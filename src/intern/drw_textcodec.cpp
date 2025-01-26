@@ -300,32 +300,27 @@ int DRW_Converter::decodeNum(const std::string &s, int *b){
 
 std::string DRW_ConvDBCSTable::fromUtf8(const std::string &s) {
     std::string result;
-    bool notFound;
-    int code;
-
+    bool notFound = false;
+    int code = 0;
     int j = 0;
     for (unsigned int i=0; i < s.length(); i++) {
         unsigned char c = s.at(i);
         if (c > 0x7F) { //need to decode
-            result += s.substr(j,i-j);
-            std::string part1 = s.substr(i,4);
-            int l;
-            code = decodeNum(part1, &l);
-            j = i+l;
+            result += s.substr(j, i-j);
+            std::string part1 = s.substr(i, 4);
+            int m = 0;
+            code = decodeNum(part1, &m);
+            j = i + m;
             i = j - 1;
             notFound = true;
-                for (int k=0; k<cpLength; k++){
-                    if(doubleTable[k][1] == code) {
-                        int data = doubleTable[k][0];
-                        char d[3];
-                        d[0] = data >> 8;
-                        d[1] = data & 0xFF;
-                        d[2]= '\0';
-                        result += d; //translate from table
-                        notFound = false;
-                        break;
-                    }
+	    for (int k=0; k<cpLength; k++){
+                if(doubleTable[k][1] == code) {
+                    int data = doubleTable[k][0];
+                    char d[3] = { char(data >> 8), char(data % 0x100), '\0'};
+                    result += d; //translate from table
+                    notFound = false;
                 }
+            }
             if (notFound)
                 result += decodeText(code);
         } //direct conversion
