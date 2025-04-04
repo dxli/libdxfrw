@@ -1884,7 +1884,6 @@ bool DRW_Hatch::parseDwg(DRW::Version version, dwgBuffer *buf, duint32 bs){
     //read loops
     for (dint32 i = 0 ; i < loopsnum; ++i){
         loop = std::make_shared<DRW_HatchLoop>(buf->getBitLong());
-        havePixelSize |= loop->type & 4;
         if (!(loop->type & 2)){ //Not polyline
             dint32 numPathSeg = buf->getBitLong();
             for (dint32 j = 0; j<numPathSeg;++j){
@@ -1991,6 +1990,7 @@ bool DRW_Hatch::parseDwg(DRW::Version version, dwgBuffer *buf, duint32 bs){
         }//end deflines
     } //end not solid
 
+    havePixelSize = havePixelSize || (loop->type & 4);
     if (havePixelSize){
         ddouble64 pixsize = buf->getBitDouble();
         DRW_DBG("\npixel size: "); DRW_DBG(pixsize);
