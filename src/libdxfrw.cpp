@@ -2019,9 +2019,9 @@ bool dxfRW::processTables() {
                     } else if (sectionstr == "VPORT") {
                         processVports();
                     } else if (sectionstr == "VIEW") {
-//                        processView();
+                        processView();
                     } else if (sectionstr == "UCS") {
-//                        processUCS();
+                        processUCS();
                     } else if (sectionstr == "APPID") {
                         processAppId();
                     } else if (sectionstr == "DIMSTYLE") {
@@ -2183,6 +2183,62 @@ bool dxfRW::processVports(){
         }
     }
 
+    return setError(DRW::BAD_READ_TABLES);
+}
+
+bool dxfRW::processView(){
+    DRW_DBG("dxfRW::processView");
+    int code;
+    std::string sectionstr;
+    bool reading = false;
+    DRW_View v;
+    while (reader->readRec(&code)) {
+        DRW_DBG(code); DRW_DBG("\n");
+        if (code == 0) {
+            if (reading)
+                iface->addView(v);
+            sectionstr = reader->getString();
+            DRW_DBG(sectionstr); DRW_DBG("\n");
+            if (sectionstr == "VIEW") {
+                reading = true;
+                v.reset();
+            } else if (sectionstr == "ENDTAB") {
+                return true;
+            }
+        } else if (reading) {
+            if (!v.parseCode(code, reader)) {
+                return setError(DRW::BAD_CODE_PARSED);
+            }
+        }
+    }
+    return setError(DRW::BAD_READ_TABLES);
+}
+
+bool dxfRW::processUCS(){
+    DRW_DBG("dxfRW::processUCS");
+    int code;
+    std::string sectionstr;
+    bool reading = false;
+    DRW_UCS u;
+    while (reader->readRec(&code)) {
+        DRW_DBG(code); DRW_DBG("\n");
+        if (code == 0) {
+            if (reading)
+                iface->addUCS(u);
+            sectionstr = reader->getString();
+            DRW_DBG(sectionstr); DRW_DBG("\n");
+            if (sectionstr == "UCS") {
+                reading = true;
+                u.reset();
+            } else if (sectionstr == "ENDTAB") {
+                return true;
+            }
+        } else if (reading) {
+            if (!u.parseCode(code, reader)) {
+                return setError(DRW::BAD_CODE_PARSED);
+            }
+        }
+    }
     return setError(DRW::BAD_READ_TABLES);
 }
 

@@ -456,7 +456,7 @@ bool dwgReader18::readDwgClasses(){
     duint32 size = dataBuf.getRawLong32();
     DRW_DBG("\ndata size in bytes "); DRW_DBG(size);
     if ((DRW::AC1024 <= version && 3 < maintenanceVersion)
-        || DRW::AC1032 <= version) { //2010+
+        || DRW::AC1032 <= version) { //2010+ MV>3
         duint32 hSize = dataBuf.getRawLong32();
         DRW_DBG("\n2010+ & MV> 3, height 32b: "); DRW_DBG(hSize);
     }
@@ -470,9 +470,13 @@ bool dwgReader18::readDwgClasses(){
     DRW_DBG("\nRc 1 "); DRW_DBG(dataBuf.getRawChar8());
     DRW_DBG("\nRc 2 "); DRW_DBG(dataBuf.getRawChar8());
     DRW_DBG("\nBit "); DRW_DBG(dataBuf.getBit());
-    if (499 >= maxClassNum) {
-        // maxClassNum is later reduced by 499, so smaller values seem to be invalid
-        // no documentation about the value of 499 found yet
+    // DWG custom-class numbers start at 500. maxClassNum is the highest class
+    // number used; the loop below iterates (maxClassNum - 499) times. Any
+    // value < 499 produces a duint32 underflow (huge loop), so reject it as
+    // structural corruption. maxClassNum == 499 (zero custom classes) is
+    // legitimate — empty drawings saved by AutoCAD 2010 RTM (maintenanceVersion=2)
+    // were previously rejected outright.
+    if (maxClassNum < 499) {
         return false;
     }
 

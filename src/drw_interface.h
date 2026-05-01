@@ -48,6 +48,12 @@ public:
     virtual void addTextStyle(const DRW_Textstyle& data) = 0;
     /** Called for every AppId entry. */
     virtual void addAppId(const DRW_AppId& data) = 0;
+    /** Called for every named UCS table entry. */
+    virtual void addUCS(const DRW_UCS& data) { (void) data; }
+    /** Called for every VIEW table entry. */
+    virtual void addView(const DRW_View& data) { (void) data; }
+    /** Called for every TOLERANCE entity. */
+    virtual void addTolerance(const DRW_Tolerance& data) { (void) data; }
 
     /**
      * Called for every block. Note: all entities added after this

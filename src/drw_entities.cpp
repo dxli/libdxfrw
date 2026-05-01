@@ -962,6 +962,31 @@ bool DRW_3Dface::parseDwg(DRW::Version v, dwgBuffer *buf, duint32 bs){
     return buf->isGood();
 }
 
+bool DRW_Tolerance::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
+    switch (code) {
+    case 10: insertionPoint.x = reader->getDouble(); break;
+    case 20: insertionPoint.y = reader->getDouble(); break;
+    case 30: insertionPoint.z = reader->getDouble(); break;
+    case 11: xAxisDirectionVector.x = reader->getDouble(); break;
+    case 21: xAxisDirectionVector.y = reader->getDouble(); break;
+    case 31: xAxisDirectionVector.z = reader->getDouble(); break;
+    case 210: extPoint.x = reader->getDouble(); break;
+    case 220: extPoint.y = reader->getDouble(); break;
+    case 230: extPoint.z = reader->getDouble(); break;
+    case 1: text = reader->getUtf8String(); break;
+    case 3: dimStyleName = reader->getUtf8String(); break;
+    default:
+        return DRW_Entity::parseCode(code, reader);
+    }
+    return true;
+}
+
+bool DRW_Tolerance::parseDwg(DRW::Version v, dwgBuffer *buf, duint32 bs){
+    (void) v; (void) buf; (void) bs;
+    DRW_DBG("PARSING TOLERANCE FROM DWG IS NOT YET IMPLEMENTED\n");
+    return true;
+}
+
 bool DRW_Block::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     switch (code) {
     case 2:
@@ -2157,7 +2182,8 @@ bool DRW_Spline::parseDwg(DRW::Version version, dwgBuffer *buf, duint32 bs){
         DRW_DBG("\nnum of knots: "); DRW_DBG(nknots); DRW_DBG(" num of control pt: ");
         DRW_DBG(ncontrol); DRW_DBG(" weight bit: "); DRW_DBG(weight);
     } else {
-        DRW_DBG("\ndwg Ellipse, unknouwn scenario\n");
+        DRW_DBG("\ndwg Spline, unknown scenario "); DRW_DBG(scenario);
+        DRW_DBG(" (expected 1 or 2)\n");
         return false; //RLZ: from doc only 1 or 2 are ok ?
     }
 
