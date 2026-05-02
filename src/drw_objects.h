@@ -40,12 +40,15 @@ namespace DRW {
          IMAGEDEF,
          PLOTSETTINGS,
          VIEW,
-         UCS
+         UCS,
+         MLINESTYLE,
+         LAYOUT,
+         DICTIONARY
      };
 
-//pending VP_ENT_HDR, GROUP, MLINESTYLE, LONG_TRANSACTION, XRECORD,
+//pending VP_ENT_HDR, GROUP, LONG_TRANSACTION, XRECORD,
 //ACDBPLACEHOLDER, VBA_PROJECT, ACAD_TABLE, CELLSTYLEMAP, DBCOLOR, DICTIONARYVAR,
-//DICTIONARYWDFLT, FIELD, IDBUFFER, IMAGEDEF, IMAGEDEFREACTOR, LAYER_INDEX, LAYOUT
+//DICTIONARYWDFLT, FIELD, IDBUFFER, IMAGEDEF, IMAGEDEFREACTOR, LAYER_INDEX,
 //MATERIAL, PLACEHOLDER, PLOTSETTINGS, RASTERVARIABLES, SCALE, SORTENTSTABLE,
 //SPATIAL_INDEX, SPATIAL_FILTER, TABLEGEOMETRY, TABLESTYLES,VISUALSTYLE,
 }
@@ -624,6 +627,74 @@ public:
 
 protected:
     bool parseDwg(DRW::Version version, dwgBuffer *buf, duint32 bs=0) override;
+};
+
+//! Class to handle Dictionary (ODA spec sec 19.4.30 fixed type 42)
+/*!
+*  Minimal carrier for named-object dictionaries; full entry-list parsing
+*  pending sample-validated implementation.
+*/
+class DRW_Dictionary : public DRW_TableEntry {
+    SETOBJFRIENDS
+public:
+    DRW_Dictionary() { reset(); }
+    void reset(){
+        tType = DRW::DICTIONARY;
+        cloning = 0;
+        hardOwner = 0;
+        name.clear();
+    }
+protected:
+    bool parseDwg(DRW::Version version, dwgBuffer *buf, duint32 bs=0) override;
+public:
+    int cloning;     /*!< duplicate-record handling (BS) */
+    int hardOwner;   /*!< hard-owner flag (RC, R2007+) */
+    //future: std::vector<std::pair<UTF8STRING, duint32>> entries; per ODA 19.4.30
+};
+
+//! Class to handle Layout (ODA spec sec 19.4.85 fixed type 82)
+/*!
+*  Minimal carrier for paperspace layouts; full field parsing pending.
+*/
+class DRW_Layout : public DRW_TableEntry {
+    SETOBJFRIENDS
+public:
+    DRW_Layout() { reset(); }
+    void reset(){
+        tType = DRW::LAYOUT;
+        layoutFlags = 0;
+        tabOrder = 0;
+        name.clear();
+    }
+protected:
+    bool parseDwg(DRW::Version version, dwgBuffer *buf, duint32 bs=0) override;
+public:
+    int layoutFlags;   /*!< layout flags (BS) */
+    int tabOrder;      /*!< tab order (BL) */
+    //future: minLim/maxLim, insertionBase, ucsOrigin, etc. per ODA 19.4.85
+};
+
+//! Class to handle MLineStyle (ODA spec sec 19.4.73 fixed type 73)
+/*!
+*  Minimal carrier for multiline styles; per-line parsing pending.
+*/
+class DRW_MLineStyle : public DRW_TableEntry {
+    SETOBJFRIENDS
+public:
+    DRW_MLineStyle() { reset(); }
+    void reset(){
+        tType = DRW::MLINESTYLE;
+        flags = 0;
+        startAngle = endAngle = 0.0;
+        name.clear();
+    }
+protected:
+    bool parseDwg(DRW::Version version, dwgBuffer *buf, duint32 bs=0) override;
+public:
+    int flags;          /*!< style flags (BS) */
+    double startAngle;  /*!< start angle (BD) */
+    double endAngle;    /*!< end angle (BD) */
+    //future: description, fillColor, lines vector per ODA 19.4.73
 };
 
 namespace DRW {

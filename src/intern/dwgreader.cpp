@@ -39,6 +39,8 @@ dwgReader::~dwgReader() {
     mapCleanUp(classesmap);
     mapCleanUp(blockRecordmap);
     mapCleanUp(appIdmap);
+    mapCleanUp(viewmap);
+    mapCleanUp(ucsmap);
 }
 
 void dwgReader::parseAttribs(DRW_Entity* e) {
@@ -604,11 +606,9 @@ bool dwgReader::readDwgTables(DRW_Header& hdr, dwgBuffer *dbuf) {
         }
     }
 
-    // Parse View / UCS / VPortEntHeader controls.
-    // These were previously gated on Debug-only builds; release users never
-    // exercised them. Any failure here (missing control, wrong oType, or
-    // parseDwg returning false) is downgraded to a warning so files that read
-    // before this change continue to read.
+    //parse View / UCS / VPortEntHeader controls
+    //RLZ: missing control or parse failure are downgraded to warnings — these
+    //RLZ: paths were previously gated on Debug builds only
     mit = ObjectMap.find(hdr.viewCtrl);
     if (mit==ObjectMap.end()) {
         DRW_DBG("\nWARNING: View control not found\n");
@@ -636,6 +636,31 @@ bool dwgReader::readDwgTables(DRW_Header& hdr, dwgBuffer *dbuf) {
             buff.resetPosition();
             if (!viewControl.parseDwg(version, &buff, bs))
                 DRW_DBG("\nWARNING: View control parseDwg failed\n");
+        }
+        //per-record loop — populate viewmap so libdwgr.cpp processDwg
+        //fires intfa.addView for each named view
+        for (auto it = viewControl.handlesList.begin(); it != viewControl.handlesList.end(); ++it) {
+            mit = ObjectMap.find(*it);
+            if (mit==ObjectMap.end()) {
+                DRW_DBG("\nWARNING: View record not found (handle skipped)\n");
+            } else {
+                oc = mit->second;
+                ObjectMap.erase(mit);
+                DRW_DBG("View Handle= "); DRW_DBGH(oc.handle); DRW_DBG(" "); DRW_DBG(oc.loc); DRW_DBG("\n");
+                DRW_View *vw = new DRW_View();
+                dbuf->setPosition(oc.loc);
+                int rsize = dbuf->getModularShort();
+                if (version > DRW::AC1021) //2010+
+                    bs = dbuf->getUModularChar();
+                else
+                    bs = 0;
+                tmpByteStr.resize(rsize);
+                dbuf->getBytes(tmpByteStr.data(), rsize);
+                dwgBuffer rbuff(tmpByteStr.data(), rsize, &decoder);
+                if (!vw->parseDwg(version, &rbuff, bs))
+                    DRW_DBG("\nWARNING: View record parseDwg failed (handle skipped)\n");
+                viewmap[vw->handle] = vw;
+            }
         }
     }
 
@@ -666,6 +691,31 @@ bool dwgReader::readDwgTables(DRW_Header& hdr, dwgBuffer *dbuf) {
             buff.resetPosition();
             if (!ucsControl.parseDwg(version, &buff, bs))
                 DRW_DBG("\nWARNING: Ucs control parseDwg failed\n");
+        }
+        //per-record loop — populate ucsmap so libdwgr.cpp processDwg
+        //fires intfa.addUCS for each named UCS
+        for (auto it = ucsControl.handlesList.begin(); it != ucsControl.handlesList.end(); ++it) {
+            mit = ObjectMap.find(*it);
+            if (mit==ObjectMap.end()) {
+                DRW_DBG("\nWARNING: Ucs record not found (handle skipped)\n");
+            } else {
+                oc = mit->second;
+                ObjectMap.erase(mit);
+                DRW_DBG("Ucs Handle= "); DRW_DBGH(oc.handle); DRW_DBG(" "); DRW_DBG(oc.loc); DRW_DBG("\n");
+                DRW_UCS *u = new DRW_UCS();
+                dbuf->setPosition(oc.loc);
+                int rsize = dbuf->getModularShort();
+                if (version > DRW::AC1021) //2010+
+                    bs = dbuf->getUModularChar();
+                else
+                    bs = 0;
+                tmpByteStr.resize(rsize);
+                dbuf->getBytes(tmpByteStr.data(), rsize);
+                dwgBuffer rbuff(tmpByteStr.data(), rsize, &decoder);
+                if (!u->parseDwg(version, &rbuff, bs))
+                    DRW_DBG("\nWARNING: Ucs record parseDwg failed (handle skipped)\n");
+                ucsmap[u->handle] = u;
+            }
         }
     }
 
@@ -1087,6 +1137,12 @@ bool dwgReader::readDwgEntity(dwgBuffer *dbuf, objHandle& obj, DRW_Interface& in
                 intfa.addLeader(&e);
             }
             break; }
+        case 46: { // TOLERANCE — ODA spec sec 19.4.46
+            DRW_Tolerance e;
+            if (entryParse( e, buff, bs, ret)) {
+                intfa.addTolerance(e);
+            }
+            break; }
         case 31: {
             DRW_Solid e;
             if (entryParse( e, buff, bs, ret)) {
@@ -1125,18 +1181,14 @@ bool dwgReader::readDwgEntity(dwgBuffer *dbuf, objHandle& obj, DRW_Interface& in
             break; }
         case 15:    // pline 2D
         case 16:    // pline 3D
-        case 29: {  // pline PFACE
+        case 29:    // pline PFACE
+        case 30: {  // POLYLINE_MESH (per ODA spec sec 19.4.31)
             DRW_Polyline e;
             if (entryParse( e, buff, bs, ret)) {
                 readPlineVertex(e, dbuf);
                 intfa.addPolyline(e);
             }
             break; }
-//        case 30: {
-//            DRW_Polyline e;// MESH (not pline)
-//            ENTRY_PARSE(e)
-//            intfa.addRay(e);
-//            break; }
         case 41: {
             DRW_Xline e;
             if (entryParse( e, buff, bs, ret)) {
@@ -1218,6 +1270,21 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle& obj, DRW_Interface& in
         dint16 oType = obj.type;
 
         switch (oType){
+        case 42: { //DICTIONARY (ODA fixed type 42)
+            DRW_Dictionary e;
+            ret = e.parseDwg(version, &buff, bs);
+            intfa.addDictionary(e);
+            break; }
+        case 73: { //MLINESTYLE (ODA fixed type 73)
+            DRW_MLineStyle e;
+            ret = e.parseDwg(version, &buff, bs);
+            intfa.addMLineStyle(e);
+            break; }
+        case 82: { //LAYOUT (ODA fixed type 82)
+            DRW_Layout e;
+            ret = e.parseDwg(version, &buff, bs);
+            intfa.addLayout(e);
+            break; }
         case 102: {
             DRW_ImageDef e;
             ret = e.parseDwg(version, &buff, bs);

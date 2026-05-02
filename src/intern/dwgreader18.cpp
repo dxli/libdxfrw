@@ -486,7 +486,14 @@ bool dwgReader18::readDwgClasses(){
     //prepare string stream for 2007+
     if (version > DRW::AC1021) {//2007+
         strBuf = &strBuff;
-        duint32 strStartPos = bitSize+191;//size in bits + 24 bytes (sn+size+hSize) - 1 bit (endbit)
+        //byte offset to the bit-stream start: 16 (start sentinel) + 4 (size)
+        //+ 4 (hSize, only when read) = 20 or 24 bytes. -1 bit for the endBit.
+        //The hSize gating must match the read-side gate at lines 458-462,
+        //otherwise AC1024 RTM files (maintenanceVersion <= 3) misalign by
+        //32 bits and fail BAD_READ_CLASSES.
+        bool hasHSize = ((DRW::AC1024 <= version && 3 < maintenanceVersion)
+                         || DRW::AC1032 <= version);
+        duint32 strStartPos = bitSize + (hasHSize ? 191 : 159);
         DRW_DBG("\nstrStartPos: "); DRW_DBG(strStartPos);
         strBuff.setPosition(strStartPos >> 3);
         strBuff.setBitPos(strStartPos & 7);

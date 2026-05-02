@@ -462,18 +462,18 @@ public:
 class DRW_Tolerance : public DRW_Entity {
     SETENTFRIENDS
 public:
-    DRW_Tolerance() : DRW_Entity() {
+    DRW_Tolerance() {
         eType = DRW::TOLERANCE;
         extPoint.x = 0;
         extPoint.y = 0;
         extPoint.z = 1;
         dimStyleName = "STANDARD";
     }
-    void applyExtrusion() override {}
+    virtual void applyExtrusion() override {}
 
 protected:
     bool parseCode(int code, const std::unique_ptr<dxfReader>& reader) override;
-    bool parseDwg(DRW::Version v, dwgBuffer *buf, duint32 bs=0) override;
+    virtual bool parseDwg(DRW::Version v, dwgBuffer *buf, duint32 bs=0) override;
 
 public:
     UTF8STRING text;                  /*!< Visual representation of the tolerance, code 1 */

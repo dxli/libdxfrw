@@ -964,17 +964,39 @@ bool DRW_3Dface::parseDwg(DRW::Version v, dwgBuffer *buf, duint32 bs){
 
 bool DRW_Tolerance::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     switch (code) {
-    case 10: insertionPoint.x = reader->getDouble(); break;
-    case 20: insertionPoint.y = reader->getDouble(); break;
-    case 30: insertionPoint.z = reader->getDouble(); break;
-    case 11: xAxisDirectionVector.x = reader->getDouble(); break;
-    case 21: xAxisDirectionVector.y = reader->getDouble(); break;
-    case 31: xAxisDirectionVector.z = reader->getDouble(); break;
-    case 210: extPoint.x = reader->getDouble(); break;
-    case 220: extPoint.y = reader->getDouble(); break;
-    case 230: extPoint.z = reader->getDouble(); break;
-    case 1: text = reader->getUtf8String(); break;
-    case 3: dimStyleName = reader->getUtf8String(); break;
+    case 1:
+        text = reader->getUtf8String();
+        break;
+    case 3:
+        dimStyleName = reader->getUtf8String();
+        break;
+    case 10:
+        insertionPoint.x = reader->getDouble();
+        break;
+    case 20:
+        insertionPoint.y = reader->getDouble();
+        break;
+    case 30:
+        insertionPoint.z = reader->getDouble();
+        break;
+    case 11:
+        xAxisDirectionVector.x = reader->getDouble();
+        break;
+    case 21:
+        xAxisDirectionVector.y = reader->getDouble();
+        break;
+    case 31:
+        xAxisDirectionVector.z = reader->getDouble();
+        break;
+    case 210:
+        extPoint.x = reader->getDouble();
+        break;
+    case 220:
+        extPoint.y = reader->getDouble();
+        break;
+    case 230:
+        extPoint.z = reader->getDouble();
+        break;
     default:
         return DRW_Entity::parseCode(code, reader);
     }
@@ -982,8 +1004,10 @@ bool DRW_Tolerance::parseCode(int code, const std::unique_ptr<dxfReader>& reader
 }
 
 bool DRW_Tolerance::parseDwg(DRW::Version v, dwgBuffer *buf, duint32 bs){
-    (void) v; (void) buf; (void) bs;
-    DRW_DBG("PARSING TOLERANCE FROM DWG IS NOT YET IMPLEMENTED\n");
+    (void) v;
+    (void) buf;
+    (void) bs;
+    DRW_DBG("\n********************** parsing TOLERANCE from DWG is not yet implemented **************************\n");
     return true;
 }
 
@@ -1628,6 +1652,17 @@ bool DRW_Polyline::parseDwg(DRW::Version version, dwgBuffer *buf, duint32 bs){
         facecount = buf->getBitShort();
         DRW_DBG("face count: "); DRW_DBG(facecount);
         DRW_DBG("flags value: "); DRW_DBG(flags);
+    } else if (oType == 0x1E) { //POLYLINE_MESH per ODA spec sec 19.4.31
+        flags = buf->getBitShort();
+        DRW_DBG("flags value: "); DRW_DBG(flags);
+        flags |= 16; //bit 4 = 3D polygon mesh
+        curvetype = buf->getBitShort();
+        vertexcount = buf->getBitShort(); //M-count
+        DRW_DBG(" M count: "); DRW_DBG(vertexcount);
+        facecount = buf->getBitShort(); //N-count
+        DRW_DBG(" N count: "); DRW_DBG(facecount);
+        /*dint16 mDensity =*/ buf->getBitShort();
+        /*dint16 nDensity =*/ buf->getBitShort();
     }
     if (version > DRW::AC1015){ //2004+
         ooCount = buf->getBitLong();
@@ -2196,11 +2231,17 @@ bool DRW_Spline::parseDwg(DRW::Version version, dwgBuffer *buf, duint32 bs){
     if (!DRW::reserve( controllist, ncontrol)) {
         return false;
     }
+    if (weight && !DRW::reserve(weightlist, ncontrol)) {
+        return false;
+    }
     for (dint32 i= 0; i<ncontrol; ++i){
         controllist.push_back(std::make_shared<DRW_Coord>(buf->get3BitDouble()));
         if (weight) {
-            DRW_DBG("\n w: ");
-            DRW_DBG(buf->getBitDouble()); //RLZ Warning: D (BD or RD)
+            //per-control-point weight; required for hyperbola/parabola
+            //conic detection in consumers (e.g. LibreCAD addSpline)
+            double w = buf->getBitDouble(); //RLZ Warning: D (BD or RD)
+            weightlist.push_back(w);
+            DRW_DBG("\n w: "); DRW_DBG(w);
         }
     }
     if (!DRW::reserve( fitlist, nfit)) {
