@@ -5691,6 +5691,180 @@ bool runDxfSurfaceRoundTrip() {
     return std::all_of(seen.begin(), seen.end(), [](bool value) { return value; });
 }
 
+class DxfMeshCaptureIface final : public dx_iface {
+public:
+    void addMesh(const DRW_Mesh& data) override {
+        mesh = data;
+        seen = true;
+    }
+
+    DRW_Mesh mesh;
+    bool seen = false;
+};
+
+bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory,
+                             bool keepOutput) {
+    const std::string encoding = binary ? "binary" : "ascii";
+    const std::filesystem::path output = directory /
+        ("libdxfrw-dxf-topology-" + encoding + ".dxf");
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+
+    dx_data source;
+    auto* face = new DRW_3Dface();
+    face->handle = 0xFA01u;
+    face->basePoint = DRW_Coord(1.0, 2.0, 3.0);
+    face->secPoint = DRW_Coord(4.0, 5.0, 6.0);
+    face->thirdPoint = DRW_Coord(7.0, 8.0, 9.0);
+    face->fourPoint = DRW_Coord(10.0, 11.0, 12.0);
+    face->invisibleflag = DRW_3Dface::FirstEdge | DRW_3Dface::ThirdEdge;
+    source.mBlock->ent.push_back(face);
+
+    auto* poly3d = new DRW_Polyline();
+    poly3d->handle = 0xFA02u;
+    poly3d->flags = 8;
+    poly3d->vertexcount = 3;
+    poly3d->addVertex(DRW_Vertex(13.0, 14.0, 15.0, 0.0));
+    poly3d->addVertex(DRW_Vertex(16.0, 17.0, 18.0, 0.0));
+    poly3d->addVertex(DRW_Vertex(19.0, 20.0, 21.0, 0.0));
+    for (const auto& vertex : poly3d->vertlist)
+        vertex->flags = 32;
+    source.mBlock->ent.push_back(poly3d);
+
+    auto* polyface = new DRW_Polyline();
+    polyface->handle = 0xFA03u;
+    polyface->flags = 64;
+    polyface->vertexcount = 4;
+    polyface->facecount = 1;
+    const std::array<DRW_Coord, 4> polyfacePoints{{
+        DRW_Coord(0.0, 0.0, 0.0), DRW_Coord(1.0, 0.0, 0.0),
+        DRW_Coord(1.0, 1.0, 0.0), DRW_Coord(0.0, 1.0, 0.0)}};
+    for (const DRW_Coord& point : polyfacePoints) {
+        DRW_Vertex vertex(point.x, point.y, point.z, 0.0);
+        vertex.flags = 192;
+        polyface->addVertex(vertex);
+    }
+    DRW_Vertex polyfaceFace;
+    polyfaceFace.flags = 128;
+    polyfaceFace.vindex1 = 1;
+    polyfaceFace.vindex2 = -2;
+    polyfaceFace.vindex3 = 3;
+    polyfaceFace.vindex4 = -4;
+    polyface->addVertex(polyfaceFace);
+    source.mBlock->ent.push_back(polyface);
+
+    auto* ocsPolyline = new DRW_LWPolyline();
+    ocsPolyline->handle = 0xFA04u;
+    ocsPolyline->elevation = 5.0;
+    ocsPolyline->extPoint = DRW_Coord(0.0, 1.0, 0.0);
+    ocsPolyline->addVertex(DRW_Vertex2D(2.0, 3.0, 0.25));
+    ocsPolyline->addVertex(DRW_Vertex2D(4.0, 5.0, 0.0));
+    source.mBlock->ent.push_back(ocsPolyline);
+
+    auto* mesh = new DRW_Mesh();
+    mesh->handle = 0xFA05u;
+    mesh->version = 2;
+    mesh->blendCrease = true;
+    mesh->subdivisionLevel = 2;
+    mesh->vertices = {
+        DRW_Coord(0.0, 0.0, 0.0), DRW_Coord(2.0, 0.0, 0.0),
+        DRW_Coord(2.0, 2.0, 1.0), DRW_Coord(0.0, 2.0, 0.0)};
+    mesh->faces = {{0, 1, 2, 3}};
+    mesh->edges = {{0, 1}, {1, 2}};
+    mesh->creases = {0.25, 0.75};
+    source.mBlock->ent.push_back(mesh);
+
+    dx_iface exporter;
+    if (!exporter.fileExport(output.string(), DRW::AC1027, binary, &source,
+                             false)) {
+        std::cerr << "DXF topology export failed (" << encoding << "): "
+                  << output << '\n';
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+
+    dx_data imported;
+    DxfMeshCaptureIface importer;
+    if (!importer.fileImport(output.string(), &imported, false)) {
+        std::cerr << "DXF topology import failed (" << encoding << "): "
+                  << output << '\n';
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+    const DRW_3Dface* decodedFace = nullptr;
+    const DRW_Polyline* decodedPoly3d = nullptr;
+    const DRW_Polyline* decodedPolyface = nullptr;
+    const DRW_LWPolyline* decodedOcsPolyline = nullptr;
+    for (const DRW_Entity* entity : imported.mBlock->ent) {
+        if (entity == nullptr)
+            continue;
+        if (entity->eType == DRW::E3DFACE)
+            decodedFace = static_cast<const DRW_3Dface*>(entity);
+        else if (entity->eType == DRW::POLYLINE) {
+            const auto* polyline = static_cast<const DRW_Polyline*>(entity);
+            if (polyline->flags == 8)
+                decodedPoly3d = polyline;
+            else if (polyline->flags == 64)
+                decodedPolyface = polyline;
+        } else if (entity->eType == DRW::LWPOLYLINE)
+            decodedOcsPolyline = static_cast<const DRW_LWPolyline*>(entity);
+    }
+
+    const bool faceValid = decodedFace != nullptr
+        && decodedFace->basePoint.x == 1.0
+        && decodedFace->basePoint.z == 3.0
+        && decodedFace->fourPoint.x == 10.0
+        && decodedFace->fourPoint.z == 12.0
+        && decodedFace->invisibleflag == (DRW_3Dface::FirstEdge
+                                           | DRW_3Dface::ThirdEdge);
+    const bool poly3dValid = decodedPoly3d != nullptr
+        && decodedPoly3d->flags == 8 && decodedPoly3d->vertlist.size() == 3
+        && decodedPoly3d->vertlist[1]->basePoint.x == 16.0
+        && decodedPoly3d->vertlist[1]->basePoint.z == 18.0;
+    const bool polyfaceValid = decodedPolyface != nullptr
+        && decodedPolyface->flags == 64
+        && decodedPolyface->vertexcount == 4 && decodedPolyface->facecount == 1
+        && decodedPolyface->vertlist.size() == 5
+        && decodedPolyface->vertlist[0]->flags == 192
+        && decodedPolyface->vertlist[4]->flags == 128
+        && decodedPolyface->vertlist[4]->vindex1 == 1
+        && decodedPolyface->vertlist[4]->vindex2 == -2
+        && decodedPolyface->vertlist[4]->vindex3 == 3
+        && decodedPolyface->vertlist[4]->vindex4 == -4;
+    const bool ocsValid = decodedOcsPolyline != nullptr
+        && decodedOcsPolyline->elevation == 5.0
+        && decodedOcsPolyline->extPoint.x == 0.0
+        && decodedOcsPolyline->extPoint.y == 1.0
+        && decodedOcsPolyline->extPoint.z == 0.0
+        && decodedOcsPolyline->vertlist.size() == 2
+        && decodedOcsPolyline->vertlist[0]->x == 2.0
+        && decodedOcsPolyline->vertlist[0]->y == 3.0
+        && decodedOcsPolyline->vertlist[0]->bulge == 0.25;
+    const bool meshValid = importer.seen && importer.mesh.version == 2
+        && importer.mesh.blendCrease
+        && importer.mesh.subdivisionLevel == 2
+        && importer.mesh.vertices.size() == mesh->vertices.size()
+        && std::equal(importer.mesh.vertices.begin(), importer.mesh.vertices.end(),
+                      mesh->vertices.begin(), [](const DRW_Coord& lhs,
+                                                 const DRW_Coord& rhs) {
+                          return lhs.x == rhs.x && lhs.y == rhs.y
+                              && lhs.z == rhs.z;
+                      })
+        && importer.mesh.faces == mesh->faces
+        && importer.mesh.edges == mesh->edges
+        && importer.mesh.creases == mesh->creases;
+    if (!keepOutput)
+        std::filesystem::remove(output, ec);
+    if (!(faceValid && poly3dValid && polyfaceValid && ocsValid && meshValid))
+        std::cerr << "DXF topology semantic mismatch (" << encoding
+                  << "): face=" << faceValid << " poly3d=" << poly3dValid
+                  << " polyface=" << polyfaceValid << " ocs=" << ocsValid
+                  << " mesh=" << meshValid << '\n';
+    return faceValid && poly3dValid && polyfaceValid && ocsValid && meshValid;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -6533,6 +6707,10 @@ int main(int argc, char** argv) {
     }
     expect(runDxfSurfaceRoundTrip(),
            "local DXF SURFACE family round-trip", failures);
+    expect(runDxfTopologyRoundTrip(false, directory, keepOutputs),
+           "local DXF ASCII 3D topology and OCS/WCS round-trip", failures);
+    expect(runDxfTopologyRoundTrip(true, directory, keepOutputs),
+           "local DXF binary 3D topology and OCS/WCS round-trip", failures);
     const std::vector<std::uint8_t> sabPayload = makeLocalSabPayload();
     expect(runAcisSabFastCheck(), "local ACIS SAB parser fast check", failures);
     const std::vector<std::uint8_t> textCarrier {

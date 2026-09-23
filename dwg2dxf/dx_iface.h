@@ -93,6 +93,10 @@ public:
     virtual void addPolyline(const DRW_Polyline& data){
         currentBlock->ent.push_back(new DRW_Polyline(data));
     }
+    virtual void addMesh(const DRW_Mesh& data){
+        if (currentBlock != nullptr)
+            currentBlock->ent.push_back(new DRW_Mesh(data));
+    }
     virtual void addSpline(const DRW_Spline* data){
         currentBlock->ent.push_back(new DRW_Spline(*data));
     }
