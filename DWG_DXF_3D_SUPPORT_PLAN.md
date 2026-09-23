@@ -156,6 +156,34 @@ Steps:
    confirmation. Pre-R13 readers require their own era-appropriate authority
    and sample; R13+ ODA layouts cannot qualify legacy forms.
 
+Source-derived dispatch inventory (routes are code evidence, not proof of
+complete format conformance or support):
+
+| DWG signature / family | Read route | Typed-write route | Qualification ceiling / compatibility note |
+| --- | --- | --- | --- |
+| AC14 (R1.40) | `dwgReaderR1_40`, dedicated pre-R2.0b container | No writer; `dwgRW::write()` rejects this version | Separate era/container; no applicable ODA v5.4.1 layout, and no current target witness for this plan. |
+| AC1003 / AC1004 / AC1006 / AC1009 (R2.10/R9/R10/R11) | `dwgReaderR11`; legacy shared entity/table paths, with version gates | No writer; the writer accepts AC1015 and later only | `createReaderForVersion()` currently routes AC1009 to `dwgReaderR11`, contrary to the stale “AC1009 unsupported” row in the local guidance. Treat read availability as implementation evidence only; it does not establish broad reliability. Legacy 3DLINE is a distinct pre-R13 body and needs its own sample/era-specific authority. |
+| AC1012 / AC1014 / AC1015 (R13/R14/R2000) | `dwgReader15` | `dwgWriter15` only for AC1015 output | AC1012/1014 are read-only in this writer API. ODA §20.4.41 covers the R13+ modeler family; older entity routes still need per-version tests. |
+| AC1018 (R2004) | `dwgReader18` owns the R2004+ page/file-header lineage | `dwgWriter18` | Modeler body is bounded by object/handle streams, but payload recovery still needs a valid sample and independent carrier check. |
+| AC1021 (R2007) | `dwgReader21`, independent page/compressor lineage | `dwgWriter21` | R2007+ modeler/SAB body path is not interchangeable with R2004. Keep per-version results separate. |
+| AC1024 (R2010) | `dwgReader24` over reader18 | `dwgWriter24` | Local successful traces exist; individual family/layout evidence still controls qualification. |
+| AC1027 (R2013) | `dwgReader27` over reader24/18 | `dwgWriter27` | ODA §24 describes AcDsPrototype/DataStorage; typed object association must still be one-to-one and sample-verified. |
+| AC1032 (R2018+) | `dwgReader32`, currently a pass-through stub over reader27 | `dwgWriter32` | Never infer R2018 correctness from an R2013 trace; version deltas remain unqualified without a target witness. |
+| Other signatures | `UNKNOWNV`, MC00, AC12, AC150, and AC1002 are rejected by `createReaderForVersion()` | Rejected by writer version gate | Unsupported, not an implicit fallback. |
+
+The family-level code routes currently visible in `src/intern/dwgreader.cpp`
+and `src/drw_entities.cpp` are: standard WCS primitives/3DFACE; legacy plus
+modern custom-class 3DLINE; compound POLYLINE/VERTEX/SEQEND; custom-class MESH;
+SPLINE plus custom-class HELIX; modeler REGION/3DSOLID/BODY; and surfaces
+dispatched by the DWG class record name. Writers exist for several typed paths,
+but no `DRW_ModelerGeometry::encodeDwg()` exists; the current modeler output
+claim is therefore read/opaque-frame retention only. MESH/surfaces have
+encoders but stay unqualified on DWG layout semantics because the applicable
+named primary layouts and independent target checks are absent. DXF ASCII and
+binary share the per-entity parse/write routes, with group-code storage and
+version gates handled below those routes; a format-specific positive result
+does not imply the paired DWG route.
+
 Positive gate: one reviewed matrix ties each in-scope row to code, normative
 paragraphs (or a recorded normative-source gap), and existing or planned
 tests. Negative gate: any unsupported family/version or DWG reader change
@@ -560,13 +588,13 @@ spec/trace readiness; finally S7. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 11/28 committed, 15 blocked, 2 in progress, and 0 ready):
+commit; 12/28 committed, 15 blocked, 1 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
 | S0.1 | COMMITTED | Rebased onto `origin/master`; HEAD and origin are identical. Existing untracked paths remain untouched. |
 | S0.2 | COMMITTED | Resolved the authoritative local ODA v5.4.1 PDF at `/Users/dli/doc/dwg/OpenDesign_Specification_for_.dwg_files (1).pdf`; title/version/page count (279) match the official download. Read §§20.4.40 SPLINE and 20.4.41 REGION/3DSOLID/BODY; continue reading each relevant section immediately before any DWG parser change. Authority lookup is unblocked; this alone does not qualify unlisted layouts. |
-| S0.3 | IN_PROGRESS | Map dispatch, versions, fields, and claim ceiling for every 3D family; do not promote unknown DWG routes. |
+| S0.3 | COMMITTED | Recorded read/write versions and reader/writer lineage, source-visible routes for each 3D family, read-only legacy AC1009 behavior, the missing modeler DWG encoder, and unsupported/unqualified claim ceilings. Unknown class/layout/version identities remain explicitly unknown; this inventory is not interoperability qualification. |
 | S0.4 | COMMITTED | AC1024 `visualization_-_conference_room.dwg` debug trace records class/type 524=`AcDbPlaneSurface`, DXF record `PLANESURFACE`, entity flag 1, two instances; successful conversion emits two `PLANESURFACE` records. This is class identity/dispatch evidence for this file/version only, not byte-layout or semantic qualification. No 3DLINE identity found. Candidate AC1018 `Extruder2.dwg` stops at Tables error 9 and AC1021 `dwgreader21_230.dwg` is too small (header error 5); neither supplied target-type evidence. |
 | S0.5 | IN_PROGRESS | DXF/core-vendor/legacy inventory is underway; compare selected independent implementations without treating them as normative. |
 | S0.6 | COMMITTED | Searchable local v5.4.1 confirms §§20.4.40 SPLINE, 20.4.41 ACIS modeler, and §24 DataStorage. No named `AcDbSubDMesh`, modern `AcDb*Surface`, or `3DLINE` layout is present; those DWG rows stay unqualified. The spec does not fully decrypt ACIS and does not qualify pre-R13 forms. |
