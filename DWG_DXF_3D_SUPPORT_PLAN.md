@@ -1123,6 +1123,21 @@ Steps:
    integration checkpoint. No general 3D-import, GUI display, native-solid,
    or editing claim follows from this matrix.
 
+23. **S8.15.1 — Qualify the FreeCAD C++ 3D POLYLINE route with one isolated
+   generated control.** Add a locally authored AC1015 `.dwgadd` recipe with
+   three nonzero-Z WCS vertices. Keep the generator-controlled fast test
+   opt-in: create the DWG in the build tree, call the exact FreeCAD argv,
+   assert one `POLYLINE`, its 3D flag, three ordered `VERTEX` records and
+   `SEQEND`, then read the DXF back and reassert the same coordinates. Add an
+   opt-in macro that runs `Draft.importDWG.open()` with the default C++ importer
+   and checks the resulting valid FreeCAD shape has exactly two connected
+   edges matching each consecutive expected WCS vertex pair. Record unsupported
+   entities and FreeCAD/runtime identity; neither raw DXF record counts nor
+   bounds alone satisfy this gate. Generated files remain under build/temp and
+   the recipe is locally authored, not target-authored interoperability
+   evidence. Treat any importer warnings separately from shape correctness and
+   keep MESH/PFACE and other POLYLINE subtypes on their own rows.
+
 Positive gate: an old source consumer still compiles, and the headless 3D probe
 receives all asserted native typed values/carrier identities without an
 implicit projection; the S8.2a `ext == true` baseline remains intact for its
@@ -1182,10 +1197,11 @@ Initial dependency/readiness order:
 The execution sequence is therefore readiness-first, not table-order-first:
 S0 → S1 → S2 and the DXF portions of S5/S6; then S3 → S4 after DWG
 spec/trace readiness; S7 and S8 proceed per completed rows, with S8's DXF
-consumer probe independent of DWG. S8.14's nonzero-Z FreeCAD integration
-slice is committed. S8.15 is READY for the next family-isolated importer probe;
-advance one proven FreeCAD entity mapping at a time. Continue any remaining
-independent DXF work while a DWG dependency is blocked.
+consumer probe independent of DWG. S8.14's nonzero-Z LINE integration and
+S8.15.1's isolated 3D POLYLINE integration slices are committed. S8.15 remains
+READY for the next family-isolated importer probe; advance one proven FreeCAD
+entity mapping at a time. Continue any remaining independent DXF work while a
+DWG dependency is blocked.
 
 FreeCAD integration is an additional bounded S8 consumer lane, not a new
 format-support claim. The exact converter invocation, four-revision planar
@@ -1194,7 +1210,12 @@ adds one locally generated AC1015 nonzero-Z LINE control, which FreeCAD 1.1.3's
 default C++ importer converts to one valid B-rep edge with endpoints
 `(1,2,3)` and `(4,6,9)`. This demonstrates this generated vector through
 the configured converter/importer path, not target-authored DWG interoperability
-or broader family support. S8.13 adds an
+or broader family support. S8.15.1 adds an isolated AC1015 3D POLYLINE control;
+the same pinned FreeCAD importer creates one valid shape with two edges and
+preserves each expected vertex. It emits four `Entity has zero-length extrusion
+direction` warnings for that generated file, despite reporting no unsupported
+entities and passing exact edge checks; retain and investigate those warnings
+before broadening the profile. S8.13 adds an
 opt-in feature audit and fast converter/readback regressions for existing
 tracked `mpolygon_solid.dwg`, `rtext_arctext.dwg`, and `large_radial.dwg` files.
 For every end-to-end result, record converter discovery (`PATH` here), source
@@ -1211,14 +1232,15 @@ must have independent source-field expectations and a named runtime/import
 mode; do not extend the routine test dependency set.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 41/55 committed, 12 blocked, 1 verified, 0 in progress, and 1 ready):
+commit; 42/56 committed, 12 blocked, 1 verified, 0 in progress, and 1 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
 | S8.12 | COMMITTED | Extended `tests/run_freecad_dwg2dxf_compat_test.cmake` with a runtime-generated malformed DWG. The exact `-o` invocation fails nonzero without publishing a final DXF; the same failure with `-y` preserves an existing sentinel, and no `.libdxfrw-*` output temp remains. Added a UTF-8 input/output path case, which passes on this macOS host; Windows is explicitly skipped because narrow `main(argc, argv)` encoding needs native qualification. Existing writer-primitives tests independently cover transactional publish/rollback and destination preservation. `cmake --build build --target dwg2dxf libdxfrw_writer_primitives_tests` passed; focused CTest `dwg2dxf_version_policy`, `dwg2dxf_freecad_cli_compat`, and `libdxfrw_writer_primitives` passed 3/3; `git diff --check` passed. No fixtures added. The converter now has tested failure-safe publication through FreeCAD's file-existence check on this host; Windows Unicode paths remain unqualified. |
 | S8.13 | COMMITTED | Fixed typed DXF pass-through in `dwg2dxf/dx_iface`: preserve derived RTEXT/ARCALIGNEDTEXT/MPOLYGON objects and dispatch to their specialized writers rather than generic TEXT/HATCH or omission. `tests/run_freecad_dwg2dxf_compat_test.cmake` now invokes exact FreeCAD argv on tracked `rtext_arctext.dwg` and `mpolygon_solid.dwg` and requires RTEXT, ARCALIGNEDTEXT, and MPOLYGON records. `tests/dwg_fixture_tests.cpp` checks DWG→DXF→DXF subtype and stable payload/radius/solid/fill fields. Added opt-in `tests/freecad_dwg2dxf_feature_audit.FCMacro` to record source/output hashes, converter path, FreeCAD/importer settings, record counts, unsupported reports, and created object types. FreeCAD 1.1.3 (rev 20260725), macOS 27 arm64, default C++ importer / converter from PATH: MPOLYGON 1, RTEXT 1, ARCALIGNEDTEXT 1, and DIMENSION 1 are emitted; FreeCAD reports MPOLYGON, RTEXT, ARCALIGNEDTEXT and dimension type 4 unsupported (0 entity objects for these rows). The existing four AC1015/AC1018/AC1021/AC1027 LINE imports remain the only positive FreeCAD import subset. `cmake --build build --target dwg2dxf libdxfrw_dwg_fixture_tests` passed; focused CTest `libdxfrw_dwg_fixtures`, `dwg2dxf_freecad_cli_compat`, and `dwg2dxf_version_policy` passed 3/3; `git diff --check` passed. No fixtures were added. Optional legacy Python import, GUI/rendering, and general feature support remain unqualified; next add matrix rows only with independent expected fields and an established importer mode. |
 | S8.14 | COMMITTED | Added locally authored `tests/fixtures/dwg/ac1015_3d_line_control.dwgadd`, optional `LIBDXFRW_ENABLE_DWGADD_FREECAD_CONTROL` CTest and `tests/freecad_dwg2dxf_3d_line_check.FCMacro`. The fast test uses LibreDWG 0.14 `dwgadd` to create an AC1015 DWG only in the build tree, invokes exact FreeCAD argv (`dwg2dxf input -o output`), verifies ASCII `$ACADVER`, exactly one LINE with endpoints `(1,2,3)`/`(4,6,9)`, and repeats through libdxfrw DXF readback. Optional real runtime passed on FreeCAD 1.1.3 revision `145529e` / macOS 27 arm64 / default C++ importer mode 2: `Draft.importDWG.open()` resolved this build's `dwg2dxf` via `PATH`, imported exactly one LINE and one valid B-rep edge, matched both endpoint XYZ tuples, and reported no unsupported features. `cmake --build build --target dwg2dxf libdxfrw_dwg_fixture_tests libdxfrw_dwg2dxf_version_tests` passed; focused CTest (`libdxfrw_dwg_fixtures`, `dwg2dxf_version_policy`, `dwg2dxf_freecad_cli_compat`, `dwg2dxf_freecad_3d_line_cli`) passed 4/4; `git diff --check` passed. DWG/DXF outputs stayed under ignored `build/` or temporary paths; the only committed sample artifact is the locally authored recipe. This is a generated route control, not AutoCAD-authored DWG interoperability or general LINE/FreeCAD 3D support. |
-| S8.15 | READY | S8.14 pins the first runtime profile (FreeCAD 1.1.3 revision `145529e`, macOS 27 arm64, C++ importer mode 2). A mixed, locally generated AC1015 control containing 3D POLYLINE, legacy POLYLINE_MESH, and PFACE was also converted/imported: FreeCAD counted three POLYLINE records and created two objects, but logged repeated zero-length-extrusion warnings and an unknown entity-read exception. Because mixed input does not identify which subtype caused the exception or which objects correspond to which subtype, it qualifies none of those families. Next isolate one locally-authored 3D POLYLINE recipe, run exact DWG→converter→FreeCAD and verify the resulting ordered WCS vertices/edges; retain separate nonzero-Z/mesh/PFACE gates. Continue to keep `3DFACE`/`SOLID`/`HATCH`, MPOLYGON, RTEXT, ARCALIGNEDTEXT, dimensions, ACIS/modeler, and any other rejected type faithful and explicitly downstream-unsupported unless the pinned runtime proves acceptance or a semantics-preserving implementation is separately designed. FreeCAD is not added to default CI; no downloaded/generated DWG/DXF file is committed. |
+| S8.15 | READY | S8.14 pins the first runtime profile (FreeCAD 1.1.3 revision `145529e`, macOS 27 arm64, C++ importer mode 2). A mixed, locally generated AC1015 control containing 3D POLYLINE, legacy POLYLINE_MESH, and PFACE was also converted/imported: FreeCAD counted three POLYLINE records and created two objects, but logged repeated zero-length-extrusion warnings and an unknown entity-read exception. Because mixed input does not identify which subtype caused the exception or which objects correspond to which subtype, it qualifies none of those families. S8.15.1 now independently qualifies one generated 3D POLYLINE: the exact converter path plus DXF readback preserved 3D flag/three vertices/SEQEND, and FreeCAD produced the expected two-edge WCS wire; four zero-length-extrusion warnings remain noted. Next isolate legacy POLYLINE_MESH and PFACE independently and determine which source record emits the unknown exception; retain separate support gates. Keep `3DFACE`/`SOLID`/`HATCH`, MPOLYGON, RTEXT, ARCALIGNEDTEXT, dimensions, ACIS/modeler, and any other rejected type faithful and explicitly downstream-unsupported unless the pinned runtime proves acceptance or a semantics-preserving implementation is separately designed. FreeCAD is not added to default CI; no downloaded/generated DWG/DXF file is committed. |
+| S8.15.1 | COMMITTED | Added locally authored `tests/fixtures/dwg/ac1015_3d_polyline_freecad_control.dwgadd`, optional `dwg2dxf_freecad_3d_polyline_cli` CTest, and `tests/freecad_dwg2dxf_3d_polyline_check.FCMacro`. The CTest generates an AC1015 DWG in the build tree, invokes exact FreeCAD argv, verifies one POLYLINE with 3D flag, three ordered coordinate VERTEX records and SEQEND, then repeats those checks after libdxfrw DXF readback; it passes 1/1. FreeCAD 1.1.3 revision `145529e` / macOS 27 arm64 / C++ importer mode 2 resolved this build's converter via PATH and created one valid shape with the two expected edges `(0,0,1)-(2,3,4)` and `(2,3,4)-(5,1,-2)`, with no unsupported entities. Four `Entity has zero-length extrusion direction` warnings were printed; exact geometry passed but the warning cause is still open. The mixed topology experiment separately logged an unknown entity-read exception and cannot identify a subtype. No generated DWG/DXF or foreign sample was committed; only the local-from-scratch recipe is tracked. This is a generated control and one pinned FreeCAD profile, not AutoCAD-authored DWG interoperability or all classic POLYLINE subtype support. |
 | S0.1 | COMMITTED | Rebased onto `origin/master`. The last ancestry check before the S8.11 slice (HEAD `aa5a8fb`) found `origin/master` to be an ancestor of `HEAD` (zero behind, 44 local commits ahead); subsequent plan/code slices are local branch commits. Existing user-owned untracked paths remain untouched. |
 | S0.2 | COMMITTED | Resolved the authoritative local ODA v5.4.1 PDF at `/Users/dli/doc/dwg/OpenDesign_Specification_for_.dwg_files (1).pdf`; title/version/page count (279) match the official download. Read §§20.4.40 SPLINE and 20.4.41 REGION/3DSOLID/BODY; continue reading each relevant section immediately before any DWG parser change. Authority lookup is unblocked; this alone does not qualify unlisted layouts. |
 | S0.3 | COMMITTED | Recorded read/write versions and reader/writer lineage, source-visible routes for each 3D family, read-only legacy AC1009 behavior, the missing modeler DWG encoder, and unsupported/unqualified claim ceilings. Unknown class/layout/version identities remain explicitly unknown; this inventory is not interoperability qualification. |
