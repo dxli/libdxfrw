@@ -2435,6 +2435,16 @@ std::vector<std::uint8_t> makeSabTestPayload(bool hasSignature = true) {
     return payload;
 }
 
+std::vector<std::uint8_t> makeAsmTestPayload() {
+    static constexpr std::uint8_t signature[] = {
+        'A', 'S', 'M', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
+        '4'};
+    std::vector<std::uint8_t> payload(std::begin(signature),
+                                      std::end(signature));
+    payload.insert(payload.end(), {0xFC, 0x53, 0x00, 0x00});
+    return payload;
+}
+
 std::vector<std::uint8_t> makeDwgHandleMapVector() {
     // One data group (size=4, handle/location deltas 1/1) followed by the
     // empty terminator group. CRCs cover each size/data span and are computed
@@ -2533,6 +2543,34 @@ void testDwgModelerDataStorageLinking(TestContext& t) {
                  && fallbackReader.linkFailures() == 0u,
              "entity-handle fallback links one uniquely keyed AcDs record");
 
+    dwgRW orderOwner(nullptr);
+    ExposedDwgReader27 orderReader(
+        std::make_unique<dwgBuffer>(backing.data(), backing.size()),
+        &orderOwner);
+    orderReader.setFormatVersion(DRW::AC1027);
+    std::vector<std::uint8_t> firstPayload = sab;
+    firstPayload.push_back(0x11u);
+    std::vector<std::uint8_t> secondPayload = sab;
+    secondPayload.push_back(0x22u);
+    orderReader.appendDataStorageSection(makeDataStorageTestSection(
+        {makeDataStorageTestRecord(0x81u, "81", firstPayload),
+         makeDataStorageTestRecord(0x82u, "82", secondPayload)}));
+    DRW_ModelerGeometry secondModeler(DRW::E3DSOLID);
+    secondModeler.handle = 0x82u;
+    secondModeler.setHasDataStorageBinaryData(true);
+    DRW_ModelerGeometry firstModeler(DRW::E3DSOLID);
+    firstModeler.handle = 0x81u;
+    firstModeler.setHasDataStorageBinaryData(true);
+    orderReader.linkDataStorage(secondModeler);
+    orderReader.linkDataStorage(firstModeler);
+    t.expect(secondModeler.dataStorageData == secondPayload
+                 && firstModeler.dataStorageData == firstPayload
+                 && secondModeler.m_modelerVersion == 2
+                 && firstModeler.m_modelerVersion == 2
+                 && orderReader.linkFailures() == 0u
+                 && orderReader.linkedRecordCount() == 2u,
+             "AcDs SAB records bind by entity handle independent of traversal order");
+
     dwgRW mismatchOwner(nullptr);
     ExposedDwgReader27 mismatchReader(
         std::make_unique<dwgBuffer>(backing.data(), backing.size()),
@@ -2602,6 +2640,28 @@ void testDwgModelerDataStorageLinking(TestContext& t) {
                  && malformedModeler.m_modelerVersion == 168
                  && malformedReader.linkFailures() == 0u,
              "non-SAB AcDs record stays opaque and cannot normalize its version");
+
+    dwgRW asmOwner(nullptr);
+    ExposedDwgReader27 asmReader(
+        std::make_unique<dwgBuffer>(backing.data(), backing.size()),
+        &asmOwner);
+    asmReader.setFormatVersion(DRW::AC1027);
+    const std::vector<std::uint8_t> asmPayload = makeAsmTestPayload();
+    asmReader.appendDataStorageSection(makeDataStorageTestSection(
+        {makeDataStorageTestRecord(0xC2u, "C2", asmPayload)}));
+    DRW_ModelerGeometry asmModeler(DRW::E3DSOLID);
+    asmModeler.handle = 0xC2u;
+    asmModeler.setHasDataStorageBinaryData(true);
+    asmModeler.dataStorageHandle = 0xC2u;
+    asmModeler.dataStorageHandleKey = "C2";
+    asmModeler.m_modelerVersion = 168;
+    asmReader.linkDataStorage(asmModeler);
+    t.expect(asmModeler.hasDataStorageRecord
+                 && asmModeler.dataStorageData == asmPayload
+                 && !asmModeler.hasDataStoragePayloadMarker
+                 && asmModeler.m_modelerVersion == 168
+                 && asmReader.linkFailures() == 0u,
+             "ASM BinaryFile4 is retained but cannot promote the ACIS carrier version");
 
     dwgRW versionOwner(nullptr);
     ExposedDwgReader27 versionReader(
