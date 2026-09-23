@@ -961,23 +961,22 @@ void testPublicOwnershipContracts(TestContext& t) {
              "NURBSURFACE assignment starts a fresh coordinate parser walk");
 
     ExposedRevolvedSurface partialRevolvedSurface;
-    t.expect(parseDxfRecords(partialRevolvedSurface, "90\n1\n"),
+    t.expect(parseDxfRecords(partialRevolvedSurface,
+                              "100\nAcDbRevolvedSurface\n90\n1\n"),
              "REVOLVEDSURFACE parser state source setup");
     ExposedRevolvedSurface copiedRevolvedSurface(partialRevolvedSurface);
-    copiedRevolvedSurface.classId = 0;
     copiedRevolvedSurface.id = 0;
-    t.expect(parseDxfRecords(copiedRevolvedSurface, "90\n2\n")
-                 && copiedRevolvedSurface.classId == 2u
-                 && copiedRevolvedSurface.id == 0u,
-             "REVOLVEDSURFACE copy starts a fresh class-id parser walk");
+    t.expect(parseDxfRecords(copiedRevolvedSurface,
+                              "100\nAcDbRevolvedSurface\n90\n2\n")
+                 && copiedRevolvedSurface.id == 2u,
+             "REVOLVEDSURFACE copy starts a fresh subtype-ID parser walk");
     ExposedRevolvedSurface assignedRevolvedSurface;
     assignedRevolvedSurface = partialRevolvedSurface;
-    assignedRevolvedSurface.classId = 0;
     assignedRevolvedSurface.id = 0;
-    t.expect(parseDxfRecords(assignedRevolvedSurface, "90\n2\n")
-                 && assignedRevolvedSurface.classId == 2u
-                 && assignedRevolvedSurface.id == 0u,
-             "REVOLVEDSURFACE assignment starts a fresh class-id parser walk");
+    t.expect(parseDxfRecords(assignedRevolvedSurface,
+                              "100\nAcDbRevolvedSurface\n90\n2\n")
+                 && assignedRevolvedSurface.id == 2u,
+             "REVOLVEDSURFACE assignment starts a fresh subtype-ID parser walk");
 
     ExposedExtrudedSurface partialExtrudedSurface;
     t.expect(parseDxfRecords(partialExtrudedSurface,
