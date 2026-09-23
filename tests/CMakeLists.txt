@@ -74,6 +74,30 @@ if(EXISTS "${_freecad_cli_sample}"
     )
 endif()
 
+# Optional locally generated DWG control for the FreeCAD nonzero-Z path.
+# LibreDWG dwgadd and FreeCAD remain external integration tools, not required
+# dependencies of the normal build/test configuration.
+option(LIBDXFRW_ENABLE_DWGADD_FREECAD_CONTROL
+    "Enable the LibreDWG-generated FreeCAD 3D LINE converter control" OFF)
+if(LIBDXFRW_ENABLE_DWGADD_FREECAD_CONTROL)
+    find_program(LIBDXFRW_DWGADD_EXECUTABLE NAMES dwgadd)
+    if(NOT LIBDXFRW_DWGADD_EXECUTABLE)
+        message(FATAL_ERROR
+            "LIBDXFRW_ENABLE_DWGADD_FREECAD_CONTROL requires LibreDWG dwgadd")
+    endif()
+    add_test(
+        NAME dwg2dxf_freecad_3d_line_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DDWGADD=${LIBDXFRW_DWGADD_EXECUTABLE}
+            -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+            -DRECIPE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dwg/ac1015_3d_line_control.dwgadd
+            -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3d_line_cli_test.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_3d_line_cli PROPERTIES
+        LABELS "dwg_read;freecad;cli;fast;generated")
+endif()
+
 # LibreCAD_3 ABI compatibility check.
 # Mirrors LibreCAD_3's DXFimpl override surface; fails to compile if upstream
 # introduces a new pure virtual on DRW_Interface or removes/renames a public
