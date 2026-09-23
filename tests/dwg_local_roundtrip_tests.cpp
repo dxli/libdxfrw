@@ -5067,7 +5067,18 @@ bool runDxfModelerCarrierRoundTrip(DRW::Version version,
         if (entity == nullptr || entity->eType != DRW::E3DSOLID)
             continue;
         const auto* decoded = static_cast<const DRW_ModelerGeometry*>(entity);
-        found = decoded->handle != 0
+        bool chunksValid = !decoded->m_dxfPayloadChunks.empty();
+        std::size_t expectedOffset = 0;
+        for (const DRW_ModelerPayloadChunk& chunk : decoded->m_dxfPayloadChunks) {
+            const bool textGroup = chunk.m_groupCode == 1 || chunk.m_groupCode == 3;
+            chunksValid = chunksValid && chunk.m_offset == expectedOffset
+                && chunk.m_offset <= decoded->m_rawBytes.size()
+                && chunk.m_length <= decoded->m_rawBytes.size() - chunk.m_offset
+                && (version <= DRW::AC1018 ? textGroup : chunk.m_groupCode == 310);
+            expectedOffset += chunk.m_length;
+        }
+        found = chunksValid && expectedOffset == decoded->m_rawBytes.size()
+            && decoded->handle != 0
             && decoded->m_modelerVersion == 7
             && decoded->m_rawBytes == payload;
     }
@@ -5092,6 +5103,42 @@ bool runDxfMalformedModelerCarrier(const char* chunk) {
     const bool importOk = importer.fileImport(output.string(), &imported, false);
     std::filesystem::remove(output, ec);
     return !importOk && imported.mBlock->ent.empty();
+}
+
+bool runDxfMixedModelerCarrierChunks() {
+    const std::filesystem::path output = std::filesystem::temp_directory_path()
+        / "libdxfrw-modeler-mixed-carrier.dxf";
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+    std::ofstream stream(output);
+    stream << "0\nSECTION\n2\nENTITIES\n"
+              "0\n3DSOLID\n5\n4A\n330\n1F\n100\nAcDbEntity\n"
+              "100\nAcDbModelerGeometry\n100\nAcDb3dSolid\n70\n1\n"
+              "1\nabc\n310\n4142\n"
+              "0\nENDSEC\n0\nEOF\n";
+    stream.close();
+
+    dx_data imported;
+    dx_iface importer;
+    const bool importOk = importer.fileImport(output.string(), &imported, false);
+    std::filesystem::remove(output, ec);
+    if (!importOk)
+        return false;
+
+    for (const DRW_Entity* entity : imported.mBlock->ent) {
+        if (entity == nullptr || entity->eType != DRW::E3DSOLID)
+            continue;
+        const auto* decoded = static_cast<const DRW_ModelerGeometry*>(entity);
+        return decoded->m_rawBytes == std::vector<std::uint8_t>{'a', 'b', 'c', 0x41, 0x42}
+            && decoded->m_dxfPayloadChunks.size() == 2
+            && decoded->m_dxfPayloadChunks[0].m_groupCode == 1
+            && decoded->m_dxfPayloadChunks[0].m_offset == 0
+            && decoded->m_dxfPayloadChunks[0].m_length == 3
+            && decoded->m_dxfPayloadChunks[1].m_groupCode == 310
+            && decoded->m_dxfPayloadChunks[1].m_offset == 3
+            && decoded->m_dxfPayloadChunks[1].m_length == 2;
+    }
+    return false;
 }
 
 dwgHandle localRawObjectHandle(std::uint8_t code, std::uint32_t ref) {
@@ -6391,6 +6438,8 @@ int main(int argc, char** argv) {
            "local malformed DXF modeler odd hex rejection", failures);
     expect(runDxfMalformedModelerCarrier("GG"),
            "local malformed DXF modeler non-hex rejection", failures);
+    expect(runDxfMixedModelerCarrierChunks(),
+           "local mixed DXF modeler carrier chunk identity", failures);
     expect(runRawDwgReplayContract(),
            "local DWG raw-object/raw-section replay contract", failures);
     if (failures != 0) {

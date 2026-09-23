@@ -208,12 +208,14 @@ Files: `src/drw_entities.h/.cpp`; `src/libdxfrw.{h,cpp}`;
 
 Steps:
 
-1. Define/document distinct carriers for DXF entity-inline SAT/text chunks,
-   DXF entity-inline binary chunks where valid, the `ACDSDATA` raw section,
+1. Define/document distinct carriers for DXF entity-inline text groups 1/3,
+   DXF entity-inline binary group 310 chunks, the `ACDSDATA` raw section,
    DWG encoded object-frame bytes, DWG inline payload bytes, proxy graphics,
    and linked DWG DataStorage bytes. Reuse generic raw-section preservation
    for opaque `ACDSDATA` until there is evidence for typed section/entity
-   association.
+   association. Preserve the DXF modeler groups as ordered `(group code,
+   offset, length)` views into the existing bounded byte buffer; do not merge
+   group identity into a single unlabeled byte string.
 2. Preserve source compatibility: keep existing public fields/callbacks where
    practical, add an explicit typed payload carrier/status, and keep any new
    `DRW_Interface` virtual non-pure with a no-op default.
@@ -507,8 +509,8 @@ commit):
 | S0.6 | BLOCKED | Verify searchable-text gaps against the required local ODA PDF; modern MESH/surface/3DLINE DWG rows stay unqualified. |
 | S1.1 | COMMITTED | Field-level serializers now cover 3DFACE, 3DLINE, POLYLINE/VERTEX, MESH, HELIX/SPLINE, modeler geometry, all surface subtypes, INSERT placement, and nested ATTRIB fields. Loft reference values are typed; binary values remain digest carriers. |
 | S1.2 | COMMITTED | Runtime self-tests verify mesh-coordinate mutation, polyface index serialization, INSERT/ATTRIB placement, loft-reference typed/binary separation, and modeler frame-body labeling/digest. Manual C++17 `-Wall -Wextra -Werror` adapter build and `--self-test` pass; `ctest -R '^libdxfrw_dwg_local_roundtrip$'` passes 1/1. Existing generated malformed DXF modeler checks remain in the fast round-trip test. No downloaded fixtures added. |
-| S2.1 | BLOCKED_ON_S1 | Define DXF carrier separation and section/entity identity without modifying DWG reader paths. |
-| S2.2 | BLOCKED_ON_S2.1 | Verify/fix SAT routing for AC1015/1018/1021/1024 and preserve opaque ACDSDATA only when identity is unambiguous. |
+| S2.1 | COMMITTED | DXF modeler reads now retain ordered group-1/3 text and group-310 binary chunk metadata as bounded views into `m_rawBytes`. The semantic adapter reports chunk bounds, keeps surface bytes explicitly unclassified, and gives DWG frame/DataStorage payloads distinct digests; `ACDSDATA` stays an independent raw-section carrier with no invented entity link. Strict C++17 adapter build/self-test and focused round-trip CTest pass for text, binary, and mixed chunk sequences. |
+| S2.2 | READY | Use the retained chunk identity and the DXF version matrix to correct/qualify SAT routing for AC1015/1018/1021/1024; preserve ACDSDATA opaquely unless section/entity identity is unambiguous. |
 | S5.1 | READY_AFTER_S1 | DXF ASCII/binary topology, OCS/WCS, MESH and compound POLYLINE checks. |
 | S5.2 | READY_AFTER_S1 | INSERT/MINSERT independent transform oracle and malformed-input checks. |
 | S6.1 | READY_AFTER_S1 | DXF surface/HELIX/SPLINE field inventory and focused tests. |

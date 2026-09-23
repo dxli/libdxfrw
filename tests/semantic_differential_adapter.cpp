@@ -662,6 +662,18 @@ public:
         fields.push_back(handleField("historyHandle", d.m_historyHandle));
         fields.push_back(boolField("hasRawBytes", !d.m_rawBytes.empty()));
         fields.push_back(uintField("rawByteCount", d.m_rawBytes.size()));
+        fields.push_back(uintField("dxfPayloadChunkCount", d.m_dxfPayloadChunks.size()));
+        for (std::size_t i = 0; i < d.m_dxfPayloadChunks.size(); ++i) {
+            const DRW_ModelerPayloadChunk& chunk = d.m_dxfPayloadChunks[i];
+            const std::string prefix = "dxfPayloadChunk." + std::to_string(i);
+            const bool inBounds = chunk.m_offset <= d.m_rawBytes.size()
+                && chunk.m_length <= d.m_rawBytes.size() - chunk.m_offset;
+            fields.push_back(intField(prefix + ".groupCode", chunk.m_groupCode));
+            fields.push_back(uintField(prefix + ".offset", chunk.m_offset));
+            fields.push_back(uintField(prefix + ".length", chunk.m_length));
+            fields.push_back(boolField(prefix + ".inBounds", inBounds));
+        }
+        appendDataStorageFields(fields, d);
         fields.push_back(stringField("rawByteCarrierKind",
             facade_ == "dwgRW" && direction_ == "read"
                 ? "dwgObjectFrameBody-unclassified-payload"
@@ -821,9 +833,7 @@ public:
             "addSurface", entity, fields, *d, false);
         if (!d->rawAcisData.empty()) {
             const std::string carrierName = facade_ == "dwgRW" && direction_ == "read"
-                ? (d->hasDataStorageBinaryData()
-                    ? "dwgSurfaceInlineDataStorageBodyBits"
-                    : "dwgSurfaceObjectBodyBits")
+                ? "dwgSurfaceReaderPayload-unclassified"
                 : facade_ == "dxfRW"
                     ? "dxfSurfaceEntityInlineAcis"
                     : "unclassifiedSurfaceBytes";
@@ -1139,7 +1149,7 @@ private:
             callbacks[callbackIndex].carrierIds.push_back(carrierId);
         }
         if (!d.dataStorageData.empty()) {
-            const std::string carrierId = addCarrier("entityDataStorage",
+            const std::string carrierId = addCarrier("dwgLinkedDataStoragePayload",
                 d.dataStorageData.data(), d.dataStorageData.size(), "preserved", record.id);
             callbacks[callbackIndex].carrierIds.push_back(carrierId);
         }
@@ -1171,6 +1181,32 @@ private:
         const std::size_t callbackIndex = records[recordIndex].callbackOrdinal;
         if (callbackIndex < callbacks.size())
             callbacks[callbackIndex].carrierIds.push_back(carrierId);
+    }
+
+    void appendDataStorageFields(std::vector<Field>& fields,
+                                 const DRW_Entity& entity) const {
+        fields.push_back(boolField("hasDataStorageBinaryData",
+                                   entity.hasDataStorageBinaryData()));
+        fields.push_back(boolField("hasDataStorageRecord",
+                                   entity.hasDataStorageRecord));
+        fields.push_back(uintField("dataStorageByteCount",
+                                   entity.dataStorageData.size()));
+        fields.push_back(uintField("dataStorageHandle",
+                                   entity.dataStorageHandle));
+        fields.push_back(stringField("dataStorageHandleKey",
+                                     entity.dataStorageHandleKey));
+        fields.push_back(uintField("dataStorageSegmentIndex",
+                                   entity.dataStorageSegmentIndex));
+        fields.push_back(uintField("dataStorageSchemaIndex",
+                                   entity.dataStorageSchemaIndex));
+        fields.push_back(boolField("hasDataStoragePayloadMarker",
+                                   entity.hasDataStoragePayloadMarker));
+        fields.push_back(uintField("dataStoragePayloadMarkerOffset",
+                                   entity.dataStoragePayloadMarkerOffset));
+        fields.push_back(uintField("dataStoragePayloadMarkerLength",
+                                   entity.dataStoragePayloadMarkerLength));
+        fields.push_back(stringField("dataStoragePayloadMarkerSection",
+                                     entity.dataStoragePayloadMarkerSection));
     }
 
     void appendVertexFields(std::vector<Field>& fields, const DRW_Vertex* vertex,
@@ -1305,11 +1341,10 @@ private:
         fields.push_back(intField("acisVersion", surface.acisVersion));
         fields.push_back(boolField("hasRawAcisData", !surface.rawAcisData.empty()));
         fields.push_back(uintField("rawAcisByteCount", surface.rawAcisData.size()));
+        appendDataStorageFields(fields, surface);
         fields.push_back(stringField("rawAcisCarrierKind",
             facade_ == "dwgRW" && direction_ == "read"
-                ? (surface.hasDataStorageBinaryData()
-                    ? "dwgInlineDataStorageBodyBits"
-                    : "dwgSurfaceObjectBodyBits")
+                ? "dwgSurfaceReaderPayload-unclassified"
                 : facade_ == "dxfRW"
                     ? "dxfEntityInlineAcis"
                     : "unknown"));
@@ -1319,9 +1354,6 @@ private:
                                   static_cast<int>(surface.rawDwgBodyVersion)));
         fields.push_back(uintField("dwgClassNum", surface.dwgClassNum));
         fields.push_back(boolField("dwgPayloadDecoded", surface.dwgPayloadDecoded));
-        fields.push_back(boolField("hasDataStorageRecord", surface.hasDataStorageRecord));
-        fields.push_back(boolField("hasDataStorageBinaryData",
-                                  surface.hasDataStorageBinaryData()));
         fields.push_back(boolField("derivedWireframeDecoded", surface.m_wireframeDecoded));
         fields.push_back(uintField("derivedWireframeVertexCount",
                                    surface.m_wireframe.vertices.size()));
@@ -2195,14 +2227,33 @@ int selfTest() {
 
     DRW_ModelerGeometry modeler(DRW::E3DSOLID);
     modeler.m_rawBytes = {0x41, 0x42, 0x43};
+    modeler.hasDataStorageRecord = true;
+    modeler.dataStorageHandle = 0x123456789u;
+    modeler.dataStorageHandleKey = "123456789";
+    modeler.dataStorageData = {0x44, 0x45};
     SemanticSink modelerSink("dwgRW", "read");
     modelerSink.addModelerGeometry(modeler);
+    bool foundFrameCarrier = false;
+    bool foundDataStorageCarrier = false;
+    for (const CarrierRow& carrier : modelerSink.carriers) {
+        if (carrier.source.find("dwgModelerObjectFrameBody-unclassified-payload")
+            != std::string::npos) {
+            foundFrameCarrier = carrier.size == modeler.m_rawBytes.size()
+                && carrier.digest == sha256(modeler.m_rawBytes.data(),
+                                             modeler.m_rawBytes.size());
+        } else if (carrier.source.find("dwgLinkedDataStoragePayload")
+                   != std::string::npos) {
+            foundDataStorageCarrier = carrier.size == modeler.dataStorageData.size()
+                && carrier.digest == sha256(modeler.dataStorageData.data(),
+                                             modeler.dataStorageData.size());
+        }
+    }
     if (fieldValue(modelerSink, "rawByteCarrierKind")
             != jsonString("dwgObjectFrameBody-unclassified-payload")
-        || modelerSink.carriers.size() != 1
-        || modelerSink.carriers.front().size != modeler.m_rawBytes.size()
-        || modelerSink.carriers.front().digest
-            != sha256(modeler.m_rawBytes.data(), modeler.m_rawBytes.size()))
+        || fieldValue(modelerSink, "dataStorageByteCount") != "2"
+        || fieldValue(modelerSink, "dataStorageHandle") != "4886718345"
+        || modelerSink.carriers.size() != 2
+        || !foundFrameCarrier || !foundDataStorageCarrier)
         return 1;
 
     SemanticSink failureSink;

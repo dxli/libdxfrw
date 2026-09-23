@@ -6405,6 +6405,7 @@ void DRW_ModelerGeometry::resetDwgState() {
     m_hasWireframe = false;
     m_historyHandle = 0;
     m_rawBytes.clear();
+    m_dxfPayloadChunks.clear();
     m_payloadRanges.clear();
     m_wireframe = DRW_AcisBrep();
     m_wireframeDecoded = false;
@@ -6497,11 +6498,15 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
 bool DRW_ModelerGeometry::parseCode(int code, const std::unique_ptr<dxfReader>& reader) {
     switch (code) {
     case 1:
-    case 3:
-        if (!appendTextBytesChecked(m_rawBytes, reader->getString(),
+    case 3: {
+        const std::string text = reader->getString();
+        const std::size_t offset = m_rawBytes.size();
+        if (!appendTextBytesChecked(m_rawBytes, text,
                                     dwgSafety::MaxBufferSize))
             return false;
+        m_dxfPayloadChunks.emplace_back(code, offset, text.size());
         break;
+    }
     case 70: {
         const int value = reader->getInt32();
         if (value < 0 || value > std::numeric_limits<std::uint16_t>::max())
@@ -6523,9 +6528,12 @@ bool DRW_ModelerGeometry::parseCode(int code, const std::unique_ptr<dxfReader>& 
             std::vector<std::uint8_t> decoded;
             if (!decodeHexBytes(reader->getString(), decoded))
                 return false;
+            const std::size_t offset = m_rawBytes.size();
+            const std::size_t length = decoded.size();
             if (!appendBytesChecked(m_rawBytes, decoded,
                                     dwgSafety::MaxBufferSize))
                 return false;
+            m_dxfPayloadChunks.emplace_back(code, offset, length);
         }
         break;
     default:

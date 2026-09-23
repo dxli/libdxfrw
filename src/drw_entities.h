@@ -817,6 +817,18 @@ struct DRW_ModelerPayloadRange {
 };
 
 //! Opaque ACIS/SAB modeler geometry entity shell (REGION, 3DSOLID, BODY).
+//! A DXF text/binary payload chunk is a view into DRW_ModelerGeometry::m_rawBytes.
+//! Group-code/order metadata keeps SAT text groups distinct from binary chunks
+//! without duplicating bounded payload storage.
+struct DRW_ModelerPayloadChunk {
+    DRW_ModelerPayloadChunk(int code, std::size_t offset, std::size_t length)
+        : m_groupCode(code), m_offset(offset), m_length(length) {}
+
+    int m_groupCode;
+    std::size_t m_offset;
+    std::size_t m_length;
+};
+
 class DRW_ModelerGeometry : public DRW_Entity {
     SETENTFRIENDS
 public:
@@ -840,6 +852,8 @@ public:
     bool m_hasWireframe = false;
     std::uint32_t m_historyHandle = 0;
     std::vector<std::uint8_t> m_rawBytes;
+    //! DXF group order/type for m_rawBytes; does not classify DWG frame bytes.
+    std::vector<DRW_ModelerPayloadChunk> m_dxfPayloadChunks;
     std::vector<DRW_ModelerPayloadRange> m_payloadRanges;
 
     //! Lazily-decoded ACIS wireframe (from m_rawBytes SAB payload).
