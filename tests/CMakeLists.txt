@@ -50,12 +50,22 @@ set_tests_properties(dwg2dxf_version_policy PROPERTIES
 set(_freecad_cli_sample
     ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dwg/ordinary_enc_AC1027.dwg
 )
-if(EXISTS "${_freecad_cli_sample}")
+set(_freecad_cli_rtext_sample
+    ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dwg/rtext_arctext.dwg
+)
+set(_freecad_cli_mpolygon_sample
+    ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dwg/mpolygon_solid.dwg
+)
+if(EXISTS "${_freecad_cli_sample}"
+        AND EXISTS "${_freecad_cli_rtext_sample}"
+        AND EXISTS "${_freecad_cli_mpolygon_sample}")
     add_test(
         NAME dwg2dxf_freecad_cli_compat
         COMMAND ${CMAKE_COMMAND}
             -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
             -DSAMPLE=${_freecad_cli_sample}
+            -DRTEXT_SAMPLE=${_freecad_cli_rtext_sample}
+            -DMPOLYGON_SAMPLE=${_freecad_cli_mpolygon_sample}
             -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_dwg2dxf_compat_test.cmake
     )

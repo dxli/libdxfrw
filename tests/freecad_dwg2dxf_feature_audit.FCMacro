@@ -1,0 +1,114 @@
+# Optional audit of the real FreeCAD Draft DWG -> DXF -> C++ importer route.
+#
+# Run with LIBDXFRW_FREECAD_DWG set to a tracked fixture and this build's
+# dwg2dxf directory first on PATH. Use an isolated --user-cfg. The macro prints
+# one JSON summary containing converter output record counts, importer stats,
+# and created FreeCAD object types; it does not download the legacy DXF parser.
+
+import collections
+import hashlib
+import json
+import os
+import platform
+import sys
+
+import FreeCAD as App
+
+
+sample = os.environ.get("LIBDXFRW_FREECAD_DWG")
+if not sample:
+    raise RuntimeError("LIBDXFRW_FREECAD_DWG must name a DWG sample")
+
+draft_path = os.path.join(App.getResourceDir(), "Mod", "Draft")
+sys.path.insert(0, draft_path)
+
+import importDWG
+import importDXF
+
+
+captured = {}
+original_convert = importDWG.convertToDxf
+original_reporter = importDXF.DxfImportReporter
+
+
+def capture_convert(filename):
+    result = original_convert(filename)
+    captured["dxf"] = result
+    return result
+
+
+class CapturingReporter(original_reporter):
+    def __init__(self, filename, stats_dict, total_time=0.0):
+        captured["stats"] = stats_dict
+        super().__init__(filename, stats_dict, total_time)
+
+
+importDWG.convertToDxf = capture_convert
+importDXF.DxfImportReporter = CapturingReporter
+
+
+def digest(path):
+    sha = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            sha.update(chunk)
+    return sha.hexdigest()
+
+
+def count_dxf_records(path):
+    counts = collections.Counter()
+    with open(path, "r", encoding="utf-8", errors="replace") as stream:
+        lines = stream.read().splitlines()
+    for index in range(0, len(lines) - 1, 2):
+        if lines[index].strip() == "0":
+            counts[lines[index + 1].strip()] += 1
+    return dict(sorted(counts.items()))
+
+
+legacy = App.ParamGet(
+    "User parameter:BaseApp/Preferences/Mod/Draft"
+).GetBool("dxfUseLegacyImporter", False)
+if legacy:
+    raise RuntimeError(
+        "This audit requires the default C++ importer; use an isolated user config"
+    )
+
+doc = None
+try:
+    doc = importDWG.open(sample)
+    if doc is None:
+        raise AssertionError("Draft.importDWG.open returned no document")
+
+    dxf_path = captured.get("dxf")
+    if not dxf_path or not os.path.isfile(dxf_path):
+        raise AssertionError("Draft DWG conversion did not leave its DXF for audit")
+
+    stats = captured.get("stats") or {}
+    unsupported = stats.get("unsupportedFeatures", {})
+    object_types = collections.Counter(obj.TypeId for obj in doc.Objects)
+    result = {
+        "freecad_version": list(App.Version()),
+        "platform": platform.platform(),
+        "architecture": platform.machine(),
+        "importer": "C++",
+        "import_mode": App.ParamGet(
+            "User parameter:BaseApp/Preferences/Mod/Draft"
+        ).GetInt("DxfImportMode", 2),
+        "converter": importDWG.get_libredwg_converter("dwg2dxf"),
+        "source": os.path.basename(sample),
+        "source_sha256": digest(sample),
+        "dxf_size": os.path.getsize(dxf_path),
+        "dxf_sha256": digest(dxf_path),
+        "dxf_record_counts": count_dxf_records(dxf_path),
+        "import_entity_counts": stats.get("entityCounts", {}),
+        "import_created_count": stats.get("totalEntitiesCreated", 0),
+        "unsupported_features": {
+            key: len(values) for key, values in sorted(unsupported.items())
+        },
+        "freecad_object_types": dict(sorted(object_types.items())),
+        "settings": stats.get("importSettings", {}),
+    }
+    print("FREECAD_DWG2DXF_FEATURE_AUDIT=" + json.dumps(result, sort_keys=True))
+finally:
+    if doc is not None and doc.Name in App.listDocuments():
+        App.closeDocument(doc.Name)

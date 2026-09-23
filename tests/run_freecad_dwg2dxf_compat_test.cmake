@@ -1,6 +1,9 @@
 if(NOT DEFINED DWG2DXF OR NOT DEFINED SAMPLE OR NOT DEFINED OUTPUT_DIR)
     message(FATAL_ERROR "DWG2DXF, SAMPLE, and OUTPUT_DIR are required")
 endif()
+if(NOT DEFINED RTEXT_SAMPLE OR NOT DEFINED MPOLYGON_SAMPLE)
+    message(FATAL_ERROR "RTEXT_SAMPLE and MPOLYGON_SAMPLE are required")
+endif()
 
 set(_test_dir "${OUTPUT_DIR}/freecad dwg2dxf cli test")
 file(MAKE_DIRECTORY "${_test_dir}")
@@ -39,6 +42,46 @@ if(_section_pos EQUAL -1 OR _version_pos EQUAL -1)
         "Expected ASCII DXF structure and source revision AC1027 in output header")
 endif()
 
+# Exercise special records through the exact converter argv FreeCAD uses, not
+# only through an in-process adapter test. The source files are tracked DWG
+# fixtures; outputs stay in this build-tree test directory.
+function(assert_freecad_entity_records sample stem)
+    set(_special_input "${_test_dir}/${stem} source.dwg")
+    set(_special_output "${_test_dir}/${stem} result.dxf")
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E copy "${sample}" "${_special_input}"
+        RESULT_VARIABLE _copy_result
+    )
+    if(NOT "${_copy_result}" STREQUAL "0")
+        message(FATAL_ERROR "Could not prepare ${stem} DWG input (${_copy_result})")
+    endif()
+    file(REMOVE "${_special_output}")
+    execute_process(
+        COMMAND "${DWG2DXF}" "${_special_input}" -o "${_special_output}"
+        RESULT_VARIABLE _result
+        OUTPUT_VARIABLE _stdout
+        ERROR_VARIABLE _stderr
+        TIMEOUT 60
+    )
+    if(NOT "${_result}" STREQUAL "0" OR NOT EXISTS "${_special_output}")
+        message(FATAL_ERROR
+            "FreeCAD-form ${stem} conversion failed (${_result})\n${_stdout}\n${_stderr}")
+    endif()
+    file(READ "${_special_output}" _special_dxf)
+    foreach(_entity IN LISTS ARGN)
+        string(FIND "${_special_dxf}" "0\n${_entity}\n" _entity_pos)
+        if(_entity_pos EQUAL -1)
+            message(FATAL_ERROR
+                "FreeCAD-form ${stem} conversion dropped the ${_entity} DXF record")
+        endif()
+    endforeach()
+endfunction()
+
+assert_freecad_entity_records("${RTEXT_SAMPLE}" "rtext arctext"
+    RTEXT ARCALIGNEDTEXT)
+assert_freecad_entity_records("${MPOLYGON_SAMPLE}" "mpolygon"
+    MPOLYGON)
+
 # Unix command-line arguments are byte strings (UTF-8 on the supported host
 # environments exercised here). Keep Windows Unicode argv qualification
 # separate because the narrow main(argc, argv) entry point has a distinct
@@ -48,6 +91,7 @@ if(NOT CMAKE_HOST_WIN32)
     file(MAKE_DIRECTORY "${_unicode_dir}")
     set(_unicode_input "${_unicode_dir}/drawing été.dwg")
     set(_unicode_output "${_unicode_dir}/résultat été.dxf")
+    file(REMOVE "${_unicode_output}")
     execute_process(
         COMMAND "${CMAKE_COMMAND}" -E copy "${SAMPLE}" "${_unicode_input}"
         RESULT_VARIABLE _copy_result

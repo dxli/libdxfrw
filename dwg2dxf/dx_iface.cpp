@@ -121,7 +121,12 @@ void dx_iface::writeEntity(DRW_Entity* e){
         dxfW->writeMText(static_cast<DRW_MText*>(e));
         break;
     case DRW::TEXT:
-        dxfW->writeText(static_cast<DRW_Text*>(e));
+        if (auto* rtext = dynamic_cast<DRW_RText*>(e))
+            dxfW->writeRText(rtext);
+        else if (auto* arcText = dynamic_cast<DRW_ArcAlignedText*>(e))
+            dxfW->writeArcAlignedText(arcText);
+        else
+            dxfW->writeText(static_cast<DRW_Text*>(e));
         break;
     case DRW::DIMLINEAR:
     case DRW::DIMALIGNED:
@@ -137,6 +142,9 @@ void dx_iface::writeEntity(DRW_Entity* e){
         break;
     case DRW::HATCH:
         dxfW->writeHatch(static_cast<DRW_Hatch*>(e));
+        break;
+    case DRW::MPOLYGON:
+        dxfW->writeMPolygon(static_cast<DRW_MPolygon*>(e));
         break;
     case DRW::IMAGE:
         dxfW->writeImage(static_cast<DRW_Image*>(e), static_cast<dx_ifaceImg*>(e)->path);

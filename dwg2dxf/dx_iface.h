@@ -123,7 +123,13 @@ public:
         currentBlock->ent.push_back(new DRW_MText(data));
     }
     virtual void addText(const DRW_Text& data){
-        currentBlock->ent.push_back(new DRW_Text(data));
+        if (const auto* rtext = dynamic_cast<const DRW_RText*>(&data))
+            currentBlock->ent.push_back(new DRW_RText(*rtext));
+        else if (const auto* arcText =
+                     dynamic_cast<const DRW_ArcAlignedText*>(&data))
+            currentBlock->ent.push_back(new DRW_ArcAlignedText(*arcText));
+        else
+            currentBlock->ent.push_back(new DRW_Text(data));
     }
     virtual void addDimAlign(const DRW_DimAligned *data){
         currentBlock->ent.push_back(new DRW_DimAligned(
@@ -158,6 +164,9 @@ public:
     }
     virtual void addHatch(const DRW_Hatch *data){
         currentBlock->ent.push_back(new DRW_Hatch(*data));
+    }
+    virtual void addMPolygon(const DRW_MPolygon *data){
+        currentBlock->ent.push_back(new DRW_MPolygon(*data));
     }
     virtual void addViewport(const DRW_Viewport& data){
         currentBlock->ent.push_back(new DRW_Viewport(data));
