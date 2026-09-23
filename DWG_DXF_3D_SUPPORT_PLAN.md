@@ -539,7 +539,8 @@ diagnostic.
 
 ### S7 — Independent qualification, claims, and release closeout
 
-State: depends on S1-S6; qualify each row independently.
+State: the S7.4 status matrix is committed; every remaining promotion or
+consumer-visibility item stays per-family/per-version evidence-gated.
 
 Dependencies: S1-S6. An unavailable DWG witness does not block completed DXF
 rows; it leaves only the corresponding DWG row unqualified.
@@ -624,7 +625,7 @@ spec/trace readiness; finally S7. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 14/28 committed, 14 blocked, 0 in progress, and 0 ready):
+commit; 15/28 committed, 13 blocked, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -644,7 +645,9 @@ commit; 14/28 committed, 14 blocked, 0 in progress, and 0 ready):
 | S3.1 | COMMITTED | Validated ODA v5.4.1 §20.4.41's non-empty modeler version range (1 or 2); empty ACIS bodies retain the absent-version/default-zero case. Runtime-generated AC1018 frames cover empty, 1, 2, 0, and 3; build and focused round-trip CTest pass. A local AC1024 conference-room debug conversion reached modeler parsers and retained 3DSOLID history handles, but the overall CLI failed on an OBJECTS-pass type-42 frame, so it is not an end-to-end positive. The version-2 byte is opaque filler; no payload extraction or semantic ACIS claim follows. |
 | S3.2–S3.6 | BLOCKED_PER_VERSION | ACIS extraction still needs version-specific boundary/handle/DataStorage evidence plus authentic target and independent checks. R1.4/R11 remains separately blocked on era-appropriate reference/sample. Do not edit parser paths speculatively. |
 | S4.1–S4.4 | BLOCKED_ON_S3 | Opaque DWG modeler payload writing follows only verified read layouts. |
-| S7.1–S7.5 | BLOCKED_ON_READY_SLICES | Qualify only completed format/version rows, then narrow README/support claims accordingly. |
+| S7.1–S7.3 | BLOCKED_ON_INDEPENDENT_WITNESS | Current LibreDWG/ezdxf attempts do not supply semantic comparison for all required rows; retain unqualified status until exact witnesses and diagnostic outcomes exist. |
+| S7.4 | COMMITTED | Added docs/3D_SUPPORT_STATUS.md, linked from README, with family-specific DXF test versions/encodings, explicit DWG reader/writer version sets, direction-specific status, evidence grade, and unqualified/unsupported boundaries. Does not modify frozen metadata/qualified-format-claims-v1.json or metadata/qualified-format-status-v1.json, and promotes no semantic claim. |
+| S7.5 | BLOCKED_ON_CONSUMER_REVIEW | Library callbacks and dx_iface tests are not proof that LibreCAD displays or edits the same families; inspect consumer callback paths and retain that distinction. |
 
 - Before implementation, convert the work packages into dependency-closed
   items with `READY`, `IN_PROGRESS`, `BLOCKED`, `VERIFIED`, and `COMMITTED`

@@ -67,6 +67,11 @@ same `libdxfrw::libdxfrw` target.
 | DWG writing and versioned feature families | experimental | Local six-version round-trips pass; self-read is not an independent oracle |
 | Derived rendering or CAD application policy | unsupported | Owned by the consumer, not this library |
 
+3D geometry is not promoted to a general supported claim by the table above.
+See the [3D format/version status matrix](docs/3D_SUPPORT_STATUS.md) for the
+exact DXF test versions and encodings, DWG reader/writer version dispositions,
+and remaining evidence limits.
+
 The six external-only follow-ups J256, J260, J268, J284, J293, and J295 are
 still `DEFERRED_EXTERNAL`. Their evidence is advisory and cannot promote any
 support claim. External DWG/DXF payloads are not committed; tests that need
