@@ -40,7 +40,7 @@ claims.
 | `MESH` / `AcDbSubDMesh` | Typed vertex/face/edge/crease/property-override data, topology validation, DXF and DWG encode/decode paths, and generated local round-trip tests exist. S5.1 added the missing in-tree `dx_iface` MESH read callback and write dispatch. | Generated ASCII/binary DXF vectors compare typed vertices/faces/edges/creases; LibreDWG 0.14 independently reads both. Self-round-trips remain consistency checks, not DWG-layout evidence. Autodesk's DXF table is useful for DXF group codes; the searchable ODA v5.4.1 text reviewed here has no named `AcDbSubDMesh` DWG layout. Keep DWG MESH layout/version claims unqualified until primary DWG evidence or a target-produced, independently checked witness exists. |
 | Six analytic/NURBS surface classes | Typed DXF paths exist. The DWG surface parser retains a bounded raw ACIS body and links DataStorage; DWG surface encoding rejects versions before AC1021. Class registration and modern DWG read/write paths exist. | The searchable ODA v5.4.1 text reviewed here has no named modern `AcDb*Surface` layouts. Keep DWG surface layout/version claims unqualified until feature-specific primary evidence or target-produced, independently checked witnesses exist. Keep the AC1021+ writer gate meanwhile; check each typed field, handle, transform, and ACIS carrier separately. Do not imply surface evaluation. |
 | `3DSOLID` / `REGION` / `BODY` and ACIS | DXF R2000–R2010 stores SAT groups 1/3 on the entity; R2013+ may place SAB in `ACDSDATA`. At baseline, `writeModelerGeometry()` treated SAT as text only through AC1018 and wrote binary chunks for later versions. S2.2 now routes textual payloads through groups 1/3 for AC1015/1018/1021/1024 and rejects binary, mixed, DWG-frame, and AC1027+ inline payloads rather than guessing. Generic raw-DXF-section preservation remains independent; typed association between a modeler entity and ACDSDATA is still not demonstrated. In DWG, the parser reads modeler status/version/history and skips bounded body data; the dispatcher later assigns the entire DWG object frame body to `DRW_ModelerGeometry::m_rawBytes`. For AC1027+ it also attempts DataStorage linking into a separate field. `decodeWireframe()` still chooses DataStorage when linked; the DXF writer no longer treats DWG frame/DataStorage metadata as SAT. `DRW_ModelerGeometry` has no DWG encoder, and `dwgRW` has no typed modeler-geometry write route. | Keep frame bytes, inline ACIS bytes, ACDSDATA/AcDsPrototype bytes, and proxy bytes separate. SAT routing is supported only through the explicitly tested AC1024 lane; AC1027+ SAB-to-entity association and DWG modeler writing remain unsupported/unqualified. |
-| NURBS/spline curve path | The repository instructions record a known R2010+ DWG spline bit-layout discrepancy (`splFlag1` read as a bit-long where the ODA specification describes one bit). No AC1027/AC1032 sample is currently in the tracked fixture corpus. | Treat 3D spline/NURBS support as unqualified for affected DWG versions until the ODA chapter and a sample trace agree. Add a local-from-scratch bit-vector test for speed, but do not use it alone to promote a version support claim. |
+| NURBS/spline curve path | Local ODA v5.4.1 §20.4.40 specifies R2013+ `Spline flags 1` as BL and the subsequent `Rational`, `Closed`, and `Periodic` values as individual B fields in scenario 1. The current `parseDwgSplineBody()` reads BL for `splFlag1`/`knotParam` only when `version > AC1024`, matching that stated version boundary; the one-bit fields are read separately. The initial suspected width defect is not supported by the cited ODA text. No authentic AC1027/AC1032 spline witness has been identified. | Do not change the DWG flag width based on the stale issue note. Keep the per-version DWG spline path unqualified until authentic target samples/field traces verify the current parse; do not infer AC1032 from the AC1027 pass-through reader. |
 | Semantic comparison | `tests/semantic_differential_adapter.cpp` currently routes MESH, modeler geometry, and surfaces through opaque serializers. | A successful opaque comparison cannot establish vertex, face, NURBS, transform, or payload-carrier correctness. Add canonical field serializers and compare payload identity separately from derived geometry. |
 | Unknown DXF sections | `dxfRW::processRawDxfSection()` captures unrecognized sections as `DRW_RawDxfSection`; the writer can re-emit supplied raw sections. | This is a useful opaque-preservation route for `ACDSDATA`, but the 3D plan must test the complete read/callback/consumer/write chain and must not call it a typed ACIS link. |
 | DXF ACIS version routing | S2.2 now writes SAT text chunks as groups 1/3 through AC1024, records/validates DXF chunk identity, and refuses unassociated AC1027+ inline bytes. The surface writer applies the same SAT gate while keeping subtype-specific binary group-310 data distinct. | Autodesk's AutoCAD 2010/current DXF references list proprietary payload groups 1/3; ezdxf independently documents SAT inline through R2010 and SAB in ACDSDATA from R2013+. LibreDWG 0.14 `dxf2dwg` successfully read locally generated AC1015/1018/1021/1024 SAT vectors. Keep AC1027+ SAB-to-entity association opaque until a valid identity/link contract is implemented. |
@@ -119,16 +119,16 @@ Steps:
 1. Synchronize/rebase the implementation branch onto current `origin/master`;
    record `HEAD`, `origin/master`, dirty paths, and whether any user-owned
    untracked files were left untouched.
-2. Resolve and read the authoritative ODA v5.4.1 PDF required by `AGENTS.md` at
-   `~/doc/dwg/OpenDesign_Specification_for_.dwg_files.pdf`; the documented
-   local path was absent during this review. Verify it matches the official
-   [published ODA specification](https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf).
+2. Resolve and read the authoritative ODA v5.4.1 PDF required by `AGENTS.md`.
+   The canonical basename was absent, but
+   `/Users/dli/doc/dwg/OpenDesign_Specification_for_.dwg_files (1).pdf` is
+   readable, identifies itself as Version 5.4.1, and has 279 pages matching
+   the official [published ODA specification](https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf).
    Read the relevant chapter before changing any `parseDwg(...)` body or any
-   file under `src/intern/dwgreader*`, exactly as `AGENTS.md` requires. Until
-   the local PDF is available, continue DXF/API/test-adapter work but do not
-   edit any `src/intern/dwgreader*` file. A local copy alone does not prove a
-   feature layout: record the applicable section (or that the reviewed v5.4.1
-   text has no applicable section) for every DWG family/version row.
+   file under `src/intern/dwgreader*`, exactly as `AGENTS.md` requires. This
+   resolves the authority-file blocker, not feature-layout gaps: record the
+   applicable section (or that the reviewed v5.4.1 text has no applicable
+   section) for every DWG family/version row.
 3. Build a capability ledger with rows for DXF ASCII/binary read/write and
    each DWG read/write version, including the legacy R1.4/R11 reader paths
    found in this source tree. For every row record the concrete dispatch,
@@ -136,20 +136,23 @@ Steps:
    type, and support-claim ceiling. Unknown means unknown, not supported.
 4. Capture empirical DWG custom-class/type identities only from real local
    files/traces, per `AGENTS.md`; do not copy class numbers from third-party
-   documentation into the reader.
+   documentation into the reader. The AC1024 `visualization_-_conference_room.dwg`
+   trace records class/type 524 as `AcDbPlaneSurface`, record name
+   `PLANESURFACE`, entity flag 1, and two instances; conversion emits two
+   `PLANESURFACE` records. This is one-file identity/dispatch evidence only,
+   not a layout or semantic qualification. No 3DLINE class identity was found.
 5. Add an entity-specific compatibility column: normative DXF/DWG spelling,
    core versus vendor/custom class, legacy versus modern encoding, and
    whether the selected LibreDWG/ezdxf oracle marks the path stable. Treat the
    absence of an entity from an Autodesk reference index as a portability risk,
    not as proof that no application ever emits it.
-6. Maintain an evidence map, not just a generic “ODA checked” flag. The online
-   v5.4.1 review located classic vertex/polyline and ACIS modeler sections
-   (including §20.4.13–20.4.17, §20.4.33–20.4.36, and §20.4.41), but found no
-   searchable named layout for `AcDbSubDMesh`, modern `AcDb*Surface`, or
-   `3DLINE`. Verify those apparent gaps against the local PDF itself; do not
-   infer a byte layout from an absent section, DXF definitions, or another
-   project's implementation. For a genuine gap, require a newer primary
-   format reference or target-generated DWG plus trace and independent-reader
+6. Maintain an evidence map, not just a generic “ODA checked” flag. The local
+   v5.4.1 searchable text confirms classic vertex/polyline, SPLINE (§20.4.40),
+   ACIS modeler (§20.4.41), and DataStorage (§24) material, but has no named
+   layout for `AcDbSubDMesh`, modern `AcDb*Surface`, or `3DLINE`. Do not infer
+   a byte layout from an absent section, DXF definitions, or another project's
+   implementation. For a genuine gap, require a newer primary format
+   reference or target-generated DWG plus trace and independent-reader
    confirmation. Pre-R13 readers require their own era-appropriate authority
    and sample; R13+ ODA layouts cannot qualify legacy forms.
 
@@ -247,8 +250,11 @@ truncated, ambiguous, or orphaned section is never emitted as entity ACIS.
 
 ### S3 — Recover ACIS carriers from DWG entities and DataStorage
 
-State: `BLOCKED_ON_S0_SPEC_AND_TRACE` for DWG reader edits; DXF and
-test-adapter lanes continue independently.
+State: the ODA v5.4.1 authority is resolved. DWG reader changes remain
+`BLOCKED_PER_VERSION` until the relevant section, successful target trace, and
+independent witness are tied to the exact version/field; the AC1024 PlaneSurface
+class-table trace is identity evidence only. DXF and test-adapter lanes remain
+independent.
 
 Dependencies: S0 local spec/trace gate; S1; S2 carrier contract.
 
@@ -369,10 +375,10 @@ finite values. Negative gate: invalid vertex indices, impossible counts,
 non-finite coordinates, half-present points, or overflowed count arithmetic
 are rejected before callback publication.
 
-### S6 — Surface/NURBS version qualification and known spline defect
+### S6 — Surface/NURBS version qualification and spline layout verification
 
 State: `READY` for DXF inventory/field tests; DWG spline edits are
-`BLOCKED_ON_S0_SPEC_AND_SAMPLE`; modern surface DWG layout claims are
+`BLOCKED_ON_AUTHENTIC_PER_VERSION_SPLINE_WITNESS`; modern surface DWG layout claims are
 `BLOCKED_ON_PRIMARY_LAYOUT_EVIDENCE`.
 
 DXF evidence boundary: the S6.1 slice below verifies the implemented DXF
@@ -403,12 +409,17 @@ Steps:
    treat that gate as proof of supported layout: until a surface-specific
    primary layout and independent witness are available, keep DWG surface
    read/write rows unqualified and avoid changing their DWG byte layout.
-3. Fix the documented R2010+ `DRW_Spline::parseDwg` `splFlag1` width only after
-   confirming ODA's one-bit rule and tracing an authentic sample. Add a
-   generated bit-boundary regression and an independent field comparison;
-   until an authentic AC1024/AC1027/AC1032 witness exists for the version in
-   question, label that row experimental/unqualified. Do not use an AC1024
-   trace to qualify AC1027 or the AC1032 pass-through stub.
+3. Reconcile the stale local `AGENTS.md` note about an R2010+ one-bit
+   `splFlag1`: ODA v5.4.1 §20.4.40 specifies R2013+ `Spline flags 1` and `Knot
+   parameter` as BL fields; in scenario 1, `Rational`, `Closed`, and `Periodic`
+   are separate B fields. `DRW_Spline::parseDwgSplineBody()` reads the BL fields
+   only when `version > AC1024` and separately reads the three scenario bits,
+   matching that source. Do not change the field width absent contradictory
+   primary evidence. Add/retain local bit-boundary tests for the actual branch,
+   then verify with authentic target splines separately for AC1024, AC1027, and
+   AC1032; do not let an AC1024 trace qualify AC1027 or the AC1032
+   pass-through stub. Until each version has a witness, leave that row
+   unqualified.
 4. Make unsupported NURBS/surface operations explicit. Retaining control
    points/knots or ACIS is not surface evaluation or tessellation.
 
@@ -549,24 +560,24 @@ spec/trace readiness; finally S7. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 8/28 committed, 17 blocked, 2 in progress, and 1 ready):
+commit; 11/28 committed, 15 blocked, 2 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
 | S0.1 | COMMITTED | Rebased onto `origin/master`; HEAD and origin are identical. Existing untracked paths remain untouched. |
-| S0.2 | BLOCKED | `/Users/dli/doc/dwg/OpenDesign_Specification_for_.dwg_files.pdf` is unavailable; required before editing `parseDwg(...)` or `src/intern/dwgreader*`. Continue independent DXF/API/tests. |
+| S0.2 | COMMITTED | Resolved the authoritative local ODA v5.4.1 PDF at `/Users/dli/doc/dwg/OpenDesign_Specification_for_.dwg_files (1).pdf`; title/version/page count (279) match the official download. Read §§20.4.40 SPLINE and 20.4.41 REGION/3DSOLID/BODY; continue reading each relevant section immediately before any DWG parser change. Authority lookup is unblocked; this alone does not qualify unlisted layouts. |
 | S0.3 | IN_PROGRESS | Map dispatch, versions, fields, and claim ceiling for every 3D family; do not promote unknown DWG routes. |
-| S0.4 | READY | Record custom DWG class/type identity only from local target traces; run after applicable spec/sample access. |
+| S0.4 | COMMITTED | AC1024 `visualization_-_conference_room.dwg` debug trace records class/type 524=`AcDbPlaneSurface`, DXF record `PLANESURFACE`, entity flag 1, two instances; successful conversion emits two `PLANESURFACE` records. This is class identity/dispatch evidence for this file/version only, not byte-layout or semantic qualification. No 3DLINE identity found. Candidate AC1018 `Extruder2.dwg` stops at Tables error 9 and AC1021 `dwgreader21_230.dwg` is too small (header error 5); neither supplied target-type evidence. |
 | S0.5 | IN_PROGRESS | DXF/core-vendor/legacy inventory is underway; compare selected independent implementations without treating them as normative. |
-| S0.6 | BLOCKED | Verify searchable-text gaps against the required local ODA PDF; modern MESH/surface/3DLINE DWG rows stay unqualified. |
+| S0.6 | COMMITTED | Searchable local v5.4.1 confirms §§20.4.40 SPLINE, 20.4.41 ACIS modeler, and §24 DataStorage. No named `AcDbSubDMesh`, modern `AcDb*Surface`, or `3DLINE` layout is present; those DWG rows stay unqualified. The spec does not fully decrypt ACIS and does not qualify pre-R13 forms. |
 | S1.1 | COMMITTED | Field-level serializers now cover 3DFACE, 3DLINE, POLYLINE/VERTEX, MESH, HELIX/SPLINE, modeler geometry, all surface subtypes, INSERT placement, and nested ATTRIB fields. Loft reference values are typed; binary values remain digest carriers. |
 | S1.2 | COMMITTED | Runtime self-tests verify mesh-coordinate mutation, polyface index serialization, INSERT/ATTRIB placement, loft-reference typed/binary separation, and modeler frame-body labeling/digest. Manual C++17 `-Wall -Wextra -Werror` adapter build and `--self-test` pass; `ctest -R '^libdxfrw_dwg_local_roundtrip$'` passes 1/1. Existing generated malformed DXF modeler checks remain in the fast round-trip test. No downloaded fixtures added. |
 | S2.1 | COMMITTED | DXF modeler reads now retain ordered group-1/3 text and group-310 binary chunk metadata as bounded views into `m_rawBytes`. The semantic adapter reports chunk bounds, keeps surface bytes explicitly unclassified, and gives DWG frame/DataStorage payloads distinct digests; `ACDSDATA` stays an independent raw-section carrier with no invented entity link. Strict C++17 adapter build/self-test and focused round-trip CTest pass for text, binary, and mixed chunk sequences. |
 | S2.2 | COMMITTED | Modeler and surface writers emit SAT text groups 1/3 only through AC1024, reject binary/mixed/unqualified DWG carriers, and reject AC1027+ inline payloads until ACDSDATA association is known. Runtime tests pass for AC1015/1018/1021/1024, ASCII/binary DXF file encodings, surface SAT, mixed-input rejection, and unsupported SAB/frame payloads. LibreDWG 0.14 `dxf2dwg --as r2000` independently read all four generated version vectors and wrote DWG output (non-fatal unknown `HEADER.DIMLDRBLK` warnings only). Generic ACDSDATA capture/replay remains a separate opaque-section path; no entity association/support claim is added. |
 | S5.1 | COMMITTED | Generated ASCII/binary DXF vectors now verify 3DFACE WCS corners/invisible-edge flags, 3D POLYLINE WCS vertices, polyface counts/subclass typing/signed invisible-edge indices, LWPOLYLINE OCS elevation/normal/local vertices, and MESH vertices/faces/edges/creases. Fixed in-tree `dx_iface` 3DFACE/MESH output routes and MESH import callback; corrected polyface groups 71/72, subclass selection, and group-91 omission; removed the invalid `AcDbSequenceEnd` marker rejected by LibreDWG. Focused CTest passes 1/1; LibreDWG 0.14 independently converts generated ASCII and binary files to R2000 DWG (only non-fatal unknown `HEADER.DIMLDRBLK` warnings). Vectors are generated at runtime and not committed. |
 | S5.2 | COMMITTED | Generated ASCII/binary DXF vectors exercise nested INSERTs with nonzero block base points, attached ATTRIB, oblique OCS, 90-degree rotation, nonuniform/mirrored scales, and MINSERT arrays. An independent arbitrary-axis/matrix oracle checks a nested world point and an array-cell offset; malformed non-finite insertion points are rejected. Writer array counts now stop at the signed 16-bit group-code limit accepted by the reader. Focused CTest passes 1/1, and LibreDWG 0.14 independently converts the exact generated ASCII/binary files to R2000 DWG (non-fatal unknown `HEADER.DIMLDRBLK` warnings only). This validates DXF acceptance, not the transform oracle; vectors are runtime-generated and not committed. |
-| S6.1 | COMMITTED | ASCII and binary runtime round-trips cover PLANESURFACE, EXTRUDED, REVOLVED, SWEPT, LOFTED, NURBSURFACE, SPLINE, and HELIX fields. Added bounded subtype group-90 sizes/group-310 byte retention; corrected SWEPT ID/size ordering and legacy group-91 acceptance; corrected one-byte binary-DXF Boolean encoding; tightened field/count/transform/constraint validation; made `dx_iface` preserve HELIX callbacks. Focused CTest `libdxfrw_dwg_local_roundtrip` passes 1/1, including malformed lengths/booleans/partial vectors and invalid writer fields. Runtime vectors are not committed. LibreDWG 0.14 rejected/does not handle the generated surface/NURBS cases, so it provides no independent semantic qualification. DWG spline bit-width and DWG surface work remain gated on ODA/sample evidence. |
-| S3.1–S3.6 | BLOCKED_ON_S0.2 | DWG ACIS extraction/version work; do not touch `src/intern/dwgreader*` until the local authority and per-version evidence gates are met. |
+| S6.1 | COMMITTED | ASCII and binary runtime round-trips cover PLANESURFACE, EXTRUDED, REVOLVED, SWEPT, LOFTED, NURBSURFACE, SPLINE, and HELIX fields. Added bounded subtype group-90 sizes/group-310 byte retention; corrected SWEPT ID/size ordering and legacy group-91 acceptance; corrected one-byte binary-DXF Boolean encoding; tightened field/count/transform/constraint validation; made `dx_iface` preserve HELIX callbacks. Focused CTest `libdxfrw_dwg_local_roundtrip` passes 1/1, including malformed lengths/booleans/partial vectors and invalid writer fields. Runtime vectors are not committed. LibreDWG 0.14 rejected/does not handle the generated surface/NURBS cases, so it provides no independent semantic qualification. ODA v5.4.1 §20.4.40 says `splFlag1` is BL for R2013+; current code matches; no width fix is justified. Authentic per-version spline qualification and all DWG surface layouts remain outstanding. |
+| S3.1–S3.6 | BLOCKED_PER_VERSION | ODA authority is available, but ACIS extraction still needs version-specific boundary/handle/DataStorage evidence plus authentic target and independent checks. R1.4/R11 remains separately blocked on era-appropriate reference/sample. Do not edit parser paths speculatively. |
 | S4.1–S4.4 | BLOCKED_ON_S3 | Opaque DWG modeler payload writing follows only verified read layouts. |
 | S7.1–S7.5 | BLOCKED_ON_READY_SLICES | Qualify only completed format/version rows, then narrow README/support claims accordingly. |
 
