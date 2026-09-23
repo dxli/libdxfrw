@@ -662,17 +662,8 @@ public:
         fields.push_back(handleField("historyHandle", d.m_historyHandle));
         fields.push_back(boolField("hasRawBytes", !d.m_rawBytes.empty()));
         fields.push_back(uintField("rawByteCount", d.m_rawBytes.size()));
-        fields.push_back(uintField("dxfPayloadChunkCount", d.m_dxfPayloadChunks.size()));
-        for (std::size_t i = 0; i < d.m_dxfPayloadChunks.size(); ++i) {
-            const DRW_ModelerPayloadChunk& chunk = d.m_dxfPayloadChunks[i];
-            const std::string prefix = "dxfPayloadChunk." + std::to_string(i);
-            const bool inBounds = chunk.m_offset <= d.m_rawBytes.size()
-                && chunk.m_length <= d.m_rawBytes.size() - chunk.m_offset;
-            fields.push_back(intField(prefix + ".groupCode", chunk.m_groupCode));
-            fields.push_back(uintField(prefix + ".offset", chunk.m_offset));
-            fields.push_back(uintField(prefix + ".length", chunk.m_length));
-            fields.push_back(boolField(prefix + ".inBounds", inBounds));
-        }
+        appendPayloadChunkFields(fields, "dxfPayloadChunk",
+                                 d.m_dxfPayloadChunks, d.m_rawBytes);
         appendDataStorageFields(fields, d);
         fields.push_back(stringField("rawByteCarrierKind",
             facade_ == "dwgRW" && direction_ == "read"
@@ -1209,6 +1200,23 @@ private:
                                      entity.dataStoragePayloadMarkerSection));
     }
 
+    void appendPayloadChunkFields(
+        std::vector<Field>& fields, const std::string& name,
+        const std::vector<DRW_ModelerPayloadChunk>& chunks,
+        const std::vector<std::uint8_t>& bytes) const {
+        fields.push_back(uintField(name + ".count", chunks.size()));
+        for (std::size_t i = 0; i < chunks.size(); ++i) {
+            const DRW_ModelerPayloadChunk& chunk = chunks[i];
+            const std::string prefix = name + "." + std::to_string(i);
+            const bool inBounds = chunk.m_offset <= bytes.size()
+                && chunk.m_length <= bytes.size() - chunk.m_offset;
+            fields.push_back(intField(prefix + ".groupCode", chunk.m_groupCode));
+            fields.push_back(uintField(prefix + ".offset", chunk.m_offset));
+            fields.push_back(uintField(prefix + ".length", chunk.m_length));
+            fields.push_back(boolField(prefix + ".inBounds", inBounds));
+        }
+    }
+
     void appendVertexFields(std::vector<Field>& fields, const DRW_Vertex* vertex,
                             std::size_t index) const {
         const std::string prefix = "vertex." + std::to_string(index);
@@ -1341,6 +1349,8 @@ private:
         fields.push_back(intField("acisVersion", surface.acisVersion));
         fields.push_back(boolField("hasRawAcisData", !surface.rawAcisData.empty()));
         fields.push_back(uintField("rawAcisByteCount", surface.rawAcisData.size()));
+        appendPayloadChunkFields(fields, "dxfAcisChunk", surface.dxfPayloadChunks,
+                                 surface.rawAcisData);
         appendDataStorageFields(fields, surface);
         fields.push_back(stringField("rawAcisCarrierKind",
             facade_ == "dwgRW" && direction_ == "read"

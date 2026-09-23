@@ -5074,7 +5074,7 @@ bool runDxfModelerCarrierRoundTrip(DRW::Version version,
             chunksValid = chunksValid && chunk.m_offset == expectedOffset
                 && chunk.m_offset <= decoded->m_rawBytes.size()
                 && chunk.m_length <= decoded->m_rawBytes.size() - chunk.m_offset
-                && (version <= DRW::AC1018 ? textGroup : chunk.m_groupCode == 310);
+                && textGroup;
             expectedOffset += chunk.m_length;
         }
         found = chunksValid && expectedOffset == decoded->m_rawBytes.size()
@@ -5105,6 +5105,101 @@ bool runDxfMalformedModelerCarrier(const char* chunk) {
     return !importOk && imported.mBlock->ent.empty();
 }
 
+bool runDxfModelerRejectsUnassociatedSab(
+    const std::vector<std::uint8_t>& payload) {
+    const std::filesystem::path output = std::filesystem::temp_directory_path()
+        / "libdxfrw-modeler-unassociated-sab.dxf";
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+    dx_data source;
+    auto* modeler = new DRW_ModelerGeometry(DRW::E3DSOLID);
+    modeler->handle = 0xFC01u;
+    modeler->m_rawBytes = payload;
+    source.mBlock->ent.push_back(modeler);
+    dx_iface exporter;
+    const bool exportOk = exporter.fileExport(output.string(), DRW::AC1027,
+                                               false, &source, false);
+    std::filesystem::remove(output, ec);
+    return !exportOk;
+}
+
+bool runDxfModelerRejectsDwgFramePayload() {
+    const std::filesystem::path output = std::filesystem::temp_directory_path()
+        / "libdxfrw-modeler-dwg-frame.dxf";
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+    dx_data source;
+    auto* modeler = new DRW_ModelerGeometry(DRW::E3DSOLID);
+    modeler->handle = 0xFC02u;
+    modeler->m_rawBytes = {'A', 'B', 'C'};
+    modeler->m_bodyBitSize = 24;
+    modeler->m_objectSize = 3;
+    source.mBlock->ent.push_back(modeler);
+    dx_iface exporter;
+    const bool exportOk = exporter.fileExport(output.string(), DRW::AC1024,
+                                               false, &source, false);
+    std::filesystem::remove(output, ec);
+    return !exportOk;
+}
+
+bool runDxfSurfaceSatCarrierRoundTrip() {
+    const std::filesystem::path output = std::filesystem::temp_directory_path()
+        / "libdxfrw-surface-sat-carrier.dxf";
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+    const std::vector<std::uint8_t> payload{
+        'A', 'C', 'I', 'S', ' ', 'S', 'A', 'T'};
+    dx_data source;
+    auto* surface = new DRW_PlaneSurface();
+    surface->handle = 0xFB10u;
+    surface->rawAcisData = payload;
+    source.mBlock->ent.push_back(surface);
+    dx_iface exporter;
+    if (!exporter.fileExport(output.string(), DRW::AC1024, false,
+                             &source, false)) {
+        std::filesystem::remove(output, ec);
+        return false;
+    }
+    dx_data imported;
+    dx_iface importer;
+    if (!importer.fileImport(output.string(), &imported, false)) {
+        std::filesystem::remove(output, ec);
+        return false;
+    }
+    std::filesystem::remove(output, ec);
+    for (const DRW_Entity* entity : imported.mBlock->ent) {
+        if (entity == nullptr || entity->eType != DRW::PLANESURFACE)
+            continue;
+        const auto* decoded = static_cast<const DRW_PlaneSurface*>(entity);
+        return decoded->rawAcisData == payload
+            && !decoded->dxfPayloadChunks.empty()
+            && std::all_of(decoded->dxfPayloadChunks.begin(),
+                           decoded->dxfPayloadChunks.end(),
+                           [](const DRW_ModelerPayloadChunk& chunk) {
+                               return chunk.m_groupCode == 1 || chunk.m_groupCode == 3;
+                           });
+    }
+    return false;
+}
+
+bool runDxfSurfaceRejectsUnassociatedSab(
+    const std::vector<std::uint8_t>& payload) {
+    const std::filesystem::path output = std::filesystem::temp_directory_path()
+        / "libdxfrw-surface-unassociated-sab.dxf";
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+    dx_data source;
+    auto* surface = new DRW_PlaneSurface();
+    surface->handle = 0xFB11u;
+    surface->rawAcisData = payload;
+    source.mBlock->ent.push_back(surface);
+    dx_iface exporter;
+    const bool exportOk = exporter.fileExport(output.string(), DRW::AC1027,
+                                               false, &source, false);
+    std::filesystem::remove(output, ec);
+    return !exportOk;
+}
+
 bool runDxfMixedModelerCarrierChunks() {
     const std::filesystem::path output = std::filesystem::temp_directory_path()
         / "libdxfrw-modeler-mixed-carrier.dxf";
@@ -5129,7 +5224,8 @@ bool runDxfMixedModelerCarrierChunks() {
         if (entity == nullptr || entity->eType != DRW::E3DSOLID)
             continue;
         const auto* decoded = static_cast<const DRW_ModelerGeometry*>(entity);
-        return decoded->m_rawBytes == std::vector<std::uint8_t>{'a', 'b', 'c', 0x41, 0x42}
+        const bool chunksPreserved =
+            decoded->m_rawBytes == std::vector<std::uint8_t>{'a', 'b', 'c', 0x41, 0x42}
             && decoded->m_dxfPayloadChunks.size() == 2
             && decoded->m_dxfPayloadChunks[0].m_groupCode == 1
             && decoded->m_dxfPayloadChunks[0].m_offset == 0
@@ -5137,6 +5233,17 @@ bool runDxfMixedModelerCarrierChunks() {
             && decoded->m_dxfPayloadChunks[1].m_groupCode == 310
             && decoded->m_dxfPayloadChunks[1].m_offset == 3
             && decoded->m_dxfPayloadChunks[1].m_length == 2;
+        if (!chunksPreserved)
+            return false;
+        const std::filesystem::path rejectedOutput =
+            std::filesystem::temp_directory_path()
+            / "libdxfrw-modeler-mixed-carrier-reject.dxf";
+        std::filesystem::remove(rejectedOutput, ec);
+        dx_iface exporter;
+        const bool exportOk = exporter.fileExport(rejectedOutput.string(),
+            DRW::AC1024, false, &imported, false);
+        std::filesystem::remove(rejectedOutput, ec);
+        return !exportOk;
     }
     return false;
 }
@@ -6431,9 +6538,21 @@ int main(int argc, char** argv) {
     const std::vector<std::uint8_t> textCarrier {
         'A', 'C', 'I', 'S', ' ', 'S', 'A', 'T', ' ', 'L', 'O', 'C', 'A', 'L'};
     expect(runDxfModelerCarrierRoundTrip(DRW::AC1018, textCarrier, "text", false),
-           "local DXF text modeler carrier round-trip", failures);
-    expect(runDxfModelerCarrierRoundTrip(DRW::AC1027, sabPayload, "binary", true),
-           "local DXF binary modeler carrier round-trip", failures);
+           "local DXF AC1018 text modeler carrier round-trip", failures);
+    expect(runDxfModelerCarrierRoundTrip(DRW::AC1015, textCarrier, "ac1015", false),
+           "local DXF AC1015 SAT text modeler carrier round-trip", failures);
+    expect(runDxfModelerCarrierRoundTrip(DRW::AC1021, textCarrier, "ac1021", true),
+           "local DXF AC1021 binary-file SAT text modeler carrier round-trip", failures);
+    expect(runDxfModelerCarrierRoundTrip(DRW::AC1024, textCarrier, "ac1024", false),
+           "local DXF AC1024 SAT text modeler carrier round-trip", failures);
+    expect(runDxfModelerRejectsUnassociatedSab(sabPayload),
+           "local DXF rejects unassociated AC1027 SAB entity payload", failures);
+    expect(runDxfModelerRejectsDwgFramePayload(),
+           "local DXF rejects DWG modeler frame bytes as ACIS", failures);
+    expect(runDxfSurfaceSatCarrierRoundTrip(),
+           "local DXF AC1024 surface SAT text carrier round-trip", failures);
+    expect(runDxfSurfaceRejectsUnassociatedSab(sabPayload),
+           "local DXF rejects unassociated AC1027 surface SAB payload", failures);
     expect(runDxfMalformedModelerCarrier("ABC"),
            "local malformed DXF modeler odd hex rejection", failures);
     expect(runDxfMalformedModelerCarrier("GG"),

@@ -17534,14 +17534,18 @@ bool DRW_PointCloudEx::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uin
 bool DRW_Surface::parseCode(int code, const std::unique_ptr<dxfReader>& reader) {
     switch (code) {
     case 1:
-    case 3:
+    case 3: {
         // SURFACE ACIS payloads use text groups in the AcDbModelerGeometry
         // subclass. Keep the bytes verbatim; group 3 is a continuation of
         // the same payload and must not be interpreted as a surface field.
-        if (!appendTextBytesChecked(rawAcisData, reader->getString(),
+        const std::string text = reader->getString();
+        const std::size_t offset = rawAcisData.size();
+        if (!appendTextBytesChecked(rawAcisData, text,
                                     dwgSafety::MaxBufferSize))
             return false;
+        dxfPayloadChunks.emplace_back(code, offset, text.size());
         break;
+    }
     case 70:
         modelerFormatVersion = reader->getInt32();
         break;
@@ -17561,9 +17565,12 @@ bool DRW_Surface::parseCode(int code, const std::unique_ptr<dxfReader>& reader) 
             std::vector<std::uint8_t> decoded;
             if (!decodeHexBytes(reader->getString(), decoded))
                 return false;
+            const std::size_t offset = rawAcisData.size();
+            const std::size_t length = decoded.size();
             if (!appendBytesChecked(rawAcisData, decoded,
                                     dwgSafety::MaxBufferSize))
                 return false;
+            dxfPayloadChunks.emplace_back(code, offset, length);
         }
         break;
     default:
@@ -18311,6 +18318,7 @@ void DRW_Surface::resetDwgState() {
     acisEmpty = false;
     acisVersion = 0;
     rawAcisData.clear();
+    dxfPayloadChunks.clear();
     hasRawDwgBody = false;
     rawDwgBodyBitSize = 0;
     rawDwgBodyVersion = DRW::UNKNOWNV;

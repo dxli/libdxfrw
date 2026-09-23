@@ -817,9 +817,9 @@ struct DRW_ModelerPayloadRange {
 };
 
 //! Opaque ACIS/SAB modeler geometry entity shell (REGION, 3DSOLID, BODY).
-//! A DXF text/binary payload chunk is a view into DRW_ModelerGeometry::m_rawBytes.
-//! Group-code/order metadata keeps SAT text groups distinct from binary chunks
-//! without duplicating bounded payload storage.
+//! A DXF modeler payload chunk is a view into the owning entity's bounded ACIS
+//! byte buffer. Group-code/order metadata keeps text groups distinct from
+//! binary chunks without duplicating payload storage.
 struct DRW_ModelerPayloadChunk {
     DRW_ModelerPayloadChunk(int code, std::size_t offset, std::size_t length)
         : m_groupCode(code), m_offset(offset), m_length(length) {}
@@ -3499,6 +3499,8 @@ public:
     bool acisEmpty = false;
     int acisVersion = 0;
     std::vector<std::uint8_t> rawAcisData;
+    //! DXF group order/type for rawAcisData; does not classify DWG body bytes.
+    std::vector<DRW_ModelerPayloadChunk> dxfPayloadChunks;
     //! Full bounded DWG body captured by parseDwg(), distinct from DXF ACIS data.
     bool hasRawDwgBody = false;
     std::uint32_t rawDwgBodyBitSize = 0;

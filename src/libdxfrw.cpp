@@ -832,6 +832,25 @@ bool isTextAcisPayload(const std::vector<std::uint8_t>& data) {
     });
 }
 
+bool hasDxfTextPayloadChunks(const std::vector<std::uint8_t>& data,
+                             const std::vector<DRW_ModelerPayloadChunk>& chunks) {
+    if (!isTextAcisPayload(data))
+        return false;
+    if (chunks.empty())
+        return true;
+
+    std::size_t expectedOffset = 0;
+    for (const DRW_ModelerPayloadChunk& chunk : chunks) {
+        if ((chunk.m_groupCode != 1 && chunk.m_groupCode != 3)
+            || chunk.m_offset != expectedOffset
+            || chunk.m_offset > data.size()
+            || chunk.m_length > data.size() - chunk.m_offset)
+            return false;
+        expectedOffset += chunk.m_length;
+    }
+    return expectedOffset == data.size();
+}
+
 void writeDxfTextChunks(dxfWriter *writer, const std::vector<std::uint8_t>& data) {
     const std::string text(data.begin(), data.end());
     constexpr std::size_t kChunkSize = 255;
@@ -6677,6 +6696,15 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
         m_writeError = true;
         return false;
     };
+    if (ent->hasRawDwgBody || ent->rawDwgBodyBitSize != 0
+        || ent->dwgPayloadDecoded || ent->dwgClassNum != 0
+        || ent->hasDataStorageBinaryData() || ent->hasDataStorageRecord
+        || !ent->dataStorageData.empty()
+        || (!ent->rawAcisData.empty()
+            && (version > DRW::AC1024
+                || !hasDxfTextPayloadChunks(ent->rawAcisData,
+                                            ent->dxfPayloadChunks))))
+        return fail();
     std::string entType;
     const char *subclassType = nullptr;
     switch (ent->eType) {
@@ -6709,12 +6737,8 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
         return false;
     writer->writeString(100, "AcDbEntity");
     writer->writeString(100, "AcDbModelerGeometry");
-    if (!ent->rawAcisData.empty()) {
-        if (isTextAcisPayload(ent->rawAcisData))
-            writeDxfTextChunks(writer.get(), ent->rawAcisData);
-        else
-            writeDxfBinaryChunks(writer.get(), ent->rawAcisData);
-    }
+    if (!ent->rawAcisData.empty())
+        writeDxfTextChunks(writer.get(), ent->rawAcisData);
     writer->writeInt16(70, ent->modelerFormatVersion);
     writer->writeString(100, "AcDbSurface");
     writer->writeInt16(71, ent->uIsolines);
@@ -6992,6 +7016,17 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
         return rejectUnsupportedDxfWrite();
     if (!preflightEntity(ent))
         return false;
+    const bool hasUnqualifiedDwgPayload = ent->m_bodyBitSize != 0
+        || ent->m_objectSize != 0 || ent->m_hasModelerData
+        || ent->m_modelerDataUnknownBit || !ent->m_payloadRanges.empty()
+        || ent->hasDataStorageBinaryData() || ent->hasDataStorageRecord
+        || !ent->dataStorageData.empty();
+    if (hasUnqualifiedDwgPayload
+        || (!ent->m_rawBytes.empty()
+            && (version > DRW::AC1024
+                || !hasDxfTextPayloadChunks(ent->m_rawBytes,
+                                            ent->m_dxfPayloadChunks))))
+        return rejectUnsupportedDxfWrite();
 
     const char *recordName = modelerGeometryDxfName(ent->eType);
     const char *subclassName = modelerGeometryDxfSubclass(ent->eType);
@@ -7007,12 +7042,8 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     writer->writeInt16(70, ent->m_modelerVersion);
     if (ent->m_historyHandle != 0)
         writer->writeString(350, toHexStr(ent->m_historyHandle));
-    if (!ent->m_rawBytes.empty()) {
-        if (version <= DRW::AC1018 && isTextAcisPayload(ent->m_rawBytes))
-            writeDxfTextChunks(writer.get(), ent->m_rawBytes);
-        else
-            writeDxfBinaryChunks(writer.get(), ent->m_rawBytes);
-    }
+    if (!ent->m_rawBytes.empty())
+        writeDxfTextChunks(writer.get(), ent->m_rawBytes);
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
     return !writer->hasWriteError();
