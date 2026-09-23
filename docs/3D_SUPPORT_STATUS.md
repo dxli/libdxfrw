@@ -81,12 +81,22 @@ LINE records, 670 have nonzero endpoint Z. This read-only sample witness does
 not establish writes, other AC1021 files, or other DWG 3D families; the sample
 remains uncommitted.
 
+In the local AC1024/R2010 `visualization_-_condominium_with_skylight.dwg`,
+both LINE records also match LibreDWG 0.14 by handle for start/end XYZ,
+thickness, and extrusion; both have nonzero endpoint Z. ODA v5.4.1 §20.4.21
+describes the layout. Its minJSON contains a bare `nan` in an unrelated
+surface field; the comparator normalizes only that non-standard token outside
+strings and checks that every compared LINE number is finite. This
+uncommitted sample provides two-record read evidence only, not write or general
+AC1024 support.
+
 | Geometry family | Format / version | Read disposition | Write disposition | Evidence and boundary |
 | --- | --- | --- | --- | --- |
 | WCS primitives / 3DFACE | DXF AC1027, ASCII and binary | Experimental field read for 3DFACE only | Experimental field write for 3DFACE only | SELFTEST and CONSUMER-PROBE; EXT-ACCEPT for generated topology conversion. POINT, LINE, RAY, and XLINE are not qualified by this 3DFACE slice. |
 | WCS primitives / 3DFACE | DWG R set / W set | UNQUALIFIED outside the narrow AC1021 field row below | UNQUALIFIED per writer version | Fixed/custom dispatch routes and local tests do not establish general per-version field semantics. |
 | 3DFACE corner/edge-field subset | DWG AC1021 / R2007 | Experimental read: four 3D corner tuples and invisible-edge flags on 48 handles in local `tablet.dwg` | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14, joined by handle; ODA v5.4.1 §20.4.32 describes the layout. One uncommitted sample only; no write, other-file, other-version, or general family claim. |
 | LINE endpoint field subset | DWG AC1021 / R2007 | Experimental read: start/end XYZ, thickness, and extrusion on 3,002 handles in local `tablet.dwg`; 670 lines have nonzero endpoint Z | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14, joined by handle; ODA v5.4.1 §20.4.21 describes the layout. One uncommitted sample only; no write, other-file, other-version, or general family claim. |
+| LINE endpoint field subset | DWG AC1024 / R2010 | Experimental read: start/end XYZ, thickness, and extrusion on two handles in local `visualization_-_condominium_with_skylight.dwg`; both have nonzero endpoint Z | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14, joined by handle; ODA v5.4.1 §20.4.21 describes the layout. One uncommitted sample only; no write or general AC1024 claim. |
 | Legacy/custom 3DLINE | DXF: no qualified version/encoding | UNQUALIFIED | UNQUALIFIED | No portable DXF spelling or independent target witness is established; do not equate it with 3D LINE. |
 | Legacy/custom 3DLINE | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | Pre-R13 and custom-class paths require separate version-specific evidence. |
 | Planar entities placed in 3D | DXF AC1027, ASCII and binary | Experimental field read for LWPOLYLINE OCS/elevation subset | Experimental field write for LWPOLYLINE OCS/elevation subset | SELFTEST and CONSUMER-PROBE for local XY/elevation/extrusion/bulge delivery; does not qualify ARC, CIRCLE, ELLIPSE, SOLID, TRACE, or HATCH as a family. |

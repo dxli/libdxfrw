@@ -4,8 +4,9 @@
 This is an optional local qualification helper, not a CTest dependency. It
 compares fields by entity handle so callback order is irrelevant. The accepted
 scope is intentionally limited to AC1024 (R2010) INSERT placement and SPLINE
-fit data, plus AC1021 (R2007) LINE endpoints and 3DFACE corners/edge flags.
-Modeler, surface, and other version/family fields are not compared here.
+fit data and one sample's LINE endpoints, plus AC1021 (R2007) LINE endpoints
+and 3DFACE corners/edge flags. Modeler, surface, and other version/family
+fields are not compared here.
 """
 
 from __future__ import annotations
@@ -23,13 +24,68 @@ class OracleError(RuntimeError):
     pass
 
 
+def is_json_word_character(value: str) -> bool:
+    return value.isalnum() or value == "_"
+
+
+def reject_nonstandard_json_constant(value: str) -> None:
+    raise OracleError(f"non-standard JSON number {value}")
+
+
+def normalize_bare_nan_tokens(value: str) -> str:
+    """Replace non-standard bare NaN tokens without touching JSON strings."""
+    output: list[str] = []
+    in_string = False
+    escaped = False
+    index = 0
+    while index < len(value):
+        char = value[index]
+        if in_string:
+            output.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            output.append(char)
+            index += 1
+            continue
+
+        token_start = index
+        token_end = index
+        if char in "+-" and value[index + 1:index + 4].lower() == "nan":
+            token_end = index + 4
+        elif value[index:index + 3].lower() == "nan":
+            token_end = index + 3
+        if token_end > token_start:
+            before = value[token_start - 1] if token_start else ""
+            after = value[token_end] if token_end < len(value) else ""
+            if (not is_json_word_character(before)
+                    and not is_json_word_character(after)):
+                output.append("null")
+                index = token_end
+                continue
+
+        output.append(char)
+        index += 1
+    return "".join(output)
+
+
 def run_json(command: list[str], label: str) -> dict[str, Any]:
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip()
         raise OracleError(f"{label} failed ({result.returncode}): {detail}")
+    json_text = (normalize_bare_nan_tokens(result.stdout)
+                 if label == "LibreDWG dwgread" else result.stdout)
     try:
-        value = json.loads(result.stdout)
+        value = json.loads(json_text,
+                           parse_constant=reject_nonstandard_json_constant)
     except json.JSONDecodeError as error:
         raise OracleError(f"{label} did not return JSON: {error}") from error
     if not isinstance(value, dict):
@@ -225,18 +281,29 @@ def main() -> int:
 
     with args.input.open("rb") as source:
         version = source.read(6).decode("ascii", errors="replace")
-    if version == "AC1024":
+    expected_nonzero_z_line_count = None
+    if (version == "AC1024"
+            and args.input.name == "visualization_-_conference_room.dwg"):
         cases = (("INSERT", 6, compare_insert),
                  ("SPLINE", 2, compare_spline))
         excluded = ["PLANESURFACE", "3DSOLID", "REGION", "BODY", "MESH",
                     "other versions and families"]
-    elif version == "AC1021":
+    elif (version == "AC1024"
+            and args.input.name == "visualization_-_condominium_with_skylight.dwg"):
+        cases = (("LINE", 2, compare_line),)
+        expected_nonzero_z_line_count = 2
+        excluded = ["all entities other than LINE", "other versions"]
+    elif version == "AC1021" and args.input.name == "tablet.dwg":
         cases = (("3DFACE", 48, compare_3dface),
                  ("LINE", 3002, compare_line))
+        expected_nonzero_z_line_count = 670
         excluded = ["all entities other than LINE and 3DFACE", "other versions"]
     else:
         raise OracleError(
-            f"expected an AC1021/R2007 or AC1024/R2010 sample, got {version!r}")
+            "unsupported sample profile: expected AC1021 tablet.dwg or AC1024 "
+            "visualization_-_conference_room.dwg / "
+            "visualization_-_condominium_with_skylight.dwg; "
+            f"got {version!r} {args.input.name!r}")
 
     external = run_json([args.dwgread, "-O", "minJSON", str(args.input)],
                         "LibreDWG dwgread")
@@ -257,9 +324,11 @@ def main() -> int:
                     for point in (row["external"]["start"],
                                   row["external"]["end"]))
                 for row in rows)
-            if nonzero_z != 670:
+            if (expected_nonzero_z_line_count is not None
+                    and nonzero_z != expected_nonzero_z_line_count):
                 raise OracleError(
-                    f"unexpected nonzero-Z LINE count {nonzero_z}; expected 670")
+                    "unexpected nonzero-Z LINE count "
+                    f"{nonzero_z}; expected {expected_nonzero_z_line_count}")
             result["recordsWithNonzeroEndpointZ"] = nonzero_z
         results.append(result)
 

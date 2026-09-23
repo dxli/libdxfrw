@@ -126,6 +126,21 @@ python3 tools/compare_dwg_3d_consumer_oracle.py \
   --input tests/samples/AC1021/tablet.dwg
 ```
 
+The comparator also matches the two LINE records in the local AC1024/R2010
+`visualization_-_condominium_with_skylight.dwg` sample, including start/end
+XYZ, thickness, and extrusion; both have nonzero endpoint Z. LibreDWG's minJSON
+for this sample contains a bare `nan` in an unrelated surface record. The
+helper normalizes only bare NaN tokens outside JSON strings, while its finite
+number checks still reject non-finite values in the compared LINE fields. ODA
+v5.4.1 §20.4.21 is the layout reference. This sample is not committed; the
+comparison establishes no write or general AC1024 support claim.
+
+```sh
+python3 tools/compare_dwg_3d_consumer_oracle.py \
+  --adapter build/tests/libdxfrw_3d_consumer_probe \
+  --input tests/samples/AC1024/visualization_-_condominium_with_skylight.dwg
+```
+
 ## Adapter requirements
 
 - Keep the existing 2D adapter lane intact. Projection, curve approximation,
