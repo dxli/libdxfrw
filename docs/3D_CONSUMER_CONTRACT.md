@@ -88,6 +88,22 @@ third-party interoperability or independent format correctness. The precise
 format/version support ceiling remains in the [status matrix](3D_SUPPORT_STATUS.md);
 unwitnessed DWG rows remain unqualified.
 
+For a separate, sample-scoped DWG read comparison, run the optional
+[`compare_dwg_3d_consumer_oracle.py`](../tools/compare_dwg_3d_consumer_oracle.py)
+with LibreDWG's `dwgread` and the locally available AC1024 conference-room
+sample. It matches INSERT placement fields and scenario-2 SPLINE fit fields by
+entity handle against ODA v5.4.1 §§20.4.9, 20.4.10, and 20.4.40. The sample is
+not committed; the comparison does not qualify writes, other DWG versions,
+surface/modeler data, or general block transforms. PLANESURFACE is purposely
+excluded because the two readers disagree and no authoritative named layout
+was found.
+
+```sh
+python3 tools/compare_dwg_3d_consumer_oracle.py \
+  --adapter build/tests/libdxfrw_3d_consumer_probe \
+  --input tests/samples/AC1024/visualization_-_conference_room.dwg
+```
+
 ## Adapter requirements
 
 - Keep the existing 2D adapter lane intact. Projection, curve approximation,

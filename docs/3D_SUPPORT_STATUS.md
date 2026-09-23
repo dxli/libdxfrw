@@ -12,6 +12,9 @@ Evidence labels:
 - CONSUMER-PROBE: generated DXF is read through the public callback API into a
   headless sink that copies the listed fields. This establishes data delivery
   for that probe, not correctness against an independent producer.
+- INDEPENDENT-READ: the same DWG sample was read by libdxfrw and a separate
+  reader, and the listed fields matched by entity handle. This narrows read
+  evidence to that sample/version/field subset; it says nothing about writing.
 - EXT-ACCEPT: LibreDWG 0.14 accepted generated input/conversion, but no
   independent field-by-field semantic comparison was established.
 - SPEC: primary DXF/DWG documentation or source inspection identifies a
@@ -55,6 +58,16 @@ display/edit support, or any DWG version. Run just this probe with
 The complete consumer-handling guidance is in the
 [3D consumer contract](3D_CONSUMER_CONTRACT.md).
 
+An optional local comparator, [`compare_dwg_3d_consumer_oracle.py`](../tools/compare_dwg_3d_consumer_oracle.py),
+uses LibreDWG `dwgread -O minJSON` as a separate read implementation. It matched
+six INSERT placement records and two fit-only SPLINE records by handle in the
+locally available AC1024/R2010 conference-room sample. That sample is not
+committed here; the comparison is read-only and does not qualify writing,
+other DWG versions, or other entity families. The same sample's two
+PLANESURFACE records disagree on typed modeler fields between readers; because
+the reviewed ODA DWG specification does not define that modern subtype layout,
+those results are excluded rather than guessed.
+
 | Geometry family | Format / version | Read disposition | Write disposition | Evidence and boundary |
 | --- | --- | --- | --- | --- |
 | WCS primitives / 3DFACE | DXF AC1027, ASCII and binary | Experimental field read for 3DFACE only | Experimental field write for 3DFACE only | SELFTEST and CONSUMER-PROBE; EXT-ACCEPT for generated topology conversion. POINT, LINE, RAY, and XLINE are not qualified by this 3DFACE slice. |
@@ -64,13 +77,15 @@ The complete consumer-handling guidance is in the
 | Planar entities placed in 3D | DXF AC1027, ASCII and binary | Experimental field read for LWPOLYLINE OCS/elevation subset | Experimental field write for LWPOLYLINE OCS/elevation subset | SELFTEST and CONSUMER-PROBE for local XY/elevation/extrusion/bulge delivery; does not qualify ARC, CIRCLE, ELLIPSE, SOLID, TRACE, or HATCH as a family. |
 | Planar entities placed in 3D | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | No independent per-version OCS/WCS semantic comparison. |
 | Placed block geometry | DXF AC1027, ASCII and binary | Experimental INSERT/MINSERT field read | Experimental INSERT/MINSERT field write | SELFTEST and CONSUMER-PROBE for insertion/scale/grid/OCS values, plus an independent matrix oracle for nested placement and array offset; external acceptance is not semantic comparison. |
-| Placed block geometry | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | Local paths do not independently establish versioned transform semantics. |
+| Placed block geometry | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | Block expansion and versioned transform semantics remain unqualified; see the narrower INSERT scalar-field read row below. |
+| INSERT placement field subset | DWG AC1024 / R2010 | Experimental read: insertion XYZ, scale, rotation, extrusion for the six matching INSERT handles in the local sample | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14; no block expansion, array offset, ATTRIB semantics, write evidence, or other-version claim. The sample is not committed. |
 | Classic 3D topology | DXF AC1027, ASCII and binary | Experimental 3D POLYLINE/VERTEX and polyface read | Experimental 3D POLYLINE/VERTEX and polyface write | SELFTEST and CONSUMER-PROBE for 3D POLYLINE XYZ delivery; EXT-ACCEPT for generated input conversion. Polyface self-tests are not all represented in the consumer probe; DWG child ownership/count claims remain separate. |
 | Classic 3D topology | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | No independent per-version semantic witness. |
 | Subdivision topology / MESH | DXF AC1027, ASCII and binary | Experimental MESH field read | Experimental MESH field write | SELFTEST and CONSUMER-PROBE for XYZ, face/edge indices, and creases; EXT-ACCEPT for generated input conversion; not an independent topology comparison. |
 | Subdivision topology / MESH | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | DWG class/layout support is not established by local self-read. |
 | Curves and analytic/NURBS surfaces | DXF AC1027, ASCII and binary | Experimental mapped-field read for SPLINE, HELIX, and six surface subtypes | Experimental mapped-field write for those tested records | SELFTEST; CONSUMER-PROBE covers SPLINE knots/control points and selected LOFTED-surface fields/carrier distinction only. No curve evaluation, surface evaluation, or independent semantic oracle. |
-| Curves and analytic/NURBS surfaces | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | ODA §20.4.40 supports the reviewed R2013+ spline flag widths; authentic per-version witnesses are still missing. No named modern surface layout was found in the reviewed ODA v5.4.1 text. |
+| Curves and analytic/NURBS surfaces | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | Except for the scoped AC1024 scenario-2 fit-only row below, authentic per-version semantic witnesses remain missing. No named modern surface layout was found in the reviewed ODA v5.4.1 text. |
+| SPLINE fit-only field subset | DWG AC1024 / R2010 | Experimental read: degree, scenario, fit tolerance, tangent vectors, and all seven XYZ fit points on both sample records | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14, joined by handle. This sample contains scenario-2 fit-only splines; it does not validate control points/knots, writes, or other versions. The sample is not committed. |
 | ACIS 3DSOLID / REGION / BODY carriers | DXF AC1015 ASCII; AC1018 ASCII; AC1021 binary; AC1024 ASCII | Experimental opaque SAT chunk read/retention | Experimental opaque SAT chunk write through AC1024 | SELFTEST; verifies carrier/chunk identity only, not ACIS semantics. Unassociated AC1027+ SAB writes are rejected; entity-to-ACDSDATA association is unqualified. |
 | ACIS 3DSOLID / REGION / BODY carriers | DWG R set | Opaque frame/envelope handling only; typed ACIS payload extraction is UNQUALIFIED per version | No typed DWG modeler-geometry writer route | S3.1 validates the general modeler version marker; it does not decode SAT/SAB or qualify DataStorage association. |
 | Proxy and derived geometry | DXF: no 3D-family/version qualification | UNQUALIFIED for 3D-specific proxy semantics | UNQUALIFIED for 3D-specific proxy semantics | General raw-carrier preservation is not a 3D geometry claim. |
