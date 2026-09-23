@@ -304,11 +304,12 @@ truncated, ambiguous, or orphaned section is never emitted as entity ACIS.
 
 ### S3 — Recover ACIS carriers from DWG entities and DataStorage
 
-State: the ODA v5.4.1 authority is resolved. DWG reader changes remain
-`BLOCKED_PER_VERSION` until the relevant section, successful target trace, and
-independent witness are tied to the exact version/field; the AC1024 PlaneSurface
-class-table trace is identity evidence only. DXF and test-adapter lanes remain
-independent.
+State: ODA v5.4.1 authority is resolved and S3.1's general modeler-version
+marker validation is committed. All additional DWG parser/carrier changes
+remain `BLOCKED_PER_VERSION` until the relevant section, successful target
+trace, and independent witness are tied to the exact version/field; the AC1024
+PlaneSurface class-table trace is identity evidence only. DXF and test-adapter
+lanes remain independent.
 
 Dependencies: S0 local spec/trace gate; S1; S2 carrier contract.
 
@@ -317,33 +318,42 @@ Files: `src/drw_entities.{h,cpp}`; `src/libdwgr.{h,cpp}`;
 
 Steps:
 
-1. For R13/R14/R2000/R2004/R2007/R2010/R2013/R2018, use applicable ODA
-   sections and actual per-version traces to define exact body/data
-   boundaries, empty/unknown bits, modeler version, ACIS data encoding,
+1. **S3.1 — modeler version marker validation.** ODA v5.4.1 §20.4.41
+   states that a non-empty modeler body carries a BS `Version` of 1 or 2;
+   the field is absent when the ACIS Empty bit is set. Validate this bounded
+   field and test empty, versions 1/2, and out-of-range values with
+   runtime-generated AC1018 frames. This is envelope validation only: the
+   version-2 byte is opaque test filler, and no ACIS payload is decoded or
+   qualified.
+2. **S3.2 — per-version layouts.** For R13/R14/R2000/R2004/R2007/R2010/R2013/R2018,
+   use applicable ODA sections and actual per-version traces to define exact
+   body/data boundaries, remaining empty/unknown bits, ACIS data encoding,
    history-handle behavior, and DataStorage presence/identity rules. This
    package covers ACIS modeler entities only; do not absorb MESH or surfaces
    into it merely because those entities also use modern class records. ODA
-   §20.4.41 describes modeler data but notes that the ACIS stream is not fully
-   decrypted; use it to bound/step/preserve the data, not as authority for
-   arbitrary SAT/SAB semantics. Do not use §20.4.41 as evidence for MESH or
-   analytic/NURBS surface layouts; the searchable v5.4.1 text reviewed here
-   did not expose named sections for those modern classes. Keep each such DWG
-   subtype `BLOCKED_ON_PRIMARY_LAYOUT_EVIDENCE` until an applicable authority
-   and independently checked witness are available; proceed with DXF lanes.
-2. Inventory the R1.4/R11 pre-R13 readers separately. Do not apply R13+
-   layouts to their records; use an appropriate legacy specification and
-   authentic version-specific sample trace before changing them. If no such
-   source exists, leave the code unchanged and keep the row unqualified.
-3. Implement bounded extraction and validation with transactional publication;
-   malformed entity-level payloads must not consume adjacent frame/handle
-   data or publish partial geometry.
-4. Attach recovered ACIS payload to the typed modeler entity without
-   overwriting its DWG object-frame carrier. For AC1027+ reconcile the
-   entity's DataStorage marker, handle/key, exactly one selected data record,
-   payload marker, and section version before publication.
-5. Keep raw same-version frame replay as a separate operation and report
-   whether a result is typed, raw-replayed, typed-and-raw, or unsupported.
-6. Treat the open [LibreDWG ACDS/ACIS report](https://github.com/LibreDWG/libredwg/issues/1411)
+   §20.4.41 notes that the ACIS stream is not fully decrypted; use it to
+   bound/step/preserve data, not as authority for arbitrary SAT/SAB semantics.
+   Do not use §20.4.41 as evidence for MESH or analytic/NURBS surface layouts;
+   the searchable v5.4.1 text reviewed here did not expose named sections for
+   those modern classes. Keep each such DWG subtype
+   `BLOCKED_ON_PRIMARY_LAYOUT_EVIDENCE` until an applicable authority and
+   independently checked witness are available; proceed with DXF lanes.
+3. **S3.3 — pre-R13 separation.** Inventory the R1.4/R11 readers separately.
+   Do not apply R13+ layouts to their records; use an appropriate legacy
+   specification and authentic version-specific sample trace before changing
+   them. If no such source exists, leave code unchanged and keep the row
+   unqualified.
+4. **S3.4 — bounded extraction.** Implement bounded extraction and validation
+   with transactional publication; malformed entity-level payloads must not
+   consume adjacent frame/handle data or publish partial geometry.
+5. **S3.5 — DataStorage association.** Attach recovered ACIS payload to the
+   typed modeler entity without overwriting its DWG object-frame carrier. For
+   AC1027+ reconcile the entity's DataStorage marker, handle/key, exactly one
+   selected data record, payload marker, and section version before
+   publication.
+6. **S3.6 — raw replay.** Keep raw same-version frame replay as a separate
+   operation and report whether a result is typed, raw-replayed, typed-and-raw,
+   or unsupported. Treat the open [LibreDWG ACDS/ACIS report](https://github.com/LibreDWG/libredwg/issues/1411)
    as an investigation lead only. Confirm any R2013+ `AcDb:AcDsPrototype_1b`
    behavior against ODA and local bytes before changing carrier rules.
 
@@ -614,7 +624,7 @@ spec/trace readiness; finally S7. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 13/28 committed, 15 blocked, 0 in progress, and 0 ready):
+commit; 14/28 committed, 14 blocked, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -631,7 +641,8 @@ commit; 13/28 committed, 15 blocked, 0 in progress, and 0 ready):
 | S5.1 | COMMITTED | Generated ASCII/binary DXF vectors now verify 3DFACE WCS corners/invisible-edge flags, 3D POLYLINE WCS vertices, polyface counts/subclass typing/signed invisible-edge indices, LWPOLYLINE OCS elevation/normal/local vertices, and MESH vertices/faces/edges/creases. Fixed in-tree `dx_iface` 3DFACE/MESH output routes and MESH import callback; corrected polyface groups 71/72, subclass selection, and group-91 omission; removed the invalid `AcDbSequenceEnd` marker rejected by LibreDWG. Focused CTest passes 1/1; LibreDWG 0.14 independently converts generated ASCII and binary files to R2000 DWG (only non-fatal unknown `HEADER.DIMLDRBLK` warnings). Vectors are generated at runtime and not committed. |
 | S5.2 | COMMITTED | Generated ASCII/binary DXF vectors exercise nested INSERTs with nonzero block base points, attached ATTRIB, oblique OCS, 90-degree rotation, nonuniform/mirrored scales, and MINSERT arrays. An independent arbitrary-axis/matrix oracle checks a nested world point and an array-cell offset; malformed non-finite insertion points are rejected. Writer array counts now stop at the signed 16-bit group-code limit accepted by the reader. Focused CTest passes 1/1, and LibreDWG 0.14 independently converts the exact generated ASCII/binary files to R2000 DWG (non-fatal unknown `HEADER.DIMLDRBLK` warnings only). This validates DXF acceptance, not the transform oracle; vectors are runtime-generated and not committed. |
 | S6.1 | COMMITTED | ASCII and binary runtime round-trips cover PLANESURFACE, EXTRUDED, REVOLVED, SWEPT, LOFTED, NURBSURFACE, SPLINE, and HELIX fields. Added bounded subtype group-90 sizes/group-310 byte retention; corrected SWEPT ID/size ordering and legacy group-91 acceptance; corrected one-byte binary-DXF Boolean encoding; tightened field/count/transform/constraint validation; made `dx_iface` preserve HELIX callbacks. Focused CTest `libdxfrw_dwg_local_roundtrip` passes 1/1, including malformed lengths/booleans/partial vectors and invalid writer fields. Runtime vectors are not committed. LibreDWG 0.14 rejected/does not handle the generated surface/NURBS cases, so it provides no independent semantic qualification. ODA v5.4.1 §20.4.40 says `splFlag1` is BL for R2013+; current code matches; no width fix is justified. Authentic per-version spline qualification and all DWG surface layouts remain outstanding. |
-| S3.1–S3.6 | BLOCKED_PER_VERSION | ODA authority is available, but ACIS extraction still needs version-specific boundary/handle/DataStorage evidence plus authentic target and independent checks. R1.4/R11 remains separately blocked on era-appropriate reference/sample. Do not edit parser paths speculatively. |
+| S3.1 | COMMITTED | Validated ODA v5.4.1 §20.4.41's non-empty modeler version range (1 or 2); empty ACIS bodies retain the absent-version/default-zero case. Runtime-generated AC1018 frames cover empty, 1, 2, 0, and 3; build and focused round-trip CTest pass. A local AC1024 conference-room debug conversion reached modeler parsers and retained 3DSOLID history handles, but the overall CLI failed on an OBJECTS-pass type-42 frame, so it is not an end-to-end positive. The version-2 byte is opaque filler; no payload extraction or semantic ACIS claim follows. |
+| S3.2–S3.6 | BLOCKED_PER_VERSION | ACIS extraction still needs version-specific boundary/handle/DataStorage evidence plus authentic target and independent checks. R1.4/R11 remains separately blocked on era-appropriate reference/sample. Do not edit parser paths speculatively. |
 | S4.1–S4.4 | BLOCKED_ON_S3 | Opaque DWG modeler payload writing follows only verified read layouts. |
 | S7.1–S7.5 | BLOCKED_ON_READY_SLICES | Qualify only completed format/version rows, then narrow README/support claims accordingly. |
 

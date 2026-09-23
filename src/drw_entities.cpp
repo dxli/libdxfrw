@@ -6458,6 +6458,12 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     if (parsedHasModelerData
         && !readBoundedBitShort(probe, bodyEndBit, parsedModelerVersion))
         return fail();
+    // ODA v5.4.1 §20.4.41 defines only modeler versions 1 and 2. The
+    // version field is absent for an empty ACIS body, so keep that case
+    // distinct instead of treating its default zero as malformed.
+    if (parsedHasModelerData
+        && parsedModelerVersion != 1 && parsedModelerVersion != 2)
+        return fail();
     if (!probe.isGood() || (stringStream != nullptr && !stringStream->isGood()))
         return fail();
 

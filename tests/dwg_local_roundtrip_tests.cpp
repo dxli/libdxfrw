@@ -17,6 +17,7 @@
 #include "drw_header.h"
 #include "dwg2dxf/dx_iface.h"
 #include "libdwgr.h"
+#include "intern/dwgbuffer.h"
 #include "intern/dwgbufferw.h"
 #include "intern/dwg_fixed_handles.h"
 
@@ -5249,6 +5250,114 @@ bool runDxfMixedModelerCarrierChunks() {
     return false;
 }
 
+class LocalModelerGeometry final : public DRW_ModelerGeometry {
+public:
+    using DRW_ModelerGeometry::DRW_ModelerGeometry;
+    using DRW_ModelerGeometry::parseDwg;
+    using DRW_Entity::encodeDwgCommon;
+    using DRW_Entity::encodeDwgEntHandle;
+
+    void setDwgType(std::uint16_t type) { oType = type; }
+};
+
+bool patchModelerObjectSize(std::vector<std::uint8_t>& bytes,
+                            std::uint64_t sizeFieldBit,
+                            std::uint32_t objectSizeBits) {
+    const std::uint64_t totalBits =
+        static_cast<std::uint64_t>(bytes.size()) * 8u;
+    if (sizeFieldBit > totalBits || totalBits - sizeFieldBit < 32u)
+        return false;
+
+    // RL fields use little-endian bytes whose bits are stored most-significant
+    // bit first, including when the field begins at a non-byte boundary.
+    for (std::uint32_t byteIndex = 0; byteIndex < 4; ++byteIndex) {
+        const std::uint8_t rawByte = static_cast<std::uint8_t>(
+            objectSizeBits >> (byteIndex * 8u));
+        for (std::uint32_t bitIndex = 0; bitIndex < 8; ++bitIndex) {
+            const std::uint64_t destinationBit = sizeFieldBit
+                + byteIndex * 8u + bitIndex;
+            const std::uint8_t mask = static_cast<std::uint8_t>(
+                1u << (7u - static_cast<unsigned>(destinationBit & 7u)));
+            const std::uint8_t value = static_cast<std::uint8_t>(
+                (rawByte >> (7u - bitIndex)) & 1u);
+            std::uint8_t& destination =
+                bytes[static_cast<std::size_t>(destinationBit >> 3)];
+            destination = static_cast<std::uint8_t>(
+                (destination & static_cast<std::uint8_t>(~mask))
+                | (value != 0 ? mask : 0));
+        }
+    }
+    return true;
+}
+
+bool buildModelerVersionFrame(bool empty, std::uint16_t modelerVersion,
+                              std::vector<std::uint8_t>& bytes) {
+    constexpr DRW::Version version = DRW::AC1018;
+    constexpr std::uint16_t modelerObjectType = 38; // §20.4.41 3DSOLID
+    LocalModelerGeometry source(DRW::E3DSOLID);
+    source.setDwgType(modelerObjectType);
+    source.handle = 0x120u;
+
+    dwgBufferW frame;
+    if (!source.encodeDwgCommon(version, &frame))
+        return false;
+
+    frame.putBit(empty ? 1u : 0u);
+    frame.putBit(0u); // unknown bit
+    if (!empty) {
+        frame.putBitShort(modelerVersion);
+        if (modelerVersion == 1)
+            frame.putBitLong(0); // zero-length SAT block terminator
+        else if (modelerVersion == 2)
+            frame.putRawChar8(0xA5u); // bounded opaque test payload byte
+    }
+    if (!frame.isGood() || frame.bitCount() >
+            std::numeric_limits<std::uint32_t>::max())
+        return false;
+    const std::uint32_t objectSizeBits = frame.bitCount();
+
+    dwgBuffer typeReader(frame.data().data(), frame.data().size());
+    if (typeReader.getObjType(version) != modelerObjectType)
+        return false;
+    const std::uint64_t sizeFieldBit = typeReader.getPosition() * 8u
+        + typeReader.getBitPos();
+
+    if (!source.encodeDwgEntHandle(version, &frame)
+        || !frame.isGood())
+        return false;
+    bytes = frame.data();
+    return patchModelerObjectSize(bytes, sizeFieldBit, objectSizeBits);
+}
+
+bool parseModelerVersionFrame(bool empty, std::uint16_t modelerVersion,
+                              bool expectedSuccess) {
+    std::vector<std::uint8_t> bytes;
+    if (!buildModelerVersionFrame(empty, modelerVersion, bytes))
+        return false;
+
+    dwgBuffer buffer(bytes.data(), bytes.size());
+    LocalModelerGeometry parsed(DRW::E3DSOLID);
+    const bool parseSucceeded = parsed.parseDwg(DRW::AC1018, &buffer);
+    if (parseSucceeded != expectedSuccess)
+        return false;
+    if (!expectedSuccess) {
+        return !buffer.isGood() && parsed.handle == DRW::NoHandle
+            && parsed.m_modelerVersion == 0 && parsed.m_rawBytes.empty();
+    }
+    if (parsed.m_isEmpty != empty || parsed.m_hasModelerData == empty)
+        return false;
+    return parsed.m_modelerVersion == (empty ? 0 : modelerVersion)
+        && parsed.handle == 0x120u;
+}
+
+bool runModelerDwgVersionValidation() {
+    return parseModelerVersionFrame(true, 0, true)
+        && parseModelerVersionFrame(false, 1, true)
+        && parseModelerVersionFrame(false, 2, true)
+        && parseModelerVersionFrame(false, 0, false)
+        && parseModelerVersionFrame(false, 3, false);
+}
+
 dwgHandle localRawObjectHandle(std::uint8_t code, std::uint32_t ref) {
     dwgHandle handle;
     handle.code = ref == 0 ? 0 : code;
@@ -7651,6 +7760,8 @@ int main(int argc, char** argv) {
            "local mixed DXF modeler carrier chunk identity", failures);
     expect(runRawDwgReplayContract(),
            "local DWG raw-object/raw-section replay contract", failures);
+    expect(runModelerDwgVersionValidation(),
+           "local DWG modeler version range and empty-body validation", failures);
     if (failures != 0) {
         std::cerr << failures << " local DWG round-trip assertion(s) failed\n";
         return 1;
