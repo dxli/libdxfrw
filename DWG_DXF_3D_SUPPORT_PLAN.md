@@ -839,7 +839,20 @@ Steps:
    any of these rows, obtain an authentic target-generated sample exercising
    the exact feature/version, its authoritative layout, and an independent
    field-level oracle; otherwise leave it unqualified. Modeler rows still
-   depend on S3/S4 evidence.
+   depend on S3/S4 evidence. Deep research found a promising PFACE candidate:
+   [CADforum's Enneper10 block](https://www.cadforum.cz/catalog/block.asp?blk=15264)
+   is described as made with 3DPLOT and identified as DWG2018; the
+   [3DPlot reference](https://www.cadforum.cz/en/3dplot-3d-math-surfaces-in-autocad-tip15090)
+   says generated surfaces are `AcDbPolyFaceMesh`, and its Enneper definition
+   gives `Z = U² - V²`. This is a candidate only: the catalog requires a free
+   registered-member download, so the binary was not available for hash,
+   header, entity-class, or vertex inspection. It is AC1032, while the reviewed
+   ODA v5.4.1 material ends at R2013 and this repo's AC1032 reader is a
+   pass-through stub. If the artifact becomes available, verify provenance,
+   actual class, and non-planar vertices, then source the R2018 layout and
+   resolve the AC1032 reader before using it as a witness. It does not address
+   nonzero-Z 3D POLYLINE or modern `AcDbSubDMesh`; keep those and PFACE
+   interoperability claims blocked until their evidence gates are met.
 12. **S8.5 — Consumer-facing contract and release claims.** After S8.1-S8.4a.5,
    document how a 3D-aware client consumes typed geometry and separates opaque
    modeler payloads from decoded fields, and how a 2D client can retain its
