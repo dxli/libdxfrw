@@ -3,15 +3,16 @@
 
 This is an optional local qualification helper, not a CTest dependency. It
 compares fields by entity handle so callback order is irrelevant. The accepted
-scope is intentionally limited to AC1024 (R2010) INSERT placement and SPLINE
-fit data and one sample's LINE endpoints, plus AC1021 (R2007) LINE endpoints
-and 3DFACE corners/edge flags. Modeler, surface, and other version/family
-fields are not compared here.
+scope is intentionally limited to AC1015 (R2000) 3D POLYLINE compound records,
+AC1024 (R2010) INSERT placement and SPLINE fit data and one sample's LINE
+endpoints, plus AC1021 (R2007) LINE endpoints and 3DFACE corners/edge flags.
+Modeler, surface, and other version/family fields are not compared here.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import pathlib
@@ -269,6 +270,81 @@ def compare_line(row: dict[str, Any]) -> None:
                   "LINE.extrusion")
 
 
+def compare_polyline3d(row: dict[str, Any],
+                       external_vertices: dict[str, dict[str, Any]],
+                       expected_vertex_count: int) -> int:
+    external = row["external"]
+    fields = row["adapter"]["fields"]
+    parent_handle = handle_key(external.get("handle"),
+                               "LibreDWG POLYLINE_3D")
+    if external.get("type") != 16 or external.get("_subclass") != "AcDb3dPolyline":
+        raise OracleError("sample parent is not DWG type 16 AcDb3dPolyline")
+    if fields.get("flags") != 8:
+        raise OracleError("libdxfrw did not preserve the sample's 3D POLYLINE flag")
+    if fields.get("curveType") != external.get("curve_type"):
+        raise OracleError("3D POLYLINE curve type differs")
+    if fields.get("vertexCount") != expected_vertex_count:
+        raise OracleError(
+            f"unexpected libdxfrw 3D POLYLINE vertex count "
+            f"{fields.get('vertexCount')!r}; expected {expected_vertex_count}")
+    if fields.get("seqEndHandle") != handle_key(external.get("seqend"),
+                                                "LibreDWG POLYLINE_3D SEQEND"):
+        raise OracleError("3D POLYLINE SEQEND handle differs")
+
+    owned_vertices = []
+    for vertex_handle, vertex in external_vertices.items():
+        owner_handle = handle_key(vertex.get("ownerhandle"),
+                                   "LibreDWG VERTEX_3D owner")
+        if owner_handle != parent_handle:
+            continue
+        object_index = vertex.get("index")
+        if isinstance(object_index, bool) or not isinstance(object_index, int):
+            raise OracleError("LibreDWG VERTEX_3D has no integer object index")
+        if (vertex.get("type") != 11
+                or vertex.get("_subclass") != "AcDb3dPolylineVertex"):
+            raise OracleError(f"vertex {vertex_handle} is not a 3D polyline vertex")
+        owned_vertices.append((object_index, vertex_handle, vertex))
+    owned_vertices.sort(key=lambda item: item[0])
+    if len(owned_vertices) != expected_vertex_count:
+        raise OracleError(
+            f"unexpected LibreDWG 3D POLYLINE child count {len(owned_vertices)}; "
+            f"expected {expected_vertex_count}")
+
+    first_handle = handle_key(external.get("first_vertex"),
+                              "LibreDWG POLYLINE_3D first vertex")
+    last_handle = handle_key(external.get("last_vertex"),
+                             "LibreDWG POLYLINE_3D last vertex")
+    if owned_vertices[0][1] != first_handle or owned_vertices[-1][1] != last_handle:
+        raise OracleError("3D POLYLINE child order disagrees with first/last handles")
+
+    nonzero_z = 0
+    for index, (_, vertex_handle, vertex) in enumerate(owned_vertices):
+        prefix = f"vertex.{index}"
+        if fields.get(prefix + ".handle") != vertex_handle:
+            raise OracleError(f"3D POLYLINE ordered vertex handle differs at {index}")
+        if fields.get(prefix + ".ownerHandle") != parent_handle:
+            raise OracleError(f"3D POLYLINE vertex owner differs at {index}")
+        compare_point(fields.get(prefix + ".position"), vertex.get("point"),
+                      f"3D POLYLINE.vertex[{index}].position")
+        compare_number(fields.get(prefix + ".flags"), vertex.get("flag"),
+                       f"3D POLYLINE.vertex[{index}].flags")
+        point = vertex.get("point")
+        if not isinstance(point, list) or len(point) != 3:
+            raise OracleError(f"LibreDWG vertex {vertex_handle} has no XYZ point")
+        if finite_number(point[2], "3D POLYLINE.vertex.z") != 0.0:
+            nonzero_z += 1
+
+    return nonzero_z
+
+
+def sha256_file(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--adapter", required=True,
@@ -282,7 +358,33 @@ def main() -> int:
     with args.input.open("rb") as source:
         version = source.read(6).decode("ascii", errors="replace")
     expected_nonzero_z_line_count = None
-    if (version == "AC1024"
+    expected_nonzero_z_vertex_count = None
+    expected_vertex_count = None
+    sample_source = None
+    if version == "AC1015" and args.input.name == "PolyLine3D.dwg":
+        expected_digest = (
+            "f51f4f65ba027bf1a001480d3c7b5bc5667960050081c67f9bb9c7bdbcfe815a"
+        )
+        actual_digest = sha256_file(args.input)
+        if actual_digest != expected_digest:
+            raise OracleError(
+                "AC1015 PolyLine3D sample digest differs from the pinned "
+                f"AutoCAD-authored input: {actual_digest}")
+        cases = (("POLYLINE_3D", 1, compare_polyline3d),)
+        expected_vertex_count = 6
+        expected_nonzero_z_vertex_count = 0
+        excluded = ["nonzero-Z coordinate preservation", "PFACE/POLYGON_MESH",
+                    "other families and versions", "DWG writing"]
+        sample_source = {
+            "repository": "LibreDWG/libredwg",
+            "commit": "34f02f54b9aacb5708c1d3d2070efb3e4b2d8c43",
+            "path": "test/test-data/2000/PolyLine3D.dwg",
+            "gitBlob": "bd1b3dde9daf91cd833c4745f8c35be119e2cf32",
+            "sha256": expected_digest,
+            "autocadPropertyDump": "test/test-data/2000/PolyLine3D.txt",
+            "autocadDxfPair": "test/test-data/2000/PolyLine3D.dxf",
+        }
+    elif (version == "AC1024"
             and args.input.name == "visualization_-_conference_room.dwg"):
         cases = (("INSERT", 6, compare_insert),
                  ("SPLINE", 2, compare_spline))
@@ -300,7 +402,8 @@ def main() -> int:
         excluded = ["all entities other than LINE and 3DFACE", "other versions"]
     else:
         raise OracleError(
-            "unsupported sample profile: expected AC1021 tablet.dwg or AC1024 "
+            "unsupported sample profile: expected AC1015 PolyLine3D.dwg, "
+            "AC1021 tablet.dwg, or AC1024 "
             "visualization_-_conference_room.dwg / "
             "visualization_-_condominium_with_skylight.dwg; "
             f"got {version!r} {args.input.name!r}")
@@ -312,13 +415,29 @@ def main() -> int:
 
     results = []
     for entity, count, comparator in cases:
+        adapter_entity = "POLYLINE" if entity == "POLYLINE_3D" else entity
         rows = compare_entity_set(index_external(external, entity),
-                                  index_adapter(adapter, entity), entity, count)
+                                  index_adapter(adapter, adapter_entity), entity,
+                                  count)
         for row in rows:
-            comparator(row)
+            if entity == "POLYLINE_3D":
+                nonzero_z = comparator(
+                    row, index_external(external, "VERTEX_3D"),
+                    expected_vertex_count)
+                if (expected_nonzero_z_vertex_count is not None
+                        and nonzero_z != expected_nonzero_z_vertex_count):
+                    raise OracleError(
+                        "unexpected nonzero-Z 3D POLYLINE vertex count "
+                        f"{nonzero_z}; expected "
+                        f"{expected_nonzero_z_vertex_count}")
+            else:
+                comparator(row)
         result = {"entity": entity, "count": len(rows),
                   "comparedBy": "handle", "semanticFieldsMatched": True}
-        if entity == "LINE":
+        if entity == "POLYLINE_3D":
+            result["vertexCount"] = expected_vertex_count
+            result["recordsWithNonzeroVertexZ"] = nonzero_z
+        elif entity == "LINE":
             nonzero_z = sum(
                 any(finite_number(point[2], "LINE.endpoint.z") != 0.0
                     for point in (row["external"]["start"],
@@ -339,6 +458,7 @@ def main() -> int:
     layout_authority = {
         "3DFACE": "ODA v5.4.1 §20.4.32",
         "LINE": "ODA v5.4.1 §20.4.21",
+        "POLYLINE_3D": "ODA v5.4.1 §§20.4.12, 20.4.17",
         "INSERT": "ODA v5.4.1 §§20.4.9-20.4.10",
         "SPLINE": "ODA v5.4.1 §20.4.40",
     }
@@ -350,6 +470,7 @@ def main() -> int:
         "rows": results,
         "layoutAuthority": {row["entity"]: layout_authority[row["entity"]]
                             for row in results},
+        "sampleSource": sample_source,
         "excluded": excluded,
         "claimBoundary": "read-field comparison on this sample only; no writer, "
                          "interoperability, or general version support claim",

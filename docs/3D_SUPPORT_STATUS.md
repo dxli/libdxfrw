@@ -90,6 +90,16 @@ strings and checks that every compared LINE number is finite. This
 uncommitted sample provides two-record read evidence only, not write or general
 AC1024 support.
 
+For AC1015/R2000, the optional comparator also matches the six child vertices
+of the AutoCAD-authored `PolyLine3D.dwg` sample against LibreDWG 0.14, including
+the 3D-polyline subtype, group-70 flag, curve type, first/last/SEQEND handles,
+child owner handles, per-vertex flags, ordered handles, and XYZ positions. The
+pinned LibreDWG sample has an AutoCAD VLA property dump and a paired AutoCAD
+DXF; the DWG's Git blob and SHA-256 are checked by the comparator. All six Z
+values are zero, so this is evidence only for the planar 3D-POLYLINE
+compound-record subset, not preservation of nonzero Z. The downloaded DWG
+stays in `/private/tmp` and is not committed.
+
 | Geometry family | Format / version | Read disposition | Write disposition | Evidence and boundary |
 | --- | --- | --- | --- | --- |
 | WCS primitives / 3DFACE | DXF AC1027, ASCII and binary | Experimental field read for 3DFACE only | Experimental field write for 3DFACE only | SELFTEST and CONSUMER-PROBE; EXT-ACCEPT for generated topology conversion. POINT, LINE, RAY, and XLINE are not qualified by this 3DFACE slice. |
@@ -97,6 +107,7 @@ AC1024 support.
 | 3DFACE corner/edge-field subset | DWG AC1021 / R2007 | Experimental read: four 3D corner tuples and invisible-edge flags on 48 handles in local `tablet.dwg` | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14, joined by handle; ODA v5.4.1 §20.4.32 describes the layout. One uncommitted sample only; no write, other-file, other-version, or general family claim. |
 | LINE endpoint field subset | DWG AC1021 / R2007 | Experimental read: start/end XYZ, thickness, and extrusion on 3,002 handles in local `tablet.dwg`; 670 lines have nonzero endpoint Z | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14, joined by handle; ODA v5.4.1 §20.4.21 describes the layout. One uncommitted sample only; no write, other-file, other-version, or general family claim. |
 | LINE endpoint field subset | DWG AC1024 / R2010 | Experimental read: start/end XYZ, thickness, and extrusion on two handles in local `visualization_-_condominium_with_skylight.dwg`; both have nonzero endpoint Z | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14, joined by handle; ODA v5.4.1 §20.4.21 describes the layout. One uncommitted sample only; no write or general AC1024 claim. |
+| 3D POLYLINE compound-record subset | DWG AC1015 / R2000 | Experimental read: 3D subtype/flag, curve type, six ordered child handles, owner handles, vertex flags, XYZ values, and SEQEND; all six vertices have Z=0 | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14; ODA v5.4.1 §§20.4.12 and 20.4.17 describe the vertex/header layout. The pinned AutoCAD-authored source includes a VLA property dump and DXF companion. This one planar sample does not qualify nonzero-Z preservation, PFACE/MESH, writes, or general AC1015 support. No fixture is committed. |
 | Legacy/custom 3DLINE | DXF: no qualified version/encoding | UNQUALIFIED | UNQUALIFIED | No portable DXF spelling or independent target witness is established; do not equate it with 3D LINE. |
 | Legacy/custom 3DLINE | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | Pre-R13 and custom-class paths require separate version-specific evidence. |
 | Planar entities placed in 3D | DXF AC1027, ASCII and binary | Experimental field read for LWPOLYLINE OCS/elevation; ELLIPSE WCS center/major-axis preservation has a callback-level self-test only | Experimental field write for LWPOLYLINE OCS/elevation subset | SELFTEST and CONSUMER-PROBE for LWPOLYLINE local XY/elevation/extrusion/bulge delivery; a separate generated ELLIPSE input checks WCS fields under `ext` true/false. Neither qualifies full curve/fill semantics or independent interoperability; ARC, CIRCLE, ELLIPSE, SOLID, TRACE, and HATCH remain unqualified as families. |
@@ -105,7 +116,7 @@ AC1024 support.
 | Placed block geometry | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | Block expansion and versioned transform semantics remain unqualified; see the narrower INSERT scalar-field read row below. |
 | INSERT placement field subset | DWG AC1024 / R2010 | Experimental read: insertion XYZ, scale, rotation, extrusion for the six matching INSERT handles in the local sample | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14; no block expansion, array offset, ATTRIB semantics, write evidence, or other-version claim. The sample is not committed. |
 | Classic 3D topology | DXF AC1027, ASCII and binary | Experimental 3D POLYLINE/VERTEX and polyface read | Experimental 3D POLYLINE/VERTEX and polyface write | SELFTEST and CONSUMER-PROBE for 3D POLYLINE XYZ delivery; EXT-ACCEPT for generated input conversion. Polyface self-tests are not all represented in the consumer probe; DWG child ownership/count claims remain separate. |
-| Classic 3D topology | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | No independent per-version semantic witness. |
+| Classic 3D topology | DWG R set / W set | UNQUALIFIED outside the narrow AC1015 3D-POLYLINE subset below | UNQUALIFIED per writer version | No broad independent per-version semantic witness; PFACE and nonzero-Z polyline geometry remain unqualified. |
 | Subdivision topology / MESH | DXF AC1027, ASCII and binary | Experimental MESH field read | Experimental MESH field write | SELFTEST and CONSUMER-PROBE for XYZ, face/edge indices, and creases; EXT-ACCEPT for generated input conversion; not an independent topology comparison. |
 | Subdivision topology / MESH | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | DWG class/layout support is not established by local self-read. |
 | Curves and analytic/NURBS surfaces | DXF AC1027, ASCII and binary | Experimental mapped-field read for SPLINE, HELIX, and six surface subtypes | Experimental mapped-field write for those tested records | SELFTEST; CONSUMER-PROBE covers SPLINE knots/control points and selected LOFTED-surface fields/carrier distinction only. No curve evaluation, surface evaluation, or independent semantic oracle. |

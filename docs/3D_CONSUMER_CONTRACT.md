@@ -145,6 +145,23 @@ python3 tools/compare_dwg_3d_consumer_oracle.py \
   --input tests/samples/AC1024/visualization_-_condominium_with_skylight.dwg
 ```
 
+The comparator also supports a pinned AC1015/R2000 AutoCAD 3D-POLYLINE sample
+from [LibreDWG test data](https://github.com/LibreDWG/libredwg/tree/34f02f54b9aacb5708c1d3d2070efb3e4b2d8c43/test/test-data/2000).
+Its sibling `PolyLine3D.txt` records the AutoCAD VLA object as
+`AcDb3dPolyline`, and `PolyLine3D.dxf` is the paired DXF reference. The
+comparator verifies the DWG blob identity, then matches one parent and six
+ordered child vertices against LibreDWG 0.14 for subtype/flags, curve type,
+vertex and owner handles, vertex flags, XYZ values, and SEQEND. All six Z
+values are zero; this is not evidence for nonzero-Z preservation, PFACE/MESH,
+writing, or general AC1015 support. Download the unchanged file to
+`/private/tmp/PolyLine3D.dwg`; it is intentionally not a committed fixture:
+
+```sh
+python3 tools/compare_dwg_3d_consumer_oracle.py \
+  --adapter build/tests/libdxfrw_3d_consumer_probe \
+  --input /private/tmp/PolyLine3D.dwg
+```
+
 ## Adapter requirements
 
 - Keep the existing 2D adapter lane intact. Projection, curve approximation,
