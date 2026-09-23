@@ -1,8 +1,9 @@
 # Optional end-to-end check for FreeCAD's Draft DWG import route.
 #
-# Run with FreeCADCmd and set LIBDXFRW_FREECAD_DWG to the tracked AC1027
-# ordinary-encoding fixture. Ensure dwg2dxf is on PATH. The expected LINE
-# bounds were independently checked against LibreDWG 0.14's DXF export.
+# Run with FreeCADCmd and set LIBDXFRW_FREECAD_DWG to one of the tracked
+# ordinary-encoding fixtures (AC1015/AC1018/AC1021/AC1027). Ensure dwg2dxf is
+# on PATH. The expected LINE bounds were independently checked against
+# LibreDWG 0.14's DXF export for each fixture.
 
 import os
 import sys

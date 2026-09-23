@@ -928,27 +928,48 @@ Steps:
    selected FreeCAD DXF importer mode (native C++ versus legacy Python). Keep
    converter correctness, DXF import mapping, and GUI display as separate
    results. The reusable opt-in macro is
-   `tests/freecad_dwg2dxf_import_check.FCMacro`; it imports the already tracked
-   AC1027 ordinary-encoding fixture and asserts all three LINE extents. Run it
-   with `LIBDXFRW_FREECAD_DWG` set to the fixture path and this build's
-   `dwg2dxf` directory on `PATH`; replay with:
+   `tests/freecad_dwg2dxf_import_check.FCMacro`; it imports an existing tracked
+   ordinary-encoding fixture and asserts all three LINE extents. Run it for
+   AC1015, AC1018, AC1021, and AC1027 by setting
+   `LIBDXFRW_FREECAD_DWG` to each fixture path and placing this build's
+   `dwg2dxf` directory on `PATH`; replay the matrix with:
 
    ```sh
-   PATH="/path/to/build/dwg2dxf:$PATH" \
-   LIBDXFRW_FREECAD_DWG="/path/to/libdxfrw/tests/fixtures/dwg/ordinary_enc_AC1027.dwg" \
-   "/path/to/freecadcmd" --user-cfg "/tmp/freecad-user.cfg" \
-     --log-file "/tmp/freecad.log" \
-     "/path/to/libdxfrw/tests/freecad_dwg2dxf_import_check.FCMacro"
+   for version in AC1015 AC1018 AC1021 AC1027; do
+     PATH="/path/to/build/dwg2dxf:$PATH" \
+     LIBDXFRW_FREECAD_DWG="/path/to/libdxfrw/tests/fixtures/dwg/ordinary_enc_${version}.dwg" \
+     "/path/to/freecadcmd" --user-cfg "/tmp/freecad-user.cfg" \
+       --log-file "/tmp/freecad.log" \
+       "/path/to/libdxfrw/tests/freecad_dwg2dxf_import_check.FCMacro" || exit $?
+   done
    ```
 
-   LibreDWG 0.14's independent DXF export
-   gives the corresponding endpoints `(1,2,0)-(3,4,0)`,
-   `(5,6,0)-(7,8,0)`, and `(9,10,0)-(11,12,0)`. FreeCAD 1.1.3 revision
-   `20260725` on arm64 / Qt 6.8.3 selected its C++ DXF importer and created
-   three `Part::Feature` objects with those bounds; its import summary reports
-   three LINEs and no unsupported features. This qualifies only that runtime,
-   importer mode, fixture, converter route, and line-field subset—not GUI
-   display or general FreeCAD/DWG/3D support. In this managed macOS sandbox,
+   For all four fixtures, LibreDWG 0.14's independent DXF export gives the
+   endpoints `(1,2,0)-(3,4,0)`, `(5,6,0)-(7,8,0)`, and
+   `(9,10,0)-(11,12,0)`. FreeCAD 1.1.3 revision `20260725` on arm64 / Qt
+   6.8.3 selected its C++ DXF importer and created three `Part::Feature`
+   objects with those bounds for each source revision; all four summaries
+   report three LINEs and no unsupported features. This qualifies only that
+   runtime, importer mode, four fixtures/revisions, converter route, and LINE
+   field subset—not GUI display or general FreeCAD/DWG/3D support.
+
+   An exploratory run through the same DWG helper on the existing untracked
+   AC1021 `tests/samples/AC1021/tablet.dwg` exposes a downstream consumer
+   boundary. The libdxfrw DXF and [ODA File Converter](https://www.opendesign.com/guestfiles/oda_file_Converter)
+   27.1.0.0's independent
+   export each contain 48 3DFACE, 81 SOLID, and 24 HATCH records. FreeCAD's
+   C++ importer creates the same 4,868 imported objects for either output but
+   marks 38 3DFACE, 69 SOLID, and 22 HATCH records unsupported and logs
+   `ReadEntity` exceptions. The shared result is evidence against attributing
+   these omissions solely to libdxfrw's conversion, not proof of equivalent
+   fields or consumer usability; this user-owned sample remains uncommitted.
+   The optional legacy Python importer was not tested because its
+   `dxfReader` dependencies are not installed, and no addon download was
+   triggered. Keep the FreeCAD qualification limited to the four ordinary
+   LINE fixtures and default C++ importer until a separate feature-level
+   consumer expectation is established.
+
+   In this managed macOS sandbox,
    the original `neon` startup failure came from sandbox denial of
    `hw.optional.neon`, not an unsupported host or FreeCAD binary; the same
    version check and import pass outside the restricted sandbox. See the
@@ -1019,7 +1040,7 @@ Initial dependency/readiness order:
 | S5 | S0, S1 | DXF topology/coordinate portion ready after S1; only the DXF portion may proceed while the ODA gate is unresolved. |
 | S6 | S0, S1 | DXF surfaces/HELIX ready after S1. DWG spline edits require the local ODA chapter and authentic per-version trace; modern DWG surface edits additionally require a surface-specific primary layout and independent witness. |
 | S7 | S1-S6 | Qualify completed rows independently. A blocked DWG row does not block completed DXF evidence or docs; it remains unqualified. |
-| S8 | S1, S5-S7.5 | Consumer-contract matrix, 2D source-compatibility guard, generated-DXF `ext=true` regression, and DXF 3D-consumer probe are committed. S8.7 adds selected generated AC1027 ARC/CIRCLE callback fields under both `ext` modes; S8.8 adds selected PFACE values; neither qualifies those entity families. Narrow target-sample DWG read evidence covers AC1024 INSERT/SPLINE and LINE fields, AC1021 3DFACE/LINE fields, and the planar AC1015 3D-POLYLINE subset. A separate LibreDWG-generated AC1015 control exercises nonzero-Z 3D POLYLINE, legacy POLYLINE_MESH, and PFACE across libdxfrw/LibreDWG readers but does not qualify AutoCAD interoperability or promote support claims. S8.9 brings the helper CLI into FreeCAD's exact `input -o output` converter contract while preserving its old syntax; S8.11 directly tests its source-version mapping; S8.10 verifies one FreeCAD 1.1.3 macOS arm64 C++ importer run against the tracked AC1027 LINE fixture and an independent LibreDWG DXF export. Other FreeCAD runtime/import modes and all other DWG rows retain their own gates. Modeler rows additionally wait for S3/S4. Keep adapters outside parser semantics and do not require GUI/rendering code. |
+| S8 | S1, S5-S7.5 | Consumer-contract matrix, 2D source-compatibility guard, generated-DXF `ext=true` regression, and DXF 3D-consumer probe are committed. S8.7 adds selected generated AC1027 ARC/CIRCLE callback fields under both `ext` modes; S8.8 adds selected PFACE values; neither qualifies those entity families. Narrow target-sample DWG read evidence covers AC1024 INSERT/SPLINE and LINE fields, AC1021 3DFACE/LINE fields, and the planar AC1015 3D-POLYLINE subset. A separate LibreDWG-generated AC1015 control exercises nonzero-Z 3D POLYLINE, legacy POLYLINE_MESH, and PFACE across libdxfrw/LibreDWG readers but does not qualify AutoCAD interoperability or promote support claims. S8.9 brings the helper CLI into FreeCAD's exact `input -o output` converter contract while preserving its old syntax; S8.11 directly tests its source-version mapping; S8.10 verifies FreeCAD 1.1.3's macOS arm64 C++ importer against tracked AC1015/AC1018/AC1021/AC1027 LINE fixtures and independent LibreDWG DXF exports. Other FreeCAD runtime/import modes and all other DWG rows retain their own gates. Modeler rows additionally wait for S3/S4. Keep adapters outside parser semantics and do not require GUI/rendering code. |
 
 The execution sequence is therefore readiness-first, not table-order-first:
 S0 → S1 → S2 and the DXF portions of S5/S6; then S3 → S4 after DWG
@@ -1082,7 +1103,7 @@ commit; 38/51 committed, 12 blocked, 1 verified, 0 in progress, and 0 ready):
 | S8.7 | COMMITTED | The semantic sink now records ARC center/radius/thickness/extrusion/start/end radians and CIRCLE center/radius/thickness/extrusion. Runtime-generated AC1027 ASCII and binary DXF include a default-normal CIRCLE, oblique-normal CIRCLE, and negative-Z ARC. The probe verifies native OCS fields with `ext == false` and the exact established `ext == true` oblique center and negative-Z ARC angle mirror/swap values; the existing LWPOLYLINE/3DFACE invariants also remain passing. Focused consumer CTest passes 1/1 and `lc3_compat_check` builds. This is writer-self-generated callback-field evidence, not independent interoperability or family qualification; no source API/DWG parser changes or fixture files. |
 | S8.8 | COMMITTED | Extended the runtime-generated AC1027 ASCII/binary consumer probe with a PFACE POLYLINE containing four nonzero-Z vertices and a typed face record whose zero source flags cause the writer to emit DXF group-70 bit 128. The sink verifies PFACE declaration/count fields, first/last vertex XYZ, face marker, and all four signed one-based face indices through both `ext == false` and `ext == true`. Focused consumer CTest passes 1/1; `git diff --check` passes. This is generated writer/readback field evidence only, not independent PFACE topology/interoperability or DWG child ownership evidence; no fixtures committed. |
 | S8.9 | COMMITTED | Added FreeCAD's exact `dwg2dxf <input> -o <output>` invocation while retaining the old positional form. The converter captures reader version, defaults to the source revision for supported versions (AC1012/R13 maps to supported AC1014/R14), emits ASCII by default, refuses existing outputs without prompting, and accepts explicit `-y`; explicit output-version overrides remain available. The new fast CTest uses the repository-tracked `tests/fixtures/dwg/ordinary_enc_AC1027.dwg` copied only into the build tree so both input and output paths contain spaces; it checks AC1027 `$ACADVER` preservation, legacy `-v2010` output AC1024, no-prompt/no-overwrite sentinel preservation within a 5-second timeout, and explicit overwrite. `cmake --build build --target dwg2dxf lc3_compat_check` succeeds; `ctest --test-dir build -R '^dwg2dxf_freecad_cli_compat$' --output-on-failure` passes 1/1; `git diff --check` passes. No DWG/DXF fixture was added. S8.11 supplies unit coverage of the AC1012→AC1014 mapping; no local authentic AC1012 DWG is available, so that reader/version path remains under its existing witness gate. This verifies converter CLI/output only, not FreeCAD import or display. |
-| S8.10 | VERIFIED | Resolved the apparent runtime blocker: macOS sandboxing hid `hw.optional.neon`, causing Qt's false incompatibility abort; outside the restricted sandbox FreeCAD 1.1.3 revision `20260725` / arm64 / Qt 6.8.3 starts. `tests/freecad_dwg2dxf_import_check.FCMacro` runs the actual `Draft.importDWG.open()` route on the existing tracked AC1027 fixture with this build's `dwg2dxf` on `PATH`. The C++ DXF importer reports 3 LINEs, creates 3 `Part::Feature`s, and reports no unsupported features. All three resulting XYZ bounding boxes match the independent LibreDWG 0.14 DXF export: `(1,2,0)-(3,4,0)`, `(5,6,0)-(7,8,0)`, `(9,10,0)-(11,12,0)`. No fixture added. This is narrow one-host/one-importer/one-sample path evidence, not GUI display, general DWG, or 3D semantic qualification; run outside the macOS sandbox when needed. Issue #19247 remains unreproduced because it has no affected DWG/output pair. |
+| S8.10 | VERIFIED | Resolved the apparent runtime blocker: macOS sandboxing hid `hw.optional.neon`, causing Qt's false incompatibility abort; outside the restricted sandbox FreeCAD 1.1.3 revision `20260725` / arm64 / Qt 6.8.3 starts. `tests/freecad_dwg2dxf_import_check.FCMacro` runs the actual `Draft.importDWG.open()` route on each already tracked ordinary-encoding fixture (AC1015/AC1018/AC1021/AC1027) with this build's `dwg2dxf` on `PATH`. For all four, the C++ DXF importer reports 3 LINEs, creates 3 `Part::Feature`s, and reports no unsupported features. Each resulting XYZ bounding box matches LibreDWG 0.14's independent direct DXF export: `(1,2,0)-(3,4,0)`, `(5,6,0)-(7,8,0)`, `(9,10,0)-(11,12,0)`. An exploratory read of the existing untracked AC1021 `tablet.dwg` further shows both libdxfrw and ODA File Converter 27.1.0.0 exports contain 48 3DFACE/81 SOLID/24 HATCH records, while FreeCAD's C++ importer creates 4,868 objects from each and reports 38 3DFACE/69 SOLID/22 HATCH as unsupported with entity-read exceptions. This shared behavior is not attributable solely to libdxfrw conversion, but it does not establish semantic equivalence or FreeCAD usability; the sample remains user-owned and unstaged. The optional legacy Python importer was not tested because its `dxfReader` dependencies are absent. No fixture added. Keep qualification limited to this one host/default importer/four LINE fixtures; no GUI, general DWG, or 3D consumer claim. Issue #19247 remains unreproduced because it has no affected DWG/output pair. |
 | S8.11 | COMMITTED | Extracted the implicit source-revision policy into CLI-private `dwg2dxf/dx_cli.h` and directly tested every supported revision, AC1012→AC1014, and UNKNOWN/unsupported rejection in `dwg2dxf_version_tests.cpp`. `cmake --build build --target dwg2dxf libdxfrw_dwg2dxf_version_tests` succeeds; `ctest --test-dir build -R '^dwg2dxf_(version_policy|freecad_cli_compat)$' --output-on-failure` passes 2/2; `git diff --check` passes. The AC1012 mapping policy is unit-tested, but no authentic AC1012 DWG fixture was available to validate that reader path. No fixtures added. |
 
 - Before implementation, convert the work packages into dependency-closed

@@ -19,6 +19,9 @@ Evidence labels:
   independent field-by-field semantic comparison was established.
 - SPEC: primary DXF/DWG documentation or source inspection identifies a
   layout or route; this alone does not prove implementation correctness.
+- CONSUMER-IMPORT: one external application's import route was exercised on a
+  named sample/version; this records consumer behavior, not file-format
+  qualification.
 - UNQUALIFIED: a semantic support claim is not justified for that
   family/version/direction.
 
@@ -47,6 +50,30 @@ current filter remains a 2D adapter: its
 source audit found projection/preview paths for 3DFACE, MESH, polygon meshes,
 and HELIX, with some native values retained only in sidecar/advanced metadata.
 Those consumer choices do not constrain the library's typed data callbacks.
+
+The FreeCAD DWG helper route was exercised separately with FreeCAD 1.1.3
+revision `20260725` on macOS arm64 / Qt 6.8.3. Its default C++ DXF importer
+received the exact `dwg2dxf <input> -o <output>` invocation through
+`Draft.importDWG.open()` and imported the three LINEs from the tracked AC1015,
+AC1018, AC1021, and AC1027 ordinary-encoding fixtures with XYZ bounds matching
+independent LibreDWG 0.14 DXF exports. This is `CONSUMER-IMPORT` evidence for
+that host/importer/fixture subset only; it is not a 3D or GUI-display claim.
+
+An exploratory read of the existing untracked AC1021 `tablet.dwg` sample
+shows the downstream boundary: libdxfrw's DXF and the
+[ODA File Converter](https://www.opendesign.com/guestfiles/oda_file_Converter)
+27.1.0.0's independent DXF export each contain 48 3DFACE, 81 SOLID, and 24
+HATCH records.
+FreeCAD's C++ importer created the same 4,868 imported objects from either
+DXF but reported 38 3DFACE, 69 SOLID, and 22 HATCH entities as unsupported;
+both runs also logged entity-read exceptions. This shared behavior means the
+observed omission is not unique to libdxfrw's output, but it does not prove
+those entities are semantically equivalent or usable in FreeCAD. The sample
+remains user-owned and uncommitted. FreeCAD's optional legacy Python importer
+was not tested because its `dxfReader` dependencies are absent locally; no
+addon download was triggered. See the opt-in
+[`freecad_dwg2dxf_import_check.FCMacro`](../tests/freecad_dwg2dxf_import_check.FCMacro)
+and the bounded S8.10 result in the implementation plan.
 
 3D-aware clients can use the public callbacks to copy typed values without an
 implicit global XY projection. The fast
