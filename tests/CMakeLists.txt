@@ -28,6 +28,23 @@ if(NOT TARGET dwg2dxf)
     return()
 endif()
 
+# Keep the no-version FreeCAD CLI revision policy independently tested from
+# full DWG input availability. The source-version mapping is pure policy.
+add_executable(libdxfrw_dwg2dxf_version_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg2dxf_version_tests.cpp
+)
+target_compile_features(libdxfrw_dwg2dxf_version_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg2dxf_version_tests
+    PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg2dxf_version_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/dwg2dxf
+    ${CMAKE_SOURCE_DIR}/src
+)
+add_test(NAME dwg2dxf_version_policy
+    COMMAND libdxfrw_dwg2dxf_version_tests)
+set_tests_properties(dwg2dxf_version_policy PROPERTIES
+    LABELS "cli;fast")
+
 # Match FreeCAD's Draft/importDWG.py subprocess contract without requiring a
 # FreeCAD installation. The DWG fixture is already tracked in this repository.
 set(_freecad_cli_sample

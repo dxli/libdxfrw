@@ -16,6 +16,7 @@
 
 #include "dx_iface.h"
 #include "dx_data.h"
+#include "dx_cli.h"
 
 #ifndef S_ISDIR
 #define S_ISDIR(mode) (((mode) & S_IFMT) == S_IFDIR)
@@ -54,25 +55,6 @@ DRW::Version checkVersion(std::string param){
     else if (param == "-v2010")
         return DRW::AC1024;
     return DRW::UNKNOWNV;
-}
-
-DRW::Version defaultOutputVersion(DRW::Version sourceVersion){
-    if (sourceVersion == DRW::AC1012)
-        return DRW::AC1014;
-
-    switch (sourceVersion) {
-    case DRW::AC1009:
-    case DRW::AC1014:
-    case DRW::AC1015:
-    case DRW::AC1018:
-    case DRW::AC1021:
-    case DRW::AC1024:
-    case DRW::AC1027:
-    case DRW::AC1032:
-        return sourceVersion;
-    default:
-        return DRW::UNKNOWNV;
-    }
 }
 
 bool convertFile(std::string inName, std::string outName, DRW::Version ver,
@@ -118,7 +100,7 @@ bool convertFile(std::string inName, std::string outName, DRW::Version ver,
     }
 
     if (ver == DRW::UNKNOWNV && nonInteractive) {
-        ver = defaultOutputVersion(fData.sourceVersion);
+        ver = dwg2dxfCli::defaultOutputVersion(fData.sourceVersion);
         if (ver == DRW::UNKNOWNV) {
             std::cout << "Error: no supported default DXF version for source revision "
                       << static_cast<int>(fData.sourceVersion) << std::endl;
