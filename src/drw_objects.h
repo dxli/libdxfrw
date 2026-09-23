@@ -2944,6 +2944,7 @@ protected:
 public:
   struct Entry {
     UTF8STRING m_name;
+    // Some valid DWGs encode a dictionary entry with a null child reference.
     std::uint32_t m_handle = 0;
   };
   int cloning;                  /*!< duplicate-record handling (BS) */

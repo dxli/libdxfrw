@@ -1967,7 +1967,9 @@ bool dwgReader::validateDwgFramePublicationStaticArtifacts(
     }
     for (const DRW_DwgDictionaryWithDefaultMembership::Entry &entry :
          dictionaryWithDefaultMembership->m_entries) {
-      if (entry.m_name.empty() || entry.m_handle == DRW::NoHandle)
+      // DICTIONARY item references can be null (ODA §20.4.44); the separate
+      // DICTIONARYWDFLT default-entry handle is required and checked above.
+      if (entry.m_name.empty())
         return false;
     }
   }

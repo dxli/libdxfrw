@@ -8124,7 +8124,10 @@ bool DRW_Dictionary::parseDwgImpl(DRW::Version version, dwgBuffer *buf,
         dwgHandle itemH;
         if (!readDwgObjectHandleWithinFrame(version, *buf, true, itemH))
             return false;
-        if (names[i].empty() || itemH.ref == 0)
+        const bool nullItemHandleIsValid = itemH.ref == 0
+            && itemH.size == 0
+            && (itemH.code == 0 || itemH.code == dwgItemHandleCode());
+        if (names[i].empty() || (itemH.ref == 0 && !nullItemHandleIsValid))
             return false;
         entries.push_back({names[i], itemH.ref});
     }
@@ -15277,7 +15280,7 @@ bool DRW_Dictionary::isDwgPayloadValidImpl(
     }
     return std::all_of(m_entries.cbegin(), m_entries.cend(),
                        [](const Entry &entry) {
-                         return !entry.m_name.empty() && entry.m_handle != 0;
+                         return !entry.m_name.empty();
                        });
 }
 

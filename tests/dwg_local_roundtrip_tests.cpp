@@ -708,6 +708,8 @@ public:
             dictionary.m_entries.push_back(
                 DRW_Dictionary::Entry{"LOCAL_SECTION_SETTINGS", 0xE800u});
         }
+        dictionary.m_entries.push_back(
+            DRW_Dictionary::Entry{"LOCAL_NULL_ENTRY", 0u});
         wroteDictionary_ = registeredDictionary_
             && writer_->writeDictionary(&dictionary)
             && dictionary.handle != 0;
@@ -913,7 +915,8 @@ public:
         dictionaryWithDefault.parentHandle = dictionary.handle;
         dictionaryWithDefault.cloning = 1;
         dictionaryWithDefault.hardOwner = 1;
-        dictionaryWithDefault.m_entries = {{"LOCAL_DEFAULT", 0xB000u}};
+        dictionaryWithDefault.m_entries = {
+            {"LOCAL_DEFAULT", 0xB000u}, {"LOCAL_NULL_DEFAULT_MEMBER", 0u}};
         dictionaryWithDefault.m_defaultEntryHandle = 0xB000u;
         wroteDictionaryWithDefault_ = registeredDictionaryWithDefault_
             && writer_->writeDictionaryWithDefault(&dictionaryWithDefault)
@@ -3137,7 +3140,7 @@ public:
             readDictionarySeen_ = data.parentHandle
                     == DRW::DwgNamedObjectsDictionaryHandle
                 && data.m_entries.size()
-                    == (expectedVersion_ >= DRW::AC1021 ? 54u : 52u)
+                    == (expectedVersion_ >= DRW::AC1021 ? 55u : 53u)
                 && data.m_entries[0].m_name == "LOCAL_XRECORD"
                 && data.m_entries[0].m_handle == 0xA602u
                 && data.m_entries[1].m_name == "LOCAL_PLOTSETTINGS"
@@ -3246,7 +3249,9 @@ public:
                     || (data.m_entries[52].m_name == "LOCAL_SECTION_MANAGER"
                         && data.m_entries[52].m_handle == 0xE700u
                         && data.m_entries[53].m_name == "LOCAL_SECTION_SETTINGS"
-                        && data.m_entries[53].m_handle == 0xE800u));
+                        && data.m_entries[53].m_handle == 0xE800u))
+                && data.m_entries.back().m_name == "LOCAL_NULL_ENTRY"
+                && data.m_entries.back().m_handle == 0u;
         }
     }
     void addXRecord(const DRW_XRecord& data) override {
@@ -3396,9 +3401,11 @@ public:
         const DRW_DictionaryWithDefault& data) override {
         if (data.handle == 0xB100u)
             readDictionaryWithDefaultSeen_ = data.parentHandle == 0xA601u
-                && data.m_entries.size() == 1
+                && data.m_entries.size() == 2
                 && data.m_entries.front().m_name == "LOCAL_DEFAULT"
                 && data.m_entries.front().m_handle == 0xB000u
+                && data.m_entries.back().m_name == "LOCAL_NULL_DEFAULT_MEMBER"
+                && data.m_entries.back().m_handle == 0u
                 && data.m_defaultEntryHandle == 0xB000u;
         if (data.handle == 0xB101u)
             readMalformedDictionaryWithDefaultSeen_ = true;
