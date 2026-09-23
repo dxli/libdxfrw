@@ -80,7 +80,8 @@ current adapter continues to apply its own 2D projection/sidecar policy.
 The `libdxfrw_3d_consumer_probe` CTest writes runtime-generated AC1027 ASCII and
 binary DXF files, then reads them into a headless `DRW_Interface` sink with
 `ext == false`. It verifies callback delivery of full-XYZ 3DFACE corners,
-3D-POLYLINE vertices, MESH vertices and face/edge topology, INSERT/MINSERT
+3D-POLYLINE vertices, PFACE vertex/face records, MESH vertices and face/edge
+topology, INSERT/MINSERT
 placement fields, SPLINE control points and knots, LWPOLYLINE OCS/elevation
 values, and typed LOFTED-surface fields alongside a separately identified
 group-310 carrier. Selected planar OCS vectors also verify CIRCLE center,

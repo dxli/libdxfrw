@@ -1069,6 +1069,26 @@ public:
                 vertex->flags = 32;
             wrote = dxfWriter_->writePolyline(&polyline) && wrote;
 
+            DRW_Polyline polyface;
+            polyface.layer = "probe_pface";
+            polyface.flags = 64;
+            polyface.vertexcount = 4;
+            polyface.facecount = 1;
+            polyface.addVertex(DRW_Vertex{1.0, 2.0, 3.0, 0.0});
+            polyface.addVertex(DRW_Vertex{4.0, 5.0, 6.0, 0.0});
+            polyface.addVertex(DRW_Vertex{7.0, 8.0, 9.0, 0.0});
+            polyface.addVertex(DRW_Vertex{10.0, 11.0, 12.0, 0.0});
+            for (std::size_t i = 0; i < 4; ++i)
+                polyface.vertlist[i]->flags = 192;
+            DRW_Vertex faceRecord;
+            faceRecord.setDwgSubtype(DRW_Vertex::DwgSubtype::PolyfaceFace);
+            faceRecord.vindex1 = 1;
+            faceRecord.vindex2 = -2;
+            faceRecord.vindex3 = 3;
+            faceRecord.vindex4 = -4;
+            polyface.addVertex(faceRecord);
+            wrote = dxfWriter_->writePolyline(&polyface) && wrote;
+
             DRW_Mesh mesh;
             mesh.vertices = {DRW_Coord{20.0, 21.0, 22.0},
                              DRW_Coord{23.0, 24.0, 25.0},
@@ -2502,6 +2522,31 @@ bool run3DConsumerProbe(bool binary) {
         || !expectEntityDouble(legacyConsumer, "ARC", negativeArcLayer,
                                "endAngleRadians", M_PI - rawArcStart))
         return false;
+
+    const auto expectPolyface = [&](const SemanticSink& sink) {
+        const std::string entity = "POLYLINE";
+        const std::string layer = "probe_pface";
+        return expectEntityField(sink, entity, layer, "flags", "64")
+            && expectEntityField(sink, entity, layer, "declaredVertexCount", "4")
+            && expectEntityField(sink, entity, layer, "declaredFaceCount", "1")
+            && expectEntityField(sink, entity, layer, "vertexCount", "5")
+            && expectEntityField(sink, entity, layer, "vertex.0.position",
+                                 "{\"x\":1,\"y\":2,\"z\":3}")
+            && expectEntityField(sink, entity, layer, "vertex.1.position",
+                                 "{\"x\":4,\"y\":5,\"z\":6}")
+            && expectEntityField(sink, entity, layer, "vertex.2.position",
+                                 "{\"x\":7,\"y\":8,\"z\":9}")
+            && expectEntityField(sink, entity, layer, "vertex.3.position",
+                                 "{\"x\":10,\"y\":11,\"z\":12}")
+            && expectEntityField(sink, entity, layer, "vertex.4.flags", "128")
+            && expectEntityField(sink, entity, layer, "vertex.4.faceIndex1", "1")
+            && expectEntityField(sink, entity, layer, "vertex.4.faceIndex2", "-2")
+            && expectEntityField(sink, entity, layer, "vertex.4.faceIndex3", "3")
+            && expectEntityField(sink, entity, layer, "vertex.4.faceIndex4", "-4");
+    };
+    if (!expectPolyface(consumer) || !expectPolyface(legacyConsumer))
+        return false;
+
     const auto expectLegacyField = [&](const std::string& name,
                                        const std::string& expected) {
         const Field* field = findEntityField(legacyConsumer, "LWPOLYLINE", name);

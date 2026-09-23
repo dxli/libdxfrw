@@ -887,6 +887,15 @@ Steps:
    change is needed. This self-generated writer/readback checks callback field
    delivery only; ARC/CIRCLE family support and third-party interoperability
    remain unqualified. Runtime files stay temporary.
+15. **S8.8 — Cover selected PFACE values in the 3D-consumer probe.** Extend
+   the runtime-generated AC1027 ASCII/binary vector with a PFACE POLYLINE,
+   four nonzero-Z vertex records, and one typed face record whose zero source
+   flags require the writer to emit the DXF face-record marker. At the
+   consumer, assert the parent PFACE flag/declaration, all relevant XYZ, the
+   emitted/parsed group-70 marker, and all four signed one-based face indices.
+   Read the same vector through both `ext` modes to guard WCS vertex delivery.
+   Keep these fields explicitly distinct from DWG child ownership/handles and
+   target interoperability; the vector is generated at test runtime.
 
 Positive gate: an old source consumer still compiles, and the headless 3D probe
 receives all asserted native typed values/carrier identities without an
@@ -951,7 +960,7 @@ consumer probe independent of DWG. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 35/47 committed, 12 blocked, 0 in progress, and 0 ready):
+commit; 36/48 committed, 12 blocked, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -994,6 +1003,7 @@ commit; 35/47 committed, 12 blocked, 0 in progress, and 0 ready):
 | S8.5 | COMMITTED | Updated README, `docs/3D_CONSUMER_CONTRACT.md`, and `docs/3D_SUPPORT_STATUS.md` to separate the existing 2D source-compatibility lane, 3D typed-data callback access, format/version semantic qualification, and consumer display/edit behavior. Documented the exact AC1027 generated ASCII/binary consumer-probe families and its self-generated evidence ceiling; S8.4a-S8.4a.5 separately document the narrow target-sample comparisons and local generated topology control with distinct evidence ceilings. Other DWG rows remain unqualified. No general 3D, renderer, evaluator, editing, or binary-ABI claim is added. |
 | S8.6 | COMMITTED | Made additive 3D support with preserved 2D behavior an explicit cross-slice acceptance rule. `lc3_compat_check` and `libdxfrw_3d_consumer_probe` build/pass; the generated ASCII/binary probe compares the same LWPOLYLINE under `ext == true` and `ext == false`, and S5.4 adds a DXF ELLIPSE WCS-invariance check in both modes. Future affected paths must repeat the applicable fast gate. This is source/callback evidence only; no LibreCAD code/UI, ABI, or general semantic format claim is added. |
 | S8.7 | COMMITTED | The semantic sink now records ARC center/radius/thickness/extrusion/start/end radians and CIRCLE center/radius/thickness/extrusion. Runtime-generated AC1027 ASCII and binary DXF include a default-normal CIRCLE, oblique-normal CIRCLE, and negative-Z ARC. The probe verifies native OCS fields with `ext == false` and the exact established `ext == true` oblique center and negative-Z ARC angle mirror/swap values; the existing LWPOLYLINE/3DFACE invariants also remain passing. Focused consumer CTest passes 1/1 and `lc3_compat_check` builds. This is writer-self-generated callback-field evidence, not independent interoperability or family qualification; no source API/DWG parser changes or fixture files. |
+| S8.8 | COMMITTED | Extended the runtime-generated AC1027 ASCII/binary consumer probe with a PFACE POLYLINE containing four nonzero-Z vertices and a typed face record whose zero source flags cause the writer to emit DXF group-70 bit 128. The sink verifies PFACE declaration/count fields, first/last vertex XYZ, face marker, and all four signed one-based face indices through both `ext == false` and `ext == true`. Focused consumer CTest passes 1/1; `git diff --check` passes. This is generated writer/readback field evidence only, not independent PFACE topology/interoperability or DWG child ownership evidence; no fixtures committed. |
 
 - Before implementation, convert the work packages into dependency-closed
   items with `READY`, `IN_PROGRESS`, `BLOCKED`, `VERIFIED`, and `COMMITTED`
