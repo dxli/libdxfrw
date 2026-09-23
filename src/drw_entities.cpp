@@ -15952,8 +15952,10 @@ bool DRW_Spline::parseDwgSplineBody(DRW::Version version, dwgBuffer *buf){
         bool hasWeights = false;
         if (!readBoundedBit(*buf, bodyEndBit, hasWeights))
             return false;
-        weight = hasWeights ? 1 : 0; // flags bit 4: weights present (code 70)
-        if (weight) flags |= 0x10;
+        weight = hasWeights ? 1 : 0;
+        // DXF SPLINE group-70 bit 4 (0x04) means rational. Bit 16 (0x10)
+        // means linear and also implies planar; it is not the DWG weight flag.
+        if (weight) flags |= 0x04;
         if (!dwgSafety::multiply(static_cast<std::uint64_t>(ncontrol),
                                  weight ? 8u : 6u, controlBits))
             return false;
