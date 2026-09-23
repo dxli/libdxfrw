@@ -3,10 +3,13 @@
 
 This is an optional local qualification helper, not a CTest dependency. It
 compares fields by entity handle so callback order is irrelevant. The accepted
-scope is intentionally limited to AC1015 (R2000) 3D POLYLINE compound records,
-AC1024 (R2010) INSERT placement and SPLINE fit data and one sample's LINE
-endpoints, plus AC1021 (R2007) LINE endpoints and 3DFACE corners/edge flags.
-Modeler, surface, and other version/family fields are not compared here.
+scope is intentionally limited to one AutoCAD-authored AC1015 (R2000) planar
+3D POLYLINE sample, one locally generated AC1015 topology control, AC1024
+(R2010) INSERT placement and SPLINE fit data and one sample's LINE endpoints,
+plus AC1021 (R2007) LINE endpoints and 3DFACE corners/edge flags. The local
+control exercises nonzero-Z 3D POLYLINE, legacy POLYLINE_MESH, and PFACE but
+does not qualify AutoCAD interoperability. Modeler, surface, and other
+version/family fields are not compared here.
 """
 
 from __future__ import annotations
@@ -272,7 +275,8 @@ def compare_line(row: dict[str, Any]) -> None:
 
 def compare_polyline3d(row: dict[str, Any],
                        external_vertices: dict[str, dict[str, Any]],
-                       expected_vertex_count: int) -> int:
+                       expected_vertex_count: int,
+                       expected_points: list[list[float]] | None = None) -> int:
     external = row["external"]
     fields = row["adapter"]["fields"]
     parent_handle = handle_key(external.get("handle"),
@@ -331,10 +335,172 @@ def compare_polyline3d(row: dict[str, Any],
         point = vertex.get("point")
         if not isinstance(point, list) or len(point) != 3:
             raise OracleError(f"LibreDWG vertex {vertex_handle} has no XYZ point")
+        if expected_points is not None:
+            compare_vector(point, expected_points[index],
+                           f"3D POLYLINE.expectedPoint[{index}]")
         if finite_number(point[2], "3D POLYLINE.vertex.z") != 0.0:
             nonzero_z += 1
 
     return nonzero_z
+
+
+def owned_polyline_children(parent_handle: str,
+                            child_groups: list[dict[str, dict[str, Any]]],
+                            label: str) -> list[tuple[int, str, dict[str, Any]]]:
+    owned = []
+    for children in child_groups:
+        for vertex_handle, vertex in children.items():
+            owner_handle = handle_key(vertex.get("ownerhandle"),
+                                       f"LibreDWG {label} child owner")
+            if owner_handle != parent_handle:
+                continue
+            object_index = vertex.get("index")
+            if isinstance(object_index, bool) or not isinstance(object_index, int):
+                raise OracleError(f"LibreDWG {label} child has no integer object index")
+            owned.append((object_index, vertex_handle, vertex))
+    owned.sort(key=lambda item: item[0])
+    return owned
+
+
+def compare_polyline_mesh(
+        row: dict[str, Any], external_vertices: dict[str, dict[str, Any]],
+        expected_dimensions: tuple[int, int],
+        expected_points: list[list[float]]) -> dict[str, int]:
+    external = row["external"]
+    fields = row["adapter"]["fields"]
+    parent_handle = handle_key(external.get("handle"), "LibreDWG POLYLINE_MESH")
+    if external.get("type") != 30 or external.get("_subclass") != "AcDbPolygonMesh":
+        raise OracleError("sample parent is not DWG type 30 AcDbPolygonMesh")
+    if fields.get("flags") != 16 or external.get("flag") != 16:
+        raise OracleError("legacy POLYLINE_MESH flag differs from 16")
+    if fields.get("curveType") != external.get("curve_type"):
+        raise OracleError("legacy POLYLINE_MESH curve type differs")
+    expected_m, expected_n = expected_dimensions
+    if (fields.get("declaredVertexCount") != expected_m
+            or fields.get("declaredFaceCount") != expected_n):
+        raise OracleError("legacy POLYLINE_MESH M/N dimensions differ from recipe")
+    if (fields.get("smoothM") != external.get("m_density")
+            or fields.get("smoothN") != external.get("n_density")):
+        raise OracleError("legacy POLYLINE_MESH density differs")
+    if fields.get("vertexCount") != len(expected_points):
+        raise OracleError("legacy POLYLINE_MESH vertex count differs from recipe")
+    if fields.get("seqEndHandle") != handle_key(
+            external.get("seqend"), "LibreDWG POLYLINE_MESH SEQEND"):
+        raise OracleError("legacy POLYLINE_MESH SEQEND handle differs")
+
+    owned = owned_polyline_children(parent_handle, [external_vertices],
+                                    "VERTEX_MESH")
+    if len(owned) != len(expected_points):
+        raise OracleError(
+            f"unexpected LibreDWG VERTEX_MESH count {len(owned)}; "
+            f"expected {len(expected_points)}")
+    if (owned[0][1] != handle_key(external.get("first_vertex"),
+                                  "LibreDWG POLYLINE_MESH first vertex")
+            or owned[-1][1] != handle_key(external.get("last_vertex"),
+                                          "LibreDWG POLYLINE_MESH last vertex")):
+        raise OracleError("legacy POLYLINE_MESH child order disagrees with end handles")
+
+    nonzero_z = 0
+    for index, (_, vertex_handle, vertex) in enumerate(owned):
+        if (vertex.get("type") != 12
+                or vertex.get("_subclass") != "AcDbPolyFaceMeshVertex"):
+            raise OracleError(f"vertex {vertex_handle} is not a DWG MESH vertex")
+        prefix = f"vertex.{index}"
+        if (fields.get(prefix + ".handle") != vertex_handle
+                or fields.get(prefix + ".ownerHandle") != parent_handle):
+            raise OracleError(f"legacy POLYLINE_MESH child link differs at {index}")
+        compare_point(fields.get(prefix + ".position"), vertex.get("point"),
+                      f"POLYLINE_MESH.vertex[{index}].position")
+        compare_vector(vertex.get("point"), expected_points[index],
+                       f"POLYLINE_MESH.expectedPoint[{index}]")
+        compare_number(fields.get(prefix + ".flags"), vertex.get("flag"),
+                       f"POLYLINE_MESH.vertex[{index}].flags")
+        if fields.get(prefix + ".dwgSubtype") != 3:
+            raise OracleError(f"libdxfrw MESH vertex subtype differs at {index}")
+        if finite_number(vertex["point"][2], "POLYLINE_MESH.vertex.z") != 0.0:
+            nonzero_z += 1
+    return {"vertexCount": len(owned), "verticesWithNonzeroZ": nonzero_z}
+
+
+def compare_polyline_pface(
+        row: dict[str, Any],
+        external_vertices: dict[str, dict[str, Any]],
+        external_faces: dict[str, dict[str, Any]],
+        expected_points: list[list[float]],
+        expected_faces: list[list[int]]) -> dict[str, int]:
+    external = row["external"]
+    fields = row["adapter"]["fields"]
+    parent_handle = handle_key(external.get("handle"), "LibreDWG POLYLINE_PFACE")
+    if external.get("type") != 29 or external.get("_subclass") != "AcDbPolyFaceMesh":
+        raise OracleError("sample parent is not DWG type 29 AcDbPolyFaceMesh")
+    expected_child_count = len(expected_points) + len(expected_faces)
+    if (external.get("numverts") != len(expected_points)
+            or external.get("numfaces") != len(expected_faces)
+            or fields.get("declaredVertexCount") != len(expected_points)
+            or fields.get("declaredFaceCount") != len(expected_faces)):
+        raise OracleError("PFACE vertex/face counts differ from recipe")
+    if fields.get("flags") != 64 or fields.get("vertexCount") != expected_child_count:
+        raise OracleError("PFACE flag or total child count differs")
+    if fields.get("seqEndHandle") != handle_key(
+            external.get("seqend"), "LibreDWG POLYLINE_PFACE SEQEND"):
+        raise OracleError("PFACE SEQEND handle differs")
+
+    owned = owned_polyline_children(parent_handle,
+                                    [external_vertices, external_faces], "PFACE")
+    if len(owned) != expected_child_count:
+        raise OracleError(
+            f"unexpected LibreDWG PFACE child count {len(owned)}; "
+            f"expected {expected_child_count}")
+    if (owned[0][1] != handle_key(external.get("first_vertex"),
+                                  "LibreDWG POLYLINE_PFACE first vertex")
+            or owned[-1][1] != handle_key(external.get("last_vertex"),
+                                          "LibreDWG POLYLINE_PFACE last vertex")):
+        raise OracleError("PFACE child order disagrees with first/last handles")
+
+    nonzero_z = 0
+    for index, (_, vertex_handle, vertex) in enumerate(owned):
+        prefix = f"vertex.{index}"
+        is_face = vertex.get("entity") == "VERTEX_PFACE_FACE"
+        if is_face:
+            if (vertex.get("type") != 14
+                    or vertex.get("_subclass") != "AcDbFaceRecord"
+                    or index < len(expected_points)):
+                raise OracleError(f"child {vertex_handle} is not an ordered PFACE face")
+            face_index = index - len(expected_points)
+            if vertex.get("vertind") != expected_faces[face_index]:
+                raise OracleError(f"LibreDWG PFACE face indices differ at {face_index}")
+            if fields.get(prefix + ".dwgSubtype") != 5:
+                raise OracleError(f"libdxfrw PFACE face subtype differs at {face_index}")
+            for corner, expected_index in enumerate(expected_faces[face_index], start=1):
+                compare_number(fields.get(f"{prefix}.faceIndex{corner}"),
+                               expected_index,
+                               f"PFACE.face[{face_index}].index{corner}")
+        else:
+            if (vertex.get("entity") != "VERTEX_PFACE"
+                    or vertex.get("type") != 13
+                    or vertex.get("_subclass") != "AcDbPolyFaceMeshVertex"
+                    or index >= len(expected_points)):
+                raise OracleError(f"child {vertex_handle} is not an ordered PFACE vertex")
+            point_index = index
+            compare_vector(vertex.get("point"), expected_points[point_index],
+                           f"PFACE.expectedPoint[{point_index}]")
+            compare_point(fields.get(prefix + ".position"), vertex.get("point"),
+                          f"PFACE.vertex[{point_index}].position")
+            if fields.get(prefix + ".dwgSubtype") != 4:
+                raise OracleError(f"libdxfrw PFACE vertex subtype differs at {point_index}")
+            if finite_number(vertex["point"][2], "PFACE.vertex.z") != 0.0:
+                nonzero_z += 1
+        if (fields.get(prefix + ".handle") != vertex_handle
+                or fields.get(prefix + ".ownerHandle") != parent_handle):
+            raise OracleError(f"PFACE child link differs at {index}")
+        if not is_face:
+            compare_number(fields.get(prefix + ".flags"), vertex.get("flag"),
+                           f"PFACE.vertex[{index}].flags")
+        # ODA §20.4.15 encodes face-record indices only. LibreDWG's `flag=128`
+        # marks its internal face-record kind; libdxfrw correctly defaults the
+        # public vertex flags field to zero because no DWG field carries it.
+    return {"vertexCount": len(expected_points), "faceCount": len(expected_faces),
+            "verticesWithNonzeroZ": nonzero_z}
 
 
 def sha256_file(path: pathlib.Path) -> str:
@@ -352,7 +518,7 @@ def main() -> int:
     parser.add_argument("--dwgread", default="dwgread",
                         help="LibreDWG dwgread executable (default: PATH lookup)")
     parser.add_argument("--input", required=True, type=pathlib.Path,
-                        help="existing supported DWG sample; never modified")
+                        help="existing supported DWG sample/control; never modified")
     args = parser.parse_args()
 
     with args.input.open("rb") as source:
@@ -361,6 +527,7 @@ def main() -> int:
     expected_nonzero_z_vertex_count = None
     expected_vertex_count = None
     sample_source = None
+    topology_recipe = None
     if version == "AC1015" and args.input.name == "PolyLine3D.dwg":
         expected_digest = (
             "f51f4f65ba027bf1a001480d3c7b5bc5667960050081c67f9bb9c7bdbcfe815a"
@@ -384,6 +551,37 @@ def main() -> int:
             "autocadPropertyDump": "test/test-data/2000/PolyLine3D.txt",
             "autocadDxfPair": "test/test-data/2000/PolyLine3D.dxf",
         }
+    elif (version == "AC1015"
+          and args.input.name == "libdxfrw_ac1015_3d_topology_control.dwg"):
+        cases = (("POLYLINE_3D", 1, compare_polyline3d),
+                 ("POLYLINE_MESH", 1, compare_polyline_mesh),
+                 ("POLYLINE_PFACE", 1, compare_polyline_pface))
+        topology_recipe = {
+            "POLYLINE_3D": {
+                "vertexCount": 2,
+                "points": [[3.0, 1.0, 0.5], [6.0, 2.0, -0.75]],
+            },
+            "POLYLINE_MESH": {
+                "dimensions": (3, 2),
+                "points": [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0],
+                           [4.0, 0.0, 1.0], [0.0, 3.0, -1.0],
+                           [2.0, 3.0, 2.0], [4.0, 3.0, 0.25]],
+            },
+            "POLYLINE_PFACE": {
+                "points": [[-2.0, 0.0, 1.0], [0.0, 0.0, 1.5],
+                           [1.0, 2.0, 0.0], [0.0, 3.0, -0.5],
+                           [-1.0, 1.0, 2.0]],
+                "faces": [[1, 2, 3, 4], [2, 3, -4, 5], [3, -4, 5, 0]],
+            },
+        }
+        excluded = ["AutoCAD-authored interoperability", "other versions",
+                    "DWG writing", "families outside this generated control"]
+        sample_source = {
+            "provenance": "generated locally from the checked-in .dwgadd recipe",
+            "recipe": "tests/fixtures/dwg/ac1015_3d_topology_control.dwgadd",
+            "writer": "LibreDWG dwgadd 0.14",
+            "boundary": "cross-reader parser control only; not AutoCAD-authored",
+        }
     elif (version == "AC1024"
             and args.input.name == "visualization_-_conference_room.dwg"):
         cases = (("INSERT", 6, compare_insert),
@@ -402,7 +600,8 @@ def main() -> int:
         excluded = ["all entities other than LINE and 3DFACE", "other versions"]
     else:
         raise OracleError(
-            "unsupported sample profile: expected AC1015 PolyLine3D.dwg, "
+            "unsupported sample profile: expected AC1015 PolyLine3D.dwg or "
+            "libdxfrw_ac1015_3d_topology_control.dwg, "
             "AC1021 tablet.dwg, or AC1024 "
             "visualization_-_conference_room.dwg / "
             "visualization_-_condominium_with_skylight.dwg; "
@@ -415,26 +614,53 @@ def main() -> int:
 
     results = []
     for entity, count, comparator in cases:
-        adapter_entity = "POLYLINE" if entity == "POLYLINE_3D" else entity
+        adapter_entity = "POLYLINE" if entity.startswith("POLYLINE_") else entity
+        adapter_rows = index_adapter(adapter, adapter_entity)
+        if topology_recipe is not None and entity.startswith("POLYLINE_"):
+            expected_flags = {"POLYLINE_3D": 8,
+                              "POLYLINE_MESH": 16,
+                              "POLYLINE_PFACE": 64}[entity]
+            adapter_rows = {
+                handle: value for handle, value in adapter_rows.items()
+                if value["fields"].get("flags") == expected_flags
+            }
         rows = compare_entity_set(index_external(external, entity),
-                                  index_adapter(adapter, adapter_entity), entity,
-                                  count)
+                                  adapter_rows, entity, count)
+        result_metrics = {}
         for row in rows:
             if entity == "POLYLINE_3D":
+                recipe = (topology_recipe or {}).get(entity)
+                vertex_count = recipe["vertexCount"] if recipe else expected_vertex_count
                 nonzero_z = comparator(
-                    row, index_external(external, "VERTEX_3D"),
-                    expected_vertex_count)
+                    row, index_external(external, "VERTEX_3D"), vertex_count,
+                    recipe.get("points") if recipe else None)
                 if (expected_nonzero_z_vertex_count is not None
                         and nonzero_z != expected_nonzero_z_vertex_count):
                     raise OracleError(
                         "unexpected nonzero-Z 3D POLYLINE vertex count "
                         f"{nonzero_z}; expected "
                         f"{expected_nonzero_z_vertex_count}")
+                if recipe is not None:
+                    result_metrics = {"vertexCount": vertex_count,
+                                     "verticesWithNonzeroZ": nonzero_z}
             else:
-                comparator(row)
+                recipe = (topology_recipe or {}).get(entity)
+                if recipe is None:
+                    comparator(row)
+                elif entity == "POLYLINE_MESH":
+                    result_metrics = comparator(
+                        row, index_external(external, "VERTEX_MESH"),
+                        recipe["dimensions"], recipe["points"])
+                elif entity == "POLYLINE_PFACE":
+                    result_metrics = comparator(
+                        row, index_external(external, "VERTEX_PFACE"),
+                        index_external(external, "VERTEX_PFACE_FACE"),
+                        recipe["points"], recipe["faces"])
         result = {"entity": entity, "count": len(rows),
                   "comparedBy": "handle", "semanticFieldsMatched": True}
-        if entity == "POLYLINE_3D":
+        if result_metrics:
+            result.update(result_metrics)
+        elif entity == "POLYLINE_3D":
             result["vertexCount"] = expected_vertex_count
             result["recordsWithNonzeroVertexZ"] = nonzero_z
         elif entity == "LINE":
@@ -459,6 +685,8 @@ def main() -> int:
         "3DFACE": "ODA v5.4.1 §20.4.32",
         "LINE": "ODA v5.4.1 §20.4.21",
         "POLYLINE_3D": "ODA v5.4.1 §§20.4.12, 20.4.17",
+        "POLYLINE_MESH": "ODA v5.4.1 §§20.4.13, 20.4.34",
+        "POLYLINE_PFACE": "ODA v5.4.1 §§20.4.14, 20.4.15, 20.4.33",
         "INSERT": "ODA v5.4.1 §§20.4.9-20.4.10",
         "SPLINE": "ODA v5.4.1 §20.4.40",
     }
@@ -473,7 +701,7 @@ def main() -> int:
         "sampleSource": sample_source,
         "excluded": excluded,
         "claimBoundary": "read-field comparison on this sample only; no writer, "
-                         "interoperability, or general version support claim",
+                         "AutoCAD interoperability, or general version support claim",
     }, sort_keys=True, indent=2))
     return 0
 

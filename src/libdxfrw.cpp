@@ -3711,6 +3711,12 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
     const std::uint32_t parentHandle = ent->handle;
     for (const auto& vertex : ent->vertlist) {
         DRW_Vertex *v = vertex.get();
+        const bool polyfaceFace = (ent->flags & 64)
+            && (v->dwgSubtype() == DRW_Vertex::DwgSubtype::PolyfaceFace
+                || ((v->flags & 128) != 0 && (v->flags & 64) == 0));
+        // DWG VERTEX_PFACE_FACE has four indices but no flags field. The
+        // public typed subtype must supply DXF's required face-record bit.
+        const int dxfVertexFlags = polyfaceFace ? 128 : v->flags;
         writer->writeString(0, "VERTEX");
         if (!writeEntity(v, /*captureSourceHandle=*/true, parentHandle))
             return false;
@@ -3719,12 +3725,11 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
             // AcDbVertex (a face record uses ONLY AcDbFaceRecord). Mirrors
             // ezdxf polyline.py vertex classification; without it AutoCAD/ezdxf
             // mis-type 3D/mesh/polyface vertices.
-            if ((ent->flags & 64) && (v->flags & 128)
-                && !(v->flags & 64)) {
+            if (polyfaceFace) {
                 writer->writeString(100, "AcDbFaceRecord");
             } else {
                 writer->writeString(100, "AcDbVertex");
-                if (v->flags & 128)
+                if (dxfVertexFlags & 128)
                     writer->writeString(100, "AcDbPolyFaceMeshVertex");
                 else if (ent->flags & 16)
                     writer->writeString(100, "AcDbPolygonMeshVertex");
@@ -3736,7 +3741,7 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
                     writer->writeString(100, "AcDb2dVertex");
             }
         }
-        if ( (ent->flags & 64) && (v->flags & 128) && !(v->flags & 64) ) {
+        if (polyfaceFace) {
             writer->writeDouble(10, 0);
             writer->writeDouble(20, 0);
             writer->writeDouble(30, 0);
@@ -3751,13 +3756,13 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
             writer->writeDouble(41, v->endwidth);
         if (v->bulge != 0)
             writer->writeDouble(42, v->bulge);
-        if (v->flags != 0) {
-            writer->writeInt16(70, v->flags);
+        if (dxfVertexFlags != 0) {
+            writer->writeInt16(70, dxfVertexFlags);
         }
-        if (v->flags & 2) {
+        if (dxfVertexFlags & 2) {
             writer->writeDouble(50, v->tgdir);
         }
-        if ( v->flags & 128 ) {
+        if (dxfVertexFlags & 128) {
             if (v->vindex1 != 0) {
                 writer->writeInt16(71, v->vindex1);
             }

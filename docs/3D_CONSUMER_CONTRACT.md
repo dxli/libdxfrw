@@ -162,6 +162,33 @@ python3 tools/compare_dwg_3d_consumer_oracle.py \
   --input /private/tmp/PolyLine3D.dwg
 ```
 
+A separate local AC1015 topology control exercises nonzero-Z 3D POLYLINE,
+legacy POLYLINE_MESH, and PFACE. Its source recipe is
+[`ac1015_3d_topology_control.dwgadd`](../tests/fixtures/dwg/ac1015_3d_topology_control.dwgadd),
+authored locally from scratch; generate the temporary DWG and compare both
+readers with the recipe's expected geometry:
+
+```sh
+dwgadd --as r2000 -o /private/tmp/libdxfrw_ac1015_3d_topology_control.dwg \
+  tests/fixtures/dwg/ac1015_3d_topology_control.dwgadd
+python3 tools/compare_dwg_3d_consumer_oracle.py \
+  --adapter build/tests/libdxfrw_3d_consumer_probe \
+  --input /private/tmp/libdxfrw_ac1015_3d_topology_control.dwg
+```
+
+LibreDWG 0.14 is both the sample writer and independent reader implementation;
+the comparison checks libdxfrw against LibreDWG and the recipe, but is not an
+AutoCAD-authored interoperability result. It adds no support-claim promotion,
+writer qualification, or general AC1015 claim. The generated DWG stays in
+`/private/tmp` and is not a committed fixture.
+
+The local topology control also exercises libdxfrw's DWG→DXF PFACE conversion:
+DWG face records carry their typed subtype and signed indices without a flags
+field, so the DXF writer synthesizes face-record group-70 bit 128 and writes
+the index groups. A fast runtime-generated ASCII/binary test covers that
+normalization from a subtype-only vertex. This is a regression check for the
+conversion path, not an independent DWG writer/interoperability claim.
+
 ## Adapter requirements
 
 - Keep the existing 2D adapter lane intact. Projection, curve approximation,

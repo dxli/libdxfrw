@@ -100,6 +100,21 @@ values are zero, so this is evidence only for the planar 3D-POLYLINE
 compound-record subset, not preservation of nonzero Z. The downloaded DWG
 stays in `/private/tmp` and is not committed.
 
+A separate locally generated AC1015 control checks nonzero-Z 3D POLYLINE,
+legacy POLYLINE_MESH, and PFACE parent/child links, ordered XYZ vertices,
+SEQEND, mesh dimensions, and signed face indices against LibreDWG 0.14 and
+the from-scratch recipe at
+[`tests/fixtures/dwg/ac1015_3d_topology_control.dwgadd`](../tests/fixtures/dwg/ac1015_3d_topology_control.dwgadd).
+LibreDWG 0.14 both writes and reads this control; it is useful cross-reader
+parser evidence, but not an independent target-generated witness or AutoCAD
+interoperability result. It does not upgrade the unqualified DWG rows below.
+The generated DWG remains in `/private/tmp` and is not committed. Converting
+this control through libdxfrw's DWG→DXF path also exposed and closed a narrow
+writer gap: a typed DWG PFACE face subtype has no DWG flags field, so DXF output
+must synthesize face-record bit 128 before emitting its signed indices. The
+runtime ASCII/binary topology test covers this subtype-only normalization; it
+is a path regression, not independent DWG writer qualification.
+
 | Geometry family | Format / version | Read disposition | Write disposition | Evidence and boundary |
 | --- | --- | --- | --- | --- |
 | WCS primitives / 3DFACE | DXF AC1027, ASCII and binary | Experimental field read for 3DFACE only | Experimental field write for 3DFACE only | SELFTEST and CONSUMER-PROBE; EXT-ACCEPT for generated topology conversion. POINT, LINE, RAY, and XLINE are not qualified by this 3DFACE slice. |

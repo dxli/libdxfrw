@@ -6679,7 +6679,9 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
         polyface->addVertex(vertex);
     }
     DRW_Vertex polyfaceFace;
-    polyfaceFace.flags = 128;
+    // DWG PFACE face records carry indices but no flags field. The writer
+    // must recover the DXF face-record marker from this typed subtype.
+    polyfaceFace.setDwgSubtype(DRW_Vertex::DwgSubtype::PolyfaceFace);
     polyfaceFace.vindex1 = 1;
     polyfaceFace.vindex2 = -2;
     polyfaceFace.vindex3 = 3;
