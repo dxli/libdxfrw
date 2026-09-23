@@ -712,7 +712,7 @@ consumer probe independent of DWG. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 19/33 committed, 13 blocked, 0 in progress, and 1 ready):
+commit; 20/33 committed, 13 blocked, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -739,7 +739,7 @@ commit; 19/33 committed, 13 blocked, 0 in progress, and 1 ready):
 | S8.2 | COMMITTED | `cmake --build build --target lc3_compat_check --parallel 2` passed (exit 0); its static assertion verifies an older 2D-style `DRW_Interface` implementation remains concrete without overriding later optional callbacks. This is compile-time source-compatibility evidence, not a LibreCAD UI/runtime test or binary-ABI guarantee. No sibling checkout changes. |
 | S8.3 | COMMITTED | Added the standalone-only `libdxfrw_3d_consumer_probe` CTest, using `SemanticSink` as a headless consumer. It writes runtime-generated AC1027 ASCII and binary DXF, reads with `ext=false`, and checks callback delivery of 3DFACE XYZ/edge flags, 3D POLYLINE vertex Z, MESH XYZ/face-edge topology/creases, INSERT/MINSERT placement/scales/grid/OCS normal, SPLINE knots/control XYZ, LWPOLYLINE elevation/local XY/extrusion/bulge, and LOFTED surface typed fields plus a separately identified group-310 carrier. Added the missing LWPOLYLINE typed-field serialization to the semantic adapter. CTest probe passes 1/1; `libdxfrw_dwg_local_roundtrip` passes 1/1; `lc3_compat_check` builds. This is generated-DXF callback-delivery evidence only: it does not qualify third-party interoperability, DWG versions, surface evaluation, or a renderer. No fixture files are committed. |
 | S8.4 | BLOCKED_PER_VERSION | Add probe rows only after S3/S4 parser evidence, authentic DWG target, and an independent semantic oracle are all available. Run ready version/family rows independently; keep the others unqualified. |
-| S8.5 | READY | Update `docs/3D_CONSUMER_CONTRACT.md` and `docs/3D_SUPPORT_STATUS.md` to incorporate the completed headless DXF consumer probe and the separate existing 2D compatibility gate. Keep format/version semantic qualification and LibreCAD display/edit behavior as independent claims; DWG rows without S8.4 evidence remain unqualified. No renderer/kernel promise. |
+| S8.5 | COMMITTED | Updated README, `docs/3D_CONSUMER_CONTRACT.md`, and `docs/3D_SUPPORT_STATUS.md` to separate the existing 2D source-compatibility lane, 3D typed-data callback access, format/version semantic qualification, and consumer display/edit behavior. Documented the exact AC1027 generated ASCII/binary consumer-probe families and its self-generated evidence ceiling; all unsupported DWG rows remain unqualified. No general 3D, renderer, evaluator, editing, or binary-ABI claim is added. |
 
 - Before implementation, convert the work packages into dependency-closed
   items with `READY`, `IN_PROGRESS`, `BLOCKED`, `VERIFIED`, and `COMMITTED`

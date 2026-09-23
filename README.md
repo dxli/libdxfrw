@@ -65,12 +65,18 @@ same `libdxfrw::libdxfrw` target.
 | DXF raw sections, opaque objects, ACIS/SAB and proxy carriers | experimental | Local preservation vectors pass; independent semantic oracle still required |
 | DWG read across the dispatched AC versions | experimental | Reader and section safety matrices pass; eligible semantic fixtures remain required |
 | DWG writing and versioned feature families | experimental | Local six-version round-trips pass; self-read is not an independent oracle |
+| Existing 2D consumer source compatibility | checked | `lc3_compat_check` verifies the LibreCAD-style callback surface; not a binary-ABI or UI guarantee |
+| 3D consumer typed-data access | experimental DXF subset | AC1027 ASCII/binary callback probe; only the listed fields/families are covered, and no renderer or geometry kernel is included |
 | Derived rendering or CAD application policy | unsupported | Owned by the consumer, not this library |
 
-3D geometry is not promoted to a general supported claim by the table above.
-See the [3D format/version status matrix](docs/3D_SUPPORT_STATUS.md) for the
-exact DXF test versions and encodings, DWG reader/writer version dispositions,
-and remaining evidence limits.
+The 3D consumer lane exposes typed XYZ, OCS/elevation, topology, placement, and
+selected surface-reference data without forcing the existing 2D projection
+policy into library callbacks. This is experimental data delivery, not a
+general 3D format-support, rendering, or editing claim. Existing 2D consumers
+such as LibreCAD retain their source-compatible callback contract. See the
+[3D consumer contract](docs/3D_CONSUMER_CONTRACT.md) and [3D format/version
+status matrix](docs/3D_SUPPORT_STATUS.md) for the exact tested scope and
+remaining evidence limits.
 
 The six external-only follow-ups J256, J260, J268, J284, J293, and J295 are
 still `DEFERRED_EXTERNAL`. Their evidence is advisory and cannot promote any

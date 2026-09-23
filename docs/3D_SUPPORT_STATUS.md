@@ -3,12 +3,15 @@
 This is an evidence/status matrix, not a promise of general 3D CAD support.
 Reader or writer route presence, local round-trips, retained raw bytes, and
 derived previews are distinct from independently qualified semantic support.
-No row below promotes a stable 3D support claim.
+No row below promotes a stable format/version semantic-support claim.
 
 Evidence labels:
 
 - SELFTEST: runtime-generated fields round-trip through libdxfrw's own DXF
   reader and writer.
+- CONSUMER-PROBE: generated DXF is read through the public callback API into a
+  headless sink that copies the listed fields. This establishes data delivery
+  for that probe, not correctness against an independent producer.
 - EXT-ACCEPT: LibreDWG 0.14 accepted generated input/conversion, but no
   independent field-by-field semantic comparison was established.
 - SPEC: primary DXF/DWG documentation or source inspection identifies a
@@ -28,21 +31,45 @@ Every DWG version in those sets remains unqualified for 3D semantic
 interoperability unless a row explicitly narrows the implementation route.
 Local writer/self-read tests are regression checks, not independent evidence.
 
+## Consumer capability is a separate dimension
+
+Existing 2D consumers retain the source-compatible `DRW_Interface` callback
+surface: [`lc3_compat_check`](../tests/lc3_compat_check.cpp) compiles a
+LibreCAD-style implementation without requiring overrides for optional newer
+callbacks. This does not promise binary ABI compatibility or validate
+LibreCAD's UI behavior. LibreCAD's current filter remains a 2D adapter: its
+source audit found projection/preview paths for 3DFACE, MESH, polygon meshes,
+and HELIX, with some native values retained only in sidecar/advanced metadata.
+Those consumer choices do not constrain the library's typed data callbacks.
+
+3D-aware clients can use the public callbacks to copy typed values without an
+implicit global XY projection. The fast
+[`libdxfrw_3d_consumer_probe`](../tests/CMakeLists.txt) writes runtime-generated
+AC1027 ASCII and binary DXF, reads with `ext == false`, and checks callback
+delivery for 3DFACE, 3D POLYLINE, MESH, INSERT/MINSERT, SPLINE, OCS/elevation
+LWPOLYLINE, and selected LOFTED-surface fields plus a separately identified
+group-310 carrier. This is a producer-self-generated callback-path check; it
+does not prove interoperability, independent semantics, full family coverage,
+display/edit support, or any DWG version. Run just this probe with
+`ctest --test-dir build -R '^libdxfrw_3d_consumer_probe$' --output-on-failure`.
+The complete consumer-handling guidance is in the
+[3D consumer contract](3D_CONSUMER_CONTRACT.md).
+
 | Geometry family | Format / version | Read disposition | Write disposition | Evidence and boundary |
 | --- | --- | --- | --- | --- |
-| WCS primitives / 3DFACE | DXF AC1027, ASCII and binary | Experimental field read for 3DFACE only | Experimental field write for 3DFACE only | SELFTEST; EXT-ACCEPT for generated topology conversion. POINT, LINE, RAY, and XLINE are not qualified by this 3DFACE slice. |
+| WCS primitives / 3DFACE | DXF AC1027, ASCII and binary | Experimental field read for 3DFACE only | Experimental field write for 3DFACE only | SELFTEST and CONSUMER-PROBE; EXT-ACCEPT for generated topology conversion. POINT, LINE, RAY, and XLINE are not qualified by this 3DFACE slice. |
 | WCS primitives / 3DFACE | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | Fixed/custom dispatch routes and local tests do not establish independent per-version field semantics. |
 | Legacy/custom 3DLINE | DXF: no qualified version/encoding | UNQUALIFIED | UNQUALIFIED | No portable DXF spelling or independent target witness is established; do not equate it with 3D LINE. |
 | Legacy/custom 3DLINE | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | Pre-R13 and custom-class paths require separate version-specific evidence. |
-| Planar entities placed in 3D | DXF AC1027, ASCII and binary | Experimental field read for LWPOLYLINE OCS/elevation subset | Experimental field write for LWPOLYLINE OCS/elevation subset | SELFTEST; does not qualify ARC, CIRCLE, ELLIPSE, SOLID, TRACE, or HATCH as a family. |
+| Planar entities placed in 3D | DXF AC1027, ASCII and binary | Experimental field read for LWPOLYLINE OCS/elevation subset | Experimental field write for LWPOLYLINE OCS/elevation subset | SELFTEST and CONSUMER-PROBE for local XY/elevation/extrusion/bulge delivery; does not qualify ARC, CIRCLE, ELLIPSE, SOLID, TRACE, or HATCH as a family. |
 | Planar entities placed in 3D | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | No independent per-version OCS/WCS semantic comparison. |
-| Placed block geometry | DXF AC1027, ASCII and binary | Experimental INSERT/MINSERT field read | Experimental INSERT/MINSERT field write | SELFTEST plus an independent matrix oracle for nested placement and array offset; external acceptance is not semantic comparison. |
+| Placed block geometry | DXF AC1027, ASCII and binary | Experimental INSERT/MINSERT field read | Experimental INSERT/MINSERT field write | SELFTEST and CONSUMER-PROBE for insertion/scale/grid/OCS values, plus an independent matrix oracle for nested placement and array offset; external acceptance is not semantic comparison. |
 | Placed block geometry | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | Local paths do not independently establish versioned transform semantics. |
-| Classic 3D topology | DXF AC1027, ASCII and binary | Experimental 3D POLYLINE/VERTEX and polyface read | Experimental 3D POLYLINE/VERTEX and polyface write | SELFTEST; EXT-ACCEPT for generated input conversion. DWG child ownership/count claims remain separate. |
+| Classic 3D topology | DXF AC1027, ASCII and binary | Experimental 3D POLYLINE/VERTEX and polyface read | Experimental 3D POLYLINE/VERTEX and polyface write | SELFTEST and CONSUMER-PROBE for 3D POLYLINE XYZ delivery; EXT-ACCEPT for generated input conversion. Polyface self-tests are not all represented in the consumer probe; DWG child ownership/count claims remain separate. |
 | Classic 3D topology | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | No independent per-version semantic witness. |
-| Subdivision topology / MESH | DXF AC1027, ASCII and binary | Experimental MESH field read | Experimental MESH field write | SELFTEST; EXT-ACCEPT for generated input conversion; not an independent topology comparison. |
+| Subdivision topology / MESH | DXF AC1027, ASCII and binary | Experimental MESH field read | Experimental MESH field write | SELFTEST and CONSUMER-PROBE for XYZ, face/edge indices, and creases; EXT-ACCEPT for generated input conversion; not an independent topology comparison. |
 | Subdivision topology / MESH | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | DWG class/layout support is not established by local self-read. |
-| Curves and analytic/NURBS surfaces | DXF AC1027, ASCII and binary | Experimental mapped-field read for SPLINE, HELIX, and six surface subtypes | Experimental mapped-field write for those tested records | SELFTEST; no curve evaluation, surface evaluation, or independent semantic oracle. |
+| Curves and analytic/NURBS surfaces | DXF AC1027, ASCII and binary | Experimental mapped-field read for SPLINE, HELIX, and six surface subtypes | Experimental mapped-field write for those tested records | SELFTEST; CONSUMER-PROBE covers SPLINE knots/control points and selected LOFTED-surface fields/carrier distinction only. No curve evaluation, surface evaluation, or independent semantic oracle. |
 | Curves and analytic/NURBS surfaces | DWG R set / W set | UNQUALIFIED per reader version | UNQUALIFIED per writer version | ODA §20.4.40 supports the reviewed R2013+ spline flag widths; authentic per-version witnesses are still missing. No named modern surface layout was found in the reviewed ODA v5.4.1 text. |
 | ACIS 3DSOLID / REGION / BODY carriers | DXF AC1015 ASCII; AC1018 ASCII; AC1021 binary; AC1024 ASCII | Experimental opaque SAT chunk read/retention | Experimental opaque SAT chunk write through AC1024 | SELFTEST; verifies carrier/chunk identity only, not ACIS semantics. Unassociated AC1027+ SAB writes are rejected; entity-to-ACDSDATA association is unqualified. |
 | ACIS 3DSOLID / REGION / BODY carriers | DWG R set | Opaque frame/envelope handling only; typed ACIS payload extraction is UNQUALIFIED per version | No typed DWG modeler-geometry writer route | S3.1 validates the general modeler version marker; it does not decode SAT/SAB or qualify DataStorage association. |
