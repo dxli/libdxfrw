@@ -8394,6 +8394,26 @@ void dwgReader::linkDataStorage(DRW_Entity &entity) {
   entity.dataStoragePayloadMarkerOffset = record->payloadMarkerOffset;
   entity.dataStoragePayloadMarkerLength = record->payloadMarkerLength;
   entity.dataStoragePayloadMarkerSection = record->payloadMarkerSection;
+
+  // In R2013+ the common has_ds_data bit advertises an out-of-line AcDs
+  // carrier. The entity-local ACIS fields do not describe that carrier's
+  // format version: a real AC1027 entity can decode its local BS as 168,
+  // while LibreDWG associates the SAB record and reports the effective
+  // modeler version as 2. Only normalize a modeler entity after the exact
+  // handle-linked record has been selected and its SAB signature is present.
+  static constexpr std::uint8_t acisSabSignature[] = {
+      'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e'};
+  const bool isModelerEntity = entity.eType == DRW::REGION ||
+      entity.eType == DRW::E3DSOLID || entity.eType == DRW::BODY;
+  if (isModelerEntity &&
+      record->payload.size() >= sizeof(acisSabSignature) &&
+      std::equal(std::begin(acisSabSignature), std::end(acisSabSignature),
+                 record->payload.begin())) {
+    auto &modeler = static_cast<DRW_ModelerGeometry &>(entity);
+    modeler.m_isEmpty = false;
+    modeler.m_hasModelerData = true;
+    modeler.m_modelerVersion = 2;
+  }
   m_dataStorageLinkedRecords.emplace(sectionIndex, recordIndex);
 }
 

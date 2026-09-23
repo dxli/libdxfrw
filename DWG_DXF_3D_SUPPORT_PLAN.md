@@ -371,10 +371,11 @@ truncated, ambiguous, or orphaned section is never emitted as entity ACIS.
 
 ### S3 — Recover ACIS carriers from DWG entities and DataStorage
 
-State: ODA v5.4.1 authority is resolved and S3.1's general modeler-version
-marker validation is committed. A narrow AC1024/R2010 version-2 inline SAB
-carrier slice is now implemented and byte-matched against LibreDWG for five
-3DSOLID records in one local sample. All other DWG parser/carrier changes
+State: ODA v5.4.1 authority is resolved; S3.1 marker validation and S3.2.1's
+AC1024/R2010 inline SAB carrier are committed. S3.2.2 now unblocks one AC1027/
+R2013 3DSOLID with `has_ds_data`: the entity callback receives the uniquely
+handle-linked AcDs SAB record, and its exact bytes match LibreDWG 0.14. This is
+opaque carrier identity evidence only. All other DWG parser/carrier changes
 remain `BLOCKED_PER_VERSION` until the relevant section, successful target
 trace, and independent witness are tied to the exact version/field; the AC1024
 PlaneSurface class-table trace is identity evidence only. DXF and test-adapter
@@ -413,6 +414,21 @@ Steps:
    `End-of-ACIS-data` marker within the entity data body. The returned payload
    is a separate opaque carrier; this does not establish SAT v2, other entity
    variants, other DWG versions, or ACIS semantics.
+   **Completed sub-slice S3.2.2:** For AC1027/R2013, `has_ds_data` causes an
+   entity-handle reference into `AcDb:AcDsPrototype_1b`; the local entity BS
+   can decode as 168 even though the exact handle-linked `ACIS BinaryFile`
+   record is SAB v2. The parser now tolerates that entity-local value only
+   when the external-data flag is present, keeps the complete frame bytes
+   separate, and sets effective modeler version 2 only after exact record
+   association and signature validation. On the untracked `Cover.dwg`, handle
+   `0x6f` receives 22,983 bytes whose SHA-256 matches LibreDWG 0.14 exactly.
+   ODA v5.4.1 §§20.4.41 and 24 describe the modeler carrier and DataStorage
+   record; LibreDWG's [`common_entity_data.spec`](https://github.com/LibreDWG/libredwg/blob/master/src/common_entity_data.spec),
+   [`dwg.spec`](https://github.com/LibreDWG/libredwg/blob/master/src/dwg.spec),
+   and [`acds.spec`](https://github.com/LibreDWG/libredwg/blob/master/src/acds.spec)
+   corroborate the `has_ds_data` handle and post-link v2 interpretation. This
+   does not qualify another entity, any other AC1027/AC1032 variant, malformed
+   or ambiguous DataStorage association, geometry semantics, or DWG writing.
 3. **S3.3 — pre-R13 separation.** Inventory the R1.4/R11 readers separately.
    Do not apply R13+ layouts to their records; use an appropriate legacy
    specification and authentic version-specific sample trace before changing
@@ -429,7 +445,9 @@ Steps:
    typed modeler entity without overwriting its DWG object-frame carrier. For
    AC1027+ reconcile the entity's DataStorage marker, handle/key, exactly one
    selected data record, payload marker, and section version before
-   publication.
+   publication. S3.2.2 completes only one AC1027 3DSOLID handle-linked SAB
+   record; missing/conflicting/orphan records, other modeler entities,
+   AC1032, and every writer route remain unqualified.
 6. **S3.6 — raw replay.** Keep raw same-version frame replay as a separate
    operation and report whether a result is typed, raw-replayed, typed-and-raw,
    or unsupported. Treat the open [LibreDWG ACDS/ACIS report](https://github.com/LibreDWG/libredwg/issues/1411)
@@ -834,7 +852,7 @@ consumer probe independent of DWG. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 28/41 committed, 13 blocked, 0 in progress, and 0 ready):
+commit; 29/41 committed, 12 blocked, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -854,7 +872,8 @@ commit; 28/41 committed, 13 blocked, 0 in progress, and 0 ready):
 | S6.1 | COMMITTED | ASCII and binary runtime round-trips cover PLANESURFACE, EXTRUDED, REVOLVED, SWEPT, LOFTED, NURBSURFACE, SPLINE, and HELIX fields. Added bounded subtype group-90 sizes/group-310 byte retention; corrected SWEPT ID/size ordering and legacy group-91 acceptance; corrected one-byte binary-DXF Boolean encoding; tightened field/count/transform/constraint validation; made `dx_iface` preserve HELIX callbacks. Focused CTest `libdxfrw_dwg_local_roundtrip` passes 1/1, including malformed lengths/booleans/partial vectors and invalid writer fields. Runtime vectors are not committed. LibreDWG 0.14 rejected/does not handle the generated surface/NURBS cases, so it provides no independent semantic qualification. ODA v5.4.1 §20.4.40 says `splFlag1` is BL for R2013+; current code matches; no width fix is justified. Authentic per-version spline qualification and all DWG surface layouts remain outstanding. The integration checkpoint also found and corrected the REVOLVEDSURFACE copy/assignment hardening vector to enter `AcDbRevolvedSurface` before testing group-90 subtype-ID state; the corrected focused hardening CTest passes. |
 | S3.1 | COMMITTED | Validated ODA v5.4.1 §20.4.41's non-empty modeler version range (1 or 2); empty ACIS bodies retain the absent-version/default-zero case. Runtime-generated AC1018 frames cover empty, 1, 2, 0, and 3; build and focused round-trip CTest pass. A local AC1024 conference-room debug conversion reached modeler parsers and retained 3DSOLID history handles, but the overall CLI failed on an OBJECTS-pass type-42 frame, so it is not an end-to-end positive. The version-2 byte is opaque filler; no payload extraction or semantic ACIS claim follows. |
 | S3.2.1 | COMMITTED | Implemented the AC1024/R2010 non-empty version-2 inline SAB carrier slice in commit `c7c8eea`. The parser requires the exact `ACIS BinaryFile` signature and a unique tagged ACIS end marker bounded by the entity data body; publishes the extracted bytes and source bit range separately from the whole DWG frame; and leaves missing/duplicate-marker cases opaque. A local-from-scratch AC1024 frame covers exact extraction, tail exclusion, marker absence/ambiguity, no DWG-frame decoder fallback, and no unqualified DXF SAB write. On the untracked local `visualization_-_aerial.dwg`, all five 3DSOLID payloads match LibreDWG 0.14 byte-for-byte by handle (same SHA-256 after accounting for LibreDWG's separately emitted `ACIS BinaryFile` signature and 7,033 payload bytes). `libdxfrw_dwg_local_roundtrip`, `libdxfrw_graph_preservation`, `libdxfrw_hardening`, and `libdxfrw_3d_consumer_probe` pass; `lc3_compat_check` builds. This is exact opaque-carrier evidence only, not semantic solid support, a DWG writer, or a claim for other entities/versions. No sample fixture was staged or committed. |
-| S3.2–S3.6 (remaining versions and paths) | BLOCKED_PER_VERSION | R13/R14/R2000 version-1 SAT block decoding; AC1018/AC1021/AC1027/AC1032 inline variants; AC1027+ DataStorage association; cross-version handle/frame accounting; and modeler DWG writing remain unimplemented or unqualified. Keep the three `E3DSOLID` spline-checkpoint objects distinct from spline correctness; do not relabel frame bytes as SAT or weaken the writer gate. R1.4/R11 remains blocked on era-appropriate reference/sample. Continue with any available per-version ODA/trace/independent-witness lane; do not infer a neighboring version's layout. |
+| S3.2.2 | COMMITTED | AC1027/R2013 `has_ds_data` modeler entities no longer fail solely because the entity-local BS is outside 1/2; effective version 2 is set only after exactly one handle-linked record starts with the exact SAB signature. Runtime-generated AC1027 frame with raw value 168 passes the typed parser regression. The local untracked `Cover.dwg` now emits one `MODELER_GEOMETRY` callback for handle `0x6f`, effective version 2, non-empty modeler state, a linked 22,983-byte record, and handle key `6F`. Its carrier SHA-256 (`e0a5e069175edafd980c942bb5766091705534b1e6e3cfe43f5fc982e17b9eda`) exactly matches LibreDWG 0.14's entity `acis_data` after rejoining the signature. Focused round-trip, graph, hardening, and consumer tests pass; `lc3_compat_check` builds. The DWG sample remains untracked; no fixture added. Opaque byte identity only, not geometry semantics, other AC1027 records/variants, AC1032, or writing. |
+| S3.2–S3.6 (remaining versions and paths) | BLOCKED_PER_VERSION | R13/R14/R2000 version-1 SAT block decoding; AC1018/AC1021/AC1027/AC1032 inline variants; AC1027+ external DataStorage association beyond the single S3.2.2 record (including missing/conflicting/orphan cases and other entities); cross-version handle/frame accounting; and modeler DWG writing remain unimplemented or unqualified. Keep the three `E3DSOLID` spline-checkpoint objects distinct from spline correctness; do not relabel frame bytes as SAT or weaken the writer gate. R1.4/R11 remains blocked on era-appropriate reference/sample. Continue with any available per-version ODA/trace/independent-witness lane; do not infer a neighboring version's layout. |
 | S4.1–S4.4 | BLOCKED_ON_S3 | Opaque DWG modeler payload writing follows only verified read layouts. |
 | S7.1–S7.3 | BLOCKED_ON_INDEPENDENT_WITNESS | Exact sample-level AC1024 DWG read comparisons now cover INSERT placement and scenario-2 SPLINE fit fields via LibreDWG 0.14 (S8.4a). The broad required family/version/direction matrix still lacks independent witnesses; retain all other rows unqualified. |
 | S7.4 | COMMITTED | Added docs/3D_SUPPORT_STATUS.md, linked from README, with family-specific DXF test versions/encodings, explicit DWG reader/writer version sets, direction-specific status, evidence grade, and unqualified/unsupported boundaries. Does not modify frozen metadata/qualified-format-claims-v1.json or metadata/qualified-format-status-v1.json, and promotes no semantic claim. |

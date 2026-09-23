@@ -6549,9 +6549,16 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
         return fail();
     // ODA v5.4.1 §20.4.41 defines only modeler versions 1 and 2. The
     // version field is absent for an empty ACIS body, so keep that case
-    // distinct instead of treating its default zero as malformed.
+    // distinct instead of treating its default zero as malformed. R2013+
+    // entities with hasDsData store their SAB in AcDb:AcDsPrototype_1b;
+    // their entity-local BS is not the external carrier's format version
+    // (e.g. LibreDWG traces a local AC1027 sample as 168 before associating
+    // its ACIS BinaryFile record). Do not reject an otherwise valid external-
+    // payload entity for that value; once linked, the SAB signature supplies
+    // the effective modeler version while m_rawBytes retains the frame.
     if (parsedHasModelerData
-        && parsedModelerVersion != 1 && parsedModelerVersion != 2)
+        && parsedModelerVersion != 1 && parsedModelerVersion != 2
+        && !(v > DRW::AC1024 && hasDsData))
         return fail();
     if (!probe.isGood() || (stringStream != nullptr && !stringStream->isGood()))
         return fail();

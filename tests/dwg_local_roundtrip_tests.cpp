@@ -5380,6 +5380,38 @@ bool buildModelerInlineSabFrame(const std::vector<std::uint8_t>& payload,
     return true;
 }
 
+bool buildModelerExternalSabFrame(std::uint16_t entityModelerVersion,
+                                  bool hasDataStorage,
+                                  std::vector<std::uint8_t>& bytes,
+                                  std::uint32_t& handleBitSize) {
+    constexpr DRW::Version version = DRW::AC1027;
+    constexpr std::uint16_t modelerObjectType = 38; // §20.4.41 3DSOLID
+    LocalModelerGeometry source(DRW::E3DSOLID);
+    source.setDwgType(modelerObjectType);
+    source.handle = 0x120u;
+    source.setHasDataStorageBinaryData(hasDataStorage);
+
+    dwgBufferW body;
+    dwgBufferW handles;
+    if (!source.encodeDwgCommon(version, &body))
+        return false;
+    body.putBit(0); // nonempty ACIS body
+    body.putBit(1); // modeler-data unknown bit
+    body.putBitShort(entityModelerVersion);
+    body.putBit(0); // empty R2007+ string stream
+    body.alignToByte();
+    if (!body.isGood() || !source.encodeDwgEntHandle(version, &body, &handles)
+        || !body.isGood() || !handles.isGood()
+        || body.size() > std::numeric_limits<std::uint32_t>::max() / 8u
+        || handles.size() > std::numeric_limits<std::uint32_t>::max() / 8u)
+        return false;
+
+    handleBitSize = static_cast<std::uint32_t>(handles.size() * 8u);
+    bytes = body.data();
+    bytes.insert(bytes.end(), handles.data().begin(), handles.data().end());
+    return true;
+}
+
 bool parseModelerVersionFrame(bool empty, std::uint16_t modelerVersion,
                               bool expectedSuccess) {
     std::vector<std::uint8_t> bytes;
@@ -5411,6 +5443,47 @@ bool runModelerDwgVersionValidation() {
         && parseModelerVersionFrame(false, 0, false)
         && parseModelerVersionFrame(false, 3, false)))
         return false;
+
+    // A 2013+ entity advertises an external AcDs/SAB carrier. Its entity-local
+    // BS must remain opaque rather than being mistaken for the SAB version;
+    // this mirrors the independently observed AC1027 Cover.dwg decode where
+    // the field reads as 168 and the linked AcDs record supplies SAB v2.
+    std::vector<std::uint8_t> externalFrame;
+    std::uint32_t externalHandleBits = 0;
+    if (!buildModelerExternalSabFrame(168, true, externalFrame,
+                                      externalHandleBits))
+        return false;
+    dwgBuffer externalBuffer(externalFrame.data(), externalFrame.size());
+    LocalModelerGeometry external(DRW::E3DSOLID);
+    if (!external.parseDwg(DRW::AC1027, &externalBuffer,
+                           externalHandleBits)
+        || !externalBuffer.isGood() || external.handle != 0x120u
+        || !external.hasDataStorageBinaryData() || external.m_isEmpty
+        || !external.m_hasModelerData || external.m_modelerVersion != 168
+        || !external.m_dwgAcisPayload.empty()
+        || !external.m_payloadRanges.empty()) {
+        std::cerr << "modeler AC1027 external-carrier parse/check failed: good="
+                  << externalBuffer.isGood()
+                  << " handle=" << external.handle
+                  << " hasDsData=" << external.hasDataStorageBinaryData()
+                  << " version=" << external.m_modelerVersion << '\n';
+        return false;
+    }
+
+    std::vector<std::uint8_t> unadvertisedFrame;
+    std::uint32_t unadvertisedHandleBits = 0;
+    if (!buildModelerExternalSabFrame(168, false, unadvertisedFrame,
+                                      unadvertisedHandleBits))
+        return false;
+    dwgBuffer unadvertisedBuffer(unadvertisedFrame.data(),
+                                 unadvertisedFrame.size());
+    LocalModelerGeometry unadvertised(DRW::E3DSOLID);
+    if (unadvertised.parseDwg(DRW::AC1027, &unadvertisedBuffer,
+                              unadvertisedHandleBits)
+        || unadvertisedBuffer.isGood()) {
+        std::cerr << "modeler AC1027 unadvertised external version was accepted\n";
+        return false;
+    }
 
     static constexpr std::uint8_t marker[] = {
         0x0E, 0x03, 'E', 'n', 'd', 0x0E, 0x02, 'o', 'f',

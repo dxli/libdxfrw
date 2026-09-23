@@ -845,6 +845,9 @@ protected:
     bool parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t bs=0) override;
 
 public:
+    //! Effective ACIS carrier version. For an exact handle-linked R2013+ SAB
+    //! record, this is normalized to 2 from its "ACIS BinaryFile" signature;
+    //! the complete DWG entity-frame bytes remain separately available below.
     std::uint16_t m_modelerVersion = 0;
     std::uint32_t m_bodyBitSize = 0;
     std::uint32_t m_objectSize = 0;
