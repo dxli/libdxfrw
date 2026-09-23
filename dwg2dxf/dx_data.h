@@ -42,6 +42,7 @@ public:
 class dx_data {
 public:
     dx_data(){
+        sourceVersion = DRW::UNKNOWNV;
         mBlock = new dx_ifaceBlock();
     }
     ~dx_data(){
@@ -52,6 +53,7 @@ public:
     }
 
     DRW_Header headerC;                 //stores a copy of the header vars
+    DRW::Version sourceVersion;          //detected source DXF/DWG revision
     std::list<DRW_LType>lineTypes;      //stores a copy of all line types
     std::list<DRW_Layer>layers;         //stores a copy of all layers
     std::list<DRW_Dimstyle>dimStyles;   //stores a copy of all dimension styles

@@ -28,6 +28,25 @@ if(NOT TARGET dwg2dxf)
     return()
 endif()
 
+# Match FreeCAD's Draft/importDWG.py subprocess contract without requiring a
+# FreeCAD installation. The DWG fixture is already tracked in this repository.
+set(_freecad_cli_sample
+    ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dwg/ordinary_enc_AC1027.dwg
+)
+if(EXISTS "${_freecad_cli_sample}")
+    add_test(
+        NAME dwg2dxf_freecad_cli_compat
+        COMMAND ${CMAKE_COMMAND}
+            -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+            -DSAMPLE=${_freecad_cli_sample}
+            -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_dwg2dxf_compat_test.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_cli_compat PROPERTIES
+        LABELS "dwg_read;freecad;cli;fast"
+    )
+endif()
+
 # LibreCAD_3 ABI compatibility check.
 # Mirrors LibreCAD_3's DXFimpl override surface; fails to compile if upstream
 # introduces a new pure virtual on DRW_Interface or removes/renames a public
