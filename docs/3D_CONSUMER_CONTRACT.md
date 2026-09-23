@@ -111,6 +111,20 @@ python3 tools/compare_dwg_3d_consumer_oracle.py \
   --input tests/samples/AC1024/visualization_-_conference_room.dwg
 ```
 
+The same optional comparator also accepts the local AC1021/R2007
+`tests/samples/AC1021/tablet.dwg` sample. It matches all 48 3DFACE records by
+handle against LibreDWG 0.14, including their four 3D corner tuples and
+invisible-edge flags; ODA v5.4.1 §20.4.32 is the reviewed layout authority.
+`has_no_flags` is treated only as the encoded default zero flag state. This
+sample is not committed and this result does not qualify writes, other
+AC1021 files, other versions, or other geometry families.
+
+```sh
+python3 tools/compare_dwg_3d_consumer_oracle.py \
+  --adapter build/tests/libdxfrw_3d_consumer_probe \
+  --input tests/samples/AC1021/tablet.dwg
+```
+
 ## Adapter requirements
 
 - Keep the existing 2D adapter lane intact. Projection, curve approximation,

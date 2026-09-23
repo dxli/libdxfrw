@@ -3,8 +3,9 @@
 
 This is an optional local qualification helper, not a CTest dependency. It
 compares fields by entity handle so callback order is irrelevant. The accepted
-scope is intentionally limited to INSERT placement and SPLINE fit data from
-an AC1024 (R2010) sample; modeler and surface fields are not compared here.
+scope is intentionally limited to AC1024 (R2010) INSERT placement and SPLINE
+fit data, plus AC1021 (R2007) 3DFACE corners and invisible-edge flags. Modeler,
+surface, and other version/family fields are not compared here.
 """
 
 from __future__ import annotations
@@ -174,6 +175,33 @@ def compare_spline(row: dict[str, Any]) -> None:
         compare_point(adapter_point, point, f"SPLINE.fitPoint[{index}]")
 
 
+def compare_3dface(row: dict[str, Any]) -> None:
+    external = row["external"]
+    fields = row["adapter"]["fields"]
+    for index in range(1, 5):
+        compare_point(fields.get(f"corner.{index - 1}"),
+                      external.get(f"corner{index}"),
+                      f"3DFACE.corner{index}")
+
+    has_no_flags = external.get("has_no_flags")
+    flags = external.get("invis_flags")
+    if isinstance(has_no_flags, bool) or has_no_flags not in (0, 1):
+        raise OracleError("LibreDWG 3DFACE has no valid has_no_flags indicator")
+    if has_no_flags == 1:
+        if flags is not None:
+            raise OracleError(
+                "LibreDWG 3DFACE has flags with has_no_flags=1")
+        flags = 0
+    elif flags is None:
+        raise OracleError("LibreDWG 3DFACE omits required invisible-edge flags")
+    numeric_flags = finite_number(flags, "3DFACE.invisibleEdgeFlags (LibreDWG)")
+    if (not numeric_flags.is_integer() or numeric_flags < 0
+            or numeric_flags > 0x0F):
+        raise OracleError(f"LibreDWG 3DFACE has invalid edge flags: {flags!r}")
+    compare_number(fields.get("invisibleEdgeFlags"), int(numeric_flags),
+                   "3DFACE.invisibleEdgeFlags")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--adapter", required=True,
@@ -181,13 +209,22 @@ def main() -> int:
     parser.add_argument("--dwgread", default="dwgread",
                         help="LibreDWG dwgread executable (default: PATH lookup)")
     parser.add_argument("--input", required=True, type=pathlib.Path,
-                        help="existing AC1024/R2010 DWG sample; never modified")
+                        help="existing supported DWG sample; never modified")
     args = parser.parse_args()
 
     with args.input.open("rb") as source:
         version = source.read(6).decode("ascii", errors="replace")
-    if version != "AC1024":
-        raise OracleError(f"expected AC1024/R2010 sample, got {version!r}")
+    if version == "AC1024":
+        cases = (("INSERT", 6, compare_insert),
+                 ("SPLINE", 2, compare_spline))
+        excluded = ["PLANESURFACE", "3DSOLID", "REGION", "BODY", "MESH",
+                    "other versions and families"]
+    elif version == "AC1021":
+        cases = (("3DFACE", 48, compare_3dface),)
+        excluded = ["all entities other than 3DFACE", "other versions"]
+    else:
+        raise OracleError(
+            f"expected an AC1021/R2007 or AC1024/R2010 sample, got {version!r}")
 
     external = run_json([args.dwgread, "-O", "minJSON", str(args.input)],
                         "LibreDWG dwgread")
@@ -195,10 +232,7 @@ def main() -> int:
                         "--facade", "dwgRW"], "libdxfrw semantic adapter")
 
     results = []
-    for entity, count, comparator in (
-        ("INSERT", 6, compare_insert),
-        ("SPLINE", 2, compare_spline),
-    ):
+    for entity, count, comparator in cases:
         rows = compare_entity_set(index_external(external, entity),
                                   index_adapter(adapter, entity), entity, count)
         for row in rows:
@@ -210,14 +244,20 @@ def main() -> int:
                                     capture_output=True, text=True, check=False)
     oracle_version = (version_result.stdout.strip()
                       if version_result.returncode == 0 else "unknown")
+    layout_authority = {
+        "3DFACE": "ODA v5.4.1 §20.4.32",
+        "INSERT": "ODA v5.4.1 §§20.4.9-20.4.10",
+        "SPLINE": "ODA v5.4.1 §20.4.40",
+    }
     print(json.dumps({
         "result": "matched",
         "dwgVersion": version,
         "sample": args.input.name,
         "independentReader": oracle_version,
         "rows": results,
-        "excluded": ["PLANESURFACE", "3DSOLID", "REGION", "BODY",
-                     "MESH", "other versions and families"],
+        "layoutAuthority": {row["entity"]: layout_authority[row["entity"]]
+                            for row in results},
+        "excluded": excluded,
         "claimBoundary": "read-field comparison on this sample only; no writer, "
                          "interoperability, or general version support claim",
     }, sort_keys=True, indent=2))
