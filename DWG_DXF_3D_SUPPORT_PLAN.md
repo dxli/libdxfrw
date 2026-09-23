@@ -985,6 +985,74 @@ Steps:
    explicit `-version` parsing covered by S8.9's integration test. This test
    validates policy branches without fabricating or relabeling a DWG sample;
    it does not replace per-version DWG reader tests.
+19. **S8.12 — Verify failure-safe output publication through FreeCAD's CLI.**
+   Current FreeCAD `Draft/importDWG.py` resolves `dwg2dxf` from its configured
+   converter path or `PATH`, starts it with argv equivalent to
+   `[dwg2dxf, input.dwg, -o, output.dxf]`, waits for completion, then checks
+   whether the expected output path exists; it does not use the child exit
+   status as the success test. See the current
+   [FreeCAD converter route](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Draft/importDWG.py).
+
+   The DXF writer already routes `dxfRW::write()` through
+   `DwgDxfOutputTransaction`: it writes an exclusive sibling temporary,
+   publishes after a successful flush/commit, and aborts failed writes without
+   changing an existing destination. Existing `libdxfrw_writer_primitives`
+   tests cover transaction publish/rollback and target preservation. Do not
+   add a second CLI transaction layer unless an end-to-end test finds a real
+   gap. Close the missing consumer-contract evidence instead: extend
+   `tests/run_freecad_dwg2dxf_compat_test.cmake` with a tiny malformed DWG
+   created at test runtime, call the exact `input -o output` form, require a
+   nonzero exit and no output path, then repeat with `-y` and a sentinel target
+   to require the old target remains byte-identical. Check that the writer's
+   temporary-name pattern leaves no debris. Keep the existing valid exact-argv,
+   spaces, no-prompt/no-overwrite, and explicit-overwrite cases. The focused
+   fast gate is:
+
+   ```sh
+   cmake --build build --target dwg2dxf libdxfrw_writer_primitives_tests
+   ctest --test-dir build -R '^(dwg2dxf_(version_policy|freecad_cli_compat)|libdxfrw_writer_primitives)$' --output-on-failure
+   ```
+
+   Probe non-ASCII paths per supported OS and
+   record or fix any platform-specific argv encoding limitation before
+   claiming them. Keep batch and legacy positional CLI behavior unchanged.
+   Use existing tracked input or runtime-generated/local-from-scratch data;
+   do not add downloaded samples.
+
+20. **S8.13 — Build a feature-scoped FreeCAD import-compatibility matrix.**
+   `Draft.importDWG.open()` sends the resulting DXF to `importDXF.open()`;
+   the selected C++ versus optional legacy Python importer and its preferences
+   therefore define the downstream acceptance boundary. Record FreeCAD
+   release/revision, OS/architecture, converter resolution method, importer
+   mode/settings, source DWG revision and tracked fixture identity, plus
+   imported/ignored/unsupported/exception counts. Keep the existing four
+   ordinary-encoding LINE fixtures as converter/import smoke coverage. Audit
+   other already-tracked fixtures (including `mpolygon_solid.dwg`,
+   `large_radial.dwg`, and `rtext_arctext.dwg`) for useful FreeCAD entity
+   coverage before creating anything; run only fixtures with stable expected
+   fields. Extend the matrix in priority order for common Draft consumers:
+   POINT/LINE/ARC/CIRCLE; LWPOLYLINE/POLYLINE including bulge and OCS; SPLINE;
+   INSERT plus nested block transforms; TEXT/MTEXT and dimensions; then only
+   3D face/mesh/solid rows that the chosen importer actually maps. Assert
+   coordinates, topology/ordering, entity/object counts, and importer outcome
+   separately, with WCS/OCS and nonzero-Z cases. For a missing case, create the
+   smallest legal input locally at test runtime/from scratch or keep the row
+   explicitly blocked—never treat the libdxfrw writer's own output as an
+   independent format-correctness witness. Preserve the existing result that
+   FreeCAD 1.1.3's default C++ importer creates three correctly bounded LINE
+   objects for tracked AC1015/1018/1021/1027 fixtures. The exploratory AC1021
+   result (3DFACE/SOLID/HATCH emitted by both libdxfrw and ODA but unsupported
+   by FreeCAD) is a downstream limitation, not a reason to drop those records
+   or claim their semantics are correct. Distinguish (a) converter CLI
+   compatibility, (b) FreeCAD import of a named entity/version/field subset,
+   (c) visible GUI rendering, and (d) editable/native solid or surface support.
+   Only (a) and evidenced rows of (b) are in scope; neither implies (c), (d),
+   or general DWG/DXF 3D qualification. Do not make FreeCAD an always-on build
+   dependency: run fast CLI/public-reader tests per affected slice and the
+   external FreeCAD matrix only at its integration/release checkpoint. Run the
+   default C++ importer first. Test the optional legacy Python importer only
+   when its `dxfReader` dependencies are already installed; do not trigger
+   downloads, and keep that mode explicitly untested without them.
 
 Positive gate: an old source consumer still compiles, and the headless 3D probe
 receives all asserted native typed values/carrier identities without an
@@ -1040,7 +1108,7 @@ Initial dependency/readiness order:
 | S5 | S0, S1 | DXF topology/coordinate portion ready after S1; only the DXF portion may proceed while the ODA gate is unresolved. |
 | S6 | S0, S1 | DXF surfaces/HELIX ready after S1. DWG spline edits require the local ODA chapter and authentic per-version trace; modern DWG surface edits additionally require a surface-specific primary layout and independent witness. |
 | S7 | S1-S6 | Qualify completed rows independently. A blocked DWG row does not block completed DXF evidence or docs; it remains unqualified. |
-| S8 | S1, S5-S7.5 | Consumer-contract matrix, 2D source-compatibility guard, generated-DXF `ext=true` regression, and DXF 3D-consumer probe are committed. S8.7 adds selected generated AC1027 ARC/CIRCLE callback fields under both `ext` modes; S8.8 adds selected PFACE values; neither qualifies those entity families. Narrow target-sample DWG read evidence covers AC1024 INSERT/SPLINE and LINE fields, AC1021 3DFACE/LINE fields, and the planar AC1015 3D-POLYLINE subset. A separate LibreDWG-generated AC1015 control exercises nonzero-Z 3D POLYLINE, legacy POLYLINE_MESH, and PFACE across libdxfrw/LibreDWG readers but does not qualify AutoCAD interoperability or promote support claims. S8.9 brings the helper CLI into FreeCAD's exact `input -o output` converter contract while preserving its old syntax; S8.11 directly tests its source-version mapping; S8.10 verifies FreeCAD 1.1.3's macOS arm64 C++ importer against tracked AC1015/AC1018/AC1021/AC1027 LINE fixtures and independent LibreDWG DXF exports. Other FreeCAD runtime/import modes and all other DWG rows retain their own gates. Modeler rows additionally wait for S3/S4. Keep adapters outside parser semantics and do not require GUI/rendering code. |
+| S8 | S1, S5-S7.5 | Consumer-contract matrix, 2D source-compatibility guard, generated-DXF `ext=true` regression, and DXF 3D-consumer probe are committed. S8.7 adds selected generated AC1027 ARC/CIRCLE callback fields under both `ext` modes; S8.8 adds selected PFACE values; neither qualifies those entity families. Narrow target-sample DWG read evidence covers AC1024 INSERT/SPLINE and LINE fields, AC1021 3DFACE/LINE fields, and the planar AC1015 3D-POLYLINE subset. A separate LibreDWG-generated AC1015 control exercises nonzero-Z 3D POLYLINE, legacy POLYLINE_MESH, and PFACE across libdxfrw/LibreDWG readers but does not qualify AutoCAD interoperability or promote support claims. S8.9 brings the helper CLI into FreeCAD's exact `input -o output` converter contract while preserving its old syntax; S8.11 directly tests its source-version mapping; S8.10 verifies FreeCAD 1.1.3's macOS arm64 C++ importer against tracked AC1015/AC1018/AC1021/AC1027 LINE fixtures and independent LibreDWG DXF exports. S8.12 adds passing CLI failure-path coverage for the existing transactional DXF writer; S8.13 remains ready to extend the opt-in FreeCAD lane to a documented, entity-by-entity acceptance matrix. The FreeCAD runtime remains an integration-only dependency. Other FreeCAD runtime/import modes and all other DWG rows retain their own gates. Modeler rows additionally wait for S3/S4. Keep adapters outside parser semantics and do not require GUI/rendering code. |
 
 The execution sequence is therefore readiness-first, not table-order-first:
 S0 → S1 → S2 and the DXF portions of S5/S6; then S3 → S4 after DWG
@@ -1049,19 +1117,24 @@ consumer probe independent of DWG. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 FreeCAD integration is an additional bounded S8 consumer lane, not a new
-format-support claim: first make the CLI's exact no-version `-o` invocation
-usable and cover it with a fast test against an existing tracked DWG fixture;
-then perform real FreeCAD conversion/import qualification only when the
-external runtime and independent expected-result sample are present. FreeCAD's
-own documentation states that DWG uses an external converter and inherits DXF
-import settings; its importer mode must therefore be recorded for every
-end-to-end result.
+format-support claim. The invocation and four-revision LINE smoke matrix are
+already implemented. S8.12 first verifies CLI output publication failure
+safety because FreeCAD treats output-path existence as conversion success;
+S8.13 then extends real import qualification only where independent expected
+fields and a named runtime/import mode are available. Record converter discovery
+(configured path or `PATH`) and FreeCAD's DXF import settings/mode for every
+end-to-end result. A DXF entity that FreeCAD ignores or reports unsupported
+remains a downstream limitation; it does not excuse incorrect converter
+output, nor does a present DXF record prove that FreeCAD imported or displayed
+it.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 38/51 committed, 12 blocked, 1 verified, 0 in progress, and 0 ready):
+commit; 39/53 committed, 12 blocked, 1 verified, 0 in progress, and 1 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
+| S8.12 | COMMITTED | Extended `tests/run_freecad_dwg2dxf_compat_test.cmake` with a runtime-generated malformed DWG. The exact `-o` invocation fails nonzero without publishing a final DXF; the same failure with `-y` preserves an existing sentinel, and no `.libdxfrw-*` output temp remains. Added a UTF-8 input/output path case, which passes on this macOS host; Windows is explicitly skipped because narrow `main(argc, argv)` encoding needs native qualification. Existing writer-primitives tests independently cover transactional publish/rollback and destination preservation. `cmake --build build --target dwg2dxf libdxfrw_writer_primitives_tests` passed; focused CTest `dwg2dxf_version_policy`, `dwg2dxf_freecad_cli_compat`, and `libdxfrw_writer_primitives` passed 3/3; `git diff --check` passed. No fixtures added. The converter now has tested failure-safe publication through FreeCAD's file-existence check on this host; Windows Unicode paths remain unqualified. |
+| S8.13 | READY | Audit already-tracked multi-entity fixtures for FreeCAD value and extend the opt-in `Draft.importDWG.open()` matrix by entity only when expected fields and input identity are independently established. Record FreeCAD version/OS, configured-path or `PATH` discovery, C++ versus optional legacy Python importer, relevant DXF preferences, and per-entity imported/ignored/unsupported/exception outcomes. Prioritize POINT/LINE/ARC/CIRCLE, polyline bulge/OCS, SPLINE, INSERT/block transforms, TEXT/MTEXT/dimensions; check 3D topology only for entities the chosen importer maps. The current four AC1015/1018/1021/1027 LINE results remain the only qualified FreeCAD import subset. AC1021 3DFACE/SOLID/HATCH omissions also occur with ODA output and remain a consumer limit, not a semantic conversion verdict. Separate converter success, parse/import, GUI display, and editable-solid claims. Avoid new downloaded fixtures and do not add FreeCAD as a routine build dependency. |
 | S0.1 | COMMITTED | Rebased onto `origin/master`. The last ancestry check before the S8.11 slice (HEAD `aa5a8fb`) found `origin/master` to be an ancestor of `HEAD` (zero behind, 44 local commits ahead); subsequent plan/code slices are local branch commits. Existing user-owned untracked paths remain untouched. |
 | S0.2 | COMMITTED | Resolved the authoritative local ODA v5.4.1 PDF at `/Users/dli/doc/dwg/OpenDesign_Specification_for_.dwg_files (1).pdf`; title/version/page count (279) match the official download. Read §§20.4.40 SPLINE and 20.4.41 REGION/3DSOLID/BODY; continue reading each relevant section immediately before any DWG parser change. Authority lookup is unblocked; this alone does not qualify unlisted layouts. |
 | S0.3 | COMMITTED | Recorded read/write versions and reader/writer lineage, source-visible routes for each 3D family, read-only legacy AC1009 behavior, the missing modeler DWG encoder, and unsupported/unqualified claim ceilings. Unknown class/layout/version identities remain explicitly unknown; this inventory is not interoperability qualification. |
@@ -1155,9 +1228,11 @@ This plan is complete when:
    of full ACIS kernel semantics, NURBS evaluation, tessellation, or editing is
    implied by byte retention, wireframe extraction, or successful parsing.
 7. `dwg2dxf` accepts FreeCAD's exact noninteractive `input -o output` call and
-   preserves the existing positional interface. Report converter output
-   validation separately from an actual FreeCAD DXF import; neither alone
-   promotes broad DWG/3D support.
+   preserves the existing positional interface. Because FreeCAD currently
+   checks output-path existence rather than the converter's exit status,
+   failed conversions must not publish a final/partial DXF at that path.
+   Report converter output validation separately from an actual FreeCAD DXF
+   import; neither alone promotes broad DWG/3D support.
 
 ## References and evidence hierarchy
 
@@ -1182,7 +1257,7 @@ format specification.
 - [ezdxf ACIS FAQ](https://ezdxf.readthedocs.io/en/stable/faq.html) — cross-project statement that DXF R2000–R2010 uses SAT in entity records and R2013+ uses SAB in ACDSDATA; treat as a high-value implementation cross-check and confirm acceptance with Autodesk/real-file witnesses.
 - [Autodesk DXF ENTITIES index](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-7D07C886-FD1D-4A0C-A7AB-B4D21F18E484.htm) — current listed record families; `3DLINE` is not listed there, so qualify it as a portability-sensitive extension.
 - [LibreDWG entity/object definitions](https://github.com/LibreDWG/libredwg/blob/master/src/objects.in) and [LibreDWG manual](https://www.gnu.org/software/libredwg/manual/LibreDWG.html) — open-source entity names and implementation coverage; check stability per family.
-- [FreeCAD `Draft/importDWG.py`](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Draft/importDWG.py) — current external `dwg2dxf <input> -o <output>` invocation and subsequent `importDXF` handoff; this establishes the converter CLI contract, not entity support.
+- [FreeCAD `Draft/importDWG.py`](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Draft/importDWG.py) — current configured-path/PATH discovery, external `dwg2dxf <input> -o <output>` invocation, output-existence success check, and subsequent `importDXF` handoff; this establishes the converter CLI/publication contract, not entity support.
 - [FreeCAD Import/Export Preferences](https://github.com/FreeCAD/FreeCAD-documentation/blob/main/wiki/Import_Export_Preferences.md) — DWG conversion is external and inherits DXF settings; distinguishes the faster C++ importer from the legacy Python importer.
 - [FreeCAD issue #19247](https://github.com/FreeCAD/FreeCAD/issues/19247) — adjacent LibreDWG-produced-DXF import report without a reproducible input/output pair; investigation lead only.
 - [ezdxf POLYLINE reference](https://ezdxf.readthedocs.io/en/stable/dxfentities/polyline.html), [Polyface tutorial](https://ezdxf.readthedocs.io/en/stable/tutorials/polyface.html), [MESH reference](https://ezdxf.readthedocs.io/en/stable/dxfentities/mesh.html), and [ACIS documentation](https://ezdxf.readthedocs.io/en/stable/acis.html) — independent DXF parser/writer cross-checks and explicit limits on arbitrary ACIS support.
