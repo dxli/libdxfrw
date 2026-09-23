@@ -100,6 +100,20 @@ bool readDxfIntInRange(const std::unique_ptr<dxfReader>& reader,
     return value >= minimum && value <= maximum;
 }
 
+bool readDxfBool(const std::unique_ptr<dxfReader>& reader, bool& value) {
+    int parsed = 0;
+    if (!readDxfIntInRange(reader, 0, 1, parsed))
+        return false;
+    value = parsed != 0;
+    return true;
+}
+
+template <typename T>
+bool finiteSurfaceMatrix(const T& values) {
+    return std::all_of(values.begin(), values.end(),
+                       [](double value) { return std::isfinite(value); });
+}
+
 int hexNibble(char c) {
     if (c >= '0' && c <= '9')
         return c - '0';
@@ -1878,12 +1892,6 @@ bool putSurfaceRawBits(dwgBufferW *buf, const std::vector<std::uint8_t>& data,
 bool finiteSurfaceCoord(const DRW_Coord& value) {
     return std::isfinite(value.x) && std::isfinite(value.y)
         && std::isfinite(value.z);
-}
-
-template <std::size_t N>
-bool finiteSurfaceMatrix(const std::array<double, N>& values) {
-    return std::all_of(values.begin(), values.end(),
-                       [](double value) { return std::isfinite(value); });
 }
 
 std::uint16_t bitShortFromInt(int value) {
@@ -15232,7 +15240,7 @@ bool DRW_Spline::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         if (m_dxfKnotCountSeen)
             return false;
         nknots = reader->getInt32();
-        if (!isValidCount(nknots, kMaxDxfItems))
+        if (!isValidCount(nknots, std::numeric_limits<std::int16_t>::max()))
             return false;
         m_dxfKnotCountSeen = true;
         break;
@@ -15240,7 +15248,7 @@ bool DRW_Spline::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         if (m_dxfControlCountSeen)
             return false;
         ncontrol = reader->getInt32();
-        if (!isValidCount(ncontrol, kMaxDxfItems))
+        if (!isValidCount(ncontrol, std::numeric_limits<std::int16_t>::max()))
             return false;
         m_dxfControlCountSeen = true;
         break;
@@ -15248,7 +15256,7 @@ bool DRW_Spline::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         if (m_dxfFitCountSeen)
             return false;
         nfit = reader->getInt32();
-        if (!isValidCount(nfit, kMaxDxfItems))
+        if (!isValidCount(nfit, std::numeric_limits<std::int16_t>::max()))
             return false;
         m_dxfFitCountSeen = true;
         break;
@@ -15317,6 +15325,8 @@ bool DRW_Spline::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
 }
 
 bool DRW_Spline::validateDxf() const {
+    if (flags > std::numeric_limits<std::int16_t>::max())
+        return false;
     if (m_dxfKnotCountSeen
         && knotslist.size() != static_cast<std::size_t>(nknots))
         return false;
@@ -15326,7 +15336,16 @@ bool DRW_Spline::validateDxf() const {
     if (m_dxfFitCountSeen
         && fitlist.size() != static_cast<std::size_t>(nfit))
         return false;
-    return validatePayloadFields(/*allowMixedLists=*/true);
+    if (!validatePayloadFields(/*allowMixedLists=*/true))
+        return false;
+    if (!weightlist.empty() && weightlist.size() != controllist.size())
+        return false;
+    if ((flags & 0x04) != 0
+        && (controllist.empty() || weightlist.size() != controllist.size()))
+        return false;
+    if (controllist.empty() && (!knotslist.empty() || !weightlist.empty()))
+        return false;
+    return true;
 }
 
 bool DRW_Spline::validatePayloadFields(bool allowMixedLists) const {
@@ -15388,7 +15407,7 @@ bool DRW_Helix::validateDxf() const {
     return DRW_Spline::validateDxf()
         && finite(axisBasePt) && finite(startPt) && finite(axisVector)
         && std::isfinite(radius) && std::isfinite(turns)
-        && std::isfinite(turnHeight);
+        && std::isfinite(turnHeight) && constraintType <= 2;
 }
 
 bool DRW_Helix::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
@@ -15455,7 +15474,7 @@ bool DRW_Helix::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     case 280:
         {
             int value = 0;
-            if (!readDxfIntInRange(reader, 0, 0xFF, value))
+            if (!readDxfIntInRange(reader, 0, 2, value))
                 return false;
             constraintType = static_cast<std::uint8_t>(value);
         }
@@ -17546,15 +17565,30 @@ bool DRW_Surface::parseCode(int code, const std::unique_ptr<dxfReader>& reader) 
         dxfPayloadChunks.emplace_back(code, offset, text.size());
         break;
     }
-    case 70:
-        modelerFormatVersion = reader->getInt32();
+    case 70: {
+        int value = 0;
+        if (!readDxfIntInRange(reader, 0,
+                               std::numeric_limits<std::int16_t>::max(), value))
+            return false;
+        modelerFormatVersion = value;
         break;
-    case 71:
-        uIsolines = reader->getInt32();
+    }
+    case 71: {
+        int value = 0;
+        if (!readDxfIntInRange(reader, 0,
+                               std::numeric_limits<std::int16_t>::max(), value))
+            return false;
+        uIsolines = value;
         break;
-    case 72:
-        vIsolines = reader->getInt32();
+    }
+    case 72: {
+        int value = 0;
+        if (!readDxfIntInRange(reader, 0,
+                               std::numeric_limits<std::int16_t>::max(), value))
+            return false;
+        vIsolines = value;
         break;
+    }
     case 310:
         // AcDbEntity proxy graphics precede the AcDbModelerGeometry subclass,
         // so the announced bytes belong to the entity, not to the ACIS body.
@@ -17592,22 +17626,38 @@ bool DRW_ExtrudedSurface::parseCode(
         break;
     }
     case 90:
+        if (!m_dxfInSubtype)
+            return DRW_Surface::parseCode(code, reader);
         {
-            // The class id, then the size of the following 310 data.
             const std::int32_t value = reader->getInt32();
-            if (value < 0 || m_dxfDataSizeSeen)
+            if (value < 0 || static_cast<std::size_t>(value) >
+                                 DRW::kMaxDxfBinaryPayloadBytes)
                 return false;
-            if (m_dxfClassIdSeen) {
+            if (!m_dxfClassIdSeen) {
+                classId = static_cast<std::uint32_t>(value);
+                m_dxfClassIdSeen = true;
+            } else if (!m_dxfDataSizeSeen) {
+                m_dxfDeclaredDataSize = static_cast<std::uint32_t>(value);
                 m_dxfDataSizeSeen = true;
-                break;
+            } else {
+                return false;
             }
-            classId = static_cast<std::uint32_t>(value);
-            m_dxfClassIdSeen = true;
         }
         break;
     case 310:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
+        {
+            std::vector<std::uint8_t> decoded;
+            if (!decodeHexBytes(reader->getString(), decoded)
+                || (m_dxfDataSizeSeen
+                    && (dxfBinaryData.size() > m_dxfDeclaredDataSize
+                        || decoded.size() > m_dxfDeclaredDataSize
+                               - dxfBinaryData.size()))
+                || !appendBytesChecked(dxfBinaryData, decoded,
+                                       DRW::kMaxDxfBinaryPayloadBytes))
+                return false;
+        }
         break;
     case 10:
         sweepVector.x = reader->getDouble();
@@ -17671,7 +17721,7 @@ bool DRW_ExtrudedSurface::parseCode(
             return DRW_Surface::parseCode(code, reader);
         {
             const std::int32_t value = reader->getInt32();
-            if (value < 0 || value > std::numeric_limits<std::uint16_t>::max())
+            if (value < 0 || value > 3)
                 return false;
             sweepAlignmentFlags = value;
         }
@@ -17681,28 +17731,35 @@ bool DRW_ExtrudedSurface::parseCode(
             return DRW_Surface::parseCode(code, reader);
         {
             const std::int32_t value = reader->getInt32();
-            if (value < 0 || value > std::numeric_limits<std::uint16_t>::max())
+            if (value < 0
+                || value > std::numeric_limits<std::int16_t>::max())
                 return false;
             pathFlags = value;
         }
         break;
     case 290:
-        solid = reader->getInt32() != 0;
+        if (!readDxfBool(reader, solid))
+            return false;
         break;
     case 292:
-        alignStart = reader->getInt32() != 0;
+        if (!readDxfBool(reader, alignStart))
+            return false;
         break;
     case 293:
-        bank = reader->getInt32() != 0;
+        if (!readDxfBool(reader, bank))
+            return false;
         break;
     case 294:
-        basePointSet = reader->getInt32() != 0;
+        if (!readDxfBool(reader, basePointSet))
+            return false;
         break;
     case 295:
-        sweepEntityTransformComputed = reader->getInt32() != 0;
+        if (!readDxfBool(reader, sweepEntityTransformComputed))
+            return false;
         break;
     case 296:
-        pathEntityTransformComputed = reader->getInt32() != 0;
+        if (!readDxfBool(reader, pathEntityTransformComputed))
+            return false;
         break;
     default:
         return DRW_Surface::parseCode(code, reader);
@@ -17711,12 +17768,24 @@ bool DRW_ExtrudedSurface::parseCode(
 }
 
 bool DRW_ExtrudedSurface::finalizeDxf() const {
-    if (!m_dxfClassIdSeen)
-        return true;
-    return m_dxfInSubtype
-        && m_dxfExtrudedTransformCount == extrudedTransform.size()
-        && m_dxfSweepTransformCount == sweepEntityTransform.size()
-        && m_dxfPathTransformCount == pathEntityTransform.size();
+    return m_dxfInSubtype && m_dxfClassIdSeen
+        && (!m_dxfDataSizeSeen
+            || dxfBinaryData.size() == m_dxfDeclaredDataSize)
+        && (m_dxfDataSizeSeen || dxfBinaryData.empty())
+        && (m_dxfExtrudedTransformCount == 0
+            || m_dxfExtrudedTransformCount == extrudedTransform.size())
+        && (m_dxfSweepTransformCount == 0
+            || m_dxfSweepTransformCount == sweepEntityTransform.size())
+        && (m_dxfPathTransformCount == 0
+            || m_dxfPathTransformCount == pathEntityTransform.size())
+        && finiteSurfaceCoord(sweepVector)
+        && finiteSurfaceCoord(referenceVector)
+        && finiteSurfaceMatrix(extrudedTransform)
+        && finiteSurfaceMatrix(sweepEntityTransform)
+        && finiteSurfaceMatrix(pathEntityTransform)
+        && std::isfinite(draftAngle) && std::isfinite(draftStartDistance)
+        && std::isfinite(draftEndDistance) && std::isfinite(twistAngle)
+        && std::isfinite(scaleFactor) && std::isfinite(alignAngle);
 }
 
 bool DRW_SweptSurface::parseCode(
@@ -17736,18 +17805,27 @@ bool DRW_SweptSurface::parseCode(
             return DRW_Surface::parseCode(code, reader);
         m_dxfTypedFieldSeen = true;
         {
-            // Each entity id may be followed by the size of its 310 data.
             const std::int32_t value = reader->getInt32();
-            if (value < 0)
+            if (value < 0 || static_cast<std::size_t>(value) >
+                                 DRW::kMaxDxfBinaryPayloadBytes)
                 return false;
-            if (m_dxfSweepEntityIdSeen) {
-                if (m_dxfDataSizeCount >= (m_dxfPathEntityIdSeen ? 2 : 1))
-                    return false;
-                ++m_dxfDataSizeCount;
-                break;
+            if (!m_dxfSweepEntityIdSeen) {
+                sweepEntityId = static_cast<std::uint32_t>(value);
+                m_dxfSweepEntityIdSeen = true;
+            } else if (!m_dxfSweepDataSizeSeen) {
+                m_dxfSweepDataSize = static_cast<std::uint32_t>(value);
+                m_dxfSweepDataSizeSeen = true;
+            } else if (!m_dxfPathEntityIdSeen
+                       && sweepData.size() == m_dxfSweepDataSize) {
+                pathEntityId = static_cast<std::uint32_t>(value);
+                m_dxfPathEntityIdSeen = true;
+            } else if (!m_dxfPathDataSizeSeen
+                       && m_dxfPathEntityIdSeen) {
+                m_dxfPathDataSize = static_cast<std::uint32_t>(value);
+                m_dxfPathDataSizeSeen = true;
+            } else {
+                return false;
             }
-            sweepEntityId = static_cast<std::uint32_t>(value);
-            m_dxfSweepEntityIdSeen = true;
         }
         break;
     case 91:
@@ -17758,7 +17836,9 @@ bool DRW_SweptSurface::parseCode(
         m_dxfTypedFieldSeen = true;
         {
             const std::int32_t value = reader->getInt32();
-            if (value < 0)
+            if (value < 0
+                || (m_dxfSweepDataSizeSeen
+                    && sweepData.size() != m_dxfSweepDataSize))
                 return false;
             pathEntityId = static_cast<std::uint32_t>(value);
             m_dxfPathEntityIdSeen = true;
@@ -17772,7 +17852,16 @@ bool DRW_SweptSurface::parseCode(
         if (!decodeHexBytes(reader->getString(), decoded))
             return false;
         auto& destination = m_dxfPathEntityIdSeen ? pathData : sweepData;
-        if (!appendBytesChecked(destination, decoded, kMaxSweepDataSize))
+        const bool hasDeclaredSize = m_dxfPathEntityIdSeen
+            ? m_dxfPathDataSizeSeen : m_dxfSweepDataSizeSeen;
+        const std::uint32_t declaredSize = m_dxfPathEntityIdSeen
+            ? m_dxfPathDataSize : m_dxfSweepDataSize;
+        if (hasDeclaredSize
+            && (destination.size() > declaredSize
+                || decoded.size() > declaredSize - destination.size()))
+            return false;
+        if (!appendBytesChecked(destination, decoded,
+                                DRW::kMaxDxfBinaryPayloadBytes))
             return false;
         break;
     }
@@ -17870,7 +17959,7 @@ bool DRW_SweptSurface::parseCode(
         m_dxfTypedFieldSeen = true;
         {
             const std::int32_t value = reader->getInt32();
-            if (value < 0 || value > std::numeric_limits<std::uint16_t>::max())
+            if (value < 0 || value > 3)
                 return false;
             sweepAlignmentFlags = value;
         }
@@ -17881,7 +17970,8 @@ bool DRW_SweptSurface::parseCode(
         m_dxfTypedFieldSeen = true;
         {
             const std::int32_t value = reader->getInt32();
-            if (value < 0 || value > std::numeric_limits<std::uint16_t>::max())
+            if (value < 0
+                || value > std::numeric_limits<std::int16_t>::max())
                 return false;
             pathFlags = value;
         }
@@ -17890,37 +17980,43 @@ bool DRW_SweptSurface::parseCode(
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
         m_dxfTypedFieldSeen = true;
-        solid = reader->getInt32() != 0;
+        if (!readDxfBool(reader, solid))
+            return false;
         break;
     case 292:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
         m_dxfTypedFieldSeen = true;
-        alignStart = reader->getInt32() != 0;
+        if (!readDxfBool(reader, alignStart))
+            return false;
         break;
     case 293:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
         m_dxfTypedFieldSeen = true;
-        bank = reader->getInt32() != 0;
+        if (!readDxfBool(reader, bank))
+            return false;
         break;
     case 294:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
         m_dxfTypedFieldSeen = true;
-        basePointSet = reader->getInt32() != 0;
+        if (!readDxfBool(reader, basePointSet))
+            return false;
         break;
     case 295:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
         m_dxfTypedFieldSeen = true;
-        sweepEntityTransformComputed = reader->getInt32() != 0;
+        if (!readDxfBool(reader, sweepEntityTransformComputed))
+            return false;
         break;
     case 296:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
         m_dxfTypedFieldSeen = true;
-        pathEntityTransformComputed = reader->getInt32() != 0;
+        if (!readDxfBool(reader, pathEntityTransformComputed))
+            return false;
         break;
     default:
         return DRW_Surface::parseCode(code, reader);
@@ -17933,10 +18029,26 @@ bool DRW_SweptSurface::finalizeDxf() const {
         return true;
     return m_dxfInSubtype && m_dxfSweepEntityIdSeen
         && m_dxfPathEntityIdSeen
-        && m_dxfSweepTransformCount == sweepEntityTransformed.size()
-        && m_dxfPathTransformCount == pathEntityTransformed.size()
-        && m_dxfSweepEntityTransformedCount == sweepEntityTransform.size()
-        && m_dxfPathEntityTransformedCount == pathEntityTransform.size();
+        && (!m_dxfSweepDataSizeSeen
+            || sweepData.size() == m_dxfSweepDataSize)
+        && (!m_dxfPathDataSizeSeen
+            || pathData.size() == m_dxfPathDataSize)
+        && (m_dxfSweepTransformCount == 0
+            || m_dxfSweepTransformCount == sweepEntityTransformed.size())
+        && (m_dxfPathTransformCount == 0
+            || m_dxfPathTransformCount == pathEntityTransformed.size())
+        && (m_dxfSweepEntityTransformedCount == 0
+            || m_dxfSweepEntityTransformedCount == sweepEntityTransform.size())
+        && (m_dxfPathEntityTransformedCount == 0
+            || m_dxfPathEntityTransformedCount == pathEntityTransform.size())
+        && finiteSurfaceCoord(referenceVector)
+        && finiteSurfaceMatrix(sweepEntityTransformed)
+        && finiteSurfaceMatrix(pathEntityTransformed)
+        && finiteSurfaceMatrix(sweepEntityTransform)
+        && finiteSurfaceMatrix(pathEntityTransform)
+        && std::isfinite(draftAngle) && std::isfinite(draftStartDistance)
+        && std::isfinite(draftEndDistance) && std::isfinite(twistAngle)
+        && std::isfinite(scaleFactor) && std::isfinite(alignAngle);
 }
 
 bool DRW_LoftedSurface::parseCode(
@@ -18023,50 +18135,58 @@ bool DRW_LoftedSurface::parseCode(
     case 290:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
+        if (!readDxfBool(reader, arcLengthParameterization))
+            return false;
         m_dxfTypedFieldSeen = true;
-        arcLengthParameterization = reader->getInt32() != 0;
         break;
     case 291:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
+        if (!readDxfBool(reader, noTwist))
+            return false;
         m_dxfTypedFieldSeen = true;
-        noTwist = reader->getInt32() != 0;
         break;
     case 292:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
+        if (!readDxfBool(reader, alignDirection))
+            return false;
         m_dxfTypedFieldSeen = true;
-        alignDirection = reader->getInt32() != 0;
         break;
     case 293:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
+        if (!readDxfBool(reader, simpleSurfaces))
+            return false;
         m_dxfTypedFieldSeen = true;
-        simpleSurfaces = reader->getInt32() != 0;
         break;
     case 294:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
+        if (!readDxfBool(reader, closedSurfaces))
+            return false;
         m_dxfTypedFieldSeen = true;
-        closedSurfaces = reader->getInt32() != 0;
         break;
     case 295:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
+        if (!readDxfBool(reader, solid))
+            return false;
         m_dxfTypedFieldSeen = true;
-        solid = reader->getInt32() != 0;
         break;
     case 296:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
+        if (!readDxfBool(reader, ruledSurface))
+            return false;
         m_dxfTypedFieldSeen = true;
-        ruledSurface = reader->getInt32() != 0;
         break;
     case 297:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
+        if (!readDxfBool(reader, virtualGuide))
+            return false;
         m_dxfTypedFieldSeen = true;
-        virtualGuide = reader->getInt32() != 0;
         break;
     case 5:
         if (!m_dxfInSubtype)
@@ -18086,9 +18206,9 @@ bool DRW_LoftedSurface::finalizeDxf() const {
     if (!m_dxfTypedFieldSeen)
         return true;
     return m_dxfInSubtype
-        && m_dxfTransformCount == loftEntityTransform.size()
-        && std::all_of(loftEntityTransform.begin(), loftEntityTransform.end(),
-                       [](double value) { return std::isfinite(value); })
+        && (m_dxfTransformCount == 0
+            || m_dxfTransformCount == loftEntityTransform.size())
+        && finiteSurfaceMatrix(loftEntityTransform)
         && std::isfinite(startDraftAngle)
         && std::isfinite(endDraftAngle)
         && std::isfinite(startDraftMagnitude)
@@ -18112,7 +18232,8 @@ bool DRW_NurbsSurface::parseCode(
             return DRW_Surface::parseCode(code, reader);
         {
             const std::int32_t value = reader->getInt32();
-            if (value < 0 || value > std::numeric_limits<std::uint16_t>::max())
+            if (value < 0
+                || value > std::numeric_limits<std::int16_t>::max())
                 return false;
             short170 = static_cast<std::uint16_t>(value);
             m_dxfTypedFieldSeen = true;
@@ -18121,7 +18242,8 @@ bool DRW_NurbsSurface::parseCode(
     case 290:
         if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
-        cvHullDisplay = reader->getInt32() != 0;
+        if (!readDxfBool(reader, cvHullDisplay))
+            return false;
         m_dxfTypedFieldSeen = true;
         break;
     case 10:
@@ -18239,22 +18361,47 @@ bool DRW_NurbsSurface::finalizeDxf() const {
 bool DRW_RevolvedSurface::parseCode(
         int code, const std::unique_ptr<dxfReader>& reader) {
     switch (code) {
+    case 100: {
+        const std::string marker = reader->getString();
+        if (marker == "AcDbRevolvedSurface")
+            m_dxfInSubtype = true;
+        else if (marker == "AcDbModelerGeometry"
+                 || marker == "AcDbSurface")
+            m_dxfInSubtype = false;
+        break;
+    }
     case 310:
-        if (!m_dxfClassIdSeen)
+        if (!m_dxfInSubtype)
             return DRW_Surface::parseCode(code, reader);
+        {
+            std::vector<std::uint8_t> decoded;
+            if (!decodeHexBytes(reader->getString(), decoded)
+                || (m_dxfDataSizeSeen
+                    && (dxfBinaryData.size() > m_dxfDeclaredDataSize
+                        || decoded.size() > m_dxfDeclaredDataSize
+                               - dxfBinaryData.size()))
+                || !appendBytesChecked(dxfBinaryData, decoded,
+                                       DRW::kMaxDxfBinaryPayloadBytes))
+                return false;
+        }
         break;
     case 90:
-        if (!m_dxfClassIdSeen) {
-            const std::int32_t value = reader->getInt32();
-            if (value < 0)
-                return false;
-            classId = static_cast<std::uint32_t>(value);
-            m_dxfClassIdSeen = true;
-        } else {
+        if (!m_dxfInSubtype)
+            return DRW_Surface::parseCode(code, reader);
+        if (!m_dxfIdSeen) {
             const std::int32_t value = reader->getInt32();
             if (value < 0)
                 return false;
             id = static_cast<std::uint32_t>(value);
+            m_dxfIdSeen = true;
+        } else {
+            const std::int32_t value = reader->getInt32();
+            if (value < 0 || static_cast<std::size_t>(value) >
+                                 DRW::kMaxDxfBinaryPayloadBytes
+                || m_dxfDataSizeSeen)
+                return false;
+            m_dxfDeclaredDataSize = static_cast<std::uint32_t>(value);
+            m_dxfDataSizeSeen = true;
         }
         break;
     case 10:
@@ -18299,15 +18446,31 @@ bool DRW_RevolvedSurface::parseCode(
         twistAngle = reader->getDouble();
         break;
     case 290:
-        solid = reader->getInt32() != 0;
+        if (!readDxfBool(reader, solid))
+            return false;
         break;
     case 291:
-        closeToAxis = reader->getInt32() != 0;
+        if (!readDxfBool(reader, closeToAxis))
+            return false;
         break;
     default:
         return DRW_Surface::parseCode(code, reader);
     }
     return true;
+}
+
+bool DRW_RevolvedSurface::finalizeDxf() const {
+    return m_dxfInSubtype && m_dxfIdSeen
+        && (!m_dxfDataSizeSeen
+            || dxfBinaryData.size() == m_dxfDeclaredDataSize)
+        && (m_dxfDataSizeSeen || dxfBinaryData.empty())
+        && (m_dxfTransformCount == 0
+            || m_dxfTransformCount == transform.size())
+        && finiteSurfaceCoord(axisPoint) && finiteSurfaceCoord(axisVector)
+        && finiteSurfaceMatrix(transform)
+        && std::isfinite(revolveAngle) && std::isfinite(startAngle)
+        && std::isfinite(draftAngle) && std::isfinite(draftStartDistance)
+        && std::isfinite(draftEndDistance) && std::isfinite(twistAngle);
 }
 
 void DRW_Surface::resetDwgState() {
@@ -18340,6 +18503,7 @@ void DRW_Surface::resetDwgState() {
     case DRW::EXTRUDEDSURFACE: {
         auto *surface = static_cast<DRW_ExtrudedSurface *>(this);
         surface->classId = 0;
+        surface->dxfBinaryData.clear();
         surface->sweepVector = DRW_Coord{0.0, 0.0, 0.0};
         surface->extrudedTransform = identity();
         surface->sweepEntityTransform = identity();
@@ -18365,6 +18529,7 @@ void DRW_Surface::resetDwgState() {
         auto *surface = static_cast<DRW_RevolvedSurface *>(this);
         surface->classId = 0;
         surface->id = 0;
+        surface->dxfBinaryData.clear();
         surface->axisPoint = DRW_Coord{0.0, 0.0, 0.0};
         surface->axisVector = DRW_Coord{0.0, 0.0, 0.0};
         surface->revolveAngle = 0.0;

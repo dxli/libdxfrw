@@ -2580,7 +2580,9 @@ public:
 //    double ex;                /*!< normal vector x coordinate, code 210 */
 //    double ey;                /*!< normal vector y coordinate, code 220 */
 //    double ez;                /*!< normal vector z coordinate, code 230 */
-    DRW_Coord normalVec;      /*!< normal vector, code 210, 220, 230 */
+    // DXF's optional extrusion direction defaults to (0,0,1). DWG parsing
+    // initializes this independently in resetDwgState().
+    DRW_Coord normalVec{0.0, 0.0, 1.0}; /*!< normal vector, code 210, 220, 230 */
     DRW_Coord tgStart;        /*!< start tangent, code 12, 22, 32 */
 //    double tgsx;              /*!< start tangent x coordinate, code 12 */
 //    double tgsy;              /*!< start tangent y coordinate, code 22 */
@@ -3548,7 +3550,8 @@ public:
         pathEntityTransform = extrudedTransform;
     }
     DRW_ExtrudedSurface(const DRW_ExtrudedSurface& o): DRW_Surface(o),
-        classId(o.classId), sweepVector(o.sweepVector),
+        classId(o.classId), dxfBinaryData(o.dxfBinaryData),
+        sweepVector(o.sweepVector),
         extrudedTransform(o.extrudedTransform),
         sweepEntityTransform(o.sweepEntityTransform),
         pathEntityTransform(o.pathEntityTransform), draftAngle(o.draftAngle),
@@ -3568,6 +3571,7 @@ public:
         if (this != &o) {
             DRW_Surface::operator=(o);
             classId = o.classId;
+            dxfBinaryData = o.dxfBinaryData;
             sweepVector = o.sweepVector;
             extrudedTransform = o.extrudedTransform;
             sweepEntityTransform = o.sweepEntityTransform;
@@ -3599,6 +3603,7 @@ protected:
 
 public:
     std::uint32_t classId = 0;
+    std::vector<std::uint8_t> dxfBinaryData;
     DRW_Coord sweepVector;
     std::array<double, kTransformSize> extrudedTransform{};
     std::array<double, kTransformSize> sweepEntityTransform{};
@@ -3626,6 +3631,7 @@ private:
         m_dxfPathTransformCount = 0;
         m_dxfClassIdSeen = false;
         m_dxfDataSizeSeen = false;
+        m_dxfDeclaredDataSize = 0;
         m_dxfInSubtype = false;
     }
 
@@ -3634,6 +3640,7 @@ private:
     std::size_t m_dxfPathTransformCount = 0;
     bool m_dxfClassIdSeen = false;
     bool m_dxfDataSizeSeen = false;
+    std::uint32_t m_dxfDeclaredDataSize = 0;
     bool m_dxfInSubtype = false;
 };
 
@@ -3651,7 +3658,8 @@ public:
                      0.0, 0.0, 0.0, 1.0};
     }
     DRW_RevolvedSurface(const DRW_RevolvedSurface& o): DRW_Surface(o),
-        classId(o.classId), id(o.id), axisPoint(o.axisPoint),
+        classId(o.classId), id(o.id), dxfBinaryData(o.dxfBinaryData),
+        axisPoint(o.axisPoint),
         axisVector(o.axisVector), revolveAngle(o.revolveAngle),
         startAngle(o.startAngle), transform(o.transform),
         draftAngle(o.draftAngle), draftStartDistance(o.draftStartDistance),
@@ -3665,6 +3673,7 @@ public:
             DRW_Surface::operator=(o);
             classId = o.classId;
             id = o.id;
+            dxfBinaryData = o.dxfBinaryData;
             axisPoint = o.axisPoint;
             axisVector = o.axisVector;
             revolveAngle = o.revolveAngle;
@@ -3684,10 +3693,12 @@ public:
 
 protected:
     bool parseCode(int code, const std::unique_ptr<dxfReader>& reader) override;
+    bool finalizeDxf() const override;
 
 public:
     std::uint32_t classId = 0;
     std::uint32_t id = 0;
+    std::vector<std::uint8_t> dxfBinaryData;
     DRW_Coord axisPoint;
     DRW_Coord axisVector;
     double revolveAngle = 0.0;
@@ -3703,11 +3714,17 @@ public:
 private:
     void resetDxfParserState() noexcept {
         m_dxfTransformCount = 0;
-        m_dxfClassIdSeen = false;
+        m_dxfIdSeen = false;
+        m_dxfDataSizeSeen = false;
+        m_dxfDeclaredDataSize = 0;
+        m_dxfInSubtype = false;
     }
 
     std::size_t m_dxfTransformCount = 0;
-    bool m_dxfClassIdSeen = false;
+    bool m_dxfIdSeen = false;
+    bool m_dxfDataSizeSeen = false;
+    std::uint32_t m_dxfDeclaredDataSize = 0;
+    bool m_dxfInSubtype = false;
 };
 
 class DRW_SweptSurface : public DRW_Surface {
@@ -3817,7 +3834,10 @@ private:
         m_dxfPathEntityTransformedCount = 0;
         m_dxfSweepEntityIdSeen = false;
         m_dxfPathEntityIdSeen = false;
-        m_dxfDataSizeCount = 0;
+        m_dxfSweepDataSizeSeen = false;
+        m_dxfPathDataSizeSeen = false;
+        m_dxfSweepDataSize = 0;
+        m_dxfPathDataSize = 0;
         m_dxfTypedFieldSeen = false;
         m_dxfInSubtype = false;
     }
@@ -3828,7 +3848,10 @@ private:
     std::size_t m_dxfPathEntityTransformedCount = 0;
     bool m_dxfSweepEntityIdSeen = false;
     bool m_dxfPathEntityIdSeen = false;
-    int m_dxfDataSizeCount = 0;
+    bool m_dxfSweepDataSizeSeen = false;
+    bool m_dxfPathDataSizeSeen = false;
+    std::uint32_t m_dxfSweepDataSize = 0;
+    std::uint32_t m_dxfPathDataSize = 0;
     bool m_dxfTypedFieldSeen = false;
     bool m_dxfInSubtype = false;
 };

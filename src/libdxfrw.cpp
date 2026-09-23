@@ -732,8 +732,12 @@ bool canWriteDxfFieldList(const DRW_FieldList& list) {
 }
 
 void writeDxfSplineBody(dxfWriter *writer, DRW_Spline *ent) {
-    // Normal vector is optional; omit when it is the default (0,0,1).
-    if (ent->normalVec.x != 0.0 || ent->normalVec.y != 0.0 || ent->normalVec.z != 1.0) {
+    // DXF omits the normal for nonplanar splines; the conventional planar
+    // default is (0,0,1), which is also omitted.
+    if ((ent->normalVec.x != 0.0 || ent->normalVec.y != 0.0
+         || ent->normalVec.z != 0.0)
+        && (ent->normalVec.x != 0.0 || ent->normalVec.y != 0.0
+            || ent->normalVec.z != 1.0)) {
         writer->writeDouble(210, ent->normalVec.x);
         writer->writeDouble(220, ent->normalVec.y);
         writer->writeDouble(230, ent->normalVec.z);
@@ -3779,13 +3783,13 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
 bool dxfRW::writeSpline(DRW_Spline *ent){
     if (version > DRW::AC1009) {
         if (writer == nullptr || ent == nullptr
-            || !ent->validatePayloadFields(/*allowMixedLists=*/true)
+            || !ent->validateDxf()
             || ent->knotslist.size()
-                   > static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max())
+                   > static_cast<std::size_t>(std::numeric_limits<std::int16_t>::max())
             || ent->controllist.size()
-                   > static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max())
+                   > static_cast<std::size_t>(std::numeric_limits<std::int16_t>::max())
             || ent->fitlist.size()
-                   > static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max())) {
+                   > static_cast<std::size_t>(std::numeric_limits<std::int16_t>::max())) {
             m_writeError = true;
             return false;
         }
@@ -3809,13 +3813,13 @@ bool dxfRW::writeHelix(DRW_Helix *ent){
         return rejectUnsupportedDxfWrite();
     if (version > DRW::AC1009) {
         if (writer == nullptr || ent == nullptr
-            || !ent->validatePayloadFields(/*allowMixedLists=*/true)
+            || !ent->validateDxf()
             || ent->knotslist.size()
-                   > static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max())
+                   > static_cast<std::size_t>(std::numeric_limits<std::int16_t>::max())
             || ent->controllist.size()
-                   > static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max())
+                   > static_cast<std::size_t>(std::numeric_limits<std::int16_t>::max())
             || ent->fitlist.size()
-                   > static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max())
+                   > static_cast<std::size_t>(std::numeric_limits<std::int16_t>::max())
             || !std::isfinite(ent->axisBasePt.x)
             || !std::isfinite(ent->axisBasePt.y)
             || !std::isfinite(ent->axisBasePt.z)
@@ -3827,7 +3831,8 @@ bool dxfRW::writeHelix(DRW_Helix *ent){
             || !std::isfinite(ent->axisVector.z)
             || !std::isfinite(ent->radius)
             || !std::isfinite(ent->turns)
-            || !std::isfinite(ent->turnHeight)) {
+            || !std::isfinite(ent->turnHeight)
+            || ent->constraintType > 2) {
             m_writeError = true;
             return false;
         }
@@ -6690,7 +6695,13 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
     }
     if (version <= DRW::AC1018)
         return rejectUnsupportedDxfWrite();
-    if (!preflightEntity(ent))
+    if (!preflightEntity(ent)
+        || ent->modelerFormatVersion < 0
+        || ent->modelerFormatVersion > std::numeric_limits<std::int16_t>::max()
+        || ent->uIsolines < 0
+        || ent->uIsolines > std::numeric_limits<std::int16_t>::max()
+        || ent->vIsolines < 0
+        || ent->vIsolines > std::numeric_limits<std::int16_t>::max())
         return false;
     const auto fail = [this]() {
         m_writeError = true;
@@ -6748,8 +6759,10 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
     if (ent->eType == DRW::REVOLVEDSURFACE) {
         const auto *revolved = dynamic_cast<const DRW_RevolvedSurface *>(ent);
         if (revolved == nullptr
-            || revolved->classId >
+            || revolved->id >
                    static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())
+            || revolved->dxfBinaryData.size() >
+                   DRW::kMaxDxfBinaryPayloadBytes
             || !std::isfinite(revolved->axisPoint.x)
             || !std::isfinite(revolved->axisPoint.y)
             || !std::isfinite(revolved->axisPoint.z)
@@ -6766,7 +6779,11 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
                             [](double value) { return std::isfinite(value); })) {
             return fail();
         }
-        writer->writeInt32(90, static_cast<std::int32_t>(revolved->classId));
+        writer->writeInt32(90, static_cast<std::int32_t>(revolved->id));
+        writer->writeInt32(90,
+                           static_cast<std::int32_t>(revolved->dxfBinaryData.size()));
+        if (!revolved->dxfBinaryData.empty())
+            writeDxfBinaryChunks(writer.get(), revolved->dxfBinaryData);
         writer->writeDouble(10, revolved->axisPoint.x);
         writer->writeDouble(20, revolved->axisPoint.y);
         writer->writeDouble(30, revolved->axisPoint.z);
@@ -6781,25 +6798,28 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
         writer->writeDouble(44, revolved->draftStartDistance);
         writer->writeDouble(45, revolved->draftEndDistance);
         writer->writeDouble(46, revolved->twistAngle);
-        writer->writeInt16(290, revolved->solid ? 1 : 0);
-        writer->writeInt16(291, revolved->closeToAxis ? 1 : 0);
+        writer->writeBool(290, revolved->solid);
+        writer->writeBool(291, revolved->closeToAxis);
     } else if (ent->eType == DRW::EXTRUDEDSURFACE) {
         const auto *extruded = dynamic_cast<const DRW_ExtrudedSurface *>(ent);
         const auto finiteCoord = [](const DRW_Coord& value) {
             return std::isfinite(value.x) && std::isfinite(value.y)
                 && std::isfinite(value.z);
         };
-        const auto validFlags = [](std::int32_t value) {
+        const auto validPathFlags = [](std::int32_t value) {
             return value >= 0 && value <=
-                static_cast<std::int32_t>(std::numeric_limits<std::uint16_t>::max());
+                static_cast<std::int32_t>(std::numeric_limits<std::int16_t>::max());
         };
         if (extruded == nullptr
             || extruded->classId >
                    static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())
+            || extruded->dxfBinaryData.size() >
+                   DRW::kMaxDxfBinaryPayloadBytes
             || !finiteCoord(extruded->sweepVector)
             || !finiteCoord(extruded->referenceVector)
-            || !validFlags(extruded->sweepAlignmentFlags)
-            || !validFlags(extruded->pathFlags)
+            || extruded->sweepAlignmentFlags < 0
+            || extruded->sweepAlignmentFlags > 3
+            || !validPathFlags(extruded->pathFlags)
             || !std::all_of(extruded->extrudedTransform.begin(),
                             extruded->extrudedTransform.end(),
                             [](double value) { return std::isfinite(value); })
@@ -6818,6 +6838,10 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
             return fail();
         }
         writer->writeInt32(90, static_cast<std::int32_t>(extruded->classId));
+        writer->writeInt32(90,
+                           static_cast<std::int32_t>(extruded->dxfBinaryData.size()));
+        if (!extruded->dxfBinaryData.empty())
+            writeDxfBinaryChunks(writer.get(), extruded->dxfBinaryData);
         writer->writeDouble(10, extruded->sweepVector.x);
         writer->writeDouble(20, extruded->sweepVector.y);
         writer->writeDouble(30, extruded->sweepVector.z);
@@ -6833,14 +6857,14 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
             writer->writeDouble(46, value);
         for (double value : extruded->pathEntityTransform)
             writer->writeDouble(47, value);
-        writer->writeInt16(290, extruded->solid ? 1 : 0);
+        writer->writeBool(290, extruded->solid);
         writer->writeInt16(70, extruded->sweepAlignmentFlags);
         writer->writeInt16(71, extruded->pathFlags);
-        writer->writeInt16(292, extruded->alignStart ? 1 : 0);
-        writer->writeInt16(293, extruded->bank ? 1 : 0);
-        writer->writeInt16(294, extruded->basePointSet ? 1 : 0);
-        writer->writeInt16(295, extruded->sweepEntityTransformComputed ? 1 : 0);
-        writer->writeInt16(296, extruded->pathEntityTransformComputed ? 1 : 0);
+        writer->writeBool(292, extruded->alignStart);
+        writer->writeBool(293, extruded->bank);
+        writer->writeBool(294, extruded->basePointSet);
+        writer->writeBool(295, extruded->sweepEntityTransformComputed);
+        writer->writeBool(296, extruded->pathEntityTransformComputed);
         writer->writeDouble(11, extruded->referenceVector.x);
         writer->writeDouble(21, extruded->referenceVector.y);
         writer->writeDouble(31, extruded->referenceVector.z);
@@ -6850,9 +6874,9 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
             return std::isfinite(value.x) && std::isfinite(value.y)
                 && std::isfinite(value.z);
         };
-        const auto validFlags = [](std::int32_t value) {
+        const auto validPathFlags = [](std::int32_t value) {
             return value >= 0 && value <=
-                static_cast<std::int32_t>(std::numeric_limits<std::uint16_t>::max());
+                static_cast<std::int32_t>(std::numeric_limits<std::int16_t>::max());
         };
         const auto finiteMatrix = [](const auto& matrix) {
             return std::all_of(matrix.begin(), matrix.end(),
@@ -6863,11 +6887,12 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
                    static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())
             || swept->pathEntityId >
                    static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())
-            || swept->sweepData.size() > DRW_SweptSurface::kMaxSweepDataSize
-            || swept->pathData.size() > DRW_SweptSurface::kMaxSweepDataSize
+            || swept->sweepData.size() > DRW::kMaxDxfBinaryPayloadBytes
+            || swept->pathData.size() > DRW::kMaxDxfBinaryPayloadBytes
             || !finiteCoord(swept->referenceVector)
-            || !validFlags(swept->sweepAlignmentFlags)
-            || !validFlags(swept->pathFlags)
+            || swept->sweepAlignmentFlags < 0
+            || swept->sweepAlignmentFlags > 3
+            || !validPathFlags(swept->pathFlags)
             || !finiteMatrix(swept->sweepEntityTransformed)
             || !finiteMatrix(swept->pathEntityTransformed)
             || !finiteMatrix(swept->sweepEntityTransform)
@@ -6881,9 +6906,13 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
             return fail();
         }
         writer->writeInt32(90, static_cast<std::int32_t>(swept->sweepEntityId));
+        writer->writeInt32(90,
+                           static_cast<std::int32_t>(swept->sweepData.size()));
         if (!swept->sweepData.empty())
             writeDxfBinaryChunks(writer.get(), swept->sweepData);
-        writer->writeInt32(91, static_cast<std::int32_t>(swept->pathEntityId));
+        writer->writeInt32(90, static_cast<std::int32_t>(swept->pathEntityId));
+        writer->writeInt32(90,
+                           static_cast<std::int32_t>(swept->pathData.size()));
         if (!swept->pathData.empty())
             writeDxfBinaryChunks(writer.get(), swept->pathData);
         for (double value : swept->sweepEntityTransformed)
@@ -6900,14 +6929,14 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
             writer->writeDouble(46, value);
         for (double value : swept->pathEntityTransform)
             writer->writeDouble(47, value);
-        writer->writeInt16(290, swept->solid ? 1 : 0);
+        writer->writeBool(290, swept->solid);
         writer->writeInt16(70, swept->sweepAlignmentFlags);
         writer->writeInt16(71, swept->pathFlags);
-        writer->writeInt16(292, swept->alignStart ? 1 : 0);
-        writer->writeInt16(293, swept->bank ? 1 : 0);
-        writer->writeInt16(294, swept->basePointSet ? 1 : 0);
-        writer->writeInt16(295, swept->sweepEntityTransformComputed ? 1 : 0);
-        writer->writeInt16(296, swept->pathEntityTransformComputed ? 1 : 0);
+        writer->writeBool(292, swept->alignStart);
+        writer->writeBool(293, swept->bank);
+        writer->writeBool(294, swept->basePointSet);
+        writer->writeBool(295, swept->sweepEntityTransformComputed);
+        writer->writeBool(296, swept->pathEntityTransformComputed);
         writer->writeDouble(11, swept->referenceVector.x);
         writer->writeDouble(21, swept->referenceVector.y);
         writer->writeDouble(31, swept->referenceVector.z);
@@ -6924,6 +6953,9 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
                    static_cast<std::int32_t>(DRW_LoftedSurface::kMaxReferenceTokenCount)
             || lofted->numGuideCurves >
                    static_cast<std::int32_t>(DRW_LoftedSurface::kMaxReferenceTokenCount)
+            || lofted->planeNormalLoftingType < 0
+            || lofted->planeNormalLoftingType >
+                   std::numeric_limits<std::int16_t>::max()
             || lofted->dxfReferenceData.size() >
                    DRW_LoftedSurface::kMaxReferenceTokenCount
             || !finiteMatrix(lofted->loftEntityTransform)
@@ -6963,19 +6995,19 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
             else
                 writeDxfBinaryChunks(writer.get(), *value.binary());
         }
-        writer->writeInt32(70, lofted->planeNormalLoftingType);
+        writer->writeInt16(70, lofted->planeNormalLoftingType);
         writer->writeDouble(41, lofted->startDraftAngle);
         writer->writeDouble(42, lofted->endDraftAngle);
         writer->writeDouble(43, lofted->startDraftMagnitude);
         writer->writeDouble(44, lofted->endDraftMagnitude);
-        writer->writeInt16(290, lofted->arcLengthParameterization ? 1 : 0);
-        writer->writeInt16(291, lofted->noTwist ? 1 : 0);
-        writer->writeInt16(292, lofted->alignDirection ? 1 : 0);
-        writer->writeInt16(293, lofted->simpleSurfaces ? 1 : 0);
-        writer->writeInt16(294, lofted->closedSurfaces ? 1 : 0);
-        writer->writeInt16(295, lofted->solid ? 1 : 0);
-        writer->writeInt16(296, lofted->ruledSurface ? 1 : 0);
-        writer->writeInt16(297, lofted->virtualGuide ? 1 : 0);
+        writer->writeBool(290, lofted->arcLengthParameterization);
+        writer->writeBool(291, lofted->noTwist);
+        writer->writeBool(292, lofted->alignDirection);
+        writer->writeBool(293, lofted->simpleSurfaces);
+        writer->writeBool(294, lofted->closedSurfaces);
+        writer->writeBool(295, lofted->solid);
+        writer->writeBool(296, lofted->ruledSurface);
+        writer->writeBool(297, lofted->virtualGuide);
         if (lofted->pathCurveHandle != 0)
             writer->writeString(5, toHexStr(lofted->pathCurveHandle));
     } else if (ent->eType == DRW::NURBSURFACE) {
@@ -6985,13 +7017,15 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
                 && std::isfinite(value.z);
         };
         if (nurbs == nullptr
+            || nurbs->short170 >
+                   static_cast<std::uint16_t>(std::numeric_limits<std::int16_t>::max())
             || !finiteCoord(nurbs->uvec1) || !finiteCoord(nurbs->vvec1)
             || !finiteCoord(nurbs->uvec2) || !finiteCoord(nurbs->vvec2)) {
             return fail();
         }
         if (version >= DRW::AC1027) {
             writer->writeInt16(170, nurbs->short170);
-            writer->writeInt16(290, nurbs->cvHullDisplay ? 1 : 0);
+            writer->writeBool(290, nurbs->cvHullDisplay);
             writer->writeDouble(10, nurbs->uvec1.x);
             writer->writeDouble(20, nurbs->uvec1.y);
             writer->writeDouble(30, nurbs->uvec1.z);
@@ -9635,10 +9669,11 @@ bool dxfRW::processEntities(bool isblock) {
             reader->setSemanticStringMode(false);
             processed = processRawEntity();
         }
-        if (!processed)
+        if (!processed) {
             return error == DRW::BAD_NONE
                 ? setError(DRW::BAD_READ_ENTITIES)
                 : false;
+        }
 
         const DxfEntityBoundary nextBoundary = classifyEntityBoundary();
         if (nextBoundary == DxfEntityBoundary::Error)
@@ -11072,13 +11107,16 @@ bool dxfRW::processSurface() {
     while (reader->readRec(&code)) {
         DRW_DBG(code); DRW_DBG("\n");
         if (0 == code) {
-            if (setEntityBoundary(code) == DxfEntityBoundary::Error)
+            if (setEntityBoundary(code) == DxfEntityBoundary::Error) {
                 return setError(DRW::BAD_READ_ENTITIES);
+            }
             DRW_DBG(nextentity); DRW_DBG("\n");
-            if (!acceptEntityCallbackBoundary())
+            if (!acceptEntityCallbackBoundary()) {
                 return setError(DRW::BAD_READ_ENTITIES);
-            if (!surf->finalizeDxf())
+            }
+            if (!surf->finalizeDxf()) {
                 return setError(DRW::BAD_CODE_PARSED);
+            }
             iface->addSurface(surf.get());
             return true;
         }

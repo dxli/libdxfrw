@@ -100,6 +100,10 @@ public:
     virtual void addSpline(const DRW_Spline* data){
         currentBlock->ent.push_back(new DRW_Spline(*data));
     }
+    virtual void addHelix(const DRW_Helix* data){
+        if (data != nullptr && currentBlock != nullptr)
+            currentBlock->ent.push_back(new DRW_Helix(*data));
+    }
     // ¿para que se usa?
     virtual void addKnot(const DRW_Entity& data){(void)data;}
 

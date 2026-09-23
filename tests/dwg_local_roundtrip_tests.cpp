@@ -5603,55 +5603,130 @@ bool runRawDwgReplayContract() {
     return result;
 }
 
-bool runDxfSurfaceRoundTrip() {
+bool runDxfSurfaceRoundTrip(bool binary,
+                            const std::filesystem::path& directory,
+                            bool keepOutput) {
+    const std::string encoding = binary ? "binary" : "ascii";
     const std::filesystem::path output =
-        std::filesystem::temp_directory_path() / "libdxfrw-surface-roundtrip.dxf";
+        directory / ("libdxfrw-surface-roundtrip-" + encoding + ".dxf");
     std::error_code ec;
     std::filesystem::remove(output, ec);
 
     dx_data source;
     auto plane = new DRW_PlaneSurface();
     plane->handle = 0xFB00u;
+    plane->modelerFormatVersion = 1;
     plane->uIsolines = 2;
     plane->vIsolines = 3;
     source.mBlock->ent.push_back(plane);
     auto extruded = new DRW_ExtrudedSurface();
     extruded->handle = 0xFB01u;
+    extruded->modelerFormatVersion = 1;
     extruded->uIsolines = 4;
     extruded->vIsolines = 5;
+    extruded->classId = 2;
+    extruded->dxfBinaryData = {0x21u, 0x43u};
     extruded->sweepVector = DRW_Coord(0.0, 0.0, 1.0);
     extruded->draftAngle = 0.1;
+    extruded->draftStartDistance = 0.25;
+    extruded->draftEndDistance = 0.5;
+    extruded->twistAngle = 0.75;
     extruded->scaleFactor = 1.25;
+    extruded->alignAngle = 0.5;
+    extruded->solid = true;
+    extruded->sweepAlignmentFlags = 3;
+    extruded->pathFlags = 7;
+    extruded->alignStart = true;
+    extruded->bank = true;
+    extruded->basePointSet = true;
+    extruded->sweepEntityTransformComputed = true;
+    extruded->pathEntityTransformComputed = true;
+    extruded->referenceVector = DRW_Coord(1.0, 2.0, 3.0);
+    extruded->extrudedTransform[3] = 0.25;
+    extruded->extrudedTransform[7] = 0.5;
+    extruded->extrudedTransform[11] = 0.75;
+    extruded->sweepEntityTransform[3] = 1.25;
+    extruded->pathEntityTransform[7] = 1.5;
     source.mBlock->ent.push_back(extruded);
     auto revolved = new DRW_RevolvedSurface();
     revolved->handle = 0xFB02u;
+    revolved->modelerFormatVersion = 1;
     revolved->uIsolines = 6;
     revolved->vIsolines = 7;
-    revolved->classId = 2;
+    revolved->id = 2;
+    revolved->dxfBinaryData = {0x65u, 0x87u};
     revolved->axisPoint = DRW_Coord(1.0, 2.0, 3.0);
-    revolved->axisVector = DRW_Coord(0.0, 0.0, 1.0);
+    revolved->axisVector = DRW_Coord(0.0, 1.0, 2.0);
     revolved->revolveAngle = 1.5;
+    revolved->startAngle = 0.25;
+    revolved->draftAngle = 0.5;
+    revolved->draftStartDistance = 0.75;
+    revolved->draftEndDistance = 1.0;
+    revolved->twistAngle = 1.25;
+    revolved->solid = true;
+    revolved->closeToAxis = true;
+    revolved->transform[3] = 0.25;
+    revolved->transform[7] = 0.5;
+    revolved->transform[11] = 0.75;
     source.mBlock->ent.push_back(revolved);
     auto swept = new DRW_SweptSurface();
     swept->handle = 0xFB03u;
+    swept->modelerFormatVersion = 1;
     swept->uIsolines = 8;
     swept->vIsolines = 9;
-    swept->classVersion = 2;
     swept->sweepEntityId = 4;
+    swept->sweepData = {0x01u, 0xA5u};
     swept->pathEntityId = 5;
-    swept->referenceVector = DRW_Coord(1.0, 0.0, 0.0);
+    swept->pathData = {0xFEu, 0x7Fu};
+    swept->referenceVector = DRW_Coord(1.0, 2.0, 3.0);
+    swept->sweepEntityTransform[3] = 0.25;
+    swept->pathEntityTransform[7] = 0.5;
+    swept->sweepEntityTransformed[11] = 0.75;
+    swept->pathEntityTransformed[3] = 1.0;
+    swept->draftAngle = 0.125;
+    swept->draftStartDistance = 0.25;
+    swept->draftEndDistance = 0.5;
+    swept->twistAngle = 0.75;
     swept->scaleFactor = 1.1;
+    swept->alignAngle = 0.875;
+    swept->solid = true;
+    swept->sweepAlignmentFlags = 2;
+    swept->pathFlags = 9;
+    swept->alignStart = true;
+    swept->bank = true;
+    swept->basePointSet = true;
+    swept->sweepEntityTransformComputed = true;
+    swept->pathEntityTransformComputed = true;
     source.mBlock->ent.push_back(swept);
     auto lofted = new DRW_LoftedSurface();
     lofted->handle = 0xFB04u;
+    lofted->modelerFormatVersion = 1;
     lofted->uIsolines = 10;
     lofted->vIsolines = 11;
     lofted->planeNormalLoftingType = 1;
     lofted->startDraftAngle = 0.2;
     lofted->endDraftAngle = 0.3;
+    lofted->startDraftMagnitude = 0.4;
+    lofted->endDraftMagnitude = 0.5;
+    lofted->arcLengthParameterization = true;
+    lofted->noTwist = false;
+    lofted->alignDirection = false;
+    lofted->simpleSurfaces = false;
+    lofted->closedSurfaces = true;
+    lofted->solid = true;
+    lofted->ruledSurface = true;
+    lofted->virtualGuide = true;
+    lofted->pathCurveHandle = 0x1234u;
+    lofted->loftEntityTransform[3] = 0.25;
+    lofted->loftEntityTransform[7] = 0.5;
+    lofted->loftEntityTransform[11] = 0.75;
+    lofted->dxfReferenceData.emplace_back(90, std::int32_t{2});
+    lofted->dxfReferenceData.emplace_back(
+        310, std::vector<std::uint8_t>{0x12u, 0x34u});
     source.mBlock->ent.push_back(lofted);
     auto nurbs = new DRW_NurbsSurface();
     nurbs->handle = 0xFB05u;
+    nurbs->modelerFormatVersion = 1;
     nurbs->uIsolines = 12;
     nurbs->vIsolines = 13;
     nurbs->short170 = 14;
@@ -5663,33 +5738,558 @@ bool runDxfSurfaceRoundTrip() {
     source.mBlock->ent.push_back(nurbs);
 
     dx_iface exporter;
-    if (!exporter.fileExport(output.string(), DRW::AC1027, false, &source,
+    if (!exporter.fileExport(output.string(), DRW::AC1027, binary, &source,
                              false)) {
-        std::filesystem::remove(output, ec);
+        std::cerr << "DXF surface export failed (" << encoding << ")\n";
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
         return false;
     }
     dx_data imported;
     dx_iface importer;
     if (!importer.fileImport(output.string(), &imported, false)) {
-        std::filesystem::remove(output, ec);
+        std::cerr << "DXF surface import failed (" << encoding << ")\n";
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
         return false;
     }
     std::array<bool, 6> seen{};
+    const auto sameCoord = [](const DRW_Coord& a, const DRW_Coord& b) {
+        return a.x == b.x && a.y == b.y && a.z == b.z;
+    };
+    const auto sameMatrix = [](const auto& a, const auto& b) {
+        return a == b;
+    };
+    bool fieldsMatch = true;
     for (const DRW_Entity* entity : imported.mBlock->ent) {
         if (entity == nullptr)
             continue;
         switch (entity->eType) {
-        case DRW::PLANESURFACE: seen[0] = true; break;
-        case DRW::EXTRUDEDSURFACE: seen[1] = true; break;
-        case DRW::REVOLVEDSURFACE: seen[2] = true; break;
-        case DRW::SWEPTSURFACE: seen[3] = true; break;
-        case DRW::LOFTEDSURFACE: seen[4] = true; break;
-        case DRW::NURBSURFACE: seen[5] = true; break;
+        case DRW::PLANESURFACE: {
+            seen[0] = true;
+            const auto* value = static_cast<const DRW_PlaneSurface*>(entity);
+            fieldsMatch = fieldsMatch
+                && value->modelerFormatVersion == plane->modelerFormatVersion
+                && value->uIsolines == plane->uIsolines
+                && value->vIsolines == plane->vIsolines;
+            break;
+        }
+        case DRW::EXTRUDEDSURFACE: {
+            seen[1] = true;
+            const auto* value = static_cast<const DRW_ExtrudedSurface*>(entity);
+            fieldsMatch = fieldsMatch
+                && value->modelerFormatVersion == extruded->modelerFormatVersion
+                && value->uIsolines == extruded->uIsolines
+                && value->vIsolines == extruded->vIsolines
+                && value->classId == extruded->classId
+                && value->dxfBinaryData == extruded->dxfBinaryData
+                && sameCoord(value->sweepVector, extruded->sweepVector)
+                && sameCoord(value->referenceVector, extruded->referenceVector)
+                && sameMatrix(value->extrudedTransform, extruded->extrudedTransform)
+                && sameMatrix(value->sweepEntityTransform, extruded->sweepEntityTransform)
+                && sameMatrix(value->pathEntityTransform, extruded->pathEntityTransform)
+                && value->draftAngle == extruded->draftAngle
+                && value->draftStartDistance == extruded->draftStartDistance
+                && value->draftEndDistance == extruded->draftEndDistance
+                && value->twistAngle == extruded->twistAngle
+                && value->scaleFactor == extruded->scaleFactor
+                && value->alignAngle == extruded->alignAngle
+                && value->solid == extruded->solid
+                && value->sweepAlignmentFlags == extruded->sweepAlignmentFlags
+                && value->pathFlags == extruded->pathFlags
+                && value->alignStart == extruded->alignStart
+                && value->bank == extruded->bank
+                && value->basePointSet == extruded->basePointSet
+                && value->sweepEntityTransformComputed
+                       == extruded->sweepEntityTransformComputed
+                && value->pathEntityTransformComputed
+                       == extruded->pathEntityTransformComputed;
+            break;
+        }
+        case DRW::REVOLVEDSURFACE: {
+            seen[2] = true;
+            const auto* value = static_cast<const DRW_RevolvedSurface*>(entity);
+            fieldsMatch = fieldsMatch
+                && value->modelerFormatVersion == revolved->modelerFormatVersion
+                && value->uIsolines == revolved->uIsolines
+                && value->vIsolines == revolved->vIsolines
+                && value->id == revolved->id
+                && value->dxfBinaryData == revolved->dxfBinaryData
+                && sameCoord(value->axisPoint, revolved->axisPoint)
+                && sameCoord(value->axisVector, revolved->axisVector)
+                && value->revolveAngle == revolved->revolveAngle
+                && value->startAngle == revolved->startAngle
+                && sameMatrix(value->transform, revolved->transform)
+                && value->draftAngle == revolved->draftAngle
+                && value->draftStartDistance == revolved->draftStartDistance
+                && value->draftEndDistance == revolved->draftEndDistance
+                && value->twistAngle == revolved->twistAngle
+                && value->solid == revolved->solid
+                && value->closeToAxis == revolved->closeToAxis;
+            break;
+        }
+        case DRW::SWEPTSURFACE: {
+            seen[3] = true;
+            const auto* value = static_cast<const DRW_SweptSurface*>(entity);
+            fieldsMatch = fieldsMatch
+                && value->modelerFormatVersion == swept->modelerFormatVersion
+                && value->uIsolines == swept->uIsolines
+                && value->vIsolines == swept->vIsolines
+                && value->sweepEntityId == swept->sweepEntityId
+                && value->sweepData == swept->sweepData
+                && value->pathEntityId == swept->pathEntityId
+                && value->pathData == swept->pathData
+                && sameCoord(value->referenceVector, swept->referenceVector)
+                && sameMatrix(value->sweepEntityTransform, swept->sweepEntityTransform)
+                && sameMatrix(value->pathEntityTransform, swept->pathEntityTransform)
+                && sameMatrix(value->sweepEntityTransformed, swept->sweepEntityTransformed)
+                && sameMatrix(value->pathEntityTransformed, swept->pathEntityTransformed)
+                && value->draftAngle == swept->draftAngle
+                && value->draftStartDistance == swept->draftStartDistance
+                && value->draftEndDistance == swept->draftEndDistance
+                && value->twistAngle == swept->twistAngle
+                && value->scaleFactor == swept->scaleFactor
+                && value->alignAngle == swept->alignAngle
+                && value->solid == swept->solid
+                && value->sweepAlignmentFlags == swept->sweepAlignmentFlags
+                && value->pathFlags == swept->pathFlags
+                && value->alignStart == swept->alignStart
+                && value->bank == swept->bank
+                && value->basePointSet == swept->basePointSet
+                && value->sweepEntityTransformComputed
+                       == swept->sweepEntityTransformComputed
+                && value->pathEntityTransformComputed
+                       == swept->pathEntityTransformComputed;
+            break;
+        }
+        case DRW::LOFTEDSURFACE: {
+            seen[4] = true;
+            const auto* value = static_cast<const DRW_LoftedSurface*>(entity);
+            fieldsMatch = fieldsMatch
+                && value->modelerFormatVersion == lofted->modelerFormatVersion
+                && value->uIsolines == lofted->uIsolines
+                && value->vIsolines == lofted->vIsolines
+                && value->planeNormalLoftingType == lofted->planeNormalLoftingType
+                && value->startDraftAngle == lofted->startDraftAngle
+                && value->endDraftAngle == lofted->endDraftAngle
+                && value->startDraftMagnitude == lofted->startDraftMagnitude
+                && value->endDraftMagnitude == lofted->endDraftMagnitude
+                && value->arcLengthParameterization == lofted->arcLengthParameterization
+                && value->noTwist == lofted->noTwist
+                && value->alignDirection == lofted->alignDirection
+                && value->simpleSurfaces == lofted->simpleSurfaces
+                && value->closedSurfaces == lofted->closedSurfaces
+                && value->solid == lofted->solid
+                && value->ruledSurface == lofted->ruledSurface
+                && value->virtualGuide == lofted->virtualGuide
+                && value->pathCurveHandle == lofted->pathCurveHandle
+                && sameMatrix(value->loftEntityTransform, lofted->loftEntityTransform)
+                && value->dxfReferenceData.size() == lofted->dxfReferenceData.size()
+                && value->dxfReferenceData[0].code() == 90
+                && value->dxfReferenceData[0].i_val() == 2
+                && value->dxfReferenceData[1].code() == 310
+                && value->dxfReferenceData[1].binary()
+                && *value->dxfReferenceData[1].binary()
+                       == std::vector<std::uint8_t>{0x12u, 0x34u};
+            break;
+        }
+        case DRW::NURBSURFACE: {
+            seen[5] = true;
+            const auto* value = static_cast<const DRW_NurbsSurface*>(entity);
+            fieldsMatch = fieldsMatch
+                && value->modelerFormatVersion == nurbs->modelerFormatVersion
+                && value->uIsolines == nurbs->uIsolines
+                && value->vIsolines == nurbs->vIsolines
+                && value->short170 == nurbs->short170
+                && value->cvHullDisplay == nurbs->cvHullDisplay
+                && sameCoord(value->uvec1, nurbs->uvec1)
+                && sameCoord(value->vvec1, nurbs->vvec1)
+                && sameCoord(value->uvec2, nurbs->uvec2)
+                && sameCoord(value->vvec2, nurbs->vvec2);
+            break;
+        }
         default: break;
         }
     }
+    if (!keepOutput)
+        std::filesystem::remove(output, ec);
+    const bool result =
+        std::all_of(seen.begin(), seen.end(), [](bool value) { return value; })
+        && fieldsMatch;
+    if (!result)
+        std::cerr << "DXF surface semantic mismatch (" << encoding
+                  << "), seen=" << seen[0] << seen[1] << seen[2]
+                  << seen[3] << seen[4] << seen[5]
+                  << ", fields=" << fieldsMatch << '\n';
+    return result;
+}
+
+bool runDxfSurfaceRejectsMalformed(const std::filesystem::path& directory) {
+    const std::filesystem::path sourcePath =
+        directory / "libdxfrw-surface-malformed-source.dxf";
+    std::error_code ec;
+    std::filesystem::remove(sourcePath, ec);
+
+    dx_data source;
+    auto* extruded = new DRW_ExtrudedSurface();
+    extruded->handle = 0xFBD0u;
+    extruded->classId = 7;
+    extruded->dxfBinaryData = {0x12u, 0x34u};
+    extruded->solid = true;
+    source.mBlock->ent.push_back(extruded);
+    auto* lofted = new DRW_LoftedSurface();
+    lofted->handle = 0xFBD1u;
+    lofted->loftEntityTransform[3] = 0.25;
+    source.mBlock->ent.push_back(lofted);
+
+    dx_iface exporter;
+    if (!exporter.fileExport(sourcePath.string(), DRW::AC1027, false, &source,
+                             false)) {
+        std::filesystem::remove(sourcePath, ec);
+        return false;
+    }
+    std::ifstream input(sourcePath, std::ios::binary);
+    if (!input) {
+        std::filesystem::remove(sourcePath, ec);
+        return false;
+    }
+    const std::string original{std::istreambuf_iterator<char>{input},
+                               std::istreambuf_iterator<char>{}};
+    std::filesystem::remove(sourcePath, ec);
+
+    const auto writeText = [](const std::filesystem::path& path,
+                              const std::string& text) {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output.write(text.data(), static_cast<std::streamsize>(text.size()));
+        return output.good();
+    };
+    const auto rejects = [&](std::string text, const char* suffix) {
+        const std::filesystem::path malformed = directory /
+            (std::string("libdxfrw-surface-malformed-") + suffix + ".dxf");
+        std::filesystem::remove(malformed, ec);
+        if (!writeText(malformed, text)) {
+            std::filesystem::remove(malformed, ec);
+            return false;
+        }
+        dx_data imported;
+        dx_iface importer;
+        const bool rejected =
+            !importer.fileImport(malformed.string(), &imported, false);
+        std::filesystem::remove(malformed, ec);
+        return rejected;
+    };
+
+    std::string badSize = original;
+    const std::size_t extrudedAt = badSize.find("AcDbExtrudedSurface");
+    const std::string group90 = "\n 90\n";
+    const std::size_t classIdAt = extrudedAt == std::string::npos
+        ? std::string::npos : badSize.find(group90, extrudedAt);
+    const std::size_t sizeAt = classIdAt == std::string::npos
+        ? std::string::npos : badSize.find(group90, classIdAt + group90.size());
+    bool sizeChanged = false;
+    if (sizeAt != std::string::npos) {
+        const std::size_t valueStart = sizeAt + group90.size();
+        const std::size_t valueDigit = badSize.find_first_not_of(" \t", valueStart);
+        const std::size_t valueEnd = badSize.find('\n', valueStart);
+        if (valueDigit != std::string::npos && valueDigit < valueEnd
+            && badSize[valueDigit] == '2') {
+            badSize[valueDigit] = '3';
+            sizeChanged = true;
+        }
+    }
+
+    std::string badBoolean = original;
+    const std::size_t solidAt = badBoolean.find("\n290\n1\n", extrudedAt);
+    const bool booleanChanged = solidAt != std::string::npos
+        && (badBoolean[solidAt + 5] = '2') == '2';
+
+    std::string partialMatrix = original;
+    const std::size_t loftedAt = partialMatrix.find("AcDbLoftedSurface");
+    std::size_t matrixAt = loftedAt == std::string::npos
+        ? std::string::npos : partialMatrix.find("\n 40\n", loftedAt);
+    for (int index = 1; matrixAt != std::string::npos && index < 16; ++index)
+        matrixAt = partialMatrix.find("\n 40\n", matrixAt + 1);
+    bool matrixRemoved = false;
+    if (matrixAt != std::string::npos) {
+        const std::size_t valueEnd = partialMatrix.find('\n', matrixAt + 5);
+        if (valueEnd != std::string::npos) {
+            partialMatrix.erase(matrixAt, valueEnd - matrixAt + 1);
+            matrixRemoved = true;
+        }
+    }
+
+    return sizeChanged && booleanChanged && matrixRemoved
+        && rejects(std::move(badSize), "size")
+        && rejects(std::move(badBoolean), "boolean")
+        && rejects(std::move(partialMatrix), "matrix");
+}
+
+bool runDxfSplineSurfaceRejectsInvalidPayload(
+        const std::filesystem::path& directory) {
+    const auto rejects = [&](DRW_Entity* entity, const char* suffix) {
+        const std::filesystem::path output = directory /
+            (std::string("libdxfrw-invalid-3d-payload-") + suffix + ".dxf");
+        std::error_code ec;
+        std::filesystem::remove(output, ec);
+        dx_data source;
+        source.mBlock->ent.push_back(entity);
+        dx_iface exporter;
+        const bool rejected = !exporter.fileExport(output.string(),
+            DRW::AC1027, false, &source, false);
+        std::filesystem::remove(output, ec);
+        return rejected;
+    };
+
+    auto* invalidHelix = new DRW_Helix();
+    invalidHelix->degree = 2;
+    invalidHelix->knotslist = {0.0, 0.0, 0.0, 1.0, 1.0, 1.0};
+    invalidHelix->controllist = {
+        std::make_shared<DRW_Coord>(0.0, 0.0, 0.0),
+        std::make_shared<DRW_Coord>(1.0, 1.0, 1.0),
+        std::make_shared<DRW_Coord>(2.0, 2.0, 2.0)};
+    invalidHelix->constraintType = 3;
+
+    auto* partialWeights = new DRW_Spline();
+    partialWeights->degree = 2;
+    partialWeights->flags = 4;
+    partialWeights->knotslist = {0.0, 0.0, 0.0, 1.0, 1.0, 1.0};
+    partialWeights->controllist = {
+        std::make_shared<DRW_Coord>(0.0, 0.0, 0.0),
+        std::make_shared<DRW_Coord>(1.0, 1.0, 1.0),
+        std::make_shared<DRW_Coord>(2.0, 2.0, 2.0)};
+    partialWeights->weightlist = {1.0, 2.0};
+
+    auto* invalidSurface = new DRW_ExtrudedSurface();
+    invalidSurface->sweepAlignmentFlags = 4;
+
+    return rejects(invalidHelix, "helix-constraint")
+        && rejects(partialWeights, "spline-weights")
+        && rejects(invalidSurface, "surface-alignment");
+}
+
+bool runDxfSplineHelixRoundTrip(bool binary,
+                               const std::filesystem::path& directory,
+                               bool keepOutput) {
+    const std::string encoding = binary ? "binary" : "ascii";
+    const std::filesystem::path output = directory /
+        ("libdxfrw-spline-helix-" + encoding + ".dxf");
+    std::error_code ec;
     std::filesystem::remove(output, ec);
-    return std::all_of(seen.begin(), seen.end(), [](bool value) { return value; });
+
+    dx_data source;
+    auto* controlSpline = new DRW_Spline();
+    controlSpline->handle = 0xFC00u;
+    controlSpline->degree = 2;
+    controlSpline->flags = 4 | 8;
+    controlSpline->normalVec = DRW_Coord(0.0, 0.0, 1.0);
+    controlSpline->knotslist = {0.0, 0.0, 0.0, 0.5, 1.0, 1.0};
+    controlSpline->weightlist = {1.0, 0.5, 2.0};
+    controlSpline->tolknot = 0.125;
+    controlSpline->tolcontrol = 0.25;
+    controlSpline->tolfit = 0.5;
+    controlSpline->tgStart = DRW_Coord(1.0, 2.0, 3.0);
+    controlSpline->tgEnd = DRW_Coord(4.0, 5.0, 6.0);
+    controlSpline->controllist = {
+        std::make_shared<DRW_Coord>(1.0, 2.0, 3.0),
+        std::make_shared<DRW_Coord>(4.0, 5.0, 6.0),
+        std::make_shared<DRW_Coord>(7.0, 8.0, 9.0)};
+    source.mBlock->ent.push_back(controlSpline);
+
+    auto* fitSpline = new DRW_Spline();
+    fitSpline->handle = 0xFC01u;
+    fitSpline->degree = 3;
+    fitSpline->tgStart = DRW_Coord(0.25, 0.5, 0.75);
+    fitSpline->tgEnd = DRW_Coord(1.0, 1.25, 1.5);
+    fitSpline->fitlist = {
+        std::make_shared<DRW_Coord>(2.0, 3.0, 4.0),
+        std::make_shared<DRW_Coord>(5.0, 6.0, 7.0),
+        std::make_shared<DRW_Coord>(8.0, 9.0, 10.0),
+        std::make_shared<DRW_Coord>(11.0, 12.0, 13.0)};
+    source.mBlock->ent.push_back(fitSpline);
+
+    auto* helix = new DRW_Helix();
+    helix->handle = 0xFC02u;
+    helix->degree = 2;
+    helix->flags = 4;
+    helix->knotslist = {0.0, 0.0, 0.0, 1.0, 1.0, 1.0};
+    helix->weightlist = {1.0, 0.75, 1.5};
+    helix->controllist = {
+        std::make_shared<DRW_Coord>(14.0, 15.0, 16.0),
+        std::make_shared<DRW_Coord>(17.0, 18.0, 19.0),
+        std::make_shared<DRW_Coord>(20.0, 21.0, 22.0)};
+    helix->m_majorVersion = 1;
+    helix->m_maintVersion = 2;
+    helix->axisBasePt = DRW_Coord(3.0, 4.0, 5.0);
+    helix->startPt = DRW_Coord(6.0, 7.0, 8.0);
+    helix->axisVector = DRW_Coord(0.0, 0.0, 1.0);
+    helix->radius = 2.5;
+    helix->turns = 3.25;
+    helix->turnHeight = 4.5;
+    helix->handedness = true;
+    helix->constraintType = 2;
+    source.mBlock->ent.push_back(helix);
+
+    dx_iface exporter;
+    if (!exporter.fileExport(output.string(), DRW::AC1027, binary, &source,
+                             false)) {
+        std::cerr << "DXF spline/helix export failed (" << encoding << ")\n";
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+    dx_data imported;
+    dx_iface importer;
+    if (!importer.fileImport(output.string(), &imported, false)) {
+        std::cerr << "DXF spline/helix import failed (" << encoding << ")\n";
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+
+    const DRW_Spline* importedControl = nullptr;
+    const DRW_Spline* importedFit = nullptr;
+    const DRW_Helix* importedHelix = nullptr;
+    for (const DRW_Entity* entity : imported.mBlock->ent) {
+        if (entity == nullptr)
+            continue;
+        if (entity->eType == DRW::SPLINE) {
+            const auto* value = static_cast<const DRW_Spline*>(entity);
+            if (value->handle == controlSpline->handle)
+                importedControl = value;
+            else if (value->handle == fitSpline->handle)
+                importedFit = value;
+        } else if (entity->eType == DRW::HELIX) {
+            importedHelix = static_cast<const DRW_Helix*>(entity);
+        }
+    }
+    const auto sameCoord = [](const DRW_Coord& a, const DRW_Coord& b) {
+        return a.x == b.x && a.y == b.y && a.z == b.z;
+    };
+    const auto samePoints = [&sameCoord](const auto& a, const auto& b) {
+        if (a.size() != b.size())
+            return false;
+        for (std::size_t i = 0; i < a.size(); ++i) {
+            if (!a[i] || !b[i] || !sameCoord(*a[i], *b[i]))
+                return false;
+        }
+        return true;
+    };
+    const bool controlMatches = importedControl != nullptr
+        && importedControl->degree == controlSpline->degree
+        && importedControl->flags == controlSpline->flags
+        && sameCoord(importedControl->normalVec, controlSpline->normalVec)
+        && importedControl->knotslist == controlSpline->knotslist
+        && importedControl->weightlist == controlSpline->weightlist
+        && samePoints(importedControl->controllist, controlSpline->controllist)
+        && importedControl->fitlist.empty()
+        && importedControl->tolknot == controlSpline->tolknot
+        && importedControl->tolcontrol == controlSpline->tolcontrol
+        && importedControl->tolfit == controlSpline->tolfit
+        && sameCoord(importedControl->tgStart, controlSpline->tgStart)
+        && sameCoord(importedControl->tgEnd, controlSpline->tgEnd);
+    const bool fitMatches = importedFit != nullptr
+        && importedFit->degree == fitSpline->degree
+        && sameCoord(importedFit->normalVec, fitSpline->normalVec)
+        && importedFit->knotslist.empty()
+        && importedFit->weightlist.empty()
+        && importedFit->controllist.empty()
+        && samePoints(importedFit->fitlist, fitSpline->fitlist)
+        && sameCoord(importedFit->tgStart, fitSpline->tgStart)
+        && sameCoord(importedFit->tgEnd, fitSpline->tgEnd);
+    const bool helixMatches = importedHelix != nullptr
+        && importedHelix->m_majorVersion == helix->m_majorVersion
+        && importedHelix->m_maintVersion == helix->m_maintVersion
+        && importedHelix->degree == helix->degree
+        && importedHelix->flags == helix->flags
+        && importedHelix->knotslist == helix->knotslist
+        && importedHelix->weightlist == helix->weightlist
+        && samePoints(importedHelix->controllist, helix->controllist)
+        && sameCoord(importedHelix->axisBasePt, helix->axisBasePt)
+        && sameCoord(importedHelix->startPt, helix->startPt)
+        && sameCoord(importedHelix->axisVector, helix->axisVector)
+        && importedHelix->radius == helix->radius
+        && importedHelix->turns == helix->turns
+        && importedHelix->turnHeight == helix->turnHeight
+        && importedHelix->handedness == helix->handedness
+        && importedHelix->constraintType == helix->constraintType;
+    if (!keepOutput)
+        std::filesystem::remove(output, ec);
+    if (!controlMatches || !fitMatches || !helixMatches)
+        std::cerr << "DXF SPLINE/HELIX semantic mismatch (" << encoding
+                  << "): control=" << controlMatches << ", fit=" << fitMatches
+                  << ", helix=" << helixMatches << '\n';
+    if (!fitMatches && importedFit != nullptr)
+        std::cerr << "  fit spline: degree=" << importedFit->degree << "/"
+                  << fitSpline->degree << " normal=(" << importedFit->normalVec.x
+                  << "," << importedFit->normalVec.y << ","
+                  << importedFit->normalVec.z << ") expected=("
+                  << fitSpline->normalVec.x << "," << fitSpline->normalVec.y
+                  << "," << fitSpline->normalVec.z << ") points="
+                  << importedFit->fitlist.size() << "/" << fitSpline->fitlist.size()
+                  << " tangents=(" << importedFit->tgStart.x << ","
+                  << importedFit->tgStart.y << "," << importedFit->tgStart.z
+                  << ";" << importedFit->tgEnd.x << "," << importedFit->tgEnd.y
+                  << "," << importedFit->tgEnd.z << ") expected=("
+                  << fitSpline->tgStart.x << "," << fitSpline->tgStart.y << ","
+                  << fitSpline->tgStart.z << ";" << fitSpline->tgEnd.x << ","
+                  << fitSpline->tgEnd.y << "," << fitSpline->tgEnd.z << ")\n";
+    if (!controlMatches && importedControl != nullptr)
+        std::cerr << "  control spline: flags=" << importedControl->flags
+                  << "/" << controlSpline->flags
+                  << " normal=(" << importedControl->normalVec.x << ","
+                  << importedControl->normalVec.y << ","
+                  << importedControl->normalVec.z << ") knots="
+                  << importedControl->knotslist.size() << " weights="
+                  << importedControl->weightlist.size() << " controls="
+                  << importedControl->controllist.size() << " fit="
+                  << importedControl->fitlist.size() << " tolerances=("
+                  << importedControl->tolknot << ","
+                  << importedControl->tolcontrol << ","
+                  << importedControl->tolfit << ") tangents=("
+                  << importedControl->tgStart.x << ","
+                  << importedControl->tgStart.y << ","
+                  << importedControl->tgStart.z << ";"
+                  << importedControl->tgEnd.x << ","
+                  << importedControl->tgEnd.y << ","
+                  << importedControl->tgEnd.z << ")\n";
+    if (!helixMatches && importedHelix != nullptr)
+        std::cerr << "  helix: version="
+                  << importedHelix->m_majorVersion << "/"
+                  << helix->m_majorVersion << ","
+                  << importedHelix->m_maintVersion << "/"
+                  << helix->m_maintVersion << " degree="
+                  << importedHelix->degree << "/" << helix->degree
+                  << " flags=" << importedHelix->flags << "/"
+                  << helix->flags << " knots="
+                  << importedHelix->knotslist.size() << " weights="
+                  << importedHelix->weightlist.size() << " controls="
+                  << importedHelix->controllist.size() << " axisBase=("
+                  << importedHelix->axisBasePt.x << ","
+                  << importedHelix->axisBasePt.y << ","
+                  << importedHelix->axisBasePt.z << ") radius="
+                  << importedHelix->radius << "/" << helix->radius
+                  << " turns=" << importedHelix->turns << "/"
+                  << helix->turns << " height=" << importedHelix->turnHeight
+                  << "/" << helix->turnHeight << " handed="
+                  << importedHelix->handedness << "/" << helix->handedness
+                  << " constraint="
+                  << static_cast<int>(importedHelix->constraintType) << "/"
+                  << static_cast<int>(helix->constraintType) << " points="
+                  << samePoints(importedHelix->controllist, helix->controllist)
+                  << " knotsSame="
+                  << (importedHelix->knotslist == helix->knotslist)
+                  << " weightsSame="
+                  << (importedHelix->weightlist == helix->weightlist)
+                  << " start=" << importedHelix->startPt.x << ","
+                  << importedHelix->startPt.y << ","
+                  << importedHelix->startPt.z << "/" << helix->startPt.x
+                  << "," << helix->startPt.y << "," << helix->startPt.z
+                  << " axis=" << importedHelix->axisVector.x << ","
+                  << importedHelix->axisVector.y << ","
+                  << importedHelix->axisVector.z << "/" << helix->axisVector.x
+                  << "," << helix->axisVector.y << "," << helix->axisVector.z
+                  << '\n';
+    return controlMatches && fitMatches && helixMatches;
 }
 
 class DxfMeshCaptureIface final : public dx_iface {
@@ -6997,8 +7597,22 @@ int main(int argc, char** argv) {
         if (!keepOutputs)
             std::filesystem::remove(output, ec);
     }
-    expect(runDxfSurfaceRoundTrip(),
-           "local DXF SURFACE family round-trip", failures);
+    expect(runDxfSurfaceRoundTrip(false, directory, keepOutputs),
+           "local DXF ASCII SURFACE subtype semantic round-trip", failures);
+    expect(runDxfSurfaceRoundTrip(true, directory, keepOutputs),
+           "local DXF binary SURFACE subtype semantic round-trip", failures);
+    expect(runDxfSurfaceRejectsMalformed(directory),
+           "local DXF SURFACE rejects malformed size, boolean, and matrix fields",
+           failures);
+    expect(runDxfSplineSurfaceRejectsInvalidPayload(directory),
+           "local DXF HELIX/SPLINE/SURFACE writers reject invalid field values",
+           failures);
+    expect(runDxfSplineHelixRoundTrip(false, directory, keepOutputs),
+           "local DXF ASCII SPLINE fit/control and HELIX semantic round-trip",
+           failures);
+    expect(runDxfSplineHelixRoundTrip(true, directory, keepOutputs),
+           "local DXF binary SPLINE fit/control and HELIX semantic round-trip",
+           failures);
     expect(runDxfTopologyRoundTrip(false, directory, keepOutputs),
            "local DXF ASCII 3D topology and OCS/WCS round-trip", failures);
     expect(runDxfTopologyRoundTrip(true, directory, keepOutputs),

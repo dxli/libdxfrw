@@ -96,6 +96,9 @@ void dx_iface::writeEntity(DRW_Entity* e){
     case DRW::MESH:
         dxfW->writeMesh(static_cast<DRW_Mesh*>(e));
         break;
+    case DRW::HELIX:
+        dxfW->writeHelix(static_cast<DRW_Helix*>(e));
+        break;
     case DRW::SPLINE:
         dxfW->writeSpline(static_cast<DRW_Spline*>(e));
         break;

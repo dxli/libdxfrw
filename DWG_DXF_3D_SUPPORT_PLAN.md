@@ -375,6 +375,14 @@ State: `READY` for DXF inventory/field tests; DWG spline edits are
 `BLOCKED_ON_S0_SPEC_AND_SAMPLE`; modern surface DWG layout claims are
 `BLOCKED_ON_PRIMARY_LAYOUT_EVIDENCE`.
 
+DXF evidence boundary: the S6.1 slice below verifies the implemented DXF
+group-code mappings through libdxfrw's own ASCII and binary reader/writer. It
+does not qualify surface evaluation, solid modeling, DWG layouts, or
+independent semantic interoperability. Generated surface vectors were also
+tried with LibreDWG 0.14, but its reader reported unsupported surface/NURBS
+cases and rejected several mapped group codes; treat that as an unsuccessful
+oracle attempt, not positive support evidence.
+
 Dependencies: S0, S1 for DXF; local ODA/reference gate before any
 `src/intern/dwgreader*` or DWG `parseDwg(...)` edit; feature-specific primary
 layout evidence plus an authentic target witness for DWG surface qualification.
@@ -403,6 +411,50 @@ Steps:
    trace to qualify AC1027 or the AC1032 pass-through stub.
 4. Make unsupported NURBS/surface operations explicit. Retaining control
    points/knots or ACIS is not surface evaluation or tessellation.
+
+DXF mapping notes established by the S6.1 source/test pass (not a claim of
+complete surface semantics):
+
+- `PLANESURFACE` carries its four optional U/V direction vectors in groups
+  10/20/30, 11/21/31, 12/22/32, and 13/23/33; group 170 and 290 are bounded
+  to their signed-short and Boolean representations. Missing vector triplets
+  remain optional; a partially present triplet is malformed.
+- `EXTRUDEDSURFACE` distinguishes the common `AcDbModelerGeometry` carrier
+  (group-310 entity proxy graphics) from subtype data after
+  `AcDbExtrudedSurface`; subtype group 90 carries class ID and binary-data
+  length, and subtype group 310 chunks are retained byte-for-byte. Vectors,
+  transforms, flags, and Boolean fields use their DXF groups; no meaning is
+  inferred from the retained bytes.
+- `REVOLVEDSURFACE` uses subtype group 90 first for entity ID and then for
+  group-310 payload size. Keep that ID distinct from the DWG-side class ID.
+  Group 310 payload bytes are preserved but not decoded as modeler geometry.
+- `SWEPTSURFACE` group-90 pairs represent sweep ID/size and path ID/size;
+  group-310 chunks are assigned to the active payload. Legacy group 91 path-ID
+  input remains accepted when the newer group-90 pair is absent. Declared
+  sizes are exact-checked when present. This compatibility path is based on
+  official DXF tables and runtime self-roundtrips, not an independent oracle.
+- `LOFTEDSURFACE` group-290–297 values are strict Booleans; optional transform
+  arrays may be absent or complete but cannot be partial. `NURBSURFACE`
+  accepts only complete coordinate triplets for each optional vector and
+  validates finite values. These fields do not amount to NURBS evaluation.
+- DXF Boolean groups 290–299 use one-byte binary-DXF storage; 16-bit group-70
+  surface flags remain signed-short fields. Spline counts/flags are constrained
+  to the signed-short range; rational splines require one finite weight per
+  control point. HELIX's constraint type is limited to the documented 0–2
+  values. The in-tree `dx_iface` now retains HELIX callbacks on import and
+  dispatches HELIX on export.
+
+S6.1 focused negative gates: declared subtype payload length mismatch,
+non-Boolean values, partial coordinate/matrix groups, out-of-range HELIX
+constraint, incomplete rational weights, and invalid extrusion alignment are
+rejected. All DXF vectors are generated in the test at runtime; no fixture is
+added to the repository. Autodesk DXF reference tables consulted:
+[EXTRUDED SURFACE](https://help.autodesk.com/view/OARX/2024/ENU/?guid=GUID-9218F5A6-3AE4-4EA4-854E-E15E1946AE88),
+[REVOLVED SURFACE](https://help.autodesk.com/view/OARX/2024/ENU/?guid=GUID-844D8EC8-318D-4721-AFF2-82923DB10678),
+[SWEPT SURFACE](https://help.autodesk.com/view/OARX/2024/ENU/?guid=GUID-55DCEC23-9286-4A32-AAFA-E1F945B10A19),
+[LOFTED SURFACE](https://help.autodesk.com/view/OARX/2024/ENU/?guid=GUID-3D9D8A87-1E46-48AE-B482-BAD1C4D460CA),
+[NURBS SURFACE](https://help.autodesk.com/view/OARX/2024/ENU/?guid=GUID-E1F884F8-AA90-4864-A215-3182D47A9C74), and
+[HELIX](https://help.autodesk.com/view/OARX/2024/ENU/?guid=GUID-76DB3ABF-3C8C-47D1-8AFB-72942D9AE1FF).
 
 Positive gate: generated fields read back exactly and available independent
 readers agree on semantic fields/carrier placement. Negative gate:
@@ -497,7 +549,7 @@ spec/trace readiness; finally S7. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 Current implementation-item ledger (update in every corresponding slice
-commit):
+commit; 8/28 committed, 17 blocked, 2 in progress, and 1 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -513,7 +565,7 @@ commit):
 | S2.2 | COMMITTED | Modeler and surface writers emit SAT text groups 1/3 only through AC1024, reject binary/mixed/unqualified DWG carriers, and reject AC1027+ inline payloads until ACDSDATA association is known. Runtime tests pass for AC1015/1018/1021/1024, ASCII/binary DXF file encodings, surface SAT, mixed-input rejection, and unsupported SAB/frame payloads. LibreDWG 0.14 `dxf2dwg --as r2000` independently read all four generated version vectors and wrote DWG output (non-fatal unknown `HEADER.DIMLDRBLK` warnings only). Generic ACDSDATA capture/replay remains a separate opaque-section path; no entity association/support claim is added. |
 | S5.1 | COMMITTED | Generated ASCII/binary DXF vectors now verify 3DFACE WCS corners/invisible-edge flags, 3D POLYLINE WCS vertices, polyface counts/subclass typing/signed invisible-edge indices, LWPOLYLINE OCS elevation/normal/local vertices, and MESH vertices/faces/edges/creases. Fixed in-tree `dx_iface` 3DFACE/MESH output routes and MESH import callback; corrected polyface groups 71/72, subclass selection, and group-91 omission; removed the invalid `AcDbSequenceEnd` marker rejected by LibreDWG. Focused CTest passes 1/1; LibreDWG 0.14 independently converts generated ASCII and binary files to R2000 DWG (only non-fatal unknown `HEADER.DIMLDRBLK` warnings). Vectors are generated at runtime and not committed. |
 | S5.2 | COMMITTED | Generated ASCII/binary DXF vectors exercise nested INSERTs with nonzero block base points, attached ATTRIB, oblique OCS, 90-degree rotation, nonuniform/mirrored scales, and MINSERT arrays. An independent arbitrary-axis/matrix oracle checks a nested world point and an array-cell offset; malformed non-finite insertion points are rejected. Writer array counts now stop at the signed 16-bit group-code limit accepted by the reader. Focused CTest passes 1/1, and LibreDWG 0.14 independently converts the exact generated ASCII/binary files to R2000 DWG (non-fatal unknown `HEADER.DIMLDRBLK` warnings only). This validates DXF acceptance, not the transform oracle; vectors are runtime-generated and not committed. |
-| S6.1 | READY_AFTER_S1 | DXF surface/HELIX/SPLINE field inventory and focused tests. |
+| S6.1 | COMMITTED | ASCII and binary runtime round-trips cover PLANESURFACE, EXTRUDED, REVOLVED, SWEPT, LOFTED, NURBSURFACE, SPLINE, and HELIX fields. Added bounded subtype group-90 sizes/group-310 byte retention; corrected SWEPT ID/size ordering and legacy group-91 acceptance; corrected one-byte binary-DXF Boolean encoding; tightened field/count/transform/constraint validation; made `dx_iface` preserve HELIX callbacks. Focused CTest `libdxfrw_dwg_local_roundtrip` passes 1/1, including malformed lengths/booleans/partial vectors and invalid writer fields. Runtime vectors are not committed. LibreDWG 0.14 rejected/does not handle the generated surface/NURBS cases, so it provides no independent semantic qualification. DWG spline bit-width and DWG surface work remain gated on ODA/sample evidence. |
 | S3.1–S3.6 | BLOCKED_ON_S0.2 | DWG ACIS extraction/version work; do not touch `src/intern/dwgreader*` until the local authority and per-version evidence gates are met. |
 | S4.1–S4.4 | BLOCKED_ON_S3 | Opaque DWG modeler payload writing follows only verified read layouts. |
 | S7.1–S7.5 | BLOCKED_ON_READY_SLICES | Qualify only completed format/version rows, then narrow README/support claims accordingly. |
