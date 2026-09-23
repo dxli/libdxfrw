@@ -1913,12 +1913,18 @@ public:
     void addSpline(const DRW_Spline*) override {}
     void addKnot(const DRW_Entity&) override {}
     void addInsert(const DRW_Insert&) override {}
-    void addTrace(const DRW_Trace&) override {}
+    void addTrace(const DRW_Trace& data) override {
+        ++traceCount;
+        lastTrace = data;
+    }
     void add3dFace(const DRW_3Dface& data) override {
         ++faceCount;
         last3dFace = data;
     }
-    void addSolid(const DRW_Solid&) override {}
+    void addSolid(const DRW_Solid& data) override {
+        ++solidCount;
+        lastSolid = data;
+    }
     void addMText(const DRW_MText&) override {}
     void addText(const DRW_Text&) override {}
     void addModelerGeometry(const DRW_ModelerGeometry& data) override {
@@ -1968,10 +1974,14 @@ public:
     bool rawSectionHasValues {false};
     std::size_t headerCount {0};
     std::size_t faceCount {0};
+    std::size_t traceCount {0};
+    std::size_t solidCount {0};
     std::string headerComments;
     std::size_t modelerGeometryCount {0};
     std::size_t surfaceCount {0};
     DRW_3Dface last3dFace;
+    DRW_Trace lastTrace;
+    DRW_Solid lastSolid;
     DRW_ModelerGeometry lastModelerGeometry;
     DRW_Surface lastSurface;
 };
@@ -2917,6 +2927,91 @@ void testDxfThreeCornerFaceFallback(TestContext& t) {
              "DXF 3DFACE rejects a half-present fourth corner");
 }
 
+void testDxfSolidTraceCornerMapping(TestContext& t) {
+    const std::string sectionStart = "0\nSECTION\n2\nENTITIES\n";
+    const std::string sectionEnd = "0\nENDSEC\n0\nEOF\n";
+    const std::string solidPrefix =
+        sectionStart + "0\nSOLID\n5\n702\n8\n0\n"
+        "10\n1\n20\n2\n30\n3\n"
+        "11\n4\n21\n5\n31\n6\n"
+        "12\n7\n22\n8\n32\n9\n";
+
+    dxfRW threeCornerReader("");
+    FuzzInterface threeCornerCapture;
+    std::string threeCornerContent = solidPrefix + sectionEnd;
+    t.expect(threeCornerReader.readAscii(&threeCornerCapture, false,
+                                         threeCornerContent)
+                 && threeCornerCapture.solidCount == 1u
+                 && threeCornerCapture.lastSolid.thirdPoint.x == 7.0
+                 && threeCornerCapture.lastSolid.thirdPoint.y == 8.0
+                 && threeCornerCapture.lastSolid.thirdPoint.z == 9.0
+                 && threeCornerCapture.lastSolid.fourPoint.x == 7.0
+                 && threeCornerCapture.lastSolid.fourPoint.y == 8.0
+                 && threeCornerCapture.lastSolid.fourPoint.z == 9.0,
+             "DXF three-corner SOLID duplicates corner three as corner four");
+
+    const std::string fourCornerSolid = solidPrefix
+        + "13\n10\n23\n11\n33\n12\n" + sectionEnd;
+    dxfRW solidReader("");
+    FuzzInterface solidCapture;
+    std::string solidContent = fourCornerSolid;
+    t.expect(solidReader.readAscii(&solidCapture, false, solidContent)
+                 && solidCapture.solidCount == 1u
+                 && solidCapture.lastSolid.basePoint.x == 1.0
+                 && solidCapture.lastSolid.secPoint.y == 5.0
+                 && solidCapture.lastSolid.thirdPoint.z == 9.0
+                 && solidCapture.lastSolid.fourPoint.x == 10.0
+                 && solidCapture.lastSolid.fourPoint.y == 11.0
+                 && solidCapture.lastSolid.fourPoint.z == 12.0,
+             "DXF SOLID keeps numbered corner groups in their indexed fields");
+
+    const std::string traceRecord = sectionStart
+        + "0\nTRACE\n5\n703\n8\n0\n"
+        "10\n1\n20\n2\n30\n3\n"
+        "11\n4\n21\n5\n31\n6\n"
+        "12\n7\n22\n8\n32\n9\n"
+        "13\n10\n23\n11\n33\n12\n"
+        "39\n2.5\n210\n0\n220\n0\n230\n-1\n" + sectionEnd;
+    dxfRW traceRawReader("");
+    FuzzInterface traceRawCapture;
+    std::string traceRawContent = traceRecord;
+    t.expect(traceRawReader.readAscii(&traceRawCapture, false,
+                                      traceRawContent)
+                 && traceRawCapture.traceCount == 1u
+                 && traceRawCapture.lastTrace.basePoint.x == 1.0
+                 && traceRawCapture.lastTrace.basePoint.y == 2.0
+                 && traceRawCapture.lastTrace.basePoint.z == 3.0
+                 && traceRawCapture.lastTrace.fourPoint.x == 10.0
+                 && traceRawCapture.lastTrace.fourPoint.y == 11.0
+                 && traceRawCapture.lastTrace.fourPoint.z == 12.0
+                 && traceRawCapture.lastTrace.thickness == 2.5
+                 && traceRawCapture.lastTrace.extPoint.z == -1.0,
+             "DXF TRACE ext=false preserves indexed OCS corners and extrusion");
+
+    dxfRW traceWcsReader("");
+    FuzzInterface traceWcsCapture;
+    std::string traceWcsContent = traceRecord;
+    t.expect(traceWcsReader.readAscii(&traceWcsCapture, true,
+                                      traceWcsContent)
+                 && traceWcsCapture.traceCount == 1u
+                 && traceWcsCapture.lastTrace.basePoint.x == -1.0
+                 && traceWcsCapture.lastTrace.basePoint.y == 2.0
+                 && traceWcsCapture.lastTrace.basePoint.z == -3.0
+                 && traceWcsCapture.lastTrace.fourPoint.x == -10.0
+                 && traceWcsCapture.lastTrace.fourPoint.y == 11.0
+                 && traceWcsCapture.lastTrace.fourPoint.z == -12.0
+                 && traceWcsCapture.lastTrace.extPoint.z == -1.0,
+             "DXF TRACE ext=true applies the negative-normal OCS basis once");
+
+    dxfRW malformedSolidReader("");
+    FuzzInterface malformedSolidCapture;
+    std::string malformedSolidContent = solidPrefix + "13\n10\n" + sectionEnd;
+    t.expect(!malformedSolidReader.readAscii(&malformedSolidCapture, false,
+                                             malformedSolidContent)
+                 && malformedSolidCapture.solidCount == 0u,
+             "DXF SOLID rejects a half-present fourth corner before callback");
+}
+
 void testMLeaderDxfContextRoundTrip(TestContext& t) {
     DRW_MLeader source;
     source.handle = 0xA100u;
@@ -3371,6 +3466,7 @@ int main() {
     testDimensionParserStateCopyIsolation(context);
     testDxfProxyGraphicsStayOutOfAcis(context);
     testDxfThreeCornerFaceFallback(context);
+    testDxfSolidTraceCornerMapping(context);
     testMLeaderDxfContextRoundTrip(context);
     testLinetypeDashFlagIsFourBits(context);
     testProxyPayloadCodesAreScopedToTheProxySubclass(context);

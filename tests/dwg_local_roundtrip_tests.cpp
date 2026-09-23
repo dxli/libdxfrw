@@ -6636,6 +6636,24 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
     face->invisibleflag = DRW_3Dface::FirstEdge | DRW_3Dface::ThirdEdge;
     source.mBlock->ent.push_back(face);
 
+    auto* solid = new DRW_Solid();
+    solid->handle = 0xFA06u;
+    solid->basePoint = DRW_Coord(22.0, 23.0, 24.0);
+    solid->secPoint = DRW_Coord(25.0, 26.0, 27.0);
+    solid->thirdPoint = DRW_Coord(28.0, 29.0, 30.0);
+    solid->fourPoint = DRW_Coord(31.0, 32.0, 33.0);
+    source.mBlock->ent.push_back(solid);
+
+    auto* trace = new DRW_Trace();
+    trace->handle = 0xFA07u;
+    trace->basePoint = DRW_Coord(34.0, 35.0, 36.0);
+    trace->secPoint = DRW_Coord(37.0, 38.0, 39.0);
+    trace->thirdPoint = DRW_Coord(40.0, 41.0, 42.0);
+    trace->fourPoint = DRW_Coord(43.0, 44.0, 45.0);
+    trace->thickness = 2.5;
+    trace->extPoint = DRW_Coord(0.0, 0.0, -1.0);
+    source.mBlock->ent.push_back(trace);
+
     auto* poly3d = new DRW_Polyline();
     poly3d->handle = 0xFA02u;
     poly3d->flags = 8;
@@ -6710,6 +6728,8 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
         return false;
     }
     const DRW_3Dface* decodedFace = nullptr;
+    const DRW_Solid* decodedSolid = nullptr;
+    const DRW_Trace* decodedTrace = nullptr;
     const DRW_Polyline* decodedPoly3d = nullptr;
     const DRW_Polyline* decodedPolyface = nullptr;
     const DRW_LWPolyline* decodedOcsPolyline = nullptr;
@@ -6718,6 +6738,10 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
             continue;
         if (entity->eType == DRW::E3DFACE)
             decodedFace = static_cast<const DRW_3Dface*>(entity);
+        else if (entity->eType == DRW::SOLID)
+            decodedSolid = static_cast<const DRW_Solid*>(entity);
+        else if (entity->eType == DRW::DXF_TRACE)
+            decodedTrace = static_cast<const DRW_Trace*>(entity);
         else if (entity->eType == DRW::POLYLINE) {
             const auto* polyline = static_cast<const DRW_Polyline*>(entity);
             if (polyline->flags == 8)
@@ -6735,6 +6759,36 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
         && decodedFace->fourPoint.z == 12.0
         && decodedFace->invisibleflag == (DRW_3Dface::FirstEdge
                                            | DRW_3Dface::ThirdEdge);
+    const bool solidValid = decodedSolid != nullptr
+        && decodedSolid->basePoint.x == 22.0
+        && decodedSolid->basePoint.y == 23.0
+        && decodedSolid->basePoint.z == 24.0
+        && decodedSolid->secPoint.x == 25.0
+        && decodedSolid->secPoint.y == 26.0
+        && decodedSolid->secPoint.z == 27.0
+        && decodedSolid->thirdPoint.x == 28.0
+        && decodedSolid->thirdPoint.y == 29.0
+        && decodedSolid->thirdPoint.z == 30.0
+        && decodedSolid->fourPoint.x == 31.0
+        && decodedSolid->fourPoint.y == 32.0
+        && decodedSolid->fourPoint.z == 33.0;
+    const bool traceValid = decodedTrace != nullptr
+        && decodedTrace->basePoint.x == 34.0
+        && decodedTrace->basePoint.y == 35.0
+        && decodedTrace->basePoint.z == 36.0
+        && decodedTrace->secPoint.x == 37.0
+        && decodedTrace->secPoint.y == 38.0
+        && decodedTrace->secPoint.z == 39.0
+        && decodedTrace->thirdPoint.x == 40.0
+        && decodedTrace->thirdPoint.y == 41.0
+        && decodedTrace->thirdPoint.z == 42.0
+        && decodedTrace->fourPoint.x == 43.0
+        && decodedTrace->fourPoint.y == 44.0
+        && decodedTrace->fourPoint.z == 45.0
+        && decodedTrace->thickness == 2.5
+        && decodedTrace->extPoint.x == 0.0
+        && decodedTrace->extPoint.y == 0.0
+        && decodedTrace->extPoint.z == -1.0;
     const bool poly3dValid = decodedPoly3d != nullptr
         && decodedPoly3d->flags == 8 && decodedPoly3d->vertlist.size() == 3
         && decodedPoly3d->vertlist[1]->basePoint.x == 16.0
@@ -6773,12 +6827,15 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
         && importer.mesh.creases == mesh->creases;
     if (!keepOutput)
         std::filesystem::remove(output, ec);
-    if (!(faceValid && poly3dValid && polyfaceValid && ocsValid && meshValid))
+    if (!(faceValid && solidValid && traceValid && poly3dValid
+          && polyfaceValid && ocsValid && meshValid))
         std::cerr << "DXF topology semantic mismatch (" << encoding
-                  << "): face=" << faceValid << " poly3d=" << poly3dValid
+                  << "): face=" << faceValid << " solid=" << solidValid
+                  << " trace=" << traceValid << " poly3d=" << poly3dValid
                   << " polyface=" << polyfaceValid << " ocs=" << ocsValid
                   << " mesh=" << meshValid << '\n';
-    return faceValid && poly3dValid && polyfaceValid && ocsValid && meshValid;
+    return faceValid && solidValid && traceValid && poly3dValid
+        && polyfaceValid && ocsValid && meshValid;
 }
 
 DRW_Coord referenceInsertTransform(const DRW_Coord& point,

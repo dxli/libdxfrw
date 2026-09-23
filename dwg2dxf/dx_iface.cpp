@@ -81,6 +81,9 @@ void dx_iface::writeEntity(DRW_Entity* e){
     case DRW::SOLID:
         dxfW->writeSolid(static_cast<DRW_Solid*>(e));
         break;
+    case DRW::DXF_TRACE:
+        dxfW->writeTrace(static_cast<DRW_Trace*>(e));
+        break;
     case DRW::E3DFACE:
         dxfW->write3dface(static_cast<DRW_3Dface*>(e));
         break;
