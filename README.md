@@ -65,13 +65,14 @@ same `libdxfrw::libdxfrw` target.
 | DXF raw sections, opaque objects, ACIS/SAB and proxy carriers | experimental | Local preservation vectors pass; independent semantic oracle still required |
 | DWG read across the dispatched AC versions | experimental | Reader and section safety matrices pass; eligible semantic fixtures remain required |
 | DWG writing and versioned feature families | experimental | Local six-version round-trips pass; self-read is not an independent oracle |
-| Existing 2D consumer source compatibility | checked | `lc3_compat_check` verifies the LibreCAD-style callback surface; not a binary-ABI or UI guarantee |
+| Existing 2D consumer compatibility | checked narrowly | `lc3_compat_check` verifies the LibreCAD-style source callback surface, and one generated DXF vector guards legacy `ext=true` LWPOLYLINE behavior; not a binary-ABI or UI guarantee |
 | 3D consumer typed-data access | experimental DXF subset | AC1027 ASCII/binary callback probe; only the listed fields/families are covered, and no renderer or geometry kernel is included |
 | Derived rendering or CAD application policy | unsupported | Owned by the consumer, not this library |
 
 The 3D consumer lane exposes typed XYZ, OCS/elevation, topology, placement, and
-selected surface-reference data without forcing the existing 2D projection
-policy into library callbacks. This is experimental data delivery, not a
+selected surface-reference data through the opt-in `ext=false` path, without
+forcing the existing 2D projection policy into library callbacks or changing
+the existing `ext=true` mode. This is experimental data delivery, not a
 general 3D format-support, rendering, or editing claim. Existing 2D consumers
 such as LibreCAD retain their source-compatible callback contract. See the
 [3D consumer contract](docs/3D_CONSUMER_CONTRACT.md) and [3D format/version

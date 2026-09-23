@@ -30,27 +30,36 @@ actually support them. This is a focused supplement to
 Maintain two separate consumer lanes:
 
 1. **Existing 2D consumers, including LibreCAD:** preserve current source-level
-   `DRW_Interface` compatibility and callback behavior. Do not add new pure
-   virtual requirements or project coordinates in the library. A 2D adapter
-   may deliberately drop Z for display, approximate a curve, or retain source
-   fields in its own metadata, but that behavior is not a libdxfrw data-support
-   claim. S7.5 records the current LibreCAD boundary; no 3D UI migration is
-   implied.
+   `DRW_Interface` compatibility and callback behavior. In the audited
+   LibreCAD filter, both `dwgRW::read` and `dxfRW::read` are called with
+   `ext == true`; preserve that established 2D-oriented mode and the meaning
+   of existing callbacks when adding 3D data access. Do not remove or rename
+   existing virtuals, add new pure-virtual requirements, silently change
+   existing callback dispatch/field semantics, or project coordinates in the
+   library. A 2D adapter may deliberately drop Z for display, approximate a
+   curve, or retain source fields in its own metadata, but that behavior is
+   not a libdxfrw data-support claim. S7.5 records the current LibreCAD
+   boundary; no 3D UI migration is implied.
 2. **3D-capable consumers:** make typed 3D fields and topology available without
-   lossy XY projection, document each field's coordinate frame and ownership,
-   and keep opaque modeler bytes distinguishable from decoded semantics. Add a
-   headless 3D-aware consumer/test adapter that demonstrates full-coordinate
-   delivery through the public API. This enables downstream consumers to build
-   scene geometry; it does not add a renderer, tessellator, or ACIS kernel to
-   libdxfrw.
+   lossy XY projection through the opt-in `ext == false` read path, document
+   each field's coordinate frame and ownership, and keep opaque modeler bytes
+   distinguishable from decoded semantics. Add a headless 3D-aware
+   consumer/test adapter that demonstrates full-coordinate delivery through
+   the public API. New callbacks remain additive with default implementations
+   (or delegation where appropriate), so a 3D consumer can opt in without
+   forcing changes on an existing 2D adapter. This enables downstream
+   consumers to build scene geometry; it does not add a renderer, tessellator,
+   or ACIS kernel to libdxfrw.
 
 These lanes are orthogonal to format qualification: source-level data access,
 callback delivery, semantic correctness per format/version, and GUI display or
-editing are four distinct evidence levels. Existing 2D behavior must not hide
-Z or topology from the new 3D adapter, and a successful 3D adapter test must
-not be read as proof that LibreCAD displays or edits those fields. Preserve
-source compatibility; do not claim binary ABI compatibility from defaulted
-virtual callbacks.
+editing are four distinct evidence levels. Keep the existing 2D route stable
+and make typed 3D delivery additive; do not make consumers switch modes based
+on entity type or mutate shared parser data to suit either rendering policy.
+Existing 2D behavior must not hide Z or topology from the new 3D adapter, and a
+successful 3D adapter test must not be read as proof that LibreCAD displays or
+edits those fields. Preserve source compatibility; do not claim binary ABI
+compatibility from defaulted virtual callbacks.
 
 ## Findings from the current source review
 
@@ -624,8 +633,21 @@ Steps:
    callback or public-field changes. Preserve default implementations for new
    callbacks and test that no new pure virtual is required. Keep the LibreCAD
    projection/metadata behavior as an adapter concern; do not change its sibling
-   checkout as part of this library lane.
-3. **S8.3 — Headless 3D consumer probe (DXF-ready).** Extend/reuse the
+   checkout as part of this library lane. Treat this as a source-compatibility
+   check only; it does not establish binary ABI or LibreCAD runtime/UI behavior.
+3. **S8.2a — Legacy 2D read-mode regression guard.** Add a fast, runtime-
+   generated DXF contrast through a test `DRW_Interface` sink: `ext == true`
+   must retain the existing callback values for the covered planar/OCS case,
+   while `ext == false` delivers the unprojected parsed values for the 3D
+   consumer lane. Choose a small non-world extrusion/elevation vector with
+   independently calculated expected coordinates; cover ASCII and binary DXF
+   using the same semantic vector. Do not broaden this into a LibreCAD GUI test
+   or change its checkout. Extend the guard only when a code slice changes an
+   additional `applyExt` path; include DWG only with an already-authorized,
+   locally generated fixture and the relevant DWG layout evidence. This
+   distinguishes a preserved 2D behavior from the new 3D data-delivery path
+   without asserting universal 2D/3D support.
+4. **S8.3 — Headless 3D consumer probe (DXF-ready).** Extend/reuse the
    semantic-adapter/test infrastructure to copy complete typed callback data
    into a neutral scene-record model, retaining full XYZ, coordinate-frame
    tags, normals, face indices/edge flags, transforms, and opaque-carrier
@@ -634,7 +656,7 @@ Steps:
    polyface/MESH topology, spline/surface parameters, and SAT/SAB/ACDSDATA
    carrier distinctions. Assert the consumer sees native values before any
    projection; runtime-generated fixtures only.
-4. **S8.4a — Sample-backed DWG consumer comparison (AC1024 INSERT/SPLINE).**
+5. **S8.4a — Sample-backed DWG consumer comparison (AC1024 INSERT/SPLINE).**
    The locally available `tests/samples/AC1024/visualization_-_conference_room.dwg`
    completes both the libdxfrw read and LibreDWG 0.14 `dwgread -O minJSON`
    read. ODA v5.4.1 §§20.4.9/20.4.10/20.4.40 give the applicable INSERT,
@@ -644,7 +666,7 @@ Steps:
    scenario, fit tolerance, tangent vectors, and all seven XYZ fit points.
    This is a narrowly scoped AC1024 read-field witness, not write or general
    DWG support. Do not copy the local DWG into the commit.
-5. **S8.4b — Remaining DWG consumer rows (blocked per family/version).** Add
+6. **S8.4b — Remaining DWG consumer rows (blocked per family/version).** Add
    comparisons only where the parser layout is verified against ODA, a
    suitable authentic target sample is available, and an independent semantic
    witness returns comparable fields. ACIS/modeler, PLANESURFACE, MESH, and
@@ -652,7 +674,7 @@ Steps:
    PLANESURFACE fields disagree, and ODA v5.4.1 does not describe that named
    modern subtype. Never fabricate DWG records or infer Z semantics from a DXF
    analogue. Modeler rows still depend on S3/S4 evidence.
-6. **S8.5 — Consumer-facing contract and release claims.** After S8.1-S8.4a,
+7. **S8.5 — Consumer-facing contract and release claims.** After S8.1-S8.4a,
    document how a 3D-aware client consumes typed geometry and separates opaque
    modeler payloads from decoded fields, and how a 2D client can retain its
    existing projection policy. Update `docs/3D_SUPPORT_STATUS.md` only with
@@ -666,9 +688,11 @@ Steps:
 
 Positive gate: an old source consumer still compiles, and the headless 3D probe
 receives all asserted native typed values/carrier identities without an
-implicit projection. Negative gate: a default no-op, 2D preview entity, or
+implicit projection; the S8.2a `ext == true` baseline remains intact for its
+covered 2D case. Negative gate: a default no-op, 2D preview entity, or
 opaque-byte digest alone cannot satisfy the 3D consumer gate or promote a
-format/version support claim.
+format/version support claim. Neither gate claims binary ABI compatibility or
+LibreCAD display/edit support.
 
 ## Fast validation and fixture policy
 
@@ -716,7 +740,7 @@ Initial dependency/readiness order:
 | S5 | S0, S1 | DXF topology/coordinate portion ready after S1; only the DXF portion may proceed while the ODA gate is unresolved. |
 | S6 | S0, S1 | DXF surfaces/HELIX ready after S1. DWG spline edits require the local ODA chapter and authentic per-version trace; modern DWG surface edits additionally require a surface-specific primary layout and independent witness. |
 | S7 | S1-S6 | Qualify completed rows independently. A blocked DWG row does not block completed DXF evidence or docs; it remains unqualified. |
-| S8 | S1, S5-S7.5 | Start the consumer-contract matrix, 2D compile guard, and DXF headless consumer probe independently. Qualify each DWG consumer row only against its own authoritative layout, authentic sample, and independent witness; modeler rows additionally wait for S3/S4. Keep adapters outside parser semantics and do not require GUI/rendering code. |
+| S8 | S1, S5-S7.5 | Consumer-contract matrix, 2D source-compatibility guard, generated-DXF `ext=true` regression, and DXF 3D-consumer probe are committed. Qualify each DWG consumer row only against its own authoritative layout, authentic sample, and independent witness; modeler rows additionally wait for S3/S4. Keep adapters outside parser semantics and do not require GUI/rendering code. |
 
 The execution sequence is therefore readiness-first, not table-order-first:
 S0 → S1 → S2 and the DXF portions of S5/S6; then S3 → S4 after DWG
@@ -725,7 +749,7 @@ consumer probe independent of DWG. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 21/34 committed, 13 blocked, 0 in progress, and 0 ready):
+commit; 22/35 committed, 13 blocked, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -750,7 +774,8 @@ commit; 21/34 committed, 13 blocked, 0 in progress, and 0 ready):
 | S7.5 | COMMITTED | Read-only audit of `../LibreCAD/librecad/src/lib/filters/rs_filterdxfrw.cpp` at LibreCAD HEAD `c67c02a01`: `add3dFace` and `addMesh` project XY into 2D polylines; 3DFACE preserves 3D corners/edge flags in a sidecar, while MESH renders base-cage faces without a native editable 3D mesh representation. Polygon-mesh polylines record counts/flags in advanced metadata, attach source 3D vertices to a fallback XData anchor, and render XY row/column polylines; smooth polygon meshes are not rendered. `addTrace`/`addSolid` produce 2D solids and retain native TRACE/SOLID corners/thickness in sidecars only for supported axial extrusion; non-axial extrusion is skipped. `addHelix` delegates to spline approximation; LibreCAD's callback documents axis/turn metadata as not represented in its entity model and dropped on import. `addSurface` and `addModelerGeometry` retain advanced metadata and render decoded SAB wireframe edges when available; neither creates an editable parametric/native 3D surface or solid. Generic spline handling creates LibreCAD 2D spline/conic entities and may approximate higher degrees. Base `DRW_Interface` defaults for `addMesh`, `addHelix`, `addSurface`, and `addModelerGeometry` are no-ops; only source-compatible delivery is guaranteed to other adapters. This is source-level callback evidence only: no LibreCAD build/UI interaction or 3D editing behavior was tested, and no public semantic 3D claim is promoted. |
 | S8.1 | COMMITTED | Added `docs/3D_CONSUMER_CONTRACT.md` mapping each in-scope family to public callbacks/fields, WCS/OCS/subtype/opaque handling, topology/transforms, default callbacks, and conservative copy/lifetime guidance. The source audit found `ext=false` is the required path for 3D adapters; `ext=true` mutates only selected entities under the legacy 2D extrusion option. Autodesk OCS/INSERT/SPLINE/3DFACE/POINT/LINE references anchor DXF coordinate claims; DWG coordinate semantics remain per-version unqualified. No API or format-support claim changed. |
 | S8.2 | COMMITTED | `cmake --build build --target lc3_compat_check --parallel 2` passed (exit 0); its static assertion verifies an older 2D-style `DRW_Interface` implementation remains concrete without overriding later optional callbacks. This is compile-time source-compatibility evidence, not a LibreCAD UI/runtime test or binary-ABI guarantee. No sibling checkout changes. |
-| S8.3 | COMMITTED | Added the standalone-only `libdxfrw_3d_consumer_probe` CTest, using `SemanticSink` as a headless consumer. It writes runtime-generated AC1027 ASCII and binary DXF, reads with `ext=false`, and checks callback delivery of 3DFACE XYZ/edge flags, 3D POLYLINE vertex Z, MESH XYZ/face-edge topology/creases, INSERT/MINSERT placement/scales/grid/OCS normal, SPLINE knots/control XYZ, LWPOLYLINE elevation/local XY/extrusion/bulge, and LOFTED surface typed fields plus a separately identified group-310 carrier. Added the missing LWPOLYLINE typed-field serialization to the semantic adapter. CTest probe passes 1/1; `libdxfrw_dwg_local_roundtrip` passes 1/1; `lc3_compat_check` builds. This is generated-DXF callback-delivery evidence only: it does not qualify third-party interoperability, DWG versions, surface evaluation, or a renderer. No fixture files are committed. S8.4a now supplies a separate narrow DWG read comparison; all other DWG consumer rows remain unqualified. |
+| S8.2a | COMMITTED | Extended the runtime-generated AC1027 ASCII/binary DXF consumer probe to read the same LWPOLYLINE with both `ext=false` and `ext=true`. For normal `(0,1,0)`, elevation `5`, and local points `(2,3)` / `(4,5)`, the unprojected callback preserves OCS/elevation fields, while the established extrusion path emits callback XY `(-2,5)` / `(-4,5)`; 3DFACE WCS corners remain unchanged. This is a focused regression for one legacy mode, not a claim of full LibreCAD runtime compatibility. No DWG parser or LibreCAD source changed; no fixtures were committed. |
+| S8.3 | COMMITTED | Added the standalone-only `libdxfrw_3d_consumer_probe` CTest, using `SemanticSink` as a headless consumer. It writes runtime-generated AC1027 ASCII and binary DXF, reads with `ext=false`, and checks callback delivery of 3DFACE XYZ/edge flags, 3D POLYLINE vertex Z, MESH XYZ/face-edge topology/creases, INSERT/MINSERT placement/scales/grid/OCS normal, SPLINE knots/control XYZ, LWPOLYLINE elevation/local XY/extrusion/bulge, and LOFTED surface typed fields plus a separately identified group-310 carrier. Added the missing LWPOLYLINE typed-field serialization to the semantic adapter. CTest probe passes 1/1; `libdxfrw_dwg_local_roundtrip` passes 1/1; `lc3_compat_check` builds. S8.2a additionally checks the same LWPOLYLINE legacy `ext=true` result in both DXF encodings. This is generated-DXF callback-delivery evidence only: it does not qualify third-party interoperability, DWG versions, surface evaluation, or a renderer. No fixture files are committed. S8.4a supplies a separate narrow DWG read comparison; all other DWG consumer rows remain unqualified. |
 | S8.4a | COMMITTED | Added `tools/compare_dwg_3d_consumer_oracle.py`, an optional read-only comparator keyed by entity handle. Against the locally available AC1024 conference-room sample, libdxfrw's semantic adapter and LibreDWG `dwgread 0.14` match all six INSERTs for insertion XYZ, scale, rotation, and extrusion, plus both scenario-2 SPLINEs for degree, scenario, fit tolerance, start/end tangent, and all seven XYZ fit points. The libdxfrw read and `dwgread -O minJSON` both complete successfully. ODA v5.4.1 §§20.4.9, 20.4.10, and 20.4.40 anchor the relevant layouts. This narrows only experimental AC1024 read-field evidence for those fields; it adds no write, other-version, modeler, or general 3D claim. PLANESURFACE values disagree between the readers (libdxfrw emits zero typed fields while LibreDWG reports nonzero modeler fields) and have no named layout in the reviewed ODA text, so that family remains unqualified. The local DWG is not staged or committed. |
 | S8.4b | BLOCKED_PER_FAMILY_VERSION | Broaden DWG consumer comparisons only when the exact reader layout, authentic target sample, and independent semantic oracle are all available. Modeler rows still depend on S3/S4; modern surface fields currently disagree and remain unqualified. Do not infer unsupported fields from neighboring families. |
 | S8.5 | COMMITTED | Updated README, `docs/3D_CONSUMER_CONTRACT.md`, and `docs/3D_SUPPORT_STATUS.md` to separate the existing 2D source-compatibility lane, 3D typed-data callback access, format/version semantic qualification, and consumer display/edit behavior. Documented the exact AC1027 generated ASCII/binary consumer-probe families and its self-generated evidence ceiling; the later S8.4a row separately documents the narrow AC1024 INSERT/SPLINE read comparison. Other DWG rows remain unqualified. No general 3D, renderer, evaluator, editing, or binary-ABI claim is added. |

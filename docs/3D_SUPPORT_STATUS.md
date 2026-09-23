@@ -40,7 +40,10 @@ Existing 2D consumers retain the source-compatible `DRW_Interface` callback
 surface: [`lc3_compat_check`](../tests/lc3_compat_check.cpp) compiles a
 LibreCAD-style implementation without requiring overrides for optional newer
 callbacks. This does not promise binary ABI compatibility or validate
-LibreCAD's UI behavior. LibreCAD's current filter remains a 2D adapter: its
+LibreCAD's UI behavior. Its current filter reads DXF and DWG with `ext == true`;
+the generated-DXF consumer probe also guards one legacy LWPOLYLINE extrusion
+case while separately checking the `ext == false` typed-data path. LibreCAD's
+current filter remains a 2D adapter: its
 source audit found projection/preview paths for 3DFACE, MESH, polygon meshes,
 and HELIX, with some native values retained only in sidecar/advanced metadata.
 Those consumer choices do not constrain the library's typed data callbacks.
@@ -51,7 +54,9 @@ implicit global XY projection. The fast
 AC1027 ASCII and binary DXF, reads with `ext == false`, and checks callback
 delivery for 3DFACE, 3D POLYLINE, MESH, INSERT/MINSERT, SPLINE, OCS/elevation
 LWPOLYLINE, and selected LOFTED-surface fields plus a separately identified
-group-310 carrier. This is a producer-self-generated callback-path check; it
+group-310 carrier. The same vectors are also read with `ext == true` for a
+single legacy LWPOLYLINE coordinate regression; this is not a LibreCAD UI test.
+This is a producer-self-generated callback-path check; it
 does not prove interoperability, independent semantics, full family coverage,
 display/edit support, or any DWG version. Run just this probe with
 `ctest --test-dir build -R '^libdxfrw_3d_consumer_probe$' --output-on-failure`.

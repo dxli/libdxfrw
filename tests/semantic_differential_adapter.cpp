@@ -2297,6 +2297,36 @@ bool run3DConsumerProbe(bool binary) {
     if (!reader.read(&consumer, false) || !consumer.diagnostics.empty())
         return false;
 
+    // Preserve the established 2D extrusion option independently of the
+    // unprojected callback values checked below. For this LWPOLYLINE,
+    // extrusion (0,1,0) gives arbitrary-axis Ax=(-1,0,0), Ay=(0,0,1);
+    // local (x,y,elevation) therefore maps to (-x,elevation,y):
+    // (2,3,5) -> (-2,5,3) and (4,5,5) -> (-4,5,5).
+    SemanticSink legacyConsumer("dxfRW", "read");
+    dxfRW legacyReader(outputName.c_str());
+    if (!legacyReader.read(&legacyConsumer, true)
+        || !legacyConsumer.diagnostics.empty())
+        return false;
+    const auto expectLegacyField = [&](const std::string& name,
+                                       const std::string& expected) {
+        const Field* field = findEntityField(legacyConsumer, "LWPOLYLINE", name);
+        if (field != nullptr && field->value == expected)
+            return true;
+        std::cerr << "2D extrusion probe mismatch for " << name << ": expected "
+                  << expected << ", got "
+                  << (field == nullptr ? "<missing>" : field->value) << '\n';
+        return false;
+    };
+    if (!expectLegacyField("vertex.0.x", "-2")
+        || !expectLegacyField("vertex.0.y", "5")
+        || !expectLegacyField("vertex.1.x", "-4")
+        || !expectLegacyField("vertex.1.y", "5")
+        || !expectLegacyField("elevation", "5")
+        || !expectLegacyField("extrusion", "{\"x\":0,\"y\":1,\"z\":0}")
+        || !fieldEquals(legacyConsumer, "3DFACE", "corner.3",
+                        "{\"x\":10,\"y\":11,\"z\":12}"))
+        return false;
+
     if (!fieldEquals(consumer, "3DFACE", "corner.3",
                      "{\"x\":10,\"y\":11,\"z\":12}")
         || !fieldEquals(consumer, "3DFACE", "invisibleEdgeFlags", "5")

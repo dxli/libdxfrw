@@ -22,7 +22,10 @@ contract. DWG has the same opt-in behavior for a selected set of entities.
 Keep the parsed format-coordinate tuples, elevation, and extrusion direction, then
 apply the entity-specific DXF/DWG coordinate rules in the consuming adapter.
 `ext == true` remains available for existing adapters with their current 2D
-policy; do not change its behavior as a side effect of 3D-consumer work.
+policy; do not change its behavior as a side effect of 3D-consumer work. The
+audited LibreCAD filter currently calls both readers with `ext == true`; the
+3D lane is an opt-in `ext == false` path, not an automatic mode switch based on
+entity type.
 
 Callbacks expose borrowed objects as references or pointers. The interface does
 not specify that callback object addresses remain valid after the callback
@@ -76,7 +79,11 @@ binary DXF files, then reads them into a headless `DRW_Interface` sink with
 3D-POLYLINE vertices, MESH vertices and face/edge topology, INSERT/MINSERT
 placement fields, SPLINE control points and knots, LWPOLYLINE OCS/elevation
 values, and typed LOFTED-surface fields alongside a separately identified
-group-310 carrier. Run only this fast probe with:
+group-310 carrier. It also reads the same generated DXF with `ext == true` and
+checks the established LWPOLYLINE extrusion result for normal `(0,1,0)` and
+elevation `5`: local points `(2,3)` and `(4,5)` arrive as `(-2,5)` and `(-4,5)`;
+the WCS 3DFACE corners remain unchanged. This one-vector regression does not
+claim complete LibreCAD runtime compatibility. Run only this fast probe with:
 
 ```sh
 ctest --test-dir build -R '^libdxfrw_3d_consumer_probe$' --output-on-failure
