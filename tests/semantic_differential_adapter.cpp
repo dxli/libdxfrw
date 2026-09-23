@@ -689,6 +689,10 @@ public:
         fields.push_back(handleField("historyHandle", d.m_historyHandle));
         fields.push_back(boolField("hasRawBytes", !d.m_rawBytes.empty()));
         fields.push_back(uintField("rawByteCount", d.m_rawBytes.size()));
+        fields.push_back(boolField("hasDwgInlineAcisPayload",
+                                   !d.m_dwgAcisPayload.empty()));
+        fields.push_back(uintField("dwgInlineAcisByteCount",
+                                   d.m_dwgAcisPayload.size()));
         appendPayloadChunkFields(fields, "dxfPayloadChunk",
                                  d.m_dxfPayloadChunks, d.m_rawBytes);
         appendDataStorageFields(fields, d);
@@ -709,6 +713,7 @@ public:
             fields.push_back(intField(prefix + ".kind", static_cast<int>(range.m_kind)));
             fields.push_back(intField(prefix + ".section", static_cast<int>(range.m_section)));
             fields.push_back(uintField(prefix + ".offset", range.m_offset));
+            fields.push_back(uintField(prefix + ".bitOffset", range.m_bitOffset));
             fields.push_back(uintField(prefix + ".length", range.m_length));
             fields.push_back(uintField(prefix + ".declaredByteSize", range.m_declaredByteSize));
             fields.push_back(intField(prefix + ".consistency", static_cast<int>(range.m_consistency)));
@@ -725,6 +730,14 @@ public:
                     : "unclassifiedModelerBytes";
             attachCarrierToRecord(recordIndex, carrierName,
                                   d.m_rawBytes.data(), d.m_rawBytes.size());
+        }
+        if (!d.m_dwgAcisPayload.empty()) {
+            attachCarrierToRecord(recordIndex,
+                                  facade_ == "dwgRW" && direction_ == "read"
+                                      ? "dwgModelerInlineAcisPayload"
+                                      : "unclassifiedModelerInlineAcisPayload",
+                                  d.m_dwgAcisPayload.data(),
+                                  d.m_dwgAcisPayload.size());
         }
     }
     SEMANTIC_OPAQUE_VALUE(addLight, DRW_Light, "LIGHT")
@@ -2489,6 +2502,7 @@ int selfTest() {
 
     DRW_ModelerGeometry modeler(DRW::E3DSOLID);
     modeler.m_rawBytes = {0x41, 0x42, 0x43};
+    modeler.m_dwgAcisPayload = {0x46, 0x47, 0x48};
     modeler.hasDataStorageRecord = true;
     modeler.dataStorageHandle = 0x123456789u;
     modeler.dataStorageHandleKey = "123456789";
@@ -2496,6 +2510,7 @@ int selfTest() {
     SemanticSink modelerSink("dwgRW", "read");
     modelerSink.addModelerGeometry(modeler);
     bool foundFrameCarrier = false;
+    bool foundInlineAcisCarrier = false;
     bool foundDataStorageCarrier = false;
     for (const CarrierRow& carrier : modelerSink.carriers) {
         if (carrier.source.find("dwgModelerObjectFrameBody-unclassified-payload")
@@ -2503,6 +2518,11 @@ int selfTest() {
             foundFrameCarrier = carrier.size == modeler.m_rawBytes.size()
                 && carrier.digest == sha256(modeler.m_rawBytes.data(),
                                              modeler.m_rawBytes.size());
+        } else if (carrier.source.find("dwgModelerInlineAcisPayload")
+                   != std::string::npos) {
+            foundInlineAcisCarrier = carrier.size == modeler.m_dwgAcisPayload.size()
+                && carrier.digest == sha256(modeler.m_dwgAcisPayload.data(),
+                                             modeler.m_dwgAcisPayload.size());
         } else if (carrier.source.find("dwgLinkedDataStoragePayload")
                    != std::string::npos) {
             foundDataStorageCarrier = carrier.size == modeler.dataStorageData.size()
@@ -2512,10 +2532,12 @@ int selfTest() {
     }
     if (fieldValue(modelerSink, "rawByteCarrierKind")
             != jsonString("dwgObjectFrameBody-unclassified-payload")
+        || fieldValue(modelerSink, "dwgInlineAcisByteCount") != "3"
         || fieldValue(modelerSink, "dataStorageByteCount") != "2"
         || fieldValue(modelerSink, "dataStorageHandle") != "4886718345"
-        || modelerSink.carriers.size() != 2
-        || !foundFrameCarrier || !foundDataStorageCarrier)
+        || modelerSink.carriers.size() != 3
+        || !foundFrameCarrier || !foundInlineAcisCarrier
+        || !foundDataStorageCarrier)
         return 1;
 
     SemanticSink failureSink;

@@ -347,10 +347,10 @@ bool copyDwgBitRange(const dwgBuffer& source, std::uint64_t startBit,
     if (endBit > sourceEnd)
         return false;
     const std::uint64_t startByte = startBit >> 3;
-    const std::uint64_t endByte = (endBit >> 3) + ((endBit & 7u) != 0);
-    const std::uint64_t byteCount = endByte - startByte;
-    if (endByte < startByte
-        || byteCount > std::numeric_limits<std::size_t>::max()
+    const std::uint64_t bitCount = endBit - startBit;
+    const std::uint64_t byteCount = (bitCount >> 3)
+        + ((bitCount & 7u) != 0 ? 1u : 0u);
+    if (byteCount > std::numeric_limits<std::size_t>::max()
         || byteCount > static_cast<std::uint64_t>(std::numeric_limits<int>::max())
         || !DRW::resize(data, static_cast<int>(byteCount)))
         return false;
@@ -364,6 +364,94 @@ bool copyDwgBitRange(const dwgBuffer& source, std::uint64_t startBit,
     }
     return data.empty()
         || (copy.getBytes(data.data(), data.size()) && copy.isGood());
+}
+
+// Find an exact byte sequence in a DWG bit stream without materializing the
+// containing object body. Candidate positions stay byte-aligned relative to
+// startBit, as raw ACIS file bytes are read from the current bit cursor.
+bool findUniqueDwgBytePattern(const dwgBuffer& source,
+                              std::uint64_t startBit,
+                              std::uint64_t endBit,
+                              const std::uint8_t* pattern,
+                              std::size_t patternSize,
+                              std::size_t& matchCount,
+                              std::uint64_t& matchStartBit) {
+    matchCount = 0;
+    matchStartBit = 0;
+    if (pattern == nullptr || patternSize == 0 || startBit > endBit
+        || patternSize > std::numeric_limits<std::uint64_t>::max() / 8u
+        || patternSize > 64)
+        return false;
+    const std::uint64_t patternBits =
+        static_cast<std::uint64_t>(patternSize) * 8u;
+    const std::uint64_t searchableBytes = (endBit - startBit) / 8u;
+    if (patternBits > endBit - startBit || searchableBytes < patternSize)
+        return true;
+
+    dwgBuffer cursor = source.forkIndependent();
+    if (!cursor.setPosition(startBit >> 3))
+        return false;
+    cursor.setBitPos(static_cast<std::uint8_t>(startBit & 7u));
+    if (!cursor.isGood())
+        return false;
+
+    // KMP keeps the scan linear in the body size and avoids a seek/fork for
+    // each candidate byte. DWG object frames can carry multi-megabyte SABs.
+    std::array<std::size_t, 64> prefix{};
+    for (std::size_t i = 1, matched = 0; i < patternSize; ++i) {
+        while (matched != 0 && pattern[i] != pattern[matched])
+            matched = prefix[matched - 1];
+        if (pattern[i] == pattern[matched])
+            ++matched;
+        prefix[i] = matched;
+    }
+    std::size_t matched = 0;
+    for (std::uint64_t byteIndex = 0; byteIndex < searchableBytes;
+         ++byteIndex) {
+        const std::uint8_t byte = cursor.getRawChar8();
+        if (!cursor.isGood())
+            return false;
+        while (matched != 0 && byte != pattern[matched])
+            matched = prefix[matched - 1];
+        if (byte == pattern[matched])
+            ++matched;
+        if (matched == patternSize) {
+            if (matchCount == std::numeric_limits<std::size_t>::max())
+                return false;
+            ++matchCount;
+            matchStartBit = startBit
+                + (byteIndex + 1u - patternSize) * 8u;
+            if (matchCount > 1)
+                return true;
+            matched = prefix[matched - 1];
+        }
+    }
+    return true;
+}
+
+bool matchesDwgBytePatternAt(const dwgBuffer& source,
+                             std::uint64_t startBit,
+                             std::uint64_t endBit,
+                             const std::uint8_t* pattern,
+                             std::size_t patternSize) {
+    if (pattern == nullptr || patternSize == 0
+        || patternSize > std::numeric_limits<std::uint64_t>::max() / 8u)
+        return false;
+    const std::uint64_t patternBits =
+        static_cast<std::uint64_t>(patternSize) * 8u;
+    if (startBit > endBit || patternBits > endBit - startBit)
+        return false;
+    dwgBuffer probe = source.forkIndependent();
+    if (!probe.setPosition(startBit >> 3))
+        return false;
+    probe.setBitPos(static_cast<std::uint8_t>(startBit & 7u));
+    if (!probe.isGood())
+        return false;
+    for (std::size_t i = 0; i < patternSize; ++i) {
+        if (probe.getRawChar8() != pattern[i] || !probe.isGood())
+            return false;
+    }
+    return true;
 }
 
 bool readBoundedBitShort(dwgBuffer& buffer, std::uint64_t endBit,
@@ -6413,6 +6501,7 @@ void DRW_ModelerGeometry::resetDwgState() {
     m_hasWireframe = false;
     m_historyHandle = 0;
     m_rawBytes.clear();
+    m_dwgAcisPayload.clear();
     m_dxfPayloadChunks.clear();
     m_payloadRanges.clear();
     m_wireframe = DRW_AcisBrep();
@@ -6467,6 +6556,70 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     if (!probe.isGood() || (stringStream != nullptr && !stringStream->isGood()))
         return fail();
 
+    // ODA v5.4.1 §20.4.41: modeler version 2 is followed by an ACIS file
+    // without a length. R2010's inline SAB form has a tagged compound
+    // End-of-ACIS-data marker. Extract only when that complete marker is
+    // unique inside the bounded entity body; leave every other version and
+    // incomplete/ambiguous carrier opaque. In particular, never treat the
+    // rest of a DWG frame as ACIS data.
+    const std::uint64_t modelerPayloadStartBit = currentDwgBit(&probe);
+    std::vector<std::uint8_t> parsedInlineAcisPayload;
+    DRW_ModelerPayloadRange parsedInlineAcisRange;
+    bool hasParsedInlineAcisRange = false;
+    static constexpr std::uint8_t sabAcisEndMarker[] = {
+        0x0E, 0x03, 'E', 'n', 'd', 0x0E, 0x02, 'o', 'f',
+        0x0E, 0x04, 'A', 'C', 'I', 'S', 0x0D, 0x04,
+        'd', 'a', 't', 'a'};
+    static constexpr std::uint8_t sabHeaderSignature[] = {
+        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e'};
+    try {
+        if (v == DRW::AC1024 && parsedHasModelerData
+            && parsedModelerVersion == 2
+            && matchesDwgBytePatternAt(*sourceBuf, modelerPayloadStartBit,
+                                       bodyEndBit, sabHeaderSignature,
+                                       sizeof(sabHeaderSignature))) {
+            std::size_t markerCount = 0;
+            std::uint64_t markerStartBit = 0;
+            if (findUniqueDwgBytePattern(*sourceBuf, modelerPayloadStartBit,
+                                         bodyEndBit, sabAcisEndMarker,
+                                         sizeof(sabAcisEndMarker), markerCount,
+                                         markerStartBit)
+                && markerCount == 1) {
+                const std::uint64_t markerBits =
+                    static_cast<std::uint64_t>(sizeof(sabAcisEndMarker)) * 8u;
+                const std::uint64_t payloadEndBit = markerStartBit + markerBits;
+                if (payloadEndBit >= markerStartBit
+                    && copyDwgBitRange(*sourceBuf, modelerPayloadStartBit,
+                                       payloadEndBit,
+                                       parsedInlineAcisPayload)
+                    && !parsedInlineAcisPayload.empty()) {
+                    parsedInlineAcisRange.m_kind =
+                        DRW_ModelerPayloadRange::Kind::Sab;
+                    parsedInlineAcisRange.m_section =
+                        DRW_ModelerPayloadRange::Section::Body;
+                    parsedInlineAcisRange.m_offset = static_cast<std::size_t>(
+                        modelerPayloadStartBit >> 3);
+                    parsedInlineAcisRange.m_bitOffset =
+                        static_cast<std::uint8_t>(modelerPayloadStartBit & 7u);
+                    parsedInlineAcisRange.m_length =
+                        parsedInlineAcisPayload.size();
+                    parsedInlineAcisRange.m_consistency =
+                        DRW_ModelerPayloadRange::Consistency::Exact;
+                    parsedInlineAcisRange.m_confidence =
+                        DRW_ModelerPayloadRange::Confidence::Marker;
+                    parsedInlineAcisRange.m_markerText =
+                        "End-of-ACIS-data (tagged SAB marker)";
+                    hasParsedInlineAcisRange = true;
+                }
+            }
+        }
+    } catch (...) {
+        // Exact extraction is optional: an allocation failure must not turn
+        // an otherwise valid typed entity into a failed DWG read.
+        parsedInlineAcisPayload.clear();
+        hasParsedInlineAcisRange = false;
+    }
+
     std::uint64_t handleEndBit = 0;
     if (!dwgHandleStreamEndBit(*sourceBuf, v, objSize, bs, handleEndBit))
         return fail();
@@ -6505,6 +6658,15 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     m_modelerDataUnknownBit = parsedUnknownBit;
     m_modelerVersion = parsedModelerVersion;
     m_historyHandle = parsedHistoryHandle;
+    if (hasParsedInlineAcisRange) {
+        try {
+            m_payloadRanges.push_back(std::move(parsedInlineAcisRange));
+            m_dwgAcisPayload = std::move(parsedInlineAcisPayload);
+        } catch (...) {
+            m_payloadRanges.clear();
+            m_dwgAcisPayload.clear();
+        }
+    }
     *sourceBuf = handleProbe;
     return true;
 }

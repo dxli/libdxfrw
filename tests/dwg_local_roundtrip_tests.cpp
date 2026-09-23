@@ -5148,7 +5148,20 @@ bool runDxfModelerRejectsDwgFramePayload() {
     const bool exportOk = exporter.fileExport(output.string(), DRW::AC1024,
                                                false, &source, false);
     std::filesystem::remove(output, ec);
-    return !exportOk;
+    if (exportOk)
+        return false;
+
+    dx_data extractedSource;
+    auto* extracted = new DRW_ModelerGeometry(DRW::E3DSOLID);
+    extracted->handle = 0xFC03u;
+    extracted->m_dwgAcisPayload = {
+        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e'};
+    extractedSource.mBlock->ent.push_back(extracted);
+    dx_iface extractedExporter;
+    const bool extractedExportOk = extractedExporter.fileExport(
+        output.string(), DRW::AC1024, false, &extractedSource, false);
+    std::filesystem::remove(output, ec);
+    return !extractedExportOk;
 }
 
 bool runDxfSurfaceSatCarrierRoundTrip() {
@@ -5336,6 +5349,37 @@ bool buildModelerVersionFrame(bool empty, std::uint16_t modelerVersion,
     return patchModelerObjectSize(bytes, sizeFieldBit, objectSizeBits);
 }
 
+bool buildModelerInlineSabFrame(const std::vector<std::uint8_t>& payload,
+                                std::vector<std::uint8_t>& bytes,
+                                std::uint32_t& handleBitSize) {
+    constexpr DRW::Version version = DRW::AC1024;
+    constexpr std::uint16_t modelerObjectType = 38; // §20.4.41 3DSOLID
+    LocalModelerGeometry source(DRW::E3DSOLID);
+    source.setDwgType(modelerObjectType);
+    source.handle = 0x120u;
+
+    dwgBufferW body;
+    dwgBufferW handles;
+    if (!source.encodeDwgCommon(version, &body))
+        return false;
+    body.putBit(0); // non-empty ACIS body
+    body.putBit(0); // modeler data unknown bit
+    body.putBitShort(2);
+    body.putBytes(payload.data(), payload.size());
+    body.putBit(0); // empty R2007+ string stream
+    body.alignToByte();
+    if (!body.isGood() || !source.encodeDwgEntHandle(version, &body, &handles)
+        || !body.isGood() || !handles.isGood()
+        || body.size() > std::numeric_limits<std::uint32_t>::max() / 8u
+        || handles.size() > std::numeric_limits<std::uint32_t>::max() / 8u)
+        return false;
+
+    handleBitSize = static_cast<std::uint32_t>(handles.size() * 8u);
+    bytes = body.data();
+    bytes.insert(bytes.end(), handles.data().begin(), handles.data().end());
+    return true;
+}
+
 bool parseModelerVersionFrame(bool empty, std::uint16_t modelerVersion,
                               bool expectedSuccess) {
     std::vector<std::uint8_t> bytes;
@@ -5349,20 +5393,102 @@ bool parseModelerVersionFrame(bool empty, std::uint16_t modelerVersion,
         return false;
     if (!expectedSuccess) {
         return !buffer.isGood() && parsed.handle == DRW::NoHandle
-            && parsed.m_modelerVersion == 0 && parsed.m_rawBytes.empty();
+            && parsed.m_modelerVersion == 0 && parsed.m_rawBytes.empty()
+            && parsed.m_dwgAcisPayload.empty()
+            && parsed.m_payloadRanges.empty();
     }
     if (parsed.m_isEmpty != empty || parsed.m_hasModelerData == empty)
         return false;
     return parsed.m_modelerVersion == (empty ? 0 : modelerVersion)
-        && parsed.handle == 0x120u;
+        && parsed.handle == 0x120u && parsed.m_dwgAcisPayload.empty()
+        && parsed.m_payloadRanges.empty();
 }
 
 bool runModelerDwgVersionValidation() {
-    return parseModelerVersionFrame(true, 0, true)
+    if (!(parseModelerVersionFrame(true, 0, true)
         && parseModelerVersionFrame(false, 1, true)
         && parseModelerVersionFrame(false, 2, true)
         && parseModelerVersionFrame(false, 0, false)
-        && parseModelerVersionFrame(false, 3, false);
+        && parseModelerVersionFrame(false, 3, false)))
+        return false;
+
+    static constexpr std::uint8_t marker[] = {
+        0x0E, 0x03, 'E', 'n', 'd', 0x0E, 0x02, 'o', 'f',
+        0x0E, 0x04, 'A', 'C', 'I', 'S', 0x0D, 0x04,
+        'd', 'a', 't', 'a'};
+    std::vector<std::uint8_t> sab = {
+        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
+        0xFC, 0x53, 0x00, 0x00};
+    sab.insert(sab.end(), std::begin(marker), std::end(marker));
+    const std::vector<std::uint8_t> exactSab = sab;
+    sab.insert(sab.end(), {0xA5, 0x5A}); // wireframe/body bytes after ACIS
+
+    std::vector<std::uint8_t> frame;
+    std::uint32_t handleBits = 0;
+    if (!buildModelerInlineSabFrame(sab, frame, handleBits)) {
+        std::cerr << "modeler AC1024 frame builder failed\n";
+        return false;
+    }
+    dwgBuffer buffer(frame.data(), frame.size());
+    LocalModelerGeometry parsed(DRW::E3DSOLID);
+    const bool parseSucceeded = parsed.parseDwg(DRW::AC1024, &buffer, handleBits);
+    if (!parseSucceeded
+        || parsed.m_modelerVersion != 2 || parsed.handle != 0x120u
+        || parsed.m_dwgAcisPayload != exactSab
+        || parsed.m_payloadRanges.size() != 1
+        || parsed.m_payloadRanges.front().m_kind
+               != DRW_ModelerPayloadRange::Kind::Sab
+        || parsed.m_payloadRanges.front().m_consistency
+               != DRW_ModelerPayloadRange::Consistency::Exact
+        || parsed.m_payloadRanges.front().m_confidence
+               != DRW_ModelerPayloadRange::Confidence::Marker
+        || parsed.m_payloadRanges.front().m_length != exactSab.size()
+        || parsed.m_payloadRanges.front().m_bitOffset > 7) {
+        std::cerr << "modeler AC1024 parse/check failed: parse=" << parseSucceeded
+                  << " version=" << parsed.m_modelerVersion
+                  << " handle=" << parsed.handle
+                  << " payload=" << parsed.m_dwgAcisPayload.size()
+                  << " expected=" << exactSab.size()
+                  << " ranges=" << parsed.m_payloadRanges.size()
+                  << " good=" << buffer.isGood() << '\n';
+        return false;
+    }
+
+    // A duplicate terminator makes the boundary ambiguous; absence/truncation
+    // also remains a successful typed read with no promoted payload.
+    std::vector<std::uint8_t> ambiguous = exactSab;
+    ambiguous.insert(ambiguous.end(), std::begin(marker), std::end(marker));
+    const auto rejectsExtraction = [](const std::vector<std::uint8_t>& body) {
+        std::vector<std::uint8_t> frameBytes;
+        std::uint32_t frameHandleBits = 0;
+        if (!buildModelerInlineSabFrame(body, frameBytes, frameHandleBits)) {
+            std::cerr << "modeler negative frame builder failed\n";
+            return false;
+        }
+        dwgBuffer localBuffer(frameBytes.data(), frameBytes.size());
+        LocalModelerGeometry local(DRW::E3DSOLID);
+        const bool localParse = local.parseDwg(DRW::AC1024, &localBuffer,
+                                               frameHandleBits);
+        if (!localParse
+            || !local.m_dwgAcisPayload.empty()
+            || !local.m_payloadRanges.empty()) {
+            std::cerr << "modeler negative parse failed: parse=" << localParse
+                      << " payload=" << local.m_dwgAcisPayload.size()
+                      << " ranges=" << local.m_payloadRanges.size()
+                      << '\n';
+            return false;
+        }
+        // This simulates the dispatcher's opaque frame carrier. It must not be
+        // sent to the SAB decoder when no exact inline carrier was extracted.
+        local.m_rawBytes = frameBytes;
+        const bool decodeRejected = !local.decodeWireframe()
+            && local.m_wireframe.empty();
+        if (!decodeRejected)
+            std::cerr << "modeler frame fallback was decoded\n";
+        return decodeRejected;
+    };
+    return rejectsExtraction(ambiguous)
+        && rejectsExtraction({0xFC, 0x53, 0x00, 0x00, 0xA5, 0x5A});
 }
 
 dwgHandle localRawObjectHandle(std::uint8_t code, std::uint32_t ref) {

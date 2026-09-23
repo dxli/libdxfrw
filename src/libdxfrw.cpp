@@ -7053,6 +7053,7 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     const bool hasUnqualifiedDwgPayload = ent->m_bodyBitSize != 0
         || ent->m_objectSize != 0 || ent->m_hasModelerData
         || ent->m_modelerDataUnknownBit || !ent->m_payloadRanges.empty()
+        || !ent->m_dwgAcisPayload.empty()
         || ent->hasDataStorageBinaryData() || ent->hasDataStorageRecord
         || !ent->dataStorageData.empty();
     if (hasUnqualifiedDwgPayload

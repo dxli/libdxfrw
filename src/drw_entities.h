@@ -809,6 +809,8 @@ struct DRW_ModelerPayloadRange {
     Kind m_kind = Kind::UnknownTail;
     Section m_section = Section::Unknown;
     size_t m_offset = 0;
+    //! Source bit offset within m_offset's byte (0..7), for DWG bit streams.
+    std::uint8_t m_bitOffset = 0;
     size_t m_length = 0;
     size_t m_declaredByteSize = 0;
     Consistency m_consistency = Consistency::Unknown;
@@ -852,20 +854,33 @@ public:
     bool m_hasWireframe = false;
     std::uint32_t m_historyHandle = 0;
     std::vector<std::uint8_t> m_rawBytes;
+    //! Exact inline ACIS bytes extracted from a qualified DWG modeler frame.
+    //! Kept separate from m_rawBytes, which may contain the whole object frame.
+    std::vector<std::uint8_t> m_dwgAcisPayload;
     //! DXF group order/type for m_rawBytes; does not classify DWG frame bytes.
     std::vector<DRW_ModelerPayloadChunk> m_dxfPayloadChunks;
     std::vector<DRW_ModelerPayloadRange> m_payloadRanges;
 
-    //! Lazily-decoded ACIS wireframe (from m_rawBytes SAB payload).
+    //! Lazily-decoded ACIS wireframe from an identified payload carrier.
     DRW_AcisBrep m_wireframe;
     bool m_wireframeDecoded = false;
-    //! Decode the SAB wireframe from m_rawBytes on demand. Idempotent; never throws.
+    //! Decode an identified ACIS wireframe on demand. Idempotent; never throws.
     bool decodeWireframe() {
         if (!m_wireframeDecoded) {
             m_wireframeDecoded = true;
-            const std::vector<std::uint8_t>& payload =
-                hasDataStorageRecord ? dataStorageData : m_rawBytes;
-            drw_decodeAcisWireframe(payload, m_wireframe);
+            const std::vector<std::uint8_t>* payload = nullptr;
+            if (hasDataStorageRecord) {
+                payload = &dataStorageData;
+            } else if (!m_dwgAcisPayload.empty()) {
+                payload = &m_dwgAcisPayload;
+            } else if (m_objectSize == 0 && m_bodyBitSize == 0) {
+                // DXF owns an inline modeler payload in m_rawBytes. DWG's
+                // m_rawBytes is only an object-frame carrier and must never
+                // be presented to the ACIS decoder as if it were a payload.
+                payload = &m_rawBytes;
+            }
+            if (payload != nullptr)
+                drw_decodeAcisWireframe(*payload, m_wireframe);
         }
         return !m_wireframe.empty();
     }
