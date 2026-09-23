@@ -4683,8 +4683,8 @@ bool dxfRW::writeInsert(DRW_Insert *ent){
         || !isSafeDxfRecordText(ent->name)
         || ent->colcount <= 0
         || ent->rowcount <= 0
-        || ent->colcount > std::numeric_limits<std::uint16_t>::max()
-        || ent->rowcount > std::numeric_limits<std::uint16_t>::max()
+        || ent->colcount > std::numeric_limits<std::int16_t>::max()
+        || ent->rowcount > std::numeric_limits<std::int16_t>::max()
         || std::any_of(ent->attlist.cbegin(), ent->attlist.cend(),
                        [](const auto& attribute) {
                            return attribute == nullptr

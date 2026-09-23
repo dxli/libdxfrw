@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -5865,6 +5866,297 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
     return faceValid && poly3dValid && polyfaceValid && ocsValid && meshValid;
 }
 
+DRW_Coord referenceInsertTransform(const DRW_Coord& point,
+                                   const DRW_Coord& blockBase,
+                                   const DRW_Insert& insert) {
+    DRW_Coord normal = insert.extPoint;
+    const double normalLength = std::sqrt(normal.x * normal.x
+        + normal.y * normal.y + normal.z * normal.z);
+    if (!std::isfinite(normalLength) || normalLength == 0.0)
+        return DRW_Coord(std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0);
+    normal.x /= normalLength;
+    normal.y /= normalLength;
+    normal.z /= normalLength;
+
+    DRW_Coord axisX;
+    if (std::abs(normal.x) < 1.0 / 64.0
+        && std::abs(normal.y) < 1.0 / 64.0) {
+        // Autodesk's arbitrary-axis rule uses Wy x N close to world Z.
+        axisX = DRW_Coord(normal.z, 0.0, -normal.x);
+    } else {
+        // Otherwise use Wz x N.
+        axisX = DRW_Coord(-normal.y, normal.x, 0.0);
+    }
+    const double axisLength = std::sqrt(axisX.x * axisX.x
+        + axisX.y * axisX.y + axisX.z * axisX.z);
+    if (!std::isfinite(axisLength) || axisLength == 0.0)
+        return DRW_Coord(std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0);
+    axisX.x /= axisLength;
+    axisX.y /= axisLength;
+    axisX.z /= axisLength;
+    const DRW_Coord axisY(
+        normal.y * axisX.z - normal.z * axisX.y,
+        normal.z * axisX.x - normal.x * axisX.z,
+        normal.x * axisX.y - normal.y * axisX.x);
+
+    const double sx = (point.x - blockBase.x) * insert.xscale;
+    const double sy = (point.y - blockBase.y) * insert.yscale;
+    const double sz = (point.z - blockBase.z) * insert.zscale;
+    const double cosine = std::cos(insert.angle);
+    const double sine = std::sin(insert.angle);
+    const double rx = sx * cosine - sy * sine;
+    const double ry = sx * sine + sy * cosine;
+    return DRW_Coord(
+        insert.basePoint.x * axisX.x + insert.basePoint.y * axisY.x
+            + insert.basePoint.z * normal.x + rx * axisX.x + ry * axisY.x
+            + sz * normal.x,
+        insert.basePoint.x * axisX.y + insert.basePoint.y * axisY.y
+            + insert.basePoint.z * normal.y + rx * axisX.y + ry * axisY.y
+            + sz * normal.y,
+        insert.basePoint.x * axisX.z + insert.basePoint.y * axisY.z
+            + insert.basePoint.z * normal.z + rx * axisX.z + ry * axisY.z
+            + sz * normal.z);
+}
+
+bool nearDxfValue(double value, double expected) {
+    return std::isfinite(value)
+        && std::abs(value - expected) <= 1.0e-9;
+}
+
+bool runDxfInsertTransformRoundTrip(bool binary,
+                                    const std::filesystem::path& directory,
+                                    bool keepOutput) {
+    const std::string encoding = binary ? "binary" : "ascii";
+    const std::filesystem::path output = directory /
+        ("libdxfrw-dxf-insert-transform-" + encoding + ".dxf");
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+
+    dx_data source;
+    auto* innerBlock = new dx_ifaceBlock();
+    innerBlock->name = "LOCAL_INNER_3D";
+    innerBlock->basePoint = DRW_Coord(1.0, 2.0, 3.0);
+    auto* blockPoint = new DRW_Point();
+    blockPoint->basePoint = DRW_Coord(4.0, 6.0, 8.0);
+    innerBlock->ent.push_back(blockPoint);
+    source.blocks.push_back(innerBlock);
+
+    auto* outerBlock = new dx_ifaceBlock();
+    outerBlock->name = "LOCAL_OUTER_3D";
+    outerBlock->basePoint = DRW_Coord(2.0, -1.0, 3.0);
+    auto* nested = new DRW_Insert();
+    nested->name = innerBlock->name;
+    nested->basePoint = DRW_Coord(6.0, 7.0, 8.0);
+    nested->xscale = 2.0;
+    nested->yscale = 0.5;
+    nested->zscale = 1.0;
+    nested->angle = 1.57079632679489661923;
+    outerBlock->ent.push_back(nested);
+    source.blocks.push_back(outerBlock);
+
+    auto* root = new DRW_Insert();
+    root->name = outerBlock->name;
+    root->basePoint = DRW_Coord(10.0, 20.0, 30.0);
+    root->xscale = -2.0;
+    root->yscale = 3.0;
+    root->zscale = 0.5;
+    root->angle = 1.57079632679489661923;
+    const double rootNormalComponent = std::sqrt(0.5);
+    root->extPoint = DRW_Coord(0.0, rootNormalComponent,
+                               rootNormalComponent);
+    auto attribute = std::make_shared<DRW_Attrib>();
+    attribute->tag = "LOCAL_3D_TAG";
+    attribute->text = "LOCAL_3D_VALUE";
+    attribute->basePoint = DRW_Coord(11.0, 12.0, 13.0);
+    attribute->height = 1.25;
+    root->attlist.push_back(attribute);
+    source.mBlock->ent.push_back(root);
+
+    auto* array = new DRW_Insert();
+    array->name = outerBlock->name;
+    array->basePoint = DRW_Coord(-3.0, 4.0, 5.0);
+    array->xscale = 1.5;
+    array->yscale = -0.5;
+    array->zscale = 2.0;
+    array->angle = -1.04719755119659774615;
+    array->extPoint = DRW_Coord(0.0, 0.0, -1.0);
+    array->colcount = 3;
+    array->rowcount = 2;
+    array->colspace = 4.25;
+    array->rowspace = 6.5;
+    source.mBlock->ent.push_back(array);
+
+    dx_iface exporter;
+    if (!exporter.fileExport(output.string(), DRW::AC1027, binary, &source,
+                             false)) {
+        std::cerr << "DXF INSERT export failed (" << encoding << "): "
+                  << output << '\n';
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+    dx_data imported;
+    dx_iface importer;
+    if (!importer.fileImport(output.string(), &imported, false)) {
+        std::cerr << "DXF INSERT import failed (" << encoding << "): "
+                  << output << '\n';
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+
+    const dx_ifaceBlock* decodedInner = nullptr;
+    const dx_ifaceBlock* decodedOuter = nullptr;
+    for (const dx_ifaceBlock* block : imported.blocks) {
+        if (block->name == "LOCAL_INNER_3D")
+            decodedInner = block;
+        else if (block->name == "LOCAL_OUTER_3D")
+            decodedOuter = block;
+    }
+    const DRW_Point* decodedPoint = nullptr;
+    if (decodedInner != nullptr) {
+        for (const DRW_Entity* entity : decodedInner->ent) {
+            if (entity != nullptr && entity->eType == DRW::POINT)
+                decodedPoint = static_cast<const DRW_Point*>(entity);
+        }
+    }
+    const DRW_Insert* decodedNested = nullptr;
+    if (decodedOuter != nullptr) {
+        for (const DRW_Entity* entity : decodedOuter->ent) {
+            if (entity != nullptr && entity->eType == DRW::INSERT)
+                decodedNested = static_cast<const DRW_Insert*>(entity);
+        }
+    }
+    const DRW_Insert* decodedRoot = nullptr;
+    const DRW_Insert* decodedArray = nullptr;
+    for (const DRW_Entity* entity : imported.mBlock->ent) {
+        if (entity == nullptr || entity->eType != DRW::INSERT)
+            continue;
+        const auto* insert = static_cast<const DRW_Insert*>(entity);
+        if (insert->isMInsert())
+            decodedArray = insert;
+        else
+            decodedRoot = insert;
+    }
+
+    const bool blockFieldsValid = decodedInner != nullptr
+        && decodedOuter != nullptr && decodedPoint != nullptr
+        && decodedInner->basePoint.x == 1.0
+        && decodedInner->basePoint.y == 2.0
+        && decodedInner->basePoint.z == 3.0
+        && decodedPoint->basePoint.x == 4.0
+        && decodedPoint->basePoint.y == 6.0
+        && decodedPoint->basePoint.z == 8.0
+        && decodedOuter->basePoint.x == 2.0
+        && decodedOuter->basePoint.y == -1.0
+        && decodedOuter->basePoint.z == 3.0;
+    const bool nestedFieldsValid = decodedNested != nullptr
+        && decodedNested->name == "LOCAL_INNER_3D"
+        && decodedNested->basePoint.x == 6.0
+        && decodedNested->basePoint.y == 7.0
+        && decodedNested->basePoint.z == 8.0
+        && decodedNested->xscale == 2.0 && decodedNested->yscale == 0.5
+        && decodedNested->zscale == 1.0
+        && nearDxfValue(decodedNested->angle, 1.57079632679489661923);
+    const bool rootFieldsValid = decodedRoot != nullptr
+        && decodedRoot->name == "LOCAL_OUTER_3D"
+        && decodedRoot->basePoint.x == 10.0
+        && decodedRoot->basePoint.y == 20.0
+        && decodedRoot->basePoint.z == 30.0
+        && decodedRoot->xscale == -2.0 && decodedRoot->yscale == 3.0
+        && decodedRoot->zscale == 0.5
+        && nearDxfValue(decodedRoot->angle, 1.57079632679489661923)
+        && nearDxfValue(decodedRoot->extPoint.y, rootNormalComponent)
+        && nearDxfValue(decodedRoot->extPoint.z, rootNormalComponent)
+        && decodedRoot->attlist.size() == 1
+        && decodedRoot->attlist.front() != nullptr
+        && decodedRoot->attlist.front()->tag == "LOCAL_3D_TAG"
+        && decodedRoot->attlist.front()->text == "LOCAL_3D_VALUE"
+        && decodedRoot->attlist.front()->basePoint.x == 11.0
+        && decodedRoot->attlist.front()->basePoint.y == 12.0
+        && decodedRoot->attlist.front()->basePoint.z == 13.0;
+    const bool arrayFieldsValid = decodedArray != nullptr
+        && decodedArray->name == "LOCAL_OUTER_3D"
+        && decodedArray->basePoint.x == -3.0
+        && decodedArray->basePoint.y == 4.0
+        && decodedArray->basePoint.z == 5.0
+        && decodedArray->xscale == 1.5 && decodedArray->yscale == -0.5
+        && decodedArray->zscale == 2.0
+        && nearDxfValue(decodedArray->angle, -1.04719755119659774615)
+        && decodedArray->extPoint.z == -1.0
+        && decodedArray->colcount == 3 && decodedArray->rowcount == 2
+        && decodedArray->colspace == 4.25 && decodedArray->rowspace == 6.5;
+
+    bool oracleValid = false;
+    bool arrayOracleValid = false;
+    if (blockFieldsValid && nestedFieldsValid && rootFieldsValid) {
+        const DRW_Coord inOuter = referenceInsertTransform(
+            decodedPoint->basePoint, decodedInner->basePoint, *decodedNested);
+        const DRW_Coord inWorld = referenceInsertTransform(
+            inOuter, decodedOuter->basePoint, *decodedRoot);
+        oracleValid = nearDxfValue(inWorld.x, 32.0)
+            && nearDxfValue(inWorld.y, 19.0 / std::sqrt(2.0))
+            && nearDxfValue(inWorld.z, 51.0 / std::sqrt(2.0));
+        if (decodedArray != nullptr) {
+            DRW_Insert arrayCell = *decodedArray;
+            const double columnOffset = 2.0 * decodedArray->colspace;
+            const double rowOffset = decodedArray->rowspace;
+            const double cosine = std::cos(decodedArray->angle);
+            const double sine = std::sin(decodedArray->angle);
+            // MINSERT grid offsets are in OCS, rotate with the array, and are
+            // not scaled by the referenced block's scale factors.
+            arrayCell.basePoint.x += columnOffset * cosine - rowOffset * sine;
+            arrayCell.basePoint.y += columnOffset * sine + rowOffset * cosine;
+            const DRW_Coord arrayWorldPoint = referenceInsertTransform(
+                inOuter, decodedOuter->basePoint, arrayCell);
+            arrayOracleValid = nearDxfValue(
+                    arrayWorldPoint.x, (-11.0 + std::sqrt(3.0)) / 4.0)
+                && nearDxfValue(arrayWorldPoint.y,
+                                (15.0 - 23.0 * std::sqrt(3.0)) / 4.0)
+                && nearDxfValue(arrayWorldPoint.z, -25.0);
+        }
+    }
+    if (!keepOutput)
+        std::filesystem::remove(output, ec);
+    const bool valid = blockFieldsValid && nestedFieldsValid && rootFieldsValid
+        && arrayFieldsValid && oracleValid && arrayOracleValid;
+    if (!valid)
+        std::cerr << "DXF INSERT semantic mismatch (" << encoding
+                  << "): block=" << blockFieldsValid
+                  << " nested=" << nestedFieldsValid << " root=" << rootFieldsValid
+                  << " array=" << arrayFieldsValid << " oracle=" << oracleValid
+                  << " arrayOracle=" << arrayOracleValid
+                  << '\n';
+    return valid;
+}
+
+bool runDxfInsertRejectsInvalidPayload() {
+    const std::filesystem::path output =
+        std::filesystem::temp_directory_path()
+        / "libdxfrw-dxf-insert-invalid-payload.dxf";
+    const auto reject = [&](const DRW_Insert& invalid,
+                            const char* suffix) {
+        std::error_code ec;
+        const std::filesystem::path target = output.parent_path()
+            / (output.stem().string() + suffix + output.extension().string());
+        std::filesystem::remove(target, ec);
+        dx_data source;
+        source.mBlock->ent.push_back(new DRW_Insert(invalid));
+        dx_iface exporter;
+        const bool rejected = !exporter.fileExport(target.string(),
+            DRW::AC1027, false, &source, false);
+        std::filesystem::remove(target, ec);
+        return rejected;
+    };
+    DRW_Insert invalidCount;
+    invalidCount.name = "LOCAL_BAD_MINSERT";
+    invalidCount.colcount = std::numeric_limits<std::int16_t>::max() + 1;
+    DRW_Insert invalidPoint;
+    invalidPoint.name = "LOCAL_BAD_INSERT_POINT";
+    invalidPoint.basePoint.x = std::numeric_limits<double>::quiet_NaN();
+    return reject(invalidCount, "-count") && reject(invalidPoint, "-point");
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -6711,6 +7003,12 @@ int main(int argc, char** argv) {
            "local DXF ASCII 3D topology and OCS/WCS round-trip", failures);
     expect(runDxfTopologyRoundTrip(true, directory, keepOutputs),
            "local DXF binary 3D topology and OCS/WCS round-trip", failures);
+    expect(runDxfInsertTransformRoundTrip(false, directory, keepOutputs),
+           "local DXF ASCII nested INSERT/MINSERT transform fields", failures);
+    expect(runDxfInsertTransformRoundTrip(true, directory, keepOutputs),
+           "local DXF binary nested INSERT/MINSERT transform fields", failures);
+    expect(runDxfInsertRejectsInvalidPayload(),
+           "local DXF INSERT rejects out-of-range MINSERT counts", failures);
     const std::vector<std::uint8_t> sabPayload = makeLocalSabPayload();
     expect(runAcisSabFastCheck(), "local ACIS SAB parser fast check", failures);
     const std::vector<std::uint8_t> textCarrier {
