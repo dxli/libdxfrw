@@ -1,0 +1,61 @@
+# Optional end-to-end check for FreeCAD's Draft DWG import route.
+#
+# Run with FreeCADCmd and set LIBDXFRW_FREECAD_DWG to the tracked AC1027
+# ordinary-encoding fixture. Ensure dwg2dxf is on PATH. The expected LINE
+# bounds were independently checked against LibreDWG 0.14's DXF export.
+
+import os
+import sys
+
+import FreeCAD as App
+
+
+sample = os.environ.get("LIBDXFRW_FREECAD_DWG")
+if not sample:
+    raise RuntimeError("LIBDXFRW_FREECAD_DWG must name a DWG sample")
+
+draft_path = os.path.join(App.getResourceDir(), "Mod", "Draft")
+sys.path.insert(0, draft_path)
+
+import importDWG
+
+
+doc = None
+try:
+    doc = importDWG.open(sample)
+    if doc is None:
+        raise AssertionError("Draft.importDWG.open returned no document")
+
+    lines = sorted(
+        (obj for obj in doc.Objects if obj.TypeId == "Part::Feature"),
+        key=lambda obj: obj.Shape.BoundBox.XMin,
+    )
+    actual = [
+        (
+            obj.Shape.BoundBox.XMin,
+            obj.Shape.BoundBox.YMin,
+            obj.Shape.BoundBox.ZMin,
+            obj.Shape.BoundBox.XMax,
+            obj.Shape.BoundBox.YMax,
+            obj.Shape.BoundBox.ZMax,
+        )
+        for obj in lines
+    ]
+    expected = [
+        (1.0, 2.0, 0.0, 3.0, 4.0, 0.0),
+        (5.0, 6.0, 0.0, 7.0, 8.0, 0.0),
+        (9.0, 10.0, 0.0, 11.0, 12.0, 0.0),
+    ]
+    if len(actual) != len(expected):
+        raise AssertionError("expected three imported LINE features: %r" % actual)
+    for observed, wanted in zip(actual, expected):
+        if any(abs(a - b) >= 1e-9 for a, b in zip(observed, wanted)):
+            raise AssertionError(
+                "FreeCAD LINE bounds differ: expected %r, got %r"
+                % (wanted, observed)
+            )
+
+    print("FREECAD_DWG_IMPORT_ASSERTIONS_PASS", actual)
+finally:
+    if doc is not None and doc.Name in App.listDocuments():
+        App.closeDocument(doc.Name)
