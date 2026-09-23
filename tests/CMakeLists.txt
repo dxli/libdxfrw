@@ -43,6 +43,28 @@ target_include_directories(lc3_compat_check PRIVATE
 )
 target_compile_features(lc3_compat_check PRIVATE cxx_std_17)
 
+# Exercise a public DRW_Interface sink against locally generated 3D DXF
+# records. The probe writes ASCII and binary DXFs at runtime, reads them back
+# through dxfRW, and checks that native Z/topology/OCS values reach the sink.
+# It deliberately compiles only against the standalone library API; the
+# separate lc3_compat_check above remains the older 2D-consumer guard.
+add_executable(libdxfrw_3d_consumer_probe
+    ${CMAKE_CURRENT_SOURCE_DIR}/semantic_differential_adapter.cpp
+)
+target_compile_features(libdxfrw_3d_consumer_probe PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_3d_consumer_probe
+    PRIVATE ${LIBDXFRW_ADAPTER_WARNING_FLAGS})
+target_compile_definitions(libdxfrw_3d_consumer_probe PRIVATE
+    LIBDXFRW_SEMANTIC_3D_CONSUMER_PROBE=1)
+target_include_directories(libdxfrw_3d_consumer_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/intern)
+target_link_libraries(libdxfrw_3d_consumer_probe PRIVATE dxfrw)
+add_test(NAME libdxfrw_3d_consumer_probe
+    COMMAND libdxfrw_3d_consumer_probe --self-test)
+set_tests_properties(libdxfrw_3d_consumer_probe PROPERTIES
+    LABELS "dxf;consumer;fast")
+
 # DXF splinepoints round-trip regression test.
 # Verifies Band BC: code 44 (tolfit) + fit points (11/21/31) survive a
 # DWG -> DXF -> DXF round-trip. Picks a known-spline-bearing sample.

@@ -14,11 +14,13 @@
 #include <array>
 #include <cctype>
 #include <cerrno>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -364,6 +366,9 @@ public:
         writeRecipeSucceeded_ = true;
     }
     bool writeRecipeSucceeded() const { return writeRecipeSucceeded_; }
+#ifdef LIBDXFRW_SEMANTIC_3D_CONSUMER_PROBE
+    void enable3DConsumerProbe() { threeDConsumerProbe_ = true; }
+#endif
 
     void addHeader(const DRW_Header*) override {
         addCallback("addHeader");
@@ -487,7 +492,29 @@ public:
     void addArc(const DRW_Arc& d) override { addBasicEntity("addArc", "ARC", d); }
     void addCircle(const DRW_Circle& d) override { addBasicEntity("addCircle", "CIRCLE", d); }
     void addEllipse(const DRW_Ellipse& d) override { addBasicEntity("addEllipse", "ELLIPSE", d); }
-    void addLWPolyline(const DRW_LWPolyline& d) override { addBasicEntity("addLWPolyline", "LWPOLYLINE", d); }
+    void addLWPolyline(const DRW_LWPolyline& d) override {
+        std::vector<Field> fields = entityFields(d, "LWPOLYLINE", "LWPOLYLINE");
+        fields.push_back(intField("flags", d.flags));
+        fields.push_back(doubleField("elevation", d.elevation));
+        fields.push_back(pointField("extrusion", d.extPoint));
+        fields.push_back(doubleField("thickness", d.thickness));
+        fields.push_back(uintField("vertexCount", d.vertlist.size()));
+        for (std::size_t i = 0; i < d.vertlist.size(); ++i) {
+            const std::string prefix = "vertex." + std::to_string(i);
+            const auto& vertex = d.vertlist[i];
+            fields.push_back(boolField(prefix + ".present",
+                                       static_cast<bool>(vertex)));
+            if (!vertex)
+                continue;
+            fields.push_back(doubleField(prefix + ".x", vertex->x));
+            fields.push_back(doubleField(prefix + ".y", vertex->y));
+            fields.push_back(doubleField(prefix + ".startWidth", vertex->stawidth));
+            fields.push_back(doubleField(prefix + ".endWidth", vertex->endwidth));
+            fields.push_back(doubleField(prefix + ".bulge", vertex->bulge));
+            fields.push_back(intField(prefix + ".identifier", vertex->identifier));
+        }
+        addEntityRecord("addLWPolyline", "LWPOLYLINE", fields, d, false);
+    }
     SEMANTIC_OPAQUE_POINTER(addMLine, DRW_MLine, "MLINE")
     SEMANTIC_OPAQUE_POINTER(addUnderlay, DRW_Underlay, "UNDERLAY")
     SEMANTIC_OPAQUE_VALUE(addShape, DRW_Shape, "SHAPE")
@@ -964,6 +991,83 @@ public:
     void writeBlockRecords() override { addCallback("writeBlockRecords"); }
     void writeEntities() override {
         addCallback("writeEntities");
+#ifdef LIBDXFRW_SEMANTIC_3D_CONSUMER_PROBE
+        if (threeDConsumerProbe_) {
+            if (dxfWriter_ == nullptr) {
+                writeRecipeSucceeded_ = false;
+                return;
+            }
+            bool wrote = true;
+            DRW_3Dface face;
+            face.basePoint = DRW_Coord{1.0, 2.0, 3.0};
+            face.secPoint = DRW_Coord{4.0, 5.0, 6.0};
+            face.thirdPoint = DRW_Coord{7.0, 8.0, 9.0};
+            face.fourPoint = DRW_Coord{10.0, 11.0, 12.0};
+            face.invisibleflag = DRW_3Dface::FirstEdge | DRW_3Dface::ThirdEdge;
+            wrote = dxfWriter_->write3dface(&face) && wrote;
+
+            DRW_Polyline polyline;
+            polyline.flags = 8;
+            polyline.vertexcount = 2;
+            polyline.addVertex(DRW_Vertex{13.0, 14.0, 15.0, 0.0});
+            polyline.addVertex(DRW_Vertex{16.0, 17.0, 18.0, 0.0});
+            for (const auto& vertex : polyline.vertlist)
+                vertex->flags = 32;
+            wrote = dxfWriter_->writePolyline(&polyline) && wrote;
+
+            DRW_Mesh mesh;
+            mesh.vertices = {DRW_Coord{20.0, 21.0, 22.0},
+                             DRW_Coord{23.0, 24.0, 25.0},
+                             DRW_Coord{26.0, 27.0, 28.0}};
+            mesh.faces = {{0, 1, 2}};
+            mesh.edges = {{0, 1}, {1, 2}};
+            mesh.creases = {0.25, 0.75};
+            wrote = dxfWriter_->writeMesh(&mesh) && wrote;
+
+            DRW_Insert insert;
+            insert.name = "PROBE_BLOCK";
+            insert.basePoint = DRW_Coord{30.0, 31.0, 32.0};
+            insert.extPoint = DRW_Coord{0.0, 1.0, 0.0};
+            insert.xscale = -2.0;
+            insert.yscale = 3.0;
+            insert.zscale = 4.0;
+            insert.angle = 0.5;
+            insert.colcount = 2;
+            insert.rowcount = 3;
+            insert.colspace = 7.0;
+            insert.rowspace = 8.0;
+            wrote = dxfWriter_->writeInsert(&insert) && wrote;
+
+            DRW_Spline spline;
+            spline.degree = 2;
+            spline.ncontrol = 3;
+            spline.knotslist = {0.0, 0.0, 0.0, 1.0, 1.0, 1.0};
+            spline.normalVec = DRW_Coord{0.0, 0.0, 1.0};
+            spline.controllist = {
+                std::make_shared<DRW_Coord>(40.0, 41.0, 42.0),
+                std::make_shared<DRW_Coord>(43.0, 44.0, 45.0),
+                std::make_shared<DRW_Coord>(46.0, 47.0, 48.0)};
+            wrote = dxfWriter_->writeSpline(&spline) && wrote;
+
+            DRW_LWPolyline ocsPolyline;
+            ocsPolyline.elevation = 5.0;
+            ocsPolyline.extPoint = DRW_Coord{0.0, 1.0, 0.0};
+            ocsPolyline.addVertex(DRW_Vertex2D{2.0, 3.0, 0.25});
+            ocsPolyline.addVertex(DRW_Vertex2D{4.0, 5.0, 0.0});
+            wrote = dxfWriter_->writeLWPolyline(&ocsPolyline) && wrote;
+
+            DRW_LoftedSurface lofted;
+            lofted.modelerFormatVersion = 1;
+            lofted.uIsolines = 10;
+            lofted.vIsolines = 11;
+            lofted.dxfReferenceData.emplace_back(90, std::int32_t{2});
+            lofted.dxfReferenceData.emplace_back(310,
+                std::vector<std::uint8_t>{0x12u, 0x34u, 0x56u});
+            wrote = dxfWriter_->writeSurface(&lofted) && wrote;
+            writeRecipeSucceeded_ = wrote && writeRecipeSucceeded_;
+            return;
+        }
+#endif
         DRW_Line line;
         line.layer = "0";
         line.basePoint = DRW_Coord{1.0, 2.0, 3.0};
@@ -1640,6 +1744,9 @@ private:
     dxfRW* dxfWriter_ = nullptr;
     dwgRW* dwgWriter_ = nullptr;
     bool writeRecipeSucceeded_ = true;
+#ifdef LIBDXFRW_SEMANTIC_3D_CONSUMER_PROBE
+    bool threeDConsumerProbe_ = false;
+#endif
 };
 
 struct Options {
@@ -2125,6 +2232,116 @@ void emitResult(std::ostream& out, const Options& options, const InputInfo& inpu
         << ",\"diagnosticCount\":" << sink.diagnostics.size() << "}}\n";
 }
 
+#ifdef LIBDXFRW_SEMANTIC_3D_CONSUMER_PROBE
+const Field* findEntityField(const SemanticSink& sink, const std::string& entity,
+                             const std::string& name) {
+    for (const RecordRow& record : sink.records) {
+        if (record.entity != entity)
+            continue;
+        for (const Field& field : record.fields) {
+            if (field.name == name)
+                return &field;
+        }
+    }
+    return nullptr;
+}
+
+bool fieldEquals(const SemanticSink& sink, const std::string& entity,
+                 const std::string& name, const std::string& expected) {
+    const Field* field = findEntityField(sink, entity, name);
+    return field != nullptr && field->value == expected;
+}
+
+bool run3DConsumerProbe(bool binary) {
+    std::error_code error;
+    const std::filesystem::path temporaryRoot =
+        std::filesystem::temp_directory_path(error);
+    if (error)
+        return false;
+    std::filesystem::path directory;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    for (unsigned attempt = 0; attempt < 32; ++attempt) {
+        directory = temporaryRoot / ("libdxfrw-semantic-3d-consumer-"
+            + std::to_string(stamp) + "-" + std::to_string(attempt));
+        error.clear();
+        if (std::filesystem::create_directory(directory, error))
+            break;
+        if (error && error != std::errc::file_exists)
+            return false;
+        directory.clear();
+    }
+    if (directory.empty())
+        return false;
+
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code cleanupError;
+            std::filesystem::remove_all(path, cleanupError);
+        }
+    } cleanup{directory};
+
+    const std::filesystem::path output = directory
+        / (binary ? "consumer-probe-binary.dxf" : "consumer-probe-ascii.dxf");
+    const std::string outputName = output.string();
+    SemanticSink producer("dxfRW", "write");
+    producer.enable3DConsumerProbe();
+    dxfRW writer(outputName.c_str());
+    producer.configureWrite(&writer);
+    if (!writer.write(&producer, DRW::AC1027, binary)
+        || !producer.writeRecipeSucceeded())
+        return false;
+
+    SemanticSink consumer("dxfRW", "read");
+    dxfRW reader(outputName.c_str());
+    if (!reader.read(&consumer, false) || !consumer.diagnostics.empty())
+        return false;
+
+    if (!fieldEquals(consumer, "3DFACE", "corner.3",
+                     "{\"x\":10,\"y\":11,\"z\":12}")
+        || !fieldEquals(consumer, "3DFACE", "invisibleEdgeFlags", "5")
+        || !fieldEquals(consumer, "POLYLINE", "vertex.1.position",
+                        "{\"x\":16,\"y\":17,\"z\":18}")
+        || !fieldEquals(consumer, "MESH", "vertex.2",
+                        "{\"x\":26,\"y\":27,\"z\":28}")
+        || !fieldEquals(consumer, "MESH", "face.0.vertex.2", "2")
+        || !fieldEquals(consumer, "MESH", "edge.1.end", "2")
+        || !fieldEquals(consumer, "MESH", "crease.1", "0.75")
+        || !fieldEquals(consumer, "INSERT", "insertionPoint",
+                        "{\"x\":30,\"y\":31,\"z\":32}")
+        || !fieldEquals(consumer, "INSERT", "extrusion",
+                        "{\"x\":0,\"y\":1,\"z\":0}")
+        || !fieldEquals(consumer, "INSERT", "xScale", "-2")
+        || !fieldEquals(consumer, "INSERT", "zScale", "4")
+        || !fieldEquals(consumer, "INSERT", "columnCount", "2")
+        || !fieldEquals(consumer, "INSERT", "rowCount", "3")
+        || !fieldEquals(consumer, "SPLINE", "controlPoint.2.position",
+                        "{\"x\":46,\"y\":47,\"z\":48}")
+        || !fieldEquals(consumer, "SPLINE", "knotCount", "6")
+        || !fieldEquals(consumer, "LWPOLYLINE", "elevation", "5")
+        || !fieldEquals(consumer, "LWPOLYLINE", "extrusion",
+                        "{\"x\":0,\"y\":1,\"z\":0}")
+        || !fieldEquals(consumer, "LWPOLYLINE", "vertex.0.x", "2")
+        || !fieldEquals(consumer, "LWPOLYLINE", "vertex.0.y", "3")
+        || !fieldEquals(consumer, "LWPOLYLINE", "vertex.0.bulge", "0.25")
+        || !fieldEquals(consumer, "LOFTEDSURFACE", "uIsolines", "10")
+        || !fieldEquals(consumer, "LOFTEDSURFACE",
+                        "dxfReferenceData.1.byteCount", "3"))
+        return false;
+
+    bool foundBinaryReference = false;
+    const std::vector<std::uint8_t> expectedBytes{0x12u, 0x34u, 0x56u};
+    for (const CarrierRow& carrier : consumer.carriers) {
+        if (carrier.source.find("loftDxfReference.1.group310")
+                != std::string::npos
+            && carrier.size == expectedBytes.size()
+            && carrier.digest == sha256(expectedBytes.data(), expectedBytes.size()))
+            foundBinaryReference = true;
+    }
+    return foundBinaryReference;
+}
+#endif
+
 int selfTest() {
     if (sha256("abc") != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
         return 1;
@@ -2170,6 +2387,11 @@ int selfTest() {
     if (failureStage(static_cast<int>(DRW::BAD_READ_SECTION)) != "section" ||
         failureStage(static_cast<int>(DRW::BAD_CODE_PARSED)) != "parseCode")
         return 1;
+
+#ifdef LIBDXFRW_SEMANTIC_3D_CONSUMER_PROBE
+    if (!run3DConsumerProbe(false) || !run3DConsumerProbe(true))
+        return 1;
+#endif
 
     const auto fieldValue = [](const SemanticSink& sink, const std::string& name) {
         if (sink.records.empty())
