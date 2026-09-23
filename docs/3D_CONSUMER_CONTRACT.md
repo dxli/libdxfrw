@@ -36,20 +36,24 @@ callback order alone is a stable ownership contract.
 
 ## Field and coordinate contract
 
-The Autodesk DXF OCS reference distinguishes WCS coordinates for 3D entities
-such as POINT, LINE, 3DFACE, 3D POLYLINE, and 3D mesh from OCS coordinates for
-planar entities such as CIRCLE, ARC, SOLID, TRACE, INSERT, 2D POLYLINE,
-LWPOLYLINE, and HATCH. OCS conversion depends on the entity normal/extrusion
-vector, elevation, and the arbitrary-axis algorithm. The table below records
-what a consumer should preserve; DWG coordinate interpretation remains
-version-qualified separately.
+The [Autodesk DXF OCS reference](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-D99F1509-E4E4-47A3-8691-92EA07DC88F5.htm)
+distinguishes WCS coordinates for 3D entities such as POINT, LINE, 3DFACE, 3D
+POLYLINE, and 3D mesh from OCS coordinates for planar entities such as CIRCLE,
+ARC, SOLID, TRACE, INSERT, 2D POLYLINE, LWPOLYLINE, and HATCH. DXF ELLIPSE is
+an important exception: Autodesk's [ELLIPSE reference](https://help.autodesk.com/cloudhelp/2023/ENU/AutoCAD-DXF/files/GUID-107CB04F-AD4D-4D2F-8EC9-AC90888063AB.htm)
+defines its center and major-axis vector in WCS, with the extrusion vector
+describing the plane normal; those coordinates are not OCS inputs to transform
+again.
+OCS conversion depends on the entity normal/extrusion vector, elevation, and
+the arbitrary-axis algorithm. The table below records what a consumer should
+preserve; DWG coordinate interpretation remains version-qualified separately.
 
 | Family | Public callback and fields | Coordinate handling for a 3D consumer | Default / boundary |
 | --- | --- | --- | --- |
 | WCS point and line primitives | `addPoint(DRW_Point)`, `addLine(DRW_Line)`, `addRay(DRW_Ray)`, `addXline(DRW_Xline)`; `basePoint`, `secPoint`, `extPoint`, `thickness`, `xAxisAngle` | Preserve XYZ endpoints and direction vectors; DXF POINT/LINE locations are WCS. Keep extrusion/thickness as separate fields rather than folding them into endpoints. | Existing required callbacks. DWG interpretation still needs per-version evidence. |
 | 3DLINE extension | `add3DLine(DRW_3DLine)`; inherits start/end/extrusion/thickness fields from LINE | Preserve full XYZ. Keep legacy pre-R13 type 21, modern DWG custom class, and DXF `3DLINE` extension identities distinct from ordinary LINE. | Default delegates to `addLine`; override `add3DLine` when extension identity matters. Portability/version claims remain unqualified. |
 | 3DFACE | `add3dFace(DRW_3Dface)`; four WCS corners and `invisibleflag` | Preserve all four XYZ corners and each invisible-edge bit. A missing fourth DXF corner is represented by the third corner. | Required callback. No projection is performed by libdxfrw when `ext == false`. |
-| Planar primitives and filled faces | `addCircle`, `addArc`, `addEllipse`, `addTrace`, `addSolid`; centers/axes/corners, radii/parameters, `extPoint`, elevation or thickness as present | Retain OCS inputs, normal/extrusion, elevation, and subtype parameters. Build the entity plane using the format rule; do not infer that OCS XY is WCS XY. TRACE/SOLID are planar faces with thickness, not ACIS 3DSOLID. | Required callbacks. The optional `ext == true` path mutates fields for selected types and is not the 3D consumer path. |
+| Planar primitives and filled faces | `addCircle`, `addArc`, `addEllipse`, `addTrace`, `addSolid`; centers/axes/corners, radii/parameters, `extPoint`, elevation or thickness as present | Use WCS center/major-axis fields for DXF ELLIPSE. Preserve OCS inputs and apply entity-specific normal/extrusion and elevation rules for CIRCLE/ARC/SOLID/TRACE; do not assume one coordinate model for the family. TRACE/SOLID are planar faces with thickness, not ACIS 3DSOLID. | Required callbacks. DXF ELLIPSE remains WCS under both `ext` settings; the optional `ext == true` path converts OCS data for selected other types and is not the 3D consumer path. DWG remains version-qualified. |
 | 2D and 3D POLYLINE/VERTEX forms | `addLWPolyline(DRW_LWPolyline)`, `addPolyline(DRW_Polyline)`; flags, elevation, extrusion, vertices, bulges, M/N counts, subtype and face indices | Branch on polyline flags and each vertex subtype. 2D forms use OCS/elevation; 3D polyline vertices are WCS. Preserve child/owner handles, ordering, signed one-based polyface indices, and invisible-edge meaning. | Required callbacks. `DRW_Polyline` is a tagged family, not one coordinate model. |
 | MESH / AcDbSubDMesh | `addMesh(DRW_Mesh)`; WCS `vertices`, face index lists, `edges`, `creases`, subdivision fields and `propertyOverrides` | Preserve base-cage XYZ and the complete topology/index structure. The face stream is not a triangle list by definition; do not triangulate or flatten it in the interchange adapter. | Default no-op; a 3D consumer must override it. No subdivision evaluator is supplied. DWG class/layout qualification remains separate. |
 | Block placement / MINSERT | `addInsert(DRW_Insert)`; insertion `basePoint`, `extPoint`, scale factors, angle, row/column counts and spacing, block name, and any published ATTRIB data/handles | DXF INSERT insertion point is OCS. Resolve the named block and base point, compose its placement and nested parents, and retain array spacing and attached attributes. Use the spec/tested transform order; do not treat the insertion point as an already-expanded WCS transform. | Required callback. Current round-trip/matrix vectors cover a tested DXF subset only. |

@@ -1907,7 +1907,10 @@ public:
     void addXline(const DRW_Xline&) override {}
     void addArc(const DRW_Arc&) override {}
     void addCircle(const DRW_Circle&) override {}
-    void addEllipse(const DRW_Ellipse&) override {}
+    void addEllipse(const DRW_Ellipse& data) override {
+        ++ellipseCount;
+        lastEllipse = data;
+    }
     void addLWPolyline(const DRW_LWPolyline&) override {}
     void addPolyline(const DRW_Polyline&) override {}
     void addSpline(const DRW_Spline*) override {}
@@ -1974,12 +1977,14 @@ public:
     bool rawSectionHasValues {false};
     std::size_t headerCount {0};
     std::size_t faceCount {0};
+    std::size_t ellipseCount {0};
     std::size_t traceCount {0};
     std::size_t solidCount {0};
     std::string headerComments;
     std::size_t modelerGeometryCount {0};
     std::size_t surfaceCount {0};
     DRW_3Dface last3dFace;
+    DRW_Ellipse lastEllipse;
     DRW_Trace lastTrace;
     DRW_Solid lastSolid;
     DRW_ModelerGeometry lastModelerGeometry;
@@ -3012,6 +3017,39 @@ void testDxfSolidTraceCornerMapping(TestContext& t) {
              "DXF SOLID rejects a half-present fourth corner before callback");
 }
 
+void testDxfEllipseCoordinatesAreWcs(TestContext& t) {
+    const std::string content =
+        "0\nSECTION\n2\nENTITIES\n0\nELLIPSE\n5\n704\n8\n0\n"
+        "10\n2\n20\n3\n30\n4\n"
+        "11\n5\n21\n6\n31\n7\n"
+        "40\n0.5\n41\n0.25\n42\n2.5\n"
+        "210\n0\n220\n0\n230\n-1\n"
+        "0\nENDSEC\n0\nEOF\n";
+    const auto preservesWcsEllipse = [&content](bool applyExt) {
+        dxfRW reader("");
+        FuzzInterface capture;
+        std::string input = content;
+        return reader.readAscii(&capture, applyExt, input)
+            && capture.ellipseCount == 1u
+            && capture.lastEllipse.basePoint.x == 2.0
+            && capture.lastEllipse.basePoint.y == 3.0
+            && capture.lastEllipse.basePoint.z == 4.0
+            && capture.lastEllipse.secPoint.x == 5.0
+            && capture.lastEllipse.secPoint.y == 6.0
+            && capture.lastEllipse.secPoint.z == 7.0
+            && capture.lastEllipse.extPoint.x == 0.0
+            && capture.lastEllipse.extPoint.y == 0.0
+            && capture.lastEllipse.extPoint.z == -1.0
+            && capture.lastEllipse.ratio == 0.5
+            && capture.lastEllipse.staparam == 0.25
+            && capture.lastEllipse.endparam == 2.5;
+    };
+    t.expect(preservesWcsEllipse(false),
+             "DXF ELLIPSE ext=false preserves WCS center and major axis");
+    t.expect(preservesWcsEllipse(true),
+             "DXF ELLIPSE ext=true does not transform WCS coordinates twice");
+}
+
 void testMLeaderDxfContextRoundTrip(TestContext& t) {
     DRW_MLeader source;
     source.handle = 0xA100u;
@@ -3467,6 +3505,7 @@ int main() {
     testDxfProxyGraphicsStayOutOfAcis(context);
     testDxfThreeCornerFaceFallback(context);
     testDxfSolidTraceCornerMapping(context);
+    testDxfEllipseCoordinatesAreWcs(context);
     testMLeaderDxfContextRoundTrip(context);
     testLinetypeDashFlagIsFourBits(context);
     testProxyPayloadCodesAreScopedToTheProxySubclass(context);

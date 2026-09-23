@@ -9714,8 +9714,10 @@ bool dxfRW::processEllipse() {
             if (!hasCenterX || !hasCenterY || !hasMajorAxisX
                 || !hasMajorAxisY || !hasRatio)
                 return setError(DRW::BAD_CODE_PARSED);
-            if (applyExt)
-                ellipse.applyExtrusion();
+            // DXF ELLIPSE center and major-axis vector are already WCS values.
+            // Unlike CIRCLE/ARC, its extrusion code supplies the plane normal;
+            // applying the OCS-to-WCS helper here would rotate valid WCS data
+            // a second time (notably in the legacy ext=true consumer path).
             iface->addEllipse(ellipse);
             return true;  //found new entity or ENDSEC, terminate
         }
