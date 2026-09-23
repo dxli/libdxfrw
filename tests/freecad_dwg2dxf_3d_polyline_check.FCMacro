@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import platform
+import subprocess
 import sys
 
 import FreeCAD as App
@@ -33,13 +34,68 @@ if legacy:
 
 captured = {}
 original_convert = importDWG.convertToDxf
+original_dxf_open = importDXF.open
 original_reporter = importDXF.DxfImportReporter
+original_popen = subprocess.Popen
+original_oda_converter = importDWG.get_oda_converter
+original_qcad_converter = importDWG.get_qcad_converter
 
 
 def capture_convert(filename):
-    result = original_convert(filename)
+    processes = []
+
+    def capture_popen(*args, **kwargs):
+        process = original_popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    subprocess.Popen = capture_popen
+    importDWG.get_oda_converter = lambda: None
+    importDWG.get_qcad_converter = lambda: None
+    try:
+        result = original_convert(filename)
+    finally:
+        subprocess.Popen = original_popen
+        importDWG.get_oda_converter = original_oda_converter
+        importDWG.get_qcad_converter = original_qcad_converter
     captured["dxf"] = result
+    captured["converter_processes"] = processes
     return result
+
+
+def assert_dwg2dxf_route(dxf_path):
+    processes = captured.get("converter_processes", [])
+    if len(processes) != 1:
+        raise AssertionError(
+            "expected exactly one converter subprocess with fallbacks disabled; got %d"
+            % len(processes)
+        )
+    process = processes[0]
+    args = process.args
+    converter = importDWG.get_libredwg_converter("dwg2dxf")
+    if not converter or not isinstance(args, (list, tuple)) or len(args) != 4:
+        raise AssertionError("FreeCAD did not invoke the expected dwg2dxf command")
+    if not same_path(args[0], converter):
+        raise AssertionError("FreeCAD invoked a different converter: %r" % (args,))
+    if not same_path(args[1], sample):
+        raise AssertionError("FreeCAD converted a different DWG input: %r" % (args,))
+    if args[2] != "-o" or not same_path(args[3], dxf_path):
+        raise AssertionError("FreeCAD did not import the dwg2dxf output: %r" % (args,))
+    if process.returncode != 0:
+        raise AssertionError("dwg2dxf exited with status %r" % process.returncode)
+    imported_path = captured.get("imported_dxf")
+    if not imported_path or not same_path(imported_path, dxf_path):
+        raise AssertionError("FreeCAD imported a different DXF than dwg2dxf produced")
+    return process
+
+
+def capture_dxf_open(filename, *args, **kwargs):
+    captured["imported_dxf"] = filename
+    return original_dxf_open(filename, *args, **kwargs)
+
+
+def same_path(left, right):
+    return os.path.normcase(os.path.abspath(left)) == os.path.normcase(os.path.abspath(right))
 
 
 class CapturingReporter(original_reporter):
@@ -67,6 +123,7 @@ def normalized_segment(points):
 
 
 importDWG.convertToDxf = capture_convert
+importDXF.open = capture_dxf_open
 importDXF.DxfImportReporter = CapturingReporter
 
 doc = None
@@ -78,6 +135,7 @@ try:
     dxf_path = captured.get("dxf")
     if not dxf_path or not os.path.isfile(dxf_path):
         raise AssertionError("Draft DWG conversion did not produce an auditable DXF")
+    converter_process = assert_dwg2dxf_route(dxf_path)
 
     imported_edges = []
     imported_shapes = []
@@ -142,6 +200,9 @@ try:
         "importer": "C++",
         "import_mode": preferences.GetInt("DxfImportMode", 2),
         "converter": importDWG.get_libredwg_converter("dwg2dxf"),
+        "converter_argv": converter_process.args,
+        "converter_returncode": converter_process.returncode,
+        "imported_dxf_path": captured.get("imported_dxf"),
         "source": os.path.basename(sample),
         "source_sha256": digest(sample),
         "dxf_size": os.path.getsize(dxf_path),
@@ -158,5 +219,8 @@ try:
         + json.dumps(result, sort_keys=True)
     )
 finally:
+    importDWG.convertToDxf = original_convert
+    importDXF.open = original_dxf_open
+    importDXF.DxfImportReporter = original_reporter
     if doc is not None and doc.Name in App.listDocuments():
         App.closeDocument(doc.Name)

@@ -58,6 +58,12 @@ replacement**. Keep two independently tested consumer lanes:
    construction of expected geometry. The converter must preserve legal DXF
    entity types and 3D coordinates; it must not rewrite a rejected entity to a
    different 2D type merely to suppress FreeCAD's unsupported-feature report.
+   Distinguish a converter merely found on PATH/preferences from one actually
+   invoked; record every attempted argv, exit status, candidate output and the
+   exact DXF path handed to `importDXF.open()`. FreeCAD 1.1.3 currently treats
+   an output file's existence as conversion success, so a nonzero converter
+   exit and a later ODA/QCAD fallback must be visible rather than attributed
+   to `dwg2dxf`.
    Require at least one nonzero-Z geometry witness to pass the complete
    DWG→`dwg2dxf`→DXF→FreeCAD route before claiming FreeCAD 3D-consumer coverage.
    Pin FreeCAD release/revision, OS/architecture, importer implementation and
@@ -84,6 +90,12 @@ Acceptance contract for every public API/callback change:
   choice to project, approximate, or retain sidecar metadata stays in its
   adapter; enabling library-level 3D data access does not claim that LibreCAD
   displays or edits 3D geometry.
+- For a positive FreeCAD converter/import assertion, require one successful
+  `dwg2dxf <input> -o <output>` process and prove that the same output path is
+  passed to the selected DXF importer. Disable fallback converters in that
+  assertion so a successful ODA/QCAD import cannot qualify libdxfrw output;
+  keep a separate fallback-enabled audit for real configured-workflow
+  diagnosis and report its actual producer.
 
 These lanes are orthogonal to format qualification: source-level data access,
 callback delivery, semantic correctness per format/version, and GUI display or
@@ -1228,6 +1240,41 @@ Steps:
    control; use an authentic witness or a verified generator path before
    marking oblique OCS ready.
 
+27. **S8.15.5 — Prove which converter FreeCAD actually used before attributing
+   an import result.** In the opt-in feature audit, wrap the configured
+   `Draft.importDWG.convertToDxf()` call to record each `subprocess.Popen`
+   argv/return code, derive the output path for LibreDWG/ODA/QCAD commands, and
+   capture the exact path passed to `importDXF.open()`. Report the configured
+   `DWGConversion` preference, resolved `dwg2dxf` path, attempted commands,
+   candidate-output existence, final converted/imported DXF paths and the
+   process whose output path matches the importer input. Do not label a
+   converter “used” from discovery or DXF record counts alone. Tighten each
+   positive LINE/POINT/3D-POLYLINE/ARC-CIRCLE assertion macro: temporarily
+   disable ODA/QCAD fallback discovery, require exactly one converter process,
+   assert its executable/input/`-o` output match the resolved `dwg2dxf`,
+   require exit status 0, and require `importDXF.open()` to receive that same
+   output. Restore monkeypatched functions even on assertion/error exits.
+
+   This closes an evidence-attribution gap, not an entity-support gap. The
+existing AC1024 `visualization_-_condominium_with_skylight.dwg` probe is
+user-owned and remains unstaged: `dwg2dxf` fails it at format 13/error 10
+with a `ReadEntity` exception; FreeCAD then succeeds through ODA fallback.
+The audit previously inspected the fallback DXF but reported only converter
+availability, so its SPLINE record/import observation is not evidence for
+this `dwg2dxf`. The same fallback-enabled audit on the user-owned AC1024
+`visualization_-_conference_room.dwg` also records `dwg2dxf` return 1/no
+output followed by ODAFileConverter return 0; the imported ODA DXF has two
+SPLINE records and FreeCAD reports two SPLINEs. This is still ODA evidence,
+not a direct `dwg2dxf` witness. LibreDWG `dwgadd` 0.14 also emitted no SPLINE
+entity from its documented local recipe in the attempted run; classify that
+as a generator limitation only, not format or importer evidence. Keep SPLINE
+unqualified until a locally available target sample is directly converted
+successfully by `dwg2dxf`, or a verified generator produces a source whose
+SPLINE fields are independently checked. Do not add generated DWG/DXF
+binaries or external samples to the repository. Keep FreeCAD integration
+optional and use the affected fast converter/readback tests plus the four
+small runtime assertion macros as the bounded validation set.
+
 Positive gate: an old source consumer still compiles, and the headless 3D probe
 receives all asserted native typed values/carrier identities without an
 implicit projection; the S8.2a `ext == true` baseline remains intact for its
@@ -1290,9 +1337,12 @@ spec/trace readiness; S7 and S8 proceed per completed rows, with S8's DXF
 consumer probe independent of DWG. S8.14's nonzero-Z LINE integration,
 S8.15.1's 3D POLYLINE integration, S8.15.2's isolated MESH/PFACE controls,
 S8.15.3's nonzero-Z POINT integration, and S8.15.4's elevated ARC/CIRCLE
-integration are committed. S8.15 remains READY for the next family-isolated
-importer probe; advance one proven FreeCAD entity mapping at a time. Continue
-any remaining independent DXF work while a DWG dependency is blocked.
+integration and S8.15.5's converter-route audit/assertions are committed.
+S8.15 remains READY for the next family-isolated importer probe; advance one
+proven FreeCAD entity mapping at a time. The SPLINE probe remains unqualified:
+the condominium sample was imported from ODA output after `dwg2dxf` failed,
+and `dwgadd` did not generate the attempted SPLINE control. Continue any
+remaining independent DXF work while a DWG dependency is blocked.
 
 FreeCAD integration is an additional bounded S8 consumer lane, not a new
 format-support claim. The exact converter invocation, four-revision planar
@@ -1335,8 +1385,20 @@ untested because its dependencies are absent. New FreeCAD-supported matrix rows
 must have independent source-field expectations and a named runtime/import
 mode; do not extend the routine test dependency set.
 
+S8.15.5 now makes route attribution explicit in the optional macros. Positive
+assertions disable ODA/QCAD fallback discovery and require one successful
+`dwg2dxf` process whose exact `-o` output is the path passed to FreeCAD's C++
+DXF importer. The fallback-enabled feature audit records every converter argv,
+exit code, candidate output/existence, configured converter preference, and
+the exact final path supplied to `importDXF.open()`. This was verified against
+the user-owned AC1024 condominium sample: `dwg2dxf` returned 1 with no output;
+FreeCAD then invoked ODAFileConverter (return 0) and imported that ODA-produced
+DXF. Although it contains one SPLINE record and FreeCAD reports one SPLINE,
+this is ODA evidence only. The sample and all converter products remain
+unstaged; no support claim is promoted.
+
 Current implementation-item ledger (update in every corresponding slice
-commit; 45/59 committed, 12 blocked, 1 verified, 0 in progress, and 1 ready):
+commit; 46/60 committed, 12 blocked, 1 verified, 0 in progress, and 1 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -1348,6 +1410,7 @@ commit; 45/59 committed, 12 blocked, 1 verified, 0 in progress, and 1 ready):
 | S8.15.2 | COMMITTED | Added locally authored AC1015 MESH, single-face PFACE and two-face PFACE `.dwgadd` controls, optional `dwg2dxf_freecad_3d_mesh_cli` / `...pface_cli` / `...pface_multiface_cli` CTests, and environment-gated bounded shape-detail output in `tests/freecad_dwg2dxf_feature_audit.FCMacro`. Exact FreeCAD `dwg2dxf input -o output` conversion and DXF readback retain one MESH POLYLINE (flag/dimensions 2×2/four XYZ vertices), one PFACE POLYLINE (four XYZ vertices/one face-record vertex/indices 1,2,3,4), and the two-face PFACE's five XYZ vertices/two face records/indices. All three new CTests pass; combined with the existing LINE/POLYLINE CLI tests and `libdxfrw_dwg_local_roundtrip`, focused CTest passes 6/6; no FreeCAD dependency enters default CI. FreeCAD 1.1.3 full revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, default C++ mode 2: mesh creates one valid `Part::Feature`, but has 3 sequential-chain edges and no faces instead of 2×2 grid topology; single-face PFACE creates a valid 4-edge wire/no faces and erroneously connects `(0,0,0)` to `(0,3,4)`. Tracked two-face PFACE converter output triggers `CDxfRead::ReadEntity` unknown exception and creates no shape; isolated signed-quad and triangle controls import, so the observed failure is multi-face. Mesh/single-face controls print 5/6 zero-length-extrusion warnings. Converter semantics are preserved, but these FreeCAD topology results are explicitly unsupported; generated DWG/DXF outputs remain in build/temp and no external or binary fixture was committed. `git diff --check` passes. This generated evidence promotes no target-authored DWG interoperability or general FreeCAD 3D claim. |
 | S8.15.3 | COMMITTED | Added locally authored `tests/fixtures/dwg/ac1015_3d_point_freecad_control.dwgadd`, opt-in `dwg2dxf_freecad_3d_point_cli` exact-argv converter/readback CTest, and `tests/freecad_dwg2dxf_3d_point_check.FCMacro`. The fast CTest generates DWG in the build tree and checks one AC1015 POINT at groups 10/20/30 `(10,20,30)` after conversion and DXF readback. FreeCAD 1.1.3 full revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2 with `Import points=Yes`, resolves this `dwg2dxf` through PATH and creates exactly one valid `Part::Feature` containing one vertex `(10,20,30)`, no edges/faces, and no unsupported report. Runtime assertion macro passes. This is one generated control and importer profile only; not a general POINT/DWG-version or target-authored interoperability claim. Generated DWG/DXF outputs remain in build/temp; no binaries were committed. |
 | S8.15.4 | COMMITTED | Added locally authored `tests/fixtures/dwg/ac1015_arc_circle_freecad_control.dwgadd`, optional `dwg2dxf_freecad_3d_arc_circle_cli` exact-argv conversion/readback CTest, and `tests/freecad_dwg2dxf_3d_arc_circle_check.FCMacro`. Fast test preserves AC1015, one ARC (center `(20,30,40)`, radius 3, 0–90°) and one CIRCLE (center `(10,20,30)`, radius 5) through `dwg2dxf input -o output` and DXF readback; it passes. FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, default C++ mode 2: two valid `Part::Feature` edges, ARC center/radius `(20,30,40)`/3, +Z axis and ordered endpoints `(23,30,40)`→`(20,33,40)`; CIRCLE center/radius `(10,20,30)`/5 and closed XY-plane locus. FreeCAD's full-circle curve internally reports -Z axis, recorded as orientation-equivalent for an undirected closed circle. No unsupported features. The runtime assertion passes. Only default-normal elevated controls are qualified; an exploratory non-default `arc.extrusion` assignment was ignored by LibreDWG dwgadd 0.14, so oblique OCS stays unqualified and requires a trustworthy sample/generator before testing. Combined focused CTest (`libdxfrw_dwg_local_roundtrip`, LINE, POINT, 3D POLYLINE, MESH, one-/multi-face PFACE and ARC/CIRCLE CLI controls) passes 8/8. Generated DWG/DXF remains in build/temp. This promotes no AutoCAD-authored interoperability, oblique OCS, or general FreeCAD 3D claim. |
+| S8.15.5 | COMMITTED | The feature audit now records configured `DWGConversion`, every converter argv/return code/candidate output, whether each output exists, and the exact DXF path passed to `importDXF.open()`. Positive LINE/POINT/3D-POLYLINE/ARC-CIRCLE macros disable ODA/QCAD fallbacks and assert exactly one successful `dwg2dxf <input> -o <same imported DXF>` invocation. Focused fast CTest for those four generated controls passes 4/4; all four optional FreeCAD runtime assertion macros pass on FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, default C++ mode 2. The fallback-enabled audit against the user-owned AC1024 condominium sample records `dwg2dxf` return 1/no output, then ODAFileConverter return 0 and its output as the actual importer input. Its SPLINE observation is therefore not attributed to libdxfrw. No sample/output was staged or committed; no SPLINE or wider support claim is promoted. |
 | S0.1 | COMMITTED | Rebased onto `origin/master`. The last ancestry check before the S8.11 slice (HEAD `aa5a8fb`) found `origin/master` to be an ancestor of `HEAD` (zero behind, 44 local commits ahead); subsequent plan/code slices are local branch commits. Existing user-owned untracked paths remain untouched. |
 | S0.2 | COMMITTED | Resolved the authoritative local ODA v5.4.1 PDF at `/Users/dli/doc/dwg/OpenDesign_Specification_for_.dwg_files (1).pdf`; title/version/page count (279) match the official download. Read §§20.4.40 SPLINE and 20.4.41 REGION/3DSOLID/BODY; continue reading each relevant section immediately before any DWG parser change. Authority lookup is unblocked; this alone does not qualify unlisted layouts. |
 | S0.3 | COMMITTED | Recorded read/write versions and reader/writer lineage, source-visible routes for each 3D family, read-only legacy AC1009 behavior, the missing modeler DWG encoder, and unsupported/unqualified claim ceilings. Unknown class/layout/version identities remain explicitly unknown; this inventory is not interoperability qualification. |
