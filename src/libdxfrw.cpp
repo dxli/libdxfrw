@@ -3573,6 +3573,11 @@ bool dxfRW::writeSolid(DRW_Solid *ent){
 bool dxfRW::write3dface(DRW_3Dface *ent){
     if (!preflightEntity(ent))
         return false;
+    if (ent->invisibleflag < DRW_3Dface::NoEdge
+        || ent->invisibleflag > DRW_3Dface::AllEdges) {
+        m_writeError = true;
+        return false;
+    }
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "3DFACE");
     if (!writeEntity(ent))

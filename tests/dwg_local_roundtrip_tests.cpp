@@ -6838,6 +6838,37 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
         && polyfaceValid && ocsValid && meshValid;
 }
 
+bool runDxfRejectsInvalidFaceFlags(bool binary,
+                                   const std::filesystem::path& directory) {
+    const std::string encoding = binary ? "binary" : "ascii";
+    const std::array<int, 3> invalidFlags{{-1, 16, 65536}};
+    bool allRejected = true;
+    for (const int flags : invalidFlags) {
+        const std::filesystem::path output = directory /
+            ("libdxfrw-invalid-3dface-flags-" + encoding + "-"
+             + std::to_string(flags) + ".dxf");
+        std::error_code ec;
+        std::filesystem::remove(output, ec);
+
+        dx_data source;
+        auto* face = new DRW_3Dface();
+        face->basePoint = DRW_Coord(1.0, 2.0, 3.0);
+        face->secPoint = DRW_Coord(4.0, 5.0, 6.0);
+        face->thirdPoint = DRW_Coord(7.0, 8.0, 9.0);
+        face->fourPoint = DRW_Coord(10.0, 11.0, 12.0);
+        face->invisibleflag = flags;
+        source.mBlock->ent.push_back(face);
+
+        dx_iface exporter;
+        const bool writeSucceeded = exporter.fileExport(
+            output.string(), DRW::AC1027, binary, &source, false);
+        if (writeSucceeded || std::filesystem::exists(output))
+            allRejected = false;
+        std::filesystem::remove(output, ec);
+    }
+    return allRejected;
+}
+
 DRW_Coord referenceInsertTransform(const DRW_Coord& point,
                                    const DRW_Coord& blockBase,
                                    const DRW_Insert& insert) {
@@ -7989,6 +8020,10 @@ int main(int argc, char** argv) {
            "local DXF ASCII 3D topology and OCS/WCS round-trip", failures);
     expect(runDxfTopologyRoundTrip(true, directory, keepOutputs),
            "local DXF binary 3D topology and OCS/WCS round-trip", failures);
+    expect(runDxfRejectsInvalidFaceFlags(false, directory),
+           "local DXF ASCII writer rejects invalid 3DFACE edge flags", failures);
+    expect(runDxfRejectsInvalidFaceFlags(true, directory),
+           "local DXF binary writer rejects invalid 3DFACE edge flags", failures);
     expect(runDxfInsertTransformRoundTrip(false, directory, keepOutputs),
            "local DXF ASCII nested INSERT/MINSERT transform fields", failures);
     expect(runDxfInsertTransformRoundTrip(true, directory, keepOutputs),
