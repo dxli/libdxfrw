@@ -539,8 +539,9 @@ diagnostic.
 
 ### S7 — Independent qualification, claims, and release closeout
 
-State: the S7.4 status matrix is committed; every remaining promotion or
-consumer-visibility item stays per-family/per-version evidence-gated.
+State: the S7.4 status matrix and S7.5 static LibreCAD callback audit are
+committed. All remaining promotion stays per-family/per-version
+evidence-gated; the callback audit does not qualify LibreCAD UI behavior.
 
 Dependencies: S1-S6. An unavailable DWG witness does not block completed DXF
 rows; it leaves only the corresponding DWG row unqualified.
@@ -625,7 +626,7 @@ spec/trace readiness; finally S7. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 15/28 committed, 13 blocked, 0 in progress, and 0 ready):
+commit; 16/28 committed, 12 blocked, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -647,7 +648,7 @@ commit; 15/28 committed, 13 blocked, 0 in progress, and 0 ready):
 | S4.1–S4.4 | BLOCKED_ON_S3 | Opaque DWG modeler payload writing follows only verified read layouts. |
 | S7.1–S7.3 | BLOCKED_ON_INDEPENDENT_WITNESS | Current LibreDWG/ezdxf attempts do not supply semantic comparison for all required rows; retain unqualified status until exact witnesses and diagnostic outcomes exist. |
 | S7.4 | COMMITTED | Added docs/3D_SUPPORT_STATUS.md, linked from README, with family-specific DXF test versions/encodings, explicit DWG reader/writer version sets, direction-specific status, evidence grade, and unqualified/unsupported boundaries. Does not modify frozen metadata/qualified-format-claims-v1.json or metadata/qualified-format-status-v1.json, and promotes no semantic claim. |
-| S7.5 | BLOCKED_ON_CONSUMER_REVIEW | Library callbacks and dx_iface tests are not proof that LibreCAD displays or edits the same families; inspect consumer callback paths and retain that distinction. |
+| S7.5 | COMMITTED | Read-only audit of `../LibreCAD/librecad/src/lib/filters/rs_filterdxfrw.cpp` at LibreCAD HEAD `c67c02a01`: `add3dFace` and `addMesh` project XY into 2D polylines; 3DFACE preserves 3D corners/edge flags in a sidecar, while MESH renders base-cage faces without a native editable 3D mesh representation. Polygon-mesh polylines record counts/flags in advanced metadata, attach source 3D vertices to a fallback XData anchor, and render XY row/column polylines; smooth polygon meshes are not rendered. `addTrace`/`addSolid` produce 2D solids and retain native TRACE/SOLID corners/thickness in sidecars only for supported axial extrusion; non-axial extrusion is skipped. `addHelix` delegates to spline approximation; LibreCAD's callback documents axis/turn metadata as not represented in its entity model and dropped on import. `addSurface` and `addModelerGeometry` retain advanced metadata and render decoded SAB wireframe edges when available; neither creates an editable parametric/native 3D surface or solid. Generic spline handling creates LibreCAD 2D spline/conic entities and may approximate higher degrees. Base `DRW_Interface` defaults for `addMesh`, `addHelix`, `addSurface`, and `addModelerGeometry` are no-ops; only source-compatible delivery is guaranteed to other adapters. This is source-level callback evidence only: no LibreCAD build/UI interaction or 3D editing behavior was tested, and no public semantic 3D claim is promoted. |
 
 - Before implementation, convert the work packages into dependency-closed
   items with `READY`, `IN_PROGRESS`, `BLOCKED`, `VERIFIED`, and `COMMITTED`
