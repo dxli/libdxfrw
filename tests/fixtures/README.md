@@ -11,5 +11,9 @@ project-authored regression artifacts). Their source blob IDs, hashes, sizes,
 versions, and feature scope are recorded in `metadata/fixture-registry.json`.
 
 No downloaded, customer-provided, converted, mutated, minimized, or newly
-derived drawing bytes are included here. Runtime conversion outputs and
-corrupted variants remain in the temporary build directory.
+derived drawing bytes are included here. The exception is
+`dxf/ac1015_insert_freecad_control.dxf`, a minimal source drawing authored
+locally from scratch for the opt-in FreeCAD INSERT-placement control; its
+expected WCS endpoints are documented in the associated test and plan. The
+ODA-converted DWG and all `dwg2dxf` outputs are generated only in the temporary
+build directory and are not committed.

@@ -145,6 +145,31 @@ if(LIBDXFRW_ENABLE_DWGADD_FREECAD_CONTROL)
     endforeach()
 endif()
 
+# Optional independent-writer DWG control for FreeCAD block INSERT placement.
+# The DXF source is locally authored; ODA and FreeCAD remain external tools
+# and are not dependencies of the normal build/test configuration.
+option(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL
+    "Enable the ODA-generated FreeCAD 3D INSERT converter control" OFF)
+if(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL)
+    find_program(LIBDXFRW_ODAFILECONVERTER_EXECUTABLE NAMES ODAFileConverter)
+    if(NOT LIBDXFRW_ODAFILECONVERTER_EXECUTABLE)
+        message(FATAL_ERROR
+            "LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL requires ODAFileConverter; "
+            "set LIBDXFRW_ODAFILECONVERTER_EXECUTABLE to its path")
+    endif()
+    add_test(
+        NAME dwg2dxf_freecad_3d_insert_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}
+            -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+            -DSOURCE_DXF=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dxf/ac1015_insert_freecad_control.dxf
+            -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3d_insert_cli_test.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_3d_insert_cli PROPERTIES
+        LABELS "dwg_read;freecad;cli;fast;generated;oda")
+endif()
+
 # LibreCAD_3 ABI compatibility check.
 # Mirrors LibreCAD_3's DXFimpl override surface; fails to compile if upstream
 # introduces a new pure virtual on DRW_Interface or removes/renames a public
