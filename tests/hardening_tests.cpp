@@ -1914,7 +1914,10 @@ public:
     void addKnot(const DRW_Entity&) override {}
     void addInsert(const DRW_Insert&) override {}
     void addTrace(const DRW_Trace&) override {}
-    void add3dFace(const DRW_3Dface&) override {}
+    void add3dFace(const DRW_3Dface& data) override {
+        ++faceCount;
+        last3dFace = data;
+    }
     void addSolid(const DRW_Solid&) override {}
     void addMText(const DRW_MText&) override {}
     void addText(const DRW_Text&) override {}
@@ -1964,9 +1967,11 @@ public:
     std::size_t rawSectionCount {0};
     bool rawSectionHasValues {false};
     std::size_t headerCount {0};
+    std::size_t faceCount {0};
     std::string headerComments;
     std::size_t modelerGeometryCount {0};
     std::size_t surfaceCount {0};
+    DRW_3Dface last3dFace;
     DRW_ModelerGeometry lastModelerGeometry;
     DRW_Surface lastSurface;
 };
@@ -2883,6 +2888,35 @@ void testDxfProxyGraphicsStayOutOfAcis(TestContext& t) {
     }
 }
 
+void testDxfThreeCornerFaceFallback(TestContext& t) {
+    const std::string facePrefix =
+        "0\nSECTION\n2\nENTITIES\n0\n3DFACE\n5\n701\n8\n0\n"
+        "10\n1\n20\n2\n30\n3\n"
+        "11\n4\n21\n5\n31\n6\n"
+        "12\n7\n22\n8\n32\n9\n";
+    const std::string suffix = "70\n15\n0\nENDSEC\n0\nEOF\n";
+
+    dxfRW validReader("");
+    FuzzInterface validCapture;
+    std::string validContent = facePrefix + suffix;
+    t.expect(validReader.readAscii(&validCapture, false, validContent)
+                 && validCapture.faceCount == 1u
+                 && validCapture.last3dFace.fourPoint.x == 7.0
+                 && validCapture.last3dFace.fourPoint.y == 8.0
+                 && validCapture.last3dFace.fourPoint.z == 9.0
+                 && validCapture.last3dFace.invisibleflag
+                        == DRW_3Dface::AllEdges,
+             "DXF 3DFACE without corner four duplicates corner three");
+
+    dxfRW malformedReader("");
+    FuzzInterface malformedCapture;
+    std::string malformedContent = facePrefix + "13\n10\n" + suffix;
+    t.expect(!malformedReader.readAscii(&malformedCapture, false,
+                                        malformedContent)
+                 && malformedCapture.faceCount == 0u,
+             "DXF 3DFACE rejects a half-present fourth corner");
+}
+
 void testMLeaderDxfContextRoundTrip(TestContext& t) {
     DRW_MLeader source;
     source.handle = 0xA100u;
@@ -3336,6 +3370,7 @@ int main() {
     testMLeaderParserStateCopyIsolation(context);
     testDimensionParserStateCopyIsolation(context);
     testDxfProxyGraphicsStayOutOfAcis(context);
+    testDxfThreeCornerFaceFallback(context);
     testMLeaderDxfContextRoundTrip(context);
     testLinetypeDashFlagIsFourBits(context);
     testProxyPayloadCodesAreScopedToTheProxySubclass(context);
