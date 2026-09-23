@@ -66,7 +66,7 @@ same `libdxfrw::libdxfrw` target.
 | DWG read across the dispatched AC versions | experimental | Reader and section safety matrices pass; eligible semantic fixtures remain required |
 | DWG writing and versioned feature families | experimental | Local six-version round-trips pass; self-read is not an independent oracle |
 | Existing 2D consumer compatibility | checked narrowly | `lc3_compat_check` verifies the LibreCAD-style source callback surface, and one generated DXF vector guards legacy `ext=true` LWPOLYLINE behavior; not a binary-ABI or UI guarantee |
-| 3D consumer typed-data access | experimental DXF subset | AC1027 ASCII/binary callback probe; only the listed fields/families are covered, and no renderer or geometry kernel is included |
+| 3D consumer typed-data access | experimental DXF subset; AC1024 opaque SAB carrier only | AC1027 ASCII/binary callback probe covers listed DXF fields/families; one AC1024 DWG sample has exact opaque SAB bytes only. Neither establishes general DWG modeler semantics, and no renderer or geometry kernel is included |
 | Derived rendering or CAD application policy | unsupported | Owned by the consumer, not this library |
 
 The 3D consumer lane exposes typed XYZ, OCS/elevation, topology, placement, and
