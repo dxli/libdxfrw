@@ -49,6 +49,23 @@ See `docs/UPGRADE_SUPPORT.md` for the support and release policy.
 python3 tools/run_fast_focus.py --build-dir build
 ```
 
+### Using `dwg2dxf` from FreeCAD
+
+The installed `dwg2dxf` executable can serve as FreeCAD Draft's external DWG
+converter. Add the installed bindir (usually `bin`) to `PATH` before launching
+FreeCAD, or set FreeCAD's DWG converter path to the full installed executable
+path. Select FreeCAD's LibreDWG-compatible converter option when you want to
+attribute an import specifically to this executable; in automatic mode FreeCAD
+may try ODA or QCAD after a failed conversion. If multiple programs named
+`dwg2dxf` are on `PATH`, the first match is used.
+
+FreeCAD invokes the converter as `dwg2dxf <input.dwg> -o <output.dxf>`; this
+form is noninteractive, writes ASCII DXF by default, and retains a supported
+source revision unless an explicit output version is supplied. The converter
+produces DXF for FreeCAD's own importer: it does not extend that importer's
+entity or 3D geometry support. For example, a DXF entity may be preserved
+correctly by `dwg2dxf` while FreeCAD reports it as unsupported.
+
 Installed consumers can use either `find_package(libdxfrw CONFIG REQUIRED)` and
 `libdxfrw::libdxfrw`, or `pkg-config --cflags --libs libdxfrw`. The package is
 relocatable and selects compatible package versions with `SameMajorVersion`.
