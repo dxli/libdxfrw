@@ -25,6 +25,33 @@ Only expose those capabilities if an implementation and independent evidence
 actually support them. This is a focused supplement to
 `LIBRECAD_DXFRW_UPGRADE_PLAN.md`; it does not reopen unrelated format families.
 
+## Consumer compatibility and enablement target
+
+Maintain two separate consumer lanes:
+
+1. **Existing 2D consumers, including LibreCAD:** preserve current source-level
+   `DRW_Interface` compatibility and callback behavior. Do not add new pure
+   virtual requirements or project coordinates in the library. A 2D adapter
+   may deliberately drop Z for display, approximate a curve, or retain source
+   fields in its own metadata, but that behavior is not a libdxfrw data-support
+   claim. S7.5 records the current LibreCAD boundary; no 3D UI migration is
+   implied.
+2. **3D-capable consumers:** make typed 3D fields and topology available without
+   lossy XY projection, document each field's coordinate frame and ownership,
+   and keep opaque modeler bytes distinguishable from decoded semantics. Add a
+   headless 3D-aware consumer/test adapter that demonstrates full-coordinate
+   delivery through the public API. This enables downstream consumers to build
+   scene geometry; it does not add a renderer, tessellator, or ACIS kernel to
+   libdxfrw.
+
+These lanes are orthogonal to format qualification: source-level data access,
+callback delivery, semantic correctness per format/version, and GUI display or
+editing are four distinct evidence levels. Existing 2D behavior must not hide
+Z or topology from the new 3D adapter, and a successful 3D adapter test must
+not be read as proof that LibreCAD displays or edits those fields. Preserve
+source compatibility; do not claim binary ABI compatibility from defaulted
+virtual callbacks.
+
 ## Findings from the current source review
 
 These are observations about code paths and existing tests, not blanket support
@@ -573,6 +600,63 @@ independent semantic evidence or is narrowed to opaque/experimental. Negative
 gate: an opaque/raw-only result, self-generated vector, or advisory external
 sample cannot promote a semantic read/write claim.
 
+### S8 — Preserve 2D consumers and enable 3D-aware consumers
+
+State: newly added consumer-enablement lane. It is independent of GUI/rendering
+work and can proceed for generated DXF vectors while versioned DWG evidence is
+blocked. No support claim is promoted by the adapter alone.
+
+Dependencies: S1 public typed-field inventory; S5/S6 DXF entity paths; S7.5
+LibreCAD callback-boundary audit. DWG coverage additionally depends on the
+relevant S3/S4 reader/writer slice and its authentic per-version evidence.
+
+Steps:
+
+1. **S8.1 — Public consumer contract matrix.** For every in-scope family, map
+   the callback and public `DRW_*` fields to WCS, OCS, entity-local, or opaque
+   coordinates; record Z-bearing values, normals/extrusion, topology/index
+   ownership, block transforms, and raw carrier fields. Mark callback defaults
+   (`no-op`, delegation, or required override) and pointer lifetime/copying
+   expectations. Reuse the S0 family inventory; do not duplicate parser
+   qualification. Keep unverified coordinate interpretations marked unknown.
+2. **S8.2 — Existing 2D source-compatibility gate.** Compile the locked
+   `lc3_compat_check` consumer and representative library/test adapters after
+   callback or public-field changes. Preserve default implementations for new
+   callbacks and test that no new pure virtual is required. Keep the LibreCAD
+   projection/metadata behavior as an adapter concern; do not change its sibling
+   checkout as part of this library lane.
+3. **S8.3 — Headless 3D consumer probe (DXF-ready).** Extend/reuse the
+   semantic-adapter/test infrastructure to copy complete typed callback data
+   into a neutral scene-record model, retaining full XYZ, coordinate-frame
+   tags, normals, face indices/edge flags, transforms, and opaque-carrier
+   identity separately. Exercise generated ASCII and binary DXF vectors from
+   S5/S6, including nonzero Z, OCS normals, nested INSERT/MINSERT transforms,
+   polyface/MESH topology, spline/surface parameters, and SAT/SAB/ACDSDATA
+   carrier distinctions. Assert the consumer sees native values before any
+   projection; runtime-generated fixtures only.
+4. **S8.4 — DWG 3D consumer probe (per-version blocked).** Feed only DWG rows
+   whose parser layout is already verified against the ODA authority and an
+   authentic target sample. Compare the headless adapter's copied fields with
+   the independent semantic witness; retain `UNQUALIFIED` and skip the row
+   when any layout, class identity, or oracle dependency is missing. Never
+   fabricate DWG records or infer an entity's Z semantics from a DXF analogue.
+5. **S8.5 — Consumer-facing contract and release claims.** After S8.1-S8.3,
+   document how a 3D-aware client consumes typed geometry and separates opaque
+   modeler payloads from decoded fields, and how a 2D client can retain its
+   existing projection policy. Update `docs/3D_SUPPORT_STATUS.md` only with
+   evidence-backed distinctions among library data delivery, 2D consumer
+   mapping, 3D consumer field access, semantic format/version qualification,
+   and actual display/edit behavior. Keep any DWG rows without S8.4 evidence
+   explicitly unqualified; do not block the completed DXF consumer contract on
+   unavailable DWG witnesses. Do not imply that this library performs scene
+   rendering or parametric/NURBS/ACIS evaluation.
+
+Positive gate: an old source consumer still compiles, and the headless 3D probe
+receives all asserted native typed values/carrier identities without an
+implicit projection. Negative gate: a default no-op, 2D preview entity, or
+opaque-byte digest alone cannot satisfy the 3D consumer gate or promote a
+format/version support claim.
+
 ## Fast validation and fixture policy
 
 Keep the normal inner loop small; reserve full matrices for integration
@@ -619,14 +703,16 @@ Initial dependency/readiness order:
 | S5 | S0, S1 | DXF topology/coordinate portion ready after S1; only the DXF portion may proceed while the ODA gate is unresolved. |
 | S6 | S0, S1 | DXF surfaces/HELIX ready after S1. DWG spline edits require the local ODA chapter and authentic per-version trace; modern DWG surface edits additionally require a surface-specific primary layout and independent witness. |
 | S7 | S1-S6 | Qualify completed rows independently. A blocked DWG row does not block completed DXF evidence or docs; it remains unqualified. |
+| S8 | S1, S5-S7.5 | Start the consumer-contract matrix, 2D compile guard, and DXF headless consumer probe independently; defer only the corresponding DWG probe rows until S3/S4 evidence is ready. Keep adapters outside the library's parser semantics and do not require GUI/rendering code. |
 
 The execution sequence is therefore readiness-first, not table-order-first:
 S0 → S1 → S2 and the DXF portions of S5/S6; then S3 → S4 after DWG
-spec/trace readiness; finally S7. Continue any remaining independent DXF work
+spec/trace readiness; S7 and S8 proceed per completed rows, with S8's DXF
+consumer probe independent of DWG. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 16/28 committed, 12 blocked, 0 in progress, and 0 ready):
+commit; 16/33 committed, 14 blocked, 0 in progress, and 3 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -649,6 +735,11 @@ commit; 16/28 committed, 12 blocked, 0 in progress, and 0 ready):
 | S7.1–S7.3 | BLOCKED_ON_INDEPENDENT_WITNESS | Current LibreDWG/ezdxf attempts do not supply semantic comparison for all required rows; retain unqualified status until exact witnesses and diagnostic outcomes exist. |
 | S7.4 | COMMITTED | Added docs/3D_SUPPORT_STATUS.md, linked from README, with family-specific DXF test versions/encodings, explicit DWG reader/writer version sets, direction-specific status, evidence grade, and unqualified/unsupported boundaries. Does not modify frozen metadata/qualified-format-claims-v1.json or metadata/qualified-format-status-v1.json, and promotes no semantic claim. |
 | S7.5 | COMMITTED | Read-only audit of `../LibreCAD/librecad/src/lib/filters/rs_filterdxfrw.cpp` at LibreCAD HEAD `c67c02a01`: `add3dFace` and `addMesh` project XY into 2D polylines; 3DFACE preserves 3D corners/edge flags in a sidecar, while MESH renders base-cage faces without a native editable 3D mesh representation. Polygon-mesh polylines record counts/flags in advanced metadata, attach source 3D vertices to a fallback XData anchor, and render XY row/column polylines; smooth polygon meshes are not rendered. `addTrace`/`addSolid` produce 2D solids and retain native TRACE/SOLID corners/thickness in sidecars only for supported axial extrusion; non-axial extrusion is skipped. `addHelix` delegates to spline approximation; LibreCAD's callback documents axis/turn metadata as not represented in its entity model and dropped on import. `addSurface` and `addModelerGeometry` retain advanced metadata and render decoded SAB wireframe edges when available; neither creates an editable parametric/native 3D surface or solid. Generic spline handling creates LibreCAD 2D spline/conic entities and may approximate higher degrees. Base `DRW_Interface` defaults for `addMesh`, `addHelix`, `addSurface`, and `addModelerGeometry` are no-ops; only source-compatible delivery is guaranteed to other adapters. This is source-level callback evidence only: no LibreCAD build/UI interaction or 3D editing behavior was tested, and no public semantic 3D claim is promoted. |
+| S8.1 | READY | Reuse S0 family inventory and audit `DRW_Interface`/public data fields into coordinate-frame, full-XYZ, topology/transform, carrier, callback-default, and lifetime requirements; output contract matrix before changing API. Unknown frame semantics remain unknown. |
+| S8.2 | READY | Build/extend `lc3_compat_check` and focused consumer compile checks; verify optional 3D callbacks remain non-pure and preserve existing 2D source compatibility. Do not alter LibreCAD's separate checkout. |
+| S8.3 | READY_DXF | Reuse `tests/semantic_differential_adapter.cpp` where practical for a headless 3D consumer profile; assert DXF full-XYZ/OCS/topology/transform/surface-carrier delivery using runtime-generated ASCII/binary vectors. Never project before capture; no fixture files. DWG subrows await S8.4. |
+| S8.4 | BLOCKED_PER_VERSION | Add probe rows only after S3/S4 parser evidence, authentic DWG target, and an independent semantic oracle are all available. Run ready version/family rows independently; keep the others unqualified. |
+| S8.5 | BLOCKED_ON_S8.1-S8.3 | Update support documentation after the DXF consumer probe and 2D compatibility evidence; retain DWG rows without S8.4 evidence as unqualified rather than waiting for them. No renderer/kernel promise. |
 
 - Before implementation, convert the work packages into dependency-closed
   items with `READY`, `IN_PROGRESS`, `BLOCKED`, `VERIFIED`, and `COMMITTED`
