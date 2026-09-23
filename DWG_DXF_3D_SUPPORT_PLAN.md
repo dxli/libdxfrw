@@ -174,15 +174,17 @@ Files: `tests/semantic_differential_adapter.cpp`;
 Steps:
 
 1. Replace opaque semantic output for `DRW_3Dface`, `DRW_3DLine`,
-   `DRW_Polyline`/`DRW_Vertex`, `DRW_Mesh`, `DRW_Helix`, modeler geometry,
-   and each surface subtype with deterministic field-level JSON.
+   `DRW_Polyline`/`DRW_Vertex`, `DRW_Mesh`, `DRW_Helix`, `DRW_Insert` and its
+   ATTRIB children, modeler geometry, and each surface subtype with
+   deterministic field-level JSON.
 2. Serialize geometry separately from raw bytes: WCS/OCS values, extrusion,
    thickness, flags, ordered vertices/faces, signed polyface indices, mesh
    topology/creases/overrides, curve knots/weights/control points where
    represented, surface scalars/points/matrices/handles, modeler status and
-   version, and ACIS/proxy/DataStorage/raw-section carrier length plus digest.
+   version, nested INSERT/ATTRIB placement and text fields, typed loft-reference
+   values, and ACIS/proxy/DataStorage/raw-section carrier length plus digest.
    Include common layer/owner/handle and compound-child identity in separate
-   fields. Never include unbounded payload contents in diagnostics.
+   fields. Never include raw payload contents in semantic fields or diagnostics.
 3. Make unknown fields/version-specific omissions visible. Keep a distinct
    “opaque-preserved” result where a semantic parse is not available.
 4. Add generated positive vectors and malformed/truncated negatives without
@@ -503,8 +505,8 @@ commit):
 | S0.4 | READY | Record custom DWG class/type identity only from local target traces; run after applicable spec/sample access. |
 | S0.5 | IN_PROGRESS | DXF/core-vendor/legacy inventory is underway; compare selected independent implementations without treating them as normative. |
 | S0.6 | BLOCKED | Verify searchable-text gaps against the required local ODA PDF; modern MESH/surface/3DLINE DWG rows stay unqualified. |
-| S1.1 | READY | Replace opaque semantic serializers for 3DFACE, 3DLINE, POLYLINE/VERTEX, MESH, HELIX, modeler geometry, and each surface subtype. |
-| S1.2 | READY | Add bounded carrier digests and generated positives/negatives; no committed downloaded fixtures. |
+| S1.1 | COMMITTED | Field-level serializers now cover 3DFACE, 3DLINE, POLYLINE/VERTEX, MESH, HELIX/SPLINE, modeler geometry, all surface subtypes, INSERT placement, and nested ATTRIB fields. Loft reference values are typed; binary values remain digest carriers. |
+| S1.2 | COMMITTED | Runtime self-tests verify mesh-coordinate mutation, polyface index serialization, INSERT/ATTRIB placement, loft-reference typed/binary separation, and modeler frame-body labeling/digest. Manual C++17 `-Wall -Wextra -Werror` adapter build and `--self-test` pass; `ctest -R '^libdxfrw_dwg_local_roundtrip$'` passes 1/1. Existing generated malformed DXF modeler checks remain in the fast round-trip test. No downloaded fixtures added. |
 | S2.1 | BLOCKED_ON_S1 | Define DXF carrier separation and section/entity identity without modifying DWG reader paths. |
 | S2.2 | BLOCKED_ON_S2.1 | Verify/fix SAT routing for AC1015/1018/1021/1024 and preserve opaque ACDSDATA only when identity is unambiguous. |
 | S5.1 | READY_AFTER_S1 | DXF ASCII/binary topology, OCS/WCS, MESH and compound POLYLINE checks. |
