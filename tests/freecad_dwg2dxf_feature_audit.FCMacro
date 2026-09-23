@@ -65,6 +65,46 @@ def count_dxf_records(path):
     return dict(sorted(counts.items()))
 
 
+def point_tuple(vertex):
+    point = vertex.Point
+    return (float(point.x), float(point.y), float(point.z))
+
+
+def shape_details(document, max_objects=64, max_components=256):
+    """Return bounded topology/coordinate details for small control files."""
+    details = []
+    truncated = False
+    for obj in document.Objects:
+        shape = getattr(obj, "Shape", None)
+        if shape is None or shape.isNull():
+            continue
+        if len(details) >= max_objects:
+            truncated = True
+            break
+
+        vertices = list(shape.Vertexes)
+        edges = list(shape.Edges)
+        faces = list(shape.Faces)
+        detail = {
+            "name": obj.Name,
+            "type": obj.TypeId,
+            "valid": shape.isValid(),
+            "vertex_count": len(vertices),
+            "edge_count": len(edges),
+            "face_count": len(faces),
+        }
+        if len(vertices) <= max_components and len(edges) <= max_components:
+            detail["vertices"] = sorted(point_tuple(vertex) for vertex in vertices)
+            detail["edges"] = [
+                sorted(point_tuple(vertex) for vertex in edge.Vertexes)
+                for edge in edges
+            ]
+        else:
+            detail["coordinates_truncated"] = True
+        details.append(detail)
+    return details, truncated
+
+
 legacy = App.ParamGet(
     "User parameter:BaseApp/Preferences/Mod/Draft"
 ).GetBool("dxfUseLegacyImporter", False)
@@ -86,6 +126,11 @@ try:
     stats = captured.get("stats") or {}
     unsupported = stats.get("unsupportedFeatures", {})
     object_types = collections.Counter(obj.TypeId for obj in doc.Objects)
+    include_shape_details = os.environ.get("LIBDXFRW_FREECAD_SHAPE_DETAIL") == "1"
+    shape_detail_values = []
+    shape_detail_truncated = False
+    if include_shape_details:
+        shape_detail_values, shape_detail_truncated = shape_details(doc)
     result = {
         "freecad_version": list(App.Version()),
         "platform": platform.platform(),
@@ -107,6 +152,9 @@ try:
         },
         "freecad_object_types": dict(sorted(object_types.items())),
         "settings": stats.get("importSettings", {}),
+        "shape_detail_enabled": include_shape_details,
+        "shape_details": shape_detail_values if include_shape_details else None,
+        "shape_detail_truncated": shape_detail_truncated,
     }
     print("FREECAD_DWG2DXF_FEATURE_AUDIT=" + json.dumps(result, sort_keys=True))
 finally:

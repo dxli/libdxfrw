@@ -107,6 +107,20 @@ if(LIBDXFRW_ENABLE_DWGADD_FREECAD_CONTROL)
     )
     set_tests_properties(dwg2dxf_freecad_3d_polyline_cli PROPERTIES
         LABELS "dwg_read;freecad;cli;fast;generated")
+    foreach(_classic_family mesh pface pface_multiface)
+        add_test(
+            NAME dwg2dxf_freecad_3d_${_classic_family}_cli
+            COMMAND ${CMAKE_COMMAND}
+                -DDWGADD=${LIBDXFRW_DWGADD_EXECUTABLE}
+                -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+                -DRECIPE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dwg/ac1015_${_classic_family}_freecad_control.dwgadd
+                -DFAMILY=${_classic_family}
+                -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_classic_polyline_cli_test.cmake
+        )
+        set_tests_properties(dwg2dxf_freecad_3d_${_classic_family}_cli PROPERTIES
+            LABELS "dwg_read;freecad;cli;fast;generated")
+    endforeach()
 endif()
 
 # LibreCAD_3 ABI compatibility check.
