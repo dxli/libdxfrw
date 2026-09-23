@@ -145,11 +145,11 @@ if(LIBDXFRW_ENABLE_DWGADD_FREECAD_CONTROL)
     endforeach()
 endif()
 
-# Optional independent-writer DWG control for FreeCAD block INSERT placement.
-# The DXF source is locally authored; ODA and FreeCAD remain external tools
-# and are not dependencies of the normal build/test configuration.
+# Optional independent-writer DWG controls for FreeCAD entity routes.
+# DXF sources are locally authored; ODA and FreeCAD remain external tools and
+# are not dependencies of the normal build/test configuration.
 option(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL
-    "Enable the ODA-generated FreeCAD 3D INSERT converter control" OFF)
+    "Enable ODA-generated FreeCAD 3D converter controls" OFF)
 if(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL)
     find_program(LIBDXFRW_ODAFILECONVERTER_EXECUTABLE NAMES ODAFileConverter)
     if(NOT LIBDXFRW_ODAFILECONVERTER_EXECUTABLE)
@@ -167,6 +167,17 @@ if(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3d_insert_cli_test.cmake
     )
     set_tests_properties(dwg2dxf_freecad_3d_insert_cli PROPERTIES
+        LABELS "dwg_read;freecad;cli;fast;generated;oda")
+    add_test(
+        NAME dwg2dxf_freecad_3d_spline_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}
+            -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+            "-DSOURCE_DXF=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dxf/ac1015_nonplanar_spline_freecad_control.dxf"
+            -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3d_spline_cli_test.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_3d_spline_cli PROPERTIES
         LABELS "dwg_read;freecad;cli;fast;generated;oda")
 endif()
 

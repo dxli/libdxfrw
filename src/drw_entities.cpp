@@ -90,6 +90,129 @@ constexpr std::int32_t kSplineFlagClosed = 4;
 constexpr std::int32_t kSplineFlagUseKnotParameter = 8;
 constexpr std::int32_t kSplineKnotParamCustom = 15;
 
+// DWG spline scenarios do not store DXF's planar bit or plane normal. Only
+// advertise a plane when the decoded geometry defines one unambiguously.
+bool deriveSplinePlaneNormal(
+    const std::vector<std::shared_ptr<DRW_Coord>>& points,
+    const DRW_Coord* startTangent, const DRW_Coord* endTangent,
+    DRW_Coord& normal) {
+    if (points.size() < 2 || points.front() == nullptr)
+        return false;
+
+    const DRW_Coord& origin = *points.front();
+    double coordinateScale = std::max({1.0, std::fabs(origin.x),
+                                       std::fabs(origin.y),
+                                       std::fabs(origin.z)});
+    for (const auto& point : points) {
+        if (point == nullptr || !std::isfinite(point->x)
+            || !std::isfinite(point->y) || !std::isfinite(point->z))
+            return false;
+        coordinateScale = std::max({coordinateScale, std::fabs(point->x),
+                                    std::fabs(point->y),
+                                    std::fabs(point->z)});
+    }
+    const double pointTolerance = std::numeric_limits<double>::epsilon()
+                                * coordinateScale * 64.0;
+
+    std::vector<DRW_Coord> directions;
+    directions.reserve(points.size() + 1);
+    for (std::size_t i = 1; i < points.size(); ++i) {
+        const double x = points[i]->x - origin.x;
+        const double y = points[i]->y - origin.y;
+        const double z = points[i]->z - origin.z;
+        const double length = std::hypot(x, y, z);
+        if (!std::isfinite(length))
+            return false;
+        if (length > pointTolerance)
+            directions.emplace_back(x / length, y / length, z / length);
+    }
+    const auto addTangentDirection = [&directions](const DRW_Coord* tangent) {
+        if (tangent == nullptr)
+            return true;
+        if (!std::isfinite(tangent->x) || !std::isfinite(tangent->y)
+            || !std::isfinite(tangent->z))
+            return false;
+        const double length = std::hypot(tangent->x, tangent->y, tangent->z);
+        if (!std::isfinite(length))
+            return false;
+        if (length > 0.0)
+            directions.emplace_back(tangent->x / length, tangent->y / length,
+                                    tangent->z / length);
+        return true;
+    };
+    if (!addTangentDirection(startTangent)
+        || !addTangentDirection(endTangent) || directions.size() < 2)
+        return false;
+
+    double nx = 0.0;
+    double ny = 0.0;
+    double nz = 0.0;
+    bool havePlane = false;
+    for (std::size_t i = 1; i < directions.size() && !havePlane; ++i) {
+        for (std::size_t j = 0; j < i; ++j) {
+            nx = directions[j].y * directions[i].z
+               - directions[j].z * directions[i].y;
+            ny = directions[j].z * directions[i].x
+               - directions[j].x * directions[i].z;
+            nz = directions[j].x * directions[i].y
+               - directions[j].y * directions[i].x;
+            const double normalLength = std::hypot(nx, ny, nz);
+            if (normalLength > 1e-12) {
+                nx /= normalLength;
+                ny /= normalLength;
+                nz /= normalLength;
+                havePlane = true;
+                break;
+            }
+        }
+    }
+    if (!havePlane)
+        return false;
+
+    const double absNx = std::fabs(nx);
+    const double absNy = std::fabs(ny);
+    const double absNz = std::fabs(nz);
+    const double dominant = absNx >= absNy && absNx >= absNz ? nx
+        : absNy >= absNz ? ny : nz;
+    if (dominant < 0.0) {
+        nx = -nx;
+        ny = -ny;
+        nz = -nz;
+    }
+
+    for (const auto& point : points) {
+        const double distance = (point->x - origin.x) * nx
+                              + (point->y - origin.y) * ny
+                              + (point->z - origin.z) * nz;
+        if (!std::isfinite(distance) || std::fabs(distance) > pointTolerance)
+            return false;
+    }
+
+    const auto tangentInPlane = [nx, ny, nz](const DRW_Coord* tangent) {
+        if (tangent == nullptr)
+            return true;
+        if (!std::isfinite(tangent->x) || !std::isfinite(tangent->y)
+            || !std::isfinite(tangent->z))
+            return false;
+        const double length = std::hypot(tangent->x, tangent->y, tangent->z);
+        if (!std::isfinite(length))
+            return false;
+        if (length == 0.0)
+            return true;
+        const double deviation = tangent->x * nx + tangent->y * ny
+                              + tangent->z * nz;
+        const double tangentTolerance = std::numeric_limits<double>::epsilon()
+                                      * length * 64.0;
+        return std::isfinite(deviation)
+            && std::fabs(deviation) <= tangentTolerance;
+    };
+    if (!tangentInPlane(startTangent) || !tangentInPlane(endTangent))
+        return false;
+
+    normal = DRW_Coord(nx, ny, nz);
+    return true;
+}
+
 bool isValidCount(std::int32_t count, std::int32_t maxCount) {
     return count >= 0 && count <= maxCount;
 }
@@ -5257,8 +5380,10 @@ bool DRW_Spline::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
 // carries here.
 void DRW_Spline::encodeDwgSplineBody(DRW::Version version, dwgBufferW *buf) const {
     // Scenario:
-    //   1 = control-point / rational / planar (uses knots + control + weights)
+    //   1 = control-point spline (uses knots + control points + weights)
     //   2 = fit-point (uses fit points + tangents + tolerance)
+// DWG does not store DXF's planar bit or optional normal here; derive those
+// only from the complete control/fit geometry when decoding.
     // When both lists are populated (e.g. DXF-sourced splines), prefer scenario 1
     // (ctrl + knots) and drop the fit list from the DWG stream — scenario 1 has no
     // fit-point section, so writing both would corrupt all subsequent entities.
@@ -15768,7 +15893,7 @@ bool DRW_Spline::parseDwgSplineBody(DRW::Version version, dwgBuffer *buf){
         return false;
     }
     if (scenario == 2) {
-        flags = 8;//scenario 2 = not rational & planar
+        flags = 0;
         if (m_splineFlags1 & kSplineFlagClosed)
             flags |= 1;
         if (!readBoundedBitDouble(*buf, bodyEndBit, tolfit)
@@ -15791,7 +15916,7 @@ bool DRW_Spline::parseDwgSplineBody(DRW::Version version, dwgBuffer *buf){
         }
         DRW_DBG("\nnumber of fit points: "); DRW_DBG(nfit);
     } else if (scenario == 1) {
-        flags = 8;//scenario 1 = rational & planar
+        flags = 0;
         bool rational = false;
         bool closed = false;
         bool periodic = false;
@@ -15905,6 +16030,18 @@ bool DRW_Spline::parseDwgSplineBody(DRW::Version version, dwgBuffer *buf){
             || !std::isfinite(fit.z))
             return false;
         parsedFits.push_back(std::make_shared<DRW_Coord>(fit));
+    }
+
+    DRW_Coord parsedNormal;
+    const bool hasPlanarControls = scenario == 1
+        && deriveSplinePlaneNormal(parsedControls, nullptr, nullptr,
+                                   parsedNormal);
+    const bool hasPlanarFitPoints = scenario == 2
+        && deriveSplinePlaneNormal(parsedFits, &tgStart, &tgEnd,
+                                   parsedNormal);
+    if (hasPlanarControls || hasPlanarFitPoints) {
+        flags |= 0x08;
+        normalVec = parsedNormal;
     }
 
     if (DRW_DBGGL == DRW_dbg::Level::Debug) {

@@ -1,7 +1,7 @@
 # Fixture provenance
 
-The seven DXF files and eight DWG files are exact Git-tracked blobs from the
-pinned LibreCAD target repository at commit
+The seven upstream DXF files and eight DWG files are exact Git-tracked blobs
+from the pinned LibreCAD target repository at commit
 `3c7785ebbcbfc8f3c8f79dbba093aff09cdec753` under
 `librecad/src/lib/filters/tests/testdata/`.  LibreCAD's accompanying
 `PROVENANCE.md` identifies them as GPL-2.0-or-later, project-authored test
@@ -11,9 +11,10 @@ project-authored regression artifacts). Their source blob IDs, hashes, sizes,
 versions, and feature scope are recorded in `metadata/fixture-registry.json`.
 
 No downloaded, customer-provided, converted, mutated, minimized, or newly
-derived drawing bytes are included here. The exception is
-`dxf/ac1015_insert_freecad_control.dxf`, a minimal source drawing authored
-locally from scratch for the opt-in FreeCAD INSERT-placement control; its
-expected WCS endpoints are documented in the associated test and plan. The
-ODA-converted DWG and all `dwg2dxf` outputs are generated only in the temporary
-build directory and are not committed.
+derived drawing bytes are included here. The exceptions are
+`dxf/ac1015_insert_freecad_control.dxf` and
+`dxf/ac1015_nonplanar_spline_freecad_control.dxf`, minimal source drawings
+authored locally from scratch for opt-in FreeCAD INSERT-placement and SPLINE
+controls. Their expected geometry is documented in the associated tests and
+plan. The ODA-converted DWGs and all `dwg2dxf` outputs are generated only in
+the temporary build directory and are not committed.
