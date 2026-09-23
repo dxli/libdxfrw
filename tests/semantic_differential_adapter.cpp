@@ -489,8 +489,24 @@ public:
     }
     void addRay(const DRW_Ray& d) override { addLineLike("addRay", "RAY", d); }
     void addXline(const DRW_Xline& d) override { addLineLike("addXline", "XLINE", d); }
-    void addArc(const DRW_Arc& d) override { addBasicEntity("addArc", "ARC", d); }
-    void addCircle(const DRW_Circle& d) override { addBasicEntity("addCircle", "CIRCLE", d); }
+    void addArc(const DRW_Arc& d) override {
+        std::vector<Field> fields = entityFields(d, "ARC", "ARC");
+        fields.push_back(pointField("center", d.basePoint));
+        fields.push_back(doubleField("radius", d.radious));
+        fields.push_back(doubleField("thickness", d.thickness));
+        fields.push_back(pointField("extrusion", d.extPoint));
+        fields.push_back(doubleField("startAngleRadians", d.staangle));
+        fields.push_back(doubleField("endAngleRadians", d.endangle));
+        addEntityRecord("addArc", "ARC", fields, d, false);
+    }
+    void addCircle(const DRW_Circle& d) override {
+        std::vector<Field> fields = entityFields(d, "CIRCLE", "CIRCLE");
+        fields.push_back(pointField("center", d.basePoint));
+        fields.push_back(doubleField("radius", d.radious));
+        fields.push_back(doubleField("thickness", d.thickness));
+        fields.push_back(pointField("extrusion", d.extPoint));
+        addEntityRecord("addCircle", "CIRCLE", fields, d, false);
+    }
     void addEllipse(const DRW_Ellipse& d) override { addBasicEntity("addEllipse", "ELLIPSE", d); }
     void addLWPolyline(const DRW_LWPolyline& d) override {
         std::vector<Field> fields = entityFields(d, "LWPOLYLINE", "LWPOLYLINE");
@@ -1011,6 +1027,31 @@ public:
                 return;
             }
             bool wrote = true;
+            DRW_Circle defaultCircle;
+            defaultCircle.layer = "probe_circle_default";
+            defaultCircle.basePoint = DRW_Coord{6.0, -3.0, 1.5};
+            defaultCircle.radious = 2.5;
+            defaultCircle.thickness = 0.75;
+            wrote = dxfWriter_->writeCircle(&defaultCircle) && wrote;
+
+            DRW_Circle obliqueCircle;
+            obliqueCircle.layer = "probe_circle_oblique";
+            obliqueCircle.basePoint = DRW_Coord{2.0, 3.0, 5.0};
+            obliqueCircle.radious = 4.0;
+            obliqueCircle.thickness = 0.5;
+            obliqueCircle.extPoint = DRW_Coord{0.0, 1.0, 0.0};
+            wrote = dxfWriter_->writeCircle(&obliqueCircle) && wrote;
+
+            DRW_Arc negativeNormalArc;
+            negativeNormalArc.layer = "probe_arc_negative_normal";
+            negativeNormalArc.basePoint = DRW_Coord{2.0, 3.0, 4.0};
+            negativeNormalArc.radious = 7.0;
+            negativeNormalArc.thickness = 0.125;
+            negativeNormalArc.extPoint = DRW_Coord{0.0, 0.0, -1.0};
+            negativeNormalArc.staangle = 10.0 / ARAD;
+            negativeNormalArc.endangle = 70.0 / ARAD;
+            wrote = dxfWriter_->writeArc(&negativeNormalArc) && wrote;
+
             DRW_3Dface face;
             face.basePoint = DRW_Coord{1.0, 2.0, 3.0};
             face.secPoint = DRW_Coord{4.0, 5.0, 6.0};
@@ -2259,6 +2300,55 @@ const Field* findEntityField(const SemanticSink& sink, const std::string& entity
     return nullptr;
 }
 
+const RecordRow* findEntityRecordByLayer(const SemanticSink& sink,
+                                         const std::string& entity,
+                                         const std::string& layer) {
+    for (const RecordRow& record : sink.records) {
+        if (record.entity != entity)
+            continue;
+        for (const Field& field : record.fields) {
+            if (field.name == "layer" && field.value == jsonString(layer))
+                return &record;
+        }
+    }
+    return nullptr;
+}
+
+const Field* findRecordField(const RecordRow* record, const std::string& name) {
+    if (record == nullptr)
+        return nullptr;
+    for (const Field& field : record->fields) {
+        if (field.name == name)
+            return &field;
+    }
+    return nullptr;
+}
+
+bool fieldEqualsForLayer(const SemanticSink& sink, const std::string& entity,
+                         const std::string& layer, const std::string& name,
+                         const std::string& expected) {
+    const Field* field = findRecordField(
+        findEntityRecordByLayer(sink, entity, layer), name);
+    return field != nullptr && field->value == expected;
+}
+
+bool doubleFieldEqualsForLayer(const SemanticSink& sink,
+                               const std::string& entity,
+                               const std::string& layer,
+                               const std::string& name, double expected) {
+    const Field* field = findRecordField(
+        findEntityRecordByLayer(sink, entity, layer), name);
+    if (field == nullptr)
+        return false;
+    try {
+        const double actual = std::stod(field->value);
+        return std::isfinite(actual)
+            && std::fabs(actual - expected) <= 1.0e-12;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
 bool fieldEquals(const SemanticSink& sink, const std::string& entity,
                  const std::string& name, const std::string& expected) {
     const Field* field = findEntityField(sink, entity, name);
@@ -2319,6 +2409,98 @@ bool run3DConsumerProbe(bool binary) {
     dxfRW legacyReader(outputName.c_str());
     if (!legacyReader.read(&legacyConsumer, true)
         || !legacyConsumer.diagnostics.empty())
+        return false;
+    const auto expectEntityField = [&](const SemanticSink& sink,
+                                       const std::string& entity,
+                                       const std::string& layer,
+                                       const std::string& name,
+                                       const std::string& expected) {
+        if (fieldEqualsForLayer(sink, entity, layer, name, expected))
+            return true;
+        const Field* field = findRecordField(
+            findEntityRecordByLayer(sink, entity, layer), name);
+        std::cerr << "ARC/CIRCLE consumer probe mismatch for " << entity
+                  << " layer " << layer << " field " << name << ": expected "
+                  << expected << ", got "
+                  << (field == nullptr ? "<missing>" : field->value) << '\n';
+        return false;
+    };
+    const auto expectEntityDouble = [&](const SemanticSink& sink,
+                                        const std::string& entity,
+                                        const std::string& layer,
+                                        const std::string& name,
+                                        double expected) {
+        if (doubleFieldEqualsForLayer(sink, entity, layer, name, expected))
+            return true;
+        const Field* field = findRecordField(
+            findEntityRecordByLayer(sink, entity, layer), name);
+        std::cerr << "ARC/CIRCLE consumer probe mismatch for " << entity
+                  << " layer " << layer << " field " << name << ": expected "
+                  << number(expected) << ", got "
+                  << (field == nullptr ? "<missing>" : field->value) << '\n';
+        return false;
+    };
+
+    // ARC/CIRCLE store planar centers in OCS. The default normal remains a
+    // no-op; an oblique normal uses the DXF arbitrary-axis basis; the legacy
+    // negative-Z ARC path also mirrors/swaps angles while retaining its normal.
+    const std::string defaultCircleLayer = "probe_circle_default";
+    const std::string obliqueCircleLayer = "probe_circle_oblique";
+    const std::string negativeArcLayer = "probe_arc_negative_normal";
+    const double rawArcStart = 10.0 / ARAD;
+    const double rawArcEnd = 70.0 / ARAD;
+    if (!expectEntityField(consumer, "CIRCLE", defaultCircleLayer, "center",
+                           "{\"x\":6,\"y\":-3,\"z\":1.5}")
+        || !expectEntityField(consumer, "CIRCLE", defaultCircleLayer, "extrusion",
+                              "{\"x\":0,\"y\":0,\"z\":1}")
+        || !expectEntityDouble(consumer, "CIRCLE", defaultCircleLayer, "radius", 2.5)
+        || !expectEntityDouble(consumer, "CIRCLE", defaultCircleLayer, "thickness", 0.75)
+        || !expectEntityField(consumer, "CIRCLE", obliqueCircleLayer, "center",
+                              "{\"x\":2,\"y\":3,\"z\":5}")
+        || !expectEntityField(consumer, "CIRCLE", obliqueCircleLayer, "extrusion",
+                              "{\"x\":0,\"y\":1,\"z\":0}")
+        || !expectEntityDouble(consumer, "CIRCLE", obliqueCircleLayer, "radius", 4.0)
+        || !expectEntityDouble(consumer, "CIRCLE", obliqueCircleLayer, "thickness", 0.5)
+        || !expectEntityField(consumer, "ARC", negativeArcLayer, "center",
+                              "{\"x\":2,\"y\":3,\"z\":4}")
+        || !expectEntityField(consumer, "ARC", negativeArcLayer, "extrusion",
+                              "{\"x\":0,\"y\":0,\"z\":-1}")
+        || !expectEntityDouble(consumer, "ARC", negativeArcLayer, "radius", 7.0)
+        || !expectEntityDouble(consumer, "ARC", negativeArcLayer, "thickness", 0.125)
+        || !expectEntityDouble(consumer, "ARC", negativeArcLayer,
+                               "startAngleRadians", rawArcStart)
+        || !expectEntityDouble(consumer, "ARC", negativeArcLayer,
+                               "endAngleRadians", rawArcEnd))
+        return false;
+
+    if (!expectEntityField(legacyConsumer, "CIRCLE", defaultCircleLayer, "center",
+                           "{\"x\":6,\"y\":-3,\"z\":1.5}")
+        || !expectEntityField(legacyConsumer, "CIRCLE", defaultCircleLayer, "extrusion",
+                              "{\"x\":0,\"y\":0,\"z\":1}")
+        || !expectEntityDouble(legacyConsumer, "CIRCLE", defaultCircleLayer,
+                               "radius", 2.5)
+        || !expectEntityDouble(legacyConsumer, "CIRCLE", defaultCircleLayer,
+                               "thickness", 0.75)
+        || !expectEntityField(legacyConsumer, "CIRCLE", obliqueCircleLayer, "center",
+                              "{\"x\":-2,\"y\":5,\"z\":3}")
+        || !expectEntityField(legacyConsumer, "CIRCLE", obliqueCircleLayer, "extrusion",
+                              "{\"x\":0,\"y\":1,\"z\":0}")
+        || !expectEntityDouble(legacyConsumer, "CIRCLE", obliqueCircleLayer,
+                               "radius", 4.0)
+        || !expectEntityDouble(legacyConsumer, "CIRCLE", obliqueCircleLayer,
+                               "thickness", 0.5)
+        || !expectEntityField(legacyConsumer, "ARC", negativeArcLayer, "center",
+                              "{\"x\":-2,\"y\":3,\"z\":-4}")
+        || !expectEntityField(legacyConsumer, "ARC", negativeArcLayer, "extrusion",
+                              "{\"x\":0,\"y\":0,\"z\":-1}")
+        || !expectEntityDouble(legacyConsumer, "ARC", negativeArcLayer,
+                               "radius", 7.0)
+        || !expectEntityDouble(legacyConsumer, "ARC", negativeArcLayer,
+                               "thickness", 0.125)
+        || !expectEntityDouble(legacyConsumer, "ARC", negativeArcLayer,
+                               "startAngleRadians", M_PI - rawArcEnd)
+        || !expectEntityDouble(legacyConsumer, "ARC", negativeArcLayer,
+                               "endAngleRadians", M_PI - rawArcStart))
         return false;
     const auto expectLegacyField = [&](const std::string& name,
                                        const std::string& expected) {

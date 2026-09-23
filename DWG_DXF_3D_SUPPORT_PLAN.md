@@ -874,6 +874,19 @@ Steps:
    vector only for a newly affected path; do not require a LibreCAD checkout,
    UI change, or renderer. Keep source compatibility distinct from ABI and
    display/edit claims.
+14. **S8.7 — Complete selected ARC/CIRCLE 3D-consumer probe fields.** Extend
+   the semantic sink to retain CIRCLE center, radius, thickness, and extrusion,
+   plus ARC's same fields and start/end angles in radians. Extend the
+   runtime-generated AC1027 ASCII/binary recipe with a default-normal CIRCLE,
+   an oblique-normal CIRCLE, and a negative-Z-normal ARC. Read every vector
+   with both `ext == false` and `ext == true`: the former must retain parsed
+   OCS fields; the latter must preserve the existing arbitrary-axis center
+   mapping and negative-Z ARC angle mirror/swap for these exact vectors. Keep
+   the already-covered LWPOLYLINE legacy and 3DFACE invariants. Run only the
+   focused consumer CTest and `lc3_compat_check`; no DWG parser or public API
+   change is needed. This self-generated writer/readback checks callback field
+   delivery only; ARC/CIRCLE family support and third-party interoperability
+   remain unqualified. Runtime files stay temporary.
 
 Positive gate: an old source consumer still compiles, and the headless 3D probe
 receives all asserted native typed values/carrier identities without an
@@ -929,7 +942,7 @@ Initial dependency/readiness order:
 | S5 | S0, S1 | DXF topology/coordinate portion ready after S1; only the DXF portion may proceed while the ODA gate is unresolved. |
 | S6 | S0, S1 | DXF surfaces/HELIX ready after S1. DWG spline edits require the local ODA chapter and authentic per-version trace; modern DWG surface edits additionally require a surface-specific primary layout and independent witness. |
 | S7 | S1-S6 | Qualify completed rows independently. A blocked DWG row does not block completed DXF evidence or docs; it remains unqualified. |
-| S8 | S1, S5-S7.5 | Consumer-contract matrix, 2D source-compatibility guard, generated-DXF `ext=true` regression, and DXF 3D-consumer probe are committed. Narrow target-sample DWG read evidence covers AC1024 INSERT/SPLINE and LINE fields, AC1021 3DFACE/LINE fields, and the planar AC1015 3D-POLYLINE subset. A separate LibreDWG-generated AC1015 control exercises nonzero-Z 3D POLYLINE, legacy POLYLINE_MESH, and PFACE across libdxfrw/LibreDWG readers but does not qualify AutoCAD interoperability or promote support claims. Other DWG rows retain their own layout/sample/oracle gates. Modeler rows additionally wait for S3/S4. Keep adapters outside parser semantics and do not require GUI/rendering code. |
+| S8 | S1, S5-S7.5 | Consumer-contract matrix, 2D source-compatibility guard, generated-DXF `ext=true` regression, and DXF 3D-consumer probe are committed. S8.7 adds selected generated AC1027 ARC/CIRCLE callback fields under both `ext` modes; it does not qualify those entity families. Narrow target-sample DWG read evidence covers AC1024 INSERT/SPLINE and LINE fields, AC1021 3DFACE/LINE fields, and the planar AC1015 3D-POLYLINE subset. A separate LibreDWG-generated AC1015 control exercises nonzero-Z 3D POLYLINE, legacy POLYLINE_MESH, and PFACE across libdxfrw/LibreDWG readers but does not qualify AutoCAD interoperability or promote support claims. Other DWG rows retain their own layout/sample/oracle gates. Modeler rows additionally wait for S3/S4. Keep adapters outside parser semantics and do not require GUI/rendering code. |
 
 The execution sequence is therefore readiness-first, not table-order-first:
 S0 → S1 → S2 and the DXF portions of S5/S6; then S3 → S4 after DWG
@@ -938,7 +951,7 @@ consumer probe independent of DWG. Continue any remaining independent DXF work
 while a DWG dependency is blocked.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 34/46 committed, 12 blocked, 0 in progress, and 0 ready):
+commit; 35/47 committed, 12 blocked, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -980,6 +993,7 @@ commit; 34/46 committed, 12 blocked, 0 in progress, and 0 ready):
 | S8.4b | BLOCKED_PER_FAMILY_VERSION | Broaden DWG consumer qualification only when the exact reader layout, authentic target sample, and independent semantic oracle are all available. S8.4a.5 now supplies a local parser control for nonzero-Z 3D POLYLINE, legacy MESH, and PFACE, but LibreDWG both generated and read that file, so target interoperability remains unqualified. The AutoCAD-authored S8.4a.4 sample is planar and does not verify those cases. The local AC1021 polygon-mesh sample has two meshes and 20 vertices, all with Z=0; it is not a non-planar/topology witness. The authoritative public ODA v5.4.1 specification covers R13–R2013 and its searchable text has no named `AcDbSubDMesh` or modern `AcDb*Surface` layout; the LibreDWG-maintained 5.4.2 diff is project-specific, not normative authority. ARC/CIRCLE OCS, modeler, modern surface, and other-version rows remain gated; modern surface fields currently disagree and remain unqualified. Next action: obtain an authentic target-generated sample exercising the exact feature/version, its authoritative layout source, and independent field-level comparison. Do not fabricate DWGs, infer unsupported fields from neighboring families, or promote support from flat/absent corpus cases. |
 | S8.5 | COMMITTED | Updated README, `docs/3D_CONSUMER_CONTRACT.md`, and `docs/3D_SUPPORT_STATUS.md` to separate the existing 2D source-compatibility lane, 3D typed-data callback access, format/version semantic qualification, and consumer display/edit behavior. Documented the exact AC1027 generated ASCII/binary consumer-probe families and its self-generated evidence ceiling; S8.4a-S8.4a.5 separately document the narrow target-sample comparisons and local generated topology control with distinct evidence ceilings. Other DWG rows remain unqualified. No general 3D, renderer, evaluator, editing, or binary-ABI claim is added. |
 | S8.6 | COMMITTED | Made additive 3D support with preserved 2D behavior an explicit cross-slice acceptance rule. `lc3_compat_check` and `libdxfrw_3d_consumer_probe` build/pass; the generated ASCII/binary probe compares the same LWPOLYLINE under `ext == true` and `ext == false`, and S5.4 adds a DXF ELLIPSE WCS-invariance check in both modes. Future affected paths must repeat the applicable fast gate. This is source/callback evidence only; no LibreCAD code/UI, ABI, or general semantic format claim is added. |
+| S8.7 | COMMITTED | The semantic sink now records ARC center/radius/thickness/extrusion/start/end radians and CIRCLE center/radius/thickness/extrusion. Runtime-generated AC1027 ASCII and binary DXF include a default-normal CIRCLE, oblique-normal CIRCLE, and negative-Z ARC. The probe verifies native OCS fields with `ext == false` and the exact established `ext == true` oblique center and negative-Z ARC angle mirror/swap values; the existing LWPOLYLINE/3DFACE invariants also remain passing. Focused consumer CTest passes 1/1 and `lc3_compat_check` builds. This is writer-self-generated callback-field evidence, not independent interoperability or family qualification; no source API/DWG parser changes or fixture files. |
 
 - Before implementation, convert the work packages into dependency-closed
   items with `READY`, `IN_PROGRESS`, `BLOCKED`, `VERIFIED`, and `COMMITTED`

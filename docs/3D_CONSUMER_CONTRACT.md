@@ -83,11 +83,16 @@ binary DXF files, then reads them into a headless `DRW_Interface` sink with
 3D-POLYLINE vertices, MESH vertices and face/edge topology, INSERT/MINSERT
 placement fields, SPLINE control points and knots, LWPOLYLINE OCS/elevation
 values, and typed LOFTED-surface fields alongside a separately identified
-group-310 carrier. It also reads the same generated DXF with `ext == true` and
-checks the established LWPOLYLINE extrusion result for normal `(0,1,0)` and
-elevation `5`: local points `(2,3)` and `(4,5)` arrive as `(-2,5)` and `(-4,5)`;
-the WCS 3DFACE corners remain unchanged. This one-vector regression does not
-claim complete LibreCAD runtime compatibility. Run only this fast probe with:
+group-310 carrier. Selected planar OCS vectors also verify CIRCLE center,
+radius, thickness, and extrusion plus ARC's corresponding fields and angles
+(radians): one default-normal CIRCLE, one `(0,1,0)`-normal CIRCLE, and one
+negative-Z-normal ARC. The same vectors run with `ext == true`; the probe
+checks the legacy arbitrary-axis CIRCLE center transform and the existing
+negative-Z ARC angle mirror/swap. It also checks the established LWPOLYLINE
+extrusion result for normal `(0,1,0)` and elevation `5`: local points `(2,3)`
+and `(4,5)` arrive as `(-2,5)` and `(-4,5)`; WCS 3DFACE corners remain
+unchanged. These generated vectors do not qualify ARC/CIRCLE family semantics
+or complete LibreCAD runtime compatibility. Run only this fast probe with:
 
 ```sh
 ctest --test-dir build -R '^libdxfrw_3d_consumer_probe$' --output-on-failure
