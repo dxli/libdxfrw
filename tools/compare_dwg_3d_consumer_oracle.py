@@ -4,8 +4,8 @@
 This is an optional local qualification helper, not a CTest dependency. It
 compares fields by entity handle so callback order is irrelevant. The accepted
 scope is intentionally limited to AC1024 (R2010) INSERT placement and SPLINE
-fit data, plus AC1021 (R2007) 3DFACE corners and invisible-edge flags. Modeler,
-surface, and other version/family fields are not compared here.
+fit data, plus AC1021 (R2007) LINE endpoints and 3DFACE corners/edge flags.
+Modeler, surface, and other version/family fields are not compared here.
 """
 
 from __future__ import annotations
@@ -202,6 +202,17 @@ def compare_3dface(row: dict[str, Any]) -> None:
                    "3DFACE.invisibleEdgeFlags")
 
 
+def compare_line(row: dict[str, Any]) -> None:
+    external = row["external"]
+    fields = row["adapter"]["fields"]
+    compare_point(fields.get("start"), external.get("start"), "LINE.start")
+    compare_point(fields.get("end"), external.get("end"), "LINE.end")
+    compare_number(fields.get("thickness"), external.get("thickness"),
+                   "LINE.thickness")
+    compare_point(fields.get("extrusion"), external.get("extrusion"),
+                  "LINE.extrusion")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--adapter", required=True,
@@ -220,8 +231,9 @@ def main() -> int:
         excluded = ["PLANESURFACE", "3DSOLID", "REGION", "BODY", "MESH",
                     "other versions and families"]
     elif version == "AC1021":
-        cases = (("3DFACE", 48, compare_3dface),)
-        excluded = ["all entities other than 3DFACE", "other versions"]
+        cases = (("3DFACE", 48, compare_3dface),
+                 ("LINE", 3002, compare_line))
+        excluded = ["all entities other than LINE and 3DFACE", "other versions"]
     else:
         raise OracleError(
             f"expected an AC1021/R2007 or AC1024/R2010 sample, got {version!r}")
@@ -237,8 +249,19 @@ def main() -> int:
                                   index_adapter(adapter, entity), entity, count)
         for row in rows:
             comparator(row)
-        results.append({"entity": entity, "count": len(rows),
-                        "comparedBy": "handle", "semanticFieldsMatched": True})
+        result = {"entity": entity, "count": len(rows),
+                  "comparedBy": "handle", "semanticFieldsMatched": True}
+        if entity == "LINE":
+            nonzero_z = sum(
+                any(finite_number(point[2], "LINE.endpoint.z") != 0.0
+                    for point in (row["external"]["start"],
+                                  row["external"]["end"]))
+                for row in rows)
+            if nonzero_z != 670:
+                raise OracleError(
+                    f"unexpected nonzero-Z LINE count {nonzero_z}; expected 670")
+            result["recordsWithNonzeroEndpointZ"] = nonzero_z
+        results.append(result)
 
     version_result = subprocess.run([args.dwgread, "--version"],
                                     capture_output=True, text=True, check=False)
@@ -246,6 +269,7 @@ def main() -> int:
                       if version_result.returncode == 0 else "unknown")
     layout_authority = {
         "3DFACE": "ODA v5.4.1 §20.4.32",
+        "LINE": "ODA v5.4.1 §20.4.21",
         "INSERT": "ODA v5.4.1 §§20.4.9-20.4.10",
         "SPLINE": "ODA v5.4.1 §20.4.40",
     }

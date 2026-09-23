@@ -112,11 +112,12 @@ python3 tools/compare_dwg_3d_consumer_oracle.py \
 ```
 
 The same optional comparator also accepts the local AC1021/R2007
-`tests/samples/AC1021/tablet.dwg` sample. It matches all 48 3DFACE records by
-handle against LibreDWG 0.14, including their four 3D corner tuples and
-invisible-edge flags; ODA v5.4.1 §20.4.32 is the reviewed layout authority.
+`tests/samples/AC1021/tablet.dwg` sample. It matches 48 3DFACE records by
+handle (four 3D corner tuples and invisible-edge flags; ODA v5.4.1 §20.4.32)
+and all 3,002 LINE records (start/end XYZ, thickness, and extrusion; §20.4.21)
+against LibreDWG 0.14. Among those lines, 670 have nonzero endpoint Z.
 `has_no_flags` is treated only as the encoded default zero flag state. This
-sample is not committed and this result does not qualify writes, other
+sample is not committed and these results do not qualify writes, other
 AC1021 files, other versions, or other geometry families.
 
 ```sh
