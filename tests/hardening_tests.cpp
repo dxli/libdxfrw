@@ -16,6 +16,7 @@
 #include "drw_datastorage.h"
 #include "intern/dwgsafety.h"
 #include "intern/dwgreader15.h"
+#include "intern/dwgreader27.h"
 #include "intern/dxfreader.h"
 #include "intern/dxfwriter.h"
 #include "intern/proxygraphicdecoder.h"
@@ -2364,6 +2365,76 @@ public:
     }
 };
 
+class ExposedDwgReader27 final : public dwgReader27 {
+public:
+    ExposedDwgReader27(std::unique_ptr<dwgBuffer> buffer, dwgRW* parent)
+        : dwgReader27(std::move(buffer), parent) {}
+
+    using dwgReader::linkDataStorage;
+    using dwgReader::finalizeDataStorageLinks;
+
+    void setFormatVersion(DRW::Version value) noexcept { version = value; }
+
+    void appendDataStorageSection(DRW_DataStorageSection section) {
+        m_dataStorageSections.push_back(std::move(section));
+    }
+
+    std::size_t linkFailures() const noexcept {
+        return m_dataStorageLinkFailures;
+    }
+
+    std::size_t linkedRecordCount() const noexcept {
+        return m_dataStorageLinkedRecords.size();
+    }
+};
+
+DRW_DataStorageRecord makeDataStorageTestRecord(
+    std::uint64_t handle, const UTF8STRING& handleKey,
+    std::vector<std::uint8_t> payload) {
+    DRW_DataStorageRecord record;
+    record.handle = handle;
+    record.handleKey = handleKey;
+    record.segmentIndex = 3;
+    record.schemaIndex = 5;
+    record.payload = std::move(payload);
+    static constexpr std::uint8_t signature[] = {
+        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i',
+        'l', 'e'};
+    record.hasPayloadMarker = record.payload.size() >= sizeof(signature)
+        && std::equal(std::begin(signature), std::end(signature),
+                      record.payload.begin());
+    record.payloadMarkerOffset = 0u;
+    record.payloadMarkerLength = record.hasPayloadMarker
+        ? static_cast<std::uint32_t>(sizeof(signature)) : 0u;
+    if (record.hasPayloadMarker)
+        record.payloadMarkerSection = "AcDb:AcDsPrototype_1b";
+    return record;
+}
+
+DRW_DataStorageSection makeDataStorageTestSection(
+    std::vector<DRW_DataStorageRecord> records) {
+    DRW_DataStorageSection section;
+    section.m_version = DRW::AC1027;
+    for (DRW_DataStorageRecord& record : records) {
+        const std::size_t index = section.records.size();
+        section.recordIndexByHandle.emplace(record.handle, index);
+        section.recordIndexByHandleKey.emplace(record.handleKey, index);
+        section.records.push_back(std::move(record));
+    }
+    return section;
+}
+
+std::vector<std::uint8_t> makeSabTestPayload(bool hasSignature = true) {
+    static constexpr std::uint8_t signature[] = {
+        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i',
+        'l', 'e'};
+    std::vector<std::uint8_t> payload;
+    if (hasSignature)
+        payload.assign(std::begin(signature), std::end(signature));
+    payload.insert(payload.end(), {0xFC, 0x53, 0x00, 0x00});
+    return payload;
+}
+
 std::vector<std::uint8_t> makeDwgHandleMapVector() {
     // One data group (size=4, handle/location deltas 1/1) followed by the
     // empty terminator group. CRCs cover each size/data span and are computed
@@ -2401,6 +2472,162 @@ void testDwgAggregateObjectBudget(TestContext& t) {
                  && retry.ObjectMap.size() == 1u
                  && !retry.readObjectBudgetExceeded(),
              "DWG object budget permits a bounded valid handle map");
+}
+
+void testDwgModelerDataStorageLinking(TestContext& t) {
+    std::vector<std::uint8_t> backing{0};
+    const std::vector<std::uint8_t> sab = makeSabTestPayload();
+
+    dwgRW validOwner(nullptr);
+    ExposedDwgReader27 validReader(
+        std::make_unique<dwgBuffer>(backing.data(), backing.size()),
+        &validOwner);
+    validReader.setFormatVersion(DRW::AC1027);
+    validReader.appendDataStorageSection(makeDataStorageTestSection(
+        {makeDataStorageTestRecord(0x6Fu, "6F", sab)}));
+    DRW_ModelerGeometry validModeler(DRW::E3DSOLID);
+    validModeler.handle = 0x6Fu;
+    validModeler.setHasDataStorageBinaryData(true);
+    validModeler.dataStorageHandle = 0x6Fu;
+    validModeler.dataStorageHandleKey = "6F";
+    validModeler.m_isEmpty = true;
+    validModeler.m_modelerVersion = 168;
+    validModeler.m_rawBytes = {0xA5u};
+    validModeler.m_dwgAcisPayload = {0x5Au};
+    validReader.linkDataStorage(validModeler);
+    t.expect(validModeler.hasDataStorageRecord
+                 && validModeler.dataStorageData == sab
+                 && validModeler.dataStorageSegmentIndex == 3u
+                 && validModeler.dataStorageSchemaIndex == 5u
+                 && validModeler.hasDataStoragePayloadMarker
+                 && validModeler.m_modelerVersion == 2
+                 && !validModeler.m_isEmpty
+                 && validModeler.m_rawBytes == std::vector<std::uint8_t>{0xA5u}
+                 && validModeler.m_dwgAcisPayload
+                        == std::vector<std::uint8_t>{0x5Au}
+                 && validReader.linkFailures() == 0u
+                 && validReader.linkedRecordCount() == 1u,
+             "unique AC1027 SAB record links without replacing frame carriers");
+    validReader.linkDataStorage(validModeler);
+    t.expect(validReader.linkFailures() == 0u
+                 && validReader.linkedRecordCount() == 1u,
+             "replaying the same DataStorage link is idempotent");
+
+    dwgRW fallbackOwner(nullptr);
+    ExposedDwgReader27 fallbackReader(
+        std::make_unique<dwgBuffer>(backing.data(), backing.size()),
+        &fallbackOwner);
+    fallbackReader.setFormatVersion(DRW::AC1027);
+    fallbackReader.appendDataStorageSection(makeDataStorageTestSection(
+        {makeDataStorageTestRecord(0x71u, "71", sab)}));
+    DRW_ModelerGeometry fallbackModeler(DRW::E3DSOLID);
+    fallbackModeler.handle = 0x71u;
+    fallbackModeler.setHasDataStorageBinaryData(true);
+    fallbackModeler.m_modelerVersion = 168;
+    fallbackReader.linkDataStorage(fallbackModeler);
+    t.expect(fallbackModeler.hasDataStorageRecord
+                 && fallbackModeler.dataStorageHandle == 0x71u
+                 && fallbackModeler.dataStorageHandleKey == "71"
+                 && fallbackModeler.dataStorageData == sab
+                 && fallbackModeler.m_modelerVersion == 2
+                 && fallbackReader.linkFailures() == 0u,
+             "entity-handle fallback links one uniquely keyed AcDs record");
+
+    dwgRW mismatchOwner(nullptr);
+    ExposedDwgReader27 mismatchReader(
+        std::make_unique<dwgBuffer>(backing.data(), backing.size()),
+        &mismatchOwner);
+    mismatchReader.setFormatVersion(DRW::AC1027);
+    mismatchReader.appendDataStorageSection(makeDataStorageTestSection(
+        {makeDataStorageTestRecord(0xA1u, "A1", sab),
+         makeDataStorageTestRecord(0xA2u, "A2", sab)}));
+    DRW_ModelerGeometry mismatchModeler(DRW::E3DSOLID);
+    mismatchModeler.handle = 0xA1u;
+    mismatchModeler.setHasDataStorageBinaryData(true);
+    mismatchModeler.dataStorageHandle = 0xA1u;
+    mismatchModeler.dataStorageHandleKey = "A2";
+    mismatchModeler.m_modelerVersion = 168;
+    mismatchReader.linkDataStorage(mismatchModeler);
+    t.expect(!mismatchModeler.hasDataStorageRecord
+                 && mismatchModeler.dataStorageData.empty()
+                 && mismatchModeler.m_modelerVersion == 168
+                 && mismatchReader.linkFailures() == 1u
+                 && mismatchReader.linkedRecordCount() == 0u,
+             "disagreeing explicit DataStorage handle views never fall back");
+
+    dwgRW ambiguousOwner(nullptr);
+    ExposedDwgReader27 ambiguousReader(
+        std::make_unique<dwgBuffer>(backing.data(), backing.size()),
+        &ambiguousOwner);
+    ambiguousReader.setFormatVersion(DRW::AC1027);
+    const DRW_DataStorageRecord duplicateRecord =
+        makeDataStorageTestRecord(0xB1u, "B1", sab);
+    ambiguousReader.appendDataStorageSection(
+        makeDataStorageTestSection({duplicateRecord}));
+    ambiguousReader.appendDataStorageSection(
+        makeDataStorageTestSection({duplicateRecord}));
+    DRW_ModelerGeometry ambiguousModeler(DRW::E3DSOLID);
+    ambiguousModeler.handle = 0xB1u;
+    ambiguousModeler.setHasDataStorageBinaryData(true);
+    ambiguousModeler.dataStorageHandle = 0xB1u;
+    ambiguousModeler.dataStorageHandleKey = "B1";
+    ambiguousModeler.m_modelerVersion = 168;
+    ambiguousReader.linkDataStorage(ambiguousModeler);
+    t.expect(!ambiguousModeler.hasDataStorageRecord
+                 && ambiguousModeler.dataStorageData.empty()
+                 && ambiguousModeler.m_modelerVersion == 168
+                 && ambiguousReader.linkFailures() == 1u
+                 && ambiguousReader.linkedRecordCount() == 0u,
+             "duplicate matching DataStorage sections are rejected atomically");
+
+    dwgRW malformedOwner(nullptr);
+    ExposedDwgReader27 malformedReader(
+        std::make_unique<dwgBuffer>(backing.data(), backing.size()),
+        &malformedOwner);
+    malformedReader.setFormatVersion(DRW::AC1027);
+    malformedReader.appendDataStorageSection(makeDataStorageTestSection(
+        {makeDataStorageTestRecord(0xC1u, "C1",
+                                   makeSabTestPayload(false))}));
+    DRW_ModelerGeometry malformedModeler(DRW::E3DSOLID);
+    malformedModeler.handle = 0xC1u;
+    malformedModeler.setHasDataStorageBinaryData(true);
+    malformedModeler.dataStorageHandle = 0xC1u;
+    malformedModeler.dataStorageHandleKey = "C1";
+    malformedModeler.m_modelerVersion = 168;
+    malformedReader.linkDataStorage(malformedModeler);
+    t.expect(malformedModeler.hasDataStorageRecord
+                 && malformedModeler.dataStorageData
+                        == makeSabTestPayload(false)
+                 && !malformedModeler.hasDataStoragePayloadMarker
+                 && malformedModeler.m_modelerVersion == 168
+                 && malformedReader.linkFailures() == 0u,
+             "non-SAB AcDs record stays opaque and cannot normalize its version");
+
+    dwgRW versionOwner(nullptr);
+    ExposedDwgReader27 versionReader(
+        std::make_unique<dwgBuffer>(backing.data(), backing.size()),
+        &versionOwner);
+    versionReader.setFormatVersion(DRW::AC1027);
+    DRW_DataStorageSection laterVersion = makeDataStorageTestSection(
+        {makeDataStorageTestRecord(0xD1u, "D1", sab)});
+    laterVersion.m_version = DRW::AC1032;
+    versionReader.appendDataStorageSection(std::move(laterVersion));
+    DRW_ModelerGeometry versionModeler(DRW::E3DSOLID);
+    versionModeler.handle = 0xD1u;
+    versionModeler.setHasDataStorageBinaryData(true);
+    versionModeler.dataStorageHandle = 0xD1u;
+    versionModeler.dataStorageHandleKey = "D1";
+    versionModeler.m_modelerVersion = 168;
+    versionReader.linkDataStorage(versionModeler);
+    versionReader.finalizeDataStorageLinks();
+    t.expect(!versionModeler.hasDataStorageRecord
+                 && versionModeler.dataStorageData.empty()
+                 && versionModeler.m_modelerVersion == 168
+                 && versionReader.linkFailures() == 1u
+                 && versionReader.m_dataStorageOrphanRecords == 1u
+                 && versionReader.m_dataStorageSections[0].orphanRecordCount
+                        == 1u,
+             "wrong-version DataStorage remains unlinked and is reported orphaned");
 }
 
 class ExposedMLeader final : public DRW_MLeader {
@@ -3045,6 +3272,7 @@ int main() {
     testDwgReadResetsVersionState(context);
     testDxfAggregateRecordBudget(context);
     testDwgAggregateObjectBudget(context);
+    testDwgModelerDataStorageLinking(context);
     testMLeaderParserStateCopyIsolation(context);
     testDimensionParserStateCopyIsolation(context);
     testDxfProxyGraphicsStayOutOfAcis(context);
