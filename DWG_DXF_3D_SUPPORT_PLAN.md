@@ -57,7 +57,12 @@ replacement**. Keep two independently tested consumer lanes:
    and field serialization by the converter, and the selected FreeCAD DXF
    importer's construction of expected geometry. Verify both FreeCAD's
    configured executable-path route and PATH discovery against this installed
-   `dwg2dxf`, accounting for platform executable names and same-named tools.
+   `dwg2dxf`, following the actual LibreDWG converter-selection code in the
+   tested FreeCAD revision and accounting for platform executable names and
+   same-named tools. Current FreeCAD `main` has a dedicated LibreDWG lane:
+   its configured converter preference or PATH resolves `dwg2dxf` on
+   Linux/macOS and `dwg2dxf.exe` on Windows. Use its LibreDWG-only preference
+   for positive attribution; automatic mode may continue to ODA/QCAD.
    The converter must preserve legal DXF entity types and 3D coordinates; it
    must not rewrite a rejected entity to a different 2D type merely to
    suppress FreeCAD's unsupported-feature report.
@@ -178,7 +183,7 @@ receive a per-format/version disposition in S0, even if the disposition is
 | Placed block geometry | INSERT/MINSERT and block contents | OCS insertion point, block base point, nested transform composition, nonuniform/mirrored scales, rows/columns/spacings, attributes/ownership | Existing generic routes; 3D transform-chain qualification missing |
 | Classic 3D topology | 3D POLYLINE, polygon mesh, polyface, VERTEX, SEQEND | WCS vertices, flags, closure, M/N order, signed one-based face indices, edge visibility, child ordering, counts and handles | Typed routes exist; independent qualification incomplete |
 | Subdivision topology | MESH / AcDbSubDMesh | Base-cage vertices, flat face-list counts, n-gons, edges, crease values, property overrides, version gate | Typed routes and generated tests exist; oracle/version checks incomplete |
-| Curve/surface geometry | SPLINE, HELIX, plane/extruded/revolved/swept/lofted/NURBS surfaces | Degrees, knots, weights, control point order, closure/periodicity where represented, sweep/profile handles, matrices, flags, version gates | Partial typed routes; one generated AC1015 weighted 3D HELIX converter path now guards rational/planar flags and metadata; target-authored DWG and FreeCAD HELIX consumer behavior remain unqualified |
+| Curve/surface geometry | SPLINE, HELIX, plane/extruded/revolved/swept/lofted/NURBS surfaces | Degrees, knots, weights, control point order, closure/periodicity where represented, sweep/profile handles, matrices, flags, version gates | Partial typed routes; one generated AC1015 weighted 3D HELIX converter path now guards rational/planar flags and metadata. Current FreeCAD `main` C++ `ReadEntity()` dispatch lacks HELIX and routes it to `ReadUnknownEntity()`; this is downstream-unsupported, not grounds to alter converter output. Target-authored DWG and other HELIX semantics remain unqualified. |
 | ACIS modeler geometry | 3DSOLID, REGION, BODY; SAT and SAB carriers | Entity-inline payload vs DXF ACDSDATA vs DWG DataStorage; frame vs payload separation; empty/history state; preservation versus semantic decode | Critical carrier gap; no typed DWG writer route observed |
 | Proxy/derived geometry | Proxy graphic data associated with 3D entities | Preserve raw carrier separately; transformations/styles/stop reason/caps; derived wireframe never suppresses source payload | Existing general proxy path; 3D-specific interactions need cross-check |
 | Excluded from geometry claims | Camera/view state, lights, point clouds, Navisworks/reference models, geodata | Record scope boundary; these may contain 3D positions but are not this geometry plan's native surface/solid topology target | Handle under their existing feature plans, not counted as 3D-model support |
@@ -976,14 +981,25 @@ Steps:
 16b. **S8.9.2 — Prove FreeCAD discovers and invokes the installed converter.**
    Add a bounded optional runtime smoke using an isolated FreeCAD user config
    and an already-tracked ordinary DWG copied beneath a path containing spaces.
-   Cover both PATH discovery and the configured executable-path preference;
-   select FreeCAD's LibreDWG-compatible converter lane (`DWGConversion=1`)
-   for attribution. Assert FreeCAD resolves the installed executable, the
-   actual subprocess uses exact argv `[resolved-dwg2dxf, input, -o, output]`,
-   exits zero, and the same output is handed to `importDXF.open()` with the
-   existing independent LINE coordinate assertions. Record executable path
-   and hash, FreeCAD revision/import mode, argv/status, and imported path. Run
-   one smoke per supported OS family when practical; specifically verify
+   Cover both PATH discovery and the configured executable-path preference.
+   For the current FreeCAD `Draft/importDWG.py` contract, test the dedicated
+   LibreDWG mode (`DWGConversion=1`); automatic mode (`0`) tries LibreDWG,
+   then may fall through to ODA/QCAD, so it is a separate diagnostic only.
+   `get_libredwg_converter("dwg2dxf")` uses a configured
+   `TeighaFileConverter` value naming either `dwg2dxf` or `dxf2dwg` (deriving
+   the sibling executable when needed), otherwise it searches PATH for
+   `dwg2dxf.exe` on Windows or `dwg2dxf` on Linux/macOS. Exercise both
+   configured-name forms if supported by the tested FreeCAD revision; assert
+   the resolved absolute path/hash so a same-named competitor cannot pass.
+   Assert the actual subprocess uses exact argv
+   `[resolved-dwg2dxf, input, -o, output]`, exits zero, and the identical
+   output path is handed to `importDXF.open()` with the existing independent
+   LINE coordinate assertions. FreeCAD currently regards output-path
+   existence as conversion success without checking the subprocess return
+   code; retain the S8.12 failure/no-partial-output guard and assert process
+   status in this positive smoke. Record executable path and hash, FreeCAD
+   revision/import mode and `DWGConversion`, argv/status, and imported path.
+   Run one smoke per supported OS family when practical; specifically verify
    Windows `.exe` discovery/path behavior. Keep this a compact integration
    check, not a replay of every entity-family test. Never commit generated
    DWG/DXF outputs or downloaded samples. This verifies installed-executable
@@ -1420,12 +1436,20 @@ and SPLINE as the bounded validation set.
    [Autodesk SPLINE group codes](https://help.autodesk.com/cloudhelp/2025/ENU/AutoCAD-DXF/files/GUID-E1F884F8-AA90-4864-A215-3182D47A9C74.htm).
 
    This qualifies only the locally-authored control through this ODA-generated
-   AC1015 DWG, `dwg2dxf`, and libdxfrw DXF readback. Current FreeCAD importer
-   source has no HELIX-specific branch in `ImpExpDxf.cpp`; that source audit
-   does not by itself prove runtime rejection or acceptance. The host is
-   currently locked, so the pinned FreeCAD 1.1.3 C++ importer macro remains a
-   separate follow-up requiring manual unlock. Until that runtime check,
-   preserve the record faithfully and leave FreeCAD HELIX shape semantics,
+   AC1015 DWG, `dwg2dxf`, and libdxfrw DXF readback. In the FreeCAD `main`
+   source snapshot reviewed 2026-09-23, the C++ DXF parser
+   (`src/Mod/Import/App/dxf/dxf.cpp`) dispatches `SPLINE` to `ReadSpline()`
+   but has no `HELIX` case in `ReadEntity()`; HELIX therefore reaches
+   `ReadUnknownEntity()`. `ImpExpDxf.cpp`'s generic spline shape path does not
+   make HELIX importable. Record this as a downstream limitation of that
+   importer revision, not a converter defect: keep the spec-correct HELIX
+   record and its fields, and do not replace it with SPLINE or another 2D
+   surrogate. Implementing geometric HELIX import requires a separate
+   FreeCAD importer change outside this libdxfrw repository. The pinned
+   FreeCAD 1.1.3 runtime is a separate, older target and may capture its exact
+   warning/object outcome; do not generalize between it and current `main`.
+   Any positive FreeCAD HELIX shape claim must pin the runtime revision and
+   prove an explicit, semantics-preserving importer route. Keep
    target-authored DWG interoperability, other versions, handedness/axis
    variants, and editing/display claims unqualified.
 
@@ -1504,14 +1528,21 @@ locally-authored source through ODA DWG generation, this `dwg2dxf`, DXF
 readback and the pinned FreeCAD C++ importer; it does not remove the need for
 target-authored DWG/version witnesses. S8.15.8 separately validates a locally
 authored rational 3D HELIX through DXF→ODA DWG→exact converter argv→DXF
-readback, and fixes weighted-spline group-70 semantics. Current
-`ImpExpDxf.cpp` maps generic spline geometry to a `Part::Feature`, but the
-absence of a HELIX-specific branch there does not establish how its upstream
-DXF reader dispatches a HELIX record; the runtime lane waits for manual desktop
-unlock. S8.9.1 now verifies the installed CLI and documents FreeCAD setup.
-S8.9.2 is READY to verify FreeCAD's runtime discovery and import of that
-installed binary; the desktop is currently locked, so this runtime check
-awaits manual unlock and does not block independent work. Continue any
+readback, and fixes weighted-spline group-70 semantics. The current FreeCAD
+`dxf.cpp` entity dispatcher in the 2026-09-23 `main` snapshot explicitly maps
+SPLINE to `ReadSpline()` and sends unlisted HELIX to `ReadUnknownEntity()`;
+generic spline construction in `ImpExpDxf.cpp` does not cover this separate
+entity. Thus the converter lane is verified, while FreeCAD `main` HELIX
+geometry is downstream-unsupported in that audited source revision and
+requires a separate FreeCAD importer change. The pinned 1.1.3 runtime is a
+distinct target and may record its own warning/object outcome; neither result
+is generalized to the other revision or used as a reason to rewrite the
+entity. S8.9.1 now verifies the installed CLI and
+documents FreeCAD setup; current `Draft/importDWG.py` source has a dedicated
+LibreDWG lane that uses the configured converter preference or platform-aware
+PATH lookup, while automatic mode may fall back to ODA/QCAD. S8.9.2 is READY
+to test installed-executable attribution with `DWGConversion=1` and keep
+fallback diagnostics separate. Continue any
 remaining independent work while a DWG dependency is blocked.
 
 FreeCAD integration is an additional bounded S8 consumer lane, not a new
@@ -1757,6 +1788,8 @@ format specification.
 - [Autodesk DXF ENTITIES index](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-7D07C886-FD1D-4A0C-A7AB-B4D21F18E484.htm) — current listed record families; `3DLINE` is not listed there, so qualify it as a portability-sensitive extension.
 - [LibreDWG entity/object definitions](https://github.com/LibreDWG/libredwg/blob/master/src/objects.in) and [LibreDWG manual](https://www.gnu.org/software/libredwg/manual/LibreDWG.html) — open-source entity names and implementation coverage; check stability per family.
 - [FreeCAD `Draft/importDWG.py`](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Draft/importDWG.py) — current configured-path/PATH discovery, external `dwg2dxf <input> -o <output>` invocation, output-existence success check, and subsequent `importDXF` handoff; this establishes the converter CLI/publication contract, not entity support.
+- [FreeCAD `Draft/importDWG.py` LibreDWG resolution](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Draft/importDWG.py#L129-L165) and [converter invocation/fallback logic](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Draft/importDWG.py#L244-L335) — `get_libredwg_converter()` selection from the `TeighaFileConverter` preference or platform PATH (`dwg2dxf.exe` on Windows, `dwg2dxf` on Linux/macOS), exact `input -o output` invocation, output-existence success check, and LibreDWG-only versus automatic ODA/QCAD fallback lanes. Pin an exact FreeCAD revision for each runtime test because `main` is mutable.
+- [FreeCAD C++ DXF entity dispatcher](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Import/App/dxf/dxf.cpp#L2040-L2062) and [`ReadEntity()` dispatch](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Import/App/dxf/dxf.cpp#L2720-L2782) — current `main` maps SPLINE to `ReadSpline()` and sends unlisted HELIX to `ReadUnknownEntity()`. This is a downstream importer limitation, not evidence to rewrite or omit a legal DXF HELIX.
 - [FreeCAD C++ DXF importer](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Import/App/dxf/ImpExpDxf.cpp) and [FreeCAD Draft DXF importer](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Draft/importDXF.py) — primary implementation references for the C++ shape-construction path and legacy Python importer; audit the exact runtime revision and preferences because support differs by importer and release.
 - [FreeCAD C++ block composition](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Import/App/dxf/ImpExpDxf.cpp) — constructs parametric `App::Link` objects for INSERTs; the pinned S8.15.6 runtime assertion checks the imported link's resulting edge geometry rather than assuming a DXF INSERT record alone constitutes successful import.
 - [LibreDWG `dwgadd` example](https://github.com/LibreDWG/libredwg/blob/master/examples/dwgadd.example) and [issue #1351](https://github.com/LibreDWG/libredwg/issues/1351) — generator syntax and a documented broken INSERT attribute-chain output; issue evidence is used only to reject that sample as a clean control, not as a format authority or libdxfrw defect claim.
@@ -1769,4 +1802,4 @@ Latest implementation-item ledger addition:
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
-| S8.15.8 | COMMITTED | Added locally-authored `tests/fixtures/dxf/ac1015_helix_freecad_control.dxf` and opt-in ODA CTest `dwg2dxf_freecad_3d_helix_cli`; generated DWG/DXF outputs remain under `build/`. The source contains a nonplanar rational HELIX (13 ordered controls/weights, 17 knots, axis `(0,0,1)`, radius 1, one turn, height 4) and a separate nonplanar weighted cubic SPLINE (four ordered controls and weights). The test generates AC1015 using ODAFileConverter 27.1.0.0, runs the exact `dwg2dxf input -o output` FreeCAD argv, and verifies both output and public DXF readback keep both entities' group-70 rational flag `0x04`, degree/counts, ordered WCS controls/weights, absent planar normals, and the HELIX trailer. It caught `parseDwgSplineBody()` setting group-70 `0x10` when DWG weights are present: Autodesk defines this as linear (with planar bit implied), not rational; fixed it to `0x04`. CMake build passes; focused internal round-trip test and ODA Spline/HELIX route tests pass. Current FreeCAD `ImpExpDxf.cpp` maps generic spline geometry to `Part::Feature`, but does not show whether its upstream DXF reader routes a HELIX through that path; no runtime import was attempted this pass because the Mac desktop is locked. This converter result therefore makes no FreeCAD shape/support claim. Target-authored DWGs and other versions remain unqualified. |
+| S8.15.8 | COMMITTED | Added locally-authored `tests/fixtures/dxf/ac1015_helix_freecad_control.dxf` and opt-in ODA CTest `dwg2dxf_freecad_3d_helix_cli`; generated DWG/DXF outputs remain under `build/`. The source contains a nonplanar rational HELIX (13 ordered controls/weights, 17 knots, axis `(0,0,1)`, radius 1, one turn, height 4) and a separate nonplanar weighted cubic SPLINE. The exact FreeCAD argv test and public DXF readback preserve rational group-70 flag `0x04`, degree/counts, ordered WCS controls/weights, absent planar normals, and HELIX trailer; it caught and fixed weighted DWG SPLINE output incorrectly using linear bit `0x10`. Focused internal round-trip and ODA Spline/HELIX route tests pass; no generated files enter source. Current FreeCAD `main` C++ `dxf.cpp` maps SPLINE to `ReadSpline()` and falls through to `ReadUnknownEntity()` for HELIX, so classify this as converter-supported/preserved but downstream-unsupported in that importer. Do not rewrite the entity; a positive FreeCAD HELIX shape claim requires a separate upstream importer change. Target-authored DWGs and other versions remain unqualified. |
