@@ -1,0 +1,132 @@
+# Optional end-to-end WCS POINT DWG -> dwg2dxf -> FreeCAD vertex check.
+#
+# Generate the input from the checked-in local recipe, put this build's
+# dwg2dxf directory first on PATH, and set LIBDXFRW_FREECAD_DWG to that DWG.
+# The control is locally generated, not an AutoCAD-authored interoperability
+# witness. Keep generated files and FreeCAD configuration outside the source.
+
+import hashlib
+import json
+import os
+import platform
+import sys
+
+import FreeCAD as App
+
+
+sample = os.environ.get("LIBDXFRW_FREECAD_DWG")
+if not sample or not os.path.isfile(sample):
+    raise RuntimeError("LIBDXFRW_FREECAD_DWG must name an existing generated DWG")
+
+draft_path = os.path.join(App.getResourceDir(), "Mod", "Draft")
+sys.path.insert(0, draft_path)
+
+import importDWG
+import importDXF
+
+
+preferences = App.ParamGet("User parameter:BaseApp/Preferences/Mod/Draft")
+if preferences.GetBool("dxfUseLegacyImporter", False):
+    raise RuntimeError("This check requires FreeCAD's default C++ DXF importer")
+
+captured = {}
+original_convert = importDWG.convertToDxf
+original_reporter = importDXF.DxfImportReporter
+
+
+def capture_convert(filename):
+    result = original_convert(filename)
+    captured["dxf"] = result
+    return result
+
+
+class CapturingReporter(original_reporter):
+    def __init__(self, filename, stats_dict, total_time=0.0):
+        captured["stats"] = stats_dict
+        super().__init__(filename, stats_dict, total_time)
+
+
+def digest(path):
+    sha = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            sha.update(chunk)
+    return sha.hexdigest()
+
+
+def close_point(actual, expected):
+    return all(abs(a - e) < 1e-8 for a, e in zip(actual, expected))
+
+
+importDWG.convertToDxf = capture_convert
+importDXF.DxfImportReporter = CapturingReporter
+
+doc = None
+try:
+    doc = importDWG.open(sample)
+    if doc is None:
+        raise AssertionError("Draft.importDWG.open returned no document")
+
+    dxf_path = captured.get("dxf")
+    if not dxf_path or not os.path.isfile(dxf_path):
+        raise AssertionError("Draft DWG conversion did not produce an auditable DXF")
+
+    imported_shapes = []
+    for obj in doc.Objects:
+        shape = getattr(obj, "Shape", None)
+        if shape is not None and not shape.isNull():
+            imported_shapes.append((obj.TypeId, shape))
+    if len(imported_shapes) != 1:
+        raise AssertionError("expected exactly one imported POINT shape")
+
+    type_id, shape = imported_shapes[0]
+    actual_vertices = [
+        (vertex.Point.x, vertex.Point.y, vertex.Point.z)
+        for vertex in shape.Vertexes
+    ]
+    expected = (10.0, 20.0, 30.0)
+    if type_id != "Part::Feature" or len(actual_vertices) != 1:
+        raise AssertionError(
+            "expected one Part::Feature containing one vertex; got %s/%d"
+            % (type_id, len(actual_vertices))
+        )
+    if not close_point(actual_vertices[0], expected):
+        raise AssertionError(
+            "FreeCAD POINT mismatch: expected %r, got %r"
+            % (expected, actual_vertices[0])
+        )
+    if shape.Edges or shape.Faces or not shape.isValid():
+        raise AssertionError("expected a valid vertex-only FreeCAD shape")
+
+    stats = captured.get("stats") or {}
+    entity_counts = stats.get("entityCounts", {})
+    if entity_counts.get("POINT", 0) != 1:
+        raise AssertionError("FreeCAD did not report exactly one POINT: %r" % entity_counts)
+    unsupported = stats.get("unsupportedFeatures", {})
+    if unsupported.get("POINT"):
+        raise AssertionError("FreeCAD reported POINT as unsupported: %r" % unsupported)
+
+    result = {
+        "status": "pass",
+        "freecad_version": list(App.Version()),
+        "platform": platform.platform(),
+        "architecture": platform.machine(),
+        "importer": "C++",
+        "import_mode": preferences.GetInt("DxfImportMode", 2),
+        "converter": importDWG.get_libredwg_converter("dwg2dxf"),
+        "source": os.path.basename(sample),
+        "source_sha256": digest(sample),
+        "dxf_size": os.path.getsize(dxf_path),
+        "dxf_sha256": digest(dxf_path),
+        "point_count": entity_counts.get("POINT"),
+        "vertex": actual_vertices[0],
+        "edge_count": len(shape.Edges),
+        "face_count": len(shape.Faces),
+        "unsupported_features": {
+            key: len(values) for key, values in sorted(unsupported.items())
+        },
+    }
+    print("FREECAD_DWG2DXF_3D_POINT_ASSERTIONS_PASS=" + json.dumps(result, sort_keys=True))
+finally:
+    if doc is not None and doc.Name in App.listDocuments():
+        App.closeDocument(doc.Name)
