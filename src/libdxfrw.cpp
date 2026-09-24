@@ -3497,6 +3497,8 @@ bool dxfRW::writeEllipse(DRW_Ellipse *ent){
         DRW_Polyline pol;
         //RLZ: copy properties
         normalized.toPolyline(&pol, elParts);
+        if (pol.vertlist.empty())
+            return rejectUnsupportedDxfWrite();
         return writePolyline(&pol);
     }
     return !writer->hasWriteError();

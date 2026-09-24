@@ -6840,6 +6840,228 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
         && polyfaceValid && ocsValid && meshValid;
 }
 
+bool runDxfLegacyEllipseDowngrade(const std::filesystem::path& directory,
+                                  bool keepOutput) {
+    const std::filesystem::path output = directory /
+        "libdxfrw-dxf-r12-ellipse-downgrade.dxf";
+    const std::filesystem::path invalidOutput = directory /
+        "libdxfrw-dxf-r12-invalid-ellipse.dxf";
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+    std::filesystem::remove(invalidOutput, ec);
+
+    dx_data source;
+    auto addEllipse = [&source](const DRW_Coord& center,
+                                const DRW_Coord& majorAxis,
+                                const DRW_Coord& normal,
+                                double ratio, double start, double end) {
+        auto* ellipse = new DRW_Ellipse();
+        ellipse->basePoint = center;
+        ellipse->secPoint = majorAxis;
+        ellipse->extPoint = normal;
+        ellipse->ratio = ratio;
+        ellipse->staparam = start;
+        ellipse->endparam = end;
+        source.mBlock->ent.push_back(ellipse);
+    };
+    const double fullTurn = 2.0 * std::acos(-1.0);
+    addEllipse(DRW_Coord(10.0, 20.0, 30.0),
+               DRW_Coord(2.0, 0.0, -1.5),
+               DRW_Coord(0.6, 0.0, 0.8),
+               0.5, 0.0, fullTurn);
+    addEllipse(DRW_Coord(0.0, 0.0, 0.0),
+               DRW_Coord(5.0, 0.0, 0.0),
+               DRW_Coord(0.0, 0.0, 1.0),
+               0.5, 0.0, fullTurn);
+    addEllipse(DRW_Coord(-10.0, 5.0, 2.0),
+               DRW_Coord(3.0, 0.0, 0.0),
+               DRW_Coord(0.0, 0.6, 0.8),
+               2.0, 0.25, 1.75);
+    addEllipse(DRW_Coord(20.0, -5.0, 3.0),
+               DRW_Coord(2.0, 0.0, 0.0),
+               DRW_Coord(0.0, 0.6, 0.8),
+               1.5, 1.75, 0.25);
+
+    dx_iface exporter;
+    if (!exporter.fileExport(output.string(), DRW::AC1009, false, &source,
+                             false)) {
+        std::cerr << "DXF R12 ellipse downgrade export failed: "
+                  << output << '\n';
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+
+    dx_data imported;
+    dx_iface importer;
+    if (!importer.fileImport(output.string(), &imported, false)) {
+        std::cerr << "DXF R12 ellipse downgrade readback failed: "
+                  << output << '\n';
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+
+    std::vector<const DRW_Polyline*> polylines;
+    for (const DRW_Entity* entity : imported.mBlock->ent) {
+        if (entity != nullptr && entity->eType == DRW::POLYLINE)
+            polylines.push_back(static_cast<const DRW_Polyline*>(entity));
+    }
+    const DRW_Polyline* tiltedFull = nullptr;
+    const DRW_Polyline* planarFull = nullptr;
+    std::vector<const DRW_Polyline*> tiltedArcs;
+    for (const DRW_Polyline* polyline : polylines) {
+        if (polyline->flags == 9)
+            tiltedFull = polyline;
+        else if (polyline->flags == 1)
+            planarFull = polyline;
+        else if (polyline->flags == 8)
+            tiltedArcs.push_back(polyline);
+    }
+
+    const auto near = [](double actual, double expected) {
+        return std::isfinite(actual)
+            && std::abs(actual - expected) < 1e-9;
+    };
+    const auto pointNear = [&near](const DRW_Coord& actual,
+                                   const DRW_Coord& expected) {
+        return near(actual.x, expected.x) && near(actual.y, expected.y)
+            && near(actual.z, expected.z);
+    };
+    const auto ellipsePoint = [](const DRW_Coord& center,
+                                 const DRW_Coord& major,
+                                 const DRW_Coord& normal,
+                                 double ratio, double parameter) {
+        const double normalLength = std::sqrt(
+            normal.x * normal.x + normal.y * normal.y
+            + normal.z * normal.z);
+        const DRW_Coord n(normal.x / normalLength,
+                          normal.y / normalLength,
+                          normal.z / normalLength);
+        const DRW_Coord minor(
+            (n.y * major.z - n.z * major.y) * ratio,
+            (n.z * major.x - n.x * major.z) * ratio,
+            (n.x * major.y - n.y * major.x) * ratio);
+        const double cosine = std::cos(parameter);
+        const double sine = std::sin(parameter);
+        return DRW_Coord(center.x + major.x * cosine + minor.x * sine,
+                         center.y + major.y * cosine + minor.y * sine,
+                         center.z + major.z * cosine + minor.z * sine);
+    };
+
+    bool tiltedFullValid = tiltedFull != nullptr
+        && tiltedFull->vertlist.size() == 128
+        && tiltedFull->vertlist.front() != nullptr
+        && tiltedFull->vertlist.front()->flags == 32
+        && pointNear(tiltedFull->vertlist[0]->basePoint,
+                     DRW_Coord(12.0, 20.0, 28.5))
+        && pointNear(tiltedFull->vertlist[32]->basePoint,
+                     DRW_Coord(10.0, 21.25, 30.0))
+        && pointNear(tiltedFull->vertlist[64]->basePoint,
+                     DRW_Coord(8.0, 20.0, 31.5))
+        && pointNear(tiltedFull->vertlist[96]->basePoint,
+                     DRW_Coord(10.0, 18.75, 30.0));
+    bool planarFullValid = planarFull != nullptr
+        && planarFull->vertlist.size() == 128
+        && planarFull->vertlist.front() != nullptr
+        && pointNear(planarFull->vertlist.front()->basePoint,
+                     DRW_Coord(5.0, 0.0, 0.0))
+        && std::all_of(planarFull->vertlist.cbegin(),
+                       planarFull->vertlist.cend(),
+                       [](const std::shared_ptr<DRW_Vertex>& vertex) {
+                           return vertex != nullptr
+                               && vertex->basePoint.z == 0.0
+                               && (vertex->flags & 32) == 0;
+                       });
+    const DRW_Polyline* tiltedArc = tiltedArcs.size() >= 1
+        ? tiltedArcs[0] : nullptr;
+    const DRW_Polyline* tiltedArcReverse = tiltedArcs.size() >= 2
+        ? tiltedArcs[1] : nullptr;
+    const DRW_Coord arcCenter(-10.0, 5.0, 2.0);
+    const DRW_Coord arcMajor(3.0, 0.0, 0.0);
+    const DRW_Coord arcNormal(0.0, 0.6, 0.8);
+    bool tiltedArcEndpointsValid = tiltedArc != nullptr
+        && tiltedArc->vertlist.size() == 32
+        && tiltedArc->vertlist.front() != nullptr
+        && tiltedArc->vertlist.back() != nullptr
+        && tiltedArc->vertlist.front()->flags == 32
+        && tiltedArc->vertlist.back()->flags == 32
+        && pointNear(tiltedArc->vertlist.front()->basePoint,
+                     ellipsePoint(arcCenter, arcMajor, arcNormal, 2.0, 0.25))
+        && pointNear(tiltedArc->vertlist.back()->basePoint,
+                     ellipsePoint(arcCenter, arcMajor, arcNormal, 2.0, 1.75))
+        && std::all_of(tiltedArc->vertlist.cbegin(),
+                       tiltedArc->vertlist.cend(),
+                       [](const std::shared_ptr<DRW_Vertex>& vertex) {
+                           return vertex != nullptr && vertex->flags == 32;
+                       });
+    bool tiltedArcSamplesValid = tiltedArcEndpointsValid;
+    if (tiltedArcSamplesValid) {
+        for (std::size_t i = 0; i < tiltedArc->vertlist.size(); ++i) {
+            const double parameter = 0.25 + 1.5
+                * static_cast<double>(i) / 31.0;
+            if (!pointNear(tiltedArc->vertlist[i]->basePoint,
+                           ellipsePoint(arcCenter, arcMajor, arcNormal,
+                                        2.0, parameter))) {
+                tiltedArcSamplesValid = false;
+                break;
+            }
+        }
+    }
+    const bool tiltedArcValid = tiltedArcSamplesValid;
+    const DRW_Coord reverseArcCenter(20.0, -5.0, 3.0);
+    const DRW_Coord reverseArcMajor(2.0, 0.0, 0.0);
+    const DRW_Coord reverseArcNormal(0.0, 0.6, 0.8);
+    bool tiltedReverseArcValid = tiltedArcReverse != nullptr
+        && tiltedArcReverse->vertlist.size() == 32
+        && tiltedArcReverse->vertlist.front() != nullptr
+        && tiltedArcReverse->vertlist.back() != nullptr
+        && pointNear(tiltedArcReverse->vertlist.front()->basePoint,
+                     ellipsePoint(reverseArcCenter, reverseArcMajor,
+                                  reverseArcNormal, 1.5, 1.75))
+        && pointNear(tiltedArcReverse->vertlist.back()->basePoint,
+                     ellipsePoint(reverseArcCenter, reverseArcMajor,
+                                  reverseArcNormal, 1.5, 0.25));
+    if (tiltedReverseArcValid) {
+        for (std::size_t i = 0; i < tiltedArcReverse->vertlist.size(); ++i) {
+            const double parameter = 1.75 - 1.5
+                * static_cast<double>(i) / 31.0;
+            if (!pointNear(tiltedArcReverse->vertlist[i]->basePoint,
+                           ellipsePoint(reverseArcCenter, reverseArcMajor,
+                                        reverseArcNormal, 1.5, parameter))) {
+                tiltedReverseArcValid = false;
+                break;
+            }
+        }
+    }
+
+    if (!keepOutput)
+        std::filesystem::remove(output, ec);
+    dx_data invalidSource;
+    auto* invalidEllipse = new DRW_Ellipse();
+    invalidEllipse->basePoint = DRW_Coord(1.0, 2.0, 3.0);
+    invalidEllipse->secPoint = DRW_Coord(4.0, 0.0, 0.0);
+    invalidEllipse->extPoint = DRW_Coord(0.0, 0.0, 0.0);
+    invalidSource.mBlock->ent.push_back(invalidEllipse);
+    dx_iface invalidExporter;
+    const bool invalidRejected = !invalidExporter.fileExport(
+        invalidOutput.string(), DRW::AC1009, false, &invalidSource, false)
+        && !std::filesystem::exists(invalidOutput);
+
+    const bool polylineCountValid = polylines.size() == 4
+        && tiltedArcs.size() == 2;
+    if (!(polylineCountValid && tiltedFullValid && planarFullValid
+          && tiltedArcValid && tiltedReverseArcValid && invalidRejected))
+        std::cerr << "DXF R12 ellipse downgrade mismatch: tilted-full="
+                  << tiltedFullValid << " planar-full=" << planarFullValid
+                  << " tilted-arc-ratio-over-one=" << tiltedArcValid
+                  << " polyline-count=" << polylines.size()
+                  << " tilted-reverse-arc=" << tiltedReverseArcValid
+                  << " invalid-rejected=" << invalidRejected << '\n';
+    return polylineCountValid && tiltedFullValid && planarFullValid
+        && tiltedArcValid && tiltedReverseArcValid && invalidRejected;
+}
+
 bool runDxfRejectsInvalidFaceFlags(bool binary,
                                    const std::filesystem::path& directory) {
     const std::string encoding = binary ? "binary" : "ascii";
@@ -8022,6 +8244,8 @@ int main(int argc, char** argv) {
            "local DXF ASCII 3D topology and OCS/WCS round-trip", failures);
     expect(runDxfTopologyRoundTrip(true, directory, keepOutputs),
            "local DXF binary 3D topology and OCS/WCS round-trip", failures);
+    expect(runDxfLegacyEllipseDowngrade(directory, keepOutputs),
+           "local DXF R12 ellipse downgrade preserves 3D geometry", failures);
     expect(runDxfRejectsInvalidFaceFlags(false, directory),
            "local DXF ASCII writer rejects invalid 3DFACE edge flags", failures);
     expect(runDxfRejectsInvalidFaceFlags(true, directory),

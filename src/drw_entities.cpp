@@ -6263,27 +6263,47 @@ void DRW_Ellipse::applyExtrusion(){
 
 //if ratio > 1 minor axis are greather than major axis, correct it
 void DRW_Ellipse::correctAxis(){
-    bool complete = false;
+    double sweep = endparam - staparam;
     if (staparam == endparam) {
         staparam = 0.0;
         endparam = M_PIx2; //2*M_PI;
-        complete = true;
+        sweep = M_PIx2;
     }
     if (ratio > 1){
-        if ( fabs(endparam - staparam - M_PIx2) < 1.0e-10)
-            complete = true;
-        double incX = secPoint.x;
-        secPoint.x = -(secPoint.y * ratio);
-        secPoint.y = incX*ratio;
-        ratio = 1/ratio;
-        if (!complete){
-            if (staparam < M_PI_2)
-                staparam += M_PI *2;
-            if (endparam < M_PI_2)
-                endparam += M_PI *2;
-            endparam -= M_PI_2;
-            staparam -= M_PI_2;
+        const double normalLength = std::sqrt(
+            extPoint.x * extPoint.x + extPoint.y * extPoint.y
+            + extPoint.z * extPoint.z);
+        const double majorLength = std::sqrt(
+            secPoint.x * secPoint.x + secPoint.y * secPoint.y
+            + secPoint.z * secPoint.z);
+        if (std::isfinite(normalLength) && normalLength > 0.0
+            && std::isfinite(majorLength) && majorLength > 0.0) {
+            const double nx = extPoint.x / normalLength;
+            const double ny = extPoint.y / normalLength;
+            const double nz = extPoint.z / normalLength;
+            const double minorX = ny * secPoint.z - nz * secPoint.y;
+            const double minorY = nz * secPoint.x - nx * secPoint.z;
+            const double minorZ = nx * secPoint.y - ny * secPoint.x;
+            const double minorLength = std::sqrt(
+                minorX * minorX + minorY * minorY + minorZ * minorZ);
+            const double targetLength = majorLength * ratio;
+            if (std::isfinite(minorLength) && minorLength > 0.0
+                && std::isfinite(targetLength)) {
+                const double axisScale = targetLength / minorLength;
+                secPoint.x = minorX * axisScale;
+                secPoint.y = minorY * axisScale;
+                secPoint.z = minorZ * axisScale;
+            }
         }
+        ratio = 1/ratio;
+        // Swapping the major/minor axes changes the parameter origin by
+        // -PI/2. Normalize only the start and preserve the signed sweep; the
+        // end may legitimately wrap past 2PI (or be less than the start for
+        // a clockwise partial ellipse).
+        staparam = std::fmod(staparam - M_PI_2, M_PIx2);
+        if (staparam < 0.0)
+            staparam += M_PIx2;
+        endparam = staparam + sweep;
     }
 }
 
@@ -6360,37 +6380,95 @@ bool DRW_Ellipse::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t b
 
 //parts are the number of vertex to split polyline, default 128
 void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
-    double radMajor, radMinor, cosRot, sinRot, incAngle, curAngle;
-    double cosCurr, sinCurr;
-	radMajor = hypot(secPoint.x, secPoint.y);
-    radMinor = radMajor*ratio;
-    //calculate sin & cos of included angle
-    incAngle = atan2(secPoint.y, secPoint.x);
-    cosRot = cos(incAngle);
-    sinRot = sin(incAngle);
-    incAngle = M_PIx2 / parts;
-    curAngle = staparam;
-    int i = static_cast<int>(curAngle / incAngle);
-    do {
-        if (curAngle > endparam) {
-            curAngle = endparam;
-            i = parts+2;
-        }
-        cosCurr = cos(curAngle);
-        sinCurr = sin(curAngle);
-        double x = basePoint.x + (cosCurr*cosRot*radMajor) - (sinCurr*sinRot*radMinor);
-        double y = basePoint.y + (cosCurr*sinRot*radMajor) + (sinCurr*cosRot*radMinor);
-        pol->addVertex( DRW_Vertex(x, y, 0.0, 0.0));
-        curAngle = (++i)*incAngle;
-    } while (i<parts);
-    if ( fabs(endparam - staparam - M_PIx2) < 1.0e-10){
-        pol->flags = 1;
+    if (pol == nullptr)
+        return;
+    pol->vertlist.clear();
+    pol->flags = 0;
+    pol->basePoint = DRW_Coord(0.0, 0.0, 0.0);
+    pol->extPoint = DRW_Coord(0.0, 0.0, 1.0);
+
+    const double fullTurn = M_PIx2;
+    const double normalLength = std::sqrt(
+        extPoint.x * extPoint.x + extPoint.y * extPoint.y
+        + extPoint.z * extPoint.z);
+    const double majorLength = std::sqrt(
+        secPoint.x * secPoint.x + secPoint.y * secPoint.y
+        + secPoint.z * secPoint.z);
+    const double sweep = endparam - staparam;
+    if (parts <= 0 || !std::isfinite(basePoint.x)
+        || !std::isfinite(basePoint.y) || !std::isfinite(basePoint.z)
+        || !std::isfinite(secPoint.x) || !std::isfinite(secPoint.y)
+        || !std::isfinite(secPoint.z) || !std::isfinite(ratio)
+        || ratio <= 0.0 || !std::isfinite(staparam)
+        || !std::isfinite(endparam) || !std::isfinite(sweep)
+        || !std::isfinite(normalLength) || normalLength <= 0.0
+        || !std::isfinite(majorLength) || majorLength <= 0.0
+        || std::abs(sweep) > fullTurn + 1.0e-10)
+        return;
+
+    const double nx = extPoint.x / normalLength;
+    const double ny = extPoint.y / normalLength;
+    const double nz = extPoint.z / normalLength;
+    const double normalMajorDot = nx * secPoint.x + ny * secPoint.y
+        + nz * secPoint.z;
+    if (std::abs(normalMajorDot) > majorLength * 1.0e-8)
+        return;
+
+    double minorX = ny * secPoint.z - nz * secPoint.y;
+    double minorY = nz * secPoint.x - nx * secPoint.z;
+    double minorZ = nx * secPoint.y - ny * secPoint.x;
+    const double minorLength = std::sqrt(
+        minorX * minorX + minorY * minorY + minorZ * minorZ);
+    if (!std::isfinite(minorLength) || minorLength <= 0.0)
+        return;
+    const double minorScale = majorLength * ratio / minorLength;
+    minorX *= minorScale;
+    minorY *= minorScale;
+    minorZ *= minorScale;
+
+    double start = staparam;
+    double actualSweep = sweep;
+    bool closed = false;
+    if (std::abs(actualSweep) <= 1.0e-10) {
+        start = 0.0;
+        actualSweep = fullTurn;
+        closed = true;
+    } else if (std::abs(std::abs(actualSweep) - fullTurn) <= 1.0e-10) {
+        actualSweep = std::copysign(fullTurn, actualSweep);
+        closed = true;
     }
+
+    const bool planarDefaultXY = std::abs(nx) <= 1.0e-12
+        && std::abs(ny) <= 1.0e-12 && nz > 0.0
+        && std::abs(basePoint.z) <= 1.0e-12
+        && std::abs(secPoint.z) <= majorLength * 1.0e-12;
+    const bool is3d = !planarDefaultXY;
+    pol->flags = (closed ? 1 : 0) | (is3d ? 8 : 0);
+
+    const double scaledSegments = static_cast<double>(parts)
+        * std::abs(actualSweep) / fullTurn;
+    const int segments = closed
+        ? std::max(3, parts)
+        : std::max(1, static_cast<int>(std::ceil(scaledSegments)));
+    const int vertexCount = closed ? segments : segments + 1;
+    for (int i = 0; i < vertexCount; ++i) {
+        const double fraction = static_cast<double>(i) / segments;
+        const double parameter = start + actualSweep * fraction;
+        const double cosine = std::cos(parameter);
+        const double sine = std::sin(parameter);
+        const double x = basePoint.x + secPoint.x * cosine + minorX * sine;
+        const double y = basePoint.y + secPoint.y * cosine + minorY * sine;
+        const double z = basePoint.z + secPoint.z * cosine + minorZ * sine;
+        DRW_Vertex vertex(x, y, z, 0.0);
+        if (is3d)
+            vertex.flags = 32;
+        pol->addVertex(vertex);
+    }
+    pol->vertexcount = static_cast<int>(pol->vertlist.size());
     pol->layer = this->layer;
     pol->lineType = this->lineType;
     pol->color = this->color;
     pol->lWeight = this->lWeight;
-    pol->extPoint = this->extPoint;
 }
 
 void DRW_Trace::applyExtrusion(){
