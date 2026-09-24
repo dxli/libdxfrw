@@ -51,13 +51,24 @@ python3 tools/run_fast_focus.py --build-dir build
 
 ### Using `dwg2dxf` from FreeCAD
 
-The installed `dwg2dxf` executable can serve as FreeCAD Draft's external DWG
-converter. Add the installed bindir (usually `bin`) to `PATH` before launching
-FreeCAD, or set FreeCAD's DWG converter path to the full installed executable
-path. Select FreeCAD's LibreDWG-compatible converter option when you want to
-attribute an import specifically to this executable; in automatic mode FreeCAD
-may try ODA or QCAD after a failed conversion. If multiple programs named
-`dwg2dxf` are on `PATH`, the first match is used.
+The installed `dwg2dxf` executable can serve as FreeCAD Draft's external
+DWG-to-DXF converter for import. This project does not provide FreeCAD's
+paired `dxf2dwg` program, so it does not provide LibreDWG-based DWG export.
+Add the installed bindir (usually `bin`) to `PATH` before launching FreeCAD, or
+set FreeCAD's DWG converter path to the full installed executable path. Select
+FreeCAD's LibreDWG-compatible converter option when you want to attribute an
+import specifically to this executable; in automatic mode FreeCAD may try ODA
+or QCAD after a failed conversion. If multiple programs named `dwg2dxf` are on
+`PATH`, the first match is used.
+
+FreeCAD shares its `TeighaFileConverter` preference between DWG import and
+export. When that preference names `dwg2dxf`, FreeCAD derives the sibling
+`dxf2dwg` path for export; if the sibling is absent, the current resolver does
+not fall back to `PATH`. For import-only use that should preserve an existing
+export setup, prefer PATH discovery and avoid setting the shared preference to
+either LibreDWG executable. If you configure this `dwg2dxf` path directly,
+route export through a separately available converter that actually supports
+`dxf2dwg`. See [FreeCAD's converter resolver](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Draft/importDWG.py#L1267-L1329).
 
 FreeCAD invokes the converter as `dwg2dxf <input.dwg> -o <output.dxf>`; this
 form is noninteractive, writes ASCII DXF by default, and retains a supported
