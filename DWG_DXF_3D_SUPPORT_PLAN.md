@@ -29,6 +29,24 @@ only when the integration behavior or claimed profile changes. Preserve
 correct DXF output when FreeCAD's importer lacks support, and report converter
 integration separately from imported-geometry support.
 
+**FreeCAD release decision and next work:** the support target is the real
+Draft workflow—FreeCAD discovers an installed `dwg2dxf`, launches it as a
+separate process, and imports the complete DXF it produced—not merely that the
+library or a build-tree CLI can parse a DWG. Keep three gates explicit:
+(1) installed converter/CLI contract, (2) attributed FreeCAD process handoff,
+and (3) per-entity geometry construction. Gates 1–2 can pass while FreeCAD
+reports an entity unsupported; that is converter integration, not geometry
+support. The bounded macOS profile and entity results below are implemented;
+native Linux/Windows qualification remains S8.9.5 and is not a prerequisite
+for independent code slices. For AC1027 modeler entities, the immediate
+FreeCAD-related implementation dependency is the evidence gate S2.3.2, then
+the minimal carrier and ODA-acceptance slices S2.3.4–S2.3.6, and only then
+the separate `open()`/`insert()` handoff check S2.3.7/S8.15.19. Until those
+gates pass, keep those conversions fail-closed while continuing unrelated
+FreeCAD-usable entity work. Per-slice validation stays fast and FreeCAD-free;
+run the slower process checks only when the launch/handoff behavior changes or
+when qualifying a new profile, operation, or entity result.
+
 **FreeCAD-first feature priority (2026-09-24):** the intended user workflow is
 FreeCAD Draft opening or inserting a DWG through the installed `dwg2dxf`
 process and then FreeCAD's selected DXF importer. Prioritize 3D feature rows
