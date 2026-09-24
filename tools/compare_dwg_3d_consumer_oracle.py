@@ -7,9 +7,12 @@ scope is intentionally limited to one AutoCAD-authored AC1015 (R2000) planar
 3D POLYLINE sample, one locally generated AC1015 topology control, AC1024
 (R2010) INSERT placement and SPLINE fit data and one sample's LINE endpoints,
 plus AC1021 (R2007) LINE endpoints, 3DFACE corners/edge flags, and ARC,
-CIRCLE, and ELLIPSE fields. The local control exercises nonzero-Z 3D POLYLINE,
-legacy POLYLINE_MESH, and PFACE but does not qualify AutoCAD interoperability.
-Modeler, surface, and other version/family fields are not compared here.
+CIRCLE, and ELLIPSE fields. A hash-pinned AutoCAD 2016-authored POINT matrix
+compares one nonzero-Z POINT across AC1014/AC1015/AC1018/AC1021/AC1024/AC1027,
+and checks the five available paired source DXFs. The local topology control
+exercises nonzero-Z 3D POLYLINE, legacy POLYLINE_MESH, and PFACE but does not
+qualify AutoCAD interoperability. Modeler, surface, and other version/family
+fields are not compared here.
 """
 
 from __future__ import annotations
@@ -26,6 +29,40 @@ from typing import Any
 
 class OracleError(RuntimeError):
     pass
+
+
+AUTOCAD_POINT3D_PROFILES: dict[str, dict[str, str | None]] = {
+    "point3d_R14.dwg": {
+        "version": "AC1014",
+        "sha256": "7e6b1378b053f20de2cf9d153da3485e6475d0cd5845d5a8144b09cfe17cdc46",
+        "dxf_sha256": None,
+    },
+    "point3d_2000.dwg": {
+        "version": "AC1015",
+        "sha256": "af51e9d5c75a9fd2a014a80bb03633faca93de2a54278e0b403a17ee1b3d7083",
+        "dxf_sha256": "3ef77eb893b58d0e96f903f3ebad93f5cf4b5d60994c00ca0d2f943a3931cc34",
+    },
+    "point3d_2004.dwg": {
+        "version": "AC1018",
+        "sha256": "ba256436ee4bb1e777296699654d9ad872c5c27fcda0e9b535868c584f4cfde5",
+        "dxf_sha256": "c2f40fbb2e362c2eeb86bcc4fb9989eea445d4740334d79623bfa99cfea43085",
+    },
+    "point3d_2007.dwg": {
+        "version": "AC1021",
+        "sha256": "4d46ed43787fe97f8eef17e529396a4c33fef7c1d22c40816b2e61bfc6e89474",
+        "dxf_sha256": "2afd335ab2364e16bffef8c7640c8a5399ca25926f4f0a6af27fe04e5de35eb7",
+    },
+    "point3d_2010.dwg": {
+        "version": "AC1024",
+        "sha256": "9819e04c3ae5e75fb4aa0c6265e77421faa833acec0ebbb60feb34f019259b19",
+        "dxf_sha256": "1bccc1155424d48fe7d79de991db9d3dd5b9e818298e50c1e73a6579d6132cdf",
+    },
+    "point3d_2013.dwg": {
+        "version": "AC1027",
+        "sha256": "839297daa100c318d5afbfa128145d2c4782300650c86b2ab58b34cf6fe1aba4",
+        "dxf_sha256": "bf1e050ecc8aa9cf09471f5bcac75f0c7844bbc895b7eb76f72489bde2567fbb",
+    },
+}
 
 
 def is_json_word_character(value: str) -> bool:
@@ -126,6 +163,46 @@ def compare_point(actual: Any, expected: Any, label: str) -> None:
     if not isinstance(actual, dict) or set(actual) != {"x", "y", "z"}:
         raise OracleError(f"{label} is not a typed XYZ point in libdxfrw output")
     compare_vector([actual[axis] for axis in ("x", "y", "z")], expected, label)
+
+
+def compare_point3d_witness(
+        row: dict[str, Any], expected_xyz: list[float],
+        expected_handle: str) -> dict[str, Any]:
+    external = row["external"]
+    fields = row["adapter"]["fields"]
+    actual_handle = handle_key(external.get("handle"), "LibreDWG POINT")
+    if actual_handle != expected_handle:
+        raise OracleError(
+            f"unexpected POINT handle {actual_handle!r}; "
+            f"expected {expected_handle!r}")
+    external_xyz = [external.get(axis) for axis in ("x", "y", "z")]
+    compare_vector(external_xyz, expected_xyz, "POINT.expectedWcsXYZ")
+    compare_point(fields.get("basePoint"), external_xyz, "POINT.basePoint")
+    compare_point(fields.get("basePoint"), expected_xyz,
+                  "POINT.expectedBasePoint")
+    expected_extrusion = [0.0, 0.0, 1.0]
+    compare_vector(external.get("extrusion"), expected_extrusion,
+                   "POINT.expectedExtrusion (LibreDWG)")
+    compare_point(fields.get("extrusion"), external.get("extrusion"),
+                  "POINT.extrusion")
+    return {"handle": actual_handle, "wcsXYZ": expected_xyz,
+            "extrusion": expected_extrusion}
+
+
+def compare_point3d_reference_dxf(
+        rows: dict[str, dict[str, Any]], expected_xyz: list[float],
+        expected_handle: str) -> dict[str, Any]:
+    if set(rows) != {expected_handle}:
+        raise OracleError(
+            "paired source DXF POINT handle differs; "
+            f"actual={sorted(rows)}, expected={[expected_handle]}")
+    fields = rows[expected_handle]["fields"]
+    compare_point(fields.get("basePoint"), expected_xyz,
+                  "paired DXF POINT.expectedBasePoint")
+    compare_point(fields.get("extrusion"), [0.0, 0.0, 1.0],
+                  "paired DXF POINT.expectedExtrusion")
+    return {"handle": expected_handle, "wcsXYZ": expected_xyz,
+            "extrusion": [0.0, 0.0, 1.0]}
 
 
 def handle_key(value: Any, label: str) -> str:
@@ -572,6 +649,8 @@ def main() -> int:
     expected_vertex_count = None
     sample_source = None
     topology_recipe = None
+    paired_reference_path: pathlib.Path | None = None
+    paired_reference_digest: str | None = None
     if version == "AC1015" and args.input.name == "PolyLine3D.dwg":
         expected_digest = (
             "f51f4f65ba027bf1a001480d3c7b5bc5667960050081c67f9bb9c7bdbcfe815a"
@@ -662,19 +741,86 @@ def main() -> int:
             "boundary": ("one-sample read-field comparison only; not "
                          "target-authored provenance"),
         }
+    elif args.input.name in AUTOCAD_POINT3D_PROFILES:
+        profile = AUTOCAD_POINT3D_PROFILES[args.input.name]
+        expected_version = profile["version"]
+        expected_digest = profile["sha256"]
+        if version != expected_version:
+            raise OracleError(
+                f"{args.input.name} has signature {version}; "
+                f"expected {expected_version}")
+        actual_digest = sha256_file(args.input)
+        if actual_digest != expected_digest:
+            raise OracleError(
+                f"{args.input.name} SHA-256 differs from the pinned "
+                f"AutoCAD-authored input: {actual_digest}")
+        cases = (("POINT", 1,
+                  lambda row: compare_point3d_witness(
+                      row, [50.0, 50.0, 50.0], "7c")),)
+        excluded = ["other POINTs and coordinate tuples",
+                    "other entities in the drawing",
+                    "other versions beyond the six pinned samples",
+                    "DWG writing",
+                    "FreeCAD geometry on profiles not separately tested"]
+        profile_label = args.input.stem.removeprefix("point3d_")
+        sample_source = {
+            "repository": "nextgis/dwg_samples",
+            "repositoryUrl": "https://github.com/nextgis/dwg_samples",
+            "corpusCommit": "ff05d5a89ce123da511ed93c5fe5e6df85e02ab8",
+            "readme": "README.md",
+            "authoring": "AutoCAD 2016 M.49.0.0, blank metric drawing, _POINT 50,50,50",
+            "profile": profile_label,
+            "sha256": expected_digest,
+            "boundary": "one POINT read-field witness for this pinned DWG version only",
+        }
+        paired_reference_digest = profile["dxf_sha256"]
+        if paired_reference_digest:
+            paired_reference_path = args.input.with_suffix(".dxf")
+            if not paired_reference_path.is_file():
+                raise OracleError(
+                    f"{args.input.name} requires its pinned paired source DXF: "
+                    f"{paired_reference_path}")
+            actual_reference_digest = sha256_file(paired_reference_path)
+            if actual_reference_digest != paired_reference_digest:
+                raise OracleError(
+                    f"paired source DXF SHA-256 differs from the pinned "
+                    f"target-authored file: {actual_reference_digest}")
+            sample_source["pairedSourceDxf"] = {
+                "path": paired_reference_path.name,
+                "sha256": paired_reference_digest,
+            }
+        else:
+            sample_source["pairedSourceDxf"] = None
     else:
         raise OracleError(
             "unsupported sample profile: expected AC1015 PolyLine3D.dwg or "
             "libdxfrw_ac1015_3d_topology_control.dwg, "
             "AC1021 tablet.dwg, or AC1024 "
             "visualization_-_conference_room.dwg / "
-            "visualization_-_condominium_with_skylight.dwg; "
+            "visualization_-_condominium_with_skylight.dwg, or one of the "
+            "hash-pinned nextgis/dwg_samples point3d_*.dwg profiles; "
             f"got {version!r} {args.input.name!r}")
 
     external = run_json([args.dwgread, "-O", "minJSON", str(args.input)],
                         "LibreDWG dwgread")
     adapter = run_json([args.adapter, "--input", str(args.input),
                         "--facade", "dwgRW"], "libdxfrw semantic adapter")
+
+    paired_reference_rows: dict[str, dict[str, Any]] | None = None
+    if paired_reference_path is not None:
+        reference = run_json(
+            [args.adapter, "--input", str(paired_reference_path),
+             "--facade", "dxfRW"],
+            "libdxfrw paired source DXF adapter")
+        paired_reference_rows = index_adapter(reference, "POINT")
+        if len(paired_reference_rows) != 1:
+            raise OracleError(
+                "paired target-authored DXF must contain exactly one POINT; "
+                f"found {len(paired_reference_rows)}")
+        paired_point = compare_point3d_reference_dxf(
+            paired_reference_rows, [50.0, 50.0, 50.0], "7c")
+    else:
+        paired_point = None
 
     results = []
     for entity, count, comparator in cases:
@@ -707,23 +853,30 @@ def main() -> int:
                 if recipe is not None:
                     result_metrics = {"vertexCount": vertex_count,
                                      "verticesWithNonzeroZ": nonzero_z}
+            elif entity == "POLYLINE_MESH":
+                recipe = topology_recipe[entity]
+                result_metrics = comparator(
+                    row, index_external(external, "VERTEX_MESH"),
+                    recipe["dimensions"], recipe["points"])
+            elif entity == "POLYLINE_PFACE":
+                recipe = topology_recipe[entity]
+                result_metrics = comparator(
+                    row, index_external(external, "VERTEX_PFACE"),
+                    index_external(external, "VERTEX_PFACE_FACE"),
+                    recipe["points"], recipe["faces"])
             else:
-                recipe = (topology_recipe or {}).get(entity)
-                if recipe is None:
-                    comparator(row)
-                elif entity == "POLYLINE_MESH":
-                    result_metrics = comparator(
-                        row, index_external(external, "VERTEX_MESH"),
-                        recipe["dimensions"], recipe["points"])
-                elif entity == "POLYLINE_PFACE":
-                    result_metrics = comparator(
-                        row, index_external(external, "VERTEX_PFACE"),
-                        index_external(external, "VERTEX_PFACE_FACE"),
-                        recipe["points"], recipe["faces"])
+                compared = comparator(row)
+                if entity == "POINT":
+                    result_metrics = compared
         result = {"entity": entity, "count": len(rows),
                   "comparedBy": "handle", "semanticFieldsMatched": True}
-        if result_metrics:
+        if entity == "POINT":
             result.update(result_metrics)
+            if paired_point is not None:
+                result["pairedSourceDxfMatched"] = paired_point
+        if result_metrics:
+            if entity != "POINT":
+                result.update(result_metrics)
         elif entity == "POLYLINE_3D":
             result["vertexCount"] = expected_vertex_count
             result["recordsWithNonzeroVertexZ"] = nonzero_z
@@ -756,6 +909,7 @@ def main() -> int:
         "ELLIPSE": "ODA v5.4.1 §20.4.39",
         "ARC": "ODA v5.4.1 §20.4.18",
         "CIRCLE": "ODA v5.4.1 §20.4.20",
+        "POINT": "ODA v5.4.1 §20.4.31",
     }
     print(json.dumps({
         "result": "matched",
@@ -767,8 +921,12 @@ def main() -> int:
                             for row in results},
         "sampleSource": sample_source,
         "excluded": excluded,
-        "claimBoundary": "read-field comparison on this sample only; no writer, "
-                         "AutoCAD interoperability, or general version support claim",
+        "claimBoundary": (
+            "read-field comparison of one pinned AutoCAD-authored POINT for "
+            "this DWG revision; no DWG writer or family-wide support claim"
+            if args.input.name in AUTOCAD_POINT3D_PROFILES else
+            "read-field comparison on this sample only; no writer, "
+            "AutoCAD interoperability, or general version support claim"),
     }, sort_keys=True, indent=2))
     return 0
 

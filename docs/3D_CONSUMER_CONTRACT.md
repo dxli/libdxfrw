@@ -152,6 +152,16 @@ coverage. The sample's origin remains unverified. Do not infer FreeCAD shape
 support, writes, other-version behavior, or general ARC/CIRCLE support from
 this single-sample comparison.
 
+An exact-hash corpus profile also compares one AutoCAD-authored WCS POINT at
+`(50,50,50)` per pinned AC1014, AC1015, AC1018, AC1021, AC1024, and AC1027
+DWG against LibreDWG 0.14, joined by handle and checked against the corpus
+recipe; five files additionally match their paired hash-pinned source DXF.
+The files are caller-supplied from the pinned `nextgis/dwg_samples` corpus and
+are not committed. This qualifies only those six DWG read-field instances; it
+does not qualify `dwg2dxf` output, writing, FreeCAD import on the older
+profiles, or general POINT/version support. The AC1015-generated and AC1027
+FreeCAD POINT checks remain separate consumer evidence.
+
 ```sh
 python3 tools/compare_dwg_3d_consumer_oracle.py \
   --adapter build/tests/libdxfrw_3d_consumer_probe \
