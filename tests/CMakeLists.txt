@@ -214,6 +214,29 @@ if(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL)
         LABELS "dwg_read;freecad;cli;fast;generated;oda")
 endif()
 
+# Optional locally-generated oblique OCS ARC/CIRCLE control. The public
+# LibreDWG API is required because its dwgadd recipe cannot set point vectors.
+option(LIBDXFRW_ENABLE_LIBREDWG_API_FREECAD_CONTROL
+    "Enable the LibreDWG API-generated FreeCAD oblique OCS control" OFF)
+if(LIBDXFRW_ENABLE_LIBREDWG_API_FREECAD_CONTROL)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBREDWG_API REQUIRED IMPORTED_TARGET libredwg)
+    add_executable(libdxfrw_freecad_oblique_arc_circle_generator
+        fixtures/dwg/create_oblique_arc_circle_freecad_control.c)
+    target_link_libraries(libdxfrw_freecad_oblique_arc_circle_generator
+        PRIVATE PkgConfig::LIBREDWG_API)
+    add_test(
+        NAME dwg2dxf_freecad_3d_oblique_arc_circle_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DGENERATOR=$<TARGET_FILE:libdxfrw_freecad_oblique_arc_circle_generator>
+            -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+            -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3d_oblique_arc_circle_cli_test.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_3d_oblique_arc_circle_cli PROPERTIES
+        LABELS "dwg_read;freecad;cli;fast;generated;libredwg-api")
+endif()
+
 # LibreCAD_3 ABI compatibility check.
 # Mirrors LibreCAD_3's DXFimpl override surface; fails to compile if upstream
 # introduces a new pure virtual on DRW_Interface or removes/renames a public

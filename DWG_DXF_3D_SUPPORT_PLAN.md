@@ -1448,9 +1448,11 @@ Steps:
    elevated controls in the pinned consumer profile. It does not qualify
    oblique OCS transforms, other versions, or target-authored samples. An
    exploratory `dwgadd 0.14` recipe assignment to `arc.extrusion` was explicitly
-   ignored, so no non-default-normal case is inferred from that attempted
-   control; use an authentic witness or a verified generator path before
-   marking oblique OCS ready.
+   ignored, so that attempted control does not qualify oblique OCS. S8.15.10
+   later uses a direct LibreDWG API generator and verifies the converter's
+   field-preserving route; its pinned FreeCAD result is still negative for
+   oblique ARC/CIRCLE shape semantics, so those rows remain downstream-
+   unsupported rather than being inferred from this default-normal item.
 
 27. **S8.15.5 — Prove which converter FreeCAD actually used before attributing
    an import result.** In the opt-in feature audit, wrap the configured
@@ -1667,6 +1669,52 @@ and SPLINE as the bounded validation set.
    target-authored DWG interoperability, general ELLIPSE support, or a claim
    about other FreeCAD versions/importer modes.
 
+   **S8.15.10 — Separate oblique OCS converter preservation from FreeCAD
+   importer semantics.** Autodesk's [ARC](https://help.autodesk.com/cloudhelp/2018/ENU/AutoCAD-DXF/files/GUID-0B14D8F1-0EBA-44BF-9108-57D8CE614BC8.htm),
+   [CIRCLE](https://help.autodesk.com/cloudhelp/2018/ENU/AutoCAD-DXF/files/GUID-8663262B-222C-414D-B133-4A8506A27C18.htm),
+   and [OCS/arbitrary-axis](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-D99F1509-E4E4-47A3-8691-92EA07DC88F5.htm)
+   references define group 210/220/230 as the extrusion normal and the ARC /
+   CIRCLE center and angles in OCS. Keep a local analytic OCS→WCS oracle.
+
+   Use the opt-in `LIBDXFRW_ENABLE_LIBREDWG_API_FREECAD_CONTROL` target and
+   `tests/fixtures/dwg/create_oblique_arc_circle_freecad_control.c` to create
+   an AC1015 DWG in the build directory: ARC center `(10,20,30)`, radius 5,
+   0–90 degrees; CIRCLE center `(-5,4,10)`, radius 2.5; both normals
+   `(0.6,0,0.8)`. The direct LibreDWG public API is deliberate: a local
+   `dwgadd 0.14` recipe trial ignored vector-field assignments. Commit the
+   generator source only, never the generated DWG/DXF. The focused CTest must
+   invoke exact FreeCAD argv `dwg2dxf input -o output` in a path containing
+   spaces, assert AC1015 and each entity's OCS center/radius/angle/normal,
+   then re-read the emitted DXF through the public API and assert those fields
+   again. Keep this a fast opt-in control, independent of full-suite cadence.
+
+   For consumer semantics, `tests/freecad_dwg2dxf_oblique_arc_circle_check.FCMacro`
+   must seed only an isolated `--user-cfg`, disable ODA/QCAD fallback, prove
+   PATH discovery plus exact executable hash/argv/status and same-path
+   `Draft.importDWG.open()` → C++ `Import.readDXF` handoff, and record valid
+   shape geometry against the analytic WCS oracle. Run it only in the pinned
+   headless environment; do not make FreeCAD a default-CI dependency. The
+   helper source in FreeCAD's mutable [`dxf.cpp`](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Import/App/dxf/dxf.cpp)
+   is a research lead only; the pinned [shape-construction source](https://github.com/FreeCAD/FreeCAD/blob/145529fe741292ff0b3977a01195bf0247425794/src/Mod/Import/App/dxf/ImpExpDxf.cpp)
+   and runtime result are the evidence for this exact profile.
+
+   **Completed result / support ceiling.** The opt-in CTest
+   `dwg2dxf_freecad_3d_oblique_arc_circle_cli` passes and preserves both
+   complete DXF records through DWG→DXF and public DXF readback. FreeCAD 1.1.3
+   revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64,
+   C++ importer mode 2, invokes the exact installed `dwg2dxf` binary and
+   imports both shapes without an unsupported-feature warning, but silently
+   ignores the oblique extrusion: the ARC/CIRCLE retain their untransformed
+   centers and +Z axes, and the ARC endpoints remain XY-plane endpoints. Both
+   semantic comparisons therefore fail. Preserve DXF OCS fields in the
+   converter; do not flatten or rewrite them to disguise the downstream
+   importer limitation. This qualifies only the generated AC1015 conversion
+   route and proves neither external DWG-writer interoperability nor positive
+   oblique FreeCAD support. An ODA 27.1.0.0 read of this LibreDWG API-generated
+   DWG failed on its dictionary object, so it is not an independent-writer
+   witness. Requalify after a pinned FreeCAD importer fix or another
+   independently readable oblique-DWG source is available.
+
    Do not silently rewrite newer-version `ELLIPSE` records as sampled
    `POLYLINE`s to make this importer appear successful. Any consumer-specific
    fallback needs an explicit user-selected mode, documented approximation
@@ -1676,11 +1724,13 @@ and SPLINE as the bounded validation set.
    separate and this optional integration out of default CI.
 
    Positive gate: `.9.1` preserves its explicitly listed planar fields;
-   `.9.2` promotes only the exact writer/runtime/geometry rows whose output
-   fields and resulting FreeCAD shapes match independent expectations.
-   Negative gate: wrong plane, missing Z, wrong closure, or wrong endpoints
-   stays downstream-unsupported, and no fallback converter may contribute
-   to a positive result.
+   `.9.2` promotes only exact writer/runtime/geometry rows whose output fields
+   and resulting FreeCAD shapes match independent expectations. `.10` may
+   establish converter field preservation while separately recording a
+   downstream semantic failure, but cannot promote FreeCAD oblique-geometry
+   support. Negative gate: wrong plane, missing Z, wrong closure, or wrong
+   endpoints stays downstream-unsupported, and no fallback converter may
+   contribute to a positive result.
 
 Positive gate: an old source consumer still compiles, and the headless 3D probe
 receives all asserted native typed values/carrier identities without an
@@ -1751,7 +1801,10 @@ correction of the false linear flag are also committed; its FreeCAD runtime
 behavior remains unqualified. S8.15.9.2 now closes the independent-writer
 ELLIPSE/FreeCAD probe: only its full-XY control imported semantically in the
 pinned runtime, while elevated and tilted partials remain downstream-
-unsupported. S8.15 remains READY for the next separately scoped,
+unsupported. S8.15.10 verifies oblique ARC/CIRCLE field preservation through
+the exact converter route while documenting FreeCAD C++ mode 2's silent loss
+of OCS geometry; both remain downstream-unsupported. S8.15 remains READY for
+the next separately scoped,
 family-isolated importer probe; advance one proven FreeCAD entity mapping at
 a time. The condominium sample's
 SPLINE observation remains ODA-fallback evidence only, and the `dwgadd`
@@ -1885,7 +1938,7 @@ degenerate, other-knot, other-scenario, target-authored, or other-version
 splines.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 59/73 committed, 12 blocked, 1 verified, 0 in progress, and 1 ready):
+commit; 60/74 committed, 12 blocked, 1 verified, 0 in progress, and 1 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -2032,6 +2085,8 @@ format specification.
 - [Open Design Specification for .dwg files, v5.4.1](https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf) — relevant coverage includes §20.4.13–20.4.17 for vertex/3D-polyline families, §20.4.33–20.4.36 for PFACE/classic POLYLINE mesh/SOLID/TRACE, §20.4.40 for SPLINE scenario/control/fit fields, and §20.4.41 for REGION/3DSOLID/BODY ACIS layout. Searchable-text review found no named modern `AcDbSubDMesh`, `AcDb*Surface`, or `3DLINE` layout; keep those corresponding DWG rows unqualified absent another primary source. The required local v5.4.1 copy was verified under S0.2 at `/Users/dli/doc/dwg/OpenDesign_Specification_for_.dwg_files (1).pdf`.
 - [AutoCAD 2010 DXF Reference](https://images.autodesk.com/adsk/files/acad_dxf1.pdf) and [current Autodesk 3DSOLID DXF reference](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-19AB1C40-0BE0-4F32-BCAB-04B37044A0D3.htm) — 3DSOLID/SURFACE ACIS payloads use groups 1/3; group 310 is not specified for the entity-inline ACIS body.
 - [Autodesk DXF ENTITIES reference](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-7D07C886-FD1D-4A0C-A7AB-B4D21F18E484.htm) — record-family index and group-code reference.
+- [Autodesk ARC DXF reference](https://help.autodesk.com/cloudhelp/2018/ENU/AutoCAD-DXF/files/GUID-0B14D8F1-0EBA-44BF-9108-57D8CE614BC8.htm) and [CIRCLE DXF reference](https://help.autodesk.com/cloudhelp/2018/ENU/AutoCAD-DXF/files/GUID-8663262B-222C-414D-B133-4A8506A27C18.htm) — ARC/CIRCLE center coordinates are OCS, group 210/220/230 supplies the extrusion normal, and ARC angles are in that OCS frame.
+- [Autodesk OCS](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-D99F1509-E4E4-47A3-8691-92EA07DC88F5.htm) and [arbitrary-axis algorithm](https://help.autodesk.com/cloudhelp/2015/ENU/AutoCAD-DXF/files/GUID-E19E5B42-0CC7-4EBA-B29F-5E1D595149EE.htm) — basis construction for the independent expected-WCS oracle; normative for the coordinate-frame check, unlike a reader/writer round trip.
 - [Autodesk 3DFACE DXF reference](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-747865D5-51F0-45F2-BEFE-9572DBC5B151.htm) — WCS corners, optional fourth vertex, invisible-edge bits.
 - [Autodesk POLYLINE DXF reference](https://help.autodesk.com/cloudhelp/2015/ENU/AutoCAD-DXF/files/GUID-ABF6B778-BE20-4B49-9B58-A94E64CEFFF3.htm) — flags, 2D OCS versus 3D WCS, mesh counts, extrusion.
 - [Autodesk VERTEX DXF reference](https://help.autodesk.com/cloudhelp/2021/ENU/AutoCAD-DXF/files/GUID-0741E831-599E-4CBF-91E1-8ADBCFD6556D.htm) and [Polyface Meshes DXF reference](https://help.autodesk.com/cloudhelp/2015/ENU/AutoCAD-DXF/files/GUID-96B6288E-F413-46C0-968A-A314171C0AAE.htm) — polyface vertex/face flags, signed invisible-edge indices, face ordering, and vertex/face counts.
@@ -2051,6 +2106,7 @@ format specification.
 - [FreeCAD `Draft/importDWG.py` LibreDWG resolution](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Draft/importDWG.py#L129-L165) and [converter invocation/fallback logic](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Draft/importDWG.py#L244-L335) — `get_libredwg_converter()` selection from the `TeighaFileConverter` preference or platform PATH (`dwg2dxf.exe` on Windows, `dwg2dxf` on Linux/macOS), exact `input -o output` invocation, output-existence success check, and LibreDWG-only versus automatic ODA/QCAD fallback lanes. Pin an exact FreeCAD revision for each runtime test because `main` is mutable.
 - [FreeCAD C++ DXF entity dispatcher](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Import/App/dxf/dxf.cpp#L2040-L2062) and [`ReadEntity()` dispatch](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Import/App/dxf/dxf.cpp#L2720-L2782) — current `main` maps SPLINE to `ReadSpline()` and sends unlisted HELIX to `ReadUnknownEntity()`. This is a downstream importer limitation, not evidence to rewrite or omit a legal DXF HELIX.
 - [FreeCAD C++ ELLIPSE parser](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Import/App/dxf/dxf.cpp#L2135-L2150) and [shape construction callback](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Import/App/dxf/ImpExpDxf.cpp#L1122-L1160) — current `main` reads center, major-axis vector, ratio, and parameters without reading the extrusion normal; the shape callback derives XY rotation, sets +Z, and constructs a complete ellipse while ignoring arc endpoints. This defines a FreeCAD importer limitation only; preserve DXF ELLIPSE fields in `dwg2dxf` and keep the tilted/partial rows unsupported until the consumer path is semantics-correct.
+- [FreeCAD pinned C++ DXF shape construction](https://github.com/FreeCAD/FreeCAD/blob/145529fe741292ff0b3977a01195bf0247425794/src/Mod/Import/App/dxf/ImpExpDxf.cpp) — exact S8.15.10 runtime revision; use alongside its macro's geometry observation. The current `main` parser source remains a mutable audit lead and cannot substitute for pinned runtime evidence.
 - [FreeCAD C++ DXF importer](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Import/App/dxf/ImpExpDxf.cpp) and [FreeCAD Draft DXF importer](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Draft/importDXF.py) — primary implementation references for the C++ shape-construction path and legacy Python importer; audit the exact runtime revision and preferences because support differs by importer and release.
 - [FreeCAD C++ block composition](https://github.com/FreeCAD/FreeCAD/blob/main/src/Mod/Import/App/dxf/ImpExpDxf.cpp) — constructs parametric `App::Link` objects for INSERTs; the pinned S8.15.6 runtime assertion checks the imported link's resulting edge geometry rather than assuming a DXF INSERT record alone constitutes successful import.
 - [LibreDWG `dwgadd` example](https://github.com/LibreDWG/libredwg/blob/master/examples/dwgadd.example) and [issue #1351](https://github.com/LibreDWG/libredwg/issues/1351) — generator syntax and a documented broken INSERT attribute-chain output; issue evidence is used only to reject that sample as a clean control, not as a format authority or libdxfrw defect claim.
@@ -2066,3 +2122,4 @@ Latest implementation-item ledger addition:
 | S8.15.8 | COMMITTED | Added locally-authored `tests/fixtures/dxf/ac1015_helix_freecad_control.dxf` and opt-in ODA CTest `dwg2dxf_freecad_3d_helix_cli`; generated DWG/DXF outputs remain under `build/`. The source contains a nonplanar rational HELIX (13 ordered controls/weights, 17 knots, axis `(0,0,1)`, radius 1, one turn, height 4) and a separate nonplanar weighted cubic SPLINE. The exact FreeCAD argv test and public DXF readback preserve rational group-70 flag `0x04`, degree/counts, ordered WCS controls/weights, absent planar normals, and HELIX trailer; it caught and fixed weighted DWG SPLINE output incorrectly using linear bit `0x10`. Focused internal round-trip and ODA Spline/HELIX route tests pass; no generated files enter source. Current FreeCAD `main` C++ `dxf.cpp` maps SPLINE to `ReadSpline()` and falls through to `ReadUnknownEntity()` for HELIX, so classify this as converter-supported/preserved but downstream-unsupported in that importer. Do not rewrite the entity; a positive FreeCAD HELIX shape claim requires a separate upstream importer change. Target-authored DWGs and other versions remain unqualified. |
 | S8.15.9.1 | COMMITTED | Added locally authored `tests/fixtures/dwg/ac1015_ellipse_freecad_control.dwgadd`, `tests/fixtures/dxf/ac1015_ellipse_freecad_control.dxf`, and opt-in `dwg2dxf_freecad_3d_ellipse_cli`. The DWGADD recipe emits only two planar AC1015 ELLIPSE controls (full and partial) because LibreDWG `dwgadd` cannot faithfully express the elevated/tilted vectors needed by `.9.2`. In a build-tree path containing spaces, the CTest invokes exact FreeCAD argv `dwg2dxf input -o output`, verifies the AC1015 signature/header and both entity field sequences (center, WCS major axis, ratio, parameters, omitted default extrusion), then repeats the checks after public DXF readback. Focused CTest passes 1/1. The locally authored elevated/tilted DXF source is reserved for an independent writer; it is not exercised by this DWGADD test. This is self-generated planar conversion/readback evidence only, not independent DWG interoperability, FreeCAD shape support, or general ELLIPSE support. All generated DWG/DXF outputs stay under `build/`; no generated drawing fixture is tracked. |
 | S8.15.9.2 | COMMITTED | Added opt-in `dwg2dxf_freecad_3d_ellipse_oda_cli` and `tests/run_freecad_3d_ellipse_oda_cli_test.cmake`. ODA File Converter 27.1.0.0 writes the locally-authored AC1015 control only under build/temp; the fast CTest checks all three independent ELLIPSE field sets before conversion and after public DXF readback, and passes 1/1. Added `tests/freecad_dwg2dxf_3d_ellipse_check.FCMacro` to enforce an isolated FreeCAD config, capture executable/hash/argv/status and identical DWG→DXF→C++ importer handoffs, then compare resulting curve plane, major-axis direction, radii, closure, parameters, and endpoints to analytic expectations. FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2, with `dwg2dxf` found on PATH (SHA-256 `5b7d23baf049746597bf0ca0a78141e94e260dfb0086aa3d468ac702df063f45`): the default-XY full ellipse matches; elevated and tilted partial ellipses are silently built as closed full +Z ellipses, with tilted normal/major-axis direction and arc endpoints lost, though FreeCAD reports no unsupported features. Thus converter output is field-preserving; only this full-XY control is a positive pinned-FreeCAD result, and partial/tilted rows remain downstream-unsupported. An earlier ODA `-4960` failure did not recur on unmodified CLI retry; no UI-lock bypass was used. Locally-authored DXF source SHA-256 `078a9982f049ee4c669f878b6cc8cc6dfcd292b72d8f394fe7c2c258b9fa7cc7`; generated DWG/DXF files were not added to source. Other FreeCAD versions/importers, target-authored DWG interoperability, and general ELLIPSE support remain unqualified. |
+| S8.15.10 | COMMITTED | Added `tests/fixtures/dwg/create_oblique_arc_circle_freecad_control.c`, an opt-in `LIBDXFRW_ENABLE_LIBREDWG_API_FREECAD_CONTROL` CTest target, `tests/run_freecad_3d_oblique_arc_circle_cli_test.cmake`, and `tests/freecad_dwg2dxf_oblique_arc_circle_check.FCMacro`. The API generator writes only an ephemeral AC1015 DWG under the build tree because a `dwgadd 0.14` recipe could not set extrusion vectors. The fast exact-FreeCAD-argv CTest verifies one ARC (center `(10,20,30)`, radius 5, 0–90 degrees) and one CIRCLE (center `(-5,4,10)`, radius 2.5), both normal `(0.6,0,0.8)`, then verifies identical fields after public DXF readback; build and CTest pass. FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ mode 2 resolves installed `dwg2dxf` by PATH, runs exact argv, imports the same output, and emits no unsupported warnings; however both entities retain their raw OCS centers and +Z axes. ARC endpoints `(15,20,30)` / `(10,25,30)` differ from the analytic WCS expectations `(2,15,36)` / `(-2,10,39)`; expected centers are `(2,10,36)` and `(2.8,-5,10.4)`, but FreeCAD keeps `(10,20,30)` and `(-5,4,10)`. Both semantic comparisons fail, so oblique ARC/CIRCLE are downstream-unsupported despite converter field preservation. ODA 27.1.0.0 rejected this API-generated DWG's dictionary object; no independent-writer or target-authored DWG interoperability is claimed. No generated DWG/DXF was committed. `cmake --build build --target libdxfrw_freecad_oblique_arc_circle_generator dwg2dxf --parallel 2`, focused CTest (`dwg2dxf_freecad_3d_oblique_arc_circle_cli`, 1/1), and `git diff --check` pass. |
