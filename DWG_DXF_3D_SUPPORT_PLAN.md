@@ -54,8 +54,63 @@ optional and out of default CI: fast installed-CLI/readback tests are the
 per-change gate, while native FreeCAD runtime checks run only for changed
 integration behavior or a new qualification tuple. The current narrow runtime
 baseline is FreeCAD 1.1.3 on macOS arm64; native Linux/Windows remain
-unqualified. S8.9.1–S8.9.6 and S8.15 are the implementation/evidence backlog
-for this gate, not new duplicate work items.
+unqualified. S8.9.1–S8.9.4 and S8.9.6 are implemented/committed for their
+bounded macOS profiles; S8.9.5 retains the native-platform qualification gap,
+and S8.15 gates entity semantics. Continue those existing work items rather
+than creating a duplicate FreeCAD harness or treating a CLI-only pass as
+application integration.
+
+### FreeCAD end-user support target
+
+The concrete user outcome is: a user builds/installs this project's
+`dwg2dxf`, configures FreeCAD Draft to select the LibreDWG converter lane, and
+opens or inserts a DWG through FreeCAD's own registered handler. FreeCAD must
+launch the installed executable as a separate process; no FreeCAD plugin,
+in-process library link, or automatic FreeCAD packaging is implied. The
+supported integration is **DWG import through DXF**, not DWG export.
+
+Use this implementation-ready checklist for every profile we claim:
+
+1. Install `dwg2dxf` outside the build tree and verify its runtime dependencies
+   resolve there. FreeCAD must discover the platform artifact (`dwg2dxf` on
+   Linux/macOS; `dwg2dxf.exe` on Windows) from the same process environment it
+   will use in normal operation.
+2. In an isolated FreeCAD profile, select its dedicated LibreDWG mode
+   (`DWGConversion=1`) to prevent Automatic mode from silently succeeding via
+   ODA/QCAD. Prefer PATH discovery when that PATH is actually inherited by the
+   FreeCAD process. If a full-path preference is used, separately preserve or
+   configure DWG export: FreeCAD shares `TeighaFileConverter` between import
+   and export and may derive the sibling `dxf2dwg` path. This project does not
+   provide that sibling.
+3. Verify FreeCAD launches exactly
+   `[installed-dwg2dxf, input.dwg, "-o", output.dxf]`; the CLI must be
+   noninteractive, emit ASCII by default, preserve the supported source DXF
+   version when no override is given, return nonzero on failure, and never
+   leave a partial final output. The old positional CLI remains compatible.
+4. Exercise FreeCAD's actual DWG `open` and `insert` entry points separately.
+   Capture the executable path/hash, argv/status, fallback selection, DXF
+   output path, and exact path handed to the selected DXF importer. First use
+   a small independently bounded LINE control to qualify deployment and
+   geometry handoff; then add only entity/version cases with their own
+   independent semantic oracle under S8.15.
+5. Keep these outcomes distinct: (a) installed executable discovery, (b)
+   converter output/readback correctness, (c) FreeCAD construction of
+   independently expected geometry, and (d) normal desktop dispatcher
+   integration. Passing a prior gate does not imply a later one. Pin the
+   FreeCAD revision, OS/architecture, launch route, importer mode, preference
+   values, operation, source DWG version, and tested entity semantics.
+
+**Current completion and remaining gap:** the exact `-o` CLI contract,
+install-prefix check, and no-prompt/failure-safe publication are implemented.
+On macOS arm64, FreeCAD 1.1.3 has pinned headless `open`/`insert` checks and a
+desktop-process dispatcher check for bounded LINE controls; selected
+entity-specific routes are recorded under S8.15, including explicit
+downstream-unsupported outcomes. Native Linux and Windows installation,
+discovery, and FreeCAD-process checks remain platform qualification work.
+Finder/Start-menu environment inheritance, FreeCAD viewport rendering,
+bidirectional export, and blanket DWG/3D support are not established. Platform
+gaps must not block independent parser/converter work, and unavailable FreeCAD
+runtimes stay external gates rather than inferred passes.
 
 For `3DSOLID`/`REGION`/`BODY`, distinguish converter support from FreeCAD
 geometry support. A positive converter result means the DWG reader selected a
@@ -335,7 +390,7 @@ claims.
 | `3DFACE` | DXF library read/write routes exist. S5.1 found the in-tree `dx_iface` did not dispatch `E3DFACE` on output; it now does. The reader requires XY components for the first three corners, accepts the fourth corner as optional and copies corner 3 when absent. The DWG parser bounds its invisible-edge flags to `0x0f`; the DXF writer now rejects group-70 values outside `0..15` before the 16-bit write. | Generated ASCII/binary DXF vectors check WCS corners and group-70 invisible-edge bits. The in-tree writer integration is fixed. A fast in-memory ASCII vector verifies the legal omitted-fourth-corner fallback, while a half-present fourth corner is rejected before callback publication. S5.3 verifies invalid flag values fail without publishing output. This does not qualify DWG layout/version support. |
 | `3DLINE` | There are typed DXF/DWG routes and a DWG custom-class number. | Verify exact class registration and per-version availability against a real trace; third-party class numbers are not adequate DWG evidence. The searchable ODA v5.4.1 text reviewed here has no `3DLINE` entry, so modern custom-class layouts need a newer primary reference or target-produced, independently checked witness; keep pre-R13 forms on their own evidence lane. |
 | 3D point/line families | `POINT`, `LINE`, `RAY`, and `XLINE` carry WCS 3D data; the DWG implementation also has distinct legacy reader code for pre-R13 3DLINE and a modern custom-class route. | Do not equate a 3D `LINE` with the implementation-specific `3DLINE` record. Audit legacy reader versions separately from custom-class DWG versions. Autodesk's current DXF ENTITIES index does not list `3DLINE`; treat that DXF spelling as an extension until a target-application witness establishes portability. |
-| Planar entities placed in 3D | ARC/CIRCLE, SOLID/TRACE, 2D POLYLINE/LWPOLYLINE, HATCH, and INSERT use OCS/elevation/extrusion in different ways. DXF ELLIPSE center and major-axis vector are WCS, with extrusion providing its plane normal. INSERT adds scale, rotation, array spacing, and block-base transforms. | INSERT's nested placement matrix is covered in S5.2. S5.1 covers SOLID/TRACE corner fields and TRACE projection; S5.4 corrects the DXF ELLIPSE `ext=true` double-transform and checks WCS invariance in both modes. Broader ARC/CIRCLE/HATCH OCS, thickness, and DWG ELLIPSE qualification remain open. Continue to use Autodesk's arbitrary-axis and per-entity rules, not a transform helper round-trip alone. |
+| Planar entities placed in 3D | ARC/CIRCLE, SOLID/TRACE, 2D POLYLINE/LWPOLYLINE, HATCH, and INSERT use OCS/elevation/extrusion in different ways. DXF ELLIPSE center and major-axis vector are WCS, with extrusion providing its plane normal. INSERT adds scale, rotation, array spacing, and block-base transforms. | INSERT's nested placement matrix is covered in S5.2. S5.1 covers SOLID/TRACE corner fields and TRACE projection; S5.4 corrects the DXF ELLIPSE `ext=true` double-transform and checks WCS invariance in both modes. S5.7 now validates the HATCH/MPOLYGON zero-XY elevation header, keeps loop and seed coordinates in OCS, and rejects a zero extrusion vector; it does not qualify general HATCH edge geometry, render behavior, or DWG. Broader ARC/CIRCLE OCS, thickness, and DWG ELLIPSE qualification remain open. Continue to use Autodesk's arbitrary-axis and per-entity rules, not a transform helper round-trip alone. |
 | Classic `POLYLINE` 3D forms | The model stores 3D polylines, polygon meshes, and polyfaces in the `POLYLINE`/`VERTEX`/`SEQEND` family. DWG dispatch has separate vertex and face types, owned-child handling, and subtype checks. S5.1 corrected DXF polyface output to include groups 71/72 for declared vertex/face counts, use the polyface/face-record subclass markers, omit vertex group 91 from polyface records, and emit the legal SEQEND subclass set. S5.5 closes the DWG→DXF PFACE face gap: DWG face subtype (whose layout has no flags field) now supplies DXF face-record bit 128 and signed index serialization. | Generated ASCII/binary vectors verify WCS 3D-polyline points and signed polyface indices; LibreDWG 0.14 independently reads both. A locally generated AC1015 control exercises this conversion path only; it is not target interoperability evidence. Keep versioned DWG ownership/count qualification separate. DXF readers must remain tolerant of legal child ordering; writers emit coordinate vertices before faces. |
 | `MESH` / `AcDbSubDMesh` | Typed vertex/face/edge/crease/property-override data, topology validation, DXF and DWG encode/decode paths, and generated local round-trip tests exist. S5.1 added the missing in-tree `dx_iface` MESH read callback and write dispatch. | Generated ASCII/binary DXF vectors compare typed vertices/faces/edges/creases; LibreDWG 0.14 independently reads both. Self-round-trips remain consistency checks, not DWG-layout evidence. Autodesk's DXF table is useful for DXF group codes; the searchable ODA v5.4.1 text reviewed here has no named `AcDbSubDMesh` DWG layout. Keep DWG MESH layout/version claims unqualified until primary DWG evidence or a target-produced, independently checked witness exists. |
 | Six analytic/NURBS surface classes | Typed DXF paths exist. The DWG surface parser retains a bounded raw ACIS body and links DataStorage; DWG surface encoding rejects versions before AC1021. Class registration and modern DWG read/write paths exist. | The searchable ODA v5.4.1 text reviewed here has no named modern `AcDb*Surface` layouts. Keep DWG surface layout/version claims unqualified until feature-specific primary evidence or target-produced, independently checked witnesses exist. Keep the AC1021+ writer gate meanwhile; check each typed field, handle, transform, and ACIS carrier separately. Do not imply surface evaluation. |
@@ -382,7 +437,7 @@ receive a per-format/version disposition in S0, even if the disposition is
 | --- | --- | --- | --- |
 | WCS primitives | POINT, LINE with nonzero Z, RAY, XLINE, 3DFACE | WCS endpoints/corners, optional values, edge flags, finite values | Typed routes exist; qualification incomplete |
 | 3DLINE variants | Pre-R13 legacy 3DLINE; modern custom DWG class and DXF `3DLINE` spelling | Keep legacy type 21 separate from modern class identity; determine DXF portability and supported versions from witnesses | Typed paths exist; extension/version support unqualified |
-| Planar geometry in 3D | ARC, CIRCLE, ELLIPSE, SOLID, TRACE, 2D POLYLINE, LWPOLYLINE, HATCH | OCS arbitrary-axis frame, elevation, extrusion, thickness, angle direction, vertex order | Existing routes; coordinate/round-trip matrix missing |
+| Planar geometry in 3D | ARC, CIRCLE, ELLIPSE, SOLID, TRACE, 2D POLYLINE, LWPOLYLINE, HATCH | OCS arbitrary-axis frame, elevation, extrusion, thickness, angle direction, vertex order | HATCH/MPOLYGON header elevation and OCS retention have one bounded ASCII negative/positive control (S5.7); broader HATCH edges/rendering and other family/version semantics remain unqualified. |
 | Placed block geometry | INSERT/MINSERT and block contents | OCS insertion point, block base point, nested transform composition, nonuniform/mirrored scales, rows/columns/spacings, attributes/ownership | One INSERT transform is positive in the pinned FreeCAD route. S8.15.11 verifies MINSERT array-field conversion/readback; FreeCAD 1.1.3 C++ imports only its first cell, so array geometry remains downstream-unsupported. Other transform/ownership combinations remain unqualified. |
 | Classic 3D topology | 3D POLYLINE, polygon mesh, polyface, VERTEX, SEQEND | WCS vertices, flags, closure, M/N order, signed one-based face indices, edge visibility, child ordering, counts and handles | Typed routes exist; independent qualification incomplete |
 | Subdivision topology | MESH / AcDbSubDMesh | Base-cage vertices, flat face-list counts, n-gons, edges, crease values, property overrides, version gate | Typed routes and generated tests exist; oracle/version checks incomplete |
@@ -764,7 +819,7 @@ an orphan record.
 ### S5 — DXF topology, coordinates, and finite-value semantics
 
 State: planned DXF topology, placement, flags, and conversion-boundary fixes
-are implemented in S5.1-S5.6. Their evidence remains vector/family-specific;
+are implemented in S5.1-S5.7. Their evidence remains vector/family-specific;
 S7/S8 independently gate broader semantic claims and blocked DWG lanes.
 
 Dependencies: S0, S1. Keep DWG-specific parser changes in S3.
@@ -816,6 +871,19 @@ Steps:
    zero flags, then check the emitted DXF marker/indices and parsed result.
    Separately smoke-test one locally generated DWG→DXF control; treat it only
    as conversion-path evidence, never independent writer qualification.
+9. **S5.7 — Lock HATCH/MPOLYGON elevation and OCS boundaries.** Autodesk's
+   HATCH reference requires the elevation point's group-10 X and group-20 Y
+   to be zero; group-30 carries elevation. Boundary vertices/edges and seed
+   points are 2D OCS values, and the extrusion vector defines their plane.
+   Validate the parent elevation/normal before the callback and before output:
+   reject nonzero parent X/Y, non-finite elevation/normal, or a zero normal
+   rather than silently discarding coordinates while writing canonical zero
+   values. Keep boundary/seed values in OCS under both `applyExt` modes. Add
+   an in-memory oblique-plane HATCH vector with a separately calculated WCS
+   point, malformed X/Y negatives, and writer-preflight negatives; verify the
+   shared MPOLYGON validation path too. Do not infer hatch fill tessellation,
+   render/display behavior, arbitrary edge-family correctness, or DWG layout
+   support from this bounded field-contract slice.
 
 Positive gate: round trips preserve point order, flags, topology, frame, and
 finite values. Negative gate: invalid vertex indices, impossible counts,
@@ -2474,6 +2542,7 @@ commit; 66/81 committed, 13 blocked, 1 verified, 1 in progress, and 0 ready):
 | S5.4 | COMMITTED | Autodesk defines DXF ELLIPSE center and major-axis vector in WCS, but `processEllipse()` previously called the OCS-to-WCS helper whenever `ext=true`, rotating already-world coordinates and mirroring parameter ranges for negative Z normals. The DXF path now preserves the WCS tuples and parameters in both modes; the DWG `emitWithExtrusion()` path is deliberately unchanged and remains version-qualified. Runtime in-memory DXF test checks WCS center/axis, normal, ratio, and partial-ellipse parameters with `ext=false` and `ext=true`; the focused hardening CTest and 4-test fast regression slice pass, and `lc3_compat_check` builds. Updated the 3D consumer contract and status table without promoting family-level support. No API, DWG parser, or fixture added. |
 | S5.5 | COMMITTED | Fixed DWG→DXF PFACE face emission: DWG type-14 face records encode signed indices but no flags field, so `writePolyline()` now recognizes the typed `PolyfaceFace` subtype and synthesizes DXF group-70 bit 128, `AcDbFaceRecord`, and groups 71–74. Existing DXF-input vertices with explicit bit 128 retain their route. The ASCII/binary round-trip regression starts with subtype set and flags zero; both variants reparse with flags 128 and preserved signed indices. Build succeeded; `libdxfrw_dwg_local_roundtrip` passes 1/1. The regenerated local AC1015 control matches libdxfrw, LibreDWG 0.14, and its recipe using valid one-based indices across nonzero-Z 3D POLYLINE, 3×2 legacy MESH, and five-vertex/three-face PFACE. DWG→DXF inspection shows three `AcDbFaceRecord`s with group 70=128 and indices `(1,2,3,4)`, `(2,3,-4,5)`, and `(3,-4,5,0)`. All four pre-existing optional DWG comparator profiles also pass; `git diff --check` passes. This closes one conversion-path gap only; no general PFACE/DWG writer or target-interoperability claim is promoted. |
 | S5.6 | COMMITTED | Reworked `DRW_Ellipse::toPolyline()` for legacy AC1009/R12 output to sample the WCS ellipse frame, emit 2D `POLYLINE` only for default-XY/zero-elevation input, and emit WCS 3D `POLYLINE` with bit-32 vertices otherwise. Fixed ratio-greater-than-one axis normalization to preserve signed partial sweeps across parameter wrap; runtime-generated tests check every sampled point for both directions of tilted ratio>1 arcs against an independent WCS ellipse equation. A zero-normal ellipse is rejected and no empty polyline/output is published. Runtime-generated AC1009 ASCII DXF covers tilted and planar full ellipses, two tilted partial arcs, and the malformed negative. `cmake --build build --target libdxfrw_dwg_local_roundtrip -j4` and focused CTest pass 1/1; `git diff --check` passes. No testing DWG/DXF fixture was added or committed. This qualifies only explicit legacy-version downgrade vectors; FreeCAD's default source-version workflow is separately gated by S8.15.9, and no target-authored or general ellipse support claim follows. |
+| S5.7 | COMMITTED | Autodesk's HATCH DXF reference fixes the parent elevation point's X/Y to zero and its Z to elevation, while boundary/seed coordinates are OCS values and extrusion defines the plane. `DRW_Hatch::validateDxf()` now rejects nonzero parent X/Y, non-finite elevation/normal, and a zero normal; parsing therefore fails before HATCH/MPOLYGON callback publication, and `validateHatchPayload()` makes writers reject rather than silently emit zero in place of caller X/Y. Runtime-only ASCII tests preserve one oblique HATCH polyline boundary and seed point unchanged under both `applyExt` settings, calculate an independent expected WCS point from N=(0.6,0,0.8), and reject each malformed parent coordinate plus a zero MPOLYGON normal. No fixture added. `cmake --build build --target libdxfrw_hardening_tests libdxfrw_wave1_tests --parallel 2` and focused CTest (`libdxfrw_wave1`, `libdxfrw_hardening`) pass 2/2; `git diff --check` passes. This is one parent-header/OCS retention contract only, not HATCH tessellation/rendering, all path edge types, independent CAD interoperability, or DWG support. Sources: [Autodesk HATCH DXF reference](https://help.autodesk.com/cloudhelp/2018/ENU/AutoCAD-DXF/files/GUID-C6C71CED-CE0F-4184-82A5-07AD6241F15B.htm), [boundary path data](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-DC5215D6-E73F-4DFF-8BE9-01CA9610FAEE.htm), and [OCS rules](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-D99F1509-E4E4-47A3-8691-92EA07DC88F5.htm). |
 | S6.1 | COMMITTED | ASCII and binary runtime round-trips cover PLANESURFACE, EXTRUDED, REVOLVED, SWEPT, LOFTED, NURBSURFACE, SPLINE, and HELIX fields. Added bounded subtype group-90 sizes/group-310 byte retention; corrected SWEPT ID/size ordering and legacy group-91 acceptance; corrected one-byte binary-DXF Boolean encoding; tightened field/count/transform/constraint validation; made `dx_iface` preserve HELIX callbacks. Focused CTest `libdxfrw_dwg_local_roundtrip` passes 1/1, including malformed lengths/booleans/partial vectors and invalid writer fields. Runtime vectors are not committed. LibreDWG 0.14 rejected/does not handle the generated surface/NURBS cases, so it provides no independent semantic qualification. ODA v5.4.1 §20.4.40 says `splFlag1` is BL for R2013+; current code matches; no width fix is justified. Authentic per-version spline qualification and all DWG surface layouts remain outstanding. The integration checkpoint also found and corrected the REVOLVEDSURFACE copy/assignment hardening vector to enter `AcDbRevolvedSurface` before testing group-90 subtype-ID state; the corrected focused hardening CTest passes. |
 | S3.1 | COMMITTED | Validated ODA v5.4.1 §20.4.41's non-empty modeler version range (1 or 2); empty ACIS bodies retain the absent-version/default-zero case. Runtime-generated AC1018 frames cover empty, 1, 2, 0, and 3; build and focused round-trip CTest pass. A local AC1024 conference-room debug conversion reached modeler parsers and retained 3DSOLID history handles, but the overall CLI failed on an OBJECTS-pass type-42 frame, so it is not an end-to-end positive. The version-2 byte is opaque filler; no payload extraction or semantic ACIS claim follows. |
 | S3.2.1 | COMMITTED | Implemented the AC1024/R2010 non-empty version-2 inline SAB carrier slice in commit `c7c8eea`. The parser requires the exact `ACIS BinaryFile` signature and a unique tagged ACIS end marker bounded by the entity data body; publishes the extracted bytes and source bit range separately from the whole DWG frame; and leaves missing/duplicate-marker cases opaque. A local-from-scratch AC1024 frame covers exact extraction, tail exclusion, marker absence/ambiguity, no DWG-frame decoder fallback, and no unqualified DXF SAB write. A fresh read-only comparison against LibreDWG 0.14 now matches every payload by handle, length, and SHA-256 across four untracked local AC1024/R2010 samples: `visualization_-_aerial.dwg` (5; 29,268 carrier bytes), `visualization_-_conference_room.dwg` (33; 700,746 bytes), `visualization_-_condominium_with_skylight.dwg` (76; 1,694,840 bytes), and `visualization_-_sun_and_sky_demo.dwg` (15; 188,240 bytes); 129 3DSOLID carriers total (2,613,094 bytes including the SAB signature). LibreDWG reports the `ACIS BinaryFile` signature separately, which is rejoined for the digest comparison. `libdxfrw_dwg_local_roundtrip`, `libdxfrw_graph_preservation`, `libdxfrw_hardening`, and `libdxfrw_3d_consumer_probe` pass; `lc3_compat_check` builds. This is exact opaque-carrier evidence only, not semantic solid support, a DWG writer, a claim for other entity types/versions, or AC1024 SAT/alternate-variant coverage. No sample fixture was staged or committed. |

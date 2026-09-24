@@ -1,5 +1,6 @@
 #include <array>
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <cstdint>
 #include <iostream>
@@ -1948,7 +1949,12 @@ public:
     void addDimAngular3P(const DRW_DimAngular3p*) override {}
     void addDimOrdinate(const DRW_DimOrdinate*) override {}
     void addLeader(const DRW_Leader*) override {}
-    void addHatch(const DRW_Hatch*) override {}
+    void addHatch(const DRW_Hatch* data) override {
+        if (data != nullptr) {
+            ++hatchCount;
+            lastHatch = *data;
+        }
+    }
     void addViewport(const DRW_Viewport&) override {}
     void addImage(const DRW_Image*) override {}
     void linkImage(const DRW_ImageDef*) override {}
@@ -1980,6 +1986,7 @@ public:
     std::size_t ellipseCount {0};
     std::size_t traceCount {0};
     std::size_t solidCount {0};
+    std::size_t hatchCount {0};
     std::string headerComments;
     std::size_t modelerGeometryCount {0};
     std::size_t surfaceCount {0};
@@ -1987,6 +1994,7 @@ public:
     DRW_Ellipse lastEllipse;
     DRW_Trace lastTrace;
     DRW_Solid lastSolid;
+    DRW_Hatch lastHatch;
     DRW_ModelerGeometry lastModelerGeometry;
     DRW_Surface lastSurface;
 };
@@ -3050,6 +3058,98 @@ void testDxfEllipseCoordinatesAreWcs(TestContext& t) {
              "DXF ELLIPSE ext=true does not transform WCS coordinates twice");
 }
 
+void testDxfHatchElevationAndOcsBoundary(TestContext& t) {
+    const std::string sectionStart =
+        "0\nSECTION\n2\nENTITIES\n0\nHATCH\n5\n705\n8\n0\n"
+        "100\nAcDbEntity\n100\nAcDbHatch\n";
+    const std::string elevationAndBoundary =
+        "10\n0\n20\n0\n30\n7\n"
+        "210\n0.6\n220\n0\n230\n0.8\n"
+        "2\nSOLID\n70\n1\n71\n0\n91\n1\n"
+        "92\n2\n72\n0\n73\n1\n93\n3\n"
+        "10\n1\n20\n2\n10\n4\n20\n2\n10\n1\n20\n5\n"
+        "97\n0\n75\n0\n76\n1\n78\n0\n"
+        "98\n1\n10\n8\n20\n9\n";
+    const std::string sectionEnd = "0\nENDSEC\n0\nEOF\n";
+    const std::string content = sectionStart + elevationAndBoundary + sectionEnd;
+
+    const auto preservesOcsBoundary = [&content](bool applyExt) {
+        FuzzInterface capture;
+        dxfRW reader("");
+        std::string input = content;
+        if (!reader.readAscii(&capture, applyExt, input)
+            || capture.hatchCount != 1u
+            || capture.lastHatch.basePoint.x != 0.0
+            || capture.lastHatch.basePoint.y != 0.0
+            || capture.lastHatch.basePoint.z != 7.0
+            || capture.lastHatch.extPoint.x != 0.6
+            || capture.lastHatch.extPoint.y != 0.0
+            || capture.lastHatch.extPoint.z != 0.8
+            || capture.lastHatch.seedPoints.size() != 1u
+            || capture.lastHatch.seedPoints.front().x != 8.0
+            || capture.lastHatch.seedPoints.front().y != 9.0
+            || capture.lastHatch.looplist.size() != 1u
+            || capture.lastHatch.looplist.front()->objlist.size() != 1u)
+            return false;
+
+        const auto boundary = std::dynamic_pointer_cast<DRW_LWPolyline>(
+            capture.lastHatch.looplist.front()->objlist.front());
+        if (!boundary || boundary->vertlist.size() != 3u)
+            return false;
+
+        // For N=(0.6,0,0.8), Autodesk's arbitrary-axis basis gives
+        // X=(0,1,0), Y=(-0.8,0,0.6). An OCS vertex (1,2) at elevation 7
+        // therefore corresponds to this independent WCS point. The callback
+        // must retain the OCS coordinates, not substitute that projection.
+        const double expectedWcsX = 0.6 * 7.0 - 0.8 * 2.0;
+        const double expectedWcsY = 1.0;
+        const double expectedWcsZ = 0.8 * 7.0 + 0.6 * 2.0;
+        return boundary->vertlist[0]->x == 1.0
+            && boundary->vertlist[0]->y == 2.0
+            && std::abs(expectedWcsX - 2.6) < 1.0e-12
+            && std::abs(expectedWcsY - 1.0) < 1.0e-12
+            && std::abs(expectedWcsZ - 6.8) < 1.0e-12;
+    };
+    t.expect(preservesOcsBoundary(false),
+             "HATCH retains elevation, extrusion, OCS loop, and seed data");
+    t.expect(preservesOcsBoundary(true),
+             "HATCH applyExt mode does not rewrite OCS boundary coordinates");
+
+    for (const std::pair<std::string, std::string>& malformedElevation : {
+             std::make_pair("10\n0\n20\n0\n30\n7\n",
+                            "10\n1\n20\n0\n30\n7\n"),
+             std::make_pair("10\n0\n20\n0\n30\n7\n",
+                            "10\n0\n20\n1\n30\n7\n")}) {
+        std::string malformed = sectionStart + elevationAndBoundary;
+        const std::size_t offset = malformed.find(malformedElevation.first);
+        if (offset == std::string::npos) {
+            t.expect(false, "HATCH malformed elevation vector is constructed");
+            continue;
+        }
+        malformed.replace(offset, malformedElevation.first.size(),
+                          malformedElevation.second);
+        malformed += sectionEnd;
+        FuzzInterface capture;
+        dxfRW reader("");
+        t.expect(!reader.readAscii(&capture, false, malformed)
+                     && capture.hatchCount == 0u,
+                 "HATCH rejects nonzero elevation OCS X or Y before callback");
+    }
+
+    FuzzInterface malformedMPolygonCapture;
+    dxfRW malformedMPolygonReader("");
+    std::string malformedMPolygon =
+        "0\nSECTION\n2\nENTITIES\n0\nMPOLYGON\n5\n706\n8\n0\n"
+        "100\nAcDbEntity\n100\nAcDbMPolygon\n"
+        "10\n0\n20\n0\n30\n7\n210\n0\n220\n0\n230\n0\n"
+        "2\nSOLID\n70\n1\n71\n0\n91\n0\n75\n0\n76\n1\n78\n0\n"
+        "98\n0\n0\nENDSEC\n0\nEOF\n";
+    t.expect(!malformedMPolygonReader.readAscii(
+                 &malformedMPolygonCapture, false, malformedMPolygon)
+                 && malformedMPolygonCapture.hatchCount == 0u,
+             "MPOLYGON shares the HATCH nonzero-extrusion validation");
+}
+
 void testMLeaderDxfContextRoundTrip(TestContext& t) {
     DRW_MLeader source;
     source.handle = 0xA100u;
@@ -3506,6 +3606,7 @@ int main() {
     testDxfThreeCornerFaceFallback(context);
     testDxfSolidTraceCornerMapping(context);
     testDxfEllipseCoordinatesAreWcs(context);
+    testDxfHatchElevationAndOcsBoundary(context);
     testMLeaderDxfContextRoundTrip(context);
     testLinetypeDashFlagIsFourBits(context);
     testProxyPayloadCodesAreScopedToTheProxySubclass(context);

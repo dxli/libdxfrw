@@ -14712,6 +14712,16 @@ bool DRW_Hatch::validateCurrentBoundaryPathDxf() const {
 }
 
 bool DRW_Hatch::validateDxf() const {
+    // DXF HATCH/MPolygon stores only the OCS elevation in group 30. The
+    // elevation point's group-10 X and group-20 Y components are fixed at
+    // zero; boundary and seed-point group-10/20 pairs are handled separately
+    // as two-dimensional OCS coordinates above.
+    if (basePoint.x != 0.0 || basePoint.y != 0.0
+        || !std::isfinite(basePoint.z)
+        || !std::isfinite(extPoint.x) || !std::isfinite(extPoint.y)
+        || !std::isfinite(extPoint.z)
+        || (extPoint.x == 0.0 && extPoint.y == 0.0 && extPoint.z == 0.0))
+        return false;
     if (!validateCurrentBoundaryPathDxf()
         || !validateCurrentPatternLineDxf())
         return false;

@@ -5461,6 +5461,22 @@ void testHatchValidationIgnoresInactiveGradient(TestContext& t) {
     hatch.isGradient = 1;
     t.expect(!owner.validateHatchPayload(&hatch),
              "active gradient still validates gradient carriers");
+
+    DRW_Hatch invalidElevation;
+    invalidElevation.basePoint = DRW_Coord{1.0, 0.0, 7.0};
+    t.expect(!owner.validateHatchPayload(&invalidElevation),
+             "HATCH writer rejects nonzero OCS elevation X instead of dropping it");
+    invalidElevation.basePoint = DRW_Coord{0.0, 1.0, 7.0};
+    t.expect(!owner.validateHatchPayload(&invalidElevation),
+             "HATCH writer rejects nonzero OCS elevation Y instead of dropping it");
+    invalidElevation.basePoint = DRW_Coord{0.0, 0.0, 7.0};
+    invalidElevation.extPoint = DRW_Coord{0.0, 0.0, 0.0};
+    t.expect(!owner.validateHatchPayload(&invalidElevation),
+             "HATCH writer rejects zero extrusion direction without an OCS frame");
+    DRW_MPolygon invalidMPolygon;
+    invalidMPolygon.extPoint = DRW_Coord{0.0, 0.0, 0.0};
+    t.expect(!owner.validateHatchPayload(&invalidMPolygon),
+             "MPOLYGON writer shares HATCH zero-extrusion validation");
 }
 
 void testFixedSpaceBlockClassification(TestContext& t) {
