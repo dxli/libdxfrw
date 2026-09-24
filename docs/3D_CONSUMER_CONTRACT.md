@@ -130,6 +130,17 @@ against LibreDWG 0.14. Among those lines, 670 have nonzero endpoint Z.
 sample is not committed and these results do not qualify writes, other
 AC1021 files, other versions, or other geometry families.
 
+For the exact-hash local sample, the comparator also matches 24 ELLIPSE
+records by handle: WCS center and semi-major-axis vectors, extrusion normals,
+axis ratios, and start/end eccentric-anomaly parameters in radians (ODA v5.4.1
+§20.4.39). It uses the adapter's default `ext=false` mode (without
+`--apply-extrusion`). Two records have negative-Z extrusion normals and 14
+have non-full parameter intervals; all center/major-axis Z values are zero. The
+sample's original producer/date are not verified, so do not describe it as
+target- or AutoCAD-authored. This is one read-field corroboration only; ELLIPSE
+remains unqualified as a general DWG family, and this does not qualify writing
+or FreeCAD shape construction.
+
 ```sh
 python3 tools/compare_dwg_3d_consumer_oracle.py \
   --adapter build/tests/libdxfrw_3d_consumer_probe \

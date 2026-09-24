@@ -108,6 +108,16 @@ LINE records, 670 have nonzero endpoint Z. This read-only sample witness does
 not establish writes, other AC1021 files, or other DWG 3D families; the sample
 remains uncommitted.
 
+The same hash-pinned local file has 24 ELLIPSE records matched by handle for
+WCS center and semi-major-axis vectors, extrusion normals, axis ratio, and
+start/end eccentric-anomaly parameters in radians (ODA v5.4.1 §20.4.39), using
+the adapter's default `ext=false` mode. Two have negative-Z extrusion normals
+and 14 have non-full parameter intervals; all center/major-axis Z values are
+zero. Its original producer/date are
+unverified. This is a one-sample read-field comparison only—not
+target-authored provenance, an ELLIPSE family support claim, writer coverage,
+or FreeCAD shape support.
+
 In the local AC1024/R2010 `visualization_-_condominium_with_skylight.dwg`,
 both LINE records also match LibreDWG 0.14 by handle for start/end XYZ,
 thickness, and extrusion; both have nonzero endpoint Z. ODA v5.4.1 §20.4.21
@@ -147,6 +157,7 @@ is a path regression, not independent DWG writer qualification.
 | WCS primitives / 3DFACE | DXF AC1027, ASCII and binary | Experimental field read for 3DFACE only | Experimental field write for 3DFACE only | SELFTEST and CONSUMER-PROBE; EXT-ACCEPT for generated topology conversion. POINT, LINE, RAY, and XLINE are not qualified by this 3DFACE slice. |
 | WCS primitives / 3DFACE | DWG R set / W set | UNQUALIFIED outside the narrow AC1021 field row below | UNQUALIFIED per writer version | Fixed/custom dispatch routes and local tests do not establish general per-version field semantics. |
 | 3DFACE corner/edge-field subset | DWG AC1021 / R2007 | Experimental read: four 3D corner tuples and invisible-edge flags on 48 handles in local `tablet.dwg` | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14, joined by handle; ODA v5.4.1 §20.4.32 describes the layout. One uncommitted sample only; no write, other-file, other-version, or general family claim. |
+| ELLIPSE field subset | DWG AC1021 / R2007 | Experimental read: WCS center/major axis, extrusion, ratio, and eccentric-anomaly start/end on 24 handles in local `tablet.dwg` | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14, joined by handle in `ext=false` mode; ODA v5.4.1 §20.4.39 describes the layout. Two negative-Z normals and 14 non-full intervals are represented, but center/major-axis Z is zero and sample provenance is unverified. One uncommitted sample only; no write, FreeCAD shape, other-version, or general family claim. |
 | LINE endpoint field subset | DWG AC1021 / R2007 | Experimental read: start/end XYZ, thickness, and extrusion on 3,002 handles in local `tablet.dwg`; 670 lines have nonzero endpoint Z | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14, joined by handle; ODA v5.4.1 §20.4.21 describes the layout. One uncommitted sample only; no write, other-file, other-version, or general family claim. |
 | LINE endpoint field subset | DWG AC1024 / R2010 | Experimental read: start/end XYZ, thickness, and extrusion on two handles in local `visualization_-_condominium_with_skylight.dwg`; both have nonzero endpoint Z | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14, joined by handle; ODA v5.4.1 §20.4.21 describes the layout. One uncommitted sample only; no write or general AC1024 claim. |
 | 3D POLYLINE compound-record subset | DWG AC1015 / R2000 | Experimental read: 3D subtype/flag, curve type, six ordered child handles, owner handles, vertex flags, XYZ values, and SEQEND; all six vertices have Z=0 | UNQUALIFIED | INDEPENDENT-READ via LibreDWG 0.14; ODA v5.4.1 §§20.4.12 and 20.4.17 describe the vertex/header layout. The pinned AutoCAD-authored source includes a VLA property dump and DXF companion. This one planar sample does not qualify nonzero-Z preservation, PFACE/MESH, writes, or general AC1015 support. No fixture is committed. |

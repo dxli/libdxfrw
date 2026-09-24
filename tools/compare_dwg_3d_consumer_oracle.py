@@ -6,8 +6,9 @@ compares fields by entity handle so callback order is irrelevant. The accepted
 scope is intentionally limited to one AutoCAD-authored AC1015 (R2000) planar
 3D POLYLINE sample, one locally generated AC1015 topology control, AC1024
 (R2010) INSERT placement and SPLINE fit data and one sample's LINE endpoints,
-plus AC1021 (R2007) LINE endpoints and 3DFACE corners/edge flags. The local
-control exercises nonzero-Z 3D POLYLINE, legacy POLYLINE_MESH, and PFACE but
+plus AC1021 (R2007) LINE endpoints, 3DFACE corners/edge flags, and ELLIPSE
+geometry fields. The local control exercises nonzero-Z 3D POLYLINE, legacy
+POLYLINE_MESH, and PFACE but
 does not qualify AutoCAD interoperability. Modeler, surface, and other
 version/family fields are not compared here.
 """
@@ -271,6 +272,23 @@ def compare_line(row: dict[str, Any]) -> None:
                    "LINE.thickness")
     compare_point(fields.get("extrusion"), external.get("extrusion"),
                   "LINE.extrusion")
+
+
+def compare_ellipse(row: dict[str, Any]) -> None:
+    external = row["external"]
+    fields = row["adapter"]["fields"]
+    compare_point(fields.get("center"), external.get("center"),
+                  "ELLIPSE.center")
+    compare_point(fields.get("majorAxis"), external.get("sm_axis"),
+                  "ELLIPSE.majorAxis")
+    compare_point(fields.get("extrusion"), external.get("extrusion"),
+                  "ELLIPSE.extrusion")
+    compare_number(fields.get("ratio"), external.get("axis_ratio"),
+                   "ELLIPSE.ratio")
+    compare_number(fields.get("startParameter"), external.get("start_angle"),
+                   "ELLIPSE.startParameter")
+    compare_number(fields.get("endParameter"), external.get("end_angle"),
+                   "ELLIPSE.endParameter")
 
 
 def compare_polyline3d(row: dict[str, Any],
@@ -594,10 +612,27 @@ def main() -> int:
         expected_nonzero_z_line_count = 2
         excluded = ["all entities other than LINE", "other versions"]
     elif version == "AC1021" and args.input.name == "tablet.dwg":
+        expected_digest = (
+            "7f203649dc8434ef7cf7a46f7f6def2a0192a1163ba34ebcf88ebfe69635ccd4"
+        )
+        actual_digest = sha256_file(args.input)
+        if actual_digest != expected_digest:
+            raise OracleError(
+                "AC1021 tablet sample digest differs from the reviewed local "
+                f"sample: {actual_digest}")
         cases = (("3DFACE", 48, compare_3dface),
+                 ("ELLIPSE", 24, compare_ellipse),
                  ("LINE", 3002, compare_line))
         expected_nonzero_z_line_count = 670
-        excluded = ["all entities other than LINE and 3DFACE", "other versions"]
+        excluded = ["all entities other than LINE, 3DFACE, and ELLIPSE",
+                    "other versions", "unverified sample provenance"]
+        sample_source = {
+            "provenance": ("existing user-owned local sample; original "
+                           "producer/date not verified"),
+            "sha256": expected_digest,
+            "boundary": ("one-sample read-field comparison only; not "
+                         "target-authored provenance"),
+        }
     else:
         raise OracleError(
             "unsupported sample profile: expected AC1015 PolyLine3D.dwg or "
@@ -689,6 +724,7 @@ def main() -> int:
         "POLYLINE_PFACE": "ODA v5.4.1 §§20.4.14, 20.4.15, 20.4.33",
         "INSERT": "ODA v5.4.1 §§20.4.9-20.4.10",
         "SPLINE": "ODA v5.4.1 §20.4.40",
+        "ELLIPSE": "ODA v5.4.1 §20.4.39",
     }
     print(json.dumps({
         "result": "matched",
