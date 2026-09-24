@@ -708,6 +708,8 @@ public:
                                                  "MODELER_GEOMETRY");
         fields.push_back(intField("entityType", static_cast<int>(d.eType)));
         fields.push_back(intField("modelerVersion", d.m_modelerVersion));
+        fields.push_back(intField("dwgSourceVersion",
+                                  static_cast<int>(d.m_dwgSourceVersion)));
         fields.push_back(uintField("bodyBitSize", d.m_bodyBitSize));
         fields.push_back(uintField("objectSize", d.m_objectSize));
         fields.push_back(boolField("isEmpty", d.m_isEmpty));

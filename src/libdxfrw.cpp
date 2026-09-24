@@ -845,6 +845,11 @@ bool hasDxfTextPayloadChunks(const std::vector<std::uint8_t>& data,
 
     std::size_t expectedOffset = 0;
     for (const DRW_ModelerPayloadChunk& chunk : chunks) {
+        if (chunk.m_groupCode == 1 && expectedOffset != 0) {
+            if (expectedOffset >= data.size() || data[expectedOffset] != '\n')
+                return false;
+            ++expectedOffset;
+        }
         if ((chunk.m_groupCode != 1 && chunk.m_groupCode != 3)
             || chunk.m_offset != expectedOffset
             || chunk.m_offset > data.size()
@@ -852,7 +857,40 @@ bool hasDxfTextPayloadChunks(const std::vector<std::uint8_t>& data,
             return false;
         expectedOffset += chunk.m_length;
     }
+    if (expectedOffset < data.size() && data[expectedOffset] == '\n')
+        ++expectedOffset;
     return expectedOffset == data.size();
+}
+
+bool hasQualifiedAc1015SatV1Payload(const DRW_ModelerGeometry& entity) {
+    const bool hasOnlyRetainedDwgFrame = entity.m_rawBytes.empty()
+        || (entity.m_dxfPayloadChunks.empty()
+            && entity.m_rawBytes.size() == entity.m_objectSize);
+    if (entity.m_dwgSourceVersion != DRW::AC1015
+        || entity.m_modelerVersion != 1 || entity.m_isEmpty
+        || !entity.m_hasModelerData
+        || entity.m_objectSize == 0 || entity.m_dwgAcisPayload.empty()
+        || entity.m_dwgAcisPayload.size() > DRW::kMaxDxfBinaryPayloadBytes
+        || entity.m_payloadRanges.empty() || !hasOnlyRetainedDwgFrame
+        || entity.hasDataStorageBinaryData() || entity.hasDataStorageRecord
+        || !entity.dataStorageData.empty())
+        return false;
+
+    std::size_t declaredTotal = 0;
+    for (const DRW_ModelerPayloadRange& range : entity.m_payloadRanges) {
+        if (range.m_kind != DRW_ModelerPayloadRange::Kind::Sat
+            || range.m_section != DRW_ModelerPayloadRange::Section::Body
+            || range.m_consistency !=
+                DRW_ModelerPayloadRange::Consistency::Exact
+            || range.m_confidence !=
+                DRW_ModelerPayloadRange::Confidence::DeclaredSize
+            || range.m_length == 0
+            || range.m_declaredByteSize != range.m_length
+            || range.m_length > entity.m_dwgAcisPayload.size() - declaredTotal)
+            return false;
+        declaredTotal += range.m_length;
+    }
+    return declaredTotal == entity.m_dwgAcisPayload.size();
 }
 
 void writeDxfTextChunks(dxfWriter *writer, const std::vector<std::uint8_t>& data) {
@@ -862,6 +900,91 @@ void writeDxfTextChunks(dxfWriter *writer, const std::vector<std::uint8_t>& data
         const std::size_t n = std::min(kChunkSize, text.size() - off);
         writer->writeString(off == 0 ? 1 : 3, text.substr(off, n));
     }
+}
+
+bool writeDxfSatTextValue(dxfWriter *writer, int groupCode,
+                          const std::uint8_t *data, std::size_t size,
+                          bool encryptSatV1 = false) {
+    if (writer == nullptr || (groupCode != 1 && groupCode != 3)
+        || (data == nullptr && size != 0))
+        return false;
+    constexpr std::size_t kChunkSize = 255;
+    std::string chunk;
+    chunk.reserve(kChunkSize);
+    int nextGroupCode = groupCode;
+    const auto flush = [&]() {
+        if (chunk.empty())
+            return true;
+        const bool written = writer->writeString(nextGroupCode, chunk);
+        nextGroupCode = 3;
+        chunk.clear();
+        return written;
+    };
+    for (std::size_t i = 0; i < size; ++i) {
+        std::uint8_t value = data[i];
+        if (value == '\r' || value == '\n' || value == '\0'
+            || value > 0x7Eu)
+            return false;
+        // ODA §20.4.41's SAT v1 transform is involutive. DWG parsing keeps
+        // decoded SAT; the DXF text carrier requires the encoded byte again.
+        if (encryptSatV1 && value > 0x20u)
+            value = static_cast<std::uint8_t>(0x9Fu - value);
+        if (value == '^') {
+            if (chunk.size() + 2u > kChunkSize && !flush())
+                return false;
+            chunk += "^ ";
+        } else {
+            if (chunk.size() + 1u > kChunkSize && !flush())
+                return false;
+            chunk.push_back(static_cast<char>(value));
+        }
+    }
+    return flush();
+}
+
+bool writeDxfSatV1Text(dxfWriter *writer,
+                       const std::vector<std::uint8_t>& data) {
+    if (data.empty())
+        return false;
+    std::size_t lineStart = 0;
+    bool wroteLine = false;
+    while (lineStart < data.size()) {
+        std::size_t lineEnd = lineStart;
+        while (lineEnd < data.size() && data[lineEnd] != '\n')
+            ++lineEnd;
+        std::size_t contentEnd = lineEnd;
+        if (contentEnd > lineStart && data[contentEnd - 1] == '\r')
+            --contentEnd;
+        if (contentEnd > lineStart) {
+            if (!writeDxfSatTextValue(writer, 1, data.data() + lineStart,
+                                      contentEnd - lineStart, true))
+                return false;
+            wroteLine = true;
+        }
+        if (lineEnd == data.size())
+            break;
+        lineStart = lineEnd + 1;
+    }
+    return wroteLine;
+}
+
+bool writeDxfSatTextPayloadChunks(
+    dxfWriter *writer, const std::vector<std::uint8_t>& data,
+    const std::vector<DRW_ModelerPayloadChunk>& chunks) {
+    if (!hasDxfTextPayloadChunks(data, chunks))
+        return false;
+    if (chunks.empty()) {
+        writeDxfTextChunks(writer, data);
+        return !writer->hasWriteError();
+    }
+    for (const DRW_ModelerPayloadChunk& chunk : chunks) {
+        const std::uint8_t *chunkData = chunk.m_length == 0
+            ? nullptr : data.data() + chunk.m_offset;
+        if (!writeDxfSatTextValue(writer, chunk.m_groupCode,
+                                  chunkData, chunk.m_length))
+            return false;
+    }
+    return true;
 }
 
 void writeDxfBinaryChunks(dxfWriter *writer, const std::vector<std::uint8_t>& data) {
@@ -7070,14 +7193,44 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
         return rejectUnsupportedDxfWrite();
     if (!preflightEntity(ent))
         return false;
-    const bool hasUnqualifiedDwgPayload = ent->m_bodyBitSize != 0
+    const bool writeAc1015SatV1 = version == DRW::AC1015
+        && hasQualifiedAc1015SatV1Payload(*ent);
+    DRW_DBG("dxfRW::writeModelerGeometry AC1015 SAT v1 qualified: ");
+    DRW_DBG(writeAc1015SatV1);
+    DRW_DBG(" payload bytes: ");
+    DRW_DBG(ent->m_dwgAcisPayload.size());
+    DRW_DBG(" modeler version: ");
+    DRW_DBG(ent->m_modelerVersion);
+    DRW_DBG(" empty: ");
+    DRW_DBG(ent->m_isEmpty);
+    DRW_DBG(" has modeler data: ");
+    DRW_DBG(ent->m_hasModelerData);
+    DRW_DBG(" source version: ");
+    DRW_DBG(static_cast<int>(ent->m_dwgSourceVersion));
+    DRW_DBG(" object size: ");
+    DRW_DBG(ent->m_objectSize);
+    DRW_DBG(" retained raw frame bytes: ");
+    DRW_DBG(ent->m_rawBytes.size());
+    DRW_DBG(" ranges: ");
+    DRW_DBG(ent->m_payloadRanges.size());
+    DRW_DBG(" raw bytes: ");
+    DRW_DBG(ent->m_rawBytes.size());
+    DRW_DBG(" dxf chunks: ");
+    DRW_DBG(ent->m_dxfPayloadChunks.size());
+    DRW_DBG(" data-storage record: ");
+    DRW_DBG(ent->hasDataStorageRecord);
+    DRW_DBG(" unknown bit: ");
+    DRW_DBG(ent->m_modelerDataUnknownBit);
+    DRW_DBG("\n");
+    const bool hasUnqualifiedDwgPayload = !writeAc1015SatV1
+        && (ent->m_bodyBitSize != 0
         || ent->m_objectSize != 0 || ent->m_hasModelerData
         || ent->m_modelerDataUnknownBit || !ent->m_payloadRanges.empty()
         || !ent->m_dwgAcisPayload.empty()
         || ent->hasDataStorageBinaryData() || ent->hasDataStorageRecord
-        || !ent->dataStorageData.empty();
+        || !ent->dataStorageData.empty());
     if (hasUnqualifiedDwgPayload
-        || (!ent->m_rawBytes.empty()
+        || (!writeAc1015SatV1 && !ent->m_rawBytes.empty()
             && (version > DRW::AC1024
                 || !hasDxfTextPayloadChunks(ent->m_rawBytes,
                                             ent->m_dxfPayloadChunks))))
@@ -7097,8 +7250,14 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     writer->writeInt16(70, ent->m_modelerVersion);
     if (ent->m_historyHandle != 0)
         writer->writeString(350, toHexStr(ent->m_historyHandle));
-    if (!ent->m_rawBytes.empty())
-        writeDxfTextChunks(writer.get(), ent->m_rawBytes);
+    if (writeAc1015SatV1) {
+        if (!writeDxfSatV1Text(writer.get(), ent->m_dwgAcisPayload))
+            return failDxfWrite();
+    } else if (!ent->m_rawBytes.empty()) {
+        if (!writeDxfSatTextPayloadChunks(writer.get(), ent->m_rawBytes,
+                                          ent->m_dxfPayloadChunks))
+            return failDxfWrite();
+    }
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
     return !writer->hasWriteError();
@@ -11175,6 +11334,18 @@ bool dxfRW::processModelerGeometry() {
             DRW_DBG(nextentity); DRW_DBG("\n");
             if (!acceptEntityCallbackBoundary())
                 return setError(DRW::BAD_READ_ENTITIES);
+            if (!geom.m_dxfPayloadChunks.empty()
+                && (geom.m_dxfPayloadChunks.back().m_groupCode == 1
+                    || geom.m_dxfPayloadChunks.back().m_groupCode == 3)) {
+                if (geom.m_rawBytes.size()
+                    >= DRW::kMaxDxfBinaryPayloadBytes)
+                    return setError(DRW::BAD_CODE_PARSED);
+                try {
+                    geom.m_rawBytes.push_back('\n');
+                } catch (...) {
+                    return setError(DRW::BAD_CODE_PARSED);
+                }
+            }
             iface->addModelerGeometry(geom);
             return true;
         }

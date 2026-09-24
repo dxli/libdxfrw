@@ -5072,6 +5072,8 @@ bool runDxfModelerCarrierRoundTrip(DRW::Version version,
         return false;
     }
     bool found = false;
+    std::vector<std::uint8_t> expectedPayload = payload;
+    expectedPayload.push_back('\n');
     for (const DRW_Entity* entity : imported.mBlock->ent) {
         if (entity == nullptr || entity->eType != DRW::E3DSOLID)
             continue;
@@ -5086,10 +5088,11 @@ bool runDxfModelerCarrierRoundTrip(DRW::Version version,
                 && textGroup;
             expectedOffset += chunk.m_length;
         }
-        found = chunksValid && expectedOffset == decoded->m_rawBytes.size()
+        found = chunksValid && expectedOffset + 1 == decoded->m_rawBytes.size()
+            && decoded->m_rawBytes.back() == '\n'
             && decoded->handle != 0
             && decoded->m_modelerVersion == 7
-            && decoded->m_rawBytes == payload;
+            && decoded->m_rawBytes == expectedPayload;
     }
     std::filesystem::remove(output, ec);
     return found;
@@ -5347,6 +5350,260 @@ bool buildModelerVersionFrame(bool empty, std::uint16_t modelerVersion,
         return false;
     bytes = frame.data();
     return patchModelerObjectSize(bytes, sizeFieldBit, objectSizeBits);
+}
+
+bool buildModelerSatV1Frame(
+    DRW::Version version,
+    const std::vector<std::vector<std::uint8_t>>& blocks,
+    const std::vector<std::uint32_t>& declaredSizes,
+    bool includeTerminator, std::vector<std::uint8_t>& bytes) {
+    constexpr std::uint16_t modelerObjectType = 38; // §20.4.41 3DSOLID
+    if (blocks.size() != declaredSizes.size())
+        return false;
+    LocalModelerGeometry source(DRW::E3DSOLID);
+    source.setDwgType(modelerObjectType);
+    source.handle = 0x120u;
+
+    dwgBufferW frame;
+    if (!source.encodeDwgCommon(version, &frame))
+        return false;
+    frame.putBit(0); // non-empty ACIS body
+    frame.putBit(1); // opaque ODA “unknown” bit, also present in Cone.dwg
+    frame.putBitShort(1);
+    for (std::size_t block = 0; block < blocks.size(); ++block) {
+        if (declaredSizes[block] >
+            static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()))
+            return false;
+        frame.putBitLong(static_cast<std::int32_t>(declaredSizes[block]));
+        for (std::uint8_t value : blocks[block]) {
+            // ODA §20.4.41 SAT v1 character transform: preserve values at or
+            // below space; printable characters above space use 0x9F - byte.
+            const std::uint8_t encoded = value > 0x20u && value <= 0x7Eu
+                ? static_cast<std::uint8_t>(0x9Fu - value) : value;
+            frame.putRawChar8(encoded);
+        }
+    }
+    if (includeTerminator)
+        frame.putBitLong(0);
+    frame.putBit(0); // no DWG wireframe block in this generated control
+    frame.putBit(1); // empty wireframe-side ACIS body
+    if (!frame.isGood() || frame.bitCount() >
+            std::numeric_limits<std::uint32_t>::max())
+        return false;
+    const std::uint32_t objectSizeBits = frame.bitCount();
+
+    dwgBuffer typeReader(frame.data().data(), frame.data().size());
+    if (typeReader.getObjType(version) != modelerObjectType)
+        return false;
+    const std::uint64_t sizeFieldBit = typeReader.getPosition() * 8u
+        + typeReader.getBitPos();
+    if (!source.encodeDwgEntHandle(version, &frame) || !frame.isGood())
+        return false;
+    bytes = frame.data();
+    return patchModelerObjectSize(bytes, sizeFieldBit, objectSizeBits);
+}
+
+bool runModelerDwgSatV1Extraction() {
+    const auto failStage = [](const char *stage) {
+        std::cerr << "SAT v1 extraction check failed: " << stage << '\n';
+        return false;
+    };
+    std::vector<std::uint8_t> satText{
+        '4', '0', '0', ' ', '2', '7', ' ', '1', ' ', '0', '\n',
+        'A', 'C', 'I', 'S', ' ', 'S', 'A', 'T', '\t', 'C', 'O', 'N', 'T',
+        'R', 'O', 'L', ' ', '^', 'X'};
+    satText.insert(satText.end(), 280u, static_cast<std::uint8_t>('Z'));
+    satText.push_back('\n');
+    const std::vector<std::vector<std::uint8_t>> blocks{
+        std::vector<std::uint8_t>(satText.begin(), satText.begin() + 11),
+        std::vector<std::uint8_t>(satText.begin() + 11, satText.end())};
+    const std::vector<std::uint32_t> declaredSizes{
+        static_cast<std::uint32_t>(blocks[0].size()),
+        static_cast<std::uint32_t>(blocks[1].size())};
+    std::vector<std::uint8_t> frame;
+    if (!buildModelerSatV1Frame(DRW::AC1015, blocks, declaredSizes, true,
+                                frame))
+        return failStage("build AC1015 frame");
+
+    dwgBuffer buffer(frame.data(), frame.size());
+    LocalModelerGeometry parsed(DRW::E3DSOLID);
+    if (!parsed.parseDwg(DRW::AC1015, &buffer) || !buffer.isGood()
+        || parsed.handle != 0x120u || parsed.m_modelerVersion != 1
+        || !parsed.m_modelerDataUnknownBit
+        || parsed.m_dwgSourceVersion != DRW::AC1015
+        || parsed.m_dwgAcisPayload.size() != satText.size()
+        || parsed.m_payloadRanges.size() != 2)
+        return failStage("parse/qualify AC1015 SAT blocks");
+    if (parsed.m_objectSize != frame.size())
+        return failStage("complete DWG frame boundary");
+    // dwgReader attaches this complete frame after entity parsing so the
+    // adapter can preserve it for raw replay while the DXF writer uses only
+    // the separately-qualified SAT payload.
+    parsed.m_rawBytes = frame;
+    std::vector<std::uint8_t> expectedPayload = satText;
+    for (std::uint8_t& value : expectedPayload) {
+        if (value == '\t')
+            value = ' ';
+    }
+    if (parsed.m_dwgAcisPayload != expectedPayload)
+        return failStage("de-obfuscated payload bytes");
+    std::vector<std::uint8_t> expectedDxfPayload = expectedPayload;
+    for (std::uint8_t& value : expectedDxfPayload) {
+        if (value > 0x20u && value <= 0x7Eu)
+            value = static_cast<std::uint8_t>(0x9Fu - value);
+    }
+    std::size_t rangedBytes = 0;
+    for (const DRW_ModelerPayloadRange& range : parsed.m_payloadRanges) {
+        if (range.m_kind != DRW_ModelerPayloadRange::Kind::Sat
+            || range.m_section != DRW_ModelerPayloadRange::Section::Body
+            || range.m_consistency !=
+                DRW_ModelerPayloadRange::Consistency::Exact
+            || range.m_confidence !=
+                DRW_ModelerPayloadRange::Confidence::DeclaredSize
+            || range.m_declaredByteSize != range.m_length)
+            return failStage("payload range semantics");
+        rangedBytes += range.m_length;
+    }
+    if (rangedBytes != expectedPayload.size() || parsed.decodeWireframe()
+        || !parsed.m_wireframe.empty())
+        return failStage("range coverage or SAT/SAB decoder separation");
+
+    // The newly extracted SAT1 payload is emitted only in the exact source
+    // revision's text-carrier lane, then re-read through the public DXF path.
+    const std::filesystem::path output = std::filesystem::temp_directory_path()
+        / "libdxfrw-modeler-ac1015-satv1.dxf";
+    const std::filesystem::path rejectedOutput =
+        std::filesystem::temp_directory_path()
+        / "libdxfrw-modeler-ac1015-satv1-wrong-source.dxf";
+    const std::filesystem::path reexportOutput =
+        std::filesystem::temp_directory_path()
+        / "libdxfrw-modeler-ac1015-satv1-reexport.dxf";
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+    std::filesystem::remove(rejectedOutput, ec);
+    std::filesystem::remove(reexportOutput, ec);
+    dx_data source;
+    source.mBlock->ent.push_back(new DRW_ModelerGeometry(parsed));
+    dx_iface exporter;
+    const bool exportOk = exporter.fileExport(output.string(), DRW::AC1015,
+                                               false, &source, false);
+    if (!exportOk) {
+        std::filesystem::remove(output, ec);
+        return failStage("export AC1015 SAT text carrier");
+    }
+    dx_data imported;
+    dx_iface importer;
+    const bool importOk = importer.fileImport(output.string(), &imported, false);
+    bool found = false;
+    if (importOk) {
+        for (const DRW_Entity* entity : imported.mBlock->ent) {
+            if (entity == nullptr || entity->eType != DRW::E3DSOLID)
+                continue;
+            const auto* decoded =
+                static_cast<const DRW_ModelerGeometry*>(entity);
+            std::size_t textBytes = 0;
+            bool validChunks = !decoded->m_dxfPayloadChunks.empty();
+            for (const DRW_ModelerPayloadChunk& chunk :
+                 decoded->m_dxfPayloadChunks) {
+                if (chunk.m_groupCode == 1 && textBytes != 0) {
+                    validChunks = validChunks
+                        && textBytes < decoded->m_rawBytes.size()
+                        && decoded->m_rawBytes[textBytes] == '\n';
+                    ++textBytes;
+                }
+                validChunks = validChunks
+                    && (chunk.m_groupCode == 1 || chunk.m_groupCode == 3)
+                    && chunk.m_offset == textBytes
+                    && chunk.m_offset <= decoded->m_rawBytes.size()
+                    && chunk.m_length
+                        <= decoded->m_rawBytes.size() - chunk.m_offset;
+                textBytes += chunk.m_length;
+            }
+            found = validChunks && textBytes + 1 == expectedDxfPayload.size()
+                && decoded->m_rawBytes.back() == '\n'
+                && decoded->m_rawBytes == expectedDxfPayload
+                && decoded->m_modelerVersion == 1
+                && decoded->m_dwgAcisPayload.empty()
+                && decoded->m_dwgSourceVersion == DRW::UNKNOWNV;
+            break;
+        }
+    }
+    if (!found) {
+        std::cerr << "SAT v1 readback: import=" << importOk
+                  << " entities=" << imported.mBlock->ent.size()
+                  << " file=" << output.string() << '\n';
+        return failStage("DXF public readback semantics");
+    }
+
+    // Re-exporting an imported DXF must preserve group-1 SAT line starts,
+    // group-3 continuations, and the caret escape rather than flattening them.
+    dx_iface reExporter;
+    if (!reExporter.fileExport(reexportOutput.string(), DRW::AC1015, false,
+                               &imported, false))
+        return failStage("re-export grouped SAT DXF carrier");
+    dx_data reimported;
+    dx_iface reimporter;
+    if (!reimporter.fileImport(reexportOutput.string(), &reimported, false))
+        return failStage("re-import grouped SAT DXF carrier");
+    bool reimportedPayloadMatches = false;
+    for (const DRW_Entity* entity : reimported.mBlock->ent) {
+        if (entity != nullptr && entity->eType == DRW::E3DSOLID) {
+            const auto* decoded =
+                static_cast<const DRW_ModelerGeometry*>(entity);
+            reimportedPayloadMatches = decoded->m_rawBytes == expectedDxfPayload
+                && decoded->m_dxfPayloadChunks.size() == 3
+                && decoded->m_dxfPayloadChunks[0].m_groupCode == 1
+                && decoded->m_dxfPayloadChunks[1].m_groupCode == 1
+                && decoded->m_dxfPayloadChunks[2].m_groupCode == 3;
+            break;
+        }
+    }
+    if (!reimportedPayloadMatches)
+        return failStage("re-export/readback SAT text semantics");
+    std::filesystem::remove(output, ec);
+    std::filesystem::remove(reexportOutput, ec);
+
+    DRW_ModelerGeometry mismatched(parsed);
+    mismatched.m_dwgSourceVersion = DRW::AC1018;
+    dx_data rejectedSource;
+    rejectedSource.mBlock->ent.push_back(
+        new DRW_ModelerGeometry(mismatched));
+    dx_iface rejectedExporter;
+    const bool rejected = !rejectedExporter.fileExport(
+        rejectedOutput.string(), DRW::AC1015, false, &rejectedSource, false);
+    const bool noPartialOutput = !std::filesystem::exists(rejectedOutput);
+    std::filesystem::remove(rejectedOutput, ec);
+    if (!rejected || !noPartialOutput)
+        return failStage("reject source-version mismatch atomically");
+
+    // An incomplete SAT1 block sequence remains a successfully parsed typed
+    // entity but is not promoted to a qualified payload or writable DXF.
+    if (!buildModelerSatV1Frame(DRW::AC1015, blocks, declaredSizes, false,
+                                frame))
+        return failStage("build unterminated AC1015 frame");
+    dwgBuffer incompleteBuffer(frame.data(), frame.size());
+    LocalModelerGeometry incomplete(DRW::E3DSOLID);
+    if (!incomplete.parseDwg(DRW::AC1015, &incompleteBuffer)
+        || !incompleteBuffer.isGood()
+        || !incomplete.m_dwgAcisPayload.empty()
+        || !incomplete.m_payloadRanges.empty()
+        || incomplete.m_dwgSourceVersion != DRW::UNKNOWNV)
+        return failStage("keep unterminated carrier opaque");
+
+    // The same byte sequence is deliberately not interpreted using another
+    // revision's layout, even if the text resembles a valid SAT carrier.
+    if (!buildModelerSatV1Frame(DRW::AC1018, blocks, declaredSizes, true,
+                                frame))
+        return failStage("build AC1018 control frame");
+    dwgBuffer otherVersionBuffer(frame.data(), frame.size());
+    LocalModelerGeometry otherVersion(DRW::E3DSOLID);
+    const bool opaqueOtherVersion =
+        otherVersion.parseDwg(DRW::AC1018, &otherVersionBuffer)
+        && otherVersionBuffer.isGood()
+        && otherVersion.m_dwgAcisPayload.empty()
+        && otherVersion.m_payloadRanges.empty()
+        && otherVersion.m_dwgSourceVersion == DRW::UNKNOWNV;
+    return opaqueOtherVersion ? true : failStage("keep AC1018 carrier opaque");
 }
 
 bool buildModelerInlineSabFrame(const std::vector<std::uint8_t>& payload,
@@ -8286,6 +8543,9 @@ int main(int argc, char** argv) {
            "local DWG raw-object/raw-section replay contract", failures);
     expect(runModelerDwgVersionValidation(),
            "local DWG modeler version range and empty-body validation", failures);
+    expect(runModelerDwgSatV1Extraction(),
+           "local AC1015 DWG SAT v1 bounded extraction and DXF text carrier",
+           failures);
     if (failures != 0) {
         std::cerr << failures << " local DWG round-trip assertion(s) failed\n";
         return 1;

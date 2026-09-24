@@ -28,6 +28,43 @@ if(NOT TARGET dwg2dxf)
     return()
 endif()
 
+# Optional external qualification for AC1015 SAT-v1 modeler carriers. Neither
+# the DWG nor independent reference DXF is vendored; callers provide paths to
+# their local evidence. The generated input/output copies remain in build/.
+option(LIBDXFRW_ENABLE_EXTERNAL_SAT_V1_CLI_CONTROL
+    "Enable external AC1015 SAT-v1 dwg2dxf comparison" OFF)
+set(LIBDXFRW_SAT_V1_DWG "" CACHE FILEPATH
+    "External AC1015 DWG with a qualified SAT-v1 3DSOLID carrier")
+set(LIBDXFRW_SAT_V1_REFERENCE_DXF "" CACHE FILEPATH
+    "Independent DXF export of the same AC1015 SAT-v1 DWG")
+if(LIBDXFRW_ENABLE_EXTERNAL_SAT_V1_CLI_CONTROL)
+    foreach(_sat_v1_input IN ITEMS
+            LIBDXFRW_SAT_V1_DWG LIBDXFRW_SAT_V1_REFERENCE_DXF)
+        if(NOT EXISTS "${${_sat_v1_input}}")
+            message(FATAL_ERROR
+                "Set ${_sat_v1_input} to an existing external evidence file")
+        endif()
+    endforeach()
+    add_executable(libdxfrw_modeler_sat_dxf_compare
+        ${CMAKE_CURRENT_SOURCE_DIR}/modeler_sat_dxf_compare.cpp)
+    target_compile_features(libdxfrw_modeler_sat_dxf_compare PRIVATE cxx_std_17)
+    target_compile_options(libdxfrw_modeler_sat_dxf_compare
+        PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+    add_test(
+        NAME dwg2dxf_freecad_external_sat_v1_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+            -DSAMPLE=${LIBDXFRW_SAT_V1_DWG}
+            -DREFERENCE_DXF=${LIBDXFRW_SAT_V1_REFERENCE_DXF}
+            -DCOMPARATOR=$<TARGET_FILE:libdxfrw_modeler_sat_dxf_compare>
+            -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_sat_v1_external_cli_test.cmake.in
+    )
+    set_tests_properties(dwg2dxf_freecad_external_sat_v1_cli PROPERTIES
+        LABELS "freecad;cli;external;integration"
+        TIMEOUT 120)
+endif()
+
 # Keep the no-version FreeCAD CLI revision policy independently tested from
 # full DWG input availability. The source-version mapping is pure policy.
 add_executable(libdxfrw_dwg2dxf_version_tests
@@ -117,6 +154,50 @@ if(LIBDXFRW_ENABLE_FREECAD_DESKTOP_CONTROL)
         LABELS "freecad;desktop;external;integration"
         TIMEOUT 240
     )
+endif()
+
+# Optional pinned FreeCAD runtime for the external AC1015 SAT-v1 witness.
+# Reuses the external sample/reference configured for the CLI comparison and
+# the existing import macro; never downloads or vendors a DWG/DXF fixture.
+option(LIBDXFRW_ENABLE_FREECAD_SAT_V1_RUNTIME_CONTROL
+    "Enable the opt-in FreeCAD SAT-v1 open/insert handoff check" OFF)
+set(LIBDXFRW_FREECADCMD_EXECUTABLE "" CACHE FILEPATH
+    "FreeCAD freecadcmd executable for the SAT-v1 runtime control")
+if(LIBDXFRW_ENABLE_FREECAD_SAT_V1_RUNTIME_CONTROL)
+    if(NOT LIBDXFRW_ENABLE_EXTERNAL_SAT_V1_CLI_CONTROL)
+        message(FATAL_ERROR
+            "The FreeCAD SAT-v1 runtime control also requires "
+            "LIBDXFRW_ENABLE_EXTERNAL_SAT_V1_CLI_CONTROL=ON and its external "
+            "DWG/reference paths")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECADCMD_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECADCMD_EXECUTABLE to FreeCAD's freecadcmd")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE to the installed "
+            "libdxfrw dwg2dxf binary, not the build-tree target")
+    endif()
+    foreach(_operation IN ITEMS open insert)
+        add_test(
+            NAME dwg2dxf_freecad_sat_v1_${_operation}
+            COMMAND ${CMAKE_COMMAND}
+                "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
+                "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
+                "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+                "-DSAMPLE=${LIBDXFRW_SAT_V1_DWG}"
+                "-DREFERENCE_DXF=${LIBDXFRW_SAT_V1_REFERENCE_DXF}"
+                "-DCOMPARATOR=$<TARGET_FILE:libdxfrw_modeler_sat_dxf_compare>"
+                "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
+                "-DOPERATION=${_operation}"
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_sat_v1_runtime_test.cmake.in
+        )
+        set_tests_properties(dwg2dxf_freecad_sat_v1_${_operation}
+            PROPERTIES
+                LABELS "freecad;modeler;external;integration"
+                TIMEOUT 240)
+    endforeach()
 endif()
 
 # Optional locally generated DWG control for the FreeCAD nonzero-Z path.

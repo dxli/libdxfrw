@@ -849,6 +849,9 @@ public:
     //! record, this is normalized to 2 from its "ACIS BinaryFile" signature;
     //! the complete DWG entity-frame bytes remain separately available below.
     std::uint16_t m_modelerVersion = 0;
+    //! Source DWG revision for a payload extracted with an exact versioned
+    //! layout. UNKNOWN means no DWG payload has been qualified for re-emission.
+    DRW::Version m_dwgSourceVersion = DRW::UNKNOWNV;
     std::uint32_t m_bodyBitSize = 0;
     std::uint32_t m_objectSize = 0;
     bool m_isEmpty = false;
@@ -857,8 +860,10 @@ public:
     bool m_hasWireframe = false;
     std::uint32_t m_historyHandle = 0;
     std::vector<std::uint8_t> m_rawBytes;
-    //! Exact inline ACIS bytes extracted from a qualified DWG modeler frame.
-    //! Kept separate from m_rawBytes, which may contain the whole object frame.
+    //! Exact SAT/SAB bytes extracted from a qualified DWG modeler frame.
+    //! SAT v1 has its block obfuscation removed; SAB v2 is retained bytewise.
+    //! Kept separate from m_rawBytes, which may hold DXF text or the retained
+    //! complete DWG object frame (m_objectSize bytes) for replay.
     std::vector<std::uint8_t> m_dwgAcisPayload;
     //! DXF group order/type for m_rawBytes; does not classify DWG frame bytes.
     std::vector<DRW_ModelerPayloadChunk> m_dxfPayloadChunks;
@@ -877,12 +882,22 @@ public:
             } else if (!m_dwgAcisPayload.empty()) {
                 payload = &m_dwgAcisPayload;
             } else if (m_objectSize == 0 && m_bodyBitSize == 0) {
-                // DXF owns an inline modeler payload in m_rawBytes. DWG's
-                // m_rawBytes is only an object-frame carrier and must never
-                // be presented to the ACIS decoder as if it were a payload.
+                // DXF owns an inline modeler payload in m_rawBytes. DWG
+                // payloads use m_dwgAcisPayload instead.
                 payload = &m_rawBytes;
             }
-            if (payload != nullptr)
+            static constexpr char sabSignature[] = "ACIS BinaryFile";
+            const std::size_t signatureSize = sizeof(sabSignature) - 1u;
+            bool isSab = payload != nullptr
+                && payload->size() >= signatureSize;
+            for (std::size_t i = 0; isSab && i < signatureSize; ++i) {
+                isSab = (*payload)[i]
+                    == static_cast<std::uint8_t>(sabSignature[i]);
+            }
+            // SAT text (including de-obfuscated DWG v1 blocks) is opaque to
+            // the SAB wireframe decoder. Only its explicit binary signature
+            // may enter that decoder.
+            if (isSab)
                 drw_decodeAcisWireframe(*payload, m_wireframe);
         }
         return !m_wireframe.empty();

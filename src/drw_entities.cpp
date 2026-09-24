@@ -84,6 +84,9 @@ constexpr std::int32_t kMaxMTextColumnHeights = 4096;
 constexpr std::int32_t kMaxMLeaderItems = 5000;
 constexpr std::int32_t kMaxLeaderVertices = 5000;
 constexpr std::uint16_t kMaxLoftedSurfaceModelerFormatVersion = 3;
+// Resource ceilings for the deliberately narrow AC1015 SAT v1 extraction
+// path. They are not DWG format maxima; oversized carriers stay opaque.
+constexpr std::size_t kMaxDwgSatV1Blocks = 65536;
 
 constexpr std::int32_t kSplineFlagMethodFitPoints = 1;
 constexpr std::int32_t kSplineFlagClosed = 4;
@@ -6696,6 +6699,7 @@ bool DRW_3Dface::parseDwg(DRW::Version v, dwgBuffer *buf,
 void DRW_ModelerGeometry::resetDwgState() {
     DRW_Entity::reset();
     m_modelerVersion = 0;
+    m_dwgSourceVersion = DRW::UNKNOWNV;
     m_bodyBitSize = 0;
     m_objectSize = 0;
     m_isEmpty = false;
@@ -6766,16 +6770,16 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     if (!probe.isGood() || (stringStream != nullptr && !stringStream->isGood()))
         return fail();
 
-    // ODA v5.4.1 §20.4.41: modeler version 2 is followed by an ACIS file
-    // without a length. R2010's inline SAB form has a tagged compound
-    // End-of-ACIS-data marker. Extract only when that complete marker is
-    // unique inside the bounded entity body; leave every other version and
-    // incomplete/ambiguous carrier opaque. In particular, never treat the
-    // rest of a DWG frame as ACIS data.
+    // ODA v5.4.1 §20.4.41: R2000 AC1015 modeler version 1 stores SAT in
+    // length-prefixed blocks; R2010 AC1024 version 2 may carry inline SAB
+    // bounded by a tagged End-of-ACIS-data marker. Only the exact AC1015 SAT1
+    // layout and the existing AC1024 SAB2 signature/marker layout are
+    // extracted. Other versions and ambiguous/incomplete carriers stay
+    // opaque; never treat the remainder of a DWG frame as ACIS data.
     const std::uint64_t modelerPayloadStartBit = currentDwgBit(&probe);
     std::vector<std::uint8_t> parsedInlineAcisPayload;
-    DRW_ModelerPayloadRange parsedInlineAcisRange;
-    bool hasParsedInlineAcisRange = false;
+    std::vector<DRW_ModelerPayloadRange> parsedAcisPayloadRanges;
+    bool hasParsedAcisPayload = false;
     static constexpr std::uint8_t sabAcisEndMarker[] = {
         0x0E, 0x03, 'E', 'n', 'd', 0x0E, 0x02, 'o', 'f',
         0x0E, 0x04, 'A', 'C', 'I', 'S', 0x0D, 0x04,
@@ -6803,6 +6807,7 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
                                        payloadEndBit,
                                        parsedInlineAcisPayload)
                     && !parsedInlineAcisPayload.empty()) {
+                    DRW_ModelerPayloadRange parsedInlineAcisRange;
                     parsedInlineAcisRange.m_kind =
                         DRW_ModelerPayloadRange::Kind::Sab;
                     parsedInlineAcisRange.m_section =
@@ -6819,15 +6824,87 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
                         DRW_ModelerPayloadRange::Confidence::Marker;
                     parsedInlineAcisRange.m_markerText =
                         "End-of-ACIS-data (tagged SAB marker)";
-                    hasParsedInlineAcisRange = true;
+                    parsedAcisPayloadRanges.push_back(
+                        std::move(parsedInlineAcisRange));
+                    hasParsedAcisPayload = true;
                 }
+            }
+        }
+
+        if (v == DRW::AC1015 && parsedHasModelerData
+            && parsedModelerVersion == 1) {
+            dwgBuffer satProbe = probe.forkIndependent();
+            std::vector<std::uint8_t> satPayload;
+            std::vector<DRW_ModelerPayloadRange> satRanges;
+            bool terminated = false;
+            std::size_t blockCount = 0;
+            while (currentDwgBit(&satProbe) < bodyEndBit) {
+                std::int32_t blockSize = 0;
+                if (!readBoundedBitLong(satProbe, bodyEndBit, blockSize))
+                    break;
+                if (blockSize == 0) {
+                    terminated = true;
+                    break;
+                }
+                if (blockSize < 0 || blockCount >= kMaxDwgSatV1Blocks)
+                    break;
+                const std::size_t byteCount =
+                    static_cast<std::size_t>(blockSize);
+                const std::uint64_t dataStartBit = currentDwgBit(&satProbe);
+                if (satPayload.size() > DRW::kMaxDxfBinaryPayloadBytes
+                    || byteCount > DRW::kMaxDxfBinaryPayloadBytes
+                        - satPayload.size()
+                    || dataStartBit > bodyEndBit
+                    || static_cast<std::uint64_t>(byteCount)
+                        > (bodyEndBit - dataStartBit) / 8u)
+                    break;
+
+                satPayload.reserve(satPayload.size() + byteCount);
+                for (std::size_t i = 0; i < byteCount; ++i) {
+                    std::uint8_t value = 0;
+                    if (!readBoundedRawChar8(satProbe, bodyEndBit, value)) {
+                        satPayload.clear();
+                        satRanges.clear();
+                        blockCount = kMaxDwgSatV1Blocks;
+                        break;
+                    }
+                    if (value > 0x20u && value <= 0x7Eu)
+                        value = static_cast<std::uint8_t>(0x9Fu - value);
+                    if (value == '\t')
+                        value = ' ';
+                    satPayload.push_back(value);
+                }
+                if (blockCount >= kMaxDwgSatV1Blocks)
+                    break;
+
+                DRW_ModelerPayloadRange range;
+                range.m_kind = DRW_ModelerPayloadRange::Kind::Sat;
+                range.m_section = DRW_ModelerPayloadRange::Section::Body;
+                range.m_offset = static_cast<std::size_t>(dataStartBit >> 3);
+                range.m_bitOffset =
+                    static_cast<std::uint8_t>(dataStartBit & 7u);
+                range.m_length = byteCount;
+                range.m_declaredByteSize = byteCount;
+                range.m_consistency =
+                    DRW_ModelerPayloadRange::Consistency::Exact;
+                range.m_confidence =
+                    DRW_ModelerPayloadRange::Confidence::DeclaredSize;
+                range.m_markerText = "ODA v5.4.1 §20.4.41 SAT v1 block";
+                satRanges.push_back(std::move(range));
+                ++blockCount;
+            }
+            if (terminated && !satPayload.empty() && !satRanges.empty()) {
+                parsedInlineAcisPayload = std::move(satPayload);
+                parsedAcisPayloadRanges = std::move(satRanges);
+                hasParsedAcisPayload = true;
             }
         }
     } catch (...) {
         // Exact extraction is optional: an allocation failure must not turn
         // an otherwise valid typed entity into a failed DWG read.
         parsedInlineAcisPayload.clear();
-        hasParsedInlineAcisRange = false;
+        parsedAcisPayloadRanges.clear();
+        hasParsedAcisPayload = false;
     }
 
     std::uint64_t handleEndBit = 0;
@@ -6868,14 +6945,19 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     m_modelerDataUnknownBit = parsedUnknownBit;
     m_modelerVersion = parsedModelerVersion;
     m_historyHandle = parsedHistoryHandle;
-    if (hasParsedInlineAcisRange) {
-        try {
-            m_payloadRanges.push_back(std::move(parsedInlineAcisRange));
-            m_dwgAcisPayload = std::move(parsedInlineAcisPayload);
-        } catch (...) {
-            m_payloadRanges.clear();
-            m_dwgAcisPayload.clear();
+    if (hasParsedAcisPayload) {
+        m_payloadRanges = std::move(parsedAcisPayloadRanges);
+        m_dwgAcisPayload = std::move(parsedInlineAcisPayload);
+        m_dwgSourceVersion = v;
+        if (v == DRW::AC1015 && m_modelerVersion == 1) {
+            DRW_DBG("  AC1015 SAT v1 payload bytes: ");
+            DRW_DBG(m_dwgAcisPayload.size());
+            DRW_DBG(" unknown bit: ");
+            DRW_DBG(m_modelerDataUnknownBit);
+            DRW_DBG("\n");
         }
+    } else if (v == DRW::AC1015 && parsedModelerVersion == 1) {
+        DRW_DBG("  AC1015 SAT v1 payload was not exactly bounded\n");
     }
     *sourceBuf = handleProbe;
     return true;
@@ -6886,11 +6968,26 @@ bool DRW_ModelerGeometry::parseCode(int code, const std::unique_ptr<dxfReader>& 
     case 1:
     case 3: {
         const std::string text = reader->getString();
+        std::string decodedText;
+        decodedText.reserve(text.size());
+        for (std::size_t i = 0; i < text.size(); ++i) {
+            if (text[i] == '^' && i + 1 < text.size()
+                && text[i + 1] == ' ') {
+                decodedText.push_back('^');
+                ++i;
+            } else {
+                decodedText.push_back(text[i]);
+            }
+        }
+        if (code == 1 && !m_dxfPayloadChunks.empty()
+            && !appendTextBytesChecked(m_rawBytes, "\n",
+                                       dwgSafety::MaxBufferSize))
+            return false;
         const std::size_t offset = m_rawBytes.size();
-        if (!appendTextBytesChecked(m_rawBytes, text,
+        if (!appendTextBytesChecked(m_rawBytes, decodedText,
                                     dwgSafety::MaxBufferSize))
             return false;
-        m_dxfPayloadChunks.emplace_back(code, offset, text.size());
+        m_dxfPayloadChunks.emplace_back(code, offset, decodedText.size());
         break;
     }
     case 70: {
