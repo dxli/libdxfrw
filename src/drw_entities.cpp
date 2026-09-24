@@ -14402,6 +14402,7 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             break;
         }
         if (arc) arc->isccw = reader->getInt32();
+        else if (ellipse) ellipse->isccw = reader->getInt32();
         // polyline path: 73 is the is-closed flag -> set bit 0 only, leaving the
         // rest of pline->flags untouched (order-independent vs code 72).
         else if (pline) pline->flags = (pline->flags & ~1) | (reader->getInt32() ? 1 : 0);

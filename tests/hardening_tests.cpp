@@ -3192,6 +3192,34 @@ void testDxfHatchElevationAndOcsBoundary(TestContext& t) {
         "11\n3\n21\n4\n12\n5\n22\n6\n13\n7\n23\n8\n",
         "HATCH accepts complete spline control, fit, and tangent pairs");
 
+    std::string clockwiseEllipse = sectionStart + hatchHeader
+        + "91\n1\n92\n0\n93\n1\n72\n3\n"
+        "10\n1\n20\n2\n11\n4\n21\n5\n40\n0.5\n"
+        "50\n15\n51\n120\n73\n0\n"
+        + hatchTrailer + sectionEnd;
+    FuzzInterface ellipseDirectionCapture;
+    dxfRW ellipseDirectionReader("");
+    const bool ellipseDirectionRead = ellipseDirectionReader.readAscii(
+        &ellipseDirectionCapture, false, clockwiseEllipse);
+    std::shared_ptr<DRW_Ellipse> clockwiseEllipseData;
+    if (ellipseDirectionRead && ellipseDirectionCapture.lastHatch.looplist.size() == 1u
+        && ellipseDirectionCapture.lastHatch.looplist.front()->objlist.size() == 1u) {
+        clockwiseEllipseData = std::dynamic_pointer_cast<DRW_Ellipse>(
+            ellipseDirectionCapture.lastHatch.looplist.front()->objlist.front());
+    }
+    const double pi = std::acos(-1.0);
+    t.expect(ellipseDirectionRead && ellipseDirectionCapture.hatchCount == 1u
+                 && clockwiseEllipseData
+                 && clockwiseEllipseData->basePoint.x == 1.0
+                 && clockwiseEllipseData->basePoint.y == 2.0
+                 && clockwiseEllipseData->secPoint.x == 4.0
+                 && clockwiseEllipseData->secPoint.y == 5.0
+                 && clockwiseEllipseData->ratio == 0.5
+                 && clockwiseEllipseData->isccw == 0
+                 && std::abs(clockwiseEllipseData->staparam - pi / 12.0) < 1.0e-12
+                 && std::abs(clockwiseEllipseData->endparam - 2.0 * pi / 3.0) < 1.0e-12,
+             "HATCH elliptic edge preserves group-73 direction and curve fields");
+
     std::string incompleteSeed = sectionStart
         + hatchHeader + "91\n0\n75\n0\n76\n1\n78\n0\n"
         "98\n1\n10\n8\n" + sectionEnd;

@@ -6967,6 +6967,29 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
     mesh->creases = {0.25, 0.75};
     source.mBlock->ent.push_back(mesh);
 
+    auto* hatch = new DRW_Hatch();
+    hatch->handle = 0xFA08u;
+    hatch->name = "SOLID";
+    auto hatchLoop = std::make_shared<DRW_HatchLoop>(0);
+    auto hatchArc = std::make_shared<DRW_Arc>();
+    hatchArc->basePoint = DRW_Coord(1.0, 2.0, 0.0);
+    hatchArc->radious = 3.0;
+    hatchArc->staangle = 0.25;
+    hatchArc->endangle = 1.5;
+    hatchArc->isccw = 0;
+    auto hatchEllipse = std::make_shared<DRW_Ellipse>();
+    hatchEllipse->basePoint = DRW_Coord(4.0, 5.0, 0.0);
+    hatchEllipse->secPoint = DRW_Coord(7.0, 9.0, 0.0);
+    hatchEllipse->ratio = 0.5;
+    hatchEllipse->staparam = 0.25;
+    hatchEllipse->endparam = 1.5;
+    hatchEllipse->isccw = 0;
+    hatchLoop->objlist.push_back(hatchArc);
+    hatchLoop->objlist.push_back(hatchEllipse);
+    hatchLoop->update();
+    hatch->appendLoop(hatchLoop);
+    source.mBlock->ent.push_back(hatch);
+
     dx_iface exporter;
     if (!exporter.fileExport(output.string(), DRW::AC1027, binary, &source,
                              false)) {
@@ -6992,6 +7015,7 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
     const DRW_Polyline* decodedPoly3d = nullptr;
     const DRW_Polyline* decodedPolyface = nullptr;
     const DRW_LWPolyline* decodedOcsPolyline = nullptr;
+    const DRW_Hatch* decodedHatch = nullptr;
     for (const DRW_Entity* entity : imported.mBlock->ent) {
         if (entity == nullptr)
             continue;
@@ -7009,6 +7033,8 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
                 decodedPolyface = polyline;
         } else if (entity->eType == DRW::LWPOLYLINE)
             decodedOcsPolyline = static_cast<const DRW_LWPolyline*>(entity);
+        else if (entity->eType == DRW::HATCH)
+            decodedHatch = static_cast<const DRW_Hatch*>(entity);
     }
 
     const bool faceValid = decodedFace != nullptr
@@ -7084,17 +7110,39 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
         && importer.mesh.faces == mesh->faces
         && importer.mesh.edges == mesh->edges
         && importer.mesh.creases == mesh->creases;
+    const DRW_Arc* decodedHatchArc = nullptr;
+    const DRW_Ellipse* decodedHatchEllipse = nullptr;
+    if (decodedHatch != nullptr && decodedHatch->looplist.size() == 1u
+        && decodedHatch->looplist.front()->objlist.size() == 2u) {
+        decodedHatchArc = dynamic_cast<const DRW_Arc*>(
+            decodedHatch->looplist.front()->objlist[0].get());
+        decodedHatchEllipse = dynamic_cast<const DRW_Ellipse*>(
+            decodedHatch->looplist.front()->objlist[1].get());
+    }
+    const bool hatchOrientationValid = decodedHatchArc != nullptr
+        && decodedHatchArc->isccw == 0
+        && decodedHatchArc->basePoint.x == 1.0
+        && decodedHatchArc->radious == 3.0
+        && decodedHatchEllipse != nullptr
+        && decodedHatchEllipse->isccw == 0
+        && decodedHatchEllipse->basePoint.x == 4.0
+        && decodedHatchEllipse->secPoint.x == 7.0
+        && decodedHatchEllipse->secPoint.y == 9.0
+        && decodedHatchEllipse->ratio == 0.5
+        && decodedHatchEllipse->staparam == 0.25
+        && decodedHatchEllipse->endparam == 1.5;
     if (!keepOutput)
         std::filesystem::remove(output, ec);
     if (!(faceValid && solidValid && traceValid && poly3dValid
-          && polyfaceValid && ocsValid && meshValid))
+          && polyfaceValid && ocsValid && meshValid && hatchOrientationValid))
         std::cerr << "DXF topology semantic mismatch (" << encoding
                   << "): face=" << faceValid << " solid=" << solidValid
                   << " trace=" << traceValid << " poly3d=" << poly3dValid
                   << " polyface=" << polyfaceValid << " ocs=" << ocsValid
-                  << " mesh=" << meshValid << '\n';
+                  << " mesh=" << meshValid
+                  << " hatch-orientation=" << hatchOrientationValid << '\n';
     return faceValid && solidValid && traceValid && poly3dValid
-        && polyfaceValid && ocsValid && meshValid;
+        && polyfaceValid && ocsValid && meshValid && hatchOrientationValid;
 }
 
 bool runDxfLegacyEllipseDowngrade(const std::filesystem::path& directory,
