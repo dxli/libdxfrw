@@ -12,9 +12,15 @@ versions, and feature scope are recorded in `metadata/fixture-registry.json`.
 
 No downloaded, customer-provided, converted, mutated, minimized, or newly
 derived drawing bytes are included here. The exceptions are
-`dxf/ac1015_insert_freecad_control.dxf` and
-`dxf/ac1015_nonplanar_spline_freecad_control.dxf`, minimal source drawings
-authored locally from scratch for opt-in FreeCAD INSERT-placement and SPLINE
-controls. Their expected geometry is documented in the associated tests and
-plan. The ODA-converted DWGs and all `dwg2dxf` outputs are generated only in
-the temporary build directory and are not committed.
+`dxf/ac1015_insert_freecad_control.dxf`,
+`dxf/ac1015_nonplanar_spline_freecad_control.dxf`, and
+`dxf/ac1015_ellipse_freecad_control.dxf`, minimal source drawings authored
+locally from scratch for opt-in FreeCAD INSERT-placement, SPLINE, and ELLIPSE
+controls. The ELLIPSE source contains planar, elevated-partial, and tilted
+partial vectors for a future independent-writer check; it is not used by the
+current DWGADD-generated planar control test. The
+`dwg/ac1015_ellipse_freecad_control.dwgadd` recipe is also locally authored
+and generates only planar AC1015 full/partial ELLIPSE controls. Expected
+geometry and the evidence limits are documented in the associated tests and
+plan. ODA/DWGADD-generated DWGs and all `dwg2dxf` outputs are generated only
+in the temporary build directory and are not committed.
