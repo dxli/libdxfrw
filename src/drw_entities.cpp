@@ -14179,6 +14179,18 @@ bool DRW_Vertex::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs
 
 bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     try {
+    const bool isCoordinateX = code >= 10 && code <= 13;
+    const bool isCoordinateY = code >= 20 && code <= 23;
+    if (m_dxfPendingCoordinateGroup != 0) {
+        if (code != m_dxfPendingCoordinateGroup + 10)
+            return false;
+        m_dxfPendingCoordinateGroup = 0;
+    } else if (isCoordinateY) {
+        return false;
+    }
+    if (isCoordinateX)
+        m_dxfPendingCoordinateGroup = code;
+
     switch (code) {
     case 2:
         name = reader->getUtf8String();
@@ -14692,7 +14704,8 @@ bool DRW_Hatch::validateCurrentPatternLineDxf() const {
 }
 
 bool DRW_Hatch::validateCurrentBoundaryPathDxf() const {
-    if (m_boundaryHandleCount != 0 || !validateCurrentSplineDxf())
+    if (m_boundaryHandleCount != 0 || m_dxfPendingCoordinateGroup != 0
+        || !validateCurrentSplineDxf())
         return false;
     if (!loop)
         return true;
@@ -14716,7 +14729,8 @@ bool DRW_Hatch::validateDxf() const {
     // elevation point's group-10 X and group-20 Y components are fixed at
     // zero; boundary and seed-point group-10/20 pairs are handled separately
     // as two-dimensional OCS coordinates above.
-    if (basePoint.x != 0.0 || basePoint.y != 0.0
+    if (m_dxfPendingCoordinateGroup != 0
+        || basePoint.x != 0.0 || basePoint.y != 0.0
         || !std::isfinite(basePoint.z)
         || !std::isfinite(extPoint.x) || !std::isfinite(extPoint.y)
         || !std::isfinite(extPoint.z)

@@ -3115,6 +3115,112 @@ void testDxfHatchElevationAndOcsBoundary(TestContext& t) {
     t.expect(preservesOcsBoundary(true),
              "HATCH applyExt mode does not rewrite OCS boundary coordinates");
 
+    const std::string hatchHeader =
+        "10\n0\n20\n0\n30\n7\n210\n0\n220\n0\n230\n1\n"
+        "2\nSOLID\n70\n1\n71\n0\n";
+    const std::string hatchTrailer =
+        "97\n0\n75\n0\n76\n1\n78\n0\n98\n0\n";
+    const auto rejectsIncompleteBoundaryPair =
+        [&t, &sectionStart, &sectionEnd, &hatchHeader, &hatchTrailer](
+            const std::string& boundary, const char *description) {
+            std::string malformed = sectionStart + hatchHeader + "91\n1\n"
+                + boundary + hatchTrailer + sectionEnd;
+            FuzzInterface capture;
+            dxfRW reader("");
+            t.expect(!reader.readAscii(&capture, false, malformed)
+                         && capture.hatchCount == 0u,
+                     description);
+        };
+    rejectsIncompleteBoundaryPair(
+        "92\n2\n72\n0\n73\n1\n93\n1\n10\n1\n",
+        "HATCH rejects a polyline OCS vertex without its Y group");
+    rejectsIncompleteBoundaryPair(
+        "92\n0\n93\n1\n72\n1\n10\n1\n20\n2\n11\n4\n",
+        "HATCH rejects a line-edge endpoint without its Y group");
+    rejectsIncompleteBoundaryPair(
+        "92\n0\n93\n1\n72\n1\n20\n2\n",
+        "HATCH rejects a line-edge Y group without its X group");
+    rejectsIncompleteBoundaryPair(
+        "92\n0\n93\n1\n72\n2\n10\n1\n40\n2\n50\n0\n51\n90\n73\n1\n",
+        "HATCH rejects a circular-edge center without its Y group");
+    rejectsIncompleteBoundaryPair(
+        "92\n0\n93\n1\n72\n3\n10\n1\n20\n2\n11\n4\n40\n0.5\n"
+        "50\n0\n51\n90\n73\n1\n",
+        "HATCH rejects an elliptical-edge major-axis point without its Y group");
+    rejectsIncompleteBoundaryPair(
+        "92\n0\n93\n1\n72\n4\n94\n1\n73\n0\n74\n0\n95\n2\n"
+        "40\n0\n40\n1\n96\n1\n10\n1\n",
+        "HATCH rejects a spline control point without its Y group");
+    rejectsIncompleteBoundaryPair(
+        "92\n0\n93\n1\n72\n4\n94\n1\n73\n0\n74\n0\n95\n2\n"
+        "40\n0\n40\n1\n96\n1\n10\n1\n20\n2\n97\n1\n"
+        "11\n3\n21\n4\n12\n5\n13\n6\n",
+        "HATCH rejects a spline start tangent without its Y group");
+    rejectsIncompleteBoundaryPair(
+        "92\n0\n93\n1\n72\n4\n94\n1\n73\n0\n74\n0\n95\n2\n"
+        "40\n0\n40\n1\n96\n1\n10\n1\n20\n2\n97\n1\n"
+        "11\n3\n21\n4\n12\n5\n22\n6\n13\n7\n",
+        "HATCH rejects a spline end tangent without its Y group");
+
+    const auto acceptsCompleteBoundaryPair =
+        [&t, &sectionStart, &sectionEnd, &hatchHeader, &hatchTrailer](
+            const std::string& boundary, const char *description) {
+            std::string valid = sectionStart + hatchHeader + "91\n1\n"
+                + boundary + hatchTrailer + sectionEnd;
+            FuzzInterface capture;
+            dxfRW reader("");
+            t.expect(reader.readAscii(&capture, false, valid)
+                         && capture.hatchCount == 1u,
+                     description);
+        };
+    acceptsCompleteBoundaryPair(
+        "92\n2\n72\n0\n73\n1\n93\n1\n10\n1\n20\n2\n",
+        "HATCH accepts complete polyline OCS vertex pairs");
+    acceptsCompleteBoundaryPair(
+        "92\n0\n93\n1\n72\n1\n10\n1\n20\n2\n11\n4\n21\n5\n",
+        "HATCH accepts complete line-edge endpoint pairs");
+    acceptsCompleteBoundaryPair(
+        "92\n0\n93\n1\n72\n2\n10\n1\n20\n2\n40\n2\n50\n0\n51\n90\n73\n1\n",
+        "HATCH accepts complete circular-edge center pairs");
+    acceptsCompleteBoundaryPair(
+        "92\n0\n93\n1\n72\n3\n10\n1\n20\n2\n11\n4\n21\n5\n"
+        "40\n0.5\n50\n0\n51\n90\n73\n1\n",
+        "HATCH accepts complete elliptical-edge point pairs");
+    acceptsCompleteBoundaryPair(
+        "92\n0\n93\n1\n72\n4\n94\n1\n73\n0\n74\n0\n95\n2\n"
+        "40\n0\n40\n1\n96\n1\n10\n1\n20\n2\n97\n1\n"
+        "11\n3\n21\n4\n12\n5\n22\n6\n13\n7\n23\n8\n",
+        "HATCH accepts complete spline control, fit, and tangent pairs");
+
+    std::string incompleteSeed = sectionStart
+        + hatchHeader + "91\n0\n75\n0\n76\n1\n78\n0\n"
+        "98\n1\n10\n8\n" + sectionEnd;
+    FuzzInterface incompleteSeedCapture;
+    dxfRW incompleteSeedReader("");
+    t.expect(!incompleteSeedReader.readAscii(&incompleteSeedCapture, false,
+                                               incompleteSeed)
+                 && incompleteSeedCapture.hatchCount == 0u,
+             "HATCH rejects a seed point without its Y group");
+    std::string incompleteSeedX = sectionStart
+        + hatchHeader + "91\n0\n75\n0\n76\n1\n78\n0\n"
+        "98\n1\n20\n9\n" + sectionEnd;
+    FuzzInterface incompleteSeedXCapture;
+    dxfRW incompleteSeedXReader("");
+    t.expect(!incompleteSeedXReader.readAscii(&incompleteSeedXCapture, false,
+                                                incompleteSeedX)
+                 && incompleteSeedXCapture.hatchCount == 0u,
+             "HATCH rejects a seed-point Y group without its X group");
+    std::string incompleteElevation = sectionStart
+        + "10\n0\n30\n7\n210\n0.6\n220\n0\n230\n0.8\n"
+        "2\nSOLID\n70\n1\n71\n0\n91\n0\n75\n0\n76\n1\n78\n0\n98\n0\n"
+        + sectionEnd;
+    FuzzInterface incompleteElevationCapture;
+    dxfRW incompleteElevationReader("");
+    t.expect(!incompleteElevationReader.readAscii(
+                 &incompleteElevationCapture, false, incompleteElevation)
+                 && incompleteElevationCapture.hatchCount == 0u,
+             "HATCH rejects an elevation-point X group without its Y group");
+
     for (const std::pair<std::string, std::string>& malformedElevation : {
              std::make_pair("10\n0\n20\n0\n30\n7\n",
                             "10\n1\n20\n0\n30\n7\n"),
@@ -3148,6 +3254,21 @@ void testDxfHatchElevationAndOcsBoundary(TestContext& t) {
                  &malformedMPolygonCapture, false, malformedMPolygon)
                  && malformedMPolygonCapture.hatchCount == 0u,
              "MPOLYGON shares the HATCH nonzero-extrusion validation");
+
+    FuzzInterface incompleteMPolygonCapture;
+    dxfRW incompleteMPolygonReader("");
+    std::string incompleteMPolygon =
+        "0\nSECTION\n2\nENTITIES\n0\nMPOLYGON\n5\n707\n8\n0\n"
+        "100\nAcDbEntity\n100\nAcDbMPolygon\n"
+        "10\n0\n20\n0\n30\n7\n210\n0\n220\n0\n230\n1\n"
+        "2\nSOLID\n70\n1\n71\n0\n91\n1\n"
+        "92\n2\n72\n0\n73\n1\n93\n1\n10\n1\n42\n0\n"
+        "97\n0\n75\n0\n76\n1\n78\n0\n99\n0\n"
+        "0\nENDSEC\n0\nEOF\n";
+    t.expect(!incompleteMPolygonReader.readAscii(
+                 &incompleteMPolygonCapture, false, incompleteMPolygon)
+                 && incompleteMPolygonCapture.hatchCount == 0u,
+             "MPOLYGON rejects an incomplete boundary OCS pair via HATCH parser");
 }
 
 void testMLeaderDxfContextRoundTrip(TestContext& t) {

@@ -2727,7 +2727,8 @@ public:
 *  Class to handle hatch entity
 *  @author Rallaz
 */
-//TODO: handle lwpolylines, splines and ellipses
+// TODO: broaden semantic and interoperability qualification for every HATCH
+// boundary edge form; typed path storage and coordinate-pair checks are partial.
 class DRW_Hatch : public DRW_Point {
     SETENTFRIENDS
 public:
@@ -2828,6 +2829,7 @@ protected:
         m_dxfSplineFitCountExpected = -1;
         m_dxfSeedPointsExpected = -1;
         m_dxfSeedPointCountSeen = false;
+        m_dxfPendingCoordinateGroup = 0;
     }
 
     bool parseCode(int code, const std::unique_ptr<dxfReader>& reader) override;
@@ -2912,6 +2914,7 @@ private:
         m_dxfGradientColorCountSeen = false;
         m_dxfSeedPointsExpected = -1;
         m_dxfSeedPointCountSeen = false;
+        m_dxfPendingCoordinateGroup = 0;
     }
 
     void addLine() {
@@ -2981,6 +2984,9 @@ private:
     int m_dxfSplineFitCountExpected = -1;
     int m_dxfSeedPointsExpected = -1;
     bool m_dxfSeedPointCountSeen = false;
+    // HATCH point/vector coordinates are adjacent X/Y group-code pairs
+    // (10/20 through 13/23). A dangling X or Y must not inherit a default.
+    int m_dxfPendingCoordinateGroup = 0;
 };
 
 //! Class to handle MPOLYGON (AcDbMPolygon) entity.
