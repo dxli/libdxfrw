@@ -1965,6 +1965,23 @@ and SPLINE as the bounded validation set.
    support. If the pinned importer drops closure or changes topology, record
    that consumer limitation without altering the converter's DXF semantics.
 
+   Implementation evidence: `tests/run_freecad_2d_lwpolyline_oda_cli_test.cmake`
+   passes the fast opt-in exact-argv conversion/readback test with ODA File
+   Converter 27.1.0.0; its generated AC1015 DWG and both DXFs remain under
+   `build/`. The optional `tests/freecad_dwg2dxf_2d_lwpolyline_check.FCMacro`
+   passes on FreeCAD 1.1.3 revision
+   `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer
+   mode 2. It resolves installed `/opt/homebrew/bin/dwg2dxf` by PATH (SHA-256
+   `e4cca8e3f5af9a878eb0085ed14e992f64d35f03065743847701274a46781c99`), invokes
+   it exactly once with `input -o output`, and imports that same successful
+   output. FreeCAD creates one valid closed four-edge wire with the four
+   expected vertices and bounds `(0,0,0)`–`(4,3,0)`, counts one LWPOLYLINE,
+   and reports no unsupported entities. The generated ODA DWG also caused
+   class-stability and unknown-codepage warnings in `dwg2dxf`; conversion and
+   semantic assertions nevertheless passed. This qualifies only this
+   locally-authored AC1015/ODA/FreeCAD profile, not target-authored DWGs or
+   general LWPOLYLINE/3D support.
+
 Positive gate: an old source consumer still compiles, and the headless 3D probe
 receives all asserted native typed values/carrier identities without an
 implicit projection; the S8.2a `ext == true` baseline remains intact for its
@@ -2054,8 +2071,8 @@ conversion/readback. The pinned FreeCAD 1.1.3 C++ importer reports that same
 SOLID unsupported and creates no shape; this is a consumer limitation, not a
 converter defect. `FreeCAD/main` contains a newer SOLID callback, but no
 runtime claim transfers across revisions. `3DFACE` remains unmapped in the
-audited current dispatcher. S8.15.13 is now the next `READY` slice: a
-default-XY closed LWPOLYLINE baseline through the same
+audited current dispatcher. S8.15.13 now qualifies one ordinary default-XY
+closed LWPOLYLINE through the same
 DWG→`dwg2dxf`→DXF-readback→pinned-FreeCAD C++ route. It is deliberately not 3D
 support evidence. Keep the desktop dispatch smoke separate and in progress;
 neither gate should stall independent family work. The
@@ -2195,7 +2212,7 @@ degenerate, other-knot, other-scenario, target-authored, or other-version
 splines.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 62/79 committed, 13 blocked, 1 verified, 1 in progress, and 2 ready):
+commit; 63/79 committed, 13 blocked, 1 verified, 1 in progress, and 1 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -2405,4 +2422,4 @@ Additional implementation-item record:
 | Item | State | Evidence / next action |
 | --- | --- | --- |
 | S8.15.12 | COMMITTED | Added the locally authored `tests/fixtures/dxf/ac1015_solid_freecad_control.dxf`, opt-in `dwg2dxf_freecad_3d_solid_oda_cli`, `tests/run_freecad_3d_solid_oda_cli_test.cmake`, and `tests/freecad_dwg2dxf_3d_solid_check.FCMacro`. ODA File Converter 27.1.0.0 generated AC1015 only under `build/`; focused exact-FreeCAD-argv conversion/readback CTest passes 1/1 and verifies all twelve corner coordinates (group 12 is corner 4; group 13 is corner 3). FreeCAD 1.1.3 full revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2, with isolated user config and installed `dwg2dxf` SHA-256 `4b959ec93a99da102507f3b53d7cbf2d083f12f62e86e96afa914c97894fa0e3`, runs exact `[binary,input,-o,output]` once and imports that same output; it counts one SOLID, reports one `Entity type 'SOLID'` unsupported diagnostic, and creates zero shapes. The macro asserts that negative outcome rather than promoting a face-import claim. A first invalid control had groups 12/13 swapped; the corrected control still confirms this pinned release's downstream gap. Generated DWG/DXF files remain in build/temp; only the local-from-scratch DXF source and code are tracked. Mutable `FreeCAD/main` has a newer SOLID path, but that code is not the pinned binary. A future positive geometry check requires running an exact FreeCAD build with that implementation and checking area 12, four edges, four corners, and z=5 bounds. No AutoCAD-authored, arbitrary-OCS, TRACE/3DFACE, other-version, or general SOLID claim. |
-| S8.15.13 | READY | Bounded FreeCAD consumer-baseline slice for one locally authored closed AC1015 LWPOLYLINE rectangle, default XY plane/elevation zero. Generate only the DWG under `build/` with ODA File Converter; the fast opt-in CTest must invoke the exact FreeCAD CLI contract `dwg2dxf input -o output`, assert record/count/closed flag/ordered vertices and public-DXF readback. The separate isolated FreeCAD C++ macro must verify installed executable identity, invocation and exact DXF handoff, then assert one valid closed four-edge wire with the expected vertices/bounds and no unsupported report. This is ordinary 2D-import baseline only—not 3D, bulge, width, thickness, nondefault OCS, target-authored DWG, or general LWPOLYLINE support. FreeCAD `main` source reviewed at the references below; pin revision and runtime result before promoting any consumer claim. Keep it opt-in, locally generated, and independent from desktop GUI validation. |
+| S8.15.13 | COMMITTED | Added locally authored `tests/fixtures/dxf/ac1015_lwpolyline_freecad_control.dxf`, opt-in `dwg2dxf_freecad_2d_lwpolyline_oda_cli`, `tests/run_freecad_2d_lwpolyline_oda_cli_test.cmake`, and `tests/freecad_dwg2dxf_2d_lwpolyline_check.FCMacro`. ODA File Converter 27.1.0.0 generates an AC1015 DWG only under `build/`; exact FreeCAD argv conversion and public DXF readback preserve one closed four-vertex LWPOLYLINE in order; focused CTest passes 1/1. FreeCAD 1.1.3 full revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2, invokes installed `/opt/homebrew/bin/dwg2dxf` via PATH (SHA-256 `e4cca8e3f5af9a878eb0085ed14e992f64d35f03065743847701274a46781c99`) exactly once and imports the same output. It creates one valid closed wire/four edges with the expected four vertices and `(0,0,0)`–`(4,3,0)` bounds, counts one LWPOLYLINE, and reports no unsupported entities. The generated DWG produced class-stability and unknown-codepage warnings, but the converter and semantic checks passed. Source DXF SHA-256 is `a09e2b9d83576ed71aca26f54db4d1be848a01c9ddf734306cc9c3f431034fef`; generated DWG/DXFs remain in build/temp. This is one local AC1015/ODA/FreeCAD consumer baseline only—not target-authored interoperability, 3D evidence, non-default OCS, bulges, widths, thickness, other importer modes/releases, or general polyline support. |

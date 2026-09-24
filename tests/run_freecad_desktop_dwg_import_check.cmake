@@ -71,7 +71,13 @@ foreach(_operation IN ITEMS open insert)
     set(_user_cfg "${_profile}/user.cfg")
     set(_result_file "${_test_root}/${_operation}.json")
     file(MAKE_DIRECTORY "${_user_home}" "${_user_data}" "${_user_temp}")
-    file(WRITE "${_user_cfg}" "")
+    file(WRITE "${_user_cfg}"
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<FCParameters>\n"
+        "  <FCParamGroup Name=\"Root\">\n"
+        "    <FCParamGroup Name=\"BaseApp\"/>\n"
+        "  </FCParamGroup>\n"
+        "</FCParameters>\n")
 
     set(_environment
         "LIBDXFRW_FREECAD_DWG=${_source_copy}"
