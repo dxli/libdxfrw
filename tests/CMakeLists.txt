@@ -233,6 +233,45 @@ if(LIBDXFRW_ENABLE_FREECAD_FAILURE_CONTROL)
     )
 endif()
 
+# Bridge the positive nonzero-Z FreeCAD geometry control through the installed
+# artifact. The ordinary fast CLI checks above remain dependency-free.
+option(LIBDXFRW_ENABLE_FREECAD_INSTALLED_3D_LINE_CONTROL
+    "Enable installed dwg2dxf FreeCAD 3D LINE open/insert checks" OFF)
+if(LIBDXFRW_ENABLE_FREECAD_INSTALLED_3D_LINE_CONTROL)
+    find_program(LIBDXFRW_DWGADD_EXECUTABLE NAMES dwgadd)
+    if(NOT LIBDXFRW_DWGADD_EXECUTABLE)
+        message(FATAL_ERROR
+            "LIBDXFRW_ENABLE_FREECAD_INSTALLED_3D_LINE_CONTROL requires LibreDWG dwgadd")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECADCMD_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECADCMD_EXECUTABLE to FreeCAD's freecadcmd")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE to the installed dwg2dxf")
+    endif()
+
+    foreach(_operation IN ITEMS open insert)
+        add_test(
+            NAME dwg2dxf_freecad_installed_3d_line_${_operation}
+            COMMAND ${CMAKE_COMMAND}
+                "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
+                "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
+                "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+                "-DDWGADD=${LIBDXFRW_DWGADD_EXECUTABLE}"
+                "-DRECIPE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dwg/ac1015_3d_line_control.dwgadd"
+                "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
+                "-DOPERATION=${_operation}"
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_installed_3d_line_test.cmake
+        )
+        set_tests_properties(dwg2dxf_freecad_installed_3d_line_${_operation}
+            PROPERTIES
+                LABELS "freecad;installed;generated;integration"
+                TIMEOUT 180)
+    endforeach()
+endif()
+
 # Optional locally generated DWG control for the FreeCAD nonzero-Z path.
 # LibreDWG dwgadd and FreeCAD remain external integration tools, not required
 # dependencies of the normal build/test configuration.
