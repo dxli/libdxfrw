@@ -274,10 +274,13 @@ Field doubleField(const std::string& name, double value) {
 Field boolField(const std::string& name, bool value) {
     return Field{name, "bool", value ? "true" : "false"};
 }
+std::string pointJson(const DRW_Coord& value) {
+    return std::string("{\"x\":") + number(value.x) +
+           ",\"y\":" + number(value.y) + ",\"z\":" +
+           number(value.z) + "}";
+}
 Field pointField(const std::string& name, const DRW_Coord& value) {
-    return Field{name, "point3d", std::string("{\"x\":") + number(value.x) +
-                 ",\"y\":" + number(value.y) + ",\"z\":" +
-                 number(value.z) + "}"};
+    return Field{name, "point3d", pointJson(value)};
 }
 
 struct CallbackRow {
@@ -507,7 +510,16 @@ public:
         fields.push_back(pointField("extrusion", d.extPoint));
         addEntityRecord("addCircle", "CIRCLE", fields, d, false);
     }
-    void addEllipse(const DRW_Ellipse& d) override { addBasicEntity("addEllipse", "ELLIPSE", d); }
+    void addEllipse(const DRW_Ellipse& d) override {
+        std::vector<Field> fields = entityFields(d, "ELLIPSE", "ELLIPSE");
+        fields.push_back(pointField("center", d.basePoint));
+        fields.push_back(pointField("majorAxis", d.secPoint));
+        fields.push_back(doubleField("ratio", d.ratio));
+        fields.push_back(doubleField("startParameter", d.staparam));
+        fields.push_back(doubleField("endParameter", d.endparam));
+        fields.push_back(pointField("extrusion", d.extPoint));
+        addEntityRecord("addEllipse", "ELLIPSE", fields, d, false);
+    }
     void addLWPolyline(const DRW_LWPolyline& d) override {
         std::vector<Field> fields = entityFields(d, "LWPOLYLINE", "LWPOLYLINE");
         fields.push_back(intField("flags", d.flags));
@@ -1051,6 +1063,26 @@ public:
             negativeNormalArc.staangle = 10.0 / ARAD;
             negativeNormalArc.endangle = 70.0 / ARAD;
             wrote = dxfWriter_->writeArc(&negativeNormalArc) && wrote;
+
+            DRW_Ellipse defaultEllipse;
+            defaultEllipse.layer = "probe_ellipse_default";
+            defaultEllipse.basePoint = DRW_Coord{1.0, 2.0, 3.0};
+            defaultEllipse.secPoint = DRW_Coord{5.0, 0.0, 0.0};
+            defaultEllipse.ratio = 0.5;
+            defaultEllipse.staparam = 0.0;
+            defaultEllipse.endparam = 2.0 * M_PI;
+            wrote = dxfWriter_->writeEllipse(&defaultEllipse) && wrote;
+
+            DRW_Ellipse tiltedEllipse;
+            tiltedEllipse.layer = "probe_ellipse_tilted_partial";
+            tiltedEllipse.basePoint = DRW_Coord{-2.0, 4.0, 6.0};
+            tiltedEllipse.secPoint = DRW_Coord{2.0, -1.0, 0.0};
+            tiltedEllipse.extPoint = DRW_Coord{1.0 / 3.0, 2.0 / 3.0,
+                                                2.0 / 3.0};
+            tiltedEllipse.ratio = 0.4;
+            tiltedEllipse.staparam = 0.25;
+            tiltedEllipse.endparam = 1.75;
+            wrote = dxfWriter_->writeEllipse(&tiltedEllipse) && wrote;
 
             DRW_3Dface face;
             face.basePoint = DRW_Coord{1.0, 2.0, 3.0};
@@ -2439,7 +2471,7 @@ bool run3DConsumerProbe(bool binary) {
             return true;
         const Field* field = findRecordField(
             findEntityRecordByLayer(sink, entity, layer), name);
-        std::cerr << "ARC/CIRCLE consumer probe mismatch for " << entity
+        std::cerr << "3D consumer probe mismatch for " << entity
                   << " layer " << layer << " field " << name << ": expected "
                   << expected << ", got "
                   << (field == nullptr ? "<missing>" : field->value) << '\n';
@@ -2454,7 +2486,7 @@ bool run3DConsumerProbe(bool binary) {
             return true;
         const Field* field = findRecordField(
             findEntityRecordByLayer(sink, entity, layer), name);
-        std::cerr << "ARC/CIRCLE consumer probe mismatch for " << entity
+        std::cerr << "3D consumer probe mismatch for " << entity
                   << " layer " << layer << " field " << name << ": expected "
                   << number(expected) << ", got "
                   << (field == nullptr ? "<missing>" : field->value) << '\n';
@@ -2521,6 +2553,50 @@ bool run3DConsumerProbe(bool binary) {
                                "startAngleRadians", M_PI - rawArcEnd)
         || !expectEntityDouble(legacyConsumer, "ARC", negativeArcLayer,
                                "endAngleRadians", M_PI - rawArcStart))
+        return false;
+
+    // DXF ELLIPSE stores its center and major-axis vector in WCS. Unlike ARC
+    // and CIRCLE, the oblique-normal vector must not rotate those coordinates
+    // when the legacy 2D extrusion option is enabled.
+    const auto expectEllipses = [&](const SemanticSink& sink) {
+        const std::string defaultEllipseLayer = "probe_ellipse_default";
+        const std::string tiltedEllipseLayer = "probe_ellipse_tilted_partial";
+        return expectEntityField(
+                   sink, "ELLIPSE", defaultEllipseLayer, "center",
+                   pointJson(DRW_Coord{1.0, 2.0, 3.0}))
+            && expectEntityField(
+                   sink, "ELLIPSE", defaultEllipseLayer, "majorAxis",
+                   pointJson(DRW_Coord{5.0, 0.0, 0.0}))
+            && expectEntityField(
+                   sink, "ELLIPSE", defaultEllipseLayer, "extrusion",
+                   pointJson(DRW_Coord{0.0, 0.0, 1.0}))
+            && expectEntityDouble(
+                   sink, "ELLIPSE", defaultEllipseLayer, "ratio", 0.5)
+            && expectEntityDouble(
+                   sink, "ELLIPSE", defaultEllipseLayer,
+                   "startParameter", 0.0)
+            && expectEntityDouble(
+                   sink, "ELLIPSE", defaultEllipseLayer,
+                   "endParameter", 2.0 * M_PI)
+            && expectEntityField(
+                   sink, "ELLIPSE", tiltedEllipseLayer, "center",
+                   pointJson(DRW_Coord{-2.0, 4.0, 6.0}))
+            && expectEntityField(
+                   sink, "ELLIPSE", tiltedEllipseLayer, "majorAxis",
+                   pointJson(DRW_Coord{2.0, -1.0, 0.0}))
+            && expectEntityField(
+                   sink, "ELLIPSE", tiltedEllipseLayer, "extrusion",
+                   pointJson(DRW_Coord{1.0 / 3.0, 2.0 / 3.0, 2.0 / 3.0}))
+            && expectEntityDouble(
+                   sink, "ELLIPSE", tiltedEllipseLayer, "ratio", 0.4)
+            && expectEntityDouble(
+                   sink, "ELLIPSE", tiltedEllipseLayer,
+                   "startParameter", 0.25)
+            && expectEntityDouble(
+                   sink, "ELLIPSE", tiltedEllipseLayer,
+                   "endParameter", 1.75);
+    };
+    if (!expectEllipses(consumer) || !expectEllipses(legacyConsumer))
         return false;
 
     const auto expectPolyface = [&](const SemanticSink& sink) {
