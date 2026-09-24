@@ -468,6 +468,17 @@ if(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL)
     set_tests_properties(dwg2dxf_freecad_3d_solid_oda_cli PROPERTIES
         LABELS "dwg_read;freecad;cli;fast;generated;oda")
     add_test(
+        NAME dwg2dxf_freecad_3dface_oda_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}
+            -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+            "-DSOURCE_DXF=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dxf/ac1015_3dface_freecad_control.dxf"
+            -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3dface_oda_cli_test.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_3dface_oda_cli PROPERTIES
+        LABELS "dwg_read;freecad;cli;fast;generated;oda")
+    add_test(
         NAME dwg2dxf_freecad_2d_lwpolyline_oda_cli
         COMMAND ${CMAKE_COMMAND}
             -DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}
@@ -489,6 +500,42 @@ if(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL)
     )
     set_tests_properties(dwg2dxf_freecad_3d_2d_polyline_ocs_oda_cli PROPERTIES
         LABELS "dwg_read;freecad;cli;fast;generated;oda")
+endif()
+
+# Optional pinned FreeCAD importer-outcome check for one tilted WCS 3DFACE.
+# It uses the independent ODA writer control and an installed build-identical
+# converter, keeping FreeCAD out of default CI.
+option(LIBDXFRW_ENABLE_FREECAD_3DFACE_RUNTIME_CONTROL
+    "Enable the opt-in FreeCAD 3DFACE converter/importer outcome check" OFF)
+if(LIBDXFRW_ENABLE_FREECAD_3DFACE_RUNTIME_CONTROL)
+    find_program(LIBDXFRW_ODAFILECONVERTER_EXECUTABLE NAMES ODAFileConverter)
+    if(NOT LIBDXFRW_ODAFILECONVERTER_EXECUTABLE)
+        message(FATAL_ERROR
+            "LIBDXFRW_ENABLE_FREECAD_3DFACE_RUNTIME_CONTROL requires ODAFileConverter")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECADCMD_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECADCMD_EXECUTABLE to FreeCAD's freecadcmd")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE to the installed dwg2dxf")
+    endif()
+    add_test(
+        NAME dwg2dxf_freecad_3dface_handoff
+        COMMAND ${CMAKE_COMMAND}
+            "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
+            "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
+            "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+            "-DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}"
+            "-DSOURCE_DXF=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dxf/ac1015_3dface_freecad_control.dxf"
+            "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
+            -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3dface_runtime_test.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_3dface_handoff PROPERTIES
+        LABELS "freecad;installed;generated;integration"
+        TIMEOUT 180)
 endif()
 
 # Optional locally-generated oblique OCS ARC/CIRCLE control. The public
