@@ -2840,7 +2840,7 @@ degenerate, other-knot, other-scenario, target-authored, or other-version
 splines.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 74/91 committed, 14 blocked, 3 verified, 0 in progress, and 0 ready):
+commit; 76/93 committed, 14 blocked, 3 verified, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
