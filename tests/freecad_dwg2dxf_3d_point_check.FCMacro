@@ -27,6 +27,10 @@ sys.path.insert(0, draft_path)
 import importDWG
 import importDXF
 
+importDWG.params.set_param("DWGConversion", 1)
+if importDWG.params.get_param("DWGConversion") != 1:
+    raise RuntimeError("FreeCAD did not select the LibreDWG-only converter lane")
+
 
 preferences = App.ParamGet("User parameter:BaseApp/Preferences/Mod/Draft")
 if preferences.GetBool("dxfUseLegacyImporter", False):
@@ -213,6 +217,7 @@ try:
         "converter_sha256": converter_hash,
         "converter_argv": converter_process.args,
         "converter_returncode": converter_process.returncode,
+        "dwg_conversion": importDWG.params.get_param("DWGConversion"),
         "imported_dxf_path": captured.get("imported_dxf"),
         "source": os.path.basename(sample),
         "source_sha256": digest(sample),

@@ -17,6 +17,9 @@
 #include "libdxfrw.h"
 #include "dx_data.h"
 
+#include <cstdint>
+#include <vector>
+
 class dx_iface : public DRW_Interface {
 public:
     dx_iface() = default;
@@ -51,6 +54,12 @@ public:
     }
     virtual void addAppId(const DRW_AppId& data){
         cData->appIds.push_back(data);
+    }
+    virtual void addDictionary(const DRW_Dictionary& data) {
+        cData->dictionaries.push_back(data);
+    }
+    virtual void addXRecord(const DRW_XRecord& data) {
+        cData->xRecords.push_back(data);
     }
 
     //blocks
@@ -291,7 +300,24 @@ public:
             dxfW->writeDimstyle(&(*it));
     }
     virtual void writeObjects() {
-        // default implementation for new DRW_Interface method
+        for (std::uint32_t handle : m_extensionDictionaryHandles) {
+            for (DRW_Dictionary& dictionary : cData->dictionaries) {
+                if (dictionary.handle != handle)
+                    continue;
+                if (!dxfW->writeDictionary(&dictionary))
+                    return;
+                break;
+            }
+        }
+        for (std::uint32_t handle : m_extensionXRecordHandles) {
+            for (DRW_XRecord& record : cData->xRecords) {
+                if (record.handle == handle) {
+                    if (!dxfW->writeXRecord(&record))
+                        return;
+                    break;
+                }
+            }
+        }
     }
     virtual void writeAppId(){
         for (std::list<DRW_AppId>::iterator it=cData->appIds.begin(); it != cData->appIds.end(); ++it)
@@ -303,6 +329,11 @@ public:
     dx_ifaceBlock* currentBlock {nullptr};
 
 private:
+    bool prepareExtensionObjectGraph(dx_data* data);
+
+    std::vector<std::uint32_t> m_extensionDictionaryHandles;
+    std::vector<std::uint32_t> m_extensionXRecordHandles;
+
     static bool isFixedSpaceBlock(const dx_ifaceBlock* block) {
         return block != nullptr
             && (block->name == "*Model_Space"

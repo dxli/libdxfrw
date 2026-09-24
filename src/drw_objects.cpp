@@ -8318,7 +8318,9 @@ bool DRW_XRecord::parseCode(int code,
     if (code == 100) {
         if (m_values.size() >= dwgSafety::MaxOwnedObjectCount)
             return false;
-        m_values.emplace_back(code, reader->getUtf8String());
+        DRW_Variant value(code, reader->getUtf8String());
+        m_values.push_back(value);
+        m_dataEntries.push_back(std::move(value));
         return true;
     }
     if (code == 280) {
@@ -8328,9 +8330,10 @@ bool DRW_XRecord::parseCode(int code,
     if (xRecordCodeIsHandle(code)) {
         if (m_handleValues.size() >= dwgSafety::MaxOwnedObjectCount)
             return false;
-        m_handleValues.emplace_back(code,
-                                    static_cast<std::uint32_t>(
-                                        reader->getHandleString()));
+        const std::uint64_t handle = reader->getHandleString();
+        m_handleValues.emplace_back(
+            code, static_cast<std::uint32_t>(handle));
+        m_dataEntries.emplace_back(code, handle);
         return true;
     }
     if (xRecordCodeIsBinary(code)) {
@@ -8339,7 +8342,9 @@ bool DRW_XRecord::parseCode(int code,
             return false;
         if (m_values.size() >= dwgSafety::MaxOwnedObjectCount)
             return false;
-        m_values.emplace_back(code, std::move(bytes));
+        DRW_Variant value(code, std::move(bytes));
+        m_values.push_back(value);
+        m_dataEntries.push_back(std::move(value));
         return true;
     }
     int xCode = 0;
@@ -8354,6 +8359,19 @@ bool DRW_XRecord::parseCode(int code,
                 m_values.back().coord()->y = value;
             else
                 m_values.back().coord()->z = value;
+            if (!m_dataEntries.empty()
+                && m_dataEntries.back().type() == DRW_Variant::COORD
+                && m_dataEntries.back().code() == xCode) {
+                if (component == 0)
+                    m_dataEntries.back().coord()->x = value;
+                else if (component == 1)
+                    m_dataEntries.back().coord()->y = value;
+                else
+                    m_dataEntries.back().coord()->z = value;
+            } else {
+                DRW_Coord point = *m_values.back().coord();
+                m_dataEntries.emplace_back(xCode, point);
+            }
         } else {
             if (m_values.size() >= dwgSafety::MaxOwnedObjectCount)
                 return false;
@@ -8365,34 +8383,43 @@ bool DRW_XRecord::parseCode(int code,
             else
                 point.z = value;
             m_values.emplace_back(xCode, point);
+            m_dataEntries.emplace_back(xCode, point);
         }
         return true;
     }
     if (xRecordCodeIsString(code)) {
         if (m_values.size() >= dwgSafety::MaxOwnedObjectCount)
             return false;
-        m_values.emplace_back(code, reader->getUtf8String());
+        DRW_Variant value(code, reader->getUtf8String());
+        m_values.push_back(value);
+        m_dataEntries.push_back(std::move(value));
         return true;
     }
     if (xRecordCodeIsDouble(code)) {
         if (m_values.size() >= dwgSafety::MaxOwnedObjectCount)
             return false;
-        m_values.emplace_back(code, reader->getDouble());
+        DRW_Variant value(code, reader->getDouble());
+        m_values.push_back(value);
+        m_dataEntries.push_back(std::move(value));
         return true;
     }
     if (xRecordCodeIsBool(code) || xRecordCodeIsByte(code)
         || xRecordCodeIsInt16(code) || xRecordCodeIsInt32(code)) {
         if (m_values.size() >= dwgSafety::MaxOwnedObjectCount)
             return false;
-        m_values.emplace_back(code, static_cast<std::int32_t>(
+        DRW_Variant value(code, static_cast<std::int32_t>(
             reader->getInt32()));
+        m_values.push_back(value);
+        m_dataEntries.push_back(std::move(value));
         return true;
     }
     if (code >= 160 && code <= 169) {
         if (m_values.size() >= dwgSafety::MaxOwnedObjectCount)
             return false;
-        m_values.emplace_back(code, static_cast<std::int64_t>(
+        DRW_Variant value(code, static_cast<std::int64_t>(
             reader->getInt64()));
+        m_values.push_back(value);
+        m_dataEntries.push_back(std::move(value));
         return true;
     }
     return false;

@@ -13,13 +13,21 @@ deliverable for FreeCAD Draft's external DWG-import workflow. Its exact
 `dwg2dxf <input> -o <output>` invocation, failure-safe output publication,
 installed-artifact discovery, and pinned FreeCAD 1.1.3/macOS arm64 `open`,
 `insert`, and registered desktop-dispatch paths are implemented and verified
-for the bounded cases recorded under S8.9 and S8.15. This qualifies neither
-native Linux/Windows deployment nor every entity's FreeCAD geometry: keep
-those as separate platform and per-entity gates. For each change, run the fast
-CLI/DXF-readback checks; run opt-in FreeCAD process checks only when the
-integration behavior or claimed profile changes. Preserve correct DXF output
-when FreeCAD's importer lacks support, and report converter integration
-separately from imported-geometry support.
+for the bounded cases recorded under S8.9 and S8.15. A new local, nontracked
+AutoCAD-sample probe found one AC1014/R14 `dwg2dxf` failure after successful DWG
+reading: DXF generation aborts in the LTYPE table, while the five probed
+AC1015/AC1018/AC1021/AC1024/AC1027 files converted. S8.9.11 now fixes the
+AC1014 writer rejection by retaining the reachable mandatory-LTYPE →
+DICTIONARY → XRECORD graph, and qualifies one installed-artifact FreeCAD
+`open()` route against the existing local AutoCAD POINT sample. Treat this as
+one concrete converter/consumer tuple, not a blanket version claim; the
+external drawing remains untracked and is not added to the repository. This
+qualifies neither native Linux/Windows deployment nor every entity's FreeCAD
+geometry: keep those as separate platform and per-entity gates. For each
+change, run the fast CLI/DXF-readback checks; run opt-in FreeCAD process checks
+only when the integration behavior or claimed profile changes. Preserve
+correct DXF output when FreeCAD's importer lacks support, and report converter
+integration separately from imported-geometry support.
 
 **Normal FreeCAD launch remains a separate deployment check:** the existing
 macOS desktop-dispatch test starts FreeCAD's app executable under a controlled
@@ -102,8 +110,8 @@ the broader 3D-support plan. The current status and remaining gate are:
 
 | Gate | Evidence-backed status | Remaining work |
 | --- | --- | --- |
-| Standalone/installable command | `dwg2dxf` accepts FreeCAD's exact `input -o output` form; installation, default ASCII, source-version policy, no-prompt behavior, and failure-safe output publication have fast coverage. The fast CLI test also verifies that DXF input/readback does not silently downgrade a declared AC1027 `$ACADVER`. | Repeat install/dependency/argv checks on each platform before making that platform claim; Windows Unicode argv remains unqualified. |
-| FreeCAD process discovery and handoff | On the pinned FreeCAD 1.1.3/macOS arm64 profile, isolated `freecadcmd` checks cover PATH and configured-path discovery, `open()` and `insert()`, exact process identity/argv, and the same output path passed to the DXF importer. | S8.9.5: qualify native Linux/Windows FreeCAD process environments and Windows `dwg2dxf.exe`, using the same launch route named in setup guidance; do not infer them from macOS or cross-builds. |
+| Standalone/installable command | `dwg2dxf` accepts FreeCAD's exact `input -o output` form; installation, default ASCII, source-version policy, no-prompt behavior, and failure-safe output publication have fast coverage. The fast CLI test also verifies that DXF input/readback does not silently downgrade a declared AC1027 `$ACADVER`. S8.9.11 now converts the local AC1014/R14 sample and verifies the retained LTYPE extension graph; the external sample is not committed. | Repeat install/dependency/argv checks on each platform before making that platform claim; Windows Unicode argv remains unqualified. |
+| FreeCAD process discovery and handoff | On the pinned FreeCAD 1.1.3/macOS 27 arm64 profile, isolated `freecadcmd` checks cover PATH and configured-path discovery, `open()` and `insert()`, exact process identity/argv, and the same output path passed to the DXF importer. S8.9.11 additionally installs this build under a temp prefix and verifies AC1014 POINT `open()` through the actual C++ DXF importer, including the expected `(50,50,50)` vertex and no unsupported features. | S8.9.5: qualify native Linux/Windows FreeCAD process environments and Windows `dwg2dxf.exe`, using the same launch route named in setup guidance; do not infer them from macOS or cross-builds. |
 | FreeCAD desktop dispatch | S8.9.6 covers the registered open/insert dispatcher in the pinned macOS desktop process for its bounded LINE control. Its controlled app launch does not establish Finder/LaunchServices PATH inheritance. | Repeat for a newly claimed platform or changed dispatch/deployment behavior. Qualify the documented normal launch route or explicitly bound the setup claim to a tested shell/configured-path route; menu/file-dialog automation and viewport rendering remain outside this gate. |
 | Imported feature semantics | S8.14/S8.15 contain entity-specific positive and negative findings; unsupported entities remain correctly typed in converter output. | Extend only per S8.15 with an independent semantic oracle. Never delay the installable converter or rewrite legal DXF entities to hide a FreeCAD importer limitation. |
 
@@ -141,6 +149,95 @@ separately when claiming both; reserve the desktop dispatcher for explicit
 desktop-route claims. If FreeCAD is unavailable, retain the fast converter
 evidence and leave only the corresponding external consumer qualification
 open—do not block independent implementation slices.
+
+**Resolved `dwg2dxf` source-version gap (S8.9.11):** before the change, a
+local, user-owned AutoCAD sample `point3d_R14.dwg` (AC1014) reached the end of
+DWG reading but failed during DXF TABLES/LTYPE emission; explicit `-v2000` did
+not avoid the failure. The five sampled AC1015/AC1018/AC1021/AC1024/AC1027
+conversions passed. The immediate rejection was the three mandatory records
+`BYBLOCK`, `BYLAYER`, and `CONTINUOUS` carry extension dictionaries at handles
+`0x2AB`, `0x2AD`, and `0x2AF`. Each dictionary owns one `ACAD_XREC_ROUNDTRIP`
+XRECORD; each XRECORD preserves original linetype spelling through codes 102,
+1, and 2 (`EXTNAMES`, uppercase key, display-case name), plus its reactor link.
+The prior writer rejected those canonical rows because it would drop their
+extension-dictionary handles. The R14 sample is locally supplied and
+nontracked; its SHA-256 is
+`7e6b1378b053f20de2cf9d153da3485e6475d0cd5845d5a8144b09cfe17cdc46`. The
+independent LibreDWG DXF export retains the same table links and
+dictionary/XRECORD closure. S8.9.11 now preserves that closed graph in the
+converter output and FreeCAD handoff; keep the sample outside the repository
+and do not commit it. The normal support boundary remains version-, entity-,
+operation-, importer-, and platform-specific.
+
+**S8.9.11 — AC1014 FreeCAD converter regression (COMMITTED).** Dependencies:
+S1's checked table-entry contracts and committed S8.9/S8.9.10 CLI/version
+policy. Implementation and completion evidence:
+
+1. Reproduced the AC1014 failure with both the exact FreeCAD argv
+   (`dwg2dxf input.dwg -o output.dxf`) and the legacy CLI form. DWG parsing
+   completed; conversion rejected the three mandatory LTYPE rows because each
+   carried an extension dictionary and the converter would otherwise discard
+   it. The three source links target DICTIONARY handles `0x2AB`, `0x2AD`, and
+   `0x2AF`; each owns an `ACAD_XREC_ROUNDTRIP` XRECORD (`0x2AC`, `0x2AE`,
+   `0x2B0`) preserving codes 102/1/2 and a reactor link. The user-supplied
+   sample and independent LibreDWG export stayed local and outside the repo.
+2. Added typed capture and DXF emission for the reachable DICTIONARY/XRECORD
+   closure without adding a pure virtual to `DRW_Interface`. Canonical
+   `BYBLOCK`/`BYLAYER`/`CONTINUOUS` rows now retain their appData, extData,
+   reactors, and xDict links before `ENDTAB`; source LTYPE handles map to
+   canonical output handles `0x14`/`0x15`/`0x16`. AC1014 table/OBJECTS owner
+   fields emit group 330. XRECORD code/value order is retained, including
+   group-102 payloads. Autodesk's [symbol-table codes](https://help.autodesk.com/cloudhelp/2016/ENU/AutoCAD-DXF/files/GUID-5926A569-3E40-4ED2-AE06-6ACCE0EFC813.htm),
+   [DICTIONARY](https://help.autodesk.com/cloudhelp/2017/ENU/AutoCAD-DXF/files/GUID-40B92C63-26F0-485B-A9C2-B349099B26D0.htm),
+   and [XRECORD](https://help.autodesk.com/cloudhelp/2018/ENU/AutoCAD-DXF/files/GUID-24668FAF-AE03-41AE-AFA4-276C3692827F.htm)
+   references anchor the output fields; no DWG byte-layout/parser change was
+   needed.
+3. The adapter emits only the closed object graph reachable from mandatory
+   LTYPE xDict links and its owner/reactor references. It fails closed on
+   duplicate handles, missing or null child objects, dangling XRECORD handle
+   references (ordered and legacy fallback forms), cycles, unsupported/raw
+   payloads, and unsafe handle collisions. It preserves stable handles unless
+   reserved output handles require consistent remapping. From-scratch AC1014
+   positive tests verify `$ACADVER`, canonical LTYPE links, DICTIONARY owners
+   and entries, XRECORD reactors and ordered 102/1/2 values, public DXF-reader
+   readback, and remapping collisions with fixed handles `0x14`/`0x15`. It
+   also verifies preservation of both dictionary `hardOwner` values and
+   remapping of XDATA group 1005 handles when their source handle collides.
+   Negative tests verify missing child, duplicate source handle, unresolved
+   XRECORD reference, null dictionary child, and no published partial file.
+   A separate input test asserts XRECORD group/value order. No external DWG or
+   DXF was copied into the repository.
+4. Installed the changed executable outside the build tree at
+   `/private/tmp/libdxfrw-r14-install-final-verified/bin/dwg2dxf` and ran
+   `tests/freecad_dwg2dxf_3d_point_check.FCMacro` via FreeCADCmd with isolated
+   preferences, PATH discovery, `DWGConversion=1`, and ODA/QCAD fallbacks
+   disabled. FreeCAD 1.1.3 revision
+   `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer
+   mode 2 invokes exact argv `[installed-dwg2dxf, input, -o, output]`, returns
+   zero, and imports the identical AC1014 DXF. It creates one valid
+   vertex-only `Part::Feature` at `(50,50,50)` and reports no unsupported
+   features. Installed executable SHA-256:
+   `6a60077d4389437e1e9dd0e2be761062d2f0b792caac432a23fde4f96c1289e4`;
+   external input SHA-256:
+   `7e6b1378b053f20de2cf9d153da3485e6475d0cd5845d5a8144b09cfe17cdc46`;
+   converter DXF SHA-256:
+   `2a7910281628144cf806a9733f076ac30f3a9248cad8de174acd1955e39ffd8a`.
+   This qualifies only this installed macOS FreeCAD `open()` route and this
+   AC1014 POINT drawing; no `insert()`, GUI dispatch, other FreeCAD revision,
+   platform, or entity/version tuple is inferred.
+5. Build targets `libdxfrw_dxf_fixture_tests`,
+   `libdxfrw_dwg_object_vectors_tests`, and `dwg2dxf` succeed. Focused tests
+   `libdxfrw_fast_focus`, `libdxfrw_graph_preservation`,
+   `libdxfrw_writer_primitives`, `libdxfrw_writer_version_matrix`,
+   `libdxfrw_dxf_fixtures`, `libdxfrw_dwg_fixtures`,
+   `dwg2dxf_version_policy`, and `dwg2dxf_freecad_cli_compat` pass 8/8;
+   `git diff --check` passes. Fast-focus exposed one stale vector assertion
+   contradicted by already-committed S0.7's valid null DWG dictionary-reference
+   behavior; the assertion now checks that established contract. The full
+   suite was not run because the focused suites cover the touched writer
+   boundaries. All generated sample/output/config artifacts stayed outside
+   the repo. Continue native Linux/Windows qualification and unrelated
+   entity/version evidence under S8.9.5/S8.15; these do not block other slices.
 
 ### FreeCAD end-user support target
 
@@ -2724,6 +2821,10 @@ FreeCAD 1.1.3 C++ imports only the first array cell, so array geometry remains
 downstream-unsupported. S8.9.5 tracks native
 platform installation/discovery separately from the qualified macOS
 `freecadcmd` route; those platform gaps do not block independent slices.
+S8.9.11 is committed: the observed AC1014 LTYPE extension-dictionary graph
+survives conversion and a pinned installed-artifact FreeCAD `open()` check.
+Native Linux/Windows qualification remains separate under S8.9.5 and does not
+block independent slices.
 S8.9.6 is COMMITTED for the pinned macOS GUI profile; the opt-in harness invokes the
 registered `importDWG` route via FreeCAD's `module_io.OpenInsertObject()` for
 both open and insert, with separate isolated profiles and the existing tracked
@@ -2928,7 +3029,7 @@ degenerate, other-knot, other-scenario, target-authored, or other-version
 splines.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 80/94 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
+commit; 81/95 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -3005,6 +3106,7 @@ commit; 80/94 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
 | S8.10 | COMMITTED | Resolved the apparent runtime blocker: macOS sandboxing hid `hw.optional.neon`, causing Qt's false incompatibility abort; outside the restricted sandbox FreeCAD 1.1.3 revision `20260725` / arm64 / Qt 6.8.3 starts. `tests/freecad_dwg2dxf_import_check.FCMacro` runs the actual `Draft.importDWG.open()` route on each already tracked ordinary-encoding fixture (AC1015/AC1018/AC1021/AC1027) with this build's `dwg2dxf` on `PATH`. For all four, the C++ DXF importer reports 3 LINEs, creates 3 `Part::Feature`s, and reports no unsupported features. Each resulting XYZ bounding box matches LibreDWG 0.14's independent direct DXF export: `(1,2,0)-(3,4,0)`, `(5,6,0)-(7,8,0)`, `(9,10,0)-(11,12,0)`. An exploratory read of the existing untracked AC1021 `tablet.dwg` further shows both libdxfrw and ODA File Converter 27.1.0.0 exports contain 48 3DFACE/81 SOLID/24 HATCH records, while FreeCAD's C++ importer creates 4,868 objects from each and reports 38 3DFACE/69 SOLID/22 HATCH as unsupported with entity-read exceptions. This shared behavior is not attributable solely to libdxfrw conversion, but it does not establish semantic equivalence or FreeCAD usability; the sample remains user-owned and unstaged. The optional legacy Python importer was not tested because its `dxfReader` dependencies are absent. No fixture added. Keep qualification limited to this one host/default importer/four LINE fixtures; no GUI, general DWG, or 3D consumer claim. Issue #19247 remains unreproduced because it has no affected DWG/output pair. |
 | S8.11 | COMMITTED | Extracted the implicit source-revision policy into CLI-private `dwg2dxf/dx_cli.h` and directly tested every supported revision, AC1012→AC1014, and UNKNOWN/unsupported rejection in `dwg2dxf_version_tests.cpp`. `cmake --build build --target dwg2dxf libdxfrw_dwg2dxf_version_tests` succeeds; `ctest --test-dir build -R '^dwg2dxf_(version_policy|freecad_cli_compat)$' --output-on-failure` passes 2/2; `git diff --check` passes. The AC1012 mapping policy is unit-tested, but no authentic AC1012 DWG fixture was available to validate that reader path. No fixtures added. |
 | S8.9.10 | COMMITTED | AC1027 DXF readback exposed that `dxfRW::getVersion()` reports the normalized text-codec version AC1021 for modern inputs; `dwg2dxf` was therefore silently downgrading a FreeCAD-form DXF re-conversion. The CLI adapter now reads the declared `$ACADVER` from its copied header callback data and maps it through `DRW::dwgVersionStrings`, falling back to `getVersion()` for missing/unknown header values; the public API behavior remains unchanged. The fast `dwg2dxf_freecad_cli_compat` CTest converts tracked AC1027 DWG to DXF and re-reads/re-emits it with exact `input -o output`, requiring AC1027 after both passes. Build targets `dwg2dxf` and `libdxfrw_dwg2dxf_version_tests` pass; focused `dwg2dxf_version_policy` and `dwg2dxf_freecad_cli_compat` pass 2/2; `git diff --check` passes. |
+| S8.9.11 | COMMITTED | Captures and writes the mandatory-LTYPE → DICTIONARY → XRECORD closure, including AC1014 group-330 owners, owner/reactor links, ordered XRECORD data, canonical LTYPE metadata, and fixed-handle collision remapping. Fails closed on incomplete/null children, duplicate handles, cycles, unresolved object refs in ordered or fallback data, raw payloads, or unsafe remaps. From-scratch AC1014 DXF tests verify public-reader round-trip, `hardOwner` preservation, XDATA group-1005 handle remapping, and no partial output; the external AutoCAD `point3d_R14.dwg` (SHA-256 `7e6b1378b053f20de2cf9d153da3485e6475d0cd5845d5a8144b09cfe17cdc46`) converts without being copied/tracked. Installed at `/private/tmp/libdxfrw-r14-install-final-verified/bin/dwg2dxf`, SHA-256 `6a60077d4389437e1e9dd0e2be761062d2f0b792caac432a23fde4f96c1289e4`; FreeCAD 1.1.3 rev `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, isolated FreeCADCmd, C++ importer mode 2, PATH discovery, `DWGConversion=1` and ODA/QCAD fallbacks disabled: exact `[binary,input,-o,output]` exits 0; the identical AC1014 DXF imports as one valid POINT vertex `(50,50,50)`, no edges/faces/unsupported features. Output DXF SHA-256 `2a7910281628144cf806a9733f076ac30f3a9248cad8de174acd1955e39ffd8a`. Focused eight-test suite passes: fast-focus, graph-preservation, writer-primitives, writer-version-matrix, DXF fixtures, DWG fixtures, CLI version policy, and FreeCAD CLI compatibility; `git diff --check` passes. Corrected one stale object-vector assertion that contradicted S0.7's already-committed null-DWG-reference contract. No external fixture, output, or config entered the repo. Qualifies only this macOS AC1014 POINT `open()` tuple; other versions/entities/operations/platforms remain independently gated. |
 | S8.15.3.1 | COMMITTED | External AutoCAD-authored `nextgis/dwg_samples/point3d_2013.dwg` (AutoCAD 2016, `_POINT 50,50,50`, AC1027; SHA-256 `839297daa100c318d5afbfa128145d2c4782300650c86b2ab58b34cf6fe1aba4`) agrees with both its paired source DXF and LibreDWG 0.14 direct export: exactly one POINT at `(50,50,50)`. The default-OFF `LIBDXFRW_ENABLE_FREECAD_AUTOCAD_POINT3D_CONTROL` path/hash-pinned opt-in test copies the caller-supplied sample only under unique system temp, verifies installed/build converter identity, exact FreeCAD argv, AC1027 converter output and readback, isolated user config and explicit macro PASS marker. FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2, resolves the installed converter on PATH and creates one vertex-only `Part::Feature` at `(50,50,50)`, with zero edges/faces and no unsupported POINT. The opt-in `dwg2dxf_freecad_autocad_ac1027_point3d` passes 1/1 outside the sandbox; a sandboxed run aborts in Qt before app code because host `neon` is hidden. No external DWG/DXF fixture is tracked or staged. This is a single target-authored entity/version/pinned-runtime witness only. |
 
 - Before implementation, convert the work packages into dependency-closed

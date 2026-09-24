@@ -108,6 +108,7 @@ OperationErrorMapping mapOperationError(DRW::error value) {
 }
 
 bool updateRawDxfApplicationDepth(const DRW_Variant& value, int& depth);
+bool isDxfHandleReferenceCode(int code);
 bool validateCapturedRawDxfObject(const DRW_RawDxfObject& object,
                                   bool binaryOutput,
                                   DxfClassifierProfile profile =
@@ -519,6 +520,18 @@ std::string dxfSymbolNameKey(std::string value) {
                        return static_cast<char>(std::toupper(ch));
                    });
     return value;
+}
+
+bool isDxfFixedOutputHandle(std::uint32_t handle) {
+    switch (handle) {
+    case 0x1u: case 0x2u: case 0x3u: case 0x5u: case 0x6u: case 0x7u:
+    case 0x8u: case 0x9u: case 0xAu: case 0xCu: case 0xDu: case 0x10u:
+    case 0x12u: case 0x14u: case 0x15u: case 0x16u: case 0x1Cu:
+    case 0x1Du: case 0x1Eu: case 0x1Fu: case 0x20u: case 0x21u:
+        return true;
+    default:
+        return false;
+    }
 }
 
 bool isSafeDxfClassMetadata(const DRW_Class& cls) {
@@ -2453,10 +2466,28 @@ bool dxfRW::writeAppData(const std::list<std::list<DRW_Variant>>& appData) {
 
             bool written = false;
             switch (data.type()) {
-            case DRW_Variant::STRING:
-                written = data.content.s != nullptr
-                    && writer->writeString(data.code(), *data.content.s);
+            case DRW_Variant::STRING: {
+                if (data.content.s == nullptr) {
+                    m_writeError = true;
+                    return false;
+                }
+                std::string value = *data.content.s;
+                if (isDxfHandleReferenceCode(data.code())) {
+                    std::uint64_t parsed = 0;
+                    const char* begin = value.data();
+                    const char* end = begin + value.size();
+                    const auto result = std::from_chars(begin, end, parsed, 16);
+                    if (result.ec == std::errc{} && result.ptr == end
+                        && parsed <= std::numeric_limits<std::uint32_t>::max()) {
+                        const std::uint32_t remapped = remapObjectHandle(
+                            static_cast<std::uint32_t>(parsed));
+                        if (remapped != parsed)
+                            value = toHexStr(remapped);
+                    }
+                }
+                written = writer->writeString(data.code(), value);
                 break;
+            }
             case DRW_Variant::INTEGER:
                 written = writer->writeInt32(data.code(), data.content.i);
                 break;
@@ -2526,7 +2557,8 @@ bool dxfRW::writeTableEntryAppData(const DRW_TableEntry& entry) {
             return false;
         }
         for (const std::uint32_t reactor : entry.reactorHandles) {
-            if (!writer->writeString(330, toHexStr(reactor))) {
+            if (!writer->writeString(330,
+                                     toHexStr(remapObjectHandle(reactor)))) {
                 m_writeError = true;
                 return false;
             }
@@ -2538,7 +2570,8 @@ bool dxfRW::writeTableEntryAppData(const DRW_TableEntry& entry) {
     }
     if (entry.xDictHandle != 0 && !hasAppGroup("ACAD_XDICTIONARY")) {
         if (!writer->writeString(102, "{ACAD_XDICTIONARY")
-            || !writer->writeString(360, toHexStr(entry.xDictHandle))
+            || !writer->writeString(
+                360, toHexStr(remapObjectHandle(entry.xDictHandle)))
             || !writer->writeString(102, "}")) {
             m_writeError = true;
             return false;
@@ -2562,11 +2595,24 @@ bool dxfRW::writeLineType(DRW_LType *ent){
               });
     //do not write linetypes handled by library
     if (strname == "BYLAYER" || strname == "BYBLOCK" || strname == "CONTINUOUS") {
-        // These mandatory records are emitted before the interface callback.
-        // Replaying application data here would otherwise report success while
-        // silently dropping the payload.
-        if (!ent->appData.empty() || !ent->extData.empty()
-            || !ent->reactorHandles.empty() || ent->xDictHandle != 0) {
+        const auto cached = std::find_if(
+            m_canonicalLineTypeMetadata.cbegin(),
+            m_canonicalLineTypeMetadata.cend(),
+            [&strname](const DRW_LType& candidate) {
+                return dxfSymbolNameKey(candidate.name) == strname;
+            });
+        const bool hasMetadata = !ent->appData.empty() || !ent->extData.empty()
+            || !ent->reactorHandles.empty() || ent->xDictHandle != 0;
+        if (hasMetadata && cached == m_canonicalLineTypeMetadata.cend()) {
+            m_writeError = true;
+            return false;
+        }
+        if (cached != m_canonicalLineTypeMetadata.cend()
+            && (cached->handle != ent->handle
+                || cached->xDictHandle != ent->xDictHandle
+                || cached->reactorHandles != ent->reactorHandles
+                || cached->appData.size() != ent->appData.size()
+                || cached->extData.size() != ent->extData.size())) {
             m_writeError = true;
             return false;
         }
@@ -2594,6 +2640,11 @@ bool dxfRW::writeLineType(DRW_LType *ent){
     std::uint32_t allocatedHandle = 0;
     if (version > DRW::AC1009 && !allocateDxfHandle(allocatedHandle))
         return false;
+    if (ent->handle != 0
+        && !bindSourceEntityHandle(ent->handle, allocatedHandle)) {
+        m_writeError = true;
+        return false;
+    }
     write(writer->writeString(0, "LTYPE"));
     if (version > DRW::AC1009) {
         write(writer->writeString(5, toHexStr(allocatedHandle)));
@@ -3353,6 +3404,15 @@ std::uint32_t dxfRW::remapEntityHandle(std::uint32_t sourceHandle) const {
     const auto it = m_writingContext.sourceHandleToMintedMap.find(sourceHandle);
     return it == m_writingContext.sourceHandleToMintedMap.end()
         ? sourceHandle : it->second;
+}
+
+std::uint32_t dxfRW::remapObjectHandle(std::uint32_t handle) const noexcept {
+    const auto structural = m_handleRemap.find(handle);
+    if (structural != m_handleRemap.end())
+        return structural->second;
+    const auto source = m_writingContext.sourceHandleToMintedMap.find(handle);
+    return source == m_writingContext.sourceHandleToMintedMap.end()
+        ? handle : source->second;
 }
 
 bool dxfRW::writePoint(DRW_Point *ent) {
@@ -7557,11 +7617,43 @@ bool dxfRW::writeTables() {
     if (!writeEndTable())
         return false;
 /*** LTYPE ***/
+    std::map<std::string, const DRW_LType*> mandatoryLinetypes;
+    const auto mandatoryHandle = [](const std::string& name) {
+        const std::string key = dxfSymbolNameKey(name);
+        if (key == "BYBLOCK")
+            return 0x14u;
+        if (key == "BYLAYER")
+            return 0x15u;
+        if (key == "CONTINUOUS")
+            return 0x16u;
+        return 0u;
+    };
+    for (const DRW_LType& lineType : m_canonicalLineTypeMetadata) {
+        const std::uint32_t fixedHandle = mandatoryHandle(lineType.name);
+        if (fixedHandle == 0)
+            continue;
+        const std::string key = dxfSymbolNameKey(lineType.name);
+        if (!mandatoryLinetypes.emplace(key, &lineType).second
+            || (lineType.handle != 0
+                && !bindSourceEntityHandle(lineType.handle, fixedHandle))) {
+            m_writeError = true;
+            return false;
+        }
+    }
+    const auto writeMandatoryMetadata = [this, &mandatoryLinetypes](
+        const char* name) {
+        const auto found = mandatoryLinetypes.find(name);
+        if (found == mandatoryLinetypes.end())
+            return true;
+        const DRW_LType& lineType = *found->second;
+        return writeTableEntryAppData(lineType)
+            && (lineType.extData.empty() || writeExtData(lineType.extData));
+    };
     writer->writeString(0, "TABLE");
     writer->writeString(2, "LTYPE");
     if (version > DRW::AC1009) {
         writer->writeString(5, "5");
-        if (version > DRW::AC1014) {
+        if (version >= DRW::AC1014) {
             writer->writeString(330, "0");
         }
         writer->writeString(100, "AcDbSymbolTable");
@@ -7571,7 +7663,7 @@ bool dxfRW::writeTables() {
     writer->writeString(0, "LTYPE");
     if (version > DRW::AC1009) {
         writer->writeString(5, "14");
-        if (version > DRW::AC1014) {
+        if (version >= DRW::AC1014) {
             writer->writeString(330, "5");
         }
         writer->writeString(100, "AcDbSymbolTableRecord");
@@ -7584,11 +7676,13 @@ bool dxfRW::writeTables() {
     writer->writeInt16(72, 65);
     writer->writeInt16(73, 0);
     writer->writeDouble(40, 0.0);
+    if (!writeMandatoryMetadata("BYBLOCK"))
+        return false;
 
     writer->writeString(0, "LTYPE");
     if (version > DRW::AC1009) {
         writer->writeString(5, "15");
-        if (version > DRW::AC1014) {
+        if (version >= DRW::AC1014) {
             writer->writeString(330, "5");
 }
         writer->writeString(100, "AcDbSymbolTableRecord");
@@ -7601,11 +7695,13 @@ bool dxfRW::writeTables() {
     writer->writeInt16(72, 65);
     writer->writeInt16(73, 0);
     writer->writeDouble(40, 0.0);
+    if (!writeMandatoryMetadata("BYLAYER"))
+        return false;
 
     writer->writeString(0, "LTYPE");
     if (version > DRW::AC1009) {
         writer->writeString(5, "16");
-        if (version > DRW::AC1014) {
+        if (version >= DRW::AC1014) {
             writer->writeString(330, "5");
         }
         writer->writeString(100, "AcDbSymbolTableRecord");
@@ -7619,6 +7715,8 @@ bool dxfRW::writeTables() {
     writer->writeInt16(72, 65);
     writer->writeInt16(73, 0);
     writer->writeDouble(40, 0.0);
+    if (!writeMandatoryMetadata("CONTINUOUS"))
+        return false;
 //Application linetypes
     if (hasWriteFailure())
         return false;
@@ -8258,8 +8356,7 @@ bool dxfRW::writeExtData(const std::vector<DRW_Variant*> &ed){
                 case 1000:
                 case 1001:
                 case 1002:
-                case 1003:
-                case 1005: {
+                case 1003: {
                     const int cc = (*it)->code();
                     if ((*it)->type() != DRW_Variant::STRING
                         || (*it)->content.s == nullptr) {
@@ -8268,6 +8365,30 @@ bool dxfRW::writeExtData(const std::vector<DRW_Variant*> &ed){
                     }
                     recordResult(writer->writeUtf8String(
                         cc, *(*it)->content.s));
+                    break;
+                }
+                case 1005: {
+                    if ((*it)->type() != DRW_Variant::STRING
+                        || (*it)->content.s == nullptr) {
+                        recordResult(false);
+                        break;
+                    }
+                    const std::string& text = *(*it)->content.s;
+                    std::uint64_t sourceHandle = 0;
+                    const char* begin = text.data();
+                    const char* end = begin + text.size();
+                    const auto parsed = std::from_chars(
+                        begin, end, sourceHandle, 16);
+                    if (parsed.ec != std::errc{} || parsed.ptr != end
+                        || sourceHandle
+                            > std::numeric_limits<std::uint32_t>::max()) {
+                        recordResult(false);
+                        break;
+                    }
+                    const std::string outputHandle = toHexStr(
+                        remapObjectHandle(
+                            static_cast<std::uint32_t>(sourceHandle)));
+                    recordResult(writer->writeUtf8String(1005, outputHandle));
                     break;
                 }
                 case 1004:
@@ -15549,12 +15670,229 @@ void dxfRW::writeObjectOwner(std::uint32_t parentHandle) {
         m_writeError = true;
         return;
     }
-    if (version <= DRW::AC1014)
-        return;  //pre-R2000 DXF has no 330 owner handles in OBJECTS
+    if (version < DRW::AC1014)
+        return;  // R14+ object records carry owner handles.
     if (parentHandle != 0)
-        writer->writeString(330, toHexStr(parentHandle));
+        writer->writeString(330, toHexStr(remapObjectHandle(parentHandle)));
     else
         writer->writeString(330, "C");
+}
+
+bool dxfRW::writeDictionary(DRW_Dictionary *ent) {
+    if (version < DRW::AC1014 || !preflightTableEntry(ent)
+        || ent->handle == 0 || ent->hardOwner < 0 || ent->hardOwner > 1
+        || ent->cloning < 0
+        || ent->cloning > std::numeric_limits<std::int16_t>::max()
+        || ent->m_entries.size() > DRW_Dictionary::kMaxEntries
+        || !ent->hasCompleteDxfEntries()) {
+        m_writeError = true;
+        return false;
+    }
+
+    const std::uint32_t handle = remapObjectHandle(ent->handle);
+    if (handle == 0 || isDxfFixedOutputHandle(handle)
+        || !reserveHandle(handle)) {
+        m_writeError = true;
+        return false;
+    }
+    RecordStateScope state(*this, ent);
+    DxfWriterRecordScope record(*writer);
+    if (!writer->writeString(0, "DICTIONARY")
+        || !writer->writeString(5, toHexStr(handle))
+        || !writeTableEntryAppData(*ent))
+        return false;
+    writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
+    writer->writeString(100, "AcDbDictionary");
+    writer->writeInt16(280, ent->hardOwner);
+    if (version > DRW::AC1014)
+        writer->writeInt16(281, ent->cloning);
+    for (const DRW_Dictionary::Entry& entry : ent->m_entries) {
+        if (entry.m_name.empty() || !isSafeDxfRecordText(entry.m_name)) {
+            m_writeError = true;
+            return false;
+        }
+        const std::uint32_t child = remapObjectHandle(entry.m_handle);
+        if (!writer->writeUtf8String(3, entry.m_name)
+            || !writer->writeString(ent->hardOwner == 1 ? 360 : 350,
+                                    toHexStr(child)))
+            return false;
+    }
+    if (!ent->extData.empty() && !writeExtData(ent->extData))
+        return false;
+    if (writer->hasWriteError() || !record.commit()) {
+        m_writeError = true;
+        return false;
+    }
+    state.commit();
+    return true;
+}
+
+bool dxfRW::writeXRecord(DRW_XRecord *ent) {
+    if (version < DRW::AC1014 || !preflightTableEntry(ent)
+        || ent->handle == 0 || ent->m_rawDataValid
+        || ent->m_dataEntries.size() > dwgSafety::MaxOwnedObjectCount
+        || ent->m_values.size() > dwgSafety::MaxOwnedObjectCount
+        || ent->m_handleValues.size() > dwgSafety::MaxOwnedObjectCount
+        || ent->m_cloning < 0
+        || ent->m_cloning > std::numeric_limits<std::int16_t>::max()
+        || std::any_of(ent->m_handleValues.cbegin(),
+                       ent->m_handleValues.cend(), [](const auto& value) {
+                           return value.first == 0;
+                       })) {
+        m_writeError = true;
+        return false;
+    }
+
+    const std::uint32_t handle = remapObjectHandle(ent->handle);
+    if (handle == 0 || isDxfFixedOutputHandle(handle)
+        || !reserveHandle(handle)) {
+        m_writeError = true;
+        return false;
+    }
+    RecordStateScope state(*this, ent);
+    DxfWriterRecordScope record(*writer);
+    if (!writer->writeString(0, "XRECORD")
+        || !writer->writeString(5, toHexStr(handle))
+        || !writeTableEntryAppData(*ent))
+        return false;
+    writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
+    writer->writeString(100, "AcDbXrecord");
+    if (version > DRW::AC1014 && ent->m_cloning != 0)
+        writer->writeInt16(280, ent->m_cloning);
+
+    const auto isHandleCode = [](int code) {
+        return (code >= 320 && code <= 369) || (code >= 390 && code <= 399)
+            || (code >= 480 && code <= 481) || code == 5 || code == 105
+            || (code >= 1005 && code <= 1009);
+    };
+    const auto isBinaryCode = [](int code) {
+        return (code >= 310 && code <= 319) || code == 1004;
+    };
+    const auto emitHandle = [this](int code, std::uint64_t value) {
+        if (value > std::numeric_limits<std::uint32_t>::max())
+            return false;
+        return writer->writeString(
+            code, toHexStr(remapObjectHandle(static_cast<std::uint32_t>(value))));
+    };
+    const auto emitValue = [&](const DRW_Variant& value) {
+        const int code = value.code();
+        if (code <= 0 || code > 1071)
+            return false;
+        if (isHandleCode(code)) {
+            switch (value.type()) {
+            case DRW_Variant::INTEGER:
+                if (value.i_val() < 0)
+                    return false;
+                return emitHandle(code,
+                                  static_cast<std::uint32_t>(value.i_val()));
+            case DRW_Variant::INTEGER64:
+                if (value.i64_val() < 0)
+                    return false;
+                return emitHandle(code,
+                                  static_cast<std::uint64_t>(value.i64_val()));
+            case DRW_Variant::STRING: {
+                const char* text = value.c_str();
+                if (text == nullptr || *text == '\0')
+                    return false;
+                std::uint64_t parsed = 0;
+                const char* end = text + std::char_traits<char>::length(text);
+                const auto result = std::from_chars(text, end, parsed, 16);
+                return result.ec == std::errc{} && result.ptr == end
+                    && emitHandle(code, parsed);
+            }
+            default:
+                return false;
+            }
+        }
+        if (isBinaryCode(code)) {
+            if (value.type() != DRW_Variant::BINARY)
+                return false;
+            const std::vector<std::uint8_t>* bytes = value.binary();
+            if (bytes == nullptr)
+                return false;
+            static constexpr char hex[] = "0123456789ABCDEF";
+            if (bytes->empty())
+                return writer->writeString(code, "");
+            for (std::size_t offset = 0; offset < bytes->size();) {
+                const std::size_t count = std::min<std::size_t>(
+                    127u, bytes->size() - offset);
+                std::string encoded;
+                encoded.reserve(count * 2u);
+                for (std::size_t i = 0; i < count; ++i) {
+                    const std::uint8_t byte = (*bytes)[offset + i];
+                    encoded.push_back(hex[byte >> 4u]);
+                    encoded.push_back(hex[byte & 0x0Fu]);
+                }
+                if (!writer->writeString(code, encoded))
+                    return false;
+                offset += count;
+            }
+            return true;
+        }
+        if (value.type() == DRW_Variant::COORD) {
+            DRW_Coord* point = value.coord();
+            if (point == nullptr || !std::isfinite(point->x)
+                || !std::isfinite(point->y) || !std::isfinite(point->z))
+                return false;
+            return writer->writeDouble(code, point->x)
+                && writer->writeDouble(code + 10, point->y)
+                && writer->writeDouble(code + 20, point->z);
+        }
+        const DxfClassifierProfile profile = m_useTargetLegacyClassifier
+            ? DxfClassifierProfile::LibreCadMasterLegacy
+            : DxfClassifierProfile::StandaloneSafe;
+        switch (value.type()) {
+        case DRW_Variant::STRING:
+            return classifyDxfCode(code, profile) == RawValType::Str
+                && value.content.s != nullptr
+                && writer->writeUtf8String(code, *value.content.s);
+        case DRW_Variant::INTEGER:
+            switch (classifyDxfCode(code, profile)) {
+            case RawValType::Int16:
+                return writer->writeInt16(code, value.i_val());
+            case RawValType::Int32:
+                return writer->writeInt32(code, value.i_val());
+            case RawValType::Bool:
+                return writer->writeBool(code, value.i_val() != 0);
+            default:
+                return false;
+            }
+        case DRW_Variant::INTEGER64:
+            return classifyDxfCode(code, profile) == RawValType::Int64
+                && writer->writeInt64(code, value.i64_val());
+        case DRW_Variant::DOUBLE:
+            return classifyDxfCode(code, profile) == RawValType::Dbl
+                && std::isfinite(value.d_val())
+                && writer->writeDouble(code, value.d_val());
+        default:
+            return false;
+        }
+    };
+
+    const std::vector<DRW_Variant>& values = ent->m_dataEntries.empty()
+        ? ent->m_values : ent->m_dataEntries;
+    for (const DRW_Variant& value : values) {
+        if (!emitValue(value)) {
+            m_writeError = true;
+            return false;
+        }
+    }
+    if (ent->m_dataEntries.empty()) {
+        for (const auto& handleValue : ent->m_handleValues) {
+            if (!emitHandle(handleValue.first, handleValue.second)) {
+                m_writeError = true;
+                return false;
+            }
+        }
+    }
+    if (!ent->extData.empty() && !writeExtData(ent->extData))
+        return false;
+    if (writer->hasWriteError() || !record.commit()) {
+        m_writeError = true;
+        return false;
+    }
+    state.commit();
+    return true;
 }
 
 bool dxfRW::writeSun(DRW_Sun *ent) {
