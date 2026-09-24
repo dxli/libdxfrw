@@ -74,6 +74,51 @@ if(EXISTS "${_freecad_cli_sample}"
     )
 endif()
 
+# Optional test of the installed converter from FreeCAD's actual desktop
+# process. It uses only a tracked ordinary DWG and is deliberately disabled
+# by default; the normal inner loop remains the fast, FreeCAD-independent CLI
+# contract test above.
+option(LIBDXFRW_ENABLE_FREECAD_DESKTOP_CONTROL
+    "Enable the opt-in FreeCAD GUI dwg2dxf open/insert smoke" OFF)
+set(LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE "" CACHE FILEPATH
+    "Installed dwg2dxf executable to qualify inside FreeCAD")
+set(LIBDXFRW_FREECAD_GUI_EXECUTABLE "" CACHE FILEPATH
+    "FreeCAD GUI executable (required outside macOS)")
+set(LIBDXFRW_FREECAD_APP_BUNDLE "" CACHE PATH
+    "FreeCAD .app bundle path (required on macOS)")
+if(LIBDXFRW_ENABLE_FREECAD_DESKTOP_CONTROL)
+    if(NOT EXISTS "${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}")
+        message(FATAL_ERROR
+            "LIBDXFRW_ENABLE_FREECAD_DESKTOP_CONTROL requires the installed "
+            "LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE path")
+    endif()
+    if(APPLE)
+        if(NOT IS_DIRECTORY "${LIBDXFRW_FREECAD_APP_BUNDLE}")
+            message(FATAL_ERROR
+                "On macOS, set LIBDXFRW_FREECAD_APP_BUNDLE to FreeCAD.app")
+        endif()
+    elseif(NOT EXISTS "${LIBDXFRW_FREECAD_GUI_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECAD_GUI_EXECUTABLE to FreeCAD's desktop executable")
+    endif()
+    add_test(
+        NAME dwg2dxf_freecad_desktop_open_insert
+        COMMAND ${CMAKE_COMMAND}
+            -DFREECAD_DWG2DXF_EXECUTABLE=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}
+            -DBUILD_DWG2DXF_EXECUTABLE=$<TARGET_FILE:dwg2dxf>
+            -DSAMPLE=${_freecad_cli_sample}
+            -DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro
+            -DDESKTOP_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_desktop_check.FCMacro
+            -DFREECAD_GUI_EXECUTABLE=${LIBDXFRW_FREECAD_GUI_EXECUTABLE}
+            -DFREECAD_APP_BUNDLE=${LIBDXFRW_FREECAD_APP_BUNDLE}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_desktop_dwg_import_check.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_desktop_open_insert PROPERTIES
+        LABELS "freecad;desktop;external;integration"
+        TIMEOUT 240
+    )
+endif()
+
 # Optional locally generated DWG control for the FreeCAD nonzero-Z path.
 # LibreDWG dwgadd and FreeCAD remain external integration tools, not required
 # dependencies of the normal build/test configuration.
@@ -222,6 +267,17 @@ if(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3d_ellipse_oda_cli_test.cmake
     )
     set_tests_properties(dwg2dxf_freecad_3d_ellipse_oda_cli PROPERTIES
+        LABELS "dwg_read;freecad;cli;fast;generated;oda")
+    add_test(
+        NAME dwg2dxf_freecad_3d_solid_oda_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}
+            -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+            "-DSOURCE_DXF=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dxf/ac1015_solid_freecad_control.dxf"
+            -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3d_solid_oda_cli_test.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_3d_solid_oda_cli PROPERTIES
         LABELS "dwg_read;freecad;cli;fast;generated;oda")
 endif()
 

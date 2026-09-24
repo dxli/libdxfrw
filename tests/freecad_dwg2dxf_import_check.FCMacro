@@ -15,6 +15,8 @@
 # document; the default is open(). Set LIBDXFRW_FREECAD_DISCOVERY to "path"
 # or "configured" to assert a specific FreeCAD resolver lane. Generated
 # DWG/DXF files should remain outside the source tree.
+# In the actual FreeCAD GUI, set LIBDXFRW_FREECAD_DESKTOP_DISPATCH=1 to use
+# the same registered-importer dispatch path as the desktop open/import UI.
 
 import hashlib
 import json
@@ -34,6 +36,9 @@ if not sample or not os.path.isfile(sample):
 operation = os.environ.get("LIBDXFRW_FREECAD_OPERATION", "open").lower()
 if operation not in ("open", "insert"):
     raise RuntimeError("LIBDXFRW_FREECAD_OPERATION must be 'open' or 'insert'")
+desktop_dispatch = os.environ.get("LIBDXFRW_FREECAD_DESKTOP_DISPATCH") == "1"
+if desktop_dispatch and not App.GuiUp:
+    raise RuntimeError("desktop dispatch qualification requires the FreeCAD GUI")
 if operation == "insert" and " " not in os.path.abspath(sample):
     raise RuntimeError("insert() qualification requires an input path with spaces")
 
@@ -126,7 +131,9 @@ elif discovery == "configured":
         raise AssertionError(
             "FreeCAD's configured converter path differs from expectation"
         )
-if operation == "insert" and discovery != "path":
+if operation == "insert" and discovery != "path" and not (
+    desktop_dispatch and discovery == "configured"
+):
     raise RuntimeError("insert() qualification requires the PATH discovery lane")
 
 captured = {}
@@ -290,11 +297,30 @@ importDXF.insert = capture_insert
 importDXF.DxfImportReporter = CapturingReporter
 
 doc = None
+registered_import_modules = []
+selected_import_module = None
 try:
+    if desktop_dispatch:
+        registered_import_modules = list(App.getImportType("dwg"))
+        if not registered_import_modules:
+            raise AssertionError("FreeCAD has no registered DWG importer")
+        selected_import_module = registered_import_modules[0]
+        if selected_import_module != "importDWG":
+            raise AssertionError(
+                "FreeCAD's normal DWG dispatch selects %r, not importDWG"
+                % selected_import_module
+            )
+        from freecad import module_io
+
     if operation == "insert":
         doc = App.newDocument("FreeCADDwgInsertCheck")
         target_name = doc.Name
-        importDWG.insert(sample, target_name)
+        if desktop_dispatch:
+            module_io.OpenInsertObject(
+                selected_import_module, sample, "insert", target_name
+            )
+        else:
+            importDWG.insert(sample, target_name)
         if target_name not in App.listDocuments():
             raise AssertionError("DWG insert did not preserve the target document")
         doc = App.getDocument(target_name)
@@ -302,9 +328,20 @@ try:
         if handoff.get("document") != target_name:
             raise AssertionError("importDXF.insert received the wrong target document")
     else:
-        doc = importDWG.open(sample)
+        if desktop_dispatch:
+            before_documents = set(App.listDocuments())
+            module_io.OpenInsertObject(selected_import_module, sample, "open")
+            added_documents = set(App.listDocuments()) - before_documents
+            if len(added_documents) != 1:
+                raise AssertionError(
+                    "normal DWG open dispatch created %d documents, expected 1"
+                    % len(added_documents)
+                )
+            doc = App.getDocument(next(iter(added_documents)))
+        else:
+            doc = importDWG.open(sample)
         if doc is None:
-            raise AssertionError("Draft.importDWG.open returned no document")
+            raise AssertionError("FreeCAD's DWG open route returned no document")
 
     dxf_path = captured.get("converted_dxf")
     if not dxf_path or not os.path.isfile(dxf_path):
@@ -331,6 +368,9 @@ try:
     handoff = captured.get("handoff") or {}
     result = {
         "operation": operation,
+        "desktop_dispatch": desktop_dispatch,
+        "registered_import_modules": registered_import_modules,
+        "selected_import_module": selected_import_module,
         "freecad_version": list(App.Version()),
         "platform": platform.platform(),
         "architecture": platform.machine(),
