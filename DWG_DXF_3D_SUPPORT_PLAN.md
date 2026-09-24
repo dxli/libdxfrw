@@ -75,6 +75,13 @@ semantic/carrier oracle. Until then, retain the fail-closed writer result; do
 not infer validity from FreeCAD opening the file or from a generic binary-group
 round trip.
 
+The same-input converter investigation also ran LibreDWG 0.14 on the available
+ODA-resaved AC1024/R2010 `Cone.dwg`: its SAB-v2-to-SAT1 path likewise reports
+unknown SAB tag 18 and writes no group-1/3 carrier despite a successful process
+exit. This is one adjacent-version diagnostic, not a claim about all AC1024
+drawings; it rules out treating this LibreDWG build as a working conversion
+oracle for the two tested sample/version pairs.
+
 **Normal FreeCAD launch remains a separate deployment check:** the existing
 macOS desktop-dispatch test starts FreeCAD's app executable under a controlled
 test environment; it does not prove Finder/LaunchServices, a Linux desktop
