@@ -14180,14 +14180,10 @@ bool DRW_Vertex::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs
 bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     try {
     const bool isCoordinateX = code >= 10 && code <= 13;
-    const bool isCoordinateY = code >= 20 && code <= 23;
-    if (m_dxfPendingCoordinateGroup != 0) {
-        if (code != m_dxfPendingCoordinateGroup + 10)
-            return false;
-        m_dxfPendingCoordinateGroup = 0;
-    } else if (isCoordinateY) {
+    if (!isValidDxfCoordinateTransition(code))
         return false;
-    }
+    if (m_dxfPendingCoordinateGroup != 0)
+        m_dxfPendingCoordinateGroup = 0;
     if (isCoordinateX)
         m_dxfPendingCoordinateGroup = code;
 
@@ -14764,6 +14760,8 @@ bool DRW_MPolygon::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
     //   99              count of degenerate boundary paths.
     // 63/421 are also gradient sub-codes in HATCH, so only claim them here when no
     // gradient is being accumulated (gradColors empty) — otherwise defer to base.
+    if (!isValidDxfCoordinateTransition(code))
+        return false;
     switch (code) {
     case 63:
         if (gradColors.empty()) { fillColorAci = reader->getInt32(); return true; }

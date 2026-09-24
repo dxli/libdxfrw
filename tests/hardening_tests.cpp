@@ -3269,6 +3269,29 @@ void testDxfHatchElevationAndOcsBoundary(TestContext& t) {
                  &incompleteMPolygonCapture, false, incompleteMPolygon)
                  && incompleteMPolygonCapture.hatchCount == 0u,
              "MPOLYGON rejects an incomplete boundary OCS pair via HATCH parser");
+
+    const std::string mpolygonSeedPrefix =
+        "0\nSECTION\n2\nENTITIES\n0\nMPOLYGON\n5\n708\n8\n0\n"
+        "100\nAcDbEntity\n100\nAcDbMPolygon\n"
+        "10\n0\n20\n0\n30\n7\n210\n0\n220\n0\n230\n1\n"
+        "2\nSOLID\n70\n1\n71\n0\n91\n0\n75\n0\n76\n1\n78\n0\n98\n1\n";
+    FuzzInterface interleavedMPolygonCapture;
+    dxfRW interleavedMPolygonReader("");
+    std::string interleavedMPolygon = mpolygonSeedPrefix
+        + "10\n8\n63\n3\n20\n9\n99\n0\n0\nENDSEC\n0\nEOF\n";
+    t.expect(!interleavedMPolygonReader.readAscii(
+                 &interleavedMPolygonCapture, false, interleavedMPolygon)
+                 && interleavedMPolygonCapture.hatchCount == 0u,
+             "MPOLYGON subclass fields cannot split an OCS coordinate pair");
+
+    FuzzInterface completeMPolygonCapture;
+    dxfRW completeMPolygonReader("");
+    std::string completeMPolygon = mpolygonSeedPrefix
+        + "10\n8\n20\n9\n63\n3\n99\n0\n0\nENDSEC\n0\nEOF\n";
+    t.expect(completeMPolygonReader.readAscii(
+                 &completeMPolygonCapture, false, completeMPolygon)
+                 && completeMPolygonCapture.hatchCount == 1u,
+             "MPOLYGON accepts a complete OCS pair before its fill-color trailer");
 }
 
 void testMLeaderDxfContextRoundTrip(TestContext& t) {

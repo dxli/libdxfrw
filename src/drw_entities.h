@@ -2834,6 +2834,11 @@ protected:
 
     bool parseCode(int code, const std::unique_ptr<dxfReader>& reader) override;
     bool validateDxf() const;
+    bool isValidDxfCoordinateTransition(int code) const {
+        if (m_dxfPendingCoordinateGroup != 0)
+            return code == m_dxfPendingCoordinateGroup + 10;
+        return code < 20 || code > 23;
+    }
     virtual bool parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs=0) override;
     [[nodiscard]] virtual bool encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs=0, dwgBufferW *strBuf=nullptr, dwgBufferW *handleBuf=nullptr) override;
     // Shared DWG boundary-loop reader (loop count + per-loop path/edge/polyline
