@@ -6771,11 +6771,12 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
         return fail();
 
     // ODA v5.4.1 §20.4.41: R2000 AC1015 modeler version 1 stores SAT in
-    // length-prefixed blocks; R2010 AC1024 version 2 may carry inline SAB
-    // bounded by a tagged End-of-ACIS-data marker. Only the exact AC1015 SAT1
-    // layout and the existing AC1024 SAB2 signature/marker layout are
-    // extracted. Other versions and ambiguous/incomplete carriers stay
-    // opaque; never treat the remainder of a DWG frame as ACIS data.
+    // length-prefixed blocks; modeler version 2 carries an inline ACIS file
+    // bounded by its signature and tagged End-of-ACIS-data marker. The
+    // AC1021/R2007 and AC1024/R2010 layouts are qualified separately: their
+    // bounded entity bodies may also contain following wireframe fields.
+    // Other versions and ambiguous/incomplete carriers stay opaque; never
+    // treat the remainder of a DWG frame as ACIS data.
     const std::uint64_t modelerPayloadStartBit = currentDwgBit(&probe);
     std::vector<std::uint8_t> parsedInlineAcisPayload;
     std::vector<DRW_ModelerPayloadRange> parsedAcisPayloadRanges;
@@ -6787,7 +6788,8 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
     static constexpr std::uint8_t sabHeaderSignature[] = {
         'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e'};
     try {
-        if (v == DRW::AC1024 && parsedHasModelerData
+        if ((v == DRW::AC1021 || v == DRW::AC1024)
+            && parsedHasModelerData
             && parsedModelerVersion == 2
             && matchesDwgBytePatternAt(*sourceBuf, modelerPayloadStartBit,
                                        bodyEndBit, sabHeaderSignature,
@@ -6823,7 +6825,7 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
                     parsedInlineAcisRange.m_confidence =
                         DRW_ModelerPayloadRange::Confidence::Marker;
                     parsedInlineAcisRange.m_markerText =
-                        "End-of-ACIS-data (tagged SAB marker)";
+                        "End-of-ACIS-data (tagged SAB marker; AC1021/AC1024)";
                     parsedAcisPayloadRanges.push_back(
                         std::move(parsedInlineAcisRange));
                     hasParsedAcisPayload = true;
