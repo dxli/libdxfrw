@@ -180,6 +180,17 @@ if(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL)
     set_tests_properties(dwg2dxf_freecad_3d_insert_cli PROPERTIES
         LABELS "dwg_read;freecad;cli;fast;generated;oda")
     add_test(
+        NAME dwg2dxf_freecad_3d_minsert_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}
+            -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+            "-DSOURCE_DXF=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dxf/ac1015_minsert_freecad_control.dxf"
+            -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3d_minsert_cli_test.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_3d_minsert_cli PROPERTIES
+        LABELS "dwg_read;freecad;cli;fast;generated;oda")
+    add_test(
         NAME dwg2dxf_freecad_3d_spline_cli
         COMMAND ${CMAKE_COMMAND}
             -DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}
