@@ -20,6 +20,7 @@
 
 import hashlib
 import json
+import math
 import os
 import platform
 import subprocess
@@ -286,11 +287,33 @@ def bounds_for_document(document):
     ]
 
 
-expected_bounds = [
-    (1.0, 2.0, 0.0, 3.0, 4.0, 0.0),
-    (5.0, 6.0, 0.0, 7.0, 8.0, 0.0),
-    (9.0, 10.0, 0.0, 11.0, 12.0, 0.0),
-]
+expected_bounds_json = os.environ.get("LIBDXFRW_FREECAD_EXPECT_LINE_BOUNDS")
+if expected_bounds_json:
+    try:
+        expected_bounds_data = json.loads(expected_bounds_json)
+        if not isinstance(expected_bounds_data, list) or not expected_bounds_data:
+            raise ValueError("expected a non-empty list of six-number bounds")
+        expected_bounds = []
+        for item in expected_bounds_data:
+            if not isinstance(item, list) or len(item) != 6:
+                raise ValueError("each expected bound must contain six numbers")
+            if any(
+                isinstance(value, bool) or not isinstance(value, (int, float))
+                for value in item
+            ):
+                raise ValueError("expected bounds must contain JSON numbers")
+            bounds = tuple(float(value) for value in item)
+            if not all(math.isfinite(value) for value in bounds):
+                raise ValueError("expected bounds must be finite")
+            expected_bounds.append(bounds)
+    except (TypeError, ValueError, OverflowError, json.JSONDecodeError) as error:
+        raise RuntimeError("invalid LIBDXFRW_FREECAD_EXPECT_LINE_BOUNDS: %s" % error)
+else:
+    expected_bounds = [
+        (1.0, 2.0, 0.0, 3.0, 4.0, 0.0),
+        (5.0, 6.0, 0.0, 7.0, 8.0, 0.0),
+        (9.0, 10.0, 0.0, 11.0, 12.0, 0.0),
+    ]
 importDWG.convertToDxf = capture_convert
 importDXF.open = capture_open
 importDXF.insert = capture_insert
@@ -350,7 +373,8 @@ try:
     actual_bounds = bounds_for_document(doc)
     if len(actual_bounds) != len(expected_bounds):
         raise AssertionError(
-            "expected three imported LINE features, got %r" % actual_bounds
+            "expected %d imported LINE features, got %r"
+            % (len(expected_bounds), actual_bounds)
         )
     for observed, expected in zip(actual_bounds, expected_bounds):
         if any(abs(a - e) >= 1e-9 for a, e in zip(observed, expected)):
@@ -388,6 +412,7 @@ try:
         "input_sha256": digest(sample),
         "converted_dxf": os.path.abspath(dxf_path),
         "import_handoff": handoff,
+        "expected_line_bounds": expected_bounds,
         "line_bounds": actual_bounds,
         "unsupported_features": unsupported,
     }

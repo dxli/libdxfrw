@@ -91,6 +91,16 @@ replacement**. Keep two independently tested consumer lanes:
    reverse export lane; FreeCAD's shared converter preference may derive the
    sibling name when the opposite direction is requested.
 
+   Current pinned-runtime baseline: `open()` has a locally generated AC1015
+   nonzero-Z LINE witness (S8.14), and `insert()` has an independent
+   locally-generated AC1015 nonzero-Z LINE witness (S8.15.15). Both exercise
+   FreeCAD 1.1.3's C++ importer on macOS arm64 through PATH-resolved
+   `dwg2dxf`; the `insert()` run additionally asserts the exact converter
+   binary hash, input/output paths containing spaces, same-output handoff,
+   target-document identity, one resulting edge, and XYZ bounds. These are
+   narrow headless consumer results, not desktop-GUI, target-authored DWG,
+   other-platform, or general 3D-family claims.
+
    **FreeCAD deployment boundary:** FreeCAD runs `dwg2dxf` as a separate
    process; this plan does not link libdxfrw into or bundle it with FreeCAD.
    The installed executable must be discoverable from FreeCAD's own process
@@ -1280,8 +1290,9 @@ importer. Keep those importer profiles separate.
    nonzero status, unchanged target document, or wrong extents fails even if a
    DXF file happens to exist. Clean only this smoke's isolated temp/config
    outputs. Do not rerun the entity-family matrix. This closes the `insert()`
-   workflow contract only; `open()` results remain separately scoped,
-   FreeCAD GUI display is not qualified, and neither route establishes
+   workflow contract and adds one narrow nonzero-Z LINE witness; `open()`
+   results remain separately scoped. FreeCAD GUI display is not qualified,
+   and neither route establishes
    general DWG/3D support. Update README/man wording to name both FreeCAD DWG
    import entry points while preserving the converter/importer support
    boundary. Keep FreeCAD and generated output out of default CI and the
@@ -2103,7 +2114,8 @@ configured direct-path discovery, and shared-preference sibling derivation.
 All three use the installed `dwg2dxf`, exact argv and imported-DXF handoff,
 and the independent three-LINE bounds; the Windows `.exe` lane remains
 unqualified. S8.9.3 separately passes the headless `insert()`/`Import.readDXF`
-handoff and target-document-content check. Both optional runs use a fresh
+handoff and target-document-content check for planar LINEs; S8.15.15 adds an
+independent nonzero-Z LINE through the same `insert()` route. Both optional runs use a fresh
 `--user-cfg` under a system-temp root; preference seeding verifies FreeCAD
 actually loaded that exact file before any writes. Since FreeCADCmd may return
 zero after reporting a macro exception, only the explicit PASS marker counts
@@ -2230,7 +2242,7 @@ degenerate, other-knot, other-scenario, target-authored, or other-version
 splines.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 64/79 committed, 13 blocked, 1 verified, 1 in progress, and 0 ready):
+commit; 65/80 committed, 13 blocked, 1 verified, 1 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -2367,10 +2379,12 @@ This plan is complete when:
    smoke in S8.9.6; `freecadcmd` alone does not qualify desktop launch
    registration/environment. That smoke verifies imported document geometry,
    not viewport rendering.
-8. The opt-in FreeCAD `open()` lane includes a verified nonzero-Z geometry
-   result from the complete DWG→`dwg2dxf`→DXF→pinned FreeCAD importer path.
-   Do not extend that 3D claim to `insert()` until the same type of witness
-   passes its distinct route. Broader family rows record imported shape
+8. The opt-in FreeCAD `open()` and `insert()` lanes each include a verified
+   nonzero-Z geometry result from their complete DWG→`dwg2dxf`→DXF→pinned
+   FreeCAD importer route (S8.14 and S8.15.15 respectively). Keep those
+   entry-point results separate: one route never substitutes for the other.
+   Each is presently only a locally generated AC1015 LINE on one pinned
+   headless macOS runtime. Broader family rows record imported shape
    semantics and failures independently; a correct but unsupported DXF
    record remains converter success plus a downstream limitation, not a
    reason to substitute another entity or claim import.
@@ -2443,3 +2457,4 @@ Additional implementation-item record:
 | S8.15.12 | COMMITTED | Added the locally authored `tests/fixtures/dxf/ac1015_solid_freecad_control.dxf`, opt-in `dwg2dxf_freecad_3d_solid_oda_cli`, `tests/run_freecad_3d_solid_oda_cli_test.cmake`, and `tests/freecad_dwg2dxf_3d_solid_check.FCMacro`. ODA File Converter 27.1.0.0 generated AC1015 only under `build/`; focused exact-FreeCAD-argv conversion/readback CTest passes 1/1 and verifies all twelve corner coordinates (group 12 is corner 4; group 13 is corner 3). FreeCAD 1.1.3 full revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2, with isolated user config and installed `dwg2dxf` SHA-256 `4b959ec93a99da102507f3b53d7cbf2d083f12f62e86e96afa914c97894fa0e3`, runs exact `[binary,input,-o,output]` once and imports that same output; it counts one SOLID, reports one `Entity type 'SOLID'` unsupported diagnostic, and creates zero shapes. The macro asserts that negative outcome rather than promoting a face-import claim. A first invalid control had groups 12/13 swapped; the corrected control still confirms this pinned release's downstream gap. Generated DWG/DXF files remain in build/temp; only the local-from-scratch DXF source and code are tracked. Mutable `FreeCAD/main` has a newer SOLID path, but that code is not the pinned binary. A future positive geometry check requires running an exact FreeCAD build with that implementation and checking area 12, four edges, four corners, and z=5 bounds. No AutoCAD-authored, arbitrary-OCS, TRACE/3DFACE, other-version, or general SOLID claim. |
 | S8.15.13 | COMMITTED | Added locally authored `tests/fixtures/dxf/ac1015_lwpolyline_freecad_control.dxf`, opt-in `dwg2dxf_freecad_2d_lwpolyline_oda_cli`, `tests/run_freecad_2d_lwpolyline_oda_cli_test.cmake`, and `tests/freecad_dwg2dxf_2d_lwpolyline_check.FCMacro`. ODA File Converter 27.1.0.0 generates an AC1015 DWG only under `build/`; exact FreeCAD argv conversion and public DXF readback preserve one closed four-vertex LWPOLYLINE in order; focused CTest passes 1/1. FreeCAD 1.1.3 full revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2, invokes installed `/opt/homebrew/bin/dwg2dxf` via PATH (SHA-256 `e4cca8e3f5af9a878eb0085ed14e992f64d35f03065743847701274a46781c99`) exactly once and imports the same output. It creates one valid closed wire/four edges with the expected four vertices and `(0,0,0)`–`(4,3,0)` bounds, counts one LWPOLYLINE, and reports no unsupported entities. The generated DWG produced class-stability and unknown-codepage warnings, but the converter and semantic checks passed. Source DXF SHA-256 is `a09e2b9d83576ed71aca26f54db4d1be848a01c9ddf734306cc9c3f431034fef`; generated DWG/DXFs remain in build/temp. This is one local AC1015/ODA/FreeCAD consumer baseline only—not target-authored interoperability, 3D evidence, non-default OCS, bulges, widths, thickness, other importer modes/releases, or general polyline support. |
 | S8.15.14 | COMMITTED | Added the locally authored `tests/fixtures/dxf/ac1015_2d_polyline_ocs_freecad_control.dxf`, opt-in ODA CTest `dwg2dxf_freecad_3d_2d_polyline_ocs_oda_cli`, `tests/run_freecad_2d_polyline_ocs_oda_cli_test.cmake`, and pinned-consumer probe `tests/freecad_dwg2dxf_3d_2d_polyline_ocs_check.FCMacro`. The fixture is authored from scratch. ODA File Converter 27.1.0.0 generates its AC1015 DWG only under ignored `build/`; the exact FreeCAD CLI (`dwg2dxf input -o output`) and public DXF readback preserve one closed 2D POLYLINE, ordered OCS vertex tuples `(0,0,0),(4,0,0),(4,3,0),(0,3,0)`, parent elevation 5, and extrusion `(0,0.6,0.8)`. ODA v5.4.1 §§20.4.11/.16 state that 2D VERTEX Z is zero (elevation/thickness are on parent POLYLINE); the first control exposed the writer copying the parsed parent elevation into each VERTEX group 30, so `dxfRW::writePolyline` now serializes zero for typed DWG `Vertex2D` while leaving the parent elevation intact. The strengthened CTest verifies that field as well as the subtype, order, closure, normal, and elevation before/after DXF readback; it passes 1/1. `cmake --build build --target dwg2dxf --parallel 2` and the focused local-roundtrip/version-policy/FreeCAD CLI plus 2D/3D POLYLINE/MESH/PFACE/ODA control suite pass; filtered CTest passes 9/9. FreeCAD 1.1.3 full revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, default C++ mode 2, resolves this checkout's `build/dwg2dxf/dwg2dxf` first on PATH (SHA-256 `bac02b1df67c515cff5b88c8a3369ea4e05e60d4234a409be9054438c8ac40c2`), invokes the exact binary once on a path with spaces, and imports that same successful output. It creates one valid closed four-edge wire but silently ignores parent elevation and oblique extrusion: vertices/bounds are flat at Z=0 rather than WCS `(-4,0.6,5.8),(-4,3,4),(0,0.6,5.8),(0,3,4)`; no unsupported feature is reported. The probe emits `FREECAD_DWG2DXF_2D_POLYLINE_OCS_LIMITATION_CONFIRMED=` and records this as downstream-unsupported, not a converter reason to emit nonstandard coordinates. Generated DWG/DXF and isolated FreeCAD profiles stay under `build/` or system temp; no generated fixture is committed. This is one AC1015 generated-control and pinned `open()`/C++/macOS/PATH profile only—not target-authored DWG interoperability, all OCS/elevation combinations, `insert()`, desktop GUI, other platforms/importers/releases, or general POLYLINE support. |
+| S8.15.15 | COMMITTED | Generalized `tests/freecad_dwg2dxf_import_check.FCMacro` with a validated `LIBDXFRW_FREECAD_EXPECT_LINE_BOUNDS` override so the existing isolated harness can assert nonzero-Z geometry on `insert()` without another framework. Reused the locally-authored `tests/fixtures/dwg/ac1015_3d_line_control.dwgadd`; LibreDWG `dwgadd`'s AC1015 output was generated under `build/` then copied under an input path containing spaces in system temp. FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, default C++ importer mode 2 and isolated `--user-cfg`: `Draft.importDWG.insert()` found this checkout's `build/dwg2dxf/dwg2dxf` through PATH (SHA-256 `bac02b1df67c515cff5b88c8a3369ea4e05e60d4234a409be9054438c8ac40c2`), invoked it once with exact argv `[binary,input,-o,output]`, got status 0, and passed the identical output path plus target document `FreeCADDwgInsertCheck` to `importDXF.insert()`. The C++ importer created exactly one LINE edge with independently specified XYZ bounds `(1,2,3)-(4,6,9)` and no unsupported features; the macro emitted its explicit PASS marker. `cmake --build build --target dwg2dxf --parallel 2` passed; focused `dwg2dxf_version_policy`, `dwg2dxf_freecad_cli_compat`, and `dwg2dxf_freecad_3d_line_cli` CTests passed 3/3; Python macro syntax and `git diff --check` pass. All generated DWG/DXF and profiles remain in build/temp; no drawing binary added. This adds one generated-control/headless `insert()` result only—not desktop GUI dispatch, target-authored DWG interoperability, other platform/revision/importer, or general 3D support. |
