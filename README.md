@@ -56,6 +56,14 @@ DWG-to-DXF converter for the `Draft.importDWG.open()` and
 `Draft.importDWG.insert()` import workflows. This project does not provide
 FreeCAD's paired `dxf2dwg` program, so it does not provide LibreDWG-based DWG
 export.
+
+The end-to-end profile qualified here is FreeCAD 1.1.3 (revision
+`145529fe741292ff0b3977a01195bf0247425794`) on macOS 27 arm64 with the C++ DXF
+importer and PATH discovery. Both `open()` and `insert()` were verified with an
+installed converter and a generated AC1015 nonzero-Z LINE control. This narrow
+result does not imply broad entity support; native Linux and Windows FreeCAD
+profiles, including Windows executable discovery, remain unqualified.
+
 Add the installed bindir (usually `bin`) to `PATH` before launching FreeCAD, or
 set FreeCAD's DWG converter path to the full installed executable path. Select
 FreeCAD's LibreDWG-compatible converter option when you want to attribute an
