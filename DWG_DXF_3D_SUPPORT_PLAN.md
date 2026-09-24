@@ -29,6 +29,24 @@ only when the integration behavior or claimed profile changes. Preserve
 correct DXF output when FreeCAD's importer lacks support, and report converter
 integration separately from imported-geometry support.
 
+**FreeCAD-first feature priority (2026-09-24):** the intended user workflow is
+FreeCAD Draft opening or inserting a DWG through the installed `dwg2dxf`
+process and then FreeCAD's selected DXF importer. Prioritize 3D feature rows
+that can complete this real end-to-end path, using the already recorded
+positive and negative S8.15 entity results to select the next slice. A row is
+**FreeCAD geometry support** only when the pinned importer creates geometry
+with independently expected coordinates/topology; a correctly typed,
+field-preserving DXF for an entity FreeCAD currently ignores is still a
+successful **converter integration** result, but not a geometry pass. Keep the
+converter's standards-correct output even when that importer limitation is
+known. FreeCAD's [DXF preferences documentation](https://github.com/FreeCAD/FreeCAD-documentation/blob/main/wiki/Import_Export_Preferences.md)
+distinguishes C++ and legacy Python DXF importer modes and notes their
+different feature coverage, so qualify each mode as a distinct profile and
+keep the pinned C++ mode as the current baseline; do not transfer results
+between them. This feature-priority rule does not defer parser/writer
+correctness for other in-scope entities or make FreeCAD a required build/test
+dependency.
+
 **Normal FreeCAD launch remains a separate deployment check:** the existing
 macOS desktop-dispatch test starts FreeCAD's app executable under a controlled
 test environment; it does not prove Finder/LaunchServices, a Linux desktop
@@ -3004,7 +3022,20 @@ FreeCAD-specific implementation contract and acceptance order:
    importer mode/settings, discovery route, entry point, and independently
    checked geometry. Pin all preferences in an isolated profile and disable
    ODA/QCAD fallbacks when attributing a result to this converter.
-5. Keep the implementation loop fast: run the entity-specific CLI/readback
+5. **Prioritize end-to-end FreeCAD feature rows.** Select the next
+   FreeCAD-facing entity slice from the existing S8.15 outcomes and the
+   actually selected FreeCAD DXF importer. For a positive feature claim,
+   exercise the installed converter through both `Draft.importDWG.open()` and
+   `insert()` when both operations are claimed, and compare FreeCAD's created
+   geometry with independent expected coordinates/topology. Pin C++ versus
+   legacy Python importer, release/revision, platform, discovery route,
+   preferences, and operation. Keep a standards-correct converter/readback
+   result even when FreeCAD reports the entity unsupported or silently
+   constructs different geometry; label that row converter-only or
+   downstream-limited, and do not add output substitutions, entity flattening,
+   or a FreeCAD patch to disguise it. Promote neither the other importer mode
+   nor another operation/platform from that result.
+6. Keep the implementation loop fast: run the entity-specific CLI/readback
    CTest and focused unit test in the normal slice; keep FreeCAD runtime and
    desktop-dispatch tests opt-in and run them only for changed converter/import
    behavior or the exact consumer claim being added. Leave other-platform,
