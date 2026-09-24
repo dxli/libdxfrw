@@ -396,6 +396,7 @@ option(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL
     "Enable ODA-generated FreeCAD 3D converter controls" OFF)
 if(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL)
     find_program(LIBDXFRW_ODAFILECONVERTER_EXECUTABLE NAMES ODAFileConverter)
+    find_program(LIBDXFRW_LIBREDWG_DWGREAD_EXECUTABLE NAMES dwgread)
     if(NOT LIBDXFRW_ODAFILECONVERTER_EXECUTABLE)
         message(FATAL_ERROR
             "LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL requires ODAFileConverter; "
@@ -473,11 +474,38 @@ if(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL)
             -DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}
             -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
             "-DSOURCE_DXF=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dxf/ac1015_3dface_freecad_control.dxf"
+            "-DLIBREDWG_DWGREAD=${LIBDXFRW_LIBREDWG_DWGREAD_EXECUTABLE}"
             -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3dface_oda_cli_test.cmake
     )
     set_tests_properties(dwg2dxf_freecad_3dface_oda_cli PROPERTIES
         LABELS "dwg_read;freecad;cli;fast;generated;oda")
+    set(_freecad_3dface_oda_versions
+        "ACAD2004|AC1018"
+        "ACAD2007|AC1021"
+        "ACAD2010|AC1024"
+        "ACAD2013|AC1027"
+        "ACAD2018|AC1032")
+    foreach(_version_pair IN LISTS _freecad_3dface_oda_versions)
+        string(REPLACE "|" ";" _version_fields "${_version_pair}")
+        list(GET _version_fields 0 _oda_target_version)
+        list(GET _version_fields 1 _expected_dwg_version)
+        add_test(
+            NAME dwg2dxf_freecad_3dface_${_expected_dwg_version}_oda_cli
+            COMMAND ${CMAKE_COMMAND}
+                -DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}
+                -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+                "-DSOURCE_DXF=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dxf/ac1015_3dface_freecad_control.dxf"
+                -DODA_TARGET_VERSION=${_oda_target_version}
+                -DEXPECTED_DWG_VERSION=${_expected_dwg_version}
+                "-DLIBREDWG_DWGREAD=${LIBDXFRW_LIBREDWG_DWGREAD_EXECUTABLE}"
+                -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3dface_oda_cli_test.cmake
+        )
+        set_tests_properties(
+            dwg2dxf_freecad_3dface_${_expected_dwg_version}_oda_cli PROPERTIES
+            LABELS "dwg_read;freecad;cli;fast;generated;oda;${_expected_dwg_version}")
+    endforeach()
     add_test(
         NAME dwg2dxf_freecad_2d_lwpolyline_oda_cli
         COMMAND ${CMAKE_COMMAND}

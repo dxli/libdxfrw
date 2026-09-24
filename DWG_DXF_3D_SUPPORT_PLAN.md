@@ -3020,6 +3020,20 @@ FreeCAD 1.1.3/C++/macOS profile: one standard 3DFACE is passed through, then
 reported unsupported with no created shapes. This proves converter integration
 for those two routes only; it is expressly not FreeCAD 3DFACE geometry support.
 
+S8.15.18.2 adds a source-from-scratch 3DFACE DWG conversion matrix for AC1018,
+AC1021, AC1024, AC1027, and AC1032, complementing the existing AC1015 case.
+ODA File Converter generates each version only under the ignored build tree;
+the opt-in tests require the DWG magic and converted `$ACADVER` to agree, then
+check one tilted 3DFACE's twelve WCS coordinates and group-70 invisible-edge
+flag after `dwg2dxf` and public DXF readback. When `dwgread` is available, its
+independent DWG read/export must preserve the same version and fields too. On
+2026-09-24, ODA File Converter 27.1.0.0 plus LibreDWG 0.14 `dwgread` passed
+all six AC1015-through-AC1032 controls (6/6; 41.06 seconds including external
+tool startup). This is a bounded local-writer semantic matrix for this entity;
+it does not establish target-authored DWGs, every class/page delta, broad
+version support, or FreeCAD 3DFACE geometry. Keep ODA/LibreDWG controls
+opt-in, and leave generated DWG/DXF files out of source control.
+
 S8.14 adds one locally generated AC1015 nonzero-Z LINE control, which FreeCAD
 1.1.3's default C++ importer converts to one valid B-rep edge with endpoints
 `(1,2,3)` and `(4,6,9)`. This demonstrates this generated vector through
@@ -3125,7 +3139,7 @@ degenerate, other-knot, other-scenario, target-authored, or other-version
 splines.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 83/97 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
+commit; 84/98 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -3373,3 +3387,4 @@ Additional implementation-item record:
 | --- | --- | --- |
 | S8.15.18 | COMMITTED | Added locally authored tests/fixtures/dxf/ac1015_3dface_freecad_control.dxf, optional fast dwg2dxf_freecad_3dface_oda_cli, optional dwg2dxf_freecad_3dface_handoff FreeCAD runtime CTest, and a pinned negative mode in tests/freecad_dwg2dxf_import_check.FCMacro. The tilted AC1015 3DFACE has WCS corners (0,0,0),(4,0,0),(4,3,4),(0,3,4), and invisible-edge flag 4. Autodesk's DXF reference defines the corners as WCS and group 70 as independent invisible-edge flags. ODA File Converter 27.1.0.0 writes only an ephemeral DWG; the fast script passes exact input -o output conversion and public DXF readback with all coordinates/flag retained. FreeCAD 1.1.3 revision 145529fe741292ff0b3977a01195bf0247425794, macOS 27 arm64, C++ mode 2, DWGConversion=1, isolated profile/PATH discovery: installed /private/tmp/libdxfrw-freecad-3dface-20260924/bin/dwg2dxf (SHA-256 6a60077d4389437e1e9dd0e2be761062d2f0b792caac432a23fde4f96c1289e4) receives exact argv, exits 0, and hands the same DXF to the importer. The pinned importer counts one 3DFACE (handle E6), reports it unsupported, and creates zero shapes; this is converter integration only, not FreeCAD geometry support. Source DXF SHA-256 d79d3d532b5c1b2364a35773e20fd98c6f7e1af576e0527d3f3a327e4510d1dc; runtime DWG SHA-256 5f1a561849721bd5810cb09527cce538fcb7e1e476e43358e62b8f76a24af31a; converted DXF SHA-256 79aa28f44b150011cc88c1a489455d90cc3f39ab52327a7dcdacf79c5a04e2dd. CMake registration, fast script, runtime handoff/negative assertion, Python AST parse, and git diff --check pass. Both CTests are opt-in; no generated DWG/DXF is tracked. Future geometry qualification requires a pinned FreeCAD build that imports 3DFACE plus independent vertex/area checks; target-authored DWG/version evidence remains open. |
 | S8.15.18.1 | COMMITTED | Split the prior optional FreeCAD runtime check into independent `dwg2dxf_freecad_3dface_open_handoff` and `..._insert_handoff` CTests, with separate isolated profiles and explicit operation assertion. Both run the exact installed binary with FreeCAD's argv `[dwg2dxf, input, -o, output]` and require that exact output be passed to the corresponding `importDXF.open()` or `insert()` call; insert also verifies `FreeCADDwgInsertCheck` as its destination document. On FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2, both consume one 3DFACE and independently confirm the same pinned importer gap: unsupported entity and zero shapes. The result qualifies both converter handoff routes only; it does not promote FreeCAD geometry support. Both runtime CTests are opt-in. |
+| S8.15.18.2 | COMMITTED | Generalized the locally-authored 3DFACE control to ODA target versions `ACAD2004/2007/2010/2013/2018` (DWG signatures AC1018/1021/1024/1027/1032), while retaining ACAD2000/AC1015. All generated DWGs remain under ignored `build/`. Each opt-in CTest checks magic/header version, one record, four tilted WCS corners and invisible-edge flag 4 in `dwg2dxf` output and public DXF readback; when installed, LibreDWG `dwgread -O DXF` is an independent reader gate on the same generated DWG. ODA File Converter 27.1.0.0 and LibreDWG 0.14 pass 6/6 versions in 41.06 seconds; the implementation is isolated to the exact 3DFACE/WCS/flag vector. This does not claim target-authored samples, complete parser coverage for those releases, or FreeCAD geometry support. The external controls stay opt-in; no generated DWG/DXF fixture is committed. |
