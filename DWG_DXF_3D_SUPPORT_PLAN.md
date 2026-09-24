@@ -25,6 +25,15 @@ Only expose those capabilities if an implementation and independent evidence
 actually support them. This is a focused supplement to
 `LIBRECAD_DXFRW_UPGRADE_PLAN.md`; it does not reopen unrelated format families.
 
+The named application-integration deliverable is also the standalone,
+installable `dwg2dxf` executable used by FreeCAD Draft for DWG import. Treat
+that external-process workflow as a first-class consumer alongside library
+adapters: FreeCAD must be able to find and launch the installed program, and
+the generated DXF must preserve the converter's supported entities/fields.
+This does not add a FreeCAD plugin, link libdxfrw into FreeCAD, provide FreeCAD's
+separate `dxf2dwg` export program, or imply that FreeCAD's own DXF importer
+supports every legal DXF entity.
+
 ### FreeCAD `dwg2dxf` completion gate
 
 FreeCAD is an explicit external consumer target for the installable
@@ -56,9 +65,13 @@ integration behavior or a new qualification tuple. The current narrow runtime
 baseline is FreeCAD 1.1.3 on macOS arm64; native Linux/Windows remain
 unqualified. S8.9.1–S8.9.4 and S8.9.6–S8.9.7 are implemented/committed for their
 bounded macOS profiles; S8.9.5 retains the native-platform qualification gap,
-and S8.15 gates entity semantics. Continue those existing work items rather
-than creating a duplicate FreeCAD harness or treating a CLI-only pass as
-application integration.
+and S8.15 gates entity semantics. The current result therefore supports only
+the explicitly recorded macOS FreeCAD 1.1.3 profiles and entity rows; do not
+write an unqualified “FreeCAD supported” claim or infer Linux/Windows support.
+Broader platform claims require native install/dependency/discovery and
+FreeCAD-process evidence under S8.9.5. Continue those existing work items
+rather than creating a duplicate FreeCAD harness or treating a CLI-only pass
+as application integration.
 
 **FreeCAD support ledger and implementation priority:** treat usable FreeCAD
 integration as a short, separately releasable converter lane—not as the end of
