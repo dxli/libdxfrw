@@ -6,11 +6,10 @@ compares fields by entity handle so callback order is irrelevant. The accepted
 scope is intentionally limited to one AutoCAD-authored AC1015 (R2000) planar
 3D POLYLINE sample, one locally generated AC1015 topology control, AC1024
 (R2010) INSERT placement and SPLINE fit data and one sample's LINE endpoints,
-plus AC1021 (R2007) LINE endpoints, 3DFACE corners/edge flags, and ELLIPSE
-geometry fields. The local control exercises nonzero-Z 3D POLYLINE, legacy
-POLYLINE_MESH, and PFACE but
-does not qualify AutoCAD interoperability. Modeler, surface, and other
-version/family fields are not compared here.
+plus AC1021 (R2007) LINE endpoints, 3DFACE corners/edge flags, and ARC,
+CIRCLE, and ELLIPSE fields. The local control exercises nonzero-Z 3D POLYLINE,
+legacy POLYLINE_MESH, and PFACE but does not qualify AutoCAD interoperability.
+Modeler, surface, and other version/family fields are not compared here.
 """
 
 from __future__ import annotations
@@ -289,6 +288,33 @@ def compare_ellipse(row: dict[str, Any]) -> None:
                    "ELLIPSE.startParameter")
     compare_number(fields.get("endParameter"), external.get("end_angle"),
                    "ELLIPSE.endParameter")
+
+
+def compare_circle_fields(row: dict[str, Any], entity: str,
+                          include_angles: bool) -> None:
+    external = row["external"]
+    fields = row["adapter"]["fields"]
+    compare_point(fields.get("center"), external.get("center"),
+                  f"{entity}.center")
+    compare_number(fields.get("radius"), external.get("radius"),
+                   f"{entity}.radius")
+    compare_number(fields.get("thickness"), external.get("thickness"),
+                   f"{entity}.thickness")
+    compare_point(fields.get("extrusion"), external.get("extrusion"),
+                  f"{entity}.extrusion")
+    if include_angles:
+        compare_number(fields.get("startAngleRadians"),
+                       external.get("start_angle"), f"{entity}.startAngle")
+        compare_number(fields.get("endAngleRadians"),
+                       external.get("end_angle"), f"{entity}.endAngle")
+
+
+def compare_arc(row: dict[str, Any]) -> None:
+    compare_circle_fields(row, "ARC", include_angles=True)
+
+
+def compare_circle(row: dict[str, Any]) -> None:
+    compare_circle_fields(row, "CIRCLE", include_angles=False)
 
 
 def compare_polyline3d(row: dict[str, Any],
@@ -622,10 +648,13 @@ def main() -> int:
                 f"sample: {actual_digest}")
         cases = (("3DFACE", 48, compare_3dface),
                  ("ELLIPSE", 24, compare_ellipse),
+                 ("ARC", 243, compare_arc),
+                 ("CIRCLE", 168, compare_circle),
                  ("LINE", 3002, compare_line))
         expected_nonzero_z_line_count = 670
-        excluded = ["all entities other than LINE, 3DFACE, and ELLIPSE",
-                    "other versions", "unverified sample provenance"]
+        excluded = ["all entities other than LINE, 3DFACE, ARC, CIRCLE, and ELLIPSE",
+                    "other versions", "unverified sample provenance",
+                    "non-default ARC/CIRCLE extrusion/thickness"]
         sample_source = {
             "provenance": ("existing user-owned local sample; original "
                            "producer/date not verified"),
@@ -725,6 +754,8 @@ def main() -> int:
         "INSERT": "ODA v5.4.1 §§20.4.9-20.4.10",
         "SPLINE": "ODA v5.4.1 §20.4.40",
         "ELLIPSE": "ODA v5.4.1 §20.4.39",
+        "ARC": "ODA v5.4.1 §20.4.18",
+        "CIRCLE": "ODA v5.4.1 §20.4.20",
     }
     print(json.dumps({
         "result": "matched",

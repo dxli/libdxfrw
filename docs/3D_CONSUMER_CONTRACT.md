@@ -141,6 +141,17 @@ target- or AutoCAD-authored. This is one read-field corroboration only; ELLIPSE
 remains unqualified as a general DWG family, and this does not qualify writing
 or FreeCAD shape construction.
 
+For that same exact-hash AC1021 sample, the comparator also matches ARC on 243
+handles and CIRCLE on 168 handles against LibreDWG 0.14 in `ext=false` mode.
+ARC fields are center tuple, radius, thickness, extrusion vector, and start/end
+angle radians (ODA v5.4.1 §20.4.18); CIRCLE fields are center tuple, radius,
+thickness, and extrusion vector (§20.4.20). These records have center Z=0,
+default +Z extrusion, and zero thickness, so this result is baseline field
+mapping only—not non-default OCS, elevated/tilted placement, or extrusion
+coverage. The sample's origin remains unverified. Do not infer FreeCAD shape
+support, writes, other-version behavior, or general ARC/CIRCLE support from
+this single-sample comparison.
+
 ```sh
 python3 tools/compare_dwg_3d_consumer_oracle.py \
   --adapter build/tests/libdxfrw_3d_consumer_probe \
