@@ -8,6 +8,19 @@ patch-equivalent to this origin commit and was skipped by rebase. Existing
 untracked workspace files, including this plan and `tests/samples/AC1021/` and
 `tests/samples/AC1024/`, were preserved and not staged.
 
+**FreeCAD consumer status:** the installable `dwg2dxf` command is a first-class
+deliverable for FreeCAD Draft's external DWG-import workflow. Its exact
+`dwg2dxf <input> -o <output>` invocation, failure-safe output publication,
+installed-artifact discovery, and pinned FreeCAD 1.1.3/macOS arm64 `open`,
+`insert`, and registered desktop-dispatch paths are implemented and verified
+for the bounded cases recorded under S8.9 and S8.15. This qualifies neither
+native Linux/Windows deployment nor every entity's FreeCAD geometry: keep
+those as separate platform and per-entity gates. For each change, run the fast
+CLI/DXF-readback checks; run opt-in FreeCAD process checks only when the
+integration behavior or claimed profile changes. Preserve correct DXF output
+when FreeCAD's importer lacks support, and report converter integration
+separately from imported-geometry support.
+
 ## Objective and limits
 
 Close evidence-backed correctness and interoperability gaps in libdxfrw's 3D
