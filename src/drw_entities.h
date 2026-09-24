@@ -849,6 +849,15 @@ public:
     //! record, this is normalized to 2 from its "ACIS BinaryFile" signature;
     //! the complete DWG entity-frame bytes remain separately available below.
     std::uint16_t m_modelerVersion = 0;
+    //! Presence/value of the R2013+ AcDbModelerGeometry group-290 field.
+    //! Retained as a DXF shell field only; its producer-specific meaning is
+    //! intentionally not inferred here.
+    bool m_hasDxfModelerFlag = false;
+    bool m_dxfModelerFlag = false;
+    //! Presence/value of the R2013+ AcDbModelerGeometry group-2 identifier.
+    //! The identifier is preserved verbatim and is not treated as a handle.
+    bool m_hasDxfModelerUid = false;
+    std::string m_dxfModelerUid;
     //! Source DWG revision for a payload extracted with an exact versioned
     //! layout. UNKNOWN means no DWG payload has been qualified for re-emission.
     DRW::Version m_dwgSourceVersion = DRW::UNKNOWNV;

@@ -7264,6 +7264,12 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
         return rejectUnsupportedDxfWrite();
     if (!preflightEntity(ent))
         return false;
+    const bool writeAc1027Shell = version >= DRW::AC1027;
+    if ((!writeAc1027Shell
+         && (ent->m_hasDxfModelerFlag || ent->m_hasDxfModelerUid))
+        || (ent->m_hasDxfModelerUid
+            && !isSafeDxfRecordText(ent->m_dxfModelerUid)))
+        return rejectUnsupportedDxfWrite();
     const bool writeAc1015SatV1 = version == DRW::AC1015
         && hasQualifiedAc1015SatV1Payload(*ent);
     DRW_DBG("dxfRW::writeModelerGeometry AC1015 SAT v1 qualified: ");
@@ -7317,10 +7323,18 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     if (!writeEntity(ent))
         return false;
     writer->writeString(100, "AcDbModelerGeometry");
+    if (writeAc1027Shell) {
+        if (ent->m_hasDxfModelerFlag)
+            writer->writeBool(290, ent->m_dxfModelerFlag);
+        if (ent->m_hasDxfModelerUid)
+            writer->writeUtf8String(2, ent->m_dxfModelerUid);
+    }
     writer->writeString(100, subclassName);
-    writer->writeInt16(70, ent->m_modelerVersion);
+    if (!writeAc1027Shell)
+        writer->writeInt16(70, ent->m_modelerVersion);
     if (ent->m_historyHandle != 0)
-        writer->writeString(350, toHexStr(ent->m_historyHandle));
+        writer->writeString(350,
+                            toHexStr(remapObjectHandle(ent->m_historyHandle)));
     if (writeAc1015SatV1) {
         if (!writeDxfSatV1Text(writer.get(), ent->m_dwgAcisPayload))
             return failDxfWrite();

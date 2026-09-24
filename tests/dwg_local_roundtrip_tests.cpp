@@ -5098,6 +5098,129 @@ bool runDxfModelerCarrierRoundTrip(DRW::Version version,
     return found;
 }
 
+bool runDxfModelerEnvelopeRoundTrip(
+    bool binary, const std::filesystem::path& directory, bool keepOutput) {
+    const std::string encoding = binary ? "binary" : "ascii";
+    const std::filesystem::path output = directory
+        / ("libdxfrw-ac1027-modeler-envelope-" + encoding + ".dxf");
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+
+    dx_data source;
+    auto* historyTarget = new DRW_ModelerGeometry(DRW::E3DSOLID);
+    historyTarget->handle = 0xFC10u;
+    historyTarget->m_hasDxfModelerFlag = true;
+    historyTarget->m_dxfModelerFlag = false;
+    historyTarget->m_hasDxfModelerUid = true;
+    historyTarget->m_dxfModelerUid =
+        "{00000000-0000-0000-0000-000000000000}";
+    source.mBlock->ent.push_back(historyTarget);
+
+    auto* solid = new DRW_ModelerGeometry(DRW::E3DSOLID);
+    solid->handle = 0xFC11u;
+    solid->m_hasDxfModelerFlag = true;
+    solid->m_dxfModelerFlag = true;
+    solid->m_hasDxfModelerUid = true;
+    solid->m_dxfModelerUid =
+        "{1a113328-eb6d-d44d-824d-78b33668f9e7}";
+    solid->m_historyHandle = historyTarget->handle;
+    source.mBlock->ent.push_back(solid);
+
+    dx_iface exporter;
+    if (!exporter.fileExport(output.string(), DRW::AC1027, binary,
+                             &source, false)) {
+        std::filesystem::remove(output, ec);
+        return false;
+    }
+
+    bool omitsLegacyVersion = true;
+    if (!binary) {
+        std::ifstream input(output);
+        std::string codeLine;
+        std::string valueLine;
+        std::string section;
+        std::string currentRecord;
+        bool waitingForSectionName = false;
+        bool foundModeler = false;
+        bool foundVersionGroup = false;
+        const auto trim = [](std::string& value) {
+            const std::size_t first = value.find_first_not_of(" \t\r\n");
+            if (first == std::string::npos) {
+                value.clear();
+                return;
+            }
+            const std::size_t last = value.find_last_not_of(" \t\r\n");
+            value = value.substr(first, last - first + 1);
+        };
+        while (std::getline(input, codeLine)
+               && std::getline(input, valueLine)) {
+            trim(codeLine);
+            trim(valueLine);
+            if (waitingForSectionName && codeLine == "2") {
+                section = valueLine;
+                waitingForSectionName = false;
+                continue;
+            }
+            if (codeLine == "0" && valueLine == "SECTION") {
+                waitingForSectionName = true;
+                currentRecord.clear();
+                continue;
+            }
+            if (codeLine == "0" && valueLine == "ENDSEC") {
+                section.clear();
+                currentRecord.clear();
+                continue;
+            }
+            if (codeLine == "0")
+                currentRecord = valueLine;
+            if (section == "ENTITIES" && currentRecord == "3DSOLID") {
+                foundModeler = true;
+                if (codeLine == "70")
+                    foundVersionGroup = true;
+            }
+        }
+        omitsLegacyVersion = input.eof() && foundModeler
+            && !foundVersionGroup;
+    }
+
+    dx_data imported;
+    dx_iface importer;
+    const bool importOk = importer.fileImport(output.string(), &imported,
+                                               false);
+    const DRW_ModelerGeometry* importedTarget = nullptr;
+    const DRW_ModelerGeometry* importedSolid = nullptr;
+    if (importOk) {
+        for (const DRW_Entity* entity : imported.mBlock->ent) {
+            if (entity == nullptr || entity->eType != DRW::E3DSOLID)
+                continue;
+            const auto* modeler =
+                static_cast<const DRW_ModelerGeometry*>(entity);
+            if (importedTarget == nullptr)
+                importedTarget = modeler;
+            else if (importedSolid == nullptr)
+                importedSolid = modeler;
+        }
+    }
+    const bool result = importOk && omitsLegacyVersion
+        && importedTarget != nullptr && importedSolid != nullptr
+        && importedTarget->handle != 0xFC10u
+        && importedTarget->m_hasDxfModelerFlag
+        && !importedTarget->m_dxfModelerFlag
+        && importedTarget->m_hasDxfModelerUid
+        && importedTarget->m_dxfModelerUid
+            == "{00000000-0000-0000-0000-000000000000}"
+        && importedSolid->handle != 0xFC11u
+        && importedSolid->m_hasDxfModelerFlag
+        && importedSolid->m_dxfModelerFlag
+        && importedSolid->m_hasDxfModelerUid
+        && importedSolid->m_dxfModelerUid
+            == "{1a113328-eb6d-d44d-824d-78b33668f9e7}"
+        && importedSolid->m_historyHandle == importedTarget->handle;
+    if (!keepOutput || !result)
+        std::filesystem::remove(output, ec);
+    return result;
+}
+
 bool runDxfMalformedModelerCarrier(const char* chunk) {
     const std::filesystem::path output =
         std::filesystem::temp_directory_path() / "libdxfrw-modeler-malformed.dxf";
@@ -8718,6 +8841,12 @@ int main(int argc, char** argv) {
            "local DXF AC1021 binary-file SAT text modeler carrier round-trip", failures);
     expect(runDxfModelerCarrierRoundTrip(DRW::AC1024, textCarrier, "ac1024", false),
            "local DXF AC1024 SAT text modeler carrier round-trip", failures);
+    expect(runDxfModelerEnvelopeRoundTrip(false, directory, keepOutputs),
+           "local DXF AC1027 modeler shell fields and history-handle remap",
+           failures);
+    expect(runDxfModelerEnvelopeRoundTrip(true, directory, keepOutputs),
+           "local binary DXF AC1027 modeler shell fields and history-handle remap",
+           failures);
     expect(runDxfModelerRejectsUnassociatedSab(sabPayload),
            "local DXF rejects unassociated AC1027 SAB entity payload", failures);
     expect(runDxfModelerRejectsDwgFramePayload(),

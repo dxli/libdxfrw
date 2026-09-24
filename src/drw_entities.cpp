@@ -6699,6 +6699,10 @@ bool DRW_3Dface::parseDwg(DRW::Version v, dwgBuffer *buf,
 void DRW_ModelerGeometry::resetDwgState() {
     DRW_Entity::reset();
     m_modelerVersion = 0;
+    m_hasDxfModelerFlag = false;
+    m_dxfModelerFlag = false;
+    m_hasDxfModelerUid = false;
+    m_dxfModelerUid.clear();
     m_dwgSourceVersion = DRW::UNKNOWNV;
     m_bodyBitSize = 0;
     m_objectSize = 0;
@@ -6967,6 +6971,10 @@ bool DRW_ModelerGeometry::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t
 
 bool DRW_ModelerGeometry::parseCode(int code, const std::unique_ptr<dxfReader>& reader) {
     switch (code) {
+    case 2:
+        m_dxfModelerUid = reader->getString();
+        m_hasDxfModelerUid = true;
+        break;
     case 1:
     case 3: {
         const std::string text = reader->getString();
@@ -6997,6 +7005,14 @@ bool DRW_ModelerGeometry::parseCode(int code, const std::unique_ptr<dxfReader>& 
         if (value < 0 || value > std::numeric_limits<std::uint16_t>::max())
             return false;
         m_modelerVersion = static_cast<std::uint16_t>(value);
+        break;
+    }
+    case 290: {
+        const int value = reader->getInt32();
+        if (value != 0 && value != 1)
+            return false;
+        m_dxfModelerFlag = value != 0;
+        m_hasDxfModelerFlag = true;
         break;
     }
     case 350:
