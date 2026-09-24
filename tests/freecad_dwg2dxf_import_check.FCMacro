@@ -1,7 +1,15 @@
 # Optional end-to-end check for FreeCAD's Draft DWG import routes.
 #
-# Run with FreeCAD, an isolated user config, and LIBDXFRW_FREECAD_DWG set to
+# Run with FreeCAD's `freecadcmd` when available, an isolated user config, and
+# LIBDXFRW_FREECAD_DWG set to
 # one of the tracked ordinary-encoding fixtures (or a generated control).
+# With freecadcmd, opt in to seeding converter settings by setting
+# LIBDXFRW_FREECAD_SEED_ISOLATED_PREFERENCES=1,
+# LIBDXFRW_FREECAD_USER_CFG to the --user-cfg file, and
+# LIBDXFRW_FREECAD_TEMP_ROOT to its new temporary parent directory. The macro
+# verifies FreeCAD actually loaded that user.cfg before changing preferences.
+# A console macro exception can still produce process exit code zero; callers
+# must require FREECAD_DWG_IMPORT_ASSERTIONS_PASS= in the output.
 # Put this build's or installed dwg2dxf on PATH. Set
 # LIBDXFRW_FREECAD_OPERATION=insert to exercise insertion into an existing
 # document; the default is open(). Set LIBDXFRW_FREECAD_DISCOVERY to "path"
@@ -29,6 +37,12 @@ if operation not in ("open", "insert"):
 if operation == "insert" and " " not in os.path.abspath(sample):
     raise RuntimeError("insert() qualification requires an input path with spaces")
 
+
+def same_path(left, right):
+    return os.path.normcase(os.path.abspath(left)) == os.path.normcase(
+        os.path.abspath(right)
+    )
+
 draft_path = os.path.join(App.getResourceDir(), "Mod", "Draft")
 sys.path.insert(0, draft_path)
 
@@ -42,19 +56,55 @@ legacy = App.ParamGet(
 if legacy:
     raise RuntimeError("This check requires FreeCAD's default C++ DXF importer")
 
-
-def same_path(left, right):
-    return os.path.normcase(os.path.abspath(left)) == os.path.normcase(
-        os.path.abspath(right)
-    )
-
-
-conversion_mode = importDWG.params.get_param("DWGConversion")
 discovery = os.environ.get("LIBDXFRW_FREECAD_DISCOVERY", "existing").lower()
 if discovery not in ("existing", "path", "configured"):
     raise RuntimeError(
         "LIBDXFRW_FREECAD_DISCOVERY must be 'existing', 'path', or 'configured'"
     )
+
+seed_preferences = os.environ.get(
+    "LIBDXFRW_FREECAD_SEED_ISOLATED_PREFERENCES"
+)
+if seed_preferences:
+    if seed_preferences != "1" or discovery == "existing":
+        raise RuntimeError(
+            "isolated preference seeding requires value '1' and an attributed lane"
+        )
+    config_root = os.environ.get("LIBDXFRW_FREECAD_TEMP_ROOT")
+    expected_user_cfg = os.environ.get("LIBDXFRW_FREECAD_USER_CFG")
+    active_user_cfg = App.ConfigGet("UserParameter")
+    if not config_root or not expected_user_cfg or not active_user_cfg:
+        raise RuntimeError(
+            "isolated preference seeding requires a temp root and --user-cfg path"
+        )
+    real_root = os.path.realpath(config_root)
+    real_user_cfg = os.path.realpath(active_user_cfg)
+    real_temp = os.path.realpath(tempfile.gettempdir())
+    if (
+        not os.path.isdir(real_root)
+        or real_root == real_temp
+        or os.path.commonpath((real_temp, real_root)) != real_temp
+    ):
+        raise RuntimeError("FreeCAD preference seed root must be a child of temp")
+    if (
+        not same_path(active_user_cfg, expected_user_cfg)
+        or os.path.commonpath((real_root, real_user_cfg)) != real_root
+    ):
+        raise RuntimeError(
+            "FreeCAD did not load the expected isolated --user-cfg file"
+        )
+    importDWG.params.set_param("DWGConversion", 1)
+    if discovery == "path":
+        importDWG.params.set_param("TeighaFileConverter", "")
+    else:
+        configured_path = os.environ.get("LIBDXFRW_FREECAD_TEIGHA_CONVERTER")
+        if not configured_path:
+            raise RuntimeError(
+                "configured discovery requires LIBDXFRW_FREECAD_TEIGHA_CONVERTER"
+            )
+        importDWG.params.set_param("TeighaFileConverter", configured_path)
+
+conversion_mode = importDWG.params.get_param("DWGConversion")
 if (operation == "insert" or discovery != "existing") and conversion_mode != 1:
     raise RuntimeError("attributed converter checks require DWGConversion=1")
 converter_preference = str(
@@ -273,6 +323,8 @@ try:
             )
 
     stats = captured.get("stats") or {}
+    if not stats:
+        raise AssertionError("FreeCAD's C++ DXF importer returned no statistics")
     unsupported = stats.get("unsupportedFeatures", {})
     if unsupported:
         raise AssertionError("FreeCAD reported unsupported features: %r" % unsupported)
@@ -283,6 +335,8 @@ try:
         "platform": platform.platform(),
         "architecture": platform.machine(),
         "importer": "C++",
+        "importer_backend": "ImportGui" if importDXF.gui else "Import",
+        "isolated_preferences_seeded": bool(seed_preferences),
         "import_mode": App.ParamGet(
             "User parameter:BaseApp/Preferences/Mod/Draft"
         ).GetInt("DxfImportMode", 2),
