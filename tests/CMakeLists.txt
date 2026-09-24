@@ -200,6 +200,39 @@ if(LIBDXFRW_ENABLE_FREECAD_SAT_V1_RUNTIME_CONTROL)
     endforeach()
 endif()
 
+# Optional failure-path qualification through FreeCAD's real Draft wrapper.
+# FreeCAD currently treats output-file existence as conversion success, so this
+# confirms that a failing installed converter cannot hand off a partial DXF.
+# The malformed DWG is created locally beneath system temp; FreeCAD stays out
+# of default CI.
+option(LIBDXFRW_ENABLE_FREECAD_FAILURE_CONTROL
+    "Enable the opt-in FreeCAD DWG conversion failure-path check" OFF)
+if(LIBDXFRW_ENABLE_FREECAD_FAILURE_CONTROL)
+    if(NOT EXISTS "${LIBDXFRW_FREECADCMD_EXECUTABLE}")
+        message(FATAL_ERROR
+            "LIBDXFRW_ENABLE_FREECAD_FAILURE_CONTROL requires "
+            "LIBDXFRW_FREECADCMD_EXECUTABLE")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}")
+        message(FATAL_ERROR
+            "LIBDXFRW_ENABLE_FREECAD_FAILURE_CONTROL requires the installed "
+            "LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE")
+    endif()
+    add_test(
+        NAME dwg2dxf_freecad_failed_conversion
+        COMMAND ${CMAKE_COMMAND}
+            "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
+            "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
+            "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+            "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_dwg2dxf_failure_test.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_failed_conversion PROPERTIES
+        LABELS "freecad;external;integration"
+        TIMEOUT 120
+    )
+endif()
+
 # Optional locally generated DWG control for the FreeCAD nonzero-Z path.
 # LibreDWG dwgadd and FreeCAD remain external integration tools, not required
 # dependencies of the normal build/test configuration.
