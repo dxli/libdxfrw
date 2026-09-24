@@ -16,6 +16,26 @@
 #include "libdwgr.h"
 #include "libdxfrw.h"
 
+namespace {
+
+DRW::Version sourceVersionFromDxfHeader(
+    const DRW_Header& header, DRW::Version fallback) {
+    const auto acadVersion = header.vars.find("$ACADVER");
+    if (acadVersion == header.vars.end() || acadVersion->second == nullptr
+            || acadVersion->second->type() != DRW_Variant::STRING) {
+        return fallback;
+    }
+
+    const std::string value = acadVersion->second->c_str();
+    for (const auto& versionEntry : DRW::dwgVersionStrings) {
+        if (versionEntry.first != nullptr && value == versionEntry.first)
+            return versionEntry.second;
+    }
+    return fallback;
+}
+
+} // namespace
+
 
 bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug){
     unsigned int found = fileI.find_last_of(".");
@@ -32,7 +52,8 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug){
         }
         bool success = dxf->read(this, false);
         if (success)
-            fData->sourceVersion = dxf->getVersion();
+            fData->sourceVersion = sourceVersionFromDxfHeader(
+                fData->headerC, dxf->getVersion());
         if (!success) {
             std::cout << "DXF file error: format " << dxf->getVersion() << " error " << dxf->getError() << std::endl;
         }

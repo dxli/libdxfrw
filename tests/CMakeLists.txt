@@ -272,6 +272,41 @@ if(LIBDXFRW_ENABLE_FREECAD_INSTALLED_3D_LINE_CONTROL)
     endforeach()
 endif()
 
+# Optional AC1027 POINT qualification using a caller-supplied AutoCAD 2016
+# sample. The DWG stays outside this repository; only test code is committed.
+option(LIBDXFRW_ENABLE_FREECAD_AUTOCAD_POINT3D_CONTROL
+    "Enable the external AutoCAD AC1027 3D POINT FreeCAD control" OFF)
+set(LIBDXFRW_AUTOCAD_POINT3D_DWG "" CACHE FILEPATH
+    "External AutoCAD 2016 AC1027 DWG containing POINT (50,50,50)")
+if(LIBDXFRW_ENABLE_FREECAD_AUTOCAD_POINT3D_CONTROL)
+    if(NOT EXISTS "${LIBDXFRW_AUTOCAD_POINT3D_DWG}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_AUTOCAD_POINT3D_DWG to the external point3d_2013.dwg")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECADCMD_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECADCMD_EXECUTABLE to FreeCAD's freecadcmd")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE to the installed dwg2dxf")
+    endif()
+    add_test(
+        NAME dwg2dxf_freecad_autocad_ac1027_point3d
+        COMMAND ${CMAKE_COMMAND}
+            "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
+            "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
+            "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+            "-DSAMPLE=${LIBDXFRW_AUTOCAD_POINT3D_DWG}"
+            "-DEXPECTED_SHA256=839297daa100c318d5afbfa128145d2c4782300650c86b2ab58b34cf6fe1aba4"
+            "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_3d_point_check.FCMacro"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_autocad_point3d_test.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_autocad_ac1027_point3d PROPERTIES
+        LABELS "freecad;external;autocad;AC1027;integration"
+        TIMEOUT 180)
+endif()
+
 # Optional locally generated DWG control for the FreeCAD nonzero-Z path.
 # LibreDWG dwgadd and FreeCAD remain external integration tools, not required
 # dependencies of the normal build/test configuration.

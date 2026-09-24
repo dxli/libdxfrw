@@ -1,12 +1,14 @@
 # Optional end-to-end WCS POINT DWG -> dwg2dxf -> FreeCAD vertex check.
 #
-# Generate the input from the checked-in local recipe, put this build's
-# dwg2dxf directory first on PATH, and set LIBDXFRW_FREECAD_DWG to that DWG.
-# The control is locally generated, not an AutoCAD-authored interoperability
-# witness. Keep generated files and FreeCAD configuration outside the source.
+# Set LIBDXFRW_FREECAD_DWG to a generated or caller-supplied DWG, put the
+# intended dwg2dxf directory first on PATH, and optionally set
+# LIBDXFRW_FREECAD_EXPECT_POINT=X,Y,Z plus expected executable/hash variables.
+# External samples remain outside the repository; keep generated files and
+# isolated FreeCAD configuration outside the source tree.
 
 import hashlib
 import json
+import math
 import os
 import platform
 import subprocess
@@ -29,6 +31,17 @@ import importDXF
 preferences = App.ParamGet("User parameter:BaseApp/Preferences/Mod/Draft")
 if preferences.GetBool("dxfUseLegacyImporter", False):
     raise RuntimeError("This check requires FreeCAD's default C++ DXF importer")
+expected_user_cfg = os.environ.get("LIBDXFRW_FREECAD_USER_CFG")
+if expected_user_cfg:
+    active_user_cfg = App.ConfigGet("UserParameter")
+    if not active_user_cfg or (
+        os.path.normcase(os.path.abspath(active_user_cfg))
+        != os.path.normcase(os.path.abspath(expected_user_cfg))
+    ):
+        raise RuntimeError(
+            "FreeCAD did not load the expected isolated user.cfg: %r"
+            % active_user_cfg
+        )
 
 captured = {}
 original_convert = importDWG.convertToDxf
@@ -75,6 +88,15 @@ def assert_dwg2dxf_route(dxf_path):
         raise AssertionError("FreeCAD did not invoke the expected dwg2dxf command")
     if not same_path(args[0], converter):
         raise AssertionError("FreeCAD invoked a different converter: %r" % (args,))
+    expected_converter = os.environ.get("LIBDXFRW_FREECAD_EXPECT_DWG2DXF")
+    if expected_converter and not same_path(converter, expected_converter):
+        raise AssertionError(
+            "FreeCAD resolved %r instead of expected converter %r"
+            % (converter, expected_converter)
+        )
+    expected_hash = os.environ.get("LIBDXFRW_FREECAD_EXPECT_DWG2DXF_SHA256")
+    if expected_hash and digest(converter).lower() != expected_hash.lower():
+        raise AssertionError("FreeCAD resolved a converter with an unexpected SHA-256")
     if not same_path(args[1], sample):
         raise AssertionError("FreeCAD converted a different DWG input: %r" % (args,))
     if args[2] != "-o" or not same_path(args[3], dxf_path):
@@ -110,6 +132,17 @@ def digest(path):
     return sha.hexdigest()
 
 
+def expected_point():
+    raw = os.environ.get("LIBDXFRW_FREECAD_EXPECT_POINT", "10,20,30")
+    try:
+        value = tuple(float(coordinate.strip()) for coordinate in raw.split(","))
+    except ValueError as error:
+        raise RuntimeError("LIBDXFRW_FREECAD_EXPECT_POINT must be X,Y,Z") from error
+    if len(value) != 3 or not all(math.isfinite(coordinate) for coordinate in value):
+        raise RuntimeError("LIBDXFRW_FREECAD_EXPECT_POINT must contain three finite values")
+    return value
+
+
 def close_point(actual, expected):
     return all(abs(a - e) < 1e-8 for a, e in zip(actual, expected))
 
@@ -142,7 +175,7 @@ try:
         (vertex.Point.x, vertex.Point.y, vertex.Point.z)
         for vertex in shape.Vertexes
     ]
-    expected = (10.0, 20.0, 30.0)
+    expected = expected_point()
     if type_id != "Part::Feature" or len(actual_vertices) != 1:
         raise AssertionError(
             "expected one Part::Feature containing one vertex; got %s/%d"
@@ -163,6 +196,11 @@ try:
     unsupported = stats.get("unsupportedFeatures", {})
     if unsupported.get("POINT"):
         raise AssertionError("FreeCAD reported POINT as unsupported: %r" % unsupported)
+    if not getattr(importDXF, "dxfImportPoints", False):
+        raise AssertionError("FreeCAD's DXF importer did not have POINT import enabled")
+
+    converter = converter_process.args[0]
+    converter_hash = digest(converter)
 
     result = {
         "status": "pass",
@@ -171,7 +209,8 @@ try:
         "architecture": platform.machine(),
         "importer": "C++",
         "import_mode": preferences.GetInt("DxfImportMode", 2),
-        "converter": importDWG.get_libredwg_converter("dwg2dxf"),
+        "converter": converter,
+        "converter_sha256": converter_hash,
         "converter_argv": converter_process.args,
         "converter_returncode": converter_process.returncode,
         "imported_dxf_path": captured.get("imported_dxf"),
@@ -180,6 +219,8 @@ try:
         "dxf_size": os.path.getsize(dxf_path),
         "dxf_sha256": digest(dxf_path),
         "point_count": entity_counts.get("POINT"),
+        "point_import_enabled": importDXF.dxfImportPoints,
+        "expected_point": expected,
         "vertex": actual_vertices[0],
         "edge_count": len(shape.Edges),
         "face_count": len(shape.Faces),

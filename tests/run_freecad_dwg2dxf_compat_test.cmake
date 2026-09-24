@@ -42,6 +42,30 @@ if(_section_pos EQUAL -1 OR _version_pos EQUAL -1)
         "Expected ASCII DXF structure and source revision AC1027 in output header")
 endif()
 
+# DXF's effective text-codec version is AC1021 for all modern releases, but
+# the CLI's default output policy must use the exact declared $ACADVER. Verify
+# that a second FreeCAD-form conversion does not silently downgrade AC1027.
+set(_readback_output "${_test_dir}/AC1027 DXF readback.dxf")
+file(REMOVE "${_readback_output}")
+execute_process(
+    COMMAND "${DWG2DXF}" "${_output}" -o "${_readback_output}"
+    RESULT_VARIABLE _readback_result
+    OUTPUT_VARIABLE _readback_stdout
+    ERROR_VARIABLE _readback_stderr
+    TIMEOUT 60
+)
+if(NOT "${_readback_result}" STREQUAL "0" OR NOT EXISTS "${_readback_output}")
+    message(FATAL_ERROR
+        "FreeCAD-form DXF readback failed (${_readback_result})\n"
+        "${_readback_stdout}\n${_readback_stderr}")
+endif()
+file(READ "${_readback_output}" _readback_header LIMIT 2048)
+string(FIND "${_readback_header}" "AC1027" _readback_version_pos)
+if(_readback_version_pos EQUAL -1)
+    message(FATAL_ERROR
+        "FreeCAD-form DXF readback downgraded the source revision from AC1027")
+endif()
+
 # Exercise special records through the exact converter argv FreeCAD uses, not
 # only through an in-process adapter test. The source files are tracked DWG
 # fixtures; outputs stay in this build-tree test directory.
