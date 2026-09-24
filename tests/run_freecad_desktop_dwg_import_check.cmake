@@ -63,6 +63,7 @@ set(_source_copy "${_input_dir}/ordinary encoding.dwg")
 file(MAKE_DIRECTORY "${_input_dir}")
 configure_file("${SAMPLE}" "${_source_copy}" COPYONLY)
 
+set(_runtime_evidence "")
 foreach(_operation IN ITEMS open insert)
     set(_profile "${_test_root}/profile-${_operation}")
     set(_user_home "${_profile}/home")
@@ -125,15 +126,18 @@ foreach(_operation IN ITEMS open insert)
     string(FIND "${_result_json}" "\"desktop_dispatch\": true" _desktop_dispatch)
     string(FIND "${_result_json}" "\"selected_import_module\": \"importDWG\""
         _registered_module)
+    string(FIND "${_result_json}" "\"dxf_import_dialog_enabled\": false"
+        _import_dialog_disabled)
     if(_pass_status EQUAL -1 OR _desktop_dispatch EQUAL -1
-            OR _registered_module EQUAL -1)
+            OR _registered_module EQUAL -1 OR _import_dialog_disabled EQUAL -1)
         message(FATAL_ERROR
             "FreeCAD desktop ${_operation} assertions did not pass.\n"
             "result:\n${_result_json}\nstdout:\n${_stdout}\nstderr:\n${_stderr}\n"
             "Isolated evidence retained at ${_test_root}")
     endif()
+    set(_runtime_evidence "${_runtime_evidence}\n${_operation}: ${_result_json}")
 endforeach()
 
 file(REMOVE_RECURSE "${_test_root}")
 message(STATUS
-    "FreeCAD desktop open/insert passed with installed dwg2dxf ${_converter_sha256}")
+    "FreeCAD desktop open/insert passed with installed dwg2dxf ${_converter_sha256}${_runtime_evidence}")

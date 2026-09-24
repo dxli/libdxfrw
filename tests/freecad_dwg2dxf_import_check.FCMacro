@@ -109,10 +109,20 @@ if seed_preferences:
                 "configured discovery requires LIBDXFRW_FREECAD_TEIGHA_CONVERTER"
             )
         importDWG.params.set_param("TeighaFileConverter", configured_path)
+    if desktop_dispatch:
+        App.ParamGet(
+            "User parameter:BaseApp/Preferences/Mod/Draft"
+        ).SetBool("dxfShowDialog", False)
 
 conversion_mode = importDWG.params.get_param("DWGConversion")
 if (operation == "insert" or discovery != "existing") and conversion_mode != 1:
     raise RuntimeError("attributed converter checks require DWGConversion=1")
+draft_preferences = App.ParamGet(
+    "User parameter:BaseApp/Preferences/Mod/Draft"
+)
+dxf_import_dialog_enabled = draft_preferences.GetBool("dxfShowDialog", True)
+if desktop_dispatch and dxf_import_dialog_enabled:
+    raise RuntimeError("desktop smoke must disable the modal DXF options dialog")
 converter_preference = str(
     importDWG.params.get_param("TeighaFileConverter") or ""
 )
@@ -404,6 +414,7 @@ try:
         "import_mode": App.ParamGet(
             "User parameter:BaseApp/Preferences/Mod/Draft"
         ).GetInt("DxfImportMode", 2),
+        "dxf_import_dialog_enabled": dxf_import_dialog_enabled,
         "dwg_conversion": conversion_mode,
         "discovery": discovery,
         "teigha_file_converter_preference": converter_preference,

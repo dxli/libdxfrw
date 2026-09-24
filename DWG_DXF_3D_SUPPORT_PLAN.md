@@ -100,6 +100,10 @@ replacement**. Keep two independently tested consumer lanes:
    target-document identity, one resulting edge, and XYZ bounds. These are
    narrow headless consumer results, not desktop-GUI, target-authored DWG,
    other-platform, or general 3D-family claims.
+   Separately, S8.9.6 qualifies the registered `open`/`insert` dispatcher in
+   the actual FreeCAD desktop process for tracked planar AC1027 LINEs via the
+   configured converter path. It does not qualify menu/file-dialog interaction,
+   viewport display, or 3D entity semantics in that desktop profile.
 
    **FreeCAD deployment boundary:** FreeCAD runs `dwg2dxf` as a separate
    process; this plan does not link libdxfrw into or bundle it with FreeCAD.
@@ -1163,7 +1167,11 @@ importer. Keep those importer profiles separate.
    1. Launch the actual FreeCAD desktop executable with a fresh, isolated
       user-config/data/temp root. Use the C++ DXF importer profile already
       qualified by the headless route and set the dedicated LibreDWG
-      conversion mode. Exercise the configured full-path route to the
+      conversion mode. For unattended automation, set `dxfShowDialog=false`
+      only in the isolated profile so the C++ importer's modal options dialog
+      cannot stall the run; assert the effective value in the result. This
+      qualifies importer dispatch, not dialog interaction or user choice.
+      Exercise the configured full-path route to the
       installed `dwg2dxf`; additionally exercise PATH lookup only when the
       tested desktop launch environment can set and verify PATH deterministically.
       Do not mutate the user's real preferences or infer Finder/Start-menu
@@ -1202,14 +1210,19 @@ importer. Keep those importer profiles separate.
       Report converter invocation, importer construction, and viewport display
       as distinct outcomes.
 
-   Initial readiness was `READY` on the already used macOS FreeCAD host because
-   the installed CLI, isolated-profile macros, tracked fixture, and semantic
-   oracle existed. The harness is now implemented, but the actual GUI run is
-   still `IN_PROGRESS` while the Mac session is locked. Native Windows and
-   Linux desktop-app results stay attached to S8.9.5's platform matrix and are
-   not inferred from this host. Completing this item qualifies one pinned
-   desktop launch/profile only; it does not broaden entity, DWG-version, GUI
-   rendering, or export support claims.
+   Status: `COMMITTED` for one pinned macOS desktop profile. FreeCAD 1.1.3,
+   revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, passed
+   the opt-in `dwg2dxf_freecad_desktop_open_insert` CTest (1/1, 20.53 seconds)
+   using the installed converter via the isolated configured-path preference.
+   The test proves the GUI process selects registered `importDWG`, invokes
+   this `dwg2dxf` once with successful exact argv per operation, hands the
+   same output to the C++ DXF importer, and creates the expected three LINE
+   shapes in open and insert documents with no unsupported features. The
+   first attempt exposed the default modal DXF-options dialog; disabling it
+   only in the test profile resolved the timeout. Native Windows/Linux
+   desktop results stay attached to S8.9.5, and Finder/Start-menu launch,
+   dialog interaction, viewport rendering, entities beyond LINE, and export
+   remain unqualified.
 
 16b. **S8.9.2 — Prove FreeCAD discovers and invokes the installed converter.**
    Add a bounded optional runtime smoke using an isolated FreeCAD user config
@@ -2070,13 +2083,15 @@ FreeCAD 1.1.3 C++ imports only the first array cell, so array geometry remains
 downstream-unsupported. S8.9.5 tracks native
 platform installation/discovery separately from the qualified macOS
 `freecadcmd` route; those platform gaps do not block independent slices.
-S8.9.6 is IN_PROGRESS: the opt-in GUI-process harness now invokes the
+S8.9.6 is COMMITTED for the pinned macOS GUI profile; the opt-in harness invokes the
 registered `importDWG` route via FreeCAD's `module_io.OpenInsertObject()` for
 both open and insert, with separate isolated profiles and the existing tracked
-LINE fixture. Its fast syntax/build/CLI gates pass; actual desktop qualification
-is pending an unlocked Mac session. This is not a file-dialog click or viewport
-render check. Keep the desktop test opt-in and do not let this host-only gate
-block independent implementation slices. S8.15.12 verifies one locally
+LINE fixture. Its desktop CTest passes 1/1 and confirms converter identity/argv,
+same-DXF handoff, and expected geometry. The default modal DXF options dialog
+initially blocked automation; the isolated profile now disables it and asserts
+the setting. This does not test file-dialog/menu interaction or viewport
+rendering. Windows/Linux remain S8.9.5 external gates; continue independent
+implementation slices. S8.15.12 verifies one locally
 authored elevated SOLID through ODA DWG generation and exact `dwg2dxf`
 conversion/readback. The pinned FreeCAD 1.1.3 C++ importer reports that same
 SOLID unsupported and creates no shape; this is a consumer limitation, not a
@@ -2123,9 +2138,10 @@ as success. These headless importer lanes are qualified, but they do not prove
 GUI-process registration/environment behavior. S8.9.6 launches the bundle's
 GUI executable directly (not through LaunchServices) to preserve the isolated
 environment and calls the registered importer dispatcher from inside the GUI
-process. Its CTest registration and fast tests pass; the actual run is
-unqualified while the host session remains locked. Continue independent ready
-work while this external GUI gate is pending.
+process. Its `dwg2dxf_freecad_desktop_open_insert` CTest passes 1/1 after
+disabling the default modal import-options dialog in isolated preferences. It
+verifies converter identity/argv, open and insert handoffs, and expected LINE
+geometry. Windows/Linux, dialog UX, and viewport remain unqualified.
 
 FreeCAD integration is an additional bounded S8 consumer lane, not a new
 format-support claim. The exact converter invocation, four-revision planar
@@ -2242,7 +2258,7 @@ degenerate, other-knot, other-scenario, target-authored, or other-version
 splines.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 65/80 committed, 13 blocked, 1 verified, 1 in progress, and 0 ready):
+commit; 66/80 committed, 13 blocked, 1 verified, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -2304,7 +2320,7 @@ commit; 65/80 committed, 13 blocked, 1 verified, 1 in progress, and 0 ready):
 | S8.9.1 | COMMITTED | Verified CMake installation under a temporary macOS prefix (`bin/dwg2dxf`); the installed binary converted tracked AC1027 input using exact FreeCAD argv and wrote AC1027 ASCII DXF under a path containing spaces. Re-ran the full `tests/run_freecad_dwg2dxf_compat_test.cmake` against that relocated installed binary; fixture-preservation, Unicode-path, legacy positional, overwrite, and transactional-failure checks all passed. Added README and man-page guidance for FreeCAD's converter selection, `PATH`/configured full-path setup, same-name converter precedence, automatic fallback caveat, and the boundary between conversion and downstream importer support. No generated fixture/output entered the repository. FreeCAD 1.1.3 macOS resolution is subsequently qualified under S8.9.2; Windows `.exe` behavior remains unqualified there. S8.9.4 clarified that this is an import-side executable, not FreeCAD's paired `dxf2dwg` export tool. |
 | S8.9.4 | COMMITTED | Updated README/man to say this package supplies FreeCAD's `dwg2dxf` import-side converter only, not its paired `dxf2dwg` export program. Verified against the current FreeCAD `main` `Draft/importDWG.py` source on 2026-09-24: one shared preference derives the opposite executable name, and an absent configured sibling does not fall back to PATH. That URL is mutable; runtime qualification is pinned to FreeCAD 1.1.3 under S8.9.2. Guidance recommends PATH discovery for import without naming either LibreDWG executable in the shared preference, and warns that direct `dwg2dxf` configuration can leave export unavailable. The fast `dwg2dxf_freecad_cli_compat` CTest passes 1/1; `mandoc -Tlint dwg2dxf/dwg2dxf.1` is clean after fixing the stale date and description line. Links reviewed; no product code, fake sibling, export claim, or fixtures added. The installed converter's macOS FreeCAD import route is qualified under S8.9.2/.3; Windows behavior remains a platform gate. |
 | S8.9.5 | BLOCKED_EXTERNAL_PLATFORM | Plan-only addition after reviewing current FreeCAD `Draft/importDWG.py` and Import/Export Preferences documentation on 2026-09-24. FreeCAD invokes an external converter then passes its DXF to the chosen importer; discovery uses the configured converter path/PATH, with `dwg2dxf.exe` on Windows and `dwg2dxf` on Linux/macOS. Existing macOS FreeCAD 1.1.3 `freecadcmd` installed-binary PATH/configured-path `open()` and `insert()` runs qualify only that pinned host/profile. Next: run the isolated-install smoke on native Windows and Linux FreeCAD hosts, checking runtime dependencies, actual selected path/hash, exact argv/output handoff, both entry points, and importer settings. Do not infer platform support from cross-compilation. This external gate does not block independent family slices. |
-| S8.9.6 | IN_PROGRESS | Implemented an opt-in actual-GUI-process harness using only tracked `ordinary_enc_AC1027.dwg`, copied beneath an input path containing spaces. It checks FreeCAD's `dwg` registration (`importDWG`) and exercises the shared `freecad.module_io.OpenInsertObject()` dispatch for both `open` and `insert` in separate GUI processes, with fresh `--user-cfg` and isolated user paths per operation. The shared macro verifies the installed converter path/hash, exactly one successful `dwg2dxf input -o output` invocation, fallback suppression, exact converted-DXF handoff, and the three independent LINE bounds/no unsupported features. Launch the app-bundle executable directly so the isolated environment reaches the GUI process; keep its Python temp directory under the same system temp parent used for the test root. The optional CTest is disabled by default and has a 240-second outer/90-second-per-launch bound; existing fast CLI tests remain the first-line check. Python syntax, normal configure/build, and focused version-policy/FreeCAD CLI CTests pass 2/2. The real GUI run is still pending because this Mac is locked; headless S8.9.2/.3 evidence does not complete this item. This dispatch-API smoke does not click the file chooser/menu or qualify viewport rendering. No drawing fixture is added; Windows/Linux native execution remains S8.9.5. |
+| S8.9.6 | COMMITTED | Implemented and passed the opt-in actual-GUI-process harness using only tracked `ordinary_enc_AC1027.dwg`, copied beneath an input path containing spaces. On FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, the app-bundle launcher registered `importDWG` and the shared `freecad.module_io.OpenInsertObject()` dispatcher completed both `open` and `insert` in separate GUI processes with fresh `--user-cfg` and isolated user paths. Both used the C++ `ImportGui` backend, `DxfImportMode=2`, `DWGConversion=1`, and the installed `/private/tmp/libdxfrw-freecad-desktop-prefix.RRbMas/install/bin/dwg2dxf` (SHA-256 `bac02b1df67c515cff5b88c8a3369ea4e05e60d4234a409be9054438c8ac40c2`) via the configured full path; each asserted one successful exact `dwg2dxf input -o output` call, fallback suppression, identical output-to-importer handoff, and three expected LINE bounds `(1,2,0)-(3,4,0)`, `(5,6,0)-(7,8,0)`, `(9,10,0)-(11,12,0)` in the open document and insertion target, with no unsupported features. Verbose CTest output now preserves the observed FreeCAD revision/platform, binary hash, argv, handoff paths, importer settings, and geometry evidence. The first launch timed out after conversion because FreeCAD's default `dxfShowDialog=true` opened the modal C++ importer-options dialog; the final harness disables it only in isolated preferences and asserts false in its result. `dwg2dxf_freecad_desktop_open_insert` passes 1/1 (20.53 seconds); Python macro syntax, three fast CLI CTests (3/3), and `git diff --check` pass. Test-owned profiles/results are removed on pass and no fixture is added. This qualifies registered dispatcher/API behavior only—not file chooser/menu interaction, viewport rendering, or 3D entities in this desktop profile. Windows/Linux native execution remains S8.9.5. |
 | S8.9.2 | COMMITTED | Extended `tests/freecad_dwg2dxf_import_check.FCMacro` with PATH/configured discovery and a guarded isolated-preference seeding mode: it checks the active `App.ConfigGet("UserParameter")` equals the requested `--user-cfg` under a fresh system-temp root before writing `DWGConversion=1` or `TeighaFileConverter`. Installed macOS `dwg2dxf` SHA-256 `5b7d23baf049746597bf0ca0a78141e94e260dfb0086aa3d468ac702df063f45` was exercised on FreeCAD 1.1.3, revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, `DxfImportMode=2`: PATH `open()`, configured direct-path `open()` with converter omitted from PATH, and sibling-derivation `open()` with the preference naming a nonexistent `dxf2dwg` beside the real `dwg2dxf` all pass. No fake sibling was created. Each asserts exact `[binary,input,-o,output]`, zero converter status, executable/hash attribution, identical `Import.readDXF` handoff, three `Part::Feature` LINE bounds `(1,2,0)-(3,4,0)`, `(5,6,0)-(7,8,0)`, `(9,10,0)-(11,12,0)`, and no unsupported features. The copied tracked AC1027 input SHA-256 is `a0ebf245e570bf0dc337c696330b7ea883feaebb7c4e781de8d77ac723815f83`; all config/data/output paths stayed in temp and the macro removed its produced DXFs. A mismatched expected config path was rejected before converter launch; `freecadcmd` nevertheless exits zero after a script exception, so the explicit `FREECAD_DWG_IMPORT_ASSERTIONS_PASS=` marker is mandatory. Python AST parsing, `dwg2dxf_freecad_cli_compat` (1/1), and `git diff --check` pass. Windows `.exe` lookup remains unqualified; GUI/display and other FreeCAD versions/importer modes remain outside this row. No fixture or generated DWG/DXF was added. |
 | S8.9.3 | COMMITTED | Independently exercised `LIBDXFRW_FREECAD_OPERATION=insert` with FreeCAD 1.1.3, revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, `DxfImportMode=2`, and the isolated-config guard added under S8.9.2. The installed converter SHA-256 is `5b7d23baf049746597bf0ca0a78141e94e260dfb0086aa3d468ac702df063f45`; with PATH discovery and fallbacks disabled it receives exact `[binary,input,-o,output]`, exits zero, and FreeCAD hands that same output path and target `FreeCADDwgInsertCheck` to `importDXF.insert()`. The headless C++ `Import.readDXF` route adds exactly three `Part::Feature` LINE shapes with independent bounds `(1,2,0)-(3,4,0)`, `(5,6,0)-(7,8,0)`, `(9,10,0)-(11,12,0)` and no unsupported features. Input SHA-256: `a0ebf245e570bf0dc337c696330b7ea883feaebb7c4e781de8d77ac723815f83`. The macro emitted its PASS marker; a separate mismatched-config negative check confirmed fail-closed behavior (FreeCADCmd can still return zero on exceptions). The tracked AC1027 input was copied under a path with spaces, and configuration/output artifacts stayed in temp; no fixture was added. Python AST parse, `dwg2dxf_freecad_cli_compat` (1/1), and `git diff --check` pass. This qualifies this one pinned headless `insert()` route only; GUI display, Windows `.exe`, other FreeCAD revisions/importer modes, and wider feature support remain unqualified. |
 | S8.10 | VERIFIED | Resolved the apparent runtime blocker: macOS sandboxing hid `hw.optional.neon`, causing Qt's false incompatibility abort; outside the restricted sandbox FreeCAD 1.1.3 revision `20260725` / arm64 / Qt 6.8.3 starts. `tests/freecad_dwg2dxf_import_check.FCMacro` runs the actual `Draft.importDWG.open()` route on each already tracked ordinary-encoding fixture (AC1015/AC1018/AC1021/AC1027) with this build's `dwg2dxf` on `PATH`. For all four, the C++ DXF importer reports 3 LINEs, creates 3 `Part::Feature`s, and reports no unsupported features. Each resulting XYZ bounding box matches LibreDWG 0.14's independent direct DXF export: `(1,2,0)-(3,4,0)`, `(5,6,0)-(7,8,0)`, `(9,10,0)-(11,12,0)`. An exploratory read of the existing untracked AC1021 `tablet.dwg` further shows both libdxfrw and ODA File Converter 27.1.0.0 exports contain 48 3DFACE/81 SOLID/24 HATCH records, while FreeCAD's C++ importer creates 4,868 objects from each and reports 38 3DFACE/69 SOLID/22 HATCH as unsupported with entity-read exceptions. This shared behavior is not attributable solely to libdxfrw conversion, but it does not establish semantic equivalence or FreeCAD usability; the sample remains user-owned and unstaged. The optional legacy Python importer was not tested because its `dxfReader` dependencies are absent. No fixture added. Keep qualification limited to this one host/default importer/four LINE fixtures; no GUI, general DWG, or 3D consumer claim. Issue #19247 remains unreproduced because it has no affected DWG/output pair. |
