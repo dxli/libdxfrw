@@ -6990,6 +6990,24 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
     hatch->appendLoop(hatchLoop);
     source.mBlock->ent.push_back(hatch);
 
+    auto* mpolygon = new DRW_MPolygon();
+    mpolygon->handle = 0xFA09u;
+    mpolygon->name = "SOLID";
+    mpolygon->solid = 1;
+    mpolygon->annotatedBoundary = 1;
+    mpolygon->xDirX = 0.25;
+    mpolygon->xDirY = -0.5;
+    auto mpolygonLoop = std::make_shared<DRW_HatchLoop>(2);
+    auto mpolygonBoundary = std::make_shared<DRW_LWPolyline>();
+    mpolygonBoundary->flags = 1;
+    mpolygonBoundary->addVertex(DRW_Vertex2D(1.0, 2.0, 0.0));
+    mpolygonBoundary->addVertex(DRW_Vertex2D(4.0, 2.0, 0.0));
+    mpolygonBoundary->addVertex(DRW_Vertex2D(3.0, 5.0, 0.0));
+    mpolygonLoop->objlist.push_back(mpolygonBoundary);
+    mpolygonLoop->update();
+    mpolygon->appendLoop(mpolygonLoop);
+    source.mBlock->ent.push_back(mpolygon);
+
     dx_iface exporter;
     if (!exporter.fileExport(output.string(), DRW::AC1027, binary, &source,
                              false)) {
@@ -7016,6 +7034,7 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
     const DRW_Polyline* decodedPolyface = nullptr;
     const DRW_LWPolyline* decodedOcsPolyline = nullptr;
     const DRW_Hatch* decodedHatch = nullptr;
+    const DRW_MPolygon* decodedMPolygon = nullptr;
     for (const DRW_Entity* entity : imported.mBlock->ent) {
         if (entity == nullptr)
             continue;
@@ -7035,6 +7054,8 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
             decodedOcsPolyline = static_cast<const DRW_LWPolyline*>(entity);
         else if (entity->eType == DRW::HATCH)
             decodedHatch = static_cast<const DRW_Hatch*>(entity);
+        else if (entity->eType == DRW::MPOLYGON)
+            decodedMPolygon = static_cast<const DRW_MPolygon*>(entity);
     }
 
     const bool faceValid = decodedFace != nullptr
@@ -7131,18 +7152,38 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
         && decodedHatchEllipse->ratio == 0.5
         && decodedHatchEllipse->staparam == 0.25
         && decodedHatchEllipse->endparam == 1.5;
+    const DRW_LWPolyline* decodedMPolygonBoundary = nullptr;
+    if (decodedMPolygon != nullptr && decodedMPolygon->looplist.size() == 1u
+        && !decodedMPolygon->looplist.front()->objlist.empty()) {
+        decodedMPolygonBoundary = dynamic_cast<const DRW_LWPolyline*>(
+            decodedMPolygon->looplist.front()->objlist.front().get());
+    }
+    const bool mpolygonValid = decodedMPolygon != nullptr
+        && decodedMPolygon->annotatedBoundary == 1
+        && decodedMPolygon->xDirX == 0.25
+        && decodedMPolygon->xDirY == -0.5
+        && decodedMPolygonBoundary != nullptr
+        && (decodedMPolygonBoundary->flags & 1) != 0
+        && decodedMPolygonBoundary->vertlist.size() == 3u
+        && decodedMPolygonBoundary->vertlist[0]->x == 1.0
+        && decodedMPolygonBoundary->vertlist[1]->y == 2.0
+        && decodedMPolygonBoundary->vertlist[2]->x == 3.0
+        && decodedMPolygonBoundary->vertlist[2]->y == 5.0;
     if (!keepOutput)
         std::filesystem::remove(output, ec);
     if (!(faceValid && solidValid && traceValid && poly3dValid
-          && polyfaceValid && ocsValid && meshValid && hatchOrientationValid))
+          && polyfaceValid && ocsValid && meshValid && hatchOrientationValid
+          && mpolygonValid))
         std::cerr << "DXF topology semantic mismatch (" << encoding
                   << "): face=" << faceValid << " solid=" << solidValid
                   << " trace=" << traceValid << " poly3d=" << poly3dValid
                   << " polyface=" << polyfaceValid << " ocs=" << ocsValid
                   << " mesh=" << meshValid
-                  << " hatch-orientation=" << hatchOrientationValid << '\n';
+                  << " hatch-orientation=" << hatchOrientationValid
+                  << " mpolygon=" << mpolygonValid << '\n';
     return faceValid && solidValid && traceValid && poly3dValid
-        && polyfaceValid && ocsValid && meshValid && hatchOrientationValid;
+        && polyfaceValid && ocsValid && meshValid && hatchOrientationValid
+        && mpolygonValid;
 }
 
 bool runDxfLegacyEllipseDowngrade(const std::filesystem::path& directory,

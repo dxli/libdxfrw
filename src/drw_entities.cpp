@@ -14513,6 +14513,7 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         break;
     case 76:
         hpattern = reader->getInt32();
+        m_dxfPatternTypeSeen = true;
         break;
     case 77:
         doubleflag = reader->getInt32();
@@ -14756,14 +14757,38 @@ bool DRW_MPolygon::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
     // to DRW_Hatch::parseCode. It adds a trailer that plain HATCH never emits:
     //   63 / 421 / 430  fill color (ACI / RGB / book-name) — the filled area's
     //                   color, which may differ from the boundary outline color;
-    //   11 / 21         boundary x-direction vector (no render impact; left to
-    //                   the base, which ignores it outside an edge context);
+    //   11 / 21         MPOLYGON offset-vector components (not an edge point);
     //   99              count of degenerate boundary paths.
     // 63/421 are also gradient sub-codes in HATCH, so only claim them here when no
     // gradient is being accumulated (gradColors empty) — otherwise defer to base.
+    // The MPOLYGON group-11/21 offset vector is a top-level trailer field,
+    // whereas the same groups describe edge data inside boundary paths.
+    if (m_dxfOffsetVectorPending) {
+        if (code != 21)
+            return false;
+        xDirY = reader->getDouble();
+        m_dxfOffsetVectorPending = false;
+        return true;
+    }
+    if (dxfPatternTypeSeen() && code == 11) {
+        xDirX = reader->getDouble();
+        m_dxfOffsetVectorPending = true;
+        return true;
+    }
+    if (dxfPatternTypeSeen() && code == 21)
+        return false;
     if (!isValidDxfCoordinateTransition(code))
         return false;
     switch (code) {
+    case 73:
+        // Before top-level group 76 this code belongs to a boundary path
+        // (polyline closure or arc/ellipse direction); after it, Autodesk
+        // assigns group 73 to MPOLYGON's annotated-boundary flag.
+        if (dxfPatternTypeSeen()) {
+            annotatedBoundary = reader->getInt32();
+            return annotatedBoundary == 0 || annotatedBoundary == 1;
+        }
+        break;
     case 63:
         if (gradColors.empty()) { fillColorAci = reader->getInt32(); return true; }
         break;
@@ -14780,6 +14805,12 @@ bool DRW_MPolygon::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         break;
     }
     return DRW_Hatch::parseCode(code, reader);
+}
+
+bool DRW_MPolygon::validateDxf() const {
+    return DRW_Hatch::validateDxf() && !m_dxfOffsetVectorPending
+        && (annotatedBoundary == 0 || annotatedBoundary == 1)
+        && std::isfinite(xDirX) && std::isfinite(xDirY);
 }
 
 // DRW_MPolygon::parseDwg — AcDbMPolygon DWG body.
@@ -14807,8 +14838,10 @@ bool DRW_MPolygon::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
     fillColorAci = 0;
     fillColorRgb = -1;
     fillColorName.clear();
+    annotatedBoundary = 0;
     xDirX = 0.0;
     xDirY = 0.0;
+    m_dxfOffsetVectorPending = false;
     degenerateLoops = 0;
     dwgBuffer bodyProbe = sourceBuf->forkIndependent();
     dwgBuffer stringProbe = sourceBuf->forkIndependent();

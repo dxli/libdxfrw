@@ -2115,6 +2115,8 @@ bool dxfRW::validateHatchPayload(const DRW_Hatch *ent) const {
             || polygon->fillColorAci > std::numeric_limits<std::uint16_t>::max()
             || polygon->fillColorRgb < -1
             || polygon->fillColorRgb > 0xFFFFFF
+            || (polygon->annotatedBoundary != 0
+                && polygon->annotatedBoundary != 1)
             || polygon->degenerateLoops < 0
             || !isSafeDxfRecordText(polygon->fillColorName))
             return false;
@@ -4355,6 +4357,8 @@ bool dxfRW::writeMPolygon(DRW_MPolygon *ent){
             writer->writeDouble(41, ent->scale);
             writer->writeInt16(77, ent->doubleflag);
         }
+        if (ent->annotatedBoundary != 0)
+            writer->writeInt16(73, ent->annotatedBoundary);
         const int nDefLines = static_cast<int>(ent->patternLines.size());
         writer->writeInt16(78, nDefLines);
         for (const DRW_Hatch::PatternLine &pl : ent->patternLines) {

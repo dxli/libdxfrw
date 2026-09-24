@@ -1955,6 +1955,13 @@ public:
             lastHatch = *data;
         }
     }
+    void addMPolygon(const DRW_MPolygon* data) override {
+        if (data != nullptr) {
+            ++mpolygonCount;
+            lastMPolygon = *data;
+            addHatch(data);
+        }
+    }
     void addViewport(const DRW_Viewport&) override {}
     void addImage(const DRW_Image*) override {}
     void linkImage(const DRW_ImageDef*) override {}
@@ -1987,6 +1994,7 @@ public:
     std::size_t traceCount {0};
     std::size_t solidCount {0};
     std::size_t hatchCount {0};
+    std::size_t mpolygonCount {0};
     std::string headerComments;
     std::size_t modelerGeometryCount {0};
     std::size_t surfaceCount {0};
@@ -1995,6 +2003,7 @@ public:
     DRW_Trace lastTrace;
     DRW_Solid lastSolid;
     DRW_Hatch lastHatch;
+    DRW_MPolygon lastMPolygon;
     DRW_ModelerGeometry lastModelerGeometry;
     DRW_Surface lastSurface;
 };
@@ -3320,6 +3329,56 @@ void testDxfHatchElevationAndOcsBoundary(TestContext& t) {
                  &completeMPolygonCapture, false, completeMPolygon)
                  && completeMPolygonCapture.hatchCount == 1u,
              "MPOLYGON accepts a complete OCS pair before its fill-color trailer");
+
+    const auto makeMPolygon = [](int closed, int annotated, const char* xdir) {
+        return std::string(
+            "0\nSECTION\n2\nENTITIES\n0\nMPOLYGON\n5\n709\n8\n0\n"
+            "100\nAcDbEntity\n100\nAcDbMPolygon\n"
+            "10\n0\n20\n0\n30\n0\n210\n0\n220\n0\n230\n1\n"
+            "2\nSOLID\n70\n1\n71\n0\n91\n1\n"
+            "92\n2\n72\n0\n73\n")
+            + std::to_string(closed)
+            + "\n93\n1\n10\n1\n20\n2\n97\n0\n76\n1\n73\n"
+            + std::to_string(annotated)
+            + "\n78\n0\n" + xdir + "99\n0\n0\nENDSEC\n0\nEOF\n";
+    };
+    const auto preservesMPolygonFlags = [&t, &makeMPolygon](
+            int closed, int annotated, const char* description) {
+        FuzzInterface capture;
+        dxfRW reader("");
+        std::string input = makeMPolygon(closed, annotated,
+            "11\n0.25\n21\n-0.5\n");
+        const bool read = reader.readAscii(&capture, false, input);
+        bool closedFlag = false;
+        if (capture.lastMPolygon.looplist.size() == 1u
+            && !capture.lastMPolygon.looplist.front()->objlist.empty()) {
+            const auto boundary = std::dynamic_pointer_cast<DRW_LWPolyline>(
+                capture.lastMPolygon.looplist.front()->objlist.front());
+            closedFlag = boundary && (boundary->flags & 1) != 0;
+        }
+        t.expect(read && capture.mpolygonCount == 1u
+                     && capture.lastMPolygon.annotatedBoundary == annotated
+                     && closedFlag == (closed != 0)
+                     && capture.lastMPolygon.xDirX == 0.25
+                     && capture.lastMPolygon.xDirY == -0.5,
+                 description);
+    };
+    preservesMPolygonFlags(1, 0,
+        "MPOLYGON annotation zero preserves a closed boundary and x direction");
+    preservesMPolygonFlags(0, 1,
+        "MPOLYGON annotation one does not close an open boundary");
+
+    for (const auto& malformedExtension : {
+             std::make_pair(2, "78\n0\n"),
+             std::make_pair(0, "11\n0.25\n99\n0\n")}) {
+        FuzzInterface capture;
+        dxfRW reader("");
+        std::string input = makeMPolygon(1, malformedExtension.first,
+            malformedExtension.second);
+        t.expect(!reader.readAscii(&capture, false, input)
+                     && capture.mpolygonCount == 0u,
+                 "MPOLYGON rejects invalid annotation and incomplete x-direction");
+    }
 }
 
 void testMLeaderDxfContextRoundTrip(TestContext& t) {

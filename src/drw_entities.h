@@ -2820,6 +2820,7 @@ protected:
         m_dxfPolylineVertexCountSeen = false;
         m_dxfPatternLineCountExpected = -1;
         m_dxfPatternLineCountSeen = false;
+        m_dxfPatternTypeSeen = false;
         m_dxfPatternDashCountExpected = -1;
         m_dxfPatternDashCountSeen = false;
         m_dxfGradientColorCountExpected = -1;
@@ -2834,6 +2835,7 @@ protected:
 
     bool parseCode(int code, const std::unique_ptr<dxfReader>& reader) override;
     bool validateDxf() const;
+    bool dxfPatternTypeSeen() const { return m_dxfPatternTypeSeen; }
     bool isValidDxfCoordinateTransition(int code) const {
         if (m_dxfPendingCoordinateGroup != 0)
             return code == m_dxfPendingCoordinateGroup + 10;
@@ -2913,6 +2915,7 @@ private:
         m_dxfPolylineVertexCountSeen = false;
         m_dxfPatternLineCountExpected = -1;
         m_dxfPatternLineCountSeen = false;
+        m_dxfPatternTypeSeen = false;
         m_dxfPatternDashCountExpected = -1;
         m_dxfPatternDashCountSeen = false;
         m_dxfGradientColorCountExpected = -1;
@@ -2980,6 +2983,7 @@ private:
     bool m_dxfPolylineVertexCountSeen = false;
     int m_dxfPatternLineCountExpected = -1;
     bool m_dxfPatternLineCountSeen = false;
+    bool m_dxfPatternTypeSeen = false;
     int m_dxfPatternDashCountExpected = -1;
     bool m_dxfPatternDashCountSeen = false;
     int m_dxfGradientColorCountExpected = -1;
@@ -2999,11 +3003,12 @@ private:
 *  AcDbMPolygon is a hatch-derived filled polygon used mainly by AutoCAD Map 3D /
 *  Civil. Its boundary loops, solid flag and pattern share HATCH's representation,
 *  so it stores into a DRW_Hatch and renders through the existing addHatch path.
-*  It only adds a trailing fill-color, an x-direction vector and a degenerate-path
-*  count that plain HATCH does not carry. The DWG binary layout also differs from
-*  HATCH: a leading BS style field precedes the gradient block, and the trailing
-*  fields are a fill CMC + x-direction + degenerate-path count (not HATCH's pixel
-*  size + seed points). Both the DXF (dxfRW::processMPolygon) and DWG
+*  It also adds an annotated-boundary flag, fill color, x-direction vector and a
+*  degenerate-path count that plain HATCH does not carry. The DWG binary layout
+*  also differs from HATCH: a leading BS style field precedes the gradient
+*  block, and the trailing fields are a fill CMC + x-direction + degenerate-path
+*  count (not HATCH's pixel size + seed points). Both the DXF
+*  (dxfRW::processMPolygon) and DWG
 *  (DRW_MPolygon::parseDwg, routed by classesmap recName "MPOLYGON" / className
 *  "AcDbMPolygon") read paths are wired; both deliver via addMPolygon.
 */
@@ -3021,15 +3026,20 @@ public:
     int fillColorAci {0};      /*!< fill color ACI index, code 63 */
     int fillColorRgb {-1};     /*!< fill color 24-bit RGB, code 421 (-1 = unset) */
     UTF8STRING fillColorName;  /*!< fill color book/name, code 430 */
-    double xDirX {0.0};        /*!< boundary x-direction vector x, code 11 */
-    double xDirY {0.0};        /*!< boundary x-direction vector y, code 21 */
+    int annotatedBoundary {0}; /*!< MPOLYGON boundary annotation flag, DXF code 73 */
+    double xDirX {0.0};        /*!< MPOLYGON offset-vector X, DXF code 11 */
+    double xDirY {0.0};        /*!< MPOLYGON offset-vector Y, DXF code 21 */
     int degenerateLoops {0};   /*!< count of degenerate boundary paths, code 99 */
 
 protected:
     bool parseCode(int code, const std::unique_ptr<dxfReader>& reader) override;
+    bool validateDxf() const;
     virtual bool parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs=0) override;
     [[nodiscard]] virtual bool encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs=0,
                            dwgBufferW *strBuf=nullptr, dwgBufferW *handleBuf=nullptr) override;
+
+private:
+    bool m_dxfOffsetVectorPending {false};
 };
 
 //! Class to handle image entity
