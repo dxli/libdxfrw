@@ -52,8 +52,10 @@ python3 tools/run_fast_focus.py --build-dir build
 ### Using `dwg2dxf` from FreeCAD
 
 The installed `dwg2dxf` executable can serve as FreeCAD Draft's external
-DWG-to-DXF converter for import. This project does not provide FreeCAD's
-paired `dxf2dwg` program, so it does not provide LibreDWG-based DWG export.
+DWG-to-DXF converter for the `Draft.importDWG.open()` and
+`Draft.importDWG.insert()` import workflows. This project does not provide
+FreeCAD's paired `dxf2dwg` program, so it does not provide LibreDWG-based DWG
+export.
 Add the installed bindir (usually `bin`) to `PATH` before launching FreeCAD, or
 set FreeCAD's DWG converter path to the full installed executable path. Select
 FreeCAD's LibreDWG-compatible converter option when you want to attribute an

@@ -29,10 +29,11 @@ the full executable path. In automatic mode FreeCAD may try another converter
 after failure. A successful conversion means that DXF was produced; FreeCAD's
 DXF importer may still not support every preserved entity or 3D feature.
 .PP
-This package supplies the DWG-to-DXF import-side program only; it does not
-include FreeCAD's paired dxf2dwg program and does not provide LibreDWG-based
-DWG export. FreeCAD shares its TeighaFileConverter preference between import
-and export. If that preference names dwg2dxf, FreeCAD derives the sibling
+This package supplies the DWG-to-DXF import-side program for FreeCAD Draft's
+importDWG.open() and importDWG.insert() workflows only; it does not include
+FreeCAD's paired dxf2dwg program and does not provide LibreDWG-based DWG
+export. FreeCAD shares its TeighaFileConverter preference between import and
+export. If that preference names dwg2dxf, FreeCAD derives the sibling
 dxf2dwg path for export; when the sibling is missing, the current resolver
 does not fall back to PATH. To discover dwg2dxf from PATH without replacing a
 separate export setup, do not set the shared preference to either LibreDWG

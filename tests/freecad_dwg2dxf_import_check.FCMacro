@@ -4,8 +4,9 @@
 # one of the tracked ordinary-encoding fixtures (or a generated control).
 # Put this build's or installed dwg2dxf on PATH. Set
 # LIBDXFRW_FREECAD_OPERATION=insert to exercise insertion into an existing
-# document; the default is open(). Generated DWG/DXF files should remain
-# outside the source tree.
+# document; the default is open(). Set LIBDXFRW_FREECAD_DISCOVERY to "path"
+# or "configured" to assert a specific FreeCAD resolver lane. Generated
+# DWG/DXF files should remain outside the source tree.
 
 import hashlib
 import json
@@ -41,9 +42,42 @@ legacy = App.ParamGet(
 if legacy:
     raise RuntimeError("This check requires FreeCAD's default C++ DXF importer")
 
+
+def same_path(left, right):
+    return os.path.normcase(os.path.abspath(left)) == os.path.normcase(
+        os.path.abspath(right)
+    )
+
+
 conversion_mode = importDWG.params.get_param("DWGConversion")
-if operation == "insert" and conversion_mode != 1:
-    raise RuntimeError("insert() qualification requires DWGConversion=1")
+discovery = os.environ.get("LIBDXFRW_FREECAD_DISCOVERY", "existing").lower()
+if discovery not in ("existing", "path", "configured"):
+    raise RuntimeError(
+        "LIBDXFRW_FREECAD_DISCOVERY must be 'existing', 'path', or 'configured'"
+    )
+if (operation == "insert" or discovery != "existing") and conversion_mode != 1:
+    raise RuntimeError("attributed converter checks require DWGConversion=1")
+converter_preference = str(
+    importDWG.params.get_param("TeighaFileConverter") or ""
+)
+if discovery == "path":
+    preference_lower = converter_preference.lower()
+    if "dwg2dxf" in preference_lower or "dxf2dwg" in preference_lower:
+        raise RuntimeError(
+            "PATH discovery requires no configured LibreDWG executable"
+        )
+elif discovery == "configured":
+    configured_path = os.environ.get("LIBDXFRW_FREECAD_TEIGHA_CONVERTER")
+    if not configured_path:
+        raise RuntimeError(
+            "configured discovery requires LIBDXFRW_FREECAD_TEIGHA_CONVERTER"
+        )
+    if not same_path(converter_preference, configured_path):
+        raise AssertionError(
+            "FreeCAD's configured converter path differs from expectation"
+        )
+if operation == "insert" and discovery != "path":
+    raise RuntimeError("insert() qualification requires the PATH discovery lane")
 
 captured = {}
 original_convert = importDWG.convertToDxf
@@ -53,12 +87,6 @@ original_reporter = importDXF.DxfImportReporter
 original_popen = subprocess.Popen
 original_oda = importDWG.get_oda_converter
 original_qcad = importDWG.get_qcad_converter
-
-
-def same_path(left, right):
-    return os.path.normcase(os.path.abspath(left)) == os.path.normcase(
-        os.path.abspath(right)
-    )
 
 
 def digest(path):
@@ -126,18 +154,11 @@ def assert_converter_route(dxf_path):
         raise AssertionError("FreeCAD did not invoke the expected dwg2dxf command")
 
     expected_binary = os.environ.get("LIBDXFRW_FREECAD_EXPECT_DWG2DXF")
-    if operation == "insert" and not expected_binary:
+    if (operation == "insert" or discovery != "existing") and not expected_binary:
         raise RuntimeError(
-            "insert() qualification requires LIBDXFRW_FREECAD_EXPECT_DWG2DXF"
+            "attributed discovery requires LIBDXFRW_FREECAD_EXPECT_DWG2DXF"
         )
-    if operation == "insert":
-        converter_preference = str(
-            importDWG.params.get_param("TeighaFileConverter")
-        ).lower()
-        if "dwg2dxf" in converter_preference or "dxf2dwg" in converter_preference:
-            raise AssertionError(
-                "insert() qualification must use PATH, not a configured LibreDWG executable"
-            )
+    if discovery == "path":
         path_candidates = [
             os.path.join(directory, executable)
             for directory in os.environ.get("PATH", "").split(os.pathsep)
@@ -146,6 +167,15 @@ def assert_converter_route(dxf_path):
         ]
         if not any(same_path(candidate, resolved) for candidate in path_candidates):
             raise AssertionError("resolved dwg2dxf was not discovered from PATH")
+    elif discovery == "configured":
+        if not expected_binary:
+            raise RuntimeError(
+                "configured discovery requires LIBDXFRW_FREECAD_EXPECT_DWG2DXF"
+            )
+        if not same_path(resolved, expected_binary):
+            raise AssertionError(
+                "configured preference did not resolve to expected dwg2dxf"
+            )
     if expected_binary and not same_path(resolved, expected_binary):
         raise AssertionError(
             "FreeCAD resolved %r, expected installed executable %r"
@@ -167,9 +197,9 @@ def assert_converter_route(dxf_path):
         raise AssertionError("FreeCAD used an unexpected DXF importer entry point")
     binary_hash = digest(resolved)
     expected_hash = os.environ.get("LIBDXFRW_FREECAD_EXPECT_DWG2DXF_SHA256")
-    if operation == "insert" and not expected_hash:
+    if (operation == "insert" or discovery != "existing") and not expected_hash:
         raise RuntimeError(
-            "insert() qualification requires LIBDXFRW_FREECAD_EXPECT_DWG2DXF_SHA256"
+            "attributed discovery requires LIBDXFRW_FREECAD_EXPECT_DWG2DXF_SHA256"
         )
     if expected_hash and binary_hash.lower() != expected_hash.lower():
         raise AssertionError("resolved dwg2dxf SHA-256 does not match expectation")
@@ -257,6 +287,8 @@ try:
             "User parameter:BaseApp/Preferences/Mod/Draft"
         ).GetInt("DxfImportMode", 2),
         "dwg_conversion": conversion_mode,
+        "discovery": discovery,
+        "teigha_file_converter_preference": converter_preference,
         "converter": converter,
         "input": os.path.abspath(sample),
         "input_sha256": digest(sample),
