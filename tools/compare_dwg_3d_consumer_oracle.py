@@ -7,12 +7,13 @@ scope is intentionally limited to one AutoCAD-authored AC1015 (R2000) planar
 3D POLYLINE sample, one locally generated AC1015 topology control, AC1024
 (R2010) INSERT placement and SPLINE fit data and one sample's LINE endpoints,
 plus AC1021 (R2007) LINE endpoints, 3DFACE corners/edge flags, and ARC,
-CIRCLE, and ELLIPSE fields. A hash-pinned AutoCAD 2016-authored POINT matrix
-compares one nonzero-Z POINT across AC1014/AC1015/AC1018/AC1021/AC1024/AC1027,
-and checks the five available paired source DXFs. The local topology control
-exercises nonzero-Z 3D POLYLINE, legacy POLYLINE_MESH, and PFACE but does not
-qualify AutoCAD interoperability. Modeler, surface, and other version/family
-fields are not compared here.
+CIRCLE, ELLIPSE, and two legacy POLYLINE_MESH records in one sample of
+unverified provenance. A hash-pinned AutoCAD 2016-authored POINT matrix
+compares one nonzero-Z POINT across
+AC1014/AC1015/AC1018/AC1021/AC1024/AC1027, and checks the five available paired
+source DXFs. The local topology control exercises nonzero-Z 3D POLYLINE,
+legacy POLYLINE_MESH, and PFACE but does not qualify AutoCAD interoperability.
+Modeler, surface, and other version/family fields are not compared here.
 """
 
 from __future__ import annotations
@@ -515,11 +516,19 @@ def compare_polyline_mesh(
         raise OracleError(
             f"unexpected LibreDWG VERTEX_MESH count {len(owned)}; "
             f"expected {len(expected_points)}")
-    if (owned[0][1] != handle_key(external.get("first_vertex"),
-                                  "LibreDWG POLYLINE_MESH first vertex")
-            or owned[-1][1] != handle_key(external.get("last_vertex"),
-                                          "LibreDWG POLYLINE_MESH last vertex")):
-        raise OracleError("legacy POLYLINE_MESH child order disagrees with end handles")
+    linked_vertices = external.get("vertex")
+    if isinstance(linked_vertices, list):
+        linked_handles = [handle_key(value, "LibreDWG POLYLINE_MESH vertex link")
+                          for value in linked_vertices]
+        if [item[1] for item in owned] != linked_handles:
+            raise OracleError(
+                "legacy POLYLINE_MESH child order disagrees with vertex links")
+    elif (owned[0][1] != handle_key(external.get("first_vertex"),
+                                    "LibreDWG POLYLINE_MESH first vertex")
+          or owned[-1][1] != handle_key(external.get("last_vertex"),
+                                        "LibreDWG POLYLINE_MESH last vertex")):
+        raise OracleError(
+            "legacy POLYLINE_MESH child order disagrees with end handles")
 
     nonzero_z = 0
     for index, (_, vertex_handle, vertex) in enumerate(owned):
@@ -649,6 +658,7 @@ def main() -> int:
     expected_vertex_count = None
     sample_source = None
     topology_recipe = None
+    tablet_mesh_recipes: dict[str, dict[str, Any]] | None = None
     paired_reference_path: pathlib.Path | None = None
     paired_reference_digest: str | None = None
     if version == "AC1015" and args.input.name == "PolyLine3D.dwg":
@@ -729,11 +739,29 @@ def main() -> int:
                  ("ELLIPSE", 24, compare_ellipse),
                  ("ARC", 243, compare_arc),
                  ("CIRCLE", 168, compare_circle),
+                 ("POLYLINE_MESH", 2, compare_polyline_mesh),
                  ("LINE", 3002, compare_line))
         expected_nonzero_z_line_count = 670
-        excluded = ["all entities other than LINE, 3DFACE, ARC, CIRCLE, and ELLIPSE",
+        tablet_mesh_points = [
+            [5.32749676213992, 4.77769267854258, 0.0],
+            [5.32007611287037, 4.85488811069972, 0.0],
+            [5.27885583688404, 4.92057745252258, 0.0],
+            [5.21257322296318, 4.96083681010969, 0.0],
+            [5.13527791840421, 4.96713257651620, 0.0],
+            [5.19517864821834, 4.77813944154093, 0.0],
+            [5.18525517733353, 4.79634562383081, 0.0],
+            [5.17122926102256, 4.81161697018965, 0.0],
+            [5.15393093509044, 4.82304974185362, 0.0],
+            [5.13438389236210, 4.82996736200440, 0.0],
+        ]
+        tablet_mesh_recipes = {
+            "154e": {"dimensions": (2, 5), "points": tablet_mesh_points},
+            "22d8": {"dimensions": (2, 5), "points": tablet_mesh_points},
+        }
+        excluded = ["all entities other than LINE, 3DFACE, ARC, CIRCLE, ELLIPSE, and POLYLINE_MESH",
                     "other versions", "unverified sample provenance",
-                    "non-default ARC/CIRCLE extrusion/thickness"]
+                    "non-default ARC/CIRCLE extrusion/thickness",
+                    "non-planar legacy mesh vertices and mesh-face semantics"]
         sample_source = {
             "provenance": ("existing user-owned local sample; original "
                            "producer/date not verified"),
@@ -826,7 +854,7 @@ def main() -> int:
     for entity, count, comparator in cases:
         adapter_entity = "POLYLINE" if entity.startswith("POLYLINE_") else entity
         adapter_rows = index_adapter(adapter, adapter_entity)
-        if topology_recipe is not None and entity.startswith("POLYLINE_"):
+        if entity.startswith("POLYLINE_"):
             expected_flags = {"POLYLINE_3D": 8,
                               "POLYLINE_MESH": 16,
                               "POLYLINE_PFACE": 64}[entity]
@@ -837,6 +865,7 @@ def main() -> int:
         rows = compare_entity_set(index_external(external, entity),
                                   adapter_rows, entity, count)
         result_metrics = {}
+        mesh_metrics: dict[str, dict[str, int]] = {}
         for row in rows:
             if entity == "POLYLINE_3D":
                 recipe = (topology_recipe or {}).get(entity)
@@ -854,8 +883,18 @@ def main() -> int:
                     result_metrics = {"vertexCount": vertex_count,
                                      "verticesWithNonzeroZ": nonzero_z}
             elif entity == "POLYLINE_MESH":
-                recipe = topology_recipe[entity]
-                result_metrics = comparator(
+                if topology_recipe is not None:
+                    recipe = topology_recipe[entity]
+                elif tablet_mesh_recipes is not None:
+                    recipe = tablet_mesh_recipes.get(row["handle"])
+                    if recipe is None:
+                        raise OracleError(
+                            "unexpected tablet POLYLINE_MESH handle "
+                            f"{row['handle']}")
+                else:
+                    raise OracleError(
+                        "POLYLINE_MESH comparison has no expected-field recipe")
+                mesh_metrics[row["handle"]] = comparator(
                     row, index_external(external, "VERTEX_MESH"),
                     recipe["dimensions"], recipe["points"])
             elif entity == "POLYLINE_PFACE":
@@ -868,6 +907,20 @@ def main() -> int:
                 compared = comparator(row)
                 if entity == "POINT":
                     result_metrics = compared
+        if entity == "POLYLINE_MESH":
+            result_metrics = {
+                "meshRecords": [
+                    {"handle": handle, **mesh_metrics[handle]}
+                    for handle in sorted(mesh_metrics,
+                                         key=lambda item: int(item, 16))
+                ],
+                "vertexCount": sum(
+                    metrics["vertexCount"]
+                    for metrics in mesh_metrics.values()),
+                "verticesWithNonzeroZ": sum(
+                    metrics["verticesWithNonzeroZ"]
+                    for metrics in mesh_metrics.values()),
+            }
         result = {"entity": entity, "count": len(rows),
                   "comparedBy": "handle", "semanticFieldsMatched": True}
         if entity == "POINT":
