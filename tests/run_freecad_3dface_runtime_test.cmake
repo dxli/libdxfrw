@@ -4,6 +4,12 @@ foreach(_required IN ITEMS FREECADCMD DWG2DXF BUILD_DWG2DXF ODAFILECONVERTER
         message(FATAL_ERROR "${_required} is missing or does not exist: '${${_required}}'")
     endif()
 endforeach()
+if(NOT DEFINED OPERATION)
+    message(FATAL_ERROR "OPERATION is required")
+endif()
+if(NOT OPERATION STREQUAL "open" AND NOT OPERATION STREQUAL "insert")
+    message(FATAL_ERROR "OPERATION must be open or insert")
+endif()
 
 get_filename_component(_installed_converter "${DWG2DXF}" REALPATH)
 get_filename_component(_build_converter "${BUILD_DWG2DXF}" REALPATH)
@@ -28,7 +34,7 @@ string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef _run_id)
 set(_temp_parent "${_system_temp_base}/libdxfrw-freecad-3dface-${_run_id} with spaces")
 set(_test_root "${_temp_parent}/runtime")
 set(_oda_output_dir "${_test_root}/oda dwg")
-set(_profile "${_test_root}/profile")
+set(_profile "${_test_root}/profile-${OPERATION}")
 set(_user_cfg "${_profile}/user.cfg")
 set(_user_home "${_profile}/home")
 set(_user_data "${_profile}/data")
@@ -85,7 +91,7 @@ else()
 endif()
 set(_environment
     "LIBDXFRW_FREECAD_DWG=${_input}"
-    "LIBDXFRW_FREECAD_OPERATION=open"
+    "LIBDXFRW_FREECAD_OPERATION=${OPERATION}"
     "LIBDXFRW_FREECAD_DISCOVERY=path"
     "LIBDXFRW_FREECAD_SEED_ISOLATED_PREFERENCES=1"
     "LIBDXFRW_FREECAD_USER_CFG=${_user_cfg}"
@@ -119,6 +125,7 @@ foreach(_expected IN ITEMS
         "FREECAD_DWG_IMPORT_ASSERTIONS_PASS="
         "${_installed_converter}"
         "${_converter_sha256}"
+        "\"operation\": \"${OPERATION}\""
         "\"support_level\": \"converter-integration-only\""
         "\"importer_outcome\": \"unsupported_by_pinned_freecad_importer\""
         "\"entity_count\": 1"

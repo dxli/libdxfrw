@@ -67,11 +67,9 @@ if expect_3dface not in ("", "0", "unsupported"):
     raise RuntimeError(
         "LIBDXFRW_FREECAD_EXPECT_3DFACE must be unsupported"
     )
-if expect_3dface and (
-    operation != "open" or desktop_dispatch or expected_modeler
-):
+if expect_3dface and (desktop_dispatch or expected_modeler):
     raise RuntimeError(
-        "3DFACE importer qualification requires open() only"
+        "3DFACE importer qualification excludes desktop dispatch and modeler mode"
     )
 if desktop_dispatch and not App.GuiUp:
     raise RuntimeError("desktop dispatch qualification requires the FreeCAD GUI")

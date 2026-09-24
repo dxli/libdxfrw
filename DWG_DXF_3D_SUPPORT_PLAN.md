@@ -2973,6 +2973,53 @@ tested DWG→DXF→import entry point; a pass through `open()` does not qualify
 Current FreeCAD source routes `Draft.importDWG.insert()` through the same
 converter helper but hands off to `importDXF.insert()`; that separate runtime
 boundary is now S8.9.3 and is not inferred from the existing `open()` tests.
+
+FreeCAD-specific implementation contract and acceptance order:
+
+1. Treat FreeCAD as an external process consumer of the installed `dwg2dxf`,
+   not a library/API integration. Test the executable FreeCAD actually resolves:
+   its `TeighaFileConverter` preference or platform `PATH` lookup (the program
+   name is `dwg2dxf.exe` on Windows and `dwg2dxf` on Linux/macOS). Record the
+   resolved real path and binary hash. Exercise paths containing spaces; keep
+   argument boundaries as an argv vector, never shell-concatenate a command.
+2. Match the current Draft/importDWG.py invocation exactly:
+   `[dwg2dxf, input.dwg, "-o", output.dxf]`. Do not require `-v`, `-y`, or
+   other switches FreeCAD does not pass. Honor the existing converter version
+   policy and preserve valid source/entity fields; validate the result through
+   the public DXF reader. Because the wrapper's LibreDWG lane treats output-file
+   existence as success after `communicate()` rather than checking the process
+   return code, keep publication atomic: failed conversion must not leave a
+   plausible final DXF. Exercise no-output failure with malformed input.
+3. Qualify `Draft.importDWG.open()` and `insert()` as separate routes. For each,
+   assert exactly one expected converter invocation, status and output path,
+   and that FreeCAD receives that same DXF; for `insert()`, also assert the
+   target document. Test the C++ and legacy Python DXF importers independently
+   only when both are actually installed. An absent optional importer/addon is
+   an explicit unqualified lane, not a reason to download or mutate a user's
+   FreeCAD installation.
+4. Separate converter compatibility from importer semantics. A valid DXF,
+   matching record/field readback, and correct handoff can pass while FreeCAD
+   reports an entity unsupported or silently constructs wrong geometry. Only
+   promote geometry for a pinned FreeCAD commit/release, platform/architecture,
+   importer mode/settings, discovery route, entry point, and independently
+   checked geometry. Pin all preferences in an isolated profile and disable
+   ODA/QCAD fallbacks when attributing a result to this converter.
+5. Keep the implementation loop fast: run the entity-specific CLI/readback
+   CTest and focused unit test in the normal slice; keep FreeCAD runtime and
+   desktop-dispatch tests opt-in and run them only for changed converter/import
+   behavior or the exact consumer claim being added. Leave other-platform,
+   other-release, GUI/file-dialog, viewport, and unavailable-importer checks
+   explicitly deferred, and continue unrelated ready slices.
+
+S8.15.18.1 now applies item 3 to a negative tilted-3DFACE witness: the fast
+converter/readback test remains separate from the two pinned FreeCAD runtime
+operations, and `open()` and `insert()` each assert the installed executable,
+exact argv, same-output handoff, importer limitation, and (for insert) target
+document. Both operations produce the same bounded result on the pinned
+FreeCAD 1.1.3/C++/macOS profile: one standard 3DFACE is passed through, then
+reported unsupported with no created shapes. This proves converter integration
+for those two routes only; it is expressly not FreeCAD 3DFACE geometry support.
+
 S8.14 adds one locally generated AC1015 nonzero-Z LINE control, which FreeCAD
 1.1.3's default C++ importer converts to one valid B-rep edge with endpoints
 `(1,2,3)` and `(4,6,9)`. This demonstrates this generated vector through
@@ -3078,7 +3125,7 @@ degenerate, other-knot, other-scenario, target-authored, or other-version
 splines.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 82/96 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
+commit; 83/97 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -3325,3 +3372,4 @@ Additional implementation-item record:
 | Item | State | Evidence / next action |
 | --- | --- | --- |
 | S8.15.18 | COMMITTED | Added locally authored tests/fixtures/dxf/ac1015_3dface_freecad_control.dxf, optional fast dwg2dxf_freecad_3dface_oda_cli, optional dwg2dxf_freecad_3dface_handoff FreeCAD runtime CTest, and a pinned negative mode in tests/freecad_dwg2dxf_import_check.FCMacro. The tilted AC1015 3DFACE has WCS corners (0,0,0),(4,0,0),(4,3,4),(0,3,4), and invisible-edge flag 4. Autodesk's DXF reference defines the corners as WCS and group 70 as independent invisible-edge flags. ODA File Converter 27.1.0.0 writes only an ephemeral DWG; the fast script passes exact input -o output conversion and public DXF readback with all coordinates/flag retained. FreeCAD 1.1.3 revision 145529fe741292ff0b3977a01195bf0247425794, macOS 27 arm64, C++ mode 2, DWGConversion=1, isolated profile/PATH discovery: installed /private/tmp/libdxfrw-freecad-3dface-20260924/bin/dwg2dxf (SHA-256 6a60077d4389437e1e9dd0e2be761062d2f0b792caac432a23fde4f96c1289e4) receives exact argv, exits 0, and hands the same DXF to the importer. The pinned importer counts one 3DFACE (handle E6), reports it unsupported, and creates zero shapes; this is converter integration only, not FreeCAD geometry support. Source DXF SHA-256 d79d3d532b5c1b2364a35773e20fd98c6f7e1af576e0527d3f3a327e4510d1dc; runtime DWG SHA-256 5f1a561849721bd5810cb09527cce538fcb7e1e476e43358e62b8f76a24af31a; converted DXF SHA-256 79aa28f44b150011cc88c1a489455d90cc3f39ab52327a7dcdacf79c5a04e2dd. CMake registration, fast script, runtime handoff/negative assertion, Python AST parse, and git diff --check pass. Both CTests are opt-in; no generated DWG/DXF is tracked. Future geometry qualification requires a pinned FreeCAD build that imports 3DFACE plus independent vertex/area checks; target-authored DWG/version evidence remains open. |
+| S8.15.18.1 | COMMITTED | Split the prior optional FreeCAD runtime check into independent `dwg2dxf_freecad_3dface_open_handoff` and `..._insert_handoff` CTests, with separate isolated profiles and explicit operation assertion. Both run the exact installed binary with FreeCAD's argv `[dwg2dxf, input, -o, output]` and require that exact output be passed to the corresponding `importDXF.open()` or `insert()` call; insert also verifies `FreeCADDwgInsertCheck` as its destination document. On FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2, both consume one 3DFACE and independently confirm the same pinned importer gap: unsupported entity and zero shapes. The result qualifies both converter handoff routes only; it does not promote FreeCAD geometry support. Both runtime CTests are opt-in. |

@@ -521,21 +521,25 @@ if(LIBDXFRW_ENABLE_FREECAD_3DFACE_RUNTIME_CONTROL)
         message(FATAL_ERROR
             "Set LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE to the installed dwg2dxf")
     endif()
-    add_test(
-        NAME dwg2dxf_freecad_3dface_handoff
-        COMMAND ${CMAKE_COMMAND}
-            "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
-            "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
-            "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
-            "-DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}"
-            "-DSOURCE_DXF=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dxf/ac1015_3dface_freecad_control.dxf"
-            "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
-            -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3dface_runtime_test.cmake
-    )
-    set_tests_properties(dwg2dxf_freecad_3dface_handoff PROPERTIES
-        LABELS "freecad;installed;generated;integration"
-        TIMEOUT 180)
+    foreach(_operation IN ITEMS open insert)
+        add_test(
+            NAME dwg2dxf_freecad_3dface_${_operation}_handoff
+            COMMAND ${CMAKE_COMMAND}
+                "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
+                "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
+                "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+                "-DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}"
+                "-DSOURCE_DXF=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dxf/ac1015_3dface_freecad_control.dxf"
+                "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
+                "-DOPERATION=${_operation}"
+                -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_3dface_runtime_test.cmake
+        )
+        set_tests_properties(dwg2dxf_freecad_3dface_${_operation}_handoff
+            PROPERTIES
+                LABELS "freecad;installed;generated;integration"
+                TIMEOUT 180)
+    endforeach()
 endif()
 
 # Optional locally-generated oblique OCS ARC/CIRCLE control. The public
