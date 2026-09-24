@@ -1,37 +1,192 @@
-# Optional end-to-end check for FreeCAD's Draft DWG import route.
+# Optional end-to-end check for FreeCAD's Draft DWG import routes.
 #
-# Run with FreeCADCmd and set LIBDXFRW_FREECAD_DWG to one of the tracked
-# ordinary-encoding fixtures (AC1015/AC1018/AC1021/AC1027). Ensure dwg2dxf is
-# on PATH. The expected LINE bounds were independently checked against
-# LibreDWG 0.14's DXF export for each fixture.
+# Run with FreeCAD, an isolated user config, and LIBDXFRW_FREECAD_DWG set to
+# one of the tracked ordinary-encoding fixtures (or a generated control).
+# Put this build's or installed dwg2dxf on PATH. Set
+# LIBDXFRW_FREECAD_OPERATION=insert to exercise insertion into an existing
+# document; the default is open(). Generated DWG/DXF files should remain
+# outside the source tree.
 
+import hashlib
+import json
 import os
+import platform
+import subprocess
 import sys
+import tempfile
 
 import FreeCAD as App
 
 
 sample = os.environ.get("LIBDXFRW_FREECAD_DWG")
-if not sample:
-    raise RuntimeError("LIBDXFRW_FREECAD_DWG must name a DWG sample")
+if not sample or not os.path.isfile(sample):
+    raise RuntimeError("LIBDXFRW_FREECAD_DWG must name an existing DWG sample")
+
+operation = os.environ.get("LIBDXFRW_FREECAD_OPERATION", "open").lower()
+if operation not in ("open", "insert"):
+    raise RuntimeError("LIBDXFRW_FREECAD_OPERATION must be 'open' or 'insert'")
+if operation == "insert" and " " not in os.path.abspath(sample):
+    raise RuntimeError("insert() qualification requires an input path with spaces")
 
 draft_path = os.path.join(App.getResourceDir(), "Mod", "Draft")
 sys.path.insert(0, draft_path)
 
 import importDWG
+import importDXF
 
 
-doc = None
-try:
-    doc = importDWG.open(sample)
-    if doc is None:
-        raise AssertionError("Draft.importDWG.open returned no document")
+legacy = App.ParamGet(
+    "User parameter:BaseApp/Preferences/Mod/Draft"
+).GetBool("dxfUseLegacyImporter", False)
+if legacy:
+    raise RuntimeError("This check requires FreeCAD's default C++ DXF importer")
 
-    lines = sorted(
-        (obj for obj in doc.Objects if obj.TypeId == "Part::Feature"),
+conversion_mode = importDWG.params.get_param("DWGConversion")
+if operation == "insert" and conversion_mode != 1:
+    raise RuntimeError("insert() qualification requires DWGConversion=1")
+
+captured = {}
+original_convert = importDWG.convertToDxf
+original_open = importDXF.open
+original_insert = importDXF.insert
+original_reporter = importDXF.DxfImportReporter
+original_popen = subprocess.Popen
+original_oda = importDWG.get_oda_converter
+original_qcad = importDWG.get_qcad_converter
+
+
+def same_path(left, right):
+    return os.path.normcase(os.path.abspath(left)) == os.path.normcase(
+        os.path.abspath(right)
+    )
+
+
+def digest(path):
+    sha = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            sha.update(chunk)
+    return sha.hexdigest()
+
+
+def capture_convert(filename):
+    processes = []
+
+    def capture_popen(*args, **kwargs):
+        process = original_popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    subprocess.Popen = capture_popen
+    importDWG.get_oda_converter = lambda: None
+    importDWG.get_qcad_converter = lambda: None
+    try:
+        result = original_convert(filename)
+    finally:
+        subprocess.Popen = original_popen
+        importDWG.get_oda_converter = original_oda
+        importDWG.get_qcad_converter = original_qcad
+    captured["converted_dxf"] = result
+    captured["converter_processes"] = processes
+    return result
+
+
+def capture_open(filename, *args, **kwargs):
+    captured["handoff"] = {"operation": "open", "path": filename}
+    return original_open(filename, *args, **kwargs)
+
+
+def capture_insert(filename, docname, *args, **kwargs):
+    captured["handoff"] = {
+        "operation": "insert",
+        "path": filename,
+        "document": docname,
+    }
+    return original_insert(filename, docname, *args, **kwargs)
+
+
+class CapturingReporter(original_reporter):
+    def __init__(self, filename, stats_dict, total_time=0.0):
+        captured["stats"] = stats_dict
+        super().__init__(filename, stats_dict, total_time)
+
+
+def assert_converter_route(dxf_path):
+    processes = captured.get("converter_processes", [])
+    if len(processes) != 1:
+        raise AssertionError(
+            "expected one dwg2dxf process with fallbacks disabled; got %d"
+            % len(processes)
+        )
+
+    process = processes[0]
+    args = process.args
+    resolved = importDWG.get_libredwg_converter("dwg2dxf")
+    if not resolved or not isinstance(args, (list, tuple)) or len(args) != 4:
+        raise AssertionError("FreeCAD did not invoke the expected dwg2dxf command")
+
+    expected_binary = os.environ.get("LIBDXFRW_FREECAD_EXPECT_DWG2DXF")
+    if operation == "insert" and not expected_binary:
+        raise RuntimeError(
+            "insert() qualification requires LIBDXFRW_FREECAD_EXPECT_DWG2DXF"
+        )
+    if operation == "insert":
+        converter_preference = str(
+            importDWG.params.get_param("TeighaFileConverter")
+        ).lower()
+        if "dwg2dxf" in converter_preference or "dxf2dwg" in converter_preference:
+            raise AssertionError(
+                "insert() qualification must use PATH, not a configured LibreDWG executable"
+            )
+        path_candidates = [
+            os.path.join(directory, executable)
+            for directory in os.environ.get("PATH", "").split(os.pathsep)
+            if directory
+            for executable in ("dwg2dxf", "dwg2dxf.exe")
+        ]
+        if not any(same_path(candidate, resolved) for candidate in path_candidates):
+            raise AssertionError("resolved dwg2dxf was not discovered from PATH")
+    if expected_binary and not same_path(resolved, expected_binary):
+        raise AssertionError(
+            "FreeCAD resolved %r, expected installed executable %r"
+            % (resolved, expected_binary)
+        )
+    if not same_path(args[0], resolved):
+        raise AssertionError("FreeCAD invoked a different converter: %r" % (args,))
+    if not same_path(args[1], sample):
+        raise AssertionError("FreeCAD converted a different DWG input: %r" % (args,))
+    if args[2] != "-o" or not same_path(args[3], dxf_path):
+        raise AssertionError("FreeCAD did not pass the converter output: %r" % (args,))
+    if process.returncode != 0:
+        raise AssertionError("dwg2dxf exited with status %r" % process.returncode)
+
+    handoff = captured.get("handoff") or {}
+    if not handoff.get("path") or not same_path(handoff["path"], dxf_path):
+        raise AssertionError("FreeCAD imported a different DXF than dwg2dxf produced")
+    if handoff.get("operation") != operation:
+        raise AssertionError("FreeCAD used an unexpected DXF importer entry point")
+    binary_hash = digest(resolved)
+    expected_hash = os.environ.get("LIBDXFRW_FREECAD_EXPECT_DWG2DXF_SHA256")
+    if operation == "insert" and not expected_hash:
+        raise RuntimeError(
+            "insert() qualification requires LIBDXFRW_FREECAD_EXPECT_DWG2DXF_SHA256"
+        )
+    if expected_hash and binary_hash.lower() != expected_hash.lower():
+        raise AssertionError("resolved dwg2dxf SHA-256 does not match expectation")
+    return {
+        "path": os.path.abspath(resolved),
+        "sha256": binary_hash,
+        "argv": list(args),
+        "returncode": process.returncode,
+    }
+
+
+def bounds_for_document(document):
+    features = sorted(
+        (obj for obj in document.Objects if obj.TypeId == "Part::Feature"),
         key=lambda obj: obj.Shape.BoundBox.XMin,
     )
-    actual = [
+    return [
         (
             obj.Shape.BoundBox.XMin,
             obj.Shape.BoundBox.YMin,
@@ -40,23 +195,92 @@ try:
             obj.Shape.BoundBox.YMax,
             obj.Shape.BoundBox.ZMax,
         )
-        for obj in lines
+        for obj in features
     ]
-    expected = [
-        (1.0, 2.0, 0.0, 3.0, 4.0, 0.0),
-        (5.0, 6.0, 0.0, 7.0, 8.0, 0.0),
-        (9.0, 10.0, 0.0, 11.0, 12.0, 0.0),
-    ]
-    if len(actual) != len(expected):
-        raise AssertionError("expected three imported LINE features: %r" % actual)
-    for observed, wanted in zip(actual, expected):
-        if any(abs(a - b) >= 1e-9 for a, b in zip(observed, wanted)):
+
+
+expected_bounds = [
+    (1.0, 2.0, 0.0, 3.0, 4.0, 0.0),
+    (5.0, 6.0, 0.0, 7.0, 8.0, 0.0),
+    (9.0, 10.0, 0.0, 11.0, 12.0, 0.0),
+]
+importDWG.convertToDxf = capture_convert
+importDXF.open = capture_open
+importDXF.insert = capture_insert
+importDXF.DxfImportReporter = CapturingReporter
+
+doc = None
+try:
+    if operation == "insert":
+        doc = App.newDocument("FreeCADDwgInsertCheck")
+        target_name = doc.Name
+        importDWG.insert(sample, target_name)
+        if target_name not in App.listDocuments():
+            raise AssertionError("DWG insert did not preserve the target document")
+        doc = App.getDocument(target_name)
+        handoff = captured.get("handoff") or {}
+        if handoff.get("document") != target_name:
+            raise AssertionError("importDXF.insert received the wrong target document")
+    else:
+        doc = importDWG.open(sample)
+        if doc is None:
+            raise AssertionError("Draft.importDWG.open returned no document")
+
+    dxf_path = captured.get("converted_dxf")
+    if not dxf_path or not os.path.isfile(dxf_path):
+        raise AssertionError("Draft DWG conversion did not produce its DXF output")
+    converter = assert_converter_route(dxf_path)
+    actual_bounds = bounds_for_document(doc)
+    if len(actual_bounds) != len(expected_bounds):
+        raise AssertionError(
+            "expected three imported LINE features, got %r" % actual_bounds
+        )
+    for observed, expected in zip(actual_bounds, expected_bounds):
+        if any(abs(a - e) >= 1e-9 for a, e in zip(observed, expected)):
             raise AssertionError(
                 "FreeCAD LINE bounds differ: expected %r, got %r"
-                % (wanted, observed)
+                % (expected, observed)
             )
 
-    print("FREECAD_DWG_IMPORT_ASSERTIONS_PASS", actual)
+    stats = captured.get("stats") or {}
+    unsupported = stats.get("unsupportedFeatures", {})
+    if unsupported:
+        raise AssertionError("FreeCAD reported unsupported features: %r" % unsupported)
+    handoff = captured.get("handoff") or {}
+    result = {
+        "operation": operation,
+        "freecad_version": list(App.Version()),
+        "platform": platform.platform(),
+        "architecture": platform.machine(),
+        "importer": "C++",
+        "import_mode": App.ParamGet(
+            "User parameter:BaseApp/Preferences/Mod/Draft"
+        ).GetInt("DxfImportMode", 2),
+        "dwg_conversion": conversion_mode,
+        "converter": converter,
+        "input": os.path.abspath(sample),
+        "input_sha256": digest(sample),
+        "converted_dxf": os.path.abspath(dxf_path),
+        "import_handoff": handoff,
+        "line_bounds": actual_bounds,
+        "unsupported_features": unsupported,
+    }
+    print("FREECAD_DWG_IMPORT_ASSERTIONS_PASS=" + json.dumps(result, sort_keys=True))
 finally:
+    importDWG.convertToDxf = original_convert
+    importDXF.open = original_open
+    importDXF.insert = original_insert
+    importDXF.DxfImportReporter = original_reporter
     if doc is not None and doc.Name in App.listDocuments():
         App.closeDocument(doc.Name)
+    dxf_path = captured.get("converted_dxf")
+    if dxf_path:
+        temp_root = os.path.realpath(tempfile.gettempdir())
+        output_dir = os.path.realpath(os.path.dirname(dxf_path))
+        if output_dir != temp_root and os.path.dirname(output_dir) == temp_root:
+            try:
+                if os.path.lexists(dxf_path):
+                    os.remove(dxf_path)
+                os.rmdir(output_dir)
+            except OSError as error:
+                print("FREECAD_DWG_IMPORT_TEMP_CLEANUP_WARNING=" + str(error))
