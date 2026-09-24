@@ -290,6 +290,17 @@ if(LIBDXFRW_ENABLE_ODAFILECONVERTER_FREECAD_CONTROL)
     )
     set_tests_properties(dwg2dxf_freecad_2d_lwpolyline_oda_cli PROPERTIES
         LABELS "dwg_read;freecad;cli;fast;generated;oda")
+    add_test(
+        NAME dwg2dxf_freecad_3d_2d_polyline_ocs_oda_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DODAFILECONVERTER=${LIBDXFRW_ODAFILECONVERTER_EXECUTABLE}
+            -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+            "-DSOURCE_DXF=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dxf/ac1015_2d_polyline_ocs_freecad_control.dxf"
+            -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_2d_polyline_ocs_oda_cli_test.cmake
+    )
+    set_tests_properties(dwg2dxf_freecad_3d_2d_polyline_ocs_oda_cli PROPERTIES
+        LABELS "dwg_read;freecad;cli;fast;generated;oda")
 endif()
 
 # Optional locally-generated oblique OCS ARC/CIRCLE control. The public

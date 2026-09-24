@@ -3750,7 +3750,15 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
         } else {
             writer->writeDouble(10, v->basePoint.x);
             writer->writeDouble(20, v->basePoint.y);
-            writer->writeDouble(30, v->basePoint.z);
+            // The DWG reader folds a 2D POLYLINE's parent elevation into each
+            // typed Vertex2D for the public model. In DXF the parent POLYLINE
+            // owns that elevation; 2D VERTEX coordinates remain at OCS z=0.
+            // See ODA DWG spec §20.4.11/§20.4.16 and avoid duplicating it.
+            const double vertexZ =
+                v->dwgSubtype() == DRW_Vertex::DwgSubtype::Vertex2D
+                    ? 0.0
+                    : v->basePoint.z;
+            writer->writeDouble(30, vertexZ);
         }
         if (v->stawidth != 0)
             writer->writeDouble(40, v->stawidth);
