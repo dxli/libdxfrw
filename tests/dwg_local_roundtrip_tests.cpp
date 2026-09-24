@@ -6915,6 +6915,9 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
     poly3d->handle = 0xFA02u;
     poly3d->flags = 8;
     poly3d->vertexcount = 3;
+    // DWG 3D polylines do not store a meaningful extrusion vector. A zero
+    // initialized DXF normal must not leak into WCS-only POLYLINE output.
+    poly3d->extPoint = DRW_Coord(0.0, 0.0, 0.0);
     poly3d->addVertex(DRW_Vertex(13.0, 14.0, 15.0, 0.0));
     poly3d->addVertex(DRW_Vertex(16.0, 17.0, 18.0, 0.0));
     poly3d->addVertex(DRW_Vertex(19.0, 20.0, 21.0, 0.0));
@@ -6927,6 +6930,7 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
     polyface->flags = 64;
     polyface->vertexcount = 4;
     polyface->facecount = 1;
+    polyface->extPoint = DRW_Coord(0.0, 0.0, 0.0);
     const std::array<DRW_Coord, 4> polyfacePoints{{
         DRW_Coord(0.0, 0.0, 0.0), DRW_Coord(1.0, 0.0, 0.0),
         DRW_Coord(1.0, 1.0, 0.0), DRW_Coord(0.0, 1.0, 0.0)}};
@@ -6945,6 +6949,31 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
     polyfaceFace.vindex4 = -4;
     polyface->addVertex(polyfaceFace);
     source.mBlock->ent.push_back(polyface);
+
+    auto* polygonMesh = new DRW_Polyline();
+    polygonMesh->handle = 0xFA0Au;
+    polygonMesh->flags = 16;
+    polygonMesh->vertexcount = 2;
+    polygonMesh->facecount = 2;
+    polygonMesh->extPoint = DRW_Coord(0.0, 0.0, 0.0);
+    const std::array<DRW_Coord, 4> polygonMeshPoints{{
+        DRW_Coord(0.0, 0.0, 0.0), DRW_Coord(2.0, 0.0, 0.0),
+        DRW_Coord(2.0, 2.0, 4.0), DRW_Coord(0.0, 2.0, 0.0)}};
+    for (const DRW_Coord& point : polygonMeshPoints) {
+        DRW_Vertex vertex(point.x, point.y, point.z, 0.0);
+        vertex.flags = 64;
+        polygonMesh->addVertex(vertex);
+    }
+    source.mBlock->ent.push_back(polygonMesh);
+
+    auto* ocsClassicPolyline = new DRW_Polyline();
+    ocsClassicPolyline->handle = 0xFA0Bu;
+    ocsClassicPolyline->flags = 1;
+    ocsClassicPolyline->basePoint.z = 5.0;
+    ocsClassicPolyline->extPoint = DRW_Coord(0.0, 0.6, 0.8);
+    ocsClassicPolyline->addVertex(DRW_Vertex(2.0, 3.0, 0.0, 0.0));
+    ocsClassicPolyline->addVertex(DRW_Vertex(4.0, 5.0, 0.0, 0.0));
+    source.mBlock->ent.push_back(ocsClassicPolyline);
 
     auto* ocsPolyline = new DRW_LWPolyline();
     ocsPolyline->handle = 0xFA04u;
@@ -7032,6 +7061,8 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
     const DRW_Trace* decodedTrace = nullptr;
     const DRW_Polyline* decodedPoly3d = nullptr;
     const DRW_Polyline* decodedPolyface = nullptr;
+    const DRW_Polyline* decodedPolygonMesh = nullptr;
+    const DRW_Polyline* decodedOcsClassicPolyline = nullptr;
     const DRW_LWPolyline* decodedOcsPolyline = nullptr;
     const DRW_Hatch* decodedHatch = nullptr;
     const DRW_MPolygon* decodedMPolygon = nullptr;
@@ -7048,8 +7079,12 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
             const auto* polyline = static_cast<const DRW_Polyline*>(entity);
             if (polyline->flags == 8)
                 decodedPoly3d = polyline;
+            else if (polyline->flags == 16)
+                decodedPolygonMesh = polyline;
             else if (polyline->flags == 64)
                 decodedPolyface = polyline;
+            else if (polyline->flags == 1)
+                decodedOcsClassicPolyline = polyline;
         } else if (entity->eType == DRW::LWPOLYLINE)
             decodedOcsPolyline = static_cast<const DRW_LWPolyline*>(entity);
         else if (entity->eType == DRW::HATCH)
@@ -7097,18 +7132,46 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
         && decodedTrace->extPoint.z == -1.0;
     const bool poly3dValid = decodedPoly3d != nullptr
         && decodedPoly3d->flags == 8 && decodedPoly3d->vertlist.size() == 3
+        && !decodedPoly3d->haveExtrusion
+        && decodedPoly3d->extPoint.x == 0.0
+        && decodedPoly3d->extPoint.y == 0.0
+        && decodedPoly3d->extPoint.z == 1.0
         && decodedPoly3d->vertlist[1]->basePoint.x == 16.0
         && decodedPoly3d->vertlist[1]->basePoint.z == 18.0;
+    const bool polygonMeshValid = decodedPolygonMesh != nullptr
+        && decodedPolygonMesh->flags == 16
+        && decodedPolygonMesh->vertexcount == 2
+        && decodedPolygonMesh->facecount == 2
+        && decodedPolygonMesh->vertlist.size() == 4
+        && !decodedPolygonMesh->haveExtrusion
+        && decodedPolygonMesh->extPoint.x == 0.0
+        && decodedPolygonMesh->extPoint.y == 0.0
+        && decodedPolygonMesh->extPoint.z == 1.0
+        && decodedPolygonMesh->vertlist[2]->basePoint.z == 4.0;
     const bool polyfaceValid = decodedPolyface != nullptr
         && decodedPolyface->flags == 64
         && decodedPolyface->vertexcount == 4 && decodedPolyface->facecount == 1
         && decodedPolyface->vertlist.size() == 5
+        && !decodedPolyface->haveExtrusion
+        && decodedPolyface->extPoint.x == 0.0
+        && decodedPolyface->extPoint.y == 0.0
+        && decodedPolyface->extPoint.z == 1.0
         && decodedPolyface->vertlist[0]->flags == 192
         && decodedPolyface->vertlist[4]->flags == 128
         && decodedPolyface->vertlist[4]->vindex1 == 1
         && decodedPolyface->vertlist[4]->vindex2 == -2
         && decodedPolyface->vertlist[4]->vindex3 == 3
         && decodedPolyface->vertlist[4]->vindex4 == -4;
+    const bool ocsClassicPolylineValid = decodedOcsClassicPolyline != nullptr
+        && decodedOcsClassicPolyline->flags == 1
+        && decodedOcsClassicPolyline->basePoint.z == 5.0
+        && decodedOcsClassicPolyline->haveExtrusion
+        && decodedOcsClassicPolyline->extPoint.x == 0.0
+        && decodedOcsClassicPolyline->extPoint.y == 0.6
+        && decodedOcsClassicPolyline->extPoint.z == 0.8
+        && decodedOcsClassicPolyline->vertlist.size() == 2
+        && decodedOcsClassicPolyline->vertlist[1]->basePoint.x == 4.0
+        && decodedOcsClassicPolyline->vertlist[1]->basePoint.y == 5.0;
     const bool ocsValid = decodedOcsPolyline != nullptr
         && decodedOcsPolyline->elevation == 5.0
         && decodedOcsPolyline->extPoint.x == 0.0
@@ -7172,17 +7235,24 @@ bool runDxfTopologyRoundTrip(bool binary, const std::filesystem::path& directory
     if (!keepOutput)
         std::filesystem::remove(output, ec);
     if (!(faceValid && solidValid && traceValid && poly3dValid
-          && polyfaceValid && ocsValid && meshValid && hatchOrientationValid
+          && polygonMeshValid && polyfaceValid && ocsClassicPolylineValid
+          && ocsValid && meshValid
+          && hatchOrientationValid
           && mpolygonValid))
         std::cerr << "DXF topology semantic mismatch (" << encoding
                   << "): face=" << faceValid << " solid=" << solidValid
                   << " trace=" << traceValid << " poly3d=" << poly3dValid
-                  << " polyface=" << polyfaceValid << " ocs=" << ocsValid
+                  << " polygon-mesh=" << polygonMeshValid
+                  << " polyface=" << polyfaceValid
+                  << " classic-ocs-polyline=" << ocsClassicPolylineValid
+                  << " ocs=" << ocsValid
                   << " mesh=" << meshValid
                   << " hatch-orientation=" << hatchOrientationValid
                   << " mpolygon=" << mpolygonValid << '\n';
     return faceValid && solidValid && traceValid && poly3dValid
-        && polyfaceValid && ocsValid && meshValid && hatchOrientationValid
+        && polygonMeshValid && polyfaceValid && ocsClassicPolylineValid
+        && ocsValid && meshValid
+        && hatchOrientationValid
         && mpolygonValid;
 }
 

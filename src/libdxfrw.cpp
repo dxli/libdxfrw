@@ -3827,7 +3827,14 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
         writer->writeInt16(75, ent->curvetype);
     }
     DRW_Coord crd  = ent->extPoint;
-    if (crd.x != 0 || crd.y != 0 || crd.z != 1) {
+    // Classic 3D polylines, polygon meshes, and polyface meshes use WCS
+    // vertices; Autodesk's OCS rules do not define them as extrudable. DWG
+    // readers leave this unused field zero-initialized, which must not become
+    // an explicit zero-length DXF extrusion vector. Preserve extrusion only
+    // for the planar OCS polyline form.
+    constexpr int wcsPolylineFlags = 8 | 16 | 64;
+    const bool usesWcsVertices = (ent->flags & wcsPolylineFlags) != 0;
+    if (!usesWcsVertices && (crd.x != 0 || crd.y != 0 || crd.z != 1)) {
         writer->writeDouble(210, crd.x);
         writer->writeDouble(220, crd.y);
         writer->writeDouble(230, crd.z);

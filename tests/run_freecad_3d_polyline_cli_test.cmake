@@ -74,6 +74,22 @@ function(assert_ac1015_polyline path)
     if(_subtype_pos EQUAL -1)
         message(FATAL_ERROR "${path} does not retain the 3D POLYLINE flag")
     endif()
+
+    string(FIND "${_dxf}" "\n100\nAcDb3dPolyline\n" _parent_pos)
+    string(FIND "${_dxf}" "\n  0\nVERTEX\n" _first_vertex_pos)
+    if(_parent_pos EQUAL -1 OR _first_vertex_pos EQUAL -1
+            OR _first_vertex_pos LESS _parent_pos)
+        message(FATAL_ERROR "Could not isolate the WCS POLYLINE parent in ${path}")
+    endif()
+    math(EXPR _parent_length "${_first_vertex_pos} - ${_parent_pos}")
+    string(SUBSTRING "${_dxf}" ${_parent_pos} ${_parent_length} _parent)
+    foreach(_extrusion_code 210 220 230)
+        string(FIND "${_parent}" "\n${_extrusion_code}\n" _extrusion_pos)
+        if(NOT _extrusion_pos EQUAL -1)
+            message(FATAL_ERROR
+                "WCS 3D POLYLINE in ${path} must not carry extrusion code ${_extrusion_code}")
+        endif()
+    endforeach()
 endfunction()
 
 assert_ac1015_polyline("${_output}")
