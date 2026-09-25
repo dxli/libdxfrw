@@ -323,6 +323,53 @@ if(LIBDXFRW_ENABLE_FREECAD_INSTALLED_3D_LINE_CONTROL)
     endforeach()
 endif()
 
+# Exercise the current shared build after CMake installs it into a relocatable
+# prefix, then reuse the installed-artifact FreeCAD geometry harness. CMake's
+# install step rewrites the executable RPATH, so this must be a distinct
+# attribution path from the byte-identical static/install test above.
+option(LIBDXFRW_ENABLE_FREECAD_SHARED_INSTALLED_3D_LINE_CONTROL
+    "Enable FreeCAD open/insert checks against this shared build's isolated install" OFF)
+if(LIBDXFRW_ENABLE_FREECAD_SHARED_INSTALLED_3D_LINE_CONTROL)
+    if(NOT BUILD_SHARED_LIBS OR NOT UNIX)
+        message(FATAL_ERROR
+            "LIBDXFRW_ENABLE_FREECAD_SHARED_INSTALLED_3D_LINE_CONTROL requires a shared Unix build")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECADCMD_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECADCMD_EXECUTABLE to FreeCAD's freecadcmd")
+    endif()
+    find_program(LIBDXFRW_DWGADD_EXECUTABLE NAMES dwgadd)
+    if(NOT LIBDXFRW_DWGADD_EXECUTABLE)
+        message(FATAL_ERROR
+            "LIBDXFRW_ENABLE_FREECAD_SHARED_INSTALLED_3D_LINE_CONTROL requires LibreDWG dwgadd")
+    endif()
+
+    foreach(_operation IN ITEMS open insert)
+        add_test(
+            NAME dwg2dxf_freecad_shared_installed_3d_line_${_operation}
+            COMMAND ${CMAKE_COMMAND}
+                "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+                "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
+                "-DDWGADD=${LIBDXFRW_DWGADD_EXECUTABLE}"
+                "-DRECIPE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dwg/ac1015_3d_line_control.dwgadd"
+                "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
+                "-DOPERATION=${_operation}"
+                "-DINSTALL_BINDIR=${CMAKE_INSTALL_BINDIR}"
+                "-DINSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR}"
+                "-DEXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+                "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+                "-DCMAKE_CONFIG=$<CONFIG>"
+                -DBUILD_SHARED_LIBS=ON
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_shared_installed_3d_line_test.cmake"
+        )
+        set_tests_properties(dwg2dxf_freecad_shared_installed_3d_line_${_operation}
+            PROPERTIES
+                LABELS "freecad;shared;installed;generated;integration"
+                TIMEOUT 300)
+    endforeach()
+endif()
+
 # Qualify the ordinary FreeCAD Automatic preference separately. Unlike the
 # LibreDWG-only controls above, keep real ODA/QCAD resolvers enabled and assert
 # that the installed dwg2dxf succeeds before either fallback is launched.

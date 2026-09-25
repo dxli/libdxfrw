@@ -26,12 +26,38 @@ get_filename_component(_build_converter "${BUILD_DWG2DXF}" REALPATH)
 if(_installed_converter STREQUAL _build_converter)
     message(FATAL_ERROR "FreeCAD integration must invoke the installed converter")
 endif()
+
+set(_allow_installed_rpath_rewrite FALSE)
+if(DEFINED ALLOW_INSTALLED_RPATH_REWRITE
+        AND ALLOW_INSTALLED_RPATH_REWRITE)
+    if(NOT DEFINED BUILD_SHARED_LIBS OR NOT BUILD_SHARED_LIBS
+            OR NOT DEFINED INSTALL_PREFIX OR NOT IS_DIRECTORY "${INSTALL_PREFIX}")
+        message(FATAL_ERROR
+            "RPATH-rewritten install qualification requires a shared build and its isolated install prefix")
+    endif()
+    file(REAL_PATH "${INSTALL_PREFIX}" _install_prefix_real)
+    string(FIND "${_installed_converter}/" "${_install_prefix_real}/"
+        _install_prefix_position)
+    if(NOT _install_prefix_position EQUAL 0)
+        message(FATAL_ERROR
+            "Installed converter is outside the isolated install prefix: ${_installed_converter}")
+    endif()
+    set(_allow_installed_rpath_rewrite TRUE)
+endif()
+
 file(SHA256 "${_installed_converter}" _installed_sha256)
 file(SHA256 "${_build_converter}" _build_sha256)
-if(NOT _installed_sha256 STREQUAL _build_sha256)
+if(NOT _installed_sha256 STREQUAL _build_sha256
+        AND NOT _allow_installed_rpath_rewrite)
     message(FATAL_ERROR
         "Installed dwg2dxf is not byte-identical to this build's target: "
         "${_installed_sha256} != ${_build_sha256}")
+endif()
+if(_allow_installed_rpath_rewrite
+        AND NOT _installed_sha256 STREQUAL _build_sha256)
+    message(STATUS
+        "Installed shared executable hash differs from the build artifact after CMake install RPATH rewriting; "
+        "the isolated wrapper installed this target into ${_install_prefix_real}")
 endif()
 set(_converter_sha256 "${_installed_sha256}")
 get_filename_component(_converter_bin_dir "${_installed_converter}" DIRECTORY)
