@@ -168,6 +168,26 @@ Only after a complete DXF is produced should the opt-in FreeCAD `open()` and
 reports unsupported qualifies converter integration only, never FreeCAD
 geometry support.
 
+**Explicit unblock conditions and evidence handoff (2026-09-25):** the two
+remaining external gates are independent; closing one does not close or delay
+the other. Use these packets to turn an external blocker into a bounded,
+implementation-ready slice rather than a general support claim.
+
+| Gate | Required external condition / handoff | Acceptance and state transition |
+| --- | --- | --- |
+| S8.9.5 Linux | A native Linux host or native Linux CI runner with the intended architecture, a usable compiler/CMake toolchain, and an installed, version-pinned FreeCAD release including `freecadcmd`. Cross-compilation from macOS is not a substitute. The handoff records host/OS/architecture, FreeCAD release and source revision, exact install prefix/build mode, and whether shell, desktop-entry, or configured-path launch is in scope. | Build/install the current revision outside the checkout; run the existing installed CLI/readback/failure-publication tests in a clean environment; then, with isolated FreeCAD preferences and fallbacks disabled, prove installed `dwg2dxf` path/hash, exact argv, status, complete output, and identical output path for separate `open()` and `insert()` runs. Verify desktop-entry environment only if it will be claimed; otherwise narrow docs to the passing shell/configured-path route. Mark only the tested Linux profile qualified after its evidence packet is saved. |
+| S8.9.5 Windows | A native Windows host or native Windows CI runner with the intended architecture, MSVC/runtime toolchain, and installed, version-pinned FreeCAD release. The handoff records OS/build, architecture, FreeCAD release/revision, compiler/runtime, install layout, and launch route. | Build/install `dwg2dxf.exe`; verify its required DLLs resolve from the documented package/system locations, not FreeCAD-private directories; then run the same clean-profile `open()`/`insert()` attribution and output-handoff checks as Linux. Include paths with spaces and a Unicode/non-ASCII input/output path before claiming those cases. Qualify the desktop launcher only if tested natively; otherwise document only the passing shell/configured-path route. Mark only the tested Windows profile qualified. |
+| S2.3.2 ACIS/ACDS semantic contract | Supply either (a) an authoritative primary specification that defines the complete bounded DXF entity/section contract, or (b) an untouched, source-provenance DWG/DXF pair from an independent CAD producer plus reproducible evidence from an independent reader/writer. The packet must identify the producer/tool build and operation, source and derived file hashes, DWG/DXF version, and exact entity-to-record association. Static source audits, self-round-trips, unpinned author reports, and ODA retention of ODA-authored input alone do not meet this condition. | Evidence must enumerate the bounded entity shell and required schema/record set; distinguish schema/object/record ID namespaces; show the owner-key-to-entity relation and GUID/history policy; reconstruct declared byte lengths from ordered chunks; establish which ordering/chunk details are semantic and any permitted timestamp mutation; and report independent semantic readback/acceptance. Include clone/INSERT/XREF cases only if those lifecycle claims are intended. If evidence proves only one producer/version/entity tuple, narrow implementation and claims to that tuple and preserve/fail closed on unknown schemas. Mark S2.3.2 `READY` only when this contract table is complete and evidence artifacts are hash-pinned; then start S2.3.4, fast S2.3.5 vectors, one-time S2.3.6 ODA acceptance, and only afterward S2.3.7 FreeCAD handoff. |
+
+For both gates, keep external binaries and converted outputs at their supplied
+paths or in unique temporary directories; record hashes and tool logs without
+adding external DWG/DXF fixtures to the repository. A partially supplied
+packet is useful for narrowing questions, but does not change the blocked
+state or promote a support claim. The platform lanes may close one OS at a
+time; S2.3.2 may unblock a narrow AC1027 carrier without establishing AC1021
+inline SAB, other ACIS versions/entities, FreeCAD B-rep support, or general
+INSERT/XREF behavior.
+
 **Additional AC1027 FreeCAD-route witness (2026-09-24; external and
 advisory):** the ACadSharp-maintained `sample_AC1027.dwg` / ASCII-DXF pair
 provides a second, structurally richer sample chain than the one-solid ODA
