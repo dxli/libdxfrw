@@ -6768,6 +6768,14 @@ public:
    * writeEntity (writePolyline/writeInsert reuse ent->handle) keeps the
    * first-seen real source; stale minted-range keys are never queried. */
   std::map<std::uint32_t, std::uint32_t> sourceHandleToMintedMap;
+  /*!< DXF write: source modeler-entity handle -> minted code-5 handle.
+   * Used only to retarget the known ACDSDATA ASM_Data owner key when opaque
+   * sections are replayed after entity handles have been allocated. */
+  std::map<std::uint32_t, std::uint32_t>
+      modelerSourceHandleToMintedMap;
+  /*!< Source entity handles emitted during the current DXF write. Used to
+   * reject an ACDSDATA modeler key that is duplicated by any written entity. */
+  std::set<std::uint32_t> writtenSourceEntityHandles;
   /*!< DXF write: source handles seen on more than one entity. Such a handle
    * cannot identify a GROUP member or other deferred reference, so it is
    * deliberately absent from sourceHandleToMintedMap. */

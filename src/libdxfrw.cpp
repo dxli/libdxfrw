@@ -1284,6 +1284,14 @@ private:
                 m_owner.m_writingContext.ambiguousSourceHandles.erase(
                     mutation.handle);
                 break;
+            case DxfWriteMutationKind::WrittenSourceEntityHandleInsert:
+                m_owner.m_writingContext.writtenSourceEntityHandles.erase(
+                    mutation.handle);
+                break;
+            case DxfWriteMutationKind::ModelerSourceHandleInsert:
+                m_owner.m_writingContext.modelerSourceHandleToMintedMap.erase(
+                    mutation.handle);
+                break;
             case DxfWriteMutationKind::ImageReactorInsert:
                 if (mutation.imageDef != nullptr)
                     mutation.imageDef->reactors.erase(mutation.key);
@@ -1713,6 +1721,8 @@ void dxfRW::resetDxfWriteSession() {
     writingBlock = false;
     currHandle = DRW::NoHandle;
     m_writingContext.sourceHandleToMintedMap.clear();
+    m_writingContext.modelerSourceHandleToMintedMap.clear();
+    m_writingContext.writtenSourceEntityHandles.clear();
     m_writingContext.ambiguousSourceHandles.clear();
     m_dxfClassesFrozen = false;
 }
@@ -2163,6 +2173,40 @@ bool dxfRW::writeEntity(DRW_Entity *ent, bool captureSourceHandle,
     // RS_Entity::sourceHandle() (getEntityAttributes). A unique source may
     // already have a planned handle so BLOCK_RECORD {BLKREFS} can refer to it.
     const std::uint32_t sourceHandle = ent->handle;
+    const bool isModelerEntity =
+        dynamic_cast<DRW_ModelerGeometry *>(ent) != nullptr;
+    if (captureSourceHandle && sourceHandle != 0) {
+        const bool alreadyWritten =
+            m_writingContext.writtenSourceEntityHandles.count(sourceHandle)
+            != 0;
+        if (alreadyWritten
+            && (isModelerEntity
+                || m_writingContext.modelerSourceHandleToMintedMap.count(
+                       sourceHandle) != 0)) {
+            // A code-320 key cannot disambiguate two emitted entities, even
+            // if source-handle planning reused the same output handle.
+            return failDxfWrite();
+        }
+        if (!alreadyWritten) {
+            const std::size_t mutationCheckpoint =
+                m_dxfWriteMutations.size();
+            if (m_recordStateScopeDepth != 0) {
+                m_dxfWriteMutations.push_back({
+                    DxfWriteMutationKind::WrittenSourceEntityHandleInsert,
+                    {}, sourceHandle, 0, false});
+            }
+            try {
+                const auto inserted =
+                    m_writingContext.writtenSourceEntityHandles.insert(
+                        sourceHandle);
+                if (!inserted.second)
+                    m_dxfWriteMutations.resize(mutationCheckpoint);
+            } catch (...) {
+                m_dxfWriteMutations.resize(mutationCheckpoint);
+                throw;
+            }
+        }
+    }
     std::uint32_t emittedHandle = 0;
     if (captureSourceHandle && sourceHandle != 0
         && m_writingContext.ambiguousSourceHandles.count(sourceHandle) == 0) {
@@ -2226,6 +2270,39 @@ bool dxfRW::writeEntity(DRW_Entity *ent, bool captureSourceHandle,
         } catch (...) {
             m_dxfWriteMutations.resize(mutationCheckpoint);
             throw;
+        }
+
+        if (isModelerEntity) {
+            const auto source =
+                m_writingContext.sourceHandleToMintedMap.find(sourceHandle);
+            if (source == m_writingContext.sourceHandleToMintedMap.end()
+                || source->second != ent->handle) {
+                return failDxfWrite();
+            }
+            const auto modeler =
+                m_writingContext.modelerSourceHandleToMintedMap.find(
+                    sourceHandle);
+            if (modeler !=
+                m_writingContext.modelerSourceHandleToMintedMap.end()) {
+                return failDxfWrite();
+            }
+            const std::size_t modelerMutationCheckpoint =
+                m_dxfWriteMutations.size();
+            if (m_recordStateScopeDepth != 0) {
+                m_dxfWriteMutations.push_back({
+                    DxfWriteMutationKind::ModelerSourceHandleInsert, {},
+                    sourceHandle, ent->handle, false});
+            }
+            try {
+                const auto inserted =
+                    m_writingContext.modelerSourceHandleToMintedMap.emplace(
+                        sourceHandle, ent->handle);
+                if (!inserted.second)
+                    m_dxfWriteMutations.resize(modelerMutationCheckpoint);
+            } catch (...) {
+                m_dxfWriteMutations.resize(modelerMutationCheckpoint);
+                throw;
+            }
         }
     }
     writer->writeString(5, toHexStr(ent->handle));
@@ -15173,6 +15250,95 @@ bool dxfRW::writeRawDxfObject(DRW_RawDxfObject *obj) {
     return true;
 }
 
+bool dxfRW::remapAcdsAsmDataOwnerHandles(
+    DRW_RawDxfSection &section) {
+    if (!dxfKeywordEquals(section.m_name, "ACDSDATA"))
+        return true;
+
+    const std::vector<DRW_Variant>& groups = section.m_groups;
+    for (std::size_t recordStart = 0; recordStart < groups.size();) {
+        if (groups[recordStart].code() != 0
+            || groups[recordStart].type() != DRW_Variant::STRING
+            || groups[recordStart].c_str() == nullptr) {
+            ++recordStart;
+            continue;
+        }
+
+        std::size_t recordEnd = recordStart + 1;
+        while (recordEnd < groups.size()
+               && groups[recordEnd].code() != 0)
+            ++recordEnd;
+
+        if (!dxfKeywordEquals(groups[recordStart].c_str(), "ACDSRECORD")) {
+            recordStart = recordEnd;
+            continue;
+        }
+
+        std::size_t idSectionCount = 0;
+        std::size_t asmDataCount = 0;
+        std::size_t ownerHandleCount = 0;
+        std::size_t ownerHandleIndex = groups.size();
+        std::uint64_t sourceHandle = 0;
+        bool ownerHandleIsString = false;
+        bool inIdSection = false;
+
+        for (std::size_t groupIndex = recordStart + 1;
+             groupIndex < recordEnd; ++groupIndex) {
+            const DRW_Variant& group = groups[groupIndex];
+            if (group.code() == 2) {
+                if (group.type() != DRW_Variant::STRING
+                    || group.c_str() == nullptr) {
+                    inIdSection = false;
+                    continue;
+                }
+                inIdSection = dxfKeywordEquals(group.c_str(), "AcDbDs::ID");
+                if (inIdSection)
+                    ++idSectionCount;
+                if (dxfKeywordEquals(group.c_str(), "ASM_Data"))
+                    ++asmDataCount;
+            } else if (inIdSection && group.code() == 320) {
+                ++ownerHandleCount;
+                ownerHandleIndex = groupIndex;
+                if (group.type() == DRW_Variant::STRING
+                    && group.c_str() != nullptr) {
+                    ownerHandleIsString = parseRawDxfHandleLexeme(
+                        group.c_str(), sourceHandle);
+                } else {
+                    ownerHandleIsString = false;
+                }
+            }
+        }
+
+        if (asmDataCount != 0) {
+            if (asmDataCount != 1 || idSectionCount != 1
+                || ownerHandleCount != 1 || !ownerHandleIsString
+                || sourceHandle == 0
+                || sourceHandle > std::numeric_limits<std::uint32_t>::max()) {
+                return failDxfWrite();
+            }
+            const std::uint32_t source =
+                static_cast<std::uint32_t>(sourceHandle);
+            if (m_writingContext.ambiguousSourceHandles.count(source) != 0)
+                return failDxfWrite();
+            const auto emitted =
+                m_writingContext.modelerSourceHandleToMintedMap.find(source);
+            if (emitted
+                == m_writingContext.modelerSourceHandleToMintedMap.end())
+                return failDxfWrite();
+
+            const std::string emittedHandle = toHexStr(emitted->second);
+            section.m_groups[ownerHandleIndex].addString(320, emittedHandle);
+            if (section.m_hasRawValues) {
+                if (ownerHandleIndex >= section.m_rawValues.size())
+                    return failDxfWrite();
+                section.m_rawValues[ownerHandleIndex] = emittedHandle;
+            }
+        }
+        recordStart = recordEnd;
+    }
+    return true;
+}
+
 bool dxfRW::writeRawDxfSection(const DRW_RawDxfSection &section) {
     if (writer == nullptr || section.m_name.empty()
         || dxfKeywordEquals(section.m_name, "HEADER")
@@ -15189,18 +15355,21 @@ bool dxfRW::writeRawDxfSection(const DRW_RawDxfSection &section) {
     const DxfClassifierProfile profile = m_useTargetLegacyClassifier
         ? DxfClassifierProfile::LibreCadMasterLegacy
         : DxfClassifierProfile::StandaloneSafe;
-    if (!validateRawDxfGroups(section.m_groups, section.m_rawValues,
-                              section.m_hasRawValues, binFile,
+    DRW_RawDxfSection output = section;
+    if (!validateRawDxfGroups(output.m_groups, output.m_rawValues,
+                              output.m_hasRawValues, binFile,
                               /*allowRecordBoundaries=*/true, profile)) {
         m_writeError = true;
         return false;
     }
+    if (!remapAcdsAsmDataOwnerHandles(output))
+        return false;
     DxfWriterRecordScope record(*writer);
     if (!writer->writeString(0, "SECTION")
-        || !writer->writeString(2, section.m_name)
-        || !writeRawDxfGroups(section.m_groups, section.m_rawValues,
-                              section.m_hasRawValues,
-                              section.m_version,
+        || !writer->writeString(2, output.m_name)
+        || !writeRawDxfGroups(output.m_groups, output.m_rawValues,
+                              output.m_hasRawValues,
+                              output.m_version,
                               /*remapSourceHandles=*/false,
                               m_useTargetLegacyClassifier)
         || !writer->writeString(0, "ENDSEC")) {

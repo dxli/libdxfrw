@@ -13,20 +13,49 @@ set(_input "${_test_dir}/opaque-acdsdata-input.dxf")
 set(_output "${_test_dir}/opaque-acdsdata-output.dxf")
 set(_output2 "${_test_dir}/opaque-acdsdata-output2.dxf")
 
-# This locally authored vector exercises only lossless opaque-section
-# passthrough. Its ACDSDATA-shaped records are deliberately unassociated and
-# do not claim to represent a valid solid carrier or ACDS schema.
+# Locally author the carrier in the build tree; this is not a committed sample
+# or a schema-validity oracle. It verifies the CLI's standalone DXF-to-DXF
+# handle identity repair and keeps an unrelated code-320 field opaque.
 file(WRITE "${_input}"
     "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1032\n0\nENDSEC\n"
     "0\nSECTION\n2\nENTITIES\n0\nLINE\n5\n30\n330\n1F\n"
     "100\nAcDbEntity\n8\n0\n100\nAcDbLine\n"
     "10\n1.0\n20\n2.0\n30\n3.0\n11\n4.0\n21\n5.0\n31\n6.0\n"
+    "0\n3DSOLID\n5\nD65\n330\n1F\n100\nAcDbEntity\n8\n0\n"
+    "100\nAcDbModelerGeometry\n290\n1\n"
+    "2\n{1A113328-EB6D-D44D-824D-78B33668F9E7}\n"
+    "100\nAcDb3dSolid\n"
     "0\nENDSEC\n0\nSECTION\n2\nACDSDATA\n"
     "0\nACDSSCHEMA\n90\n7\n1\nOpaqueSchema\n"
+    "0\nACDSRECORD\n90\n8\n2\nAcDbDs::ID\n280\n10\n"
+    "320\nD65\n2\nASM_Data\n280\n15\n94\n4\n310\n41434453\n"
     "0\nACDSRECORD\n90\n9\n2\nOpaqueRecord\n"
     "320\n30\n94\n4\n310\n41434453\n"
     "0\nENDSEC\n0\nEOF\n"
 )
+
+function(assert_modeler_acds_link _path _pass_name)
+    file(READ "${_path}" _contents)
+    string(REGEX MATCH
+        "[ \t]*0\n3DSOLID\n[ \t]*5\n([0-9A-F]+)"
+        _entity_match "${_contents}")
+    set(_entity_handle "${CMAKE_MATCH_1}")
+    string(REGEX MATCH
+        "AcDbDs::ID\n[ \t]*280\n10\n[ \t]*320\n([0-9A-F]+)\n[ \t]*2\nASM_Data"
+        _acds_match "${_contents}")
+    set(_acds_handle "${CMAKE_MATCH_1}")
+    if(_entity_match STREQUAL "" OR _acds_match STREQUAL ""
+            OR NOT "${_entity_handle}" STREQUAL "${_acds_handle}")
+        message(FATAL_ERROR
+            "${_pass_name} did not link ACDSDATA ASM_Data key to emitted 3DSOLID handle; entity='${_entity_handle}', key='${_acds_handle}'")
+    endif()
+    string(REGEX MATCH
+        "OpaqueRecord\n[ \t]*320\n30\n" _opaque_match "${_contents}")
+    if(_opaque_match STREQUAL "")
+        message(FATAL_ERROR
+            "${_pass_name} globally remapped or dropped unrelated OpaqueRecord code-320 value")
+    endif()
+endfunction()
 
 execute_process(
     COMMAND "${DWG2DXF}" "${_input}" -o "${_output}"
@@ -52,6 +81,7 @@ foreach(_required IN ITEMS
             "first conversion dropped required opaque section value: ${_required}")
     endif()
 endforeach()
+assert_modeler_acds_link("${_output}" "first exact-argv conversion")
 string(FIND "${_contents}" " 10\n1\n" _line_start)
 string(FIND "${_contents}" " 31\n6\n" _line_end)
 if(_line_start EQUAL -1 OR _line_end EQUAL -1)
@@ -82,6 +112,7 @@ foreach(_required IN ITEMS
             "second conversion dropped required opaque section value: ${_required}")
     endif()
 endforeach()
+assert_modeler_acds_link("${_output2}" "second exact-argv conversion")
 string(FIND "${_contents2}" " 10\n1\n" _line_start2)
 string(FIND "${_contents2}" " 31\n6\n" _line_end2)
 if(_line_start2 EQUAL -1 OR _line_end2 EQUAL -1)

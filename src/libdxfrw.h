@@ -582,6 +582,8 @@ public:
         SourceHandleInsert,
         SourceHandleErase,
         AmbiguousSourceHandleInsert,
+        WrittenSourceEntityHandleInsert,
+        ModelerSourceHandleInsert,
         ImageReactorInsert
     };
     struct DxfWriteMutation {
@@ -632,6 +634,7 @@ public:
                            bool remapSourceHandles = true,
                            bool useLegacyClassifier = false);
     LIBDXFRW_TEST_SEAM_NOINLINE bool writeRawDxfSection(const DRW_RawDxfSection &section);
+    bool remapAcdsAsmDataOwnerHandles(DRW_RawDxfSection &section);
     void writePlotSettingsFields(const DRW_PlotSettings *ent);
     /*use version from dwgutil.h*/
     std::string toHexStr(std::uint32_t n);

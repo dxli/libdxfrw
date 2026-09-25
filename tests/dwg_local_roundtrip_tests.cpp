@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -5221,6 +5222,235 @@ bool runDxfModelerEnvelopeRoundTrip(
     return result;
 }
 
+DRW_RawDxfSection makeLocalAcdsDataSection(
+    const std::string& modelerHandle, bool includeOwnerHandle = true,
+    bool duplicateOwnerHandle = false) {
+    DRW_RawDxfSection section;
+    section.m_name = "ACDSDATA";
+    section.m_version = DRW::AC1027;
+    section.m_groups.emplace_back(0, "ACDSSCHEMA");
+    section.m_groups.emplace_back(90, static_cast<std::int32_t>(7));
+    section.m_groups.emplace_back(1, "LocalGeneratedSchema");
+    section.m_groups.emplace_back(0, "ACDSRECORD");
+    section.m_groups.emplace_back(90, static_cast<std::int32_t>(9));
+    section.m_groups.emplace_back(2, "AcDbDs::ID");
+    section.m_groups.emplace_back(280, static_cast<std::int32_t>(10));
+    if (includeOwnerHandle)
+        section.m_groups.emplace_back(320, modelerHandle);
+    if (duplicateOwnerHandle)
+        section.m_groups.emplace_back(320, modelerHandle);
+    section.m_groups.emplace_back(2, "ASM_Data");
+    section.m_groups.emplace_back(280, static_cast<std::int32_t>(15));
+    section.m_groups.emplace_back(94, static_cast<std::int32_t>(4));
+    section.m_groups.emplace_back(310, std::string("41434453"));
+    section.m_groups.emplace_back(0, "ACDSRECORD");
+    section.m_groups.emplace_back(90, static_cast<std::int32_t>(10));
+    section.m_groups.emplace_back(2, "OpaqueRecord");
+    section.m_groups.emplace_back(320, std::string("FC21"));
+    return section;
+}
+
+bool findAcdsRecordOwner(const DRW_RawDxfSection& section,
+                         const std::string& recordPayloadName,
+                         std::string& ownerHandle) {
+    const auto equalsAsciiCaseInsensitive = [](const std::string& lhs,
+                                                const char* rhs) {
+        if (rhs == nullptr || lhs.size() != std::strlen(rhs))
+            return false;
+        for (std::size_t index = 0; index < lhs.size(); ++index) {
+            if (std::toupper(static_cast<unsigned char>(lhs[index]))
+                != std::toupper(static_cast<unsigned char>(rhs[index])))
+                return false;
+        }
+        return true;
+    };
+    const auto& groups = section.m_groups;
+    for (std::size_t recordStart = 0; recordStart < groups.size();) {
+        if (groups[recordStart].code() != 0
+            || groups[recordStart].type() != DRW_Variant::STRING
+            || groups[recordStart].c_str() == nullptr) {
+            ++recordStart;
+            continue;
+        }
+        std::size_t recordEnd = recordStart + 1;
+        while (recordEnd < groups.size() && groups[recordEnd].code() != 0)
+            ++recordEnd;
+        if (equalsAsciiCaseInsensitive(groups[recordStart].c_str(),
+                                       "ACDSRECORD")) {
+            bool inId = false;
+            bool hasPayload = false;
+            std::size_t ownerCount = 0;
+            std::string candidate;
+            for (std::size_t index = recordStart + 1; index < recordEnd;
+                 ++index) {
+                const DRW_Variant& group = groups[index];
+                if (group.code() == 2
+                    && group.type() == DRW_Variant::STRING
+                    && group.c_str() != nullptr) {
+                    inId = equalsAsciiCaseInsensitive(group.c_str(),
+                                                      "AcDbDs::ID");
+                    if (equalsAsciiCaseInsensitive(group.c_str(),
+                                                   recordPayloadName.c_str()))
+                        hasPayload = true;
+                } else if (group.code() == 320
+                           && (recordPayloadName != "ASM_Data" || inId)) {
+                    ++ownerCount;
+                    if (group.type() == DRW_Variant::STRING
+                        && group.c_str() != nullptr)
+                        candidate = group.c_str();
+                }
+            }
+            if (hasPayload) {
+                if (ownerCount != 1 || candidate.empty())
+                    return false;
+                ownerHandle = candidate;
+                return true;
+            }
+        }
+        recordStart = recordEnd;
+    }
+    return false;
+}
+
+bool runDxfAcdsModelerOwnerRemap(bool binary,
+                                 const std::filesystem::path& directory,
+                                 bool keepOutputs) {
+    const std::string encoding = binary ? "binary" : "ascii";
+    const std::filesystem::path output = directory
+        / ("libdxfrw-ac1027-acds-owner-" + encoding + ".dxf");
+    const std::filesystem::path output2 = directory
+        / ("libdxfrw-ac1027-acds-owner-second-" + encoding + ".dxf");
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+    std::filesystem::remove(output2, ec);
+
+    dx_data source;
+    auto* modeler = new DRW_ModelerGeometry(DRW::E3DSOLID);
+    modeler->handle = 0xFC20u;
+    source.mBlock->ent.push_back(modeler);
+    auto* line = new DRW_Line();
+    line->handle = 0xFC21u;
+    line->basePoint = DRW_Coord(1.0, 2.0, 3.0);
+    line->secPoint = DRW_Coord(4.0, 5.0, 6.0);
+    source.mBlock->ent.push_back(line);
+    source.rawDxfSections.push_back(makeLocalAcdsDataSection("FC20"));
+
+    dx_iface exporter;
+    std::string originalLinkedHandle;
+    if (!exporter.fileExport(output.string(), DRW::AC1027, binary,
+                             &source, false)
+        || !findAcdsRecordOwner(source.rawDxfSections.front(), "ASM_Data",
+                                originalLinkedHandle)
+        || originalLinkedHandle != "FC20") {
+        if (!keepOutputs) {
+            std::filesystem::remove(output, ec);
+            std::filesystem::remove(output2, ec);
+        }
+        return false;
+    }
+
+    dx_data imported;
+    dx_iface importer;
+    if (!importer.fileImport(output.string(), &imported, false)) {
+        if (!keepOutputs) {
+            std::filesystem::remove(output, ec);
+            std::filesystem::remove(output2, ec);
+        }
+        return false;
+    }
+    const DRW_ModelerGeometry* importedModeler = nullptr;
+    for (const DRW_Entity* entity : imported.mBlock->ent) {
+        if (entity != nullptr && entity->eType == DRW::E3DSOLID) {
+            importedModeler =
+                static_cast<const DRW_ModelerGeometry*>(entity);
+            break;
+        }
+    }
+    std::string linkedHandle;
+    std::string opaqueHandle;
+    const bool firstPassValid = importedModeler != nullptr
+        && importedModeler->handle != 0xFC20u
+        && !imported.rawDxfSections.empty()
+        && findAcdsRecordOwner(imported.rawDxfSections.front(), "ASM_Data",
+                               linkedHandle)
+        && findAcdsRecordOwner(imported.rawDxfSections.front(), "OpaqueRecord",
+                               opaqueHandle)
+        && std::stoul(linkedHandle, nullptr, 16) == importedModeler->handle
+        && opaqueHandle == "FC21";
+    if (!firstPassValid) {
+        if (!keepOutputs) {
+            std::filesystem::remove(output, ec);
+            std::filesystem::remove(output2, ec);
+        }
+        return false;
+    }
+
+    bool result = firstPassValid;
+    if (!binary) {
+        dx_iface secondExporter;
+        dx_data secondImported;
+        dx_iface secondImporter;
+        const bool secondPassValid =
+            secondExporter.fileExport(output2.string(), DRW::AC1027, binary,
+                                      &imported, false)
+            && secondImporter.fileImport(output2.string(), &secondImported,
+                                         false);
+        const DRW_ModelerGeometry* secondModeler = nullptr;
+        if (secondPassValid) {
+            for (const DRW_Entity* entity : secondImported.mBlock->ent) {
+                if (entity != nullptr && entity->eType == DRW::E3DSOLID) {
+                    secondModeler =
+                        static_cast<const DRW_ModelerGeometry*>(entity);
+                    break;
+                }
+            }
+        }
+        linkedHandle.clear();
+        opaqueHandle.clear();
+        result = secondModeler != nullptr
+            && !secondImported.rawDxfSections.empty()
+            && findAcdsRecordOwner(secondImported.rawDxfSections.front(),
+                                   "ASM_Data", linkedHandle)
+            && findAcdsRecordOwner(secondImported.rawDxfSections.front(),
+                                   "OpaqueRecord", opaqueHandle)
+            && std::stoul(linkedHandle, nullptr, 16) == secondModeler->handle
+            && opaqueHandle == "FC21";
+    }
+    if (!keepOutputs) {
+        std::filesystem::remove(output, ec);
+        std::filesystem::remove(output2, ec);
+    }
+    return result;
+}
+
+bool runDxfAcdsModelerOwnerRejectsMalformed(
+    bool includeOwnerHandle, bool duplicateOwnerHandle,
+    const std::string& ownerHandle,
+    bool duplicateModelerSourceHandle = false) {
+    const std::filesystem::path output =
+        std::filesystem::temp_directory_path()
+        / "libdxfrw-acds-owner-malformed.dxf";
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+    dx_data source;
+    auto* modeler = new DRW_ModelerGeometry(DRW::E3DSOLID);
+    modeler->handle = 0xFC20u;
+    source.mBlock->ent.push_back(modeler);
+    if (duplicateModelerSourceHandle) {
+        auto* duplicate = new DRW_ModelerGeometry(DRW::REGION);
+        duplicate->handle = 0xFC20u;
+        source.mBlock->ent.push_back(duplicate);
+    }
+    source.rawDxfSections.push_back(makeLocalAcdsDataSection(
+        ownerHandle, includeOwnerHandle, duplicateOwnerHandle));
+    dx_iface exporter;
+    const bool exported = exporter.fileExport(output.string(), DRW::AC1027,
+                                               false, &source, false);
+    const bool outputAbsent = !std::filesystem::exists(output);
+    std::filesystem::remove(output, ec);
+    return !exported && outputAbsent;
+}
+
 bool runDxfMalformedModelerCarrier(const char* chunk) {
     const std::filesystem::path output =
         std::filesystem::temp_directory_path() / "libdxfrw-modeler-malformed.dxf";
@@ -8846,6 +9076,27 @@ int main(int argc, char** argv) {
            failures);
     expect(runDxfModelerEnvelopeRoundTrip(true, directory, keepOutputs),
            "local binary DXF AC1027 modeler shell fields and history-handle remap",
+           failures);
+    expect(runDxfAcdsModelerOwnerRemap(false, directory, keepOutputs),
+           "local ASCII DXF AC1027 ACDSDATA ASM_Data owner remap and second pass",
+           failures);
+    expect(runDxfAcdsModelerOwnerRemap(true, directory, keepOutputs),
+           "local binary DXF AC1027 ACDSDATA ASM_Data owner remap and second pass",
+           failures);
+    expect(runDxfAcdsModelerOwnerRejectsMalformed(false, false, "FC20"),
+           "local DXF rejects ASM_Data association without an owner key",
+           failures);
+    expect(runDxfAcdsModelerOwnerRejectsMalformed(true, true, "FC20"),
+           "local DXF rejects ambiguous duplicate ASM_Data owner keys",
+           failures);
+    expect(runDxfAcdsModelerOwnerRejectsMalformed(true, false, "FC99"),
+           "local DXF rejects orphan ASM_Data owner keys",
+           failures);
+    expect(runDxfAcdsModelerOwnerRejectsMalformed(true, false, "FC20", true),
+           "local DXF rejects ASM_Data keys ambiguous across modeler entities",
+           failures);
+    expect(runDxfAcdsModelerOwnerRejectsMalformed(true, false, "ZZ"),
+           "local DXF rejects malformed ASM_Data owner handles",
            failures);
     expect(runDxfModelerRejectsUnassociatedSab(sabPayload),
            "local DXF rejects unassociated AC1027 SAB entity payload", failures);
