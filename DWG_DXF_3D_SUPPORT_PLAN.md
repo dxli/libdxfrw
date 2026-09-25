@@ -1397,6 +1397,16 @@ Implementation sequence:
    so the isolated branch could not be built here. Keep those reports advisory.
    In particular, the PR's unconditional group-350 zero differs from the ODA
    witness's nonzero history handle and still needs independent field policy.
+   A focused Autodesk-primary-source lookup on 2026-09-24 for
+   `ACDSDATA`, `ACDSRECORD`, `AcDbDs::ID`, and `ASM_Data` found no published
+   DXF envelope or identity contract. The official [ObjectARX `AcDb3dSolid`
+   reference](https://help.autodesk.com/cloudhelp/2027/ENU/OARX-RefGuide/files/OARX-RefGuide-AcDb3dSolid.html)
+   describes the entity as a container/interface for ShapeManager geometry
+   and points geometry traversal to BREP APIs, but does not specify DXF
+   serialization. Autodesk's [XRECORD DXF reference](https://help.autodesk.com/cloudhelp/2023/ENU/AutoCAD-DXF/files/GUID-24668FAF-AE03-41AE-AFA4-276C3692827F.htm)
+   permits application-defined groups inside XRECORD objects only; it is not
+   authority for the distinct ACDSDATA section. This is bounded negative
+   evidence, not a reason to invent an XRECORD substitute or promote support.
    Autodesk's generic group-code rule that 320-series handles are not
    translated during INSERT/XREF is still an unresolved lifecycle constraint,
    even though independent readers and multiple samples use group 320 as the
