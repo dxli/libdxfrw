@@ -1235,7 +1235,14 @@ or XREF, while group 350–359 soft-owner IDs are translated. The community
 BricsCAD witness calls group 320 a `3DSOLID` back-reference, but does not say
 how that key is maintained when the drawing is rewritten. Therefore matching
 group 320 to a changing output entity handle is not yet a justified remap
-rule. LibreDWG's own documentation marks ACDSRECORD/ACDSSCHEMA as unhandled
+rule. A focused reread of the ODA specification's §24.2.2.7.1 clarifies a
+separate DWG-container identity domain: the DataStorage schema-search table
+associates data-segment object handles with sorted indexes and says AutoCAD
+ignores the entity when that search data is absent. This does not define the
+DXF `ACDSDATA` section or its group-320 key. Keep the DWG data-record handle /
+index mapping distinct from the DXF ACDSRECORD-to-entity key; do not copy a
+DWG DataStorage object handle or sorted index into the DXF group-320 field.
+LibreDWG's own documentation marks ACDSRECORD/ACDSSCHEMA as unhandled
 (without fields/DXF), and its AcDs reader notes describe incomplete,
 heuristic extraction; this is evidence of an independent implementation gap,
 not a serializer oracle. S2.3.4–.7 remain gated on resolving required-vs-
@@ -3987,7 +3994,7 @@ degenerate, other-knot, other-scenario, target-authored, or other-version
 splines.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 89/103 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
+commit; 90/104 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -4010,6 +4017,7 @@ commit; 89/103 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
 | S0.5 | COMMITTED | Added path-specific ezdxf/LibreDWG compatibility evidence. Prior S5.1 LibreDWG 0.14 runs accept the exact generated 3DFACE/polyline/MESH DXF vectors. In this pass LibreDWG 0.14 omitted checked 3D families while exporting local AC1024/AC1027 target DWGs and rejected the generated surface/NURBS cases; these are not positives. S8.4a later compared a direct LibreDWG JSON read with libdxfrw on the same local AC1024 DWG and matched only six INSERT placement records and two scenario-2 SPLINE fit records; this is distinct from the earlier DXF-export coverage check and does not qualify other families. ezdxf 1.4.4 docs establish field/API scope and ACIS limitations, but no executable ezdxf run was possible because the package is not installed. LibreDWG 0.11 stability labels remain historical only. |
 | S0.6 | COMMITTED | Full-text review of the local 279-page v5.4.1 on 2026-09-24 confirms §§20.4.40 SPLINE, 20.4.41 ACIS modeler, and §24 DataStorage. Chapter 8 covers R2018 and says its organization is structurally almost identical to R2013, listing three auxiliary-header shorts and a bounded set of entity/object deltas; §9 explicitly documents the R2018+ header-size field. The searchable text still has no named `AcDbSubDMesh`, modern `AcDb*Surface`, or `3DLINE` class layout; those class-specific DWG rows stay unqualified despite generic R2018 organization coverage. The spec does not fully decrypt ACIS and does not qualify pre-R13 forms. |
 | S0.7 | COMMITTED | ODA v5.4.1 §§2.13, 20.4.44, and 20.4.45 plus LibreDWG 0.14 JSON for the untracked AC1024 conference-room DWG establish a valid named DICTIONARY entry with a null child reference. DWG parsing now accepts only a zero-reference/zero-counter handle with code 0 or the expected item-handle code; DICTIONARYWDFLT still requires its separate default handle. Runtime-generated regular/DWFDT dictionary vectors preserve null members; the local round-trip and hardening tests pass. DXF group-350 validation remains strict. The full 72-target build, `lc3_compat_check`, and 3D consumer probe pass. The spline integration checkpoint now reaches DXF output but is blocked on three unqualified E3DSOLID DWG-frame payloads in the sample's `Fluorescent Fixture` block; this does not qualify spline or modeler conversion. The local DWG was not staged. |
+| S0.8 | COMMITTED | Re-read ODA v5.4.1 §24.2.2.7.1 against the R2013+ FreeCAD `dwg2dxf` ACDSDATA bridge. The DWG DataStorage schema-search table couples DataStorage-segment object handles to sorted indexes; the specification says AutoCAD ignores an entity if this search data is absent. §24.3's default schema dump is likewise DWG DataStorage evidence, not a DXF ACDSDATA envelope. Recorded the key distinction in S2.3: DWG DataStorage handle/index links must not be conflated with the separately evidenced DXF ACDSRECORD group-320 entity key. This sharpens implementation guards but does not resolve DXF contract or promote conversion support. Authority: [ODA Open Design Specification for .dwg files](https://static.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf), §§24.2.2.7.1 and 24.3. |
 | S1.1 | COMMITTED | Field-level serializers now cover 3DFACE, 3DLINE, POLYLINE/VERTEX, MESH, HELIX/SPLINE, modeler geometry, all surface subtypes, INSERT placement, and nested ATTRIB fields. Loft reference values are typed; binary values remain digest carriers. |
 | S1.2 | COMMITTED | Runtime self-tests verify mesh-coordinate mutation, polyface index serialization, INSERT/ATTRIB placement, loft-reference typed/binary separation, and modeler frame-body labeling/digest. Manual C++17 `-Wall -Wextra -Werror` adapter build and `--self-test` pass; `ctest -R '^libdxfrw_dwg_local_roundtrip$'` passes 1/1. Existing generated malformed DXF modeler checks remain in the fast round-trip test. No downloaded fixtures added. |
 | S2.1 | COMMITTED | DXF modeler reads now retain ordered group-1/3 text and group-310 binary chunk metadata as bounded views into `m_rawBytes`. The semantic adapter reports chunk bounds, keeps surface bytes explicitly unclassified, and gives DWG frame/DataStorage payloads distinct digests; `ACDSDATA` stays an independent raw-section carrier with no invented entity link. Strict C++17 adapter build/self-test and focused round-trip CTest pass for text, binary, and mixed chunk sequences. |
