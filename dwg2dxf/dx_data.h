@@ -15,6 +15,7 @@
 #include "libdxfrw.h"
 
 #include <list>
+#include <vector>
 
 //class to store image data and path from DRW_ImageDef
 class dx_ifaceImg : public DRW_Image {
@@ -62,6 +63,7 @@ public:
     std::list<DRW_AppId>appIds;         //stores a copy of all line types
     std::list<DRW_Dictionary>dictionaries; //typed OBJECTS dictionaries
     std::list<DRW_XRecord>xRecords;      //typed XRECORD objects
+    std::vector<DRW_RawDxfSection> rawDxfSections; //opaque DXF section passthrough
     std::list<dx_ifaceBlock*>blocks;    //stores a copy of all blocks and the entities in it
     std::list<dx_ifaceImg*>images;      //temporary list to find images for link with DRW_ImageDef. Do not delete it!!
 

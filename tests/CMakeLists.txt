@@ -111,6 +111,21 @@ if(EXISTS "${_freecad_cli_sample}"
     )
 endif()
 
+# The core codec can replay raw sections, but dwg2dxf must also retain them
+# through its concrete DXF import/export adapter. Generate the tiny opaque
+# ACDSDATA-shaped control in the build tree; it is not a schema-validity oracle.
+add_test(
+    NAME dwg2dxf_raw_dxf_section_passthrough
+    COMMAND ${CMAKE_COMMAND}
+        -DDWG2DXF=$<TARGET_FILE:dwg2dxf>
+        -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg2dxf_raw_dxf_section_test.cmake
+)
+set_tests_properties(dwg2dxf_raw_dxf_section_passthrough PROPERTIES
+    LABELS "cli;fast;dxf"
+    TIMEOUT 20
+)
+
 # Optional test of the installed converter from FreeCAD's actual desktop
 # process. It uses only a tracked ordinary DWG and is deliberately disabled
 # by default; the normal inner loop remains the fast, FreeCAD-independent CLI

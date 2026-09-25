@@ -355,6 +355,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
     std::vector<DRW_LType> lineTypes(cData->lineTypes.begin(),
                                      cData->lineTypes.end());
     dxfW->setCanonicalLineTypeMetadata(lineTypes);
+    dxfW->setRawDxfSections(cData->rawDxfSections);
     if (debug) {
         dxfW->setDebug(DRW::DebugLevel::Debug);
     }
