@@ -29,15 +29,21 @@ only when the integration behavior or claimed profile changes. Preserve
 correct DXF output when FreeCAD's importer lacks support, and report converter
 integration separately from imported-geometry support.
 
-**FreeCAD deployment qualification gap (2026-09-24):** the S8.9.8 runtime
-record says the installed child process's runtime dependencies resolve from
-FreeCAD's process environment. A clean-environment check now passes for the
-current macOS `BUILD_SHARED_LIBS=OFF` install artifact and its actual FreeCAD
-child process (recorded under S8.9.5); its only linked runtime libraries are
-macOS system libraries. This closes dependency provenance and handoff for that
-exact binary/profile, not shared-library packaging or Linux/Windows
-qualification. Keep these gates separate from entity/geometry claims; do not
-copy FreeCAD libraries or bundle system runtimes speculatively.
+**FreeCAD deployment qualification update (2026-09-24):** the S8.9.8 runtime
+record originally relied on FreeCAD's process environment to resolve the
+installed converter's dependencies. A clean-environment check already passed
+for the macOS `BUILD_SHARED_LIBS=OFF` install artifact and its actual FreeCAD
+child process. It exposed a separate shared-build packaging defect: installed
+`dwg2dxf` had `@rpath/libdxfrw.2.dylib` but no install RPATH. The converter
+target now receives a relocatable path from its install `bin` directory to
+`lib` for shared macOS/Linux builds. The new fast installed-artifact test
+installs to an isolated prefix and invokes the exact FreeCAD CLI contract with
+loader overrides removed; both static and shared macOS runs pass, and `otool`
+confirms `@loader_path/../lib` with only the installed libdxfrw and macOS
+system libraries linked. This
+closes the macOS installed-CLI loader-path defect, not a shared-binary FreeCAD
+geometry claim or native Linux/Windows qualification; those remain S8.9.5.
+Do not copy FreeCAD libraries or bundle system runtimes speculatively.
 
 **FreeCAD converter contract audit (2026-09-24):** the current upstream
 `Draft/importDWG.py` resolves LibreDWG from the shared converter-path preference
@@ -4144,10 +4150,11 @@ degenerate, other-knot, other-scenario, target-authored, or other-version
 splines.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 92/106 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
+commit; 93/107 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
+| S8.9.13 | COMMITTED | A shared macOS install reproduced FreeCAD's installed-child loader failure: `dwg2dxf` referenced `@rpath/libdxfrw.2.dylib` but had no `LC_RPATH`. `dwg2dxf/CMakeLists.txt` now sets an install-relative `@loader_path`/`$ORIGIN` path to `CMAKE_INSTALL_LIBDIR` for shared Apple/Unix builds, while static builds and Windows' colocated runtime DLL layout remain unchanged. Added `dwg2dxf_freecad_installed_cli_compat` and `tests/run_freecad_installed_dwg2dxf_test.cmake`: install the build under a unique prefix/path containing spaces, reject absolute or escaping GNUInstallDirs destinations and build-tree executable substitution, then reuse the existing exact-argv converter checks for the three repository-tracked DWG controls with `DYLD_*`/`LD_*` loader overrides unset and a minimal system PATH. The static macOS CTest passes 1/1 (0.49 s); a separate `BUILD_SHARED_LIBS=ON` macOS build passes the same test 1/1 (0.62 s). Direct `otool` inspection confirms the installed shared executable has `@loader_path/../lib` and links only the installed libdxfrw plus macOS system libraries; `env -i PATH=/usr/bin:/bin` converts tracked AC1027 input successfully. The tests add no DWG/DXF fixtures and remove their unique install/output roots only on success. This is installed CLI/dependency-resolution evidence for macOS only; native Linux/Windows and an actual FreeCAD process using the shared build remain distinct S8.9.5 qualification work. |
 | S8.9.12 | COMMITTED | Generalized the shared installed-LINE FreeCAD macro/runner for Automatic mode (`DWGConversion=0`), preserving actual ODA/QCAD resolver behavior and requiring exactly one child process. Added the default-OFF `LIBDXFRW_ENABLE_FREECAD_AUTOMATIC_3D_LINE_CONTROL` with separate open/insert CTests; no drawing fixtures were added and generated DWGs stayed in temporary roots. FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2, isolated profile/PATH: both Automatic operations select installed `/private/tmp/libdxfrw-freecad-auto.m85IDP/bin/dwg2dxf` (SHA-256 `54c9a6fedd8a4dd8ef59e3490b1a730f68e0defa70e665fb322dbc8c2757d00f`) exactly once, use `[binary,input,-o,output]`, exit 0, hand the same AC1015 DXF to the importer, create one LINE with bounds `(1,2,3)-(4,6,9)`, and report no unsupported entities. No ODA/QCAD process runs. Existing LibreDWG-only `open()`/`insert()` controls still pass 2/2; combined modes pass 4/4. Fast version-policy/CLI CTests pass 2/2 and the `dwg2dxf` build passes. FreeCAD aborts before app code inside the sandbox due to Qt's hidden host `neon` feature; all four runtime checks pass outside it. This closes only the Automatic-mode selection/handoff for this pinned macOS LINE profile; native Linux/Windows and general entity/3D support remain unqualified. README and man page record the bounded result and continuing fallback semantics. |
 | S2.2.4 | COMMITTED | Added a DXF write-context map from unique modeler source handles to their final emitted handles. During opaque ACDSDATA replay, only a group-320 key inside an `ACDSRECORD`'s `AcDbDs::ID` subsection is rewritten, and only when that same record has one `ASM_Data` marker and the source uniquely maps to a written modeler entity. Unrelated code-320 values remain byte/spelling-preserved. Malformed, missing, duplicate, ambiguous-source, and orphan associations fail the output transaction. Runtime-generated ASCII/binary `dx_iface` exports are read back and assert the key equals the public modeler handle; ASCII repeats through a second conversion. The exact FreeCAD-argv CLI control (`input -o output`) uses a local AC1032 DXF, checks both conversion passes and the unrelated opaque key, and passes. Focused CTest `libdxfrw_dwg_local_roundtrip`, `dwg2dxf_freecad_cli_compat`, and `dwg2dxf_raw_dxf_section_passthrough` passed 3/3; `git diff --check` passed. Binary second-pass reading currently stops in TABLES before ACDSDATA, so the binary vector gates one conversion/readback while the second-pass check remains ASCII. No DWG/DXF fixture was committed. This repairs DXF→DXF association only; DWG DataStorage serialization, ACDSDATA schema validity, ODA acceptance, and FreeCAD modeler geometry remain blocked/unqualified. |
 | S5.11 | COMMITTED | `dxfRW::writePolyline()` now omits group 210/220/230 for WCS 3D POLYLINE, polygon mesh, and polyface forms, so a zero-initialized DWG `extPoint` cannot become a zero-length DXF extrusion. ASCII and binary round-trip vectors cover flags 8/16/64, no explicit extrusion after public readback, a nonzero-Z polygon-mesh vertex, and a classic planar OCS POLYLINE retaining its non-default vector `(0,0.6,0.8)`. The exact FreeCAD `dwg2dxf input -o output` CTest rejects any 210/220/230 tuple on the WCS parent. `dwg2dxf_freecad_cli_compat`, `dwg2dxf_freecad_3d_polyline_cli`, `libdxfrw_dwg_local_roundtrip`, and `libdxfrw_3d_consumer_probe` pass (4/4); `lc3_compat_check` builds. The pinned FreeCAD 1.1.3/macOS 27 arm64/C++ importer mode 2 `open()` check imports the expected two edges and XYZ endpoints with no zero-length-extrusion warnings. No generated DWG/DXF fixture was added. This is bounded writer and one FreeCAD consumer-profile evidence only; broader POLYLINE/DWG/platform claims remain unchanged. |

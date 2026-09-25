@@ -109,6 +109,42 @@ if(EXISTS "${_freecad_cli_sample}"
     set_tests_properties(dwg2dxf_freecad_cli_compat PROPERTIES
         LABELS "dwg_read;freecad;cli;fast"
     )
+
+    # Exercise the artifact FreeCAD actually launches, not just the build-tree
+    # executable. Keep this test inside the chosen install prefix and skip
+    # non-relocatable GNUInstallDirs layouts rather than risking a host install.
+    set(_freecad_install_dirs_safe TRUE)
+    foreach(_install_dir IN ITEMS
+            "${CMAKE_INSTALL_BINDIR}" "${CMAKE_INSTALL_LIBDIR}")
+        if(IS_ABSOLUTE "${_install_dir}"
+                OR "${_install_dir}" MATCHES "(^|/)\\.\\.(/|$)")
+            set(_freecad_install_dirs_safe FALSE)
+        endif()
+    endforeach()
+    if(_freecad_install_dirs_safe)
+        add_test(
+            NAME dwg2dxf_freecad_installed_cli_compat
+            COMMAND ${CMAKE_COMMAND}
+                "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+                "-DINSTALL_BINDIR=${CMAKE_INSTALL_BINDIR}"
+                "-DINSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR}"
+                "-DEXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+                "-DSAMPLE=${_freecad_cli_sample}"
+                "-DRTEXT_SAMPLE=${_freecad_cli_rtext_sample}"
+                "-DMPOLYGON_SAMPLE=${_freecad_cli_mpolygon_sample}"
+                "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+                "-DCMAKE_CONFIG=$<CONFIG>"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_installed_dwg2dxf_test.cmake"
+        )
+        set_tests_properties(dwg2dxf_freecad_installed_cli_compat PROPERTIES
+            LABELS "freecad;cli;fast;installed"
+            TIMEOUT 180
+        )
+    else()
+        message(STATUS
+            "Skipping installed FreeCAD CLI test: GNUInstallDirs destinations are absolute or escape the install prefix")
+    endif()
 endif()
 
 # The core codec can replay raw sections, but dwg2dxf must also retain them
