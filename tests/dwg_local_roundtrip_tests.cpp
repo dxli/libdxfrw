@@ -5393,6 +5393,61 @@ bool runDxfViewportLightingRoundTrip(
     return result;
 }
 
+bool runDxfRayXlineRoundTrip(
+    bool binary, const std::filesystem::path& directory) {
+    const std::filesystem::path output = directory /
+        (binary ? "libdxfrw-ray-xline-binary.dxf"
+                : "libdxfrw-ray-xline-ascii.dxf");
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+
+    dx_data source;
+    auto* ray = new DRW_Ray();
+    ray->basePoint = DRW_Coord(1.0, 2.0, 3.0);
+    ray->secPoint = DRW_Coord(0.0, 0.0, 1.0);
+    source.mBlock->ent.push_back(ray);
+    auto* xline = new DRW_Xline();
+    xline->basePoint = DRW_Coord(4.0, 5.0, 6.0);
+    xline->secPoint = DRW_Coord(0.0, 0.6, 0.8);
+    source.mBlock->ent.push_back(xline);
+
+    dx_iface exporter;
+    const bool exportOk = exporter.fileExport(
+        output.string(), DRW::AC1027, binary, &source, false);
+    dx_data imported;
+    dx_iface importer;
+    const bool importOk = exportOk
+        && importer.fileImport(output.string(), &imported, false);
+    const DRW_Ray* roundTrippedRay = nullptr;
+    const DRW_Xline* roundTrippedXline = nullptr;
+    if (importOk) {
+        for (const DRW_Entity* entity : imported.mBlock->ent) {
+            if (entity == nullptr)
+                continue;
+            if (entity->eType == DRW::RAY)
+                roundTrippedRay = static_cast<const DRW_Ray*>(entity);
+            else if (entity->eType == DRW::XLINE)
+                roundTrippedXline = static_cast<const DRW_Xline*>(entity);
+        }
+    }
+    const bool result = roundTrippedRay != nullptr
+        && roundTrippedXline != nullptr
+        && roundTrippedRay->basePoint.x == 1.0
+        && roundTrippedRay->basePoint.y == 2.0
+        && roundTrippedRay->basePoint.z == 3.0
+        && roundTrippedRay->secPoint.x == 0.0
+        && roundTrippedRay->secPoint.y == 0.0
+        && roundTrippedRay->secPoint.z == 1.0
+        && roundTrippedXline->basePoint.x == 4.0
+        && roundTrippedXline->basePoint.y == 5.0
+        && roundTrippedXline->basePoint.z == 6.0
+        && roundTrippedXline->secPoint.x == 0.0
+        && roundTrippedXline->secPoint.y == 0.6
+        && roundTrippedXline->secPoint.z == 0.8;
+    std::filesystem::remove(output, ec);
+    return result;
+}
+
 bool runDxfAcdsModelerOwnerRemap(bool binary,
                                  const std::filesystem::path& directory,
                                  bool keepOutputs) {
@@ -9162,6 +9217,10 @@ int main(int argc, char** argv) {
            "local ASCII DXF viewport lighting round-trip", failures);
     expect(runDxfViewportLightingRoundTrip(true, directory),
            "local binary DXF viewport boolean-width round-trip", failures);
+    expect(runDxfRayXlineRoundTrip(false, directory),
+           "local ASCII DXF RAY/XLINE WCS round-trip", failures);
+    expect(runDxfRayXlineRoundTrip(true, directory),
+           "local binary DXF RAY/XLINE WCS round-trip", failures);
     expect(runDxfAcdsModelerOwnerRemap(false, directory, keepOutputs),
            "local ASCII DXF AC1027 ACDSDATA ASM_Data owner remap and second pass",
            failures);

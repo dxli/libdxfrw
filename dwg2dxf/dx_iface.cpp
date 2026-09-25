@@ -420,6 +420,12 @@ void dx_iface::writeEntity(DRW_Entity* e){
     case DRW::LINE:
         dxfW->writeLine(static_cast<DRW_Line*>(e));
         break;
+    case DRW::RAY:
+        dxfW->writeRay(static_cast<DRW_Ray*>(e));
+        break;
+    case DRW::XLINE:
+        dxfW->writeXline(static_cast<DRW_Xline*>(e));
+        break;
     case DRW::CIRCLE:
         dxfW->writeCircle(static_cast<DRW_Circle*>(e));
         break;

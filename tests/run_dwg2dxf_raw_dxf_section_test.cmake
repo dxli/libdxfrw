@@ -22,6 +22,10 @@ file(WRITE "${_input}"
     "0\nSECTION\n2\nENTITIES\n0\nLINE\n5\n30\n330\n1F\n"
     "100\nAcDbEntity\n8\n0\n100\nAcDbLine\n"
     "10\n1.0\n20\n2.0\n30\n3.0\n11\n4.0\n21\n5.0\n31\n6.0\n"
+    "0\nRAY\n5\n32\n330\n1F\n100\nAcDbEntity\n8\n0\n"
+    "100\nAcDbRay\n10\n1\n20\n2\n30\n3\n11\n0\n21\n0\n31\n1\n"
+    "0\nXLINE\n5\n33\n330\n1F\n100\nAcDbEntity\n8\n0\n"
+    "100\nAcDbXline\n10\n4\n20\n5\n30\n6\n11\n0\n21\n0.6\n31\n0.8\n"
     "0\nVIEWPORT\n5\n31\n330\n1F\n100\nAcDbEntity\n8\n0\n"
     "100\nAcDbViewport\n10\n10\n20\n20\n30\n30\n69\n7\n"
     "292\n0\n282\n2\n141\n0.25\n142\n0.75\n"
@@ -75,7 +79,7 @@ endif()
 
 file(READ "${_output}" _contents)
 foreach(_required IN ITEMS
-        "AC1032" "LINE" "VIEWPORT"
+        "AC1032" "LINE" "RAY" "XLINE" "VIEWPORT"
         "ACDSDATA" "ACDSSCHEMA" "7" "OpaqueSchema"
         "ACDSRECORD" "9" "OpaqueRecord" "320" "30"
         "94" "4" "310" "41434453")
@@ -83,6 +87,15 @@ foreach(_required IN ITEMS
     if(_found EQUAL -1)
         message(FATAL_ERROR
             "first conversion dropped required opaque section value: ${_required}")
+    endif()
+endforeach()
+foreach(_entity_check IN ITEMS
+        "AcDbRay\n[ \t]*10\n1\n[ \t]*20\n2\n[ \t]*30\n3\n[ \t]*11\n0\n[ \t]*21\n0\n[ \t]*31\n1\n"
+        "AcDbXline\n[ \t]*10\n4\n[ \t]*20\n5\n[ \t]*30\n6\n[ \t]*11\n0\n[ \t]*21\n0\\.6\n[ \t]*31\n0\\.8\n")
+    string(REGEX MATCH "${_entity_check}" _entity_match "${_contents}")
+    if(_entity_match STREQUAL "")
+        message(FATAL_ERROR
+            "first conversion lost the RAY/XLINE WCS base point or direction")
     endif()
 endforeach()
 string(REGEX MATCH "292\n0\n282\n[ \t]*2\n" _viewport_lighting
@@ -112,7 +125,7 @@ endif()
 
 file(READ "${_output2}" _contents2)
 foreach(_required IN ITEMS
-        "AC1032" "LINE" "VIEWPORT"
+        "AC1032" "LINE" "RAY" "XLINE" "VIEWPORT"
         "ACDSDATA" "ACDSSCHEMA" "7" "OpaqueSchema"
         "ACDSRECORD" "9" "OpaqueRecord" "320" "30"
         "94" "4" "310" "41434453")
@@ -120,6 +133,15 @@ foreach(_required IN ITEMS
     if(_found EQUAL -1)
         message(FATAL_ERROR
             "second conversion dropped required opaque section value: ${_required}")
+    endif()
+endforeach()
+foreach(_entity_check IN ITEMS
+        "AcDbRay\n[ \t]*10\n1\n[ \t]*20\n2\n[ \t]*30\n3\n[ \t]*11\n0\n[ \t]*21\n0\n[ \t]*31\n1\n"
+        "AcDbXline\n[ \t]*10\n4\n[ \t]*20\n5\n[ \t]*30\n6\n[ \t]*11\n0\n[ \t]*21\n0\\.6\n[ \t]*31\n0\\.8\n")
+    string(REGEX MATCH "${_entity_check}" _entity_match "${_contents2}")
+    if(_entity_match STREQUAL "")
+        message(FATAL_ERROR
+            "second conversion lost the RAY/XLINE WCS base point or direction")
     endif()
 endforeach()
 string(REGEX MATCH "292\n0\n282\n[ \t]*2\n" _viewport_lighting2
