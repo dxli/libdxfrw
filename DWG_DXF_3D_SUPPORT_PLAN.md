@@ -1271,7 +1271,8 @@ Implementation sequence:
    normative ACDSDATA contract or ODA acceptance result. Both files remain
    outside this repository and may be used only as external opt-in inputs.
 2. **S2.3.2 — Resolve the R2013 DXF entity/section contract (`BLOCKED`,
-   narrowed by independent witness and primary-source boundary check).**
+   narrowed by independent reader evidence; writer and identity policy remain
+   unresolved).**
    Compare the bounded descriptions:
    Autodesk's published `3DSOLID` reference (group 70 modeler version 1 and
    groups 1/3 text); the ODA AC1027 entity shell (290=1, nonzero GUID, nonzero
@@ -1290,7 +1291,35 @@ Implementation sequence:
    as a real unresolved compatibility constraint, not as proof that the
    witnessed group-320 relationship is false. The local ezdxf v1.4.4 source
    audit is complete but static-only; do not treat its self-tests as
-   interoperability evidence. A bounded follow-up on 2026-09-24 found no
+   interoperability evidence. A source audit on 2026-09-24 found a useful
+   independent-reader cross-check in ACadSharp PR [#1139](https://github.com/DomCR/ACadSharp/pull/1139),
+   merged 2026-07-09: its R2013+ DXF reader associates `ACDSRECORD` data by
+   the `AcDbDs::ID` subsection's group-320 owner handle and reads group-310
+   chunks from `ASM_Data`; the PR reports 13 R2018 REGION payloads whose
+   declared sizes match and describes a larger 306-file read corpus. This
+   independently corroborates that bounded reader mapping, but it does not
+   establish all required schema records, the `3DSOLID`/`REGION` entity-shell
+   fields, identity behavior after cloning/remapping, or writer acceptance.
+   ACadSharp PR [#1150](https://github.com/DomCR/ACadSharp/pull/1150) proposes
+   the corresponding writer and remains open as of this review. Its author
+   reports testing DXF outputs with DWG TrueView and an ODA-based reader, and
+   identifies a version boundary for the `AcDb3dSolid` subclass/history field;
+   this is a valuable implementation lead, not independently reproducible
+   evidence until the exact patch/output and tool versions are available and
+   rerun. The local ACadSharp checkout is pinned at
+   `3a52a52047e84670759c1f9ad3916ec3ce85ff56`, predates those PRs, and its
+   `DxfWriter.writeACDSData()` is empty; do not mistake that checkout or its
+   maintained AC1027 sample for the proposed writer implementation.
+   Autodesk's generic group-code rule that 320-series handles are not
+   translated during INSERT/XREF is still an unresolved lifecycle constraint,
+   even though the reader evidence consistently uses group 320 as the
+   application-level entity key. For the narrow standalone `dwg2dxf`→FreeCAD
+   route, the first implementation check may be limited to proving that
+   source entity handles are preserved unchanged in the emitted DXF and that
+   the same handles resolve the records; it must not imply INSERT/XREF or
+   arbitrary handle-remap support.
+
+   A bounded follow-up on 2026-09-24 found no
    downloadable `mm.dxf` in the public BricsCAD/ezdxf analysis. The existing
    sibling ezdxf v1.4.4 checkout contains a tracked AC1032
    `examples_dxf/uncommon.dxf` (SHA-256
@@ -1299,21 +1328,34 @@ Implementation sequence:
    authoring provenance is not established and it does not settle contract
    semantics. The pinned generator cannot run in the available system or
    bundled Python runtimes because `typing_extensions`/`pyparsing` are absent.
+   The installed ODA File Converter 27.1.0.0 was also tried against the
+   ACadSharp-maintained `sample_AC1027_ascii.dxf` using its normal CLI form;
+   the app process exited 134 before producing output, with macOS pasteboard
+   `-4960`/connection-invalid errors. An identical retry after opening the
+   app produced the same result. This is an unavailable headless test route,
+   not evidence that ODA rejected the DXF; no UI-lock bypass or source change
+   was made. Reattempt this acceptance check only from a functioning native
+   ODA test session, and keep its result separate from the earlier verified
+   ODA-origin round trip in S2.3.3.
    Do not install dependencies into the sibling checkout or infer the
-   contract from static code. Further unblocking now requires a hash-pinned
-   BricsCAD-authored sample supplied by its source, an already-provisioned
-   ezdxf runtime, or an authoritative DXF contract. Do not repeat broad
-   searches. When an admissible source becomes available, record exact tag
-   order and parsed values. Establish which envelope fields
-   are required, whether record and schema/object IDs have distinct
-   namespaces, how IDs/GUID/history/entity keys behave when handles are
-   reassigned or drawings are inserted/XREFed, and whether chunk boundaries
-   are semantic or merely serialization. Confirm conclusions with exact
-   parser readback and ODA acceptance plus semantic readback of a locally
-   generated control; mere successful open or section retention is
-   insufficient. Exercise handle stability and reassignment explicitly: the
-   candidate group-320 entity key must still resolve after libdxfrw mints DXF
-   output handles, or the precise remap rule must be established. ODA §24
+   contract from static code. Do not repeat broad searches. The next bounded
+   action is to obtain the exact #1150 writer patch or a locally provisioned
+   build of it, extract its schema/record/envelope decisions into explicit
+   candidate assertions, then independently run the existing ODA 27.1.0.0
+   route and public DXF readback against libdxfrw output. If that patch is not
+   obtainable, continue only after a hash-pinned BricsCAD-authored sample,
+   already-provisioned ezdxf runtime, or authoritative DXF contract becomes
+   available. In either case, record exact tag order and parsed values.
+   Establish which envelope fields are required, whether record and
+   schema/object IDs have distinct namespaces, and how GUID/history/entity
+   keys behave under the standalone conversion's handle preservation; keep
+   INSERT/XREF and arbitrary remapping claims separately gated. Establish
+   whether chunk boundaries are semantic or merely serialization. Confirm
+   conclusions with exact parser readback and ODA acceptance plus semantic
+   readback of a locally generated control; mere successful open or section
+   retention is insufficient. For the FreeCAD converter route, prove that
+   source entity handles survive unchanged and resolve the generated records.
+   ODA §24
    establishes DWG DataStorage only. LibreDWG's
    unhandled ACDS object classification and heuristic DWG extraction cannot
    settle the DXF writer contract. Never set DXF group 70 to 2 merely because
@@ -1330,8 +1372,12 @@ Implementation sequence:
    marks ACDSRECORD/ACDSSCHEMA unhandled; its [release notes](https://github.com/LibreDWG/libredwg/blob/master/NEWS)
    describe current DWG extraction as incomplete/heuristic, while its [issue
    #1411](https://github.com/LibreDWG/libredwg/issues/1411) is an ezdxf-authored
-   R2018 reproducer, not evidence of AutoCAD acceptance. None supplies the
-   missing normative DXF section contract.
+   R2018 reproducer, not evidence of AutoCAD acceptance. ACadSharp's merged
+   [ACIS DXF/DWG reader](https://github.com/DomCR/ACadSharp/pull/1139) and
+   proposed [ACIS writer](https://github.com/DomCR/ACadSharp/pull/1150) provide
+   independent implementation evidence with the limits stated above; neither
+   is a normative DXF specification. No available source yet proves the
+   complete required DXF entity/section contract or handle lifecycle.
 3. **S2.3.3 — Record the available acceptance route (`VERIFIED`, bounded).**
    ODA File Converter 27.1.0.0 successfully read an ODA-produced AC1027 DXF,
    wrote AC1027 DWG, and exported AC1027 DXF while retaining the six schemas
@@ -3484,7 +3530,7 @@ Initial dependency/readiness order:
 | --- | --- | --- |
 | S0 | None | Baseline synchronized. Finish the capability/evidence inventory. The local ODA PDF gates DWG reader edits only; locate/verify it while DXF inventory proceeds. |
 | S1 | S0 inventory | Start after inventory; test/adapter-only and safe while DWG byte-layout edits are gated. |
-| S2 | S0, S1 | S2.1/S2.2/S2.2.1–S2.2.3 are committed. S2.2.1 is generic codec-level opaque ACDSDATA section replay; S2.2.3 closes the separate concrete `dwg2dxf` DXF-input/DXF-output adapter loss, without interpreting the section. S2.2.2 preserves observed AC1027 DXF modeler-shell fields. None qualifies DWG-to-DXF SAB/ACDSDATA emission or FreeCAD solid import. S2.3.1/.3 evidence includes the ODA route, an external ACadSharp multi-entity AC1027 failure vector, and a static ezdxf candidate-writer audit. The bounded search for an executable ezdxf generator or BricsCAD `mm.dxf` is unavailable in the current environment; resolve the entity-envelope/group-320 key lifecycle in .2 only with new independent evidence, and do not repeat broad searches. Then run fast generated vectors, one ODA-output acceptance check, and one optional FreeCAD installed-binary handoff using its exact argv and the external sample. Keep complete-DXF converter handoff distinct from FreeCAD solid geometry. Do not touch DWG parser files. |
+| S2 | S0, S1 | S2.1/S2.2/S2.2.1–S2.2.3 are committed. S2.2.1 is generic codec-level opaque ACDSDATA section replay; S2.2.3 closes the separate concrete `dwg2dxf` DXF-input/DXF-output adapter loss, without interpreting the section. S2.2.2 preserves observed AC1027 DXF modeler-shell fields. None qualifies DWG-to-DXF SAB/ACDSDATA emission or FreeCAD solid import. S2.3.1/.3 evidence includes the ODA route and an external ACadSharp multi-entity AC1027 failure vector. ACadSharp's merged #1139 reader independently corroborates the group-320 owner-key/ASM_Data group-310 mapping for a bounded R2018 read case; open #1150 is a writer lead only. The entity envelope, schema completeness, and key lifecycle remain unresolved; do not repeat broad searches. Next obtain the exact writer patch/output or another admissible source, encode its claims as fast generated vectors, run one ODA-output acceptance check, and only then one optional FreeCAD installed-binary handoff using exact argv. Keep converter handoff distinct from solid geometry. No DWG parser edits absent the per-version ODA/trace gate. |
 | S3 | S0 applicable ODA chapter, per-version authentic trace, S1, S2 | Ready only for modeler entities whose layout is actually described and witnessed. MESH/surface/modern 3DLINE layout gaps stay separately blocked; continue S5/S6 DXF lanes and keep those DWG claims unqualified. |
 | S4 | S3 verified payload reading, S2 | Blocked until S3 read evidence; do not build writer layout by mirroring an unverified reader. |
 | S5 | S0, S1 | DXF topology/coordinate portion ready after S1; only the DXF portion may proceed while the ODA gate is unresolved. |
@@ -3498,10 +3544,13 @@ regressions for generic raw-section replay, AC1027 modeler-shell preservation,
 and raw-section passthrough through the concrete CLI adapter respectively.
 The new .3 item closes data loss only on DXF input→DXF output; none unblocks
 DWG-to-DXF modeler-carrier serialization.
-S2.3.1/.3 sample-mapping and ODA-reader-route research is complete, and the
-local ezdxf source audit narrows (but does not resolve) the candidate link
-shape; resolve the blocked entity-envelope/handle-lifecycle contract in
-S2.3.2 with one bounded source-or-generated-control check, then
+S2.3.1/.3 sample-mapping and ODA-reader-route research is complete. The
+merged ACadSharp #1139 reader independently corroborates the bounded
+group-320 owner-key/`ASM_Data` payload mapping; its open #1150 writer is a
+candidate, not merged/reproducible evidence. Obtain that exact patch/output
+or another admissible source and resolve only the remaining entity-envelope,
+schema-completeness, and standalone handle-preservation contract in S2.3.2;
+do not repeat broad searches. Then
 implement S2.3.4 in small slices with S2.3.5 fast checks after each change.
 Run S2.3.6 once on the first complete output, then S2.3.7/S8.15.19 once as an
 optional FreeCAD checkpoint. If the envelope cannot be proven, leave only
