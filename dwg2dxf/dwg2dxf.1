@@ -31,9 +31,12 @@ DXF importer may still not support every preserved entity or 3D feature.
 .PP
 The end-to-end profile qualified by this project is FreeCAD 1.1.3 on macOS 27
 arm64 with the C++ DXF importer, using the installed converter for a generated
-AC1015 nonzero-Z LINE through both open and insert. Native Linux and Windows
-profiles are not yet qualified; entity and version support remains specific
-to the published support matrix.
+AC1015 nonzero-Z LINE through both open and insert. Both Automatic
+(DWGConversion=0) and LibreDWG-only (DWGConversion=1) modes were checked with
+PATH discovery; the Automatic-mode control selected this executable first and
+did not run ODA/QCAD fallback. Automatic mode may still try another converter
+after failure. Native Linux and Windows profiles are not yet qualified; entity
+and version support remains specific to the published support matrix.
 .PP
 This package supplies the DWG-to-DXF import-side program for FreeCAD Draft's
 importDWG.open() and importDWG.insert() workflows only; it does not include

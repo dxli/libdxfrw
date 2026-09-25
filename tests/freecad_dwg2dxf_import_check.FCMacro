@@ -41,6 +41,15 @@ if operation not in ("open", "insert"):
 expect_conversion_failure = (
     os.environ.get("LIBDXFRW_FREECAD_EXPECT_CONVERSION_FAILURE", "") == "1"
 )
+requested_conversion_mode = os.environ.get(
+    "LIBDXFRW_FREECAD_DWG_CONVERSION", "1"
+)
+if requested_conversion_mode not in ("0", "1"):
+    raise RuntimeError(
+        "LIBDXFRW_FREECAD_DWG_CONVERSION must be '0' (Automatic) or "
+        "'1' (LibreDWG only)"
+    )
+expected_conversion_mode = int(requested_conversion_mode)
 if expect_conversion_failure and operation != "open":
     raise RuntimeError("conversion-failure qualification requires operation=open")
 expected_modeler = os.environ.get(
@@ -132,7 +141,7 @@ if seed_preferences:
         raise RuntimeError(
             "FreeCAD did not load the expected isolated --user-cfg file"
         )
-    importDWG.params.set_param("DWGConversion", 1)
+    importDWG.params.set_param("DWGConversion", expected_conversion_mode)
     if discovery == "path":
         importDWG.params.set_param("TeighaFileConverter", "")
     else:
@@ -148,8 +157,12 @@ if seed_preferences:
         ).SetBool("dxfShowDialog", False)
 
 conversion_mode = importDWG.params.get_param("DWGConversion")
-if (operation == "insert" or discovery != "existing") and conversion_mode != 1:
-    raise RuntimeError("attributed converter checks require DWGConversion=1")
+if (operation == "insert" or discovery != "existing") and (
+    conversion_mode != expected_conversion_mode
+):
+    raise RuntimeError(
+        "attributed converter check did not load the requested DWGConversion mode"
+    )
 draft_preferences = App.ParamGet(
     "User parameter:BaseApp/Preferences/Mod/Draft"
 )
@@ -207,8 +220,11 @@ def capture_convert(filename):
         return process
 
     subprocess.Popen = capture_popen
-    importDWG.get_oda_converter = lambda: None
-    importDWG.get_qcad_converter = lambda: None
+    # In Automatic mode retain FreeCAD's real ODA/QCAD fallback behavior so
+    # any fallback child is observable and can invalidate attribution.
+    if conversion_mode != 0:
+        importDWG.get_oda_converter = lambda: None
+        importDWG.get_qcad_converter = lambda: None
     try:
         result = original_convert(filename)
     finally:
@@ -244,7 +260,7 @@ def assert_converter_route(dxf_path):
     processes = captured.get("converter_processes", [])
     if len(processes) != 1:
         raise AssertionError(
-            "expected one dwg2dxf process with fallbacks disabled; got %d"
+            "expected exactly one dwg2dxf child and no fallback process; got %d"
             % len(processes)
         )
 

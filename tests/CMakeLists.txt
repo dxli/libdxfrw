@@ -287,6 +287,47 @@ if(LIBDXFRW_ENABLE_FREECAD_INSTALLED_3D_LINE_CONTROL)
     endforeach()
 endif()
 
+# Qualify the ordinary FreeCAD Automatic preference separately. Unlike the
+# LibreDWG-only controls above, keep real ODA/QCAD resolvers enabled and assert
+# that the installed dwg2dxf succeeds before either fallback is launched.
+option(LIBDXFRW_ENABLE_FREECAD_AUTOMATIC_3D_LINE_CONTROL
+    "Enable FreeCAD Automatic-mode dwg2dxf 3D LINE open/insert checks" OFF)
+if(LIBDXFRW_ENABLE_FREECAD_AUTOMATIC_3D_LINE_CONTROL)
+    find_program(LIBDXFRW_DWGADD_EXECUTABLE NAMES dwgadd)
+    if(NOT LIBDXFRW_DWGADD_EXECUTABLE)
+        message(FATAL_ERROR
+            "LIBDXFRW_ENABLE_FREECAD_AUTOMATIC_3D_LINE_CONTROL requires LibreDWG dwgadd")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECADCMD_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECADCMD_EXECUTABLE to FreeCAD's freecadcmd")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE to the installed dwg2dxf")
+    endif()
+
+    foreach(_operation IN ITEMS open insert)
+        add_test(
+            NAME dwg2dxf_freecad_automatic_3d_line_${_operation}
+            COMMAND ${CMAKE_COMMAND}
+                "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
+                "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
+                "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+                "-DDWGADD=${LIBDXFRW_DWGADD_EXECUTABLE}"
+                "-DRECIPE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dwg/ac1015_3d_line_control.dwgadd"
+                "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
+                "-DOPERATION=${_operation}"
+                "-DDWG_CONVERSION_MODE=0"
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_installed_3d_line_test.cmake
+        )
+        set_tests_properties(dwg2dxf_freecad_automatic_3d_line_${_operation}
+            PROPERTIES
+                LABELS "freecad;automatic;installed;generated;integration"
+                TIMEOUT 180)
+    endforeach()
+endif()
+
 # Optional AC1027 POINT qualification using a caller-supplied AutoCAD 2016
 # sample. The DWG stays outside this repository; only test code is committed.
 option(LIBDXFRW_ENABLE_FREECAD_AUTOCAD_POINT3D_CONTROL

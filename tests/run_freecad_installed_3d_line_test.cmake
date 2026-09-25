@@ -13,6 +13,13 @@ endforeach()
 if(NOT OPERATION STREQUAL "open" AND NOT OPERATION STREQUAL "insert")
     message(FATAL_ERROR "OPERATION must be open or insert")
 endif()
+if(NOT DEFINED DWG_CONVERSION_MODE)
+    set(DWG_CONVERSION_MODE 1)
+endif()
+if(NOT DWG_CONVERSION_MODE STREQUAL "0"
+        AND NOT DWG_CONVERSION_MODE STREQUAL "1")
+    message(FATAL_ERROR "DWG_CONVERSION_MODE must be 0 or 1")
+endif()
 
 get_filename_component(_installed_converter "${DWG2DXF}" REALPATH)
 get_filename_component(_build_converter "${BUILD_DWG2DXF}" REALPATH)
@@ -98,6 +105,7 @@ set(_environment
     "LIBDXFRW_FREECAD_DWG=${_input}"
     "LIBDXFRW_FREECAD_OPERATION=${OPERATION}"
     "LIBDXFRW_FREECAD_DISCOVERY=path"
+    "LIBDXFRW_FREECAD_DWG_CONVERSION=${DWG_CONVERSION_MODE}"
     "LIBDXFRW_FREECAD_SEED_ISOLATED_PREFERENCES=1"
     "LIBDXFRW_FREECAD_USER_CFG=${_user_cfg}"
     "LIBDXFRW_FREECAD_TEMP_ROOT=${_test_root}"
@@ -133,7 +141,7 @@ foreach(_expected IN ITEMS
         "${_converter_sha256}"
         "\"operation\": \"${OPERATION}\""
         "\"discovery\": \"path\""
-        "\"dwg_conversion\": 1"
+        "\"dwg_conversion\": ${DWG_CONVERSION_MODE}"
         "\"expected_line_bounds\"")
     string(FIND "${_freecad_stdout}" "${_expected}" _found)
     if(_found EQUAL -1)
