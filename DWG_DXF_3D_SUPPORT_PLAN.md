@@ -31,14 +31,14 @@ integration separately from imported-geometry support.
 
 **FreeCAD deployment qualification gap (2026-09-24):** the S8.9.8 runtime
 record says the installed child process's runtime dependencies resolve from
-FreeCAD's process environment. That proves the bounded FreeCAD handoff, but
-does not by itself prove the installed converter has a complete deployment
-dependency closure independent of FreeCAD's private library paths or this
-build tree. Keep this separate from the already-passing argv and geometry
-checks: extend S8.9.5 to trace loaded dependency paths and launch the installed
-artifact in a clean environment before broadening installation guidance or
-platform claims. Do not copy FreeCAD libraries or bundle system runtimes
-speculatively.
+FreeCAD's process environment. A separate clean-environment check now passes
+for the current macOS `BUILD_SHARED_LIBS=OFF` install artifact (recorded under
+S8.9.5), whose only linked runtime libraries are macOS system libraries.
+That closes the standalone CLI dependency check for this exact build/profile,
+not the old S8.9.8 binary's loaded-path provenance, shared-library packaging,
+or Linux/Windows qualification. Keep these gates separate from the already-
+passing argv and geometry checks; do not copy FreeCAD libraries or bundle
+system runtimes speculatively.
 
 **FreeCAD converter contract audit (2026-09-24):** the current upstream
 `Draft/importDWG.py` resolves LibreDWG from the shared converter-path preference
@@ -2637,8 +2637,18 @@ importer. Keep those importer profiles separate.
    FreeCAD 1.1.3 `freecadcmd` PATH/configured-path discovery on macOS arm64
    (S8.9.1/.2), with `open()` and `insert()` handoffs (S8.9.2/.3); S8.9.6
    additionally covers registered dispatch inside a controlled macOS GUI
-   process. Remaining: native Windows install/discovery/runtime and, where
-   available, matching Linux process-environment evidence. The normal OS
+   process. A 2026-09-24 clean-install audit of the current macOS
+   `BUILD_SHARED_LIBS=OFF` artifact also ran exact FreeCAD argv with `env -i`
+   from outside the checkout, using input/output paths with spaces; conversion
+   succeeded and `otool -L` showed only `/usr/lib/libc++.1.dylib` and
+   `/usr/lib/libSystem.B.dylib`. The existing fast `dwg2dxf_freecad_cli_compat`
+   test passed 1/1. This proves the standalone CLI dependency closure only for
+   that installed binary/build mode; it does not retroactively trace the
+   different binary used by S8.9.8 or establish shared-build packaging.
+   Remaining: capture selected-binary/dependency provenance in a FreeCAD child
+   where the platform permits, qualify a shared build only if it is advertised,
+   and run native Windows plus, where available, Linux install/discovery/runtime
+   checks. The normal OS
    desktop-launch environment (Finder/LaunchServices, Linux desktop entry, or
    Windows Start menu) is not established merely by the current controlled GUI
    launch; test the actual launcher named in setup guidance or keep the
