@@ -286,6 +286,38 @@ FreeCAD solid construction. See the
 and LibreDWG's
 [minimal R2018 data-loss reproducer](https://github.com/LibreDWG/libredwg/issues/1411).
 
+**ACDS evidence-gate recheck (2026-09-25; no state promotion):** current
+upstream [ezdxf ACIS DXF API](https://github.com/mozman/ezdxf/blob/master/src/ezdxf/acis/dxf.py)
+confirms that `export_dxf()` routes AC1027+ bodies through SAB into ACDSDATA;
+the same project's [DXF structure notes](https://github.com/mozman/ezdxf/blob/master/docs/source/dxfinternals/filestructure.rst)
+still describe ACDSDATA as undocumented by the DXF reference. The historical
+[dxfgrabber ACDSDATA reader](https://projects.blender.org/blender/blender-addons/commit/82a00ee2a0d8f2001917ddc4e34de4104200eca3)
+groups `ACDSRECORD` subsections on group 2, looks up `AcDbDs::ID` and
+`ASM_Data`, treats the third ID-section tag (group 320) as the modeler-entity
+handle, and concatenates group-310 bytes. This corroborates one candidate
+reader algorithm, but dxfgrabber is the same author's predecessor to ezdxf,
+is parser-only here, and does not independently qualify record lengths,
+GUID/history behavior, or semantic geometry. The public
+[LibreDWG #1411 reproduction](https://github.com/LibreDWG/libredwg/issues/1411)
+uses ezdxf-generated data and demonstrates loss through LibreDWG, not
+independent acceptance. The reported BricsCAD-authored `mm.dxf` remains
+unavailable with no downloadable artifact/hash; the new RealDWG-Web changelog
+also mentions attaching ACDSDATA to solids, but the implementation is in a
+private package and cannot be audited or reproduced. `ezdxf` is not installed
+in this environment, so no generated-file or runtime result is claimed.
+
+The shortest unblock is now explicit: obtain the actual BricsCAD `mm.dxf` (or
+an equivalent nonconfidential, source-provenance AC1027 DWG/DXF pair) with
+producer build/operation and hashes; run at least one independently implemented
+reader against the untouched DXF and compare the linked SAB with independently
+expected simple-solid semantics; verify group-94 length against ordered
+group-310 chunks and record the GUID/history fields without assigning
+unproven meaning. Keep the artifact external and hash-pinned. If only one
+entity/schema/producer/version tuple is established, mark only that narrow
+S2.3.2 contract `READY`; do not infer clone, INSERT/XREF, other entity, or
+FreeCAD B-rep support. Until this packet exists, keep the production
+ACDSDATA serializer fail-closed and continue unrelated ready converter work.
+
 The current converter failure is localized: `dwg2dxf` reads the AC1027
 `3DSOLID` at handle `20B`, resolves its linked DataStorage record, and reaches
 the DXF modeler writer; `dxfRW::writeModelerGeometry()` then fails closed
