@@ -1906,8 +1906,14 @@ public:
     void addLine(const DRW_Line&) override {}
     void addRay(const DRW_Ray&) override {}
     void addXline(const DRW_Xline&) override {}
-    void addArc(const DRW_Arc&) override {}
-    void addCircle(const DRW_Circle&) override {}
+    void addArc(const DRW_Arc& data) override {
+        ++arcCount;
+        lastArc = data;
+    }
+    void addCircle(const DRW_Circle& data) override {
+        ++circleCount;
+        lastCircle = data;
+    }
     void addEllipse(const DRW_Ellipse& data) override {
         ++ellipseCount;
         lastEllipse = data;
@@ -1991,6 +1997,8 @@ public:
     std::size_t headerCount {0};
     std::size_t faceCount {0};
     std::size_t ellipseCount {0};
+    std::size_t arcCount {0};
+    std::size_t circleCount {0};
     std::size_t traceCount {0};
     std::size_t solidCount {0};
     std::size_t hatchCount {0};
@@ -2000,6 +2008,8 @@ public:
     std::size_t surfaceCount {0};
     DRW_3Dface last3dFace;
     DRW_Ellipse lastEllipse;
+    DRW_Arc lastArc;
+    DRW_Circle lastCircle;
     DRW_Trace lastTrace;
     DRW_Solid lastSolid;
     DRW_Hatch lastHatch;
@@ -3067,6 +3077,150 @@ void testDxfEllipseCoordinatesAreWcs(TestContext& t) {
              "DXF ELLIPSE ext=true does not transform WCS coordinates twice");
 }
 
+void testDxfArcCircleRequireExtrusionDirection(TestContext& t) {
+    const std::string sectionStart = "0\nSECTION\n2\nENTITIES\n0\n";
+    const std::string sectionEnd = "0\nENDSEC\n0\nEOF\n";
+    const auto entityRecords = [&](bool arc, const std::string& normal) {
+        std::string records = sectionStart + (arc ? "ARC\n" : "CIRCLE\n")
+            + "5\n705\n8\n0\n10\n2\n20\n3\n30\n4\n40\n2.5\n";
+        if (arc)
+            records += "50\n15\n51\n75\n";
+        records += normal + sectionEnd;
+        return records;
+    };
+
+    for (bool arc : {false, true}) {
+        for (bool applyExt : {false, true}) {
+            for (const auto& invalidNormal : {
+                     std::pair<const char*, const char*>{
+                         "210\n0\n220\n0\n230\n0\n", "zero"},
+                     {"210\nnan\n220\n0\n230\n1\n", "non-finite"}}) {
+                FuzzInterface capture;
+                dxfRW reader("");
+                std::string malformed = entityRecords(arc, invalidNormal.first);
+                const bool read = reader.readAscii(&capture, applyExt, malformed);
+                t.expect(!read && capture.arcCount == 0u
+                             && capture.circleCount == 0u,
+                         arc ? "DXF ARC rejects an invalid extrusion direction before callback"
+                             : "DXF CIRCLE rejects an invalid extrusion direction before callback");
+            }
+        }
+
+        for (bool applyExt : {false, true}) {
+            FuzzInterface capture;
+            dxfRW reader("");
+            std::string valid = entityRecords(arc, "");
+            const bool read = reader.readAscii(&capture, applyExt, valid);
+            bool fieldsMatch = false;
+            if (arc) {
+                fieldsMatch = capture.arcCount == 1u
+                    && capture.circleCount == 0u
+                    && capture.lastArc.extPoint.x == 0.0
+                    && capture.lastArc.extPoint.y == 0.0
+                    && capture.lastArc.extPoint.z == 1.0
+                    && capture.lastArc.basePoint.x == 2.0
+                    && capture.lastArc.basePoint.y == 3.0
+                    && capture.lastArc.basePoint.z == 4.0
+                    && capture.lastArc.staangle == 15.0 / ARAD
+                    && capture.lastArc.endangle == 75.0 / ARAD;
+            } else {
+                fieldsMatch = capture.circleCount == 1u
+                    && capture.arcCount == 0u
+                    && capture.lastCircle.extPoint.x == 0.0
+                    && capture.lastCircle.extPoint.y == 0.0
+                    && capture.lastCircle.extPoint.z == 1.0
+                    && capture.lastCircle.basePoint.x == 2.0
+                    && capture.lastCircle.basePoint.y == 3.0
+                    && capture.lastCircle.basePoint.z == 4.0;
+            }
+            t.expect(read && fieldsMatch,
+                     arc ? "DXF ARC accepts omitted default extrusion"
+                         : "DXF CIRCLE accepts omitted default extrusion");
+        }
+
+        for (bool applyExt : {false, true}) {
+            FuzzInterface capture;
+            dxfRW reader("");
+            std::string valid = entityRecords(
+                arc, "210\n0.6\n220\n0\n230\n0.8\n");
+            const bool read = reader.readAscii(&capture, applyExt, valid);
+            const DRW_Coord expectedCenter = applyExt
+                ? DRW_Coord(0.0, 2.0, 5.0)
+                : DRW_Coord(2.0, 3.0, 4.0);
+            bool fieldsMatch = false;
+            if (arc) {
+                fieldsMatch = capture.arcCount == 1u
+                    && capture.circleCount == 0u
+                    && capture.lastArc.extPoint.x == 0.6
+                    && capture.lastArc.extPoint.y == 0.0
+                    && capture.lastArc.extPoint.z == 0.8
+                    && std::abs(capture.lastArc.basePoint.x
+                                - expectedCenter.x) < 1.0e-12
+                    && std::abs(capture.lastArc.basePoint.y
+                                - expectedCenter.y) < 1.0e-12
+                    && std::abs(capture.lastArc.basePoint.z
+                                - expectedCenter.z) < 1.0e-12
+                    && capture.lastArc.staangle == 15.0 / ARAD
+                    && capture.lastArc.endangle == 75.0 / ARAD;
+            } else {
+                fieldsMatch = capture.circleCount == 1u
+                    && capture.arcCount == 0u
+                    && capture.lastCircle.extPoint.x == 0.6
+                    && capture.lastCircle.extPoint.y == 0.0
+                    && capture.lastCircle.extPoint.z == 0.8
+                    && std::abs(capture.lastCircle.basePoint.x
+                                - expectedCenter.x) < 1.0e-12
+                    && std::abs(capture.lastCircle.basePoint.y
+                                - expectedCenter.y) < 1.0e-12
+                    && std::abs(capture.lastCircle.basePoint.z
+                                - expectedCenter.z) < 1.0e-12;
+            }
+            t.expect(read && fieldsMatch,
+                     arc ? "DXF ARC retains a valid oblique OCS direction"
+                         : "DXF CIRCLE retains a valid oblique OCS direction");
+        }
+    }
+
+    const auto writerRejectsInvalidNormal = [](bool binary, bool arc,
+                                                bool nonfinite) {
+        std::ostringstream output(std::ios::binary);
+        dxfRW owner("");
+        owner.version = DRW::AC1015;
+        owner.binFile = binary;
+        if (binary)
+            owner.writer = std::make_unique<dxfWriterBinary>(&output);
+        else
+            owner.writer = std::make_unique<dxfWriterAscii>(&output);
+
+        DRW_Circle circle;
+        circle.basePoint = DRW_Coord(2.0, 3.0, 4.0);
+        circle.radious = 2.5;
+        circle.extPoint = nonfinite
+            ? DRW_Coord(std::numeric_limits<double>::quiet_NaN(), 0.0, 1.0)
+            : DRW_Coord(0.0, 0.0, 0.0);
+        if (!arc)
+            return !owner.writeCircle(&circle) && output.str().empty();
+
+        DRW_Arc value;
+        value.basePoint = circle.basePoint;
+        value.radious = circle.radious;
+        value.extPoint = circle.extPoint;
+        value.staangle = 15.0 / ARAD;
+        value.endangle = 75.0 / ARAD;
+        return !owner.writeArc(&value) && output.str().empty();
+    };
+    for (bool binary : {false, true}) {
+        for (bool nonfinite : {false, true}) {
+            t.expect(writerRejectsInvalidNormal(binary, false, nonfinite),
+                     binary ? "binary DXF writer rejects invalid-normal CIRCLE atomically"
+                            : "ASCII DXF writer rejects invalid-normal CIRCLE atomically");
+            t.expect(writerRejectsInvalidNormal(binary, true, nonfinite),
+                     binary ? "binary DXF writer rejects invalid-normal ARC atomically"
+                            : "ASCII DXF writer rejects invalid-normal ARC atomically");
+        }
+    }
+}
+
 void testDxfHatchElevationAndOcsBoundary(TestContext& t) {
     const std::string sectionStart =
         "0\nSECTION\n2\nENTITIES\n0\nHATCH\n5\n705\n8\n0\n"
@@ -3837,6 +3991,7 @@ int main() {
     testDxfThreeCornerFaceFallback(context);
     testDxfSolidTraceCornerMapping(context);
     testDxfEllipseCoordinatesAreWcs(context);
+    testDxfArcCircleRequireExtrusionDirection(context);
     testDxfHatchElevationAndOcsBoundary(context);
     testMLeaderDxfContextRoundTrip(context);
     testLinetypeDashFlagIsFourBits(context);

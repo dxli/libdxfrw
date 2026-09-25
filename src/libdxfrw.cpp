@@ -199,6 +199,14 @@ bool isFiniteDxfCoord(const DRW_Coord& point) {
         && std::isfinite(point.z);
 }
 
+bool isValidDxfExtrusionDirection(const DRW_Coord& direction) {
+    if (!isFiniteDxfCoord(direction))
+        return false;
+    const double magnitude = std::hypot(
+        std::hypot(direction.x, direction.y), direction.z);
+    return std::isfinite(magnitude) && magnitude > 0.0;
+}
+
 bool isValidDxfLineWeight(DRW_LW_Conv::lineWidth value) {
     switch (value) {
     case DRW_LW_Conv::width00:
@@ -273,7 +281,8 @@ bool isValidDxfEntityFields(const DRW_Entity& entity) {
             return false;
     }
     if (const auto *circle = dynamic_cast<const DRW_Circle*>(&entity)) {
-        if (!std::isfinite(circle->radious))
+        if (!std::isfinite(circle->radious)
+            || !isValidDxfExtrusionDirection(circle->extPoint))
             return false;
     }
     if (const auto *arc = dynamic_cast<const DRW_Arc*>(&entity)) {
@@ -10667,7 +10676,8 @@ bool dxfRW::processCircle() {
             DRW_DBG(nextentity); DRW_DBG("\n");
             if (!acceptEntityCallbackBoundary())
                 return setError(DRW::BAD_READ_ENTITIES);
-            if (!hasCenterX || !hasCenterY || !hasRadius)
+            if (!hasCenterX || !hasCenterY || !hasRadius
+                || !isValidDxfExtrusionDirection(circle.extPoint))
                 return setError(DRW::BAD_CODE_PARSED);
             if (applyExt)
                 circle.applyExtrusion();
@@ -10705,7 +10715,8 @@ bool dxfRW::processArc() {
             if (!acceptEntityCallbackBoundary())
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!hasCenterX || !hasCenterY || !hasRadius
-                || !hasStartAngle || !hasEndAngle)
+                || !hasStartAngle || !hasEndAngle
+                || !isValidDxfExtrusionDirection(arc.extPoint))
                 return setError(DRW::BAD_CODE_PARSED);
             if (applyExt)
                 arc.applyExtrusion();
