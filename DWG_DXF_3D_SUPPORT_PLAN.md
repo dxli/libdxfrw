@@ -1784,6 +1784,19 @@ Implementation sequence:
    so the isolated branch could not be built here. Keep those reports advisory.
    In particular, the PR's unconditional group-350 zero differs from the ODA
    witness's nonzero history handle and still needs independent field policy.
+   **Current-state recheck (2026-09-25):** the upstream PR is still open at
+   head `098d7a3a7ce84101e2391ce965fc4138d1b35e54`. Its September 4 update
+   reports additional DWG TrueView checks for R2000/R2004/R2007/R2010/R2013,
+   an SAT group-1/3 token-boundary fix, and version-gating the
+   `AcDb3dSolid` subclass/history field; the discussion also repeats the
+   author's ODA-reader check. This improves the candidate implementation and
+   identifies test cases, but the accessible report still does not provide a
+   reproducible command/tool-build manifest, hash-pinned output pair, or
+   independent semantic readback artifact. The maintainer's August 1 comment
+   explicitly defers writer review until the Prototype1b reader is stable and
+   calls for manual testing in different software. Recheck for those concrete
+   artifacts before reconsidering S2.3.2; PR state or a merged source patch
+   alone is not the contract evidence.
    A focused Autodesk-primary-source lookup on 2026-09-24 for
    `ACDSDATA`, `ACDSRECORD`, `AcDbDs::ID`, and `ASM_Data` found no published
    DXF envelope or identity contract. The official [ObjectARX `AcDb3dSolid`
