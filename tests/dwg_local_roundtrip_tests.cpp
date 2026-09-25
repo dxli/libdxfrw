@@ -8086,6 +8086,86 @@ bool nearDxfValue(double value, double expected) {
         && std::abs(value - expected) <= 1.0e-9;
 }
 
+class SplineBodyParserProbe : public DRW_Spline {
+public:
+    bool parseBody(DRW::Version version, dwgBuffer& buffer,
+                   std::uint64_t bodyEndBit) {
+        if (bodyEndBit > std::numeric_limits<std::uint32_t>::max())
+            return false;
+        objSize = static_cast<std::uint32_t>(bodyEndBit);
+        dwgDataEndBit = bodyEndBit;
+        return parseDwgSplineBody(version, &buffer);
+    }
+};
+
+bool runR2013SplineBitLongBoundaryTest() {
+    // ODA v5.4.1 §20.4.40 defines both R2013+ fields as BL. Build this
+    // scenario-2 body directly from bitstream primitives rather than through
+    // DRW_Spline::encodeDwgSplineBody(), then place a sentinel at the exact
+    // entity-body boundary to detect a field-width/cursor regression.
+    constexpr std::int32_t splineFlags1 = 13; // fit points, use knot param, closed
+    constexpr std::int32_t knotParameter = 2;
+    constexpr std::int32_t sentinel = 777;
+    const DRW_Coord startTangent(0.0, 0.0, 0.0);
+    const DRW_Coord endTangent(0.0, 0.0, 0.0);
+    const DRW_Coord firstFit(1.0, 2.0, 0.0);
+    const DRW_Coord secondFit(3.0, 0.0, 4.0);
+
+    dwgBufferW encoded;
+    encoded.putBitLong(2); // scenario
+    encoded.putBitLong(splineFlags1);
+    encoded.putBitLong(knotParameter);
+    encoded.putBitLong(1); // degree
+    encoded.putBitDouble(0.125); // fit tolerance
+    encoded.put3BitDouble(startTangent);
+    encoded.put3BitDouble(endTangent);
+    encoded.putBitLong(2); // fit-point count
+    encoded.put3BitDouble(firstFit);
+    encoded.put3BitDouble(secondFit);
+    if (!encoded.isGood())
+        return false;
+
+    const std::uint64_t encodedBits =
+        static_cast<std::uint64_t>(encoded.size()) * 8u;
+    const std::uint64_t bodyEndBit = encoded.bitPos() == 0
+        ? encodedBits
+        : encodedBits - (8u - encoded.bitPos());
+    if (bodyEndBit == 0
+        || bodyEndBit > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    encoded.putBitLong(sentinel);
+    if (!encoded.isGood())
+        return false;
+
+    dwgBuffer input(encoded.data().data(), encoded.data().size());
+    SplineBodyParserProbe parsed;
+    if (!parsed.parseBody(DRW::AC1027, input, bodyEndBit))
+        return false;
+
+    const bool fieldsMatch = parsed.m_scenario == 2
+        && parsed.m_splineFlags1 == splineFlags1
+        && parsed.m_knotParam == knotParameter
+        && parsed.degree == 1 && parsed.flags == 1
+        && parsed.nfit == 2 && parsed.tolfit == 0.125
+        && parsed.tgStart.x == startTangent.x
+        && parsed.tgStart.y == startTangent.y
+        && parsed.tgStart.z == startTangent.z
+        && parsed.tgEnd.x == endTangent.x
+        && parsed.tgEnd.y == endTangent.y
+        && parsed.tgEnd.z == endTangent.z
+        && parsed.fitlist.size() == 2
+        && parsed.fitlist[0] != nullptr
+        && parsed.fitlist[0]->x == firstFit.x
+        && parsed.fitlist[0]->y == firstFit.y
+        && parsed.fitlist[0]->z == firstFit.z
+        && parsed.fitlist[1] != nullptr
+        && parsed.fitlist[1]->x == secondFit.x
+        && parsed.fitlist[1]->y == secondFit.y
+        && parsed.fitlist[1]->z == secondFit.z;
+    return fieldsMatch && input.isGood() && input.getBitLong() == sentinel
+        && input.isGood();
+}
+
 bool runDxfInsertTransformRoundTrip(bool binary,
                                     const std::filesystem::path& directory,
                                     bool keepOutput) {
@@ -8337,6 +8417,9 @@ int main(int argc, char** argv) {
         std::cerr << "usage: " << argv[0] << " [--keep-dir DIRECTORY]\n";
         return 2;
     }
+    expect(runR2013SplineBitLongBoundaryTest(),
+           "synthetic AC1027 SPLINE BL fields preserve body-boundary alignment",
+           failures);
     std::error_code ec;
     for (const DRW::Version version : versions) {
         const std::filesystem::path output = directory /
