@@ -29,6 +29,17 @@ only when the integration behavior or claimed profile changes. Preserve
 correct DXF output when FreeCAD's importer lacks support, and report converter
 integration separately from imported-geometry support.
 
+**FreeCAD deployment qualification gap (2026-09-24):** the S8.9.8 runtime
+record says the installed child process's runtime dependencies resolve from
+FreeCAD's process environment. That proves the bounded FreeCAD handoff, but
+does not by itself prove the installed converter has a complete deployment
+dependency closure independent of FreeCAD's private library paths or this
+build tree. Keep this separate from the already-passing argv and geometry
+checks: extend S8.9.5 to trace loaded dependency paths and launch the installed
+artifact in a clean environment before broadening installation guidance or
+platform claims. Do not copy FreeCAD libraries or bundle system runtimes
+speculatively.
+
 **FreeCAD converter contract audit (2026-09-24):** the current upstream
 `Draft/importDWG.py` resolves LibreDWG from the shared converter-path preference
 before searching the FreeCAD process's `PATH`, uses `dwg2dxf.exe` on Windows
@@ -330,8 +341,10 @@ FreeCAD is an explicit external consumer target for the installable
 `dwg2dxf` executable, not an incidental CLI smoke test: FreeCAD Draft launches
 the converter as a separate process and then imports its DXF. For each claimed
 FreeCAD profile, completion requires all of the following in the same pinned
-profile: (1) the installed, platform-named executable is discoverable outside
-the build tree; (2) FreeCAD invokes it with its actual argument vector
+profile: (1) the installed, platform-named executable and its declared runtime
+dependency closure work outside the build tree and without borrowing private
+runtime libraries from the FreeCAD installation; (2) FreeCAD invokes it with
+its actual argument vector
 `[dwg2dxf, input.dwg, "-o", output.dxf]` and the converter exits successfully
 while publishing a complete ASCII DXF; and (3) the selected FreeCAD DXF
 importer receives that exact output path. Keep two non-interchangeable result
@@ -2544,8 +2557,27 @@ importer. Keep those importer profiles separate.
    1. On each available native platform, install into an isolated prefix and
       use the installed artifact—not `$<TARGET_FILE:dwg2dxf>`—from a clean
       FreeCAD profile. Verify it starts without relying on the build tree or
-      developer-only library paths. On Windows assert the installed filename
-      is `dwg2dxf.exe`; on Linux/macOS assert `dwg2dxf`.
+      developer-only library paths. First record the CMake build mode and the
+      executable's direct/transitive runtime dependencies using native loader
+      inspection (`otool`/loader tracing, `readelf`/loader tracing, or Windows
+      PE dependency inspection). Run the installed executable from a working
+      directory outside the checkout with build-tree and developer loader
+      paths removed from the test environment; prove non-system dependencies
+      resolve from the installed package or an explicitly documented system
+      dependency, not accidentally from FreeCAD's private libraries. On
+      Windows assert the installed filename is `dwg2dxf.exe`; on Linux/macOS
+      assert `dwg2dxf`.
+      **Build-mode/dependency gate:** keep packaging work minimal and
+      evidence-led. The CI/default `BUILD_SHARED_LIBS=OFF` install profile is
+      the baseline. If shared `dxfrw` builds are advertised for FreeCAD use,
+      add one separate install smoke for that mode and require its runtime
+      library to resolve from the documented install/system location;
+      otherwise state the supported CLI package/build mode. If a dependency
+      fails, choose the smallest existing project-compatible fix (static-link
+      the CLI where supported, install the required library with correct
+      loader metadata, or document a real runtime package dependency). Do not
+      indiscriminately bundle host/system libraries or rely on FreeCAD's
+      inherited loader environment.
    2. Exercise both supported discovery forms where that FreeCAD revision
       permits them: PATH with the LibreDWG-only converter choice, and a
       configured full path in an isolated profile. Also test a conflicting
@@ -2570,8 +2602,14 @@ importer. Keep those importer profiles separate.
       platforms where path support is claimed; until the native Windows argv
       encoding check passes, leave Windows Unicode paths explicitly
       unqualified.
-   4. Keep the fast installed-CLI contract test independent of FreeCAD and
-      default CI. Run the native FreeCAD smoke only where FreeCAD is installed;
+   4. In the actual FreeCAD child-process run, capture loaded-module/dependency
+      origins where the platform permits and reject accidental resolution of
+      libdxfrw or another project-private dependency from FreeCAD's own bundle.
+      It is acceptable for FreeCAD's own modules to load from its installation;
+      the converter must not need those private modules to satisfy its own
+      declared dependency graph. Keep the fast installed-CLI contract test
+      independent of FreeCAD and default CI. Run the native FreeCAD smoke only
+      where FreeCAD is installed;
       record release/revision, OS/architecture, exact launch route, effective
       PATH or configured converter preference, importer mode/settings, and
       executable identity. Update README/man in the same slice if the tested
