@@ -3064,6 +3064,11 @@ bool dxfRW::writeVport(DRW_Vport *ent){
 bool dxfRW::writeDimstyle(DRW_Dimstyle *ent){
     if (!preflightTableEntry(ent))
         return false;
+    if (version > DRW::AC1018
+        && ent->dimfxlon != 0 && ent->dimfxlon != 1) {
+        m_writeError = true;
+        return false;
+    }
 
     // Validate dynamic DIMSTYLE overrides before the record prefix is
     // emitted.  Unknown codes are rejected rather than silently dropped;

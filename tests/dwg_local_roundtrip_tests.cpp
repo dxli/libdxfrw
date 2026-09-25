@@ -5312,6 +5312,40 @@ bool findAcdsRecordOwner(const DRW_RawDxfSection& section,
     return false;
 }
 
+bool runDxfDimstyleRejectsInvalidBooleans(
+    const std::filesystem::path& directory) {
+    for (bool binary : {false, true}) {
+        for (int code : {290, 295}) {
+            for (int value : {-1, 2}) {
+                const std::filesystem::path output = directory /
+                    ("libdxfrw-invalid-dimstyle-bool-"
+                     + std::to_string(code) + "-" + std::to_string(value)
+                     + (binary ? "-binary.dxf" : "-ascii.dxf"));
+                std::error_code ec;
+                std::filesystem::remove(output, ec);
+
+                dx_data source;
+                DRW_Dimstyle style;
+                style.name = "LOCAL_INVALID_DIMSTYLE";
+                if (code == 290)
+                    style.dimfxlon = value;
+                else
+                    style.add("$DIMTXTDIRECTION", code, value);
+                source.dimStyles.push_back(style);
+
+                dx_iface exporter;
+                const bool exported = exporter.fileExport(
+                    output.string(), DRW::AC1027, binary, &source, false);
+                const bool outputAbsent = !std::filesystem::exists(output);
+                std::filesystem::remove(output, ec);
+                if (exported || !outputAbsent)
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool runDxfAcdsModelerOwnerRemap(bool binary,
                                  const std::filesystem::path& directory,
                                  bool keepOutputs) {
@@ -9073,6 +9107,9 @@ int main(int argc, char** argv) {
            failures);
     expect(runDxfModelerEnvelopeRoundTrip(true, directory, keepOutputs),
            "local binary DXF AC1027 modeler shell fields and history-handle remap",
+           failures);
+    expect(runDxfDimstyleRejectsInvalidBooleans(directory),
+           "local ASCII/binary DXF writers reject invalid DIMSTYLE booleans",
            failures);
     expect(runDxfAcdsModelerOwnerRemap(false, directory, keepOutputs),
            "local ASCII DXF AC1027 ACDSDATA ASM_Data owner remap and second pass",
