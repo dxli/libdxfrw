@@ -8166,6 +8166,70 @@ bool runR2013SplineBitLongBoundaryTest() {
         && input.isGood();
 }
 
+bool runAc1024SplineVersionBoundaryTest() {
+    // The R2013+ BL fields must not be consumed by AC1024. The three older
+    // scenario flags remain separate B fields immediately after degree.
+    constexpr std::int32_t sentinel = 509;
+    dwgBufferW encoded;
+    encoded.putBitLong(1); // control-point scenario
+    encoded.putBitLong(1); // degree
+    encoded.putBoolBit(true);  // rational
+    encoded.putBoolBit(true);  // closed
+    encoded.putBoolBit(false); // periodic
+    encoded.putBitDouble(0.125); // knot tolerance
+    encoded.putBitDouble(0.25);  // control-point tolerance
+    encoded.putBitLong(4); // knot count = control count + degree + 1
+    encoded.putBitLong(2); // control count
+    encoded.putBoolBit(true); // weights present
+    encoded.putBitDouble(0.0);
+    encoded.putBitDouble(0.0);
+    encoded.putBitDouble(1.0);
+    encoded.putBitDouble(1.0);
+    encoded.put3BitDouble(DRW_Coord(0.0, 0.0, 0.0));
+    encoded.putBitDouble(1.0);
+    encoded.put3BitDouble(DRW_Coord(2.0, 0.0, 0.0));
+    encoded.putBitDouble(1.5);
+    if (!encoded.isGood())
+        return false;
+
+    const std::uint64_t encodedBits =
+        static_cast<std::uint64_t>(encoded.size()) * 8u;
+    const std::uint64_t bodyEndBit = encoded.bitPos() == 0
+        ? encodedBits
+        : encodedBits - (8u - encoded.bitPos());
+    if (bodyEndBit == 0
+        || bodyEndBit > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    encoded.putBitLong(sentinel);
+    if (!encoded.isGood())
+        return false;
+
+    dwgBuffer input(encoded.data().data(), encoded.data().size());
+    SplineBodyParserProbe parsed;
+    if (!parsed.parseBody(DRW::AC1024, input, bodyEndBit))
+        return false;
+
+    const bool fieldsMatch = parsed.m_scenario == 1
+        && parsed.m_splineFlags1 == 0 && parsed.m_knotParam == 15
+        && parsed.degree == 1 && parsed.flags == 5
+        && parsed.nknots == 4 && parsed.ncontrol == 2
+        && parsed.nfit == 0 && parsed.tolknot == 0.125
+        && parsed.tolcontrol == 0.25
+        && parsed.knotslist == std::vector<double>({0.0, 0.0, 1.0, 1.0})
+        && parsed.weightlist == std::vector<double>({1.0, 1.5})
+        && parsed.controllist.size() == 2
+        && parsed.controllist[0] != nullptr
+        && parsed.controllist[0]->x == 0.0
+        && parsed.controllist[0]->y == 0.0
+        && parsed.controllist[0]->z == 0.0
+        && parsed.controllist[1] != nullptr
+        && parsed.controllist[1]->x == 2.0
+        && parsed.controllist[1]->y == 0.0
+        && parsed.controllist[1]->z == 0.0;
+    return fieldsMatch && input.isGood() && input.getBitLong() == sentinel
+        && input.isGood();
+}
+
 bool runDxfInsertTransformRoundTrip(bool binary,
                                     const std::filesystem::path& directory,
                                     bool keepOutput) {
@@ -8419,6 +8483,9 @@ int main(int argc, char** argv) {
     }
     expect(runR2013SplineBitLongBoundaryTest(),
            "synthetic AC1027 SPLINE BL fields preserve body-boundary alignment",
+           failures);
+    expect(runAc1024SplineVersionBoundaryTest(),
+           "synthetic AC1024 SPLINE excludes R2013+ fields and preserves alignment",
            failures);
     std::error_code ec;
     for (const DRW::Version version : versions) {
