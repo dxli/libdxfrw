@@ -82,6 +82,34 @@ add_test(NAME dwg2dxf_version_policy
 set_tests_properties(dwg2dxf_version_policy PROPERTIES
     LABELS "cli;fast")
 
+# Keep the concrete dwg2dxf adapter's cross-callback image link alive. The
+# source DXF is generated at test time, passed through the real CLI twice, and
+# read back through the same adapter; no image/DXF fixture is committed.
+add_executable(libdxfrw_dwg2dxf_adapter_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg2dxf_adapter_tests.cpp
+    ${CMAKE_SOURCE_DIR}/dwg2dxf/dx_iface.cpp
+)
+target_compile_features(libdxfrw_dwg2dxf_adapter_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg2dxf_adapter_tests
+    PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg2dxf_adapter_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/dwg2dxf
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(libdxfrw_dwg2dxf_adapter_tests PRIVATE dxfrw)
+add_test(
+    NAME dwg2dxf_image_path_cli
+    COMMAND ${CMAKE_COMMAND}
+        "-DADAPTER_TEST=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"
+        "-DDWG2DXF=$<TARGET_FILE:dwg2dxf>"
+        "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg2dxf_image_path_test.cmake
+)
+set_tests_properties(dwg2dxf_image_path_cli PROPERTIES
+    LABELS "cli;fast;dxf;adapter"
+    TIMEOUT 30
+)
+
 # Match FreeCAD's Draft/importDWG.py subprocess contract without requiring a
 # FreeCAD installation. The DWG fixture is already tracked in this repository.
 set(_freecad_cli_sample

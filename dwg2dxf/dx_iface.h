@@ -182,7 +182,7 @@ public:
     }
     virtual void addImage(const DRW_Image *data){
         dx_ifaceImg *img = new dx_ifaceImg(*data);
-        currentBlock->ent.push_back(new dx_ifaceImg(*data));
+        currentBlock->ent.push_back(img);
         cData->images.push_back(img);
     }
 

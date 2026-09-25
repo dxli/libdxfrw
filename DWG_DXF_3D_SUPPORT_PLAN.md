@@ -188,6 +188,100 @@ time; S2.3.2 may unblock a narrow AC1027 carrier without establishing AC1021
 inline SAB, other ACIS versions/entities, FreeCAD B-rep support, or general
 INSERT/XREF behavior.
 
+**Unblock execution packets (2026-09-25):** the acceptance rows above now have
+the following concrete provisioning and evidence handoffs. These are setup
+conditions, not claims that either external gate has passed. Run the two lanes
+independently; a platform pass does not satisfy S2.3.2, and an ACDS witness
+does not qualify a native FreeCAD installation.
+
+1. **Provision one native FreeCAD runner per platform.** Reserve a native
+   Linux host/runner and a native Windows host/runner for the intended
+   architectures; record the exact OS image/build and architecture. Install a
+   pinned FreeCAD release that includes `freecadcmd`, and record its release,
+   source revision/build identifier, executable path, and package or installer
+   hash. Also provision a pinned native `dwgadd` from LibreDWG for the existing
+   locally authored AC1015 LINE recipe; record its version/build. Do not use a
+   macOS cross-build, a FreeCAD bundle's private converter, or a moving
+   `latest` download as the qualification environment. If either dependency
+   cannot be provisioned, leave that OS `BLOCKED_EXTERNAL_PLATFORM` and keep
+   the missing prerequisite explicit.
+2. **Run the existing installed-artifact harness, not a new consumer shim.**
+   Build the static/default CLI profile and install it to a fresh prefix
+   outside the checkout. Reconfigure the test build after installation so the
+   installed `dwg2dxf` path exists, then enable
+   `LIBDXFRW_ENABLE_FREECAD_INSTALLED_3D_LINE_CONTROL` and point
+   `LIBDXFRW_FREECADCMD_EXECUTABLE`, `LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE`,
+   and `LIBDXFRW_DWGADD_EXECUTABLE` at the pinned native tools. Run the two
+   existing `dwg2dxf_freecad_installed_3d_line_open` and
+   `dwg2dxf_freecad_installed_3d_line_insert` CTests. Also run the fast
+   installed-CLI/readback and failure-publication controls on that build. Keep
+   loader overrides and build-tree paths out of the process environment; on
+   Linux explicitly test without `LD_LIBRARY_PATH`, and on Windows inspect the
+   installed `.exe` dependency closure and run from outside the checkout.
+   Use separate isolated FreeCAD profiles with fallbacks disabled. The LINE is
+   only a launcher/deployment smoke, not ACIS or general 3D geometry evidence.
+3. **Save a compact, reproducible platform evidence packet.** Attach the
+   source revision, configure arguments/build mode, install prefix layout,
+   installed executable SHA-256, FreeCAD and `dwgadd` identities, native
+   dependency/load-path report, exact converter argv/status, output DXF hash,
+   `open()`/`insert()` handoff paths and explicit macro PASS markers, and the
+   CTest log/XML. Redact user-specific secrets, but retain enough environment
+   detail to reproduce discovery. Keep generated DWG/DXF and profiles in the
+   test's unique temporary/build locations; do not add them as fixtures. A
+   passing Linux packet closes only the tested Linux profile; likewise for
+   Windows. Qualify desktop-entry/Start-menu discovery and Unicode paths only
+   if the evidence packet explicitly exercises those routes; otherwise narrow
+   setup guidance to the tested shell/configured-path and path-encoding scope.
+   Do not add FreeCAD installation or runtime tests to ordinary fast CI; use a
+   provisioned native runner or an explicitly opt-in/manual qualification job.
+4. **Request a source-provenance AC1027 pair for the first ACDS slice.** The
+   next external handoff is not another source-code search: obtain the actual
+   BricsCAD `mm.dxf` cited by the existing public report, if its author can
+   supply it, or have an independent CAD producer create one minimal analytic
+   `3DSOLID`, save the native DWG, and export the paired AC1027 DXF. Ask for the
+   producer name/build, exact create/save/export operations, original files,
+   file hashes, DWG/DXF versions, and a read-only transfer/source URL. Keep
+   artifacts external and do not treat a screenshot, pasted excerpt, sample
+   recipe, or unpinned report as a substitute. Start with one standalone
+   AC1027 `3DSOLID`; a `REGION`, other version, or lifecycle operation is a
+   separate tuple unless the same packet directly covers it.
+5. **Require independent semantic observations, not just byte retention.**
+   From the untouched pair, record the entity type/handle, associated
+   `ACDSRECORD`, schema and record names/IDs, all relevant group-320 keys,
+   group-94 declared length, ordered group-310 chunk lengths and reconstructed
+   payload hash, plus the modeler entity's group-2/GUID and group-350/history
+   values. Have an implementation independent of both the producer and this
+   serializer read the DXF and report the association and payload validity;
+   have an independent ACIS-capable application/kernel report semantic solid
+   invariants (valid B-rep, extents, volume, and available face/edge counts)
+   against the producer's known analytic dimensions. Pin tool versions/builds,
+   commands, logs, input/output hashes, and numeric tolerances. ODA-only
+   DXF→DWG→DXF retention of ODA-authored bytes, LibreDWG-only self-generation,
+   ezdxf/dxfgrabber same-author lineage, static source inspection, or matching
+   opaque payload hashes alone remain advisory and do not meet this gate.
+6. **Resolve identity policy before setting S2.3.2 `READY`.** Show whether the
+   group-320 association survives an independent save/rewrite that changes the
+   modeler entity handle, or provide authoritative documentation of that
+   behavior. Because libdxfrw assigns output handles, the witness must justify
+   whether the key is preserved, remapped, or causes fail-closed output. If
+   this operation cannot be evidenced, limit the proposed slice to an
+   identity-preserving case only if the current writer can actually preserve
+   that identity; otherwise keep the serializer blocked. INSERT/XREF/copy
+   behavior may be excluded from the first narrow claim, but must remain
+   explicitly unsupported/opaque and cannot be inferred from standalone
+   evidence. Once the contract and evidence are complete, mark only that
+   entity/version tuple `READY`, implement the narrow carrier, run fast
+   generated vectors, then perform one ODA acceptance and one separate
+   FreeCAD handoff. Geometry support still requires the pinned FreeCAD importer
+   to construct geometry matching the independent semantic oracle.
+
+**Current unblock state:** the repository already contains the installed
+FreeCAD open/insert harness and the ACDSDATA opaque passthrough/identity tests;
+what is missing is the native Linux/Windows toolchain/runtime evidence and the
+external source-provenance semantic packet above. No workflow or support claim
+should be treated as unblocked merely because these handoff conditions are now
+specified.
+
 **Additional AC1027 FreeCAD-route witness (2026-09-24; external and
 advisory):** the ACadSharp-maintained `sample_AC1027.dwg` / ASCII-DXF pair
 provides a second, structurally richer sample chain than the one-solid ODA
@@ -4257,7 +4351,7 @@ degenerate, other-knot, other-scenario, target-authored, or other-version
 splines.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 96/110 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
+commit; 97/111 committed, 14 blocked, 0 verified, 0 in progress, and 0 ready):
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -4525,3 +4619,4 @@ Additional implementation-item record:
 | S8.15.18.2 | COMMITTED | Generalized the locally-authored 3DFACE control to ODA target versions `ACAD2004/2007/2010/2013/2018` (DWG signatures AC1018/1021/1024/1027/1032), while retaining ACAD2000/AC1015. All generated DWGs remain under ignored `build/`. Each opt-in CTest checks magic/header version, one record, four tilted WCS corners and invisible-edge flag 4 in `dwg2dxf` output and public DXF readback; when installed, LibreDWG `dwgread -O DXF` is an independent reader gate on the same generated DWG. ODA File Converter 27.1.0.0 and LibreDWG 0.14 pass 6/6 versions in 41.06 seconds; the implementation is isolated to the exact 3DFACE/WCS/flag vector. This does not claim target-authored samples, complete parser coverage for those releases, or FreeCAD geometry support. The external controls stay opt-in; no generated DWG/DXF fixture is committed. |
 | S8.13.1 | COMMITTED | Closed a FreeCAD-converter adapter gap: `dxfRW::writeViewport()` existed, but `dwg2dxf`'s `dx_iface::writeEntity()` omitted `DRW::VIEWPORT`, so DXF→DXF CLI conversion dropped viewport records. Added typed dispatch and corrected group 292 (`useDefaultLighting`) from 16-bit integer output to the binary-DXF boolean representation. Runtime-generated ASCII/binary library round trips preserve the lighting flag, following group 282 value, and viewport fields; the locally-authored build-tree CLI control verifies viewport retention and binary/text field alignment across two exact `[dwg2dxf, input, -o, output]` passes. `libdxfrw_dwg_local_roundtrip`, `dwg2dxf_freecad_cli_compat`, and `dwg2dxf_raw_dxf_section_passthrough` pass 3/3. `git diff --check` passes; no drawing fixture was added. This qualifies converter/readback behavior only, not FreeCAD viewport geometry/rendering, DWG viewport parsing, or native Linux/Windows execution. |
 | S8.13.2 | COMMITTED | Closed two more typed-output gaps in the FreeCAD converter adapter: import already stores `RAY`/`XLINE`, and `dxfRW` already has typed writers, but `dx_iface::writeEntity()` omitted both. Added dispatch and runtime-generated ASCII/binary round trips for nonzero-Z base points and independent direction vectors (including normalized oblique XLINE direction); the build-tree exact-argv CLI control checks each entity's WCS base/direction over two DXF→DXF passes. `cmake --build build --target libdxfrw_dwg_local_roundtrip dwg2dxf --parallel 2` and the focused `libdxfrw_dwg_local_roundtrip`, `dwg2dxf_freecad_cli_compat`, and `dwg2dxf_raw_dxf_section_passthrough` tests pass (3/3); `git diff --check` passes. Controls are created locally in the build tree; no test DWG/DXF fixture is committed. This is bounded converter/readback evidence only, not proof of FreeCAD importer geometry support or native Linux/Windows behavior. |
+| S8.13.3 | COMMITTED | Fixed a resource-link loss in the concrete converter adapter: `dx_iface::addImage()` previously made one `dx_ifaceImg` copy for the block entity and a second for the deferred `IMAGEDEF` link list, so `linkImage()` updated an object the writer never serialized. The entity and link list now share the same owned instance. Added a runtime-generated adapter control that writes an image with a relative path, then invokes the real exact-argv `dwg2dxf input -o output` path twice and checks the image's linked path through public `dx_iface::fileImport()` readback after each pass. Built `libdxfrw_dwg2dxf_adapter_tests` and `dwg2dxf`; focused CTest (`dwg2dxf_image_path_cli`, `libdxfrw_dwg_local_roundtrip`, `dwg2dxf_freecad_cli_compat`, `dwg2dxf_raw_dxf_section_passthrough`) passes 4/4; `git diff --check` passes. Generated DXF files stay in a unique build-tree directory and are removed on success; no image or drawing fixture was committed. This is path/reference preservation only—not raster asset availability, FreeCAD image rendering, or any 3D geometry support claim. |
