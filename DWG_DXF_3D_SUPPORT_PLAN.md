@@ -417,6 +417,49 @@ complete converter handoff and preserve data for a capable downstream reader,
 but cannot create FreeCAD solid geometry without a separate verified importer
 path.
 
+**Locally authored ODA/LibreDWG conversion probe (2026-09-25; scratch-only,
+negative evidence):** LibreDWG 0.14 `dwgadd` generated an analytic box from a
+local recipe (`version 2004; box (1 2 3) (0 0 1) 4 3 2`) as AC1018 DWG
+`5cd281c399312666b9e74f1a436da8c01aadc867900a565f921ee56df60b79de`; its
+LibreDWG-produced AC1018 DXF is
+`9854ac8cf810712aa858e80ee41566c342081f9e848e3d888c35b5cbe16205ac` and
+contains a SAT-text `3DSOLID` body. Reproduce the source pair with:
+
+```sh
+dwgadd --as r2004 -o build/oda-libredwg-pairs/libredwg_box_ac1018.dwg \
+  build/oda-libredwg-pairs/acis_box.dwgadd
+dwg2dxf --as r2004 -y \
+  -o build/oda-libredwg-pairs/libredwg_box_ac1018.dxf \
+  build/oda-libredwg-pairs/libredwg_box_ac1018.dwg
+```
+
+ODA File Converter / SDK 27.1 was run with the seed DXF as input (`*.DXF`,
+recursion and audit off) and `2018 DWG` output. It converted that DXF to an
+AC1032 DWG at
+`build/oda-libredwg-pairs/oda-from-dxf-ac1032/acis_box.dwg` (SHA-256
+`1d49fa53ceb761e6de4a9227c41567a45c85438c821888f5208ee84a2a037910`).
+LibreDWG 0.14 `dwgread -O minJSON` returns `SUCCESS` and exposes the AC1032
+DataStorage directory, but its readback reports `_data_`/`schdat` segments
+unhandled and zero linked SAB payloads. `dwg2dxf --as r2013` still writes a
+typed AC1027 `3DSOLID` shell (`group 70=168`, zero GUID, `group 350=0`), but
+the output DXF (`af67c700a6dd56a1c033d33460609c37ffbc1221c2db71e1889ac06b5b3aed68`)
+contains no SAT body or `ACDSDATA`; LibreDWG also reports a `revision_bytes`
+read error and empty history/GUID. The current libdxfrw `dwg2dxf` run on the
+same ODA DWG exits 1 with `Conversion failed` and publishes no DXF.
+LibreDWG wrote its derived AC1027 DXF with
+`dwg2dxf --as r2013 -y -o <readback.dxf> <ac1032.dwg>`.
+
+This is a useful, hash-pinned cross-tool failure reproducer—not the S2.3.2
+unblock packet. The geometry recipe and seed DXF were authored through
+LibreDWG, so this is not an independent CAD-authored witness; the independent
+LibreDWG readback cannot validate the ACDS record semantics or solid geometry,
+and the ODA conversion changes the drawing version. In particular, do not
+infer that ODA rejected the solid or that the DXF carrier is invalid from
+LibreDWG's unsupported DataStorage path. All files remain under ignored
+`build/oda-libredwg-pairs/`; do not move them into tracked fixtures. Continue
+to require the source-provenance independent CAD pair and independent semantic
+reader described in S2.3.2 before enabling an ACDSDATA serializer.
+
 **Independent R2013+ DXF witness and generated-control route (bounded):** the
 ezdxf maintainer's analysis of a BricsCAD-authored AC1027 DXF describes an
 `ACDSRECORD` whose group 320 refers back to the `3DSOLID` handle, with SAB
