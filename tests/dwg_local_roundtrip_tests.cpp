@@ -5346,6 +5346,53 @@ bool runDxfDimstyleRejectsInvalidBooleans(
     return true;
 }
 
+bool runDxfViewportLightingRoundTrip(
+    bool binary, const std::filesystem::path& directory) {
+    const std::filesystem::path output = directory /
+        (binary ? "libdxfrw-viewport-lighting-binary.dxf"
+                : "libdxfrw-viewport-lighting-ascii.dxf");
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+
+    dx_data source;
+    auto* viewport = new DRW_Viewport();
+    viewport->basePoint = DRW_Coord(10.0, 20.0, 30.0);
+    viewport->vpID = 7;
+    viewport->useDefaultLighting = false;
+    viewport->defaultLightingType = 2;
+    viewport->brightness = 0.25;
+    viewport->contrast = 0.75;
+    source.mBlock->ent.push_back(viewport);
+
+    dx_iface exporter;
+    const bool exportOk = exporter.fileExport(
+        output.string(), DRW::AC1027, binary, &source, false);
+    dx_data imported;
+    dx_iface importer;
+    const bool importOk = exportOk
+        && importer.fileImport(output.string(), &imported, false);
+    const DRW_Viewport* roundTripped = nullptr;
+    if (importOk) {
+        for (const DRW_Entity* entity : imported.mBlock->ent) {
+            if (entity != nullptr && entity->eType == DRW::VIEWPORT) {
+                roundTripped = static_cast<const DRW_Viewport*>(entity);
+                break;
+            }
+        }
+    }
+    const bool result = roundTripped != nullptr
+        && roundTripped->basePoint.x == 10.0
+        && roundTripped->basePoint.y == 20.0
+        && roundTripped->basePoint.z == 30.0
+        && roundTripped->vpID == 7
+        && !roundTripped->useDefaultLighting
+        && roundTripped->defaultLightingType == 2
+        && roundTripped->brightness == 0.25
+        && roundTripped->contrast == 0.75;
+    std::filesystem::remove(output, ec);
+    return result;
+}
+
 bool runDxfAcdsModelerOwnerRemap(bool binary,
                                  const std::filesystem::path& directory,
                                  bool keepOutputs) {
@@ -9111,6 +9158,10 @@ int main(int argc, char** argv) {
     expect(runDxfDimstyleRejectsInvalidBooleans(directory),
            "local ASCII/binary DXF writers reject invalid DIMSTYLE booleans",
            failures);
+    expect(runDxfViewportLightingRoundTrip(false, directory),
+           "local ASCII DXF viewport lighting round-trip", failures);
+    expect(runDxfViewportLightingRoundTrip(true, directory),
+           "local binary DXF viewport boolean-width round-trip", failures);
     expect(runDxfAcdsModelerOwnerRemap(false, directory, keepOutputs),
            "local ASCII DXF AC1027 ACDSDATA ASM_Data owner remap and second pass",
            failures);

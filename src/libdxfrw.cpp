@@ -6186,7 +6186,7 @@ bool dxfRW::writeViewport(DRW_Viewport *ent) {
     if (version > DRW::AC1015)
         writer->writeInt16(170, ent->shadePlotMode);
     if (version > DRW::AC1018) {
-        writer->writeInt16(292, ent->useDefaultLighting ? 1 : 0);
+        writer->writeBool(292, ent->useDefaultLighting);
         writer->writeInt16(282, ent->defaultLightingType);
         writer->writeDouble(141, ent->brightness);
         writer->writeDouble(142, ent->contrast);

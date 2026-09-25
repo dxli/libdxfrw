@@ -490,6 +490,9 @@ void dx_iface::writeEntity(DRW_Entity* e){
     case DRW::MPOLYGON:
         dxfW->writeMPolygon(static_cast<DRW_MPolygon*>(e));
         break;
+    case DRW::VIEWPORT:
+        dxfW->writeViewport(static_cast<DRW_Viewport*>(e));
+        break;
     case DRW::IMAGE:
         dxfW->writeImage(static_cast<DRW_Image*>(e), static_cast<dx_ifaceImg*>(e)->path);
         break;

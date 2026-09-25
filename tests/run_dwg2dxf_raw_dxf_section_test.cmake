@@ -13,14 +13,18 @@ set(_input "${_test_dir}/opaque-acdsdata-input.dxf")
 set(_output "${_test_dir}/opaque-acdsdata-output.dxf")
 set(_output2 "${_test_dir}/opaque-acdsdata-output2.dxf")
 
-# Locally author the carrier in the build tree; this is not a committed sample
+# Locally author the controls in the build tree; this is not a committed sample
 # or a schema-validity oracle. It verifies the CLI's standalone DXF-to-DXF
-# handle identity repair and keeps an unrelated code-320 field opaque.
+# handle identity repair, VIEWPORT typed pass-through, and keeps an unrelated
+# code-320 field opaque.
 file(WRITE "${_input}"
     "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1032\n0\nENDSEC\n"
     "0\nSECTION\n2\nENTITIES\n0\nLINE\n5\n30\n330\n1F\n"
     "100\nAcDbEntity\n8\n0\n100\nAcDbLine\n"
     "10\n1.0\n20\n2.0\n30\n3.0\n11\n4.0\n21\n5.0\n31\n6.0\n"
+    "0\nVIEWPORT\n5\n31\n330\n1F\n100\nAcDbEntity\n8\n0\n"
+    "100\nAcDbViewport\n10\n10\n20\n20\n30\n30\n69\n7\n"
+    "292\n0\n282\n2\n141\n0.25\n142\n0.75\n"
     "0\n3DSOLID\n5\nD65\n330\n1F\n100\nAcDbEntity\n8\n0\n"
     "100\nAcDbModelerGeometry\n290\n1\n"
     "2\n{1A113328-EB6D-D44D-824D-78B33668F9E7}\n"
@@ -71,7 +75,7 @@ endif()
 
 file(READ "${_output}" _contents)
 foreach(_required IN ITEMS
-        "AC1032" "LINE"
+        "AC1032" "LINE" "VIEWPORT"
         "ACDSDATA" "ACDSSCHEMA" "7" "OpaqueSchema"
         "ACDSRECORD" "9" "OpaqueRecord" "320" "30"
         "94" "4" "310" "41434453")
@@ -81,6 +85,12 @@ foreach(_required IN ITEMS
             "first conversion dropped required opaque section value: ${_required}")
     endif()
 endforeach()
+string(REGEX MATCH "292\n0\n282\n[ \t]*2\n" _viewport_lighting
+    "${_contents}")
+if(_viewport_lighting STREQUAL "")
+    message(FATAL_ERROR
+        "first conversion lost the VIEWPORT boolean lighting field or following field alignment")
+endif()
 assert_modeler_acds_link("${_output}" "first exact-argv conversion")
 string(FIND "${_contents}" " 10\n1\n" _line_start)
 string(FIND "${_contents}" " 31\n6\n" _line_end)
@@ -102,7 +112,7 @@ endif()
 
 file(READ "${_output2}" _contents2)
 foreach(_required IN ITEMS
-        "AC1032" "LINE"
+        "AC1032" "LINE" "VIEWPORT"
         "ACDSDATA" "ACDSSCHEMA" "7" "OpaqueSchema"
         "ACDSRECORD" "9" "OpaqueRecord" "320" "30"
         "94" "4" "310" "41434453")
@@ -112,6 +122,12 @@ foreach(_required IN ITEMS
             "second conversion dropped required opaque section value: ${_required}")
     endif()
 endforeach()
+string(REGEX MATCH "292\n0\n282\n[ \t]*2\n" _viewport_lighting2
+    "${_contents2}")
+if(_viewport_lighting2 STREQUAL "")
+    message(FATAL_ERROR
+        "second conversion lost the VIEWPORT boolean lighting field or following field alignment")
+endif()
 assert_modeler_acds_link("${_output2}" "second exact-argv conversion")
 string(FIND "${_contents2}" " 10\n1\n" _line_start2)
 string(FIND "${_contents2}" " 31\n6\n" _line_end2)
