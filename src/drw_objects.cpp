@@ -2855,6 +2855,8 @@ bool DRW_Dimstyle::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         break;
     case 290:
         dimfxlon = reader->getInt32();
+        if (dimfxlon != 0 && dimfxlon != 1)
+            return false;
         break;
     case 292: // Legacy LibreCAD compatibility spelling.
     case 294: // LibreDWG compatibility spelling.

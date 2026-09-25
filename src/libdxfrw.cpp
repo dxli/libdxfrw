@@ -388,6 +388,10 @@ struct DxfDimstyleVariableSpec {
     DRW::Version minimumVersion;
 };
 
+bool dxfDimstyleVariableIsBoolean(int code) {
+    return code == 290 || code == 295;
+}
+
 // DIMSTYLE's dynamic map is an override mechanism, not an arbitrary DXF
 // record. Keep the type and version contract in one table so a malformed
 // variant cannot be emitted through an inactive union member.
@@ -3087,6 +3091,11 @@ bool dxfRW::writeDimstyle(DRW_Dimstyle *ent){
             m_writeError = true;
             return false;
         }
+        if (dxfDimstyleVariableIsBoolean(value->code())
+            && value->i_val() != 0 && value->i_val() != 1) {
+            m_writeError = true;
+            return false;
+        }
     }
 
     RecordStateScope state(*this, ent);
@@ -3220,8 +3229,9 @@ bool dxfRW::writeDimstyle(DRW_Dimstyle *ent){
     if (version > DRW::AC1014) {
         wI(289, ent->dimatfit);
     }
-    if ( version > DRW::AC1018 && ent->dimfxlon !=0 )
-        wI(290, ent->dimfxlon);
+    if (version > DRW::AC1018 && ent->dimfxlon != 0
+        && !dimVarCodes.count(290))
+        writer->writeBool(290, ent->dimfxlon != 0);
     if (version > DRW::AC1009) {
         const std::string txstyname = dxfSymbolNameKey(ent->dimtxsty);
         if (!dimVarCodes.count(340) && textStyleMap.count(txstyname) > 0) {
@@ -3255,7 +3265,12 @@ bool dxfRW::writeDimstyle(DRW_Dimstyle *ent){
             continue;
         switch (v->type()) {
             case DRW_Variant::STRING:  writer->writeUtf8String(v->code(), v->c_str()); break;
-            case DRW_Variant::INTEGER: writer->writeInt16(v->code(), v->i_val()); break;
+            case DRW_Variant::INTEGER:
+                if (dxfDimstyleVariableIsBoolean(v->code()))
+                    writer->writeBool(v->code(), v->i_val() != 0);
+                else
+                    writer->writeInt16(v->code(), v->i_val());
+                break;
             case DRW_Variant::INTEGER64: writer->writeInt64(v->code(), v->i64_val()); break;
             case DRW_Variant::DOUBLE:  writer->writeDouble(v->code(), v->d_val()); break;
             default: break;

@@ -5385,37 +5385,34 @@ bool runDxfAcdsModelerOwnerRemap(bool binary,
         return false;
     }
 
-    bool result = firstPassValid;
-    if (!binary) {
-        dx_iface secondExporter;
-        dx_data secondImported;
-        dx_iface secondImporter;
-        const bool secondPassValid =
-            secondExporter.fileExport(output2.string(), DRW::AC1027, binary,
-                                      &imported, false)
-            && secondImporter.fileImport(output2.string(), &secondImported,
-                                         false);
-        const DRW_ModelerGeometry* secondModeler = nullptr;
-        if (secondPassValid) {
-            for (const DRW_Entity* entity : secondImported.mBlock->ent) {
-                if (entity != nullptr && entity->eType == DRW::E3DSOLID) {
-                    secondModeler =
-                        static_cast<const DRW_ModelerGeometry*>(entity);
-                    break;
-                }
+    dx_iface secondExporter;
+    dx_data secondImported;
+    dx_iface secondImporter;
+    const bool secondPassValid =
+        secondExporter.fileExport(output2.string(), DRW::AC1027, binary,
+                                  &imported, false)
+        && secondImporter.fileImport(output2.string(), &secondImported,
+                                     false);
+    const DRW_ModelerGeometry* secondModeler = nullptr;
+    if (secondPassValid) {
+        for (const DRW_Entity* entity : secondImported.mBlock->ent) {
+            if (entity != nullptr && entity->eType == DRW::E3DSOLID) {
+                secondModeler =
+                    static_cast<const DRW_ModelerGeometry*>(entity);
+                break;
             }
         }
-        linkedHandle.clear();
-        opaqueHandle.clear();
-        result = secondModeler != nullptr
-            && !secondImported.rawDxfSections.empty()
-            && findAcdsRecordOwner(secondImported.rawDxfSections.front(),
-                                   "ASM_Data", linkedHandle)
-            && findAcdsRecordOwner(secondImported.rawDxfSections.front(),
-                                   "OpaqueRecord", opaqueHandle)
-            && std::stoul(linkedHandle, nullptr, 16) == secondModeler->handle
-            && opaqueHandle == "FC21";
     }
+    linkedHandle.clear();
+    opaqueHandle.clear();
+    const bool result = secondModeler != nullptr
+        && !secondImported.rawDxfSections.empty()
+        && findAcdsRecordOwner(secondImported.rawDxfSections.front(),
+                               "ASM_Data", linkedHandle)
+        && findAcdsRecordOwner(secondImported.rawDxfSections.front(),
+                               "OpaqueRecord", opaqueHandle)
+        && std::stoul(linkedHandle, nullptr, 16) == secondModeler->handle
+        && opaqueHandle == "FC21";
     if (!keepOutputs) {
         std::filesystem::remove(output, ec);
         std::filesystem::remove(output2, ec);
