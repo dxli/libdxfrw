@@ -308,6 +308,73 @@ external source-provenance semantic packet above. No workflow or support claim
 should be treated as unblocked merely because these handoff conditions are now
 specified.
 
+**Unblock decision checklist and handoff request (2026-09-25):** treat these as
+two separately owned external handoffs, not code changes that can be simulated
+on this macOS checkout. A partial packet is useful for diagnosis but leaves its
+gate blocked. Keep external DWG/DXF inputs, generated outputs, and FreeCAD
+profiles outside version control; check in only harness/code/plan changes and
+sanitized evidence summaries, never received or generated drawing fixtures.
+
+* **Native Linux and Windows FreeCAD qualification (S8.9.5).** The unblocker
+  must provide one native runner for each OS/architecture being claimed, with
+  network/package access or pre-provisioned pinned compiler, CMake, FreeCAD
+  `freecadcmd`, and LibreDWG `dwgadd`. Before testing, capture a manifest with
+  OS image/build, architecture, tool versions/build IDs and executable paths,
+  FreeCAD source revision, and package/installer hashes. Run the existing
+  installed-artifact harness from a fresh prefix outside the checkout, in
+  isolated FreeCAD profiles and with fallback converters disabled. A platform
+  packet is complete only when the installed CLI/readback/failure-publication
+  controls and both installed FreeCAD `open()`/`insert()` controls pass; logs
+  identify the exact installed `dwg2dxf` path and hash, invocation argv and
+  exit status, complete output hash, importer handoff path, and explicit PASS
+  marker. Also capture the clean runtime dependency/load-path check (no Linux
+  `LD_LIBRARY_PATH`; no Windows dependency resolved from FreeCAD-private
+  directories). The authored AC1015 nonzero-Z LINE is only a deployment smoke.
+  Test desktop launch, shared-library packaging, Unicode paths, or other
+  architectures/releases only when those specific routes are claimed; otherwise
+  state their exclusion. Mark Linux and Windows independently qualified only
+  from their own native passing packets; S8.9.5 is complete only when every
+  required target OS has passed. A macOS result, cross-build, or CI job running
+  in a different OS container cannot substitute for a native result. If a
+  runner or pinned tool is unavailable, the next action is to provision/request
+  that resource and retain `BLOCKED_EXTERNAL_PLATFORM`, not to add another local
+  simulation or weaken the criterion.
+* **Independent ACIS/ACDS semantic evidence (S2.3.2).** The unblocker must
+  supply either a primary normative document that resolves the bounded contract
+  below, or an untouched source-provenance DWG/DXF pair produced by a CAD tool
+  independent of libdxfrw. The packet must include a stable read-only source or
+  transfer reference, producer/tool build and exact create/save/export steps,
+  source and derived-file SHA-256 hashes, format versions, and a minimal
+  standalone analytic `3DSOLID` tuple. A different implementation must
+  independently parse the DXF graph and report the entity-to-`ACDSRECORD`
+  association and payload reconstruction; an ACIS-capable independent reader
+  must report a valid solid and compare its known extents, volume, and available
+  topology counts. Pin commands, builds, logs, tolerances, and all output hashes.
+  The evidence table must resolve required entity shell fields, schema names and
+  ID namespaces, record names/IDs, group-320 association, GUID/history policy,
+  group-94 length versus ordered group-310 chunks, payload timestamp mutation,
+  and whether a handle-changing rewrite preserves/remaps/breaks the association.
+  Do not mark `READY` if a field or lifecycle rule is inferred only from byte
+  equality, a self-round-trip, source inspection, an author report, or an ODA
+  round-trip of ODA-authored input. If identity-changing behavior is untested,
+  the first implementation must be demonstrably identity-preserving; if this
+  library necessarily changes the handle and the key rule remains unknown, the
+  serializer stays blocked. Once the complete evidence packet is reviewed,
+  mark only its proven producer/version/entity tuple `READY`; implement that
+  narrow carrier, run its fast generated-vector tests, then one ODA acceptance
+  check. FreeCAD `open()`/`insert()` is a later, separate handoff; successful
+  conversion alone never asserts FreeCAD geometry support. If no qualifying
+  source pair or normative contract can be supplied, request it from the CAD
+  producer/maintainer or spec owner and keep the gate blocked rather than
+  repeating broad web searches.
+
+**Gate transition rule:** external evidence changes a blocker to eligible work
+only after its complete packet is available for review. Eligibility is not a
+support claim: each implementation slice still needs the plan's fast local
+checks, and any external acceptance/runtime qualification is reported only for
+the exact tested OS/tool/version/entity tuple. Contradictory evidence returns
+the affected slice to `BLOCKED` until its scope or contract is corrected.
+
 **Additional AC1027 FreeCAD-route witness (2026-09-24; external and
 advisory):** the ACadSharp-maintained `sample_AC1027.dwg` / ASCII-DXF pair
 provides a second, structurally richer sample chain than the one-solid ODA
