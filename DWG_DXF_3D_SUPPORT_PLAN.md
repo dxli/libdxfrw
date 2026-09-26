@@ -2153,8 +2153,10 @@ Implementation sequence:
    default; its output SHA-256 exactly matches the file independently opened
    by Open CAD Studio. Forcing AC1024/`-v2010` is correctly rejected by the
    AC1027-only gate. No full suite was run. The locally-authored ezdxf→ODA control, external ACadSharp negative
-   baseline rerun, callback-order permutations, and all edge combinations are
-   still follow-up work. Keep generated artifacts temporary; no fixture files
+   baseline rerun and all edge combinations remain follow-up work; new
+   generated ASCII/binary vectors also reverse proxy, material, and dictionary
+   callback collection order and pass the same semantic readback. Entity-order
+   permutations are not covered. Keep generated artifacts temporary; no fixture files
    are added to the repository.
 6. **S2.3.6 — Accept actual libdxfrw output externally (`PENDING_ODA`).** The
    exact output from LibreDWG `Cone.dwg` converted by libdxfrw was opened by
@@ -4407,19 +4409,17 @@ writer now retain their one-byte boolean representation, and the focused
 codec/adapter regression, not external ACDSDATA acceptance. The new .4 item
 repairs data loss only on DXF input→DXF output; none unblocks DWG-to-DXF
 modeler-carrier serialization.
-S2.3.1/.3 sample-mapping and ODA-reader-route research is complete. The
-merged ACadSharp #1139 reader independently corroborates the bounded
-group-320 owner-key/`ASM_Data` payload mapping. The exact open #1150 source has
-now been audited; its schema/record choices and unpinned author checks remain
-candidate evidence only. Resolve only the remaining entity-envelope,
-schema-completeness, and standalone/insert-XREF identity contract in S2.3.2;
-do not repeat broad searches. Then implement S2.3.4 in small slices with
-S2.3.5 fast checks after each change.
-Run S2.3.6 once on the first complete output, then S2.3.7/S8.15.19 once as an
-optional FreeCAD checkpoint. If the envelope cannot be proven, leave only
-this ACDSDATA serializer blocked and continue independent FreeCAD-supported
-DXF work. Continue the DXF
-portions of S5/S6 in parallel; then S3 → S4 after DWG spec/trace readiness;
+S2.3.1/.3 research is complete and S2.3.2 is `READY_NARROW` only for the
+hash-pinned ODA AC1027 standalone `3DSOLID` tuple. The bounded S2.3.4
+projection is implemented; S2.3.5 generated ASCII/binary vectors, including
+reversed proxy/material/dictionary callback collections, and the real
+source-revision-default CLI conversion pass. Its output hash matches the
+file already read by Open CAD Studio. The required one-time S2.3.6 ODA
+read/round-trip acceptance remains pending because the installed converter
+aborts while this macOS session is locked. Retry that gate when available;
+do not broaden or promote the supported tuple. Then run S2.3.7/S8.15.19 once
+as an optional FreeCAD checkpoint. Meanwhile continue any independent ready
+DXF and evidence-vector work; keep S3 → S4 gated on DWG spec/trace readiness;
 S7 and S8 proceed per completed rows, with S8's DXF
 consumer probe independent of DWG. S8.4a.8/.9 are later read-only POINT-matrix
 and flat legacy-mesh field extensions; they do not reopen the already-

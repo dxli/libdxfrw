@@ -5500,10 +5500,13 @@ bool hasSixAcdsSchemaIds(const DRW_RawDxfSection& section) {
 }
 
 bool runDxfAcdsDataStorageProjection(
-    bool binary, const std::filesystem::path& directory, bool keepOutput) {
+    bool binary, const std::filesystem::path& directory, bool keepOutput,
+    bool reverseCallbackCollections = false) {
     const std::string encoding = binary ? "binary" : "ascii";
     const std::filesystem::path output = directory /
-        ("libdxfrw-ac1027-acds-projection-" + encoding + ".dxf");
+        ("libdxfrw-ac1027-acds-projection-" + encoding
+         + (reverseCallbackCollections ? "-reversed-callbacks" : "")
+         + ".dxf");
     std::error_code ec;
     std::filesystem::remove(output, ec);
 
@@ -5513,6 +5516,11 @@ bool runDxfAcdsDataStorageProjection(
         0x01u, 0x02u, 0x03u, 0x04u};
     dx_data source;
     addLocalAcdsDataStorageModeler(source, sourceHandle, payload);
+    if (reverseCallbackCollections) {
+        source.proxyObjects.reverse();
+        source.materials.reverse();
+        source.dictionaries.reverse();
+    }
 
     dx_iface exporter;
     if (!exporter.fileExport(output.string(), DRW::AC1027, binary,
@@ -9775,6 +9783,14 @@ int main(int argc, char** argv) {
            failures);
     expect(runDxfAcdsDataStorageProjection(true, directory, keepOutputs),
            "local binary DWG DataStorage to AC1027 ACDSDATA projection",
+           failures);
+    expect(runDxfAcdsDataStorageProjection(false, directory, keepOutputs,
+                                           true),
+           "local ASCII AC1027 ACDS projection with reversed object callbacks",
+           failures);
+    expect(runDxfAcdsDataStorageProjection(true, directory, keepOutputs,
+                                           true),
+           "local binary AC1027 ACDS projection with reversed object callbacks",
            failures);
     expect(runDxfAcdsHistoryClosureRejectsAmbiguity(directory, true, false),
            "local DWG ACDS projection rejects duplicate history proxies",
