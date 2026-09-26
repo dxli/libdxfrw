@@ -2162,8 +2162,11 @@ Implementation sequence:
    AC1027-only gate. No full suite was run. The locally-authored ezdxf→ODA control, external ACadSharp negative
    baseline rerun and all edge combinations remain follow-up work; new
    generated ASCII/binary vectors also reverse proxy, material, and dictionary
-   callback collection order and pass the same semantic readback. Entity-order
-   permutations are not covered. Keep generated artifacts temporary; no fixture files
+   callback collection order and pass the same semantic readback. Both entity
+   orders (neighboring LINE before/after the 3DSOLID) preserve the line's
+   nonzero-Z endpoints and the ACDS association. These are generated vectors,
+   not a full permutation matrix.
+   Keep generated artifacts temporary; no fixture files
    are added to the repository.
 6. **S2.3.6 — Accept actual libdxfrw output externally (`PENDING_ODA`).** The
    exact output from LibreDWG `Cone.dwg` converted by libdxfrw was opened by

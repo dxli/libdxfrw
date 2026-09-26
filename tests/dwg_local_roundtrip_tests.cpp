@@ -5587,11 +5587,13 @@ bool hasExpectedAcdsSchemaDefinitions(const DRW_RawDxfSection& section) {
 
 bool runDxfAcdsDataStorageProjection(
     bool binary, const std::filesystem::path& directory, bool keepOutput,
-    bool reverseCallbackCollections = false) {
+    bool reverseCallbackCollections = false,
+    bool reverseEntityOrder = false) {
     const std::string encoding = binary ? "binary" : "ascii";
     const std::filesystem::path output = directory /
         ("libdxfrw-ac1027-acds-projection-" + encoding
          + (reverseCallbackCollections ? "-reversed-callbacks" : "")
+         + (reverseEntityOrder ? "-reversed-entities" : "")
          + ".dxf");
     std::error_code ec;
     std::filesystem::remove(output, ec);
@@ -5601,7 +5603,14 @@ bool runDxfAcdsDataStorageProjection(
         'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
         0x01u, 0x02u, 0x03u, 0x04u};
     dx_data source;
+    auto* neighborLine = new DRW_Line();
+    neighborLine->basePoint = DRW_Coord(10.0, 20.0, 30.0);
+    neighborLine->secPoint = DRW_Coord(14.0, 25.0, 36.0);
+    if (!reverseEntityOrder)
+        source.mBlock->ent.push_back(neighborLine);
     addLocalAcdsDataStorageModeler(source, sourceHandle, payload);
+    if (reverseEntityOrder)
+        source.mBlock->ent.push_back(neighborLine);
     if (reverseCallbackCollections) {
         source.proxyObjects.reverse();
         source.materials.reverse();
@@ -5638,7 +5647,22 @@ bool runDxfAcdsDataStorageProjection(
     const bool schemaMatch = imported.rawDxfSections.size() == 1u
         && imported.rawDxfSections.front().m_name == "ACDSDATA"
         && hasExpectedAcdsSchemaDefinitions(imported.rawDxfSections.front());
+    const bool neighborLineMatch = readOk
+        && std::any_of(imported.mBlock->ent.begin(), imported.mBlock->ent.end(),
+                       [](const DRW_Entity* entity) {
+                           if (entity == nullptr || entity->eType != DRW::LINE)
+                               return false;
+                           const auto* line =
+                               static_cast<const DRW_Line*>(entity);
+                           return line->basePoint.x == 10.0
+                               && line->basePoint.y == 20.0
+                               && line->basePoint.z == 30.0
+                               && line->secPoint.x == 14.0
+                               && line->secPoint.y == 25.0
+                               && line->secPoint.z == 36.0;
+                       });
     const bool result = importedModeler != nullptr
+        && neighborLineMatch
         && importedModeler->handle != sourceHandle
         && importedModeler->m_historyHandle == 0x20Eu
         && schemaMatch
@@ -9966,6 +9990,14 @@ int main(int argc, char** argv) {
     expect(runDxfAcdsDataStorageProjection(true, directory, keepOutputs,
                                            true),
            "local binary AC1027 ACDS projection with reversed object callbacks",
+           failures);
+    expect(runDxfAcdsDataStorageProjection(false, directory, keepOutputs,
+                                           false, true),
+           "local ASCII AC1027 ACDS projection with reversed entity order",
+           failures);
+    expect(runDxfAcdsDataStorageProjection(true, directory, keepOutputs,
+                                           false, true),
+           "local binary AC1027 ACDS projection with reversed entity order",
            failures);
     expect(runDxfAcdsHistoryClosureRejectsAmbiguity(directory, true, false),
            "local DWG ACDS projection rejects duplicate history proxies",
