@@ -106,6 +106,105 @@ bool hasSabSignature(const std::vector<std::uint8_t>& payload) {
                       });
 }
 
+bool matchesDataStorageSchemaProperty(
+    const DRW_DataStorageSchemaProperty& property, std::uint32_t nameIndex,
+    const char* name, std::uint32_t type, std::uint32_t flags,
+    std::uint16_t valueCount,
+    const std::vector<std::vector<std::uint8_t>>& values) {
+    return name != nullptr && property.nameIndex == nameIndex
+        && property.name == name && property.type == type
+        && property.flags == flags && property.valueCount == valueCount
+        && property.values == values;
+}
+
+bool matchesQualifiedAc1027AcdsSchemas(
+    const DRW_DataStorageSection& storage) {
+    try {
+    static const std::array<const char*, 7> expectedPropertyNames = {
+        "AcDbDs::ID", "Thumbnail_Data", "ASM_Data",
+        "AcDbDs::TreatedAsObjectData", "AcDbDs::Legacy",
+        "AcDs:Indexable", "AcDbDs::HandleAttribute"};
+    if (storage.schemaCount != 6u || storage.schemas.size() != 6u
+        || storage.schemaPropertyNameCount != expectedPropertyNames.size()
+        || storage.schemaPropertyNames.size() != expectedPropertyNames.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < expectedPropertyNames.size(); ++index) {
+        if (storage.schemaPropertyNames[index] != expectedPropertyNames[index])
+            return false;
+    }
+
+    std::array<const DRW_DataStorageSchema*, 6> schemasByIndex{};
+    for (const DRW_DataStorageSchema& schema : storage.schemas) {
+        if (schema.index >= schemasByIndex.size()
+            || schemasByIndex[schema.index] != nullptr) {
+            return false;
+        }
+        schemasByIndex[schema.index] = &schema;
+    }
+    if (!std::all_of(schemasByIndex.begin(), schemasByIndex.end(),
+                     [](const DRW_DataStorageSchema* schema) {
+                         return schema != nullptr;
+                     })) {
+        return false;
+    }
+    const auto propertyMatches = [](const DRW_DataStorageSchema& schema,
+                                    std::size_t propertyIndex,
+                                    std::uint32_t nameIndex,
+                                    const char* name,
+                                    std::uint32_t type,
+                                    std::uint32_t flags,
+                                    std::uint16_t valueCount,
+                                    const std::vector<std::vector<std::uint8_t>>&
+                                        values) {
+        return propertyIndex < schema.properties.size()
+            && matchesDataStorageSchemaProperty(
+                schema.properties[propertyIndex], nameIndex, name, type, flags,
+                valueCount, values);
+    };
+    const std::vector<std::vector<std::uint8_t>> idValues0 = {
+        {6u, 0u, 0u, 0u, 0u, 0u, 0u, 0u},
+        {7u, 0u, 0u, 0u, 0u, 0u, 0u, 0u}};
+    const std::vector<std::vector<std::uint8_t>> idValues1 = {
+        {2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u},
+        {3u, 0u, 0u, 0u, 0u, 0u, 0u, 0u}};
+    const std::vector<std::vector<std::uint8_t>> handleValue = {{0u}};
+    const auto& thumbnail = *schemasByIndex[0];
+    const auto& asmData = *schemasByIndex[1];
+    const auto& treatedAsObjectData = *schemasByIndex[2];
+    const auto& legacy = *schemasByIndex[3];
+    const auto& indexable = *schemasByIndex[4];
+    const auto& handleAttribute = *schemasByIndex[5];
+    return thumbnail.indexes == std::vector<std::uint64_t>{4u, 5u}
+        && thumbnail.properties.size() == 2u
+        && propertyMatches(thumbnail, 0u, 0u, "AcDbDs::ID", 10u, 0u, 2u,
+                           idValues0)
+        && propertyMatches(thumbnail, 1u, 1u, "Thumbnail_Data", 15u, 0u, 0u,
+                           {})
+        && asmData.indexes == std::vector<std::uint64_t>{0u, 1u}
+        && asmData.properties.size() == 2u
+        && propertyMatches(asmData, 0u, 0u, "AcDbDs::ID", 10u, 0u, 2u,
+                           idValues1)
+        && propertyMatches(asmData, 1u, 2u, "ASM_Data", 15u, 0u, 0u, {})
+        && treatedAsObjectData.indexes.empty()
+        && treatedAsObjectData.properties.size() == 1u
+        && propertyMatches(treatedAsObjectData, 0u, 3u,
+                           "AcDbDs::TreatedAsObjectData", 1u, 0u, 0u, {})
+        && legacy.indexes.empty() && legacy.properties.size() == 1u
+        && propertyMatches(legacy, 0u, 4u, "AcDbDs::Legacy", 1u, 0u, 0u, {})
+        && indexable.indexes.empty() && indexable.properties.size() == 1u
+        && propertyMatches(indexable, 0u, 5u, "AcDs:Indexable", 1u, 0u, 0u,
+                           {})
+        && handleAttribute.indexes.empty()
+        && handleAttribute.properties.size() == 1u
+        && propertyMatches(handleAttribute, 0u, 6u,
+                           "AcDbDs::HandleAttribute", 7u, 8u, 1u,
+                           handleValue);
+    } catch (...) {
+        return false;
+    }
+}
+
 std::string proxyHandleString(std::uint64_t handle) {
     std::array<char, 17> digits{};
     const auto converted = std::to_chars(digits.data(), digits.data() + 16,
@@ -435,8 +534,9 @@ bool appendAcdsDataSection(
         || storage.m_name != "AcDb:AcDsPrototype_1b"
         || storage.m_version != DRW::AC1027 || storage.parseFailed
         || !storage.structurallyValid || !storage.replayAllowed
-        || !storage.payloadsRetained || storage.schemaCount != 6u
-        || storage.schemas.size() != 6u || storage.records.size() != 1u
+        || !storage.payloadsRetained
+        || !matchesQualifiedAc1027AcdsSchemas(storage)
+        || storage.records.size() != 1u
         || !storage.duplicateRecordHandleKeys.empty()
         || storage.orphanRecordCount != 0u || linkedEntityCount != 1u
         || modeler == nullptr || modeler->eType != DRW::E3DSOLID
@@ -462,17 +562,6 @@ bool appendAcdsDataSection(
     if (!configureAcdsMaterialDictionary(data, referencedMaterials,
                                          materialDictionaries, rootEntries,
                                          materialHandles)) {
-        return false;
-    }
-
-    std::array<bool, 6> seenSchemas{};
-    for (const DRW_DataStorageSchema& schema : storage.schemas) {
-        if (schema.index >= seenSchemas.size() || seenSchemas[schema.index])
-            return false;
-        seenSchemas[schema.index] = true;
-    }
-    if (!std::all_of(seenSchemas.begin(), seenSchemas.end(),
-                     [](bool seen) { return seen; })) {
         return false;
     }
 

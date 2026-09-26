@@ -5258,9 +5258,66 @@ DRW_DataStorageSection makeLocalDataStorageSection(
     section.m_version = DRW::AC1027;
     section.payloadsRetained = true;
     section.schemaCount = 6;
+    const std::array<const char*, 7> schemaPropertyNames = {
+        "AcDbDs::ID", "Thumbnail_Data", "ASM_Data",
+        "AcDbDs::TreatedAsObjectData", "AcDbDs::Legacy",
+        "AcDs:Indexable", "AcDbDs::HandleAttribute"};
+    section.schemaPropertyNameCount =
+        static_cast<std::uint32_t>(schemaPropertyNames.size());
+    for (const char* name : schemaPropertyNames)
+        section.schemaPropertyNames.emplace_back(name);
     for (std::uint32_t index = 0; index < 6u; ++index) {
         DRW_DataStorageSchema schema;
         schema.index = index;
+        const auto property = [](std::uint32_t nameIndex, const char* name,
+                                 std::uint32_t type, std::uint32_t flags,
+                                 std::uint16_t valueCount,
+                                 std::vector<std::vector<std::uint8_t>> values) {
+            DRW_DataStorageSchemaProperty result;
+            result.nameIndex = nameIndex;
+            result.name = name;
+            result.type = type;
+            result.flags = flags;
+            result.valueCount = valueCount;
+            result.values = std::move(values);
+            return result;
+        };
+        switch (index) {
+        case 0:
+            schema.indexes = {4u, 5u};
+            schema.properties.push_back(property(
+                0u, schemaPropertyNames[0], 10u, 0u, 2u,
+                {{6u, 0u, 0u, 0u, 0u, 0u, 0u, 0u},
+                 {7u, 0u, 0u, 0u, 0u, 0u, 0u, 0u}}));
+            schema.properties.push_back(property(
+                1u, schemaPropertyNames[1], 15u, 0u, 0u, {}));
+            break;
+        case 1:
+            schema.indexes = {0u, 1u};
+            schema.properties.push_back(property(
+                0u, schemaPropertyNames[0], 10u, 0u, 2u,
+                {{2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u},
+                 {3u, 0u, 0u, 0u, 0u, 0u, 0u, 0u}}));
+            schema.properties.push_back(property(
+                2u, schemaPropertyNames[2], 15u, 0u, 0u, {}));
+            break;
+        case 2:
+            schema.properties.push_back(property(
+                3u, schemaPropertyNames[3], 1u, 0u, 0u, {}));
+            break;
+        case 3:
+            schema.properties.push_back(property(
+                4u, schemaPropertyNames[4], 1u, 0u, 0u, {}));
+            break;
+        case 4:
+            schema.properties.push_back(property(
+                5u, schemaPropertyNames[5], 1u, 0u, 0u, {}));
+            break;
+        case 5:
+            schema.properties.push_back(property(
+                6u, schemaPropertyNames[6], 7u, 8u, 1u, {{0u}}));
+            break;
+        }
         section.schemas.push_back(std::move(schema));
     }
     DRW_DataStorageRecord record;
@@ -5458,9 +5515,29 @@ bool findAcdsRecordPayload(const DRW_RawDxfSection& section,
     return false;
 }
 
-bool hasSixAcdsSchemaIds(const DRW_RawDxfSection& section) {
-    std::array<bool, 6> seen{};
-    std::size_t count = 0;
+bool hasExpectedAcdsSchemaDefinitions(const DRW_RawDxfSection& section) {
+    using Field = std::pair<int, std::string>;
+    const std::array<std::vector<Field>, 6> expected = {{
+        {{0, "ACDSSCHEMA"}, {90, "0"}, {1, "AcDb_Thumbnail_Schema"},
+         {2, "AcDbDs::ID"}, {280, "10"}, {91, "8"},
+         {2, "Thumbnail_Data"}, {280, "15"}, {91, "0"}},
+        {{0, "ACDSSCHEMA"}, {90, "1"}, {1, "AcDb3DSolid_ASM_Data"},
+         {2, "AcDbDs::ID"}, {280, "10"}, {91, "8"},
+         {2, "ASM_Data"}, {280, "15"}, {91, "0"}},
+        {{0, "ACDSSCHEMA"}, {90, "2"},
+         {1, "AcDbDs::TreatedAsObjectDataSchema"},
+         {2, "AcDbDs::TreatedAsObjectData"}, {280, "1"}, {91, "0"}},
+        {{0, "ACDSSCHEMA"}, {90, "3"}, {1, "AcDbDs::LegacySchema"},
+         {2, "AcDbDs::Legacy"}, {280, "1"}, {91, "0"}},
+        {{0, "ACDSSCHEMA"}, {90, "4"},
+         {1, "AcDbDs::IndexedPropertySchema"},
+         {2, "AcDs:Indexable"}, {280, "1"}, {91, "0"}},
+        {{0, "ACDSSCHEMA"}, {90, "5"},
+         {1, "AcDbDs::HandleAttributeSchema"},
+         {2, "AcDbDs::HandleAttribute"}, {280, "7"}, {91, "1"},
+         {284, "1"}}
+    }};
+    std::size_t schemaIndex = 0;
     for (std::size_t start = 0; start < section.m_groups.size();) {
         const DRW_Variant& marker = section.m_groups[start];
         if (marker.code() != 0 || marker.type() != DRW_Variant::STRING
@@ -5473,30 +5550,39 @@ bool hasSixAcdsSchemaIds(const DRW_RawDxfSection& section) {
                && section.m_groups[end].code() != 0)
             ++end;
         if (std::strcmp(marker.c_str(), "ACDSSCHEMA") == 0) {
-            bool hasId = false;
-            std::uint32_t id = 0;
-            for (std::size_t index = start + 1u; index < end; ++index) {
-                const DRW_Variant& group = section.m_groups[index];
-                if (group.code() != 90 || group.type() != DRW_Variant::INTEGER
-                    || group.i_val() < 0
-                    || group.i_val() >= static_cast<int>(seen.size())
-                    || hasId) {
-                    continue;
-                }
-                hasId = true;
-                id = static_cast<std::uint32_t>(group.i_val());
-            }
-            if (!hasId || seen[id])
+            if (schemaIndex >= expected.size())
                 return false;
-            seen[id] = true;
-            ++count;
+            std::size_t headerEnd = start + 1u;
+            while (headerEnd < end) {
+                const DRW_Variant& group = section.m_groups[headerEnd];
+                if (group.code() == 101
+                    && group.type() == DRW_Variant::STRING
+                    && group.c_str() != nullptr
+                    && std::strcmp(group.c_str(), "ACDSRECORD") == 0) {
+                    break;
+                }
+                ++headerEnd;
+            }
+            std::vector<Field> actual;
+            for (std::size_t index = start; index < headerEnd; ++index) {
+                const DRW_Variant& group = section.m_groups[index];
+                if (group.type() == DRW_Variant::STRING
+                    && group.c_str() != nullptr) {
+                    actual.emplace_back(group.code(), group.c_str());
+                } else if (group.type() == DRW_Variant::INTEGER) {
+                    actual.emplace_back(group.code(),
+                                        std::to_string(group.i_val()));
+                } else {
+                    return false;
+                }
+            }
+            if (actual != expected[schemaIndex])
+                return false;
+            ++schemaIndex;
         }
         start = end;
     }
-    return count == seen.size()
-        && std::all_of(seen.begin(), seen.end(), [](bool value) {
-               return value;
-           });
+    return schemaIndex == expected.size();
 }
 
 bool runDxfAcdsDataStorageProjection(
@@ -5549,12 +5635,13 @@ bool runDxfAcdsDataStorageProjection(
     if (importedModeler != nullptr)
         std::snprintf(expectedHandle, sizeof(expectedHandle), "%X",
                       importedModeler->handle);
+    const bool schemaMatch = imported.rawDxfSections.size() == 1u
+        && imported.rawDxfSections.front().m_name == "ACDSDATA"
+        && hasExpectedAcdsSchemaDefinitions(imported.rawDxfSections.front());
     const bool result = importedModeler != nullptr
         && importedModeler->handle != sourceHandle
         && importedModeler->m_historyHandle == 0x20Eu
-        && imported.rawDxfSections.size() == 1u
-        && imported.rawDxfSections.front().m_name == "ACDSDATA"
-        && hasSixAcdsSchemaIds(imported.rawDxfSections.front())
+        && schemaMatch
         && findAcdsRecordPayload(imported.rawDxfSections.front(), "ASM_Data",
                                  linkedHandle, parsedPayload)
         && linkedHandle == expectedHandle
@@ -5649,6 +5736,40 @@ bool runDxfAcdsHistoryClosureRejectsAmbiguity(
         && !std::filesystem::exists(output);
     std::filesystem::remove(output, ec);
     return rejectedWithoutPublication;
+}
+
+bool runDxfAcdsSchemaFingerprintRejectsMismatch(
+    const std::filesystem::path& directory) {
+    const std::vector<std::uint8_t> payload {
+        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
+        0x01u, 0x02u, 0x03u, 0x04u};
+    for (int mismatch = 0; mismatch < 3; ++mismatch) {
+        const std::filesystem::path output = directory /
+            ("libdxfrw-ac1027-acds-schema-mismatch-"
+             + std::to_string(mismatch) + ".dxf");
+        std::error_code ec;
+        std::filesystem::remove(output, ec);
+        dx_data source;
+        addLocalAcdsDataStorageModeler(source, 0xFC20u, payload);
+        DRW_DataStorageSection& storage = source.dataStorageSections.front();
+        if (mismatch == 0) {
+            storage.schemaPropertyNames[2] = "Unqualified_Property";
+        } else if (mismatch == 1) {
+            storage.schemas[1].properties[1].type = 14u;
+        } else {
+            storage.schemas[0].indexes[0] = 5u;
+        }
+
+        dx_iface exporter;
+        const bool exportOk = exporter.fileExport(
+            output.string(), DRW::AC1027, false, &source, false);
+        const bool rejectedWithoutPublication = !exportOk
+            && !std::filesystem::exists(output);
+        std::filesystem::remove(output, ec);
+        if (!rejectedWithoutPublication)
+            return false;
+    }
+    return true;
 }
 
 bool findAcdsRecordOwner(const DRW_RawDxfSection& section,
@@ -9797,6 +9918,9 @@ int main(int argc, char** argv) {
            failures);
     expect(runDxfAcdsHistoryClosureRejectsAmbiguity(directory, false, true),
            "local DWG ACDS projection rejects ambiguous material dictionaries",
+           failures);
+    expect(runDxfAcdsSchemaFingerprintRejectsMismatch(directory),
+           "local DWG ACDS projection rejects unqualified schema fingerprints",
            failures);
     expect(runDxfAcdsModelerOwnerRejectsMalformed(false, false, "FC20"),
            "local DXF rejects ASM_Data association without an owner key",

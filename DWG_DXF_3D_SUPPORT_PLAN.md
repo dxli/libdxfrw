@@ -2118,8 +2118,9 @@ Implementation sequence:
 4. **S2.3.4 — Implement the smallest handle-keyed projection (`IMPLEMENTED`,
    bounded to .2 evidence).** The adapter retains typed DataStorage, modeler,
    proxy-object, material, and dictionary records. The writer accepts only one
-   AC1027 standalone 3DSOLID, six complete schemas, one handle-matched
-   `ASM_Data` SAB record, and the exact witnessed three-proxy graph:
+   AC1027 standalone 3DSOLID, the exact witnessed six-schema/property-name,
+   index, type, and value fingerprint, one handle-matched `ASM_Data` SAB
+   record, and the exact witnessed three-proxy graph:
    `AcDbShHistory`→`AcDbEvalGraph`→`AcDbShCone`, with 340, 340, and 360
    references respectively. It preserves the observed proxy body bits and
    typed handle edges; the ODA specification
@@ -2131,7 +2132,9 @@ Implementation sequence:
    MATERIALs and include every history reference. Ambiguous/missing proxy or
    material closure fails before output publication. The generated output
    keeps the group-320 key aligned to the minted entity handle and emits the
-   group-350 history link plus the referenced proxy chain. Exact SAB bytes and
+   group-350 history link plus the referenced proxy chain. The output
+   reconstructs the six observed DXF `ACDSSCHEMA` headers; it does not treat
+   the DWG schema directory as those DXF records. Exact SAB bytes and
    timestamp, group-2 GUID when present, source record/schema order, and the
    six observed schemas remain separate from DWG frame/proxy bytes. Other
    schemas, versions, entities, ambiguous graphs, and missing closure remain
@@ -2143,9 +2146,11 @@ Implementation sequence:
    referenced MATERIAL objects; readback checks the remapped owner key,
    history handle, proxy class IDs/owners/references, and exact payload bytes.
    Negative vectors verify duplicate history proxies and ambiguous matching
-   material dictionaries fail without publishing a file. Readback also checks
-   all six schema IDs, the three proxy body bit lengths/bytes, owners, class
-   IDs, and references. Existing vectors
+   material dictionaries fail without publishing a file. Three negative
+   vectors mutate the parsed schema-property name table, a property type, or
+   an index mapping and must fail without publishing. Readback checks all six
+   exact DXF schema headers/names, the three proxy body bit lengths/bytes,
+   owners, class IDs, and references. Existing vectors
    continue to cover malformed/missing/duplicate/orphaned ACDS owner keys,
    unsupported inline SAB, and output failure. The fast executable
    `build/libdxfrw_dwg_local_roundtrip` passed on 2026-09-26. The production
