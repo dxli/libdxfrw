@@ -1,7 +1,7 @@
 # DWG/DXF 3D Support Review and Fix Plan
 
 Status: implementation in progress; DWG reader edits remain evidence-gated.
-Review date: 2026-09-25.
+Review date: 2026-09-26.
 Implementation baseline: `423cf99fd26bc9938dc259907e2889666d672d1f`
 (`origin/master`, `codex/pr100-clean` after rebase). The local commit was
 patch-equivalent to this origin commit and was skipped by rebase. Existing
@@ -1992,6 +1992,13 @@ Implementation sequence:
    attachment path returns 404. No bytes were obtained, so the Stack Overflow
    report remains unpinned and advisory. Do not repeat this URL probe unless
    its owner supplies a current location.
+   **Fast regression baseline recheck (2026-09-26):**
+   `libdxfrw_dwg_local_roundtrip`, `dwg2dxf_version_policy`,
+   `dwg2dxf_freecad_cli_compat`, and
+   `dwg2dxf_raw_dxf_section_passthrough` pass 4/4. This confirms the existing
+   typed-modeler fail-closed, CLI contract, and opaque DXF-section behavior;
+   these tests do not consume the generated ODA DWG or qualify ACDSDATA
+   extraction/emission. No full suite was run because there was no code edit.
 3. **S2.3.3 — Record the available acceptance route (`VERIFIED`, bounded).**
    ODA File Converter 27.1.0.0 successfully read an ODA-produced AC1027 DXF,
    wrote AC1027 DWG, and exported AC1027 DXF while retaining the six schemas
