@@ -2145,10 +2145,12 @@ Implementation sequence:
    modeler, ACDSDATA record, history proxy chain, material dictionary, and
    referenced MATERIAL objects; readback checks the remapped owner key,
    history handle, proxy class IDs/owners/references, and exact payload bytes.
-   Negative vectors verify duplicate history proxies and ambiguous matching
-   material dictionaries fail without publishing a file. Three negative
-   vectors mutate the parsed schema-property name table, a property type, or
-   an index mapping and must fail without publishing. Readback checks all six
+   Negative vectors verify duplicate history proxies, ambiguous matching
+   material dictionaries, and seven malformed closure edges (missing proxy,
+   wrong class/owner/reference/subclass, missing material, or inconsistent
+   proxy-body bit size) fail without publishing. Three more vectors mutate the
+   parsed schema-property name table, a property type, or an index mapping and
+   must fail without publishing. Readback checks all six
    exact DXF schema headers/names, the three proxy body bit lengths/bytes,
    owners, class IDs, and references. Existing vectors
    continue to cover malformed/missing/duplicate/orphaned ACDS owner keys,

@@ -5772,6 +5772,60 @@ bool runDxfAcdsSchemaFingerprintRejectsMismatch(
     return true;
 }
 
+bool runDxfAcdsHistoryClosureRejectsMalformedEdges(
+    const std::filesystem::path& directory) {
+    static const std::array<const char*, 7> cases = {
+        "missing-history", "wrong-class", "wrong-owner", "wrong-reference",
+        "missing-material", "wrong-subclass", "proxy-bit-size"};
+    const std::vector<std::uint8_t> payload {
+        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
+        0x01u, 0x02u, 0x03u, 0x04u};
+    for (std::size_t index = 0; index < cases.size(); ++index) {
+        const std::filesystem::path output = directory /
+            (std::string("libdxfrw-ac1027-acds-edge-") + cases[index]
+             + ".dxf");
+        std::error_code ec;
+        std::filesystem::remove(output, ec);
+        dx_data source;
+        addLocalAcdsDataStorageModeler(source, 0xFC20u, payload);
+        switch (index) {
+        case 0:
+            source.proxyObjects.pop_front();
+            break;
+        case 1:
+            source.proxyObjects.front().m_proxyClassId = 520;
+            break;
+        case 2:
+            source.proxyObjects.front().parentHandle = 0x1234u;
+            break;
+        case 3:
+            source.proxyObjects.front().m_objectIdRefs.front().m_dxfCode = 360;
+            break;
+        case 4:
+            source.materials.remove_if([](const DRW_Material& material) {
+                return material.handle == 0x96u;
+            });
+            break;
+        case 5:
+            source.proxyObjects.front().m_proxySubclass = "cn:Other";
+            break;
+        case 6:
+            ++source.proxyObjects.front().m_objectDataBitSize;
+            break;
+        }
+
+        dx_iface exporter;
+        const bool exportOk = exporter.fileExport(
+            output.string(), DRW::AC1027, false, &source, false);
+        const bool rejectedWithoutPublication = !exportOk
+            && !std::filesystem::exists(output);
+        std::filesystem::remove(output, ec);
+        if (!rejectedWithoutPublication)
+            return false;
+    }
+    return true;
+}
+
 bool findAcdsRecordOwner(const DRW_RawDxfSection& section,
                          const std::string& recordPayloadName,
                          std::string& ownerHandle) {
@@ -9921,6 +9975,9 @@ int main(int argc, char** argv) {
            failures);
     expect(runDxfAcdsSchemaFingerprintRejectsMismatch(directory),
            "local DWG ACDS projection rejects unqualified schema fingerprints",
+           failures);
+    expect(runDxfAcdsHistoryClosureRejectsMalformedEdges(directory),
+           "local DWG ACDS projection rejects malformed history closure edges",
            failures);
     expect(runDxfAcdsModelerOwnerRejectsMalformed(false, false, "FC20"),
            "local DXF rejects ASM_Data association without an owner key",

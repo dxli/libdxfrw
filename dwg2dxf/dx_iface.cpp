@@ -117,6 +117,10 @@ bool matchesDataStorageSchemaProperty(
         && property.values == values;
 }
 
+// The DXF ACDSSCHEMA writer below reconstructs one observed AC1027 table.
+// Restrict this bridge to the matching DWG DataStorage schema fingerprint;
+// a six-schema count alone must never relabel a different property layout.
+// This is a sample-qualified guard, not a general DataStorage schema codec.
 bool matchesQualifiedAc1027AcdsSchemas(
     const DRW_DataStorageSection& storage) {
     try {
