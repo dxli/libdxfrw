@@ -66,7 +66,7 @@ bool verify(const std::string& path) {
     return true;
 }
 
-bool generate3DLine(const std::string& path) {
+bool generate3DLine(const std::string& path, bool binary) {
     dx_data data;
     dx_iface iface;
     iface.cData = &data;
@@ -82,7 +82,7 @@ bool generate3DLine(const std::string& path) {
     if (data.mBlock->ent.size() != 1
         || dynamic_cast<DRW_3DLine*>(data.mBlock->ent.front()) == nullptr)
         return fail("generated 3DLINE lost its adapter subtype");
-    if (!iface.fileExport(path, DRW::AC1027, false, &data, false))
+    if (!iface.fileExport(path, DRW::AC1027, binary, &data, false))
         return fail("could not export generated 3DLINE control");
     return true;
 }
@@ -140,7 +140,9 @@ int main(int argc, char** argv) {
     if (mode == "--verify")
         return verify(path) ? 0 : 1;
     if (mode == "--generate-3dline")
-        return generate3DLine(path) ? 0 : 1;
+        return generate3DLine(path, false) ? 0 : 1;
+    if (mode == "--generate-3dline-binary")
+        return generate3DLine(path, true) ? 0 : 1;
     if (mode == "--verify-3dline")
         return verify3DLine(path) ? 0 : 1;
     if (mode == "--reject-3dline-ac1014")

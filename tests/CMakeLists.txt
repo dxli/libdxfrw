@@ -129,6 +129,25 @@ set_tests_properties(dwg2dxf_3dline_adapter_cli PROPERTIES
     TIMEOUT 30
 )
 
+# Exercise the same generated adapter subtype through binary-DXF input and
+# output, with public readback after two exact CLI conversion passes.
+add_test(
+    NAME dwg2dxf_3dline_binary_adapter_cli
+    COMMAND ${CMAKE_COMMAND}
+        "-DADAPTER_TEST=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"
+        "-DDWG2DXF=$<TARGET_FILE:dwg2dxf>"
+        "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+        "-DCASE_NAME=3dline-binary-adapter"
+        "-DGENERATE_MODE=--generate-3dline-binary"
+        "-DVERIFY_MODE=--verify-3dline"
+        "-DCONVERSION_OPTIONS=-b"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg2dxf_image_path_test.cmake
+)
+set_tests_properties(dwg2dxf_3dline_binary_adapter_cli PROPERTIES
+    LABELS "cli;fast;dxf;adapter;3d;binary"
+    TIMEOUT 30
+)
+
 # Match FreeCAD's Draft/importDWG.py subprocess contract without requiring a
 # FreeCAD installation. The DWG fixture is already tracked in this repository.
 set(_freecad_cli_sample

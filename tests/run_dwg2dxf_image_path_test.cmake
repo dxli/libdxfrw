@@ -40,7 +40,7 @@ if(NOT "${_generate_result}" STREQUAL "0")
 endif()
 
 execute_process(
-    COMMAND "${DWG2DXF}" "${_input}" -o "${_first}"
+    COMMAND "${DWG2DXF}" "${_input}" -o "${_first}" ${CONVERSION_OPTIONS}
     RESULT_VARIABLE _first_result
     OUTPUT_VARIABLE _first_stdout
     ERROR_VARIABLE _first_stderr
@@ -53,7 +53,7 @@ if(NOT "${_first_result}" STREQUAL "0")
 endif()
 
 execute_process(
-    COMMAND "${DWG2DXF}" "${_first}" -o "${_second}"
+    COMMAND "${DWG2DXF}" "${_first}" -o "${_second}" ${CONVERSION_OPTIONS}
     RESULT_VARIABLE _second_result
     OUTPUT_VARIABLE _second_stdout
     ERROR_VARIABLE _second_stderr
