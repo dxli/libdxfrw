@@ -1251,12 +1251,18 @@ bool copyProxyBitRange(const dwgBuffer& source, std::uint64_t startBit,
         return false;
 
     const std::uint64_t startByte = startBit >> 3;
-    const std::uint64_t endByte = (endBit >> 3) + ((endBit & 7u) != 0);
-    const std::uint64_t byteCount = endByte - startByte;
-    if (endByte < startByte
-        || byteCount > std::numeric_limits<std::size_t>::max()
-        || byteCount > static_cast<std::uint64_t>(std::numeric_limits<int>::max())
-        || !DRW::resize(data, static_cast<int>(byteCount)))
+    const std::uint64_t bitCount = endBit - startBit;
+    const std::uint64_t byteCount = bitCount / 8u
+        + ((bitCount & 7u) != 0 ? 1u : 0u);
+    const std::uint64_t sourceEndByte =
+        (endBit >> 3) + ((endBit & 7u) != 0);
+    const std::uint64_t sourceByteCount = sourceEndByte - startByte;
+    if (sourceEndByte < startByte
+        || sourceByteCount > std::numeric_limits<std::size_t>::max()
+        || sourceByteCount
+               > static_cast<std::uint64_t>(std::numeric_limits<int>::max())
+        || byteCount > sourceByteCount
+        || !DRW::resize(data, static_cast<int>(sourceByteCount)))
         return false;
     dwgBuffer copy = source;
     if (!copy.setPosition(startByte)
@@ -1269,7 +1275,10 @@ bool copyProxyBitRange(const dwgBuffer& source, std::uint64_t startBit,
     }
     if (data.empty())
         return true;
-    return copy.getBytes(data.data(), data.size()) && copy.isGood();
+    if (!copy.getBytes(data.data(), data.size()) || !copy.isGood())
+        return false;
+    data.resize(static_cast<std::size_t>(byteCount));
+    return true;
 }
 
 int proxyDxfCode(std::uint8_t handleCode) {
@@ -19542,9 +19551,14 @@ bool DRW_ProxyObject::parseDwg(DRW::Version version, dwgBuffer *buf,
     if (!readProxyOptionalBitLong(*buf, dataEndBit, present, value))
         return fail();
     if (present) {
-        m_hasProxyCarrierId = true;
-        m_proxyCarrierId = value;
+        // DXF group 90 is the fixed internal DWG object typecode (0x1F3 for
+        // ACAD_PROXY_OBJECT); the DWG object's class ID is serialized here
+        // and maps to DXF group 91.
+        m_hasProxyClassId = true;
+        m_proxyClassId = value;
     }
+    m_hasProxyCarrierId = true;
+    m_proxyCarrierId = kDwgType;
 
     if (version >= DRW::AC1018 && proxyHasBits(*stringBuf, stringEndBit, 2)) {
         if (dataEndBit > std::numeric_limits<std::uint32_t>::max()
@@ -19605,6 +19619,7 @@ bool DRW_ProxyObject::parseDwg(DRW::Version version, dwgBuffer *buf,
         return fail();
     m_objectDataBitSize = static_cast<std::uint32_t>(dataEndBit
                                                      - payloadStartBit);
+    m_hasObjectDataBitSize = true;
 
     dwgBuffer handleBuffer = *buf;
     seekObjectHandleStream(version, &handleBuffer, objSize,

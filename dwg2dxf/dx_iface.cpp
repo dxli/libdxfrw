@@ -13,6 +13,8 @@
 #include <iostream>
 #include <algorithm>
 #include <charconv>
+#include <array>
+#include <cctype>
 #include <functional>
 #include <limits>
 #include <map>
@@ -22,6 +24,7 @@
 #include "dx_iface.h"
 #include "libdwgr.h"
 #include "libdxfrw.h"
+#include "intern/dxfparserlimits.h"
 
 namespace {
 
@@ -41,7 +44,547 @@ DRW::Version sourceVersionFromDxfHeader(
     return fallback;
 }
 
+void addAcdsSchemaHeader(DRW_RawDxfSection& section, int index,
+                         const char* schemaName, const char* payloadName) {
+    section.m_groups.emplace_back(0, "ACDSSCHEMA");
+    section.m_groups.emplace_back(90, index);
+    section.m_groups.emplace_back(1, schemaName);
+    section.m_groups.emplace_back(2, "AcDbDs::ID");
+    section.m_groups.emplace_back(280, 10);
+    section.m_groups.emplace_back(91, 8);
+    section.m_groups.emplace_back(2, payloadName);
+    section.m_groups.emplace_back(280, 15);
+    section.m_groups.emplace_back(91, 0);
+}
+
+void addAcdsSchemaAttributes(DRW_RawDxfSection& section, int index) {
+    section.m_groups.emplace_back(101, "ACDSRECORD");
+    section.m_groups.emplace_back(95, index);
+    section.m_groups.emplace_back(90, 2);
+    section.m_groups.emplace_back(2, "AcDbDs::TreatedAsObjectData");
+    section.m_groups.emplace_back(280, 1);
+    section.m_groups.emplace_back(291, 1);
+
+    section.m_groups.emplace_back(101, "ACDSRECORD");
+    section.m_groups.emplace_back(95, index);
+    section.m_groups.emplace_back(90, 3);
+    section.m_groups.emplace_back(2, "AcDbDs::Legacy");
+    section.m_groups.emplace_back(280, 1);
+    section.m_groups.emplace_back(291, 1);
+
+    section.m_groups.emplace_back(101, "ACDSRECORD");
+    section.m_groups.emplace_back(1, "AcDbDs::ID");
+    section.m_groups.emplace_back(90, 4);
+    section.m_groups.emplace_back(2, "AcDs:Indexable");
+    section.m_groups.emplace_back(280, 1);
+    section.m_groups.emplace_back(291, 1);
+
+    section.m_groups.emplace_back(101, "ACDSRECORD");
+    section.m_groups.emplace_back(1, "AcDbDs::ID");
+    section.m_groups.emplace_back(90, 5);
+    section.m_groups.emplace_back(2, "AcDbDs::HandleAttribute");
+    section.m_groups.emplace_back(280, 7);
+    section.m_groups.emplace_back(282, 1);
+}
+
+void addAcdsMarkerSchema(DRW_RawDxfSection& section, int index,
+                         const char* name, const char* member) {
+    section.m_groups.emplace_back(0, "ACDSSCHEMA");
+    section.m_groups.emplace_back(90, index);
+    section.m_groups.emplace_back(1, name);
+    section.m_groups.emplace_back(2, member);
+    section.m_groups.emplace_back(280, 1);
+    section.m_groups.emplace_back(91, 0);
+}
+
+bool hasSabSignature(const std::vector<std::uint8_t>& payload) {
+    static constexpr char signature[] = "ACIS BinaryFile";
+    return payload.size() >= sizeof(signature) - 1u
+        && std::equal(std::begin(signature), std::end(signature) - 1,
+                      payload.begin(), [](char expected, std::uint8_t actual) {
+                          return static_cast<std::uint8_t>(expected) == actual;
+                      });
+}
+
+std::string proxyHandleString(std::uint64_t handle) {
+    std::array<char, 17> digits{};
+    const auto converted = std::to_chars(digits.data(), digits.data() + 16,
+                                         handle, 16);
+    if (converted.ec != std::errc())
+        return {};
+    std::string value(digits.data(), converted.ptr);
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char ch) {
+                       return static_cast<char>(std::toupper(ch));
+                   });
+    return value;
+}
+
+bool appendProxyBinaryGroups(DRW_RawDxfObject& raw, int code,
+                             const std::vector<std::uint8_t>& bytes) {
+    constexpr std::size_t bytesPerChunk = 127u;
+    for (std::size_t offset = 0; offset < bytes.size();
+         offset += bytesPerChunk) {
+        const std::size_t count = std::min(bytesPerChunk,
+                                           bytes.size() - offset);
+        static constexpr char hex[] = "0123456789ABCDEF";
+        std::string chunk;
+        chunk.reserve(count * 2u);
+        for (std::size_t index = 0; index < count; ++index) {
+            const std::uint8_t byte = bytes[offset + index];
+            chunk.push_back(hex[byte >> 4u]);
+            chunk.push_back(hex[byte & 0x0Fu]);
+        }
+        raw.groups.emplace_back(code, std::move(chunk));
+    }
+    return true;
+}
+
+bool makeRawProxyObject(const DRW_ProxyObject& proxy,
+                        DRW_RawDxfObject& raw) {
+    const auto expectedBytes = [](std::uint64_t bits) {
+        return bits / 8u + ((bits & 7u) != 0 ? 1u : 0u);
+    };
+    if (proxy.handle == 0 || proxy.parentHandle == 0
+        || !proxy.m_hasProxyCarrierId || !proxy.m_hasProxyClassId
+        || !proxy.m_hasProxyDrawingFormat
+        || !proxy.m_hasObjectDataBitSize
+        || proxy.m_objectDataBitSize
+               > DRW::kMaxDxfBinaryPayloadBytes * 8u
+        || expectedBytes(proxy.m_objectDataBitSize)
+               != proxy.m_objectData.size()
+        || (proxy.m_hasProxyGraphicsByteSize
+            && (proxy.m_proxyGraphicsByteSize
+                    != proxy.m_binaryData.size()
+                || proxy.m_proxyGraphicsByteSize
+                       > DRW::kMaxDxfBinaryPayloadBytes))
+        || (!proxy.m_hasProxyGraphicsByteSize
+            && !proxy.m_binaryData.empty())
+        || (proxy.m_hasUnknownDataByteSize
+            && (proxy.m_unknownDataByteSize
+                    != proxy.m_unknownData.size()
+                || proxy.m_unknownDataByteSize
+                       > DRW::kMaxDxfBinaryPayloadBytes))
+        || (!proxy.m_hasUnknownDataByteSize
+            && !proxy.m_unknownData.empty())) {
+        return false;
+    }
+
+    raw = DRW_RawDxfObject{};
+    raw.name = "ACAD_PROXY_OBJECT";
+    raw.handle = proxy.handle;
+    raw.parentHandle = proxy.parentHandle;
+    raw.groups.emplace_back(5, proxyHandleString(proxy.handle));
+    raw.groups.emplace_back(330, proxyHandleString(proxy.parentHandle));
+    if (!proxy.reactorHandles.empty()) {
+        raw.groups.emplace_back(102, "{ACAD_REACTORS");
+        for (std::uint32_t reactor : proxy.reactorHandles) {
+            if (reactor == 0)
+                return false;
+            raw.groups.emplace_back(330, proxyHandleString(reactor));
+        }
+        raw.groups.emplace_back(102, "}");
+    }
+    if (proxy.xDictHandle != 0) {
+        raw.groups.emplace_back(102, "{ACAD_XDICTIONARY");
+        raw.groups.emplace_back(360, proxyHandleString(proxy.xDictHandle));
+        raw.groups.emplace_back(102, "}");
+    }
+    raw.groups.emplace_back(100, "AcDbProxyObject");
+    raw.groups.emplace_back(90, proxy.m_proxyCarrierId);
+    raw.groups.emplace_back(91, proxy.m_proxyClassId);
+    if (proxy.m_hasProxyGraphicsByteSize) {
+        if (proxy.m_proxyGraphicsByteSize
+            > static_cast<std::uint64_t>(
+                  std::numeric_limits<std::int32_t>::max())) {
+            return false;
+        }
+        raw.groups.emplace_back(92, static_cast<std::int32_t>(
+            proxy.m_proxyGraphicsByteSize));
+        if (!appendProxyBinaryGroups(raw, 310, proxy.m_binaryData))
+            return false;
+    }
+    if (proxy.m_proxyDrawingFormat
+        > static_cast<std::uint32_t>(
+              std::numeric_limits<std::int32_t>::max())) {
+        return false;
+    }
+    raw.groups.emplace_back(95, static_cast<std::int32_t>(
+        proxy.m_proxyDrawingFormat));
+    raw.groups.emplace_back(70,
+        proxy.m_hasFromDxf && proxy.m_fromDxf ? 1 : 0);
+    raw.groups.emplace_back(161,
+        static_cast<std::int64_t>(proxy.m_objectDataBitSize));
+    if (!appendProxyBinaryGroups(raw, 310, proxy.m_objectData))
+        return false;
+    if (proxy.m_hasUnknownDataByteSize) {
+        raw.groups.emplace_back(162, static_cast<std::int64_t>(
+            proxy.m_unknownDataByteSize));
+        if (!appendProxyBinaryGroups(raw, 310, proxy.m_unknownData))
+            return false;
+    }
+    for (const DRW_ProxyObjectIdRef& reference : proxy.m_objectIdRefs) {
+        if ((reference.m_dxfCode != 330 && reference.m_dxfCode != 340
+             && reference.m_dxfCode != 350 && reference.m_dxfCode != 360)
+            || reference.m_handle == 0) {
+            return false;
+        }
+        raw.groups.emplace_back(reference.m_dxfCode,
+                                proxyHandleString(reference.m_handle));
+    }
+    return true;
+}
+
+bool collectAcdsHistoryProxyGraph(
+    const dx_data& data, const DRW_ModelerGeometry& modeler,
+    std::vector<DRW_RawDxfObject>& output,
+    std::vector<std::uint32_t>& materialHandles) {
+    if (modeler.m_historyHandle == 0 || modeler.handle == 0)
+        return false;
+
+    std::unordered_map<std::uint32_t, std::vector<const DRW_ProxyObject*>> byHandle;
+    for (const DRW_ProxyObject& proxy : data.proxyObjects)
+        byHandle[proxy.handle].push_back(&proxy);
+
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> pending;
+    std::unordered_map<std::uint32_t, std::uint32_t> expectedOwner;
+    std::unordered_set<std::uint32_t> visited;
+    pending.emplace_back(modeler.m_historyHandle, modeler.handle);
+    try {
+        while (!pending.empty()) {
+            if (output.size() >= 3u)
+                return false;
+            const auto current = pending.back();
+            pending.pop_back();
+            const std::uint32_t handle = current.first;
+            const auto priorOwner = expectedOwner.emplace(handle, current.second);
+            if (!priorOwner.second && priorOwner.first->second != current.second)
+                return false;
+            if (!visited.insert(handle).second)
+                continue;
+
+            const auto found = byHandle.find(handle);
+            if (found == byHandle.end() || found->second.size() != 1u
+                || found->second.front()->parentHandle != current.second) {
+                return false;
+            }
+            const DRW_ProxyObject& proxy = *found->second.front();
+            const std::int32_t expectedClassIds[] = {521, 520, 519};
+            const char* expectedSubclasses[] = {
+                "cn:AcDbShHistory", "cn:AcDbEvalGraph", "cn:AcDbShCone"};
+            if (!proxy.m_hasProxyClassId
+                || proxy.m_proxyClassId != expectedClassIds[output.size()]
+                || proxy.m_proxySubclass != expectedSubclasses[output.size()]
+                || proxy.m_objectIdRefs.size() != 1u) {
+                return false;
+            }
+
+            DRW_RawDxfObject raw;
+            if (!makeRawProxyObject(proxy, raw)) {
+                return false;
+            }
+            output.push_back(std::move(raw));
+
+            const DRW_ProxyObjectIdRef& reference =
+                proxy.m_objectIdRefs.front();
+            if (reference.m_handle == 0
+                || reference.m_handle
+                       > std::numeric_limits<std::uint32_t>::max()) {
+                return false;
+            }
+            const std::uint32_t target =
+                static_cast<std::uint32_t>(reference.m_handle);
+            if (output.size() < 3u) {
+                if (reference.m_dxfCode != 340
+                    || byHandle.find(target) == byHandle.end()) {
+                    return false;
+                }
+                pending.emplace_back(target, handle);
+                continue;
+            }
+
+            if (reference.m_dxfCode != 360
+                || byHandle.find(target) != byHandle.end())
+                return false;
+            std::size_t materialMatches = 0;
+            for (const DRW_Material& material : data.materials) {
+                if (material.handle == target)
+                    ++materialMatches;
+            }
+            if (materialMatches != 1u)
+                return false;
+            materialHandles.push_back(target);
+        }
+    } catch (...) {
+        return false;
+    }
+    return output.size() == 3u && materialHandles.size() == 1u;
+}
+
+bool configureAcdsMaterialDictionary(
+    const dx_data& data, const std::vector<std::uint32_t>& referencedMaterials,
+    std::vector<DRW_Dictionary>& namedDictionaries,
+    std::vector<std::pair<std::string, std::string>>& rootEntries,
+    std::vector<std::uint32_t>& materialHandles) {
+    if (referencedMaterials.empty())
+        return true;
+    std::unordered_set<std::uint32_t> required(referencedMaterials.begin(),
+                                                referencedMaterials.end());
+    const DRW_Dictionary* materialDictionary = nullptr;
+    for (const DRW_Dictionary& dictionary : data.dictionaries) {
+        // R2010+ DWG readers do not publish the implicit NamedObjectsDictionary
+        // body (handle C). Reconstruct only ACAD_MATERIAL when one complete
+        // root-owned dictionary has entries that all resolve uniquely to
+        // typed MATERIAL objects and includes every history reference.
+        if (dictionary.handle == 0 || dictionary.handle == 0xCu
+            || dictionary.handle == 0xDu || dictionary.parentHandle != 0xCu
+            || !dictionary.hasCompleteDwgEntries()
+            || dictionary.m_entries.empty()) {
+            continue;
+        }
+
+        std::unordered_set<std::uint32_t> entries;
+        bool matchesMaterials = true;
+        for (const DRW_Dictionary::Entry& entry : dictionary.m_entries) {
+            if (entry.m_handle == 0 || !entries.insert(entry.m_handle).second) {
+                matchesMaterials = false;
+                break;
+            }
+            std::size_t matches = 0;
+            for (const DRW_Material& material : data.materials) {
+                if (material.handle == entry.m_handle)
+                    ++matches;
+            }
+            if (matches != 1u) {
+                matchesMaterials = false;
+                break;
+            }
+        }
+        if (!matchesMaterials
+            || !std::all_of(required.begin(), required.end(),
+                            [&entries](std::uint32_t handle) {
+                                return entries.count(handle) != 0;
+                            })) {
+            continue;
+        }
+        if (materialDictionary != nullptr)
+            return false;
+        materialDictionary = &dictionary;
+    }
+    if (materialDictionary == nullptr)
+        return false;
+
+    for (const DRW_Dictionary::Entry& entry : materialDictionary->m_entries)
+        materialHandles.push_back(entry.m_handle);
+    namedDictionaries.push_back(*materialDictionary);
+    rootEntries.emplace_back("ACAD_MATERIAL",
+                             proxyHandleString(materialDictionary->handle));
+    return true;
+}
+
+bool appendAcdsDataSection(
+    const dx_data& data, DRW::Version outputVersion,
+    std::vector<DRW_RawDxfSection>& sections) {
+    bool hasExistingAcdsData = false;
+    for (const DRW_RawDxfSection& section : sections) {
+        if (section.m_name == "ACDSDATA"
+            || section.m_name == "acdsdata") {
+            hasExistingAcdsData = true;
+            break;
+        }
+    }
+
+    const DRW_ModelerGeometry* modeler = nullptr;
+    std::size_t linkedEntityCount = 0;
+    const auto inspectBlock = [&](const dx_ifaceBlock* block) {
+        if (block == nullptr)
+            return true;
+        for (const DRW_Entity* entity : block->ent) {
+            if (entity == nullptr)
+                continue;
+            const bool carriesDataStorage = entity->hasDataStorageRecord
+                || entity->hasDataStorageBinaryData()
+                || !entity->dataStorageData.empty();
+            if (!carriesDataStorage)
+                continue;
+            ++linkedEntityCount;
+            if (entity->eType != DRW::E3DSOLID)
+                return false;
+            modeler = static_cast<const DRW_ModelerGeometry*>(entity);
+        }
+        return true;
+    };
+
+    if (!inspectBlock(data.mBlock))
+        return false;
+    for (const dx_ifaceBlock* block : data.blocks) {
+        if (block == data.mBlock)
+            continue;
+        if (!inspectBlock(block))
+            return false;
+    }
+
+    if (data.dataStorageSections.empty())
+        return linkedEntityCount == 0;
+    if (data.dataStorageSections.size() != 1u)
+        return false;
+    const DRW_DataStorageSection& storage = data.dataStorageSections.front();
+    if (storage.records.empty() && linkedEntityCount == 0)
+        return true;
+    if (hasExistingAcdsData || outputVersion != DRW::AC1027
+        || storage.m_name != "AcDb:AcDsPrototype_1b"
+        || storage.m_version != DRW::AC1027 || storage.parseFailed
+        || !storage.structurallyValid || !storage.replayAllowed
+        || !storage.payloadsRetained || storage.schemaCount != 6u
+        || storage.schemas.size() != 6u || storage.records.size() != 1u
+        || !storage.duplicateRecordHandleKeys.empty()
+        || storage.orphanRecordCount != 0u || linkedEntityCount != 1u
+        || modeler == nullptr || modeler->eType != DRW::E3DSOLID
+        || !modeler->hasDataStorageBinaryData()
+        || !modeler->hasDataStorageRecord || modeler->m_isEmpty
+        || !modeler->m_hasModelerData || modeler->m_dwgAcisPayload.size() != 0u
+        || modeler->dataStorageSchemaIndex != 1u
+        || modeler->dataStorageData.empty()
+        || modeler->dataStorageData.size() > 8u * 1024u * 1024u
+        || !hasSabSignature(modeler->dataStorageData)) {
+        return false;
+    }
+
+    std::vector<DRW_RawDxfObject> historyObjects;
+    std::vector<std::uint32_t> referencedMaterials;
+    if (!collectAcdsHistoryProxyGraph(data, *modeler, historyObjects,
+                                      referencedMaterials)) {
+        return false;
+    }
+    std::vector<DRW_Dictionary> materialDictionaries;
+    std::vector<std::pair<std::string, std::string>> rootEntries;
+    std::vector<std::uint32_t> materialHandles;
+    if (!configureAcdsMaterialDictionary(data, referencedMaterials,
+                                         materialDictionaries, rootEntries,
+                                         materialHandles)) {
+        return false;
+    }
+
+    std::array<bool, 6> seenSchemas{};
+    for (const DRW_DataStorageSchema& schema : storage.schemas) {
+        if (schema.index >= seenSchemas.size() || seenSchemas[schema.index])
+            return false;
+        seenSchemas[schema.index] = true;
+    }
+    if (!std::all_of(seenSchemas.begin(), seenSchemas.end(),
+                     [](bool seen) { return seen; })) {
+        return false;
+    }
+
+    const DRW_DataStorageRecord& record = storage.records.front();
+    if (!record.isHandleSafe || record.isBlobReference
+        || record.schemaIndex != 1u || record.handle != modeler->handle
+        || record.handle != modeler->dataStorageHandle
+        || record.handleKey.empty()
+        || record.handleKey != modeler->dataStorageHandleKey
+        || record.payload != modeler->dataStorageData
+        || record.dataByteLength != record.payload.size()
+        || !record.hasPayloadMarker || record.payloadMarkerLength == 0u
+        || record.payloadMarkerOffset > record.payload.size()
+        || record.payloadMarkerLength
+               > record.payload.size() - record.payloadMarkerOffset) {
+        return false;
+    }
+
+    DRW_RawDxfSection section;
+    section.m_name = "ACDSDATA";
+    section.m_version = DRW::AC1027;
+    section.m_groups.emplace_back(70, 2);
+    section.m_groups.emplace_back(71, 2);
+
+    addAcdsSchemaHeader(section, 0, "AcDb_Thumbnail_Schema",
+                        "Thumbnail_Data");
+    addAcdsSchemaAttributes(section, 0);
+    addAcdsSchemaHeader(section, 1, "AcDb3DSolid_ASM_Data", "ASM_Data");
+    addAcdsSchemaAttributes(section, 1);
+    addAcdsMarkerSchema(section, 2,
+                        "AcDbDs::TreatedAsObjectDataSchema",
+                        "AcDbDs::TreatedAsObjectData");
+    addAcdsMarkerSchema(section, 3, "AcDbDs::LegacySchema",
+                        "AcDbDs::Legacy");
+    addAcdsMarkerSchema(section, 4, "AcDbDs::IndexedPropertySchema",
+                        "AcDs:Indexable");
+    section.m_groups.emplace_back(0, "ACDSSCHEMA");
+    section.m_groups.emplace_back(90, 5);
+    section.m_groups.emplace_back(1, "AcDbDs::HandleAttributeSchema");
+    section.m_groups.emplace_back(2, "AcDbDs::HandleAttribute");
+    section.m_groups.emplace_back(280, 7);
+    section.m_groups.emplace_back(91, 1);
+    section.m_groups.emplace_back(284, 1);
+
+    section.m_groups.emplace_back(0, "ACDSRECORD");
+    section.m_groups.emplace_back(90, 1);
+    section.m_groups.emplace_back(2, "AcDbDs::ID");
+    section.m_groups.emplace_back(280, 10);
+    section.m_groups.emplace_back(320, record.handleKey);
+    section.m_groups.emplace_back(2, "ASM_Data");
+    section.m_groups.emplace_back(280, 15);
+    section.m_groups.emplace_back(94,
+        static_cast<std::int32_t>(record.payload.size()));
+    static constexpr char hexDigits[] = "0123456789ABCDEF";
+    constexpr std::size_t bytesPerChunk = 127u;
+    for (std::size_t offset = 0; offset < record.payload.size();
+         offset += bytesPerChunk) {
+        const std::size_t count = std::min(
+            bytesPerChunk, record.payload.size() - offset);
+        std::string hex;
+        hex.reserve(count * 2u);
+        for (std::size_t index = 0; index < count; ++index) {
+            const std::uint8_t value = record.payload[offset + index];
+            hex.push_back(hexDigits[value >> 4u]);
+            hex.push_back(hexDigits[value & 0x0fu]);
+        }
+        section.m_groups.emplace_back(310, std::move(hex));
+    }
+    sections.push_back(std::move(section));
+    return true;
+}
+
 } // namespace
+
+bool dx_iface::collectAcdsHistoryProxyObjects(
+    const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
+    std::vector<std::uint32_t>& materialHandles) {
+    if (data.dataStorageSections.empty())
+        return true;
+    const DRW_ModelerGeometry* linkedModeler = nullptr;
+    std::size_t linkedCount = 0;
+    const auto inspect = [&](const dx_ifaceBlock* block) {
+        if (block == nullptr)
+            return true;
+        for (const DRW_Entity* entity : block->ent) {
+            if (entity == nullptr
+                || (!entity->hasDataStorageRecord
+                    && !entity->hasDataStorageBinaryData()
+                    && entity->dataStorageData.empty())) {
+                continue;
+            }
+            if (entity->eType != DRW::E3DSOLID)
+                return false;
+            ++linkedCount;
+            linkedModeler = static_cast<const DRW_ModelerGeometry*>(entity);
+        }
+        return true;
+    };
+    if (!inspect(data.mBlock))
+        return false;
+    for (const dx_ifaceBlock* block : data.blocks) {
+        if (block != data.mBlock && !inspect(block))
+            return false;
+    }
+    if (linkedCount != 1u || linkedModeler == nullptr)
+        return false;
+    if (!collectAcdsHistoryProxyGraph(data, *linkedModeler, objects,
+                                      materialHandles)) {
+        return false;
+    }
+    return true;
+}
 
 bool dx_iface::prepareExtensionObjectGraph(dx_data* data) {
     m_extensionDictionaryHandles.clear();
@@ -349,13 +892,37 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug){
 
 bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, dx_data *fData, bool debug){
     cData = fData;
+    m_acdsHistoryObjects.clear();
+    m_acdsMaterialHandles.clear();
     if (!prepareExtensionObjectGraph(cData))
         return false;
     dxfW = new dxfRW(file.c_str());
     std::vector<DRW_LType> lineTypes(cData->lineTypes.begin(),
                                      cData->lineTypes.end());
     dxfW->setCanonicalLineTypeMetadata(lineTypes);
-    dxfW->setRawDxfSections(cData->rawDxfSections);
+    std::vector<DRW_RawDxfSection> rawDxfSections = cData->rawDxfSections;
+    if (!appendAcdsDataSection(*cData, v, rawDxfSections)) {
+        delete dxfW;
+        dxfW = nullptr;
+        return false;
+    }
+    std::vector<std::uint32_t> referencedMaterials;
+    std::vector<DRW_Dictionary> materialDictionaries;
+    std::vector<std::pair<std::string, std::string>> materialRootEntries;
+    if (!cData->dataStorageSections.empty()) {
+        if (!collectAcdsHistoryProxyObjects(*cData, m_acdsHistoryObjects,
+                                            referencedMaterials)
+            || !configureAcdsMaterialDictionary(
+                *cData, referencedMaterials, materialDictionaries,
+                materialRootEntries, m_acdsMaterialHandles)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+        dxfW->setNamedDictObjects(materialDictionaries);
+        dxfW->setRootDictEntries(materialRootEntries);
+    }
+    dxfW->setRawDxfSections(rawDxfSections);
     if (debug) {
         dxfW->setDebug(DRW::DebugLevel::Debug);
     }
@@ -375,6 +942,32 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
             delete dxfW;
             dxfW = nullptr;
             return false;
+        }
+    }
+    std::unordered_set<std::uint32_t> proxyHandles;
+    for (const DRW_RawDxfObject& object : cData->rawProxyObjects) {
+        if (object.handle == 0 || !proxyHandles.insert(object.handle).second
+            || !dxfW->reserveHandle(object.handle)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
+    if (!cData->dataStorageSections.empty()) {
+        for (const DRW_RawDxfObject& object : m_acdsHistoryObjects) {
+            if (!proxyHandles.insert(object.handle).second
+                || !dxfW->reserveHandle(object.handle)) {
+                delete dxfW;
+                dxfW = nullptr;
+                return false;
+            }
+        }
+        for (const std::uint32_t handle : m_acdsMaterialHandles) {
+            if (!dxfW->reserveHandle(handle)) {
+                delete dxfW;
+                dxfW = nullptr;
+                return false;
+            }
         }
     }
     std::map<std::uint32_t, std::uint32_t> handleRemap;

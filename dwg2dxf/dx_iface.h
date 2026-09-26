@@ -18,6 +18,7 @@
 #include "dx_data.h"
 
 #include <cstdint>
+#include <unordered_set>
 #include <vector>
 
 class dx_iface : public DRW_Interface {
@@ -60,6 +61,18 @@ public:
     }
     virtual void addXRecord(const DRW_XRecord& data) {
         cData->xRecords.push_back(data);
+    }
+    virtual void addMaterial(const DRW_Material& data) {
+        if (cData != nullptr)
+            cData->materials.push_back(data);
+    }
+    virtual void addProxyObject(const DRW_ProxyObject& data) {
+        if (cData != nullptr)
+            cData->proxyObjects.push_back(data);
+    }
+    virtual void addRawDxfObject(const DRW_RawDxfObject& data) {
+        if (cData != nullptr && data.name == "ACAD_PROXY_OBJECT")
+            cData->rawProxyObjects.push_back(data);
     }
 
     //blocks
@@ -244,6 +257,11 @@ public:
             cData->rawDxfSections.push_back(data);
     }
 
+    virtual void addDataStorage(const DRW_DataStorageSection& data) {
+        if (cData != nullptr)
+            cData->dataStorageSections.push_back(data);
+    }
+
 //writer part, send all in class dx_data to writer
     virtual void addComment(const char* /*comment*/){}
     virtual void addPlotSettings(const DRW_PlotSettings *data) {
@@ -327,6 +345,37 @@ public:
                 }
             }
         }
+        std::unordered_set<std::uint32_t> rawProxyHandles;
+        for (DRW_RawDxfObject& object : cData->rawProxyObjects) {
+            if (object.handle == 0
+                || !rawProxyHandles.insert(object.handle).second
+                || !dxfW->writeRawDxfObject(&object)) {
+                return;
+            }
+        }
+        if (!cData->dataStorageSections.empty()) {
+            for (DRW_RawDxfObject& object : m_acdsHistoryObjects) {
+                if (rawProxyHandles.count(object.handle) != 0
+                    || !dxfW->writeRawDxfObject(&object)) {
+                    return;
+                }
+            }
+            for (std::uint32_t handle : m_acdsMaterialHandles) {
+                std::size_t matches = 0;
+                for (DRW_Material& material : cData->materials) {
+                    if (material.handle != handle)
+                        continue;
+                    ++matches;
+                    if (!dxfW->writeMaterial(&material)) {
+                        return;
+                    }
+                }
+                if (matches != 1u) {
+                    dxfW->writeRawDxfObject(nullptr);
+                    return;
+                }
+            }
+        }
     }
     virtual void writeAppId(){
         for (std::list<DRW_AppId>::iterator it=cData->appIds.begin(); it != cData->appIds.end(); ++it)
@@ -339,6 +388,11 @@ public:
 
 private:
     bool prepareExtensionObjectGraph(dx_data* data);
+    static bool collectAcdsHistoryProxyObjects(
+        const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
+        std::vector<std::uint32_t>& materialHandles);
+    std::vector<DRW_RawDxfObject> m_acdsHistoryObjects;
+    std::vector<std::uint32_t> m_acdsMaterialHandles;
 
     std::vector<std::uint32_t> m_extensionDictionaryHandles;
     std::vector<std::uint32_t> m_extensionXRecordHandles;

@@ -919,6 +919,132 @@ bool hasQualifiedAc1015SatV1Payload(const DRW_ModelerGeometry& entity) {
     return declaredTotal == entity.m_dwgAcisPayload.size();
 }
 
+bool hasSabBinaryFileSignature(const std::vector<std::uint8_t>& payload) {
+    static constexpr char signature[] = "ACIS BinaryFile";
+    return payload.size() >= sizeof(signature) - 1u
+        && std::equal(std::begin(signature), std::end(signature) - 1,
+                      payload.begin(), [](char expected, std::uint8_t actual) {
+                          return static_cast<std::uint8_t>(expected) == actual;
+                      });
+}
+
+bool hasQualifiedAc1027AcdsRecord(
+    const DRW_ModelerGeometry& entity,
+    const std::vector<DRW_RawDxfSection>& sections) {
+    if (entity.eType != DRW::E3DSOLID
+        || entity.m_dwgSourceVersion != DRW::AC1027
+        || entity.m_modelerVersion != 2 || entity.m_isEmpty
+        || !entity.m_hasModelerData || !entity.hasDataStorageBinaryData()
+        || !entity.hasDataStorageRecord || entity.dataStorageData.empty()
+        || entity.dataStorageData.size() > DRW_DataStorageConst::PAYLOAD_BLOB_SECTION_CAP
+        || !hasSabBinaryFileSignature(entity.dataStorageData)
+        || entity.dataStorageSchemaIndex != 1u
+        || entity.dataStorageHandle != entity.handle
+        || entity.dataStorageHandleKey.empty()
+        || !entity.m_dwgAcisPayload.empty()
+        || !entity.m_payloadRanges.empty()) {
+        return false;
+    }
+
+    const DRW_RawDxfSection* acdsSection = nullptr;
+    for (const DRW_RawDxfSection& section : sections) {
+        if (!dxfKeywordEquals(section.m_name, "ACDSDATA"))
+            continue;
+        if (acdsSection != nullptr || section.m_version != DRW::AC1027)
+            return false;
+        acdsSection = &section;
+    }
+    if (acdsSection == nullptr)
+        return false;
+
+    std::size_t matchedRecords = 0;
+    const std::vector<DRW_Variant>& groups = acdsSection->m_groups;
+    for (std::size_t start = 0; start < groups.size();) {
+        const DRW_Variant& startGroup = groups[start];
+        if (startGroup.code() != 0 || startGroup.type() != DRW_Variant::STRING
+            || startGroup.c_str() == nullptr) {
+            ++start;
+            continue;
+        }
+        std::size_t end = start + 1u;
+        while (end < groups.size() && groups[end].code() != 0)
+            ++end;
+        if (!dxfKeywordEquals(startGroup.c_str(), "ACDSRECORD")) {
+            start = end;
+            continue;
+        }
+
+        bool inId = false;
+        bool hasAsmData = false;
+        std::size_t ownerCount = 0;
+        std::string owner;
+        bool hasLength = false;
+        std::uint64_t declaredLength = 0;
+        std::vector<std::uint8_t> payload;
+        for (std::size_t index = start + 1u; index < end; ++index) {
+            const DRW_Variant& group = groups[index];
+            if (group.code() == 2) {
+                if (group.type() != DRW_Variant::STRING
+                    || group.c_str() == nullptr) {
+                    inId = false;
+                    continue;
+                }
+                inId = dxfKeywordEquals(group.c_str(), "AcDbDs::ID");
+                if (dxfKeywordEquals(group.c_str(), "ASM_Data"))
+                    hasAsmData = true;
+            } else if (inId && group.code() == 320) {
+                ++ownerCount;
+                if (group.type() == DRW_Variant::STRING
+                    && group.c_str() != nullptr)
+                    owner = group.c_str();
+            } else if (hasAsmData && group.code() == 94) {
+                if (hasLength || group.type() != DRW_Variant::INTEGER
+                    || group.i_val() < 0)
+                    return false;
+                declaredLength = static_cast<std::uint64_t>(group.i_val());
+                hasLength = true;
+            } else if (hasAsmData && group.code() == 310) {
+                if (group.type() != DRW_Variant::STRING
+                    || group.c_str() == nullptr)
+                    return false;
+                const std::string hex = group.c_str();
+                if ((hex.size() & 1u) != 0u)
+                    return false;
+                for (std::size_t offset = 0; offset < hex.size(); offset += 2u) {
+                    const auto digit = [](unsigned char value) -> int {
+                        if (value >= '0' && value <= '9')
+                            return value - '0';
+                        if (value >= 'A' && value <= 'F')
+                            return value - 'A' + 10;
+                        if (value >= 'a' && value <= 'f')
+                            return value - 'a' + 10;
+                        return -1;
+                    };
+                    const int high = digit(
+                        static_cast<unsigned char>(hex[offset]));
+                    const int low = digit(
+                        static_cast<unsigned char>(hex[offset + 1u]));
+                    if (high < 0 || low < 0
+                        || payload.size() >= entity.dataStorageData.size())
+                        return false;
+                    payload.push_back(static_cast<std::uint8_t>(
+                        (static_cast<unsigned int>(high) << 4u)
+                        | static_cast<unsigned int>(low)));
+                }
+            }
+        }
+        if (hasAsmData) {
+            ++matchedRecords;
+            if (ownerCount != 1u || owner != entity.dataStorageHandleKey
+                || !hasLength || declaredLength != entity.dataStorageData.size()
+                || payload != entity.dataStorageData)
+                return false;
+        }
+        start = end;
+    }
+    return matchedRecords == 1u;
+}
+
 void writeDxfTextChunks(dxfWriter *writer, const std::vector<std::uint8_t>& data) {
     const std::string text(data.begin(), data.end());
     constexpr std::size_t kChunkSize = 255;
@@ -7378,6 +7504,11 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
         return rejectUnsupportedDxfWrite();
     const bool writeAc1015SatV1 = version == DRW::AC1015
         && hasQualifiedAc1015SatV1Payload(*ent);
+    const bool writeAc1027Sab = version == DRW::AC1027
+        && hasQualifiedAc1027AcdsRecord(*ent, m_rawDxfSections);
+    DRW_DBG("dxfRW::writeModelerGeometry AC1027 ACDSDATA SAB qualified: ");
+    DRW_DBG(writeAc1027Sab);
+    DRW_DBG("\n");
     DRW_DBG("dxfRW::writeModelerGeometry AC1015 SAT v1 qualified: ");
     DRW_DBG(writeAc1015SatV1);
     DRW_DBG(" payload bytes: ");
@@ -7406,6 +7537,7 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     DRW_DBG(ent->m_modelerDataUnknownBit);
     DRW_DBG("\n");
     const bool hasUnqualifiedDwgPayload = !writeAc1015SatV1
+        && !writeAc1027Sab
         && (ent->m_bodyBitSize != 0
         || ent->m_objectSize != 0 || ent->m_hasModelerData
         || ent->m_modelerDataUnknownBit || !ent->m_payloadRanges.empty()
@@ -7413,7 +7545,8 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
         || ent->hasDataStorageBinaryData() || ent->hasDataStorageRecord
         || !ent->dataStorageData.empty());
     if (hasUnqualifiedDwgPayload
-        || (!writeAc1015SatV1 && !ent->m_rawBytes.empty()
+        || (!writeAc1015SatV1 && !writeAc1027Sab
+            && !ent->m_rawBytes.empty()
             && (version > DRW::AC1024
                 || !hasDxfTextPayloadChunks(ent->m_rawBytes,
                                             ent->m_dxfPayloadChunks))))
@@ -7444,7 +7577,7 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     if (writeAc1015SatV1) {
         if (!writeDxfSatV1Text(writer.get(), ent->m_dwgAcisPayload))
             return failDxfWrite();
-    } else if (!ent->m_rawBytes.empty()) {
+    } else if (!writeAc1027Sab && !ent->m_rawBytes.empty()) {
         if (!writeDxfSatTextPayloadChunks(writer.get(), ent->m_rawBytes,
                                           ent->m_dxfPayloadChunks))
             return failDxfWrite();

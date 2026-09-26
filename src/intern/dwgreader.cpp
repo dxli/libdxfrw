@@ -8410,6 +8410,7 @@ void dwgReader::linkDataStorage(DRW_Entity &entity) {
       std::equal(std::begin(acisSabSignature), std::end(acisSabSignature),
                  record->payload.begin())) {
     auto &modeler = static_cast<DRW_ModelerGeometry &>(entity);
+    modeler.m_dwgSourceVersion = version;
     modeler.m_isEmpty = false;
     modeler.m_hasModelerData = true;
     modeler.m_modelerVersion = 2;
