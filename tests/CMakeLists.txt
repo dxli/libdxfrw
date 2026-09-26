@@ -121,6 +121,7 @@ add_test(
         "-DCASE_NAME=3dline-adapter"
         "-DGENERATE_MODE=--generate-3dline"
         "-DVERIFY_MODE=--verify-3dline"
+        "-DNEGATIVE_MODE=--reject-3dline-ac1014"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg2dxf_image_path_test.cmake
 )
 set_tests_properties(dwg2dxf_3dline_adapter_cli PROPERTIES

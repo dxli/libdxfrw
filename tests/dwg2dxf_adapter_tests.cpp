@@ -1,5 +1,6 @@
 #include "dx_iface.h"
 
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -105,6 +106,25 @@ bool verify3DLine(const std::string& path) {
     return true;
 }
 
+bool reject3DLineBeforeAC1015(const std::string& path) {
+    dx_data data;
+    dx_iface iface;
+    iface.cData = &data;
+    iface.currentBlock = data.mBlock;
+
+    DRW_3DLine line;
+    line.basePoint = DRW_Coord(1.0, 2.0, 3.0);
+    line.secPoint = DRW_Coord(4.0, 5.0, 6.0);
+    iface.add3DLine(line);
+
+    if (iface.fileExport(path, DRW::AC1014, false, &data, false))
+        return fail("3DLINE export unexpectedly accepted target AC1014");
+    std::ifstream output(path, std::ios::binary);
+    if (output.good())
+        return fail("unsupported AC1014 3DLINE export published a file");
+    return true;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -123,6 +143,8 @@ int main(int argc, char** argv) {
         return generate3DLine(path) ? 0 : 1;
     if (mode == "--verify-3dline")
         return verify3DLine(path) ? 0 : 1;
+    if (mode == "--reject-3dline-ac1014")
+        return reject3DLineBeforeAC1015(path) ? 0 : 1;
     std::cerr << "unknown mode: " << mode << '\n';
     return 2;
 }

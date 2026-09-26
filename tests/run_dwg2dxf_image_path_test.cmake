@@ -80,6 +80,26 @@ foreach(_output IN ITEMS "${_first}" "${_second}")
     endif()
 endforeach()
 
+if(DEFINED NEGATIVE_MODE AND NOT "${NEGATIVE_MODE}" STREQUAL "")
+    set(_negative_output "${_test_root}/${CASE_NAME} unsupported AC1014.dxf")
+    execute_process(
+        COMMAND "${ADAPTER_TEST}" "${NEGATIVE_MODE}" "${_negative_output}"
+        RESULT_VARIABLE _negative_result
+        OUTPUT_VARIABLE _negative_stdout
+        ERROR_VARIABLE _negative_stderr
+        TIMEOUT 10
+    )
+    if(NOT "${_negative_result}" STREQUAL "0")
+        message(FATAL_ERROR
+            "Unsupported-version adapter gate failed (${_negative_result}).\n"
+            "${_negative_stdout}\n${_negative_stderr}\nEvidence: ${_test_root}")
+    endif()
+    if(EXISTS "${_negative_output}")
+        message(FATAL_ERROR
+            "Unsupported-version adapter gate published ${_negative_output}")
+    endif()
+endif()
+
 file(REMOVE_RECURSE "${_test_root}")
 message(STATUS
     "Adapter control survived generated export, two exact-argv CLI passes, and public read-back.")
