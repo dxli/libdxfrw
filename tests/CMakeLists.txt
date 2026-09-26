@@ -110,6 +110,24 @@ set_tests_properties(dwg2dxf_image_path_cli PROPERTIES
     TIMEOUT 30
 )
 
+# Keep the concrete adapter's modern custom-class 3DLINE subtype and payload
+# through generated DXF, two exact FreeCAD-argv CLI passes, and public readback.
+add_test(
+    NAME dwg2dxf_3dline_adapter_cli
+    COMMAND ${CMAKE_COMMAND}
+        "-DADAPTER_TEST=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"
+        "-DDWG2DXF=$<TARGET_FILE:dwg2dxf>"
+        "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+        "-DCASE_NAME=3dline-adapter"
+        "-DGENERATE_MODE=--generate-3dline"
+        "-DVERIFY_MODE=--verify-3dline"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg2dxf_image_path_test.cmake
+)
+set_tests_properties(dwg2dxf_3dline_adapter_cli PROPERTIES
+    LABELS "cli;fast;dxf;adapter;3d"
+    TIMEOUT 30
+)
+
 # Match FreeCAD's Draft/importDWG.py subprocess contract without requiring a
 # FreeCAD installation. The DWG fixture is already tracked in this repository.
 set(_freecad_cli_sample

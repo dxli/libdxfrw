@@ -420,6 +420,9 @@ void dx_iface::writeEntity(DRW_Entity* e){
     case DRW::LINE:
         dxfW->writeLine(static_cast<DRW_Line*>(e));
         break;
+    case DRW::THREEDLINE:
+        dxfW->write3DLine(static_cast<DRW_3DLine*>(e));
+        break;
     case DRW::RAY:
         dxfW->writeRay(static_cast<DRW_Ray*>(e));
         break;

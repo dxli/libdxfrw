@@ -81,6 +81,10 @@ public:
     virtual void addLine(const DRW_Line& data){
         currentBlock->ent.push_back(new DRW_Line(data));
     }
+    virtual void add3DLine(const DRW_3DLine& data){
+        if (currentBlock != nullptr)
+            currentBlock->ent.push_back(new DRW_3DLine(data));
+    }
     virtual void addRay(const DRW_Ray& data){
         currentBlock->ent.push_back(new DRW_Ray(data));
     }

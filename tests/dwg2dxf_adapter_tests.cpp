@@ -65,6 +65,46 @@ bool verify(const std::string& path) {
     return true;
 }
 
+bool generate3DLine(const std::string& path) {
+    dx_data data;
+    dx_iface iface;
+    iface.cData = &data;
+    iface.currentBlock = data.mBlock;
+
+    DRW_3DLine line;
+    line.basePoint = DRW_Coord(1.25, -2.5, 3.75);
+    line.secPoint = DRW_Coord(-4.5, 5.25, -6.75);
+    line.extPoint = DRW_Coord(0.0, 1.0, 0.0);
+    line.thickness = 2.5;
+    iface.add3DLine(line);
+
+    if (data.mBlock->ent.size() != 1
+        || dynamic_cast<DRW_3DLine*>(data.mBlock->ent.front()) == nullptr)
+        return fail("generated 3DLINE lost its adapter subtype");
+    if (!iface.fileExport(path, DRW::AC1027, false, &data, false))
+        return fail("could not export generated 3DLINE control");
+    return true;
+}
+
+bool verify3DLine(const std::string& path) {
+    dx_data data;
+    dx_iface iface;
+    if (!iface.fileImport(path, &data, false))
+        return fail("could not read 3DLINE control");
+    if (data.mBlock->ent.size() != 1)
+        return fail("read-back 3DLINE entity count is not one");
+    auto* line = dynamic_cast<DRW_3DLine*>(data.mBlock->ent.front());
+    if (line == nullptr || line->eType != DRW::THREEDLINE)
+        return fail("read-back entity did not retain its 3DLINE subtype");
+    if (line->basePoint.x != 1.25 || line->basePoint.y != -2.5
+        || line->basePoint.z != 3.75 || line->secPoint.x != -4.5
+        || line->secPoint.y != 5.25 || line->secPoint.z != -6.75
+        || line->thickness != 2.5 || line->extPoint.x != 0.0
+        || line->extPoint.y != 1.0 || line->extPoint.z != 0.0)
+        return fail("read-back 3DLINE fields changed");
+    return true;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -79,6 +119,10 @@ int main(int argc, char** argv) {
         return generate(path) ? 0 : 1;
     if (mode == "--verify")
         return verify(path) ? 0 : 1;
+    if (mode == "--generate-3dline")
+        return generate3DLine(path) ? 0 : 1;
+    if (mode == "--verify-3dline")
+        return verify3DLine(path) ? 0 : 1;
     std::cerr << "unknown mode: " << mode << '\n';
     return 2;
 }
