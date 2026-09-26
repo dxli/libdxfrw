@@ -2155,18 +2155,21 @@ Implementation sequence:
    owners, class IDs, and references. Existing vectors
    continue to cover malformed/missing/duplicate/orphaned ACDS owner keys,
    unsupported inline SAB, and output failure. The fast executable
-   `build/libdxfrw_dwg_local_roundtrip` passed on 2026-09-26. The production
+   `build/libdxfrw_dwg_local_roundtrip` passed on 2026-09-26 and
+   `lc3_compat_check` builds. The production
    FreeCAD-compatible CLI also converted the ODA pair with its source-revision
    default; its output SHA-256 exactly matches the file independently opened
    by Open CAD Studio. Forcing AC1024/`-v2010` is correctly rejected by the
-   AC1027-only gate. No full suite was run. The locally-authored ezdxf→ODA control, external ACadSharp negative
-   baseline rerun and all edge combinations remain follow-up work; new
-   generated ASCII/binary vectors also reverse proxy, material, and dictionary
-   callback collection order and pass the same semantic readback. Both entity
-   orders (neighboring LINE before/after the 3DSOLID) preserve the line's
-   nonzero-Z endpoints and the ACDS association. These are generated vectors,
-   not a full permutation matrix.
-   Keep generated artifacts temporary; no fixture files
+   AC1027-only gate. No full suite was run. Generated ASCII/binary vectors
+   reverse proxy, material, and dictionary callback collection order and pass
+   the same semantic readback. Both entity orders (neighboring LINE
+   before/after the 3DSOLID) preserve the line's nonzero-Z endpoints and ACDS
+   association. Representative malformed-edge vectors cover closure, schema,
+   proxy-body, and owner failures; exhaustive combinatorial cross-products are
+   intentionally omitted to keep the default fast slice bounded. The
+   locally-authored ezdxf→ODA control and external ACadSharp negative baseline
+   remain optional advisory checks; neither substitutes for the required ODA
+   acceptance in S2.3.6. Keep generated artifacts temporary; no fixture files
    are added to the repository.
 6. **S2.3.6 — Accept actual libdxfrw output externally (`PENDING_ODA`).** The
    exact output from LibreDWG `Cone.dwg` converted by libdxfrw was opened by
