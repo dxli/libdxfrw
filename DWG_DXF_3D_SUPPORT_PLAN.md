@@ -2124,8 +2124,10 @@ Implementation sequence:
    and group-350 history handles did not. This is external reader/writer
    acceptance for these two inputs and the pinned ODA version, not a normative
    DXF contract, a semantic ACIS-kernel result, or acceptance of libdxfrw
-   output. LibreDWG's empty payload extraction and ezdxf's SAB token parse
-   failure keep the independent geometry oracle open. Use the official [ODA File Converter
+   output. The semantic oracle for this exact profile is now closed narrowly
+   by the hash-pinned InventorLoader/FreeCAD Part check below; LibreDWG's empty
+   payload extraction and ezdxf's SAB token parse failure remain independent
+   reader limitations, not contrary geometry evidence. Use the official [ODA File Converter
    CLI](https://www.opendesign.com/guestfiles/oda_file_Converter) for the
    reproducible external check after implementation, scoped strictly to ODA
    27.1.0.0 read/round-trip compatibility. LibreDWG 0.14 is not an ACDSDATA
@@ -2254,10 +2256,44 @@ Implementation sequence:
    conversion because the body's transform reference is raw. `cq-acis` labels
    itself experimental and admits only selected SAB/ASM profiles, so neither
    its partial decode nor the successful older ODA control establishes semantic
-   support for this producer/version. The next unblock is an independent
-   reader that completes this exact ASM 230 profile or an independently
-   reviewed version-specific decoder; do not change libdxfrw's opaque SAB
+   support for this producer/version. This result is superseded as the exact
+   sample's semantic-evidence blocker by the separate complete
+   InventorLoader/FreeCAD Part witness immediately below; it remains useful as
+   an independent compatibility boundary. Do not change libdxfrw's opaque SAB
    carrier or promote a family claim based on partial parse output.
+   **Independent semantic witness for the exact ACadSharp sample (2026-09-27):**
+   Re-ran the separate open-source [InventorLoader reader at commit
+   `e94bdf5e29052a0dc7ce6fdf755e956ae507caec`](https://github.com/jmplonka/InventorLoader/tree/e94bdf5e29052a0dc7ce6fdf755e956ae507caec)
+   through FreeCAD Part on each SAB extracted from the hash-pinned ACadSharp
+   source DXF (SHA-256
+   `4f26752008643642c37f7bab410b23cfd8b6dd9ee3aaa19746b612ea956b61e6`) and
+   preserved byte-for-byte in ODA 27.1.0.0's AC1027 readback. All three
+   headers report ACIS `218.0`, AutoCAD `ASM 230.7.0.65535 NT`, and 25.4
+   mm/source-unit scaling; InventorLoader returns success and creates every
+   entity without a failed record. `D65` (7,779 bytes, SAB SHA-256
+   `f7037d878da73ea7d53bb054b344199cd42fbce7f106eb374f84ed08bfa97f87`) yields
+   one valid closed six-face/twelve-edge solid; normalized bounds are 5×5×5,
+   area 150, volume 125 source units. `D69` (2,876 bytes, SHA-256
+   `0e41c535979a0727645bcb0468508346221c222093c9fa73e48fce7f07109439`) yields
+   one valid planar face with one closed seven-edge boundary wire (area
+   14,623.383451 mm²); it is correctly not coerced into a 3D solid. `D6A`
+   (7,489 bytes, SHA-256
+   `bf0c6147600400f0a1fdfecdf8f38dcd468cd16196913bdd81b4fb9acc239e7d`) yields
+   one valid closed seven-face/fifteen-edge solid (47.5393117069 source-unit³,
+   76.7139605235 source-unit²; normalized extents
+   4.03616799×3.98472040×4.38048716). The box dimensions match its
+   `ACSH_BOX_CLASS` history; the extrusion is the separate
+   `ACSH_EXTRUSION_CLASS` graph, and the REGION has no history reference.
+   ODA's source/readback SAB digests are identical, so the same geometry check
+   applies to both files. This closes independent semantic geometry for these
+   three exact payloads and exposes a supported reader route despite cq-acis's
+   explicit ASM-230 parse rejection. The separate official CAD Assistant
+   check was run on the smaller standalone ODA cone SAB and returned no
+   semantic result; it did not test these ACadSharp payloads. This does not
+   define a normative SAB/ACDS schema, prove general ASM 230 coverage,
+   qualify handle/group-320 lifecycle or arbitrary proxy graphs, or make
+   FreeCAD's native DXF importer support 3DSOLID. Keep those implementation
+   and consumer gates separate; no family-level support claim is promoted.
    Recheck the saved temporary pair with
    `python3 tests/check_acds_roundtrip.py /private/tmp/libdxfrw-oda-accepted.etqy2h/Cone.dxf /private/tmp/libdxfrw-oda-accepted.etqy2h/dxf/Cone.dxf`;
    pin fresh SHA-256s before interpreting any new external run.
@@ -2306,17 +2342,19 @@ Implementation sequence:
    does not change this native importer result. This is converter integration
    for one standalone tuple only, not FreeCAD solid import.
 
-   Next, keep the multi-solid/REGION ACadSharp pair as a separate negative/
+   Keep the multi-solid/REGION ACadSharp pair as a separate writer/consumer
    qualification gate: its pinned DWG currently returns conversion status 1
    in the deliberately narrow writer, so no FreeCAD handoff is claimed for
-   it. Diagnostic tracing confirms DWG read reaches OBJECTS and
+   it. The separate InventorLoader witness above now qualifies only the
+   semantic geometry of its three SAB payloads. Diagnostic tracing confirms
+   DWG read reaches OBJECTS and
    `prepareExtensionObjectGraph()` succeeds; `appendAcdsDataSection()` first
    rejects the linked `REGION D69`, then the two linked `3DSOLID`s and four
    ACDS records (including a thumbnail) independently exceed the one-entity/
    one-record contract. Three nonfatal object warnings concern an ACDBASSOC
    shell and two TABLECONTENT objects, not the SAB join. An implementation
-   The paired source DXF now gives a hash-pinned inventory for the next
-   sub-plan: source `sample_AC1027_ascii.dxf` SHA-256
+   sub-plan is now detailed below. The paired source DXF supplies its
+   hash-pinned inventory: source `sample_AC1027_ascii.dxf` SHA-256
    `4f26752008643642c37f7bab410b23cfd8b6dd9ee3aaa19746b612ea956b61e6`
    contains `3DSOLID D65` → history `D66`, `REGION D69` (no history handle),
    and `3DSOLID D6A` → history `D6B`. Its ACDSDATA contains thumbnail record
@@ -2327,9 +2365,10 @@ Implementation sequence:
    DXF SHA-256
    `50ed64d7742296dbcd50349110f1ea1bdb6e9df0c5b31f924567fe9a1d248386`)
    preserves all four record types/keys/lengths and byte-identical payload
-   hashes. It does not independently establish authoring provenance, semantic
-   geometry of these three payloads, or group-320 clone/INSERT/XREF behavior.
-   An implementation sub-plan must (a) bind only these three unique
+   hashes. ODA retention alone does not establish authoring provenance or
+   group-320 clone/INSERT/XREF behavior; semantic geometry is independently
+   witnessed above for these exact SAB digests. The implementation sub-plan
+   must (a) bind only these three unique
    `ASM_Data` records to matching typed entities by explicit handle, (b)
    preserve the unowned thumbnail record without callback-order assumptions,
    (c) separately close each solid's proxy/history/material graph while
@@ -4931,7 +4970,7 @@ commit; 102/116 committed, 13 blocked, 0 verified, 1 in progress, and 0 ready):
 | S2.2.1 | COMMITTED | Added an in-memory, locally generated orphan `ACDSDATA`-shaped section regression: read through the generic raw-section callback, verify ordered group codes and raw spellings, replay/write and read again, and confirm no typed entity association. `cmake --build build --target libdxfrw_wave1_tests --parallel 2` and `ctest --test-dir build -R '^libdxfrw_wave1$' --output-on-failure` pass (1/1); `git diff --check` passes. No DWG/DXF fixture file was added. This is opaque-carrier preservation only—not schema, SAB, DataStorage association, DXF semantic writer, FreeCAD importer acceptance, or a promoted support claim—and it does not unblock S2.3. |
 | S2.2.2 | COMMITTED | Preserved observed R2013+ `AcDbModelerGeometry` group 290 and group-2 identifier opaquely; omitted the pre-R2013 group-70 format field for AC1027+ and remapped group-350 history references through the entity output-handle map. Runtime-generated ASCII and binary DXF vectors verify false/true group 290, zero/nonzero GUID-like values, changed entity handles, correctly remapped history, and no AC1027 group 70; no fixture was added. `cmake --build build --target dwg2dxf lc3_compat_check libdxfrw_dwg_local_roundtrip --parallel 2` succeeds; focused CTest (`libdxfrw_dwg_local_roundtrip`, `dwg2dxf_version_policy`, `dwg2dxf_freecad_cli_compat`) passes 3/3; `git diff --check` passes. Shell-field preservation only—not a normative field contract, ACDSDATA schema/association, DWG-to-DXF SAB conversion, FreeCAD importer acceptance, or support claim. |
 | S2.2.3 | COMMITTED | Closed an adapter gap: `dx_iface` inherited the no-op `addRawDxfSection`, so `dwg2dxf input.dxf -o output.dxf` discarded unknown sections even though the generic codec could replay them. `dx_data` now retains these opaque sections and `fileExport()` supplies them to the writer. New `dwg2dxf_raw_dxf_section_passthrough` generates a local AC1032 control at test runtime, checks the ACDSDATA-shaped section and neighboring LINE through two actual CLI passes, and removes only its unique build-tree directory. Build targets `dwg2dxf`, `lc3_compat_check`, and `libdxfrw_dwg_local_roundtrip` pass; focused CLI/version/local-roundtrip CTest passes 4/4; `git diff --check` passes. Existing sibling ezdxf v1.4.4 sample `examples_dxf/uncommon.dxf` (SHA-256 `5efdd671e3b6d8c45bd0688b1d6479d523f2290f0b390f1584348bf46e34c965`) also round-trips through the CLI twice with identical canonicalized ACDSDATA tag/value digest `a0b28e71c99bde07e9d9942f38eae538988dcb5d6acfd680cf291cdc2fe4265d`: six schemas, fifteen records, two 3DSOLID entities. The sample remains external, and its authoring provenance is unknown. This is DXF→DXF opaque section retention only; it does not qualify DWG DataStorage-to-DXF emission, ACDSDATA schema/link semantics, FreeCAD DWG handoff, or solid geometry support. No drawing fixture was added. |
-| S2.3 | IN_PROGRESS_NARROW; S2.3.4 IMPLEMENTED; S2.3.5 FAST_PASS; S2.3.6 VERIFIED_NARROW; S2.3.7 VERIFIED_STANDALONE_HANDOFF | ODA File Converter 27.1.0.0 generated a hash-pinned AC1027 DWG/DXF pair from tracked LibreDWG Cone; Open CAD Studio v2026.38 independently confirmed its 1,980-byte `ASM_Data` and equal source-pair mesh metrics. The bounded S2.3.4 writer projects only that standalone `3DSOLID` / `AcDb3DSolid_ASM_Data` tuple. S2.3.6 accepts actual libdxfrw AC1027 DXF `65eb8817aa14075b02331ef4ac27c79aeb4f79efb52e3f7f9fb3df3f5c047ca2` through ODA AC1027 DWG `afdddaf8d5cdc7b598bbb7bb7479cbd26c77d3d9dd8f91c7bf0a799ed3bb57af` and return DXF `309043a6ac578355806a8d47e5a68da99849b70c4d1eaf2f07e869fb2a2df586`: six schemas, the keyed 1,980-byte SAB, and three-proxy history/material chain survive; the standalone structural checker passes. Host-access CLI execution resolved the earlier sandbox pasteboard failure. Open CAD Studio independently reads one linked solid and exact SAB; InventorLoader commit `e94bdf5e29052a0dc7ce6fdf755e956ae507caec` decodes that exact SAB and FreeCAD Part reconstructs a valid closed cone (area 326.9045229846473, volume 392.69908169872417, bounds `(5,5,0)–(15,15,15)`). The independent `cq-acis 0.3.8` parser also produces matching normalized geometry for this ODA cone, but does not support the distinct AutoCAD ASM 230.7 payloads in the ACadSharp sample: it reports an unsupported entity schema at byte 235 and refuses conversion of all three SABs. The official CAD Assistant 1.6.0 ARM64 release likewise returned a generic transfer error on the exact standalone SAB. These are non-results for the ACadSharp profile, not evidence against the existing ODA cone result. ODA renumbered its DWG custom classes; the exporter now binds proxy IDs to exact parsed CLASSES names rather than fixed numbers, allowing the rewritten DWG to re-convert without broadening the accepted tuple. Installed `dwg2dxf` SHA-256 `93c4ade4a61cce16b41d9ecbf986e0e6e5131e20c1344b2cc3d04a1b00399850` passed FreeCAD 1.1.3 macOS arm64 `open()` and `insert()` with exact argv and identical C++ importer handoff on the ODA rewrite; both wrote AC1027 DXF `3ac62c93dcc894ec55cf7721ef6870b57facf918f4e710fe766a0cfeff34dc4b`, preserving six schemas, proxy chain, and exact SAB. The pinned importer counts one 3DSOLID as unsupported and creates zero shapes. The ACadSharp sample inventory now pins one region, two solids, three keyed SAB records, and one thumbnail; the ODA 27.1.0.0 rewrite/readback preserves all four record payload digests, but group-320 lifecycle and the multi-entity proxy closure remain unqualified and are the next narrow sub-plan. No public family-level support claim is promoted; clones, INSERT/XREF, other producers/versions/schemas/entities, DWG modeler writing, material appearance, native FreeCAD solid import, and other platforms remain unqualified. No external/generated DWG/DXF fixture was committed. |
+| S2.3 | IN_PROGRESS_NARROW; S2.3.4 IMPLEMENTED; S2.3.5 FAST_PASS; S2.3.6 VERIFIED_NARROW; S2.3.7 VERIFIED_STANDALONE_HANDOFF | ODA File Converter 27.1.0.0 generated a hash-pinned AC1027 DWG/DXF pair from tracked LibreDWG Cone; Open CAD Studio v2026.38 independently confirmed its 1,980-byte `ASM_Data` and equal source-pair mesh metrics. The bounded S2.3.4 writer projects only that standalone `3DSOLID` / `AcDb3DSolid_ASM_Data` tuple. S2.3.6 accepts actual libdxfrw AC1027 DXF `65eb8817aa14075b02331ef4ac27c79aeb4f79efb52e3f7f9fb3df3f5c047ca2` through ODA AC1027 DWG `afdddaf8d5cdc7b598bbb7bb7479cbd26c77d3d9dd8f91c7bf0a799ed3bb57af` and return DXF `309043a6ac578355806a8d47e5a68da99849b70c4d1eaf2f07e869fb2a2df586`: six schemas, the keyed 1,980-byte SAB, and three-proxy history/material chain survive; the standalone structural checker passes. Host-access CLI execution resolved the earlier sandbox pasteboard failure. Open CAD Studio independently reads one linked solid and exact SAB; InventorLoader commit `e94bdf5e29052a0dc7ce6fdf755e956ae507caec` decodes that exact SAB and FreeCAD Part reconstructs a valid closed cone (area 326.9045229846473, volume 392.69908169872417, bounds `(5,5,0)–(15,15,15)`). The independent `cq-acis 0.3.8` parser also produces matching normalized geometry for this ODA cone, but does not support the distinct AutoCAD ASM 230.7 payloads in the ACadSharp sample: it reports an unsupported entity schema at byte 235 and refuses conversion of all three SABs. The official CAD Assistant 1.6.0 ARM64 release returned a generic transfer error on the exact standalone ODA cone SAB; neither result tests ACadSharp. A separate run of the pinned InventorLoader reader plus FreeCAD Part decoded all three ACadSharp payloads and produced valid geometry from their byte-identical ODA readback counterparts: D65 is a closed six-face/twelve-edge 5×5×5 box (normalized area 150, volume 125); D69 is one valid planar face with a closed seven-edge boundary (14,623.383451 mm²); D6A is a valid closed seven-face/fifteen-edge solid (normalized volume 47.5393117, area 76.7139605). This witness covers only these exact payloads. ODA renumbered its DWG custom classes; the exporter now binds proxy IDs to exact parsed CLASSES names rather than fixed numbers, allowing the rewritten DWG to re-convert without broadening the accepted tuple. Installed `dwg2dxf` SHA-256 `93c4ade4a61cce16b41d9ecbf986e0e6e5131e20c1344b2cc3d04a1b00399850` passed FreeCAD 1.1.3 macOS arm64 `open()` and `insert()` with exact argv and identical C++ importer handoff on the ODA rewrite; both wrote AC1027 DXF `3ac62c93dcc894ec55cf7721ef6870b57facf918f4e710fe766a0cfeff34dc4b`, preserving six schemas, proxy chain, and exact SAB. The pinned importer counts one 3DSOLID as unsupported and creates zero shapes. The ACadSharp sample inventory now pins one region, two solids, three keyed SAB records, and one thumbnail; the ODA 27.1.0.0 rewrite/readback preserves all four record payload digests and semantic geometry is now independently witnessed, but group-320 lifecycle, exact-sample multi-entity proxy closure in libdxfrw output, and standard FreeCAD native 3DSOLID import remain unqualified. No public family-level support claim is promoted; clones, INSERT/XREF, other producers/versions/schemas/entities, DWG modeler writing, material appearance, native FreeCAD solid import, and other platforms remain unqualified. No external/generated DWG/DXF fixture was committed. |
 | S5.1 | COMMITTED | Generated ASCII/binary DXF vectors verify 3DFACE WCS corners/invisible-edge flags, SOLID and TRACE numbered corner fields, 3D POLYLINE WCS vertices, polyface counts/subclass typing/signed invisible-edge indices, LWPOLYLINE OCS elevation/normal/local vertices, and MESH vertices/faces/edges/creases. Fast in-memory ASCII inputs verify omitted corner 4 duplicates corner 3 for 3DFACE and SOLID, reject half-present fourth corners for 3DFACE/SOLID, and check TRACE OCS values plus the negative-normal `ext=true` projection. Fixed in-tree `dx_iface` 3DFACE/MESH/TRACE output routes and MESH import callback; corrected polyface groups 71/72, subclass selection, and group-91 omission; removed the invalid `AcDbSequenceEnd` marker rejected by LibreDWG. The focused round-trip and hardening CTests pass, the 4-test fast regression slice passes 4/4, and `lc3_compat_check` builds. LibreDWG 0.14 accepts the generated ASCII/binary DXF through its R2000 converter, but the DWG→DXF check drops nonzero SOLID/TRACE corner Z values and therefore does not independently qualify those semantics; no support claim is based on that lossy result. Vectors are generated at runtime and not committed. |
 | S5.2 | COMMITTED | Generated ASCII/binary DXF vectors exercise nested INSERTs with nonzero block base points, attached ATTRIB, oblique OCS, 90-degree rotation, nonuniform/mirrored scales, and MINSERT arrays. An independent arbitrary-axis/matrix oracle checks a nested world point and an array-cell offset; malformed non-finite insertion points are rejected. Writer array counts now stop at the signed 16-bit group-code limit accepted by the reader. Focused CTest passes 1/1, and LibreDWG 0.14 independently converts the exact generated ASCII/binary files to R2000 DWG (non-fatal unknown `HEADER.DIMLDRBLK` warnings only). This validates DXF acceptance, not the transform oracle; vectors are runtime-generated and not committed. |
 | S5.3 | COMMITTED | Closed the 3DFACE group-70 writer truncation gap: DXF defines only the four edge bits (`1`, `2`, `4`, `8`), but serialization used a signed 16-bit field without validating the `int` source. The writer now fails closed before record emission for values below zero or above `0x0f`. Runtime-generated ASCII and binary exports reject `-1`, reserved bit `16`, and `65536` (which would otherwise narrow to zero); tests verify no output file is published. DXF parsing remains permissive and keeps the parsed integer in the typed callback for forward compatibility. The official [Autodesk 3DFACE DXF reference](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-747865D5-51F0-45F2-BEFE-9572DBC5B151.htm) anchors the four defined flags. Focused round-trip CTest passes; no DWG claim or fixture added. |
