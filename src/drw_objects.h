@@ -5854,6 +5854,8 @@ public:
   std::uint32_t m_minor = 0;    /*!< BL evalexpr.minor (DXF 99) */
   std::int16_t m_valueCode =
       0; /*!< BSd evalexpr.value_code (DXF 70; -9999 = none) */
+  double m_valueDouble = 0.0; /*!< selector-40 EvalExpr payload (DXF 140) */
+  bool m_hasValueDouble = false;
   std::uint32_t m_valueHandle = 0; /*!< handle value when m_valueCode == 91 */
   std::uint32_t m_nodeId = 0;      /*!< BL evalexpr.nodeid (DXF 90) */
 
@@ -6105,7 +6107,8 @@ public:
   UTF8STRING m_dependencyName;
   std::int32_t m_classVersion = 0;
 
-  //! True only when a full validation class (PointParameter /
+  //! True only when a full validation class (GripLocationComponent / Grip /
+  //! PointParameter /
   //! BasePointParameter / LookupParameter / FlipParameter /
   //! RotationParameter / LinearParameter / PolarParameter /
   //! AlignmentParameter / XYParameter / constraint parameters /

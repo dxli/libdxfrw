@@ -10,9 +10,11 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <sstream>
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "drw_entities.h"
@@ -20,6 +22,7 @@
 #include "drw_header.h"
 #include "dwg2dxf/dx_iface.h"
 #include "libdwgr.h"
+#include "libdxfrw.h"
 #include "intern/dwgbuffer.h"
 #include "intern/dwgbufferw.h"
 #include "intern/dwg_fixed_handles.h"
@@ -6427,6 +6430,486 @@ bool runDxfTypedAcdsBoxRoundTrip(
     return result;
 }
 
+const DRW_Variant* findDynamicDxfGroup(
+        const DRW_RawDxfObject& raw, const std::string& subclass, int code,
+        std::size_t occurrence = 0) {
+    std::string currentSubclass;
+    for (const DRW_Variant& group : raw.groups) {
+        if (group.code() == 100 && group.type() == DRW_Variant::STRING) {
+            currentSubclass = group.c_str();
+            continue;
+        }
+        if (currentSubclass == subclass && group.code() == code) {
+            if (occurrence == 0)
+                return &group;
+            --occurrence;
+        }
+    }
+    return nullptr;
+}
+
+bool dynamicDxfIntegerEquals(const DRW_RawDxfObject& raw,
+                             const std::string& subclass, int code,
+                             std::int64_t expected) {
+    const DRW_Variant* group = findDynamicDxfGroup(raw, subclass, code);
+    if (group == nullptr)
+        return false;
+    if (group->type() == DRW_Variant::INTEGER)
+        return group->i_val() == expected;
+    return group->type() == DRW_Variant::INTEGER64
+        && group->i64_val() == expected;
+}
+
+bool dynamicDxfDoubleEquals(const DRW_RawDxfObject& raw,
+                            const std::string& subclass, int code,
+                            double expected) {
+    const DRW_Variant* group = findDynamicDxfGroup(raw, subclass, code);
+    if (group == nullptr || group->type() != DRW_Variant::DOUBLE)
+        return false;
+    const double actual = group->d_val();
+    const double tolerance = std::max(1.0, std::abs(expected)) * 1e-12;
+    return std::abs(actual - expected) <= tolerance;
+}
+
+bool sameEvaluationGraph(const DRW_EvaluationGraph& left,
+                         const DRW_EvaluationGraph& right) {
+    if (left.handle != right.handle
+        || left.parentHandle != right.parentHandle
+        || left.m_value96 != right.m_value96
+        || left.m_value97 != right.m_value97
+        || left.m_nodes.size() != right.m_nodes.size()
+        || left.m_edges.size() != right.m_edges.size())
+        return false;
+    for (std::size_t i = 0; i < left.m_nodes.size(); ++i) {
+        const DRW_EvaluationGraphNode& a = left.m_nodes[i];
+        const DRW_EvaluationGraphNode& b = right.m_nodes[i];
+        if (a.m_index != b.m_index || a.m_flags != b.m_flags
+            || a.m_nextNodeIndex != b.m_nextNodeIndex
+            || a.m_expressionHandle != b.m_expressionHandle
+            || a.m_data1 != b.m_data1 || a.m_data2 != b.m_data2
+            || a.m_data3 != b.m_data3 || a.m_data4 != b.m_data4)
+            return false;
+    }
+    for (std::size_t i = 0; i < left.m_edges.size(); ++i) {
+        const DRW_EvaluationGraphEdge& a = left.m_edges[i];
+        const DRW_EvaluationGraphEdge& b = right.m_edges[i];
+        if (a.m_value92 != b.m_value92 || a.m_value93 != b.m_value93
+            || a.m_value94 != b.m_value94
+            || a.m_value91a != b.m_value91a
+            || a.m_value91b != b.m_value91b
+            || a.m_value92a != b.m_value92a
+            || a.m_value92b != b.m_value92b
+            || a.m_value92c != b.m_value92c
+            || a.m_value92d != b.m_value92d
+            || a.m_value92e != b.m_value92e)
+            return false;
+    }
+    return true;
+}
+
+struct DxfAsciiPair {
+    std::string codeText;
+    std::string valueText;
+    int code = -1;
+};
+
+std::string trimAsciiWhitespace(std::string value) {
+    const std::size_t first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return {};
+    const std::size_t last = value.find_last_not_of(" \t\r\n");
+    return value.substr(first, last - first + 1u);
+}
+
+bool readDxfAsciiPairs(const std::filesystem::path& path,
+                       std::vector<DxfAsciiPair>& pairs) {
+    std::ifstream input(path);
+    if (!input)
+        return false;
+    std::string codeText;
+    std::string valueText;
+    while (std::getline(input, codeText)) {
+        if (!std::getline(input, valueText))
+            return false;
+        const std::string trimmedCode = trimAsciiWhitespace(codeText);
+        std::size_t parsed = 0;
+        int code = -1;
+        try {
+            code = std::stoi(trimmedCode, &parsed);
+        } catch (...) {
+            return false;
+        }
+        if (parsed != trimmedCode.size())
+            return false;
+        pairs.push_back({codeText, valueText, code});
+    }
+    return input.eof();
+}
+
+bool appendDxfSection(const std::vector<DxfAsciiPair>& pairs,
+                      const std::string& sectionName,
+                      std::ostringstream& output) {
+    for (std::size_t start = 0; start + 1u < pairs.size(); ++start) {
+        if (pairs[start].code != 0
+            || trimAsciiWhitespace(pairs[start].valueText) != "SECTION"
+            || pairs[start + 1u].code != 2
+            || trimAsciiWhitespace(pairs[start + 1u].valueText)
+                != sectionName)
+            continue;
+        for (std::size_t index = start; index < pairs.size(); ++index) {
+            output << pairs[index].codeText << '\n'
+                   << pairs[index].valueText << '\n';
+            if (pairs[index].code == 0
+                && trimAsciiWhitespace(pairs[index].valueText) == "ENDSEC")
+                return true;
+        }
+        return false;
+    }
+    return false;
+}
+
+bool appendSelectedDxfObjects(
+        const std::vector<DxfAsciiPair>& pairs,
+        const std::unordered_set<std::uint32_t>& selectedHandles,
+        std::ostringstream& output) {
+    for (std::size_t start = 0; start + 1u < pairs.size(); ++start) {
+        if (pairs[start].code != 0
+            || trimAsciiWhitespace(pairs[start].valueText) != "SECTION"
+            || pairs[start + 1u].code != 2
+            || trimAsciiWhitespace(pairs[start + 1u].valueText) != "OBJECTS")
+            continue;
+        output << pairs[start].codeText << '\n' << pairs[start].valueText
+               << '\n' << pairs[start + 1u].codeText << '\n'
+               << pairs[start + 1u].valueText << '\n';
+        std::vector<DxfAsciiPair> record;
+        const auto emitSelectedRecord = [&]() {
+            std::uint32_t handle = 0;
+            bool hasHandle = false;
+            for (const DxfAsciiPair& pair : record) {
+                if (pair.code != 5)
+                    continue;
+                const std::string text = trimAsciiWhitespace(pair.valueText);
+                try {
+                    std::size_t parsed = 0;
+                    const unsigned long value = std::stoul(text, &parsed, 16);
+                    if (parsed == text.size()
+                        && value <= std::numeric_limits<std::uint32_t>::max()) {
+                        handle = static_cast<std::uint32_t>(value);
+                        hasHandle = true;
+                    }
+                } catch (...) {
+                    return false;
+                }
+                break;
+            }
+            if (hasHandle && selectedHandles.count(handle) != 0) {
+                for (const DxfAsciiPair& pair : record)
+                    output << pair.codeText << '\n' << pair.valueText << '\n';
+            }
+            record.clear();
+            return true;
+        };
+        for (std::size_t index = start + 2u; index < pairs.size(); ++index) {
+            if (pairs[index].code == 0
+                && trimAsciiWhitespace(pairs[index].valueText) == "ENDSEC") {
+                if (!emitSelectedRecord())
+                    return false;
+                output << pairs[index].codeText << '\n'
+                       << pairs[index].valueText << '\n';
+                return true;
+            }
+            if (pairs[index].code == 0 && !record.empty()
+                && !emitSelectedRecord())
+                return false;
+            record.push_back(pairs[index]);
+        }
+        return false;
+    }
+    return false;
+}
+
+bool buildDynamicBlockOracleDxf(
+        const std::filesystem::path& path,
+        const std::unordered_set<std::uint32_t>& selectedHandles,
+        std::string& output) {
+    std::vector<DxfAsciiPair> pairs;
+    if (!readDxfAsciiPairs(path, pairs))
+        return false;
+    std::ostringstream projected;
+    if (!appendDxfSection(pairs, "HEADER", projected)
+        || !appendDxfSection(pairs, "CLASSES", projected)
+        || !appendSelectedDxfObjects(pairs, selectedHandles, projected))
+        return false;
+    projected << "  0\nEOF\n";
+    output = projected.str();
+    return true;
+}
+
+bool runDynamicBlockOdaPairQualification(
+        const std::filesystem::path& dwgPath,
+        const std::filesystem::path& dxfPath) {
+    if (!std::filesystem::is_regular_file(dwgPath)
+        || !std::filesystem::is_regular_file(dxfPath))
+        return false;
+
+    class DwgCaptureIface final : public dx_iface {
+    public:
+        std::vector<DRW_DynamicBlockObject> dynamicObjects;
+        std::vector<DRW_DwgFramePublication> frames;
+        void addDynamicBlockObject(
+                const DRW_DynamicBlockObject& data) override {
+            dynamicObjects.push_back(data);
+        }
+        void addDwgFramePublication(
+                const DRW_DwgFramePublication& frame) override {
+            frames.push_back(frame);
+        }
+    } dwgIface;
+    dx_data dwgData;
+    dwgIface.cData = &dwgData;
+    dwgRW dwgReader(dwgPath.string().c_str());
+    if (!dwgReader.read(&dwgIface, false)
+        || dwgReader.getVersion() != DRW::AC1027) {
+        std::cerr << "dynamic-block DWG read/version failed\n";
+        return false;
+    }
+
+    class DxfCaptureIface final : public dx_iface {
+    public:
+        std::vector<DRW_RawDxfObject> dynamicRecords;
+        void addRawDxfObject(const DRW_RawDxfObject& data) override {
+            if (DRW_DynamicBlockObject::isDynamicBlockRecName(data.name))
+                dynamicRecords.push_back(data);
+            dx_iface::addRawDxfObject(data);
+        }
+    } dxfIface;
+    dx_data dxfData;
+    dxfIface.cData = &dxfData;
+    dxfRW dxfReader(dxfPath.string().c_str());
+
+    std::unordered_map<std::uint32_t, const DRW_DynamicBlockObject*> dwgByHandle;
+    for (const DRW_DynamicBlockObject& object : dwgIface.dynamicObjects) {
+        if (object.handle == 0
+            || !dwgByHandle.emplace(object.handle, &object).second) {
+            std::cerr << "duplicate/null DWG dynamic-block handle\n";
+            return false;
+        }
+    }
+    const DRW_EvaluationGraph* sourceDynamicGraph = nullptr;
+    std::size_t graphCandidates = 0;
+    for (const DRW_EvaluationGraph& graph : dwgData.evaluationGraphs) {
+        if (graph.m_nodes.size() != 12u || graph.m_edges.size() != 10u)
+            continue;
+        const bool allTargetsDynamic = std::all_of(
+            graph.m_nodes.begin(), graph.m_nodes.end(),
+            [&dwgByHandle](const DRW_EvaluationGraphNode& node) {
+                return dwgByHandle.count(node.m_expressionHandle) == 1u;
+            });
+        if (allTargetsDynamic) {
+            sourceDynamicGraph = &graph;
+            ++graphCandidates;
+        }
+    }
+    if (graphCandidates != 1u || sourceDynamicGraph == nullptr) {
+        std::cerr << "expected one 12-node/10-edge dynamic-block graph; found "
+                  << graphCandidates << '\n';
+        return false;
+    }
+
+    std::unordered_set<std::uint32_t> selectedHandles{
+        sourceDynamicGraph->handle};
+    for (const DRW_EvaluationGraphNode& node : sourceDynamicGraph->m_nodes)
+        selectedHandles.insert(node.m_expressionHandle);
+    std::string dxfProjection;
+    if (!buildDynamicBlockOracleDxf(dxfPath, selectedHandles,
+                                    dxfProjection)) {
+        std::cerr << "failed to isolate ODA HEADER/CLASSES and witnessed "
+                     "OBJECTS records\n";
+        return false;
+    }
+    const bool dxfReadOk = dxfReader.readAscii(
+        &dxfIface, false, dxfProjection);
+    if (!dxfReadOk) {
+        const DRW_OperationDiagnostic diagnostic =
+            dxfReader.getLastDiagnostic();
+        std::cerr << "dynamic-block ODA projection read/version failed: read="
+                  << dxfReadOk << " version="
+                  << static_cast<int>(dxfReader.getVersion()) << " error="
+                  << static_cast<int>(dxfReader.getError()) << " phase="
+                  << static_cast<int>(diagnostic.phase) << " code="
+                  << diagnostic.code << " message=" << diagnostic.message
+                  << '\n';
+        return false;
+    }
+    std::unordered_map<std::uint32_t, const DRW_RawDxfObject*> dxfByHandle;
+    for (const DRW_RawDxfObject& object : dxfIface.dynamicRecords) {
+        if (object.handle == 0
+            || !dxfByHandle.emplace(object.handle, &object).second) {
+            std::cerr << "duplicate/null ODA DXF dynamic-block handle\n";
+            return false;
+        }
+    }
+
+    const DRW_EvaluationGraph* odaDynamicGraph = nullptr;
+    for (const DRW_EvaluationGraph& graph : dxfData.evaluationGraphs) {
+        if (graph.handle == sourceDynamicGraph->handle) {
+            if (odaDynamicGraph != nullptr)
+                return false;
+            odaDynamicGraph = &graph;
+        }
+    }
+    const bool graphMatches = odaDynamicGraph != nullptr
+        && sameEvaluationGraph(*sourceDynamicGraph, *odaDynamicGraph);
+    if (!graphMatches) {
+        std::cerr << "dynamic-block EvaluationGraph differs at handle "
+                  << std::hex << sourceDynamicGraph->handle << std::dec << '\n';
+        return false;
+    }
+
+    std::size_t commonFieldsCompared = 0;
+    std::size_t selector40ValueMismatches = 0;
+    std::unordered_map<std::string, std::size_t> targetClassCounts;
+    bool targetStructureMatches = true;
+    for (const DRW_EvaluationGraphNode &node : sourceDynamicGraph->m_nodes) {
+      const DRW_DynamicBlockObject &source =
+          *dwgByHandle.at(node.m_expressionHandle);
+      const auto dxfIt = dxfByHandle.find(source.handle);
+      if (dxfIt == dxfByHandle.end()) {
+        targetStructureMatches = false;
+        std::cerr << "missing ODA DXF target " << std::hex << source.handle
+                  << std::dec << " (" << source.m_recordName << ")\n";
+        continue;
+      }
+      const DRW_RawDxfObject &raw = *dxfIt->second;
+      ++targetClassCounts[source.m_recordName];
+      const bool identityMatches = raw.name == source.m_recordName &&
+                                   raw.parentHandle == source.parentHandle;
+      const bool evalFieldsMatch =
+          source.m_evalExprParsed &&
+          dynamicDxfIntegerEquals(raw, "AcDbEvalExpr", 90, source.m_nodeId) &&
+          dynamicDxfIntegerEquals(raw, "AcDbEvalExpr", 98, source.m_major) &&
+          dynamicDxfIntegerEquals(raw, "AcDbEvalExpr", 99, source.m_minor) &&
+          (source.m_valueCode == -9999
+               ? findDynamicDxfGroup(raw, "AcDbEvalExpr", 70) == nullptr
+               : dynamicDxfIntegerEquals(raw, "AcDbEvalExpr", 70,
+                                         source.m_valueCode));
+      const bool evalValueMatches =
+          source.m_valueCode != 40 ||
+          (source.m_hasValueDouble &&
+           dynamicDxfDoubleEquals(raw, "AcDbEvalExpr", 140,
+                                  source.m_valueDouble));
+      bool typedFieldsMatch = identityMatches && evalFieldsMatch;
+      commonFieldsCompared +=
+          evalFieldsMatch ? 3u + (source.m_valueCode == -9999 ? 0u : 1u) : 0u;
+      commonFieldsCompared +=
+          evalValueMatches && source.m_valueCode == 40 ? 1u : 0u;
+      if (source.m_valueCode == 40 && !evalValueMatches) {
+        ++selector40ValueMismatches;
+        const DRW_Variant *dxfValue =
+            findDynamicDxfGroup(raw, "AcDbEvalExpr", 140);
+        std::cout.flush();
+        std::cerr << "dynamic EvalExpr selector-40 value differs @" << std::hex
+                  << source.handle << std::dec
+                  << " DWG=" << source.m_valueDouble << " DXF140=";
+        if (dxfValue != nullptr && dxfValue->type() == DRW_Variant::DOUBLE)
+          std::cerr << dxfValue->d_val();
+        else
+          std::cerr << "<absent-or-nondouble>";
+        std::cerr << '\n';
+      }
+      if (source.m_elementParsed) {
+        typedFieldsMatch =
+            typedFieldsMatch &&
+            findDynamicDxfGroup(raw, "AcDbBlockElement", 300) != nullptr &&
+            findDynamicDxfGroup(raw, "AcDbBlockElement", 300)->type() ==
+                DRW_Variant::STRING &&
+            findDynamicDxfGroup(raw, "AcDbBlockElement", 300)->c_str() ==
+                source.m_elementName &&
+            dynamicDxfIntegerEquals(raw, "AcDbBlockElement", 98,
+                                    source.m_elementMajor) &&
+            dynamicDxfIntegerEquals(raw, "AcDbBlockElement", 99,
+                                    source.m_elementMinor) &&
+            dynamicDxfIntegerEquals(raw, "AcDbBlockElement", 1071,
+                                    source.m_eed1071);
+        commonFieldsCompared += typedFieldsMatch ? 4u : 0u;
+      }
+      if (source.m_kind ==
+          DRW_DynamicBlockObject::Kind::GripLocationComponent) {
+        const DRW_Variant *gripExpr =
+            findDynamicDxfGroup(raw, "AcDbBlockGripExpr", 300);
+        const bool gripFieldsMatch =
+            source.m_bodyFullyDecoded &&
+            dynamicDxfIntegerEquals(raw, "AcDbBlockGripExpr", 91,
+                                    source.m_gripType) &&
+            gripExpr != nullptr && gripExpr->type() == DRW_Variant::STRING &&
+            gripExpr->c_str() == source.m_gripExpr;
+        typedFieldsMatch = typedFieldsMatch && gripFieldsMatch;
+        commonFieldsCompared += gripFieldsMatch ? 2u : 0u;
+      }
+      if (!typedFieldsMatch) {
+        targetStructureMatches = false;
+        std::cout.flush();
+        std::cerr << "typed common-field mismatch " << source.m_recordName
+                  << '@' << std::hex << source.handle << std::dec
+                  << " owner=" << std::hex << source.parentHandle << std::dec
+                  << " eval=" << source.m_evalExprParsed
+                  << " node/major/minor=" << source.m_nodeId << '/'
+                  << source.m_major << '/' << source.m_minor
+                  << " valueCode=" << source.m_valueCode
+                  << " hasValueDouble=" << source.m_hasValueDouble
+                  << " valueDouble=" << source.m_valueDouble
+                  << " bodyFullyDecoded=" << source.m_bodyFullyDecoded << '\n';
+      }
+      const DRW_Variant *valueSelector =
+          findDynamicDxfGroup(raw, "AcDbEvalExpr", 70);
+      std::cout << "  " << source.m_recordName << '@' << std::hex
+                << source.handle << std::dec
+                << " valueCode=" << source.m_valueCode << " dxf70=";
+      if (valueSelector != nullptr &&
+          valueSelector->type() == DRW_Variant::INTEGER)
+        std::cout << valueSelector->i_val();
+      else
+        std::cout << "<absent>";
+      std::cout << " bodyFullyDecoded=" << source.m_bodyFullyDecoded << '\n';
+    }
+    bool classesMatch = true;
+    for (const auto &expected : targetClassCounts) {
+      std::size_t matches = 0;
+      int declaredInstances = 0;
+      for (const DRW_Class &cls : dxfData.dxfClasses) {
+        if (cls.recName != expected.first)
+          continue;
+        ++matches;
+        declaredInstances = cls.instanceCount;
+      }
+      classesMatch = classesMatch && matches == 1u &&
+                     declaredInstances >= static_cast<int>(expected.second);
+    }
+    if (!classesMatch) {
+      std::cerr << "ODA CLASSES rows do not cover the dynamic-block closure\n";
+      return false;
+    }
+
+    std::cout << "dynamic-block ODA correlation: graph=" << std::hex
+              << sourceDynamicGraph->handle << std::dec
+              << " nodes=" << sourceDynamicGraph->m_nodes.size()
+              << " edges=" << sourceDynamicGraph->m_edges.size()
+              << " targets=" << targetClassCounts.size()
+              << " classes=" << targetClassCounts.size()
+              << " common-fields=" << commonFieldsCompared
+              << " graph/owner/structure-match="
+              << (graphMatches && targetStructureMatches ? "yes" : "no")
+              << " classes-match=" << (classesMatch ? "yes" : "no")
+              << " selector40-value-mismatches=" << selector40ValueMismatches
+              << " source-records=" << dwgIface.dynamicObjects.size()
+              << " ODA-records=" << dxfIface.dynamicRecords.size()
+              << " (non-matching fields remain unqualified)\n";
+    for (const auto &entry : targetClassCounts)
+      std::cout << "  " << entry.first << ": " << entry.second << '\n';
+    return graphMatches && targetStructureMatches && classesMatch &&
+           selector40ValueMismatches == 0u;
+}
+
 bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
     if (!std::filesystem::is_regular_file(path))
         return false;
@@ -10561,6 +11044,13 @@ int main(int argc, char** argv) {
         std::cout << "ACSH pinned-sample prefix qualification: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
+    } else if (argc == 4
+        && std::string(argv[1]) == "--verify-dynamicblock-oda-pair") {
+        const bool passed = runDynamicBlockOdaPairQualification(
+            argv[2], argv[3]);
+        std::cout << "dynamic-block ODA pair qualification: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
     } else if (argc == 3 && std::string(argv[1]) == "--keep-dir") {
         directory = argv[2];
         std::filesystem::create_directories(directory);
@@ -10568,7 +11058,8 @@ int main(int argc, char** argv) {
     } else if (argc != 1) {
         std::cerr << "usage: " << argv[0]
                   << " [--keep-dir DIRECTORY]"
-                     " [--verify-acsh-prefix-sample DWG]\n";
+                     " [--verify-acsh-prefix-sample DWG]"
+                     " [--verify-dynamicblock-oda-pair DWG DXF]\n";
         return 2;
     }
     expect(runR2013SplineBitLongBoundaryTest(),

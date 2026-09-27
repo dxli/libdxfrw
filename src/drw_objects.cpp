@@ -21613,6 +21613,8 @@ void DRW_DynamicBlockObject::reset() {
     m_major = 0;
     m_minor = 0;
     m_valueCode = 0;
+    m_valueDouble = 0.0;
+    m_hasValueDouble = false;
     m_valueHandle = 0;
     m_nodeId = 0;
     m_purgeFlag = 0;
@@ -21809,7 +21811,9 @@ void DRW_DynamicBlockObject::reset() {
 // (AcDbEvalExpr_fields / AcDbBlockElement_fields / AcDbBlockParameter_fields /
 // AcDbBlockAction_fields / BLOCKVISIBILITYPARAMETER / verified
 // BLOCK*ACTION subclasses),
-// ground-truthed against dwgread -O JSON.  Handle-reference vectors (deps /
+// cross-checked against LibreDWG on the pinned AC1027 sample. Its JSON and DXF
+// exporters disagree on some dynamic-block numeric fields, so neither is yet
+// a field-level oracle for serialization. Handle-reference vectors (deps /
 // blocks / params) live in the handle stream: their COUNT is read inline in
 // the data stream, then the handles are decoded after common handles.  Every
 // read is isGood()-guarded and every count is bounded.  A short body still
@@ -22018,6 +22022,8 @@ bool DRW_DynamicBlockObject::parseDwg(DRW::Version version, dwgBuffer *buf, std:
     std::int32_t valueCode = 0;
     std::int32_t nodeId = 0;
     std::uint32_t valueHandle = 0;
+    double valueDouble = 0.0;
+    bool hasValueDouble = false;
     UTF8STRING valueText;
     if (!readBitLongWithinBody(&bodyProbe, version, dynamicBodyEnd, parentId)
         || !readBitLongWithinBody(&bodyProbe, version, dynamicBodyEnd, major)
@@ -22028,10 +22034,10 @@ bool DRW_DynamicBlockObject::parseDwg(DRW::Version version, dwgBuffer *buf, std:
 
     switch (valueCode) { // value-code switch
     case 40: {
-        double value = 0.0;
         if (!readBitDoubleWithinBody(&bodyProbe, version, dynamicBodyEnd,
-                                     value))
+                                     valueDouble))
             return fail();
+        hasValueDouble = true;
         break;
     }
     case 10:
@@ -22083,6 +22089,8 @@ bool DRW_DynamicBlockObject::parseDwg(DRW::Version version, dwgBuffer *buf, std:
     m_major = static_cast<std::uint32_t>(major);
     m_minor = static_cast<std::uint32_t>(minor);
     m_valueCode = static_cast<std::int16_t>(valueCode);
+    m_valueDouble = valueDouble;
+    m_hasValueDouble = hasValueDouble;
     m_valueHandle = valueHandle;
     m_nodeId = static_cast<std::uint32_t>(nodeId);
     m_evalExprParsed = true;
@@ -22108,6 +22116,12 @@ bool DRW_DynamicBlockObject::parseDwg(DRW::Version version, dwgBuffer *buf, std:
             *sBuf = gripStringProbe;
         m_gripType = gripType;
         m_gripExpr = std::move(gripExpr);
+        const std::uint64_t bodyPosition =
+            currentObjectDwgBit(&gripBodyProbe);
+        const std::uint64_t stringPosition = version > DRW::AC1018
+            ? currentObjectDwgBit(&gripStringProbe) : bodyPosition;
+        m_bodyFullyDecoded = bodyPosition == dynamicBodyEnd
+            && stringPosition == dynamicStringEnd;
         return true;
     }
 
