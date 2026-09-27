@@ -385,10 +385,29 @@ public:
             }
         }
         if (!cData->dataStorageSections.empty()) {
-            for (DRW_RawDxfObject& object : m_acdsHistoryObjects) {
-                if (rawProxyHandles.count(object.handle) != 0
-                    || !dxfW->writeRawDxfObject(&object)) {
-                    return;
+            if (!m_acdsTypedHistoryObjects.empty()) {
+                for (DRW_RawDxfObject& object : m_acdsTypedHistoryObjects) {
+                    if (object.handle == 0
+                        || !rawProxyHandles.insert(object.handle).second
+                        || !dxfW->writeRawDxfObject(&object)) {
+                        return;
+                    }
+                }
+                for (DRW_EvaluationGraph& graph :
+                     m_acdsTypedEvaluationGraphs) {
+                    if (graph.handle == 0
+                        || !rawProxyHandles.insert(graph.handle).second
+                        || !dxfW->writeEvaluationGraph(
+                            &graph, "ACAD_EVALUATION_GRAPH")) {
+                        return;
+                    }
+                }
+            } else {
+                for (DRW_RawDxfObject& object : m_acdsHistoryObjects) {
+                    if (rawProxyHandles.count(object.handle) != 0
+                        || !dxfW->writeRawDxfObject(&object)) {
+                        return;
+                    }
                 }
             }
             for (std::uint32_t handle : m_acdsMaterialHandles) {
@@ -433,7 +452,13 @@ private:
     static bool collectAcdsHistoryProxyObjects(
         const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
         std::vector<std::uint32_t>& materialHandles, bool debug);
+    static bool collectAcdsTypedBoxHistoryObjects(
+        const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
+        std::vector<DRW_EvaluationGraph>& graphs,
+        std::vector<std::uint32_t>& materialHandles, bool debug);
     std::vector<DRW_RawDxfObject> m_acdsHistoryObjects;
+    std::vector<DRW_RawDxfObject> m_acdsTypedHistoryObjects;
+    std::vector<DRW_EvaluationGraph> m_acdsTypedEvaluationGraphs;
     std::vector<std::uint32_t> m_acdsMaterialHandles;
 
     std::vector<std::uint32_t> m_extensionDictionaryHandles;

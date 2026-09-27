@@ -6117,6 +6117,316 @@ bool runAcdsHistoryCallbackCapture() {
                == std::vector<std::uint8_t>({0xD4u, 0xE5u});
 }
 
+bool runDxfTypedAcdsBoxRoundTrip(
+    bool binary, const std::filesystem::path& directory, bool keepOutput) {
+    const std::filesystem::path output = directory /
+        (std::string("libdxfrw-ac1027-typed-acds-box-")
+         + (binary ? "binary" : "ascii") + ".dxf");
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+
+    constexpr std::uint32_t modelerHandle = 0xFC20u;
+    constexpr std::uint32_t historyHandle = 0xFC21u;
+    constexpr std::uint32_t graphHandle = 0xFC22u;
+    constexpr std::uint32_t boxHandle = 0xFC23u;
+    constexpr std::uint32_t materialHandle = 0x96u;
+    const std::vector<std::uint8_t> payload{
+        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
+        0x21u, 0x22u, 0x23u};
+
+    dx_data source;
+    auto* modeler = new DRW_ModelerGeometry(DRW::E3DSOLID);
+    modeler->handle = modelerHandle;
+    modeler->m_modelerVersion = 2;
+    modeler->m_dwgSourceVersion = DRW::AC1027;
+    modeler->m_hasModelerData = true;
+    modeler->m_historyHandle = historyHandle;
+    modeler->setHasDataStorageBinaryData(true);
+    modeler->hasDataStorageRecord = true;
+    modeler->dataStorageHandle = modelerHandle;
+    modeler->dataStorageHandleKey = "FC20";
+    modeler->dataStorageSchemaIndex = 5u;
+    modeler->dataStorageData = payload;
+    source.mBlock->ent.push_back(modeler);
+    source.dataStorageSections.push_back(
+        makeLocalAcadSharpDataStorageSection(modelerHandle, payload));
+
+    source.dwgClassCoverage.m_status =
+        DRW_DwgClassCoverageStatus::FinalizedComplete;
+    source.dwgClassCoverage.m_complete = true;
+    const std::array<std::tuple<std::uint16_t, const char*, const char*>, 3>
+        classes{{
+            {521u, "ACSH_HISTORY_CLASS", "AcDbShHistory"},
+            {520u, "ACAD_EVALUATION_GRAPH", "AcDbEvalGraph"},
+            {546u, "ACSH_BOX_CLASS", "AcDbShBox"}}};
+    for (const auto& cls : classes) {
+        DRW_DwgClassCoverageEntry entry;
+        entry.m_classNumber = std::get<0>(cls);
+        entry.m_recordName = std::get<1>(cls);
+        entry.m_className = std::get<2>(cls);
+        entry.m_entityFlagRaw = 0x1F3u;
+        entry.m_state = DRW_DwgClassCoverageState::Published;
+        source.dwgClassCoverage.m_entries.push_back(std::move(entry));
+    }
+
+    const auto completePrefix = [](
+        DRW_AcShHistoryObject& object,
+        DRW_AssociativePrefixStatus::Kind kind) {
+        DRW_AssociativePrefixStatus status;
+        status.m_kind = kind;
+        status.m_status = DRW_AssociativePrefixStatus::ParseStatus::Complete;
+        object.m_prefixStatuses.push_back(std::move(status));
+    };
+    DRW_AcShHistoryObject history("ACSH_HISTORY_CLASS");
+    history.handle = historyHandle;
+    history.parentHandle = modelerHandle;
+    history.m_major = 33u;
+    history.m_minor = 329u;
+    history.m_historyNodeId = 1u;
+    history.m_ownerHandle = graphHandle;
+    completePrefix(history,
+                   DRW_AssociativePrefixStatus::Kind::AcDbShHistoryNode);
+    source.acshHistoryObjects.push_back(history);
+
+    DRW_EvaluationGraph graph;
+    graph.handle = graphHandle;
+    graph.parentHandle = historyHandle;
+    graph.m_value96 = 1;
+    graph.m_value97 = 1;
+    DRW_EvaluationGraphNode graphNode;
+    graphNode.m_index = 0;
+    graphNode.m_flags = 32;
+    graphNode.m_nextNodeIndex = 1;
+    graphNode.m_expressionHandle = boxHandle;
+    graphNode.m_data1 = -1;
+    graphNode.m_data2 = -1;
+    graphNode.m_data3 = -1;
+    graphNode.m_data4 = -1;
+    graph.m_nodes.push_back(graphNode);
+    source.evaluationGraphs.push_back(graph);
+
+    DRW_AcShHistoryObject box("ACSH_BOX_CLASS");
+    box.handle = boxHandle;
+    box.parentHandle = graphHandle;
+    box.m_evalExprPrefix.m_id = 1;
+    box.m_evalExprPrefix.m_value98 = 33;
+    box.m_evalExprPrefix.m_value99 = 329;
+    box.m_evalExprPrefix.m_complete = true;
+    completePrefix(box, DRW_AssociativePrefixStatus::Kind::AcDbEvalExpr);
+    box.m_historyNodePrefix.m_major = 33;
+    box.m_historyNodePrefix.m_minor = 329;
+    for (std::size_t index = 0; index < 4u; ++index)
+        box.m_historyNodePrefix.m_transform[index * 5u] = 1.0;
+    box.m_historyNodePrefix.m_colorIndex = 256u;
+    box.m_historyNodePrefix.m_nodeValue = 3;
+    box.m_historyNodePrefix.m_handle = materialHandle;
+    box.m_historyNodePrefix.m_complete = true;
+    completePrefix(box,
+                   DRW_AssociativePrefixStatus::Kind::AcDbShHistoryNode);
+    box.m_major = 33u;
+    box.m_minor = 329u;
+    box.m_shapeParams = {5.0, 5.0, 5.0};
+    completePrefix(box, DRW_AssociativePrefixStatus::Kind::AcShActionBody);
+    source.acshHistoryObjects.push_back(box);
+
+    DRW_Dictionary materialDictionary;
+    materialDictionary.handle = 0x72u;
+    materialDictionary.parentHandle = 0xCu;
+    materialDictionary.cloning = 1;
+    materialDictionary.m_entries = {
+        {"ByLayer", materialHandle}, {"ByBlock", 0x97u},
+        {"Global", 0x98u}};
+    source.dictionaries.push_back(materialDictionary);
+    for (const auto& materialInfo : {
+             std::pair<std::uint32_t, const char*>{materialHandle, "ByLayer"},
+             {0x97u, "ByBlock"}, {0x98u, "Global"}}) {
+        DRW_Material material;
+        material.handle = materialInfo.first;
+        material.parentHandle = materialDictionary.handle;
+        material.m_name = materialInfo.second;
+        source.materials.push_back(std::move(material));
+    }
+
+    dx_iface exporter;
+    if (!exporter.fileExport(output.string(), DRW::AC1027, binary,
+                             &source, false)) {
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+
+    class RawCaptureIface final : public dx_iface {
+    public:
+        std::vector<DRW_RawDxfObject> objects;
+        void addRawDxfObject(const DRW_RawDxfObject& object) override {
+            objects.push_back(object);
+            dx_iface::addRawDxfObject(object);
+        }
+    };
+    dx_data imported;
+    RawCaptureIface importer;
+    const bool readOk = importer.fileImport(output.string(), &imported, false);
+    const auto findRaw = [&importer](const char* name, std::uint32_t handle)
+        -> const DRW_RawDxfObject* {
+        const DRW_RawDxfObject* found = nullptr;
+        for (const DRW_RawDxfObject& object : importer.objects) {
+            if (object.name != name || object.handle != handle)
+                continue;
+            if (found != nullptr)
+                return nullptr;
+            found = &object;
+        }
+        return found;
+    };
+    const auto hasInt = [](const DRW_RawDxfObject* object, int code,
+                           std::int32_t expected) {
+        return object != nullptr
+            && std::any_of(object->groups.begin(), object->groups.end(),
+                           [code, expected](const DRW_Variant& group) {
+                               return group.code() == code
+                                   && group.type() == DRW_Variant::INTEGER
+                                   && group.i_val() == expected;
+                           });
+    };
+    const auto hasString = [](const DRW_RawDxfObject* object, int code,
+                              const std::string& expected) {
+        return object != nullptr
+            && std::any_of(object->groups.begin(), object->groups.end(),
+                           [code, &expected](const DRW_Variant& group) {
+                               return group.code() == code
+                                   && group.type() == DRW_Variant::STRING
+                                   && group.c_str() != nullptr
+                                   && expected == group.c_str();
+                           });
+    };
+    const DRW_RawDxfObject* historyRaw =
+        findRaw("ACSH_HISTORY_CLASS", historyHandle);
+    const DRW_RawDxfObject* boxRaw =
+        findRaw("ACSH_BOX_CLASS", boxHandle);
+    const DRW_EvaluationGraph* importedGraph = nullptr;
+    for (const DRW_EvaluationGraph& value : imported.evaluationGraphs) {
+        if (value.handle == graphHandle)
+            importedGraph = &value;
+    }
+    std::vector<std::pair<std::string, int>> expectedClasses{
+        {"ACSH_HISTORY_CLASS", 1}, {"ACAD_EVALUATION_GRAPH", 1},
+        {"ACSH_BOX_CLASS", 1}, {"MATERIAL", 3}};
+    bool classesMatch = imported.dxfClasses.size() == expectedClasses.size();
+    if (classesMatch) {
+        for (std::size_t index = 0; index < expectedClasses.size(); ++index) {
+            const DRW_Class& value = imported.dxfClasses[index];
+            if (value.recName != expectedClasses[index].first
+                || value.instanceCount != expectedClasses[index].second
+                || value.wasaProxyFlag != 0) {
+                classesMatch = false;
+                break;
+            }
+        }
+    }
+    std::string acdsOwnerHandle;
+    std::vector<std::uint8_t> acdsPayload;
+    std::uint32_t importedModelerHandle = 0;
+    for (const DRW_Entity* entity : imported.mBlock->ent) {
+        if (entity != nullptr && entity->handle != 0
+            && entity->eType == DRW::E3DSOLID) {
+            importedModelerHandle = entity->handle;
+            break;
+        }
+    }
+    char expectedModelerHandle[9] = {};
+    std::snprintf(expectedModelerHandle, sizeof(expectedModelerHandle), "%X",
+                  importedModelerHandle);
+    const bool acdsPayloadMatches = imported.rawDxfSections.size() == 1u
+        && findAcdsRecordPayload(imported.rawDxfSections.front(), "ASM_Data",
+                                 acdsOwnerHandle, acdsPayload)
+        && importedModelerHandle != 0
+        && acdsOwnerHandle == expectedModelerHandle && acdsPayload == payload;
+    std::vector<std::string> boxSubclasses;
+    std::vector<double> boxTransform;
+    std::vector<double> boxDimensions;
+    bool inBoxShape = false;
+    if (boxRaw != nullptr) {
+        for (const DRW_Variant& group : boxRaw->groups) {
+            if (group.code() == 100
+                && group.type() == DRW_Variant::STRING
+                && group.c_str() != nullptr) {
+                boxSubclasses.emplace_back(group.c_str());
+                inBoxShape = std::strcmp(group.c_str(), "AcDbShBox") == 0;
+            } else if (group.code() >= 40 && group.code() <= 55
+                       && group.type() == DRW_Variant::DOUBLE
+                       && !inBoxShape) {
+                boxTransform.push_back(group.d_val());
+            } else if (group.code() >= 40 && group.code() <= 42
+                       && group.type() == DRW_Variant::DOUBLE
+                       && inBoxShape) {
+                boxDimensions.push_back(group.d_val());
+            }
+        }
+    }
+    const std::vector<std::string> expectedBoxSubclasses{
+        "AcDbEvalExpr", "AcDbShHistoryNode", "AcDbShPrimitive", "AcDbShBox"};
+    const std::vector<double> expectedBoxTransform{
+        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0};
+    const bool result = readOk && historyRaw != nullptr && boxRaw != nullptr
+        && hasInt(historyRaw, 90, 33) && hasInt(historyRaw, 91, 329)
+        && hasInt(historyRaw, 92, 1) && hasInt(historyRaw, 280, 0)
+        && hasInt(historyRaw, 281, 0)
+        && hasString(historyRaw, 330, expectedModelerHandle)
+        && hasString(historyRaw, 360, "FC22")
+        && hasInt(boxRaw, 90, 1) && hasInt(boxRaw, 91, 329)
+        && hasInt(boxRaw, 92, 3)
+        && hasString(boxRaw, 330, "FC22")
+        && boxSubclasses == expectedBoxSubclasses
+        && boxTransform == expectedBoxTransform
+        && boxDimensions == std::vector<double>({5.0, 5.0, 5.0})
+        && std::any_of(boxRaw->groups.begin(), boxRaw->groups.end(),
+                       [](const DRW_Variant& group) {
+                           return group.code() == 347
+                               && group.type() == DRW_Variant::STRING
+                               && group.c_str() != nullptr
+                               && std::strcmp(group.c_str(), "96") == 0;
+                       })
+        && importedGraph != nullptr && importedGraph->m_value96 == 1
+        && importedGraph->m_value97 == 1
+        && importedGraph->m_nodes.size() == 1u
+        && importedGraph->m_nodes.front().m_index == 0
+        && importedGraph->m_nodes.front().m_flags == 32
+        && importedGraph->m_nodes.front().m_nextNodeIndex == 1
+        && importedGraph->m_nodes.front().m_expressionHandle == boxHandle
+        && importedGraph->m_nodes.front().m_data1 == -1
+        && importedGraph->m_nodes.front().m_data2 == -1
+        && importedGraph->m_nodes.front().m_data3 == -1
+        && importedGraph->m_nodes.front().m_data4 == -1
+        && classesMatch && imported.materials.size() == 3u
+        && imported.rawDxfSections.size() == 1u
+        && imported.rawDxfSections.front().m_name == "ACDSDATA"
+        && acdsPayloadMatches;
+    if (!result) {
+        std::cerr << "Typed ACDS BOX round-trip ("
+                  << (binary ? "binary" : "ASCII") << "): read=" << readOk
+                  << " history=" << (historyRaw != nullptr)
+                  << " box=" << (boxRaw != nullptr)
+                  << " graph=" << (importedGraph != nullptr)
+                  << " classes=" << classesMatch
+                  << " materials=" << imported.materials.size()
+                  << " sections=" << imported.rawDxfSections.size()
+                  << " acdsPayload=" << acdsPayloadMatches
+                  << " payloadOwner=" << acdsOwnerHandle
+                  << " modeler=" << expectedModelerHandle
+                  << " payloadBytes=" << acdsPayload.size() << '\n';
+        if (!classesMatch) {
+            for (const DRW_Class& value : imported.dxfClasses)
+                std::cerr << "  CLASS " << value.recName << " count="
+                          << value.instanceCount << " proxy="
+                          << value.wasaProxyFlag << '\n';
+        }
+    }
+    if (!keepOutput)
+        std::filesystem::remove(output, ec);
+    return result;
+}
+
 bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
     if (!std::filesystem::is_regular_file(path))
         return false;
@@ -6298,6 +6608,8 @@ bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
     };
     const DRW_ModelerGeometry* boxModeler = findModeler(0xD65u);
     const bool boxClosureLinksMatch = boxModeler != nullptr
+        && boxHistory->m_major == 33u && boxHistory->m_minor == 329u
+        && boxHistory->m_historyNodeId == 1u
         && boxModeler->m_historyHandle == boxHistory->handle
         && boxHistory->parentHandle == boxModeler->handle
         && boxHistory->m_ownerHandle == boxGraph->handle
@@ -6388,7 +6700,9 @@ bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
                   << captured.acshHistoryObjects.size() << " materials="
                   << captured.materials.size() << " proxies="
                   << captured.proxyObjects.size() << " linked-box=yes"
-                  << " linked-extrusion=yes\n";
+                  << " linked-extrusion=yes box-history="
+                  << boxHistory->m_major << '/' << boxHistory->m_minor << '/'
+                  << boxHistory->m_historyNodeId << '\n';
     }
     return acdsSchemasMatch && prefixesMatch && boxClosureLinksMatch
         && extrusionClosureLinksMatch
@@ -11106,6 +11420,10 @@ int main(int argc, char** argv) {
     expect(runAcdsHistoryCallbackCapture(),
            "local typed ACIS history/evaluation callback retention",
            failures);
+    expect(runDxfTypedAcdsBoxRoundTrip(false, directory, keepOutputs),
+           "local ASCII typed ACDS BOX closure round-trip", failures);
+    expect(runDxfTypedAcdsBoxRoundTrip(true, directory, keepOutputs),
+           "local binary typed ACDS BOX closure round-trip", failures);
     expect(runDxfEvaluationGraphRoundTrip(false, directory, keepOutputs),
            "local ASCII EvaluationGraph typed writer and handle remap",
            failures);

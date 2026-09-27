@@ -15,6 +15,7 @@
 #include <charconv>
 #include <array>
 #include <cctype>
+#include <cmath>
 #include <functional>
 #include <limits>
 #include <map>
@@ -1081,6 +1082,321 @@ bool dx_iface::collectAcdsHistoryProxyObjects(
     return objects.size() - startingObjectCount == data.proxyObjects.size();
 }
 
+bool dx_iface::collectAcdsTypedBoxHistoryObjects(
+    const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
+    std::vector<DRW_EvaluationGraph>& graphs,
+    std::vector<std::uint32_t>& materialHandles, bool debug) {
+    const auto reject = [&](const char* reason, std::uint32_t handle = 0) {
+        if (debug) {
+            std::cerr << "ACDS typed BOX closure rejected: handle="
+                      << proxyHandleString(handle) << " reason=" << reason
+                      << '\n';
+        }
+        return false;
+    };
+    if (data.dataStorageSections.empty() || !data.proxyObjects.empty()
+        || !data.rawProxyObjects.empty()) {
+        return reject("typed lane requires DataStorage and no proxy records");
+    }
+    if (!data.dwgClassCoverage.m_complete
+        || data.dwgClassCoverage.m_status
+               != DRW_DwgClassCoverageStatus::FinalizedComplete) {
+        return reject("source CLASSES coverage is incomplete");
+    }
+
+    const auto hasOnePublishedClass = [&data](const char* recordName,
+                                               const char* className) {
+        std::size_t matches = 0;
+        std::uint16_t classNumber = 0;
+        for (const DRW_DwgClassCoverageEntry& entry :
+             data.dwgClassCoverage.m_entries) {
+            if (entry.m_recordName != recordName
+                || entry.m_className != className) {
+                continue;
+            }
+            ++matches;
+            classNumber = entry.m_classNumber;
+            if (entry.m_state != DRW_DwgClassCoverageState::Published
+                || entry.m_classNumber < 500u
+                || entry.m_entityFlagRaw != 0x1F3u) {
+                return false;
+            }
+        }
+        return matches == 1u && classNumber >= 500u;
+    };
+    if (!hasOnePublishedClass("ACSH_HISTORY_CLASS", "AcDbShHistory")
+        || !hasOnePublishedClass("ACAD_EVALUATION_GRAPH", "AcDbEvalGraph")
+        || !hasOnePublishedClass("ACSH_BOX_CLASS", "AcDbShBox")) {
+        return reject("required source custom-class metadata is not unique");
+    }
+
+    const auto hasCompletePrefixes = [](
+        const DRW_AcShHistoryObject& object,
+        std::initializer_list<DRW_AssociativePrefixStatus::Kind> kinds) {
+        if (object.m_prefixStatuses.size() != kinds.size())
+            return false;
+        auto expected = kinds.begin();
+        for (const DRW_AssociativePrefixStatus& status :
+             object.m_prefixStatuses) {
+            if (expected == kinds.end() || status.m_kind != *expected
+                || status.m_status
+                       != DRW_AssociativePrefixStatus::ParseStatus::Complete) {
+                return false;
+            }
+            ++expected;
+        }
+        return expected == kinds.end();
+    };
+    const auto commonLinksAreEmpty = [](const DRW_TableEntry& object) {
+        return object.extData.empty() && object.appData.empty()
+            && object.reactorHandles.empty() && object.xDictHandle == 0
+            && object.extensionDictionaryFlag() == 0;
+    };
+
+    std::unordered_map<std::uint32_t, const DRW_AcShHistoryObject*> historyByHandle;
+    for (const DRW_AcShHistoryObject& object : data.acshHistoryObjects) {
+        if (object.handle == 0
+            || !historyByHandle.emplace(object.handle, &object).second) {
+            return reject("duplicate or zero typed ACSH handle", object.handle);
+        }
+    }
+    std::unordered_map<std::uint32_t, const DRW_EvaluationGraph*> graphByHandle;
+    for (const DRW_EvaluationGraph& graph : data.evaluationGraphs) {
+        if (graph.handle == 0
+            || !graphByHandle.emplace(graph.handle, &graph).second) {
+            return reject("duplicate or zero EvaluationGraph handle",
+                          graph.handle);
+        }
+    }
+
+    std::vector<const DRW_ModelerGeometry*> modelers;
+    const auto inspect = [&modelers](const dx_ifaceBlock* block) {
+        if (block == nullptr)
+            return true;
+        for (const DRW_Entity* entity : block->ent) {
+            if (entity == nullptr
+                || (!entity->hasDataStorageRecord
+                    && !entity->hasDataStorageBinaryData()
+                    && entity->dataStorageData.empty())) {
+                continue;
+            }
+            if (entity->eType != DRW::E3DSOLID
+                && entity->eType != DRW::REGION) {
+                return false;
+            }
+            modelers.push_back(
+                static_cast<const DRW_ModelerGeometry*>(entity));
+        }
+        return true;
+    };
+    if (!inspect(data.mBlock))
+        return reject("DataStorage owner is not a modeler entity");
+    for (const dx_ifaceBlock* block : data.blocks) {
+        if (block != data.mBlock && !inspect(block))
+            return reject("DataStorage owner is not a modeler entity");
+    }
+
+    std::vector<DRW_RawDxfObject> typedObjects;
+    std::vector<DRW_EvaluationGraph> typedGraphs;
+    std::vector<std::uint32_t> typedMaterials;
+    std::unordered_set<std::uint32_t> modelerHandles;
+    std::unordered_set<std::uint32_t> usedHistoryHandles;
+    std::unordered_set<std::uint32_t> usedGraphHandles;
+    std::unordered_set<std::uint32_t> usedShapeHandles;
+
+    const auto addString = [](DRW_RawDxfObject& object, int code,
+                              const std::string& value) {
+        object.groups.emplace_back(code, value);
+    };
+    const auto addInt = [](DRW_RawDxfObject& object, int code,
+                           std::int32_t value) {
+        object.groups.emplace_back(code, value);
+    };
+    const auto buildHistoryObject = [&](const DRW_AcShHistoryObject& history,
+                                        DRW_RawDxfObject& output) {
+        output.name = "ACSH_HISTORY_CLASS";
+        output.handle = history.handle;
+        output.parentHandle = history.parentHandle;
+        addString(output, 5, proxyHandleString(history.handle));
+        addString(output, 330, proxyHandleString(history.parentHandle));
+        addString(output, 100, "AcDbShHistory");
+        addInt(output, 90, history.m_major);
+        addInt(output, 91, history.m_minor);
+        addString(output, 360, proxyHandleString(history.m_ownerHandle));
+        addInt(output, 92, history.m_historyNodeId);
+        addInt(output, 280, history.m_showHistory ? 1 : 0);
+        addInt(output, 281, history.m_recordHistory ? 1 : 0);
+        return true;
+    };
+    const auto buildBoxObject = [&](const DRW_AcShHistoryObject& box,
+                                    DRW_RawDxfObject& output) {
+        output.name = "ACSH_BOX_CLASS";
+        output.handle = box.handle;
+        output.parentHandle = box.parentHandle;
+        addString(output, 5, proxyHandleString(box.handle));
+        addString(output, 330, proxyHandleString(box.parentHandle));
+        addString(output, 100, "AcDbEvalExpr");
+        addInt(output, 90, box.m_evalExprPrefix.m_id);
+        addInt(output, 98, box.m_evalExprPrefix.m_value98);
+        addInt(output, 99, box.m_evalExprPrefix.m_value99);
+        addString(output, 100, "AcDbShHistoryNode");
+        addInt(output, 90, box.m_historyNodePrefix.m_major);
+        addInt(output, 91, box.m_historyNodePrefix.m_minor);
+        int code = 40;
+        for (double value : box.m_historyNodePrefix.m_transform)
+            output.groups.emplace_back(code++, value);
+        addInt(output, 62, static_cast<std::int32_t>(
+            box.m_historyNodePrefix.m_colorIndex));
+        addInt(output, 92, box.m_historyNodePrefix.m_nodeValue);
+        addString(output, 347,
+                  proxyHandleString(box.m_historyNodePrefix.m_handle));
+        addString(output, 100, "AcDbShPrimitive");
+        addString(output, 100, "AcDbShBox");
+        addInt(output, 90, box.m_major);
+        addInt(output, 91, box.m_minor);
+        for (std::size_t index = 0; index < box.m_shapeParams.size(); ++index)
+            output.groups.emplace_back(40 + static_cast<int>(index),
+                                       box.m_shapeParams[index]);
+        return true;
+    };
+
+    for (const DRW_ModelerGeometry* modeler : modelers) {
+        if (modeler == nullptr || modeler->handle == 0
+            || !modelerHandles.insert(modeler->handle).second) {
+            return reject("duplicate or zero DataStorage modeler handle");
+        }
+        if (modeler->m_historyHandle == 0) {
+            if (modeler->eType != DRW::REGION)
+                return reject("3DSOLID has no history owner", modeler->handle);
+            continue;
+        }
+        if (modeler->eType != DRW::E3DSOLID)
+            return reject("only 3DSOLID may own the BOX history profile",
+                          modeler->handle);
+        const auto historyIt = historyByHandle.find(modeler->m_historyHandle);
+        if (historyIt == historyByHandle.end())
+            return reject("modeler history handle is not typed",
+                          modeler->m_historyHandle);
+        const DRW_AcShHistoryObject& history = *historyIt->second;
+        if (history.m_recordName != "ACSH_HISTORY_CLASS"
+            || history.parentHandle != modeler->handle
+            || history.m_ownerHandle == 0
+            || history.m_major > static_cast<std::uint32_t>(
+                   std::numeric_limits<std::int32_t>::max())
+            || history.m_minor > static_cast<std::uint32_t>(
+                   std::numeric_limits<std::int32_t>::max())
+            || history.m_historyNodeId > static_cast<std::uint32_t>(
+                   std::numeric_limits<std::int32_t>::max())
+            || !commonLinksAreEmpty(history)
+            || !hasCompletePrefixes(history, {
+                DRW_AssociativePrefixStatus::Kind::AcDbShHistoryNode})) {
+            return reject("history object owner or body is incomplete",
+                          history.handle);
+        }
+        const auto graphIt = graphByHandle.find(history.m_ownerHandle);
+        if (graphIt == graphByHandle.end())
+            return reject("history graph handle is not typed",
+                          history.m_ownerHandle);
+        const DRW_EvaluationGraph& graph = *graphIt->second;
+        if (graph.parentHandle != history.handle || graph.m_value96 != 1
+            || graph.m_value97 != 1 || graph.m_nodes.size() != 1u
+            || !graph.m_edges.empty() || !commonLinksAreEmpty(graph)) {
+            return reject("EvaluationGraph shape is outside the BOX profile",
+                          graph.handle);
+        }
+        const DRW_EvaluationGraphNode& node = graph.m_nodes.front();
+        if (node.m_index != 0 || node.m_flags != 32
+            || node.m_nextNodeIndex != 1 || node.m_data1 != -1
+            || node.m_data2 != -1 || node.m_data3 != -1
+            || node.m_data4 != -1 || node.m_expressionHandle == 0) {
+            return reject("EvaluationGraph node is outside the BOX profile",
+                          graph.handle);
+        }
+        const auto boxIt = historyByHandle.find(node.m_expressionHandle);
+        if (boxIt == historyByHandle.end())
+            return reject("graph expression handle is not typed",
+                          node.m_expressionHandle);
+        const DRW_AcShHistoryObject& box = *boxIt->second;
+        if (box.m_recordName != "ACSH_BOX_CLASS"
+            || box.parentHandle != graph.handle
+            || !commonLinksAreEmpty(box)
+            || !hasCompletePrefixes(box, {
+                DRW_AssociativePrefixStatus::Kind::AcDbEvalExpr,
+                DRW_AssociativePrefixStatus::Kind::AcDbShHistoryNode,
+                DRW_AssociativePrefixStatus::Kind::AcShActionBody})
+            || !box.m_evalExprPrefix.m_complete
+            || box.m_evalExprPrefix.m_hasEvaluatedValue
+            || box.m_evalExprPrefix.m_valueCode > 0
+            || box.m_evalExprPrefix.m_id <= 0
+            || !box.m_historyNodePrefix.m_complete
+            || box.m_historyNodePrefix.m_major < 0
+            || box.m_historyNodePrefix.m_minor < 0
+            || static_cast<std::uint32_t>(
+                   box.m_historyNodePrefix.m_major) != history.m_major
+            || static_cast<std::uint32_t>(
+                   box.m_historyNodePrefix.m_minor) != history.m_minor
+            || box.m_historyNodePrefix.m_nodeValue != 3
+            || box.m_historyNodePrefix.m_handle == 0
+            || box.m_historyNodePrefix.m_hasRgbColor
+            || !box.m_historyNodePrefix.m_colorName.empty()
+            || !box.m_historyNodePrefix.m_colorBookName.empty()
+            || box.m_major != static_cast<std::uint32_t>(
+                   box.m_historyNodePrefix.m_major)
+            || box.m_minor != static_cast<std::uint32_t>(
+                   box.m_historyNodePrefix.m_minor)
+            || box.m_shapeParams.size() != 3u
+            || std::any_of(box.m_shapeParams.begin(), box.m_shapeParams.end(),
+                           [](double value) {
+                               return !std::isfinite(value) || value <= 0.0;
+                           })
+            || std::any_of(box.m_historyNodePrefix.m_transform.begin(),
+                           box.m_historyNodePrefix.m_transform.end(),
+                           [](double value) {
+                               return !std::isfinite(value);
+                           })) {
+            return reject("BOX class body or prefix is incomplete",
+                          box.handle);
+        }
+        std::size_t materialMatches = 0;
+        for (const DRW_Material& material : data.materials) {
+            if (material.handle == box.m_historyNodePrefix.m_handle)
+                ++materialMatches;
+        }
+        if (materialMatches != 1u)
+            return reject("BOX material link is missing or ambiguous",
+                          box.handle);
+
+        if (!usedHistoryHandles.insert(history.handle).second
+            || !usedGraphHandles.insert(graph.handle).second
+            || !usedShapeHandles.insert(box.handle).second) {
+            return reject("history closure is shared or ambiguous",
+                          modeler->handle);
+        }
+        DRW_RawDxfObject historyOutput;
+        DRW_RawDxfObject boxOutput;
+        buildHistoryObject(history, historyOutput);
+        buildBoxObject(box, boxOutput);
+        typedObjects.push_back(std::move(historyOutput));
+        typedObjects.push_back(std::move(boxOutput));
+        typedGraphs.push_back(graph);
+        if (std::find(typedMaterials.begin(), typedMaterials.end(),
+                      box.m_historyNodePrefix.m_handle) == typedMaterials.end()) {
+            typedMaterials.push_back(box.m_historyNodePrefix.m_handle);
+        }
+    }
+
+    if (usedHistoryHandles.size() * 2u != data.acshHistoryObjects.size()
+        || usedGraphHandles.size() != data.evaluationGraphs.size()
+        || usedHistoryHandles.empty()) {
+        return reject("unmatched ACSH objects or EvaluationGraphs remain");
+    }
+    objects.swap(typedObjects);
+    graphs.swap(typedGraphs);
+    materialHandles.insert(materialHandles.end(), typedMaterials.begin(),
+                           typedMaterials.end());
+    return true;
+}
+
 bool dx_iface::prepareExtensionObjectGraph(dx_data* data) {
     m_extensionDictionaryHandles.clear();
     m_extensionXRecordHandles.clear();
@@ -1393,6 +1709,8 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug){
 bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, dx_data *fData, bool debug){
     cData = fData;
     m_acdsHistoryObjects.clear();
+    m_acdsTypedHistoryObjects.clear();
+    m_acdsTypedEvaluationGraphs.clear();
     m_acdsMaterialHandles.clear();
     const auto reportPreflightFailure = [debug](const char* stage) {
         if (debug) {
@@ -1431,8 +1749,22 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
             dxfW = nullptr;
             return false;
         };
-        if (!collectAcdsHistoryProxyObjects(*cData, m_acdsHistoryObjects,
-                                            referencedMaterials, debug)) {
+        const bool hasTypedAcdsObjects =
+            !cData->acshHistoryObjects.empty()
+            || !cData->evaluationGraphs.empty();
+        if (hasTypedAcdsObjects) {
+            if (!collectAcdsTypedBoxHistoryObjects(
+                    *cData, m_acdsTypedHistoryObjects,
+                    m_acdsTypedEvaluationGraphs, referencedMaterials,
+                    debug)) {
+                reportPreflightFailure("ACDS typed BOX history closure");
+                delete dxfW;
+                dxfW = nullptr;
+                return false;
+            }
+        } else if (!collectAcdsHistoryProxyObjects(
+                       *cData, m_acdsHistoryObjects, referencedMaterials,
+                       debug)) {
             reportPreflightFailure("ACDS modeler/history proxy closure");
             delete dxfW;
             dxfW = nullptr;
@@ -1449,6 +1781,51 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
         dxfW->setNamedDictObjects(materialDictionaries);
         dxfW->setRootDictEntries(materialRootEntries);
 
+        if (!m_acdsTypedHistoryObjects.empty()) {
+            // Native custom objects use their record names directly. They do
+            // not carry the proxy-only group-91 class ordinal.
+            std::map<std::string, int> classInstanceCounts;
+            for (const DRW_RawDxfObject& object :
+                 m_acdsTypedHistoryObjects) {
+                if (object.name.empty() || object.handle == 0) {
+                    reportPreflightFailure("ACDS typed object class metadata");
+                    return failAcdsExport();
+                }
+                ++classInstanceCounts[object.name];
+            }
+            if (m_acdsTypedEvaluationGraphs.size()
+                > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+                return failAcdsExport();
+            }
+            if (!m_acdsTypedEvaluationGraphs.empty()) {
+                classInstanceCounts["ACAD_EVALUATION_GRAPH"] =
+                    static_cast<int>(m_acdsTypedEvaluationGraphs.size());
+            }
+            if (m_acdsMaterialHandles.size()
+                > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+                return failAcdsExport();
+            }
+            if (!m_acdsMaterialHandles.empty())
+                classInstanceCounts["MATERIAL"] =
+                    static_cast<int>(m_acdsMaterialHandles.size());
+
+            std::vector<DRW_Class> classes;
+            static const char* supportedTypedClasses[] = {
+                "ACSH_HISTORY_CLASS", "ACAD_EVALUATION_GRAPH",
+                "ACSH_BOX_CLASS", "MATERIAL"};
+            for (const char* name : supportedTypedClasses) {
+                const auto count = classInstanceCounts.find(name);
+                if (count == classInstanceCounts.end())
+                    continue;
+                DRW_Class cls;
+                if (!dxfRW::dxfClassForRecordName(name, cls))
+                    return failAcdsExport();
+                cls.instanceCount = count->second;
+                cls.wasaProxyFlag = 0;
+                classes.push_back(std::move(cls));
+            }
+            dxfW->setDxfClasses(classes);
+        } else {
         // DXF proxy group 91 indexes CLASSES from 500; ODA discards proxies
         // if those ordinal references do not resolve. Rebuild the class table
         // from the exact source DWG class records used by the validated proxy
@@ -1569,6 +1946,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
             object.groups[classIdGroupIndex].addInt(91, outputId->second);
         }
         dxfW->setDxfClasses(classes);
+        }
     } else {
         std::vector<DRW_Class> classes = cData->dxfClasses;
         if (!cData->evaluationGraphs.empty()) {
@@ -1647,6 +2025,25 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
         for (const DRW_RawDxfObject& object : m_acdsHistoryObjects) {
             if (!proxyHandles.insert(object.handle).second
                 || !dxfW->reserveHandle(object.handle)) {
+                delete dxfW;
+                dxfW = nullptr;
+                return false;
+            }
+        }
+        for (const DRW_RawDxfObject& object : m_acdsTypedHistoryObjects) {
+            if (object.handle == 0
+                || !proxyHandles.insert(object.handle).second
+                || !dxfW->reserveHandle(object.handle)) {
+                delete dxfW;
+                dxfW = nullptr;
+                return false;
+            }
+        }
+        for (const DRW_EvaluationGraph& graph :
+             m_acdsTypedEvaluationGraphs) {
+            if (graph.handle == 0
+                || !proxyHandles.insert(graph.handle).second
+                || !dxfW->reserveHandle(graph.handle)) {
                 delete dxfW;
                 dxfW = nullptr;
                 return false;
