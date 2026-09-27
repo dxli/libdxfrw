@@ -6431,8 +6431,16 @@ bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
     if (!std::filesystem::is_regular_file(path))
         return false;
 
+    class FrameCaptureIface final : public dx_iface {
+    public:
+        std::vector<DRW_DwgFramePublication> frames;
+        void addDwgFramePublication(
+            const DRW_DwgFramePublication& frame) override {
+            frames.push_back(frame);
+        }
+    };
     dx_data captured;
-    dx_iface iface;
+    FrameCaptureIface iface;
     iface.cData = &captured;
     dwgRW reader(path.string().c_str());
     const bool readOk = reader.read(&iface, false);
@@ -6703,6 +6711,62 @@ bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
                   << " linked-extrusion=yes box-history="
                   << boxHistory->m_major << '/' << boxHistory->m_minor << '/'
                   << boxHistory->m_historyNodeId << '\n';
+        for (const DRW_EvaluationGraph& graph : captured.evaluationGraphs) {
+            if (graph.handle == boxGraph->handle
+                || graph.handle == extrusionGraph->handle)
+                continue;
+            const bool parentIsHistory = std::any_of(
+                captured.acshHistoryObjects.begin(),
+                captured.acshHistoryObjects.end(),
+                [&graph](const DRW_AcShHistoryObject& object) {
+                    return object.handle == graph.parentHandle;
+                });
+            const bool parentIsModeler = std::any_of(
+                captured.mBlock->ent.begin(), captured.mBlock->ent.end(),
+                [&graph](const DRW_Entity* entity) {
+                    return entity != nullptr
+                        && entity->handle == graph.parentHandle;
+                });
+            std::cout << "ACSH additional graph: handle=" << std::hex
+                      << graph.handle << " parent=" << graph.parentHandle
+                      << std::dec << " parent-is-history=" << parentIsHistory
+                      << " parent-is-modeler=" << parentIsModeler
+                      << " nodes=" << graph.m_nodes.size()
+                      << " edges=" << graph.m_edges.size() << " targets=";
+            for (const DRW_EvaluationGraphNode& node : graph.m_nodes)
+                std::cout << ' ' << std::hex << node.m_expressionHandle
+                          << std::dec;
+            std::cout << '\n';
+            std::vector<std::uint32_t> associatedHandles{graph.parentHandle};
+            for (const DRW_DwgFramePublication& frame : iface.frames) {
+                if (frame.m_handle == graph.parentHandle
+                    && frame.m_parentHandle != DRW::NoHandle
+                    && frame.m_parentHandle != 0)
+                    associatedHandles.push_back(frame.m_parentHandle);
+            }
+            for (const DRW_EvaluationGraphNode& node : graph.m_nodes) {
+                if (node.m_expressionHandle != 0)
+                    associatedHandles.push_back(node.m_expressionHandle);
+            }
+            std::sort(associatedHandles.begin(), associatedHandles.end());
+            associatedHandles.erase(
+                std::unique(associatedHandles.begin(), associatedHandles.end()),
+                associatedHandles.end());
+            for (const std::uint32_t handle : associatedHandles) {
+                for (const DRW_DwgFramePublication& frame : iface.frames) {
+                    if (frame.m_handle != handle)
+                        continue;
+                    std::cout << "ACSH additional graph closure frame: handle="
+                              << std::hex << frame.m_handle << std::dec
+                              << " record=" << frame.m_recordName
+                              << " class=" << frame.m_className
+                              << " encoded-type=" << frame.m_encodedType
+                              << " resolved-type=" << frame.m_resolvedType
+                              << " parent=" << std::hex
+                              << frame.m_parentHandle << std::dec << '\n';
+                }
+            }
+        }
     }
     return acdsSchemasMatch && prefixesMatch && boxClosureLinksMatch
         && extrusionClosureLinksMatch
