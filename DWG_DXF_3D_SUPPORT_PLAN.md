@@ -142,6 +142,59 @@ version-pinned native measurement packet from the user or an authorized
 external runner; do not install licensed tools, infer dimensions from history,
 or promote a support claim. No external drawing or binary was added.
 
+**Known-size ACIS/SAB generator route audit (2026-09-27; S2.3.9.4.13):** a
+source-available control-generation route exists in
+[ACadRust 0.5.5](https://github.com/HakanSeven12/acadrust) / its
+[published crate source](https://docs.rs/acadrust/latest/src/acadrust/entities/acis/primitives.rs.html):
+`build_box(center, length, width, height)` constructs the B-rep vertices from
+those explicit dimensions, and the crate documents AC1027 read/write plus
+R2013+ SAB output. This is a promising way to create controlled known-size
+ACIS data without borrowing a downloaded drawing. It does not, by itself,
+satisfy the embedded AutoCAD witness gate. The implementation of
+[`SabWriter`](https://docs.rs/acadrust/latest/src/acadrust/entities/acis/sab.rs.html)
+uses the `ACIS BinaryFile` magic and `End-of-ACIS-data` terminator; its default
+`SatHeader` is ACIS 7.0. More importantly, its `SatVersion` docs associate
+ACIS 21.0 with save version 21800, but the implementation's
+`sat_version_number()` computes `major * 100 + minor * 10 + patch` (2100 for
+21.0); the source parser/writer mapping must be corrected or independently
+verified before configuring a modern version. The authoritative ODA DWG spec
+v5.4.1 §24.2.2.3 further says an AcDs SAB stream is prefixed with
+`ACIS BinaryFile`; when created from SAT, the terminator is
+`End-of-ASM-data` for save version >=21800 and `End-of-ACIS-data` below it.
+Therefore neither the `ACIS BinaryFile` prefix alone nor a R2013+ DWG
+container proves that the payload has the right 21800/ASM transition. The
+crate's default SAB writer is not a qualified target-version generator: it
+always emits `End-of-ACIS-data` and defaults to version 700.
+
+Treat a pinned generator as an **experimental
+generic ACIS scale control only**: generate an asymmetric box from recorded
+source dimensions, record the exact SAT/SAB header and payload hash, write
+AC1027 with explicit `$INSUNITS`, then compare raw and millimetre extents from
+independent readers. Make a second copy changing only `$INSUNITS`; do not infer
+the unit rule from the writer's own round trip. The generator must first
+produce and externally validate the version-21800 header/terminator pair; if
+it emits ACIS 7.0, 2100, or another unqualified format, retain it only as a
+parser fixture and do not advance S2.3.2. Even a passing 21800 control narrows
+only the generic embedded-SAB scale question; keep the exact ASM-230 / native
+AutoCAD path gated until an authentic matching control or an authoritative
+version-matched contract is obtained.
+
+The public ACadSharp `sample_AC1027.dwg` and paired DXF remain the best
+available modern embedded samples, but a fresh exact-name search found no
+published authoring dimensions or native pre-export B-rep measurement; the
+maintainer's [provenance answer](https://github.com/DomCR/ACadSharp/discussions/520)
+still describes the files as reader-test inputs. Open CAD Studio's public
+[web app](https://www.opencadstudio.com/app/) is an accessible ACadRust-based
+authoring surface, but is not an independent producer and does not expose a
+verified AutoCAD-native extent report. This host has Node.js but no `cargo` or
+`rustc`; no software was installed, the web app was inspected but not used to
+generate a drawing, and no license or Gatekeeper exception was used. No drawing
+fixture was generated or committed in this audit. Next execution option: fix
+and pin the ACadrust save-version mapping/terminator behavior in an isolated
+Rust-enabled generator, validate its 21800 output with ODA and a second
+independent reader, then obtain the separate AutoCAD/authorized external
+measurement packet only if the ASM-230 contract remains unresolved.
+
 **Native-platform unblock research (2026-09-27; S8.9.5):** the plan's native-CI
 option is immediately actionable on the existing project workflow matrix:
 `.github/workflows/build.yml` already builds on `ubuntu-24.04` and
