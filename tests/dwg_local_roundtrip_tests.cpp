@@ -5339,10 +5339,17 @@ DRW_DataStorageSection makeLocalDataStorageSection(
 }
 
 void addLocalAcdsHistoryClosure(dx_data& source,
-                               DRW_ModelerGeometry& modeler) {
-    constexpr std::uint32_t history = 0x20Eu;
-    constexpr std::uint32_t evaluation = 0x20Du;
-    constexpr std::uint32_t operation = 0x20Cu;
+                               DRW_ModelerGeometry& modeler,
+                               std::uint32_t history = 0x20Eu,
+                               std::uint32_t evaluation = 0x20Du,
+                               std::uint32_t operation = 0x20Cu,
+                               std::uint16_t operationClassId = 519u,
+                               const char* operationRecordName =
+                                   "ACSH_CONE_CLASS",
+                               const char* operationClassName =
+                                   "AcDbShCone",
+                               const char* operationSubclass =
+                                   "cn:AcDbShCone") {
     constexpr std::uint32_t material = 0x96u;
     modeler.m_historyHandle = history;
 
@@ -5381,8 +5388,9 @@ void addLocalAcdsHistoryClosure(dx_data& source,
     source.proxyObjects.push_back(proxy(evaluation, history, 520, 190,
                                         "cn:AcDbEvalGraph",
                                         360, operation));
-    source.proxyObjects.push_back(proxy(operation, evaluation, 519, 558,
-                                        "cn:AcDbShCone",
+    source.proxyObjects.push_back(proxy(operation, evaluation,
+                                        operationClassId, 558,
+                                        operationSubclass,
                                         340, material));
 
     source.dwgClassCoverage.m_status =
@@ -5392,9 +5400,18 @@ void addLocalAcdsHistoryClosure(dx_data& source,
         classes {{
             {521u, "ACSH_HISTORY_CLASS", "AcDbShHistory"},
             {520u, "ACAD_EVALUATION_GRAPH", "AcDbEvalGraph"},
-            {519u, "ACSH_CONE_CLASS", "AcDbShCone"}
+            {operationClassId, operationRecordName, operationClassName}
         }};
     for (const auto& cls : classes) {
+        const bool exists = std::any_of(
+            source.dwgClassCoverage.m_entries.begin(),
+            source.dwgClassCoverage.m_entries.end(),
+            [&cls](const DRW_DwgClassCoverageEntry& entry) {
+                return entry.m_recordName == std::get<1>(cls)
+                    && entry.m_className == std::get<2>(cls);
+            });
+        if (exists)
+            continue;
         DRW_DwgClassCoverageEntry entry;
         entry.m_classNumber = std::get<0>(cls);
         entry.m_recordName = std::get<1>(cls);
@@ -5404,17 +5421,31 @@ void addLocalAcdsHistoryClosure(dx_data& source,
         source.dwgClassCoverage.m_entries.push_back(std::move(entry));
     }
 
-    DRW_Dictionary materialsDictionary;
-    materialsDictionary.handle = 0x72u;
-    materialsDictionary.parentHandle = 0xCu;
-    materialsDictionary.cloning = 1;
-    materialsDictionary.m_entries.push_back({"ByLayer", 0x96u});
-    materialsDictionary.m_entries.push_back({"ByBlock", 0x97u});
-    materialsDictionary.m_entries.push_back({"Global", 0x98u});
-    source.dictionaries.push_back(std::move(materialsDictionary));
+    const bool hasMaterialsDictionary = std::any_of(
+        source.dictionaries.begin(), source.dictionaries.end(),
+        [](const DRW_Dictionary& dictionary) {
+            return dictionary.handle == 0x72u;
+        });
+    if (!hasMaterialsDictionary) {
+        DRW_Dictionary materialsDictionary;
+        materialsDictionary.handle = 0x72u;
+        materialsDictionary.parentHandle = 0xCu;
+        materialsDictionary.cloning = 1;
+        materialsDictionary.m_entries.push_back({"ByLayer", 0x96u});
+        materialsDictionary.m_entries.push_back({"ByBlock", 0x97u});
+        materialsDictionary.m_entries.push_back({"Global", 0x98u});
+        source.dictionaries.push_back(std::move(materialsDictionary));
+    }
     for (const auto& materialInfo : {
              std::pair<std::uint32_t, const char*>{0x96u, "ByLayer"},
              {0x97u, "ByBlock"}, {0x98u, "Global"}}) {
+        const bool exists = std::any_of(
+            source.materials.begin(), source.materials.end(),
+            [&materialInfo](const DRW_Material& materialRecord) {
+                return materialRecord.handle == materialInfo.first;
+            });
+        if (exists)
+            continue;
         DRW_Material value;
         value.handle = materialInfo.first;
         value.parentHandle = 0x72u;
@@ -5606,6 +5637,298 @@ bool hasExpectedAcdsSchemaDefinitions(const DRW_RawDxfSection& section) {
         start = end;
     }
     return schemaIndex == expected.size();
+}
+
+bool runDxfAcdsMultipleDataStorageProjection(
+    bool binary, const std::filesystem::path& directory, bool keepOutput) {
+    const std::filesystem::path output = directory /
+        (std::string("libdxfrw-ac1027-acds-multiple-")
+         + (binary ? "binary" : "ascii") + ".dxf");
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+
+    const auto sab = [](std::uint8_t suffix) {
+        return std::vector<std::uint8_t>{
+            'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
+            suffix, static_cast<std::uint8_t>(suffix + 1u),
+            static_cast<std::uint8_t>(suffix + 2u)};
+    };
+    const std::vector<std::uint8_t> boxPayload = sab(0x21u);
+    const std::vector<std::uint8_t> extrusionPayload = sab(0x31u);
+    const std::vector<std::uint8_t> regionPayload = sab(0x41u);
+    const std::vector<std::uint8_t> pngPayload{
+        0x89u, 'P', 'N', 'G', 0x0Du, 0x0Au, 0x1Au, 0x0Au,
+        0x00u, 0x00u, 0x00u, 0x0Du, 'I', 'H', 'D', 'R',
+        0x00u, 0x00u, 0x00u, 0x01u, 0x00u, 0x00u, 0x00u, 0x01u,
+        0x08u, 0x06u, 0x00u, 0x00u, 0x00u, 0x1Fu, 0x15u, 0xC4u, 0x89u,
+        0x00u, 0x00u, 0x00u, 0x0Bu, 'I', 'D', 'A', 'T',
+        0x78u, 0xDAu, 0x63u, 0x64u, 0x00u, 0x02u, 0x00u, 0x00u,
+        0x05u, 0x00u, 0x01u, 0xA5u, 0x50u, 0x20u, 0xA6u,
+        0x00u, 0x00u, 0x00u, 0x00u, 'I', 'E', 'N', 'D',
+        0xAEu, 0x42u, 0x60u, 0x82u};
+
+    dx_data source;
+    const auto addModeler = [&source](
+        DRW::ETYPE type, std::uint32_t handle,
+        const std::vector<std::uint8_t>& payload) {
+        auto* modeler = new DRW_ModelerGeometry(type);
+        modeler->handle = handle;
+        modeler->m_modelerVersion = 2;
+        modeler->m_dwgSourceVersion = DRW::AC1027;
+        modeler->m_hasModelerData = true;
+        modeler->setHasDataStorageBinaryData(true);
+        modeler->hasDataStorageRecord = true;
+        modeler->dataStorageHandle = handle;
+        char handleText[9] = {};
+        std::snprintf(handleText, sizeof(handleText), "%X", handle);
+        modeler->dataStorageHandleKey = handleText;
+        // This is a DWG-internal lookup index, not the DXF ACDSRECORD code.
+        modeler->dataStorageSchemaIndex = 5u;
+        modeler->dataStorageData = payload;
+        source.mBlock->ent.push_back(modeler);
+        return modeler;
+    };
+    auto* box = addModeler(DRW::E3DSOLID, 0xFC20u, boxPayload);
+    auto* extrusion = addModeler(
+        DRW::E3DSOLID, 0xFC21u, extrusionPayload);
+    auto* region = addModeler(DRW::REGION, 0xFC22u, regionPayload);
+    addLocalAcdsHistoryClosure(source, *box, 0x30Eu, 0x30Du, 0x30Cu,
+                               546u, "ACSH_BOX_CLASS", "AcDbShBox",
+                               "cn:AcDbShBox");
+    addLocalAcdsHistoryClosure(source, *extrusion, 0x40Eu, 0x40Du, 0x40Cu,
+                               547u, "ACSH_EXTRUSION_CLASS",
+                               "AcDbShExtrusion", "cn:AcDbShExtrusion");
+
+    DRW_DataStorageSection storage = makeLocalDataStorageSection(
+        box->handle, boxPayload);
+    storage.records.front().schemaIndex = 5u;
+    DRW_DataStorageRecord extrusionRecord =
+        makeLocalDataStorageSection(extrusion->handle, extrusionPayload)
+            .records.front();
+    extrusionRecord.schemaIndex = 5u;
+    storage.records.push_back(std::move(extrusionRecord));
+    DRW_DataStorageRecord regionRecord =
+        makeLocalDataStorageSection(region->handle, regionPayload)
+            .records.front();
+    regionRecord.schemaIndex = 5u;
+    storage.records.push_back(std::move(regionRecord));
+    for (const std::uint32_t handle : {0xA602u, 0xA770u}) {
+        DRW_DataStorageRecord thumbnail;
+        thumbnail.handle = handle;
+        char handleText[9] = {};
+        std::snprintf(handleText, sizeof(handleText), "%X", handle);
+        thumbnail.handleKey = handleText;
+        thumbnail.isHandleSafe = true;
+        thumbnail.schemaIndex = 0u;
+        thumbnail.dataByteLength =
+            static_cast<std::uint32_t>(pngPayload.size());
+        thumbnail.payload = pngPayload;
+        storage.records.push_back(std::move(thumbnail));
+    }
+    storage.orphanRecordCount = 2u;
+    source.dataStorageSections.push_back(std::move(storage));
+
+    dx_iface exporter;
+    if (!exporter.fileExport(output.string(), DRW::AC1027, binary,
+                             &source, false)) {
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+    dx_data imported;
+    dx_iface importer;
+    if (!importer.fileImport(output.string(), &imported, false)
+        || imported.rawDxfSections.size() != 1u
+        || imported.rawDxfSections.front().m_name != "ACDSDATA") {
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+
+    const auto decodeHex = [](const std::string& text,
+                              std::vector<std::uint8_t>& bytes) {
+        if ((text.size() & 1u) != 0u)
+            return false;
+        const auto nibble = [](unsigned char value) {
+            if (value >= '0' && value <= '9')
+                return static_cast<int>(value - '0');
+            if (value >= 'A' && value <= 'F')
+                return static_cast<int>(value - 'A' + 10);
+            if (value >= 'a' && value <= 'f')
+                return static_cast<int>(value - 'a' + 10);
+            return -1;
+        };
+        for (std::size_t index = 0; index < text.size(); index += 2u) {
+            const int high = nibble(static_cast<unsigned char>(text[index]));
+            const int low = nibble(static_cast<unsigned char>(text[index + 1u]));
+            if (high < 0 || low < 0)
+                return false;
+            bytes.push_back(static_cast<std::uint8_t>((high << 4) | low));
+        }
+        return true;
+    };
+    const std::map<std::string, std::vector<std::uint8_t>> expectedThumbnails{
+        {"A602", pngPayload}, {"A770", pngPayload}};
+    std::map<std::string, std::vector<std::uint8_t>> observedRecords;
+    const auto& groups = imported.rawDxfSections.front().m_groups;
+    bool recordsValid = true;
+    std::size_t asmRecordCount = 0;
+    std::size_t thumbnailRecordCount = 0;
+    for (std::size_t start = 0; start < groups.size();) {
+        if (groups[start].code() != 0
+            || groups[start].type() != DRW_Variant::STRING
+            || groups[start].c_str() == nullptr
+            || std::strcmp(groups[start].c_str(), "ACDSRECORD") != 0) {
+            ++start;
+            continue;
+        }
+        std::size_t end = start + 1u;
+        while (end < groups.size() && groups[end].code() != 0)
+            ++end;
+        std::string key;
+        std::string propertyName;
+        std::vector<std::uint8_t> payload;
+        std::uint32_t declaredLength = 0;
+        std::int32_t schemaCode = -1;
+        bool inId = false;
+        for (std::size_t index = start + 1u; index < end; ++index) {
+            const DRW_Variant& group = groups[index];
+            if (group.code() == 90
+                && group.type() == DRW_Variant::INTEGER) {
+                schemaCode = static_cast<std::int32_t>(group.i_val());
+            } else if (group.code() == 2
+                       && group.type() == DRW_Variant::STRING
+                       && group.c_str() != nullptr) {
+                inId = std::strcmp(group.c_str(), "AcDbDs::ID") == 0;
+                if (!inId)
+                    propertyName = group.c_str();
+            } else if (inId && group.code() == 320
+                       && group.type() == DRW_Variant::STRING
+                       && group.c_str() != nullptr) {
+                key = group.c_str();
+            } else if (group.code() == 94
+                       && group.type() == DRW_Variant::INTEGER
+                       && group.i_val() >= 0) {
+                declaredLength = static_cast<std::uint32_t>(group.i_val());
+            } else if ((propertyName == "ASM_Data"
+                        || propertyName == "Thumbnail_Data")
+                       && group.code() == 310
+                       && group.type() == DRW_Variant::STRING
+                       && group.c_str() != nullptr) {
+                recordsValid = recordsValid && decodeHex(group.c_str(), payload);
+            }
+        }
+        if (propertyName == "ASM_Data") {
+            ++asmRecordCount;
+            recordsValid = recordsValid && schemaCode == 1;
+        } else if (propertyName == "Thumbnail_Data") {
+            ++thumbnailRecordCount;
+            recordsValid = recordsValid && schemaCode == 0;
+        } else {
+            recordsValid = false;
+        }
+        if (key.empty() || payload.size() != declaredLength
+            || !observedRecords.emplace(key, std::move(payload)).second) {
+            recordsValid = false;
+        }
+        start = end;
+    }
+
+    std::vector<std::string> modelerHandleKeys;
+    std::size_t solidCount = 0;
+    std::size_t regionCount = 0;
+    for (const DRW_Entity* entity : imported.mBlock->ent) {
+        if (entity == nullptr)
+            continue;
+        if (entity->eType == DRW::E3DSOLID)
+            ++solidCount;
+        else if (entity->eType == DRW::REGION)
+            ++regionCount;
+        else
+            continue;
+        const auto* modeler = static_cast<const DRW_ModelerGeometry*>(entity);
+        char handleText[9] = {};
+        std::snprintf(handleText, sizeof(handleText), "%X", modeler->handle);
+        modelerHandleKeys.emplace_back(handleText);
+    }
+    std::sort(modelerHandleKeys.begin(), modelerHandleKeys.end());
+    std::vector<std::vector<std::uint8_t>> modelerSabPayloads;
+    bool modelerAssociationsMatch = modelerHandleKeys.size() == 3u;
+    for (const std::string& handleKey : modelerHandleKeys) {
+        const auto record = observedRecords.find(handleKey);
+        if (record == observedRecords.end()
+            || record->second.size() < 15u
+            || !std::equal(boxPayload.begin(), boxPayload.begin() + 15,
+                           record->second.begin())) {
+            modelerAssociationsMatch = false;
+            continue;
+        }
+        modelerSabPayloads.push_back(record->second);
+    }
+    std::sort(modelerSabPayloads.begin(), modelerSabPayloads.end());
+    std::vector<std::vector<std::uint8_t>> expectedModelerSabPayloads{
+        boxPayload, extrusionPayload, regionPayload};
+    std::sort(expectedModelerSabPayloads.begin(),
+              expectedModelerSabPayloads.end());
+    const bool thumbnailsMatch =
+        observedRecords.size() == modelerHandleKeys.size()
+                                  + expectedThumbnails.size()
+        && std::all_of(
+            expectedThumbnails.begin(), expectedThumbnails.end(),
+            [&observedRecords](const auto& expected) {
+                const auto record = observedRecords.find(expected.first);
+                return record != observedRecords.end()
+                    && record->second == expected.second;
+            });
+
+    const std::array<std::pair<const char*, int>, 5> expectedClasses{{
+        {"ACSH_HISTORY_CLASS", 2}, {"ACAD_EVALUATION_GRAPH", 2},
+        {"ACSH_BOX_CLASS", 1}, {"ACSH_EXTRUSION_CLASS", 1},
+        {"MATERIAL", 3}}};
+    bool classesMatch = imported.dxfClasses.size() == expectedClasses.size();
+    if (classesMatch) {
+        for (std::size_t index = 0; index < expectedClasses.size(); ++index) {
+            const DRW_Class& cls = imported.dxfClasses[index];
+            if (cls.recName != expectedClasses[index].first
+                || cls.instanceCount != expectedClasses[index].second) {
+                classesMatch = false;
+                break;
+            }
+        }
+    }
+    const bool result = recordsValid && observedRecords.size() == 5u
+        && asmRecordCount == 3u && thumbnailRecordCount == 2u
+        && solidCount == 2u && regionCount == 1u
+        && modelerAssociationsMatch
+        && modelerSabPayloads == expectedModelerSabPayloads
+        && thumbnailsMatch
+        && imported.proxyObjects.size() == 6u
+        && imported.rawProxyObjects.size() == 6u && classesMatch
+        && hasExpectedAcdsSchemaDefinitions(imported.rawDxfSections.front());
+    if (!result) {
+        std::cerr << "ACDS multi-projection details: recordsValid="
+                  << recordsValid << " observedRecords="
+                  << observedRecords.size() << " ASM=" << asmRecordCount
+                  << " thumbnails=" << thumbnailRecordCount
+                  << " solids=" << solidCount << " regions=" << regionCount
+                  << " modeler associations=" << modelerAssociationsMatch
+                  << " SABs=" << modelerSabPayloads.size() << " proxies="
+                  << imported.proxyObjects.size() << "/"
+                  << imported.rawProxyObjects.size() << " classes="
+                  << classesMatch << " schema="
+                  << hasExpectedAcdsSchemaDefinitions(
+                         imported.rawDxfSections.front()) << '\n';
+        std::cerr << "ACDS multi-projection entity types:";
+        for (const DRW_Entity* entity : imported.mBlock->ent) {
+            if (entity != nullptr)
+                std::cerr << ' ' << static_cast<int>(entity->eType)
+                          << ':' << entity->handle;
+        }
+        std::cerr << '\n';
+    }
+    if (!keepOutput)
+        std::filesystem::remove(output, ec);
+    return result;
 }
 
 bool runDxfAcdsDataStorageProjection(
@@ -10164,6 +10487,14 @@ int main(int argc, char** argv) {
            failures);
     expect(runDxfAcdsDataStorageProjection(true, directory, keepOutputs),
            "local binary DWG DataStorage to AC1027 ACDSDATA projection",
+           failures);
+    expect(runDxfAcdsMultipleDataStorageProjection(
+               false, directory, keepOutputs),
+           "local ASCII multi-modeler ACDS projection with thumbnails",
+           failures);
+    expect(runDxfAcdsMultipleDataStorageProjection(
+               true, directory, keepOutputs),
+           "local binary multi-modeler ACDS projection with thumbnails",
            failures);
     expect(runDxfAcdsDataStorageProjection(false, directory, keepOutputs,
                                            false, false, true),

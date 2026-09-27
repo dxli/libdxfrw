@@ -931,14 +931,13 @@ bool hasSabBinaryFileSignature(const std::vector<std::uint8_t>& payload) {
 bool hasQualifiedAc1027AcdsRecord(
     const DRW_ModelerGeometry& entity,
     const std::vector<DRW_RawDxfSection>& sections) {
-    if (entity.eType != DRW::E3DSOLID
+    if ((entity.eType != DRW::E3DSOLID && entity.eType != DRW::REGION)
         || entity.m_dwgSourceVersion != DRW::AC1027
         || entity.m_modelerVersion != 2 || entity.m_isEmpty
         || !entity.m_hasModelerData || !entity.hasDataStorageBinaryData()
         || !entity.hasDataStorageRecord || entity.dataStorageData.empty()
         || entity.dataStorageData.size() > DRW_DataStorageConst::PAYLOAD_BLOB_SECTION_CAP
         || !hasSabBinaryFileSignature(entity.dataStorageData)
-        || entity.dataStorageSchemaIndex != 1u
         || entity.dataStorageHandle != entity.handle
         || entity.dataStorageHandleKey.empty()
         || !entity.m_dwgAcisPayload.empty()
@@ -957,7 +956,8 @@ bool hasQualifiedAc1027AcdsRecord(
     if (acdsSection == nullptr)
         return false;
 
-    std::size_t matchedRecords = 0;
+    bool matchedEntityRecord = false;
+    std::unordered_set<std::string> asmOwnerKeys;
     const std::vector<DRW_Variant>& groups = acdsSection->m_groups;
     for (std::size_t start = 0; start < groups.size();) {
         const DRW_Variant& startGroup = groups[start];
@@ -976,6 +976,9 @@ bool hasQualifiedAc1027AcdsRecord(
 
         bool inId = false;
         bool hasAsmData = false;
+        std::size_t asmDataLabelCount = 0;
+        bool hasSchemaIndex = false;
+        std::uint32_t schemaIndex = 0;
         std::size_t ownerCount = 0;
         std::string owner;
         bool hasLength = false;
@@ -983,15 +986,24 @@ bool hasQualifiedAc1027AcdsRecord(
         std::vector<std::uint8_t> payload;
         for (std::size_t index = start + 1u; index < end; ++index) {
             const DRW_Variant& group = groups[index];
-            if (group.code() == 2) {
+            if (!hasSchemaIndex && group.code() == 90) {
+                if (group.type() != DRW_Variant::INTEGER
+                    || group.i_val() < 0) {
+                    return false;
+                }
+                schemaIndex = static_cast<std::uint32_t>(group.i_val());
+                hasSchemaIndex = true;
+            } else if (group.code() == 2) {
                 if (group.type() != DRW_Variant::STRING
                     || group.c_str() == nullptr) {
                     inId = false;
                     continue;
                 }
                 inId = dxfKeywordEquals(group.c_str(), "AcDbDs::ID");
-                if (dxfKeywordEquals(group.c_str(), "ASM_Data"))
+                if (dxfKeywordEquals(group.c_str(), "ASM_Data")) {
                     hasAsmData = true;
+                    ++asmDataLabelCount;
+                }
             } else if (inId && group.code() == 320) {
                 ++ownerCount;
                 if (group.type() == DRW_Variant::STRING
@@ -1025,7 +1037,8 @@ bool hasQualifiedAc1027AcdsRecord(
                     const int low = digit(
                         static_cast<unsigned char>(hex[offset + 1u]));
                     if (high < 0 || low < 0
-                        || payload.size() >= entity.dataStorageData.size())
+                        || payload.size()
+                               >= DRW_DataStorageConst::PAYLOAD_BLOB_SECTION_CAP)
                         return false;
                     payload.push_back(static_cast<std::uint8_t>(
                         (static_cast<unsigned int>(high) << 4u)
@@ -1034,15 +1047,27 @@ bool hasQualifiedAc1027AcdsRecord(
             }
         }
         if (hasAsmData) {
-            ++matchedRecords;
-            if (ownerCount != 1u || owner != entity.dataStorageHandleKey
-                || !hasLength || declaredLength != entity.dataStorageData.size()
-                || payload != entity.dataStorageData)
+            if (asmDataLabelCount != 1u || !hasSchemaIndex
+                || schemaIndex != 1u || ownerCount != 1u
+                || owner.empty() || !asmOwnerKeys.insert(owner).second
+                || !hasLength
+                || declaredLength != payload.size()
+                || declaredLength > DRW_DataStorageConst::PAYLOAD_BLOB_SECTION_CAP
+                || payload.empty() || !hasSabBinaryFileSignature(payload)) {
                 return false;
+            }
+            if (owner == entity.dataStorageHandleKey) {
+                if (matchedEntityRecord
+                    || declaredLength != entity.dataStorageData.size()
+                    || payload != entity.dataStorageData) {
+                    return false;
+                }
+                matchedEntityRecord = true;
+            }
         }
         start = end;
     }
-    return matchedRecords == 1u;
+    return matchedEntityRecord;
 }
 
 void writeDxfTextChunks(dxfWriter *writer, const std::vector<std::uint8_t>& data) {

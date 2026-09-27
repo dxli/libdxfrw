@@ -106,6 +106,14 @@ bool hasSabSignature(const std::vector<std::uint8_t>& payload) {
                       });
 }
 
+bool hasPngSignature(const std::vector<std::uint8_t>& payload) {
+    static constexpr std::uint8_t signature[] = {
+        0x89u, 'P', 'N', 'G', 0x0Du, 0x0Au, 0x1Au, 0x0Au};
+    return payload.size() >= sizeof(signature)
+        && std::equal(std::begin(signature), std::end(signature),
+                      payload.begin());
+}
+
 bool matchesDataStorageSchemaProperty(
     const DRW_DataStorageSchemaProperty& property, std::uint32_t nameIndex,
     const char* name, std::uint32_t type, std::uint32_t flags,
@@ -357,46 +365,86 @@ bool collectAcdsHistoryProxyGraph(
         return false;
 
     // A DWG class number is assigned per drawing, not fixed by the object
-    // type. ODA's own AC1027 roundtrip renumbers this witnessed chain from
-    // 521/520/519 to 500/501/502. Bind each proxy body to the independently
-    // parsed CLASSES record instead of accepting either set as a magic value.
+    // type. Bind every proxy body to the independently parsed CLASSES record
+    // instead of accepting a familiar numeric class-ID triple by coincidence.
     if (!data.dwgClassCoverage.m_complete
         || data.dwgClassCoverage.m_status
                != DRW_DwgClassCoverageStatus::FinalizedComplete) {
         return false;
     }
-    const char* expectedRecordNames[] = {
-        "ACSH_HISTORY_CLASS", "ACAD_EVALUATION_GRAPH", "ACSH_CONE_CLASS"};
-    const char* expectedClassNames[] = {
-        "AcDbShHistory", "AcDbEvalGraph", "AcDbShCone"};
-    std::int32_t sourceClassIds[3] = {0, 0, 0};
-    for (std::size_t index = 0; index < 3u; ++index) {
+
+    struct ProxyClass {
+        const char* recordName;
+        const char* className;
+        const char* subclass;
+    };
+    const auto proxyClassForSubclass = [](const std::string& subclass,
+                                          ProxyClass& result) {
+        if (subclass == "cn:AcDbShHistory") {
+            result = {"ACSH_HISTORY_CLASS", "AcDbShHistory",
+                      "cn:AcDbShHistory"};
+            return true;
+        }
+        if (subclass == "cn:AcDbEvalGraph") {
+            result = {"ACAD_EVALUATION_GRAPH", "AcDbEvalGraph",
+                      "cn:AcDbEvalGraph"};
+            return true;
+        }
+        if (subclass == "cn:AcDbShCone") {
+            result = {"ACSH_CONE_CLASS", "AcDbShCone", "cn:AcDbShCone"};
+            return true;
+        }
+        if (subclass == "cn:AcDbShBox") {
+            result = {"ACSH_BOX_CLASS", "AcDbShBox", "cn:AcDbShBox"};
+            return true;
+        }
+        if (subclass == "cn:AcDbShExtrusion") {
+            result = {"ACSH_EXTRUSION_CLASS", "AcDbShExtrusion",
+                      "cn:AcDbShExtrusion"};
+            return true;
+        }
+        return false;
+    };
+    const auto sourceClassIdFor = [&data](const ProxyClass& proxyClass,
+                                          std::int32_t& sourceClassId) {
+        sourceClassId = 0;
         for (const DRW_DwgClassCoverageEntry& entry :
              data.dwgClassCoverage.m_entries) {
-            if (entry.m_recordName != expectedRecordNames[index]
-                || entry.m_className != expectedClassNames[index]) {
+            if (entry.m_recordName != proxyClass.recordName
+                || entry.m_className != proxyClass.className) {
                 continue;
             }
-            if (sourceClassIds[index] != 0
+            if (sourceClassId != 0
                 || entry.m_state != DRW_DwgClassCoverageState::Published
                 || entry.m_entityFlagRaw != 0x1F3
                 || entry.m_classNumber < 500) {
                 return false;
             }
-            sourceClassIds[index] = entry.m_classNumber;
+            sourceClassId = entry.m_classNumber;
         }
-        if (sourceClassIds[index] == 0)
-            return false;
-    }
-    if (sourceClassIds[0] == sourceClassIds[1]
-        || sourceClassIds[0] == sourceClassIds[2]
-        || sourceClassIds[1] == sourceClassIds[2]) {
+        return sourceClassId != 0;
+    };
+
+    const std::size_t outputStart = output.size();
+    ProxyClass expectedClasses[3] = {
+        {"ACSH_HISTORY_CLASS", "AcDbShHistory", "cn:AcDbShHistory"},
+        {"ACAD_EVALUATION_GRAPH", "AcDbEvalGraph", "cn:AcDbEvalGraph"},
+        {nullptr, nullptr, nullptr}};
+    std::int32_t sourceClassIds[3] = {0, 0, 0};
+    if (!sourceClassIdFor(expectedClasses[0], sourceClassIds[0])
+        || !sourceClassIdFor(expectedClasses[1], sourceClassIds[1])) {
         return false;
     }
 
     std::unordered_map<std::uint32_t, std::vector<const DRW_ProxyObject*>> byHandle;
-    for (const DRW_ProxyObject& proxy : data.proxyObjects)
+    for (const DRW_ProxyObject& proxy : data.proxyObjects) {
+        if (proxy.handle == 0
+            || !byHandle.emplace(proxy.handle,
+                                 std::vector<const DRW_ProxyObject*>{}).second) {
+            return false;
+        }
         byHandle[proxy.handle].push_back(&proxy);
+    }
 
     std::vector<std::pair<std::uint32_t, std::uint32_t>> pending;
     std::unordered_map<std::uint32_t, std::uint32_t> expectedOwner;
@@ -404,7 +452,7 @@ bool collectAcdsHistoryProxyGraph(
     pending.emplace_back(modeler.m_historyHandle, modeler.handle);
     try {
         while (!pending.empty()) {
-            if (output.size() >= 3u)
+            if (output.size() - outputStart >= 3u)
                 return false;
             const auto current = pending.back();
             pending.pop_back();
@@ -421,21 +469,28 @@ bool collectAcdsHistoryProxyGraph(
                 return false;
             }
             const DRW_ProxyObject& proxy = *found->second.front();
-            const char* expectedSubclasses[] = {
-                "cn:AcDbShHistory", "cn:AcDbEvalGraph", "cn:AcDbShCone"};
-            if (!proxy.m_hasProxyClassId
-                || proxy.m_proxyClassId != sourceClassIds[output.size()]
-                || proxy.m_proxySubclass != expectedSubclasses[output.size()]
+            const std::size_t depth = output.size() - outputStart;
+            if (depth == 2u
+                && !proxyClassForSubclass(proxy.m_proxySubclass,
+                                          expectedClasses[2])) {
+                return false;
+            }
+            if (depth >= 3u
+                || !proxy.m_hasProxyClassId
+                || !sourceClassIdFor(expectedClasses[depth],
+                                     sourceClassIds[depth])
+                || (depth == 2u
+                    && (sourceClassIds[2] == sourceClassIds[0]
+                        || sourceClassIds[2] == sourceClassIds[1]))
+                || proxy.m_proxyClassId != sourceClassIds[depth]
+                || proxy.m_proxySubclass != expectedClasses[depth].subclass
                 || proxy.m_objectIdRefs.size() != 1u) {
                 return false;
             }
 
             DRW_RawDxfObject raw;
-            if (!makeRawProxyObject(
-                    proxy, static_cast<std::int32_t>(500u + output.size()),
-                    raw)) {
+            if (!makeRawProxyObject(proxy, proxy.m_proxyClassId, raw))
                 return false;
-            }
             output.push_back(std::move(raw));
 
             const DRW_ProxyObjectIdRef& reference =
@@ -447,7 +502,7 @@ bool collectAcdsHistoryProxyGraph(
             }
             const std::uint32_t target =
                 static_cast<std::uint32_t>(reference.m_handle);
-            if (output.size() < 3u) {
+            if (depth < 2u) {
                 if (reference.m_dxfCode != 360
                     || byHandle.find(target) == byHandle.end()) {
                     return false;
@@ -466,12 +521,15 @@ bool collectAcdsHistoryProxyGraph(
             }
             if (materialMatches != 1u)
                 return false;
-            materialHandles.push_back(target);
+            if (std::find(materialHandles.begin(), materialHandles.end(),
+                          target) == materialHandles.end()) {
+                materialHandles.push_back(target);
+            }
         }
     } catch (...) {
         return false;
     }
-    return output.size() == 3u && materialHandles.size() == 1u;
+    return output.size() - outputStart == 3u;
 }
 
 bool configureAcdsMaterialDictionary(
@@ -547,8 +605,8 @@ bool appendAcdsDataSection(
         }
     }
 
-    const DRW_ModelerGeometry* modeler = nullptr;
-    std::size_t linkedEntityCount = 0;
+    std::vector<const DRW_ModelerGeometry*> linkedModelers;
+    std::unordered_set<std::uint32_t> linkedHandles;
     const auto inspectBlock = [&](const dx_ifaceBlock* block) {
         if (block == nullptr)
             return true;
@@ -560,10 +618,17 @@ bool appendAcdsDataSection(
                 || !entity->dataStorageData.empty();
             if (!carriesDataStorage)
                 continue;
-            ++linkedEntityCount;
-            if (entity->eType != DRW::E3DSOLID)
+            if (entity->eType != DRW::E3DSOLID
+                && entity->eType != DRW::REGION) {
                 return false;
-            modeler = static_cast<const DRW_ModelerGeometry*>(entity);
+            }
+            const auto* modeler =
+                static_cast<const DRW_ModelerGeometry*>(entity);
+            if (modeler->handle == 0
+                || !linkedHandles.insert(modeler->handle).second) {
+                return false;
+            }
+            linkedModelers.push_back(modeler);
         }
         return true;
     };
@@ -578,11 +643,11 @@ bool appendAcdsDataSection(
     }
 
     if (data.dataStorageSections.empty())
-        return linkedEntityCount == 0;
+        return linkedModelers.empty();
     if (data.dataStorageSections.size() != 1u)
         return false;
     const DRW_DataStorageSection& storage = data.dataStorageSections.front();
-    if (storage.records.empty() && linkedEntityCount == 0)
+    if (storage.records.empty() && linkedModelers.empty())
         return true;
     if (hasExistingAcdsData || outputVersion != DRW::AC1027
         || storage.m_name != "AcDb:AcDsPrototype_1b"
@@ -590,49 +655,70 @@ bool appendAcdsDataSection(
         || !storage.structurallyValid || !storage.replayAllowed
         || !storage.payloadsRetained
         || !matchesQualifiedAc1027AcdsSchemas(storage)
-        || storage.records.size() != 1u
         || !storage.duplicateRecordHandleKeys.empty()
-        || storage.orphanRecordCount != 0u || linkedEntityCount != 1u
-        || modeler == nullptr || modeler->eType != DRW::E3DSOLID
-        || !modeler->hasDataStorageBinaryData()
-        || !modeler->hasDataStorageRecord || modeler->m_isEmpty
-        || !modeler->m_hasModelerData || modeler->m_dwgAcisPayload.size() != 0u
-        || modeler->dataStorageSchemaIndex != 1u
-        || modeler->dataStorageData.empty()
-        || modeler->dataStorageData.size() > 8u * 1024u * 1024u
-        || !hasSabSignature(modeler->dataStorageData)) {
+        || storage.records.size() < linkedModelers.size()) {
         return false;
     }
 
-    std::vector<DRW_RawDxfObject> historyObjects;
-    std::vector<std::uint32_t> referencedMaterials;
-    if (!collectAcdsHistoryProxyGraph(data, *modeler, historyObjects,
-                                      referencedMaterials)) {
-        return false;
-    }
-    std::vector<DRW_Dictionary> materialDictionaries;
-    std::vector<std::pair<std::string, std::string>> rootEntries;
-    std::vector<std::uint32_t> materialHandles;
-    if (!configureAcdsMaterialDictionary(data, referencedMaterials,
-                                         materialDictionaries, rootEntries,
-                                         materialHandles)) {
-        return false;
+    std::unordered_map<std::uint32_t, const DRW_ModelerGeometry*> byHandle;
+    for (const DRW_ModelerGeometry* modeler : linkedModelers) {
+        if (modeler == nullptr || !modeler->hasDataStorageBinaryData()
+            || !modeler->hasDataStorageRecord || modeler->m_isEmpty
+            || !modeler->m_hasModelerData
+            || !modeler->m_dwgAcisPayload.empty()
+            || modeler->dataStorageHandle != modeler->handle
+            || modeler->dataStorageHandleKey.empty()
+            || modeler->dataStorageData.empty()
+            || modeler->dataStorageData.size()
+                   > DRW_DataStorageConst::PAYLOAD_BLOB_SECTION_CAP
+            || !hasSabSignature(modeler->dataStorageData)
+            || !byHandle.emplace(modeler->handle, modeler).second) {
+            return false;
+        }
     }
 
-    const DRW_DataStorageRecord& record = storage.records.front();
-    if (!record.isHandleSafe || record.isBlobReference
-        || record.schemaIndex != 1u || record.handle != modeler->handle
-        || record.handle != modeler->dataStorageHandle
-        || record.handleKey.empty()
-        || record.handleKey != modeler->dataStorageHandleKey
-        || record.payload != modeler->dataStorageData
-        || record.dataByteLength != record.payload.size()
-        || !record.hasPayloadMarker || record.payloadMarkerLength == 0u
-        || record.payloadMarkerOffset > record.payload.size()
-        || record.payloadMarkerLength
-               > record.payload.size() - record.payloadMarkerOffset) {
-        return false;
+    std::unordered_set<std::string> recordKeys;
+    std::unordered_set<std::uint32_t> matchedModelers;
+    std::size_t thumbnailCount = 0;
+    for (const DRW_DataStorageRecord& record : storage.records) {
+        if (!record.isHandleSafe || record.isBlobReference
+            || record.handle == 0 || record.handleKey.empty()
+            || !recordKeys.insert(record.handleKey).second
+            || record.payload.empty()
+            || record.payload.size() > DRW_DataStorageConst::PAYLOAD_BLOB_SECTION_CAP
+            || record.dataByteLength != record.payload.size()) {
+            return false;
+        }
+        if (record.schemaIndex == 0u && !record.hasPayloadMarker
+            && hasPngSignature(record.payload)) {
+            // DataStorage schema 0 is the independently verified
+            // Thumbnail_Data property. Preserve layout thumbnails as
+            // unowned ACDSDATA records; their handles do not name modelers.
+            ++thumbnailCount;
+            continue;
+        }
+        if (!record.hasPayloadMarker
+            || record.payloadMarkerLength == 0u
+            || record.payloadMarkerOffset > record.payload.size()
+            || record.payloadMarkerLength
+                   > record.payload.size() - record.payloadMarkerOffset) {
+            return false;
+        }
+        if (record.handle > std::numeric_limits<std::uint32_t>::max())
+            return false;
+        const auto linked = byHandle.find(static_cast<std::uint32_t>(record.handle));
+        if (linked == byHandle.end()
+            || linked->second->dataStorageHandleKey != record.handleKey
+            || linked->second->dataStorageData != record.payload
+            || !hasSabSignature(record.payload)
+            || !matchedModelers.insert(linked->first).second) {
+            return false;
+        }
     }
+    if (matchedModelers.size() != linkedModelers.size()
+        || storage.orphanRecordCount != thumbnailCount
+        || storage.records.size() != linkedModelers.size() + thumbnailCount)
+        return false;
 
     DRW_RawDxfSection section;
     section.m_name = "ACDSDATA";
@@ -660,29 +746,38 @@ bool appendAcdsDataSection(
     section.m_groups.emplace_back(91, 1);
     section.m_groups.emplace_back(284, 1);
 
-    section.m_groups.emplace_back(0, "ACDSRECORD");
-    section.m_groups.emplace_back(90, 1);
-    section.m_groups.emplace_back(2, "AcDbDs::ID");
-    section.m_groups.emplace_back(280, 10);
-    section.m_groups.emplace_back(320, record.handleKey);
-    section.m_groups.emplace_back(2, "ASM_Data");
-    section.m_groups.emplace_back(280, 15);
-    section.m_groups.emplace_back(94,
-        static_cast<std::int32_t>(record.payload.size()));
     static constexpr char hexDigits[] = "0123456789ABCDEF";
     constexpr std::size_t bytesPerChunk = 127u;
-    for (std::size_t offset = 0; offset < record.payload.size();
-         offset += bytesPerChunk) {
-        const std::size_t count = std::min(
-            bytesPerChunk, record.payload.size() - offset);
-        std::string hex;
-        hex.reserve(count * 2u);
-        for (std::size_t index = 0; index < count; ++index) {
-            const std::uint8_t value = record.payload[offset + index];
-            hex.push_back(hexDigits[value >> 4u]);
-            hex.push_back(hexDigits[value & 0x0fu]);
+    for (const DRW_DataStorageRecord& record : storage.records) {
+        if (record.payload.size() > static_cast<std::size_t>(
+                std::numeric_limits<std::int32_t>::max())) {
+            return false;
         }
-        section.m_groups.emplace_back(310, std::move(hex));
+        section.m_groups.emplace_back(0, "ACDSRECORD");
+        const bool isThumbnail = record.schemaIndex == 0u
+            && !record.hasPayloadMarker;
+        section.m_groups.emplace_back(90, isThumbnail ? 0 : 1);
+        section.m_groups.emplace_back(2, "AcDbDs::ID");
+        section.m_groups.emplace_back(280, 10);
+        section.m_groups.emplace_back(320, record.handleKey);
+        section.m_groups.emplace_back(2,
+            isThumbnail ? "Thumbnail_Data" : "ASM_Data");
+        section.m_groups.emplace_back(280, 15);
+        section.m_groups.emplace_back(94,
+            static_cast<std::int32_t>(record.payload.size()));
+        for (std::size_t offset = 0; offset < record.payload.size();
+             offset += bytesPerChunk) {
+            const std::size_t count = std::min(
+                bytesPerChunk, record.payload.size() - offset);
+            std::string hex;
+            hex.reserve(count * 2u);
+            for (std::size_t index = 0; index < count; ++index) {
+                const std::uint8_t value = record.payload[offset + index];
+                hex.push_back(hexDigits[value >> 4u]);
+                hex.push_back(hexDigits[value & 0x0fu]);
+            }
+            section.m_groups.emplace_back(310, std::move(hex));
+        }
     }
     sections.push_back(std::move(section));
     return true;
@@ -695,8 +790,7 @@ bool dx_iface::collectAcdsHistoryProxyObjects(
     std::vector<std::uint32_t>& materialHandles) {
     if (data.dataStorageSections.empty())
         return true;
-    const DRW_ModelerGeometry* linkedModeler = nullptr;
-    std::size_t linkedCount = 0;
+    std::vector<const DRW_ModelerGeometry*> linkedModelers;
     const auto inspect = [&](const dx_ifaceBlock* block) {
         if (block == nullptr)
             return true;
@@ -707,10 +801,12 @@ bool dx_iface::collectAcdsHistoryProxyObjects(
                     && entity->dataStorageData.empty())) {
                 continue;
             }
-            if (entity->eType != DRW::E3DSOLID)
+            if (entity->eType != DRW::E3DSOLID
+                && entity->eType != DRW::REGION) {
                 return false;
-            ++linkedCount;
-            linkedModeler = static_cast<const DRW_ModelerGeometry*>(entity);
+            }
+            linkedModelers.push_back(
+                static_cast<const DRW_ModelerGeometry*>(entity));
         }
         return true;
     };
@@ -720,13 +816,31 @@ bool dx_iface::collectAcdsHistoryProxyObjects(
         if (block != data.mBlock && !inspect(block))
             return false;
     }
-    if (linkedCount != 1u || linkedModeler == nullptr)
-        return false;
-    if (!collectAcdsHistoryProxyGraph(data, *linkedModeler, objects,
-                                      materialHandles)) {
-        return false;
+
+    const std::size_t startingObjectCount = objects.size();
+    std::unordered_set<std::uint32_t> modelerHandles;
+    for (const DRW_ModelerGeometry* modeler : linkedModelers) {
+        if (modeler == nullptr || modeler->handle == 0
+            || !modelerHandles.insert(modeler->handle).second) {
+            return false;
+        }
+        if (modeler->m_historyHandle == 0) {
+            // The independently witnessed REGION has no history reference.
+            // Do not synthesize an operation graph for that entity.
+            if (modeler->eType != DRW::REGION)
+                return false;
+            continue;
+        }
+        if (modeler->eType != DRW::E3DSOLID
+            || !collectAcdsHistoryProxyGraph(data, *modeler, objects,
+                                             materialHandles)) {
+            return false;
+        }
     }
-    return true;
+
+    // This converter slice only emits proxy records that participate in the
+    // witnessed modeler closures. Refuse to silently drop any other proxy.
+    return objects.size() - startingObjectCount == data.proxyObjects.size();
 }
 
 bool dx_iface::prepareExtensionObjectGraph(dx_data* data) {
@@ -1060,6 +1174,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
     std::vector<DRW_Dictionary> materialDictionaries;
     std::vector<std::pair<std::string, std::string>> materialRootEntries;
     if (!cData->dataStorageSections.empty()) {
+        const auto failAcdsExport = [&]() {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        };
         if (!collectAcdsHistoryProxyObjects(*cData, m_acdsHistoryObjects,
                                             referencedMaterials)
             || !configureAcdsMaterialDictionary(
@@ -1072,24 +1191,124 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
         dxfW->setNamedDictObjects(materialDictionaries);
         dxfW->setRootDictEntries(materialRootEntries);
 
-        // The witnessed AC1027 history graph consists of three custom
-        // classes. DXF proxy group 91 indexes CLASSES from 500; ODA discards
-        // the proxies if those ordinal references do not resolve. Emit only
-        // the witnessed graph classes plus its referenced material class.
+        // DXF proxy group 91 indexes CLASSES from 500; ODA discards proxies
+        // if those ordinal references do not resolve. Rebuild the class table
+        // from the exact source DWG class records used by the validated proxy
+        // graphs, then assign output ordinals independent of source numbering.
+        static const char* supportedProxyClasses[] = {
+            "ACSH_HISTORY_CLASS", "ACAD_EVALUATION_GRAPH",
+            "ACSH_CONE_CLASS", "ACSH_BOX_CLASS",
+            "ACSH_EXTRUSION_CLASS"};
+        std::unordered_map<std::uint32_t, std::string> sourceClassNames;
+        std::map<std::string, int> classInstanceCounts;
+        for (DRW_RawDxfObject& object : m_acdsHistoryObjects) {
+            std::size_t classIdCount = 0;
+            std::uint32_t sourceClassId = 0;
+            std::size_t classIdGroupIndex = 0;
+            for (std::size_t index = 0; index < object.groups.size(); ++index) {
+                const DRW_Variant& group = object.groups[index];
+                if (group.code() != 91)
+                    continue;
+                ++classIdCount;
+                classIdGroupIndex = index;
+                if (group.type() != DRW_Variant::INTEGER
+                || group.i_val() < 0) {
+                    return failAcdsExport();
+                }
+                sourceClassId = static_cast<std::uint32_t>(group.i_val());
+            }
+            if (classIdCount != 1u)
+                return failAcdsExport();
+            const DRW_DwgClassCoverageEntry* classEntry = nullptr;
+            for (const DRW_DwgClassCoverageEntry& entry :
+                 cData->dwgClassCoverage.m_entries) {
+                if (entry.m_classNumber != sourceClassId)
+                    continue;
+                if (classEntry != nullptr) {
+                    classEntry = nullptr;
+                    break;
+                }
+                classEntry = &entry;
+            }
+            if (classEntry == nullptr
+                || std::find(std::begin(supportedProxyClasses),
+                             std::end(supportedProxyClasses),
+                             classEntry->m_recordName)
+                       == std::end(supportedProxyClasses)) {
+                return failAcdsExport();
+            }
+            const auto inserted = sourceClassNames.emplace(
+                sourceClassId, classEntry->m_recordName);
+            if (!inserted.second
+                && inserted.first->second != classEntry->m_recordName) {
+                return failAcdsExport();
+            }
+            ++classInstanceCounts[classEntry->m_recordName];
+            object.groups[classIdGroupIndex].addInt(91, 0);
+        }
+
         std::vector<DRW_Class> classes;
-        for (const char* name : {"ACSH_HISTORY_CLASS",
-                                 "ACAD_EVALUATION_GRAPH",
-                                 "ACSH_CONE_CLASS", "MATERIAL"}) {
+        std::unordered_map<std::string, std::int32_t> outputClassIds;
+        for (const char* name : supportedProxyClasses) {
+            const auto count = classInstanceCounts.find(name);
+            if (count == classInstanceCounts.end())
+                continue;
             DRW_Class cls;
             if (!dxfRW::dxfClassForRecordName(name, cls)) {
                 delete dxfW;
                 dxfW = nullptr;
                 return false;
             }
-            cls.instanceCount = name == std::string("MATERIAL")
-                ? static_cast<int>(m_acdsMaterialHandles.size()) : 1;
-            cls.wasaProxyFlag = name == std::string("MATERIAL") ? 0 : 1;
+            cls.instanceCount = count->second;
+            cls.wasaProxyFlag = 1;
+            outputClassIds.emplace(name,
+                static_cast<std::int32_t>(500u + classes.size()));
             classes.push_back(std::move(cls));
+        }
+        if (!m_acdsMaterialHandles.empty()) {
+            DRW_Class cls;
+            if (!dxfRW::dxfClassForRecordName("MATERIAL", cls)) {
+                delete dxfW;
+                dxfW = nullptr;
+                return false;
+            }
+            cls.instanceCount = static_cast<int>(m_acdsMaterialHandles.size());
+            cls.wasaProxyFlag = 0;
+            classes.push_back(std::move(cls));
+        }
+        for (DRW_RawDxfObject& object : m_acdsHistoryObjects) {
+            std::size_t classIdGroupIndex = object.groups.size();
+            std::uint32_t sourceClassId = 0;
+            for (std::size_t index = 0; index < object.groups.size(); ++index) {
+                const DRW_Variant& group = object.groups[index];
+                if (group.code() == 91) {
+                    classIdGroupIndex = index;
+                    break;
+                }
+            }
+            if (classIdGroupIndex == object.groups.size())
+                return failAcdsExport();
+            // The temporary value was zeroed above; recover the exact class
+            // name from the proxy subclass and the source coverage report.
+            const DRW_ProxyObject* sourceProxy = nullptr;
+            for (const DRW_ProxyObject& proxy : cData->proxyObjects) {
+                if (proxy.handle != object.handle)
+                    continue;
+                if (sourceProxy != nullptr)
+                    return failAcdsExport();
+                sourceProxy = &proxy;
+            }
+            if (sourceProxy == nullptr || !sourceProxy->m_hasProxyClassId)
+                return failAcdsExport();
+            sourceClassId = static_cast<std::uint32_t>(
+                sourceProxy->m_proxyClassId);
+            const auto sourceName = sourceClassNames.find(sourceClassId);
+            if (sourceName == sourceClassNames.end())
+                return failAcdsExport();
+            const auto outputId = outputClassIds.find(sourceName->second);
+            if (outputId == outputClassIds.end())
+                return failAcdsExport();
+            object.groups[classIdGroupIndex].addInt(91, outputId->second);
         }
         dxfW->setDxfClasses(classes);
     } else {

@@ -154,8 +154,18 @@ remaining lanes:
    unlocking the desktop is not required. S2.3.7 now passes the exact installed
    FreeCAD converter handoff for this standalone tuple on macOS arm64 in both
    `open()` and `insert()`; the pinned importer reports `3DSOLID` unsupported
-   and creates no solid. The broader ACadSharp multi-entity control and other
-   platforms remain separately gated.
+   and creates no solid. Independent InventorLoader/FreeCAD Part checks now
+   decode all three exact ACadSharp SAB payloads as the expected box, planar
+   REGION, and extrusion; the official CAD Assistant ARM64 run on the separate
+   standalone ODA cone returned only a generic SAT-transfer error and adds no
+   semantic result. The direct ACadSharp DWG conversion still fails before
+   output publication: dwgReader emits typed evaluation-graph and
+   ACSh-history callbacks plus raw DWG frames, but dx_iface does not retain or
+   serialize those callbacks. A generated multi-modeler projection slice now
+   tests the recognized record mix without claiming the external DWG converts.
+   Keep payload semantics, custom-object reconstruction, sample provenance,
+   and consumer qualification as separate gates; no family-level claim is
+   promoted.
    Keep AC1021 inline SAB and all other producers, entities,
    versions, and lifecycle operations fail-closed until separately evidenced.
    Do not promote this implementation/readback result to general support or
@@ -405,6 +415,20 @@ converter failure case, not evidence that the sample's section is normative,
 accepted by ODA, or renderable by FreeCAD. Keep both sample files outside this
 repository; use them as external opt-in inputs only after the format/acceptance
 gate in S2.3 permits output.
+
+**Callback boundary diagnosis (2026-09-27):** the direct DWG route has a
+precise adapter loss after parser publication. The DWG dispatcher constructs
+typed DRW_EvaluationGraph and DRW_AcShHistoryObject values and also emits
+DRW_UnsupportedObject frames carrying the original DWG class/body bytes.
+dx_iface currently inherits the DRW_Interface no-op implementations for those
+three callbacks, so dx_data receives neither history/evaluation metadata nor
+the raw frame evidence needed to correlate it. Those raw DWG bytes are not DXF
+object groups and must not be copied or relabelled as proxy data. The existing
+typed EvaluationGraph DXF writer is reusable; the bounded ACSh history/box/
+extrusion serializers still require group mapping, owner/link remapping, and
+complete-prefix gates. Keep export fail-closed until that graph is serialized
+with no missing references and the external sample can be converted without
+publishing partial output.
 
 **R2013+ FreeCAD carrier lead (2026-09-24; advisory, not yet a support
 claim):** an ODA File Converter 27.1.0.0 AC1027/R2013 `Cone.dxf` has an
@@ -5208,3 +5232,11 @@ Additional implementation-item record:
 | S8.13.4 | COMMITTED | `dx_iface::add3DLine()` now stores `DRW_3DLine` rather than invoking the interface's compatibility fallback to `addLine()`, and `writeEntity()` dispatches `DRW::THREEDLINE` to the existing typed `dxfRW::write3DLine()`. Extended the runtime-generated adapter test with an in-memory 3DLINE carrying distinct nonzero XYZ endpoints, thickness 2.5 and oblique extrusion `(0,1,0)`; its subtype and every field survive source DXF generation, two exact FreeCAD-argv `dwg2dxf` passes and public reader readback. `cmake --build build --target libdxfrw_dwg2dxf_adapter_tests dwg2dxf --parallel 2` succeeds; focused `dwg2dxf_image_path_cli` and `dwg2dxf_3dline_adapter_cli` pass 2/2. All drawings are generated under the build tree and deleted on success; no DWG/DXF fixture was committed. This repairs only the concrete converter adapter for the existing DXF extension. The DXF ENTITIES index does not list `3DLINE`; target-DWG class/version availability, independent CAD acceptance, legacy pre-R13 behavior, and FreeCAD geometry support remain unqualified. |
 | S8.13.4.1 | COMMITTED | Extended `dwg2dxf_3dline_adapter_cli` with a generated AC1014 negative vector that enters the typed `DRW::THREEDLINE` route, requires the existing AC1015 minimum-version writer guard to fail, and verifies no final DXF is published. `cmake --build build --target libdxfrw_dwg2dxf_adapter_tests --parallel 2` succeeds; `dwg2dxf_image_path_cli` and `dwg2dxf_3dline_adapter_cli` pass 2/2; `git diff --check` passes. The test leaves no drawing fixture. A 2026-09-26 authoritative-source check found Autodesk's current ENTITIES index enumerates `LINE` but not `3DLINE`; LibreDWG 0.14 manual field listings are retained as implementation cross-check only. This closes the local older-target fail-closed test, not historical DXF interoperability or modern DWG class/version evidence. |
 | S8.13.4.2 | COMMITTED | Added a runtime-generated AC1027 binary DXF control for the typed 3DLINE and enabled the existing CLI harness's optional `-b` output flag for this case. The control parses binary input, emits binary output on both exact `dwg2dxf input -o output -b` passes, and checks subtype plus endpoints, thickness, and extrusion through public reader readback after each pass. `cmake --build build --target libdxfrw_dwg2dxf_adapter_tests dwg2dxf --parallel 2` succeeds; ASCII and binary `dwg2dxf_3dline_*_adapter_cli` tests pass 2/2, and `git diff --check` passes. Runtime files are removed after success; no test fixture is committed. This adds local binary codec/adapter coverage only and does not qualify `3DLINE` standards portability, target-authored DWG support, or CAD/FreeCAD acceptance. |
+### ACadSharp multi-record projection and next callback bridge (2026-09-27)
+
+| Item | State | Evidence / next action |
+| --- | --- | --- |
+| S2.3.8 | COMMITTED | The AC1027 DXF projection accepts a bounded set of multiple linked SAB records for 3DSOLID and REGION, maps internal DWG DataStorage schema indexes by exact owner and ACIS BinaryFile marker rather than mistaking them for DXF ACDSRECORD schema codes, and retains unowned thumbnails only when the exact schema-0 PNG signature is present. Multiple history closures now support only the witnessed cone/box/extrusion terminal classes, derive class IDs from the completed source CLASSES report, remap output class ordinals, and deduplicate shared material references. The AC1027 ACDS read-side qualification accepts multiple unique schema-1 ASM_Data owner keys, validates each declared length and SAB signature, and matches each modeler to exactly one handle-keyed payload. Runtime-generated ASCII and binary tests cover two solids, one history-free REGION, three SABs, two PNG thumbnails, box/extrusion history closures, exact payload-to-output-handle associations, schema/class counts, and public readback. Build of dwg2dxf plus libdxfrw_dwg_local_roundtrip succeeds with -Werror; the focused libdxfrw_dwg_local_roundtrip CTest passes 1/1 in 0.96 seconds; git diff --check passes. No external DWG/DXF or test fixture was added. This validates the bounded projection with synthetic callbacks only; it does not yet convert the actual ACadSharp DWG or promote family support. |
+| S2.3.9 | READY | Bridge the exact DWG callback seam without treating raw DWG bytes as DXF groups. First retain DRW_EvaluationGraph, DRW_AcShHistoryObject, and DRW_UnsupportedObject callbacks in dx_data with duplicate-handle and class-coverage checks. Correlate only the exact object handles/owners observed in the pinned ACadSharp pair. Reuse the typed EvaluationGraph DXF writer where its validation succeeds; add bounded ACSH history/box/extrusion DXF serialization only for fields proven complete by parse-prefix status and cross-checked against the external pair. Re-map every owner/pointer reference and recompute class instance counts. Reject missing, duplicated, unknown, truncated, or unrepresentable history fields before publishing any DXF. Add locally generated positive/negative ASCII/binary tests and preserve the external DWG/DXF only at its existing temp path. Then run the exact AC1027 sample converter, verify all three record associations and output hashes, request one ODA acceptance pass, and only afterward repeat pinned FreeCAD handoff checks. The independent SAB geometry result remains a separate semantic witness; it cannot substitute for successful object-graph export or establish AutoCAD provenance. |
+
+Research state remains narrow: the independent InventorLoader/FreeCAD Part run verifies semantic geometry for the exact three ACadSharp SAB payloads preserved by ODA, while CAD Assistant produced no geometry result for its separate standalone ODA cone input. The ACadSharp repository recipe/stamp is still not an independently audited AutoCAD source packet. Native Linux and Windows FreeCAD qualification also remain outstanding. Neither external gate authorizes general ACIS/ACDS support.
