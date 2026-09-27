@@ -17280,7 +17280,8 @@ bool dxfRW::writeEvaluationGraph(DRW_EvaluationGraph *ent,
     if (version > DRW::AC1014) {
         written = written && writeString(
             330, ent->parentHandle != 0
-                ? toHexStr(static_cast<std::uint32_t>(ent->parentHandle))
+                ? toHexStr(remapObjectHandle(
+                      static_cast<std::uint32_t>(ent->parentHandle)))
                 : "C");
     }
     written = written && writeString(100, "AcDbEvalGraph")
@@ -17292,7 +17293,8 @@ bool dxfRW::writeEvaluationGraph(DRW_EvaluationGraph *ent,
             && writer->writeInt32(93, node.m_flags)
             && writer->writeInt32(95, node.m_nextNodeIndex);
         written = written
-            && writeString(360, toHexStr(node.m_expressionHandle));
+            && writeString(360, toHexStr(
+                   remapObjectHandle(node.m_expressionHandle)));
         written = written
             && writer->writeInt32(92, node.m_data1)
             && writer->writeInt32(92, node.m_data2)

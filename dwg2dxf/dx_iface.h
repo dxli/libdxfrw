@@ -407,6 +407,17 @@ public:
                 }
             }
         }
+        // The bounded typed EvaluationGraph writer is independently usable
+        // for ordinary DXF input. AC1027 DataStorage closures stay on their
+        // stricter proxy-graph gate until ACSH field serialization is complete.
+        if (cData->dataStorageSections.empty()) {
+            for (DRW_EvaluationGraph& graph : cData->evaluationGraphs) {
+                if (!dxfW->writeEvaluationGraph(
+                        &graph, "ACAD_EVALUATION_GRAPH")) {
+                    return;
+                }
+            }
+        }
     }
     virtual void writeAppId(){
         for (std::list<DRW_AppId>::iterator it=cData->appIds.begin(); it != cData->appIds.end(); ++it)

@@ -875,6 +875,11 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data) {
                 || !xrecords.emplace(record.handle, &record).second)
                 return false;
         }
+        for (const DRW_EvaluationGraph& graph : data->evaluationGraphs) {
+            if (graph.handle == 0
+                || !sourceHandles.insert(graph.handle).second)
+                return false;
+        }
 
         std::unordered_set<std::uint32_t> visiting;
         std::unordered_set<std::uint32_t> visitedDictionaries;
@@ -1312,7 +1317,37 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
         }
         dxfW->setDxfClasses(classes);
     } else {
-        dxfW->setDxfClasses(cData->dxfClasses);
+        std::vector<DRW_Class> classes = cData->dxfClasses;
+        if (!cData->evaluationGraphs.empty()) {
+            const auto isEvaluationGraphClass = [](const DRW_Class& cls) {
+                return cls.recName == "EVALUATION_GRAPH"
+                    || cls.recName == "EVALUATIONGRAPH"
+                    || cls.recName == "ACDBEVALGRAPH"
+                    || cls.recName == "ACAD_EVALUATION_GRAPH";
+            };
+            classes.erase(
+                std::remove_if(classes.begin(), classes.end(),
+                               isEvaluationGraphClass),
+                classes.end());
+            DRW_Class evaluationGraphClass;
+            if (!dxfRW::dxfClassForRecordName(
+                    "ACAD_EVALUATION_GRAPH", evaluationGraphClass)) {
+                delete dxfW;
+                dxfW = nullptr;
+                return false;
+            }
+            if (cData->evaluationGraphs.size()
+                > static_cast<std::size_t>(
+                    std::numeric_limits<int>::max())) {
+                delete dxfW;
+                dxfW = nullptr;
+                return false;
+            }
+            evaluationGraphClass.instanceCount = static_cast<int>(
+                cData->evaluationGraphs.size());
+            classes.push_back(std::move(evaluationGraphClass));
+        }
+        dxfW->setDxfClasses(classes);
     }
     dxfW->setRawDxfSections(rawDxfSections);
     if (debug) {
@@ -1340,6 +1375,16 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
     for (const DRW_RawDxfObject& object : cData->rawProxyObjects) {
         if (object.handle == 0 || !proxyHandles.insert(object.handle).second
             || !dxfW->reserveHandle(object.handle)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
+    for (const DRW_EvaluationGraph& graph : cData->evaluationGraphs) {
+        if (cData->dataStorageSections.empty()
+            && (graph.handle == 0
+                || !proxyHandles.insert(graph.handle).second
+                || !dxfW->reserveHandle(graph.handle))) {
             delete dxfW;
             dxfW = nullptr;
             return false;

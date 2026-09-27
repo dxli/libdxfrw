@@ -6018,6 +6018,140 @@ bool runAcdsHistoryCallbackCapture() {
                == std::vector<std::uint8_t>({0xD4u, 0xE5u});
 }
 
+bool runDxfEvaluationGraphRoundTrip(
+    bool binary, const std::filesystem::path& directory, bool keepOutput) {
+    const std::string encoding = binary ? "binary" : "ascii";
+    const std::filesystem::path output = directory /
+        ("libdxfrw-ac1027-evaluation-graph-" + encoding + ".dxf");
+    const std::filesystem::path rejectedOutput = directory /
+        ("libdxfrw-ac1018-evaluation-graph-" + encoding + ".dxf");
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+    std::filesystem::remove(rejectedOutput, ec);
+
+    dx_data source;
+    auto* line = new DRW_Line();
+    line->handle = DRW::DwgNamedObjectsDictionaryHandle;
+    const std::uint32_t sourceLineHandle = line->handle;
+    line->basePoint = DRW_Coord(1.0, 2.0, 3.0);
+    line->secPoint = DRW_Coord(4.0, 5.0, 6.0);
+    source.mBlock->ent.push_back(line);
+
+    DRW_EvaluationGraph graph;
+    graph.handle = 0xD67u;
+    graph.m_value96 = 26;
+    graph.m_value97 = 26;
+    DRW_EvaluationGraphNode node;
+    node.m_index = 0;
+    node.m_flags = 32;
+    node.m_nextNodeIndex = 1;
+    node.m_expressionHandle = line->handle;
+    node.m_data1 = 2;
+    node.m_data2 = 5;
+    node.m_data3 = 0;
+    node.m_data4 = 6;
+    graph.m_nodes.push_back(node);
+    DRW_EvaluationGraphEdge edge;
+    edge.m_value92 = -1;
+    edge.m_value93 = -1;
+    edge.m_value94 = 2;
+    edge.m_value91a = 2;
+    edge.m_value91b = 2;
+    edge.m_value92a = 1;
+    edge.m_value92b = 2;
+    edge.m_value92c = 3;
+    edge.m_value92d = 4;
+    edge.m_value92e = 5;
+    graph.m_edges.push_back(edge);
+    source.evaluationGraphs.push_back(graph);
+
+    DRW_Class aliasClass;
+    if (!dxfRW::dxfClassForRecordName("EVALUATION_GRAPH", aliasClass))
+        return false;
+    aliasClass.instanceCount = 99;
+    source.dxfClasses.push_back(aliasClass);
+
+    dx_iface exporter;
+    if (!exporter.fileExport(output.string(), DRW::AC1027, binary,
+                             &source, false)) {
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+    dx_data imported;
+    dx_iface importer;
+    if (!importer.fileImport(output.string(), &imported, false)) {
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+
+    const DRW_Line* importedLine = nullptr;
+    for (const DRW_Entity* entity : imported.mBlock->ent) {
+        if (entity != nullptr && entity->eType == DRW::LINE) {
+            importedLine = static_cast<const DRW_Line*>(entity);
+            break;
+        }
+    }
+    const bool classesMatch = imported.dxfClasses.size() == 1u
+        && imported.dxfClasses.front().recName == "ACAD_EVALUATION_GRAPH"
+        && imported.dxfClasses.front().instanceCount == 1;
+    const bool graphMatch = imported.evaluationGraphs.size() == 1u
+        && imported.evaluationGraphs.front().handle == graph.handle
+        && imported.evaluationGraphs.front().parentHandle
+               == DRW::DwgNamedObjectsDictionaryHandle
+        && imported.evaluationGraphs.front().m_value96 == graph.m_value96
+        && imported.evaluationGraphs.front().m_value97 == graph.m_value97
+        && imported.evaluationGraphs.front().m_nodes.size() == 1u
+        && imported.evaluationGraphs.front().m_nodes.front().m_flags == 32
+        && imported.evaluationGraphs.front().m_nodes.front()
+               .m_expressionHandle != sourceLineHandle
+        && imported.evaluationGraphs.front().m_nodes.front()
+               .m_expressionHandle
+               == (importedLine == nullptr ? 0u : importedLine->handle)
+        && imported.evaluationGraphs.front().m_nodes.front().m_data4 == 6
+        && imported.evaluationGraphs.front().m_edges.size() == 1u
+        && imported.evaluationGraphs.front().m_edges.front().m_value92 == -1
+        && imported.evaluationGraphs.front().m_edges.front().m_value92e == 5;
+
+    // AC1021 is the minimum version for this typed OBJECT. A rejected older
+    // target must not publish a partial DXF at its final path.
+    dx_iface oldVersionExporter;
+    const bool oldVersionRejected =
+        !oldVersionExporter.fileExport(rejectedOutput.string(), DRW::AC1018,
+                                       binary, &source, false)
+        && !std::filesystem::exists(rejectedOutput);
+    if (!keepOutput)
+        std::filesystem::remove(output, ec);
+    if (!(importedLine != nullptr && classesMatch && graphMatch
+          && oldVersionRejected)) {
+        std::cerr << "EvaluationGraph round-trip details (" << encoding
+                  << "): line=" << (importedLine != nullptr)
+                  << " class=" << classesMatch << " graphs="
+                  << imported.evaluationGraphs.size() << " graph="
+                  << graphMatch << " old-version=" << oldVersionRejected
+                  << '\n';
+        if (!imported.evaluationGraphs.empty()) {
+            const DRW_EvaluationGraph& actual =
+                imported.evaluationGraphs.front();
+            std::cerr << "EvaluationGraph values: handle=" << actual.handle
+                      << " owner=" << actual.parentHandle << " nodes="
+                      << actual.m_nodes.size() << " edges="
+                      << actual.m_edges.size();
+            if (!actual.m_nodes.empty()) {
+                std::cerr << " expression="
+                          << actual.m_nodes.front().m_expressionHandle
+                          << " target="
+                          << (importedLine == nullptr
+                                  ? 0u : importedLine->handle);
+            }
+            std::cerr << '\n';
+        }
+    }
+    return importedLine != nullptr && classesMatch && graphMatch
+        && oldVersionRejected;
+}
+
 bool runDxfAcdsDataStorageProjection(
     bool binary, const std::filesystem::path& directory, bool keepOutput,
     bool reverseCallbackCollections = false,
@@ -10585,6 +10719,12 @@ int main(int argc, char** argv) {
            failures);
     expect(runAcdsHistoryCallbackCapture(),
            "local typed ACIS history/evaluation callback retention",
+           failures);
+    expect(runDxfEvaluationGraphRoundTrip(false, directory, keepOutputs),
+           "local ASCII EvaluationGraph typed writer and handle remap",
+           failures);
+    expect(runDxfEvaluationGraphRoundTrip(true, directory, keepOutputs),
+           "local binary EvaluationGraph typed writer and handle remap",
            failures);
     expect(runDxfAcdsDataStorageProjection(false, directory, keepOutputs,
                                            false, false, true),
