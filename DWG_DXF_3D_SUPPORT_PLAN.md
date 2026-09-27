@@ -74,12 +74,15 @@ producer format string; do not infer its effect from its name. A public copy
 of Spatial's *SAT Save File Format D 7.0* defines the header field as
 millimetres represented by each model unit and describes SAB as the same save
 file structure with binary tokens ([copy](https://studylib.net/doc/18215310/sat-save-file-format)).
-This legacy ACIS document, Autodesk's current SAT export guidance, and
+This legacy ACIS document, Autodesk's official SAT export article (whose
+listed AutoCAD product versions are 2000–2009), and
 [Solid Edge's ACIS import guidance](https://www.soliddna.com/SEHelp/ST5/EN/i_v/openingacis1a.htm)
 converge on the hypothesis that `scale=25.4` means 25.4 mm per model unit;
 Solid Edge documents that its SAT importer uses 25.4 to scale inch-file
-geometry. For the ACadSharp box's 5-unit extents, this predicts 127 mm if its
-AC1027 drawing units are inches. The original ACIS manual notes that major releases may
+geometry. If the ACadSharp sample's recorded box history faithfully describes
+the embedded B-rep's 5-unit extents, this predicts 127 mm when the drawing
+units are inches; that history is not an independent native-modeler measurement.
+The original ACIS manual notes that major releases may
 change save-file format details, however, and does not specifically qualify
 AutoCAD's ACIS-218 / ASM-230 embedded DWG path. That leaves a direct conflict
 with cadmpeg's modern 217/218 claim that raw model-space lengths are centimetres
@@ -109,6 +112,32 @@ the standard ACIS header rule applies to the embedded 218 stream and isolates
 which decoder is mis-scaling. If the exact producer route is unavailable or
 results remain split, keep the dimensional gate open. Do not use CADMPEG's own
 STEP output as the oracle or add external controls to repository fixtures.
+
+**ACIS unit-scale provenance audit (2026-09-27; S2.3.9.4.12):** the
+[ACadSharp maintainer's answer](https://github.com/DomCR/ACadSharp/discussions/520)
+says repository sample DWG/DXF files are used by its reader tests and points
+to separate example code; it does not say the DWGs were authored by ACadSharp
+or identify the original modeler dimensions. The paired AC1027 artifacts and
+the repository's sequential `SAVEAS` recipe remain useful provenance evidence,
+but the recipe was not observed executing and the box history is not a native
+B-rep extent oracle. The chosen official cadmpeg v0.6.0 reader is an independent
+decode implementation, yet its published [format profile](https://github.com/cadmpeg/cadmpeg/blob/v0.6.0/docs/format-support.md)
+scores bare ACIS/ASM streams at L1; that profile defines correct units and
+geometry as L2 proof criteria. Its successful parse/topology and STEP result
+therefore record a real decoder disagreement, not a validated unit oracle.
+The related [ASM notes](https://github.com/cadmpeg/cadmpeg/blob/main/docs/formats/asm.md)
+are on moving `main`, not the pinned v0.6.0 tag. Finally, Autodesk's official
+[SAT unit article](https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/Controlling-the-drawing-units-when-exporting-to-an-ACIS-SAT-file.html)
+is explicitly listed for AutoCAD 2000–2009; its 2025 publication date does
+not extend that scope to ACIS-218 / ASM-230 embedded in AC1027. These findings
+leave ×25.4 as the better-supported hypothesis, not a resolved contract. The
+gate remains `UNRESOLVED` until one witnessed AutoCAD 2013-or-newer control
+records analytic model dimensions and native B-rep extents before export, then
+records the exact embedded SAB hash/header and independent readers' raw and
+millimetre extents. If that producer/kernel route is unavailable, request a
+version-pinned native measurement packet from the user or an authorized
+external runner; do not install licensed tools, infer dimensions from history,
+or promote a support claim. No external drawing or binary was added.
 
 **Native-platform unblock research (2026-09-27; S8.9.5):** the plan's native-CI
 option is immediately actionable on the existing project workflow matrix:
@@ -286,8 +315,8 @@ remaining lanes:
    FreeCAD converter handoff for this standalone tuple on macOS arm64 in both
    `open()` and `insert()`; the pinned importer reports `3DSOLID` unsupported
    and creates no solid. Independent InventorLoader/FreeCAD Part checks now
-   decode all three exact ACadSharp SAB payloads as the expected box, planar
-   REGION, and extrusion. cadmpeg v0.6.0 independently decodes the same
+   decode all three exact ACadSharp SAB payloads as a box, planar REGION, and
+   extrusion; their source modeler dimensions remain unverified. cadmpeg v0.6.0 independently decodes the same
    topology without losses, but its STEP/OCCT dimensions are ×10 mm/source
    unit versus the previous ×25.4 result; dimensional parity remains
    unresolved against the SAB header `scale=25.4` and DXF `$INSUNITS=1`
@@ -362,7 +391,7 @@ implementation-ready slice rather than a general support claim.
 | --- | --- | --- |
 | S8.9.5 Linux | A native Linux host or native Linux CI runner with the intended architecture, a usable compiler/CMake toolchain, and an installed, version-pinned FreeCAD release including `freecadcmd`. Cross-compilation from macOS is not a substitute. The handoff records host/OS/architecture, FreeCAD release and source revision, exact install prefix/build mode, and whether shell, desktop-entry, or configured-path launch is in scope. | Build/install the current revision outside the checkout; run the existing installed CLI/readback/failure-publication tests in a clean environment; then, with isolated FreeCAD preferences and fallbacks disabled, prove installed `dwg2dxf` path/hash, exact argv, status, complete output, and identical output path for separate `open()` and `insert()` runs. Verify desktop-entry environment only if it will be claimed; otherwise narrow docs to the passing shell/configured-path route. Mark only the tested Linux profile qualified after its evidence packet is saved. |
 | S8.9.5 Windows | A native Windows host or native Windows CI runner with the intended architecture, MSVC/runtime toolchain, and installed, version-pinned FreeCAD release. The handoff records OS/build, architecture, FreeCAD release/revision, compiler/runtime, install layout, and launch route. | Build/install `dwg2dxf.exe`; verify its required DLLs resolve from the documented package/system locations, not FreeCAD-private directories; then run the same clean-profile `open()`/`insert()` attribution and output-handoff checks as Linux. Include paths with spaces and a Unicode/non-ASCII input/output path before claiming those cases. Qualify the desktop launcher only if tested natively; otherwise document only the passing shell/configured-path route. Mark only the tested Windows profile qualified. |
-| S2.3.2 ACIS/ACDS contract | A full modern ACIS-218/ASM-230 embedded-DWG contract remains unavailable. A hash-pinned ODA-produced AC1027 pair from a tracked LibreDWG source, plus independent Open CAD Studio readback, qualifies one standalone `3DSOLID` / `AcDb3DSolid_ASM_Data` carrier/history tuple only. S2.3.6 accepts actual libdxfrw output through a version-matched ODA round-trip. InventorLoader/FreeCAD Part and cq-acis reconstruct the exact ODA cone; InventorLoader/FreeCAD Part also decodes the three exact ACadSharp SABs. cadmpeg v0.6.0 independently decodes those ACadSharp payloads and agrees on topology, but its STEP/OCCT metrics use ×10 mm/source-unit versus the prior ×25.4 mm/source-unit findings. The ACIS D7.0 save-file specification defines header scale as millimetres per model unit and describes SAB's binary record structure; Autodesk's current SAT guidance agrees that an inch-unit export uses 25.4. This favors ×25.4, but D7.0 does not expressly qualify modern ACIS-218 / ASM-230 embedded DWG, while cadmpeg asserts ×10 for the modern branch. | `READY_NARROW` for byte-preserving carrier/history transport only: one `ASM_Data` owner key equals the entity handle; six observed schema definitions; group 94 equals concatenated ordered group-310 bytes; opaque group-2 GUID; existing group-350 history handle; exact SAB payload hash. Preserve bytes and observed order; fail closed on unsupported or ambiguous references. Dimensional semantic parity is `UNRESOLVED` pending a known-size ACIS-218/ASM-230 control with independently observed modeler dimensions and native DWG unit interpretation; compare the ACIS-spec ×25.4 prediction against each reader and do not promote cadmpeg's ×10 result. Clone/INSERT/XREF lifecycle, other schemas/entities/producers/versions, DWG modeler writing, and native FreeCAD solid import remain blocked. S2.3.4/.5/.6 have bounded carrier implementation/verification evidence; S2.3.7 establishes installed FreeCAD converter handoff for the exact standalone tuple on pinned macOS only, not native FreeCAD geometry. |
+| S2.3.2 ACIS/ACDS contract | A full modern ACIS-218/ASM-230 embedded-DWG contract remains unavailable. A hash-pinned ODA-produced AC1027 pair from a tracked LibreDWG source, plus independent Open CAD Studio readback, qualifies one standalone `3DSOLID` / `AcDb3DSolid_ASM_Data` carrier/history tuple only. S2.3.6 accepts actual libdxfrw output through a version-matched ODA round-trip. InventorLoader/FreeCAD Part and cq-acis reconstruct the exact ODA cone; InventorLoader/FreeCAD Part also decodes the three exact ACadSharp SABs, but ACadSharp's maintainer identifies these as reader-test inputs and their original modeler dimensions are unknown. cadmpeg v0.6.0 independently decodes those payloads and agrees on topology, but its STEP/OCCT metrics use ×10 mm/source-unit versus the prior ×25.4 mm/source-unit findings; its published bare-stream score is L1, below its own L2 geometry-and-units criteria. The public ACIS D7.0 save-file specification defines header scale as millimetres per model unit and describes SAB's binary record structure; Autodesk's SAT export article is explicitly scoped to AutoCAD 2000–2009 and does not cover the embedded modern ACIS-218/ASM-230 path. These sources favor ×25.4 as a hypothesis, but do not resolve the modern embedded contract or establish the sample's authoring dimensions. | `READY_NARROW` for byte-preserving carrier/history transport only: one `ASM_Data` owner key equals the entity handle; six observed schema definitions; group 94 equals concatenated ordered group-310 bytes; opaque group-2 GUID; existing group-350 history handle; exact SAB payload hash. Preserve bytes and observed order; fail closed on unsupported or ambiguous references. Dimensional semantic parity is `UNRESOLVED` pending a witnessed, known-size ACIS-218/ASM-230 control with independently observed native modeler dimensions and DWG unit interpretation; compare raw and converted extents for each reader and do not promote cadmpeg's ×10 result. Clone/INSERT/XREF lifecycle, other schemas/entities/producers/versions, DWG modeler writing, and native FreeCAD solid import remain blocked. S2.3.4/.5/.6 have bounded carrier implementation/verification evidence; S2.3.7 establishes installed FreeCAD converter handoff for the exact standalone tuple on pinned macOS only, not native FreeCAD geometry. |
 
 For both gates, keep external binaries and converted outputs at their supplied
 paths or in unique temporary directories; record hashes and tool logs without
@@ -2465,8 +2494,8 @@ Implementation sequence:
    this reader's 25.4 mm/source-unit results. The exact SAB headers contain
    `scale=25.4`, and the source DXF declares `$INSUNITS=1`; the ACIS D7.0
    save-file specification defines that header as millimetres per model unit,
-   and Autodesk's current SAT guidance agrees that inch-unit export uses
-   25.4. This favors the prior reader's scale, while CADMPEG 0.6.0's published
+   and Autodesk's official SAT article (AutoCAD 2000–2009) agrees that inch-unit
+   export uses 25.4. This favors the prior reader's scale, while CADMPEG 0.6.0's published
    217/218 profile applies ×10 mm/source-unit. Because D7.0 does not expressly
    qualify modern ACIS-218 / ASM-230 embedded DWG, keep cross-reader dimensional
    parity `UNRESOLVED` until a known-size native modeler/B-rep extent verifies
