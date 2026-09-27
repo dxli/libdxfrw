@@ -5338,6 +5338,80 @@ DRW_DataStorageSection makeLocalDataStorageSection(
     return section;
 }
 
+DRW_DataStorageSection makeLocalAcadSharpDataStorageSection(
+    std::uint32_t handle, const std::vector<std::uint8_t>& payload) {
+    DRW_DataStorageSection section =
+        makeLocalDataStorageSection(handle, payload);
+    static const std::array<const char*, 8> propertyNames = {
+        "AcDbDs::ID", "Thumbnail_Data", "AcDbDs::TreatedAsObjectData",
+        "AcDbDs::Legacy", "AcDs:Indexable", "AcDbDs::HandleAttribute",
+        "AcDbDs::ID", "ASM_Data"};
+    section.schemaPropertyNameCount = 2u;
+    section.schemaPropertyNames.clear();
+    for (const char* name : propertyNames)
+        section.schemaPropertyNames.emplace_back(name);
+    if (section.schemas.size() != 6u)
+        return section;
+
+    const auto property = [](std::uint32_t nameIndex, const char* name,
+                             std::uint32_t type, std::uint32_t flags,
+                             std::uint16_t valueCount,
+                             std::vector<std::vector<std::uint8_t>> values) {
+        DRW_DataStorageSchemaProperty result;
+        result.nameIndex = nameIndex;
+        result.name = name;
+        result.type = type;
+        result.flags = flags;
+        result.valueCount = valueCount;
+        result.values = std::move(values);
+        return result;
+    };
+    for (std::size_t index = 0; index < section.schemas.size(); ++index) {
+        DRW_DataStorageSchema& schema = section.schemas[index];
+        schema.segmentIndex = index == 5u ? 631u : 5u;
+        schema.indexes.clear();
+        schema.properties.clear();
+        switch (index) {
+        case 0:
+            schema.indexes = {0u, 1u};
+            schema.properties.push_back(property(
+                0u, propertyNames[0], 10u, 0u, 2u,
+                {{6u, 0u, 0u, 0u, 0u, 0u, 0u, 0u},
+                 {7u, 0u, 0u, 0u, 0u, 0u, 0u, 0u}}));
+            schema.properties.push_back(property(
+                1u, propertyNames[1], 15u, 0u, 0u, {}));
+            break;
+        case 1:
+            schema.properties.push_back(property(
+                2u, propertyNames[2], 1u, 0u, 0u, {}));
+            break;
+        case 2:
+            schema.properties.push_back(property(
+                3u, propertyNames[3], 1u, 0u, 0u, {}));
+            break;
+        case 3:
+            schema.properties.push_back(property(
+                4u, propertyNames[4], 1u, 0u, 0u, {}));
+            break;
+        case 4:
+            schema.properties.push_back(property(
+                5u, propertyNames[5], 7u, 8u, 1u, {{0u}}));
+            break;
+        case 5:
+            schema.indexes = {6u, 4u};
+            schema.properties.push_back(property(
+                0u, propertyNames[6], 10u, 0u, 2u,
+                {{2u, 0u, 0u, 0u, 0u, 0u, 0u, 0u},
+                 {3u, 0u, 0u, 0u, 0u, 0u, 0u, 0u}}));
+            schema.properties.push_back(property(
+                1u, propertyNames[7], 15u, 0u, 0u, {}));
+            break;
+        }
+    }
+    section.records.front().schemaIndex = 5u;
+    return section;
+}
+
 void addLocalAcdsHistoryClosure(dx_data& source,
                                DRW_ModelerGeometry& modeler,
                                std::uint32_t history = 0x20Eu,
@@ -5699,18 +5773,15 @@ bool runDxfAcdsMultipleDataStorageProjection(
                                547u, "ACSH_EXTRUSION_CLASS",
                                "AcDbShExtrusion", "cn:AcDbShExtrusion");
 
-    DRW_DataStorageSection storage = makeLocalDataStorageSection(
+    DRW_DataStorageSection storage = makeLocalAcadSharpDataStorageSection(
         box->handle, boxPayload);
-    storage.records.front().schemaIndex = 5u;
     DRW_DataStorageRecord extrusionRecord =
-        makeLocalDataStorageSection(extrusion->handle, extrusionPayload)
+        makeLocalAcadSharpDataStorageSection(extrusion->handle, extrusionPayload)
             .records.front();
-    extrusionRecord.schemaIndex = 5u;
     storage.records.push_back(std::move(extrusionRecord));
     DRW_DataStorageRecord regionRecord =
-        makeLocalDataStorageSection(region->handle, regionPayload)
+        makeLocalAcadSharpDataStorageSection(region->handle, regionPayload)
             .records.front();
-    regionRecord.schemaIndex = 5u;
     storage.records.push_back(std::move(regionRecord));
     for (const std::uint32_t handle : {0xA602u, 0xA770u}) {
         DRW_DataStorageRecord thumbnail;
@@ -5950,7 +6021,9 @@ bool runAcdsHistoryCallbackCapture() {
     DRW_AcShHistoryObject history("ACSH_HISTORY_CLASS");
     history.handle = 0xD66u;
     history.parentHandle = 0xD65u;
-    history.m_ownerHandle = 0xD65u;
+    // The common parent is the modeler object (DXF 330); the DWG class's
+    // additional owner handle maps to DXF 360 and links the graph.
+    history.m_ownerHandle = graph.handle;
     history.m_historyNodeId = 329u;
     history.m_evalExprPrefix.m_unknown = -1;
     history.m_evalExprPrefix.m_value98 = 33;
@@ -6016,11 +6089,13 @@ bool runAcdsHistoryCallbackCapture() {
 
     return captured.evaluationGraphs.size() == 1u
         && captured.evaluationGraphs.front().handle == 0xD67u
+        && captured.evaluationGraphs.front().parentHandle == history.handle
         && captured.evaluationGraphs.front().m_nodes.size() == 1u
         && captured.evaluationGraphs.front().m_nodes.front()
                .m_expressionHandle == 0xD68u
         && captured.acshHistoryObjects.size() == 3u
-        && captured.acshHistoryObjects[0].m_ownerHandle == 0xD65u
+        && captured.acshHistoryObjects[0].parentHandle == 0xD65u
+        && captured.acshHistoryObjects[0].m_ownerHandle == graph.handle
         && captured.acshHistoryObjects[0].m_evalExprPrefix.m_complete
         && captured.acshHistoryObjects[0].m_evalExprPrefix.m_value98 == 33
         && captured.acshHistoryObjects[0].m_historyNodePrefix.m_complete
@@ -6175,7 +6250,27 @@ bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
         findObject("ACSH_BOX_CLASS", 0xD68u);
     const DRW_AcShHistoryObject* extrusion =
         findObject("ACSH_EXTRUSION_CLASS", 0xD6Du);
-    if (box == nullptr || extrusion == nullptr) {
+    const DRW_AcShHistoryObject* boxHistory =
+        findObject("ACSH_HISTORY_CLASS", 0xD66u);
+    const DRW_AcShHistoryObject* extrusionHistory =
+        findObject("ACSH_HISTORY_CLASS", 0xD6Bu);
+    const auto findGraph = [&captured](std::uint32_t handle)
+        -> const DRW_EvaluationGraph* {
+        const DRW_EvaluationGraph* found = nullptr;
+        for (const DRW_EvaluationGraph& graph : captured.evaluationGraphs) {
+            if (graph.handle != handle)
+                continue;
+            if (found != nullptr)
+                return nullptr;
+            found = &graph;
+        }
+        return found;
+    };
+    const DRW_EvaluationGraph* boxGraph = findGraph(0xD67u);
+    const DRW_EvaluationGraph* extrusionGraph = findGraph(0xD6Cu);
+    if (box == nullptr || extrusion == nullptr || boxHistory == nullptr
+        || extrusionHistory == nullptr || boxGraph == nullptr
+        || extrusionGraph == nullptr) {
         std::cerr << "ACSH sample object lookup failed; retained"
                   << captured.acshHistoryObjects.size() << " objects:";
         for (const DRW_AcShHistoryObject& object :
@@ -6186,6 +6281,45 @@ bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
         std::cerr << '\n';
         return false;
     }
+
+    const auto findModeler = [&captured](std::uint32_t handle)
+        -> const DRW_ModelerGeometry* {
+        const DRW_ModelerGeometry* found = nullptr;
+        for (const DRW_Entity* entity : captured.mBlock->ent) {
+            if (entity == nullptr || entity->handle != handle
+                || (entity->eType != DRW::E3DSOLID
+                    && entity->eType != DRW::REGION))
+                continue;
+            if (found != nullptr)
+                return nullptr;
+            found = static_cast<const DRW_ModelerGeometry*>(entity);
+        }
+        return found;
+    };
+    const DRW_ModelerGeometry* boxModeler = findModeler(0xD65u);
+    const bool boxClosureLinksMatch = boxModeler != nullptr
+        && boxModeler->m_historyHandle == boxHistory->handle
+        && boxHistory->parentHandle == boxModeler->handle
+        && boxHistory->m_ownerHandle == boxGraph->handle
+        && boxGraph->parentHandle == boxHistory->handle
+        && boxGraph->m_value96 == 1 && boxGraph->m_value97 == 1
+        && boxGraph->m_nodes.size() == 1u
+        && boxGraph->m_nodes.front().m_index == 0
+        && boxGraph->m_nodes.front().m_flags == 32
+        && boxGraph->m_nodes.front().m_expressionHandle == box->handle
+        && boxGraph->m_edges.empty()
+        && box->parentHandle == boxGraph->handle
+        && box->m_historyNodePrefix.m_handle == 0x96u;
+    const DRW_ModelerGeometry* extrusionModeler = findModeler(0xD6Au);
+    const bool extrusionClosureLinksMatch = extrusionModeler != nullptr
+        && extrusionModeler->m_historyHandle == extrusionHistory->handle
+        && extrusionHistory->parentHandle == extrusionModeler->handle
+        && extrusionHistory->m_ownerHandle == extrusionGraph->handle
+        && extrusionGraph->parentHandle == extrusionHistory->handle
+        && extrusionGraph->m_nodes.size() == 1u
+        && extrusionGraph->m_nodes.front().m_expressionHandle
+            == extrusion->handle
+        && extrusion->parentHandle == extrusionGraph->handle;
 
     const std::array<double, 16> boxTransform{{
         1.0, 0.0, 0.0, 17.77672546982376,
@@ -6248,7 +6382,16 @@ bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
         printPrefix(*box);
         printPrefix(*extrusion);
     }
-    return acdsSchemasMatch && prefixesMatch
+    if (prefixesMatch && boxClosureLinksMatch && extrusionClosureLinksMatch) {
+        std::cout << "ACSH typed closure witness: modelers=2 graphs="
+                  << captured.evaluationGraphs.size() << " history="
+                  << captured.acshHistoryObjects.size() << " materials="
+                  << captured.materials.size() << " proxies="
+                  << captured.proxyObjects.size() << " linked-box=yes"
+                  << " linked-extrusion=yes\n";
+    }
+    return acdsSchemasMatch && prefixesMatch && boxClosureLinksMatch
+        && extrusionClosureLinksMatch
         && box->m_shapeParams == std::vector<double>({5.0, 5.0, 5.0})
         && close(extrusion->m_direction.z, 4.380487155114503);
 }

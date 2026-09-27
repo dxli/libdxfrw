@@ -129,7 +129,7 @@ bool matchesDataStorageSchemaProperty(
 // Restrict this bridge to the matching DWG DataStorage schema fingerprint;
 // a six-schema count alone must never relabel a different property layout.
 // This is a sample-qualified guard, not a general DataStorage schema codec.
-bool matchesQualifiedAc1027AcdsSchemas(
+bool matchesQualifiedOdaAc1027AcdsSchemas(
     const DRW_DataStorageSection& storage) {
     try {
     static const std::array<const char*, 7> expectedPropertyNames = {
@@ -215,6 +215,132 @@ bool matchesQualifiedAc1027AcdsSchemas(
     } catch (...) {
         return false;
     }
+}
+
+struct AcdsOutputSchemaRoles {
+    std::uint32_t thumbnailSchemaIndex = 0;
+    std::uint32_t modelerSchemaIndex = 0;
+};
+
+bool matchesQualifiedAcadSharpAc1027AcdsSchemas(
+    const DRW_DataStorageSection& storage,
+    AcdsOutputSchemaRoles& outputRoles) {
+    try {
+        static const std::array<const char*, 8> expectedPropertyNames = {
+            "AcDbDs::ID", "Thumbnail_Data", "AcDbDs::TreatedAsObjectData",
+            "AcDbDs::Legacy", "AcDs:Indexable", "AcDbDs::HandleAttribute",
+            "AcDbDs::ID", "ASM_Data"};
+        if (storage.schemaCount != 6u || storage.schemas.size() != 6u
+            || storage.schemaPropertyNameCount != 2u
+            || storage.schemaPropertyNames.size() != expectedPropertyNames.size()) {
+            return false;
+        }
+        for (std::size_t index = 0; index < expectedPropertyNames.size();
+             ++index) {
+            if (storage.schemaPropertyNames[index]
+                != expectedPropertyNames[index]) {
+                return false;
+            }
+        }
+
+        std::array<const DRW_DataStorageSchema*, 6> schemasByIndex{};
+        for (const DRW_DataStorageSchema& schema : storage.schemas) {
+            if (schema.index >= schemasByIndex.size()
+                || schemasByIndex[schema.index] != nullptr) {
+                return false;
+            }
+            schemasByIndex[schema.index] = &schema;
+        }
+        if (!std::all_of(schemasByIndex.begin(), schemasByIndex.end(),
+                         [](const DRW_DataStorageSchema* schema) {
+                             return schema != nullptr;
+                         })) {
+            return false;
+        }
+        const auto propertyMatches = [](
+            const DRW_DataStorageSchema& schema, std::size_t propertyIndex,
+            std::uint32_t nameIndex, const char* name, std::uint32_t type,
+            std::uint32_t flags, std::uint16_t valueCount,
+            std::size_t valueSize) {
+            if (propertyIndex >= schema.properties.size())
+                return false;
+            const DRW_DataStorageSchemaProperty& property =
+                schema.properties[propertyIndex];
+            if (property.nameIndex != nameIndex || property.name != name
+                || property.type != type || property.flags != flags
+                || property.valueCount != valueCount
+                || (valueCount == 0u && !property.values.empty())
+                || (valueCount != 0u
+                    && property.values.size() != valueCount)) {
+                return false;
+            }
+            return std::all_of(
+                property.values.begin(), property.values.end(),
+                [valueSize](const std::vector<std::uint8_t>& value) {
+                    return value.size() == valueSize;
+                });
+        };
+        const auto idPropertyMatches = [&propertyMatches](
+            const DRW_DataStorageSchema& schema, std::size_t propertyIndex) {
+            return propertyMatches(schema, propertyIndex, 0u, "AcDbDs::ID",
+                                   10u, 0u, 2u, 8u);
+        };
+        const auto& thumbnail = *schemasByIndex[0];
+        const auto& treated = *schemasByIndex[1];
+        const auto& legacy = *schemasByIndex[2];
+        const auto& indexable = *schemasByIndex[3];
+        const auto& handleAttribute = *schemasByIndex[4];
+        const auto& modeler = *schemasByIndex[5];
+        const bool profileMatches =
+            thumbnail.indexes == std::vector<std::uint64_t>{0u, 1u}
+            && thumbnail.properties.size() == 2u
+            && idPropertyMatches(thumbnail, 0u)
+            && propertyMatches(thumbnail, 1u, 1u, "Thumbnail_Data", 15u,
+                               0u, 0u, 0u)
+            && treated.indexes.empty() && treated.properties.size() == 1u
+            && propertyMatches(treated, 0u, 2u,
+                               "AcDbDs::TreatedAsObjectData", 1u, 0u, 0u,
+                               0u)
+            && legacy.indexes.empty() && legacy.properties.size() == 1u
+            && propertyMatches(legacy, 0u, 3u, "AcDbDs::Legacy", 1u, 0u,
+                               0u, 0u)
+            && indexable.indexes.empty() && indexable.properties.size() == 1u
+            && propertyMatches(indexable, 0u, 4u, "AcDs:Indexable", 1u,
+                               0u, 0u, 0u)
+            && handleAttribute.indexes.empty()
+            && handleAttribute.properties.size() == 1u
+            && propertyMatches(handleAttribute, 0u, 5u,
+                               "AcDbDs::HandleAttribute", 7u, 8u, 1u, 1u)
+            && modeler.indexes == std::vector<std::uint64_t>{6u, 4u}
+            && modeler.properties.size() == 2u
+            && idPropertyMatches(modeler, 0u)
+            && propertyMatches(modeler, 1u, 1u, "ASM_Data", 15u, 0u, 0u,
+                               0u)
+            && thumbnail.segmentIndex == treated.segmentIndex
+            && thumbnail.segmentIndex == legacy.segmentIndex
+            && thumbnail.segmentIndex == indexable.segmentIndex
+            && thumbnail.segmentIndex == handleAttribute.segmentIndex
+            && thumbnail.segmentIndex != modeler.segmentIndex;
+        if (!profileMatches)
+            return false;
+
+        outputRoles.thumbnailSchemaIndex = 0u;
+        outputRoles.modelerSchemaIndex = 5u;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool matchesQualifiedAc1027AcdsSchemas(
+    const DRW_DataStorageSection& storage,
+    AcdsOutputSchemaRoles& outputRoles) {
+    if (matchesQualifiedOdaAc1027AcdsSchemas(storage)) {
+        outputRoles.thumbnailSchemaIndex = 0u;
+        outputRoles.modelerSchemaIndex = 1u;
+        return true;
+    }
+    return matchesQualifiedAcadSharpAc1027AcdsSchemas(storage, outputRoles);
 }
 
 std::string proxyHandleString(std::uint64_t handle) {
@@ -360,9 +486,21 @@ bool makeRawProxyObject(const DRW_ProxyObject& proxy,
 bool collectAcdsHistoryProxyGraph(
     const dx_data& data, const DRW_ModelerGeometry& modeler,
     std::vector<DRW_RawDxfObject>& output,
-    std::vector<std::uint32_t>& materialHandles) {
-    if (modeler.m_historyHandle == 0 || modeler.handle == 0)
+    std::vector<std::uint32_t>& materialHandles, bool debug) {
+    const auto reject = [&](const char* reason, std::uint32_t handle = 0,
+                            std::size_t depth = 0) {
+        if (debug) {
+            std::cerr << "ACDS history graph rejected: modeler="
+                      << proxyHandleString(modeler.handle)
+                      << " history="
+                      << proxyHandleString(modeler.m_historyHandle)
+                      << " handle=" << proxyHandleString(handle)
+                      << " depth=" << depth << " reason=" << reason << '\n';
+        }
         return false;
+    };
+    if (modeler.m_historyHandle == 0 || modeler.handle == 0)
+        return reject("missing modeler or history handle");
 
     // A DWG class number is assigned per drawing, not fixed by the object
     // type. Bind every proxy body to the independently parsed CLASSES record
@@ -370,7 +508,7 @@ bool collectAcdsHistoryProxyGraph(
     if (!data.dwgClassCoverage.m_complete
         || data.dwgClassCoverage.m_status
                != DRW_DwgClassCoverageStatus::FinalizedComplete) {
-        return false;
+        return reject("source CLASSES coverage is incomplete");
     }
 
     struct ProxyClass {
@@ -433,7 +571,7 @@ bool collectAcdsHistoryProxyGraph(
     std::int32_t sourceClassIds[3] = {0, 0, 0};
     if (!sourceClassIdFor(expectedClasses[0], sourceClassIds[0])
         || !sourceClassIdFor(expectedClasses[1], sourceClassIds[1])) {
-        return false;
+        return reject("history/evaluation source class metadata is unqualified");
     }
 
     std::unordered_map<std::uint32_t, std::vector<const DRW_ProxyObject*>> byHandle;
@@ -441,7 +579,7 @@ bool collectAcdsHistoryProxyGraph(
         if (proxy.handle == 0
             || !byHandle.emplace(proxy.handle,
                                  std::vector<const DRW_ProxyObject*>{}).second) {
-            return false;
+            return reject("duplicate or zero source proxy handle", proxy.handle);
         }
         byHandle[proxy.handle].push_back(&proxy);
     }
@@ -453,27 +591,51 @@ bool collectAcdsHistoryProxyGraph(
     try {
         while (!pending.empty()) {
             if (output.size() - outputStart >= 3u)
-                return false;
+                return reject("history closure exceeds three objects",
+                              pending.back().first, output.size() - outputStart);
             const auto current = pending.back();
             pending.pop_back();
             const std::uint32_t handle = current.first;
             const auto priorOwner = expectedOwner.emplace(handle, current.second);
             if (!priorOwner.second && priorOwner.first->second != current.second)
-                return false;
+                return reject("proxy has conflicting expected owners", handle,
+                              output.size() - outputStart);
             if (!visited.insert(handle).second)
                 continue;
 
             const auto found = byHandle.find(handle);
             if (found == byHandle.end() || found->second.size() != 1u
                 || found->second.front()->parentHandle != current.second) {
-                return false;
+                if (debug && found != byHandle.end()) {
+                    std::cerr << "  proxy candidates for "
+                              << proxyHandleString(handle) << " count="
+                              << found->second.size() << " expectedOwner="
+                              << proxyHandleString(current.second);
+                    for (const DRW_ProxyObject* candidate : found->second) {
+                        std::cerr << " [owner="
+                                  << proxyHandleString(candidate->parentHandle)
+                                  << " class=" << candidate->m_proxyClassId
+                                  << " subclass=" << candidate->m_proxySubclass
+                                  << " refs=" << candidate->m_objectIdRefs.size();
+                        for (const DRW_ProxyObjectIdRef& ref :
+                             candidate->m_objectIdRefs) {
+                            std::cerr << ',' << ref.m_dxfCode << ':'
+                                      << proxyHandleString(ref.m_handle);
+                        }
+                        std::cerr << ']';
+                    }
+                    std::cerr << '\n';
+                }
+                return reject("proxy is missing, duplicated, or has wrong owner",
+                              handle, output.size() - outputStart);
             }
             const DRW_ProxyObject& proxy = *found->second.front();
             const std::size_t depth = output.size() - outputStart;
             if (depth == 2u
                 && !proxyClassForSubclass(proxy.m_proxySubclass,
                                           expectedClasses[2])) {
-                return false;
+                return reject("terminal history class is unsupported", handle,
+                              depth);
             }
             if (depth >= 3u
                 || !proxy.m_hasProxyClassId
@@ -485,12 +647,14 @@ bool collectAcdsHistoryProxyGraph(
                 || proxy.m_proxyClassId != sourceClassIds[depth]
                 || proxy.m_proxySubclass != expectedClasses[depth].subclass
                 || proxy.m_objectIdRefs.size() != 1u) {
-                return false;
+                return reject("proxy identity, ordinal, or reference shape is unsupported",
+                              handle, depth);
             }
 
             DRW_RawDxfObject raw;
             if (!makeRawProxyObject(proxy, proxy.m_proxyClassId, raw))
-                return false;
+                return reject("proxy object fields cannot be re-emitted",
+                              handle, depth);
             output.push_back(std::move(raw));
 
             const DRW_ProxyObjectIdRef& reference =
@@ -498,14 +662,16 @@ bool collectAcdsHistoryProxyGraph(
             if (reference.m_handle == 0
                 || reference.m_handle
                        > std::numeric_limits<std::uint32_t>::max()) {
-                return false;
+                return reject("history object reference is invalid", handle,
+                              depth);
             }
             const std::uint32_t target =
                 static_cast<std::uint32_t>(reference.m_handle);
             if (depth < 2u) {
                 if (reference.m_dxfCode != 360
                     || byHandle.find(target) == byHandle.end()) {
-                    return false;
+                    return reject("history link does not target a proxy object",
+                                  handle, depth);
                 }
                 pending.emplace_back(target, handle);
                 continue;
@@ -513,23 +679,28 @@ bool collectAcdsHistoryProxyGraph(
 
             if (reference.m_dxfCode != 340
                 || byHandle.find(target) != byHandle.end())
-                return false;
+                return reject("terminal link is not a material reference",
+                              handle, depth);
             std::size_t materialMatches = 0;
             for (const DRW_Material& material : data.materials) {
                 if (material.handle == target)
                     ++materialMatches;
             }
             if (materialMatches != 1u)
-                return false;
+                return reject("terminal material target is missing or ambiguous",
+                              handle, depth);
             if (std::find(materialHandles.begin(), materialHandles.end(),
                           target) == materialHandles.end()) {
                 materialHandles.push_back(target);
             }
         }
     } catch (...) {
-        return false;
+        return reject("exception while validating proxy graph");
     }
-    return output.size() - outputStart == 3u;
+    if (output.size() - outputStart != 3u)
+        return reject("proxy graph has an incomplete closure",
+                      modeler.m_historyHandle, output.size() - outputStart);
+    return true;
 }
 
 bool configureAcdsMaterialDictionary(
@@ -649,7 +820,9 @@ bool appendAcdsDataSection(
     const DRW_DataStorageSection& storage = data.dataStorageSections.front();
     if (storage.records.empty() && linkedModelers.empty())
         return true;
-    const bool schemasQualified = matchesQualifiedAc1027AcdsSchemas(storage);
+    AcdsOutputSchemaRoles schemaRoles;
+    const bool schemasQualified =
+        matchesQualifiedAc1027AcdsSchemas(storage, schemaRoles);
     if (debug && !schemasQualified) {
         std::cerr << "ACDS schema fingerprint details: declared="
                   << storage.schemaCount << " decoded=" << storage.schemas.size()
@@ -667,8 +840,20 @@ bool appendAcdsDataSection(
                 std::cerr << value << ',';
             std::cerr << " properties=";
             for (const DRW_DataStorageSchemaProperty& property :
-                 schema.properties)
-                std::cerr << '[' << property.name << ']';
+                 schema.properties) {
+                std::cerr << '[' << property.name << " index="
+                          << property.nameIndex << " type=" << property.type
+                          << " flags=" << property.flags << " unknown="
+                          << property.unknown1 << '/' << property.unknown2
+                          << " count=" << property.valueCount << " values=";
+                for (const std::vector<std::uint8_t>& value : property.values) {
+                    std::cerr << '{';
+                    for (std::uint8_t byte : value)
+                        std::cerr << static_cast<unsigned>(byte) << ',';
+                    std::cerr << '}';
+                }
+                std::cerr << ']';
+            }
             std::cerr << '\n';
         }
         for (const DRW_DataStorageRecord& record : storage.records) {
@@ -738,7 +923,8 @@ bool appendAcdsDataSection(
             || record.dataByteLength != record.payload.size()) {
             return false;
         }
-        if (record.schemaIndex == 0u && !record.hasPayloadMarker
+        if (record.schemaIndex == schemaRoles.thumbnailSchemaIndex
+            && !record.hasPayloadMarker
             && hasPngSignature(record.payload)) {
             // DataStorage schema 0 is the independently verified
             // Thumbnail_Data property. Preserve layout thumbnails as
@@ -746,6 +932,8 @@ bool appendAcdsDataSection(
             ++thumbnailCount;
             continue;
         }
+        if (record.schemaIndex != schemaRoles.modelerSchemaIndex)
+            return false;
         if (!record.hasPayloadMarker
             || record.payloadMarkerLength == 0u
             || record.payloadMarkerOffset > record.payload.size()
@@ -803,7 +991,8 @@ bool appendAcdsDataSection(
             return false;
         }
         section.m_groups.emplace_back(0, "ACDSRECORD");
-        const bool isThumbnail = record.schemaIndex == 0u
+        const bool isThumbnail =
+            record.schemaIndex == schemaRoles.thumbnailSchemaIndex
             && !record.hasPayloadMarker;
         section.m_groups.emplace_back(90, isThumbnail ? 0 : 1);
         section.m_groups.emplace_back(2, "AcDbDs::ID");
@@ -836,7 +1025,7 @@ bool appendAcdsDataSection(
 
 bool dx_iface::collectAcdsHistoryProxyObjects(
     const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
-    std::vector<std::uint32_t>& materialHandles) {
+    std::vector<std::uint32_t>& materialHandles, bool debug) {
     if (data.dataStorageSections.empty())
         return true;
     std::vector<const DRW_ModelerGeometry*> linkedModelers;
@@ -882,7 +1071,7 @@ bool dx_iface::collectAcdsHistoryProxyObjects(
         }
         if (modeler->eType != DRW::E3DSOLID
             || !collectAcdsHistoryProxyGraph(data, *modeler, objects,
-                                             materialHandles)) {
+                                             materialHandles, debug)) {
             return false;
         }
     }
@@ -1243,7 +1432,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
             return false;
         };
         if (!collectAcdsHistoryProxyObjects(*cData, m_acdsHistoryObjects,
-                                            referencedMaterials)) {
+                                            referencedMaterials, debug)) {
             reportPreflightFailure("ACDS modeler/history proxy closure");
             delete dxfW;
             dxfW = nullptr;

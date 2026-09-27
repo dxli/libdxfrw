@@ -432,7 +432,7 @@ private:
     bool prepareExtensionObjectGraph(dx_data* data);
     static bool collectAcdsHistoryProxyObjects(
         const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
-        std::vector<std::uint32_t>& materialHandles);
+        std::vector<std::uint32_t>& materialHandles, bool debug);
     std::vector<DRW_RawDxfObject> m_acdsHistoryObjects;
     std::vector<std::uint32_t> m_acdsMaterialHandles;
 
