@@ -2950,6 +2950,18 @@ void testDxfThreeCornerFaceFallback(TestContext& t) {
                         == DRW_3Dface::AllEdges,
              "DXF 3DFACE without corner four duplicates corner three");
 
+    for (int edgeFlags = DRW_3Dface::NoEdge;
+         edgeFlags <= DRW_3Dface::AllEdges; ++edgeFlags) {
+        dxfRW flagsReader("");
+        FuzzInterface flagsCapture;
+        std::string flagsContent = facePrefix + "70\n"
+            + std::to_string(edgeFlags) + "\n0\nENDSEC\n0\nEOF\n";
+        t.expect(flagsReader.readAscii(&flagsCapture, false, flagsContent)
+                     && flagsCapture.faceCount == 1u
+                     && flagsCapture.last3dFace.invisibleflag == edgeFlags,
+                 "DXF 3DFACE accepts each documented edge-flag combination");
+    }
+
     dxfRW malformedReader("");
     FuzzInterface malformedCapture;
     std::string malformedContent = facePrefix + "13\n10\n" + suffix;
@@ -2957,6 +2969,17 @@ void testDxfThreeCornerFaceFallback(TestContext& t) {
                                         malformedContent)
                  && malformedCapture.faceCount == 0u,
              "DXF 3DFACE rejects a half-present fourth corner");
+
+    for (const int invalidFlags : {-1, 16, 31}) {
+        dxfRW invalidFlagsReader("");
+        FuzzInterface invalidFlagsCapture;
+        std::string invalidFlagsContent = facePrefix + "70\n"
+            + std::to_string(invalidFlags) + "\n0\nENDSEC\n0\nEOF\n";
+        t.expect(!invalidFlagsReader.readAscii(&invalidFlagsCapture, false,
+                                               invalidFlagsContent)
+                     && invalidFlagsCapture.faceCount == 0u,
+                 "DXF 3DFACE rejects invisible-edge bits outside mask 0x0F");
+    }
 }
 
 void testDxfSolidTraceCornerMapping(TestContext& t) {

@@ -6587,14 +6587,16 @@ bool DRW_Solid::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t bs){
 
 bool DRW_3Dface::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     switch (code) {
-    case 70:
-        invisibleflag = reader->getInt32();
-        break;
+    case 70: {
+        const int parsedFlag = reader->getInt32();
+        if (parsedFlag < NoEdge || parsedFlag > AllEdges)
+            return false;
+        invisibleflag = parsedFlag;
+        return true;
+    }
     default:
         return DRW_Trace::parseCode(code, reader);
     }
-
-    return true;
 }
 
 bool DRW_3Dface::parseDwg(DRW::Version v, dwgBuffer *buf,
