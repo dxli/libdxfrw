@@ -29,6 +29,29 @@ the selected CAD Assistant signature issue, native FreeCAD platform
 qualification, selector-40 semantics, or the ACSH DWG parser. No support
 claim is promoted and no external fixture is added.
 
+**Native-platform unblock research (2026-09-27; S8.9.5):** the plan's native-CI
+option is immediately actionable on the existing project workflow matrix:
+`.github/workflows/build.yml` already builds on `ubuntu-24.04` and
+`windows-2022`. FreeCAD's official [1.1.3 release](https://github.com/FreeCAD/FreeCAD/releases/tag/1.1.3)
+publishes a Linux x86_64 AppImage and Windows x86_64 portable `.7z` alongside
+the installer; its release notes state Windows builds are signed by the
+FreeCAD Project Association. The official [download page](https://www.freecad.org/downloads)
+confirms these as supported stable release formats; GitHub-hosted runner
+images separately list the pinned native Linux and Windows labels
+([runner matrix](https://github.com/actions/runner-images#available-images)).
+Next platform slice: add a **manually dispatched, opt-in** Linux/Windows
+qualification workflow (not default PR CI), fetch only the official 1.1.3
+artifacts, verify upstream SHA-256 and Windows signature before extraction,
+then run the existing generated-from-scratch installed-artifact `open()` and
+`insert()` controls against each native package with isolated profiles,
+fallbacks disabled, dependency-path attribution, Unicode/spaced paths, and
+failure-without-partial-output checks. Keep downloads and all generated files
+inside unique runner temp paths and do not commit DWG/DXF fixtures. CI success
+would qualify only those exact OS/architecture/FreeCAD/build/importer tuples;
+GUI desktop launch and other FreeCAD/OS versions remain separate. This
+identifies a low-friction route but does not itself close S8.9.5 or promote a
+support claim.
+
 Implementation baseline: `423cf99fd26bc9938dc259907e2889666d672d1f`
 (`origin/master`, `codex/pr100-clean` after rebase). The local commit was
 patch-equivalent to this origin commit and was skipped by rebase. Existing
