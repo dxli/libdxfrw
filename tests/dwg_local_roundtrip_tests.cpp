@@ -6645,7 +6645,7 @@ bool buildDynamicBlockOracleDxf(
     return true;
 }
 
-bool runDynamicBlockOdaPairQualification(
+bool runDynamicBlockTypedDxfPairQualification(
         const std::filesystem::path& dwgPath,
         const std::filesystem::path& dxfPath) {
     if (!std::filesystem::is_regular_file(dwgPath)
@@ -6886,11 +6886,11 @@ bool runDynamicBlockOdaPairQualification(
                      declaredInstances >= static_cast<int>(expected.second);
     }
     if (!classesMatch) {
-      std::cerr << "ODA CLASSES rows do not cover the dynamic-block closure\n";
+      std::cerr << "DXF CLASSES rows do not cover the dynamic-block closure\n";
       return false;
     }
 
-    std::cout << "dynamic-block ODA correlation: graph=" << std::hex
+    std::cout << "dynamic-block typed-DXF correlation: graph=" << std::hex
               << sourceDynamicGraph->handle << std::dec
               << " nodes=" << sourceDynamicGraph->m_nodes.size()
               << " edges=" << sourceDynamicGraph->m_edges.size()
@@ -6901,8 +6901,8 @@ bool runDynamicBlockOdaPairQualification(
               << (graphMatches && targetStructureMatches ? "yes" : "no")
               << " classes-match=" << (classesMatch ? "yes" : "no")
               << " selector40-value-mismatches=" << selector40ValueMismatches
-              << " source-records=" << dwgIface.dynamicObjects.size()
-              << " ODA-records=" << dxfIface.dynamicRecords.size()
+              << " DWG-records=" << dwgIface.dynamicObjects.size()
+              << " DXF-records=" << dxfIface.dynamicRecords.size()
               << " (non-matching fields remain unqualified)\n";
     for (const auto &entry : targetClassCounts)
       std::cout << "  " << entry.first << ": " << entry.second << '\n';
@@ -11045,10 +11045,10 @@ int main(int argc, char** argv) {
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 4
-        && std::string(argv[1]) == "--verify-dynamicblock-oda-pair") {
-        const bool passed = runDynamicBlockOdaPairQualification(
+        && std::string(argv[1]) == "--verify-dynamicblock-typed-pair") {
+        const bool passed = runDynamicBlockTypedDxfPairQualification(
             argv[2], argv[3]);
-        std::cout << "dynamic-block ODA pair qualification: "
+        std::cout << "dynamic-block typed-DXF pair qualification: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 3 && std::string(argv[1]) == "--keep-dir") {
@@ -11059,7 +11059,7 @@ int main(int argc, char** argv) {
         std::cerr << "usage: " << argv[0]
                   << " [--keep-dir DIRECTORY]"
                      " [--verify-acsh-prefix-sample DWG]"
-                     " [--verify-dynamicblock-oda-pair DWG DXF]\n";
+                     " [--verify-dynamicblock-typed-pair DWG DXF]\n";
         return 2;
     }
     expect(runR2013SplineBitLongBoundaryTest(),
