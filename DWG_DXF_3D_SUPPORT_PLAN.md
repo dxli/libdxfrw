@@ -2300,19 +2300,30 @@ Implementation sequence:
    all external/generated DWG/DXF files outside the repository and the
    FreeCAD runtime gate opt-in, not in default CI.
 
-Readiness/self-unblock rule: .1 and .3 are complete research; do not rerun
-them absent new evidence. The next blocking item is .2. Resolve it through
-version-specific primary DXF documentation, a hash-pinned target-produced
-AC1027 DXF with audited provenance, or focused parser/source inspection of the
-installed ODA/target tooling. The exact ACadSharp #1150 source audit and
-completed S2.2.4 vectors narrow the implementation question but do not satisfy
-that provenance gate. The new acadrust/Open CAD Studio route is a concrete
-candidate for the missing independent semantic readback; test it only against
-the pinned source-provenance pair and do not substitute its self-round-trip
-suite. If neither primary/target evidence nor a reproducible external semantic
-readback can be obtained, record the exact missing contract, keep only this
-serializer gated, and continue independently ready FreeCAD-supported DWG→DXF entity slices. After each
-implementation item is
+   The reproducible opt-in gate is
+   `LIBDXFRW_ENABLE_FREECAD_ACDS_RUNTIME_CONTROL=ON` in `tests/CMakeLists.txt`.
+   The caller supplies the external AC1027 DWG, installed `dwg2dxf` path and
+   SHA-256, FreeCAD `freecadcmd` path, and exact pinned revision; an optional
+   baseline DXF enables `tests/check_acds_roundtrip.py` on each FreeCAD output.
+   `dwg2dxf_freecad_acds_open_handoff` and `_insert_handoff` each create a
+   unique temporary profile/input-with-spaces, verify exact argv/output/path,
+   require the pinned unsupported-one-solid/zero-shape outcome, and remove only
+   their unique temporary directory on success. Both pass 2/2 on the pinned
+   macOS arm64 profile with the exact SAB/proxy checker enabled. Default CI
+   remains FreeCAD- and external-fixture-free.
+
+Readiness/self-unblock rule: .1/.3 research, .2's one-tuple contract, .4's
+writer, .5's fast vectors, .6's ODA/independent geometry acceptance, and .7's
+pinned standalone FreeCAD converter handoff are now resolved at their stated
+narrow scopes. Do not rerun the slow external gates for unrelated edits. The
+next S2.3 expansion requires the separate ACadSharp multi-record/REGION
+sub-plan above, with independent source/target evidence for every new schema,
+join, and proxy lifecycle; its present status-1 refusal is expected, not a
+reason to weaken this standalone serializer. In parallel, native Linux and
+Windows installation/handoff remain S8.9.5 external-platform work, and native
+FreeCAD solid construction requires an importer capability outside libdxfrw.
+Continue independently ready FreeCAD-supported DWG→DXF entity slices. After
+each implementation item is
 committed, refresh this section's states/dependencies/next unblock step, then
 publish the existing progress update before advancing; do not batch progress
 updates until the whole ACIS lane finishes.

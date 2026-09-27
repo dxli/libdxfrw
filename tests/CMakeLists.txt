@@ -317,6 +317,75 @@ if(LIBDXFRW_ENABLE_FREECAD_SAT_V1_RUNTIME_CONTROL)
     endforeach()
 endif()
 
+# External AC1027 ACDSDATA handoff qualification. The caller supplies the DWG,
+# installed converter, its expected digest, and a pinned FreeCAD 1.1.3 runtime.
+# No drawing or generated output is added to the source tree. This deliberately
+# checks converter handoff plus FreeCAD's current unsupported-3DSOLID outcome,
+# not FreeCAD B-rep support. An optional libdxfrw DXF baseline enables the
+# stricter, separately maintained ACDSDATA/proxy/SAB round-trip checker.
+option(LIBDXFRW_ENABLE_FREECAD_ACDS_RUNTIME_CONTROL
+    "Enable the opt-in external AC1027 ACDSDATA FreeCAD open/insert handoff check" OFF)
+set(LIBDXFRW_ACDS_DWG "" CACHE FILEPATH
+    "Caller-supplied AC1027 DWG with one 3DSOLID and ACDSDATA")
+set(LIBDXFRW_ACDS_INSTALLED_DWG2DXF "" CACHE FILEPATH
+    "Installed libdxfrw dwg2dxf executable to qualify in FreeCAD")
+set(LIBDXFRW_ACDS_INSTALLED_SHA256 "" CACHE STRING
+    "Expected SHA-256 of the installed ACDSDATA dwg2dxf executable")
+set(LIBDXFRW_ACDS_FREECAD_REVISION "" CACHE STRING
+    "Exact FreeCAD 1.1.3 App.Version()[7] revision to qualify")
+set(LIBDXFRW_ACDS_BASELINE_DXF "" CACHE FILEPATH
+    "Optional caller-supplied libdxfrw AC1027 DXF for strict ACDSDATA comparison")
+if(LIBDXFRW_ENABLE_FREECAD_ACDS_RUNTIME_CONTROL)
+    foreach(_acds_path IN ITEMS LIBDXFRW_ACDS_DWG
+            LIBDXFRW_ACDS_INSTALLED_DWG2DXF LIBDXFRW_FREECADCMD_EXECUTABLE)
+        if(NOT EXISTS "${${_acds_path}}")
+            message(FATAL_ERROR
+                "FreeCAD ACDSDATA control requires existing ${_acds_path}")
+        endif()
+    endforeach()
+    string(LENGTH "${LIBDXFRW_ACDS_INSTALLED_SHA256}" _acds_sha_length)
+    if(NOT _acds_sha_length EQUAL 64
+            OR NOT LIBDXFRW_ACDS_INSTALLED_SHA256 MATCHES "^[0-9a-fA-F]+$")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_ACDS_INSTALLED_SHA256 to the installed binary's exact SHA-256")
+    endif()
+    string(LENGTH "${LIBDXFRW_ACDS_FREECAD_REVISION}" _acds_revision_length)
+    if(NOT _acds_revision_length EQUAL 40
+            OR NOT LIBDXFRW_ACDS_FREECAD_REVISION MATCHES "^[0-9a-fA-F]+$")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_ACDS_FREECAD_REVISION to the pinned FreeCAD 1.1.3 Git revision")
+    endif()
+    if(LIBDXFRW_ACDS_BASELINE_DXF)
+        if(NOT EXISTS "${LIBDXFRW_ACDS_BASELINE_DXF}")
+            message(FATAL_ERROR
+                "LIBDXFRW_ACDS_BASELINE_DXF must name an existing external DXF")
+        endif()
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    endif()
+    foreach(_operation IN ITEMS open insert)
+        add_test(
+            NAME dwg2dxf_freecad_acds_${_operation}_handoff
+            COMMAND ${CMAKE_COMMAND}
+                "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
+                "-DDWG2DXF=${LIBDXFRW_ACDS_INSTALLED_DWG2DXF}"
+                "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+                "-DSAMPLE=${LIBDXFRW_ACDS_DWG}"
+                "-DEXPECTED_SHA256=${LIBDXFRW_ACDS_INSTALLED_SHA256}"
+                "-DFREECAD_REVISION=${LIBDXFRW_ACDS_FREECAD_REVISION}"
+                "-DBASELINE_DXF=${LIBDXFRW_ACDS_BASELINE_DXF}"
+                "-DPYTHON=${Python3_EXECUTABLE}"
+                "-DACDS_CHECKER=${CMAKE_CURRENT_SOURCE_DIR}/check_acds_roundtrip.py"
+                "-DIMPORT_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_acds_check.FCMacro"
+                "-DOPERATION=${_operation}"
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_acds_runtime_test.cmake
+        )
+        set_tests_properties(dwg2dxf_freecad_acds_${_operation}_handoff
+            PROPERTIES
+                LABELS "freecad;acds;AC1027;external;integration"
+                TIMEOUT 240)
+    endforeach()
+endif()
+
 # Optional failure-path qualification through FreeCAD's real Draft wrapper.
 # FreeCAD currently treats output-file existence as conversion success, so this
 # confirms that a failing installed converter cannot hand off a partial DXF.
