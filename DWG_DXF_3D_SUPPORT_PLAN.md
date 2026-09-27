@@ -29,6 +29,30 @@ the selected CAD Assistant signature issue, native FreeCAD platform
 qualification, selector-40 semantics, or the ACSH DWG parser. No support
 claim is promoted and no external fixture is added.
 
+**Independent SAB reader lead (2026-09-27; S2.3.9.4.11 candidate only):**
+[`cadmpeg-codec-sat 0.5.5`](https://docs.rs/crate/cadmpeg-codec-sat/0.5.5)
+documents a read-only parser for bare ASM/ACIS SAT/SAB streams, including
+`ASM BinaryFile4` and `ASM BinaryFile8`; the parent [cadmpeg project](https://github.com/cadmpeg/cadmpeg)
+states its format research is clean-room and uses no vendor SDK/decompiled
+code. Its [ASM format notes](https://github.com/cadmpeg/cadmpeg/blob/main/docs/formats/asm.md)
+document the binary header, reference widths, and record grammar, while its
+[support profile](https://github.com/cadmpeg/cadmpeg/blob/main/docs/format-support.md)
+still scores the stream family only at L1 and gives no result for these exact
+ACadSharp `ASM 230.7.0.65535 NT` payloads. This is the best newly found
+noncommercial exact-payload probe, not qualified evidence. Before counting
+anything, pin the crate/repository revision and dependency hashes; run offline
+on only the extracted hash-pinned SAB bytes for the 1,980-byte ODA cone and
+the three ACadSharp payloads; record detected stream/version, complete decode
+report/losses, and typed geometry counts; then export to STEP and compare
+independent FreeCAD/OCCT validity, bounds, area, and volume where applicable
+against the existing witnesses. A warning-free positive decode still counts
+only as a separate implementation's exact-file semantic witness, not a format
+specification or blanket ACIS support claim. Do not count unknown/unverified
+branches, blocking losses, opaque-only retention, or a decoder self-round-trip.
+The current host has no `cargo` or `cadmpeg` executable; do not install a Rust
+toolchain or execute the third-party code on user files without explicit
+authorization. No SAB payload or derived output is to be committed.
+
 **Native-platform unblock research (2026-09-27; S8.9.5):** the plan's native-CI
 option is immediately actionable on the existing project workflow matrix:
 `.github/workflows/build.yml` already builds on `ubuntu-24.04` and
