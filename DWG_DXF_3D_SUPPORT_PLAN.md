@@ -131,6 +131,9 @@ are on moving `main`, not the pinned v0.6.0 tag. Finally, Autodesk's official
 is explicitly listed for AutoCAD 2000–2009; its 2025 publication date does
 not extend that scope to ACIS-218 / ASM-230 embedded in AC1027. These findings
 leave ×25.4 as the better-supported hypothesis, not a resolved contract. The
+local tool inventory found FreeCAD, ODA File Converter, and BRL-CAD MGED, but
+no `AutoCAD.app`/`accoreconsole` or `sat-g`/`g-sat` executable on Spotlight or
+`PATH`; no source-native AutoCAD modeler extent is available on this host. The
 gate remains `UNRESOLVED` until one witnessed AutoCAD 2013-or-newer control
 records analytic model dimensions and native B-rep extents before export, then
 records the exact embedded SAB hash/header and independent readers' raw and
