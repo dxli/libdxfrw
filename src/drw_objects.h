@@ -5673,7 +5673,42 @@ protected:
                 std::uint32_t bs = 0) override;
 
 public:
+  //! Bounded, typed representation of the AcDbEvalExpr prefix used by the
+  //! observed ACSH history classes. A prefix is writable only when complete.
+  struct EvalExprPrefix {
+    std::int32_t m_unknown = 0;
+    std::int32_t m_value98 = 0;
+    std::int32_t m_value99 = 0;
+    std::int16_t m_valueCode = 0;
+    bool m_hasEvaluatedValue = false;
+    double m_doubleValue = 0.0;
+    DRW_Coord m_pointValue;
+    UTF8STRING m_textValue;
+    std::int32_t m_longValue = 0;
+    std::uint32_t m_handleValue = 0;
+    std::int16_t m_shortValue = 0;
+    std::int32_t m_id = 0;
+    bool m_complete = false;
+  };
+
+  //! Bounded, typed representation of the common AcDbShHistoryNode prefix.
+  struct HistoryNodePrefix {
+    std::int32_t m_major = 0;
+    std::int32_t m_minor = 0;
+    std::array<double, 16> m_transform{};
+    std::uint32_t m_colorIndex = 0;
+    std::int32_t m_rgbColor = -1;
+    bool m_hasRgbColor = false;
+    UTF8STRING m_colorName;
+    UTF8STRING m_colorBookName;
+    std::int32_t m_nodeValue = 0;
+    std::uint32_t m_handle = 0;
+    bool m_complete = false;
+  };
+
   UTF8STRING m_recordName;
+  EvalExprPrefix m_evalExprPrefix;
+  HistoryNodePrefix m_historyNodePrefix;
   std::uint32_t m_major = 0;
   std::uint32_t m_minor = 0;
   std::uint32_t m_ownerHandle = 0;

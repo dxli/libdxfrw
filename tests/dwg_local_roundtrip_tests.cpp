@@ -5952,6 +5952,18 @@ bool runAcdsHistoryCallbackCapture() {
     history.parentHandle = 0xD65u;
     history.m_ownerHandle = 0xD65u;
     history.m_historyNodeId = 329u;
+    history.m_evalExprPrefix.m_unknown = -1;
+    history.m_evalExprPrefix.m_value98 = 33;
+    history.m_evalExprPrefix.m_value99 = 329;
+    history.m_evalExprPrefix.m_id = 1;
+    history.m_evalExprPrefix.m_complete = true;
+    history.m_historyNodePrefix.m_major = 33;
+    history.m_historyNodePrefix.m_minor = 329;
+    history.m_historyNodePrefix.m_transform[0] = 1.0;
+    history.m_historyNodePrefix.m_colorIndex = 256;
+    history.m_historyNodePrefix.m_nodeValue = 3;
+    history.m_historyNodePrefix.m_handle = 0xD64u;
+    history.m_historyNodePrefix.m_complete = true;
     iface.addAcShHistoryObject(history);
 
     DRW_AcShHistoryObject box("ACSH_BOX_CLASS");
@@ -5994,6 +6006,10 @@ bool runAcdsHistoryCallbackCapture() {
 
     graph.m_nodes.front().m_expressionHandle = 0;
     history.m_ownerHandle = 0;
+    history.m_evalExprPrefix.m_value98 = 0;
+    history.m_evalExprPrefix.m_complete = false;
+    history.m_historyNodePrefix.m_transform[0] = 0.0;
+    history.m_historyNodePrefix.m_complete = false;
     box.m_shapeParams.clear();
     graphFrame.m_rawBytes.clear();
     historyFrame.m_rawBytes.clear();
@@ -6005,6 +6021,14 @@ bool runAcdsHistoryCallbackCapture() {
                .m_expressionHandle == 0xD68u
         && captured.acshHistoryObjects.size() == 3u
         && captured.acshHistoryObjects[0].m_ownerHandle == 0xD65u
+        && captured.acshHistoryObjects[0].m_evalExprPrefix.m_complete
+        && captured.acshHistoryObjects[0].m_evalExprPrefix.m_value98 == 33
+        && captured.acshHistoryObjects[0].m_historyNodePrefix.m_complete
+        && captured.acshHistoryObjects[0].m_historyNodePrefix.m_minor == 329
+        && captured.acshHistoryObjects[0].m_historyNodePrefix.m_transform[0]
+               == 1.0
+        && captured.acshHistoryObjects[0].m_historyNodePrefix.m_handle
+               == 0xD64u
         && captured.acshHistoryObjects[1].m_shapeParams
                == std::vector<double>({5.0, 5.0, 5.0})
         && captured.acshHistoryObjects[2].m_recordName
@@ -6016,6 +6040,118 @@ bool runAcdsHistoryCallbackCapture() {
         && captured.acdsHistoryDwgFrames[1].m_handle == 0xD66u
         && captured.acdsHistoryDwgFrames[1].m_rawBytes
                == std::vector<std::uint8_t>({0xD4u, 0xE5u});
+}
+
+bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
+    if (!std::filesystem::is_regular_file(path))
+        return false;
+
+    dx_data captured;
+    dx_iface iface;
+    iface.cData = &captured;
+    dwgRW reader(path.string().c_str());
+    const bool readOk = reader.read(&iface, false);
+    if (!readOk || reader.getVersion() != DRW::AC1027) {
+        std::cerr << "ACSH sample read/version: read=" << readOk
+                  << " version=" << static_cast<int>(reader.getVersion())
+                  << '\n';
+        return false;
+    }
+
+    const auto findObject = [&captured](const UTF8STRING& name,
+                                        std::uint32_t handle)
+        -> const DRW_AcShHistoryObject* {
+        const DRW_AcShHistoryObject* found = nullptr;
+        for (const DRW_AcShHistoryObject& object :
+             captured.acshHistoryObjects) {
+            if (object.m_recordName != name || object.handle != handle)
+                continue;
+            if (found != nullptr)
+                return nullptr;
+            found = &object;
+        }
+        return found;
+    };
+    const DRW_AcShHistoryObject* box =
+        findObject("ACSH_BOX_CLASS", 0xD68u);
+    const DRW_AcShHistoryObject* extrusion =
+        findObject("ACSH_EXTRUSION_CLASS", 0xD6Du);
+    if (box == nullptr || extrusion == nullptr) {
+        std::cerr << "ACSH sample object lookup failed; retained"
+                  << captured.acshHistoryObjects.size() << " objects:";
+        for (const DRW_AcShHistoryObject& object :
+             captured.acshHistoryObjects) {
+            std::cerr << ' ' << object.m_recordName << '@' << std::hex
+                      << object.handle << std::dec;
+        }
+        std::cerr << '\n';
+        return false;
+    }
+
+    const std::array<double, 16> boxTransform{{
+        1.0, 0.0, 0.0, 17.77672546982376,
+        0.0, 1.0, 0.0, -220.8501226607159,
+        0.0, 0.0, 1.0, 2.5,
+        0.0, 0.0, 0.0, 1.0}};
+    const std::array<double, 16> extrusionTransform{{
+        1.0, 0.0, 0.0, 15.27672546982376,
+        0.0, 1.0, 0.0, -223.3501226607159,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0}};
+    const auto close = [](double left, double right) {
+        return std::abs(left - right) <= 1e-12;
+    };
+    const auto prefixMatches = [&close](
+        const DRW_AcShHistoryObject& object,
+        const std::array<double, 16>& expectedTransform,
+        std::int32_t expectedStep) {
+        if (!object.m_evalExprPrefix.m_complete
+            || object.m_evalExprPrefix.m_value98 != 33
+            || object.m_evalExprPrefix.m_value99 != 329
+            || object.m_evalExprPrefix.m_id != 1
+            || object.m_evalExprPrefix.m_hasEvaluatedValue
+            || !object.m_historyNodePrefix.m_complete
+            || object.m_historyNodePrefix.m_major != 33
+            || object.m_historyNodePrefix.m_minor != 329
+            || object.m_historyNodePrefix.m_colorIndex != 256
+            || object.m_historyNodePrefix.m_nodeValue != expectedStep
+            || object.m_historyNodePrefix.m_handle != 0x96u)
+            return false;
+        for (std::size_t index = 0; index < expectedTransform.size(); ++index) {
+            if (!close(object.m_historyNodePrefix.m_transform[index],
+                       expectedTransform[index]))
+                return false;
+        }
+        return true;
+    };
+    const bool prefixesMatch = prefixMatches(*box, boxTransform, 3)
+        && prefixMatches(*extrusion, extrusionTransform, 4);
+    if (!prefixesMatch) {
+        const auto printPrefix = [](const DRW_AcShHistoryObject& object) {
+            std::cerr << object.m_recordName << '@' << std::hex << object.handle
+                      << std::dec << " eval=" << object.m_evalExprPrefix.m_complete
+                      << ':' << object.m_evalExprPrefix.m_unknown << '/'
+                      << object.m_evalExprPrefix.m_value98 << '/'
+                      << object.m_evalExprPrefix.m_value99 << '/'
+                      << object.m_evalExprPrefix.m_valueCode << '/'
+                      << object.m_evalExprPrefix.m_id << " history="
+                      << object.m_historyNodePrefix.m_complete << ':'
+                      << object.m_historyNodePrefix.m_major << '/'
+                      << object.m_historyNodePrefix.m_minor << '/'
+                      << object.m_historyNodePrefix.m_colorIndex << '/'
+                      << object.m_historyNodePrefix.m_nodeValue << '/'
+                      << std::hex << object.m_historyNodePrefix.m_handle
+                      << std::dec << " transform:";
+            for (double value : object.m_historyNodePrefix.m_transform)
+                std::cerr << ' ' << value;
+            std::cerr << '\n';
+        };
+        printPrefix(*box);
+        printPrefix(*extrusion);
+    }
+    return prefixesMatch
+        && box->m_shapeParams == std::vector<double>({5.0, 5.0, 5.0})
+        && close(extrusion->m_direction.z, 4.380487155114503);
 }
 
 bool runDxfEvaluationGraphRoundTrip(
@@ -9799,12 +9935,20 @@ int main(int argc, char** argv) {
         DRW::AC1024, DRW::AC1027, DRW::AC1032};
     std::filesystem::path directory = std::filesystem::temp_directory_path();
     bool keepOutputs = false;
-    if (argc == 3 && std::string(argv[1]) == "--keep-dir") {
+    if (argc == 3
+        && std::string(argv[1]) == "--verify-acsh-prefix-sample") {
+        const bool passed = runAcshPrefixSampleQualification(argv[2]);
+        std::cout << "ACSH pinned-sample prefix qualification: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    } else if (argc == 3 && std::string(argv[1]) == "--keep-dir") {
         directory = argv[2];
         std::filesystem::create_directories(directory);
         keepOutputs = true;
     } else if (argc != 1) {
-        std::cerr << "usage: " << argv[0] << " [--keep-dir DIRECTORY]\n";
+        std::cerr << "usage: " << argv[0]
+                  << " [--keep-dir DIRECTORY]"
+                     " [--verify-acsh-prefix-sample DWG]\n";
         return 2;
     }
     expect(runR2013SplineBitLongBoundaryTest(),
