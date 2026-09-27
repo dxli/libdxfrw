@@ -29,29 +29,71 @@ the selected CAD Assistant signature issue, native FreeCAD platform
 qualification, selector-40 semantics, or the ACSH DWG parser. No support
 claim is promoted and no external fixture is added.
 
-**Independent SAB reader lead (2026-09-27; S2.3.9.4.11 candidate only):**
-[`cadmpeg-codec-sat 0.5.5`](https://docs.rs/crate/cadmpeg-codec-sat/0.5.5)
-documents a read-only parser for bare ASM/ACIS SAT/SAB streams, including
-`ASM BinaryFile4` and `ASM BinaryFile8`; the parent [cadmpeg project](https://github.com/cadmpeg/cadmpeg)
-states its format research is clean-room and uses no vendor SDK/decompiled
-code. Its [ASM format notes](https://github.com/cadmpeg/cadmpeg/blob/main/docs/formats/asm.md)
-document the binary header, reference widths, and record grammar, while its
-[support profile](https://github.com/cadmpeg/cadmpeg/blob/main/docs/format-support.md)
-still scores the stream family only at L1 and gives no result for these exact
-ACadSharp `ASM 230.7.0.65535 NT` payloads. This is the best newly found
-noncommercial exact-payload probe, not qualified evidence. Before counting
-anything, pin the crate/repository revision and dependency hashes; run offline
-on only the extracted hash-pinned SAB bytes for the 1,980-byte ODA cone and
-the three ACadSharp payloads; record detected stream/version, complete decode
-report/losses, and typed geometry counts; then export to STEP and compare
-independent FreeCAD/OCCT validity, bounds, area, and volume where applicable
-against the existing witnesses. A warning-free positive decode still counts
-only as a separate implementation's exact-file semantic witness, not a format
-specification or blanket ACIS support claim. Do not count unknown/unverified
-branches, blocking losses, opaque-only retention, or a decoder self-round-trip.
-The current host has no `cargo` or `cadmpeg` executable; do not install a Rust
-toolchain or execute the third-party code on user files without explicit
-authorization. No SAB payload or derived output is to be committed.
+**Independent SAB reader comparison (2026-09-27; S2.3.9.4.11):** at the user's
+direction, downloaded the official [cadmpeg v0.6.0 Apple Silicon release](https://github.com/cadmpeg/cadmpeg/releases/tag/v0.6.0)
+to temporary storage and verified its archive SHA-256 against the publisher:
+`6731f9da45572430311346777c87d9f2143a4156aad30b884571b98b2c615f1a`.
+The executable reports `cadmpeg 0.6.0+g9a520bea6167`. Its README/LEGAL files
+declare a clean-room policy prohibiting SDKs and decompiled binaries; this is
+project-stated provenance, not an independent audit. The [v0.6.0 format profile](https://github.com/cadmpeg/cadmpeg/blob/v0.6.0/docs/format-support.md)
+admits ACIS save-format 218 but still rates the bare SAT/SAB envelope L1; its
+[ASM format notes](https://github.com/cadmpeg/cadmpeg/blob/main/docs/formats/asm.md)
+say 217/218 model-space lengths are centimetres converted to millimetres by
+×10 and treat header `scale` as metadata. Ran offline on only four existing
+temporary payloads: the 1,980-byte ODA cone (`a5ab9c449ddc100afa636d59a69d883211bd4adbebf3e8e9654918a2602b028e`)
+and ACadSharp `D65`, `D69`, `D6A` (7,779 / 2,876 / 7,489 bytes; SHA-256
+`f7037d878da73ea7d53bb054b344199cd42fbce7f106eb374f84ed08bfa97f87`,
+`0e41c535979a0727645bcb0468508346221c222093c9fa73e48fce7f07109439`,
+`bf0c6147600400f0a1fdfecdf8f38dcd468cd16196913bdd81b4fb9acc239e7d`). All
+four were detected as ACIS binary 218.00 with four-byte references; each
+transferred geometry with zero unknown records, zero unknown faces, no decode
+losses, and no check findings. ACadSharp topology counts agree with the prior
+InventorLoader/FreeCAD witness (D65: one 6-face/12-edge solid; D69: one
+1-face/7-edge region; D6A: one 7-face/15-edge solid).
+
+The follow-up STEP check found a material dimensional disagreement, so these
+results do **not** count as independent dimensional/semantic corroboration.
+`cadmpeg` exported D65/D69/D6A to STEP; the bundled FreeCAD PythonOCC/OCCT
+reader imported each and reported valid shapes, but measured the geometry at
+×10 mm/source-unit: D65 extents 50×50×50 mm, area 15,000 mm², volume 125,000
+mm³; D69 area 2,266.628968 mm²; D6A extents 40.36168×39.84720×43.80487 mm,
+area 7,671.396052 mm², volume 47,539.311707 mm³. The exact SAB headers instead
+carry `scale=25.4`; the source ACadSharp DXF declares `$INSUNITS=1` (inches),
+and Autodesk's [SAT unit guidance](https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/Controlling-the-drawing-units-when-exporting-to-an-ACIS-SAT-file.html)
+maps inches to 25.4 and millimetres to 1. That SAT guidance is not a complete
+contract for embedded SAB. Autodesk's ObjectARX API says `$INSUNITS` labels
+the drawing's length unit but changing it does not transform scales or
+coordinate values ([`setInsunits`](https://help.autodesk.com/cloudhelp/2018/ENU/OARX-MAC-RefGuide/files/OREFMAC-AcDbDatabase__setInsunits_AcDb__UnitsValue.html)).
+The paired `$INSUNITS=1` is therefore useful drawing context, not proof that
+the SAB's raw coordinates equal drawing coordinates or a rule for applying
+the SAB header scale.
+Autodesk Inventor's [DataIO format matrix](https://help.autodesk.com/cloudhelp/2021/ENU/Inventor-API/files/DataIO_Overview.htm)
+also lists SAT and SAB export variants with an explicit `DocUnits` option;
+producer mode is therefore a required control, not an incidental detail. The
+ODA-v5.4.2-based [LibreDWG manual diff](https://github.com/LibreDWG/libredwg/blob/master/doc/ODA-5.4.2-libredwg.patch)
+describes the R2013+ AcDs record as carrying SAB bytes but explicitly leaves
+detailed ACIS/SAB semantics outside its documented scope. Together these
+sources explain why the existing cross-reader mismatch cannot be settled from
+the DWG/DXF wrapper alone. Treat cadmpeg as exact-stream and topology
+corroboration only; keep dimensional parity and support claims blocked until a
+known-size, product/version-matched control resolves the internal `scale`
+semantics. Outputs and reports stayed under
+`/private/tmp/libdxfrw-cadmpeg.Skswue/results`; no fixture, binary, or derived
+file was added to the repository. **Next bounded unblock:** author one simple
+analytic solid with dimensions queried from the modeling API, then export
+equivalent controls through the target product's explicit document-units and
+model-units modes (or document that the target product lacks such a choice).
+For each artifact, record product/build, unit mode, source dimensions, DXF
+`$INSUNITS`, SAB header `scale`, and payload hash. Ensure at least one result is
+the same ACIS 218/ASM branch and DWG carrier profile as the unresolved sample;
+measure the exact SABs with an independent ACIS 218 importer and compare
+against the API-known dimensions. If available, vary `$INSUNITS` while holding
+the source geometry and exported payload mode fixed to distinguish metadata
+from geometry scaling. Conclude which factor is applied exactly once; if the
+producer/importer cannot be version-matched or neither independent reader
+matches the known dimensions, leave the dimensional gate open. Do not
+substitute cadmpeg's own STEP output as the oracle or add external controls to
+repository fixtures.
 
 **Native-platform unblock research (2026-09-27; S8.9.5):** the plan's native-CI
 option is immediately actionable on the existing project workflow matrix:
@@ -230,7 +272,11 @@ remaining lanes:
    `open()` and `insert()`; the pinned importer reports `3DSOLID` unsupported
    and creates no solid. Independent InventorLoader/FreeCAD Part checks now
    decode all three exact ACadSharp SAB payloads as the expected box, planar
-   REGION, and extrusion; the official CAD Assistant ARM64 run on the separate
+   REGION, and extrusion. cadmpeg v0.6.0 independently decodes the same
+   topology without losses, but its STEP/OCCT dimensions are ×10 mm/source
+   unit versus the previous ×25.4 result; dimensional parity remains
+   unresolved against the SAB header `scale=25.4` and DXF `$INSUNITS=1`
+   (S2.3.9.4.11). The official CAD Assistant ARM64 run on the separate
    standalone ODA cone returned only a generic SAT-transfer error and adds no
    semantic result. The direct ACadSharp DWG conversion still fails before
    output publication: dwgReader emits typed evaluation-graph and
@@ -301,7 +347,7 @@ implementation-ready slice rather than a general support claim.
 | --- | --- | --- |
 | S8.9.5 Linux | A native Linux host or native Linux CI runner with the intended architecture, a usable compiler/CMake toolchain, and an installed, version-pinned FreeCAD release including `freecadcmd`. Cross-compilation from macOS is not a substitute. The handoff records host/OS/architecture, FreeCAD release and source revision, exact install prefix/build mode, and whether shell, desktop-entry, or configured-path launch is in scope. | Build/install the current revision outside the checkout; run the existing installed CLI/readback/failure-publication tests in a clean environment; then, with isolated FreeCAD preferences and fallbacks disabled, prove installed `dwg2dxf` path/hash, exact argv, status, complete output, and identical output path for separate `open()` and `insert()` runs. Verify desktop-entry environment only if it will be claimed; otherwise narrow docs to the passing shell/configured-path route. Mark only the tested Linux profile qualified after its evidence packet is saved. |
 | S8.9.5 Windows | A native Windows host or native Windows CI runner with the intended architecture, MSVC/runtime toolchain, and installed, version-pinned FreeCAD release. The handoff records OS/build, architecture, FreeCAD release/revision, compiler/runtime, install layout, and launch route. | Build/install `dwg2dxf.exe`; verify its required DLLs resolve from the documented package/system locations, not FreeCAD-private directories; then run the same clean-profile `open()`/`insert()` attribution and output-handoff checks as Linux. Include paths with spaces and a Unicode/non-ASCII input/output path before claiming those cases. Qualify the desktop launcher only if tested natively; otherwise document only the passing shell/configured-path route. Mark only the tested Windows profile qualified. |
-| S2.3.2 ACIS/ACDS semantic contract | A full normative contract remains unavailable. A hash-pinned ODA-produced AC1027 pair from a tracked LibreDWG source, plus independent Open CAD Studio readback, qualifies one standalone `3DSOLID` / `AcDb3DSolid_ASM_Data` tuple only. Static audits and ODA retention of ODA-authored input alone were insufficient; S2.3.6 accepts the actual libdxfrw output through a version-matched ODA round-trip, and independent InventorLoader/FreeCAD Part reconstruction proves the exact SAB is a valid closed cone. | `READY_NARROW` only for this tuple: one `ASM_Data` owner key equals the entity handle; six observed schema definitions; group 94 equals concatenated ordered group-310 bytes; opaque group-2 GUID; existing group-350 history handle; exact SAB payload hash, equal nonempty source DWG/DXF semantic mesh results, and matching analytic cone metrics for libdxfrw's SAB. Preserve bytes and observed order; fail closed on unsupported or ambiguous references. Clone/INSERT/XREF lifecycle, other schemas/entities/producers/versions, DWG modeler writing, and native FreeCAD solid import remain blocked. S2.3.4/.5/.6 have bounded implementation/verification evidence; S2.3.7 establishes installed FreeCAD converter handoff for the exact standalone tuple on pinned macOS only, not geometry. |
+| S2.3.2 ACIS/ACDS contract | A full normative contract remains unavailable. A hash-pinned ODA-produced AC1027 pair from a tracked LibreDWG source, plus independent Open CAD Studio readback, qualifies one standalone `3DSOLID` / `AcDb3DSolid_ASM_Data` carrier/history tuple only. S2.3.6 accepts actual libdxfrw output through a version-matched ODA round-trip. InventorLoader/FreeCAD Part and cq-acis reconstruct the exact ODA cone; InventorLoader/FreeCAD Part also decodes the three exact ACadSharp SABs. cadmpeg v0.6.0 independently decodes those ACadSharp payloads and agrees on topology, but its STEP/OCCT metrics use ×10 mm/source-unit versus the prior ×25.4 mm/source-unit findings. Each SAB header has `scale=25.4`, and the ACadSharp DXF declares `$INSUNITS=1`; Autodesk's SAT guidance suggests 25.4 mm/unit, but its ObjectARX API says changing `$INSUNITS` does not scale coordinate data, and Autodesk Inventor exposes explicit `DocUnits` SAT/SAB export variants. These sources make the wrapper values insufficient to resolve the embedded SAB's physical scale. | `READY_NARROW` for byte-preserving carrier/history transport only: one `ASM_Data` owner key equals the entity handle; six observed schema definitions; group 94 equals concatenated ordered group-310 bytes; opaque group-2 GUID; existing group-350 history handle; exact SAB payload hash. Preserve bytes and observed order; fail closed on unsupported or ambiguous references. Dimensional semantic parity is `UNRESOLVED` pending a known-size, product/version-matched control whose source dimensions and ACIS export unit mode are independently observed (or a normative source resolving embedded `scale` semantics); do not infer physical size from `$INSUNITS` alone or count cadmpeg as geometric confirmation. Clone/INSERT/XREF lifecycle, other schemas/entities/producers/versions, DWG modeler writing, and native FreeCAD solid import remain blocked. S2.3.4/.5/.6 have bounded carrier implementation/verification evidence; S2.3.7 establishes installed FreeCAD converter handoff for the exact standalone tuple on pinned macOS only, not native FreeCAD geometry. |
 
 For both gates, keep external binaries and converted outputs at their supplied
 paths or in unique temporary directories; record hashes and tool logs without
@@ -2397,15 +2443,26 @@ Implementation sequence:
    `ACSH_BOX_CLASS` history; the extrusion is the separate
    `ACSH_EXTRUSION_CLASS` graph, and the REGION has no history reference.
    ODA's source/readback SAB digests are identical, so the same geometry check
-   applies to both files. This closes independent semantic geometry for these
-   three exact payloads and exposes a supported reader route despite cq-acis's
-   explicit ASM-230 parse rejection. The separate official CAD Assistant
-   check was run on the smaller standalone ODA cone SAB and returned no
-   semantic result; it did not test these ACadSharp payloads. This does not
-   define a normative SAB/ACDS schema, prove general ASM 230 coverage,
-   qualify handle/group-320 lifecycle or arbitrary proxy graphs, or make
-   FreeCAD's native DXF importer support 3DSOLID. Keep those implementation
-   and consumer gates separate; no family-level support claim is promoted.
+   applies to both files. This is an exact-payload geometry witness from one
+   independent parser/kernel route, not general ASM 230 coverage. A separate
+   comparison against cadmpeg v0.6.0 (S2.3.9.4.11 above) agrees on typed
+   topology but measures all three STEP exports at ×10 mm/source-unit, versus
+   this reader's 25.4 mm/source-unit results. The exact SAB headers contain
+   `scale=25.4`, and the source DXF declares `$INSUNITS=1`; however, Autodesk
+   says changing `$INSUNITS` does not scale coordinate data, and its public
+   SAT unit guidance does not fully specify this embedded binary DWG/SAB
+   carrier. Keep the earlier exact-payload geometry observations, but mark
+   cross-reader dimensional parity `UNRESOLVED` until a known-size control
+   pins producer unit mode and a product/version-matched oracle or normative
+   source resolves the embedded `scale` semantics. Do not count
+   cadmpeg's geometry as confirmation, and do not use this disagreement alone
+   to invalidate either parser. The separate official CAD Assistant check was
+   run on the smaller standalone ODA cone SAB and returned no semantic result;
+   it did not test these ACadSharp payloads. None of these observations define
+   a normative SAB/ACDS schema, prove general ASM 230 coverage, qualify
+   handle/group-320 lifecycle or arbitrary proxy graphs, or make FreeCAD's
+   native DXF importer support 3DSOLID. Keep those implementation and consumer
+   gates separate; no family-level support claim is promoted.
    Recheck the saved temporary pair with
    `python3 tests/check_acds_roundtrip.py /private/tmp/libdxfrw-oda-accepted.etqy2h/Cone.dxf /private/tmp/libdxfrw-oda-accepted.etqy2h/dxf/Cone.dxf`;
    pin fresh SHA-256s before interpreting any new external run.
