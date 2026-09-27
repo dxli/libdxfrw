@@ -39,6 +39,9 @@ public:
     void addDxfClass(const DRW_Class& data) {
         cData->dxfClasses.push_back(data);
     }
+    void addDwgClassCoverageReport(const DRW_DwgClassCoverageReport& data) {
+        cData->dwgClassCoverage = data;
+    }
 
     //tables
     virtual void addLType(const DRW_LType& data){

@@ -408,12 +408,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("libdxfrw_dxf", type=Path,
                         help="libdxfrw-produced AC1027 ASCII DXF")
-    parser.add_argument("oda_return_dxf", type=Path,
-                        help="ODA AC1027 round-trip return DXF")
+    parser.add_argument("comparison_dxf", type=Path,
+                        help="ODA return or re-imported AC1027 ASCII DXF")
     args = parser.parse_args(argv)
     try:
         source = analyze(parse_document(args.libdxfrw_dxf, "libdxfrw input"))
-        returned = analyze(parse_document(args.oda_return_dxf, "ODA return"))
+        returned = analyze(parse_document(args.comparison_dxf,
+                                          "round-trip comparison"))
         require(source.sab_sha256 == returned.sab_sha256,
                 "round-trip: SAB SHA-256 differs: "
                 f"libdxfrw={source.sab_sha256}, ODA={returned.sab_sha256}")
@@ -423,7 +424,7 @@ def main(argv: list[str] | None = None) -> int:
                     "history": source.history_handle,
                     "solid": source.solid_handle,
                 },
-                "odaReturn": {
+                "comparison": {
                     "history": returned.history_handle,
                     "solid": returned.solid_handle,
                 },

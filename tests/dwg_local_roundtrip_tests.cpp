@@ -11,6 +11,7 @@
 #include <iterator>
 #include <limits>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -5384,6 +5385,25 @@ void addLocalAcdsHistoryClosure(dx_data& source,
                                         "cn:AcDbShCone",
                                         340, material));
 
+    source.dwgClassCoverage.m_status =
+        DRW_DwgClassCoverageStatus::FinalizedComplete;
+    source.dwgClassCoverage.m_complete = true;
+    const std::array<std::tuple<std::uint16_t, const char*, const char*>, 3>
+        classes {{
+            {521u, "ACSH_HISTORY_CLASS", "AcDbShHistory"},
+            {520u, "ACAD_EVALUATION_GRAPH", "AcDbEvalGraph"},
+            {519u, "ACSH_CONE_CLASS", "AcDbShCone"}
+        }};
+    for (const auto& cls : classes) {
+        DRW_DwgClassCoverageEntry entry;
+        entry.m_classNumber = std::get<0>(cls);
+        entry.m_recordName = std::get<1>(cls);
+        entry.m_className = std::get<2>(cls);
+        entry.m_entityFlagRaw = 0x1F3;
+        entry.m_state = DRW_DwgClassCoverageState::Published;
+        source.dwgClassCoverage.m_entries.push_back(std::move(entry));
+    }
+
     DRW_Dictionary materialsDictionary;
     materialsDictionary.handle = 0x72u;
     materialsDictionary.parentHandle = 0xCu;
@@ -5591,12 +5611,14 @@ bool hasExpectedAcdsSchemaDefinitions(const DRW_RawDxfSection& section) {
 bool runDxfAcdsDataStorageProjection(
     bool binary, const std::filesystem::path& directory, bool keepOutput,
     bool reverseCallbackCollections = false,
-    bool reverseEntityOrder = false) {
+    bool reverseEntityOrder = false,
+    bool reassignedClassIds = false) {
     const std::string encoding = binary ? "binary" : "ascii";
     const std::filesystem::path output = directory /
         ("libdxfrw-ac1027-acds-projection-" + encoding
          + (reverseCallbackCollections ? "-reversed-callbacks" : "")
          + (reverseEntityOrder ? "-reversed-entities" : "")
+         + (reassignedClassIds ? "-reassigned-classes" : "")
          + ".dxf");
     std::error_code ec;
     std::filesystem::remove(output, ec);
@@ -5612,6 +5634,18 @@ bool runDxfAcdsDataStorageProjection(
     if (!reverseEntityOrder)
         source.mBlock->ent.push_back(neighborLine);
     addLocalAcdsDataStorageModeler(source, sourceHandle, payload);
+    if (reassignedClassIds) {
+        const std::int32_t renumbered[] = {500, 501, 502};
+        std::size_t index = 0;
+        for (DRW_ProxyObject& proxy : source.proxyObjects)
+            proxy.m_proxyClassId = renumbered[index++];
+        index = 0;
+        for (DRW_DwgClassCoverageEntry& cls :
+             source.dwgClassCoverage.m_entries) {
+            cls.m_classNumber =
+                static_cast<std::uint16_t>(renumbered[index++]);
+        }
+    }
     if (reverseEntityOrder)
         source.mBlock->ent.push_back(neighborLine);
     if (reverseCallbackCollections) {
@@ -5697,7 +5731,7 @@ bool runDxfAcdsDataStorageProjection(
                                && line->secPoint.y == 25.0
                                && line->secPoint.z == 36.0;
                        });
-    const bool result = importedModeler != nullptr
+    bool result = importedModeler != nullptr
         && neighborLineMatch
         && importedModeler->handle != sourceHandle
         && importedModeler->m_historyHandle == 0x20Eu
@@ -5773,6 +5807,63 @@ bool runDxfAcdsDataStorageProjection(
             std::filesystem::remove(output, ec);
             return false;
         }
+    }
+    if (result && !reverseCallbackCollections && !reverseEntityOrder) {
+        // Re-exporting DXF input uses the captured CLASS records, not the
+        // DWG DataStorage projection. Exercise that distinct writer branch.
+        const std::filesystem::path replay = directory /
+            (output.stem().string() + "-replay.dxf");
+        std::filesystem::remove(replay, ec);
+        dx_iface replayExporter;
+        dx_data replayed;
+        dx_iface replayImporter;
+        result = replayExporter.fileExport(replay.string(), DRW::AC1027,
+                                           binary, &imported, false)
+            && replayImporter.fileImport(replay.string(), &replayed, false)
+            && replayed.dxfClasses.size() == imported.dxfClasses.size()
+            && replayed.rawProxyObjects.size() == 3u
+            && replayed.rawDxfSections.size() == 1u;
+        if (result) {
+            for (std::size_t index = 0; index < imported.dxfClasses.size();
+                 ++index) {
+                const DRW_Class& before = imported.dxfClasses[index];
+                const DRW_Class& after = replayed.dxfClasses[index];
+                if (before.recName != after.recName
+                    || before.className != after.className
+                    || before.instanceCount != after.instanceCount
+                    || before.wasaProxyFlag != after.wasaProxyFlag) {
+                    result = false;
+                    break;
+                }
+            }
+        }
+        if (result) {
+            const DRW_ModelerGeometry* replayedModeler = nullptr;
+            for (const DRW_Entity* entity : replayed.mBlock->ent) {
+                if (entity != nullptr && entity->eType == DRW::E3DSOLID) {
+                    replayedModeler =
+                        static_cast<const DRW_ModelerGeometry*>(entity);
+                    break;
+                }
+            }
+            std::string replayedKey;
+            std::vector<std::uint8_t> replayedPayload;
+            char replayedExpectedHandle[9] = {};
+            if (replayedModeler != nullptr) {
+                std::snprintf(replayedExpectedHandle,
+                              sizeof(replayedExpectedHandle), "%X",
+                              replayedModeler->handle);
+            }
+            result = replayedModeler != nullptr
+                && replayedModeler->m_historyHandle == 0x20Eu
+                && findAcdsRecordPayload(replayed.rawDxfSections.front(),
+                                         "ASM_Data", replayedKey,
+                                         replayedPayload)
+                && replayedKey == replayedExpectedHandle
+                && replayedPayload == payload;
+        }
+        if (!keepOutput || !result)
+            std::filesystem::remove(replay, ec);
     }
     if (!keepOutput || !result)
         std::filesystem::remove(output, ec);
@@ -5874,10 +5965,11 @@ bool runDxfAcdsSchemaFingerprintRejectsMismatch(
 
 bool runDxfAcdsHistoryClosureRejectsMalformedEdges(
     const std::filesystem::path& directory) {
-    static const std::array<const char*, 8> cases = {
+    static const std::array<const char*, 11> cases = {
         "missing-history", "wrong-class", "wrong-owner", "wrong-reference",
         "missing-material", "wrong-subclass", "proxy-bit-size",
-        "proxy-padding"};
+        "proxy-padding", "missing-class-report", "duplicate-class-binding",
+        "wrong-class-name"};
     const std::vector<std::uint8_t> payload {
         'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
         0x01u, 0x02u, 0x03u, 0x04u};
@@ -5915,6 +6007,16 @@ bool runDxfAcdsHistoryClosureRejectsMalformedEdges(
             break;
         case 7:
             source.proxyObjects.back().m_objectData.back() |= 1u;
+            break;
+        case 8:
+            source.dwgClassCoverage.m_complete = false;
+            break;
+        case 9:
+            source.dwgClassCoverage.m_entries.push_back(
+                source.dwgClassCoverage.m_entries.front());
+            break;
+        case 10:
+            source.dwgClassCoverage.m_entries.front().m_className = "Other";
             break;
         }
 
@@ -10062,6 +10164,10 @@ int main(int argc, char** argv) {
            failures);
     expect(runDxfAcdsDataStorageProjection(true, directory, keepOutputs),
            "local binary DWG DataStorage to AC1027 ACDSDATA projection",
+           failures);
+    expect(runDxfAcdsDataStorageProjection(false, directory, keepOutputs,
+                                           false, false, true),
+           "local AC1027 ACDS projection accepts ODA-reassigned DWG class IDs",
            failures);
     expect(runDxfAcdsDataStorageProjection(false, directory, keepOutputs,
                                            true),

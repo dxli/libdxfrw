@@ -356,6 +356,44 @@ bool collectAcdsHistoryProxyGraph(
     if (modeler.m_historyHandle == 0 || modeler.handle == 0)
         return false;
 
+    // A DWG class number is assigned per drawing, not fixed by the object
+    // type. ODA's own AC1027 roundtrip renumbers this witnessed chain from
+    // 521/520/519 to 500/501/502. Bind each proxy body to the independently
+    // parsed CLASSES record instead of accepting either set as a magic value.
+    if (!data.dwgClassCoverage.m_complete
+        || data.dwgClassCoverage.m_status
+               != DRW_DwgClassCoverageStatus::FinalizedComplete) {
+        return false;
+    }
+    const char* expectedRecordNames[] = {
+        "ACSH_HISTORY_CLASS", "ACAD_EVALUATION_GRAPH", "ACSH_CONE_CLASS"};
+    const char* expectedClassNames[] = {
+        "AcDbShHistory", "AcDbEvalGraph", "AcDbShCone"};
+    std::int32_t sourceClassIds[3] = {0, 0, 0};
+    for (std::size_t index = 0; index < 3u; ++index) {
+        for (const DRW_DwgClassCoverageEntry& entry :
+             data.dwgClassCoverage.m_entries) {
+            if (entry.m_recordName != expectedRecordNames[index]
+                || entry.m_className != expectedClassNames[index]) {
+                continue;
+            }
+            if (sourceClassIds[index] != 0
+                || entry.m_state != DRW_DwgClassCoverageState::Published
+                || entry.m_entityFlagRaw != 0x1F3
+                || entry.m_classNumber < 500) {
+                return false;
+            }
+            sourceClassIds[index] = entry.m_classNumber;
+        }
+        if (sourceClassIds[index] == 0)
+            return false;
+    }
+    if (sourceClassIds[0] == sourceClassIds[1]
+        || sourceClassIds[0] == sourceClassIds[2]
+        || sourceClassIds[1] == sourceClassIds[2]) {
+        return false;
+    }
+
     std::unordered_map<std::uint32_t, std::vector<const DRW_ProxyObject*>> byHandle;
     for (const DRW_ProxyObject& proxy : data.proxyObjects)
         byHandle[proxy.handle].push_back(&proxy);
@@ -383,11 +421,10 @@ bool collectAcdsHistoryProxyGraph(
                 return false;
             }
             const DRW_ProxyObject& proxy = *found->second.front();
-            const std::int32_t expectedClassIds[] = {521, 520, 519};
             const char* expectedSubclasses[] = {
                 "cn:AcDbShHistory", "cn:AcDbEvalGraph", "cn:AcDbShCone"};
             if (!proxy.m_hasProxyClassId
-                || proxy.m_proxyClassId != expectedClassIds[output.size()]
+                || proxy.m_proxyClassId != sourceClassIds[output.size()]
                 || proxy.m_proxySubclass != expectedSubclasses[output.size()]
                 || proxy.m_objectIdRefs.size() != 1u) {
                 return false;
