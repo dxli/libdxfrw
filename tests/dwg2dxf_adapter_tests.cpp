@@ -1,5 +1,7 @@
 #include "dx_iface.h"
 
+#include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -125,9 +127,44 @@ bool reject3DLineBeforeAC1015(const std::string& path) {
     return true;
 }
 
+bool rejectDynamicBlockWithoutSerializer() {
+    dx_data data;
+    dx_iface iface;
+    iface.cData = &data;
+
+    DRW_DynamicBlockObject object("BLOCKVISIBILITYPARAMETER");
+    object.handle = 0xD701u;
+    iface.addDynamicBlockObject(object);
+    if (data.dynamicBlockObjects.size() != 1u
+        || data.dynamicBlockObjects.front().handle != object.handle
+        || data.dynamicBlockObjects.front().m_recordName != object.m_recordName) {
+        return fail("dynamic-block callback was not retained by the adapter");
+    }
+
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch()
+                           .count();
+    const std::filesystem::path output =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-dynamic-block-guard-" + std::to_string(nonce)
+           + ".dxf");
+    if (std::filesystem::exists(output))
+        return fail("dynamic-block guard test output path unexpectedly exists");
+    if (iface.fileExport(output.string(), DRW::AC1027, false, &data, true))
+        return fail("dynamic-block export unexpectedly passed without a serializer");
+    if (std::filesystem::exists(output)) {
+        std::error_code ignored;
+        std::filesystem::remove(output, ignored);
+        return fail("rejected dynamic-block export published a DXF");
+    }
+    return true;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2 && std::string(argv[1]) == "--reject-dynamic-block")
+        return rejectDynamicBlockWithoutSerializer() ? 0 : 1;
     if (argc != 3) {
         std::cerr << "usage: dwg2dxf_adapter_tests --generate|--verify <file>\n";
         return 2;

@@ -76,6 +76,9 @@ public:
     std::vector<DRW_EvaluationGraph> evaluationGraphs;
     std::vector<DRW_AcShHistoryObject> acshHistoryObjects;
     std::vector<DRW_UnsupportedObject> acdsHistoryDwgFrames;
+    // Retain dynamic-block callbacks so export can fail closed rather than
+    // silently discarding the graph. No dynamic-block DXF writer is qualified.
+    std::vector<DRW_DynamicBlockObject> dynamicBlockObjects;
     std::list<dx_ifaceBlock*>blocks;    //stores a copy of all blocks and the entities in it
     std::list<dx_ifaceImg*>images;      //temporary list to find images for link with DRW_ImageDef. Do not delete it!!
 

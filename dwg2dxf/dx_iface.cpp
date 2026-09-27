@@ -1717,6 +1717,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
             std::cerr << "DXF export preflight failed: " << stage << '\n';
         }
     };
+    if (!cData->dynamicBlockObjects.empty()) {
+        reportPreflightFailure(
+            "dynamic-block objects have no qualified DXF serializer");
+        return false;
+    }
     if (!prepareExtensionObjectGraph(cData)) {
         reportPreflightFailure("extension-object graph validation");
         return false;

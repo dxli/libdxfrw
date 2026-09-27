@@ -110,6 +110,17 @@ set_tests_properties(dwg2dxf_image_path_cli PROPERTIES
     TIMEOUT 30
 )
 
+# Dynamic-block objects are retained by the converter adapter and must block
+# publication until a semantics-qualified DXF writer exists.
+add_test(
+    NAME dwg2dxf_dynamic_block_fail_closed
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --reject-dynamic-block
+)
+set_tests_properties(dwg2dxf_dynamic_block_fail_closed PROPERTIES
+    LABELS "fast;dxf;adapter;dynamic-block"
+    TIMEOUT 10
+)
+
 # Keep the concrete adapter's modern custom-class 3DLINE subtype and payload
 # through generated DXF, two exact FreeCAD-argv CLI passes, and public readback.
 add_test(
