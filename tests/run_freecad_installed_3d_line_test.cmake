@@ -1,17 +1,41 @@
-foreach(_required IN ITEMS FREECADCMD DWG2DXF BUILD_DWG2DXF DWGADD RECIPE
+foreach(_required IN ITEMS FREECADCMD DWG2DXF BUILD_DWG2DXF
         IMPORT_CHECK_MACRO OPERATION)
     if(NOT DEFINED ${_required})
         message(FATAL_ERROR "${_required} is required")
     endif()
 endforeach()
-foreach(_path IN ITEMS FREECADCMD DWG2DXF BUILD_DWG2DXF DWGADD RECIPE
-        IMPORT_CHECK_MACRO)
+foreach(_path IN ITEMS FREECADCMD DWG2DXF BUILD_DWG2DXF IMPORT_CHECK_MACRO)
     if(NOT EXISTS "${${_path}}")
         message(FATAL_ERROR "${_path} does not exist: ${${_path}}")
     endif()
 endforeach()
+if(DEFINED SAMPLE)
+    foreach(_required IN ITEMS EXPECTED_INPUT_SHA256 EXPECTED_MAGIC_HEX)
+        if(NOT DEFINED ${_required})
+            message(FATAL_ERROR "${_required} is required with SAMPLE")
+        endif()
+    endforeach()
+    if(NOT EXISTS "${SAMPLE}")
+        message(FATAL_ERROR "SAMPLE does not exist: ${SAMPLE}")
+    endif()
+else()
+    foreach(_required IN ITEMS DWGADD RECIPE)
+        if(NOT DEFINED ${_required})
+            message(FATAL_ERROR "${_required} is required without SAMPLE")
+        endif()
+    endforeach()
+    foreach(_path IN ITEMS DWGADD RECIPE)
+        if(NOT EXISTS "${${_path}}")
+            message(FATAL_ERROR "${_path} does not exist: ${${_path}}")
+        endif()
+    endforeach()
+endif()
 if(NOT OPERATION STREQUAL "open" AND NOT OPERATION STREQUAL "insert")
     message(FATAL_ERROR "OPERATION must be open or insert")
+endif()
+if(DEFINED INPUT_PATH_UNICODE AND NOT INPUT_PATH_UNICODE STREQUAL "ON"
+        AND NOT INPUT_PATH_UNICODE STREQUAL "OFF")
+    message(FATAL_ERROR "INPUT_PATH_UNICODE must be ON or OFF")
 endif()
 if(NOT DEFINED DWG_CONVERSION_MODE)
     set(DWG_CONVERSION_MODE 1)
@@ -72,8 +96,16 @@ endif()
 string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef _run_id)
 set(_temp_parent "${_system_temp_base}/libdxfrw-freecad-installed-line-${_run_id} with spaces")
 set(_test_root "${_temp_parent}/runtime")
-set(_input_dir "${_test_root}/input with spaces")
-set(_input "${_input_dir}/AC1015 3D LINE.dwg")
+if(INPUT_PATH_UNICODE)
+    set(_input_dir "${_test_root}/entrée café input with spaces")
+else()
+    set(_input_dir "${_test_root}/input with spaces")
+endif()
+if(DEFINED SAMPLE)
+    set(_input "${_input_dir}/AC1027 tracked 3D LINE.dwg")
+else()
+    set(_input "${_input_dir}/AC1015 generated 3D LINE.dwg")
+endif()
 set(_profile "${_test_root}/profile-${OPERATION}")
 set(_user_cfg "${_profile}/user.cfg")
 set(_user_home "${_profile}/home")
@@ -89,23 +121,49 @@ if(NOT _temp_prefix EQUAL 0)
         "Refusing to use a non-temporary test root: ${_temp_parent_real}")
 endif()
 
-execute_process(
-    COMMAND "${DWGADD}" --as r2000 -o "${_input}" "${RECIPE}"
-    RESULT_VARIABLE _generate_result
-    OUTPUT_VARIABLE _generate_stdout
-    ERROR_VARIABLE _generate_stderr
-    TIMEOUT 60
-)
-if(NOT "${_generate_result}" STREQUAL "0" OR NOT EXISTS "${_input}")
-    message(FATAL_ERROR
-        "Could not generate the local AC1015 LINE control (${_generate_result}).\n"
-        "Evidence retained at ${_temp_parent}\n"
-        "${_generate_stdout}\n${_generate_stderr}")
+if(DEFINED SAMPLE)
+    file(SHA256 "${SAMPLE}" _sample_sha256)
+    if(NOT _sample_sha256 STREQUAL EXPECTED_INPUT_SHA256)
+        message(FATAL_ERROR
+            "Tracked FreeCAD DWG sample hash mismatch: ${_sample_sha256} != ${EXPECTED_INPUT_SHA256}")
+    endif()
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E copy "${SAMPLE}" "${_input}"
+        RESULT_VARIABLE _copy_result
+        OUTPUT_VARIABLE _copy_stdout
+        ERROR_VARIABLE _copy_stderr
+        TIMEOUT 60
+    )
+    if(NOT "${_copy_result}" STREQUAL "0" OR NOT EXISTS "${_input}")
+        message(FATAL_ERROR
+            "Could not copy the tracked AC1027 LINE control (${_copy_result}).\n"
+            "Evidence retained at ${_temp_parent}\n${_copy_stdout}\n${_copy_stderr}")
+    endif()
+else()
+    execute_process(
+        COMMAND "${DWGADD}" --as r2000 -o "${_input}" "${RECIPE}"
+        RESULT_VARIABLE _generate_result
+        OUTPUT_VARIABLE _generate_stdout
+        ERROR_VARIABLE _generate_stderr
+        TIMEOUT 60
+    )
+    if(NOT "${_generate_result}" STREQUAL "0" OR NOT EXISTS "${_input}")
+        message(FATAL_ERROR
+            "Could not generate the local AC1015 LINE control (${_generate_result}).\n"
+            "Evidence retained at ${_temp_parent}\n"
+            "${_generate_stdout}\n${_generate_stderr}")
+    endif()
 endif()
 file(READ "${_input}" _magic_hex LIMIT 6 HEX)
-if(NOT "${_magic_hex}" STREQUAL "414331303135")
+if(DEFINED EXPECTED_MAGIC_HEX)
+    set(_expected_magic_hex "${EXPECTED_MAGIC_HEX}")
+else()
+    set(_expected_magic_hex "414331303135")
+endif()
+if(NOT "${_magic_hex}" STREQUAL "${_expected_magic_hex}")
     message(FATAL_ERROR
-        "The generated control is not AC1015 (${_magic_hex}); evidence retained at ${_temp_parent}")
+        "The FreeCAD DWG control has unexpected version magic (${_magic_hex} != ${_expected_magic_hex}); "
+        "evidence retained at ${_temp_parent}")
 endif()
 
 file(WRITE "${_user_cfg}"
@@ -145,6 +203,16 @@ set(_environment
     "TMPDIR=${_temp_parent}"
     "TEMP=${_temp_parent}"
     "TMP=${_temp_parent}")
+if(DEFINED EXPECTED_LINE_BOUNDS)
+    list(REMOVE_ITEM _environment
+        "LIBDXFRW_FREECAD_EXPECT_LINE_BOUNDS=[[1,2,3,4,6,9]]")
+    list(APPEND _environment
+        "LIBDXFRW_FREECAD_EXPECT_LINE_BOUNDS=${EXPECTED_LINE_BOUNDS}")
+endif()
+if(DEFINED EXPECTED_FREECAD_REVISION)
+    list(APPEND _environment
+        "LIBDXFRW_FREECAD_EXPECT_REVISION=${EXPECTED_FREECAD_REVISION}")
+endif()
 
 execute_process(
     COMMAND "${CMAKE_COMMAND}" -E env ${_environment}

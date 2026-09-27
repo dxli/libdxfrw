@@ -469,6 +469,51 @@ if(LIBDXFRW_ENABLE_FREECAD_INSTALLED_3D_LINE_CONTROL)
     endforeach()
 endif()
 
+# Native Linux/Windows qualification can reuse the exact LibreCAD-tracked
+# AC1027 three-LINE fixture. This avoids requiring an external dwgadd build or
+# adding another DWG to the repository. Keep it opt-in: it launches the pinned
+# FreeCAD consumer twice (open and insert) and is intended for manual platform
+# qualification, not every fast CI run.
+option(LIBDXFRW_ENABLE_FREECAD_TRACKED_AC1027_LINE_CONTROL
+    "Enable pinned FreeCAD checks using the tracked AC1027 three-LINE DWG" OFF)
+if(LIBDXFRW_ENABLE_FREECAD_TRACKED_AC1027_LINE_CONTROL)
+    if(NOT EXISTS "${LIBDXFRW_FREECADCMD_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECADCMD_EXECUTABLE to FreeCAD's FreeCADCmd/freecadcmd")
+    endif()
+    if(NOT EXISTS "${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}")
+        message(FATAL_ERROR
+            "Set LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE to the installed dwg2dxf")
+    endif()
+    if(NOT EXISTS "${_freecad_cli_sample}")
+        message(FATAL_ERROR
+            "The tracked ordinary_enc_AC1027.dwg fixture is required")
+    endif()
+
+    foreach(_operation IN ITEMS open insert)
+        add_test(
+            NAME dwg2dxf_freecad_tracked_ac1027_line_${_operation}
+            COMMAND ${CMAKE_COMMAND}
+                "-DFREECADCMD=${LIBDXFRW_FREECADCMD_EXECUTABLE}"
+                "-DDWG2DXF=${LIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE}"
+                "-DBUILD_DWG2DXF=$<TARGET_FILE:dwg2dxf>"
+                "-DSAMPLE=${_freecad_cli_sample}"
+                -DEXPECTED_INPUT_SHA256=a0ebf245e570bf0dc337c696330b7ea883feaebb7c4e781de8d77ac723815f83
+                -DEXPECTED_MAGIC_HEX=414331303237
+                "-DIMPORT_CHECK_MACRO=${CMAKE_CURRENT_SOURCE_DIR}/freecad_dwg2dxf_import_check.FCMacro"
+                "-DOPERATION=${_operation}"
+                -DINPUT_PATH_UNICODE=ON
+                -DEXPECTED_FREECAD_REVISION=145529fe741292ff0b3977a01195bf0247425794
+                -DEXPECTED_LINE_BOUNDS=[[1,2,0,3,4,0],[5,6,0,7,8,0],[9,10,0,11,12,0]]
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/run_freecad_installed_3d_line_test.cmake
+        )
+        set_tests_properties(dwg2dxf_freecad_tracked_ac1027_line_${_operation}
+            PROPERTIES
+                LABELS "freecad;installed;generated;integration;AC1027;platform"
+                TIMEOUT 180)
+    endforeach()
+endif()
+
 # Exercise the current shared build after CMake installs it into a relocatable
 # prefix, then reuse the installed-artifact FreeCAD geometry harness. CMake's
 # install step rewrites the executable RPATH, so this must be a distinct

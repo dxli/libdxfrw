@@ -30,6 +30,15 @@ import tempfile
 
 import FreeCAD as App
 
+expected_revision = os.environ.get("LIBDXFRW_FREECAD_EXPECT_REVISION", "")
+if expected_revision:
+    version = App.Version()
+    if len(version) < 8 or str(version[7]).lower() != expected_revision.lower():
+        raise RuntimeError(
+            "FreeCAD revision %r does not match expected pinned revision %r"
+            % (version[7] if len(version) > 7 else None, expected_revision)
+        )
+
 
 sample = os.environ.get("LIBDXFRW_FREECAD_DWG")
 if not sample or not os.path.isfile(sample):
