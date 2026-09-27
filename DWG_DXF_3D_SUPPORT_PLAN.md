@@ -2,6 +2,33 @@
 
 Status: implementation in progress; DWG reader edits remain evidence-gated.
 Review date: 2026-09-27.
+
+**External unblock research (2026-09-27; S2.3.9.4.10):** Autodesk's public
+[Dynamic Block API overview](https://help.autodesk.com/cloudhelp/2022/ENU/OARX-DevGuide/files/GUID-81D407FB-5C58-4197-A8DE-83A10F13091E.htm)
+supports querying/setting dynamic-block properties and describes graph
+evaluation; [`AcDbDynBlockReferenceProperty::value`](https://help.autodesk.com/cloudhelp/2019/ENU/OARX-RefGuide/files/OREF-AcDbDynBlockReferenceProperty__value.html)
+returns an `AcDbEvalVariant`, which Autodesk defines as a typed wrapper around
+`resbuf` ([reference](https://help.autodesk.com/cloudhelp/2018/ENU/OARX-RefGuide/files/OREF-AcDbEvalVariant.html)).
+This is an efficient path to observe source property semantics, but neither
+these API docs nor [grip behavior docs](https://help.autodesk.com/cloudhelp/2027/ENG/AutoCAD-Core/files/GUID-31E1AD7C-387A-46B5-BCFD-6DD2173747C3.htm)
+specifies selector-40 binary/DXF storage, the A83/A84 sentinel, or save/reopen
+normalization. The bounded authoritative experiment is: query and log each
+property's name, description, value, and type in the exact pinned drawing;
+save as ASCII DXF; reopen and query the same properties; separately compare
+the raw selector values before and after. Property-level equality alone does
+not prove selector mapping.
+
+For ACIS, [Ansys 2026 R1](https://ansyshelp.ansys.com/public/Views/Secured/corp/v261/en/pdf/CAD_Integration.pdf)
+documents a standalone SAT/SAB geometry reader on Windows/Linux with ACIS
+versions through 2023, but does not identify the exact ACadSharp
+`ASM 230.7.0.65535 NT` profile. Only a hash-matched import with independent
+geometry checks can count; do not start an account, download, installation,
+or trial without user authorization. [OCCT's ACIS import/export component](https://github.com/Open-Cascade-SAS/OCCT-Components)
+is commercial and requires purchase for full access. These leads do not clear
+the selected CAD Assistant signature issue, native FreeCAD platform
+qualification, selector-40 semantics, or the ACSH DWG parser. No support
+claim is promoted and no external fixture is added.
+
 Implementation baseline: `423cf99fd26bc9938dc259907e2889666d672d1f`
 (`origin/master`, `codex/pr100-clean` after rebase). The local commit was
 patch-equivalent to this origin commit and was skipped by rebase. Existing
@@ -1350,7 +1377,7 @@ claims.
 
 | Area | Current code evidence | Review consequence |
 | --- | --- | --- |
-| `3DFACE` | DXF library read/write routes exist. S5.1 found the in-tree `dx_iface` did not dispatch `E3DFACE` on output; it now does. The reader requires XY components for the first three corners, accepts the fourth corner as optional and copies corner 3 when absent. The DWG parser bounds its invisible-edge flags to `0x0f`; the DXF writer now rejects group-70 values outside `0..15` before the 16-bit write. | Generated ASCII/binary DXF vectors check WCS corners and group-70 invisible-edge bits. S8.15.18 additionally runs a locally authored tilted control through ODA-generated AC1015 DWG, exact FreeCAD-form conversion, and public DXF readback; all four WCS corners and the invisible-edge flag survive. FreeCAD 1.1.3 C++ counts one entity but reports it unsupported and creates no shape. Autodesk defines the four corner points as WCS and group 70's optional per-edge invisibility flags in its [3DFACE DXF reference](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-747865D5-51F0-45F2-BEFE-9572DBC5B151.htm). This is one generated AC1015 converter witness only; it does not qualify target-authored DWG layout/version support or FreeCAD geometry support. |
+| `3DFACE` | DXF library read/write routes exist. S5.1 found the in-tree `dx_iface` did not dispatch `E3DFACE` on output; it now does. The reader requires XY components for the first three corners, accepts the fourth corner as optional and copies corner 3 when absent, and rejects group-70 values outside `0..15`; the DWG parser applies the same flag bound, and the DXF writer rejects invalid values before writing. | Generated ASCII/binary DXF vectors check WCS corners and group-70 invisible-edge bits. S8.15.18 additionally runs a locally authored tilted control through ODA-generated AC1015 DWG, exact FreeCAD-form conversion, and public DXF readback; all four WCS corners and the invisible-edge flag survive. FreeCAD 1.1.3 C++ counts one entity but reports it unsupported and creates no shape. Autodesk defines the four corner points as WCS and group 70's optional per-edge invisibility flags in its [3DFACE DXF reference](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-747865D5-51F0-45F2-BEFE-9572DBC5B151.htm). This is one generated AC1015 converter witness only; it does not qualify target-authored DWG layout/version support or FreeCAD geometry support. |
 | `3DLINE` | Typed DXF/DWG codec routes exist; `dx_iface` now stores the modern `DRW_3DLine` subtype and dispatches its typed DXF writer (S8.13.4). | Locally generated ASCII and binary DXF exact-CLI/two-pass readback vectors verify adapter subtype and field preservation; S8.13.4.1 verifies pre-AC1015 output fails closed. Autodesk's current DXF ENTITIES index lists `LINE` but not `3DLINE`; no authoritative Autodesk definition or target-produced DWG witness was found in the 2026-09-26 check. LibreDWG's manual documents start/end/extrusion/thickness fields, but this is an implementation cross-check only. Keep the DXF spelling as a portability-sensitive extension, do not substitute it for standard WCS `LINE`, and keep pre-R13 legacy 3DLINE on its separate evidence lane. |
 | 3D point/line families | `POINT`, `LINE`, `RAY`, and `XLINE` carry WCS 3D data; legacy pre-R13 and modern custom-class 3DLINE remain distinct. | S8.4a.8 matches one AutoCAD-authored POINT `(50,50,50)` against LibreDWG for each exact AC1014/1015/1018/1021/1024/1027 sample; five also match their hash-pinned paired source DXF. Only the AC1027 and local AC1015 POINT controls have separate pinned-FreeCAD geometry checks (S8.15.3/.3.1). S8.13.4 and S8.13.4.2 verify generated ASCII and binary DXF adapter retention for the modern `3DLINE` extension only. Do not equate a 3D `LINE` with implementation-specific `3DLINE`, or promote DWG/version/target-CAD portability from a codec self-round-trip. |
 | Planar entities placed in 3D | ARC/CIRCLE, SOLID/TRACE, 2D POLYLINE/LWPOLYLINE, HATCH/MPOLYGON, and INSERT use distinct coordinate and topology rules. DXF ELLIPSE center and major-axis vector are WCS, with extrusion providing its plane normal. INSERT adds scale, rotation, array spacing, and block-base transforms. | INSERT's nested placement matrix is covered in S5.2. S5.1 covers SOLID/TRACE corner fields and TRACE projection; S5.4 corrects the DXF ELLIPSE `ext=true` double-transform and checks WCS invariance in both modes. S5.7 validates the HATCH/MPOLYGON zero-XY elevation header, OCS retention, and nonzero extrusion; S5.8 rejects partial X/Y pairs for polyline, line, arc, ellipse, and spline boundary data plus seed points; S5.9 preserves HATCH elliptic-edge direction; S5.10 disambiguates MPOLYGON's top-level group-73 annotation flag from boundary-path code 73 and retains its group-11/21 vector. This does not establish fill/render behavior, all optional tuples, DWG semantics, or FreeCAD MPOLYGON geometry support. Broader ARC/CIRCLE OCS, thickness, and DWG ELLIPSE qualification remain open. Continue to use Autodesk's arbitrary-axis and per-entity rules, not a transform helper round-trip alone. |
@@ -2677,8 +2704,9 @@ an orphan record.
 ### S5 — DXF topology, coordinates, and finite-value semantics
 
 State: planned DXF topology, placement, flags, and conversion-boundary fixes
-are implemented in S5.1-S5.12. Their evidence remains vector/family-specific;
-S7/S8 independently gate broader semantic claims and blocked DWG lanes.
+are implemented in S5.1-S5.12; S8.15.18.3 additionally closes the 3DFACE DXF
+input flag-range guard. Their evidence remains vector/family-specific; S7/S8
+independently gate broader semantic claims and blocked DWG lanes.
 
 Dependencies: S0, S1. Keep DWG-specific parser changes in S3.
 
@@ -2693,9 +2721,9 @@ Steps:
    optional defaults, and version-specific entity availability.
 2. Verify `3DFACE` three-corner fallback, all four invisible-edge bits,
    coordinate order, and WCS round trips. Reject or diagnose invalid values
-   instead of silently truncating flags on write. S5.3 closes the output-side
-   guard; the DXF reader remains permissive and retains the source integer so
-   future/reserved bits are not silently discarded on input.
+   rather than silently truncating flags on write or retaining unsupported
+   reserved bits on input. S5.3 closes the writer guard; S8.15.18.3 adds the
+   matching DXF parser range check for group 70 values outside `0..15`.
 3. Verify old `POLYLINE`/`VERTEX` subtypes: open/closed 3D polyline, M/N
    polygon mesh, PFACE vertex then face streams, signed one-based face
    references, hidden edge bits, `SEQEND`, and inconsistent declared counts.
