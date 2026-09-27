@@ -36,6 +36,9 @@ public:
     void addHeader(const DRW_Header* data){
         cData->headerC = *data;
     }
+    void addDxfClass(const DRW_Class& data) {
+        cData->dxfClasses.push_back(data);
+    }
 
     //tables
     virtual void addLType(const DRW_LType& data){

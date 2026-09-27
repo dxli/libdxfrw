@@ -1278,22 +1278,32 @@ bool copyProxyBitRange(const dwgBuffer& source, std::uint64_t startBit,
     if (!copy.getBytes(data.data(), data.size()) || !copy.isGood())
         return false;
     data.resize(static_cast<std::size_t>(byteCount));
+    // The DWG bit range may end inside a byte shared with the following
+    // stream. DXF proxy code 161 declares the significant bits; clear the
+    // unused low bits instead of leaking adjacent DWG bits into group 310.
+    if ((bitCount & 7u) != 0)
+        data.back() &= static_cast<std::uint8_t>(
+            0xFFu << (8u - (bitCount & 7u)));
     return true;
 }
 
 int proxyDxfCode(std::uint8_t handleCode) {
+    // ODA DWG spec §2.13 / §20.4.90: proxy objids are typed handles.
+    // Autodesk DXF reference: 330 soft pointer, 340 hard pointer,
+    // 350 soft owner, 360 hard owner.
     switch (handleCode) {
+    case 2:
+        return 350;
     case 3:
+        return 360;
+    case 5:
         return 340;
     case 4:
     case 6:
     case 8:
     case 10:
     case 12:
-        return 350;
-    case 5:
-        return 360;
-    case 2:
+        return 330;
     default:
         return 330;
     }

@@ -14451,11 +14451,14 @@ bool validateProxyDxfPayloads(const DxfProxyCapture& capture) {
 }
 
 int proxyDxfHandleCode(int code) {
+    // Inverse of the DWG typed-handle/DXF group-code mapping (ODA §2.13;
+    // Autodesk DXF handle groups). DXF has absolute handles only, so code 4
+    // is the canonical soft-pointer representation on readback.
     switch (code) {
-    case 330: return 2;
-    case 340: return 3;
-    case 350: return 4;
-    case 360: return 5;
+    case 330: return 4;
+    case 340: return 5;
+    case 350: return 2;
+    case 360: return 3;
     default: return 0;
     }
 }

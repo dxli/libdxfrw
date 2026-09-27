@@ -244,6 +244,7 @@ bool appendProxyBinaryGroups(DRW_RawDxfObject& raw, int code,
 }
 
 bool makeRawProxyObject(const DRW_ProxyObject& proxy,
+                        std::int32_t outputClassId,
                         DRW_RawDxfObject& raw) {
     const auto expectedBytes = [](std::uint64_t bits) {
         return bits / 8u + ((bits & 7u) != 0 ? 1u : 0u);
@@ -272,6 +273,13 @@ bool makeRawProxyObject(const DRW_ProxyObject& proxy,
             && !proxy.m_unknownData.empty())) {
         return false;
     }
+    const std::uint32_t significantLastBits =
+        proxy.m_objectDataBitSize & 7u;
+    if (significantLastBits != 0u
+        && (proxy.m_objectData.back()
+            & ((1u << (8u - significantLastBits)) - 1u)) != 0u) {
+        return false;
+    }
 
     raw = DRW_RawDxfObject{};
     raw.name = "ACAD_PROXY_OBJECT";
@@ -295,7 +303,9 @@ bool makeRawProxyObject(const DRW_ProxyObject& proxy,
     }
     raw.groups.emplace_back(100, "AcDbProxyObject");
     raw.groups.emplace_back(90, proxy.m_proxyCarrierId);
-    raw.groups.emplace_back(91, proxy.m_proxyClassId);
+    // DXF proxy class IDs are the 500-based ordinal positions of CLASS
+    // records in this output, not the source DWG's class IDs.
+    raw.groups.emplace_back(91, outputClassId);
     if (proxy.m_hasProxyGraphicsByteSize) {
         if (proxy.m_proxyGraphicsByteSize
             > static_cast<std::uint64_t>(
@@ -335,6 +345,7 @@ bool makeRawProxyObject(const DRW_ProxyObject& proxy,
         raw.groups.emplace_back(reference.m_dxfCode,
                                 proxyHandleString(reference.m_handle));
     }
+    raw.groups.emplace_back(94, 0);
     return true;
 }
 
@@ -383,7 +394,9 @@ bool collectAcdsHistoryProxyGraph(
             }
 
             DRW_RawDxfObject raw;
-            if (!makeRawProxyObject(proxy, raw)) {
+            if (!makeRawProxyObject(
+                    proxy, static_cast<std::int32_t>(500u + output.size()),
+                    raw)) {
                 return false;
             }
             output.push_back(std::move(raw));
@@ -398,7 +411,7 @@ bool collectAcdsHistoryProxyGraph(
             const std::uint32_t target =
                 static_cast<std::uint32_t>(reference.m_handle);
             if (output.size() < 3u) {
-                if (reference.m_dxfCode != 340
+                if (reference.m_dxfCode != 360
                     || byHandle.find(target) == byHandle.end()) {
                     return false;
                 }
@@ -406,7 +419,7 @@ bool collectAcdsHistoryProxyGraph(
                 continue;
             }
 
-            if (reference.m_dxfCode != 360
+            if (reference.m_dxfCode != 340
                 || byHandle.find(target) != byHandle.end())
                 return false;
             std::size_t materialMatches = 0;
@@ -989,6 +1002,13 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
     m_acdsMaterialHandles.clear();
     if (!prepareExtensionObjectGraph(cData))
         return false;
+    if (!cData->dataStorageSections.empty()
+        && (!cData->rawProxyObjects.empty()
+            || !cData->dxfClasses.empty())) {
+        // The narrow DWG DataStorage projection owns its four CLASS ordinal
+        // slots. Do not silently discard unrelated custom classes/proxies.
+        return false;
+    }
     dxfW = new dxfRW(file.c_str());
     std::vector<DRW_LType> lineTypes(cData->lineTypes.begin(),
                                      cData->lineTypes.end());
@@ -1014,6 +1034,29 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
         }
         dxfW->setNamedDictObjects(materialDictionaries);
         dxfW->setRootDictEntries(materialRootEntries);
+
+        // The witnessed AC1027 history graph consists of three custom
+        // classes. DXF proxy group 91 indexes CLASSES from 500; ODA discards
+        // the proxies if those ordinal references do not resolve. Emit only
+        // the witnessed graph classes plus its referenced material class.
+        std::vector<DRW_Class> classes;
+        for (const char* name : {"ACSH_HISTORY_CLASS",
+                                 "ACAD_EVALUATION_GRAPH",
+                                 "ACSH_CONE_CLASS", "MATERIAL"}) {
+            DRW_Class cls;
+            if (!dxfRW::dxfClassForRecordName(name, cls)) {
+                delete dxfW;
+                dxfW = nullptr;
+                return false;
+            }
+            cls.instanceCount = name == std::string("MATERIAL")
+                ? static_cast<int>(m_acdsMaterialHandles.size()) : 1;
+            cls.wasaProxyFlag = name == std::string("MATERIAL") ? 0 : 1;
+            classes.push_back(std::move(cls));
+        }
+        dxfW->setDxfClasses(classes);
+    } else {
+        dxfW->setDxfClasses(cData->dxfClasses);
     }
     dxfW->setRawDxfSections(rawDxfSections);
     if (debug) {

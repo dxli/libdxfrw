@@ -5363,9 +5363,12 @@ void addLocalAcdsHistoryClosure(dx_data& source,
         value.m_objectDataBitSize = bitSize;
         value.m_objectData.resize((bitSize + 7u) / 8u,
                                   static_cast<std::uint8_t>(handle));
+        if ((bitSize & 7u) != 0u)
+            value.m_objectData.back() &= static_cast<std::uint8_t>(
+                0xFFu << (8u - (bitSize & 7u)));
         DRW_ProxyObjectIdRef reference;
         reference.m_dxfCode = referenceCode;
-        reference.m_handleCode = referenceCode == 360 ? 5 : 3;
+        reference.m_handleCode = referenceCode == 340 ? 5 : 3;
         reference.m_handle = referenceHandle;
         reference.m_rawHandle = referenceHandle;
         value.m_objectIdRefs.push_back(reference);
@@ -5373,13 +5376,13 @@ void addLocalAcdsHistoryClosure(dx_data& source,
     };
     source.proxyObjects.push_back(proxy(history, modeler.handle, 521, 32,
                                         "cn:AcDbShHistory",
-                                        340, evaluation));
+                                        360, evaluation));
     source.proxyObjects.push_back(proxy(evaluation, history, 520, 190,
                                         "cn:AcDbEvalGraph",
-                                        340, operation));
+                                        360, operation));
     source.proxyObjects.push_back(proxy(operation, evaluation, 519, 558,
                                         "cn:AcDbShCone",
-                                        360, material));
+                                        340, material));
 
     DRW_Dictionary materialsDictionary;
     materialsDictionary.handle = 0x72u;
@@ -5647,6 +5650,39 @@ bool runDxfAcdsDataStorageProjection(
     const bool schemaMatch = imported.rawDxfSections.size() == 1u
         && imported.rawDxfSections.front().m_name == "ACDSDATA"
         && hasExpectedAcdsSchemaDefinitions(imported.rawDxfSections.front());
+    const bool proxyTerminators = readOk
+        && std::all_of(imported.rawProxyObjects.begin(),
+                       imported.rawProxyObjects.end(),
+                       [](const DRW_RawDxfObject& object) {
+                           return std::count_if(
+                                      object.groups.begin(),
+                                      object.groups.end(),
+                                      [](const DRW_Variant& group) {
+                                          return group.code() == 94
+                                              && group.type()
+                                                     == DRW_Variant::INTEGER
+                                              && group.i_val() == 0;
+                                      }) == 1;
+                       });
+    const std::array<std::pair<const char*, int>, 4> expectedClasses {{
+        {"ACSH_HISTORY_CLASS", 1},
+        {"ACAD_EVALUATION_GRAPH", 1},
+        {"ACSH_CONE_CLASS", 1},
+        {"MATERIAL", 3}
+    }};
+    bool classesMatch = imported.dxfClasses.size() == expectedClasses.size();
+    if (classesMatch) {
+        for (std::size_t index = 0; index < expectedClasses.size(); ++index) {
+            const DRW_Class& cls = imported.dxfClasses[index];
+            if (cls.recName != expectedClasses[index].first
+                || cls.instanceCount != expectedClasses[index].second
+                || cls.wasaProxyFlag != (index < 3u ? 1 : 0)
+                || cls.entityFlag != 0) {
+                classesMatch = false;
+                break;
+            }
+        }
+    }
     const bool neighborLineMatch = readOk
         && std::any_of(imported.mBlock->ent.begin(), imported.mBlock->ent.end(),
                        [](const DRW_Entity* entity) {
@@ -5666,12 +5702,14 @@ bool runDxfAcdsDataStorageProjection(
         && importedModeler->handle != sourceHandle
         && importedModeler->m_historyHandle == 0x20Eu
         && schemaMatch
+        && classesMatch
         && findAcdsRecordPayload(imported.rawDxfSections.front(), "ASM_Data",
                                  linkedHandle, parsedPayload)
         && linkedHandle == expectedHandle
         && parsedPayload == payload
         && imported.proxyObjects.size() == 3u
         && imported.rawProxyObjects.size() == 3u
+        && proxyTerminators
         && std::any_of(imported.dictionaries.begin(),
                        imported.dictionaries.end(),
                        [](const DRW_Dictionary& dictionary) {
@@ -5689,36 +5727,46 @@ bool runDxfAcdsDataStorageProjection(
         const auto operation = proxies.find(0x20Cu);
         const auto hasReference = [](const DRW_ProxyObject* value,
                                      int code, std::uint32_t handle) {
+            const std::uint8_t handleCode = code == 360 ? 3u : 5u;
             return value != nullptr
                 && std::any_of(value->m_objectIdRefs.begin(),
                                value->m_objectIdRefs.end(),
-                               [code, handle](
+                               [code, handle, handleCode](
                                    const DRW_ProxyObjectIdRef& reference) {
                                    return reference.m_dxfCode == code
+                                       && reference.m_handleCode == handleCode
                                        && reference.m_handle == handle;
                                });
         };
         const auto hasPayload = [](const DRW_ProxyObject* value,
                                    std::uint32_t bits, std::uint8_t byte) {
-            return value != nullptr && value->m_objectDataBitSize == bits
-                && value->m_objectData.size() == (bits + 7u) / 8u
-                && std::all_of(value->m_objectData.begin(),
-                               value->m_objectData.end(),
-                               [byte](std::uint8_t actual) {
-                                   return actual == byte;
-                               });
+            if (value == nullptr || value->m_objectDataBitSize != bits
+                || value->m_objectData.size() != (bits + 7u) / 8u)
+                return false;
+            for (std::size_t index = 0; index < value->m_objectData.size();
+                 ++index) {
+                const std::uint8_t expected =
+                    (index + 1u == value->m_objectData.size()
+                     && (bits & 7u) != 0u)
+                        ? static_cast<std::uint8_t>(
+                              byte & (0xFFu << (8u - (bits & 7u))))
+                        : byte;
+                if (value->m_objectData[index] != expected)
+                    return false;
+            }
+            return true;
         };
         if (history == proxies.end() || evaluation == proxies.end()
             || operation == proxies.end()
             || history->second->parentHandle != importedModeler->handle
             || evaluation->second->parentHandle != 0x20Eu
             || operation->second->parentHandle != 0x20Du
-            || history->second->m_proxyClassId != 521
-            || evaluation->second->m_proxyClassId != 520
-            || operation->second->m_proxyClassId != 519
-            || !hasReference(history->second, 340, 0x20Du)
-            || !hasReference(evaluation->second, 340, 0x20Cu)
-            || !hasReference(operation->second, 360, 0x96u)
+            || history->second->m_proxyClassId != 500
+            || evaluation->second->m_proxyClassId != 501
+            || operation->second->m_proxyClassId != 502
+            || !hasReference(history->second, 360, 0x20Du)
+            || !hasReference(evaluation->second, 360, 0x20Cu)
+            || !hasReference(operation->second, 340, 0x96u)
             || !hasPayload(history->second, 32, 0x0Eu)
             || !hasPayload(evaluation->second, 190, 0x0Du)
             || !hasPayload(operation->second, 558, 0x0Cu)) {
@@ -5762,6 +5810,34 @@ bool runDxfAcdsHistoryClosureRejectsAmbiguity(
     return rejectedWithoutPublication;
 }
 
+bool runDxfAcdsHistoryClosureRejectsMixedClasses(
+    const std::filesystem::path& directory) {
+    const std::vector<std::uint8_t> payload {
+        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
+        0x01u, 0x02u, 0x03u, 0x04u};
+    for (int mixed = 0; mixed < 2; ++mixed) {
+        const std::filesystem::path output = directory /
+            (mixed == 0 ? "libdxfrw-acds-mixed-raw-proxy.dxf"
+                        : "libdxfrw-acds-mixed-class.dxf");
+        std::error_code ec;
+        std::filesystem::remove(output, ec);
+        dx_data source;
+        addLocalAcdsDataStorageModeler(source, 0xFC20u, payload);
+        if (mixed == 0)
+            source.rawProxyObjects.emplace_back();
+        else
+            source.dxfClasses.emplace_back();
+        dx_iface exporter;
+        if (exporter.fileExport(output.string(), DRW::AC1027, false,
+                                &source, false)
+            || std::filesystem::exists(output)) {
+            std::filesystem::remove(output, ec);
+            return false;
+        }
+    }
+    return true;
+}
+
 bool runDxfAcdsSchemaFingerprintRejectsMismatch(
     const std::filesystem::path& directory) {
     const std::vector<std::uint8_t> payload {
@@ -5798,9 +5874,10 @@ bool runDxfAcdsSchemaFingerprintRejectsMismatch(
 
 bool runDxfAcdsHistoryClosureRejectsMalformedEdges(
     const std::filesystem::path& directory) {
-    static const std::array<const char*, 7> cases = {
+    static const std::array<const char*, 8> cases = {
         "missing-history", "wrong-class", "wrong-owner", "wrong-reference",
-        "missing-material", "wrong-subclass", "proxy-bit-size"};
+        "missing-material", "wrong-subclass", "proxy-bit-size",
+        "proxy-padding"};
     const std::vector<std::uint8_t> payload {
         'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
         0x01u, 0x02u, 0x03u, 0x04u};
@@ -5823,7 +5900,7 @@ bool runDxfAcdsHistoryClosureRejectsMalformedEdges(
             source.proxyObjects.front().parentHandle = 0x1234u;
             break;
         case 3:
-            source.proxyObjects.front().m_objectIdRefs.front().m_dxfCode = 360;
+            source.proxyObjects.front().m_objectIdRefs.front().m_dxfCode = 340;
             break;
         case 4:
             source.materials.remove_if([](const DRW_Material& material) {
@@ -5835,6 +5912,9 @@ bool runDxfAcdsHistoryClosureRejectsMalformedEdges(
             break;
         case 6:
             ++source.proxyObjects.front().m_objectDataBitSize;
+            break;
+        case 7:
+            source.proxyObjects.back().m_objectData.back() |= 1u;
             break;
         }
 
@@ -10004,6 +10084,9 @@ int main(int argc, char** argv) {
            failures);
     expect(runDxfAcdsHistoryClosureRejectsAmbiguity(directory, false, true),
            "local DWG ACDS projection rejects ambiguous material dictionaries",
+           failures);
+    expect(runDxfAcdsHistoryClosureRejectsMixedClasses(directory),
+           "local DWG ACDS projection rejects unrelated custom classes and raw proxies",
            failures);
     expect(runDxfAcdsSchemaFingerprintRejectsMismatch(directory),
            "local DWG ACDS projection rejects unqualified schema fingerprints",

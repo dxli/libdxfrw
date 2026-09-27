@@ -67,6 +67,7 @@ public:
     std::list<DRW_ProxyObject>proxyObjects; //typed ACAD_PROXY_OBJECT records
     std::list<DRW_RawDxfObject>rawProxyObjects; //lossless DXF proxy passthrough
     std::vector<DRW_RawDxfSection> rawDxfSections; //opaque DXF section passthrough
+    std::vector<DRW_Class> dxfClasses; //readback of emitted CLASS metadata
     std::vector<DRW_DataStorageSection> dataStorageSections; //typed DWG AcDs data
     std::list<dx_ifaceBlock*>blocks;    //stores a copy of all blocks and the entities in it
     std::list<dx_ifaceImg*>images;      //temporary list to find images for link with DRW_ImageDef. Do not delete it!!
