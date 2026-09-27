@@ -595,7 +595,7 @@ bool configureAcdsMaterialDictionary(
 
 bool appendAcdsDataSection(
     const dx_data& data, DRW::Version outputVersion,
-    std::vector<DRW_RawDxfSection>& sections) {
+    std::vector<DRW_RawDxfSection>& sections, bool debug) {
     bool hasExistingAcdsData = false;
     for (const DRW_RawDxfSection& section : sections) {
         if (section.m_name == "ACDSDATA"
@@ -649,14 +649,63 @@ bool appendAcdsDataSection(
     const DRW_DataStorageSection& storage = data.dataStorageSections.front();
     if (storage.records.empty() && linkedModelers.empty())
         return true;
+    const bool schemasQualified = matchesQualifiedAc1027AcdsSchemas(storage);
+    if (debug && !schemasQualified) {
+        std::cerr << "ACDS schema fingerprint details: declared="
+                  << storage.schemaCount << " decoded=" << storage.schemas.size()
+                  << " propertyNames=" << storage.schemaPropertyNameCount
+                  << '/' << storage.schemaPropertyNames.size() << '\n';
+        for (std::size_t index = 0;
+             index < storage.schemaPropertyNames.size(); ++index) {
+            std::cerr << "  property-name[" << index << "]="
+                      << storage.schemaPropertyNames[index] << '\n';
+        }
+        for (const DRW_DataStorageSchema& schema : storage.schemas) {
+            std::cerr << "  schema[" << schema.index << "] segment="
+                      << schema.segmentIndex << " indexes=";
+            for (std::uint64_t value : schema.indexes)
+                std::cerr << value << ',';
+            std::cerr << " properties=";
+            for (const DRW_DataStorageSchemaProperty& property :
+                 schema.properties)
+                std::cerr << '[' << property.name << ']';
+            std::cerr << '\n';
+        }
+        for (const DRW_DataStorageRecord& record : storage.records) {
+            std::cerr << "  record handle=" << record.handleKey
+                      << " schemaIndex=" << record.schemaIndex
+                      << " bytes=" << record.payload.size()
+                      << " marker=" << record.hasPayloadMarker
+                      << " markerSection=" << record.payloadMarkerSection
+                      << '\n';
+        }
+    }
     if (hasExistingAcdsData || outputVersion != DRW::AC1027
         || storage.m_name != "AcDb:AcDsPrototype_1b"
         || storage.m_version != DRW::AC1027 || storage.parseFailed
         || !storage.structurallyValid || !storage.replayAllowed
         || !storage.payloadsRetained
-        || !matchesQualifiedAc1027AcdsSchemas(storage)
+        || !schemasQualified
         || !storage.duplicateRecordHandleKeys.empty()
         || storage.records.size() < linkedModelers.size()) {
+        if (debug) {
+            std::cerr << "ACDS projection rejected: output="
+                      << static_cast<int>(outputVersion)
+                      << " existingSection=" << hasExistingAcdsData
+                      << " storageName=" << storage.m_name
+                      << " storageVersion="
+                      << static_cast<int>(storage.m_version)
+                      << " parsed=" << !storage.parseFailed
+                      << " structurallyValid=" << storage.structurallyValid
+                      << " replayAllowed=" << storage.replayAllowed
+                      << " payloadsRetained=" << storage.payloadsRetained
+                      << " schemasQualified=" << schemasQualified
+                      << " duplicateKeys="
+                      << storage.duplicateRecordHandleKeys.size()
+                      << " records=" << storage.records.size()
+                      << " linkedModelers=" << linkedModelers.size()
+                      << '\n';
+        }
         return false;
     }
 
@@ -1156,13 +1205,21 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
     cData = fData;
     m_acdsHistoryObjects.clear();
     m_acdsMaterialHandles.clear();
-    if (!prepareExtensionObjectGraph(cData))
+    const auto reportPreflightFailure = [debug](const char* stage) {
+        if (debug) {
+            std::cerr << "DXF export preflight failed: " << stage << '\n';
+        }
+    };
+    if (!prepareExtensionObjectGraph(cData)) {
+        reportPreflightFailure("extension-object graph validation");
         return false;
+    }
     if (!cData->dataStorageSections.empty()
         && (!cData->rawProxyObjects.empty()
             || !cData->dxfClasses.empty())) {
         // The narrow DWG DataStorage projection owns its four CLASS ordinal
         // slots. Do not silently discard unrelated custom classes/proxies.
+        reportPreflightFailure("mixed source DXF classes/proxies with ACDS data");
         return false;
     }
     dxfW = new dxfRW(file.c_str());
@@ -1170,7 +1227,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
                                      cData->lineTypes.end());
     dxfW->setCanonicalLineTypeMetadata(lineTypes);
     std::vector<DRW_RawDxfSection> rawDxfSections = cData->rawDxfSections;
-    if (!appendAcdsDataSection(*cData, v, rawDxfSections)) {
+    if (!appendAcdsDataSection(*cData, v, rawDxfSections, debug)) {
+        reportPreflightFailure("ACDS DataStorage projection");
         delete dxfW;
         dxfW = nullptr;
         return false;
@@ -1185,10 +1243,16 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary, 
             return false;
         };
         if (!collectAcdsHistoryProxyObjects(*cData, m_acdsHistoryObjects,
-                                            referencedMaterials)
-            || !configureAcdsMaterialDictionary(
+                                            referencedMaterials)) {
+            reportPreflightFailure("ACDS modeler/history proxy closure");
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+        if (!configureAcdsMaterialDictionary(
                 *cData, referencedMaterials, materialDictionaries,
                 materialRootEntries, m_acdsMaterialHandles)) {
+            reportPreflightFailure("ACDS material dictionary closure");
             delete dxfW;
             dxfW = nullptr;
             return false;

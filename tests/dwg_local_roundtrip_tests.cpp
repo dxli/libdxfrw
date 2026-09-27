@@ -6058,6 +6058,105 @@ bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
         return false;
     }
 
+    const auto schemaByIndex = [&captured](std::uint32_t schemaIndex)
+        -> const DRW_DataStorageSchema* {
+        if (captured.dataStorageSections.size() != 1u)
+            return nullptr;
+        for (const DRW_DataStorageSchema& schema :
+             captured.dataStorageSections.front().schemas) {
+            if (schema.index == schemaIndex)
+                return &schema;
+        }
+        return nullptr;
+    };
+    const auto propertyMatches = [](const DRW_DataStorageSchema* schema,
+                                    std::size_t propertyIndex,
+                                    std::uint32_t nameIndex,
+                                    const char* name) {
+        return schema != nullptr && propertyIndex < schema->properties.size()
+            && schema->properties[propertyIndex].nameIndex == nameIndex
+            && schema->properties[propertyIndex].name == name;
+    };
+    bool acdsSchemasMatch = false;
+    if (captured.dataStorageSections.size() == 1u) {
+        const DRW_DataStorageSection& storage =
+            captured.dataStorageSections.front();
+        const DRW_DataStorageSchema* thumbnail = schemaByIndex(0u);
+        const DRW_DataStorageSchema* treated = schemaByIndex(1u);
+        const DRW_DataStorageSchema* legacy = schemaByIndex(2u);
+        const DRW_DataStorageSchema* indexable = schemaByIndex(3u);
+        const DRW_DataStorageSchema* handleAttribute = schemaByIndex(4u);
+        const DRW_DataStorageSchema* modeler = schemaByIndex(5u);
+        const std::array<UTF8STRING, 8> propertyNames{{
+            "AcDbDs::ID", "Thumbnail_Data", "AcDbDs::TreatedAsObjectData",
+            "AcDbDs::Legacy", "AcDs:Indexable", "AcDbDs::HandleAttribute",
+            "AcDbDs::ID", "ASM_Data"}};
+        bool namesMatch = storage.schemaPropertyNameCount == 2u
+            && storage.schemaPropertyNames.size() == 8u;
+        if (namesMatch) {
+            for (std::size_t index = 0; index < propertyNames.size(); ++index) {
+                namesMatch = namesMatch
+                    && storage.schemaPropertyNames[index]
+                        == propertyNames[index];
+            }
+        }
+        const bool propertiesMatch = namesMatch
+            && thumbnail != nullptr && treated != nullptr && legacy != nullptr
+            && indexable != nullptr && handleAttribute != nullptr
+            && modeler != nullptr
+            && thumbnail->segmentIndex == treated->segmentIndex
+            && thumbnail->segmentIndex == legacy->segmentIndex
+            && thumbnail->segmentIndex == indexable->segmentIndex
+            && thumbnail->segmentIndex == handleAttribute->segmentIndex
+            && thumbnail->segmentIndex != modeler->segmentIndex
+            && thumbnail->properties.size() == 2u
+            && propertyMatches(thumbnail, 0u, 0u, "AcDbDs::ID")
+            && propertyMatches(thumbnail, 1u, 1u, "Thumbnail_Data")
+            && treated != nullptr && treated->properties.size() == 1u
+            && propertyMatches(treated, 0u, 2u,
+                               "AcDbDs::TreatedAsObjectData")
+            && legacy != nullptr && legacy->properties.size() == 1u
+            && propertyMatches(legacy, 0u, 3u, "AcDbDs::Legacy")
+            && indexable != nullptr && indexable->properties.size() == 1u
+            && propertyMatches(indexable, 0u, 4u, "AcDs:Indexable")
+            && handleAttribute != nullptr
+            && handleAttribute->properties.size() == 1u
+            && propertyMatches(handleAttribute, 0u, 5u,
+                               "AcDbDs::HandleAttribute")
+            && modeler->properties.size() == 2u
+            && propertyMatches(modeler, 0u, 0u, "AcDbDs::ID")
+            && propertyMatches(modeler, 1u, 1u, "ASM_Data");
+        std::size_t thumbnailRecords = 0;
+        std::size_t modelerRecords = 0;
+        for (const DRW_DataStorageRecord& record : storage.records) {
+            const bool isThumbnail = record.schemaIndex == 0u
+                && !record.hasPayloadMarker && record.payload.size() >= 8u
+                && record.payload[0] == 0x89u && record.payload[1] == 'P'
+                && record.payload[2] == 'N' && record.payload[3] == 'G';
+            const bool isModeler = record.schemaIndex == 5u
+                && record.hasPayloadMarker
+                && record.payload.size() >= 15u
+                && std::equal(record.payload.begin(),
+                              record.payload.begin() + 15,
+                              "ACIS BinaryFile");
+            thumbnailRecords += isThumbnail ? 1u : 0u;
+            modelerRecords += isModeler ? 1u : 0u;
+        }
+        acdsSchemasMatch = storage.schemaCount == 6u && namesMatch
+            && propertiesMatch && thumbnailRecords == 5u
+            && modelerRecords == 3u;
+        if (!acdsSchemasMatch) {
+            std::cerr << "ACDS segment-local schema qualification failed: "
+                      << "sections=" << captured.dataStorageSections.size()
+                      << " schemas=" << storage.schemaCount
+                      << " names=" << storage.schemaPropertyNames.size()
+                      << " records=" << storage.records.size()
+                      << " thumbnails=" << thumbnailRecords
+                      << " modelers=" << modelerRecords
+                      << " properties=" << propertiesMatch << '\n';
+        }
+    }
+
     const auto findObject = [&captured](const UTF8STRING& name,
                                         std::uint32_t handle)
         -> const DRW_AcShHistoryObject* {
@@ -6149,7 +6248,7 @@ bool runAcshPrefixSampleQualification(const std::filesystem::path& path) {
         printPrefix(*box);
         printPrefix(*extrusion);
     }
-    return prefixesMatch
+    return acdsSchemasMatch && prefixesMatch
         && box->m_shapeParams == std::vector<double>({5.0, 5.0, 5.0})
         && close(extrusion->m_direction.z, 4.380487155114503);
 }
