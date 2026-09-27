@@ -70,6 +70,12 @@ public:
     std::vector<DRW_Class> dxfClasses; //readback of emitted CLASS metadata
     DRW_DwgClassCoverageReport dwgClassCoverage; //source DWG class-number binding
     std::vector<DRW_DataStorageSection> dataStorageSections; //typed DWG AcDs data
+    // Typed DWG callbacks needed to inspect bounded ACIS history closures.
+    // The unsupported-object companions are DWG frame bodies, not DXF groups;
+    // they are retained only for correlation/diagnostics, never DXF replay.
+    std::vector<DRW_EvaluationGraph> evaluationGraphs;
+    std::vector<DRW_AcShHistoryObject> acshHistoryObjects;
+    std::vector<DRW_UnsupportedObject> acdsHistoryDwgFrames;
     std::list<dx_ifaceBlock*>blocks;    //stores a copy of all blocks and the entities in it
     std::list<dx_ifaceImg*>images;      //temporary list to find images for link with DRW_ImageDef. Do not delete it!!
 

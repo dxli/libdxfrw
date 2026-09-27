@@ -80,6 +80,31 @@ public:
         if (cData != nullptr && data.name == "ACAD_PROXY_OBJECT")
             cData->rawProxyObjects.push_back(data);
     }
+    virtual void addEvaluationGraph(const DRW_EvaluationGraph& data) {
+        if (cData != nullptr)
+            cData->evaluationGraphs.push_back(data);
+    }
+    virtual void addAcShHistoryObject(const DRW_AcShHistoryObject& data) {
+        if (cData != nullptr)
+            cData->acshHistoryObjects.push_back(data);
+    }
+    virtual void addUnsupportedObject(const DRW_UnsupportedObject& data) {
+        if (cData == nullptr || data.m_isEntity)
+            return;
+        // Preserve only raw frames paired with this bounded AC1027 projection
+        // profile. m_rawBytes are DWG object-body bits, not DXF group data;
+        // keeping them here is for handle/class correlation and diagnostics,
+        // never as a DXF serializer input.
+        const bool evaluationGraph =
+            data.m_recordName == "ACAD_EVALUATION_GRAPH"
+            || data.m_className == "AcDbEvalGraph";
+        const bool historyObject =
+            data.m_recordName == "ACSH_HISTORY_CLASS"
+            || data.m_recordName == "ACSH_BOX_CLASS"
+            || data.m_recordName == "ACSH_EXTRUSION_CLASS";
+        if (evaluationGraph || historyObject)
+            cData->acdsHistoryDwgFrames.push_back(data);
+    }
 
     //blocks
     virtual void addBlock(const DRW_Block& data){

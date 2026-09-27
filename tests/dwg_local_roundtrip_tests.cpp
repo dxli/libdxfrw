@@ -5931,6 +5931,93 @@ bool runDxfAcdsMultipleDataStorageProjection(
     return result;
 }
 
+bool runAcdsHistoryCallbackCapture() {
+    dx_data captured;
+    dx_iface iface;
+    iface.cData = &captured;
+
+    DRW_EvaluationGraph graph;
+    graph.handle = 0xD67u;
+    graph.parentHandle = 0xD66u;
+    graph.m_value96 = 96;
+    graph.m_value97 = 97;
+    DRW_EvaluationGraphNode node;
+    node.m_index = 0;
+    node.m_expressionHandle = 0xD68u;
+    graph.m_nodes.push_back(node);
+    iface.addEvaluationGraph(graph);
+
+    DRW_AcShHistoryObject history("ACSH_HISTORY_CLASS");
+    history.handle = 0xD66u;
+    history.parentHandle = 0xD65u;
+    history.m_ownerHandle = 0xD65u;
+    history.m_historyNodeId = 329u;
+    iface.addAcShHistoryObject(history);
+
+    DRW_AcShHistoryObject box("ACSH_BOX_CLASS");
+    box.handle = 0xD68u;
+    box.parentHandle = 0xD67u;
+    box.m_shapeParams = {5.0, 5.0, 5.0};
+    iface.addAcShHistoryObject(box);
+
+    DRW_AcShHistoryObject extrusion("ACSH_EXTRUSION_CLASS");
+    extrusion.handle = 0xD6Du;
+    extrusion.parentHandle = 0xD6Cu;
+    extrusion.m_shapeParams = {4.38, 0.0, 0.0, 1.0};
+    iface.addAcShHistoryObject(extrusion);
+
+    DRW_UnsupportedObject graphFrame;
+    graphFrame.m_recordName = "ACAD_EVALUATION_GRAPH";
+    graphFrame.m_className = "AcDbEvalGraph";
+    graphFrame.m_handle = graph.handle;
+    graphFrame.m_objectSize = 3;
+    graphFrame.m_bodyBitSize = 20;
+    graphFrame.m_rawBytes = {0xA1u, 0xB2u, 0xC3u};
+    iface.addUnsupportedObject(graphFrame);
+
+    DRW_UnsupportedObject historyFrame;
+    historyFrame.m_recordName = "ACSH_HISTORY_CLASS";
+    historyFrame.m_className = "AcDbShHistory";
+    historyFrame.m_handle = history.handle;
+    historyFrame.m_objectSize = 2;
+    historyFrame.m_bodyBitSize = 15;
+    historyFrame.m_rawBytes = {0xD4u, 0xE5u};
+    iface.addUnsupportedObject(historyFrame);
+
+    DRW_UnsupportedObject unrelatedFrame;
+    unrelatedFrame.m_recordName = "ACDBASSOCNETWORK";
+    unrelatedFrame.m_className = "AcDbAssocNetwork";
+    unrelatedFrame.m_handle = 0xD70u;
+    unrelatedFrame.m_objectSize = 128;
+    unrelatedFrame.m_rawBytes.resize(unrelatedFrame.m_objectSize, 0xFFu);
+    iface.addUnsupportedObject(unrelatedFrame);
+
+    graph.m_nodes.front().m_expressionHandle = 0;
+    history.m_ownerHandle = 0;
+    box.m_shapeParams.clear();
+    graphFrame.m_rawBytes.clear();
+    historyFrame.m_rawBytes.clear();
+
+    return captured.evaluationGraphs.size() == 1u
+        && captured.evaluationGraphs.front().handle == 0xD67u
+        && captured.evaluationGraphs.front().m_nodes.size() == 1u
+        && captured.evaluationGraphs.front().m_nodes.front()
+               .m_expressionHandle == 0xD68u
+        && captured.acshHistoryObjects.size() == 3u
+        && captured.acshHistoryObjects[0].m_ownerHandle == 0xD65u
+        && captured.acshHistoryObjects[1].m_shapeParams
+               == std::vector<double>({5.0, 5.0, 5.0})
+        && captured.acshHistoryObjects[2].m_recordName
+               == "ACSH_EXTRUSION_CLASS"
+        && captured.acdsHistoryDwgFrames.size() == 2u
+        && captured.acdsHistoryDwgFrames[0].m_handle == 0xD67u
+        && captured.acdsHistoryDwgFrames[0].m_rawBytes
+               == std::vector<std::uint8_t>({0xA1u, 0xB2u, 0xC3u})
+        && captured.acdsHistoryDwgFrames[1].m_handle == 0xD66u
+        && captured.acdsHistoryDwgFrames[1].m_rawBytes
+               == std::vector<std::uint8_t>({0xD4u, 0xE5u});
+}
+
 bool runDxfAcdsDataStorageProjection(
     bool binary, const std::filesystem::path& directory, bool keepOutput,
     bool reverseCallbackCollections = false,
@@ -10495,6 +10582,9 @@ int main(int argc, char** argv) {
     expect(runDxfAcdsMultipleDataStorageProjection(
                true, directory, keepOutputs),
            "local binary multi-modeler ACDS projection with thumbnails",
+           failures);
+    expect(runAcdsHistoryCallbackCapture(),
+           "local typed ACIS history/evaluation callback retention",
            failures);
     expect(runDxfAcdsDataStorageProjection(false, directory, keepOutputs,
                                            false, false, true),
