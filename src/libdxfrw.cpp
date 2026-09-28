@@ -416,7 +416,8 @@ bool isValidDxfEntityFields(const DRW_Entity& entity) {
     if (const auto *ellipse = dynamic_cast<const DRW_Ellipse*>(&entity)) {
         if (!std::isfinite(ellipse->ratio)
             || !std::isfinite(ellipse->staparam)
-            || !std::isfinite(ellipse->endparam))
+            || !std::isfinite(ellipse->endparam)
+            || !isValidDxfExtrusionDirection(ellipse->extPoint))
             return false;
     }
     if (const auto *text = dynamic_cast<const DRW_Text*>(&entity)) {
@@ -10419,7 +10420,8 @@ bool dxfRW::processEllipse() {
             if (!acceptEntityCallbackBoundary())
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!hasCenterX || !hasCenterY || !hasMajorAxisX
-                || !hasMajorAxisY || !hasRatio)
+                || !hasMajorAxisY || !hasRatio
+                || !isValidDxfExtrusionDirection(ellipse.extPoint))
                 return setError(DRW::BAD_CODE_PARSED);
             // DXF ELLIPSE center and major-axis vector are already WCS values.
             // Unlike CIRCLE/ARC, its extrusion code supplies the plane normal;

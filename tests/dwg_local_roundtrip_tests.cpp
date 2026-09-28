@@ -10830,6 +10830,246 @@ bool runDxfLegacyEllipseDowngrade(const std::filesystem::path& directory,
         && tiltedArcValid && tiltedReverseArcValid && invalidRejected;
 }
 
+bool runDxfEllipseRejectsInvalidNormals(
+        const std::filesystem::path& directory) {
+    const std::filesystem::path validPath = directory /
+        "libdxfrw-ellipse-normal-control.dxf";
+    const std::filesystem::path zeroNormalPath = directory /
+        "libdxfrw-ellipse-zero-normal.dxf";
+    const std::filesystem::path nonFiniteNormalPath = directory /
+        "libdxfrw-ellipse-nonfinite-normal.dxf";
+    std::error_code ec;
+    for (const std::filesystem::path& path :
+         {validPath, zeroNormalPath, nonFiniteNormalPath})
+        std::filesystem::remove(path, ec);
+
+    dx_data source;
+    auto* defaultEllipse = new DRW_Ellipse();
+    defaultEllipse->basePoint = DRW_Coord(1.0, 2.0, 3.0);
+    defaultEllipse->secPoint = DRW_Coord(4.0, 0.0, 1.0);
+    defaultEllipse->ratio = 0.5;
+    defaultEllipse->staparam = 0.25;
+    defaultEllipse->endparam = 5.5;
+    source.mBlock->ent.push_back(defaultEllipse);
+
+    auto* obliqueEllipse = new DRW_Ellipse();
+    obliqueEllipse->basePoint = DRW_Coord(-2.0, 5.0, 7.0);
+    obliqueEllipse->secPoint = DRW_Coord(3.0, 0.0, 2.0);
+    obliqueEllipse->extPoint = DRW_Coord(0.6, 0.0, 0.8);
+    obliqueEllipse->ratio = 0.75;
+    obliqueEllipse->staparam = 0.5;
+    obliqueEllipse->endparam = 4.5;
+    source.mBlock->ent.push_back(obliqueEllipse);
+
+    dx_iface exporter;
+    if (!exporter.fileExport(validPath.string(), DRW::AC1027, false,
+                             &source, false)) {
+        std::filesystem::remove(validPath, ec);
+        return false;
+    }
+    std::ifstream input(validPath);
+    if (!input)
+        return false;
+    std::string validDxf{std::istreambuf_iterator<char>{input},
+                         std::istreambuf_iterator<char>{}};
+
+    const auto replaceEllipseGroupValue = [](std::string& text,
+                                            std::size_t ellipseIndex,
+                                            int groupCode,
+                                            const std::string& replacement) {
+        std::istringstream inputText(text);
+        std::vector<std::string> lines;
+        std::string line;
+        while (std::getline(inputText, line))
+            lines.push_back(line);
+        std::size_t currentEllipse = 0;
+        bool replaced = false;
+        for (std::size_t index = 0; index + 1u < lines.size(); index += 2u) {
+            std::string normalized = lines[index];
+            normalized.erase(std::remove_if(normalized.begin(), normalized.end(),
+                [](unsigned char value) {
+                    return value == ' ' || value == '\t' || value == '\r';
+                }), normalized.end());
+            std::string value = lines[index + 1u];
+            value.erase(std::remove_if(value.begin(), value.end(),
+                [](unsigned char character) {
+                    return character == ' ' || character == '\t'
+                        || character == '\r';
+                }), value.end());
+            if (normalized == "0" && value == "ELLIPSE") {
+                ++currentEllipse;
+                continue;
+            }
+            if (currentEllipse == ellipseIndex && !replaced
+                && normalized == std::to_string(groupCode)) {
+                lines[index + 1u] = replacement;
+                replaced = true;
+            }
+        }
+        if (!replaced)
+            return false;
+        std::ostringstream outputText;
+        for (const std::string& outputLine : lines)
+            outputText << outputLine << '\n';
+        text = outputText.str();
+        return true;
+    };
+    const auto writeText = [](const std::filesystem::path& path,
+                              const std::string& text) {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output << text;
+        return static_cast<bool>(output);
+    };
+
+    std::string zeroNormal = validDxf;
+    const bool zeroMutation =
+        replaceEllipseGroupValue(zeroNormal, 2u, 210, "0.0")
+        && replaceEllipseGroupValue(zeroNormal, 2u, 220, "0.0")
+        && replaceEllipseGroupValue(zeroNormal, 2u, 230, "0.0");
+    std::string nonFiniteNormal = validDxf;
+    const bool nonFiniteMutation =
+        replaceEllipseGroupValue(nonFiniteNormal, 2u, 220, "nan");
+    if (!zeroMutation || !nonFiniteMutation
+        || !writeText(zeroNormalPath, zeroNormal)
+        || !writeText(nonFiniteNormalPath, nonFiniteNormal)) {
+        for (const std::filesystem::path& path :
+             {validPath, zeroNormalPath, nonFiniteNormalPath})
+            std::filesystem::remove(path, ec);
+        return false;
+    }
+
+    class EllipseCaptureIface final : public dx_iface {
+    public:
+        std::size_t ellipseCount = 0;
+        void addEllipse(const DRW_Ellipse& data) override {
+            ++ellipseCount;
+            dx_iface::addEllipse(data);
+        }
+    };
+    const auto importedValidModes = [&validPath](bool applyExtrusion) {
+        dx_data imported;
+        EllipseCaptureIface importer;
+        const bool readOk = importer.fileImport(validPath.string(), &imported,
+                                                applyExtrusion);
+        if (!readOk || importer.ellipseCount != 2u
+            || imported.mBlock->ent.size() != 2u) {
+            std::cerr << "ELLIPSE valid read: ok=" << readOk
+                      << " callbacks=" << importer.ellipseCount
+                      << " entities=" << imported.mBlock->ent.size()
+                      << " applyExt=" << applyExtrusion << '\n';
+            return false;
+        }
+        const DRW_Ellipse* parsedDefault = nullptr;
+        const DRW_Ellipse* parsedOblique = nullptr;
+        for (const DRW_Entity* entity : imported.mBlock->ent) {
+            if (entity == nullptr || entity->eType != DRW::ELLIPSE)
+                return false;
+            const auto* ellipse = static_cast<const DRW_Ellipse*>(entity);
+            if (std::abs(ellipse->basePoint.x - 1.0) <= 1.0e-9)
+                parsedDefault = ellipse;
+            else if (std::abs(ellipse->basePoint.x + 2.0) <= 1.0e-9)
+                parsedOblique = ellipse;
+        }
+        const auto near = [](double value, double expected) {
+            return std::isfinite(value)
+                && std::abs(value - expected) <= 1.0e-9;
+        };
+        return parsedDefault != nullptr && parsedOblique != nullptr
+            && !parsedDefault->haveExtrusion
+            && parsedDefault->extPoint.x == 0.0
+            && parsedDefault->extPoint.y == 0.0
+            && parsedDefault->extPoint.z == 1.0
+            && parsedOblique->haveExtrusion
+            && near(parsedDefault->basePoint.x, 1.0)
+            && near(parsedDefault->basePoint.y, 2.0)
+            && near(parsedDefault->basePoint.z, 3.0)
+            && near(parsedDefault->secPoint.x, 4.0)
+            && near(parsedDefault->secPoint.y, 0.0)
+            && near(parsedDefault->secPoint.z, 1.0)
+            && near(parsedOblique->basePoint.x, -2.0)
+            && near(parsedOblique->basePoint.y, 5.0)
+            && near(parsedOblique->basePoint.z, 7.0)
+            && near(parsedOblique->secPoint.x, 3.0)
+            && near(parsedOblique->secPoint.y, 0.0)
+            && near(parsedOblique->secPoint.z, 2.0)
+            && near(parsedOblique->extPoint.x, 0.6)
+            && near(parsedOblique->extPoint.y, 0.0)
+            && near(parsedOblique->extPoint.z, 0.8);
+    };
+    const auto rejectedWithoutPublishingEllipse =
+        [](const std::filesystem::path& path) {
+        dx_data imported;
+        EllipseCaptureIface importer;
+        const bool importOk = importer.fileImport(path.string(), &imported,
+                                                  false);
+        const bool onlyEarlierValidEllipseWasPublished =
+            importer.ellipseCount == 1u && imported.mBlock->ent.size() == 1u
+            && imported.mBlock->ent.front() != nullptr
+            && imported.mBlock->ent.front()->eType == DRW::ELLIPSE;
+        if (importOk || !onlyEarlierValidEllipseWasPublished) {
+            std::cerr << "ELLIPSE malformed read: path=" << path.filename()
+                      << " ok=" << importOk
+                      << " callbacks=" << importer.ellipseCount;
+            for (const DRW_Entity* entity : imported.mBlock->ent) {
+                if (entity != nullptr && entity->eType == DRW::ELLIPSE) {
+                    const auto* ellipse = static_cast<const DRW_Ellipse*>(entity);
+                    std::cerr << " normal=(" << ellipse->extPoint.x << ','
+                              << ellipse->extPoint.y << ','
+                              << ellipse->extPoint.z << ')';
+                }
+            }
+            std::cerr << '\n';
+        }
+        return !importOk && onlyEarlierValidEllipseWasPublished;
+    };
+
+    bool writerNegatives = true;
+    for (const auto& testCase :
+         {std::make_pair(DRW::AC1027, false),
+          std::make_pair(DRW::AC1027, true),
+          std::make_pair(DRW::AC1009, false)}) {
+        const std::string encoding = testCase.second ? "binary" : "ascii";
+        const std::filesystem::path output = directory /
+            ("libdxfrw-ellipse-writer-zero-normal-" + encoding + "-"
+             + std::to_string(static_cast<int>(testCase.first)) + ".dxf");
+        std::filesystem::remove(output, ec);
+        dx_data invalidSource;
+        auto* invalidEllipse = new DRW_Ellipse();
+        invalidEllipse->basePoint = DRW_Coord(1.0, 2.0, 3.0);
+        invalidEllipse->secPoint = DRW_Coord(4.0, 0.0, 1.0);
+        invalidEllipse->extPoint = DRW_Coord(0.0, 0.0, 0.0);
+        invalidEllipse->ratio = 0.5;
+        invalidEllipse->endparam = 2.0 * std::acos(-1.0);
+        invalidSource.mBlock->ent.push_back(invalidEllipse);
+        dx_iface invalidExporter;
+        const bool rejected = !invalidExporter.fileExport(
+            output.string(), testCase.first, testCase.second,
+            &invalidSource, false)
+            && !std::filesystem::exists(output);
+        writerNegatives = writerNegatives && rejected;
+        std::filesystem::remove(output, ec);
+    }
+
+    const bool validDefaultMode = importedValidModes(false);
+    const bool validLegacyMode = importedValidModes(true);
+    const bool zeroRejected =
+        rejectedWithoutPublishingEllipse(zeroNormalPath);
+    const bool nonFiniteRejected =
+        rejectedWithoutPublishingEllipse(nonFiniteNormalPath);
+    const bool result = validDefaultMode && validLegacyMode && zeroRejected
+        && nonFiniteRejected && writerNegatives;
+    if (!result) {
+        std::cerr << "ELLIPSE extrusion gate: default=" << validDefaultMode
+                  << " legacy=" << validLegacyMode << " zero="
+                  << zeroRejected << " non-finite=" << nonFiniteRejected
+                  << " writer=" << writerNegatives << '\n';
+    }
+    for (const std::filesystem::path& path :
+         {validPath, zeroNormalPath, nonFiniteNormalPath})
+        std::filesystem::remove(path, ec);
+    return result;
+}
+
 bool runDxfRejectsInvalidFaceFlags(bool binary,
                                    const std::filesystem::path& directory) {
     const std::string encoding = binary ? "binary" : "ascii";
@@ -12180,6 +12420,9 @@ int main(int argc, char** argv) {
            "local DXF binary 3D topology and OCS/WCS round-trip", failures);
     expect(runDxfLegacyEllipseDowngrade(directory, keepOutputs),
            "local DXF R12 ellipse downgrade preserves 3D geometry", failures);
+    expect(runDxfEllipseRejectsInvalidNormals(directory),
+           "local DXF ELLIPSE rejects undefined extrusion normals",
+           failures);
     expect(runDxfRejectsInvalidFaceFlags(false, directory),
            "local DXF ASCII writer rejects invalid 3DFACE edge flags", failures);
     expect(runDxfRejectsInvalidFaceFlags(true, directory),
