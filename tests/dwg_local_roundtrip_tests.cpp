@@ -6144,6 +6144,9 @@ bool runDxfAcShExtrusionProjectionCapture(
               "0\nENDSEC\n0\nSECTION\n2\nOBJECTS\n"
               "0\nACSH_EXTRUSION_CLASS\n5\nD6D\n330\nD6C\n"
               "100\nAcDbShSweepBase\n";
+    stream << "90\n33\n91\n329\n10\n0.0\n20\n0.0\n30\n4.380487155114503\n"
+              "92\n77\n90\n32\n310\nA1B2C3D4\n93\n0\n"
+              "42\n0.0\n43\n0.0\n44\n0.0\n45\n0.0\n48\n1.0\n49\n0.0\n";
     const std::array<double, 16> sweepTransform{{
         1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0,
         9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0}};
@@ -6204,9 +6207,45 @@ bool runDxfAcShExtrusionProjectionCapture(
                                && value.type() == DRW_Variant::INTEGER
                                && value.i_val() == miterOption;
                        });
+    const auto hasIntegerGroup = [&raw](int code, std::int64_t expected) {
+        return std::any_of(raw.groups.begin(), raw.groups.end(),
+                           [code, expected](const DRW_Variant& value) {
+                               return value.code() == code
+                                   && value.type() == DRW_Variant::INTEGER
+                                   && value.i_val() == expected;
+                           });
+    };
+    const auto hasDoubleGroup = [&raw](int code, double expected) {
+        return std::any_of(raw.groups.begin(), raw.groups.end(),
+                           [code, expected](const DRW_Variant& value) {
+                               return value.code() == code
+                                   && value.type() == DRW_Variant::DOUBLE
+                                   && value.d_val() == expected;
+                           });
+    };
+    const bool rawUnprojectedFieldsPreserved =
+        std::count_if(raw.groups.begin(), raw.groups.end(),
+                      [](const DRW_Variant& value) {
+                          return value.code() == 90;
+                      }) == 2
+        && hasIntegerGroup(90, 33) && hasIntegerGroup(90, 32)
+        && hasIntegerGroup(91, 329) && hasIntegerGroup(92, 77)
+        && hasIntegerGroup(93, 0)
+        && hasDoubleGroup(10, 0.0) && hasDoubleGroup(20, 0.0)
+        && hasDoubleGroup(30, 4.380487155114503)
+        && hasDoubleGroup(42, 0.0) && hasDoubleGroup(43, 0.0)
+        && hasDoubleGroup(44, 0.0) && hasDoubleGroup(45, 0.0)
+        && hasDoubleGroup(48, 1.0) && hasDoubleGroup(49, 0.0)
+        && std::any_of(raw.groups.begin(), raw.groups.end(),
+                       [](const DRW_Variant& value) {
+                           return value.code() == 310
+                               && value.type() == DRW_Variant::STRING
+                               && value.c_str() != nullptr
+                               && std::strcmp(value.c_str(), "A1B2C3D4") == 0;
+                       });
     if (object.m_recordName != "ACSH_EXTRUSION_CLASS"
         || transformCount != 16u + (duplicateTransformValue ? 1u : 0u)
-        || !rawOptionsPreserved) {
+        || !rawOptionsPreserved || !rawUnprojectedFieldsPreserved) {
         return false;
     }
     if (duplicateTransformValue || alignOption < 0 || alignOption > 3) {
