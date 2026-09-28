@@ -5356,6 +5356,15 @@ splines.
 Current implementation-item ledger (update in every corresponding slice
 commit; 103/117 committed, 13 blocked, 0 verified, 1 in progress, and 0 ready):
 
+The PR's first hosted native-qualification attempt stopped before CTest because
+the frozen broad inventory listed 40 tests while a clean workflow-profile
+configure registers 49. Regenerated `metadata/qualification-required-tests-v1.json`
+from a clean tree at the PR head; its 49-test digest matches the CI inventory.
+The qualification runner, workflow-contract checks, and manifest validation
+pass locally. This is inventory-contract alignment only: no platform tests ran
+in the failed hosted attempt, and it does not qualify FreeCAD on Linux or
+Windows; a hosted rerun and receipt review remain required.
+
 | Item | State | Evidence / next action |
 | --- | --- | --- |
 | S8.9.13 | COMMITTED | A shared macOS install reproduced FreeCAD's installed-child loader failure: `dwg2dxf` referenced `@rpath/libdxfrw.2.dylib` but had no `LC_RPATH`. `dwg2dxf/CMakeLists.txt` now sets an install-relative `@loader_path`/`$ORIGIN` path to `CMAKE_INSTALL_LIBDIR` for shared Apple/Unix builds, while static builds and Windows' colocated runtime DLL layout remain unchanged. Added `dwg2dxf_freecad_installed_cli_compat` and `tests/run_freecad_installed_dwg2dxf_test.cmake`: install the build under a unique prefix/path containing spaces, reject absolute or escaping GNUInstallDirs destinations and build-tree executable substitution, then reuse the existing exact-argv converter checks for the three repository-tracked DWG controls with `DYLD_*`/`LD_*` loader overrides unset and a minimal system PATH. The static macOS CTest passes 1/1 (0.49 s); a separate `BUILD_SHARED_LIBS=ON` macOS build passes the same test 1/1 (0.62 s). Direct `otool` inspection confirms the installed shared executable has `@loader_path/../lib` and links only the installed libdxfrw plus macOS system libraries; `env -i PATH=/usr/bin:/bin` converts tracked AC1027 input successfully. Freshly installing the current static build and using the runner's unchanged strict hash mode also passes FreeCAD 1.1.3/macOS 27 arm64 `open()` and `insert()` (C++ importer mode 2, `DWGConversion=1`), with exact argv/handoff, one LINE at `(1,2,3)-(4,6,9)`, and no unsupported features; installed/build SHA-256 is `2ce17276b418bc5d3e7417e2d7642bcc0eea7b0535c8d0a8bf027ea822035b1f`. A separately configured stale install hash (`54c9a6...`) was correctly refused, so the shared-only exception has not weakened the default identity guard. Tests use the tracked local `.dwgadd` recipe and existing DWG controls; no drawing fixture is added. This is installed CLI/dependency-resolution evidence for macOS only; S8.9.14 covers the pinned shared FreeCAD process tuple, and native Linux/Windows remain S8.9.5. |
