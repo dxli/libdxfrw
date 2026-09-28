@@ -5474,6 +5474,18 @@ now also exercises the CRLF-normalized malformed-SURFACE assertion. Native
 FreeCAD executable discovery/import qualification on Linux and Windows remains
 external and unclaimed.
 
+S8.9.5 dispatch availability check (2026-09-28): the manual-only
+`.github/workflows/freecad-platform-qualification.yml` is present on PR #102's
+head, but `gh workflow list --all` on `LibreCAD/libdxfrw` does not register it
+and `gh workflow view freecad-platform-qualification.yml --ref codex/pr100-clean`
+returns 404 (`not found on the default branch`). GitHub documents that
+`workflow_dispatch` only receives events when its workflow file exists on the
+default branch ([workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onworkflow_dispatch)).
+PR #102 remains open and unmerged, so the native Linux/Windows FreeCAD jobs
+cannot yet be dispatched. Do not make this workflow automatic or merge the PR
+without authorization; no FreeCAD platform run or claim is inferred from the
+green native C++ build matrix.
+
 - Before implementation, convert the work packages into dependency-closed
   items with `READY`, `IN_PROGRESS`, `BLOCKED`, `VERIFIED`, and `COMMITTED`
   states and positive/negative gates. After every item, update its evidence,
