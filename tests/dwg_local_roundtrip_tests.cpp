@@ -10830,7 +10830,7 @@ bool runDxfLegacyEllipseDowngrade(const std::filesystem::path& directory,
         && tiltedArcValid && tiltedReverseArcValid && invalidRejected;
 }
 
-bool runDxfEllipseRejectsInvalidNormals(
+bool runDxfEllipseRejectsInvalidGeometry(
         const std::filesystem::path& directory) {
     const std::filesystem::path validPath = directory /
         "libdxfrw-ellipse-normal-control.dxf";
@@ -10838,15 +10838,25 @@ bool runDxfEllipseRejectsInvalidNormals(
         "libdxfrw-ellipse-zero-normal.dxf";
     const std::filesystem::path nonFiniteNormalPath = directory /
         "libdxfrw-ellipse-nonfinite-normal.dxf";
+    const std::filesystem::path nonPerpendicularPath = directory /
+        "libdxfrw-ellipse-nonperpendicular-axis.dxf";
+    const std::filesystem::path zeroMajorAxisPath = directory /
+        "libdxfrw-ellipse-zero-major-axis.dxf";
+    const std::filesystem::path zeroRatioPath = directory /
+        "libdxfrw-ellipse-zero-ratio.dxf";
+    const std::filesystem::path negativeRatioPath = directory /
+        "libdxfrw-ellipse-negative-ratio.dxf";
     std::error_code ec;
     for (const std::filesystem::path& path :
-         {validPath, zeroNormalPath, nonFiniteNormalPath})
+         {validPath, zeroNormalPath, nonFiniteNormalPath,
+          nonPerpendicularPath, zeroMajorAxisPath, zeroRatioPath,
+          negativeRatioPath})
         std::filesystem::remove(path, ec);
 
     dx_data source;
     auto* defaultEllipse = new DRW_Ellipse();
     defaultEllipse->basePoint = DRW_Coord(1.0, 2.0, 3.0);
-    defaultEllipse->secPoint = DRW_Coord(4.0, 0.0, 1.0);
+    defaultEllipse->secPoint = DRW_Coord(4.0, 0.0, 0.0);
     defaultEllipse->ratio = 0.5;
     defaultEllipse->staparam = 0.25;
     defaultEllipse->endparam = 5.5;
@@ -10854,7 +10864,7 @@ bool runDxfEllipseRejectsInvalidNormals(
 
     auto* obliqueEllipse = new DRW_Ellipse();
     obliqueEllipse->basePoint = DRW_Coord(-2.0, 5.0, 7.0);
-    obliqueEllipse->secPoint = DRW_Coord(3.0, 0.0, 2.0);
+    obliqueEllipse->secPoint = DRW_Coord(4.0, 0.0, -3.0);
     obliqueEllipse->extPoint = DRW_Coord(0.6, 0.0, 0.8);
     obliqueEllipse->ratio = 0.75;
     obliqueEllipse->staparam = 0.5;
@@ -10929,11 +10939,33 @@ bool runDxfEllipseRejectsInvalidNormals(
     std::string nonFiniteNormal = validDxf;
     const bool nonFiniteMutation =
         replaceEllipseGroupValue(nonFiniteNormal, 2u, 220, "nan");
+    std::string nonPerpendicularAxis = validDxf;
+    const bool nonPerpendicularMutation =
+        replaceEllipseGroupValue(nonPerpendicularAxis, 2u, 31, "-2.0");
+    std::string zeroMajorAxis = validDxf;
+    const bool zeroMajorAxisMutation =
+        replaceEllipseGroupValue(zeroMajorAxis, 2u, 11, "0.0")
+        && replaceEllipseGroupValue(zeroMajorAxis, 2u, 21, "0.0")
+        && replaceEllipseGroupValue(zeroMajorAxis, 2u, 31, "0.0");
+    std::string zeroRatio = validDxf;
+    const bool zeroRatioMutation =
+        replaceEllipseGroupValue(zeroRatio, 2u, 40, "0.0");
+    std::string negativeRatio = validDxf;
+    const bool negativeRatioMutation =
+        replaceEllipseGroupValue(negativeRatio, 2u, 40, "-0.5");
     if (!zeroMutation || !nonFiniteMutation
+        || !nonPerpendicularMutation || !zeroMajorAxisMutation
+        || !zeroRatioMutation || !negativeRatioMutation
         || !writeText(zeroNormalPath, zeroNormal)
-        || !writeText(nonFiniteNormalPath, nonFiniteNormal)) {
+        || !writeText(nonFiniteNormalPath, nonFiniteNormal)
+        || !writeText(nonPerpendicularPath, nonPerpendicularAxis)
+        || !writeText(zeroMajorAxisPath, zeroMajorAxis)
+        || !writeText(zeroRatioPath, zeroRatio)
+        || !writeText(negativeRatioPath, negativeRatio)) {
         for (const std::filesystem::path& path :
-             {validPath, zeroNormalPath, nonFiniteNormalPath})
+             {validPath, zeroNormalPath, nonFiniteNormalPath,
+              nonPerpendicularPath, zeroMajorAxisPath, zeroRatioPath,
+              negativeRatioPath})
             std::filesystem::remove(path, ec);
         return false;
     }
@@ -10985,13 +11017,13 @@ bool runDxfEllipseRejectsInvalidNormals(
             && near(parsedDefault->basePoint.z, 3.0)
             && near(parsedDefault->secPoint.x, 4.0)
             && near(parsedDefault->secPoint.y, 0.0)
-            && near(parsedDefault->secPoint.z, 1.0)
+            && near(parsedDefault->secPoint.z, 0.0)
             && near(parsedOblique->basePoint.x, -2.0)
             && near(parsedOblique->basePoint.y, 5.0)
             && near(parsedOblique->basePoint.z, 7.0)
-            && near(parsedOblique->secPoint.x, 3.0)
+            && near(parsedOblique->secPoint.x, 4.0)
             && near(parsedOblique->secPoint.y, 0.0)
-            && near(parsedOblique->secPoint.z, 2.0)
+            && near(parsedOblique->secPoint.z, -3.0)
             && near(parsedOblique->extPoint.x, 0.6)
             && near(parsedOblique->extPoint.y, 0.0)
             && near(parsedOblique->extPoint.z, 0.8);
@@ -11010,44 +11042,73 @@ bool runDxfEllipseRejectsInvalidNormals(
             std::cerr << "ELLIPSE malformed read: path=" << path.filename()
                       << " ok=" << importOk
                       << " callbacks=" << importer.ellipseCount;
-            for (const DRW_Entity* entity : imported.mBlock->ent) {
-                if (entity != nullptr && entity->eType == DRW::ELLIPSE) {
-                    const auto* ellipse = static_cast<const DRW_Ellipse*>(entity);
-                    std::cerr << " normal=(" << ellipse->extPoint.x << ','
-                              << ellipse->extPoint.y << ','
-                              << ellipse->extPoint.z << ')';
-                }
-            }
             std::cerr << '\n';
         }
         return !importOk && onlyEarlierValidEllipseWasPublished;
     };
 
-    bool writerNegatives = true;
-    for (const auto& testCase :
-         {std::make_pair(DRW::AC1027, false),
-          std::make_pair(DRW::AC1027, true),
-          std::make_pair(DRW::AC1009, false)}) {
-        const std::string encoding = testCase.second ? "binary" : "ascii";
-        const std::filesystem::path output = directory /
-            ("libdxfrw-ellipse-writer-zero-normal-" + encoding + "-"
-             + std::to_string(static_cast<int>(testCase.first)) + ".dxf");
-        std::filesystem::remove(output, ec);
-        dx_data invalidSource;
-        auto* invalidEllipse = new DRW_Ellipse();
-        invalidEllipse->basePoint = DRW_Coord(1.0, 2.0, 3.0);
-        invalidEllipse->secPoint = DRW_Coord(4.0, 0.0, 1.0);
-        invalidEllipse->extPoint = DRW_Coord(0.0, 0.0, 0.0);
-        invalidEllipse->ratio = 0.5;
-        invalidEllipse->endparam = 2.0 * std::acos(-1.0);
-        invalidSource.mBlock->ent.push_back(invalidEllipse);
-        dx_iface invalidExporter;
-        const bool rejected = !invalidExporter.fileExport(
-            output.string(), testCase.first, testCase.second,
-            &invalidSource, false)
-            && !std::filesystem::exists(output);
-        writerNegatives = writerNegatives && rejected;
-        std::filesystem::remove(output, ec);
+    struct WriterNegative {
+        const char* name;
+        std::function<void(DRW_Ellipse&)> corrupt;
+    };
+    const std::vector<WriterNegative> writerNegatives = {
+        {"zero-normal", [](DRW_Ellipse& ellipse) {
+            ellipse.extPoint = DRW_Coord(0.0, 0.0, 0.0);
+        }},
+        {"nonfinite-center", [](DRW_Ellipse& ellipse) {
+            ellipse.basePoint.x = std::numeric_limits<double>::quiet_NaN();
+        }},
+        {"nonfinite-major-axis", [](DRW_Ellipse& ellipse) {
+            ellipse.secPoint.z = std::numeric_limits<double>::infinity();
+        }},
+        {"zero-major-axis", [](DRW_Ellipse& ellipse) {
+            ellipse.secPoint = DRW_Coord(0.0, 0.0, 0.0);
+        }},
+        {"nonperpendicular-axis", [](DRW_Ellipse& ellipse) {
+            ellipse.extPoint = DRW_Coord(0.6, 0.0, 0.8);
+        }},
+        {"zero-ratio", [](DRW_Ellipse& ellipse) {
+            ellipse.ratio = 0.0;
+        }},
+        {"negative-ratio", [](DRW_Ellipse& ellipse) {
+            ellipse.ratio = -0.5;
+        }}
+    };
+    bool writerNegativesPass = true;
+    for (const WriterNegative& invalid : writerNegatives) {
+        for (const auto& testCase :
+             {std::make_pair(DRW::AC1027, false),
+              std::make_pair(DRW::AC1027, true),
+              std::make_pair(DRW::AC1009, false)}) {
+            const std::string encoding = testCase.second ? "binary" : "ascii";
+            const std::filesystem::path output = directory /
+                (std::string("libdxfrw-ellipse-writer-") + invalid.name + "-"
+                 + encoding + "-"
+                 + std::to_string(static_cast<int>(testCase.first)) + ".dxf");
+            std::filesystem::remove(output, ec);
+            dx_data invalidSource;
+            auto* invalidEllipse = new DRW_Ellipse();
+            invalidEllipse->basePoint = DRW_Coord(1.0, 2.0, 3.0);
+            invalidEllipse->secPoint = DRW_Coord(4.0, 0.0, 0.0);
+            invalidEllipse->ratio = 0.5;
+            invalidEllipse->staparam = 0.25;
+            invalidEllipse->endparam = 5.5;
+            invalid.corrupt(*invalidEllipse);
+            invalidSource.mBlock->ent.push_back(invalidEllipse);
+            dx_iface invalidExporter;
+            const bool rejected = !invalidExporter.fileExport(
+                output.string(), testCase.first, testCase.second,
+                &invalidSource, false)
+                && !std::filesystem::exists(output);
+            if (!rejected) {
+                std::cerr << "ELLIPSE writer accepted invalid geometry: "
+                          << invalid.name << " version="
+                          << static_cast<int>(testCase.first)
+                          << " binary=" << testCase.second << '\n';
+            }
+            writerNegativesPass = writerNegativesPass && rejected;
+            std::filesystem::remove(output, ec);
+        }
     }
 
     const bool validDefaultMode = importedValidModes(false);
@@ -11056,16 +11117,32 @@ bool runDxfEllipseRejectsInvalidNormals(
         rejectedWithoutPublishingEllipse(zeroNormalPath);
     const bool nonFiniteRejected =
         rejectedWithoutPublishingEllipse(nonFiniteNormalPath);
+    const bool nonPerpendicularRejected =
+        rejectedWithoutPublishingEllipse(nonPerpendicularPath);
+    const bool zeroMajorAxisRejected =
+        rejectedWithoutPublishingEllipse(zeroMajorAxisPath);
+    const bool zeroRatioRejected =
+        rejectedWithoutPublishingEllipse(zeroRatioPath);
+    const bool negativeRatioRejected =
+        rejectedWithoutPublishingEllipse(negativeRatioPath);
     const bool result = validDefaultMode && validLegacyMode && zeroRejected
-        && nonFiniteRejected && writerNegatives;
+        && nonFiniteRejected && nonPerpendicularRejected
+        && zeroMajorAxisRejected && zeroRatioRejected && negativeRatioRejected
+        && writerNegativesPass;
     if (!result) {
         std::cerr << "ELLIPSE extrusion gate: default=" << validDefaultMode
                   << " legacy=" << validLegacyMode << " zero="
                   << zeroRejected << " non-finite=" << nonFiniteRejected
-                  << " writer=" << writerNegatives << '\n';
+                  << " non-perpendicular=" << nonPerpendicularRejected
+                  << " zero-axis=" << zeroMajorAxisRejected
+                  << " zero-ratio=" << zeroRatioRejected
+                  << " negative-ratio=" << negativeRatioRejected
+                  << " writer=" << writerNegativesPass << '\n';
     }
     for (const std::filesystem::path& path :
-         {validPath, zeroNormalPath, nonFiniteNormalPath})
+         {validPath, zeroNormalPath, nonFiniteNormalPath,
+          nonPerpendicularPath, zeroMajorAxisPath, zeroRatioPath,
+          negativeRatioPath})
         std::filesystem::remove(path, ec);
     return result;
 }
@@ -12420,7 +12497,7 @@ int main(int argc, char** argv) {
            "local DXF binary 3D topology and OCS/WCS round-trip", failures);
     expect(runDxfLegacyEllipseDowngrade(directory, keepOutputs),
            "local DXF R12 ellipse downgrade preserves 3D geometry", failures);
-    expect(runDxfEllipseRejectsInvalidNormals(directory),
+    expect(runDxfEllipseRejectsInvalidGeometry(directory),
            "local DXF ELLIPSE rejects undefined extrusion normals",
            failures);
     expect(runDxfRejectsInvalidFaceFlags(false, directory),

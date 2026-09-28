@@ -330,6 +330,38 @@ bool isValidDxfExtrusionDirection(const DRW_Coord& direction) {
     return std::isfinite(magnitude) && magnitude > 0.0;
 }
 
+bool isValidDxfEllipseGeometry(const DRW_Ellipse& ellipse) {
+    if (!isFiniteDxfCoord(ellipse.basePoint)
+        || !isFiniteDxfCoord(ellipse.secPoint)
+        || !std::isfinite(ellipse.ratio) || ellipse.ratio <= 0.0
+        || !std::isfinite(ellipse.staparam)
+        || !std::isfinite(ellipse.endparam)
+        || !isValidDxfExtrusionDirection(ellipse.extPoint))
+        return false;
+
+    const double majorLength = std::hypot(
+        std::hypot(ellipse.secPoint.x, ellipse.secPoint.y),
+        ellipse.secPoint.z);
+    const double normalLength = std::hypot(
+        std::hypot(ellipse.extPoint.x, ellipse.extPoint.y),
+        ellipse.extPoint.z);
+    if (!std::isfinite(majorLength) || majorLength == 0.0
+        || !std::isfinite(normalLength) || normalLength == 0.0)
+        return false;
+
+    const double alignment =
+        (ellipse.secPoint.x / majorLength)
+            * (ellipse.extPoint.x / normalLength)
+        + (ellipse.secPoint.y / majorLength)
+            * (ellipse.extPoint.y / normalLength)
+        + (ellipse.secPoint.z / majorLength)
+            * (ellipse.extPoint.z / normalLength);
+    // ObjectARX defines the major axis as perpendicular to the ellipse normal
+    // within 1e-6. Normalize both vectors first so scaled DXF normals do not
+    // change the geometric check.
+    return std::isfinite(alignment) && std::abs(alignment) <= 1.0e-6;
+}
+
 bool isValidDxfLineWeight(DRW_LW_Conv::lineWidth value) {
     switch (value) {
     case DRW_LW_Conv::width00:
@@ -414,10 +446,7 @@ bool isValidDxfEntityFields(const DRW_Entity& entity) {
             return false;
     }
     if (const auto *ellipse = dynamic_cast<const DRW_Ellipse*>(&entity)) {
-        if (!std::isfinite(ellipse->ratio)
-            || !std::isfinite(ellipse->staparam)
-            || !std::isfinite(ellipse->endparam)
-            || !isValidDxfExtrusionDirection(ellipse->extPoint))
+        if (!isValidDxfEllipseGeometry(*ellipse))
             return false;
     }
     if (const auto *text = dynamic_cast<const DRW_Text*>(&entity)) {
@@ -10421,7 +10450,7 @@ bool dxfRW::processEllipse() {
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!hasCenterX || !hasCenterY || !hasMajorAxisX
                 || !hasMajorAxisY || !hasRatio
-                || !isValidDxfExtrusionDirection(ellipse.extPoint))
+                || !isValidDxfEllipseGeometry(ellipse))
                 return setError(DRW::BAD_CODE_PARSED);
             // DXF ELLIPSE center and major-axis vector are already WCS values.
             // Unlike CIRCLE/ARC, its extrusion code supplies the plane normal;

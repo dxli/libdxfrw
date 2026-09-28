@@ -3071,7 +3071,7 @@ void testDxfEllipseCoordinatesAreWcs(TestContext& t) {
     const std::string content =
         "0\nSECTION\n2\nENTITIES\n0\nELLIPSE\n5\n704\n8\n0\n"
         "10\n2\n20\n3\n30\n4\n"
-        "11\n5\n21\n6\n31\n7\n"
+        "11\n5\n21\n6\n31\n0\n"
         "40\n0.5\n41\n0.25\n42\n2.5\n"
         "210\n0\n220\n0\n230\n-1\n"
         "0\nENDSEC\n0\nEOF\n";
@@ -3086,7 +3086,7 @@ void testDxfEllipseCoordinatesAreWcs(TestContext& t) {
             && capture.lastEllipse.basePoint.z == 4.0
             && capture.lastEllipse.secPoint.x == 5.0
             && capture.lastEllipse.secPoint.y == 6.0
-            && capture.lastEllipse.secPoint.z == 7.0
+            && capture.lastEllipse.secPoint.z == 0.0
             && capture.lastEllipse.extPoint.x == 0.0
             && capture.lastEllipse.extPoint.y == 0.0
             && capture.lastEllipse.extPoint.z == -1.0
