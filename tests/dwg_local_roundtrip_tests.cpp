@@ -9610,9 +9610,14 @@ bool runDxfSurfaceRejectsMalformed(const std::filesystem::path& directory) {
         std::filesystem::remove(sourcePath, ec);
         return false;
     }
-    const std::string original{std::istreambuf_iterator<char>{input},
-                               std::istreambuf_iterator<char>{}};
+    std::string original{std::istreambuf_iterator<char>{input},
+                         std::istreambuf_iterator<char>{}};
     std::filesystem::remove(sourcePath, ec);
+
+    // Windows text-mode output expands LF to CRLF; normalize before the exact
+    // group-code edits below so the malformed cases are platform-independent.
+    original.erase(std::remove(original.begin(), original.end(), '\r'),
+                   original.end());
 
     const auto writeText = [](const std::filesystem::path& path,
                               const std::string& text) {

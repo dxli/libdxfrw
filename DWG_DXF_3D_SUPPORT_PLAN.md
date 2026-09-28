@@ -5356,14 +5356,19 @@ splines.
 Current implementation-item ledger (update in every corresponding slice
 commit; 103/117 committed, 13 blocked, 0 verified, 1 in progress, and 0 ready):
 
-The PR's first hosted native-qualification attempt stopped before CTest because
-the frozen broad inventory listed 40 tests while a clean workflow-profile
-configure registers 49. Regenerated `metadata/qualification-required-tests-v1.json`
-from a clean tree at the PR head; its 49-test digest matches the CI inventory.
-The qualification runner, workflow-contract checks, and manifest validation
-pass locally. This is inventory-contract alignment only: no platform tests ran
-in the failed hosted attempt, and it does not qualify FreeCAD on Linux or
-Windows; a hosted rerun and receipt review remain required.
+The first hosted run exposed a stale frozen CTest inventory (40 names versus
+49 registered by the clean workflow profile). After regenerating the contract,
+Linux and macOS each passed all seven focused tests; Windows passed six and
+failed `libdxfrw_dwg_local_roundtrip` because its malformed-SURFACE test searched
+LF-only byte patterns in Windows CRLF output. The test now normalizes line
+endings before mutation, and its focused local CTest passes. Receipt emission
+on the first two hosts was blocked by the stale frozen implementation digest;
+Windows also correctly rejected its failed test suite. The digest is now
+recomputed for the combined contract/test change and the status overlay records
+`cb98585f106ccaf7b44ce63c05bec85c05f0f521070da0521029ba1f81c6ad47`, with
+claims unchanged. A hosted rerun is required to verify Windows and emit/review
+the platform receipts; these contract/test results do not qualify FreeCAD
+support on any new platform.
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -5456,6 +5461,12 @@ Windows; a hosted rerun and receipt review remain required.
 | S8.9.11 | COMMITTED | Captures and writes the mandatory-LTYPE → DICTIONARY → XRECORD closure, including AC1014 group-330 owners, owner/reactor links, ordered XRECORD data, canonical LTYPE metadata, and fixed-handle collision remapping. Fails closed on incomplete/null children, duplicate handles, cycles, unresolved object refs in ordered or fallback data, raw payloads, or unsafe remaps. From-scratch AC1014 DXF tests verify public-reader round-trip, `hardOwner` preservation, XDATA group-1005 handle remapping, and no partial output; the external AutoCAD `point3d_R14.dwg` (SHA-256 `7e6b1378b053f20de2cf9d153da3485e6475d0cd5845d5a8144b09cfe17cdc46`) converts without being copied/tracked. Installed at `/private/tmp/libdxfrw-r14-install-final-verified/bin/dwg2dxf`, SHA-256 `6a60077d4389437e1e9dd0e2be761062d2f0b792caac432a23fde4f96c1289e4`; FreeCAD 1.1.3 rev `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, isolated FreeCADCmd, C++ importer mode 2, PATH discovery, `DWGConversion=1` and ODA/QCAD fallbacks disabled: exact `[binary,input,-o,output]` exits 0; the identical AC1014 DXF imports as one valid POINT vertex `(50,50,50)`, no edges/faces/unsupported features. Output DXF SHA-256 `2a7910281628144cf806a9733f076ac30f3a9248cad8de174acd1955e39ffd8a`. Focused eight-test suite passes: fast-focus, graph-preservation, writer-primitives, writer-version-matrix, DXF fixtures, DWG fixtures, CLI version policy, and FreeCAD CLI compatibility; `git diff --check` passes. Corrected one stale object-vector assertion that contradicted S0.7's already-committed null-DWG-reference contract. After rebasing on refreshed `origin/master` `25a2f8d`, the combined MTEXT-fill and linetype-extension fixture first exposed that `FixtureInterface` intercepts dictionary/XRECORD callbacks; the test now checks those adapter capture vectors. Rebuilt `libdxfrw_dxf_fixture_tests`; focused `libdxfrw_dxf_fixtures` passes 1/1. No fixture, external output, or config was added. Qualifies only this macOS AC1014 POINT `open()` tuple; other versions/entities/operations/platforms remain independently gated. |
 | S8.9.15 | IMPLEMENTED_AWAITING_NATIVE_RUN | Added default-OFF `LIBDXFRW_ENABLE_FREECAD_TRACKED_AC1027_LINE_CONTROL`, which drives the existing isolated FreeCADCmd open/insert harness from the already-tracked LibreCAD `ordinary_enc_AC1027.dwg` (fixture-registry SHA-256 `a0ebf245e570bf0dc337c696330b7ea883feaebb7c4e781de8d77ac723815f83`, three expected LINE bounds). The harness verifies the source hash and AC1027 magic, installed-vs-build converter identity, pinned FreeCAD revision `145529fe741292ff0b3977a01195bf0247425794`, exact converter argv/output handoff, output content and FreeCAD bounds; test-owned copies remain in temp and use a Unicode path with spaces. Added manual-only `.github/workflows/freecad-platform-qualification.yml` for native Ubuntu 24.04 x86_64 and Windows 2022 x64. It downloads FreeCAD 1.1.3 artifacts only on dispatch and verifies pinned SHA-256 values before execution; logs are uploaded as artifacts. No new DWG/DXF fixture or automatic/default CI load is introduced. CMake registers both tests. On FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, installed converter SHA-256 `5f083c6af355dde6e92422968a49f44574f24f505915b325a979879326d2180a` passed both `open` and `insert`; each used the Unicode/spaced temp input, exact argv and handoff, created three LINE features at the expected bounds, and reported no unsupported features. The sandboxed attempt failed before app code because Qt cannot see ARM `neon`; both checks passed outside the sandbox. Fast `dwg2dxf_freecad_cli_compat` passes 1/1, the CMake config lists both tests, macro syntax and `git diff --check` pass, and actionlint is clean. GitHub-hosted Linux/Windows jobs have not yet been dispatched; S8.9.5 remains open until both native jobs pass and their receipts are reviewed. |
 | S8.15.3.1 | COMMITTED | External AutoCAD-authored `nextgis/dwg_samples/point3d_2013.dwg` (AutoCAD 2016, `_POINT 50,50,50`, AC1027; SHA-256 `839297daa100c318d5afbfa128145d2c4782300650c86b2ab58b34cf6fe1aba4`) agrees with both its paired source DXF and LibreDWG 0.14 direct export: exactly one POINT at `(50,50,50)`. The default-OFF `LIBDXFRW_ENABLE_FREECAD_AUTOCAD_POINT3D_CONTROL` path/hash-pinned opt-in test copies the caller-supplied sample only under unique system temp, verifies installed/build converter identity, exact FreeCAD argv, AC1027 converter output and readback, isolated user config and explicit macro PASS marker. FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2, resolves the installed converter on PATH and creates one vertex-only `Part::Feature` at `(50,50,50)`, with zero edges/faces and no unsupported POINT. The opt-in `dwg2dxf_freecad_autocad_ac1027_point3d` passes 1/1 outside the sandbox; a sandboxed run aborts in Qt before app code because host `neon` is hidden. No external DWG/DXF fixture is tracked or staged. This is a single target-authored entity/version/pinned-runtime witness only. |
+
+Qualification follow-up supersedes the S8.9.15 snapshot above: the clean
+49-test inventory now matches all hosted configurations. Linux and macOS
+focused suites pass 7/7; Windows' CRLF-sensitive assertion was fixed and its
+local focused CTest passes 1/1. The new run must still produce sealed receipts
+before native deployment qualification can be reviewed.
 
 - Before implementation, convert the work packages into dependency-closed
   items with `READY`, `IN_PROGRESS`, `BLOCKED`, `VERIFIED`, and `COMMITTED`
