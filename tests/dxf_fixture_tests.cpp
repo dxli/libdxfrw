@@ -947,7 +947,9 @@ void testLinetypeExtensionGraphRoundTrip(TestContext& t) {
                  "extension dictionary link applies only necessary remapping");
 
         const DRW_Dictionary* dictionary = nullptr;
-        for (const DRW_Dictionary& candidate : roundTrip.dictionaries) {
+        // FixtureInterface intercepts typed object callbacks for focused
+        // inspection instead of forwarding them into dx_data.
+        for (const DRW_Dictionary& candidate : readerInterface.dictionaries) {
             if (candidate.handle == outputDictionary)
                 dictionary = &candidate;
         }
@@ -961,7 +963,7 @@ void testLinetypeExtensionGraphRoundTrip(TestContext& t) {
                  "extension dictionary owner, membership, and hard-owner flag survive");
 
         const DRW_XRecord* record = nullptr;
-        for (const DRW_XRecord& candidate : roundTrip.xRecords) {
+        for (const DRW_XRecord& candidate : readerInterface.xrecords) {
             if (!dictionary->m_entries.empty()
                 && candidate.handle == dictionary->m_entries.front().m_handle)
                 record = &candidate;
