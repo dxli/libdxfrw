@@ -11147,6 +11147,129 @@ bool runDxfEllipseRejectsInvalidGeometry(
     return result;
 }
 
+bool runDxfArcCircleThicknessRoundTrip(
+        bool binary, const std::filesystem::path& directory) {
+    const std::filesystem::path output = directory /
+        (binary ? "libdxfrw-arc-circle-thickness-binary.dxf"
+                : "libdxfrw-arc-circle-thickness-ascii.dxf");
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+
+    dx_data source;
+    auto* circle = new DRW_Circle();
+    circle->basePoint = DRW_Coord(2.0, 3.0, 4.0);
+    circle->extPoint = DRW_Coord(0.6, 0.0, 0.8);
+    circle->radious = 2.5;
+    circle->thickness = 3.75;
+    source.mBlock->ent.push_back(circle);
+
+    auto* arc = new DRW_Arc();
+    arc->basePoint = DRW_Coord(2.0, 3.0, 4.0);
+    arc->extPoint = DRW_Coord(0.6, 0.0, 0.8);
+    arc->radious = 1.75;
+    arc->thickness = 1.25;
+    arc->staangle = 0.25;
+    arc->endangle = 1.5;
+    source.mBlock->ent.push_back(arc);
+
+    dx_iface exporter;
+    if (!exporter.fileExport(output.string(), DRW::AC1027, binary,
+                             &source, false)) {
+        std::filesystem::remove(output, ec);
+        return false;
+    }
+
+    class ArcCircleCapture final : public dx_iface {
+    public:
+        dx_data data;
+        DRW_Circle circle;
+        DRW_Arc arc;
+        bool hasCircle = false;
+        bool hasArc = false;
+
+        ArcCircleCapture() {
+            cData = &data;
+            currentBlock = data.mBlock;
+        }
+
+        void addCircle(const DRW_Circle& value) override {
+            circle = value;
+            hasCircle = true;
+        }
+
+        void addArc(const DRW_Arc& value) override {
+            arc = value;
+            hasArc = true;
+        }
+    };
+
+    const auto readAndCheck = [&](bool applyExtrusion) {
+        const std::string outputName = output.string();
+        dxfRW reader(outputName.c_str());
+        ArcCircleCapture capture;
+        const bool readOk = reader.read(&capture, applyExtrusion);
+        if (!readOk || !capture.hasCircle || !capture.hasArc) {
+            std::cerr << "ARC/CIRCLE thickness read failed: binary=" << binary
+                      << " applyExt=" << applyExtrusion << " ok=" << readOk
+                      << " circle=" << capture.hasCircle
+                      << " arc=" << capture.hasArc << '\n';
+            return false;
+        }
+        const DRW_Circle* parsedCircle = &capture.circle;
+        const DRW_Arc* parsedArc = &capture.arc;
+        const auto near = [](double actual, double expected) {
+            return std::isfinite(actual)
+                && std::abs(actual - expected) <= 1.0e-9;
+        };
+        const auto pointNear = [&near](const DRW_Coord& actual,
+                                       const DRW_Coord& expected) {
+            return near(actual.x, expected.x)
+                && near(actual.y, expected.y)
+                && near(actual.z, expected.z);
+        };
+        const DRW_Coord expectedCenter = applyExtrusion
+            ? DRW_Coord(0.0, 2.0, 5.0)
+            : DRW_Coord(2.0, 3.0, 4.0);
+        const bool fieldsMatch = parsedCircle != nullptr && parsedArc != nullptr
+            && near(parsedCircle->thickness, 3.75)
+            && near(parsedArc->thickness, 1.25)
+            && near(parsedCircle->radious, 2.5)
+            && near(parsedArc->radious, 1.75)
+            && pointNear(parsedCircle->basePoint, expectedCenter)
+            && pointNear(parsedArc->basePoint, expectedCenter)
+            && pointNear(parsedCircle->extPoint, DRW_Coord(0.6, 0.0, 0.8))
+            && pointNear(parsedArc->extPoint, DRW_Coord(0.6, 0.0, 0.8))
+            && near(parsedArc->staangle, 0.25)
+            && near(parsedArc->endangle, 1.5);
+        if (!fieldsMatch) {
+            std::cerr << "ARC/CIRCLE thickness fields differ: binary=" << binary
+                      << " applyExt=" << applyExtrusion
+                      << " circle-thickness="
+                      << (parsedCircle ? parsedCircle->thickness : -999.0)
+                      << " arc-thickness="
+                      << (parsedArc ? parsedArc->thickness : -999.0)
+                      << " circle-center-x="
+                      << (parsedCircle ? parsedCircle->basePoint.x : -999.0)
+                      << " circle-center-y="
+                      << (parsedCircle ? parsedCircle->basePoint.y : -999.0)
+                      << " circle-center-z="
+                      << (parsedCircle ? parsedCircle->basePoint.z : -999.0)
+                      << " arc-center-x="
+                      << (parsedArc ? parsedArc->basePoint.x : -999.0)
+                      << " arc-center-y="
+                      << (parsedArc ? parsedArc->basePoint.y : -999.0)
+                      << " arc-center-z="
+                      << (parsedArc ? parsedArc->basePoint.z : -999.0)
+                      << '\n';
+        }
+        return fieldsMatch;
+    };
+
+    const bool valid = readAndCheck(false) && readAndCheck(true);
+    std::filesystem::remove(output, ec);
+    return valid;
+}
+
 bool runDxfRejectsInvalidFaceFlags(bool binary,
                                    const std::filesystem::path& directory) {
     const std::string encoding = binary ? "binary" : "ascii";
@@ -12499,6 +12622,12 @@ int main(int argc, char** argv) {
            "local DXF R12 ellipse downgrade preserves 3D geometry", failures);
     expect(runDxfEllipseRejectsInvalidGeometry(directory),
            "local DXF ELLIPSE rejects undefined extrusion normals",
+           failures);
+    expect(runDxfArcCircleThicknessRoundTrip(false, directory),
+           "local DXF ASCII ARC/CIRCLE preserves thickness independently of OCS projection",
+           failures);
+    expect(runDxfArcCircleThicknessRoundTrip(true, directory),
+           "local DXF binary ARC/CIRCLE preserves thickness independently of OCS projection",
            failures);
     expect(runDxfRejectsInvalidFaceFlags(false, directory),
            "local DXF ASCII writer rejects invalid 3DFACE edge flags", failures);
