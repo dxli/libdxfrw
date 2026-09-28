@@ -6123,6 +6123,92 @@ bool runAcdsHistoryCallbackCapture() {
                == std::vector<std::uint8_t>({0xD4u, 0xE5u});
 }
 
+bool runDxfAcShExtrusionProjectionCapture(
+        const std::filesystem::path& directory, bool duplicateTransformValue) {
+    const std::filesystem::path output = directory /
+        (duplicateTransformValue
+             ? "libdxfrw-acsh-extrusion-projection-malformed.dxf"
+             : "libdxfrw-acsh-extrusion-projection.dxf");
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+    std::ofstream stream(output);
+    if (!stream)
+        return false;
+
+    stream << "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1027\n"
+              "0\nENDSEC\n0\nSECTION\n2\nOBJECTS\n"
+              "0\nACSH_EXTRUSION_CLASS\n5\nD6D\n330\nD6C\n"
+              "100\nAcDbShSweepBase\n";
+    const std::array<double, 16> sweepTransform{{
+        1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0,
+        9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0}};
+    const std::array<double, 16> pathTransform{{
+        -1.0, -2.0, -3.0, -4.0, -5.0, -6.0, -7.0, -8.0,
+        -9.0, -10.0, -11.0, -12.0, -13.0, -14.0, -15.0, -16.0}};
+    for (double value : sweepTransform)
+        stream << "46\n" << value << '\n';
+    if (duplicateTransformValue)
+        stream << "46\n17.0\n";
+    for (double value : pathTransform)
+        stream << "47\n" << value << '\n';
+    stream << "70\n0\n71\n2\n"
+              "290\n1\n292\n1\n293\n0\n294\n0\n295\n1\n296\n0\n"
+              "11\n3.5\n21\n-2.0\n31\n9.0\n"
+              "100\nAcDbShExtrusion\n0\nENDSEC\n0\nEOF\n";
+    stream.close();
+    if (!stream) {
+        std::filesystem::remove(output, ec);
+        return false;
+    }
+
+    class CaptureIface final : public dx_iface {
+    public:
+        std::vector<DRW_RawDxfObject> rawObjects;
+        void addRawDxfObject(const DRW_RawDxfObject& object) override {
+            rawObjects.push_back(object);
+            dx_iface::addRawDxfObject(object);
+        }
+    };
+    dx_data imported;
+    CaptureIface importer;
+    const bool readOk = importer.fileImport(output.string(), &imported, false);
+    std::filesystem::remove(output, ec);
+    if (!readOk || imported.acshHistoryObjects.size() != 1u
+        || importer.rawObjects.size() != 1u) {
+        return false;
+    }
+
+    const DRW_AcShHistoryObject& object = imported.acshHistoryObjects.front();
+    const auto& projection = object.m_extrusionDxfProjection;
+    const DRW_RawDxfObject& raw = importer.rawObjects.front();
+    const std::size_t transformCount = static_cast<std::size_t>(
+        std::count_if(raw.groups.begin(), raw.groups.end(),
+                      [](const DRW_Variant& value) {
+                          return value.code() == 46;
+                      }));
+    if (object.m_recordName != "ACSH_EXTRUSION_CLASS"
+        || transformCount != 16u + (duplicateTransformValue ? 1u : 0u)) {
+        return false;
+    }
+    if (duplicateTransformValue) {
+        return !projection.m_transformAndOptionFieldsComplete
+            && std::all_of(projection.m_sweepEntityTransform.begin(),
+                           projection.m_sweepEntityTransform.end(),
+                           [](double value) { return value == 0.0; });
+    }
+
+    return projection.m_transformAndOptionFieldsComplete
+        && projection.m_sweepEntityTransform == sweepTransform
+        && projection.m_pathEntityTransform == pathTransform
+        && projection.m_alignOption == 0
+        && projection.m_miterOption == 2
+        && projection.m_hasAlignStart && projection.m_bank
+        && !projection.m_checkIntersections && !projection.m_flag294
+        && projection.m_flag295 && !projection.m_flag296
+        && projection.m_point.x == 3.5 && projection.m_point.y == -2.0
+        && projection.m_point.z == 9.0;
+}
+
 bool runDxfTypedAcdsBoxRoundTrip(
     bool binary, const std::filesystem::path& directory, bool keepOutput) {
     const std::filesystem::path output = directory /
@@ -12104,6 +12190,12 @@ int main(int argc, char** argv) {
            failures);
     expect(runAcdsHistoryCallbackCapture(),
            "local typed ACIS history/evaluation callback retention",
+           failures);
+    expect(runDxfAcShExtrusionProjectionCapture(directory, false),
+           "local DXF ACSH extrusion projection captures fixed fields atomically",
+           failures);
+    expect(runDxfAcShExtrusionProjectionCapture(directory, true),
+           "local DXF ACSH extrusion projection declines malformed transform count",
            failures);
     expect(runDxfTypedAcdsBoxRoundTrip(false, directory, keepOutputs),
            "local ASCII typed ACDS BOX closure round-trip", failures);

@@ -5758,6 +5758,25 @@ public:
   std::uint32_t m_numCrossSections = 0; //!< BL num_crosssects
   std::uint32_t m_numGuides = 0;        //!< BL num_guides
 
+  //! Exact DXF projection fields observed in AcDbShSweepBase for
+  //! ACSH_EXTRUSION_CLASS. This is a capture-only subset: it does not qualify
+  //! the DWG body layout or make the history object writable.
+  struct ExtrusionDxfProjection {
+    std::array<double, 16> m_sweepEntityTransform{};
+    std::array<double, 16> m_pathEntityTransform{};
+    std::int32_t m_alignOption = 0;
+    std::int32_t m_miterOption = 0;
+    bool m_hasAlignStart = false;
+    bool m_bank = false;
+    bool m_checkIntersections = false;
+    bool m_flag294 = false;
+    bool m_flag295 = false;
+    bool m_flag296 = false;
+    DRW_Coord m_point;
+    bool m_transformAndOptionFieldsComplete = false;
+  };
+  ExtrusionDxfProjection m_extrusionDxfProjection;
+
   std::vector<DRW_AssociativePrefixStatus> m_prefixStatuses;
 };
 

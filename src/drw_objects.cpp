@@ -20991,6 +20991,7 @@ void DRW_AcShHistoryObject::reset() {
     m_isCloseToAxis = false;
     m_numCrossSections = 0;
     m_numGuides = 0;
+    m_extrusionDxfProjection = ExtrusionDxfProjection{};
     m_prefixStatuses.clear();
 }
 

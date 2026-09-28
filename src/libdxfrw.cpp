@@ -138,6 +138,125 @@ bool isDxfHexText(const std::string& text) {
     });
 }
 
+bool captureAcShExtrusionDxfProjection(
+        const DRW_RawDxfObject& raw,
+        DRW_AcShHistoryObject::ExtrusionDxfProjection& projection) {
+    if (raw.name != "ACSH_EXTRUSION_CLASS")
+        return false;
+
+    DRW_AcShHistoryObject::ExtrusionDxfProjection parsed;
+    std::array<std::size_t, 2> transformCounts{};
+    std::array<std::size_t, 2> optionCounts{};
+    std::array<std::size_t, 6> flagCounts{};
+    std::array<std::size_t, 3> pointCounts{};
+    double point[3] = {};
+    bool inSweepBase = false;
+    std::size_t sweepBaseMarkerCount = 0;
+
+    for (const DRW_Variant& group : raw.groups) {
+        if (group.code() == 100) {
+            if (group.type() != DRW_Variant::STRING || group.c_str() == nullptr)
+                return false;
+            inSweepBase = std::strcmp(group.c_str(), "AcDbShSweepBase") == 0;
+            if (inSweepBase && ++sweepBaseMarkerCount != 1u)
+                return false;
+            continue;
+        }
+        if (!inSweepBase)
+            continue;
+
+        if (group.code() == 46 || group.code() == 47) {
+            const std::size_t transformIndex =
+                group.code() == 46 ? 0u : 1u;
+            if (group.type() != DRW_Variant::DOUBLE
+                || transformCounts[transformIndex] >= 16u
+                || !std::isfinite(group.d_val())) {
+                return false;
+            }
+            auto& transform = transformIndex == 0u
+                ? parsed.m_sweepEntityTransform
+                : parsed.m_pathEntityTransform;
+            transform[transformCounts[transformIndex]++] = group.d_val();
+            continue;
+        }
+
+        if (group.code() == 70 || group.code() == 71) {
+            const std::size_t optionIndex = group.code() == 70 ? 0u : 1u;
+            if (group.type() != DRW_Variant::INTEGER
+                || optionCounts[optionIndex] != 0u
+                || group.i_val() < -128 || group.i_val() > 127) {
+                return false;
+            }
+            (optionIndex == 0u ? parsed.m_alignOption : parsed.m_miterOption) =
+                group.i_val();
+            ++optionCounts[optionIndex];
+            continue;
+        }
+
+        std::size_t flagIndex = flagCounts.size();
+        switch (group.code()) {
+        case 290: flagIndex = 0u; break;
+        case 292: flagIndex = 1u; break;
+        case 293: flagIndex = 2u; break;
+        case 294: flagIndex = 3u; break;
+        case 295: flagIndex = 4u; break;
+        case 296: flagIndex = 5u; break;
+        default: break;
+        }
+        if (flagIndex != flagCounts.size()) {
+            if (group.type() != DRW_Variant::INTEGER
+                || flagCounts[flagIndex] != 0u
+                || (group.i_val() != 0 && group.i_val() != 1)) {
+                return false;
+            }
+            const bool value = group.i_val() != 0;
+            switch (flagIndex) {
+            case 0: parsed.m_hasAlignStart = value; break;
+            case 1: parsed.m_bank = value; break;
+            case 2: parsed.m_checkIntersections = value; break;
+            case 3: parsed.m_flag294 = value; break;
+            case 4: parsed.m_flag295 = value; break;
+            case 5: parsed.m_flag296 = value; break;
+            default: return false;
+            }
+            ++flagCounts[flagIndex];
+            continue;
+        }
+
+        std::size_t pointIndex = pointCounts.size();
+        switch (group.code()) {
+        case 11: pointIndex = 0u; break;
+        case 21: pointIndex = 1u; break;
+        case 31: pointIndex = 2u; break;
+        default: break;
+        }
+        if (pointIndex != pointCounts.size()) {
+            if (group.type() != DRW_Variant::DOUBLE
+                || pointCounts[pointIndex] != 0u
+                || !std::isfinite(group.d_val())) {
+                return false;
+            }
+            point[pointIndex] = group.d_val();
+            ++pointCounts[pointIndex];
+        }
+    }
+
+    if (sweepBaseMarkerCount != 1u
+        || transformCounts[0] != 16u || transformCounts[1] != 16u
+        || optionCounts[0] != 1u || optionCounts[1] != 1u
+        || std::any_of(flagCounts.begin(), flagCounts.end(),
+                       [](std::size_t count) { return count != 1u; })
+        || std::any_of(pointCounts.begin(), pointCounts.end(),
+                       [](std::size_t count) { return count != 1u; })) {
+        return false;
+    }
+
+    parsed.m_point = DRW_Coord(point[0], point[1], point[2]);
+    parsed.m_transformAndOptionFieldsComplete = true;
+    projection = parsed;
+    return true;
+}
+
 bool isValidDxfEedVariant(const DRW_Variant *value) {
     if (value == nullptr)
         return false;
@@ -12329,6 +12448,12 @@ bool dxfRW::processAcShHistoryObject() {
                 return setError(DRW::BAD_CODE_PARSED);
             data.handle = raw.handle;
             data.parentHandle = raw.parentHandle;
+            // Retain only the bounded transform/option projection observed in
+            // AcDbShSweepBase. The full DXF object stays in `raw`; an
+            // incomplete projection is diagnostic-only and must not make an
+            // otherwise preservable raw object unreadable.
+            captureAcShExtrusionDxfProjection(raw,
+                                               data.m_extrusionDxfProjection);
             iface->addAcShHistoryObject(data);
             iface->addRawDxfObject(raw);
             return true;
