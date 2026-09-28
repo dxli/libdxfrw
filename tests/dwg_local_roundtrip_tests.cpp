@@ -5533,8 +5533,10 @@ void addLocalAcdsHistoryClosure(dx_data& source,
 
 DRW_ModelerGeometry* addLocalAcdsDataStorageModeler(
     dx_data& source, std::uint32_t handle,
-    const std::vector<std::uint8_t>& payload) {
-    auto* modeler = new DRW_ModelerGeometry(DRW::E3DSOLID);
+    const std::vector<std::uint8_t>& payload,
+    DRW::ETYPE entityType = DRW::E3DSOLID,
+    bool addHistoryClosure = true) {
+    auto* modeler = new DRW_ModelerGeometry(entityType);
     modeler->handle = handle;
     modeler->m_modelerVersion = 2;
     modeler->m_dwgSourceVersion = DRW::AC1027;
@@ -5547,7 +5549,8 @@ DRW_ModelerGeometry* addLocalAcdsDataStorageModeler(
     modeler->dataStorageHandleKey = handleText;
     modeler->dataStorageSchemaIndex = 1;
     modeler->dataStorageData = payload;
-    addLocalAcdsHistoryClosure(source, *modeler);
+    if (addHistoryClosure)
+        addLocalAcdsHistoryClosure(source, *modeler);
     source.mBlock->ent.push_back(modeler);
     source.dataStorageSections.push_back(
         makeLocalDataStorageSection(handle, payload));
@@ -7650,6 +7653,120 @@ bool runDxfAcdsDataStorageProjection(
     }
     if (!keepOutput || !result)
         std::filesystem::remove(output, ec);
+    return result;
+}
+
+bool runDxfAcdsRegionWithoutHistoryProjection(
+    bool binary, const std::filesystem::path& directory, bool keepOutputs) {
+    const std::string encoding = binary ? "binary" : "ascii";
+    const std::filesystem::path output = directory /
+        ("libdxfrw-ac1027-acds-region-no-history-" + encoding + ".dxf");
+    const std::filesystem::path replay = directory /
+        ("libdxfrw-ac1027-acds-region-no-history-replay-" + encoding
+         + ".dxf");
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+    std::filesystem::remove(replay, ec);
+
+    constexpr std::uint32_t sourceHandle = 0xFC20u;
+    // Deliberately opaque marker bytes: this regression checks the REGION /
+    // ACDSDATA transport and owner key only, not ACIS validity or geometry.
+    const std::vector<std::uint8_t> payload {
+        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
+        0x01u, 0x02u, 0x03u, 0x04u};
+    dx_data source;
+    addLocalAcdsDataStorageModeler(source, sourceHandle, payload,
+                                   DRW::REGION, false);
+
+    const auto hasExpectedRegionAndStorage = [&payload](const dx_data& data) {
+        if (data.mBlock == nullptr || data.rawDxfSections.size() != 1u
+            || data.rawDxfSections.front().m_name != "ACDSDATA"
+            || !hasExpectedAcdsSchemaDefinitions(
+                data.rawDxfSections.front())
+            || !data.proxyObjects.empty() || !data.rawProxyObjects.empty()
+            || !data.acshHistoryObjects.empty()
+            || !data.evaluationGraphs.empty()) {
+            std::cerr << "REGION ACDSDATA structure mismatch: block="
+                      << (data.mBlock != nullptr) << " sections="
+                      << data.rawDxfSections.size() << " proxy="
+                      << data.proxyObjects.size() << '/'
+                      << data.rawProxyObjects.size() << " history="
+                      << data.acshHistoryObjects.size() << " graphs="
+                      << data.evaluationGraphs.size() << '\n';
+            return false;
+        }
+
+        const DRW_ModelerGeometry* region = nullptr;
+        std::size_t regionCount = 0u;
+        std::size_t solidCount = 0u;
+        for (const DRW_Entity* entity : data.mBlock->ent) {
+            if (entity == nullptr)
+                continue;
+            if (entity->eType == DRW::REGION) {
+                ++regionCount;
+                region = static_cast<const DRW_ModelerGeometry*>(entity);
+            } else if (entity->eType == DRW::E3DSOLID) {
+                ++solidCount;
+            }
+        }
+        if (regionCount != 1u || solidCount != 0u || region == nullptr
+            || region->handle == 0u || region->m_historyHandle != 0u) {
+            std::cerr << "REGION ACDSDATA entity mismatch: regions="
+                      << regionCount << " solids=" << solidCount
+                      << " handle=" << (region == nullptr ? 0u
+                                                           : region->handle)
+                      << " history=" << (region == nullptr ? 0u
+                                                            : region->m_historyHandle)
+                      << '\n';
+            return false;
+        }
+
+        char expectedHandle[9] = {};
+        std::snprintf(expectedHandle, sizeof(expectedHandle), "%X",
+                      region->handle);
+        std::string linkedHandle;
+        std::vector<std::uint8_t> parsedPayload;
+        const bool recordMatches = findAcdsRecordPayload(
+            data.rawDxfSections.front(), "ASM_Data", linkedHandle,
+            parsedPayload)
+            && linkedHandle == expectedHandle && parsedPayload == payload;
+        if (!recordMatches) {
+            std::cerr << "REGION ACDSDATA record mismatch: expected owner="
+                      << expectedHandle << " actual owner=" << linkedHandle
+                      << " bytes=" << parsedPayload.size() << '\n';
+        }
+        return recordMatches;
+    };
+
+    dx_iface exporter;
+    dx_data imported;
+    dx_iface importer;
+    const bool exportOk = exporter.fileExport(output.string(), DRW::AC1027,
+                                              binary, &source, false);
+    const bool importOk = exportOk
+        && importer.fileImport(output.string(), &imported, false);
+    bool result = importOk && hasExpectedRegionAndStorage(imported);
+    if (!result) {
+        std::cerr << "REGION ACDSDATA first pass failed: export=" << exportOk
+                  << " import=" << importOk << '\n';
+    }
+
+    // Re-exporting imported DXF exercises the separate DXF ACDSDATA replay
+    // path, including the REGION handle-to-record owner mapping.
+    if (result) {
+        dx_iface replayExporter;
+        dx_data replayed;
+        dx_iface replayImporter;
+        result = replayExporter.fileExport(replay.string(), DRW::AC1027,
+                                           binary, &imported, false)
+            && replayImporter.fileImport(replay.string(), &replayed, false)
+            && hasExpectedRegionAndStorage(replayed);
+    }
+
+    if (!keepOutputs) {
+        std::filesystem::remove(output, ec);
+        std::filesystem::remove(replay, ec);
+    }
     return result;
 }
 
@@ -11968,6 +12085,14 @@ int main(int argc, char** argv) {
            failures);
     expect(runDxfAcdsDataStorageProjection(true, directory, keepOutputs),
            "local binary DWG DataStorage to AC1027 ACDSDATA projection",
+           failures);
+    expect(runDxfAcdsRegionWithoutHistoryProjection(false, directory,
+                                                    keepOutputs),
+           "local ASCII AC1027 REGION ACDSDATA projection without history",
+           failures);
+    expect(runDxfAcdsRegionWithoutHistoryProjection(true, directory,
+                                                    keepOutputs),
+           "local binary AC1027 REGION ACDSDATA projection without history",
            failures);
     expect(runDxfAcdsMultipleDataStorageProjection(
                false, directory, keepOutputs),

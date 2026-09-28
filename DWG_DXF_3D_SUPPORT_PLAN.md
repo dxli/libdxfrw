@@ -3,6 +3,15 @@
 Status: implementation in progress; DWG reader edits remain evidence-gated.
 Review date: 2026-09-27.
 
+**Local DXF transport regression (2026-09-28; S2.3.9.4.24):** added a
+runtime-generated AC1027 ASCII and binary REGION-without-history
+ACDSDATA export/import/re-export regression. It checks REGION identity,
+ACDSDATA schema, owner-handle linkage, and exact opaque payload bytes; the
+marker is deliberately not valid-ACIS or geometry evidence. The focused
+`libdxfrw_dwg_local_roundtrip` CTest passes, and no drawing fixture was added.
+This is a structural transport check only and does not promote any external
+item or semantic ACIS/ACDS support claim.
+
 **Native ACIS witness generator and FreeCAD scope recheck (2026-09-27; S2.3.9.4.14):**
 an exact-name search found no public DWG paired with source-native solid
 dimensions: Autodesk's public AutoCAD sample catalog contains large real-world
@@ -44,9 +53,10 @@ No claims are promoted and no drawing fixture is added.
 no public download found in this pass supplies both an AutoCAD-authored AC1027
 `3DSOLID` and source-recorded extents/mass properties. The public
 [LibreDWG issue #1411](https://github.com/LibreDWG/libredwg/issues/1411)
-does, however, publish a concise locally reproducible AC1027 SAB producer
-recipe; it confirms a sample can be created from scratch without acquiring a
-customer drawing, but it is neither AutoCAD provenance nor a dimension oracle.
+does, however, publish a concise locally reproducible AC1032 DXF / SAB producer
+recipe (using ezdxf); it creates a DXF, not a DWG, and confirms a sample can
+be created from scratch without acquiring a customer drawing, but it is
+neither AutoCAD provenance nor a dimension oracle.
 The official [Autodesk sample catalog](https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/6XGQklp3ZcBFqljLPjrnQ9.html)
 offers genuine AutoCAD 2010+ drawings, but publishes no modeler extents/mass
 manifest. The public [AutoCAD 2016 sample corpus](https://github.com/nextgis/dwg_samples)
@@ -5354,7 +5364,7 @@ degenerate, other-knot, other-scenario, target-authored, or other-version
 splines.
 
 Current implementation-item ledger (update in every corresponding slice
-commit; 103/117 committed, 13 blocked, 0 verified, 1 in progress, and 0 ready):
+commit; 104/118 committed, 13 blocked, 0 verified, 1 in progress, and 0 ready):
 
 The first hosted run exposed a stale frozen CTest inventory (40 names versus
 49 registered by the clean workflow profile). After regenerating the contract,
