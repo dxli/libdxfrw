@@ -6202,9 +6202,10 @@ bool runDxfAcShExtrusionProjectionCapture(
         && projection.m_pathEntityTransform == pathTransform
         && projection.m_alignOption == 0
         && projection.m_miterOption == 2
-        && projection.m_hasAlignStart && projection.m_bank
-        && !projection.m_checkIntersections && !projection.m_flag294
-        && projection.m_flag295 && !projection.m_flag296
+        && projection.m_isSolid && projection.m_hasAlignStart
+        && !projection.m_bank && !projection.m_basePointSet
+        && projection.m_sweepEntityTransformComputed
+        && !projection.m_pathEntityTransformComputed
         && projection.m_point.x == 3.5 && projection.m_point.y == -2.0
         && projection.m_point.z == 9.0;
 }

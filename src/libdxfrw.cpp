@@ -211,12 +211,12 @@ bool captureAcShExtrusionDxfProjection(
             }
             const bool value = group.i_val() != 0;
             switch (flagIndex) {
-            case 0: parsed.m_hasAlignStart = value; break;
-            case 1: parsed.m_bank = value; break;
-            case 2: parsed.m_checkIntersections = value; break;
-            case 3: parsed.m_flag294 = value; break;
-            case 4: parsed.m_flag295 = value; break;
-            case 5: parsed.m_flag296 = value; break;
+            case 0: parsed.m_isSolid = value; break;
+            case 1: parsed.m_hasAlignStart = value; break;
+            case 2: parsed.m_bank = value; break;
+            case 3: parsed.m_basePointSet = value; break;
+            case 4: parsed.m_sweepEntityTransformComputed = value; break;
+            case 5: parsed.m_pathEntityTransformComputed = value; break;
             default: return false;
             }
             ++flagCounts[flagIndex];

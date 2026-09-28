@@ -5766,12 +5766,12 @@ public:
     std::array<double, 16> m_pathEntityTransform{};
     std::int32_t m_alignOption = 0;
     std::int32_t m_miterOption = 0;
+    bool m_isSolid = false;
     bool m_hasAlignStart = false;
     bool m_bank = false;
-    bool m_checkIntersections = false;
-    bool m_flag294 = false;
-    bool m_flag295 = false;
-    bool m_flag296 = false;
+    bool m_basePointSet = false;
+    bool m_sweepEntityTransformComputed = false;
+    bool m_pathEntityTransformComputed = false;
     DRW_Coord m_point;
     bool m_transformAndOptionFieldsComplete = false;
   };
