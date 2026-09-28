@@ -6124,11 +6124,16 @@ bool runAcdsHistoryCallbackCapture() {
 }
 
 bool runDxfAcShExtrusionProjectionCapture(
-        const std::filesystem::path& directory, bool duplicateTransformValue) {
+        const std::filesystem::path& directory, bool duplicateTransformValue,
+        std::int32_t alignOption = 0, std::int32_t miterOption = 2) {
     const std::filesystem::path output = directory /
         (duplicateTransformValue
              ? "libdxfrw-acsh-extrusion-projection-malformed.dxf"
-             : "libdxfrw-acsh-extrusion-projection.dxf");
+             : miterOption != 2
+                 ? "libdxfrw-acsh-extrusion-projection-wide-miter.dxf"
+                 : alignOption != 0
+                     ? "libdxfrw-acsh-extrusion-projection-invalid-align.dxf"
+                     : "libdxfrw-acsh-extrusion-projection.dxf");
     std::error_code ec;
     std::filesystem::remove(output, ec);
     std::ofstream stream(output);
@@ -6151,8 +6156,8 @@ bool runDxfAcShExtrusionProjectionCapture(
         stream << "46\n17.0\n";
     for (double value : pathTransform)
         stream << "47\n" << value << '\n';
-    stream << "70\n0\n71\n2\n"
-              "290\n1\n292\n1\n293\n0\n294\n0\n295\n1\n296\n0\n"
+    stream << "70\n" << alignOption << "\n71\n" << miterOption << '\n'
+           << "290\n1\n292\n1\n293\n0\n294\n0\n295\n1\n296\n0\n"
               "11\n3.5\n21\n-2.0\n31\n9.0\n"
               "100\nAcDbShExtrusion\n0\nENDSEC\n0\nEOF\n";
     stream.close();
@@ -6186,11 +6191,25 @@ bool runDxfAcShExtrusionProjectionCapture(
                       [](const DRW_Variant& value) {
                           return value.code() == 46;
                       }));
+    const bool rawOptionsPreserved =
+        std::any_of(raw.groups.begin(), raw.groups.end(),
+                    [alignOption](const DRW_Variant& value) {
+                        return value.code() == 70
+                            && value.type() == DRW_Variant::INTEGER
+                            && value.i_val() == alignOption;
+                    })
+        && std::any_of(raw.groups.begin(), raw.groups.end(),
+                       [miterOption](const DRW_Variant& value) {
+                           return value.code() == 71
+                               && value.type() == DRW_Variant::INTEGER
+                               && value.i_val() == miterOption;
+                       });
     if (object.m_recordName != "ACSH_EXTRUSION_CLASS"
-        || transformCount != 16u + (duplicateTransformValue ? 1u : 0u)) {
+        || transformCount != 16u + (duplicateTransformValue ? 1u : 0u)
+        || !rawOptionsPreserved) {
         return false;
     }
-    if (duplicateTransformValue) {
+    if (duplicateTransformValue || alignOption < 0 || alignOption > 3) {
         return !projection.m_transformAndOptionFieldsComplete
             && std::all_of(projection.m_sweepEntityTransform.begin(),
                            projection.m_sweepEntityTransform.end(),
@@ -6200,8 +6219,8 @@ bool runDxfAcShExtrusionProjectionCapture(
     return projection.m_transformAndOptionFieldsComplete
         && projection.m_sweepEntityTransform == sweepTransform
         && projection.m_pathEntityTransform == pathTransform
-        && projection.m_alignOption == 0
-        && projection.m_miterOption == 2
+        && projection.m_alignOption == alignOption
+        && projection.m_miterOption == miterOption
         && projection.m_isSolid && projection.m_hasAlignStart
         && !projection.m_bank && !projection.m_basePointSet
         && projection.m_sweepEntityTransformComputed
@@ -12197,6 +12216,12 @@ int main(int argc, char** argv) {
            failures);
     expect(runDxfAcShExtrusionProjectionCapture(directory, true),
            "local DXF ACSH extrusion projection declines malformed transform count",
+           failures);
+    expect(runDxfAcShExtrusionProjectionCapture(directory, false, 0, 128),
+           "local DXF ACSH extrusion projection accepts int16 miter options",
+           failures);
+    expect(runDxfAcShExtrusionProjectionCapture(directory, false, 4, 2),
+           "local DXF ACSH extrusion projection rejects unknown alignment options",
            failures);
     expect(runDxfTypedAcdsBoxRoundTrip(false, directory, keepOutputs),
            "local ASCII typed ACDS BOX closure round-trip", failures);

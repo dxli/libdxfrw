@@ -182,9 +182,13 @@ bool captureAcShExtrusionDxfProjection(
 
         if (group.code() == 70 || group.code() == 71) {
             const std::size_t optionIndex = group.code() == 70 ? 0u : 1u;
+            // DXF group codes 60-79 are int16; do not apply the DWG RC width.
             if (group.type() != DRW_Variant::INTEGER
                 || optionCounts[optionIndex] != 0u
-                || group.i_val() < -128 || group.i_val() > 127) {
+                || group.i_val() < std::numeric_limits<std::int16_t>::min()
+                || group.i_val() > std::numeric_limits<std::int16_t>::max()
+                || (group.code() == 70
+                    && (group.i_val() < 0 || group.i_val() > 3))) {
                 return false;
             }
             (optionIndex == 0u ? parsed.m_alignOption : parsed.m_miterOption) =
