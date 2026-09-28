@@ -1,7 +1,7 @@
 # DWG/DXF 3D Support Review and Fix Plan
 
 Status: implementation in progress; DWG reader edits remain evidence-gated.
-Review date: 2026-09-27.
+Review date: 2026-09-28.
 
 **Local DXF transport regression (2026-09-28; S2.3.9.4.24):** added a
 runtime-generated AC1027 ASCII and binary REGION-without-history
@@ -11,6 +11,20 @@ marker is deliberately not valid-ACIS or geometry evidence. The focused
 `libdxfrw_dwg_local_roundtrip` CTest passes, and no drawing fixture was added.
 This is a structural transport check only and does not promote any external
 item or semantic ACIS/ACDS support claim.
+
+**Authenticated upstream corpus audit (2026-09-28):** the connected GitHub
+account can read LibreCAD master at `3ddea5b53f7d8698663eb06b3dbe8b1b94cfc25b`.
+Its [fixture manifest](https://github.com/LibreCAD/LibreCAD/blob/3ddea5b53f7d8698663eb06b3dbe8b1b94cfc25b/tests/fixtures/fixture_manifest.json)
+records exact hashes for `dwgreader21_230.dwg`, `Cover.dwg`, `simple.dwg`, and
+`Extruder2.dwg`, but marks them `test-corpus-local`, `local-only`, and
+`defaultEnabled: false`; it has no entries for `Pool_Detail.dwg` or
+`children-room-decoration.dwg`. The matching
+[corpus provenance ledger](https://github.com/LibreCAD/LibreCAD/blob/3ddea5b53f7d8698663eb06b3dbe8b1b94cfc25b/docs/conformance/corpus_provenance.json)
+identifies `Extruder2.dwg` as genuine AutoCAD and `Cover.dwg` as ODA/Teigha,
+while the other four remain producer-unknown. These are metadata records,
+not repository DWG blobs, redistribution permission, or source-authored
+semantic geometry manifests. J256/J260/J268/J284/J293/J295 therefore remain
+`DEFERRED_EXTERNAL`; this audit cannot promote a support claim.
 
 **Native ACIS witness generator and FreeCAD scope recheck (2026-09-27; S2.3.9.4.14):**
 an exact-name search found no public DWG paired with source-native solid
