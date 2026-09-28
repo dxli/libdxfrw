@@ -5368,7 +5368,11 @@ recomputed for the combined contract/test change and the status overlay records
 `cb98585f106ccaf7b44ce63c05bec85c05f0f521070da0521029ba1f81c6ad47`, with
 claims unchanged. A hosted rerun is required to verify Windows and emit/review
 the platform receipts; these contract/test results do not qualify FreeCAD
-support on any new platform.
+support on any new platform. The corrected hosted run 36388534899 on commit
+`94f3f349f1bf5e4419cbe1f27bf2e94e5477b0a8` subsequently passed Linux, macOS,
+and Windows: all three focused suites passed 7/7 and each immutable receipt
+passed sealing, upload, and post-upload verification. No FreeCAD executable
+was launched, and no platform support claim changed.
 
 | Item | State | Evidence / next action |
 | --- | --- | --- |
@@ -5462,11 +5466,13 @@ support on any new platform.
 | S8.9.15 | IMPLEMENTED_AWAITING_NATIVE_RUN | Added default-OFF `LIBDXFRW_ENABLE_FREECAD_TRACKED_AC1027_LINE_CONTROL`, which drives the existing isolated FreeCADCmd open/insert harness from the already-tracked LibreCAD `ordinary_enc_AC1027.dwg` (fixture-registry SHA-256 `a0ebf245e570bf0dc337c696330b7ea883feaebb7c4e781de8d77ac723815f83`, three expected LINE bounds). The harness verifies the source hash and AC1027 magic, installed-vs-build converter identity, pinned FreeCAD revision `145529fe741292ff0b3977a01195bf0247425794`, exact converter argv/output handoff, output content and FreeCAD bounds; test-owned copies remain in temp and use a Unicode path with spaces. Added manual-only `.github/workflows/freecad-platform-qualification.yml` for native Ubuntu 24.04 x86_64 and Windows 2022 x64. It downloads FreeCAD 1.1.3 artifacts only on dispatch and verifies pinned SHA-256 values before execution; logs are uploaded as artifacts. No new DWG/DXF fixture or automatic/default CI load is introduced. CMake registers both tests. On FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, installed converter SHA-256 `5f083c6af355dde6e92422968a49f44574f24f505915b325a979879326d2180a` passed both `open` and `insert`; each used the Unicode/spaced temp input, exact argv and handoff, created three LINE features at the expected bounds, and reported no unsupported features. The sandboxed attempt failed before app code because Qt cannot see ARM `neon`; both checks passed outside the sandbox. Fast `dwg2dxf_freecad_cli_compat` passes 1/1, the CMake config lists both tests, macro syntax and `git diff --check` pass, and actionlint is clean. GitHub-hosted Linux/Windows jobs have not yet been dispatched; S8.9.5 remains open until both native jobs pass and their receipts are reviewed. |
 | S8.15.3.1 | COMMITTED | External AutoCAD-authored `nextgis/dwg_samples/point3d_2013.dwg` (AutoCAD 2016, `_POINT 50,50,50`, AC1027; SHA-256 `839297daa100c318d5afbfa128145d2c4782300650c86b2ab58b34cf6fe1aba4`) agrees with both its paired source DXF and LibreDWG 0.14 direct export: exactly one POINT at `(50,50,50)`. The default-OFF `LIBDXFRW_ENABLE_FREECAD_AUTOCAD_POINT3D_CONTROL` path/hash-pinned opt-in test copies the caller-supplied sample only under unique system temp, verifies installed/build converter identity, exact FreeCAD argv, AC1027 converter output and readback, isolated user config and explicit macro PASS marker. FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2, resolves the installed converter on PATH and creates one vertex-only `Part::Feature` at `(50,50,50)`, with zero edges/faces and no unsupported POINT. The opt-in `dwg2dxf_freecad_autocad_ac1027_point3d` passes 1/1 outside the sandbox; a sandboxed run aborts in Qt before app code because host `neon` is hidden. No external DWG/DXF fixture is tracked or staged. This is a single target-authored entity/version/pinned-runtime witness only. |
 
-Qualification follow-up supersedes the S8.9.15 snapshot above: the clean
-49-test inventory now matches all hosted configurations. Linux and macOS
-focused suites pass 7/7; Windows' CRLF-sensitive assertion was fixed and its
-local focused CTest passes 1/1. The new run must still produce sealed receipts
-before native deployment qualification can be reviewed.
+General PR build-matrix follow-up only; this does not dispatch the separate
+FreeCAD platform workflow referenced by S8.9.15 or change S8.9.5. The corrected
+49-test inventory matches all hosted configurations, and Linux/macOS/Windows
+each pass the 7-test focused suite with a sealed, verified receipt. Windows
+now also exercises the CRLF-normalized malformed-SURFACE assertion. Native
+FreeCAD executable discovery/import qualification on Linux and Windows remains
+external and unclaimed.
 
 - Before implementation, convert the work packages into dependency-closed
   items with `READY`, `IN_PROGRESS`, `BLOCKED`, `VERIFIED`, and `COMMITTED`
