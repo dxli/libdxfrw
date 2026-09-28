@@ -3103,9 +3103,11 @@ void testDxfEllipseCoordinatesAreWcs(TestContext& t) {
 void testDxfArcCircleRequireExtrusionDirection(TestContext& t) {
     const std::string sectionStart = "0\nSECTION\n2\nENTITIES\n0\n";
     const std::string sectionEnd = "0\nENDSEC\n0\nEOF\n";
-    const auto entityRecords = [&](bool arc, const std::string& normal) {
+    const auto entityRecords = [&](bool arc, const std::string& normal,
+                                   const char* radius = "2.5") {
         std::string records = sectionStart + (arc ? "ARC\n" : "CIRCLE\n")
-            + "5\n705\n8\n0\n10\n2\n20\n3\n30\n4\n40\n2.5\n";
+            + "5\n705\n8\n0\n10\n2\n20\n3\n30\n4\n40\n"
+            + radius + "\n";
         if (arc)
             records += "50\n15\n51\n75\n";
         records += normal + sectionEnd;
@@ -3125,7 +3127,21 @@ void testDxfArcCircleRequireExtrusionDirection(TestContext& t) {
                 t.expect(!read && capture.arcCount == 0u
                              && capture.circleCount == 0u,
                          arc ? "DXF ARC rejects an invalid extrusion direction before callback"
-                             : "DXF CIRCLE rejects an invalid extrusion direction before callback");
+                         : "DXF CIRCLE rejects an invalid extrusion direction before callback");
+            }
+
+            for (const auto& invalidRadius : {
+                     std::pair<const char*, const char*>{"0", "zero"},
+                     {"-2.5", "negative"}, {"nan", "non-finite"}}) {
+                FuzzInterface capture;
+                dxfRW reader("");
+                std::string malformed =
+                    entityRecords(arc, "", invalidRadius.first);
+                const bool read = reader.readAscii(&capture, applyExt, malformed);
+                t.expect(!read && capture.arcCount == 0u
+                             && capture.circleCount == 0u,
+                         arc ? "DXF ARC rejects a nonpositive or non-finite radius before callback"
+                             : "DXF CIRCLE rejects a nonpositive or non-finite radius before callback");
             }
         }
 
@@ -3144,6 +3160,7 @@ void testDxfArcCircleRequireExtrusionDirection(TestContext& t) {
                     && capture.lastArc.basePoint.x == 2.0
                     && capture.lastArc.basePoint.y == 3.0
                     && capture.lastArc.basePoint.z == 4.0
+                    && capture.lastArc.radious == 2.5
                     && capture.lastArc.staangle == 15.0 / ARAD
                     && capture.lastArc.endangle == 75.0 / ARAD;
             } else {
@@ -3154,7 +3171,8 @@ void testDxfArcCircleRequireExtrusionDirection(TestContext& t) {
                     && capture.lastCircle.extPoint.z == 1.0
                     && capture.lastCircle.basePoint.x == 2.0
                     && capture.lastCircle.basePoint.y == 3.0
-                    && capture.lastCircle.basePoint.z == 4.0;
+                    && capture.lastCircle.basePoint.z == 4.0
+                    && capture.lastCircle.radious == 2.5;
             }
             t.expect(read && fieldsMatch,
                      arc ? "DXF ARC accepts omitted default extrusion"
@@ -3240,6 +3258,51 @@ void testDxfArcCircleRequireExtrusionDirection(TestContext& t) {
             t.expect(writerRejectsInvalidNormal(binary, true, nonfinite),
                      binary ? "binary DXF writer rejects invalid-normal ARC atomically"
                             : "ASCII DXF writer rejects invalid-normal ARC atomically");
+        }
+    }
+
+    const auto writerRejectsInvalidRadius = [](DRW::Version version,
+                                                bool binary, bool arc,
+                                                double radius) {
+        std::ostringstream output(std::ios::binary);
+        dxfRW owner("");
+        owner.version = version;
+        owner.binFile = binary;
+        if (binary)
+            owner.writer = std::make_unique<dxfWriterBinary>(&output);
+        else
+            owner.writer = std::make_unique<dxfWriterAscii>(&output);
+
+        DRW_Circle circle;
+        circle.basePoint = DRW_Coord(2.0, 3.0, 4.0);
+        circle.radious = radius;
+        if (!arc)
+            return !owner.writeCircle(&circle) && output.str().empty();
+
+        DRW_Arc value;
+        value.basePoint = circle.basePoint;
+        value.radious = circle.radious;
+        value.staangle = 15.0 / ARAD;
+        value.endangle = 75.0 / ARAD;
+        return !owner.writeArc(&value) && output.str().empty();
+    };
+    const std::vector<double> invalidRadii = {
+        0.0, -2.5, std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::infinity()};
+    for (DRW::Version version : {DRW::AC1015, DRW::AC1009}) {
+        for (bool binary : {false, true}) {
+            if (version == DRW::AC1009 && binary)
+                continue;
+            for (double radius : invalidRadii) {
+                t.expect(writerRejectsInvalidRadius(
+                             version, binary, false, radius),
+                         binary ? "binary DXF writer rejects invalid CIRCLE radius before record output"
+                                : "ASCII DXF writer rejects invalid CIRCLE radius before record output");
+                t.expect(writerRejectsInvalidRadius(
+                             version, binary, true, radius),
+                         binary ? "binary DXF writer rejects invalid ARC radius before record output"
+                                : "ASCII DXF writer rejects invalid ARC radius before record output");
+            }
         }
     }
 }

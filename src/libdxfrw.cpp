@@ -330,6 +330,19 @@ bool isValidDxfExtrusionDirection(const DRW_Coord& direction) {
     return std::isfinite(magnitude) && magnitude > 0.0;
 }
 
+bool isValidDxfCircleGeometry(const DRW_Circle& circle) {
+    return isFiniteDxfCoord(circle.basePoint)
+        && std::isfinite(circle.thickness)
+        && std::isfinite(circle.radious) && circle.radious > 0.0
+        && isValidDxfExtrusionDirection(circle.extPoint);
+}
+
+bool isValidDxfArcGeometry(const DRW_Arc& arc) {
+    return isValidDxfCircleGeometry(arc)
+        && std::isfinite(arc.staangle)
+        && std::isfinite(arc.endangle);
+}
+
 bool isValidDxfEllipseGeometry(const DRW_Ellipse& ellipse) {
     if (!isFiniteDxfCoord(ellipse.basePoint)
         || !isFiniteDxfCoord(ellipse.secPoint)
@@ -436,13 +449,11 @@ bool isValidDxfEntityFields(const DRW_Entity& entity) {
             return false;
     }
     if (const auto *circle = dynamic_cast<const DRW_Circle*>(&entity)) {
-        if (!std::isfinite(circle->radious)
-            || !isValidDxfExtrusionDirection(circle->extPoint))
+        if (!isValidDxfCircleGeometry(*circle))
             return false;
     }
     if (const auto *arc = dynamic_cast<const DRW_Arc*>(&entity)) {
-        if (!std::isfinite(arc->staangle)
-            || !std::isfinite(arc->endangle))
+        if (!isValidDxfArcGeometry(*arc))
             return false;
     }
     if (const auto *ellipse = dynamic_cast<const DRW_Ellipse*>(&entity)) {
@@ -11009,7 +11020,7 @@ bool dxfRW::processCircle() {
             if (!acceptEntityCallbackBoundary())
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!hasCenterX || !hasCenterY || !hasRadius
-                || !isValidDxfExtrusionDirection(circle.extPoint))
+                || !isValidDxfCircleGeometry(circle))
                 return setError(DRW::BAD_CODE_PARSED);
             if (applyExt)
                 circle.applyExtrusion();
@@ -11048,7 +11059,7 @@ bool dxfRW::processArc() {
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!hasCenterX || !hasCenterY || !hasRadius
                 || !hasStartAngle || !hasEndAngle
-                || !isValidDxfExtrusionDirection(arc.extPoint))
+                || !isValidDxfArcGeometry(arc))
                 return setError(DRW::BAD_CODE_PARSED);
             if (applyExt)
                 arc.applyExtrusion();
