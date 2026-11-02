@@ -48,43 +48,69 @@
     "function": "check_default_output_versions and check_default_dwg_output_versions",
     "selector": "--options-only (DXF source matrix); --batch-only / --fast-only (DWG source matrix)",
     "existingCtest": "dwg2dxf_cli_contract",
-    "runtimeAuthoredInput": "The minimal SOURCE DXF is written in a temporary directory with only $ACADVER varied. AC1021 and AC1027 DWGs are written by the local test writer at runtime; no binary fixture is committed.",
+    "runtimeAuthoredInput": "The minimal SOURCE DXF is written in a temporary directory with only $ACADVER varied. AC1015/1018/1021/1024/1027/1032 DWG sources are written by the local test writer at runtime; no DWG/DXF fixture is committed.",
     "route": "dwg2dxf <source.dxf> -o <output.dxf> [-b]",
     "assertions": [
-      "All nine source revision headers select the expected default target, including the AC1012 compatibility mapping to AC1014.",
-      "Each target is emitted as ASCII and Binary DXF with the exact $ACADVER value.",
-      "Binary DXF is checked with the R12 one-byte group-code framing for AC1009 and two-byte framing for later revisions.",
-      "All inputs remain byte-identical and each invocation exits successfully.",
-      "Locally authored AC1021 and AC1027 DWG sources select the same default DXF target through FreeCAD -o in ASCII and Binary.",
-      "Binary outputs from both DWG profiles are reopened through FreeCAD -o and read back as ASCII at the same target revision."
+      "All nine source revision headers select the expected FreeCAD -o DXF default, including the AC1012 compatibility mapping to AC1014.",
+      "Each DXF source default is emitted as ASCII and Binary DXF with the exact $ACADVER value.",
+      "Binary DXF is checked with R12 one-byte group-code framing for AC1009 and two-byte framing for later revisions.",
+      "Locally authored AC1015, AC1021, AC1024, AC1027 and AC1032 DWGs succeed through FreeCAD -o at the source revision in ASCII and Binary; binary outputs read back at the same revision.",
+      "AC1018 output is refused in ASCII/Binary at default AC1018 and explicit AC1024 because the completed read contains two opaque callbacks and strict output qualification is 0/2; a pre-existing destination sentinel and the source bytes remain unchanged."
     ],
-    "controls": 24,
+    "controls": 37,
     "fixtureFilesAdded": 0
   },
   "validation": {
     "build": "PASS: cmake --build build-gcc --target dwg2dxf libdxfrw_dwg_local_roundtrip -j2",
-    "test": "PASS: dwg2dxf_cli_contract CTest 1/1 (8.96s) after rebuilding both current executables; options-only 96 controls; batch-only 33 bounded controls including four default DWG outputs and two binary readbacks.",
+    "test": "PASS: ctest --test-dir build-gcc -R '^dwg2dxf_cli_contract$' --output-on-failure (1/1, 11.07 s); python3 -B tests/dwg2dxf_cli_contract_tests.py --converter build-gcc/dwg2dxf/dwg2dxf --options-only (96 controls)",
     "diffCheck": "PASS: git diff --check",
     "sha256": {
-      "tests/dwg2dxf_cli_contract_tests.py": "66effb668a2f99669e3a6777033962b168cbfd05666e7c5fa7d91321a33cc201",
+      "tests/dwg2dxf_cli_contract_tests.py": "3025741a8ec4d191471c83aa56198c7efcc051c7098b6538df306ae5f2c90048",
       "build-gcc/dwg2dxf/dwg2dxf": "04a96d39d968708006679eb5861ffc3b2b488bb3dd9d8d76eca74b235c5cfaa0",
-      "build-gcc/libdxfrw_dwg_local_roundtrip": "8774bc5b5d44d8ff95018bdd72533b932cf9bc5a88e4db00e47576c441b9b2a0"
+      "build-gcc/libdxfrw_dwg_local_roundtrip": "54a9da4255845f43bd40740c8cedd5da9b1021a37a9b43d586717ae3abeedf42",
+      "tests/dwg_local_roundtrip_tests.cpp": "caa5535d5822d43934cdc72ce6b04ce83685bf6632c2e0ed56405999f9d032a1"
     }
   },
   "limits": [
-    "This receipt covers source-DXF defaults for all supported revision headers and generated AC1021/AC1027 DWG defaults through FreeCAD -o; other DWG-derived versions, explicit-version semantics outside existing controls, and native CAD acceptance remain separately scoped.",
+    "This receipt covers all supported source-DXF header defaults plus the six DWG writer versions. The AC1018 generated profile remains unqualified and refused; AC1012/AC1014 DWG source inputs, other routes, and native CAD acceptance remain separate.",
     "This is CLI contract evidence, not a DWG/DXF semantic support claim."
   ],
   "dwgProfiles": [
     {
+      "source": "AC1015",
+      "origin": "libdxfrw_dwg_local_roundtrip --generate-cli-batch-source (locally authored at runtime)",
+      "expectedTarget": "AC1015",
+      "result": "PASS: ASCII/Binary default output; Binary readback as ASCII"
+    },
+    {
       "source": "AC1021",
       "origin": "libdxfrw_dwg_local_roundtrip --generate-cli-batch-source (locally authored at runtime)",
-      "expectedTarget": "AC1021"
+      "expectedTarget": "AC1021",
+      "result": "PASS: ASCII/Binary default output; Binary readback as ASCII"
+    },
+    {
+      "source": "AC1024",
+      "origin": "libdxfrw_dwg_local_roundtrip --generate-cli-batch-source (locally authored at runtime)",
+      "expectedTarget": "AC1024",
+      "result": "PASS: ASCII/Binary default output; Binary readback as ASCII"
     },
     {
       "source": "AC1027",
-      "origin": "libdxfrw_dwg_local_roundtrip --generate-cli-batch-source ... AC1027 (locally authored at runtime)",
-      "expectedTarget": "AC1027"
+      "origin": "libdxfrw_dwg_local_roundtrip --generate-cli-batch-source (locally authored at runtime)",
+      "expectedTarget": "AC1027",
+      "result": "PASS: ASCII/Binary default output; Binary readback as ASCII"
+    },
+    {
+      "source": "AC1032",
+      "origin": "libdxfrw_dwg_local_roundtrip --generate-cli-batch-source (locally authored at runtime)",
+      "expectedTarget": "AC1032",
+      "result": "PASS: ASCII/Binary default output; Binary readback as ASCII"
+    },
+    {
+      "source": "AC1018",
+      "origin": "libdxfrw_dwg_local_roundtrip --generate-cli-batch-source (locally authored at runtime)",
+      "expectedTarget": "AC1018",
+      "result": "FAIL_CLOSED: default AC1018 and explicit AC1024 output refuse 2 opaque callback frames (qualified=0/2); sentinel and source preserved"
     }
   ]
 }

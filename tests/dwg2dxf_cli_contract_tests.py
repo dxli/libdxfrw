@@ -130,19 +130,49 @@ def check_default_output_versions(converter, root, invoke):
 def check_default_dwg_output_versions(converter, root, writer,
                                       ac1021_source):
     """Pin DWG-derived FreeCAD -o defaults for the generated source profiles."""
-    ac1027_source = root / "default-version-source-AC1027.dwg"
-    generated = run_bounded(
-        [str(writer), "--generate-cli-batch-source", str(ac1027_source),
-         "AC1027"], 10, 131072, cwd=root)
-    if generated.returncode != 0 or not ac1027_source.is_file():
-        raise AssertionError(f"could not author AC1027 default-version source: {generated!r}")
+    sources = [(b"AC1021", ac1021_source)]
+    for revision in (b"AC1015", b"AC1018", b"AC1024", b"AC1027", b"AC1032"):
+        source = root / f"default-version-source-{revision.decode()}.dwg"
+        generated = run_bounded(
+            [str(writer), "--generate-cli-batch-source", str(source),
+             revision.decode()], 10, 131072, cwd=root)
+        if generated.returncode != 0 or not source.is_file():
+            raise AssertionError(
+                f"could not author {revision.decode()} default-version source: "
+                f"{generated!r}")
+        sources.append((revision, source))
 
     checked = 0
-    for revision, source in ((b"AC1021", ac1021_source),
-                             (b"AC1027", ac1027_source)):
+    for revision, source in sources:
         original = source.read_bytes()
         if original[:6] != revision:
             raise AssertionError(f"generated DWG source has wrong revision: {source}")
+        if revision == b"AC1018":
+            for target_args in ((), ("-v2010",)):
+                for binary in (False, True):
+                    output = root / (
+                        f"default-version-dwg-refusal-{revision.decode()}-"
+                        f"{'default' if not target_args else 'AC1024'}-"
+                        f"{'binary' if binary else 'ascii'}.dxf")
+                    output.write_bytes(SENTINEL)
+                    arguments = [str(converter), str(source), "-o", str(output),
+                                 *target_args, "-y"]
+                    if binary:
+                        arguments.append("-b")
+                    result = run_bounded(
+                        arguments, 10, 2 * 1024 * 1024, cwd=root)
+                    required = (
+                        b"strict-complete conversion requires output qualification "
+                        b"for every opaque DWG callback (qualified=0/2)")
+                    if (result.returncode != 1 or output.read_bytes() != SENTINEL
+                            or source.read_bytes() != original
+                            or required not in result.stderr):
+                        raise AssertionError(
+                            f"AC1018 unqualified output was not refused atomically "
+                            f"for target {target_args!r}/{binary}: {result!r}")
+                    checked += 1
+            continue
+
         for binary in (False, True):
             output = root / (
                 f"default-version-dwg-output-{revision.decode()}-"
