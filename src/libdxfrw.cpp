@@ -5083,10 +5083,8 @@ bool dxfRW::validateHatchPayload(const DRW_Hatch *ent) const {
         || !isFiniteDxfCoord(ent->extPoint)
         || ent->solid < 0 || ent->solid > 1
         || ent->associative < 0 || ent->associative > 1
-        || ent->hstyle < 0
-        || ent->hstyle > std::numeric_limits<std::uint16_t>::max()
-        || ent->hpattern < 0
-        || ent->hpattern > std::numeric_limits<std::uint16_t>::max()
+        || ent->hstyle < 0 || ent->hstyle > 2
+        || ent->hpattern < 0 || ent->hpattern > 2
         || ent->doubleflag < 0 || ent->doubleflag > 1
         || !std::isfinite(ent->angle) || !std::isfinite(ent->scale)
         || !std::isfinite(ent->pixelSize)

@@ -18238,14 +18238,29 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             return false;
         return DRW_Point::parseCode(code, reader);
     case 75:
-        hstyle = reader->getInt32();
+        {
+            const int value = reader->getInt32();
+            if (value < 0 || value > 2)
+                return false;
+            hstyle = value;
+        }
         break;
     case 76:
-        hpattern = reader->getInt32();
+        {
+            const int value = reader->getInt32();
+            if (value < 0 || value > 2)
+                return false;
+            hpattern = value;
+        }
         m_dxfPatternTypeSeen = true;
         break;
     case 77:
-        doubleflag = reader->getInt32();
+        {
+            const int value = reader->getInt32();
+            if (value != 0 && value != 1)
+                return false;
+            doubleflag = value;
+        }
         break;
     case 78:
         if (m_dxfPatternLineCountSeen)

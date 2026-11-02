@@ -872,6 +872,77 @@ void testHatchBooleanDxfDomain(TestContext& t) {
              "MPOLYGON retains its distinct group-70 version and group-71 fill meanings");
 }
 
+void testHatchPatternDxfDomains(TestContext& t) {
+    const auto parseValue = [](ExposedHatch& hatch, int code, int value,
+                               bool binary) {
+        std::ostringstream encoded(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&encoded))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&encoded));
+        writer->setVersion("AC1027", true);
+        if (!writer->writeInt16(code, value) || writer->hasWriteError())
+            return false;
+        writer.reset();
+        std::istringstream input(encoded.str(),
+                                 std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        int parsedCode = 0;
+        return reader->readRec(&parsedCode) && parsedCode == code
+            && hatch.parseCode(parsedCode, reader);
+    };
+    const auto fieldValue = [](const ExposedHatch& hatch, int code) {
+        return code == 75 ? hatch.hstyle
+            : code == 76 ? hatch.hpattern : hatch.doubleflag;
+    };
+    for (const bool binary : {false, true}) {
+        for (const int code : {75, 76, 77}) {
+            const int maximum = code == 77 ? 1 : 2;
+            for (int value = 0; value <= maximum; ++value) {
+                ExposedHatch hatch;
+                t.expect(parseValue(hatch, code, value, binary)
+                             && fieldValue(hatch, code) == value,
+                         "HATCH accepts documented pattern selector values in ASCII/Binary DXF");
+            }
+            for (const int value : {-1, maximum + 1}) {
+                ExposedHatch hatch;
+                const int prior = fieldValue(hatch, code);
+                t.expect(!parseValue(hatch, code, value, binary)
+                             && fieldValue(hatch, code) == prior,
+                         "HATCH rejects out-of-domain pattern selectors without mutation");
+            }
+        }
+
+        const auto writerAccepts = [binary](int invalidCode) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            dxfRW codec(nullptr);
+            codec.version = DRW::AC1027;
+            codec.binFile = binary;
+            codec.writer = binary
+                ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+                : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+            codec.writer->setVersion("AC1027", true);
+            DRW_Hatch hatch;
+            hatch.handle = 0x711u;
+            if (invalidCode == 75)
+                hatch.hstyle = 3;
+            else if (invalidCode == 76)
+                hatch.hpattern = 3;
+            else
+                hatch.doubleflag = 2;
+            return !codec.writeHatch(&hatch) && output.str().empty();
+        };
+        t.expect(writerAccepts(75),
+                 "HATCH writer refuses an out-of-domain style before emitting a record");
+        t.expect(writerAccepts(76),
+                 "HATCH writer refuses an out-of-domain pattern type before emitting a record");
+        t.expect(writerAccepts(77),
+                 "HATCH writer refuses an out-of-domain double flag before emitting a record");
+    }
+}
+
 void testLeaderAdvisoryCountState(TestContext& t) {
     ExposedLeader source;
     t.expect(parseDxfRecords(source, "76\n99\n10\n1\n20\n2\n30\n3\n10\n4\n20\n6\n30\n0\n")
@@ -23618,6 +23689,18 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::cout << "HATCH Boolean DXF domain: PASS\n";
+        return 0;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--hatch-pattern-dxf-domains") {
+        TestContext focused;
+        testHatchPatternDxfDomains(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " HATCH pattern-domain assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "HATCH pattern DXF domains: PASS\n";
         return 0;
     }
     if (argc == 2
