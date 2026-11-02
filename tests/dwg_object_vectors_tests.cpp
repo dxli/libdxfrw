@@ -119,6 +119,13 @@ public:
     using DRW_PlotSettings::parseDwg;
 };
 
+class DimensionAssociationCodecProbe final
+    : public DRW_DimensionAssociation {
+public:
+    using DRW_DimensionAssociation::encodeDwg;
+    using DRW_DimensionAssociation::parseDwg;
+};
+
 class LayoutEncodeProbe final : public DRW_Layout {
 public:
     using DRW_Layout::encodeDwg;
@@ -11865,6 +11872,222 @@ void testPlotSettingsDwgDecodeRoundTrip(TestContext& t) {
     }
 }
 
+struct DimensionAssociationFrame {
+    std::vector<std::uint8_t> bytes;
+    std::uint32_t handleBits {0};
+};
+
+bool makeDimensionAssociationDetailFrame(DimensionAssociationFrame& frame) {
+    constexpr DRW::Version version = DRW::AC1024;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    dwgBufferW body(&codec), strings(&codec), handles(&codec), object(&codec);
+
+    // Generated direct-codec vector. The class type is a placeholder because
+    // this test starts after the DWG object dispatcher.
+    object.putObjType(version, 1u);
+    dwgHandle ownHandle;
+    ownHandle.ref = 0xA100u;
+    object.putHandle(ownHandle);
+    object.putBitShort(0u); // no EED
+    object.putBitLong(1); // one reactor
+    object.putBit(0u); // null extension dictionary handle follows
+
+    body.putBitLong(0x07); // refs occupy associativity slots 1, 2 and 4
+    body.putBit(1u); // trans-space
+    body.putRawChar8(4u); // rotated dimension type
+
+    struct RefVector {
+        const char* name;
+        std::uint8_t type;
+        std::uint32_t handle;
+        std::int32_t subent;
+        std::int32_t gsMarker;
+        const char* xrefPath;
+        double nearParameter;
+        DRW_Coord point;
+        bool intersection;
+        std::uint32_t intersectionHandle;
+        std::int32_t intersectionSubent;
+        std::int32_t intersectionGsMarker;
+        const char* intersectionPath;
+        bool lastPoint;
+    };
+    const std::array<RefVector, 3> refs{{
+        {"AcDbOsnapPointRef", 1u, 0x40u, 2, 9, nullptr,
+         1.0, {1.25, -2.5, 2.0e50}, false, 0u, 0, 0, nullptr, true},
+        {"AcDbOsnapPointRef", 6u, 0x41u, 3, 10, nullptr,
+         0.04914376136317, {-3.0, 4.5, 6.0}, true, 0x50u, 5, 0,
+         "xref-intersection-6", false},
+        {"AcDbOsnapPointRef", 13u, 0x42u, 4, 12,
+         "xref-main-13", 2.0, {7.0, 8.0, 9.0}, false, 0u, 0, 0,
+         nullptr, true}}};
+
+    for (const RefVector& ref : refs) {
+        strings.putVariableText(version, ref.name);
+        body.putRawChar8(ref.type);
+        body.putBitLong(1); // one main object handle
+        body.putBitLong(ref.subent);
+        body.putBitLong(ref.gsMarker);
+        body.putBitLong(ref.xrefPath != nullptr ? 1 : 0);
+        if (ref.xrefPath != nullptr)
+            strings.putVariableText(version, ref.xrefPath);
+        body.putBitDouble(ref.nearParameter);
+        body.put3BitDouble(ref.point);
+        if (ref.intersection) {
+            body.putBitLong(1); // one intersected object handle
+            body.putBitLong(ref.intersectionSubent);
+            body.putBitLong(ref.intersectionGsMarker);
+            body.putBitLong(ref.intersectionPath != nullptr ? 1 : 0);
+            if (ref.intersectionPath != nullptr)
+                strings.putVariableText(version, ref.intersectionPath);
+        }
+        body.putBit(ref.lastPoint ? 1u : 0u);
+    }
+
+    appendBits(object, body);
+    object.alignToByte();
+    strings.alignToByte();
+    if (!strings.data().empty())
+        object.putBytes(strings.data().data(), strings.size());
+    for (int bit = 0; bit < 7; ++bit)
+        object.putBit(0u);
+    const std::uint64_t stringBitSize = strings.size() * 8u + 7u;
+    if (stringBitSize > std::numeric_limits<std::uint16_t>::max())
+        return false;
+    object.putRawShort16(static_cast<std::uint16_t>(stringBitSize));
+    object.putBit(1u); // bounded R2007+ string stream
+    object.alignToByte();
+
+    const auto putHandle = [&handles](std::uint8_t code,
+                                      std::uint32_t reference) {
+        dwgHandle value;
+        value.code = reference == 0 ? 0u : code;
+        value.ref = reference;
+        value.ref64 = reference;
+        handles.putHandle(value);
+    };
+    putHandle(DRW::DwgSoftPointer, 0x20u); // owner
+    putHandle(DRW::DwgSoftPointer, 0x21u); // reactor
+    putHandle(DRW::DwgHardOwnership, 0u); // null extension dictionary
+    putHandle(DRW::DwgSoftPointer, 0x30u); // dimension
+    for (const RefVector& ref : refs) {
+        putHandle(DRW::DwgSoftPointer, ref.handle);
+        if (ref.intersection)
+            putHandle(DRW::DwgSoftPointer, ref.intersectionHandle);
+    }
+    handles.alignToByte();
+
+    if (!object.isGood() || !strings.isGood() || !handles.isGood()
+        || handles.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+    appendBits(object, handles);
+    if (!object.isGood())
+        return false;
+    frame.bytes = object.data();
+    return true;
+}
+
+void testDimensionAssociationDwgDetailReadback(TestContext& t) {
+    DimensionAssociationFrame frame;
+    const bool built = makeDimensionAssociationDetailFrame(frame);
+    t.expect(built, "generated AC1024 DIMASSOC detail frame builds from scratch");
+    if (!built)
+        return;
+
+    DRW_TextCodec codec;
+    codec.setVersion(DRW::AC1024, false);
+    DimensionAssociationCodecProbe parsed;
+    parsed.m_associativityFlags = 0x0Fu;
+    parsed.m_osnapRefs.push_back({});
+    std::vector<std::uint8_t> truncated = frame.bytes;
+    if (!truncated.empty())
+        truncated.pop_back();
+    dwgBuffer truncatedInput(truncated.data(), truncated.size(), &codec);
+    const bool rejected = !parsed.parseDwg(DRW::AC1024, &truncatedInput,
+                                           frame.handleBits)
+        && !truncatedInput.isGood() && parsed.handle == 0u
+        && parsed.m_associativityFlags == 0u && parsed.m_osnapRefs.empty();
+    t.expect(rejected,
+             "truncated DIMASSOC handle tail resets partial state before retry");
+
+    dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+    const bool read = parsed.parseDwg(DRW::AC1024, &input, frame.handleBits);
+    const auto& refs = parsed.m_osnapRefs;
+    const bool commonFieldsMatch = parsed.handle == 0xA100u
+        && parsed.parentHandle == 0x20u
+        && parsed.reactorHandles == std::vector<std::uint32_t>{0x21u}
+        && parsed.xDictHandle == 0u
+        && parsed.m_dimensionHandle == 0x30u
+        && parsed.m_associativityFlags == 0x07u
+        && parsed.m_isTransSpace && parsed.m_rotatedDimensionType == 4u
+        && refs.size() == 3u && !parsed.m_hasUnrepresentableDetail;
+    t.expect(read && input.isGood() && commonFieldsMatch,
+             "AC1024 DIMASSOC typed parser retains common links and slot metadata");
+    if (read && refs.size() == 3u) {
+        const auto& pointRef = refs[0];
+        const auto& intersectionRef = refs[1];
+        const auto& xrefRef = refs[2];
+        t.expect(pointRef.m_className == "AcDbOsnapPointRef"
+                     && pointRef.m_hasObjectOsnapType
+                     && pointRef.m_objectOsnapType == 1u
+                     && pointRef.m_objectHandle == 0x40u
+                     && pointRef.m_hasSubentType
+                     && pointRef.m_subentType == 2
+                     && pointRef.m_hasGsMarker
+                     && pointRef.m_gsMarker == 9
+                     && pointRef.m_hasNearParameter
+                     && pointRef.m_nearParameter == 1.0
+                     && pointRef.m_hasOsnapPoint
+                     && pointRef.m_osnapPoint.x == 1.25
+                     && pointRef.m_osnapPoint.y == -2.5
+                     && pointRef.m_osnapPoint.z == 2.0e50
+                     && pointRef.m_hasLastPointRef
+                     && pointRef.m_lastPointRef == 1,
+                 "DIMASSOC point osnap projects exact scalar, point, and last-point fields");
+        t.expect(intersectionRef.m_className == "AcDbOsnapPointRef"
+                     && intersectionRef.m_objectOsnapType == 6u
+                     && intersectionRef.m_objectHandle == 0x41u
+                     && intersectionRef.m_subentType == 3
+                     && intersectionRef.m_gsMarker == 10
+                     && intersectionRef.m_nearParameter == 0.04914376136317
+                     && intersectionRef.m_osnapPoint.x == -3.0
+                     && intersectionRef.m_osnapPoint.y == 4.5
+                     && intersectionRef.m_osnapPoint.z == 6.0
+                     && intersectionRef.m_hasIntersectionObjectHandle
+                     && intersectionRef.m_intersectionObjectHandle == 0x50u
+                     && intersectionRef.m_hasIntersectionSubentType
+                     && intersectionRef.m_intersectionSubentType == 5
+                     && intersectionRef.m_hasIntersectionGsMarker
+                     && intersectionRef.m_intersectionGsMarker == 0
+                     && intersectionRef.m_hasIntersectionXrefObjectHandleString
+                     && intersectionRef.m_intersectionXrefObjectHandleString
+                         == "xref-intersection-6"
+                     && intersectionRef.m_hasLastPointRef
+                     && intersectionRef.m_lastPointRef == 0,
+                 "DIMASSOC intersection osnap projects its second edge and path");
+        t.expect(xrefRef.m_objectOsnapType == 13u
+                     && xrefRef.m_objectHandle == 0x42u
+                     && xrefRef.m_subentType == 4
+                     && xrefRef.m_gsMarker == 12
+                     && xrefRef.m_hasXrefObjectHandleString
+                     && xrefRef.m_xrefObjectHandleString == "xref-main-13"
+                     && xrefRef.m_nearParameter == 2.0
+                     && xrefRef.m_osnapPoint.x == 7.0
+                     && xrefRef.m_osnapPoint.y == 8.0
+                     && xrefRef.m_osnapPoint.z == 9.0
+                     && xrefRef.m_lastPointRef == 1,
+                 "DIMASSOC non-intersection osnap projects the main XREF path");
+    }
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    t.expect(!parsed.encodeDwg(DRW::AC1024, &body, &strings, &handles)
+                 && body.data().empty() && strings.data().empty()
+                 && handles.data().empty(),
+             "detailed DIMASSOC remains refused by the unqualified DWG encoder");
+}
+
 void testLayoutVectors(TestContext& t) {
     for (DRW::Version version : kVersions) {
         LayoutEncodeProbe object;
@@ -18840,6 +19063,14 @@ int main(int argc, char** argv) {
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
+    if (argc == 2
+        && std::string(argv[1]) == "--dimassoc-dwg-detail-readback") {
+        TestContext context;
+        testDimensionAssociationDwgDetailReadback(context);
+        std::cout << "AC1024 DIMASSOC DWG detail readback: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
     TestContext context;
     testGroupVectors(context);
     testDictionaryVectors(context);
@@ -18847,6 +19078,7 @@ int main(int argc, char** argv) {
     testOpaqueXRecordReplayGuards(context);
     testPlotSettingsVectors(context);
     testPlotSettingsDwgDecodeRoundTrip(context);
+    testDimensionAssociationDwgDetailReadback(context);
     testLayoutVectors(context);
     testR2007TableCellTypeReaderVectors(context);
     testTablePlacementVectors(context);

@@ -25543,11 +25543,14 @@ bool DRW_DimensionAssociation::parseDwg(DRW::Version version, dwgBuffer *buf, st
                                       ref.m_objectOsnapType)
             || ref.m_objectOsnapType > 13)
             return false;
+        ref.m_hasObjectOsnapType = true;
+        if (ref.m_className != "AcDbOsnapPointRef")
+            hasUnrepresentableDetail = true;
         std::int32_t xrefCount = 0;
         if (!readBitLongWithinBody(bodyBuf, version, bodyEnd, xrefCount)
             || !isValidAssocCount(xrefCount))
             return false;
-        if (xrefCount > 1 || ref.m_objectOsnapType != 0)
+        if (xrefCount > 1)
             hasUnrepresentableDetail = true;
         for (std::int32_t i = 0; i < xrefCount; ++i) {
             const std::uint32_t objectHandle =
@@ -25569,12 +25572,23 @@ bool DRW_DimensionAssociation::parseDwg(DRW::Version version, dwgBuffer *buf, st
                                           xrefPathCount)
                 || !isValidAssocCount(xrefPathCount))
                 return false;
-            DRW_UNUSED(mainSubentType);
-            DRW_UNUSED(mainGsmarker);
+            ref.m_hasSubentType = true;
+            ref.m_subentType = mainSubentType;
+            ref.m_hasGsMarker = true;
+            ref.m_gsMarker = mainGsmarker;
+            if (mainSubentType < std::numeric_limits<std::int16_t>::min()
+                || mainSubentType > std::numeric_limits<std::int16_t>::max())
+                hasUnrepresentableDetail = true;
+            if (xrefPathCount > 1)
+                hasUnrepresentableDetail = true;
             for (std::int32_t i = 0; i < xrefPathCount; ++i) {
                 UTF8STRING path;
                 if (!readText(path))
                     return false;
+                if (i == 0) {
+                    ref.m_hasXrefObjectHandleString = true;
+                    ref.m_xrefObjectHandleString = std::move(path);
+                }
             }
         }
         double osnapDistance = 0.0;
@@ -25590,21 +25604,25 @@ bool DRW_DimensionAssociation::parseDwg(DRW::Version version, dwgBuffer *buf, st
             || !std::isfinite(osnapPoint.z)) {
             return false;
         }
-        if (osnapDistance != 0.0 || osnapPoint.x != 0.0
-            || osnapPoint.y != 0.0 || osnapPoint.z != 0.0) {
-            hasUnrepresentableDetail = true;
-        }
+        ref.m_hasNearParameter = true;
+        ref.m_nearParameter = osnapDistance;
+        ref.m_hasOsnapPoint = true;
+        ref.m_osnapPoint = osnapPoint;
         if (ref.m_objectOsnapType == 6 || ref.m_objectOsnapType == 11) {
-            hasUnrepresentableDetail = true;
             std::int32_t intersectionCount = 0;
             if (!readBitLongWithinBody(bodyBuf, version, bodyEnd,
                                        intersectionCount)
                 || !isValidAssocCount(intersectionCount))
                 return false;
             for (std::int32_t i = 0; i < intersectionCount; ++i) {
-                readObjectHandleRef(&hBuff, handleEndBit);
+                const std::uint32_t objectHandle =
+                    readObjectHandleRef(&hBuff, handleEndBit);
                 if (!hBuff.isGood())
                     return false;
+                if (i == 0) {
+                    ref.m_hasIntersectionObjectHandle = true;
+                    ref.m_intersectionObjectHandle = objectHandle;
+                }
             }
             std::int32_t intersectionSubentType = 0;
             std::int32_t intersectionGsmarker = 0;
@@ -25617,19 +25635,36 @@ bool DRW_DimensionAssociation::parseDwg(DRW::Version version, dwgBuffer *buf, st
                                           intersectionPathCount)
                 || !isValidAssocCount(intersectionPathCount))
                 return false;
-            DRW_UNUSED(intersectionSubentType);
-            DRW_UNUSED(intersectionGsmarker);
+            ref.m_hasIntersectionSubentType = true;
+            ref.m_intersectionSubentType = intersectionSubentType;
+            ref.m_hasIntersectionGsMarker = true;
+            ref.m_intersectionGsMarker = intersectionGsmarker;
+            if (intersectionSubentType
+                    < std::numeric_limits<std::int16_t>::min()
+                || intersectionSubentType
+                    > std::numeric_limits<std::int16_t>::max())
+                hasUnrepresentableDetail = true;
+            if (intersectionCount != 1
+                || ref.m_intersectionObjectHandle == 0
+                || ref.m_objectHandle == 0
+                || intersectionPathCount > 1)
+                hasUnrepresentableDetail = true;
             for (std::int32_t i = 0; i < intersectionPathCount; ++i) {
                 UTF8STRING path;
                 if (!readText(path))
                     return false;
+                if (i == 0) {
+                    ref.m_hasIntersectionXrefObjectHandleString = true;
+                    ref.m_intersectionXrefObjectHandleString =
+                        std::move(path);
+                }
             }
         }
         bool hasLastPointRef = false;
         if (!readBitWithinBody(bodyBuf, version, bodyEnd, hasLastPointRef))
             return false;
-        if (hasLastPointRef)
-            hasUnrepresentableDetail = true;
+        ref.m_hasLastPointRef = true;
+        ref.m_lastPointRef = hasLastPointRef ? 1 : 0;
         return bodyBuf->isGood() && bodySBuf->isGood();
     };
 

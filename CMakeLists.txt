@@ -1331,6 +1331,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_plotsettings_dwg_decode_roundtrip
         PROPERTIES LABELS "fast;dwg;object-vectors;plotsettings;generated"
                    TIMEOUT 15)
+    add_test(NAME libdxfrw_dimassoc_dwg_detail_readback
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --dimassoc-dwg-detail-readback)
+    set_tests_properties(libdxfrw_dimassoc_dwg_detail_readback
+        PROPERTIES LABELS "fast;dwg;object-vectors;dimassoc;generated"
+                   TIMEOUT 15)
     add_test(NAME libdxfrw_persistent_manager_exact_footer
         COMMAND libdxfrw_dwg_object_vectors_tests --persistent-manager-exact-footer)
     set_tests_properties(libdxfrw_persistent_manager_exact_footer PROPERTIES
