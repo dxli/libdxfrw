@@ -898,7 +898,9 @@ void DRW_Header::write(const std::unique_ptr<dxfWriter>& writer, DRW::Version ve
         || !canWriteDxfEndcaps()
         || !canWriteDxfJoinstyle()
         || !canWriteDxfLwdisplay()
-        || !canWriteDxfXedit()) {
+        || !canWriteDxfXedit()
+        || !canWriteDxfHeaderIntegerRange("$ANGDIR", 70, 0, 1)
+        || !canWriteDxfHeaderIntegerRange("$ATTMODE", 70, 0, 2)) {
         writer->markWriteError();
         return;
     }

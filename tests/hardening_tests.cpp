@@ -2225,23 +2225,15 @@ void testDxfInsunitsHeaderDomain(TestContext& t) {
     }
 }
 
-void testDxfLineweightHeaderDomains(TestContext& t) {
-    struct Domain {
-        const char* name;
-        int groupCode;
-        std::vector<int> validValues;
-        std::vector<int> invalidValues;
-    };
-    const std::vector<Domain> domains{
-        {"$CELWEIGHT", 370,
-         {-3, -2, -1, 0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50,
-          53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211},
-         {-4, 1, 6, 212}},
-        {"$ENDCAPS", 280, {0, 1, 2, 3}, {-1, 4}},
-        {"$JOINSTYLE", 280, {0, 1, 2, 3}, {-1, 4}},
-        {"$LWDISPLAY", 290, {0, 1}, {-1, 2}},
-        {"$XEDIT", 290, {0, 1}, {-1, 2}}
-    };
+struct DxfIntegerHeaderDomain {
+    const char* name;
+    int groupCode;
+    std::vector<int> validValues;
+    std::vector<int> invalidValues;
+};
+
+void testDxfIntegerHeaderDomains(
+        TestContext& t, const std::vector<DxfIntegerHeaderDomain>& domains) {
     const auto makeWriter = [](bool binary, std::ostream* output) {
         std::unique_ptr<dxfWriter> writer = binary
             ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(output))
@@ -2281,7 +2273,7 @@ void testDxfLineweightHeaderDomains(TestContext& t) {
     };
 
     for (const bool binary : {false, true}) {
-        for (const Domain& domain : domains) {
+        for (const DxfIntegerHeaderDomain& domain : domains) {
             for (const int validValue : domain.validValues) {
                 std::ostringstream output(std::ios::out | std::ios::binary);
                 std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
@@ -2347,7 +2339,7 @@ void testDxfLineweightHeaderDomains(TestContext& t) {
         }
     }
 
-    for (const Domain& domain : domains) {
+    for (const DxfIntegerHeaderDomain& domain : domains) {
         const int invalidValue = domain.invalidValues.front();
         std::ostringstream source(std::ios::out | std::ios::binary);
         source << "9\n" << domain.name << '\n'
@@ -2367,6 +2359,28 @@ void testDxfLineweightHeaderDomains(TestContext& t) {
                  std::string(domain.name)
                      + " tolerant input retains its unsupported integer value");
     }
+}
+
+void testDxfLineweightHeaderDomains(TestContext& t) {
+    const std::vector<DxfIntegerHeaderDomain> domains{
+        {"$CELWEIGHT", 370,
+         {-3, -2, -1, 0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50,
+          53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211},
+         {-4, 1, 6, 212}},
+        {"$ENDCAPS", 280, {0, 1, 2, 3}, {-1, 4}},
+        {"$JOINSTYLE", 280, {0, 1, 2, 3}, {-1, 4}},
+        {"$LWDISPLAY", 290, {0, 1}, {-1, 2}},
+        {"$XEDIT", 290, {0, 1}, {-1, 2}}
+    };
+    testDxfIntegerHeaderDomains(t, domains);
+}
+
+void testDxfOrientationAttributeHeaderDomains(TestContext& t) {
+    const std::vector<DxfIntegerHeaderDomain> domains{
+        {"$ANGDIR", 70, {0, 1}, {-1, 2}},
+        {"$ATTMODE", 70, {0, 1, 2}, {-1, 3}}
+    };
+    testDxfIntegerHeaderDomains(t, domains);
 }
 
 void testLeaderAdvisoryCountState(TestContext& t) {
@@ -25444,6 +25458,19 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (argc == 2
+        && std::string(argv[1])
+            == "--dxf-orientation-attribute-header-domains") {
+        TestContext focused;
+        testDxfOrientationAttributeHeaderDomains(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " orientation/attribute HEADER assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "Orientation/attribute HEADER domains: PASS\n";
+        return 0;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--dxf-geodata-modern-text-preflight") {
         TestContext focused;
         testDxfGeoDataModernTextPreflightView(focused);
@@ -26696,6 +26723,7 @@ int main(int argc, char** argv) {
     testDxfMeasurementHeaderDomain(context);
     testDxfInsunitsHeaderDomain(context);
     testDxfLineweightHeaderDomains(context);
+    testDxfOrientationAttributeHeaderDomains(context);
     testLeaderAdvisoryCountState(context);
     testPublicOwnershipContracts(context);
     testEmbeddedAttributeTextRouting(context);

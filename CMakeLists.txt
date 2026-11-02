@@ -1783,6 +1783,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_lineweight_header_domains PROPERTIES
         LABELS "fast;dxf;reader;writer;header;transaction;generated"
         TIMEOUT 20)
+    add_test(NAME libdxfrw_orientation_attribute_header_domains
+        COMMAND libdxfrw_hardening_tests
+            --dxf-orientation-attribute-header-domains)
+    set_tests_properties(libdxfrw_orientation_attribute_header_domains PROPERTIES
+        LABELS "fast;dxf;reader;writer;header;transaction;generated"
+        TIMEOUT 20)
     add_test(NAME libdxfrw_scale_units_dxf_domain
         COMMAND libdxfrw_hardening_tests --dxf-scale-units-domain)
     set_tests_properties(libdxfrw_scale_units_dxf_domain PROPERTIES
