@@ -119,6 +119,13 @@ engines.
    caller-state preservation, temporary cleanup, and corrected retry at the
    narrowest selector that exercises the changed graph boundary.
 
+**Standalone PLOTSETTINGS boundary:** a generated AC1024/AC1027/AC1032 codec
+vector now checks the modeled AcDbPlotSettings prefix fields, common owner/
+reactor/extension-dictionary handles, plot-view/shade handle roles, and
+truncated-handle reset/retry. The vector is encoder/parser consistency evidence;
+it does not replace physical producer field-span/role proof or whole-document
+graph closure. See the [codec round-trip receipt](docs/research/p4-plotsettings-r2007plus-dwg-codec-decode-roundtrip-2026-11-02.json).
+
 After actual prerequisites close, run one composed strict CLI checkpoint. A
 successful process exit or record count alone is not closure. For AC1018 opt-in
 capture, keep default legacy consumers opted out until codec, source, dependency and

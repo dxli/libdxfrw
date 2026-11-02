@@ -116,6 +116,7 @@ public:
 class PlotSettingsEncodeProbe final : public DRW_PlotSettings {
 public:
     using DRW_PlotSettings::encodeDwg;
+    using DRW_PlotSettings::parseDwg;
 };
 
 class LayoutEncodeProbe final : public DRW_Layout {
@@ -11481,6 +11482,136 @@ void testPlotSettingsVectors(TestContext& t) {
              "PLOTSETTINGS preflight preserves sentinel buffers and state");
 }
 
+struct PlotSettingsFrame {
+    std::vector<std::uint8_t> bytes;
+    std::uint32_t handleBits {0};
+};
+
+bool makePlotSettingsFrame(DRW::Version version,
+                           const PlotSettingsEncodeProbe& source,
+                           PlotSettingsFrame& frame) {
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    dwgBufferW body(&codec), strings(&codec), handles(&codec), object(&codec);
+    if (!source.encodeDwg(version, &body, &strings, &handles))
+        return false;
+
+    // Direct parser vector only: this synthetic type prefix exercises the
+    // PlotSettings codec after dispatch, not a producer's class-number map.
+    object.putObjType(version, 1u);
+    dwgHandle ownHandle;
+    ownHandle.ref = source.handle;
+    object.putHandle(ownHandle);
+    object.putBitShort(0u); // no EED
+    object.putBitLong(source.reactorCount());
+    object.putBit(source.extensionDictionaryFlag());
+    if (version > DRW::AC1024)
+        object.putBit(source.hasDataStorageBinaryData() ? 1u : 0u);
+    appendBits(object, body);
+    object.alignToByte();
+
+    strings.alignToByte();
+    if (!strings.data().empty())
+        object.putBytes(strings.data().data(), strings.size());
+    for (int bit = 0; bit < 7; ++bit)
+        object.putBit(0u);
+    const std::uint64_t stringBitSize = strings.size() * 8u + 7u;
+    if (stringBitSize > std::numeric_limits<std::uint16_t>::max())
+        return false;
+    object.putRawShort16(static_cast<std::uint16_t>(stringBitSize));
+    object.putBit(1u); // R2007+ string stream is present
+    object.alignToByte();
+
+    handles.alignToByte();
+    if (!object.isGood() || !strings.isGood() || !handles.isGood()
+        || handles.bitCount()
+            > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+    appendBits(object, handles);
+    if (!object.isGood())
+        return false;
+    frame.bytes = object.data();
+    return true;
+}
+
+bool plotSettingsFieldsMatch(const PlotSettingsEncodeProbe& value) {
+    return value.handle == 0xA100u
+        && value.parentHandle == 0x23u
+        && value.reactorHandles == std::vector<std::uint32_t>{0x36u}
+        && value.xDictHandle == 0x37u
+        && value.reactorCount() == 1
+        && value.extensionDictionaryFlag() == 0u
+        && !value.hasDataStorageBinaryData()
+        && value.pageSetupName == "VECTOR_PAGE"
+        && value.printerConfig == "VECTOR_PRINTER"
+        && value.plotLayoutFlags == 1
+        && value.marginLeft == 1.0 && value.marginBottom == 2.0
+        && value.marginRight == 3.0 && value.marginTop == 4.0
+        && value.paperWidth == 210.0 && value.paperHeight == 297.0
+        && value.paperSize == "A4"
+        && value.plotOriginX == 5.0 && value.plotOriginY == 6.0
+        && value.paperUnits == 1 && value.plotRotation == 0
+        && value.plotType == 0
+        && value.windowMinX == -10.0 && value.windowMinY == -20.0
+        && value.windowMaxX == 10.0 && value.windowMaxY == 20.0
+        && value.plotViewName.empty()
+        && value.realWorldUnits == 1.0 && value.drawingUnits == 1.0
+        && value.currentStyleSheet == "VECTOR_STYLE"
+        && value.scaleType == 1 && value.scaleFactor == 1.0
+        && value.paperImageOriginX == 0.0
+        && value.paperImageOriginY == 0.0
+        && value.shadePlotMode == 1 && value.shadePlotResLevel == 2
+        && value.shadePlotCustomDPI == 300
+        && value.plotViewHandle.ref == 0x240u
+        && value.plotViewHandle.code == DRW::DwgHardPointer
+        && value.shadePlotHandle.ref == 0x241u
+        && value.shadePlotHandle.code == DRW::DwgSoftPointer;
+}
+
+void testPlotSettingsDwgDecodeRoundTrip(TestContext& t) {
+    const std::array<std::pair<DRW::Version, const char*>, 3> versions{{
+        {DRW::AC1024, "AC1024"},
+        {DRW::AC1027, "AC1027"},
+        {DRW::AC1032, "AC1032"}}};
+    for (const auto& versionCase : versions) {
+        const DRW::Version version = versionCase.first;
+        const std::string versionName = versionCase.second;
+        PlotSettingsEncodeProbe source;
+        populatePlotSettings(source);
+        source.handle = 0xA100u;
+        source.setDwgCommonObjectState(1, 0u, false);
+        source.xDictHandle = 0x37u;
+        PlotSettingsFrame frame;
+        const bool built = makePlotSettingsFrame(version, source, frame);
+        t.expect(built, versionName + " PlotSettings frame builds from scratch");
+        if (!built)
+            continue;
+
+        std::vector<std::uint8_t> truncated = frame.bytes;
+        if (!truncated.empty())
+            truncated.pop_back();
+        PlotSettingsEncodeProbe parsed;
+        parsed.pageSetupName = "STALE_PARSE_STATE";
+        DRW_TextCodec badCodec;
+        badCodec.setVersion(version, false);
+        dwgBuffer badInput(truncated.data(), truncated.size(), &badCodec);
+        const bool rejected = !parsed.parseDwg(version, &badInput,
+                                               frame.handleBits)
+            && !badInput.isGood() && parsed.pageSetupName.empty()
+            && parsed.marginLeft == 0.0;
+        t.expect(rejected, versionName
+            + " truncated handle tail resets the partial PlotSettings parse");
+
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+        const bool read = parsed.parseDwg(version, &input, frame.handleBits);
+        t.expect(read && input.isGood() && plotSettingsFieldsMatch(parsed),
+            versionName + " typed PlotSettings fields and references read back after retry");
+    }
+}
+
 void testLayoutVectors(TestContext& t) {
     for (DRW::Version version : kVersions) {
         LayoutEncodeProbe object;
@@ -18441,12 +18572,21 @@ int main(int argc, char** argv) {
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
+    if (argc == 2
+        && std::string(argv[1]) == "--plotsettings-dwg-decode-roundtrip") {
+        TestContext context;
+        testPlotSettingsDwgDecodeRoundTrip(context);
+        std::cout << "AC1024/AC1027/AC1032 PlotSettings DWG decode round-trip: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
     TestContext context;
     testGroupVectors(context);
     testDictionaryVectors(context);
     testXRecordVectors(context);
     testOpaqueXRecordReplayGuards(context);
     testPlotSettingsVectors(context);
+    testPlotSettingsDwgDecodeRoundTrip(context);
     testLayoutVectors(context);
     testR2007TableCellTypeReaderVectors(context);
     testTablePlacementVectors(context);
