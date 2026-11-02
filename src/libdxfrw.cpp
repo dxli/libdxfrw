@@ -11843,6 +11843,9 @@ bool dxfRW::writeUnderlay(DRW_Underlay *ent) {
                                 || (ent->flags & 0x10) != 0;
     const std::uint8_t wireFlags =
         hasInverseClip ? static_cast<std::uint8_t>(ent->flags | 0x10) : ent->flags;
+        || ent->kind < DRW_Underlay::PDF || ent->kind > DRW_Underlay::DWF
+        || ent->definitionHandle == 0u
+        || ent->definitionHandle == DRW::NoHandle
     const char* tag = (ent->kind == DRW_Underlay::DGN) ? "DGNUNDERLAY"
                     : (ent->kind == DRW_Underlay::DWF) ? "DWFUNDERLAY"
                     : "PDFUNDERLAY";
@@ -11850,12 +11853,15 @@ bool dxfRW::writeUnderlay(DRW_Underlay *ent) {
     if (!writeEntity(ent))
         return false;
     writer->writeString(100, "AcDbUnderlayReference");
-    if (ent->definitionHandle != 0) {
-        writer->writeString(340, toHexStr(ent->definitionHandle));
-    }
+    writer->writeString(340, toHexStr(definitionHandle));
     writer->writeDouble(10, ent->position.x);
     writer->writeDouble(20, ent->position.y);
     writer->writeDouble(30, ent->position.z);
+    const std::uint32_t definitionHandle =
+        remapObjectHandle(ent->definitionHandle);
+    if (definitionHandle == 0u || definitionHandle == DRW::NoHandle
+        || isDxfFixedOutputHandle(definitionHandle))
+        return failDxfWrite();
     if (ent->scale.x != 1.0 || ent->scale.y != 1.0 || ent->scale.z != 1.0) {
         writer->writeDouble(41, ent->scale.x);
         writer->writeDouble(42, ent->scale.y);
@@ -11883,20 +11889,25 @@ bool dxfRW::writeUnderlay(DRW_Underlay *ent) {
     }
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    return scope.commit();
 }
 
 bool dxfRW::writeUnderlayDefinition(DRW_UnderlayDefinition *ent) {
     if (version <= DRW::AC1009)
         return rejectUnsupportedDxfWrite("UNDERLAY definition");
-    if (!preflightTableEntry(ent))
+    if (!preflightTableEntry(ent)
+        || ent->kind < DRW_UnderlayDefinition::PDF
+        || ent->kind > DRW_UnderlayDefinition::DWF
+        || ent->handle == 0u || ent->handle == DRW::NoHandle
+        || ent->parentHandle == 0u || ent->parentHandle == DRW::NoHandle
+        || ent->filename.empty())
         return false;
     const char* tag = (ent->kind == DRW_UnderlayDefinition::DGN) ? "DGNDEFINITION"
                     : (ent->kind == DRW_UnderlayDefinition::DWF) ? "DWFDEFINITION"
                     : "PDFDEFINITION";
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, tag);
-    writer->writeString(5, toHexStr(ent->handle));
+    writer->writeString(5, toHexStr(handle));
     if (!writeTableEntryAppData(*ent))
         return false;
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
@@ -11905,7 +11916,10 @@ bool dxfRW::writeUnderlayDefinition(DRW_UnderlayDefinition *ent) {
     writer->writeUtf8String(2, ent->sheetName);
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    if (writer->hasWriteError()
+        || !bindDxfWriteSourceObjectHandle(ent->handle, handle))
+        return failDxfWrite();
+    return scope.commit();
 }
 
 bool dxfRW::writeMText(DRW_MText *ent){
@@ -11915,6 +11929,10 @@ bool dxfRW::writeMText(DRW_MText *ent){
         const bool hasColumns = hasR2018MTextColumns(*ent);
         if (hasColumns
             && (version < DRW::AC1032
+    const std::uint32_t handle = remapObjectHandle(ent->handle);
+    if (handle == 0u || handle == DRW::NoHandle
+        || isDxfFixedOutputHandle(handle) || !reserveHandle(handle))
+        return failDxfWrite();
                 || !isValidR2018MTextColumnState(*ent)))
             return rejectUnsupportedDxfWrite("MTEXT column profile");
         EntityRecordScope scope(*this, ent);

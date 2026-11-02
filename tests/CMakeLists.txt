@@ -2278,6 +2278,11 @@ add_test(NAME dwg2dxf_acds_raw_dxf_source_baseline
     COMMAND libdxfrw_dwg2dxf_adapter_tests --acds-raw-dxf-source-baseline)
 set_tests_properties(dwg2dxf_acds_raw_dxf_source_baseline PROPERTIES
     LABELS "fast;dxf;adapter;acds;retention;generated" TIMEOUT 10)
+add_test(NAME dwg2dxf_underlay_definition_graph
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --underlay-definition-graph)
+set_tests_properties(dwg2dxf_underlay_definition_graph PROPERTIES
+    LABELS "fast;dxf;underlay;dictionary;graph;adapter;generated;transaction"
+    TIMEOUT 30)
 
 add_test(
     NAME dwg2dxf_raw_dxf_entity_capture_limits

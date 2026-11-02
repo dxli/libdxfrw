@@ -61408,6 +61408,231 @@ bool groupAdapterRoundTrip() {
     return true;
 }
 
+bool underlayDefinitionGraphRoundTrip() {
+    const auto path = std::filesystem::temp_directory_path()
+        / ("libdxfrw-underlay-graph-"
+           + std::to_string(std::chrono::steady_clock::now()
+                                .time_since_epoch()
+                                .count())
+           + ".dxf");
+    if (std::filesystem::exists(path))
+        return fail("underlay graph scratch path already exists");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove(path, ignored);
+        }
+    } cleanup{path};
+
+    dx_data data;
+    dx_iface author;
+    author.cData = &data;
+    author.currentBlock = data.mBlock;
+    data.hasNamedObjectDictionary = true;
+    data.namedObjectDictionary.handle = 0xC700u;
+    data.namedObjectDictionary.m_entries = {
+        {"ACAD_PDFDEFINITIONS", 0xC701u},
+        {"ACAD_DGNDEFINITIONS", 0xC702u},
+        {"ACAD_DWFDEFINITIONS", 0xC703u}};
+
+    constexpr std::array<DRW_Underlay::Kind, 3> kinds{{
+        DRW_Underlay::PDF, DRW_Underlay::DGN, DRW_Underlay::DWF}};
+    constexpr std::array<const char*, 3> rootNames{{
+        "ACAD_PDFDEFINITIONS", "ACAD_DGNDEFINITIONS",
+        "ACAD_DWFDEFINITIONS"}};
+    for (std::size_t i = 0; i < kinds.size(); ++i) {
+        const std::uint32_t dictionaryHandle =
+            static_cast<std::uint32_t>(0xC701u + i);
+        const std::uint32_t definitionHandle =
+            static_cast<std::uint32_t>(0xC710u + i);
+        DRW_Dictionary dictionary;
+        dictionary.handle = dictionaryHandle;
+        dictionary.parentHandle = data.namedObjectDictionary.handle;
+        dictionary.hardOwner = 1;
+        dictionary.cloning = 2;
+        dictionary.m_entries = {{"SOURCE_UNDERLAY", definitionHandle}};
+        data.dictionaries.push_back(dictionary);
+
+        DRW_UnderlayDefinition definition;
+        definition.handle = definitionHandle;
+        definition.parentHandle = dictionaryHandle;
+        definition.kind = static_cast<DRW_UnderlayDefinition::Kind>(kinds[i]);
+        definition.filename = std::string("underlay-")
+            + std::to_string(i) + ".source";
+        definition.sheetName = std::string("sheet-") + std::to_string(i);
+        author.linkUnderlay(&definition);
+
+        DRW_Underlay underlay;
+        underlay.handle = static_cast<std::uint32_t>(0xC720u + i);
+        underlay.kind = kinds[i];
+        underlay.definitionHandle = definitionHandle;
+        underlay.position = DRW_Coord(10.0 + i, 20.0 + i, 30.0 + i);
+        underlay.scale = DRW_Coord(2.0 + i, 3.0 + i, 1.0);
+        underlay.rotation = 15.0 + i;
+        underlay.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+        underlay.flags = 0x12;
+        underlay.contrast = static_cast<std::uint8_t>(70u + i);
+        underlay.fade = static_cast<std::uint8_t>(10u + i);
+        underlay.clipBoundary = {DRW_Coord(1.0, 2.0),
+                                 DRW_Coord(3.0, 4.0)};
+        underlay.inverseClipBoundary = {DRW_Coord(5.0, 6.0),
+                                        DRW_Coord(7.0, 8.0)};
+        author.addUnderlay(&underlay);
+    }
+
+    unsigned cells = 0u;
+    for (const DRW::Version version : {DRW::AC1024, DRW::AC1032}) {
+        for (const bool binary : {false, true}) {
+            if (!author.fileExport(path.string(), version, binary, &data,
+                                   false, true))
+                return fail("complete PDF/DGN/DWF definition graph failed export");
+            dx_data readback;
+            dx_iface reader;
+            if (!reader.fileImport(path.string(), &readback, false)
+                || readback.underlays.size() != kinds.size()
+                || readback.underlayDefinitions.size() != kinds.size())
+                return fail("underlay graph output failed typed ASCII/Binary readback");
+
+            for (std::size_t i = 0; i < kinds.size(); ++i) {
+                const auto root = std::find_if(
+                    readback.namedObjectDictionary.m_entries.begin(),
+                    readback.namedObjectDictionary.m_entries.end(),
+                    [&](const DRW_Dictionary::Entry& entry) {
+                        return entry.m_name == rootNames[i];
+                    });
+                if (root == readback.namedObjectDictionary.m_entries.end())
+                    return fail("underlay root dictionary edge was not emitted");
+                const auto dictionary = std::find_if(
+                    readback.dictionaries.begin(), readback.dictionaries.end(),
+                    [&](const DRW_Dictionary& candidate) {
+                        return candidate.handle == root->m_handle;
+                    });
+                if (dictionary == readback.dictionaries.end()
+                    || dictionary->parentHandle
+                        != readback.namedObjectDictionary.handle
+                    || dictionary->m_entries.size() != 1u
+                    || dictionary->m_entries.front().m_name
+                        != "SOURCE_UNDERLAY")
+                    return fail("underlay child dictionary ownership/key was lost");
+
+                const auto actualDefinitionIt =
+                    readback.underlayDefinitions.find({
+                        readback.importGeneration,
+                        dictionary->m_entries.front().m_handle});
+                if (actualDefinitionIt == readback.underlayDefinitions.end())
+                    return fail("underlay definition callback was not retained");
+                const DRW_UnderlayDefinition* actualDefinition =
+                    &actualDefinitionIt->second;
+                if (actualDefinition->parentHandle != dictionary->handle
+                    || static_cast<int>(actualDefinition->kind)
+                        != static_cast<int>(kinds[i])
+                    || actualDefinition->filename
+                        != std::string("underlay-") + std::to_string(i)
+                            + ".source"
+                    || actualDefinition->sheetName
+                        != std::string("sheet-") + std::to_string(i))
+                    return fail("underlay definition handle/kind/fields did not round-trip");
+
+                const auto actualUnderlayIt = std::find_if(
+                    readback.underlays.begin(), readback.underlays.end(),
+                    [actualDefinition](const dx_ifaceUnderlay* candidate) {
+                        return candidate != nullptr
+                            && candidate->definitionHandle
+                                == actualDefinition->handle;
+                    });
+                const auto* actualUnderlay =
+                    actualUnderlayIt == readback.underlays.end()
+                        ? nullptr : *actualUnderlayIt;
+                if (actualUnderlay == nullptr
+                    || actualUnderlay->definitionHandle
+                        != actualDefinition->handle
+                    || actualUnderlay->kind != kinds[i]
+                    || actualUnderlay->position.x != 10.0 + i
+                    || actualUnderlay->position.y != 20.0 + i
+                    || actualUnderlay->position.z != 30.0 + i
+                    || actualUnderlay->scale.x != 2.0 + i
+                    || actualUnderlay->scale.y != 3.0 + i
+                    || actualUnderlay->rotation != 15.0 + i
+                    || actualUnderlay->flags != 0x12
+                    || actualUnderlay->contrast != 70u + i
+                    || actualUnderlay->fade != 10u + i
+                    || actualUnderlay->clipBoundary.size() != 2u
+                    || actualUnderlay->inverseClipBoundary.size() != 2u
+                    || actualUnderlay->clipBoundary[0].x != 1.0
+                    || actualUnderlay->clipBoundary[0].y != 2.0
+                    || actualUnderlay->clipBoundary[1].x != 3.0
+                    || actualUnderlay->clipBoundary[1].y != 4.0
+                    || actualUnderlay->inverseClipBoundary[0].x != 5.0
+                    || actualUnderlay->inverseClipBoundary[0].y != 6.0
+                    || actualUnderlay->inverseClipBoundary[1].x != 7.0
+                    || actualUnderlay->inverseClipBoundary[1].y != 8.0) {
+                    if (actualUnderlay != nullptr)
+                        std::cerr << "UNDERLAY mismatch i=" << i
+                            << " handle=" << actualUnderlay->handle
+                            << " def=" << actualUnderlay->definitionHandle
+                            << " kind=" << static_cast<int>(actualUnderlay->kind)
+                            << " pos=" << actualUnderlay->position.x << ','
+                            << actualUnderlay->position.y << ','
+                            << actualUnderlay->position.z << " scale="
+                            << actualUnderlay->scale.x << ','
+                            << actualUnderlay->scale.y << ','
+                            << actualUnderlay->scale.z << " rotation="
+                            << actualUnderlay->rotation << " contrast="
+                            << static_cast<unsigned>(actualUnderlay->contrast)
+                            << " fade=" << static_cast<unsigned>(actualUnderlay->fade)
+                            << " clips=" << actualUnderlay->clipBoundary.size()
+                            << '/' << actualUnderlay->inverseClipBoundary.size()
+                            << " lastInverseY="
+                            << (actualUnderlay->inverseClipBoundary.size() > 1u
+                                ? actualUnderlay->inverseClipBoundary[1].y : -999.0)
+                            << '\n';
+                    return fail("underlay entity reference/placement/clip fields did not round-trip");
+                }
+            }
+            ++cells;
+        }
+    }
+
+    const auto originalDefinitions = data.underlayDefinitions;
+    const auto definitionKey = dx_data::UnderlayDefinitionKey{
+        data.importGeneration, 0xC710u};
+    const std::string sentinel = "UNDERLAY_ATOMIC_DESTINATION\n";
+    { std::ofstream previous(path, std::ios::binary); previous << sentinel; }
+    data.underlayDefinitions.erase(definitionKey);
+    if (author.fileExport(path.string(), DRW::AC1032, true, &data,
+                          false, true))
+        return fail("underlay reference to missing typed definition was admitted");
+    std::ifstream previous(path, std::ios::binary);
+    const std::string retained((std::istreambuf_iterator<char>(previous)), {});
+    if (retained != sentinel)
+        return fail("missing underlay target changed the prior destination");
+    data.underlayDefinitions = originalDefinitions;
+    if (!author.fileExport(path.string(), DRW::AC1032, true, &data,
+                           false, true))
+        return fail("restoring the missing underlay definition did not retry successfully");
+    { std::ofstream previousOutput(path, std::ios::binary);
+      previousOutput << sentinel; }
+    data.underlayDefinitions.at(definitionKey).kind =
+        DRW_UnderlayDefinition::DGN;
+    if (author.fileExport(path.string(), DRW::AC1032, false, &data,
+                          false, true))
+        return fail("underlay entity whose definition has the wrong kind was admitted");
+    std::ifstream wrongKindPrevious(path, std::ios::binary);
+    const std::string wrongKindRetained(
+        (std::istreambuf_iterator<char>(wrongKindPrevious)), {});
+    if (wrongKindRetained != sentinel)
+        return fail("wrong-kind underlay definition changed the prior destination");
+    data.underlayDefinitions = originalDefinitions;
+    if (!author.fileExport(path.string(), DRW::AC1032, true, &data,
+                           false, true))
+        return fail("correcting the underlay definition kind did not retry successfully");
+
+    std::cout << "Underlay definition graph: " << cells
+              << " ASCII/Binary version cells, all 3 kinds; missing-target and wrong-kind atomic refusals plus corrected retries passed\n";
+    return true;
+}
+
 int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--field-graph-export-refusal") {
@@ -61992,6 +62217,8 @@ int main(int argc, char** argv) {
         return rejectMaintenanceDowngrade(path) ? 0 : 1;
     if (mode == "--reject-3dline-ac1014")
         return reject3DLineBeforeAC1015(path) ? 0 : 1;
+    if (argc == 2 && std::string(argv[1]) == "--underlay-definition-graph")
+        return underlayDefinitionGraphRoundTrip() ? 0 : 1;
     std::cerr << "unknown mode: " << mode << '\n';
     return 2;
 }

@@ -185,6 +185,15 @@ public:
     std::size_t retainedPathBytes{0};
 };
 
+// Keeps a typed underlay entity's definition identity tied to the source read
+// that delivered it. The source definition callback arrives later in OBJECTS.
+class dx_ifaceUnderlay : public DRW_Underlay {
+public:
+    dx_ifaceUnderlay() = default;
+    dx_ifaceUnderlay(const DRW_Underlay& source) : DRW_Underlay(source) {}
+    std::uint64_t sourceImportGeneration{0};
+};
+
 struct dx_ifaceRawEntityEvent {
     std::size_t typedEntityIndex {0};
     DRW_RawDxfObject record;
@@ -955,6 +964,7 @@ public:
     std::map<ImageDefinitionKey, DRW_ImageDefinitionReactor> imageDefinitionReactors;
     std::size_t imageDefinitionReactorRetainedRecords{0u};
     std::size_t imageDefinitionReactorRetainedBytes{0u};
+    std::list<dx_ifaceUnderlay*> underlays; //non-owning indexes into BLOCK entity lists
     bool imageDefinitionReactorCaptureFailed{false};
     // Callback-owned IMAGEDEF map copies are bounded across this container's
     // lifetime. Filename paths copied into IMAGE entities use the separate
@@ -979,6 +989,14 @@ public:
                 invalidImageDefinitionGenerations.insert(generation);
                 ++imageDefinitionAuxiliaryStatusKeysRetained;
             }
+    using UnderlayDefinitionKey = std::pair<std::uint64_t, std::uint32_t>;
+    std::map<UnderlayDefinitionKey, DRW_UnderlayDefinition>
+        underlayDefinitions;
+    std::set<UnderlayDefinitionKey> conflictingUnderlayDefinitions;
+    std::size_t underlayDefinitionRetainedRecords{0};
+    std::size_t underlayDefinitionRetainedBytes{0};
+    bool underlayDefinitionCaptureFailed{false};
+
             return false;
         }
         const ImageDefinitionKey key{generation, definition.handle};

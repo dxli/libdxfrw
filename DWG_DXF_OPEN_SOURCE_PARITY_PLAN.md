@@ -366,7 +366,13 @@ eligible reader. The exact package and environment result are in the
   `dwg2dxf` profiles without dropping required geometry. The limited macOS ARM64
   2D open/insert profile is recorded in
   [the FreeCAD route receipt](docs/research/p8-macos-freecad-dwg2dxf-open-insert-qualification-2026-11-01.json);
-  it does not qualify 3D semantics or other platforms.
+  it does not qualify 3D semantics or other platforms. The generated Underlay
+  adapter route now closes PDF/DGN/DWF definitions and references through the
+  named-object dictionary, with AC1024/AC1032 ASCII/Binary readback and atomic
+  missing-target/wrong-kind refusal plus retry; see the [Underlay graph
+  receipt](docs/research/p8-underlay-definition-graph-adapter-2026-11-02.json).
+  This proves transport only, not native consumer semantics or remaining BLOCK
+  callback coverage.
 - Complete native Linux/Windows FreeCAD qualification and bind the actual loaded
   library/converter child. Verify Windows UTF-8/Qt paths, filesystem collisions,
   MSVC/DLL/shared/static/relocated consumers and package/toolchain contracts.

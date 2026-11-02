@@ -894,6 +894,43 @@ public:
         }
     }
 
+    void addUnderlay(const DRW_Underlay *data) override {
+        if (data == nullptr || cData == nullptr)
+            return;
+        constexpr std::size_t underlayIndexNodeBytes =
+            sizeof(dx_ifaceUnderlay*) + 2u * sizeof(void*);
+        std::size_t entityBytes = 0u;
+        if (!estimateTypedEntityRetainedBytes(
+                *data, sizeof(dx_ifaceUnderlay), entityBytes)
+            || entityBytes > TypedEntityCaptureMaxRetainedBytes
+                - TypedEntityListNodeBytes) {
+            cData->typedEntityCaptureFailed = true;
+            return;
+        }
+        entityBytes += TypedEntityListNodeBytes;
+        if (cData->typedEntityRetainedBytes
+                > TypedEntityCaptureMaxRetainedBytes
+            || entityBytes > TypedEntityCaptureMaxRetainedBytes
+                - cData->typedEntityRetainedBytes
+            || underlayIndexNodeBytes
+                > TypedEntityCaptureMaxRetainedBytes
+                    - cData->typedEntityRetainedBytes - entityBytes) {
+            cData->typedEntityCaptureFailed = true;
+            return;
+        }
+        dx_ifaceUnderlay* underlay =
+            retainTypedEntity<dx_ifaceUnderlay>(*data);
+        if (underlay == nullptr)
+            return;
+        underlay->sourceImportGeneration = cData->importGeneration;
+        try {
+            cData->underlays.push_back(underlay);
+            cData->typedEntityRetainedBytes += underlayIndexNodeBytes;
+        } catch (...) {
+            cData->typedEntityCaptureFailed = true;
+        }
+    }
+
     void addWipeout(const DRW_Wipeout *data) override {
         // WIPEOUT owns a masking boundary, not a raster file/IMAGEDEF link.
         if (data == nullptr)
@@ -1004,6 +1041,7 @@ public:
             // before any table/owner records consume output handles.
             if (!planLeaderAnnotationHandles()) {
                 (void)dxfW->writeLeader(nullptr);
+    void linkUnderlay(const DRW_UnderlayDefinition *data) override;
                 return;
             }
         }
@@ -1453,6 +1491,20 @@ public:
                     dxfW->writeRawDxfObject(nullptr);
                     return;
                 }
+            }
+        }
+        objectWritePhase = "underlay definitions";
+        std::unordered_set<std::uint32_t> underlayHandles;
+        for (const dx_data::UnderlayDefinitionKey& key :
+             m_underlayDefinitionKeysToWrite) {
+            const auto definition = cData->underlayDefinitions.find(key);
+            if (key.first != cData->importGeneration
+                || definition == cData->underlayDefinitions.end()
+                || definition->second.handle != key.second
+                || !underlayHandles.insert(key.second).second
+                || !dxfW->writeUnderlayDefinition(&definition->second)) {
+                dxfW->writeRawDxfObject(nullptr);
+                return;
             }
         }
         objectWritePhase = "sort dictionaries and layouts";
@@ -2604,7 +2656,11 @@ private:
             return nullptr;
         observeDxfBlockDeliveryValue(static_cast<std::int32_t>(source.eType),source.handle,source.parentHandle,
                                     DRW_DxfBlockCallback::Count,nullptr,&source);
-        using OriginalModel=typename std::conditional<std::is_same<EntityT,dx_ifaceImg>::value,DRW_Image,EntityT>::type;
+        using OriginalModel=typename std::conditional<
+            std::is_same<EntityT,dx_ifaceImg>::value, DRW_Image,
+            typename std::conditional<
+                std::is_same<EntityT, dx_ifaceUnderlay>::value,
+                DRW_Underlay, EntityT>::type>::type;
         observeDxfEntitiesTyped<OriginalModel>(source);
         retainTableEntityIdentity(static_cast<const DRW_Entity&>(source));
         if (currentBlock == nullptr
@@ -3352,6 +3408,8 @@ private:
     struct DxfDynamicBlockReplaySource {
         bool hasTypedModel{false};
         bool hasBlockRepresentationModel{false};
+    std::vector<dx_data::UnderlayDefinitionKey>
+        m_underlayDefinitionKeysToWrite;
         DRW_DynamicBlockObject model;
         DRW_RawDxfObject raw;
     };

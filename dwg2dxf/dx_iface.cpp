@@ -8401,6 +8401,9 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         std::unordered_map<std::uint32_t, const DRW_XRecord*> xrecords;
         std::unordered_map<std::uint32_t, const DRW_Material*> materials;
         std::unordered_map<std::uint32_t,
+        std::unordered_map<std::uint32_t,
+                           const DRW_UnderlayDefinition*>
+            underlayDefinitions;
                            const DRW_AssociativeObject*> associativeRecords;
         std::unordered_map<std::uint32_t,
                            const DRW_DynamicBlockObject*>
@@ -8569,6 +8572,24 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         sortEntsOutput.reserve(m_sortEmissionTables.size());
         for (const DRW_SortEntsTable& table : m_sortEmissionTables) {
             if (!examineSourceRecord()
+        inventoryFamily = "UNDERLAY definition identities";
+        for (const auto& definition : data->underlayDefinitions) {
+            if (definition.first.first != data->importGeneration)
+                continue;
+            if (!examineSourceRecord())
+                return false;
+            if (definition.first.second == 0u
+                || definition.first.second == DRW::NoHandle
+                || definition.second.handle != definition.first.second
+                || definition.second.kind < DRW_UnderlayDefinition::PDF
+                || definition.second.kind > DRW_UnderlayDefinition::DWF
+                || definition.second.filename.empty()
+                || !sourceHandles.insert(definition.first.second).second
+                || !underlayDefinitions.emplace(
+                    definition.first.second, &definition.second).second)
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "invalid or duplicate UNDERLAY definition identity");
+        }
                 || table.handle == 0u || table.handle == DRW::NoHandle
                 || !sortEntsOutput.emplace(table.handle, &table).second)
                 return reject(ExtensionGraphFailure::InvalidGraph,
@@ -9614,6 +9635,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             Phase phase{Phase::Enter};
             std::size_t index{0};
             const DRW_MLineStyle* mlineStyle{nullptr};
+        std::unordered_set<std::uint32_t> visitedUnderlayDefinitions;
             const DRW_MLeaderStyle* mleaderStyle{nullptr};
             const DRW_PlotSettings* plotSettings{nullptr};
             const DRW_RenderSettings* renderSettings{nullptr};
@@ -9645,6 +9667,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 && associative != associativeRecords.end()) {
                 Frame frame{handle};
                 frame.associative = associative->second;
+            const DRW_UnderlayDefinition* underlayDefinition{nullptr};
                 frames.push_back(frame);
                 return true;
             }
@@ -9656,6 +9679,14 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 Frame frame{handle, nullptr, nullptr, nullptr, nullptr,
                             nullptr, nullptr, Phase::Enter, 0};
                 frame.dictionaryWithDefault =
+            const auto underlayDefinition = underlayDefinitions.find(handle);
+            if (!requireDictionary
+                && underlayDefinition != underlayDefinitions.end()) {
+                Frame frame{handle};
+                frame.underlayDefinition = underlayDefinition->second;
+                frames.push_back(frame);
+                return true;
+            }
                     dictionaryWithDefault->second;
                 frames.push_back(frame);
                 return true;
@@ -9813,6 +9844,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     activeGraphPhase = "record completion";
                     break;
                 }
+                addOwner(underlayDefinitions);
                 const DRW_TableEntry* entryPointer = nullptr;
                 if (frame.dictionaryWithDefault != nullptr)
                     entryPointer = frame.dictionaryWithDefault;
@@ -9877,6 +9909,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                         : frame.plotSettings != nullptr
                                             ? visitedPlotSettings.count(frame.handle) != 0
                                         : frame.material != nullptr
+                else if (frame.underlayDefinition != nullptr)
+                    entryPointer = frame.underlayDefinition;
                                             ? visitedMaterials.count(frame.handle) != 0
                                             : frame.renderSettings != nullptr
                                                 ? visitedRenderSettings.count(frame.handle) != 0
@@ -9913,6 +9947,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         };
                         const auto completeValueDependency = [data](
                                 const DRW_AssociativeObject& candidate) {
+                                        : frame.underlayDefinition != nullptr
+                                            ? visitedUnderlayDefinitions.count(frame.handle) != 0
                             const bool valueKindMatches =
                                 candidate.m_valueDependencyValueCode == 40
                                     ? candidate.m_valueDependencyValueKind
@@ -11183,7 +11219,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                 "associative record has no admitted AC1024 writer profile");
                         }
                     }
-                    if (frame.dictionary || frame.record || frame.material) {
+                    if (frame.dictionary || frame.record || frame.material
+                        || frame.underlayDefinition) {
                         if (!preflightEdgeCandidateCount(entry.appData.size(), "typed common-group inventory work limit")) return false;
                         unsigned reactorGroups = 0u, dictionaryGroups = 0u;
                         for (const auto& group : entry.appData) {
@@ -11416,6 +11453,17 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     ++m_extensionGraphStats.stagedHandles;
                     visiting.insert(frame.handle);
                     if (frame.dictionary != nullptr)
+                    } else if (frame.underlayDefinition != nullptr) {
+                        const DRW_UnderlayDefinition& definition =
+                            *frame.underlayDefinition;
+                        if (definition.handle != frame.handle
+                            || definition.parentHandle != entry.parentHandle
+                            || definition.kind < DRW_UnderlayDefinition::PDF
+                            || definition.kind > DRW_UnderlayDefinition::DWF
+                            || definition.filename.empty())
+                            return reject(
+                                ExtensionGraphFailure::InvalidGraph,
+                                "UNDERLAY definition has an invalid identity, kind, filename, or dictionary owner");
                         m_extensionDictionaryHandles.push_back(frame.handle);
                     else if (frame.dictionaryWithDefault != nullptr)
                         m_extensionDictionaryWithDefaultHandles.push_back(
@@ -11495,6 +11543,10 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         frame.index = 0;
                         frame.phase = Phase::DefaultEntry;
                         break;
+                    }
+                    else if (frame.underlayDefinition != nullptr) {
+                        // UNDERLAY definitions are emitted by the dedicated
+                        // rooted dictionary writer after generic graph proof.
                     }
                     if (layoutSymbolKey(frame.associative->m_recordName)
                             == "ACDBASSOCNETWORK"
@@ -12126,6 +12178,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     return reject(ExtensionGraphFailure::InvalidGraph,
                         "GROUP has a null reactor target");
                 if (groupReferenceHandles.count(reactor) != 0u
+                    else if (frame.underlayDefinition != nullptr)
+                        visitedUnderlayDefinitions.insert(frame.handle);
                     || linetypeHandles.count(reactor) != 0u
                     || blockDelimiterHandles.count(reactor) != 0u)
                     continue;
@@ -21336,6 +21390,53 @@ void dx_iface::addAssociativeObject(
     }
     try {
         cData->associativeObjects.push_back(data);
+void dx_iface::linkUnderlay(const DRW_UnderlayDefinition* data) {
+    if (data == nullptr || cData == nullptr
+        || cData->underlayDefinitionCaptureFailed)
+        return;
+    const std::uint64_t generation = cData->importGeneration;
+    if (data->handle == 0u || data->handle == DRW::NoHandle) {
+        cData->underlayDefinitionCaptureFailed = true;
+        return;
+    }
+
+    std::size_t estimatedBytes = sizeof(std::pair<
+        const dx_data::UnderlayDefinitionKey, DRW_UnderlayDefinition>)
+        + 3u * sizeof(void*);
+    if (data->filename.size() == std::numeric_limits<std::size_t>::max()
+        || data->sheetName.size() == std::numeric_limits<std::size_t>::max()
+        || !addTableEntryRetainedBytes(*data, estimatedBytes)
+        || !addAssociativeRetainedBytes(data->filename.size() + 1u,
+                                        estimatedBytes)
+        || !addAssociativeRetainedBytes(data->sheetName.size() + 1u,
+                                        estimatedBytes)
+        || cData->underlayDefinitionRetainedRecords
+            >= ImageDefinitionCaptureMaxRecords
+        || cData->underlayDefinitions.size()
+            >= ImageDefinitionCaptureMaxRecords
+        || cData->underlayDefinitionRetainedBytes
+            > ImageDefinitionCaptureMaxRetainedBytes
+        || estimatedBytes > ImageDefinitionCaptureMaxRetainedBytes
+            - cData->underlayDefinitionRetainedBytes) {
+        cData->underlayDefinitionCaptureFailed = true;
+        return;
+    }
+
+    const dx_data::UnderlayDefinitionKey key{generation, data->handle};
+    try {
+        const auto inserted = cData->underlayDefinitions.emplace(key, *data);
+        if (!inserted.second) {
+            cData->conflictingUnderlayDefinitions.insert(key);
+            cData->underlayDefinitionCaptureFailed = true;
+            return;
+        }
+        ++cData->underlayDefinitionRetainedRecords;
+        cData->underlayDefinitionRetainedBytes += estimatedBytes;
+    } catch (...) {
+        cData->underlayDefinitionCaptureFailed = true;
+    }
+}
+
         receipt.retainedBytes += estimatedBytes;
     } catch (...) {
         receipt.captureFailed = true;
@@ -39607,7 +39708,8 @@ void dx_iface::addUnsupportedObject(const DRW_UnsupportedObject& data) {
     const bool viewportEntityHeaderControl =
         data.m_recordName
         == DRW_UnsupportedObject::vportEntityHeaderControlRecordName();
-    if (cData->dwgReadOutcome.attempted && !viewportEntityHeaderControl)
+    if (cData->dwgReadOutcome.attempted && !viewportEntityHeaderControl
+        && !typedUnderlayDefinition)
         countDwgReadCallback(cData->dwgReadOutcome.opaqueViewCallbacks);
 
     if (isStandardDwgObjectType(data.m_objectType) && !data.m_isCustomClass) {
@@ -39697,6 +39799,19 @@ void dx_iface::addUnsupportedObject(const DRW_UnsupportedObject& data) {
         cData->acdsHistoryDwgFrameCaptureFailed = true;
     }
 }
+    const bool underlayDefinitionClass =
+        data.m_recordName == "PDFDEFINITION"
+        || data.m_recordName == "DGNDEFINITION"
+        || data.m_recordName == "DWFDEFINITION"
+        || data.m_className == "AcDbPdfDefinition"
+        || data.m_className == "AcDbDgnDefinition"
+        || data.m_className == "AcDbDwfDefinition";
+    const bool typedUnderlayDefinition =
+        cData->dwgReadOutcome.attempted
+        && cData->sourceFormat == dx_source_format::DWG
+        && underlayDefinitionClass
+        && cData->underlayDefinitions.count(
+               {cData->importGeneration, data.m_handle}) == 1u;
 
 void dx_iface::addObjectContextData(const DRW_ObjectContextData& data) {
     (void)data;
@@ -39733,6 +39848,12 @@ bool tableSourceCellEqual(const DRW_TableCell& a, const DRW_TableCell& b) noexce
         || !tableSourcePointEqual(a.m_geometryTopLeft,b.m_geometryTopLeft)
         || !tableSourcePointEqual(a.m_geometryCenter,b.m_geometryCenter)) return false;
     const double left[]={a.m_rotation,a.m_blockScale,a.m_width,a.m_height,a.m_contentWidth,a.m_contentHeight,
+    // These objects have a complete public DRW_UnderlayDefinition model and
+    // arrive through linkUnderlay before the auxiliary raw callback. The typed
+    // output route owns them; classifying them as opaque would require a raw
+    // callback publication in addition to the typed record.
+    if (typedUnderlayDefinition)
+        return;
         a.m_geometryWidth,a.m_geometryHeight,a.m_textHeight};
     const double right[]={b.m_rotation,b.m_blockScale,b.m_width,b.m_height,b.m_contentWidth,b.m_contentHeight,
         b.m_geometryWidth,b.m_geometryHeight,b.m_textHeight};
@@ -69765,6 +69886,15 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         }
         return false;
     };
+    for (const auto& definition : cData->underlayDefinitions) {
+        if (definition.first.first != cData->importGeneration)
+            continue;
+        if (!remapFixedCollision(definition.first.second)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
     bool rawXdataHandleInventory = hasRawXdataHandle(cData->mBlock);
     for (const dx_ifaceBlock* block : cData->blocks)
         rawXdataHandleInventory = rawXdataHandleInventory
@@ -70174,7 +70304,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             const bool closedDictionary = targetDictionary != nullptr
                 && targetDictionary->parentHandle
                     == cData->namedObjectDictionary.handle
-                && (dictionaryQueued
+                && (dictionaryQueued || underlayDictionaryQueued
                     || (!requireResolvedOwners
                         && targetDictionary->m_entries.empty()));
             const bool closedDictionaryWithDefault =
@@ -70261,6 +70391,190 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             delete dxfW;
             dxfW = nullptr;
             return false;
+    std::set<std::uint32_t> underlayDictionaryHandles;
+    m_underlayDefinitionKeysToWrite.clear();
+    bool underlayGraphValid = !cData->underlayDefinitionCaptureFailed;
+    std::map<std::uint32_t, const DRW_UnderlayDefinition*>
+        currentUnderlayDefinitions;
+    std::set<dx_data::UnderlayDefinitionKey> rootedUnderlayDefinitions;
+    try {
+        for (const auto& entry : cData->underlayDefinitions) {
+            if (entry.first.first != cData->importGeneration)
+                continue;
+            const DRW_UnderlayDefinition& definition = entry.second;
+            if (entry.first.second == 0u || entry.first.second == DRW::NoHandle
+                || definition.handle != entry.first.second
+                || definition.kind < DRW_UnderlayDefinition::PDF
+                || definition.kind > DRW_UnderlayDefinition::DWF
+                || definition.filename.empty()
+                || !currentUnderlayDefinitions.emplace(
+                    entry.first.second, &definition).second) {
+                underlayGraphValid = false;
+                break;
+            }
+            m_underlayDefinitionKeysToWrite.push_back(entry.first);
+        }
+
+        const auto inspectUnderlayEntities = [&](const dx_ifaceBlock* block) {
+            if (block == nullptr)
+                return true;
+            for (const DRW_Entity* entity : block->ent) {
+                if (entity == nullptr || entity->eType != DRW::UNDERLAY)
+                    continue;
+                const auto* underlay =
+                    dynamic_cast<const dx_ifaceUnderlay*>(entity);
+                if (underlay == nullptr
+                    || underlay->sourceImportGeneration
+                        != cData->importGeneration
+                    || underlay->definitionHandle == 0u
+                    || underlay->definitionHandle == DRW::NoHandle)
+                    return false;
+                const auto definition = cData->underlayDefinitions.find(
+                    {underlay->sourceImportGeneration,
+                     underlay->definitionHandle});
+                if (definition == cData->underlayDefinitions.end()
+                    || static_cast<int>(definition->second.kind)
+                        != static_cast<int>(underlay->kind))
+                    return false;
+            }
+            return true;
+        };
+        if (underlayGraphValid
+            && (!inspectUnderlayEntities(cData->mBlock)
+                || !std::all_of(cData->blocks.begin(), cData->blocks.end(),
+                    [&](const dx_ifaceBlock* block) {
+                        return inspectUnderlayEntities(block);
+                    })))
+            underlayGraphValid = false;
+
+        struct UnderlayDictionaryProfile {
+            const char* rootName;
+            DRW_UnderlayDefinition::Kind kind;
+        };
+        static constexpr UnderlayDictionaryProfile profiles[] = {
+            {"ACAD_PDFDEFINITIONS", DRW_UnderlayDefinition::PDF},
+            {"ACAD_DGNDEFINITIONS", DRW_UnderlayDefinition::DGN},
+            {"ACAD_DWFDEFINITIONS", DRW_UnderlayDefinition::DWF}};
+        if (underlayGraphValid && !currentUnderlayDefinitions.empty()
+            && !cData->hasNamedObjectDictionary)
+            underlayGraphValid = false;
+
+        for (const UnderlayDictionaryProfile& profile : profiles) {
+            if (!underlayGraphValid)
+                break;
+            std::size_t rootMatches = 0u;
+            std::uint32_t dictionaryHandle = 0u;
+            if (cData->hasNamedObjectDictionary) {
+                for (const DRW_Dictionary::Entry& entry :
+                     cData->namedObjectDictionary.m_entries) {
+                    if (layoutSymbolKey(entry.m_name) == profile.rootName) {
+                        ++rootMatches;
+                        dictionaryHandle = entry.m_handle;
+                    }
+                }
+            }
+            bool hasDefinitionsOfKind = false;
+            for (const auto& definition : currentUnderlayDefinitions)
+                hasDefinitionsOfKind = hasDefinitionsOfKind
+                    || definition.second->kind == profile.kind;
+            if (rootMatches > 1u || (rootMatches == 0u
+                    && hasDefinitionsOfKind)) {
+                underlayGraphValid = false;
+                break;
+            }
+            if (rootMatches == 0u)
+                continue;
+            if (dictionaryHandle == 0u
+                || dictionaryHandle == DRW::NoHandle
+                || cData->namedObjectDictionary.handle == 0u
+                || cData->namedObjectDictionary.handle == DRW::NoHandle) {
+                underlayGraphValid = false;
+                break;
+            }
+
+            const DRW_Dictionary* dictionary = nullptr;
+            std::size_t dictionaryMatches = 0u;
+            for (const DRW_Dictionary& candidate : cData->dictionaries) {
+                if (candidate.handle != dictionaryHandle)
+                    continue;
+                dictionary = &candidate;
+                ++dictionaryMatches;
+            }
+            if (dictionaryMatches != 1u || dictionary == nullptr
+                || dictionary->parentHandle
+                    != cData->namedObjectDictionary.handle
+                || !dictionary->hasCompleteDxfEntries()
+                || (cData->sourceFormat == dx_source_format::DWG
+                    && !dictionary->hasCompleteDwgEntries())
+                || dictionary->m_entries.size()
+                    > DRW_Dictionary::kMaxEntries) {
+                underlayGraphValid = false;
+                break;
+            }
+            std::set<std::uint32_t> dictionaryTargets;
+            for (const DRW_Dictionary::Entry& entry : dictionary->m_entries) {
+                const auto definition = currentUnderlayDefinitions.find(
+                    entry.m_handle);
+                if (entry.m_handle == 0u || entry.m_handle == DRW::NoHandle
+                    || definition == currentUnderlayDefinitions.end()
+                    || definition->second->kind != profile.kind
+                    || definition->second->parentHandle != dictionaryHandle
+                    || !dictionaryTargets.insert(entry.m_handle).second
+                    || !rootedUnderlayDefinitions.emplace(
+                        cData->importGeneration, entry.m_handle).second) {
+                    underlayGraphValid = false;
+                    break;
+                }
+            }
+            if (!underlayGraphValid)
+                break;
+            std::size_t definitionsOfKind = 0u;
+            for (const auto& definition : currentUnderlayDefinitions)
+                if (definition.second->kind == profile.kind)
+                    ++definitionsOfKind;
+            if (dictionaryTargets.size() != definitionsOfKind
+                || !underlayDictionaryHandles.insert(dictionaryHandle).second) {
+                underlayGraphValid = false;
+                break;
+            }
+        }
+        if (underlayGraphValid
+            && rootedUnderlayDefinitions.size()
+                != currentUnderlayDefinitions.size())
+            underlayGraphValid = false;
+    } catch (...) {
+        underlayGraphValid = false;
+    }
+    if (underlayGraphValid) {
+        for (const dx_data::UnderlayDefinitionKey& key :
+             m_underlayDefinitionKeysToWrite) {
+            const std::uint32_t outputHandle =
+                dxfW->remapHandle(key.second);
+            if (outputHandle == 0u || outputHandle == DRW::NoHandle
+                || !dxfW->reserveHandle(outputHandle)) {
+                underlayGraphValid = false;
+                break;
+            }
+        }
+    }
+    if (underlayGraphValid) {
+        for (const std::uint32_t sourceHandle : underlayDictionaryHandles) {
+            const std::uint32_t outputHandle =
+                dxfW->remapHandle(sourceHandle);
+            if (outputHandle == 0u || outputHandle == DRW::NoHandle
+                || !dxfW->reserveHandle(outputHandle)) {
+                underlayGraphValid = false;
+                break;
+            }
+        }
+    }
+    if (!underlayGraphValid) {
+        if (debug || requireResolvedOwners)
+            std::cerr << "DXF export rejected incomplete UNDERLAY definition graph\n";
+        delete dxfW;
+        dxfW = nullptr;
+        return false;
+    }
         }
         std::uint32_t emittedHandle = layoutEntry->m_handle;
         emittedHandle = dxfW->remapHandle(emittedHandle);
@@ -70587,6 +70901,8 @@ bool dx_iface::planLeaderAnnotationHandles() {
             for (const dx_ifaceBlock* block : cData->blocks) {
                 if (block != nullptr && block->handle != 0
                     && block->handle != DRW::NoHandle
+            const bool underlayDictionaryQueued =
+                underlayDictionaryHandles.count(sourceEntry.m_handle) != 0u;
                     && annotationHandles.count(block->handle) != 0u)
                     objectHandleCollisions.insert(block->handle);
             }
@@ -70946,3 +71262,25 @@ void dx_iface::writeEntity(DRW_Entity* e){
             selected->second.published = true;
     }
 }
+    case DRW::UNDERLAY:
+        if (auto* underlay = dynamic_cast<dx_ifaceUnderlay*>(e)) {
+            if (cData == nullptr) {
+                dxfW->writeRawDxfEntity(nullptr);
+            } else {
+                const auto definition = cData->underlayDefinitions.find(
+                    {underlay->sourceImportGeneration,
+                     underlay->definitionHandle});
+                if (definition == cData->underlayDefinitions.end()
+                    || static_cast<int>(definition->second.kind)
+                        != static_cast<int>(underlay->kind)
+                    || definition->second.handle
+                        != underlay->definitionHandle) {
+                    dxfW->writeRawDxfEntity(nullptr);
+                } else {
+                    written = dxfW->writeUnderlay(underlay);
+                }
+            }
+        } else {
+            dxfW->writeRawDxfEntity(nullptr);
+        }
+        break;
