@@ -62,6 +62,45 @@ DRW_Coord extrusionUnitVector(DRW_Coord direction) {
     return direction;
 }
 
+void calculateOcsAxes(DRW_Coord direction, DRW_Coord& axisX,
+                      DRW_Coord& axisY) {
+    const DRW_Coord normal = extrusionUnitVector(direction);
+    if (std::fabs(normal.x) < 0.015625
+        && std::fabs(normal.y) < 0.015625) {
+        // Ax = Wy x N, where Wy is [0, 1, 0].
+        axisX = DRW_Coord(normal.z, 0.0, -normal.x);
+    } else {
+        // Ax = Wz x N, where Wz is [0, 0, 1].
+        axisX = DRW_Coord(-normal.y, normal.x, 0.0);
+    }
+    axisX.unitize();
+
+    // Ay = N x Ax.
+    axisY = DRW_Coord(
+        normal.y * axisX.z - axisX.y * normal.z,
+        normal.z * axisX.x - axisX.z * normal.x,
+        normal.x * axisX.y - axisX.x * normal.y);
+    axisY.unitize();
+}
+
+DRW_Coord transformOcsCoordinate(DRW_Coord normal,
+                                 const DRW_Coord& coordinate) {
+    DRW_Coord axisX;
+    DRW_Coord axisY;
+    calculateOcsAxes(normal, axisX, axisY);
+    const DRW_Coord axisZ(
+        axisX.y * axisY.z - axisX.z * axisY.y,
+        axisX.z * axisY.x - axisX.x * axisY.z,
+        axisX.x * axisY.y - axisX.y * axisY.x);
+    return DRW_Coord(
+        axisX.x * coordinate.x + axisY.x * coordinate.y
+            + axisZ.x * coordinate.z,
+        axisX.y * coordinate.x + axisY.y * coordinate.y
+            + axisZ.y * coordinate.z,
+        axisX.z * coordinate.x + axisY.z * coordinate.y
+            + axisZ.z * coordinate.z);
+}
+
 struct EmbeddedMTextHandleInfo {
     bool m_ownerHandle = false;
     int m_numReactors = 0;
@@ -4206,32 +4245,7 @@ bool DRW_Entity::releaseDxfRetainedStringBytes(std::size_t& ownerBytes) {
 *  @author Rallaz
 */
 void DRW_Entity::calculateAxis(DRW_Coord extPoint){
-    extPoint = extrusionUnitVector(extPoint);
-    //Follow the arbitrary DXF definitions for extrusion axes.
-    if (fabs(extPoint.x) < 0.015625 && fabs(extPoint.y) < 0.015625) {
-        //If we get here, implement Ax = Wy x N where Wy is [0,1,0] per the DXF spec.
-        //The cross product works out to Wy.y*N.z-Wy.z*N.y, Wy.z*N.x-Wy.x*N.z, Wy.x*N.y-Wy.y*N.x
-        //Factoring in the fixed values for Wy gives N.z,0,-N.x
-        extAxisX.x = extPoint.z;
-        extAxisX.y = 0;
-        extAxisX.z = -extPoint.x;
-    } else {
-        //Otherwise, implement Ax = Wz x N where Wz is [0,0,1] per the DXF spec.
-        //The cross product works out to Wz.y*N.z-Wz.z*N.y, Wz.z*N.x-Wz.x*N.z, Wz.x*N.y-Wz.y*N.x
-        //Factoring in the fixed values for Wz gives -N.y,N.x,0.
-        extAxisX.x = -extPoint.y;
-        extAxisX.y = extPoint.x;
-        extAxisX.z = 0;
-    }
-
-    extAxisX.unitize();
-
-    //Ay = N x Ax
-    extAxisY.x = (extPoint.y * extAxisX.z) - (extAxisX.y * extPoint.z);
-    extAxisY.y = (extPoint.z * extAxisX.x) - (extAxisX.z * extPoint.x);
-    extAxisY.z = (extPoint.x * extAxisX.y) - (extAxisX.x * extPoint.y);
-
-    extAxisY.unitize();
+    calculateOcsAxes(extPoint, extAxisX, extAxisY);
 }
 
 //! Extrude a point using arbitrary axis
@@ -14978,6 +14992,19 @@ DRW_HatchLoop& DRW_HatchLoop::operator=(const DRW_HatchLoop& rhs) {
         objlist.swap(copies);
     }
     return *this;
+}
+
+DRW_Coord DRW_Hatch::boundaryPointToWcs(
+    const DRW_Coord& ocsPoint) const {
+    DRW_Coord elevatedPoint(ocsPoint.x, ocsPoint.y,
+                            basePoint.z + ocsPoint.z);
+    return transformOcsCoordinate(extPoint, elevatedPoint);
+}
+
+DRW_Coord DRW_Hatch::boundaryVectorToWcs(
+    const DRW_Coord& ocsVector) const {
+    return transformOcsCoordinate(
+        extPoint, DRW_Coord(ocsVector.x, ocsVector.y, ocsVector.z));
 }
 
 DRW_Hatch::DRW_Hatch(const DRW_Hatch& rhs)

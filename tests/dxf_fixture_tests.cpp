@@ -22228,6 +22228,44 @@ void testTextOcsExtrusion(TestContext& t) {
     }
 }
 
+void testHatchOcsWcsCoordinateMapping(TestContext& t) {
+    const auto equalPoint = [](const DRW_Coord& actual,
+                               double x, double y, double z) {
+        return std::abs(actual.x - x) < 1e-12
+            && std::abs(actual.y - y) < 1e-12
+            && std::abs(actual.z - z) < 1e-12;
+    };
+
+    DRW_Hatch hatch;
+    hatch.basePoint = DRW_Coord(0.0, 0.0, 4.0);
+    hatch.extPoint = DRW_Coord(1.0, 0.0, 0.0);
+    const DRW_Coord localPoint(2.0, 3.0);
+    const DRW_Coord localVector(2.0, 3.0);
+    const DRW_Coord worldPoint = hatch.boundaryPointToWcs(localPoint);
+    const DRW_Coord worldVector = hatch.boundaryVectorToWcs(localVector);
+    t.expect(equalPoint(worldPoint, 4.0, 2.0, 3.0),
+             "HATCH OCS boundary point includes elevation and arbitrary normal");
+    t.expect(equalPoint(worldVector, 0.0, 2.0, 3.0),
+             "HATCH OCS boundary vector maps without elevation translation");
+    t.expect(equalPoint(localPoint, 2.0, 3.0, 0.0)
+                 && equalPoint(hatch.basePoint, 0.0, 0.0, 4.0)
+                 && equalPoint(hatch.extPoint, 1.0, 0.0, 0.0),
+             "HATCH mapping preserves its input and stored OCS frame");
+
+    DRW_MPolygon mpolygon;
+    mpolygon.basePoint = DRW_Coord(0.0, 0.0, 4.0);
+    mpolygon.extPoint = DRW_Coord(2.0, 0.0, 0.0);
+    t.expect(equalPoint(mpolygon.boundaryPointToWcs(localPoint),
+                        4.0, 2.0, 3.0),
+             "MPOLYGON inherits HATCH mapping and normalizes the extrusion");
+
+    hatch.basePoint = DRW_Coord(0.0, 0.0, 4.0);
+    hatch.extPoint = DRW_Coord(0.0, 0.0, -1.0);
+    t.expect(equalPoint(hatch.boundaryPointToWcs(localPoint),
+                        -2.0, 3.0, -4.0),
+             "negative WCS Z extrusion follows the arbitrary-axis rule");
+}
+
 bool writeUnderlayOcsControl(const std::filesystem::path& path,
                              bool binary) {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
@@ -61273,6 +61311,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testTextOcsExtrusion(context);
         std::cout << "DXF TEXT/INSERT/ATTRIB OCS extrusion controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--hatch-ocs-wcs-coordinate") {
+        TestContext context;
+        testHatchOcsWcsCoordinateMapping(context);
+        std::cout << "HATCH/MPOLYGON OCS to WCS coordinate mapping: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

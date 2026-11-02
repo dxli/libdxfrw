@@ -3469,6 +3469,14 @@ public:
         looplist.push_back(v);
     }
 
+    //! Map an OCS HATCH/MPOLYGON boundary point to WCS. The hatch elevation
+    //! (group 10) is added to the point's OCS Z before applying the normal.
+    //! The source point and stored 2D boundary model are not modified.
+    DRW_Coord boundaryPointToWcs(const DRW_Coord& ocsPoint) const;
+
+    //! Map an OCS HATCH/MPOLYGON boundary vector to WCS without translation.
+    DRW_Coord boundaryVectorToWcs(const DRW_Coord& ocsVector) const;
+
 protected:
     // DWG parsing may reuse an entity instance after a failed or older-version
     // parse. Clear every HATCH-owned carrier before reading the next body.
