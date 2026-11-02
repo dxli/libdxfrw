@@ -229,17 +229,34 @@ and [Autodesk's VIEWPORT DXF table](https://help.autodesk.com/cloudhelp/2025/ENU
    no modeled payload. Keep FIELD suppression separate from TABLE payload
    handling: the AC1021 TABLE flags=2/type=2 checksum profile is source-backed
    in the [TABLE CadValue receipt](docs/research/rpp5ag-cadvalue-framing-and-native-table-retention-fast-slice-2026-10-22.json).
-   Physical AC1021 FIELD flags=2/type=2 checksum children remain incomplete:
-   under ODA §20.4.99 suppression, 71 `_text` records leave unexplained 34-bit
-   body suffixes. ACadSharp reads them as BD doubles, and a temporary mask-0x01
-   candidate matched all 71 handle/value pairs; this conflicts with current
-   LibreDWG and is not enough to override the specification. Keep the records
-   raw-only until an eligible producer source or bounded independent reader
-   adjudicates the spans. See the [reader-conflict receipt](docs/research/p5-ac1021-field-flags2-child-reader-conflict-2026-11-01.json). A generated in-memory AC1021 control with a flags=2/type=2 child and opaque 34-bit tail verifies that this boundary remains incomplete; the same parser instance also accepts and encodes a corrected complete frame on retry. No DWG/DXF fixture was added. The type-8 receipt records
+   Physical AC1021 FIELD flags=2/type=2 checksum children now follow the
+   generic present-payload rule: ODA §20.4.99 says flag bit 1 (`0x01`) suppresses
+   the type-specific value, and current LibreDWG master uses the same mask.
+   The physical census confirms all 71 `ACFD_FIELDTEXT_CHECKSUM` children decode
+   as finite BD values and their containing FIELD records are complete. The
+   superseding [resolution receipt](docs/research/p5-ac1021-field-flags2-checksum-payload-resolution-2026-11-02.json)
+   corrects the earlier reader-conflict interpretation; retain the older
+   [conflict receipt](docs/research/p5-ac1021-field-flags2-child-reader-conflict-2026-11-01.json)
+   as historical evidence. The generated vector verifies both complete payload
+   consumption and refusal of an additional unexplained 34-bit tail, followed
+   by successful same-object correction retry. No DWG/DXF fixture was added.
+   This closes only the checksum-child span profile, not physical FIELD
+   output/readback or native evaluation. A separate generated strict DXF
+   control now writes the exact flags=2/type=2 `ACFD_FIELDTEXT_CHECKSUM`
+   child profile in ASCII and Binary; an AC1021 core-writer vector checks the
+   group-93/group-140 emission. It refuses the same value under an
+   unqualified key without replacing the destination, retries after correction,
+   and verifies fresh typed readback. Its [transport receipt](docs/research/p5-ac1021-field-checksum-generated-dxf-transport-2026-11-02.json)
+   records the generated-only boundary. The pre-write root checks use the
+   requested target version; reading `dxfW->getVersion()` there used an unset
+   codec version and incorrectly rejected the qualified target. This still
+   does not establish physical DWG source-to-output or native FIELD semantics.
+   The type-8 receipt records
    the group-98 wire-type
    disagreement and unresolved child-count framing for type-4 roots. For the
-   physical AC1021 FIELD population, only 15 `AcExpr` records presently parse
-   as complete and 127/142 records remain raw-only. The 42 peer-selected
+   physical AC1021 FIELD population, 15 `AcExpr` roots parse as complete; the
+   71 checksum children are also now complete, leaving 56/142 records raw-only.
+   The 42 peer-selected
    `AcObjProp` handles match local raw-only shells. Their object-data suffixes
    remain unexplained:
    41 records leave 258 bits and handle `0x1481E` leaves 210 bits. Do not mark
@@ -327,8 +344,6 @@ recheck is recorded in the
 [flag-scope receipt](docs/research/p5-table-cadvalue-oda-flags-and-ac1021-checksum-scope-2026-11-02.json).
 It does not resolve the AC1027 TABLECONTENT span discrepancy, qualify native
 TABLE semantics, or promote any support claim.
-
-**AC1021 FIELD flags=2/type=2 payload correction:** ODA v5.4.1 §20.4.99 and the current LibreDWG schema gate the type-specific value only on bit 0 (`0x01`). The parser now consumes the BD value for the physical `ACFD_FIELDTEXT_CHECKSUM` children; all 71 local source-profile children complete, while 42 peer-selected `AcObjProp.16.2` records remain raw-only. Generated controls verify re-encoding and continued refusal of an unexplained suffix. Thirteen focused FIELD CTests pass, and the physical census remains incomplete for other records. This does not qualify source-to-DXF output or native FIELD evaluation. See [the payload-resolution receipt](docs/research/p5-ac1021-field-flags2-checksum-payload-resolution-2026-11-02.json).
 
 **Legacy FIELD DXF flag guard:** AC1018 serialization now refuses nonzero root
 or child CadValue format flags before emitting bytes. Autodesk's FIELD DXF

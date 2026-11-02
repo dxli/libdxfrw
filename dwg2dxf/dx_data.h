@@ -955,6 +955,7 @@ public:
     bool rawDynamicBlockCaptureFailed{false};
     std::list<dx_ifaceBlock*>blocks;    //stores a copy of all blocks and the entities in it
     std::list<dx_ifaceImg*>images;      //temporary list to find images for link with DRW_ImageDef. Do not delete it!!
+    std::list<dx_ifaceUnderlay*> underlays; //non-owning indexes into BLOCK entity lists
 
     // IMAGEDEF is delivered after IMAGE entities. Preserve full definitions
     // under their import generation and source handle; a filename is not a
@@ -964,7 +965,6 @@ public:
     std::map<ImageDefinitionKey, DRW_ImageDefinitionReactor> imageDefinitionReactors;
     std::size_t imageDefinitionReactorRetainedRecords{0u};
     std::size_t imageDefinitionReactorRetainedBytes{0u};
-    std::list<dx_ifaceUnderlay*> underlays; //non-owning indexes into BLOCK entity lists
     bool imageDefinitionReactorCaptureFailed{false};
     // Callback-owned IMAGEDEF map copies are bounded across this container's
     // lifetime. Filename paths copied into IMAGE entities use the separate
@@ -979,6 +979,14 @@ public:
     std::set<ImageDefinitionKey> conflictingImageDefinitions;
     std::set<std::uint64_t> invalidImageDefinitionGenerations;
 
+    using UnderlayDefinitionKey = std::pair<std::uint64_t, std::uint32_t>;
+    std::map<UnderlayDefinitionKey, DRW_UnderlayDefinition>
+        underlayDefinitions;
+    std::set<UnderlayDefinitionKey> conflictingUnderlayDefinitions;
+    std::size_t underlayDefinitionRetainedRecords{0};
+    std::size_t underlayDefinitionRetainedBytes{0};
+    bool underlayDefinitionCaptureFailed{false};
+
     bool retainImageDefinition(std::uint64_t generation,
                                const DRW_ImageDef& definition) {
         if (definition.handle == 0 || definition.handle == DRW::NoHandle) {
@@ -989,14 +997,6 @@ public:
                 invalidImageDefinitionGenerations.insert(generation);
                 ++imageDefinitionAuxiliaryStatusKeysRetained;
             }
-    using UnderlayDefinitionKey = std::pair<std::uint64_t, std::uint32_t>;
-    std::map<UnderlayDefinitionKey, DRW_UnderlayDefinition>
-        underlayDefinitions;
-    std::set<UnderlayDefinitionKey> conflictingUnderlayDefinitions;
-    std::size_t underlayDefinitionRetainedRecords{0};
-    std::size_t underlayDefinitionRetainedBytes{0};
-    bool underlayDefinitionCaptureFailed{false};
-
             return false;
         }
         const ImageDefinitionKey key{generation, definition.handle};

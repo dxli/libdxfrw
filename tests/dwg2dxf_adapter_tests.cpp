@@ -30843,7 +30843,8 @@ bool fieldListMembershipOutput() {
         childInteger.m_value.m_value = DRW_Variant(91, std::int32_t{17});
         child.m_childValues.push_back(childInteger);
         DRW_Field::ChildValue childDouble;
-        childDouble.m_key = "CHILD_DOUBLE";
+        childDouble.m_key = "ACFD_FIELDTEXT_CHECKSUM";
+        childDouble.m_value.m_formatFlags = 2;
         childDouble.m_value.m_dataType = 2;
         childDouble.m_value.m_value = DRW_Variant(140, 2.75);
         child.m_childValues.push_back(childDouble);
@@ -30963,6 +30964,21 @@ bool fieldListMembershipOutput() {
             first.handle, second.handle, child.handle, mainInteger0.handle,
             mainInteger.handle, mainDouble.handle, mainBinary.handle,
             mainPoint2d.handle, mainPoint3d.handle};
+        const auto sourceChecksumField = std::find_if(
+            data.fields.begin(), data.fields.end(),
+            [](const DRW_Field& field) {
+                return field.m_fieldCode == "FIELD_LIST_CHILD";
+            });
+        if (sourceChecksumField == data.fields.end())
+            return fail("checksum FIELD child was not retained");
+        auto sourceChecksum = std::find_if(
+            sourceChecksumField->m_childValues.begin(),
+            sourceChecksumField->m_childValues.end(),
+            [](const DRW_Field::ChildValue& value) {
+                return value.m_key == "ACFD_FIELDTEXT_CHECKSUM";
+            });
+        if (sourceChecksum == sourceChecksumField->m_childValues.end())
+            return fail("checksum FIELD child value was not retained");
         DRW_Field& secondField = *std::next(data.fields.begin());
         const auto mainPoint3dRecord = std::find_if(
             data.fields.begin(), data.fields.end(),
@@ -30988,7 +31004,7 @@ bool fieldListMembershipOutput() {
         secondField.m_value.m_value.addInt(
             330, referenceTarget->handle);
         if (!writer.fileExport(output.string(), DRW::AC1027, binary,
-                               &data, false))
+                               &data, true))
             return fail("corrected FIELD object references did not retry on the same adapter");
 
         {
@@ -31014,6 +31030,29 @@ bool fieldListMembershipOutput() {
         if (!writer.fileExport(output.string(), DRW::AC1027, binary,
                                &data, false))
             return fail("corrected FIELD coordinate did not retry on the same adapter");
+
+        {
+            std::ofstream existing(output,
+                std::ios::binary | std::ios::trunc);
+            if (!existing || !(existing << sentinel))
+                return fail("could not restore FIELD profile refusal sentinel");
+        }
+        sourceChecksum->m_key = "UNQUALIFIED_CHECKSUM_PROFILE";
+        if (writer.fileExport(output.string(), DRW::AC1027, binary,
+                              &data, false))
+            return fail("FIELD with flags=2 under an unqualified key was exported");
+        {
+            std::ifstream existing(output, std::ios::binary);
+            const std::string preserved{
+                std::istreambuf_iterator<char>(existing),
+                std::istreambuf_iterator<char>()};
+            if (preserved != sentinel)
+                return fail("unqualified FIELD flags=2 replaced destination");
+        }
+        sourceChecksum->m_key = "ACFD_FIELDTEXT_CHECKSUM";
+        if (!writer.fileExport(output.string(), DRW::AC1027, binary,
+                               &data, false))
+            return fail("corrected FIELD flags=2 profile did not retry");
 
         dx_data readback;
         dx_iface reader;
@@ -31148,7 +31187,7 @@ bool fieldListMembershipOutput() {
         const auto parsedChildDouble = std::find_if(
             parsedChild->m_childValues.begin(), parsedChild->m_childValues.end(),
             [](const DRW_Field::ChildValue& value) {
-                return value.m_key == "CHILD_DOUBLE";
+                return value.m_key == "ACFD_FIELDTEXT_CHECKSUM";
             });
         const auto parsedChildBinary = std::find_if(
             parsedChild->m_childValues.begin(), parsedChild->m_childValues.end(),
@@ -31242,6 +31281,7 @@ bool fieldListMembershipOutput() {
             || parsedChildInteger->m_value.m_value.i_val() != 17
             || parsedChildDouble == parsedChild->m_childValues.end()
             || parsedChildDouble->m_value.m_dataType != 2
+            || parsedChildDouble->m_value.m_formatFlags != 2
             || parsedChildDouble->m_value.m_value.type()
                 != DRW_Variant::DOUBLE
             || parsedChildDouble->m_value.m_value.code() != 140
@@ -61379,140 +61419,6 @@ bool sortEntsAdapter(const std::filesystem::path& prefix) {
 
 } // namespace
 
-bool ucsBaseHeaderNameTargetClosure() {
-    const auto nonce = static_cast<std::uint64_t>(
-        std::chrono::steady_clock::now().time_since_epoch().count());
-    const auto readFile = [](const std::filesystem::path& path) {
-        std::ifstream input(path, std::ios::binary);
-        return std::string{std::istreambuf_iterator<char>{input},
-                           std::istreambuf_iterator<char>{}};
-    };
-    const std::string sentinel = "preserve UCS target destination\n";
-    for (const bool binary : {false, true}) {
-        const auto path = std::filesystem::temp_directory_path()
-            / ("libdxfrw-ucs-base-target-" + std::to_string(nonce)
-               + (binary ? "-binary.dxf" : "-ascii.dxf"));
-        {
-            std::ofstream output(path, std::ios::binary);
-            if (!output)
-                return fail("could not create UCS base target sentinel");
-            output << sentinel;
-        }
-
-        dx_data data;
-        data.headerC.addStr("$UCSBASE", "MODEL-BASE", 2);
-        data.headerC.addStr("$PUCSBASE", "PAPER-BASE", 2);
-        dx_iface writer;
-        const auto exportStrict = [&]() {
-            return writer.fileExport(path.string(), DRW::AC1027, binary,
-                                     &data, false, true);
-        };
-        if (exportStrict() || readFile(path) != sentinel)
-            return fail("strict export accepted a missing UCSBASE target or replaced its destination");
-        dx_iface completeWriter;
-        if (completeWriter.fileExport(
-                path.string(), DRW::AC1027, binary, &data, false, false,
-                dx_dxfSourceTextPolicy::Compatible,
-                DRW::DxfTextWritePolicy::Compatible,
-                dx_dxfProxyGraphicsPolicy::Compatible,
-                dx_dwgReadCompletenessPolicy::RequireComplete)
-            || readFile(path) != sentinel)
-            return fail("RequireComplete export accepted a missing UCSBASE target or replaced its destination");
-
-        DRW_UCS modelBase;
-        modelBase.handle = 0xA101u;
-        modelBase.name = "Model-Base";
-        data.ucsList.push_back(modelBase);
-        if (exportStrict() || readFile(path) != sentinel)
-            return fail("strict export accepted a missing PUCSBASE target or replaced its destination");
-
-        DRW_UCS paperBase;
-        paperBase.handle = 0xA102u;
-        paperBase.name = "Paper-Base";
-        data.ucsList.push_back(paperBase);
-        if (!exportStrict())
-            return fail("strict export rejected unique ASCII case-insensitive UCSBASE/PUCSBASE targets");
-        const std::string acceptedBytes = readFile(path);
-        if (acceptedBytes.empty())
-            return fail("strict UCS base target export produced an empty file");
-
-        DRW_UCS ambiguousBase;
-        ambiguousBase.handle = 0xA103u;
-        ambiguousBase.name = "MODEL-BASE";
-        data.ucsList.push_back(ambiguousBase);
-        if (exportStrict() || readFile(path) != acceptedBytes)
-            return fail("strict export accepted an ambiguous UCS name or replaced the prior output");
-        data.ucsList.pop_back();
-        if (!exportStrict() || readFile(path) != acceptedBytes)
-            return fail("same-adapter UCS target correction retry did not restore the original output");
-
-        dx_data readback;
-        dx_iface reader;
-        std::string modelName;
-        std::string paperName;
-        const auto readHeaderString = [&readback](const char* key,
-                                                   std::string& value) {
-            const auto found = readback.headerC.vars.find(key);
-            if (found == readback.headerC.vars.end()
-                || found->second == nullptr
-                || found->second->type() != DRW_Variant::STRING
-                || found->second->code() != 2)
-                return false;
-            value = found->second->c_str();
-            return true;
-        };
-        if (!reader.fileImport(path.string(), &readback, false)
-            || !readHeaderString("$UCSBASE", modelName)
-            || !readHeaderString("$PUCSBASE", paperName)
-            || modelName != "MODEL-BASE" || paperName != "PAPER-BASE"
-            || readback.ucsList.size() != 2u)
-            return fail("fresh DXF readback did not preserve UCS base names and target table records");
-
-        std::error_code ignored;
-        std::filesystem::remove(path, ignored);
-    }
-
-    const auto worldPath = std::filesystem::temp_directory_path()
-        / ("libdxfrw-ucs-base-world-" + std::to_string(nonce) + ".dxf");
-    dx_data worldData;
-    worldData.headerC.addStr("$UCSBASE", "WORLD", 2);
-    worldData.headerC.addStr("$PUCSBASE", "", 2);
-    dx_iface worldWriter;
-    if (!worldWriter.fileExport(worldPath.string(), DRW::AC1027, false,
-                                &worldData, false, true))
-        return fail("strict export rejected built-in WORLD or blank PUCSBASE defaults");
-    {
-        std::error_code ignored;
-        std::filesystem::remove(worldPath, ignored);
-    }
-
-    const auto unicodePath = std::filesystem::temp_directory_path()
-        / ("libdxfrw-ucs-base-unicode-" + std::to_string(nonce) + ".dxf");
-    {
-        std::ofstream output(unicodePath, std::ios::binary);
-        if (!output)
-            return fail("could not create Unicode UCS target sentinel");
-        output << sentinel;
-    }
-    dx_data unicodeData;
-    unicodeData.headerC.addStr("$UCSBASE", "Étage", 2);
-    DRW_UCS unicodeBase;
-    unicodeBase.handle = 0xA201u;
-    unicodeBase.name = "ÉTAGE";
-    unicodeData.ucsList.push_back(unicodeBase);
-    dx_iface unicodeWriter;
-    if (unicodeWriter.fileExport(unicodePath.string(), DRW::AC1027, false,
-                                 &unicodeData, false, true)
-        || readFile(unicodePath) != sentinel)
-        return fail("strict export promoted a non-ASCII UCS case variant without native collation evidence");
-    {
-        std::error_code ignored;
-        std::filesystem::remove(unicodePath, ignored);
-    }
-    return true;
-}
-
-
 bool groupAdapterRoundTrip() {
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
@@ -61852,6 +61758,139 @@ bool groupAdapterRoundTrip() {
                     "unresolved ACAD_GROUP dictionary target"))
                 return false;
         }
+    }
+    return true;
+}
+
+bool ucsBaseHeaderNameTargetClosure() {
+    const auto nonce = static_cast<std::uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto readFile = [](const std::filesystem::path& path) {
+        std::ifstream input(path, std::ios::binary);
+        return std::string{std::istreambuf_iterator<char>{input},
+                           std::istreambuf_iterator<char>{}};
+    };
+    const std::string sentinel = "preserve UCS target destination\n";
+    for (const bool binary : {false, true}) {
+        const auto path = std::filesystem::temp_directory_path()
+            / ("libdxfrw-ucs-base-target-" + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        {
+            std::ofstream output(path, std::ios::binary);
+            if (!output)
+                return fail("could not create UCS base target sentinel");
+            output << sentinel;
+        }
+
+        dx_data data;
+        data.headerC.addStr("$UCSBASE", "MODEL-BASE", 2);
+        data.headerC.addStr("$PUCSBASE", "PAPER-BASE", 2);
+        dx_iface writer;
+        const auto exportStrict = [&]() {
+            return writer.fileExport(path.string(), DRW::AC1027, binary,
+                                     &data, false, true);
+        };
+        if (exportStrict() || readFile(path) != sentinel)
+            return fail("strict export accepted a missing UCSBASE target or replaced its destination");
+        dx_iface completeWriter;
+        if (completeWriter.fileExport(
+                path.string(), DRW::AC1027, binary, &data, false, false,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::RequireComplete)
+            || readFile(path) != sentinel)
+            return fail("RequireComplete export accepted a missing UCSBASE target or replaced its destination");
+
+        DRW_UCS modelBase;
+        modelBase.handle = 0xA101u;
+        modelBase.name = "Model-Base";
+        data.ucsList.push_back(modelBase);
+        if (exportStrict() || readFile(path) != sentinel)
+            return fail("strict export accepted a missing PUCSBASE target or replaced its destination");
+
+        DRW_UCS paperBase;
+        paperBase.handle = 0xA102u;
+        paperBase.name = "Paper-Base";
+        data.ucsList.push_back(paperBase);
+        if (!exportStrict())
+            return fail("strict export rejected unique ASCII case-insensitive UCSBASE/PUCSBASE targets");
+        const std::string acceptedBytes = readFile(path);
+        if (acceptedBytes.empty())
+            return fail("strict UCS base target export produced an empty file");
+
+        DRW_UCS ambiguousBase;
+        ambiguousBase.handle = 0xA103u;
+        ambiguousBase.name = "MODEL-BASE";
+        data.ucsList.push_back(ambiguousBase);
+        if (exportStrict() || readFile(path) != acceptedBytes)
+            return fail("strict export accepted an ambiguous UCS name or replaced the prior output");
+        data.ucsList.pop_back();
+        if (!exportStrict() || readFile(path) != acceptedBytes)
+            return fail("same-adapter UCS target correction retry did not restore the original output");
+
+        dx_data readback;
+        dx_iface reader;
+        std::string modelName;
+        std::string paperName;
+        const auto readHeaderString = [&readback](const char* key,
+                                                   std::string& value) {
+            const auto found = readback.headerC.vars.find(key);
+            if (found == readback.headerC.vars.end()
+                || found->second == nullptr
+                || found->second->type() != DRW_Variant::STRING
+                || found->second->code() != 2)
+                return false;
+            value = found->second->c_str();
+            return true;
+        };
+        if (!reader.fileImport(path.string(), &readback, false)
+            || !readHeaderString("$UCSBASE", modelName)
+            || !readHeaderString("$PUCSBASE", paperName)
+            || modelName != "MODEL-BASE" || paperName != "PAPER-BASE"
+            || readback.ucsList.size() != 2u)
+            return fail("fresh DXF readback did not preserve UCS base names and target table records");
+
+        std::error_code ignored;
+        std::filesystem::remove(path, ignored);
+    }
+
+    const auto worldPath = std::filesystem::temp_directory_path()
+        / ("libdxfrw-ucs-base-world-" + std::to_string(nonce) + ".dxf");
+    dx_data worldData;
+    worldData.headerC.addStr("$UCSBASE", "WORLD", 2);
+    worldData.headerC.addStr("$PUCSBASE", "", 2);
+    dx_iface worldWriter;
+    if (!worldWriter.fileExport(worldPath.string(), DRW::AC1027, false,
+                                &worldData, false, true))
+        return fail("strict export rejected built-in WORLD or blank PUCSBASE defaults");
+    {
+        std::error_code ignored;
+        std::filesystem::remove(worldPath, ignored);
+    }
+
+    const auto unicodePath = std::filesystem::temp_directory_path()
+        / ("libdxfrw-ucs-base-unicode-" + std::to_string(nonce) + ".dxf");
+    {
+        std::ofstream output(unicodePath, std::ios::binary);
+        if (!output)
+            return fail("could not create Unicode UCS target sentinel");
+        output << sentinel;
+    }
+    dx_data unicodeData;
+    unicodeData.headerC.addStr("$UCSBASE", "Étage", 2);
+    DRW_UCS unicodeBase;
+    unicodeBase.handle = 0xA201u;
+    unicodeBase.name = "ÉTAGE";
+    unicodeData.ucsList.push_back(unicodeBase);
+    dx_iface unicodeWriter;
+    if (unicodeWriter.fileExport(unicodePath.string(), DRW::AC1027, false,
+                                 &unicodeData, false, true)
+        || readFile(unicodePath) != sentinel)
+        return fail("strict export promoted a non-ASCII UCS case variant without native collation evidence");
+    {
+        std::error_code ignored;
+        std::filesystem::remove(unicodePath, ignored);
     }
     return true;
 }
@@ -62457,6 +62496,8 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--generated-image-dictionary-source-identity")
         return imageCommonHandleRoleControls() && imageReactorCaptureControls() && generatedImageDictionarySourceIdentity()
             && generatedImageDefinitionExtensions() ? 0 : 1;
+    if (argc == 2 && std::string(argv[1]) == "--underlay-definition-graph")
+        return underlayDefinitionGraphRoundTrip() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--group-adapter-roundtrip")
         return groupAdapterRoundTrip() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--seqend-footer-table")
@@ -62667,8 +62708,6 @@ int main(int argc, char** argv) {
         return rejectMaintenanceDowngrade(path) ? 0 : 1;
     if (mode == "--reject-3dline-ac1014")
         return reject3DLineBeforeAC1015(path) ? 0 : 1;
-    if (argc == 2 && std::string(argv[1]) == "--underlay-definition-graph")
-        return underlayDefinitionGraphRoundTrip() ? 0 : 1;
     std::cerr << "unknown mode: " << mode << '\n';
     return 2;
 }

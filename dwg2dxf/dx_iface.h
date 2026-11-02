@@ -1004,6 +1004,7 @@ public:
     }
 
     void linkImage(const DRW_ImageDef *data) override;
+    void linkUnderlay(const DRW_UnderlayDefinition *data) override;
 
     virtual void addModelerGeometry(const DRW_ModelerGeometry& data) override{
         retainTypedEntity<DRW_ModelerGeometry>(data);
@@ -1073,7 +1074,6 @@ public:
             // before any table/owner records consume output handles.
             if (!planLeaderAnnotationHandles()) {
                 (void)dxfW->writeLeader(nullptr);
-    void linkUnderlay(const DRW_UnderlayDefinition *data) override;
                 return;
             }
         }
@@ -1455,6 +1455,20 @@ public:
                 break;
             }
         }
+        objectWritePhase = "underlay definitions";
+        std::unordered_set<std::uint32_t> underlayHandles;
+        for (const dx_data::UnderlayDefinitionKey& key :
+             m_underlayDefinitionKeysToWrite) {
+            const auto definition = cData->underlayDefinitions.find(key);
+            if (key.first != cData->importGeneration
+                || definition == cData->underlayDefinitions.end()
+                || definition->second.handle != key.second
+                || !underlayHandles.insert(key.second).second
+                || !dxfW->writeUnderlayDefinition(&definition->second)) {
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+        }
         objectWritePhase = "render settings";
         if (!hasUnchangedDxfRenderPresetSources()) {
             dxfW->writeRawDxfObject(nullptr);
@@ -1523,20 +1537,6 @@ public:
                     dxfW->writeRawDxfObject(nullptr);
                     return;
                 }
-            }
-        }
-        objectWritePhase = "underlay definitions";
-        std::unordered_set<std::uint32_t> underlayHandles;
-        for (const dx_data::UnderlayDefinitionKey& key :
-             m_underlayDefinitionKeysToWrite) {
-            const auto definition = cData->underlayDefinitions.find(key);
-            if (key.first != cData->importGeneration
-                || definition == cData->underlayDefinitions.end()
-                || definition->second.handle != key.second
-                || !underlayHandles.insert(key.second).second
-                || !dxfW->writeUnderlayDefinition(&definition->second)) {
-                dxfW->writeRawDxfObject(nullptr);
-                return;
             }
         }
         objectWritePhase = "sort dictionaries and layouts";
@@ -2228,7 +2228,8 @@ public:
         objectWritePhase = "FIELD and FIELDLIST records";
         std::unordered_set<std::uint32_t> tableFieldHandles;
         if (!cData->fields.empty()) {
-            if (!hasTableContentFieldOutputProfile(*cData)) {
+            if (!hasTableContentFieldOutputProfile(
+                    *cData, dxfW->getVersion())) {
                 dxfW->writeRawDxfObject(nullptr);
                 return;
             }
@@ -2344,7 +2345,8 @@ private:
     bool mlineStyleBodiesSourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
     bool mlineLayerSourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
     bool mlineLtypeSourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
-    bool hasTableContentFieldOutputProfile(const dx_data&) const noexcept;
+    bool hasTableContentFieldOutputProfile(
+        const dx_data&, DRW::Version outputVersion) const noexcept;
     bool tableContentDirectReferencesClosed(
         const DRW_TableContentObject&,
         const std::unordered_set<std::uint32_t>&) const noexcept;
@@ -3350,6 +3352,8 @@ private:
     bool hasUnchangedDynamicBlockOutputProfile() const noexcept;
 
     std::vector<std::uint32_t> m_extensionDictionaryHandles;
+    std::vector<dx_data::UnderlayDefinitionKey>
+        m_underlayDefinitionKeysToWrite;
     std::vector<std::uint32_t> m_extensionAssociativeHandles;
     std::vector<std::uint32_t> m_extensionBlockRepresentationDataHandles;
     std::vector<DRW_BlockRepresentationData>
@@ -3440,8 +3444,6 @@ private:
     struct DxfDynamicBlockReplaySource {
         bool hasTypedModel{false};
         bool hasBlockRepresentationModel{false};
-    std::vector<dx_data::UnderlayDefinitionKey>
-        m_underlayDefinitionKeysToWrite;
         DRW_DynamicBlockObject model;
         DRW_RawDxfObject raw;
     };
