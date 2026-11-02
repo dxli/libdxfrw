@@ -1,0 +1,81 @@
+{
+  "schema": "libdxfrw-implementation-slice-v1",
+  "id": "p6-dimension-mixed-frame-writeback-2026-11-02",
+  "date": "2026-11-02",
+  "status": "IMPLEMENTED_WORKTREE_VERIFIED",
+  "repositoryHead": "01e0f6eb",
+  "scope": {
+    "plan": "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md P6 \u2014 DIMENSION coordinate-frame transport",
+    "operation": "Preserve native DXF/DWG OCS point fields when a caller reads DIMENSION with applyExtrusion enabled and then serializes the result.",
+    "behavior": [
+      "DRW_Dimension::applyExtrusion transforms the modeled text, clone, and angular-arc OCS points to WCS and records the transformed state using the existing haveExtrusion flag; no object-layout or virtual-interface change is made.",
+      "DXF and DWG writers project only those transformed fields back into the native OCS frame before writing the extrusion vector; WCS definition fields remain unchanged.",
+      "Generated ASCII/Binary controls cover nine DIMENSION subtypes, four extrusion normals, raw and transformed read modes, output/readback, and a following-entity boundary sentinel.",
+      "A generated AC1015 DWG write/read control confirms the common text/clone OCS projection and the two-line angular-dimension arc point projection."
+    ],
+    "supportClaimEffect": "none"
+  },
+  "implementation": {
+    "files": {
+      "src/drw_entities.h": "314f6ffe30cd57c87ad3c0a5679e1e79b07ce15d54ae4b6fb1fcc5cce67adf0c",
+      "src/drw_entities.cpp": "2cd1a685e28e95b4e9c1a0880775aa0e5c5cef48258af82149a111796d60af92",
+      "src/libdxfrw.cpp": "77fae1df93efb78b5bb7f594ba05c0ea671190c6f99b8cc034b605df7d4d5fab",
+      "tests/dwg_local_roundtrip_tests.cpp": "fac60b7a40abbfc1d1a5173f60f288aaeccb53b87e348515b7447a9a3004ae22"
+    },
+    "artifacts": {
+      "build-gcc/libdxfrw.a": "934fee11f680ebb3d3db25c981a18ce87831e955bcd0e3f57115d04dc5b51126",
+      "build-gcc/libdxfrw_dwg_local_roundtrip": "837c1b6b97a7c07e6fdc89fd2ed6b54b06e481fc985dcf55868087ac7a3f39a3",
+      "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests": "52faedd6b187699569692fbe38e29a597c89df996fc3d53e3b82263cd5cf2102"
+    }
+  },
+  "validation": {
+    "build": {
+      "command": "cmake --build build-gcc --target dwg2dxf libdxfrw_dwg2dxf_adapter_tests libdxfrw_dwg_local_roundtrip lc3_compat_check -j4",
+      "result": "PASS"
+    },
+    "focusedTests": {
+      "command": "ctest --test-dir build-gcc -R '^(libdxfrw_dwg_local_roundtrip|libdxfrw_dxf_dimension_ocs_extrusion|dwg2dxf_dimension_frames_ascii_cli|dwg2dxf_dimension_frames_binary_cli|dwg2dxf_arc_dimension_flags_ascii_cli|dwg2dxf_arc_dimension_flags_binary_cli|dwg2dxf_modeler_dxf_writer_matrix|dwg2dxf_typed_entity_capture_limits|libdxfrw_writer_version_matrix)$' --output-on-failure",
+      "result": "PASS (9/9; 9.57 seconds)",
+      "coverage": [
+        "Local DWG round-trip aggregate, including DIMASSOC/object-carrier readback and surface subtype/retry assertions.",
+        "Generated ASCII and Binary DIMENSION mixed-frame read/write/readback in raw and applyExtrusion modes.",
+        "Generated AC1015 DWG write/read of applied-extrusion aligned text/clone points and angular arc point.",
+        "Generated ARC_DIMENSION flags, public OCS extrusion policy, modeler writer matrix, adapter capture limits, and writer version matrix."
+      ],
+      "passed": 9,
+      "failed": 0
+    },
+    "compatibilityBuild": {
+      "command": "cmake --build build-gcc --target lc3_compat_check --parallel 4",
+      "result": "PASS"
+    },
+    "diffCheck": {
+      "command": "git diff --check",
+      "result": "PASS"
+    },
+    "fullSuiteRun": false,
+    "asanRun": false,
+    "persistentFixtureAdded": false,
+    "buildCommand": "cmake --build build-gcc --target dwg2dxf libdxfrw_dwg2dxf_adapter_tests libdxfrw_dwg_local_roundtrip lc3_compat_check --parallel 4",
+    "buildResult": "PASS"
+  },
+  "limitations": [
+    "This receipt covers generated transport and coordinate-frame behavior only; it does not qualify physical producer prevalence, native dimension rendering, associative semantics, or broad format support.",
+    "No testing DWG/DXF fixture was added to the repository; all generated DXFs were written under /private/tmp."
+  ],
+  "repositoryState": {
+    "validationBaseHead": "01e0f6eb",
+    "validationSnapshot": "WORKTREE",
+    "note": "Validation ran against the source and artifact hashes listed above. Other in-progress worktree changes were present; no drawing fixtures were added."
+  },
+  "sha256": {
+    "src/drw_entities.h": "314f6ffe30cd57c87ad3c0a5679e1e79b07ce15d54ae4b6fb1fcc5cce67adf0c",
+    "src/drw_entities.cpp": "2cd1a685e28e95b4e9c1a0880775aa0e5c5cef48258af82149a111796d60af92",
+    "src/libdxfrw.cpp": "77fae1df93efb78b5bb7f594ba05c0ea671190c6f99b8cc034b605df7d4d5fab",
+    "tests/dwg_local_roundtrip_tests.cpp": "fac60b7a40abbfc1d1a5173f60f288aaeccb53b87e348515b7447a9a3004ae22",
+    "tests/CMakeLists.txt": "f281e68bc060b15bd4f7146bac164ef270355019c9ce125e3e8dec3a8c10f18f",
+    "build-gcc/libdxfrw.a": "e914dfaade4d7776a2cc6de6b1044a0ea26d7e0978d13472858fd5fe5a8f71b8",
+    "build-gcc/libdxfrw_dwg_local_roundtrip": "987896aa5f1323e86129fb5ebb594047e70816ed405e22c30fbbebbac8d4b167",
+    "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests": "6f12b9682af9840ebf9eca39bc52e773cd708d18c5ed293ee98806437d8d1bb2"
+  }
+}

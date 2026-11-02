@@ -27726,7 +27726,20 @@ public:
         tilted.setDimPoint({5.0, 6.0, 4.0});
         tilted.setDef1Point({7.0, 8.0, 4.0});
         tilted.setDef2Point({9.0, 10.0, 4.0});
+        tilted.applyExtrusion();
         wroteDimensions_ = writer_->writeDimension(&tilted);
+
+        DRW_DimAngular angular;
+        angular.setText("ANGULAR_APPLIED");
+        angular.setExtrusion({0.0, 0.6, 0.8});
+        angular.setTextPoint({2.0, 3.0, 4.0});
+        angular.setDimPoint({5.0, 6.0, 0.0});
+        angular.setFirstLine1({1.0, 2.0, 4.0});
+        angular.setFirstLine2({7.0, 6.0, 4.0});
+        angular.setSecondLine1({4.0, 5.0, 4.0});
+        angular.applyExtrusion();
+        wroteDimensions_ = writer_->writeDimension(&angular)
+            && wroteDimensions_;
 
         DRW_DimAligned zeroElevation;
         zeroElevation.setText("CLONE_ZERO");
@@ -27777,6 +27790,7 @@ public:
         const std::array<DRW_Coord, 3> pictureScales {{{
             1.25, 0.75, 2.5}, {1.0, 1.0, 1.0}, {0.5, 1.5, 2.25}}};
         const std::array<double, 3> pictureRotations {{0.375, 0.0, -0.625}};
+        bool angularFound = false;
         const auto same = [](DRW_Coord lhs, DRW_Coord rhs) {
             return nearDxfValue(lhs.x, rhs.x)
                 && nearDxfValue(lhs.y, rhs.y)
@@ -27820,6 +27834,16 @@ public:
                     return false;
                 }
                 found[index] = true;
+            } else if (const auto* angular =
+                           dynamic_cast<const DRW_DimAngular*>(entity)) {
+                const DRW_Coord expectedText{2.0, 3.0, 4.0};
+                const DRW_Coord expectedArc{5.0, 6.0, 0.0};
+                if (angularFound || angular->getText() != "ANGULAR_APPLIED"
+                    || !same(angular->getExtrusion(), {0.0, 0.6, 0.8})
+                    || !same(angular->getTextPoint(), expectedText)
+                    || !same(angular->getDimPoint(), expectedArc))
+                    return false;
+                angularFound = true;
             } else if (const auto* line =
                            dynamic_cast<const DRW_Line*>(entity)) {
                 followingLine = line->basePoint.x == 901.0
@@ -27834,7 +27858,8 @@ public:
         }
         return std::all_of(found.cbegin(), found.cend(),
                            [](bool value) { return value; })
-            && followingLine && data_.mBlock->ent.size() == 4u;
+            && angularFound && followingLine
+            && data_.mBlock->ent.size() == 5u;
     }
 
 private:
@@ -28615,7 +28640,7 @@ public:
     }
 };
 
-bool dimensionFrameMatches(dx_data& data) {
+bool dimensionFrameMatches(dx_data& data, bool applyExtrusion) {
     const std::array<DRW_Coord, 4> normals {{{0, 0, 1}, {0, 0, -1}, {0, .6, .8}, {.6, 0, .8}}};
     const std::array<DRW_Coord, 4> worldText {{{2, 3, 4}, {-2, 3, -4}, {-2, 0, 5}, {0, 2, 5}}};
     const auto same = [](DRW_Coord a, DRW_Coord b) {
@@ -28648,28 +28673,44 @@ bool dimensionFrameMatches(dx_data& data) {
         const int userPositioned = normal % 2 == 1 && kind < 7 ? 128 : 0;
         const int expectedFlags = 32 | subtype | (kind == 6 ? 64 : 0)
             | userPositioned;
+        const DRW_Coord expectedTextPoint = applyExtrusion
+            ? worldText[normal] : DRW_Coord{2, 3, 4};
         bool matches = dimension->eType == types[kind]
             && dimension->type == expectedFlags
             && dimension->getText() == "F" + std::to_string(normal) + "-" + std::to_string(kind)
             && same(dimension->getExtrusion(), normals[normal])
-            && same(dimension->getTextPoint(), {2, 3, 4})
+            && same(dimension->getTextPoint(), expectedTextPoint)
             && same(dimension->getDefPoint(), dimensionFrameWcs(normal, {3, 8, 4}));
-        DRW_Insert basis;
-        basis.extPoint = dimension->getExtrusion();
-        matches = matches && same(referenceInsertTransform(dimension->getTextPoint(), {0, 0, 0}, basis), worldText[normal]);
+        if (applyExtrusion) {
+            matches = matches
+                && same(dimension->getTextPoint(), worldText[normal]);
+        } else {
+            DRW_Insert basis;
+            basis.extPoint = dimension->getExtrusion();
+            matches = matches && same(referenceInsertTransform(
+                dimension->getTextPoint(), {0, 0, 0}, basis),
+                worldText[normal]);
+        }
         const auto first = dimensionFrameWcs(normal, {1, 2, 4});
         const auto second = dimensionFrameWcs(normal, {7, 6, 4});
         const auto circle = dimensionFrameWcs(normal, {4, 5, 4});
         if (auto* aligned = dynamic_cast<DRW_DimAligned*>(dimension)) {
-            matches = matches && same(aligned->getClonepoint(), {1, -2, 4})
+            const DRW_Coord expectedClonePoint = applyExtrusion
+                ? dimensionFrameWcs(normal, {1, -2, 4})
+                : DRW_Coord{1, -2, 4};
+            matches = matches && same(aligned->getClonepoint(), expectedClonePoint)
                 && same(aligned->getDef1Point(), first) && same(aligned->getDef2Point(), second);
         } else if (auto* angular = dynamic_cast<DRW_DimAngular*>(dimension)) {
+            const DRW_Coord expectedDimPoint = applyExtrusion
+                ? dimensionFrameWcs(normal, {5, 6, 4})
+                : DRW_Coord{5, 6, 4};
             matches = matches && same(angular->getFirstLine1(), first)
                 && same(angular->getFirstLine2(), second) && same(angular->getSecondLine1(), circle)
-                && same(angular->getDimPoint(), {5, 6, 4});
+                && same(angular->getDimPoint(), expectedDimPoint);
         } else if (auto* angular = dynamic_cast<DRW_DimAngular3p*>(dimension)) {
             matches = matches && same(angular->getFirstLine(), first)
-                && same(angular->getSecondLine(), second) && same(angular->getVertexPoint(), circle);
+                && same(angular->getSecondLine(), second)
+                && same(angular->getVertexPoint(), circle);
         } else if (auto* large = dynamic_cast<DRW_DimLargeRadial*>(dimension)) {
             matches = matches && same(large->getChordPoint(), circle)
                 && same(large->overrideCenterPoint, dimensionFrameWcs(normal, {2, 4, 4}))
@@ -28682,7 +28723,8 @@ bool dimensionFrameMatches(dx_data& data) {
             matches = matches && same(ordinate->getFirstLine(), first) && same(ordinate->getSecondLine(), second);
         } else if (auto* arc = dynamic_cast<DRW_DimArc*>(dimension)) {
             matches = matches && same(arc->getExtLine1(), first) && same(arc->getExtLine2(), second)
-                && same(arc->getArcCenter(), circle) && arc->arcStartAngle == .25 && arc->arcEndAngle == 1.75;
+                && same(arc->getArcCenter(), circle)
+                && arc->arcStartAngle == .25 && arc->arcEndAngle == 1.75;
         }
         bool pictureFound = false;
         for (const auto* block : data.blocks) {
@@ -28691,7 +28733,9 @@ bool dimensionFrameMatches(dx_data& data) {
             pictureFound = line && same(line->basePoint, {100.0 + id, 200, 300});
         }
         matches = matches && pictureFound;
-        if (!matches) std::cerr << "DIMENSION frame F" << normal << '-' << kind << " not retained\n";
+        if (!matches)
+            std::cerr << "DIMENSION frame F" << normal << '-' << kind
+                      << " not retained\n";
         valid = matches && valid;
         ++id;
     }
@@ -28703,7 +28747,8 @@ bool verifyDimensionFrameFile(const std::filesystem::path& path, bool applyExtru
     DimensionFrameCapture capture(data);
     const auto name = path.string();
     dxfRW reader(name.c_str());
-    return reader.read(&capture, applyExtrusion) && dimensionFrameMatches(data);
+    return reader.read(&capture, applyExtrusion)
+        && dimensionFrameMatches(data, applyExtrusion);
 }
 
 bool runDxfDimensionFrames(bool binary, const std::filesystem::path& directory, bool keepOutput) {
@@ -28724,7 +28769,7 @@ bool runDxfDimensionFrames(bool binary, const std::filesystem::path& directory, 
         dx_iface writer;
         matches = writer.fileExport(output.string(), DRW::AC1027, binary, &data, false)
             && dimensionFrameWireFlagsMatch(output, binary, expectedFlags)
-            && dimensionFrameMatches(data)
+            && dimensionFrameMatches(data, applyExtrusion)
             && verifyDimensionFrameFile(output, applyExtrusion) && matches;
         valid = matches && valid;
         if (!keepOutput) { std::error_code ec; std::filesystem::remove(output, ec); }

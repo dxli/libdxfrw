@@ -105,6 +105,24 @@ DRW_Coord transformOcsCoordinate(DRW_Coord normal,
             + axisZ.z * coordinate.z);
 }
 
+DRW_Coord inverseTransformOcsCoordinate(DRW_Coord normal,
+                                        const DRW_Coord& coordinate) {
+    DRW_Coord axisX;
+    DRW_Coord axisY;
+    calculateOcsAxes(normal, axisX, axisY);
+    const DRW_Coord axisZ(
+        axisX.y * axisY.z - axisX.z * axisY.y,
+        axisX.z * axisY.x - axisX.x * axisY.z,
+        axisX.x * axisY.y - axisX.y * axisY.x);
+    return DRW_Coord(
+        axisX.x * coordinate.x + axisX.y * coordinate.y
+            + axisX.z * coordinate.z,
+        axisY.x * coordinate.x + axisY.y * coordinate.y
+            + axisY.z * coordinate.z,
+        axisZ.x * coordinate.x + axisZ.y * coordinate.y
+            + axisZ.z * coordinate.z);
+}
+
 struct EmbeddedMTextHandleInfo {
     bool m_ownerHandle = false;
     int m_numReactors = 0;
@@ -24496,6 +24514,25 @@ void DRW_Dimension::applyExtrusion() {
     extrudePoint(extPoint, &textPoint);
     extrudePoint(extPoint, &clonePoint);
     extrudePoint(extPoint, &arcPoint);
+    // Reuse the existing per-entity flag to avoid changing DRW_Dimension's
+    // public object layout. The transformed fields are now WCS; a later DXF
+    // write projects them back to the native OCS frame.
+    haveExtrusion = false;
+}
+
+DRW_Coord DRW_Dimension::getDxfTextPoint() const {
+    return !haveExtrusion
+        ? inverseTransformOcsCoordinate(extPoint, textPoint) : textPoint;
+}
+
+DRW_Coord DRW_Dimension::getDxfClonePoint() const {
+    return !haveExtrusion
+        ? inverseTransformOcsCoordinate(extPoint, clonePoint) : clonePoint;
+}
+
+DRW_Coord DRW_Dimension::getDxfArcPoint() const {
+    return !haveExtrusion
+        ? inverseTransformOcsCoordinate(extPoint, arcPoint) : arcPoint;
 }
 
 bool DRW_Dimension::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
@@ -24702,6 +24739,7 @@ bool DRW_Dimension::parseDwg(DRW::Version version, dwgBuffer *buf, dwgBuffer *sB
         return false;
 
     extPoint = parsedExtrusion;
+    haveExtrusion = true; // Parsed DIMENSION points remain in their native frame.
     textPoint = parsedTextPoint;
     type = parsedTypeValue;
     text = parsedText;
@@ -25309,9 +25347,10 @@ bool DRW_Dimension::encodeDwgDimBase(DRW::Version version, dwgBufferW *buf,
     // R2007+: the dim text below is routed to strBuf (the separate string
     // stream) via the (strBuf ? strBuf : buf) selector in putVariableText.
     buf->put3BitDouble(extPoint);        // 3BD per ODA §20.4.22 (NOT BE, NO padding bits)
-    buf->putRawDouble(textPoint.x);
-    buf->putRawDouble(textPoint.y);
-    buf->putBitDouble(textPoint.z);
+    const DRW_Coord dxfTextPoint = getDxfTextPoint();
+    buf->putRawDouble(dxfTextPoint.x);
+    buf->putRawDouble(dxfTextPoint.y);
+    buf->putBitDouble(dxfTextPoint.z);
     // Reverse the parseDwg type-byte transformation:
     //   parseDwg bit0=0 → type bit7 set;  bit0=1 → type bit7 clear
     //   parseDwg bit1=1 → type bit5 set;  bit1=0 → type bit5 clear
@@ -25335,8 +25374,9 @@ bool DRW_Dimension::encodeDwgDimBase(DRW::Version version, dwgBufferW *buf,
         buf->putBit(flipArrow1 ? 1 : 0);
         buf->putBit(flipArrow2 ? 1 : 0);
     }
-    buf->putRawDouble(clonePoint.x);
-    buf->putRawDouble(clonePoint.y);
+    const DRW_Coord dxfClonePoint = getDxfClonePoint();
+    buf->putRawDouble(dxfClonePoint.x);
+    buf->putRawDouble(dxfClonePoint.y);
     return true;
 }
 

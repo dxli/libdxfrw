@@ -8943,9 +8943,10 @@ bool dxfRW::writeArcDimension(DRW_DimArc *d) {
     writer->writeDouble(10, d->getArcDefPoint().x);
     writer->writeDouble(20, d->getArcDefPoint().y);
     writer->writeDouble(30, d->getArcDefPoint().z);
-    writer->writeDouble(11, d->getTextPoint().x);
-    writer->writeDouble(21, d->getTextPoint().y);
-    writer->writeDouble(31, d->getTextPoint().z);
+    const DRW_Coord textPoint = d->getDxfTextPoint();
+    writer->writeDouble(11, textPoint.x);
+    writer->writeDouble(21, textPoint.y);
+    writer->writeDouble(31, textPoint.z);
     // ARC_DIMENSION: subtype 5 in low 3 bits (same as angular3p); preserve high bits.
     const int dimType = (d->type & ~0x07) | 5 | 32;
     writer->writeInt16(70, dimType);
@@ -8978,7 +8979,7 @@ bool dxfRW::writeArcDimension(DRW_DimArc *d) {
     writer->writeInt16(71, d->hasLeader ? 1 : 0);
     // The presence flag controls display, not the stored point values. Keep
     // inactive leader points as well; do not replace them with extension points.
-    const DRW_Coord lp1 = d->getLeaderPt1();
+    const DRW_Coord lp1 = d->getDxfArcPoint();
     const DRW_Coord lp2 = d->leaderPt2;
     writer->writeDouble(16, lp1.x); writer->writeDouble(26, lp1.y); writer->writeDouble(36, lp1.z);
     writer->writeDouble(17, lp2.x); writer->writeDouble(27, lp2.y); writer->writeDouble(37, lp2.z);
@@ -9008,9 +9009,10 @@ bool dxfRW::writeLargeRadialDimension(DRW_DimLargeRadial *d) {
     writer->writeDouble(10, d->getCenterPoint().x);
     writer->writeDouble(20, d->getCenterPoint().y);
     writer->writeDouble(30, d->getCenterPoint().z);
-    writer->writeDouble(11, d->getTextPoint().x);
-    writer->writeDouble(21, d->getTextPoint().y);
-    writer->writeDouble(31, d->getTextPoint().z);
+    const DRW_Coord textPoint = d->getDxfTextPoint();
+    writer->writeDouble(11, textPoint.x);
+    writer->writeDouble(21, textPoint.y);
+    writer->writeDouble(31, textPoint.z);
     int dimType = (d->type & ~0x07) | 4;
     if (!(dimType & 32))
         dimType += 32;
@@ -9380,9 +9382,10 @@ bool dxfRW::writeDimension(DRW_Dimension *ent) {
         writer->writeDouble(10, ent->getDefPoint().x);
         writer->writeDouble(20, ent->getDefPoint().y);
         writer->writeDouble(30, ent->getDefPoint().z);
-        writer->writeDouble(11, ent->getTextPoint().x);
-        writer->writeDouble(21, ent->getTextPoint().y);
-        writer->writeDouble(31, ent->getTextPoint().z);
+        const DRW_Coord textPoint = ent->getDxfTextPoint();
+        writer->writeDouble(11, textPoint.x);
+        writer->writeDouble(21, textPoint.y);
+        writer->writeDouble(31, textPoint.z);
         // DRW_Dimension::type carries DXF flags, while the concrete C++
         // subtype is represented by eType.  Callers historically assigned
         // DRW::DIMENSION to type (the entity enum value) when constructing a
@@ -9504,9 +9507,10 @@ bool dxfRW::writeDimension(DRW_Dimension *ent) {
             writer->writeDouble(15, dd->getSecondLine1().x);
             writer->writeDouble(25, dd->getSecondLine1().y);
             writer->writeDouble(35, dd->getSecondLine1().z);
-            writer->writeDouble(16, dd->getDimPoint().x);
-            writer->writeDouble(26, dd->getDimPoint().y);
-            writer->writeDouble(36, dd->getDimPoint().z);
+            const DRW_Coord dimPoint = ent->getDxfArcPoint();
+            writer->writeDouble(16, dimPoint.x);
+            writer->writeDouble(26, dimPoint.y);
+            writer->writeDouble(36, dimPoint.z);
             break; }
             case DRW::DIMANGULAR3P: {
             DRW_DimAngular3p * dd = (DRW_DimAngular3p*)ent;
@@ -20467,6 +20471,8 @@ bool dxfRW::processArcDimension() {
             // See processDimension(): the frozen parser stores group 2 raw,
             // while the public callback contract carries UTF-8 model text.
             d.setName(reader->toUtf8String(d.getName(), 2));
+            if (applyExt)
+                d.applyExtrusion();
             iface->addDimArc(&d);
             return true;
         }
@@ -20494,6 +20500,8 @@ bool dxfRW::processLargeRadialDimension() {
             // See processDimension(): preserve the callback's UTF-8 semantic
             // string contract without rebinding the frozen parser source.
             d.setName(reader->toUtf8String(d.getName(), 2));
+            if (applyExt)
+                d.applyExtrusion();
             iface->addDimRadial(&d);
             return true;
         }

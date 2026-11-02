@@ -478,7 +478,7 @@ public:
         acDbColorHandle = ref;
     }
 
-	bool haveExtrusion = false;        /*!< set to true if the entity have extrusion*/
+	bool haveExtrusion = false;        /*!< extrusion present; DRW_Dimension also uses false after applyExtrusion() to mark its OCS points as WCS */
     // Ordered typed XDATA: strings1000/1001/1003 are semantic UTF-8;
     // controls1002, binary1004 and handle1005 retain their distinct roles.
 	std::vector<std::shared_ptr<DRW_Variant>> extData; /*!< FIFO list of extended data, codes 1000 to 1071*/
@@ -5003,9 +5003,16 @@ public:
     // The default DXF read mode retains those native frames; applyExtrusion
     // converts only the OCS point fields.
     void applyExtrusion() override;
+    // Return the OCS values required by DXF/DWG writers. When a caller
+    // requested applyExtrusion() on read, haveExtrusion is cleared to record
+    // that the public OCS point fields now hold WCS coordinates; project them
+    // back before serializing the extrusion vector.
 
 protected:
     void resetDwgState();
+    DRW_Coord getDxfTextPoint() const;
+    DRW_Coord getDxfClonePoint() const;
+    DRW_Coord getDxfArcPoint() const;
     bool parseCode(int code, const std::unique_ptr<dxfReader>& reader) override;
     virtual bool parseDwg(DRW::Version version, dwgBuffer *buf, dwgBuffer *sBuf, std::uint32_t bs = 0) override;
     virtual bool parseDwg(DRW::Version version, dwgBuffer* buf, std::uint32_t bs=0) override;
@@ -5037,7 +5044,7 @@ public:
     void setFlipArrow2(bool v) { flipArrow2 = v; }
 
     DRW_Coord getExtrusion() const {return extPoint;}            /*!< extrusion, code 210, 220 & 230 */
-    void setExtrusion(const DRW_Coord p) {extPoint =p;}
+    void setExtrusion(const DRW_Coord p) {extPoint =p; haveExtrusion = true;} /*!< Set extrusion and mark DIMENSION point fields as native OCS. */
     // DWG anonymous-dimension-picture-block placement. These are not the
     // dimension clone offset or DXF's dimension-specific point/rotation data.
     DRW_Coord getAnonymousBlockScale() const { return anonymousBlockScale; }
