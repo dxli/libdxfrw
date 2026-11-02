@@ -108,7 +108,7 @@ class Decoder {
         activeBytes={};
     }
     bool valueHasRequiredPayload() const {
-        if(!activeValue || !activeHasType || !activeValue->hasDwgPayload(version))
+        if(!activeValue || !activeHasType || !activeValue->hasDwgFieldPayload(version))
             return activeValue && activeHasType;
         switch(activeValue->m_dataType) {
         case 0:case 1:case 64:return activeValue->m_value.type()==DRW_Variant::INTEGER;

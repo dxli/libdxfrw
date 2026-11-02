@@ -6610,7 +6610,7 @@ void testFieldCadValueEmissionPreflight(TestContext& t) {
          }},
         {"kGeneral without a DXF-defined type mapping", [](DRW_Field& field) {
              DRW_CadValue& value = field.m_value;
-             value.m_formatFlags = 0x02;
+             value.m_formatFlags = 0;
              value.m_dataType = 512;
              value.m_dataSize = 4;
              value.m_rawData = {0xA1u, 0xB2u, 0xC3u, 0xD4u};
@@ -6672,7 +6672,7 @@ void testFieldCadValueEmissionPreflight(TestContext& t) {
             field.m_fieldCode = "CADVALUE_FLAG_TRANSPORT";
             field.m_value.m_formatFlags = flags;
             field.m_value.m_dataType = 2;
-            if ((flags & 1) == 0)
+            if ((flags & 3) == 0)
                 field.m_value.m_value.addDouble(140, 42.5);
             field.m_value.m_unitType = 1;
             field.m_value.m_formatString = "0.0";
@@ -6691,8 +6691,8 @@ void testFieldCadValueEmissionPreflight(TestContext& t) {
             const auto doubles = std::count(tags.begin(), tags.end(), "140:0x1.54p+5");
             t.expect(written && ended
                          && std::find(tags.begin(), tags.end(), "93:" + std::to_string(flags)) != tags.end()
-                         && doubles == ((flags & 1) == 0 ? 1 : 0),
-                     "ASCII/Binary FIELD payload uses bit 0; flag 2 retains its scalar");
+                         && doubles == ((flags & 3) == 0 ? 1 : 0),
+                     "ASCII/Binary FIELD payload follows low format flag bits");
         }
 
         DRW_Field flaggedDate;

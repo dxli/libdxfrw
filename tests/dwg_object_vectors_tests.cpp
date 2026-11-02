@@ -4573,7 +4573,8 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
                     std::int32_t rootFormatFlagsOverride = -1,
                     std::int32_t unknownChildValueType = 1024,
                     bool knownUnknownRootValue = false,
-                    bool appendOpaqueBodyTail = false) {
+                    bool appendOpaqueBodyTail = false,
+                    std::int32_t childFormatFlagsOverride = -1) {
     constexpr std::uint32_t fieldHandle = 0xA100u;
 
     DRW_TextCodec codec;
@@ -4586,7 +4587,7 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
     source.m_fieldCode = "GENERATED_FIELD";
     source.m_evaluationStatusFlags = 2;
     if (generalRootValue || explicitRootType512) {
-        source.m_value.m_formatFlags = generalRootValue ? 0x02 : 0;
+        source.m_value.m_formatFlags = 0;
         source.m_value.m_dataType = 512;
         source.m_value.m_dataSize = 4;
         source.m_value.m_rawData = {0xA1u, 0xB2u, 0xC3u, 0xD4u};
@@ -4722,12 +4723,22 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
         default:
             return false;
         }
+        if (childFormatFlagsOverride >= 0
+            && (childFormatFlagsOverride & ~0x03) == 0) {
+            value.m_formatFlags = childFormatFlagsOverride;
+            if (!value.hasDwgFieldPayload(version)) {
+                value.m_value = DRW_Variant();
+                value.m_dataSize = 0u;
+                value.m_rawData.clear();
+                value.m_handle = 0u;
+            }
+        }
         source.m_childValues.push_back(std::move(child));
     }
 
     if (rootFormatFlagsOverride >= 0 && (rootFormatFlagsOverride & ~0x03) == 0) {
         source.m_value.m_formatFlags = rootFormatFlagsOverride;
-        if (!source.m_value.hasDwgPayload(version)) {
+        if (!source.m_value.hasDwgFieldPayload(version)) {
             source.m_value.m_value = DRW_Variant();
             source.m_value.m_dataSize = 0u;
             source.m_value.m_rawData.clear();
@@ -4848,7 +4859,7 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
         } else if (generalChildValue) {
             body.putBitLong(1); // one child CadValue follows
             strings.putVariableText(version, "GENERAL_CHILD");
-            body.putBitLong(0x02); // retained format flags; payload present
+            body.putBitLong(0); // no payload-suppression flags
             body.putBitLong(512); // explicit kGeneral type is always present
             body.putBitLong(4); // general byte count
             body.putRawChar8(0xA1u);
@@ -4933,7 +4944,7 @@ void testFieldCadValueGeneralFormatFlag(TestContext& t) {
             t.expect(read && input.isGood() && parsed.hasCompleteDwgPayload(),
                      "FIELD kGeneral root frame parses completely for "
                          + std::to_string(static_cast<int>(version)));
-            t.expect(parsed.m_value.m_formatFlags == 0x02
+            t.expect(parsed.m_value.m_formatFlags == 0
                          && parsed.m_value.m_dataType == 512
                          && parsed.m_value.m_dataSize == expectedRaw.size()
                          && parsed.m_value.m_rawData == expectedRaw
@@ -4997,7 +5008,7 @@ void testFieldCadValueGeneralFormatFlag(TestContext& t) {
             t.expect(value != nullptr
                          && parsed.m_childValues.front().m_key
                                 == "GENERAL_CHILD"
-                         && value->m_formatFlags == 0x02
+                         && value->m_formatFlags == 0
                          && value->m_dataType == 512
                          && value->m_dataSize == expectedRaw.size()
                          && value->m_rawData == expectedRaw
@@ -6001,7 +6012,7 @@ void testFieldCadValueUnknownType(TestContext& t) {
             constructed.m_fieldCode = "UNKNOWN_CAD_VALUE";
             constructed.m_value.m_formatFlags = formatFlags[i];
             constructed.m_value.m_dataType = 0;
-            if (constructed.m_value.hasDwgPayload(version))
+            if (constructed.m_value.hasDwgFieldPayload(version))
                 constructed.m_value.m_value.addInt(91, 42);
             constructed.m_value.m_unitType = 12;
             constructed.m_valueString = "42";
@@ -9176,11 +9187,15 @@ void testTableCellGeneralValueFormatFlag(TestContext& t) {
 }
 
 void testCadValuePayloadPresence(TestContext& t) {
-    const auto matches = [](const DRW_CadValue& value, std::int32_t flags,
+    const auto matches = [](DRW::Version version, bool fieldContext,
+                            const DRW_CadValue& value, std::int32_t flags,
                             int type) {
         if (value.m_formatFlags != flags || value.m_dataType != type)
             return false;
-        if ((flags & 1) != 0)
+        const bool hasPayload = fieldContext
+            ? value.hasDwgFieldPayload(version)
+            : value.hasDwgPayload(version);
+        if (!hasPayload)
             return value.m_value.type() == DRW_Variant::INVALID
                 && value.m_handle == 0u && value.m_rawData.empty();
         if (type == 2)
@@ -9208,9 +9223,10 @@ void testCadValuePayloadPresence(TestContext& t) {
                     const bool read = parsed.parseDwg(version, &input, fieldFrame.handleBits);
                     t.expect(read && parsed.hasCompleteDwgPayload()
                                  && parsed.isDwgPayloadValid(version)
-                                 && matches(parsed.m_value, flags, type),
-                             "FIELD always reads explicit type and suppresses payload only for bit 0");
-                    const bool expectedHandle = type == 64 && (flags & 1) == 0;
+                                 && matches(version, true, parsed.m_value,
+                                            flags, type),
+                             "FIELD always reads explicit type and suppresses payload for low flag bits");
+                    const bool expectedHandle = type == 64 && (flags & 3) == 0;
                     t.expect(DRW_Field::cadValueHasDwgObjectHandle(version, parsed.m_value)
                                  == expectedHandle,
                              "FIELD object-ID handle slot follows the payload-presence bit");
@@ -9256,8 +9272,46 @@ void testCadValuePayloadPresence(TestContext& t) {
                     && content.m_rows[0].m_cells[0].m_contents.size() == 1u
                     && content.m_tableStyleHandle == 0xA700u;
                 if (valueMatches)
-                    valueMatches = matches(content.m_rows[0].m_cells[0].m_contents[0].m_value, flags, type);
-                t.expect(valueMatches, "TABLE payload/handle presence uses bit 0 and retains flags 2");
+                    valueMatches = matches(
+                        version, false,
+                        content.m_rows[0].m_cells[0].m_contents[0].m_value,
+                        flags, type);
+                t.expect(valueMatches, "TABLE payload/handle presence follows its established flag rule");
+            }
+        }
+    }
+
+    for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+        for (const std::int32_t flags : {1, 2, 3}) {
+            for (const int childType : {2, 64}) {
+                FieldFrame childFrame;
+                const bool childBuilt = makeFieldFrame(
+                    false, false, childFrame, false, false, false, false,
+                    version, false, false, false, 0, childType, 0, -1,
+                    1024, false, false, flags);
+                t.expect(childBuilt, "FIELD suppressed child-value frame builds");
+                if (!childBuilt)
+                    continue;
+
+                DRW_TextCodec codec;
+                codec.setVersion(version, false);
+                dwgBuffer input(childFrame.bytes.data(), childFrame.bytes.size(),
+                                &codec);
+                FieldCodecProbe parsed;
+                const bool read = parsed.parseDwg(
+                    version, &input, childFrame.handleBits);
+                const DRW_CadValue* value = parsed.m_childValues.size() == 1u
+                    ? &parsed.m_childValues.front().m_value : nullptr;
+                t.expect(read && parsed.hasCompleteDwgPayload()
+                             && value != nullptr
+                             && value->m_formatFlags == flags
+                             && value->m_dataType == childType
+                             && !value->hasDwgFieldPayload(version)
+                             && value->m_value.type() == DRW_Variant::INVALID
+                             && value->m_handle == 0u
+                             && !DRW_Field::cadValueHasDwgObjectHandle(
+                                 version, *value),
+                         "FIELD suppressed child keeps type and omits scalar/handle payload");
             }
         }
     }

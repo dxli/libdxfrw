@@ -1300,7 +1300,7 @@ std::string dxfFieldHandleText(std::uint32_t handle) {
 
 bool dxfFieldValuePayloadIsSuppressed(
     DRW::Version version, const DRW_CadValue& value) {
-    return !value.hasDwgPayload(version);
+    return !value.hasDwgFieldPayload(version);
 }
 
 bool dxfFieldValueHasData(const DRW_CadValue& value) {

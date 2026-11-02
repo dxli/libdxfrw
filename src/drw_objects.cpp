@@ -2446,6 +2446,18 @@ enum class CadValueReadResult {
     Error,
 };
 
+enum class CadValueWireContext {
+    Table,
+    Field,
+};
+
+bool hasCadValuePayload(DRW::Version version, const DRW_CadValue& value,
+                        CadValueWireContext context) {
+    return context == CadValueWireContext::Field
+        ? value.hasDwgFieldPayload(version)
+        : value.hasDwgPayload(version);
+}
+
 bool hasSupportedCadValueFormatFlags(
     DRW::Version version, const DRW_CadValue& value,
     bool allowObservedRootProfile = false) {
@@ -2526,14 +2538,14 @@ CadValueReadResult readCadValue(
         DRW_DBG(value.m_formatFlags); DRW_DBG("\n");
         return CadValueReadResult::Unsupported;
     }
-    if (!value.hasDwgPayload(version)
+    if (!value.hasDwgFieldPayload(version)
         && value.m_dataType != 0 && value.m_dataType != 1
         && value.m_dataType != 2
         && value.m_dataType != 4 && value.m_dataType != 8
         && value.m_dataType != 16 && value.m_dataType != 32
         && value.m_dataType != 64 && value.m_dataType != 512)
         return CadValueReadResult::Unsupported;
-    if (value.hasDwgPayload(version)) {
+    if (value.hasDwgFieldPayload(version)) {
         switch (value.m_dataType) {
         case 0:
         case 1:
@@ -21254,17 +21266,19 @@ bool isValidCadValue(const DRW_CadValue& value) {
     return true;
 }
 
-bool isWritableCadValue(DRW::Version version, const DRW_CadValue& value,
-                        bool allowObservedRootProfile = false) {
+bool isWritableCadValue(
+    DRW::Version version, const DRW_CadValue& value,
+    CadValueWireContext context = CadValueWireContext::Table,
+    bool allowObservedRootProfile = false) {
     if (!isValidCadValue(value))
         return false;
     if (!hasSupportedCadValueFormatFlags(version, value,
                                          allowObservedRootProfile))
         return false;
-    if (!value.hasDwgPayload(version)) {
-        // ODA §20.4.99 retains the data-type BL while flag bit 0 suppresses
-        // the type-specific payload. Preserve this bounded type-0 profile as
-        // an empty transport value; it carries no inferred application value.
+    if (!hasCadValuePayload(version, value, context)) {
+        // ODA §20.4.99 retains the data-type BL while the low format flag bits
+        // suppress the type-specific payload. Preserve this bounded type-0
+        // profile as an empty transport value; it carries no inferred value.
         const bool knownType =
             value.m_dataType == 0 || value.m_dataType == 1
             || value.m_dataType == 2 || value.m_dataType == 4
@@ -21316,9 +21330,11 @@ bool isWritableCadValue(DRW::Version version, const DRW_CadValue& value,
 // closed rather than being emitted with a guessed layout.
 bool writeCadValue(DRW::Version version, dwgBufferW *buf, dwgBufferW *strBuf,
                    const DRW_CadValue& value,
+                   CadValueWireContext context = CadValueWireContext::Table,
                    bool allowObservedRootProfile = false) {
     if (buf == nullptr
-        || !isWritableCadValue(version, value, allowObservedRootProfile))
+        || !isWritableCadValue(version, value, context,
+                               allowObservedRootProfile))
         return false;
 
     dwgBufferW *textBuf = strBuf != nullptr && version > DRW::AC1018
@@ -21326,7 +21342,7 @@ bool writeCadValue(DRW::Version version, dwgBufferW *buf, dwgBufferW *strBuf,
     if (version > DRW::AC1018)
         buf->putBitLong(value.m_formatFlags);
     buf->putBitLong(value.m_dataType);
-    if (value.hasDwgPayload(version)) {
+    if (hasCadValuePayload(version, value, context)) {
         switch (value.m_dataType) {
         case 0:
         case 1:
@@ -21389,17 +21405,19 @@ bool writeCadValue(DRW::Version version, dwgBufferW *buf, dwgBufferW *strBuf,
     return true;
 }
 
-bool writeCadValueHandle(DRW::Version version, dwgBufferW *buf,
-                         const DRW_CadValue& value) {
-    const DRW_Field::DwgReferencePolicy policy =
-        DRW_Field::dwgReferencePolicy(
-            version, DRW_Field::DwgReferenceKind::CadValueObjectId, &value);
-    if (buf == nullptr || !policy.hasHandleStreamSlot)
-      return buf != nullptr && !DRW_Field::cadValueHasDwgObjectHandle(version,
-                                                                        value);
+bool writeCadValueHandle(
+    DRW::Version version, dwgBufferW *buf, const DRW_CadValue& value,
+    CadValueWireContext context = CadValueWireContext::Table) {
+    const bool hasSlot = value.m_dataType == 64
+        && hasCadValuePayload(version, value, context);
+    if (buf == nullptr)
+        return false;
+    if (!hasSlot)
+        return value.m_handle == 0u;
+
     if (value.m_handle == DRW::NoHandle)
-      return false;
-    buf->putHandle(makeRefW(value.m_handle, policy.wireHandleCode));
+        return false;
+    buf->putHandle(makeRefW(value.m_handle, DRW::DwgSoftPointer));
     return buf->isGood();
 }
 
@@ -21734,7 +21752,7 @@ DRW_Field::DwgReferencePolicy DRW_Field::dwgReferencePolicy(
   case DwgReferenceKind::CadValueObjectId:
     return {DRW::DwgSoftPointer,
             value != nullptr && value->m_dataType == 64
-                && value->hasDwgPayload(version),
+                && value->hasDwgFieldPayload(version),
             false};
   case DwgReferenceKind::FieldListMember:
     return {DRW::DwgSoftPointer, true, true};
@@ -21759,7 +21777,8 @@ bool DRW_Field::isDwgPayloadValid(DRW::Version version) const noexcept {
   const auto validCadValue = [version](const DRW_CadValue &value,
                                        bool allowObservedRootProfile) {
     const bool hasObjectHandle = cadValueHasDwgObjectHandle(version, value);
-    return isWritableCadValue(version, value, allowObservedRootProfile) &&
+    return isWritableCadValue(version, value, CadValueWireContext::Field,
+                              allowObservedRootProfile) &&
            (!hasObjectHandle || value.m_handle != DRW::NoHandle);
   };
   if (version < DRW::AC1015 || m_childHandles.size() > kMaxItems ||
@@ -21814,7 +21833,8 @@ bool DRW_Field::encodeDwg(DRW::Version version, dwgBufferW *buf,
   buf->putBitLong(m_evaluationErrorCode);
   sb->putVariableText(version, m_evaluationErrorMessage);
 
-  if (!writeCadValue(version, buf, sb, m_value, true))
+  if (!writeCadValue(version, buf, sb, m_value,
+                      CadValueWireContext::Field, true))
     return false;
 
   sb->putVariableText(version, m_valueString);
@@ -21823,7 +21843,8 @@ bool DRW_Field::encodeDwg(DRW::Version version, dwgBufferW *buf,
   buf->putBitLong(static_cast<std::int32_t>(m_childValues.size()));
   for (const auto &cv : m_childValues) {
     sb->putVariableText(version, cv.m_key);
-    if (!writeCadValue(version, buf, sb, cv.m_value))
+    if (!writeCadValue(version, buf, sb, cv.m_value,
+                       CadValueWireContext::Field))
       return false;
   }
 
@@ -21834,11 +21855,13 @@ bool DRW_Field::encodeDwg(DRW::Version version, dwgBufferW *buf,
                               numReactors, xDictFlag, &reactorHandles,
                               xDictHandle);
   if (cadValueHasDwgObjectHandle(version, m_value) &&
-      !writeCadValueHandle(version, hb, m_value))
+      !writeCadValueHandle(version, hb, m_value,
+                           CadValueWireContext::Field))
     return false;
   for (const auto &cv : m_childValues) {
     if (cadValueHasDwgObjectHandle(version, cv.m_value) &&
-        !writeCadValueHandle(version, hb, cv.m_value))
+        !writeCadValueHandle(version, hb, cv.m_value,
+                             CadValueWireContext::Field))
       return false;
   }
   const DwgReferencePolicy childPolicy =

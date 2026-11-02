@@ -3831,10 +3831,15 @@ struct DRW_CadValue {
   UTF8STRING m_valueString;
   std::uint32_t m_handle = 0;
   std::vector<std::uint8_t> m_rawData;
-  // ODA §20.4.99's first flag bit suppresses the value payload, not the
-  // preceding data-type BL. Other retained flags do not imply emptiness.
+  // Keep the established TABLE CadValue interpretation separate from FIELD:
+  // the AC1021 TABLE source profile carries a value when only bit 1 is set.
   [[nodiscard]] bool hasDwgPayload(DRW::Version version) const noexcept {
     return version <= DRW::AC1018 || (m_formatFlags & 0x01) == 0;
+  }
+  // ODA §20.4.99 says bit 1 suppresses the type-specific FIELD payload, while
+  // retaining the preceding data-type BL. LibreDWG applies both low bits.
+  [[nodiscard]] bool hasDwgFieldPayload(DRW::Version version) const noexcept {
+    return version <= DRW::AC1018 || (m_formatFlags & 0x03) == 0;
   }
 };
 

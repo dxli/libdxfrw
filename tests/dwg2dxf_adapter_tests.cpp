@@ -30201,15 +30201,28 @@ bool physicalAc1021FieldFlag4Type2ProfileCensus(
 
     std::set<std::uint32_t> rawFieldHandles(
         iface.rawFieldFrames.begin(), iface.rawFieldFrames.end());
-    const std::size_t rawOnlyFieldShells = static_cast<std::size_t>(
-        std::count_if(rawFieldHandles.begin(), rawFieldHandles.end(),
-                      [&typedFieldHandles](std::uint32_t handle) {
-                          return typedFieldHandles.count(handle) == 0u;
-                      }));
+    std::set<std::uint32_t> rawOnlyFieldHandles;
+    std::set_difference(rawFieldHandles.begin(), rawFieldHandles.end(),
+                        typedFieldHandles.begin(), typedFieldHandles.end(),
+                        std::inserter(rawOnlyFieldHandles,
+                                      rawOnlyFieldHandles.end()));
+    const std::set<std::uint32_t> peerAcObjPropHandles{
+        0x144FAu, 0x1455Fu, 0x14583u, 0x14598u, 0x145ACu, 0x145EAu,
+        0x14621u, 0x1462Fu, 0x14643u, 0x14658u, 0x146B1u, 0x146B4u,
+        0x146B7u, 0x146BAu, 0x146E8u, 0x14704u, 0x14731u, 0x1475Eu,
+        0x1476Eu, 0x1478Cu, 0x147B6u, 0x147CBu, 0x147E8u, 0x147F6u,
+        0x1480Au, 0x1481Eu, 0x14832u, 0x1485Cu, 0x14870u, 0x14884u,
+        0x14898u, 0x148ACu, 0x148C1u, 0x148F5u, 0x14925u, 0x14934u,
+        0x14948u, 0x14965u, 0x14974u, 0x14988u, 0x1499Cu, 0x149B2u};
+    const bool peerRootHandlesAreRawOnly = std::includes(
+        rawOnlyFieldHandles.begin(), rawOnlyFieldHandles.end(),
+        peerAcObjPropHandles.begin(), peerAcObjPropHandles.end());
 
     std::cerr << "AC1021 FIELD profile: total=" << data.fields.size()
               << " rawFieldFrames=" << rawFieldHandles.size()
-              << " rawOnlyShells=" << rawOnlyFieldShells
+              << " rawOnlyShells=" << rawOnlyFieldHandles.size()
+              << " peerAcObjPropRawOnly="
+              << (peerRootHandlesAreRawOnly ? peerAcObjPropHandles.size() : 0u)
               << " typed=" << typedRoots << " AcExpr=" << acExprRoots
               << " AcObjProp=" << acObjPropRoots;
     for (const auto& entry : childValueProfiles)
@@ -30218,9 +30231,13 @@ bool physicalAc1021FieldFlag4Type2ProfileCensus(
                       << ",type=" << profile.first.second << ")="
                       << profile.second;
     std::cerr << '\n';
-    if (typedRoots != 15u || acExprRoots != 15u || acObjPropRoots != 0u
-        || rawFieldHandles.size() != 142u || rawOnlyFieldShells != 56u)
-        return fail("AC1021 complete FIELD root census differs from the bounded body profile");
+    if (data.fields.size() != 15u || typedRoots != 15u || acExprRoots != 15u
+        || acObjPropRoots != 0u
+        || rawFieldHandles.size() != 142u
+        || rawOnlyFieldHandles.size() != 127u
+        || peerAcObjPropHandles.size() != 42u
+        || !peerRootHandlesAreRawOnly)
+        return fail("AC1021 FIELD census differs from the source-bounded flag/tail profile");
     return true;
 }
 
