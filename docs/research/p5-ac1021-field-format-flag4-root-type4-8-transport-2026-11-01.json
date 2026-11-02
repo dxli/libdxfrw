@@ -82,6 +82,18 @@
       ],
       "peerComparison": "All four BL length candidates equal the corresponding LibreDWG 0.14 JSON values, including the anomalous 272695808 value. This is parser agreement, not semantic or normative proof.",
       "interpretation": "The group-98 discrepancy is a candidate cause, not a proven explanation for the child-count failure. Do not change the decoder or admit type 4 until the physical bit spans for group 98 and group 93 are independently established against a conforming producer/parser."
+    },
+    "odaTvProbe": {
+      "trace": "/private/tmp/libdxfrw-ac1021-field-length-tv-experiment3.log",
+      "method": "A temporary, unretained reader change decoded group 98 as TV from the bounded AC1021 detached string stream after valueString, following ODA v5.4.1 §20.4.76. It logged the text-stream bit span and attempted a strict nonnegative decimal conversion.",
+      "roots": [
+        {"handle": "0x2396", "valueString": "Variable", "stringBitsBefore": 1375, "stringBitsEnd": 1379, "decodedTv": "", "bitsConsumed": 2},
+        {"handle": "0x2395", "valueString": "Variable", "stringBitsBefore": 1303, "stringBitsEnd": 1307, "decodedTv": "", "bitsConsumed": 2},
+        {"handle": "0x2394", "valueString": "Variable", "stringBitsBefore": 1823, "stringBitsEnd": 1827, "decodedTv": "", "bitsConsumed": 2},
+        {"handle": "0x2392", "valueString": "Variable", "stringBitsBefore": 4687, "stringBitsEnd": 4691, "decodedTv": "", "bitsConsumed": 2}
+      ],
+      "result": "All four candidates decode an empty TV, not a decimal length, and remain incomplete. The probe was reverted. Under that layout the next child-count BL would be the first body BL candidate previously read as valueStringLength (112, 16, 272695808, and 4 respectively); this does not resolve the following child-count framing.",
+      "decision": "No admission. The normative TV interpretation and physical body-stream BL candidates still fail to produce a coherent group-98/group-93 span. Obtain a producer-backed or independently traced conforming sample before changing the decoder."
     }
   },
   "postChangeObservation": {
