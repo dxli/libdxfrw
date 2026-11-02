@@ -22686,6 +22686,46 @@ private:
     }
 };
 
+void testLeaderDxfAllocationFailure(TestContext& t) {
+    struct LeaderParseProbe final : DRW_Leader {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+    };
+    const auto parseRecord = [](LeaderParseProbe& leader, int expectedCode,
+                                std::string_view value,
+                                long allocationFailure = -1) {
+        const std::string record = std::to_string(expectedCode) + "\n"
+            + std::string(value) + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int code = 0;
+        if (!reader->readRec(&code) || code != expectedCode)
+            return false;
+        MaterialAllocationFailure failure(allocationFailure);
+        return leader.parse(code, reader);
+    };
+
+    for (long allocationFailure = 0; allocationFailure < 3;
+         ++allocationFailure) {
+        LeaderParseProbe leader;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(
+            leader, 10, "1.25", allocationFailure);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = leader.vertexlist.empty();
+        const bool retried = parseRecord(leader, 10, "1.25")
+            && parseRecord(leader, 20, "2.5")
+            && leader.vertexlist.size() == 1u
+            && leader.vertexlist.front()
+            && leader.vertexlist.front()->x == 1.25
+            && leader.vertexlist.front()->y == 2.5;
+        t.expect(rejected && failedOnce && rolledBack && retried,
+                 "LEADER point allocation failure preserves the field ordinal and retries cleanly");
+    }
+}
+
+
 void testDimensionOcsExtrusion(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
@@ -61593,6 +61633,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testUnderlayDxfAllocationFailure(context);
         std::cout << "UNDERLAY DXF allocation-failure and retry controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--leader-dxf-allocation-failure") {
+        TestContext context;
+        testLeaderDxfAllocationFailure(context);
+        std::cout << "LEADER DXF allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

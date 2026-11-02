@@ -41,6 +41,14 @@
 
 namespace {
 
+std::shared_ptr<DRW_Coord> makeCoordNoThrow() noexcept {
+    try {
+        return std::make_shared<DRW_Coord>();
+    } catch (...) {
+        return {};
+    }
+}
+
 bool isValidSubDMeshCreaseValue(double value) noexcept {
     return std::isfinite(value) && (value == -1.0 || value >= 0.0);
 }
@@ -25755,15 +25763,28 @@ bool DRW_Leader::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             && vertexlist.size()
                 >= static_cast<std::size_t>(kMaxLeaderVertices))
             return nullptr;
-        const std::size_t index = occurrence++;
+        const std::size_t index = occurrence;
         if (index >= vertexlist.size()) {
             const std::size_t required = index + 1u;
-            if (!DRW::reserve(vertexlist, required))
+            std::vector<std::shared_ptr<DRW_Coord>> additions;
+            const std::size_t missing = required - vertexlist.size();
+            if (!DRW::reserve(additions, static_cast<int>(missing)))
                 return nullptr;
-            while (vertexlist.size() < required)
-                vertexlist.push_back(std::make_shared<DRW_Coord>());
+            for (std::size_t i = 0; i < missing; ++i) {
+                std::shared_ptr<DRW_Coord> point = makeCoordNoThrow();
+                if (!point)
+                    return nullptr;
+                additions.push_back(std::move(point));
+            }
+            if (!DRW::reserve(vertexlist, static_cast<int>(required)))
+                return nullptr;
+            for (std::shared_ptr<DRW_Coord>& point : additions)
+                vertexlist.push_back(std::move(point));
         }
+        if (!vertexlist[index])
+            return nullptr;
         vertexpoint = vertexlist[index];
+        ++occurrence;
         return vertexpoint;
     };
     switch (code) {
