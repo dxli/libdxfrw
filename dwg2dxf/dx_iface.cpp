@@ -15089,6 +15089,23 @@ bool addSectionObjectRetainedBytes(
         && estimate <= kMaxAdapterTypedEntityRetainedBytes;
 }
 
+bool addOle2FrameRetainedBytes(
+        const DRW_Ole2Frame& frame, std::size_t& estimate) noexcept {
+    return frame.m_payloadBytes.size() <= DRW_Ole2Frame::kMaxOlePayloadBytes
+        && addStringPayloadBytes(frame.m_oleClient, estimate)
+        && addVectorPayloadBytes(frame.m_rawBytes, estimate)
+        && addVectorPayloadBytes(frame.m_payloadBytes, estimate)
+        && estimate <= kMaxAdapterTypedEntityRetainedBytes;
+}
+
+bool addOleFrameRetainedBytes(
+        const DRW_OleFrame& frame, std::size_t& estimate) noexcept {
+    return frame.m_payloadBytes.size() <= DRW_OleFrame::kMaxOlePayloadBytes
+        && addVectorPayloadBytes(frame.m_rawBytes, estimate)
+        && addVectorPayloadBytes(frame.m_payloadBytes, estimate)
+        && estimate <= kMaxAdapterTypedEntityRetainedBytes;
+}
+
 bool addAttributeRetainedBytes(
         const DRW_Attrib& attribute, std::size_t& estimate) noexcept {
     if (!addStringPayloadBytes(attribute.tag, estimate)
@@ -15397,6 +15414,14 @@ bool estimateTypedEntityRetainedBytes(
     if (const auto* section =
             dynamic_cast<const DRW_SectionObject*>(&entity)) {
         if (!addSectionObjectRetainedBytes(*section, estimate))
+            return false;
+    }
+    if (const auto* ole2 = dynamic_cast<const DRW_Ole2Frame*>(&entity)) {
+        if (!addOle2FrameRetainedBytes(*ole2, estimate))
+            return false;
+    }
+    if (const auto* ole = dynamic_cast<const DRW_OleFrame*>(&entity)) {
+        if (!addOleFrameRetainedBytes(*ole, estimate))
             return false;
     }
     if (const auto* attribute = dynamic_cast<const DRW_Attrib*>(&entity)) {
@@ -70779,6 +70804,18 @@ void dx_iface::writeEntity(DRW_Entity* e){
             written = dxfW->writeCamera(camera);
         else
             written = dxfW->writeCamera(nullptr);
+        break;
+    case DRW::OLE2FRAME:
+        if (auto* ole2 = dynamic_cast<DRW_Ole2Frame*>(e))
+            written = dxfW->writeOle2Frame(ole2);
+        else
+            written = dxfW->writeOle2Frame(nullptr);
+        break;
+    case DRW::OLEFRAME:
+        if (auto* ole = dynamic_cast<DRW_OleFrame*>(e))
+            written = dxfW->writeOleFrame(ole);
+        else
+            written = dxfW->writeOleFrame(nullptr);
         break;
     case DRW::GEOPOSITIONMARKER:
         if (auto* marker = dynamic_cast<DRW_GeoPositionMarker*>(e))

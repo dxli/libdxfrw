@@ -757,6 +757,22 @@ public:
     void addCamera(const DRW_Camera& data) override{
         retainTypedEntity<DRW_Camera>(data);
     }
+    void addOle2Frame(const DRW_Ole2Frame& data) override {
+        if (data.eType != DRW::OLE2FRAME) {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
+            return;
+        }
+        retainTypedEntity<DRW_Ole2Frame>(data);
+    }
+    void addOleFrame(const DRW_OleFrame& data) override {
+        if (data.eType != DRW::OLEFRAME) {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
+            return;
+        }
+        retainTypedEntity<DRW_OleFrame>(data);
+    }
     void addGeoPositionMarker(
             const DRW_GeoPositionMarker& data) override {
         retainTypedEntity<DRW_GeoPositionMarker>(data);

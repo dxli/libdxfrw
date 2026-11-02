@@ -22287,6 +22287,32 @@ bool runDxfSurfaceRoundTrip(bool binary,
                         DRW_Coord(4.0, 5.0, 6.0)};
     section->m_blVerts = {DRW_Coord(-1.0, -2.0, -3.0)};
     surfaceBlock->ent.push_back(section);
+    auto* ole2 = new DRW_Ole2Frame();
+    ole2->handle = 0xFC09u;
+    ole2->parentHandle = surfaceBlockRecordHandle;
+    ole2->m_oleVersion = 2u;
+    ole2->m_oleClient = "BLOCK-OLE2";
+    ole2->m_pt1 = DRW_Coord(2.0, 3.0, 0.0);
+    ole2->m_pt2 = DRW_Coord(7.0, 9.0, 0.0);
+    ole2->m_flags = 3u;
+    ole2->m_mode = 1u;
+    ole2->m_lockAspect = 1u;
+    ole2->m_payloadPresent = true;
+    ole2->m_payloadBytes = {0x00u, 0x1Fu, 0x80u, 0xFFu, 0x35u};
+    ole2->m_payloadByteCount =
+        static_cast<std::uint32_t>(ole2->m_payloadBytes.size());
+    ole2->m_declaredPayloadLength = ole2->m_payloadByteCount;
+    surfaceBlock->ent.push_back(ole2);
+    auto* ole = new DRW_OleFrame();
+    ole->handle = 0xFC0Au;
+    ole->parentHandle = surfaceBlockRecordHandle;
+    ole->m_flags = 2u;
+    ole->m_payloadPresent = true;
+    ole->m_payloadBytes = {0x80u, 0x00u, 0xFFu, 0xA5u};
+    ole->m_payloadByteCount =
+        static_cast<std::uint32_t>(ole->m_payloadBytes.size());
+    ole->m_declaredPayloadLength = ole->m_payloadByteCount;
+    surfaceBlock->ent.push_back(ole);
     source.blocks.push_back(surfaceBlock);
 
     dx_iface exporter;
@@ -22315,7 +22341,7 @@ bool runDxfSurfaceRoundTrip(bool binary,
     };
     const auto blockTailMatches = [&](const dx_ifaceBlock* target,
                                       std::size_t prefixCount) {
-        if (target == nullptr || target->ent.size() != prefixCount + 3u)
+        if (target == nullptr || target->ent.size() != prefixCount + 5u)
             return false;
         auto entityIt = target->ent.begin();
         for (std::size_t index = 0; index < prefixCount; ++index)
@@ -22343,7 +22369,7 @@ bool runDxfSurfaceRoundTrip(bool binary,
             || capturedMarker->mtext->height != geoMarker->mtext->height)
             return false;
         const auto* capturedSection =
-            dynamic_cast<const DRW_SectionObject*>(*entityIt);
+            dynamic_cast<const DRW_SectionObject*>(*entityIt++);
         if (capturedSection == nullptr
             || capturedSection->eType != DRW::SECTION
             || capturedSection->m_state != section->m_state
@@ -22367,6 +22393,31 @@ bool runDxfSurfaceRoundTrip(bool binary,
                            section->m_blVerts[point]))
                 return false;
         }
+        const auto* capturedOle2 =
+            dynamic_cast<const DRW_Ole2Frame*>(*entityIt++);
+        if (capturedOle2 == nullptr
+            || capturedOle2->eType != DRW::OLE2FRAME
+            || capturedOle2->m_oleVersion != ole2->m_oleVersion
+            || capturedOle2->m_oleClient != ole2->m_oleClient
+            || !sameCoord(capturedOle2->m_pt1, ole2->m_pt1)
+            || !sameCoord(capturedOle2->m_pt2, ole2->m_pt2)
+            || capturedOle2->m_flags != ole2->m_flags
+            || capturedOle2->m_mode != ole2->m_mode
+            || capturedOle2->m_lockAspect != ole2->m_lockAspect
+            || capturedOle2->m_payloadBytes != ole2->m_payloadBytes
+            || !capturedOle2->m_payloadPresent
+            || capturedOle2->m_declaredPayloadLength
+                != ole2->m_declaredPayloadLength)
+            return false;
+        const auto* capturedOle =
+            dynamic_cast<const DRW_OleFrame*>(*entityIt);
+        if (capturedOle == nullptr || capturedOle->eType != DRW::OLEFRAME
+            || capturedOle->m_flags != ole->m_flags
+            || capturedOle->m_payloadBytes != ole->m_payloadBytes
+            || !capturedOle->m_payloadPresent
+            || capturedOle->m_declaredPayloadLength
+                != ole->m_declaredPayloadLength)
+            return false;
         return true;
     };
     const auto blockEntitiesMatch = [&](const dx_data& data) {
@@ -22379,7 +22430,7 @@ bool runDxfSurfaceRoundTrip(bool binary,
             }
         }
         if (target == nullptr
-            || target->ent.size() != sourceSurfaces.size() + 3u)
+            || target->ent.size() != sourceSurfaces.size() + 5u)
             return false;
         const std::array<DRW::ETYPE, 6> expectedTypes {{
             DRW::PLANESURFACE, DRW::EXTRUDEDSURFACE,
