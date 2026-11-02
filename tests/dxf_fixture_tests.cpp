@@ -55513,9 +55513,18 @@ bool readTableCellGroups(const std::filesystem::path& path, bool binary,
             continue;
         std::string value = reader->getRawValue();
         switch (code) {
+        case 65:
+        case 66:
+        case 68:
         case 69:
         case 177:
+        case 275:
+        case 276:
+        case 278:
         case 279:
+        case 285:
+        case 286:
+        case 288:
         case 289:
             value = std::to_string(reader->getInt32());
             break;
@@ -55530,7 +55539,7 @@ bool readTableCellGroups(const std::filesystem::path& path, bool binary,
     return inTable && input.eof();
 }
 
-void testLegacyTableTopBorderVisibility(TestContext& t) {
+void testLegacyTableCellBorderOverrides(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
     const auto output = std::filesystem::temp_directory_path()
@@ -55549,10 +55558,12 @@ void testLegacyTableTopBorderVisibility(TestContext& t) {
         row.m_cells.resize(1u);
         DRW_TableCell& cell = row.m_cells.front();
         cell.m_type = 1;
+        cell.m_edgeFlags = 0x01;
         cell.m_textHeight = 4.0;
         cell.m_overrideFlags = 0x4460u;
         cell.m_borders[0].m_lineWeight = 40;
         cell.m_borders[0].m_colorRgb = 63;
+        cell.m_borders[0].m_hasDxfVisibility = true;
         cell.m_contents.emplace_back();
         cell.m_contents.back().m_type = 1;
         cell.m_contents.back().m_text = "top border source profile";
@@ -55613,6 +55624,21 @@ void testLegacyTableTopBorderVisibility(TestContext& t) {
              "AC1018 0x4460 top-border profile rejects missing color atomically");
 
     liveCell->m_borders[0].m_colorRgb = 63;
+    liveCell->m_borders[0].m_hasDxfVisibility = false;
+    const bool missingVisibilityRefused = !exporter.fileExport(
+        output.string(), DRW::AC1018, false, &data, false);
+    std::ifstream missingVisibilityInput(output, std::ios::binary);
+    const std::string missingVisibilityPreserved(
+        std::istreambuf_iterator<char>(missingVisibilityInput), {});
+    t.expect(missingVisibilityRefused
+                 && missingVisibilityPreserved
+                     == "table destination sentinel\n"
+                 && liveCell->m_edgeFlags == 0x01
+                 && liveCell->m_borders[0].m_colorRgb == 63
+                 && !liveCell->m_borders[0].m_hasDxfVisibility,
+             "AC1018 cell override refuses a missing selected visibility value atomically");
+
+    liveCell->m_borders[0].m_hasDxfVisibility = true;
     const bool exported = exporter.fileExport(output.string(), DRW::AC1018,
                                                false, &data, false);
     std::vector<std::pair<int, std::string>> groups;
@@ -55622,9 +55648,8 @@ void testLegacyTableTopBorderVisibility(TestContext& t) {
                  && groupNumber(groups, 140, 4)
                  && groupNumber(groups, 69, 63)
                  && groupNumber(groups, 279, 40)
-                 && !std::any_of(groups.begin(), groups.end(),
-                     [](const auto& group) { return group.first == 289; }),
-             "AC1018 top-border retry writes exact fields and preserves absent group 289");
+                 && groupNumber(groups, 289, 1),
+             "AC1018 top-border retry writes exact fields including explicit visibility");
 
     const bool binaryExported = exporter.fileExport(
         binaryOutput.string(), DRW::AC1018, true, &data, false);
@@ -55636,9 +55661,8 @@ void testLegacyTableTopBorderVisibility(TestContext& t) {
                  && groupNumber(binaryGroups, 140, 4)
                  && groupNumber(binaryGroups, 69, 63)
                  && groupNumber(binaryGroups, 279, 40)
-                 && std::none_of(binaryGroups.begin(), binaryGroups.end(),
-                     [](const auto& group) { return group.first == 289; }),
-             "AC1018 binary output preserves fields and absent group 289");
+                 && groupNumber(binaryGroups, 289, 1),
+             "AC1018 binary output preserves explicit fields and visibility");
     dx_data binaryReadback;
     FixtureInterface binaryReader;
     DRW_Table* binaryTable = nullptr;
@@ -55654,27 +55678,31 @@ void testLegacyTableTopBorderVisibility(TestContext& t) {
                  && binaryCell->m_overrideFlags == 0x4460u
                  && binaryCell->m_borders[0].m_colorRgb == 63
                  && binaryCell->m_borders[0].m_lineWeight == 40
-                 && !binaryCell->m_borders[0].m_hasDxfVisibility,
-             "AC1018 binary top-border fields and absent visibility read back");
+                 && binaryCell->m_edgeFlags == 0x01
+                 && binaryCell->m_borders[0].m_hasDxfVisibility
+                 && binaryCell->m_borders[0].m_visible,
+             "AC1018 binary top-border fields and explicit visibility read back");
 
-    dx_data absentReadback;
-    FixtureInterface absentReader;
-    DRW_Table* absentTable = nullptr;
-    DRW_TableCell* absentCell = nullptr;
-    const bool absentImported = absentReader.fileImport(
-        output.string(), &absentReadback, false);
-    if (absentImported) {
-        absentTable = tableFrom(absentReadback);
-        absentCell = cellFrom(absentTable);
+    dx_data initialReadback;
+    FixtureInterface initialReader;
+    DRW_Table* initialTable = nullptr;
+    DRW_TableCell* initialCell = nullptr;
+    const bool initialImported = initialReader.fileImport(
+        output.string(), &initialReadback, false);
+    if (initialImported) {
+        initialTable = tableFrom(initialReadback);
+        initialCell = cellFrom(initialTable);
     }
-    t.expect(absentImported && absentTable != nullptr
-                 && absentCell != nullptr
-                 && absentCell->m_overrideFlags == 0x4460u
-                 && absentCell->m_textHeight == 4.0
-                 && absentCell->m_borders[0].m_lineWeight == 40
-                 && absentCell->m_borders[0].m_colorRgb == 63
-                 && !absentCell->m_borders[0].m_hasDxfVisibility,
-             "AC1018 absent group 289 survives public typed readback");
+    t.expect(initialImported && initialTable != nullptr
+                 && initialCell != nullptr
+                 && initialCell->m_overrideFlags == 0x4460u
+                 && initialCell->m_textHeight == 4.0
+                 && initialCell->m_edgeFlags == 0x01
+                 && initialCell->m_borders[0].m_lineWeight == 40
+                 && initialCell->m_borders[0].m_colorRgb == 63
+                 && initialCell->m_borders[0].m_hasDxfVisibility
+                 && initialCell->m_borders[0].m_visible,
+             "AC1018 explicit visible group 289 survives public typed readback");
 
     liveCell->m_borders[0].m_hasDxfVisibility = true;
     liveCell->m_borders[0].m_visible = false;
@@ -55749,6 +55777,87 @@ void testLegacyTableTopBorderVisibility(TestContext& t) {
                  && explicitVisibleCell->m_borders[0].m_hasDxfVisibility
                  && explicitVisibleCell->m_borders[0].m_visible,
              "AC1018 explicit visible group 289 survives readback");
+
+    dx_data allEdgesData;
+    std::unique_ptr<DRW_Table> allEdgesTable = makeTable();
+    DRW_TableCell* allEdgesCell = cellFrom(allEdgesTable.get());
+    if (allEdgesCell == nullptr) {
+        t.expect(false, "AC1018 all-edge TABLE cell is available");
+        return;
+    }
+    allEdgesCell->m_edgeFlags = 0x0F;
+    allEdgesCell->m_overrideFlags = 0x0000FFE0u;
+    allEdgesCell->m_borders[0].m_colorRgb = 63;
+    allEdgesCell->m_borders[0].m_lineWeight = 40;
+    allEdgesCell->m_borders[0].m_visible = false;
+    allEdgesCell->m_borders[0].m_hasDxfVisibility = true;
+    allEdgesCell->m_borders[1].m_colorRgb = 22;
+    allEdgesCell->m_borders[1].m_lineWeight = 20;
+    allEdgesCell->m_borders[1].m_visible = true;
+    allEdgesCell->m_borders[1].m_hasDxfVisibility = true;
+    allEdgesCell->m_borders[2].m_colorRgb = 30;
+    allEdgesCell->m_borders[2].m_lineWeight = 30;
+    allEdgesCell->m_borders[3].m_colorRgb = 31;
+    allEdgesCell->m_borders[3].m_lineWeight = 31;
+    allEdgesData.mBlock->ent.push_back(allEdgesTable.release());
+    dx_iface allEdgesExporter;
+    const bool allEdgesAsciiExported = allEdgesExporter.fileExport(
+        output.string(), DRW::AC1018, false, &allEdgesData, false);
+    groups.clear();
+    const bool allEdgesAsciiRead = readTableCellGroups(
+        output, false, groups);
+    const bool allEdgesAsciiFields = allEdgesAsciiExported
+        && allEdgesAsciiRead
+        && groupNumber(groups, 177, 65504)
+        && groupNumber(groups, 140, 4)
+        && groupNumber(groups, 69, 63)
+        && groupNumber(groups, 279, 40)
+        && groupNumber(groups, 289, 0)
+        && groupNumber(groups, 65, 22)
+        && groupNumber(groups, 275, 20)
+        && groupNumber(groups, 285, 1)
+        && groupNumber(groups, 66, 30)
+        && groupNumber(groups, 276, 30)
+        && groupNumber(groups, 68, 31)
+        && groupNumber(groups, 278, 31)
+        && std::none_of(groups.begin(), groups.end(),
+            [](const auto& group) {
+                return group.first == 286 || group.first == 288;
+            });
+    t.expect(allEdgesAsciiFields,
+             "AC1018 ASCII output preserves representable top/right/bottom/left override groups and explicit visibility");
+
+    const bool allEdgesBinaryExported = allEdgesExporter.fileExport(
+        binaryOutput.string(), DRW::AC1018, true, &allEdgesData, false);
+    dx_data allEdgesBinaryReadback;
+    FixtureInterface allEdgesBinaryReader;
+    const bool allEdgesBinaryImported = allEdgesBinaryExported
+        && allEdgesBinaryReader.fileImport(
+            binaryOutput.string(), &allEdgesBinaryReadback, false);
+    DRW_Table* allEdgesBinaryTable = allEdgesBinaryImported
+        ? tableFrom(allEdgesBinaryReadback) : nullptr;
+    DRW_TableCell* allEdgesBinaryCell = cellFrom(allEdgesBinaryTable);
+    bool allEdgesBinaryFields = allEdgesBinaryImported
+        && allEdgesBinaryCell != nullptr
+        && allEdgesBinaryCell->m_overrideFlags == 0x0000FFE0u
+        && allEdgesBinaryCell->m_edgeFlags == 0x0F
+        && allEdgesBinaryCell->m_textHeight == 4.0;
+    const std::array<int, 4> allEdgesColors = {{63, 22, 30, 31}};
+    const std::array<int, 4> allEdgesLineweights = {{40, 20, 30, 31}};
+    const std::array<bool, 4> allEdgesVisibility = {{false, true, true, true}};
+    if (allEdgesBinaryFields) {
+        for (std::size_t edge = 0u; edge < allEdgesColors.size(); ++edge) {
+            const DRW_TableBorder& border =
+                allEdgesBinaryCell->m_borders[edge];
+            allEdgesBinaryFields = allEdgesBinaryFields
+                && border.m_colorRgb == allEdgesColors[edge]
+                && border.m_lineWeight == allEdgesLineweights[edge]
+                && border.m_visible == allEdgesVisibility[edge]
+                && border.m_hasDxfVisibility == (edge < 2u);
+        }
+    }
+    t.expect(allEdgesBinaryFields,
+             "AC1018 binary output/readback preserves all four cell edges and only the selected top/right visibility fields");
 
     std::error_code error;
     std::filesystem::remove(output, error);
@@ -60915,8 +61024,8 @@ int main(int argc, char** argv) {
     }
     if (argc == 2 && std::string(argv[1]) == "--ac1018-table-top-border") {
         TestContext context;
-        testLegacyTableTopBorderVisibility(context);
-        std::cout << "AC1018 TABLE top-border profile: "
+        testLegacyTableCellBorderOverrides(context);
+        std::cout << "AC1018 TABLE cell-border override profiles: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
@@ -61031,7 +61140,7 @@ int main(int argc, char** argv) {
     testXRecordCoordinateTuples(context);
     testXRecordPoint18(context);
     testTableEntryDataStorageRefusal(context);
-    testLegacyTableTopBorderVisibility(context);
+    testLegacyTableCellBorderOverrides(context);
     testXRecordCoordinateBoundaries(context);
     testXRecordVersionedHeaderAndPayload(context);
     testLinetypeExtensionGraphRoundTrip(context);

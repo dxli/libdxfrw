@@ -6922,8 +6922,10 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
                          std::uint8_t cellEdgeFlags = 0u,
                          std::uint8_t virtualEdgeFlags = 0u,
                          std::uint16_t topVisibility = 1u) {
+    constexpr std::uint32_t ac1018CellOverrideFlags = 0x0003FFE0u;
     const bool knownCellOverrideProfile = cellOverrideFlags == 0u
-        || (version == DRW::AC1018 && cellOverrideFlags == 0x00004460u)
+        || (version == DRW::AC1018 && cellOverrideFlags != 0u
+            && (cellOverrideFlags & ~ac1018CellOverrideFlags) == 0u)
         || (version == DRW::AC1021 && cellOverrideFlags == 0x00000004u);
     if (!knownCellOverrideProfile
         || (tableOverrideFlags & ~0x00000020u) != 0u)
@@ -6979,7 +6981,8 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
         if (cellOverrideFlags != 0u) {
             body.putBitLong(static_cast<std::int32_t>(cellOverrideFlags));
             body.putRawChar8(virtualEdgeFlags);
-            if (cellOverrideFlags == 0x00000004u) {
+            if (version == DRW::AC1021
+                && cellOverrideFlags == 0x00000004u) {
                 // ODA v5.4.1 §20.4.96.1: bit 0x04 selects Background color
                 // CMC. Use a literal ByLayer CMC so this test does not rely
                 // on the production CMC writer to construct its own input.
@@ -6988,15 +6991,34 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
                     (0xC0u << 24u) | 0u));
                 body.putRawChar8(0);
             } else {
-                // AC1018 0x4460: text height BD, top-border CMC, lineweight
-                // BS, and visibility BS, in ODA §20.4.96.1 order.
-                body.putBitDouble(4.0);
-                body.putBitShort(0);
-                body.putBitLong(static_cast<std::int32_t>(
-                    (0xC3u << 24u) | 63u));
-                body.putRawChar8(0);
-                body.putBitShort(40);
-                body.putBitShort(topVisibility);
+                constexpr std::uint32_t borderColorFlags[] = {
+                    0x00000040u, 0x00000080u,
+                    0x00000100u, 0x00000200u
+                };
+                constexpr std::uint32_t borderLineweightFlags[] = {
+                    0x00000400u, 0x00000800u,
+                    0x00001000u, 0x00002000u
+                };
+                constexpr std::uint32_t borderVisibilityFlags[] = {
+                    0x00004000u, 0x00008000u,
+                    0x00010000u, 0x00020000u
+                };
+                if ((cellOverrideFlags & 0x00000020u) != 0u)
+                    body.putBitDouble(4.0);
+                for (std::size_t edge = 0u; edge < 4u; ++edge) {
+                    if ((cellOverrideFlags & borderColorFlags[edge]) != 0u) {
+                        body.putBitShort(0);
+                        body.putBitLong(static_cast<std::int32_t>(
+                            (0xC3u << 24u) | 63u));
+                        body.putRawChar8(0);
+                    }
+                    if ((cellOverrideFlags
+                            & borderLineweightFlags[edge]) != 0u)
+                        body.putBitShort(40);
+                    if ((cellOverrideFlags
+                            & borderVisibilityFlags[edge]) != 0u)
+                        body.putBitShort(topVisibility);
+                }
             }
         }
         if (version > DRW::AC1018) {
@@ -7175,6 +7197,51 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  && ac1018VisibleTopBorderCell->m_borders[0].m_visible
                  && ac1018VisibleTopBorderCell->m_borders[0].m_hasDxfVisibility,
              "AC1018 TABLE preserves explicit visible state separately from the default");
+
+    constexpr std::uint32_t ac1018AllCellBorderFlags = 0x0003FFE0u;
+    R2007TableFrame ac1018AllEdgesFrame;
+    const bool ac1018AllEdgesBuilt = makeR2007TableFrame(
+        1, ac1018AllEdgesFrame, TablePlacement{},
+        ac1018AllCellBorderFlags, 0u, DRW::AC1018, 0x0Fu);
+    t.expect(ac1018AllEdgesBuilt,
+             "AC1018 TABLE all-edge override vector builds from scratch");
+    if (!ac1018AllEdgesBuilt)
+        return;
+    dwgBuffer ac1018AllEdgesInput(ac1018AllEdgesFrame.bytes.data(),
+                                  ac1018AllEdgesFrame.bytes.size());
+    const bool ac1018AllEdgesRead = table.parseDwg(
+        DRW::AC1018, &ac1018AllEdgesInput);
+    const DRW_TableCell* ac1018AllEdgesCell =
+        table.m_content.m_rows.size() == 1u
+            && table.m_content.m_rows.front().m_cells.size() == 1u
+        ? &table.m_content.m_rows.front().m_cells.front() : nullptr;
+    bool ac1018AllEdgesMatch = ac1018AllEdgesRead
+        && ac1018AllEdgesInput.isGood() && table.m_semanticContentComplete
+        && ac1018AllEdgesCell != nullptr
+        && ac1018AllEdgesCell->m_overrideFlags
+            == ac1018AllCellBorderFlags
+        && ac1018AllEdgesCell->m_edgeFlags == 0x0F
+        && ac1018AllEdgesCell->m_textHeight == 4.0
+        && cursorBit(ac1018AllEdgesInput)
+            == ac1018AllEdgesFrame.tableDataEndBit;
+    if (ac1018AllEdgesMatch) {
+        for (std::size_t edge = 0u; edge < 4u; ++edge) {
+            const DRW_TableBorder& border =
+                ac1018AllEdgesCell->m_borders[edge];
+            ac1018AllEdgesMatch = ac1018AllEdgesMatch
+                && border.m_colorRgb == 63
+                && border.m_lineWeight == 40 && border.m_visible
+                && border.m_hasDxfVisibility;
+        }
+    }
+    t.expect(ac1018AllEdgesMatch,
+             "AC1018 TABLE maps text height and all four ODA cell-edge color/weight/visibility fields in wire order");
+    if (ac1018AllEdgesRead) {
+        const std::int32_t sentinel = ac1018AllEdgesInput.getBitLong();
+        t.expect(ac1018AllEdgesInput.isGood()
+                     && sentinel == kTablePlacementTailSentinel,
+                 "AC1018 TABLE all-edge decoder leaves the next body field aligned");
+    }
 
     R2007TableFrame ac1018VirtualTopBorderFrame;
     const bool ac1018VirtualTopBorderBuilt = makeR2007TableFrame(
@@ -18131,6 +18198,13 @@ void testR2018OuterAnnotativeStateCopyReset(TestContext& t) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2 && std::string(argv[1]) == "--table-cell-overrides") {
+        TestContext context;
+        testR2007TableCellTypeReaderVectors(context);
+        std::cout << "AC1018/AC1021 TABLE cell override vectors: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--persistent-manager-exact-footer") {
         TestContext context;
         testPersistentManagerExactFooter(context);

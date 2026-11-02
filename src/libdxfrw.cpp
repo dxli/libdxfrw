@@ -9762,19 +9762,61 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         }
     }
 
-    const auto selectedLegacyTopBorder = [this](
+    const auto selectedLegacyCellOverride = [this](
             const DRW_TableCell& cell) {
+        constexpr std::array<std::uint32_t, 4> borderColorFlags = {{
+            0x00000040u, 0x00000080u, 0x00000100u, 0x00000200u
+        }};
+        constexpr std::array<std::uint32_t, 4> borderLineweightFlags = {{
+            0x00000400u, 0x00000800u, 0x00001000u, 0x00002000u
+        }};
+        constexpr std::array<std::uint32_t, 4> borderVisibilityFlags = {{
+            0x00004000u, 0x00008000u, 0x00010000u, 0x00020000u
+        }};
+        constexpr std::uint32_t textHeightFlag = 0x00000020u;
         if (version != DRW::AC1018 || cell.m_type != 1
-            || cell.m_overrideFlags != 0x4460u
-            || !std::isfinite(cell.m_textHeight) || cell.m_textHeight <= 0.0)
+            || cell.m_overrideFlags == 0u)
             return false;
-        const DRW_TableBorder& top = cell.m_borders[0];
-        if (top.m_colorRgb < 0 || top.m_colorRgb > 32767
-            || top.m_colorMethod != 0u || top.m_lineWeight < 0
-            || top.m_lineWeight > 32767
-            || (!top.m_visible && !top.m_hasDxfVisibility))
+        std::uint32_t representableFlags = textHeightFlag;
+        int expectedEdgeFlags = 0;
+        for (std::size_t edge = 0u; edge < borderColorFlags.size(); ++edge) {
+            const std::uint32_t edgeFlags = borderColorFlags[edge]
+                | borderLineweightFlags[edge]
+                | borderVisibilityFlags[edge];
+            representableFlags |= edgeFlags;
+            if ((cell.m_overrideFlags & edgeFlags) != 0u)
+                expectedEdgeFlags |= 1 << edge;
+        }
+        if ((cell.m_overrideFlags & ~representableFlags) != 0u
+            || cell.m_overrideFlags > 0x0000FFFFu
+            || (cell.m_overrideFlags & ~textHeightFlag) == 0u
+            || cell.m_edgeFlags != expectedEdgeFlags
+            || cell.m_virtualEdgeFlags != 0
+            || ((cell.m_overrideFlags & textHeightFlag) != 0u
+                && (!std::isfinite(cell.m_textHeight)
+                    || cell.m_textHeight <= 0.0)))
             return false;
-        return std::all_of(cell.m_borders.begin() + 1,
+        for (std::size_t edge = 0u; edge < borderColorFlags.size(); ++edge) {
+            const DRW_TableBorder& border = cell.m_borders[edge];
+            const bool hasColor = (cell.m_overrideFlags
+                & borderColorFlags[edge]) != 0u;
+            const bool hasLineweight = (cell.m_overrideFlags
+                & borderLineweightFlags[edge]) != 0u;
+            const bool hasVisibility = (cell.m_overrideFlags
+                & borderVisibilityFlags[edge]) != 0u;
+            if (border.m_colorMethod != 0u
+                || (hasColor
+                    ? (border.m_colorRgb < 0 || border.m_colorRgb > 32767)
+                    : border.m_colorRgb != -1)
+                || (hasLineweight
+                    ? (border.m_lineWeight < 0 || border.m_lineWeight > 32767)
+                    : border.m_lineWeight != 0)
+                || (hasVisibility
+                    ? !border.m_hasDxfVisibility
+                    : (!border.m_visible || border.m_hasDxfVisibility)))
+                return false;
+        }
+        return std::all_of(cell.m_borders.begin() + 4,
                            cell.m_borders.end(),
             [](const DRW_TableBorder& border) {
                 return border.m_lineWeight == 0 && border.m_visible
@@ -9797,10 +9839,10 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         for (const DRW_TableCell& cell : row.m_cells) {
             const bool textCell = cell.m_type == 1;
             const bool blockCell = cell.m_type == 2;
-            const bool selectedLegacyTop = selectedLegacyTopBorder(cell);
+            const bool selectedLegacyBorder =
+                selectedLegacyCellOverride(cell);
             // AC1018 alignment/text-height use group 177 bits 0x01/0x20;
-            // the separate selected 0x4460 top-border profile is checked
-            // above. Other flags and missing companions remain unsupported.
+            // the bounded text-height and cell-edge profile is checked above.
             const bool legacyTextHeight = version == DRW::AC1018 && textCell
                 && (cell.m_overrideFlags & 0x20u) != 0u
                 && std::isfinite(cell.m_textHeight) && cell.m_textHeight > 0.0;
@@ -9814,7 +9856,7 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
                 && ((cell.m_overrideFlags & 0x20u) == 0u || legacyTextHeight)
                 && ((cell.m_overrideFlags & 0x01u) == 0u || legacyAlignment);
             const bool legacyOverrides = legacyBasicOverrides
-                || selectedLegacyTop;
+                || selectedLegacyBorder;
             const bool cellContentMatches = cell.m_contents.size() == 1u
                 && ((textCell && cell.m_contents.front().m_type == 1)
                     || (blockCell && cell.m_contents.front().m_type == 4
@@ -9953,8 +9995,8 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             for (std::size_t borderIndex = 0;
                  borderIndex < cell.m_borders.size(); ++borderIndex) {
                 const DRW_TableBorder& border = cell.m_borders[borderIndex];
-                const bool selectedLegacyTopBorder = selectedLegacyTop
-                    && borderIndex == 0u;
+                const bool selectedLegacyEdge =
+                    selectedLegacyBorder && borderIndex < 4u;
                 if (border.m_colorMethod != 0u || border.m_lineWeight < 0
                     || border.m_lineWeight > 32767
                     || border.m_colorRgb < -1 || border.m_colorRgb > 32767
@@ -9962,7 +10004,7 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
                         && (border.m_colorRgb >= 0
                             || border.m_lineWeight != 0 || !border.m_visible
                             || border.m_hasDxfVisibility)
-                        && !selectedLegacyTopBorder)
+                        && !selectedLegacyEdge)
                     || (borderIndex >= 4u
                         && (border.m_lineWeight != 0 || !border.m_visible
                             || border.m_colorRgb != -1
@@ -10178,22 +10220,40 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             static const int borderColorCodes[] = {69, 65, 66, 68};
             static const int borderWeightCodes[] = {279, 275, 276, 278};
             static const int borderVisibleCodes[] = {289, 285, 286, 288};
-            const bool legacyTopBorder = selectedLegacyTopBorder(*cell);
+            static constexpr std::uint32_t borderColorFlags[] = {
+                0x00000040u, 0x00000080u, 0x00000100u, 0x00000200u
+            };
+            static constexpr std::uint32_t borderLineweightFlags[] = {
+                0x00000400u, 0x00000800u, 0x00001000u, 0x00002000u
+            };
+            static constexpr std::uint32_t borderVisibilityFlags[] = {
+                0x00004000u, 0x00008000u, 0x00010000u, 0x00020000u
+            };
+            const bool legacyCellOverride =
+                selectedLegacyCellOverride(*cell);
             for (std::size_t border = 0; border < 4u; ++border) {
                 const DRW_TableBorder& value = cell->m_borders[border];
-                const bool legacyTop = legacyTopBorder && border == 0u;
                 if ((version >= DRW::AC1021
-                     || (legacyTop && (cell->m_overrideFlags & 0x40u) != 0u))
+                     || (legacyCellOverride
+                         && (cell->m_overrideFlags
+                             & borderColorFlags[border]) != 0u))
                     && value.m_colorRgb >= 0)
                     writer->writeInt16(borderColorCodes[border],
                                        value.m_colorRgb);
                 if ((version >= DRW::AC1021
-                     || (legacyTop && (cell->m_overrideFlags & 0x400u) != 0u))
-                    && ((legacyTop && (cell->m_overrideFlags & 0x400u) != 0u)
+                     || (legacyCellOverride
+                         && (cell->m_overrideFlags
+                             & borderLineweightFlags[border]) != 0u))
+                    && ((legacyCellOverride
+                         && (cell->m_overrideFlags
+                             & borderLineweightFlags[border]) != 0u)
                         || value.m_lineWeight != 0))
                     writer->writeInt16(borderWeightCodes[border],
                                        value.m_lineWeight);
-                if (version >= DRW::AC1021 || legacyTop) {
+                if (version >= DRW::AC1021
+                    || (legacyCellOverride
+                        && (cell->m_overrideFlags
+                            & borderVisibilityFlags[border]) != 0u)) {
                     if (value.m_hasDxfVisibility || !value.m_visible)
                         writer->writeInt16(borderVisibleCodes[border],
                                            value.m_visible ? 1 : 0);
