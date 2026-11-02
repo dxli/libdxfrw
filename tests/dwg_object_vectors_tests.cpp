@@ -4572,7 +4572,8 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
                     std::int32_t unsupportedChildValueType = 0,
                     std::int32_t rootFormatFlagsOverride = -1,
                     std::int32_t unknownChildValueType = 1024,
-                    bool knownUnknownRootValue = false) {
+                    bool knownUnknownRootValue = false,
+                    bool appendOpaqueBodyTail = false) {
     constexpr std::uint32_t fieldHandle = 0xA100u;
 
     DRW_TextCodec codec;
@@ -4866,6 +4867,8 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
             body.putBitLong(childCount);
         }
     }
+    if (appendOpaqueBodyTail)
+        body.putRawLong32(0xA1B2C3D4u);
 
     dwgBufferW object(&codec);
     object.putObjType(version, 1u);
@@ -5595,6 +5598,34 @@ void testFieldCadValueUnqualifiedFormatFlags(TestContext& t) {
                          + std::to_string(static_cast<int>(version))
                          + " flags=" + std::to_string(flags));
         }
+    }
+
+    FieldFrame tailedRootFrame;
+    const bool tailedRootBuilt = makeFieldFrame(
+        false, false, tailedRootFrame, false, false, false, false,
+        DRW::AC1021, false, false, false, 2, 64, 0, 0x04, 1024,
+        false, true);
+    t.expect(tailedRootBuilt,
+             "AC1021 FIELD root flags=4/type=2 bounded opaque-tail frame builds");
+    if (tailedRootBuilt) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1021, false);
+        dwgBuffer input(tailedRootFrame.bytes.data(),
+                        tailedRootFrame.bytes.size(), &codec);
+        FieldCodecProbe parsed;
+        const bool read = parsed.parseDwg(
+            DRW::AC1021, &input, tailedRootFrame.handleBits);
+        dwgBufferW body, strings, handles;
+        const bool encoded = parsed.encodeDwg(
+            DRW::AC1021, &body, &strings, &handles);
+        t.expect(read && input.isGood() && !parsed.hasCompleteDwgPayload()
+                     && !parsed.isDwgPayloadValid(DRW::AC1021) && !encoded
+                     && parsed.m_value.m_formatFlags == 0x04
+                     && parsed.m_value.m_dataType == 2
+                     && parsed.m_childValues.size() == 1u
+                     && body.bitCount() == 0u && strings.bitCount() == 0u
+                     && handles.bitCount() == 0u,
+                 "AC1021 FIELD with unmodeled object-data tail remains a bounded incomplete shell");
     }
 
     for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {

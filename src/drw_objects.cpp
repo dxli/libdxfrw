@@ -10911,6 +10911,30 @@ bool DRW_Field::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
       m_childValues.push_back(std::move(childValue));
     }
 
+    if (version > DRW::AC1018) {
+      std::uint64_t bodyBit = currentObjectDwgBit(bodyBuf);
+      bool bodyTailIsAlignment = bodyBit <= bodyEnd
+          && bodyEnd - bodyBit < 8u;
+      dwgBuffer padding = bodyBuf->forkIndependent();
+      while (bodyTailIsAlignment && bodyBit < bodyEnd) {
+        if (padding.getBit() != 0u || !padding.isGood()) {
+          bodyTailIsAlignment = false;
+          break;
+        }
+        bodyBit = currentObjectDwgBit(&padding);
+      }
+      if (!bodyTailIsAlignment) {
+        DRW_DBG("FIELD has an unmodeled object-data tail; keeping raw shell; bits=");
+        if (currentObjectDwgBit(bodyBuf) <= bodyEnd)
+          DRW_DBG(static_cast<unsigned long long>(
+              bodyEnd - currentObjectDwgBit(bodyBuf)));
+        else
+          DRW_DBG("invalid");
+        DRW_DBG("\n");
+        return finishSoft();
+      }
+    }
+
     if (!bodyFits())
         return fail();
     *buf = *bodyBuf;

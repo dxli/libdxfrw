@@ -30131,8 +30131,21 @@ bool rejectUnserializableFieldCarriers() {
 
 bool physicalAc1021FieldFlag4Type2ProfileCensus(
     const std::string& sourcePath) {
+    class FieldCensusIface final : public dx_iface {
+    public:
+        void addUnsupportedObject(
+            const DRW_UnsupportedObject& object) override {
+            if (object.m_recordName == "FIELD"
+                || object.m_className == "AcDbField")
+                rawFieldFrames.push_back(object.m_handle);
+            dx_iface::addUnsupportedObject(object);
+        }
+
+        std::vector<std::uint32_t> rawFieldFrames;
+    };
+
     dx_data data;
-    dx_iface iface;
+    FieldCensusIface iface;
     if (!iface.fileImport(sourcePath, &data, false))
         return fail("could not import AC1021 FIELD profile source");
     if (data.sourceFormat != dx_source_format::DWG
@@ -30142,8 +30155,11 @@ bool physicalAc1021FieldFlag4Type2ProfileCensus(
     std::size_t typedRoots = 0u;
     std::size_t acExprRoots = 0u;
     std::size_t acObjPropRoots = 0u;
-    std::map<int, std::size_t> objectIdTypes;
+    std::set<std::uint32_t> typedFieldHandles;
+    std::map<std::string, std::map<std::pair<int, int>, std::size_t>>
+        childValueProfiles;
     for (const DRW_Field& field : data.fields) {
+        typedFieldHandles.insert(field.handle);
         if (field.m_value.m_formatFlags != 4
             || field.m_value.m_dataType != 2)
             continue;
@@ -30178,17 +30194,33 @@ bool physicalAc1021FieldFlag4Type2ProfileCensus(
             || propertyName.m_value.m_value.type() != DRW_Variant::STRING)
             return fail("AcObjProp FIELD child value roles or types changed");
 
-        ++objectIdTypes[objectId.m_value.m_dataType];
+        for (const DRW_Field::ChildValue& child : field.m_childValues)
+            ++childValueProfiles[child.m_key][{
+                child.m_value.m_formatFlags, child.m_value.m_dataType}];
     }
 
+    std::set<std::uint32_t> rawFieldHandles(
+        iface.rawFieldFrames.begin(), iface.rawFieldFrames.end());
+    const std::size_t rawOnlyFieldShells = static_cast<std::size_t>(
+        std::count_if(rawFieldHandles.begin(), rawFieldHandles.end(),
+                      [&typedFieldHandles](std::uint32_t handle) {
+                          return typedFieldHandles.count(handle) == 0u;
+                      }));
+
     std::cerr << "AC1021 FIELD profile: total=" << data.fields.size()
+              << " rawFieldFrames=" << rawFieldHandles.size()
+              << " rawOnlyShells=" << rawOnlyFieldShells
               << " typed=" << typedRoots << " AcExpr=" << acExprRoots
               << " AcObjProp=" << acObjPropRoots;
-    for (const auto& entry : objectIdTypes)
-        std::cerr << " objectIdType" << entry.first << '=' << entry.second;
+    for (const auto& entry : childValueProfiles)
+        for (const auto& profile : entry.second)
+            std::cerr << " " << entry.first << "(flags=" << profile.first.first
+                      << ",type=" << profile.first.second << ")="
+                      << profile.second;
     std::cerr << '\n';
-    if (typedRoots != 57u || acExprRoots != 15u || acObjPropRoots != 42u)
-        return fail("AC1021 FIELD root census differs from the frozen peer census");
+    if (typedRoots != 15u || acExprRoots != 15u || acObjPropRoots != 0u
+        || rawFieldHandles.size() != 142u || rawOnlyFieldShells != 56u)
+        return fail("AC1021 complete FIELD root census differs from the bounded body profile");
     return true;
 }
 
