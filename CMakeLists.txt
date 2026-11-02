@@ -1144,6 +1144,20 @@ if(LIBDXFRW_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/intern
         ${CMAKE_CURRENT_SOURCE_DIR}/dwg2dxf)
     target_link_libraries(libdxfrw_dwg_reader_matrix_tests PRIVATE dxfrw)
+    # Opt-in source-bound DIMASSOC transport probe. This executable accepts a
+    # caller-supplied DWG path and deliberately has no committed sample or
+    # default CTest registration.
+    add_executable(libdxfrw_dimassoc_physical_transport_tests
+        tests/dimassoc_physical_transport_tests.cpp
+        ${_libdxfrw_reader_test_adapter_source})
+    target_compile_features(libdxfrw_dimassoc_physical_transport_tests
+        PRIVATE cxx_std_17)
+    target_include_directories(libdxfrw_dimassoc_physical_transport_tests
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+                ${CMAKE_CURRENT_SOURCE_DIR}/src/intern
+                ${CMAKE_CURRENT_SOURCE_DIR}/dwg2dxf)
+    target_link_libraries(libdxfrw_dimassoc_physical_transport_tests
+        PRIVATE dxfrw)
     add_test(NAME libdxfrw_dwg_reader_matrix
         COMMAND libdxfrw_dwg_reader_matrix_tests)
     add_test(NAME libdxfrw_dwg_erased_block_record_table_recovery
