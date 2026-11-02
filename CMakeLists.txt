@@ -2290,6 +2290,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dxf_fixture_tests --mline-vector-component-order)
     set_tests_properties(libdxfrw_mline_vector_component_order PROPERTIES
         LABELS "fast;dxf;geometry" TIMEOUT 30)
+    add_test(NAME libdxfrw_lwpolyline_point_component_order
+        COMMAND libdxfrw_dxf_fixture_tests --lwpolyline-point-component-order)
+    set_tests_properties(libdxfrw_lwpolyline_point_component_order PROPERTIES
+        LABELS "fast;dxf;reader;lwpolyline;geometry;allocation" TIMEOUT 30)
     add_test(NAME libdxfrw_leader_point_component_order
         COMMAND libdxfrw_dxf_fixture_tests --leader-point-component-order)
     set_tests_properties(libdxfrw_leader_point_component_order PROPERTIES

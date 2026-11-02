@@ -12885,14 +12885,19 @@ bool DRW_LWPolyline::parseCode(int code, const std::unique_ptr<dxfReader>& reade
             && vertlist.size()
                 >= static_cast<std::size_t>(kMaxLWPolylineVertices))
             return nullptr;
-        const std::size_t index = occurrence++;
+        const std::size_t index = occurrence;
         if (index >= vertlist.size()) {
             const std::size_t required = index + 1u;
             if (!DRW::reserve(vertlist, required))
                 return nullptr;
-            while (vertlist.size() < required)
-                vertlist.push_back(std::make_shared<DRW_Vertex2D>());
+            while (vertlist.size() < required) {
+                auto parsedVertex = makeVertex2DNoThrow();
+                if (!parsedVertex)
+                    return nullptr;
+                vertlist.push_back(std::move(parsedVertex));
+            }
         }
+        ++occurrence;
         vertex = vertlist[index];
         return vertex;
     };
@@ -13133,14 +13138,18 @@ bool DRW_LWPolyline::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_
 
     if (parsedVertexCount > 0) { //verify if is lwpol without vertex (empty)
         // add vertexes
-		auto parsedVertex = std::make_shared<DRW_Vertex2D>();
+		auto parsedVertex = makeVertex2DNoThrow();
+		if (!parsedVertex)
+			return fail();
 		if (!readBoundedRawDouble(*buf, bodyEndBit, parsedVertex->x)
 		    || !readBoundedRawDouble(*buf, bodyEndBit, parsedVertex->y))
 		    return fail();
 		parsedVertices.push_back(parsedVertex);
 		auto pv = parsedVertex;
 		for (std::uint32_t i = 1; i < parsedVertexCount; ++i){
-			parsedVertex = std::make_shared<DRW_Vertex2D>();
+            parsedVertex = makeVertex2DNoThrow();
+			if (!parsedVertex)
+				return fail();
 			if (version < DRW::AC1015) {//14-
                 if (!readBoundedRawDouble(*buf, bodyEndBit, parsedVertex->x)
                     || !readBoundedRawDouble(*buf, bodyEndBit, parsedVertex->y))
