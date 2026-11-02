@@ -24590,7 +24590,7 @@ bool runDxfSplineFitOnlyInput(bool binary,
         || parsed.mBlock->ent.size() != 2u)
         return fail("literal read / trailing LINE alignment");
     auto entity = parsed.mBlock->ent.cbegin();
-    const auto* spline = dynamic_cast<const DRW_Spline*>(*entity++);
+    auto* spline = dynamic_cast<DRW_Spline*>(*entity++);
     const auto* line = dynamic_cast<const DRW_Line*>(*entity);
     if (!spline || !line || spline->degree != 3 || spline->flags != splineFlags
         || !spline->controllist.empty() || !spline->knotslist.empty()
@@ -24616,8 +24616,20 @@ bool runDxfSplineFitOnlyInput(bool binary,
     }
 
     dx_iface writer;
+    // The R2013+ DWG-only fields select a fit-point curve's parameterization,
+    // which DXF cannot encode. Non-default choices must fail closed; the
+    // documented chord default remains representable as ordinary DXF fit data.
+    spline->m_scenario = 2;
+    spline->m_splineFlags1 = 9;
+    for (const std::int32_t knotParameter : {1, 2}) {
+        spline->m_knotParam = knotParameter;
+        if (writer.fileExport(output.string(), DRW::AC1027, binary, &parsed, false)
+            || spline->m_knotParam != knotParameter)
+            return fail("non-default DWG fit-spline knot parameterization was emitted or mutated");
+    }
+    spline->m_knotParam = 0;
     if (!writer.fileExport(output.string(), DRW::AC1027, binary, &parsed, false))
-        return fail("writer export");
+        return fail("chord-default writer retry");
 
     // Independently inspect the writer's emitted group codes.  dxfRW's
     // semantic round-trip alone would miss a writer/read pair sharing a bug.

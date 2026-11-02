@@ -19907,6 +19907,17 @@ bool DRW_Spline::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
 bool DRW_Spline::validateDxf() const {
     if (flags > std::numeric_limits<std::int16_t>::max())
         return false;
+    // R2013+ DWG fit splines can select chord, square-root-chord, or uniform
+    // knot parameterization. DXF's AcDbSpline group-code contract has no field
+    // for that selector; only chord is the documented default. Emitting a
+    // different selection as fit points alone would silently change the curve
+    // when a DXF consumer rebuilds it.
+    if (m_scenario == 2
+        && (m_splineFlags1
+            & (kSplineFlagMethodFitPoints | kSplineFlagUseKnotParameter))
+            == (kSplineFlagMethodFitPoints | kSplineFlagUseKnotParameter)
+        && m_knotParam != 0)
+        return false;
     if (m_dxfKnotCountSeen
         && knotslist.size() != static_cast<std::size_t>(nknots))
         return false;
