@@ -1132,10 +1132,35 @@ def check_source_disposition_projection(converter, root, writer):
     if (issue.returncode != 1 or issue_output.read_bytes() != SENTINEL
             or issue_source.read_bytes() != issue_bytes
             or b"inputCodePagePolicy=exact-named" not in projection
-            or not issue_mask.startswith(b"0x")
-            or int(issue_mask, 16) == 0):
+            or issue_mask != b"0x0000000000000820"):
         raise AssertionError(
-            f"DXF decoder issue mask/policy was not projected: {issue!r}")
+            f"DXF invalid UTF-8 issue mask/policy was not projected exactly: {issue!r}")
+    checked += 1
+
+    escape_pairs = [
+        (0, b"SECTION"), (2, b"HEADER"), (9, b"$ACADVER"), (1, b"AC1021"),
+        (9, b"$DWGCODEPAGE"), (3, b"ANSI_1252"), (0, b"ENDSEC"),
+        (0, b"SECTION"), (2, b"ENTITIES"), (0, b"TEXT"), (5, b"A0"),
+        (8, b"0"), (10, 1.0), (20, 2.0), (40, 1.0), (1, b"\\U+xyz0"),
+        (0, b"ENDSEC")]
+    escape_source = root / "decoder malformed escape.dxf"
+    escape_output = root / "decoder malformed escape destination.dxf"
+    escape_bytes = encode_authored_pairs(escape_pairs, False)
+    escape_source.write_bytes(escape_bytes)
+    escape_output.write_bytes(SENTINEL)
+    escaped = run_bounded(
+        [str(converter), str(escape_source), "-o", str(escape_output), "-y", "-d",
+         "--dxf-codepage-policy=exact-named"], 10, 131072, cwd=root)
+    projection = next((line for line in escaped.stderr.splitlines()
+                       if line.startswith(b"CLI source disposition projection:")), b"")
+    escape_mask = next((field.split(b"=", 1)[1] for field in projection.split()
+                        if field.startswith(b"sourceDxfTextIssueMask=")), b"")
+    if (escaped.returncode != 1 or escape_output.read_bytes() != SENTINEL
+            or escape_source.read_bytes() != escape_bytes
+            or b"inputCodePagePolicy=exact-named" not in projection
+            or escape_mask != b"0x0000000000000600"):
+        raise AssertionError(
+            f"DXF malformed-escape issue mask was not projected exactly: {escaped!r}")
     checked += 1
 
     if writer is None:

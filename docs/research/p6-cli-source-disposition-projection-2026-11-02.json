@@ -26,20 +26,21 @@
       "A locally generated AC1021 DXF with $REQUIREDVERSIONS=1 targeting AC1024 exposes the exact mask and is refused atomically.",
       "The same source targeting AC1032 exposes the mask as admitted, writes group 160 with value 1, and preserves it through typed DXF readback.",
       "Locally generated duplicate-variable, repeated-group-160 and wrong-group-code $REQUIREDVERSIONS inputs report malformed/unknown, are refused at AC1032, and preserve source and destination bytes.",
-      "A locally authored AC1021 DXF text value triggers a nonzero decoder issue mask and reports exact-named codepage policy.",
+      "A locally authored AC1021 DXF text value reports the exact invalid-UTF-8/output mask 0x820 and exact-named codepage policy.",
+      "A locally authored malformed DXF Unicode escape reports the exact malformed/unrepresented escape mask and preserves source/destination bytes on refusal.",
       "A locally authored AC1027 DWG contains one skipped custom class and one skipped unsupported object; strict export reports both counts and preserves the destination."
     ],
     "sourceGenerator": "tests/dwg_local_roundtrip_tests.cpp --generate-cli-skip-source authors the skipped-record DWG from scratch at runtime.",
-    "controls": 10,
+    "controls": 11,
     "fixtureFilesAdded": 0
   },
   "validation": {
     "build": "PASS: cmake --build build-gcc --target dwg2dxf -j2",
-    "test": "PASS: python3 tests/dwg2dxf_cli_contract_tests.py --converter $PWD/build-gcc/dwg2dxf/dwg2dxf --writer $PWD/build-gcc/libdxfrw_dwg_local_roundtrip --source-disposition-only (10 controls); PASS: same command with --fast-only (103 option controls, 47 batch controls, 2 read-observation controls, 18 partial-read controls, 10 source-disposition controls)",
+    "test": "PASS: python3 tests/dwg2dxf_cli_contract_tests.py --converter $PWD/build-gcc/dwg2dxf/dwg2dxf --writer $PWD/build-gcc/libdxfrw_dwg_local_roundtrip --source-disposition-only (11 controls); PASS: same command with --fast-only (103 option controls, 47 batch controls, 2 read-observation controls, 18 partial-read controls, 11 source-disposition controls)",
     "diffCheck": "PASS: git diff --check",
     "sha256": {
       "dwg2dxf/main.cpp": "90459947d539c89bd66bfae43039d9704f5370a78e471b4a459aa6f58cf15adc",
-      "tests/dwg2dxf_cli_contract_tests.py": "ee78b0af292ca545b14b1c72ae08338593956c53b09120923d97dce6a36fe108",
+      "tests/dwg2dxf_cli_contract_tests.py": "80a2941e33a2e45c2a8a536783b05bc496623312e686f971ec408c861c8cbc7e",
       "tests/dwg_local_roundtrip_tests.cpp": "a8f7e05f9d419d5ada7936475f120f76f4cbe579ea18641e0542da150fb6c81c",
       "build-gcc/dwg2dxf/dwg2dxf": "03af8a6be9cdd010438901fbe2e8fbc4afdc422e3c54c185383d5ec1ed56e1f4",
       "build-gcc/libdxfrw_dwg_local_roundtrip": "0af58ebc4816c4d22cc7832f414c5d74ff6c21fd176e80127badaf75d7463d03"
@@ -49,6 +50,6 @@
     "HEADER diagnosis covers repeated-variable and repeated-group refusal only; the CLI did not repair any input, and broader caller/API repair workflows remain open.",
     "Skip counts cover one generated AC1027 custom-class and unsupported-object pair, not all skip/recovery categories or revisions.",
     "The $REQUIREDVERSIONS controls cover three malformed source shapes plus one valid mask preserved through AC1032 typed DXF output/readback and an AC1024 refusal. The mask's feature semantics, source-producer diversity and native acceptance remain open.",
-    "The DXF text mask is decoder-issue telemetry, not a unique count of corrupt records or a semantic loss total."
+    "The DXF text mask is decoder-issue telemetry, not a unique count of corrupt records or a semantic loss total. Exact generated masks now cover invalid UTF-8/output (0x820) and malformed/unrepresented escapes (0x600); other decoder issue classes remain unqualified by this CLI selector."
   ]
 }
