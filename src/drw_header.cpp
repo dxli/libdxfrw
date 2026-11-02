@@ -892,7 +892,8 @@ void DRW_Header::write(const std::unique_ptr<dxfWriter>& writer, DRW::Version ve
         || !canWriteDxfCeltscale()
         || !canWriteDxfPsltscale()
         || !canWriteDxfMsltscale(ver)
-        || !canWriteDxfMeasurement()) {
+        || !canWriteDxfMeasurement()
+        || !canWriteDxfInsunits(ver)) {
         writer->markWriteError();
         return;
     }
@@ -2784,6 +2785,47 @@ bool DRW_Header::canWriteDxfMeasurement() const noexcept {
     return canWriteDxfZeroOrOneIntegerHeaderVariable("$MEASUREMENT");
 }
 
+bool DRW_Header::getInsunitsValue(int& value, bool& present) const noexcept {
+    constexpr std::string_view dollarKey = "$INSUNITS";
+    constexpr std::string_view bareKey = "INSUNITS";
+    value = 0;
+    present = false;
+    const auto inspect = [&](const auto& values) {
+        for (const auto& item : values) {
+            const std::string_view key(item.first);
+            if (!headerNamesEqualIgnoringAsciiCase(key, dollarKey)
+                && !headerNamesEqualIgnoringAsciiCase(key, bareKey))
+                continue;
+            if ((key != dollarKey && key != bareKey) || present
+                || item.second == nullptr
+                || item.second->type() != DRW_Variant::INTEGER
+                || item.second->code() != 70)
+                return false;
+            value = item.second->content.i;
+            present = true;
+        }
+        return true;
+    };
+    return inspect(vars) && inspect(customVars);
+}
+
+bool DRW_Header::canWriteDxfInsunits(DRW::Version target) const noexcept {
+    int value = 0;
+    bool present = false;
+    if (!getInsunitsValue(value, present))
+        return false;
+    return !present
+        || (target > DRW::AC1014 && value >= 0
+            && value < static_cast<int>(UnitCount));
+}
+
+bool DRW_Header::canWriteDwgInsunits() const noexcept {
+    int value = 0;
+    bool present = false;
+    return getInsunitsValue(value, present)
+        && (!present || (value >= 0 && value < static_cast<int>(UnitCount)));
+}
+
 bool DRW_Header::canWriteDxfVisualStyleReferences(DRW::Version target) const {
     for (const DxfHeaderVisualStyleReference& reference :
          dxfHeaderVisualStyleReferences) {
@@ -4026,7 +4068,7 @@ bool DRW_Header::encodeDwgForWriter(
         version != DRW::AC1021 && version != DRW::AC1024 &&
         version != DRW::AC1027 &&
         version != DRW::AC1032) return false;
-    if (buf == nullptr)
+    if (buf == nullptr || !canWriteDwgInsunits())
         return false;
 
     struct EncodedTime {

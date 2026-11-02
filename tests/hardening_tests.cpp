@@ -84,6 +84,7 @@ public:
 class ExposedHeader : public DRW_Header {
 public:
     using DRW_Header::parseCode;
+    using DRW_Header::encodeDwg;
 };
 
 class ExposedMLineStyle : public DRW_MLineStyle {
@@ -2024,6 +2025,194 @@ void testDxfMeasurementHeaderDomain(TestContext& t) {
                                         retryFound, retryValue)
                      && retryFound && retryValue == 1,
                  "same writer accepts corrected MEASUREMENT after rollback");
+    }
+}
+
+void testDxfInsunitsHeaderDomain(TestContext& t) {
+    const auto makeWriter = [](bool binary, std::ostream* output,
+                               const char* version = "AC1027") {
+        std::unique_ptr<dxfWriter> writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(output))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(output));
+        writer->setVersion(version, true);
+        return writer;
+    };
+    const auto emitHeader = [](const std::unique_ptr<dxfWriter>& writer,
+                               DRW_Header& header, DRW::Version target) {
+        DxfWriterRecordScope record(*writer);
+        header.write(writer, target);
+        return !writer->hasWriteError() && record.commit();
+    };
+    const auto readInsunits = [](const std::string& bytes, bool binary,
+                                 bool& found, int& value) {
+        found = false;
+        std::istringstream input(bytes, std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        bool expectingValue = false;
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (expectingValue) {
+                if (code != 70)
+                    return false;
+                value = reader->getInt32();
+                found = true;
+                return true;
+            }
+            if (code == 9)
+                expectingValue = reader->getString() == "$INSUNITS";
+        }
+        return true;
+    };
+
+    for (const bool binary : {false, true}) {
+        for (int validValue = 0; validValue < DRW_Header::UnitCount;
+             ++validValue) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
+            DRW_Header header;
+            header.addInt("$INSUNITS", validValue, 70);
+            bool found = false;
+            int parsedValue = -1;
+            t.expect(emitHeader(writer, header, DRW::AC1027)
+                         && readInsunits(output.str(), binary, found, parsedValue)
+                         && found && parsedValue == validValue,
+                     "documented INSUNITS values 0-24 round-trip in ASCII/Binary DXF");
+        }
+
+        std::ostringstream absentOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> absentWriter = makeWriter(
+            binary, &absentOutput);
+        DRW_Header absent;
+        bool absentFound = true;
+        int absentValue = -1;
+        t.expect(emitHeader(absentWriter, absent, DRW::AC1027)
+                     && readInsunits(absentOutput.str(), binary,
+                                    absentFound, absentValue)
+                     && !absentFound,
+                 "absent INSUNITS remains absent in ASCII/Binary DXF");
+
+        for (const int invalidValue : {-1, 25,
+                                       (std::numeric_limits<int>::max)()}) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
+            DRW_Header header;
+            header.addInt("$INSUNITS", invalidValue, 70);
+            t.expect(!emitHeader(writer, header, DRW::AC1027)
+                         && output.str().empty(),
+                     "out-of-domain INSUNITS is atomically refused");
+        }
+
+        const auto refuses = [&](DRW_Header& header) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
+            return !emitHeader(writer, header, DRW::AC1027)
+                && output.str().empty();
+        };
+        DRW_Header wrongType;
+        wrongType.addStr("$INSUNITS", "4", 1);
+        t.expect(refuses(wrongType), "INSUNITS wrong variant type is refused");
+        DRW_Header wrongGroup;
+        wrongGroup.addInt("$INSUNITS", 4, 90);
+        t.expect(refuses(wrongGroup), "INSUNITS wrong group code is refused");
+        DRW_Header duplicateAliases;
+        duplicateAliases.addInt("$INSUNITS", 4, 70);
+        duplicateAliases.addInt("INSUNITS", 4, 70);
+        t.expect(refuses(duplicateAliases),
+                 "INSUNITS dollar/bare aliases are refused together");
+        DRW_Header lowercaseAlias;
+        lowercaseAlias.addInt("$insunits", 4, 70);
+        t.expect(refuses(lowercaseAlias),
+                 "case-folded INSUNITS alias cannot bypass canonical spelling");
+        DRW_Header customMap;
+        customMap.addCustomVar("$INSUNITS", "4", 70);
+        t.expect(refuses(customMap),
+                 "INSUNITS placed in custom variables is refused");
+
+        std::ostringstream source(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> sourceWriter = makeWriter(binary, &source);
+        t.expect(sourceWriter->writeString(9, "$INSUNITS")
+                     && sourceWriter->writeInt16(70, 25),
+                 "unsupported INSUNITS source control is encoded");
+        std::istringstream sourceInput(source.str(),
+                                       std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> sourceReader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&sourceInput))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&sourceInput));
+        sourceReader->setVersion("AC1027", true);
+        ExposedHeader parsedHeader;
+        int code = 0;
+        bool parsedOk = true;
+        while (sourceReader->readRec(&code))
+            parsedOk = parsedHeader.parseCode(code, sourceReader) && parsedOk;
+        const auto parsedValue = parsedHeader.vars.find("$INSUNITS");
+        t.expect(parsedOk && parsedValue != parsedHeader.vars.end()
+                     && parsedValue->second != nullptr
+                     && parsedValue->second->type() == DRW_Variant::INTEGER
+                     && parsedValue->second->code() == 70
+                     && parsedValue->second->content.i == 25,
+                 "DXF input retains unsupported INSUNITS for diagnosis");
+
+        std::ostringstream retryOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> retryWriter = makeWriter(
+            binary, &retryOutput);
+        DRW_Header invalidRetry;
+        invalidRetry.addInt("$INSUNITS", 25, 70);
+        t.expect(!emitHeader(retryWriter, invalidRetry, DRW::AC1027)
+                     && retryOutput.str().empty()
+                     && !retryWriter->hasWriteError(),
+                 "invalid INSUNITS rolls back the HEADER writer transaction");
+        DRW_Header correctedRetry;
+        correctedRetry.addInt("$INSUNITS", 24, 70);
+        bool retryFound = false;
+        int retryValue = -1;
+        t.expect(emitHeader(retryWriter, correctedRetry, DRW::AC1027)
+                     && readInsunits(retryOutput.str(), binary,
+                                    retryFound, retryValue)
+                     && retryFound && retryValue == 24,
+                 "same writer accepts corrected INSUNITS after rollback");
+
+        std::ostringstream oldOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> oldWriter = makeWriter(
+            binary, &oldOutput, "AC1014");
+        DRW_Header unsupportedTarget;
+        unsupportedTarget.addInt("$INSUNITS", 4, 70);
+        t.expect(!emitHeader(oldWriter, unsupportedTarget, DRW::AC1014)
+                     && oldOutput.str().empty(),
+                 "INSUNITS is refused rather than dropped on pre-2000 DXF targets");
+    }
+
+    static_assert(DRW_Header::USSurveyFoot == 21
+                      && DRW_Header::USSurveyInch == 22
+                      && DRW_Header::USSurveyYard == 23
+                      && DRW_Header::USSurveyMile == 24
+                      && DRW_Header::UnitCount == 25,
+                  "INSUNITS survey units complete the public enum through 24");
+
+    constexpr std::array<DRW::Version, 6> dwgVersions{{
+        DRW::AC1015, DRW::AC1018, DRW::AC1021,
+        DRW::AC1024, DRW::AC1027, DRW::AC1032
+    }};
+    for (const DRW::Version version : dwgVersions) {
+        for (const int validValue : {0, 20, 21, 24}) {
+            ExposedHeader header;
+            header.addInt("$INSUNITS", validValue, 70);
+            dwgBufferW data, handles, strings;
+            t.expect(header.encodeDwg(version, &data, &handles, &strings),
+                     "DWG HEADER encoder accepts documented INSUNITS values");
+        }
+        for (const int invalidValue : {-1, 25}) {
+            ExposedHeader header;
+            header.addInt("$INSUNITS", invalidValue, 70);
+            dwgBufferW data, handles, strings;
+            t.expect(!header.encodeDwg(version, &data, &handles, &strings)
+                         && data.bitCount() == 0u
+                         && handles.bitCount() == 0u
+                         && strings.bitCount() == 0u,
+                     "DWG HEADER refuses unsupported INSUNITS before emitting bytes");
+        }
     }
 }
 
@@ -25078,6 +25267,18 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--dxf-insunits-header-domain") {
+        TestContext focused;
+        testDxfInsunitsHeaderDomain(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " INSUNITS HEADER assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "INSUNITS HEADER domain: PASS\n";
+        return 0;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--dxf-geodata-modern-text-preflight") {
         TestContext focused;
         testDxfGeoDataModernTextPreflightView(focused);
@@ -26328,6 +26529,7 @@ int main(int argc, char** argv) {
     testDxfOperationAdmission(context);
     testDxfLinetypeDisplayScaleDomains(context);
     testDxfMeasurementHeaderDomain(context);
+    testDxfInsunitsHeaderDomain(context);
     testLeaderAdvisoryCountState(context);
     testPublicOwnershipContracts(context);
     testEmbeddedAttributeTextRouting(context);

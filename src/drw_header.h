@@ -93,7 +93,11 @@ public:
         Astro = 18,             ///< ~149.6 x 10^9 m
         Lightyear = 19,         ///< ~9.46 x 10^15 m
         Parsec = 20,            ///< ~3.0857 x 10^16 m
-        UnitCount = 21,         ///< Used to iterate through units
+        USSurveyFoot = 21,      ///< US survey foot
+        USSurveyInch = 22,      ///< US survey inch
+        USSurveyYard = 23,      ///< US survey yard
+        USSurveyMile = 24,      ///< US survey mile
+        UnitCount = 25,         ///< Used to iterate through units
 
         /** $MEASUREMENT header variable, since R14/AC1014 */
         English = 0,            ///< English/Imperial drawing */
@@ -223,6 +227,10 @@ public:
     /// Preserve explicit measurement selection only for the documented
     /// imperial/metric values; absence remains distinct from either value.
     bool canWriteDxfMeasurement() const noexcept;
+    /// Preserve the documented INSUNITS code range (0-24) and refuse it on
+    /// DXF revisions before the variable is emitted. This is scalar admission
+    /// only; platform-specific unit conversion support is separate.
+    bool canWriteDxfInsunits(DRW::Version target) const noexcept;
     /// Return whether the dimension-variable family can be represented in the
     /// requested DXF revision without dropping modern split-variable values.
     bool canWriteDxfDimensionVariables(DRW::Version target) const;
@@ -399,6 +407,8 @@ private:
                                       int& legacyUnit, int& legacyFit,
                                       int& linearUnit, int& fraction,
                                       int& textArrowFit, int& textMove) const;
+    bool getInsunitsValue(int& value, bool& present) const noexcept;
+    bool canWriteDwgInsunits() const noexcept;
     static bool matchesIntVar(const std::unordered_map<std::string, DRW_Variant*>& values,
                               const char* key, int code, int value);
     template <typename Map>
