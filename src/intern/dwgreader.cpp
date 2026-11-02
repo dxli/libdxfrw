@@ -7090,9 +7090,9 @@ std::string dwgReader::findTableName(DRW::TTYPE table, std::int32_t handle) {
       name = (ds_it->second)->name;
     break;
   }
-  case DRW::BLOCK_RECORD: { // use DRW_Block because name are more correct
-    //        auto bk_it = blockmap.find(handle);
-    //        if (bk_it != blockmap.end())
+  case DRW::BLOCK_RECORD: {
+    // readDwgBlocks normalizes each BLOCK_RECORD name from its matching BLOCK
+    // delimiter before entity delivery, so this is the canonical DXF name.
     auto bk_it = blockRecordmap.find(handle);
     if (bk_it != blockRecordmap.end())
       name = (bk_it->second)->name;
@@ -7119,6 +7119,15 @@ std::string dwgReader::findTableName(DRW::TTYPE table, std::int32_t handle) {
     break;
   }
   return name;
+}
+
+void dwgReader::resolveDimensionTableReferences(DRW_Dimension &dimension) {
+  dimension.style = findTableName(DRW::DIMSTYLE, dimension.dimStyleH.ref);
+  // DWG dimensions store a hard pointer to their anonymous BLOCK_RECORD;
+  // DXF represents that relationship by the dimension's group-2 block name.
+  // Resolve it while the source BLOCK_RECORD map is available so downstream
+  // 2D consumers and DXF output receive the complete picture-block link.
+  dimension.name = findTableName(DRW::BLOCK_RECORD, dimension.blockH.ref);
 }
 
 std::string dwgReader::findAppIdName(std::uint32_t handle) const {
@@ -8750,6 +8759,41 @@ bool dwgReader::readDwgBlocks(DRW_Interface &intfa, dwgBuffer *dbuf,
         return false;
     } catch (...) {
       return false;
+    }
+  }
+
+  // A DIMENSION's second common handle points at its anonymous
+  // BLOCK_RECORD, but the table record's stored name can be a shortened
+  // source spelling. The BLOCK delimiter carries the canonical name. Resolve
+  // all valid delimiter names before walking any block entities, since a
+  // model-space dimension may be encountered before its picture block in the
+  // unordered BLOCK_RECORD map.
+  for (auto &item : blockRecordmap) {
+    DRW_Block_Record *record = item.second;
+    if (record == nullptr || invalidOwnershipRecords.count(record) != 0u)
+      continue;
+    const auto blockIt = ObjectMap.find(record->block);
+    if (blockIt == ObjectMap.end())
+      continue;
+    try {
+      DwgObjectFrame nameFrame;
+      if (!nameFrame.readAt(*dbuf, version, blockIt->second.loc))
+        continue;
+      auto &nameBody = nameFrame.body();
+      dwgBuffer nameBuffer(nameBody.data(), nameBody.size(), &decoder);
+      dwgBuffer typeBuffer = nameBuffer.forkIndependent();
+      if (typeBuffer.getObjType(version) != dwgType::BLOCK
+          || !typeBuffer.isGood())
+        continue;
+      DRW_Block blockName;
+      if (!parseBlock(blockName, nameBuffer, nameFrame.bodyBitSize())
+          || blockName.handle != blockIt->second.handle
+          || blockName.handle != record->block)
+        continue;
+      record->name = blockName.name;
+    } catch (...) {
+      // Name resolution is advisory during the tolerant read. The regular
+      // block pass below remains responsible for frame failure reporting.
     }
   }
 
@@ -11434,7 +11478,7 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
       case dwgType::DIM_ORDINATE: {
         DRW_DimOrdinate e;
         if (entryParse(e, buff, bs, ret)) {
-          e.style = findTableName(DRW::DIMSTYLE, e.dimStyleH.ref);
+          resolveDimensionTableReferences(e);
           output.appendValue(e, &DRW_Interface::addDimOrdinate);
         }
         break;
@@ -11442,7 +11486,7 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
       case dwgType::DIM_LINEAR: {
         DRW_DimLinear e;
         if (entryParse(e, buff, bs, ret)) {
-          e.style = findTableName(DRW::DIMSTYLE, e.dimStyleH.ref);
+          resolveDimensionTableReferences(e);
           output.appendValue(e, &DRW_Interface::addDimLinear);
         }
         break;
@@ -11450,7 +11494,7 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
       case dwgType::DIM_ALIGNED: {
         DRW_DimAligned e;
         if (entryParse(e, buff, bs, ret)) {
-          e.style = findTableName(DRW::DIMSTYLE, e.dimStyleH.ref);
+          resolveDimensionTableReferences(e);
           output.appendValue(e, &DRW_Interface::addDimAlign);
         }
         break;
@@ -11458,7 +11502,7 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
       case dwgType::DIM_ANGULAR3P: {
         DRW_DimAngular3p e;
         if (entryParse(e, buff, bs, ret)) {
-          e.style = findTableName(DRW::DIMSTYLE, e.dimStyleH.ref);
+          resolveDimensionTableReferences(e);
           output.appendValue(e, &DRW_Interface::addDimAngular3P);
         }
         break;
@@ -11466,7 +11510,7 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
       case dwgType::DIM_ANGULAR: {
         DRW_DimAngular e;
         if (entryParse(e, buff, bs, ret)) {
-          e.style = findTableName(DRW::DIMSTYLE, e.dimStyleH.ref);
+          resolveDimensionTableReferences(e);
           output.appendValue(e, &DRW_Interface::addDimAngular);
         }
         break;
@@ -11474,7 +11518,7 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
       case dwgType::DIM_RADIAL: {
         DRW_DimRadial e;
         if (entryParse(e, buff, bs, ret)) {
-          e.style = findTableName(DRW::DIMSTYLE, e.dimStyleH.ref);
+          resolveDimensionTableReferences(e);
           output.appendValue(e, &DRW_Interface::addDimRadial);
         }
         break;
@@ -11482,7 +11526,7 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
       case dwgType::DIM_DIAMETRIC: {
         DRW_DimDiametric e;
         if (entryParse(e, buff, bs, ret)) {
-          e.style = findTableName(DRW::DIMSTYLE, e.dimStyleH.ref);
+          resolveDimensionTableReferences(e);
           output.appendValue(e, &DRW_Interface::addDimDiametric);
         }
         break;
@@ -11771,7 +11815,7 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
                cit->second->className == "AcDbArcDimension")) {
             DRW_DimArc e;
             if (entryParse(e, buff, bs, ret)) {
-              e.style = findTableName(DRW::DIMSTYLE, e.dimStyleH.ref);
+              resolveDimensionTableReferences(e);
               output.appendValue(e, &DRW_Interface::addDimArc);
             }
             break;
@@ -11784,7 +11828,7 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
             // DRW_DimRadial); the jog point/angle ride along on the object.
             DRW_DimLargeRadial e;
             if (entryParse(e, buff, bs, ret)) {
-              e.style = findTableName(DRW::DIMSTYLE, e.dimStyleH.ref);
+              resolveDimensionTableReferences(e);
               output.appendValue(e, &DRW_Interface::addDimRadial);
             }
             break;

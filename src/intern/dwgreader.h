@@ -1525,6 +1525,7 @@ protected:
   void parseAttribs(DRW_Entity *e);
   void parseAttribs(DRW_TableEntry *e);
   std::string findTableName(DRW::TTYPE table, std::int32_t handle);
+  void resolveDimensionTableReferences(DRW_Dimension &dimension);
   std::string findAppIdName(std::uint32_t handle) const;
 
   void setCodePage(const std::string &c) { decoder.setCodePage(c, false); }

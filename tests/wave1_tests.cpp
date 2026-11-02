@@ -15278,6 +15278,31 @@ void testDimensionPictureBlockStrictNameAdmission(TestContext& t) {
         t.expect(emptyNameOwner.writeDimension(&emptyName),
                  "strict DXF conversion leaves empty-name dimensions unclassified rather than assuming an ordinary picture block");
 
+        std::ostringstream unresolvedHandleOutput;
+        unresolvedHandleOutput << prefix;
+        dxfRW unresolvedHandleOwner("");
+        unresolvedHandleOwner.version = DRW::AC1032;
+        unresolvedHandleOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&unresolvedHandleOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&unresolvedHandleOutput));
+        unresolvedHandleOwner.setSourceBlockRecords({}, true);
+        class ExposedDimAligned final : public DRW_DimAligned {
+        public:
+            void setPictureBlockHandle(std::uint32_t handle) {
+                blockH.ref = handle;
+            }
+        } unresolvedHandle;
+        unresolvedHandle.handle = 0x587u;
+        unresolvedHandle.setPictureBlockHandle(0x1234u);
+        t.expect(!unresolvedHandleOwner.writeDimension(&unresolvedHandle)
+                     && unresolvedHandleOwner.m_writeError
+                     && unresolvedHandleOwner.getLastDiagnostic().code
+                         == "unresolved-dimension-picture-block"
+                     && unresolvedHandleOutput.str() == prefix,
+                 "strict DXF conversion refuses a DWG picture-block handle without a resolved group-2 name before output");
+
         const auto configureOwner = [binary](dxfRW& owner,
                                               std::ostringstream& output,
                                               PictureBlockInterface& adapter) {

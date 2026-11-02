@@ -9036,8 +9036,22 @@ bool dxfRW::preflightDimensionPictureBlock(
     // standalone writers unchanged unless the caller opted into resolved
     // block-owner validation.
     if (!m_requireResolvedBlockOwners || version <= DRW::AC1009
-        || dimension == nullptr || dimension->name.empty())
+        || dimension == nullptr)
         return true;
+
+    if (dimension->name.empty()) {
+        if (dimension->blockH.ref == 0u
+            || dimension->blockH.ref == DRW::NoHandle)
+            return true;
+        recordOperationDiagnostic(writingBlock ? DRW::OperationPhase::Blocks
+                                               : DRW::OperationPhase::Entities,
+            DRW::OperationCause::ValidationFailure,
+            "unresolved-dimension-picture-block",
+            "DIMENSION picture-block handle has no resolved BLOCK_RECORD name",
+            0, false, dimension->handle,
+            dimension->handle != DRW::NoHandle);
+        return failDxfWrite();
+    }
 
     const std::string key = dxfSymbolNameKey(dimension->name);
     const bool fixedSpace = key == "*MODEL_SPACE"

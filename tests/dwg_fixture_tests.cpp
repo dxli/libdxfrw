@@ -226,6 +226,39 @@ void testAdvancedTargetFixtures(TestContext& t) {
                     && std::fabs(left.y - right.y) < 1e-12
                     && std::fabs(left.z - right.z) < 1e-12;
             };
+            const auto entityTypes = [](const dx_ifaceBlock* block) {
+                std::vector<int> result;
+                if (block != nullptr) {
+                    result.reserve(block->ent.size());
+                    for (const DRW_Entity* entity : block->ent)
+                        result.push_back(entity == nullptr
+                            ? -1 : static_cast<int>(entity->eType));
+                }
+                return result;
+            };
+            dx_ifaceBlock* sourcePictureBlock = nullptr;
+            std::size_t sourcePictureBlockCount = 0u;
+            for (dx_ifaceBlock* block : data.blocks) {
+                if (block != nullptr
+                    && block->name == sourceDimension->getName()) {
+                    sourcePictureBlock = block;
+                    ++sourcePictureBlockCount;
+                }
+            }
+            const DRW_Block_Record* sourcePictureBlockRecord = nullptr;
+            std::size_t sourcePictureBlockRecordCount = 0u;
+            for (const DRW_Block_Record& record : data.blockRecords) {
+                if (record.name == sourceDimension->getName()) {
+                    sourcePictureBlockRecord = &record;
+                    ++sourcePictureBlockRecordCount;
+                }
+            }
+            t.expect(!sourceDimension->getName().empty()
+                         && sourcePictureBlockCount == 1u
+                         && sourcePictureBlockRecordCount == 1u
+                         && sourcePictureBlock != nullptr
+                         && !sourcePictureBlock->ent.empty(),
+                     "large radial source picture-block handle resolves to one typed block graph");
             for (const bool binary : {false, true}) {
                 dx_data isolated;
                 isolated.headerC = data.headerC;
@@ -235,12 +268,16 @@ void testAdvancedTargetFixtures(TestContext& t) {
                 isolated.dimStyles = data.dimStyles;
                 isolated.textStyles = data.textStyles;
                 isolated.appIds = data.appIds;
+                if (sourcePictureBlock != nullptr
+                    && sourcePictureBlockRecord != nullptr) {
+                    // Borrow the fixture-owned block for this synchronous
+                    // projection. The list node is removed before isolated's
+                    // destructor; data remains the sole block owner.
+                    isolated.blocks.push_back(sourcePictureBlock);
+                    isolated.blockRecords.push_back(*sourcePictureBlockRecord);
+                }
                 auto* isolatedDimension =
                     new DRW_DimLargeRadial(*sourceDimension);
-                // Keep this record-only probe free of an unresolved group-2
-                // edge to the fixture's picture block, which is intentionally
-                // outside the selected-record projection.
-                isolatedDimension->setName("");
                 isolated.mBlock->ent.push_back(isolatedDimension);
 
                 const std::filesystem::path output = temporaryDxfPath(
@@ -262,6 +299,8 @@ void testAdvancedTargetFixtures(TestContext& t) {
                         output.string(), &reopened, false);
                     DRW_DimLargeRadial* actual = nullptr;
                     std::size_t actualCount = 0u;
+                    const dx_ifaceBlock* actualPictureBlock = nullptr;
+                    std::size_t actualPictureBlockCount = 0u;
                     if (readBack && reopened.mBlock != nullptr) {
                         for (DRW_Entity* entity : reopened.mBlock->ent) {
                             if (auto* candidate =
@@ -271,8 +310,18 @@ void testAdvancedTargetFixtures(TestContext& t) {
                             }
                         }
                     }
+                    if (readBack) {
+                        for (const dx_ifaceBlock* block : reopened.blocks) {
+                            if (block != nullptr && actual != nullptr
+                                && block->name == actual->getName()) {
+                                actualPictureBlock = block;
+                                ++actualPictureBlockCount;
+                            }
+                        }
+                    }
                     const bool matches = actualCount == 1u
                         && actual != nullptr
+                        && actual->getName() == sourceDimension->getName()
                         && actual->getText() == sourceDimension->getText()
                         && actual->getStyle() == sourceDimension->getStyle()
                         && actual->type == sourceDimension->type
@@ -301,14 +350,19 @@ void testAdvancedTargetFixtures(TestContext& t) {
                                      sourceDimension->overrideCenterPoint)
                         && sameCoord(actual->jogPoint,
                                      sourceDimension->jogPoint)
-                        && actual->jogAngle == sourceDimension->jogAngle;
+                        && actual->jogAngle == sourceDimension->jogAngle
+                        && actualPictureBlockCount == 1u
+                        && actualPictureBlock != nullptr
+                        && entityTypes(actualPictureBlock)
+                            == entityTypes(sourcePictureBlock);
                     t.expect(readBack && matches,
                              binary
-                                 ? "large radial binary DXF readback preserves typed fields"
-                                 : "large radial ASCII DXF readback preserves typed fields");
+                                 ? "large radial binary DXF readback preserves fields and picture-block graph"
+                                 : "large radial ASCII DXF readback preserves fields and picture-block graph");
                 }
                 std::error_code ec;
                 std::filesystem::remove(output, ec);
+                isolated.blocks.clear();
             }
         }
     }
