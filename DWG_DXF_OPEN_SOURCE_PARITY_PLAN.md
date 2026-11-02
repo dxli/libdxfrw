@@ -354,9 +354,12 @@ eligible reader. The exact package and environment result are in the
 ## P8 — consumer, platform, packaging and release gates
 
 - Preserve LibreCAD/LibreCAD_3 callback/default behavior; new callbacks remain
-  non-pure. Qualify intended 3D consumers and remaining FreeCAD `dwg2dxf`
-  profiles without dropping required geometry. The limited macOS ARM64 2D
-  open/insert profile is recorded in
+  non-pure. The compile-only LibreCAD_3 facade guard and generated ASCII/Binary
+  3D-consumer probe pass; see the [local API and 3D probe receipt](docs/research/p8-local-compat-and-generated-3d-probe-2026-11-02.json).
+  These checks cover API shape and generated record delivery only, not native
+  application behavior. Qualify intended 3D consumers and remaining FreeCAD
+  `dwg2dxf` profiles without dropping required geometry. The limited macOS ARM64
+  2D open/insert profile is recorded in
   [the FreeCAD route receipt](docs/research/p8-macos-freecad-dwg2dxf-open-insert-qualification-2026-11-01.json);
   it does not qualify 3D semantics or other platforms.
 - Complete native Linux/Windows FreeCAD qualification and bind the actual loaded
