@@ -5202,15 +5202,16 @@ bool dxfRW::validateHatchPayload(const DRW_Hatch *ent) const {
     if (const auto *polygon = dynamic_cast<const DRW_MPolygon*>(ent)) {
         if (!std::isfinite(polygon->xDirX) || !std::isfinite(polygon->xDirY)
             || polygon->fillColorAci < 0
-            || polygon->fillColorAci > std::numeric_limits<std::uint16_t>::max()
+            || polygon->fillColorAci > 256
             || polygon->fillColorRgb < -1
             || polygon->fillColorRgb > 0xFFFFFF
             || (polygon->annotatedBoundary != 0
                 && polygon->annotatedBoundary != 1)
             || polygon->degenerateLoops < 0
-            // Autodesk documents group 63 for MPOLYGON fill ACI, but no
-            // MPOLYGON-specific color-book extension. Preserve this DWG-only
-            // CMC field rather than inventing a DXF group mapping.
+            // Autodesk documents group 63 as the MPOLYGON fill ACI. The
+            // accepted color-index domain is 0..256 (BYBLOCK/BYLAYER are the
+            // special endpoints); this field has no MPOLYGON color-book
+            // extension, so preserve that DWG-only CMC field separately.
             || !polygon->fillColorBookName.empty()
             || !isSafeDxfRecordText(polygon->fillColorName))
             return false;

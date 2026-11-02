@@ -13772,6 +13772,116 @@ void testHatchGradientStopColorDomain(TestContext& t) {
              "HATCH typed validation rejects out-of-domain gradient stop scalars");
 }
 
+void testMPolygonAciDomain(TestContext& t) {
+    struct MPolygonParseProbe final : DRW_MPolygon {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+        bool valid() const { return validateDxf(); }
+    };
+    const auto parseRecord = [](MPolygonParseProbe& polygon, int code,
+                                const char* value) {
+        const std::string record = std::to_string(code) + "\n" + value + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int parsedCode = 0;
+        return reader->readRec(&parsedCode) && parsedCode == code
+            && polygon.parse(parsedCode, reader);
+    };
+
+    for (const char* invalidValue : {"-1", "257"}) {
+        MPolygonParseProbe polygon;
+        polygon.fillColorAci = 23;
+        const bool rejected = !parseRecord(polygon, 63, invalidValue);
+        const bool unchanged = polygon.fillColorAci == 23 && polygon.valid();
+        const bool retried = parseRecord(polygon, 63, "256")
+            && polygon.fillColorAci == 256 && polygon.valid();
+        t.expect(rejected && unchanged && retried,
+                 "MPOLYGON invalid group-63 ACI preserves model state for corrected retry");
+    }
+
+    for (const int colorIndex : {0, 1, 255, 256}) {
+        MPolygonParseProbe polygon;
+        const std::string value = std::to_string(colorIndex);
+        const bool accepted = parseRecord(polygon, 63, value.c_str())
+            && polygon.fillColorAci == colorIndex && polygon.valid();
+        const std::string label =
+            "MPOLYGON group-63 ACI accepts documented index " + value;
+        t.expect(accepted, label.c_str());
+    }
+
+    struct MPolygonWriterAdapter final : dx_iface {
+        DRW_MPolygon polygon;
+        bool rejectedByEntityWriter{false};
+        void writeEntities() override {
+            if (dxfW == nullptr || !dxfW->writeMPolygon(&polygon))
+                rejectedByEntityWriter = true;
+        }
+    };
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    for (const bool binary : {false, true}) {
+        const auto path = std::filesystem::temp_directory_path()
+            / ("libdxfrw-mpolygon-aci-" + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code error;
+                std::filesystem::remove(path, error);
+            }
+        } cleanup{path};
+        const std::string previous = "previous destination bytes\n";
+        {
+            std::ofstream output(path, std::ios::binary | std::ios::trunc);
+            output << previous;
+        }
+
+        dxfRW codec(path.string().c_str());
+        dx_data data;
+        MPolygonWriterAdapter writer;
+        writer.cData = &data;
+        writer.currentBlock = data.mBlock;
+        writer.dxfW = &codec;
+        const auto destinationIsPrevious = [&path, &previous]() {
+            std::ifstream input(path, std::ios::binary);
+            return std::string(std::istreambuf_iterator<char>(input),
+                               std::istreambuf_iterator<char>()) == previous;
+        };
+        writer.polygon.fillColorAci = -1;
+        writer.rejectedByEntityWriter = false;
+        const bool negativeRejected = !codec.write(&writer, DRW::AC1027, binary)
+            && writer.rejectedByEntityWriter && destinationIsPrevious();
+        writer.polygon.fillColorAci = 257;
+        writer.rejectedByEntityWriter = false;
+        const bool overRangeRejected = !codec.write(&writer, DRW::AC1027, binary)
+            && writer.rejectedByEntityWriter && destinationIsPrevious();
+
+        writer.polygon.fillColorAci = 256;
+        writer.rejectedByEntityWriter = false;
+        const bool retryWritten = codec.write(&writer, DRW::AC1027, binary)
+            && !writer.rejectedByEntityWriter;
+        dx_data decoded;
+        dx_iface importer;
+        const bool imported = retryWritten
+            && importer.fileImport(path.string(), &decoded, false);
+        const DRW_MPolygon* decodedMPolygon = nullptr;
+        if (imported && decoded.mBlock != nullptr) {
+            for (const DRW_Entity* entity : decoded.mBlock->ent) {
+                if (const auto* polygon = dynamic_cast<const DRW_MPolygon*>(entity))
+                    decodedMPolygon = polygon;
+            }
+        }
+        const std::string label =
+            std::string("MPOLYGON group-63 ACI writer refusal/retry/readback (")
+            + (binary ? "Binary" : "ASCII") + ")";
+        t.expect(negativeRejected && overRangeRejected && retryWritten
+                     && imported && decodedMPolygon != nullptr
+                     && decodedMPolygon->fillColorAci == 256,
+                 label.c_str());
+    }
+}
+
 void testHatchSplinePointComponentOrder(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
@@ -61933,6 +62043,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testHatchGradientStopColorDomain(context);
         std::cout << "HATCH gradient-stop color-domain controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--mpolygon-aci-domain") {
+        TestContext context;
+        testMPolygonAciDomain(context);
+        std::cout << "MPOLYGON group-63 ACI-domain controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

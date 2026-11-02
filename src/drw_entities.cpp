@@ -19086,7 +19086,10 @@ bool DRW_MPolygon::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         break;
     case 63:
         if (gradColors.empty()) {
-            fillColorAci = reader->getInt32();
+            const int colorIndex = reader->getInt32();
+            if (colorIndex < 0 || colorIndex > 256)
+                return false;
+            fillColorAci = colorIndex;
             fillColorDwgMethod = 0xFFu;
             fillColorDwgFlags = 0u;
             fillColorDwgIndex = 0u;
@@ -19160,6 +19163,7 @@ bool DRW_MPolygon::validateDxf() const {
         && dxfVersion >= 0 && dxfVersion <= std::numeric_limits<std::int16_t>::max()
         && (solid == 0 || solid == 1)
         && (annotatedBoundary == 0 || annotatedBoundary == 1)
+        && fillColorAci >= 0 && fillColorAci <= 256
         && std::isfinite(xDirX) && std::isfinite(xDirY);
 }
 

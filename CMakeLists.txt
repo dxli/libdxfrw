@@ -2310,6 +2310,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dxf_fixture_tests --mesh-dxf-allocation-failure)
     set_tests_properties(libdxfrw_mesh_dxf_allocation_failure PROPERTIES
         LABELS "fast;dxf;reader;mesh;allocation;retry" TIMEOUT 30)
+    add_test(NAME libdxfrw_mpolygon_aci_domain
+        COMMAND libdxfrw_dxf_fixture_tests --mpolygon-aci-domain)
+    set_tests_properties(libdxfrw_mpolygon_aci_domain PROPERTIES
+        LABELS "fast;dxf;reader;writer;mpolygon;validation;retry" TIMEOUT 30)
     add_test(NAME libdxfrw_hatch_spline_point_component_order
         COMMAND libdxfrw_dxf_fixture_tests
             --hatch-spline-point-component-order)

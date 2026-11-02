@@ -351,6 +351,8 @@ failing-stage diagnostic.
 
 **HATCH gradient color scalar admission:** Explicit group-421 RGB and group-63 ACI values are checked before mutating the active stop, and typed-model validation enforces the same 24-bit RGB and 0..256 ACI bounds. The focused HATCH/MPOLYGON cohort passes 5/5 in 0.82 seconds. This establishes scalar admission and retry only; gradient rendering, physical producer breadth, and native semantics remain open. See [the HATCH gradient-color receipt](docs/research/p6-hatch-gradient-stop-color-domain-2026-11-02.json).
 
+**MPOLYGON ACI scalar admission:** Group 63 now accepts the documented 0..256 ACI domain at DXF parse, typed validation, and writer admission, preserving same-group correction/retry and ASCII/Binary destination safety. Its dedicated fast selector passes 1/1 in 0.09 seconds. This does not qualify fill rendering or native semantics. See [the MPOLYGON ACI receipt](docs/research/p6-mpolygon-aci-dxf-domain-2026-11-02.json).
+
 ## P7 — ACIS/ACDS and independent 3D meaning
 
 - Complete the original DWG entity → owner/key → AcDs segment → SAT/SAB join,
