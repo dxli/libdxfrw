@@ -34492,9 +34492,19 @@ int main(int argc, char** argv) {
         DRW::Version version = DRW::AC1027;
         if (argc == 4) {
             const std::string token = argv[3];
-            if (token == "AC1021")
+            if (token == "AC1015")
+                version = DRW::AC1015;
+            else if (token == "AC1018")
+                version = DRW::AC1018;
+            else if (token == "AC1021")
                 version = DRW::AC1021;
-            else if (token != "AC1027") {
+            else if (token == "AC1024")
+                version = DRW::AC1024;
+            else if (token == "AC1027")
+                version = DRW::AC1027;
+            else if (token == "AC1032")
+                version = DRW::AC1032;
+            else {
                 std::cerr << "Unsupported CLI partial-read source version: "
                           << token << '\n';
                 return 1;

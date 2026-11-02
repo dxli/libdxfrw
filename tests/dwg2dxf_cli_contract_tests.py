@@ -900,8 +900,12 @@ def check_partial_dwg_read_cli(converter, root, writer):
     if writer is None:
         raise AssertionError("partial-read CLI control requires the local DWG writer")
     checked = 0
-    for revision, version in ((b"AC1021", "AC1021"),
-                              (b"AC1027", "AC1027")):
+    for revision, version in ((b"AC1015", "AC1015"),
+                              (b"AC1018", "AC1018"),
+                              (b"AC1021", "AC1021"),
+                              (b"AC1024", "AC1024"),
+                              (b"AC1027", "AC1027"),
+                              (b"AC1032", "AC1032")):
         source = root / f"generated partial-read source {version}.dwg"
         generated = run_bounded(
             [str(writer), "--generate-cli-partial-read-source", str(source), version],
