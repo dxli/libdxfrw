@@ -963,6 +963,101 @@ def check_partial_dwg_read_cli(converter, root, writer):
     return 3
 
 
+def check_source_disposition_projection(converter, root, writer):
+    """Expose repair, skip, decoder-issue and required-version decisions."""
+    checked = 0
+
+    malformed_header = root / "header repair required.dxf"
+    malformed_output = root / "header repair destination.dxf"
+    malformed_bytes = SOURCE.replace(
+        b"0\nENDSEC\n0\nSECTION\n2\nENTITIES",
+        b"9\n$ACADVER\n1\nAC1021\n0\nENDSEC\n0\nSECTION\n2\nENTITIES", 1)
+    malformed_header.write_bytes(malformed_bytes)
+    malformed_output.write_bytes(SENTINEL)
+    malformed = run_bounded(
+        [str(converter), str(malformed_header), "-o", str(malformed_output),
+         "-y", "-d"], 10, 131072, cwd=root)
+    if (malformed.returncode != 1 or malformed_output.read_bytes() != SENTINEL
+            or malformed_header.read_bytes() != malformed_bytes
+            or b"sourceRepairAction=none" not in malformed.stderr
+            or b"sourceHeaderStructure=repair-required" not in malformed.stderr):
+        raise AssertionError(
+            f"malformed HEADER was not projected as repair-required: {malformed!r}")
+    checked += 1
+
+    required_versions = root / "required versions mask.dxf"
+    required_versions_output = root / "required versions destination.dxf"
+    required_versions_bytes = SOURCE.replace(
+        b"0\nENDSEC\n0\nSECTION\n2\nENTITIES",
+        b"9\n$REQUIREDVERSIONS\n160\n1\n0\nENDSEC\n0\nSECTION\n2\nENTITIES", 1)
+    required_versions.write_bytes(required_versions_bytes)
+    required_versions_output.write_bytes(SENTINEL)
+    masked = run_bounded(
+        [str(converter), str(required_versions), "-o", str(required_versions_output),
+         "-v2010", "-y", "-d"], 10, 131072, cwd=root)
+    if (masked.returncode != 1 or required_versions_output.read_bytes() != SENTINEL
+            or required_versions.read_bytes() != required_versions_bytes
+            or b"sourceRequiredVersionsStatus=present" not in masked.stderr
+            or b"sourceRequiredVersionsMask=0x0000000000000001" not in masked.stderr
+            or b"sourceRequiredVersionsOutput=refused" not in masked.stderr):
+        raise AssertionError(
+            f"required-version feature mask was not projected atomically: {masked!r}")
+    checked += 1
+
+    issue_pairs = [
+        (0, b"SECTION"), (2, b"HEADER"), (9, b"$ACADVER"), (1, b"AC1021"),
+        (9, b"$DWGCODEPAGE"), (3, b"ANSI_1252"), (0, b"ENDSEC"),
+        (0, b"SECTION"), (2, b"ENTITIES"), (0, b"TEXT"), (5, b"A0"),
+        (8, b"0"), (10, 1.0), (20, 2.0), (40, 1.0), (1, b"\xc0\xaf"),
+        (0, b"ENDSEC")]
+    issue_source = root / "decoder issue mask.dxf"
+    issue_output = root / "decoder issue destination.dxf"
+    issue_bytes = encode_authored_pairs(issue_pairs, False)
+    issue_source.write_bytes(issue_bytes)
+    issue_output.write_bytes(SENTINEL)
+    issue = run_bounded(
+        [str(converter), str(issue_source), "-o", str(issue_output), "-y", "-d",
+         "--dxf-codepage-policy=exact-named"], 10, 131072, cwd=root)
+    projection = next((line for line in issue.stderr.splitlines()
+                       if line.startswith(b"CLI source disposition projection:")), b"")
+    issue_mask = next((field.split(b"=", 1)[1] for field in projection.split()
+                       if field.startswith(b"sourceDxfTextIssueMask=")), b"0x00000000")
+    if (issue.returncode != 1 or issue_output.read_bytes() != SENTINEL
+            or issue_source.read_bytes() != issue_bytes
+            or b"inputCodePagePolicy=exact-named" not in projection
+            or not issue_mask.startswith(b"0x")
+            or int(issue_mask, 16) == 0):
+        raise AssertionError(
+            f"DXF decoder issue mask/policy was not projected: {issue!r}")
+    checked += 1
+
+    if writer is None:
+        raise AssertionError("skip projection control requires the local DWG writer")
+    skipped_source = root / "generated skipped-record source.dwg"
+    generated = run_bounded(
+        [str(writer), "--generate-cli-skip-source", str(skipped_source)],
+        10, 131072, cwd=root)
+    if generated.returncode != 0 or not skipped_source.is_file():
+        raise AssertionError(f"could not author skipped-record DWG locally: {generated!r}")
+    skipped_bytes = skipped_source.read_bytes()
+    skipped_output = root / "skipped-record destination.dxf"
+    skipped_output.write_bytes(SENTINEL)
+    skipped = run_bounded(
+        [str(converter), str(skipped_source), "-o", str(skipped_output),
+         "-v2013", "-y", "-d"], 10, 2 * 1024 * 1024, cwd=root)
+    projection = next((line for line in skipped.stderr.splitlines()
+                       if line.startswith(b"CLI source disposition projection:")), b"")
+    if (skipped.returncode != 1 or skipped_output.read_bytes() != SENTINEL
+            or skipped_source.read_bytes() != skipped_bytes
+            or b"sourceDwgSkippedCustomClassInstances=1" not in projection
+            or b"sourceDwgSkippedUnsupportedObjectInstances=1" not in projection
+            or b"strict-complete conversion requires" not in skipped.stderr):
+        raise AssertionError(
+            f"strict output did not project and refuse skipped DWG records: {skipped!r}")
+    checked += 1
+    return checked
+
+
 def check_unsupported_dwg_codepage(converter, root):
     """Mutate only the envelope codepage of an admitted local sample."""
     fixture = (Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "dwg"
@@ -1554,6 +1649,8 @@ def main():
                         help="run only the unsupported DWG envelope-codepage diagnostic control")
     parser.add_argument("--partial-read-only", action="store_true",
                         help="run only the strict/explicit-partial DWG CLI controls")
+    parser.add_argument("--source-disposition-only", action="store_true",
+                        help="run only CLI repair/skip/mask preflight projections")
     args = parser.parse_args()
     converter = args.converter.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="libdxfrw-cli-contract-") as directory:
@@ -1606,21 +1703,30 @@ def main():
             checked = check_partial_dwg_read_cli(converter, root, args.writer)
             print(f"CLI partial DWG read: PASS ({checked} strict/partial/readback controls)")
             return
+        if args.source_disposition_only:
+            checked = check_source_disposition_projection(converter, root, args.writer)
+            print(f"CLI source disposition projection: PASS ({checked} repair/skip/mask controls)")
+            return
         if args.fast_only:
             checked = check_options(converter, root)
             batch_checked = check_batch(converter, root, args.writer)
             observation_checked = check_read_observations(converter, root)
             partial_read_checked = check_partial_dwg_read_cli(
                 converter, root, args.writer)
+            disposition_checked = check_source_disposition_projection(
+                converter, root, args.writer)
             print(f"CLI fast contract: PASS ({checked} option controls, "
                   f"{batch_checked} batch controls, {observation_checked} "
                   f"read-observation controls, {partial_read_checked} "
-                  "partial-read controls)")
+                  f"partial-read controls, {disposition_checked} "
+                  "source-disposition controls)")
             return
         checked = check_options(converter, root)
         batch_checked = check_batch(converter, root, args.writer)
         observation_checked = check_read_observations(converter, root)
         partial_read_checked = check_partial_dwg_read_cli(
+            converter, root, args.writer)
+        disposition_checked = check_source_disposition_projection(
             converter, root, args.writer)
         source_checked = check_source_text_admission(converter, root)
         target = check_target_text_transport(converter, root)
@@ -1630,7 +1736,8 @@ def main():
         policy = check_exact_input_policy(converter, root)
     print(f"CLI contract: PASS ({checked} option/filename and "
           f"{batch_checked} batch controls, {observation_checked} read-observation controls; "
-          f"{partial_read_checked} partial-read controls; "
+          f"{partial_read_checked} partial-read controls, "
+          f"{disposition_checked} source-disposition controls; "
           f"source text {source_checked[0]} refusals/{source_checked[1]} retries/"
           f"{source_checked[2]} positives/{source_checked[3]} mixed batch; target text "
           f"{target[0]} refusals/{target[1]} retries/{target[2]} modern/{target[3]} two-pass routes; "

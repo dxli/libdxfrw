@@ -16,6 +16,8 @@
 #include <set>
 #include <system_error>
 #include <sys/stat.h>
+#include <array>
+#include <cstdint>
 
 #include "dx_iface.h"
 #include "dx_data.h"
@@ -91,11 +93,28 @@ const char* cliSourceFormatName(dx_source_format format) noexcept {
     return "unknown";
 }
 
+const char* cliCodePagePolicyName(DRW::DxfCodePagePolicy policy) noexcept {
+    return policy == DRW::DxfCodePagePolicy::ExactNamed
+        ? "exact-named" : "compatible";
+}
+
+void writeCliHex64(std::ostream& output, std::uint64_t value) {
+    static constexpr char digits[] = "0123456789abcdef";
+    std::array<char, 16> text{};
+    for (std::size_t index = text.size(); index > 0; --index) {
+        text[index - 1] = digits[value & 0x0fu];
+        value >>= 4u;
+    }
+    output << "0x";
+    output.write(text.data(), static_cast<std::streamsize>(text.size()));
+}
+
 void reportCliConversionProjection(const dx_data& data,
                                    DRW::Version targetVersion,
                                    bool sourceDefaultTarget,
                                    bool binary,
-                                   bool allowPartialDwgRead) {
+                                   bool allowPartialDwgRead,
+                                   DRW::DxfCodePagePolicy codePagePolicy) {
     const char* readCompleteness = data.sourceFormat != dx_source_format::DWG
         ? "not-applicable"
         : allowPartialDwgRead ? "explicit-partial" : "strict";
@@ -111,6 +130,59 @@ void reportCliConversionProjection(const dx_data& data,
               << " outputEncoding=" << (binary ? "Binary" : "ASCII")
               << " readCompleteness=" << readCompleteness
               << " stage=before-output-preflight\n";
+
+    const bool isDxf = data.sourceFormat == dx_source_format::DXF;
+    const bool isDwg = data.sourceFormat == dx_source_format::DWG;
+    const char* headerStructure = !isDxf ? "not-applicable"
+        : data.headerC.canWriteDxfHeaderStructure() ? "ready" : "repair-required";
+    const auto requiredVersions = data.headerC.vars.find("$REQUIREDVERSIONS");
+    const bool hasRequiredVersions = requiredVersions != data.headerC.vars.end();
+    const DRW_Variant* requiredValue = hasRequiredVersions
+        ? requiredVersions->second : nullptr;
+    const bool wellTypedMask = requiredValue != nullptr
+        && requiredValue->type() == DRW_Variant::INTEGER64
+        && requiredValue->code() == 160;
+    const DwgReadObservations& dwgObservations = data.dwgReadOutcome.observations;
+    std::cerr << "CLI source disposition projection: schema=1 "
+              << "sourceRepairAction=none "
+              << "sourceHeaderStructure=" << headerStructure << ' '
+              << "inputCodePagePolicy=" << cliCodePagePolicyName(codePagePolicy)
+              << " sourceDxfTextIssueMask=";
+    if (isDxf)
+        writeCliHex64(std::cerr, data.dxfReadOutcome.observations.issueMask);
+    else
+        std::cerr << "not-applicable";
+    std::cerr << " sourceRequiredVersionsStatus=";
+    if (!isDxf) {
+        std::cerr << "not-applicable sourceRequiredVersionsMask=not-applicable";
+    } else if (!hasRequiredVersions) {
+        std::cerr << "absent sourceRequiredVersionsMask=absent";
+    } else if (!wellTypedMask) {
+        std::cerr << "malformed sourceRequiredVersionsMask=unknown";
+    } else {
+        std::cerr << "present sourceRequiredVersionsMask=";
+        writeCliHex64(std::cerr,
+            static_cast<std::uint64_t>(requiredValue->i64_val()));
+    }
+    std::cerr << " sourceRequiredVersionsOutput=";
+    if (!isDxf)
+        std::cerr << "not-applicable";
+    else if (targetVersion == DRW::UNKNOWNV)
+        std::cerr << "unknown-target";
+    else
+        std::cerr << (data.headerC.canWriteDxfRequiredVersions(targetVersion)
+            ? "admitted" : "refused");
+    std::cerr << " sourceDwgSkippedCustomClassInstances=";
+    if (isDwg)
+        std::cerr << dwgObservations.skippedCustomClasses.instances;
+    else
+        std::cerr << "not-applicable";
+    std::cerr << " sourceDwgSkippedUnsupportedObjectInstances=";
+    if (isDwg)
+        std::cerr << dwgObservations.skippedUnsupportedObjects.instances;
+    else
+        std::cerr << "not-applicable";
+    std::cerr << "\n";
 }
 
 } // namespace
@@ -192,7 +264,8 @@ bool convertFile(std::string inName, std::string outName, DRW::Version ver,
         if (ver == DRW::UNKNOWNV) {
             if (debug)
                 reportCliConversionProjection(fData, ver, sourceDefaultTarget,
-                                               binary, allowPartialDwgRead);
+                                               binary, allowPartialDwgRead,
+                                               codePagePolicy);
             std::cout << "Error: no supported default DXF version for source revision "
                       << static_cast<int>(fData.sourceVersion) << std::endl;
             return false;
@@ -201,7 +274,7 @@ bool convertFile(std::string inName, std::string outName, DRW::Version ver,
 
     if (debug)
         reportCliConversionProjection(fData, ver, sourceDefaultTarget, binary,
-                                       allowPartialDwgRead);
+                                       allowPartialDwgRead, codePagePolicy);
 
     if (allowPartialDwgRead && fData.sourceFormat == dx_source_format::DWG) {
         std::cerr << "WARNING: explicit partial DWG read mode; output may omit "

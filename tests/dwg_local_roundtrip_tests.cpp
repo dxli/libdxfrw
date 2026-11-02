@@ -34499,6 +34499,22 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
+    if (argc == 3
+        && std::string(argv[1]) == "--generate-cli-skip-source") {
+        if (std::filesystem::exists(argv[2])) {
+            std::cerr << "Refusing to replace an existing CLI skip source\n";
+            return 1;
+        }
+        dwgRW writer(argv[2]);
+        ReadOutcomeControl source(&writer, 2);
+        if (!writer.write(&source, DRW::AC1027, true) || !source.wrote) {
+            const DRW_OperationDiagnostic diagnostic = writer.getLastDiagnostic();
+            std::cerr << "Could not generate CLI skip DWG source: "
+                      << diagnostic.code << " — " << diagnostic.message << '\n';
+            return 1;
+        }
+        return 0;
+    }
     if ((argc == 3 || argc == 4)
         && std::string(argv[1]) == "--generate-cli-batch-source") {
         if (std::filesystem::exists(argv[2])) {

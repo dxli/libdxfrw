@@ -1,0 +1,51 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-cli-source-disposition-projection-2026-11-02",
+  "date": "2026-11-02",
+  "status": "FAST_VALIDATED",
+  "supportClaimEffect": "none",
+  "scope": "Expose bounded pre-output CLI diagnostics for explicit repair state, skipped DWG records, DXF text issue masks and the source $REQUIREDVERSIONS feature mask.",
+  "projection": {
+    "line": "CLI source disposition projection: schema=1",
+    "fields": [
+      "sourceRepairAction=none and sourceHeaderStructure=ready|repair-required|not-applicable",
+      "inputCodePagePolicy=compatible|exact-named",
+      "sourceDxfTextIssueMask as a fixed-width 32-bit hexadecimal mask or not-applicable",
+      "sourceRequiredVersionsStatus and the exact 64-bit mask, plus output admission state",
+      "sourceDwgSkippedCustomClassInstances and sourceDwgSkippedUnsupportedObjectInstances"
+    ],
+    "limits": "The diagnostic is bounded and read-only. It does not apply repairs or convert observations into a completeness/support claim."
+  },
+  "control": {
+    "file": "tests/dwg2dxf_cli_contract_tests.py",
+    "function": "check_source_disposition_projection",
+    "selector": "--source-disposition-only; included in --fast-only",
+    "runtimeInputs": [
+      "A locally generated DXF with repeated $ACADVER HEADER structure is refused without changing its destination and is reported as repair-required.",
+      "A locally generated AC1021 DXF with $REQUIREDVERSIONS=1 targeting AC1024 exposes the exact mask and is refused atomically.",
+      "A locally authored AC1021 DXF text value triggers a nonzero decoder issue mask and reports exact-named codepage policy.",
+      "A locally authored AC1027 DWG contains one skipped custom class and one skipped unsupported object; strict export reports both counts and preserves the destination."
+    ],
+    "sourceGenerator": "tests/dwg_local_roundtrip_tests.cpp --generate-cli-skip-source authors the skipped-record DWG from scratch at runtime.",
+    "controls": 4,
+    "fixtureFilesAdded": 0
+  },
+  "validation": {
+    "build": "PASS: cmake --build build-gcc --target dwg2dxf libdxfrw_dwg_local_roundtrip -j2",
+    "test": "PASS: python3 -B tests/dwg2dxf_cli_contract_tests.py --converter $PWD/build-gcc/dwg2dxf/dwg2dxf --writer $PWD/build-gcc/libdxfrw_dwg_local_roundtrip --source-disposition-only (4 controls); --fast-only (103 option, 47 batch, 2 read-observation, 3 partial-read and 4 source-disposition controls)",
+    "diffCheck": "PASS: git diff --check",
+    "sha256": {
+      "dwg2dxf/main.cpp": "e80733e7133e3a1eb77311052b93e74b0fcf6f1fb6aa2fbf2fe00028b5fd27ae",
+      "tests/dwg2dxf_cli_contract_tests.py": "c9b854460b150ae3d3ed9a17053e95b6e7dc286b74b0d98ffcee7860f583d4a4",
+      "tests/dwg_local_roundtrip_tests.cpp": "6a88fec49ad99e972a52db7003dbf82480f730604f2eff032fb49b38d2558fbe",
+      "build-gcc/dwg2dxf/dwg2dxf": "32a09aebcad165c22f60288a927ea1b0e40775c52829d08233eba8affd7c832f",
+      "build-gcc/libdxfrw_dwg_local_roundtrip": "31fa3dc95737d94e699e9feb886bb60fca1d2435cd029d7503b7a501f814e13a"
+    }
+  },
+  "limits": [
+    "Repair diagnosis covers DXF HEADER repeated-structure refusal only; the CLI did not repair any input.",
+    "Skip counts cover one generated AC1027 custom-class and unsupported-object pair, not all skip/recovery categories or revisions.",
+    "The $REQUIREDVERSIONS control covers one valid mask and an older-target refusal. Other malformed masks, masks with semantic consumers and native acceptance remain open.",
+    "The DXF text mask is decoder-issue telemetry, not a unique count of corrupt records or a semantic loss total."
+  ]
+}
