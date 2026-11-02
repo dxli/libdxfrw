@@ -18413,6 +18413,13 @@ bool DRW_Hatch::validateDxf() const {
     if (!validateCurrentBoundaryPathDxf()
         || !validateCurrentPatternLineDxf())
         return false;
+    // DWG stores the gradient companion fields even when the fill flag is
+    // clear. The DXF writer emits those fields only for an active gradient,
+    // so nonempty stops on a non-gradient entity would otherwise disappear
+    // during DWG-to-DXF conversion. Keep the retained data and refuse this
+    // lossy projection; callers can retry after explicitly resolving it.
+    if (isGradient == 0 && !gradColors.empty())
+        return false;
     if (m_dxfLoopCountExpected >= 0
         && looplist.size() != static_cast<std::size_t>(m_dxfLoopCountExpected))
         return false;

@@ -548,9 +548,173 @@ void testUtf8FilesystemPaths(TestContext& t) {
         std::cout << "UTF-8 filesystem paths: PASS\n";
 }
 
+void testInactiveHatchGradientStopsFailClosed(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        dx_data data;
+        auto* hatch = new DRW_Hatch();
+        hatch->solid = 1;
+        hatch->isGradient = 0;
+        hatch->name = "SOLID";
+        auto loop = std::make_shared<DRW_HatchLoop>(2);
+        auto polyline = std::make_shared<DRW_LWPolyline>();
+        polyline->flags = 1;
+        polyline->addVertex(DRW_Vertex2D(0.0, 0.0, 0.0));
+        polyline->addVertex(DRW_Vertex2D(2.0, 0.0, 0.0));
+        polyline->addVertex(DRW_Vertex2D(1.0, 2.0, 0.0));
+        loop->objlist.push_back(polyline);
+        loop->update();
+        hatch->appendLoop(loop);
+        data.mBlock->ent.push_back(hatch);
+
+        const std::filesystem::path baseline = temporaryDxfPath(
+            binary ? "hatch-inactive-gradient-baseline-binary"
+                   : "hatch-inactive-gradient-baseline-ascii");
+        FixtureInterface writer;
+        const bool baselineExported = writer.fileExport(
+            baseline.string(), DRW::AC1027, binary, &data, false);
+        t.expect(baselineExported,
+                 binary
+                     ? "ordinary binary HATCH exports before the loss control"
+                     : "ordinary ASCII HATCH exports before the loss control");
+        if (!baselineExported)
+            continue;
+
+        FixtureInterface baselineReader;
+        dx_data baselineData;
+        const bool baselineRead = baselineReader.fileImport(
+            baseline.string(), &baselineData, false);
+        std::size_t baselineHatchCount = 0u;
+        if (baselineRead && baselineData.mBlock != nullptr) {
+            for (const DRW_Entity* entity : baselineData.mBlock->ent)
+                if (dynamic_cast<const DRW_Hatch*>(entity) != nullptr)
+                    ++baselineHatchCount;
+        }
+        t.expect(baselineRead && baselineHatchCount == 1u,
+                 binary
+                     ? "ordinary binary HATCH baseline has typed readback"
+                     : "ordinary ASCII HATCH baseline has typed readback");
+
+        hatch->gradColors.emplace_back(0.0, 0x0000FF, 0, 0xC2u);
+        hatch->gradColors.emplace_back(1.0, 0xFFFFFF, 0, 0xC2u);
+        const std::filesystem::path rejected = temporaryDxfPath(
+            binary ? "hatch-inactive-gradient-rejected-binary"
+                   : "hatch-inactive-gradient-rejected-ascii");
+        const std::string sentinel = "inactive gradient stops must be retained\n";
+        {
+            std::ofstream output(rejected, std::ios::binary);
+            t.expect(static_cast<bool>(output),
+                     "create HATCH loss-guard destination sentinel");
+            output << sentinel;
+        }
+        const bool rejectedLossyProjection = !writer.fileExport(
+            rejected.string(), DRW::AC1027, binary, &data, false);
+        std::ifstream rejectedInput(rejected, std::ios::binary);
+        const std::string rejectedContents{
+            std::istreambuf_iterator<char>{rejectedInput},
+            std::istreambuf_iterator<char>{}};
+        t.expect(rejectedLossyProjection && rejectedContents == sentinel,
+                 binary
+                     ? "binary HATCH refuses inactive stops atomically"
+                     : "ASCII HATCH refuses inactive stops atomically");
+
+        // A caller that explicitly resolves the retained, unrepresentable
+        // source values can reuse the same adapter after the failed export.
+        hatch->gradColors.clear();
+        const std::filesystem::path retry = temporaryDxfPath(
+            binary ? "hatch-inactive-gradient-retry-binary"
+                   : "hatch-inactive-gradient-retry-ascii");
+        const bool retried = writer.fileExport(
+            retry.string(), DRW::AC1027, binary, &data, false);
+        FixtureInterface retryReader;
+        dx_data retryData;
+        const bool retryRead = retried && retryReader.fileImport(
+            retry.string(), &retryData, false);
+        std::size_t retryHatchCount = 0u;
+        if (retryRead && retryData.mBlock != nullptr) {
+            for (const DRW_Entity* entity : retryData.mBlock->ent)
+                if (dynamic_cast<const DRW_Hatch*>(entity) != nullptr)
+                    ++retryHatchCount;
+        }
+        t.expect(retried && retryRead && retryHatchCount == 1u,
+                 binary
+                     ? "binary HATCH succeeds on corrected same-adapter retry"
+                     : "ASCII HATCH succeeds on corrected same-adapter retry");
+
+        std::error_code ec;
+        std::filesystem::remove(baseline, ec);
+        std::filesystem::remove(rejected, ec);
+        std::filesystem::remove(retry, ec);
+    }
+}
+
+int testPhysicalInactiveGradientHatch(const char* sourcePath) {
+    constexpr std::uint32_t sourceHandle = 0x173u;
+    FixtureInterface sourceReader;
+    dx_data sourceData;
+    if (!sourceReader.fileImport(sourcePath, &sourceData, false)
+        || sourceData.mBlock == nullptr) {
+        std::cerr << "FAIL: physical HATCH source imports\n";
+        return 1;
+    }
+
+    const DRW_Hatch* sourceHatch = nullptr;
+    for (const DRW_Entity* entity : sourceData.mBlock->ent) {
+        const auto* candidate = dynamic_cast<const DRW_Hatch*>(entity);
+        if (candidate != nullptr && candidate->handle == sourceHandle) {
+            sourceHatch = candidate;
+            break;
+        }
+    }
+    const bool sourceProfileMatches = sourceHatch != nullptr
+        && sourceHatch->isGradient == 0
+        && sourceHatch->gradColors.size() == 2u
+        && sourceHatch->gradColors[0].value == 0.0
+        && sourceHatch->gradColors[0].colorMethod == 0xC2u
+        && sourceHatch->gradColors[0].rgb == 0x0000FF
+        && sourceHatch->gradColors[1].value == 1.0
+        && sourceHatch->gradColors[1].colorMethod == 0xC2u
+        && sourceHatch->gradColors[1].rgb == 0xFFFFFF
+        && sourceHatch->looplist.size() == 2u;
+    if (!sourceProfileMatches) {
+        std::cerr << "FAIL: physical HATCH 0x173 inactive-gradient fields\n";
+        return 1;
+    }
+
+    for (std::size_t loopIndex = 0; loopIndex < sourceHatch->looplist.size();
+         ++loopIndex) {
+        const auto& loop = sourceHatch->looplist[loopIndex];
+        const auto* polyline = loop != nullptr && loop->objlist.size() == 1u
+            ? dynamic_cast<const DRW_LWPolyline*>(loop->objlist.front().get())
+            : nullptr;
+        if (loop == nullptr || loop->type != 7 || polyline == nullptr
+            || polyline->vertlist.size() != 2u
+            || polyline->vertlist[0] == nullptr
+            || polyline->vertlist[1] == nullptr
+            || polyline->vertlist[0]->bulge != 1.0
+            || polyline->vertlist[1]->bulge != 1.0) {
+            std::cerr << "FAIL: physical HATCH 0x173 boundary fields\n";
+            return 1;
+        }
+    }
+    std::cout << "Physical AC1018 HATCH 0x173 inactive-gradient profile: PASS\n";
+    return 0;
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--hatch-inactive-gradient-guard") {
+        TestContext context;
+        testInactiveHatchGradientStopsFailClosed(context);
+        if (context.failures != 0)
+            return 1;
+        std::cout << "Inactive HATCH gradient-stop refusal: PASS\n";
+        return 0;
+    }
+    if (argc == 3
+        && std::string(argv[1]) == "--hatch-source-profile")
+        return testPhysicalInactiveGradientHatch(argv[2]);
     TestContext context;
     testOrdinaryEncoding(context, "ordinary_enc_AC1015.dwg", false, "",
                          "ANSI_1252");

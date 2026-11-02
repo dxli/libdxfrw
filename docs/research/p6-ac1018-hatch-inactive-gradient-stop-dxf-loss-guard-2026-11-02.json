@@ -1,0 +1,76 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-ac1018-hatch-inactive-gradient-stop-dxf-loss-guard-2026-11-02",
+  "date": "2026-11-02",
+  "title": "AC1018 HATCH inactive-gradient stop DXF loss guard",
+  "status": "RETAINED_STOPS_FAIL_CLOSED; ASCII_BINARY_ATOMIC_REFUSAL_AND_RETRY_VERIFIED",
+  "supportClaimEffect": "none",
+  "scope": "Prevent silent loss when a parsed DWG HATCH has isGradient=0 but retains gradient color stops. The DXF writer emits the gradient block only for active gradients, while DXF validation requires the disabled-gradient stop count to be zero. The guard refuses this unrepresentable profile and leaves the caller's entity available for an explicitly corrected retry.",
+  "binding": {
+    "repositoryCommitBeforeSlice": "14dd2c86",
+    "sourceSha256": {
+      "src/drw_entities.cpp": "3b94d00cc92f135a4203c0bc87cbbfac416ef11ccec688c0870809ff9609a322",
+      "tests/dwg_fixture_tests.cpp": "1bb2c9a0adcb7ce36b12f22447d63bf5cb2538837ff781f5514f8c2673601fb8",
+      "CMakeLists.txt": "be9c8f4632a41be29082b02b47e6e8b1b5ff6d7ad6ff02a4251b87fe5dfc4c71",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "7767a2da3cd45ec769b40a6af7bb22d415e3f080674aed2f7e4a67fc00e93f74"
+    },
+    "executables": {
+      "build-gcc/libdxfrw.a": "fdee51cbb6596cfb5f46f9afbe216bf3d746b72c80cf64a0b0901e06a7256a40",
+      "build-gcc/libdxfrw_dwg_fixture_tests": "6da49ef64d1175a11f058a2c9c0cfa73be8f83bfcf15716c954fef5de923c618"
+    }
+  },
+  "authority": {
+    "title": "Open Design Specification for .dwg files v5.4.1",
+    "sections": ["20.4.75"],
+    "localPath": "~/doc/dwg/OpenDesign_Specification_for_.dwg_files (1).pdf",
+    "sha256": "1ed2e02722862188120da606e4b6a816fa4014c96de68da2f84a2ecda09461e7",
+    "relevance": "ODA lists the R2004+ gradient flag, companion fields, stop count and each stop's value/CMC fields in the HATCH body. No change to the DWG byte layout or parser was made."
+  },
+  "physicalSource": {
+    "input": "/Users/dli/doc/dwg/Extruder2.dwg",
+    "repositoryStatus": "external local sample; not added to this repository",
+    "inputSha256": "fa44ada15684eecf46acc4ef095be2ed4793f438da6d570be46c828279aed21c",
+    "version": "AC1018",
+    "entity": "HATCH",
+    "handle": "0x173",
+    "localReaderCommand": "build-gcc/libdxfrw_dwg_fixture_tests --hatch-source-profile /Users/dli/doc/dwg/Extruder2.dwg",
+    "localReaderResult": "PASS: current libdxfrw imports HATCH 0x173 with isGradient=0, two stop values 0/1, C2 colors 0x0000FF/0xFFFFFF, and two type-7 polyline paths with two vertices and bulge 1.0 on each vertex.",
+    "tracePath": "/private/tmp/libdxfrw-hatch-profile-final.log",
+    "traceSha256": "f2b083c9d69e45a678788d90914d5223c582e04bed8864f7e651d4e8227c5b3d",
+    "readDisposition": "The source import reports 474 entity parse failures elsewhere in the drawing. This checks one typed record only and does not qualify whole-file output.",
+    "independentProjection": {
+      "reader": "LibreDWG dwgread 0.14",
+      "projectionPath": "/private/tmp/libdxfrw-mpolygon-peer-census/Extruder2.dwg.json",
+      "projectionSha256": "cce18602d90ddff40d0c71164d6d4d29f6a539b981c9ec2a42408d24bce1142d",
+      "observation": "The peer projection identifies HATCH handle [0,2,371], is_gradient_fill=0, two stops at 0/1 with C2 colors 0x0000FF/0xFFFFFF, and two derived closed polyline paths with two vertices, bulge 1.0 and no boundary handles. This is corroborative implementation evidence, not normative layout authority."
+    }
+  },
+  "implementation": {
+    "file": "src/drw_entities.cpp",
+    "change": "DRW_Hatch::validateDxf rejects isGradient=0 when gradColors is nonempty. Both HATCH and MPOLYGON writers use validation before emission; DRW_MPolygon::validateDxf delegates to the HATCH validation.",
+    "behavior": "Refuse the projection instead of dropping retained stop data. No DWG parser, DWG writer, public API, or DRW_Interface callback changed."
+  },
+  "generatedControl": {
+    "selector": "libdxfrw_dwg_fixture_tests --hatch-inactive-gradient-guard",
+    "command": "ctest --test-dir build-gcc -R '^libdxfrw_hatch_inactive_gradient_guard$' --output-on-failure",
+    "result": "PASS 1/1",
+    "coverage": [
+      "Ordinary ASCII and Binary HATCH baseline output and typed readback",
+      "Nonempty stops with isGradient=0 are refused in both encodings",
+      "Existing destination bytes remain unchanged on refusal",
+      "After the caller clears the unsupported stops, the same exporter succeeds and fresh typed readback finds the HATCH"
+    ],
+    "fixtureFilesAdded": 0
+  },
+  "affectedCohort": {
+    "command": "ctest --test-dir build-gcc -R '^(libdxfrw_hatch_inactive_gradient_guard|libdxfrw_dwg_fixtures)$' --output-on-failure",
+    "result": "PASS 2/2 in 0.60 seconds",
+    "asanRun": "Not run; this validation-only writer guard changes no allocation, ownership, parser bounds, or lifetime behavior."
+  },
+  "limitations": [
+    "This guard does not determine whether the inactive stops have native rendering meaning; that remains independently unqualified.",
+    "The source drawing has unrelated entity parse failures and was not converted as a whole.",
+    "Selected HATCH import and generated refusal/readback controls do not qualify general HATCH, MPOLYGON, geometry, annotation, or consumer support.",
+    "No external DWG/DXF fixture was added and no support claim is promoted."
+  ]
+}

@@ -2164,6 +2164,12 @@ if(LIBDXFRW_BUILD_TESTS)
     add_test(NAME libdxfrw_dwg_fixtures
         COMMAND libdxfrw_dwg_fixture_tests)
 
+    add_test(NAME libdxfrw_hatch_inactive_gradient_guard
+        COMMAND libdxfrw_dwg_fixture_tests --hatch-inactive-gradient-guard)
+    set_tests_properties(libdxfrw_hatch_inactive_gradient_guard PROPERTIES
+        LABELS "fast;dxf;hatch;loss-guard;transaction"
+        TIMEOUT 30)
+
     add_test(NAME libdxfrw_implementation_speed
         COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_implementation_speed.py
