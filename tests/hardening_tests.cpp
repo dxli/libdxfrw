@@ -11289,6 +11289,74 @@ void testDxfScaleUnitDomain(TestContext& t) {
     }
 }
 
+void testDxfScaleFlagOutputGuard(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        std::ostringstream encoded(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> fieldWriter = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&encoded))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&encoded));
+        fieldWriter->setVersion("AC1027", true);
+        t.expect(fieldWriter->writeInt16(70, 1)
+                     && !fieldWriter->hasWriteError(),
+                 "generated SCALE group-70 input is available");
+        fieldWriter.reset();
+        std::istringstream fieldInput(encoded.str(),
+                                      std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> fieldReader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&fieldInput))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&fieldInput));
+        fieldReader->setVersion("AC1027", true);
+        ExposedScale parsed;
+        int code = 0;
+        t.expect(fieldReader->readRec(&code) && code == 70
+                     && parsed.parseCode(code, fieldReader)
+                     && parsed.flag == 1,
+                 "SCALE reader retains unknown nonzero group 70 in ASCII/Binary DXF");
+
+        const auto writeScaleWithFlag = [binary](std::uint16_t flag) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            dxfRW codec(nullptr);
+            codec.version = DRW::AC1027;
+            codec.binFile = binary;
+            codec.writer = binary
+                ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+                : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+            codec.writer->setVersion("AC1027", true);
+            DRW_Scale scale;
+            scale.handle = 0x521u;
+            scale.name = "1:48";
+            scale.flag = flag;
+            scale.paperUnits = 1.0;
+            scale.drawingUnits = 48.0;
+            const bool written = codec.writeScale(&scale);
+            return std::make_pair(written, output.str());
+        };
+        const auto validOutput = writeScaleWithFlag(0);
+        ExposedScale readback;
+        bool readbackOk = validOutput.first && !validOutput.second.empty();
+        if (readbackOk) {
+            std::istringstream outputInput(validOutput.second,
+                                           std::ios::in | std::ios::binary);
+            std::unique_ptr<dxfReader> outputReader = binary
+                ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&outputInput))
+                : std::unique_ptr<dxfReader>(new dxfReaderAscii(&outputInput));
+            outputReader->setVersion("AC1027", true);
+            int outputCode = 0;
+            while (outputReader->readRec(&outputCode)) {
+                if (!readback.parseCode(outputCode, outputReader)) {
+                    readbackOk = false;
+                    break;
+                }
+            }
+        }
+        t.expect(readbackOk && readback.flag == 0,
+                 "SCALE writer's group-70 zero value survives ASCII/Binary readback");
+        const auto unknownOutput = writeScaleWithFlag(1);
+        t.expect(!unknownOutput.first && unknownOutput.second.empty(),
+                 "SCALE writer refuses a nonzero unknown group 70 before output");
+    }
+}
+
 void testDxfPointCloudDefFilenameOwnerBudget(TestContext& t) {
     const std::string oldFilename = "old-pointcloud.pts";
     const std::string sourceFilename(256u, 'P');
@@ -24622,6 +24690,18 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::cout << "SCALE units domain: PASS\n";
+        return 0;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--dxf-scale-flag-output-guard") {
+        TestContext focused;
+        testDxfScaleFlagOutputGuard(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " SCALE flag-output assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "SCALE flag output guard: PASS\n";
         return 0;
     }
     if (argc == 2

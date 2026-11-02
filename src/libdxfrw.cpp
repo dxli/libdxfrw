@@ -29734,6 +29734,7 @@ bool dxfRW::writeSun(DRW_Sun *ent) {
 
 bool dxfRW::writeScale(DRW_Scale *ent) {
     if (ent == nullptr || version < DRW::AC1014
+        || ent->flag != 0
         || !std::isfinite(ent->paperUnits) || ent->paperUnits <= 0.0
         || !std::isfinite(ent->drawingUnits) || ent->drawingUnits <= 0.0
         || !preflightTableEntry(ent) || ent->handle == 0) {

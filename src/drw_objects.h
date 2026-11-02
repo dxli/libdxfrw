@@ -6594,7 +6594,7 @@ protected:
                                dwgBufferW *strBuf = nullptr) const;
 
 public:
-  std::uint16_t flag = 0;    /*!< always 0, code 70 */
+  std::uint16_t flag = 0;    /*!< unknown field; ODA writes 0, code 70 */
   double paperUnits = 1.0;   /*!< numerator,  code 140 */
   double drawingUnits = 1.0; /*!< denominator, code 141 */
   bool isUnitScale = false;  /*!< true for the 1:1 entry, code 290 */
