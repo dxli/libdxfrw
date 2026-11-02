@@ -13271,8 +13271,11 @@ bool DRW_MLine::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             || (m_dxfVertexCountSeen
                 && occurrence >= static_cast<std::uint32_t>(numVerts)))
             return false;
-        if (vertlist.size() <= occurrence)
-            vertlist.resize(static_cast<std::size_t>(occurrence) + 1u);
+        const std::size_t requiredSize =
+            static_cast<std::size_t>(occurrence) + 1u;
+        if (vertlist.size() < requiredSize
+            && !DRW::resize(vertlist, static_cast<int>(requiredSize)))
+            return false;
         (vertlist[occurrence].*vector).*axis = reader->getDouble();
         ++occurrence;
         return true;
@@ -13327,10 +13330,14 @@ bool DRW_MLine::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             const std::int32_t count = reader->getInt32();
             if (!isValidCount(count, kMaxDxfLines))
                 return false;
+            const std::uint8_t previousNumLines = numLines;
             numLines = static_cast<std::uint8_t>(count);
             m_dxfLineCountSeen = true;
-            if (!attachPendingParameterBlocks())
+            if (!attachPendingParameterBlocks()) {
+                m_dxfLineCountSeen = false;
+                numLines = previousNumLines;
                 return false;
+            }
         }
         break;
     case 10:
@@ -13408,37 +13415,66 @@ bool DRW_MLine::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             if (!isValidCount(count, kMaxDxfParameters))
                 return false;
             if (m_dxfLineCountSeen) {
-                if (m_currentParameterVertexIdx < 0) {
-                    m_currentParameterVertexIdx = 0;
-                } else if (m_currentElementIdx == static_cast<int>(numLines)) {
-                    ++m_currentParameterVertexIdx;
-                    m_currentElementIdx = 0;
+                int parameterVertexIdx = m_currentParameterVertexIdx;
+                int elementIdx = m_currentElementIdx;
+                if (parameterVertexIdx < 0) {
+                    parameterVertexIdx = 0;
+                    elementIdx = 0;
+                } else if (elementIdx == static_cast<int>(numLines)) {
+                    ++parameterVertexIdx;
+                    elementIdx = 0;
                 }
-                if (m_currentParameterVertexIdx >= kMaxDxfVertices
+                if (parameterVertexIdx >= kMaxDxfVertices
                     || (m_dxfVertexCountSeen
-                        && m_currentParameterVertexIdx
-                            >= static_cast<int>(numVerts))
-                    || m_currentElementIdx >= static_cast<int>(numLines))
+                        && parameterVertexIdx >= static_cast<int>(numVerts))
+                    || elementIdx >= static_cast<int>(numLines))
                     return false;
-                if (vertlist.size()
-                    <= static_cast<std::size_t>(m_currentParameterVertexIdx))
-                    vertlist.resize(static_cast<std::size_t>(
-                        m_currentParameterVertexIdx) + 1u);
-                DRW_MLineVertex& vertex =
-                    vertlist[m_currentParameterVertexIdx];
-                if (m_currentElementIdx
-                        != static_cast<int>(vertex.segParms.size())
-                    || m_currentElementIdx >= kMaxDxfLines)
+
+                std::vector<double> segmentValues;
+                if (!DRW::reserve(segmentValues, count))
                     return false;
-                vertex.segParms.emplace_back();
+
+                const std::size_t previousVertexCount = vertlist.size();
+                const std::size_t requiredVertexCount =
+                    static_cast<std::size_t>(parameterVertexIdx) + 1u;
+                if (vertlist.size() < requiredVertexCount
+                    && !DRW::resize(
+                        vertlist, static_cast<int>(requiredVertexCount)))
+                    return false;
+                DRW_MLineVertex& vertex = vertlist[parameterVertexIdx];
+                if (elementIdx != static_cast<int>(vertex.segParms.size())
+                    || elementIdx
+                        != static_cast<int>(vertex.areaFillParms.size())
+                    || elementIdx >= kMaxDxfLines) {
+                    if (vertlist.size() > previousVertexCount)
+                        vertlist.resize(previousVertexCount);
+                    return false;
+                }
+                const int requiredElementCount = elementIdx + 1;
+                if (!DRW::reserve(vertex.segParms, requiredElementCount)
+                    || !DRW::reserve(vertex.areaFillParms,
+                                     requiredElementCount)) {
+                    if (vertlist.size() > previousVertexCount)
+                        vertlist.resize(previousVertexCount);
+                    return false;
+                }
+                vertex.segParms.emplace_back(std::move(segmentValues));
                 vertex.areaFillParms.emplace_back();
+                m_currentParameterVertexIdx = parameterVertexIdx;
+                m_currentElementIdx = elementIdx;
             } else {
                 const std::size_t maxBlocks =
                     static_cast<std::size_t>(kMaxDxfVertices)
                     * static_cast<std::size_t>(kMaxDxfLines);
                 if (m_dxfPendingParameters.size() >= maxBlocks)
                     return false;
-                m_dxfPendingParameters.emplace_back();
+                DxfParameterBlock pending;
+                if (!DRW::reserve(pending.segment, count)
+                    || !DRW::reserve(
+                        m_dxfPendingParameters,
+                        static_cast<int>(m_dxfPendingParameters.size() + 1u)))
+                    return false;
+                m_dxfPendingParameters.push_back(std::move(pending));
                 m_currentPendingParameterIdx = static_cast<int>(
                     m_dxfPendingParameters.size() - 1u);
             }
@@ -13493,10 +13529,23 @@ bool DRW_MLine::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                        != m_currentSegExpected) {
             return false;
         }
-        m_currentSegExpected = -1;
-        m_currentSegFillCount = reader->getInt32();
-        if (!isValidCount(m_currentSegFillCount, kMaxDxfParameters))
-            return false;
+        {
+            const std::int32_t fillCount = reader->getInt32();
+            if (!isValidCount(fillCount, kMaxDxfParameters))
+                return false;
+            std::vector<double>* fillValues = nullptr;
+            if (m_dxfLineCountSeen) {
+                fillValues = &vertlist[m_currentParameterVertexIdx]
+                    .areaFillParms[m_currentElementIdx];
+            } else {
+                fillValues = &m_dxfPendingParameters[
+                    m_currentPendingParameterIdx].areaFill;
+            }
+            if (!DRW::reserve(*fillValues, fillCount))
+                return false;
+            m_currentSegExpected = -1;
+            m_currentSegFillCount = fillCount;
+        }
         m_currentAreaExpected = m_currentSegFillCount;
         if (m_currentAreaExpected == 0) {
             m_currentAreaExpected = -1;
@@ -13559,25 +13608,48 @@ bool DRW_MLine::attachPendingParameterBlocks() {
             && m_dxfPendingParameters.size()
                 > static_cast<std::size_t>(numVerts) * elementsPerVertex))
         return false;
-    for (std::size_t blockIndex = 0;
-         blockIndex < m_dxfPendingParameters.size(); ++blockIndex) {
-        const std::size_t vertexIndex = blockIndex / elementsPerVertex;
-        const std::size_t elementIndex = blockIndex % elementsPerVertex;
-        if (vertexIndex >= static_cast<std::size_t>(kMaxDxfVertices)
-            || (m_dxfVertexCountSeen && vertexIndex >= numVerts))
+    const std::size_t blockCount = m_dxfPendingParameters.size();
+    const std::size_t requiredVertexCount =
+        (blockCount + elementsPerVertex - 1u) / elementsPerVertex;
+    if (requiredVertexCount > static_cast<std::size_t>(kMaxDxfVertices))
+        return false;
+    for (std::size_t vertexIndex = 0;
+         vertexIndex < requiredVertexCount; ++vertexIndex) {
+        if (vertexIndex < vertlist.size()
+            && (!vertlist[vertexIndex].segParms.empty()
+                || !vertlist[vertexIndex].areaFillParms.empty()))
             return false;
-        if (vertlist.size() <= vertexIndex)
-            vertlist.resize(vertexIndex + 1u);
+    }
+
+    const std::size_t previousVertexCount = vertlist.size();
+    if (vertlist.size() < requiredVertexCount
+        && !DRW::resize(vertlist, static_cast<int>(requiredVertexCount)))
+        return false;
+    for (std::size_t vertexIndex = 0;
+         vertexIndex < requiredVertexCount; ++vertexIndex) {
+        const std::size_t firstBlock = vertexIndex * elementsPerVertex;
+        const std::size_t blocksForVertex = std::min(
+            elementsPerVertex, blockCount - firstBlock);
         DRW_MLineVertex& vertex = vertlist[vertexIndex];
-        if (vertex.segParms.size() != elementIndex
-            || vertex.areaFillParms.size() != elementIndex)
+        if (!DRW::reserve(vertex.segParms,
+                          static_cast<int>(blocksForVertex))
+            || !DRW::reserve(vertex.areaFillParms,
+                             static_cast<int>(blocksForVertex))) {
+            if (vertlist.size() > previousVertexCount)
+                vertlist.resize(previousVertexCount);
             return false;
+        }
+    }
+
+    for (std::size_t blockIndex = 0;
+         blockIndex < blockCount; ++blockIndex) {
+        const std::size_t vertexIndex = blockIndex / elementsPerVertex;
+        DRW_MLineVertex& vertex = vertlist[vertexIndex];
         vertex.segParms.push_back(std::move(
             m_dxfPendingParameters[blockIndex].segment));
         vertex.areaFillParms.push_back(std::move(
             m_dxfPendingParameters[blockIndex].areaFill));
     }
-    const std::size_t blockCount = m_dxfPendingParameters.size();
     m_currentParameterVertexIdx = static_cast<int>(
         (blockCount - 1u) / elementsPerVertex);
     m_currentElementIdx = static_cast<int>(blockCount % elementsPerVertex);

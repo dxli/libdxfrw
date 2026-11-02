@@ -13772,6 +13772,151 @@ void testHatchGradientStopColorDomain(TestContext& t) {
              "HATCH typed validation rejects out-of-domain gradient stop scalars");
 }
 
+void testMLineDxfAllocationFailure(TestContext& t) {
+    const auto parseRecord = [](DRW_MLine& mline, int expectedCode,
+                                std::string_view value,
+                                long allocationFailure = -1) {
+        const std::string record = std::to_string(expectedCode) + "\n"
+            + std::string(value) + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(
+            new dxfReaderAscii(&input));
+        int code = 0;
+        if (!reader->readRec(&code) || code != expectedCode)
+            return false;
+        MaterialAllocationFailure failure(allocationFailure);
+        return mline.parseCode(code, reader);
+    };
+    const auto completeParameterBlock = [&parseRecord](DRW_MLine& mline) {
+        return parseRecord(mline, 41, "0.125")
+            && parseRecord(mline, 75, "1")
+            && parseRecord(mline, 42, "0.375")
+            && mline.vertlist.size() == 1u
+            && mline.vertlist.front().segParms.size() == 1u
+            && mline.vertlist.front().areaFillParms.size() == 1u
+            && mline.vertlist.front().segParms.front()
+                == std::vector<double>{0.125}
+            && mline.vertlist.front().areaFillParms.front()
+                == std::vector<double>{0.375};
+    };
+    const auto completePendingParameterBlock = [&parseRecord](
+            DRW_MLine& mline) {
+        return parseRecord(mline, 41, "0.125")
+            && parseRecord(mline, 75, "1")
+            && parseRecord(mline, 42, "0.375");
+    };
+
+    {
+        DRW_MLine mline;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(mline, 11, "1.25", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool retried = parseRecord(mline, 11, "1.25")
+            && mline.vertlist.size() == 1u
+            && mline.vertlist.front().position.x == 1.25;
+        t.expect(rejected && failedOnce && retried,
+                 "MLINE vector growth catches allocation failure and retries without losing the group");
+    }
+
+    for (long allocationFailure = 0; allocationFailure < 2;
+         ++allocationFailure) {
+        DRW_MLine mline;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(
+            mline, 74, "1", allocationFailure);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool retried = parseRecord(mline, 74, "1")
+            && completePendingParameterBlock(mline)
+            && parseRecord(mline, 73, "1")
+            && mline.vertlist.size() == 1u
+            && mline.vertlist.front().segParms.front()
+                == std::vector<double>{0.125}
+            && mline.vertlist.front().areaFillParms.front()
+                == std::vector<double>{0.375};
+        if (!(rejected && failedOnce && retried))
+            std::cerr << "MLINE pending allocation diagnostic offset="
+                      << allocationFailure << " rejected=" << rejected
+                      << " failedOnce=" << failedOnce << " retried="
+                      << retried << " failures="
+                      << materialFailedAllocations - failuresBefore << '\n';
+        t.expect(rejected && failedOnce && retried,
+                 "MLINE pending parameter allocation failure preserves retry state");
+    }
+
+    for (long allocationFailure = 0; allocationFailure < 3;
+         ++allocationFailure) {
+        DRW_MLine mline;
+        const bool pending = parseRecord(mline, 74, "1");
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(
+            mline, 73, "1", allocationFailure);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = mline.vertlist.empty() && mline.numLines == 0u;
+        const bool retried = completePendingParameterBlock(mline)
+            && parseRecord(mline, 73, "1")
+            && mline.vertlist.size() == 1u
+            && mline.vertlist.front().segParms.front()
+                == std::vector<double>{0.125}
+            && mline.vertlist.front().areaFillParms.front()
+                == std::vector<double>{0.375};
+        if (!(pending && rejected && failedOnce && rolledBack && retried))
+            std::cerr << "MLINE attachment diagnostic offset="
+                      << allocationFailure << " pending=" << pending
+                      << " rejected=" << rejected << " failedOnce="
+                      << failedOnce << " rolledBack=" << rolledBack
+                      << " retried=" << retried << " failures="
+                      << materialFailedAllocations - failuresBefore << '\n';
+        t.expect(pending && rejected && failedOnce && rolledBack && retried,
+                 "MLINE pending-block attachment rolls back and retries after allocation failure");
+    }
+
+    for (long allocationFailure = 0; allocationFailure < 4;
+         ++allocationFailure) {
+        DRW_MLine mline;
+        const bool lineCount = parseRecord(mline, 73, "1");
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(
+            mline, 74, "1", allocationFailure);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = mline.vertlist.empty();
+        const bool retried = parseRecord(mline, 74, "1")
+            && completeParameterBlock(mline);
+        if (!(lineCount && rejected && failedOnce && rolledBack && retried))
+            std::cerr << "MLINE known allocation diagnostic offset="
+                      << allocationFailure << " lineCount=" << lineCount
+                      << " rejected=" << rejected << " failedOnce="
+                      << failedOnce << " rolledBack=" << rolledBack
+                      << " retried=" << retried << " failures="
+                      << materialFailedAllocations - failuresBefore << '\n';
+        t.expect(lineCount && rejected && failedOnce && rolledBack && retried,
+                 "MLINE known-line parameter setup is atomic across allocation failures");
+    }
+
+    {
+        DRW_MLine mline;
+        const bool setup = parseRecord(mline, 73, "1")
+            && parseRecord(mline, 74, "1")
+            && parseRecord(mline, 41, "0.125");
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(mline, 75, "1", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool retried = parseRecord(mline, 75, "1")
+            && parseRecord(mline, 42, "0.375")
+            && mline.vertlist.size() == 1u
+            && mline.vertlist.front().areaFillParms.size() == 1u
+            && mline.vertlist.front().areaFillParms.front()
+                == std::vector<double>{0.375};
+        if (!(setup && rejected && failedOnce && retried))
+            std::cerr << "MLINE fill allocation diagnostic setup=" << setup
+                      << " rejected=" << rejected << " failedOnce="
+                      << failedOnce << " retried=" << retried << " failures="
+                      << materialFailedAllocations - failuresBefore << '\n';
+        t.expect(setup && rejected && failedOnce && retried,
+                 "MLINE fill-vector allocation failure preserves the active segment for retry");
+    }
+}
+
+
 void testMPolygonAciDomain(TestContext& t) {
     struct MPolygonParseProbe final : DRW_MPolygon {
         bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
@@ -62114,6 +62259,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testMLineVectorComponentOrder(context);
         std::cout << "MLINE vector coordinate-group ordering controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--mline-dxf-allocation-failure") {
+        TestContext context;
+        testMLineDxfAllocationFailure(context);
+        std::cout << "MLINE DXF allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
