@@ -407,6 +407,18 @@ stops. This closes only the writer retry path; physical producer prevalence,
 fill semantics and native rendering remain open. See the [retry guard receipt](docs/research/p6-hatch-inactive-gradient-stop-writer-retry-2026-11-02.json)
 and [Autodesk's HATCH DXF table](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-C6C71CED-CE0F-4184-82A5-07AD6241F15B.htm).
 
+**HATCH/MPOLYGON validation through whole-file callbacks:** `DRW_Hatch::validateDxf`
+is intentionally non-virtual, so the shared validator now explicitly invokes
+`DRW_MPolygon::validateDxf` for derived polygons without changing the public
+vtable. If payload validation fails during a whole-file callback, the active
+transaction is latched as failed; direct record-level callers retain corrected
+same-writer retry behavior. This closes a path where the void callback contract
+could otherwise publish a file after an entity writer returned false. The five
+focused HATCH/MPOLYGON round-trip, CMC and boundary graph tests pass; see the
+[atomic callback refusal receipt](docs/research/p6-hatch-mpolygon-callback-refusal-atomicity-2026-11-02.json).
+This is validation and transaction evidence only, not native fill/rendering or
+broader HATCH/MPOLYGON qualification.
+
 ## P7 — ACIS/ACDS and independent 3D meaning
 
 - Complete the original DWG entity → owner/key → AcDs segment → SAT/SAB join,

@@ -5082,11 +5082,16 @@ bool dxfRW::validateHatchPayload(const DRW_Hatch *ent) const {
         return value <= static_cast<std::size_t>(
             std::numeric_limits<std::uint16_t>::max());
     };
-    const bool hasGradientPayload = ent != nullptr
-        && hasHatchGradientDxfPayload(*ent);
+    if (ent == nullptr)
+        return false;
+    const auto *mpolygon = dynamic_cast<const DRW_MPolygon*>(ent);
+    const bool hasGradientPayload = hasHatchGradientDxfPayload(*ent);
     // Gradient group codes are documented in Autodesk's R2004-era DXF
     // reference. Keep older target profiles lossless by refusing to emit them.
-    if (ent == nullptr || !ent->validateDxf()
+    if (!ent->validateDxf()
+        // DRW_Hatch::validateDxf is non-virtual to preserve the public ABI;
+        // explicitly validate the additional MPOLYGON fill CMC profile too.
+        || (mpolygon != nullptr && !mpolygon->validateDxf())
         || !isSafeDxfRecordText(ent->name)
         || ent->isGradient < 0 || ent->isGradient > 1
         || (hasGradientPayload && version < DRW::AC1018)
@@ -5208,21 +5213,21 @@ bool dxfRW::validateHatchPayload(const DRW_Hatch *ent) const {
         }
     }
 
-    if (const auto *polygon = dynamic_cast<const DRW_MPolygon*>(ent)) {
-        if (!std::isfinite(polygon->xDirX) || !std::isfinite(polygon->xDirY)
-            || polygon->fillColorAci < 0
-            || polygon->fillColorAci > 256
-            || polygon->fillColorRgb < -1
-            || polygon->fillColorRgb > 0xFFFFFF
-            || (polygon->annotatedBoundary != 0
-                && polygon->annotatedBoundary != 1)
-            || polygon->degenerateLoops < 0
+    if (mpolygon != nullptr) {
+        if (!std::isfinite(mpolygon->xDirX) || !std::isfinite(mpolygon->xDirY)
+            || mpolygon->fillColorAci < 0
+            || mpolygon->fillColorAci > 256
+            || mpolygon->fillColorRgb < -1
+            || mpolygon->fillColorRgb > 0xFFFFFF
+            || (mpolygon->annotatedBoundary != 0
+                && mpolygon->annotatedBoundary != 1)
+            || mpolygon->degenerateLoops < 0
             // Autodesk documents group 63 as the MPOLYGON fill ACI. The
             // accepted color-index domain is 0..256 (BYBLOCK/BYLAYER are the
             // special endpoints); this field has no MPOLYGON color-book
             // extension, so preserve that DWG-only CMC field separately.
-            || !polygon->fillColorBookName.empty()
-            || !isSafeDxfRecordText(polygon->fillColorName))
+            || !mpolygon->fillColorBookName.empty()
+            || !isSafeDxfRecordText(mpolygon->fillColorName))
             return false;
     }
     return true;
@@ -8436,8 +8441,13 @@ bool dxfRW::writeHatch(DRW_Hatch *ent){
         }
         // Keep payload representability refusals retryable. The common entity
         // preflight latches failures for the whole output operation.
-        if (!validateHatchPayload(ent))
-            return false;
+        if (!validateHatchPayload(ent)) {
+            // Direct record callers can correct and retry on the same stream.
+            // In a whole-file callback, however, false is otherwise easy for
+            // the void callback contract to ignore; latch the transaction so
+            // an incomplete HATCH cannot be published as a successful file.
+            return m_dxfWriteAttemptActive ? failDxfWrite() : false;
+        }
         if (!preflightEntity(ent))
             return false;
         const auto writeBoundaryHandles = [this](const DRW_HatchLoop& loop) {
@@ -8665,8 +8675,11 @@ bool dxfRW::writeMPolygon(DRW_MPolygon *ent){
         }
         // Match HATCH: reject unrepresentable gradient companions before the
         // common preflight makes the refusal sticky.
-        if (!validateHatchPayload(ent))
-            return false;
+        if (!validateHatchPayload(ent)) {
+            // Keep direct-record retries available while making a failed
+            // callback abort the enclosing atomic file write.
+            return m_dxfWriteAttemptActive ? failDxfWrite() : false;
+        }
         if (!preflightEntity(ent))
             return false;
         EntityRecordScope scope(*this, ent);
@@ -11860,6 +11873,9 @@ bool dxfRW::writeUnderlay(DRW_Underlay *ent) {
         return false;
     if (version <= DRW::AC1009) return rejectUnsupportedDxfWrite("UNDERLAY");
     if (ent == nullptr || writer == nullptr || !ent->validatePayloadFields()
+        || ent->kind < DRW_Underlay::PDF || ent->kind > DRW_Underlay::DWF
+        || ent->definitionHandle == 0u
+        || ent->definitionHandle == DRW::NoHandle
         || ent->clipBoundary.size() > DRW_Underlay::kMaxClipVertices
         || ent->inverseClipBoundary.size() > DRW_Underlay::kMaxClipVertices
         || (version <= DRW::AC1021
@@ -11868,13 +11884,15 @@ bool dxfRW::writeUnderlay(DRW_Underlay *ent) {
         return false;
     }
     EntityRecordScope scope(*this, ent);
+    const std::uint32_t definitionHandle =
+        remapObjectHandle(ent->definitionHandle);
+    if (definitionHandle == 0u || definitionHandle == DRW::NoHandle
+        || isDxfFixedOutputHandle(definitionHandle))
+        return failDxfWrite();
     const bool hasInverseClip = !ent->inverseClipBoundary.empty()
                                 || (ent->flags & 0x10) != 0;
     const std::uint8_t wireFlags =
         hasInverseClip ? static_cast<std::uint8_t>(ent->flags | 0x10) : ent->flags;
-        || ent->kind < DRW_Underlay::PDF || ent->kind > DRW_Underlay::DWF
-        || ent->definitionHandle == 0u
-        || ent->definitionHandle == DRW::NoHandle
     const char* tag = (ent->kind == DRW_Underlay::DGN) ? "DGNUNDERLAY"
                     : (ent->kind == DRW_Underlay::DWF) ? "DWFUNDERLAY"
                     : "PDFUNDERLAY";
@@ -11886,11 +11904,6 @@ bool dxfRW::writeUnderlay(DRW_Underlay *ent) {
     writer->writeDouble(10, ent->position.x);
     writer->writeDouble(20, ent->position.y);
     writer->writeDouble(30, ent->position.z);
-    const std::uint32_t definitionHandle =
-        remapObjectHandle(ent->definitionHandle);
-    if (definitionHandle == 0u || definitionHandle == DRW::NoHandle
-        || isDxfFixedOutputHandle(definitionHandle))
-        return failDxfWrite();
     if (ent->scale.x != 1.0 || ent->scale.y != 1.0 || ent->scale.z != 1.0) {
         writer->writeDouble(41, ent->scale.x);
         writer->writeDouble(42, ent->scale.y);
@@ -11935,6 +11948,10 @@ bool dxfRW::writeUnderlayDefinition(DRW_UnderlayDefinition *ent) {
                     : (ent->kind == DRW_UnderlayDefinition::DWF) ? "DWFDEFINITION"
                     : "PDFDEFINITION";
     EntityRecordScope scope(*this, ent);
+    const std::uint32_t handle = remapObjectHandle(ent->handle);
+    if (handle == 0u || handle == DRW::NoHandle
+        || isDxfFixedOutputHandle(handle) || !reserveHandle(handle))
+        return failDxfWrite();
     writer->writeString(0, tag);
     writer->writeString(5, toHexStr(handle));
     if (!writeTableEntryAppData(*ent))
@@ -11955,13 +11972,15 @@ bool dxfRW::writeMText(DRW_MText *ent){
     if (version > DRW::AC1009) {
         if (!preflightEntity(ent))
             return false;
+        if (ent->handle != 0u) {
+            const std::uint32_t handle = remapObjectHandle(ent->handle);
+            if (handle == 0u || handle == DRW::NoHandle
+                || isDxfFixedOutputHandle(handle) || !reserveHandle(handle))
+                return failDxfWrite();
+        }
         const bool hasColumns = hasR2018MTextColumns(*ent);
         if (hasColumns
             && (version < DRW::AC1032
-    const std::uint32_t handle = remapObjectHandle(ent->handle);
-    if (handle == 0u || handle == DRW::NoHandle
-        || isDxfFixedOutputHandle(handle) || !reserveHandle(handle))
-        return failDxfWrite();
                 || !isValidR2018MTextColumnState(*ent)))
             return rejectUnsupportedDxfWrite("MTEXT column profile");
         EntityRecordScope scope(*this, ent);
@@ -13588,6 +13607,10 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
         m_writeError = true;
         return false;
     }
+    const auto fail = [this]() {
+        m_writeError = true;
+        return false;
+    };
     if (version <= DRW::AC1018)
         return rejectUnsupportedDxfWrite("SURFACE");
     if (!preflightEntity(ent)
