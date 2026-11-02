@@ -62081,6 +62081,82 @@ bool underlayDefinitionGraphRoundTrip() {
         }
     }
 
+    struct VersionGateCase {
+        DRW_Underlay::Kind kind;
+        const char* rootName;
+        DRW::Version rejectedVersion;
+        DRW::Version acceptedVersion;
+    };
+    constexpr std::array<VersionGateCase, 3> versionGateCases{{
+        {DRW_Underlay::DWF, "ACAD_DWFDEFINITIONS",
+         DRW::AC1018, DRW::AC1021},
+        {DRW_Underlay::DGN, "ACAD_DGNDEFINITIONS",
+         DRW::AC1021, DRW::AC1024},
+        {DRW_Underlay::PDF, "ACAD_PDFDEFINITIONS",
+         DRW::AC1021, DRW::AC1024}}};
+    const std::string gateSentinel = "UNDERLAY_VERSION_GATE_DESTINATION\n";
+    unsigned versionGateCells = 0u;
+    for (const VersionGateCase& gate : versionGateCases) {
+        for (const bool binary : {false, true}) {
+            dx_data gateData;
+            dx_iface gateAdapter;
+            gateAdapter.cData = &gateData;
+            gateAdapter.currentBlock = gateData.mBlock;
+            gateData.hasNamedObjectDictionary = true;
+            gateData.namedObjectDictionary.handle = 0xC800u;
+            gateData.namedObjectDictionary.m_entries = {
+                {gate.rootName, 0xC801u}};
+
+            DRW_Dictionary dictionary;
+            dictionary.handle = 0xC801u;
+            dictionary.parentHandle = 0xC800u;
+            dictionary.hardOwner = 1;
+            dictionary.cloning = 2;
+            dictionary.m_entries = {{"SOURCE_UNDERLAY", 0xC802u}};
+            gateData.dictionaries.push_back(dictionary);
+
+            DRW_UnderlayDefinition definition;
+            definition.handle = 0xC802u;
+            definition.parentHandle = 0xC801u;
+            definition.kind = static_cast<DRW_UnderlayDefinition::Kind>(
+                gate.kind);
+            definition.filename = "version-gate.source";
+            gateAdapter.linkUnderlay(&definition);
+
+            DRW_Underlay underlay;
+            underlay.handle = 0xC803u;
+            underlay.kind = gate.kind;
+            underlay.definitionHandle = definition.handle;
+            underlay.clipBoundary = {DRW_Coord(0.0, 0.0),
+                                     DRW_Coord(1.0, 1.0)};
+            gateAdapter.addUnderlay(&underlay);
+
+            { std::ofstream previous(path, std::ios::binary);
+              previous << gateSentinel; }
+            if (gateAdapter.fileExport(path.string(), gate.rejectedVersion,
+                                       binary, &gateData, false, true))
+                return fail("underlay kind was emitted below its target-version floor");
+            std::ifstream rejectedOutput(path, std::ios::binary);
+            const std::string rejectedBytes(
+                (std::istreambuf_iterator<char>(rejectedOutput)), {});
+            if (rejectedBytes != gateSentinel)
+                return fail("underlay version refusal changed the prior destination");
+
+            if (!gateAdapter.fileExport(path.string(), gate.acceptedVersion,
+                                        binary, &gateData, false, true))
+                return fail("underlay version refusal did not permit same-adapter retry");
+            dx_data gateReadback;
+            dx_iface gateReader;
+            if (!gateReader.fileImport(path.string(), &gateReadback, false)
+                || gateReadback.underlays.size() != 1u
+                || gateReadback.underlayDefinitions.size() != 1u
+                || gateReadback.underlays.front() == nullptr
+                || gateReadback.underlays.front()->kind != gate.kind)
+                return fail("underlay boundary-version retry failed typed readback");
+            ++versionGateCells;
+        }
+    }
+
     const auto originalDefinitions = data.underlayDefinitions;
     const auto definitionKey = dx_data::UnderlayDefinitionKey{
         data.importGeneration, 0xC710u};
@@ -62116,7 +62192,9 @@ bool underlayDefinitionGraphRoundTrip() {
         return fail("correcting the underlay definition kind did not retry successfully");
 
     std::cout << "Underlay definition graph: " << cells
-              << " ASCII/Binary version cells, all 3 kinds; missing-target and wrong-kind atomic refusals plus corrected retries passed\n";
+              << " ASCII/Binary version cells, all 3 kinds; "
+              << versionGateCells
+              << " minimum-version refusal/readback retry cells; missing-target and wrong-kind atomic refusals plus corrected retries passed\n";
     return true;
 }
 

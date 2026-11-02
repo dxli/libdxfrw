@@ -11868,18 +11868,37 @@ bool dxfRW::writeMLine(DRW_MLine *ent) {
     return !writer->hasWriteError();
 }
 
+namespace {
+
+bool supportsUnderlayVersion(DRW::Version version, int kind) noexcept {
+    // AC1021 covers AutoCAD 2007 through 2009, so it cannot distinguish the
+    // 2008 DGN introduction from 2007. Require AC1024 for DGN and PDF to avoid
+    // emitting references that an AC1021-era target may not recognize.
+    if (kind == DRW_Underlay::DWF)
+        return version >= DRW::AC1021;
+    if (kind == DRW_Underlay::DGN || kind == DRW_Underlay::PDF)
+        return version >= DRW::AC1024;
+    return false;
+}
+
+} // namespace
+
 bool dxfRW::writeUnderlay(DRW_Underlay *ent) {
     if (!preflightDxfWrite())
         return false;
-    if (version <= DRW::AC1009) return rejectUnsupportedDxfWrite("UNDERLAY");
     if (ent == nullptr || writer == nullptr || !ent->validatePayloadFields()
         || ent->kind < DRW_Underlay::PDF || ent->kind > DRW_Underlay::DWF
         || ent->definitionHandle == 0u
         || ent->definitionHandle == DRW::NoHandle
         || ent->clipBoundary.size() > DRW_Underlay::kMaxClipVertices
-        || ent->inverseClipBoundary.size() > DRW_Underlay::kMaxClipVertices
-        || (version <= DRW::AC1021
-            && (!ent->inverseClipBoundary.empty() || (ent->flags & 0x10) != 0))) {
+        || ent->inverseClipBoundary.size() > DRW_Underlay::kMaxClipVertices) {
+        m_writeError = true;
+        return false;
+    }
+    if (!supportsUnderlayVersion(version, ent->kind))
+        return rejectUnsupportedDxfWrite("UNDERLAY version profile");
+    if (version <= DRW::AC1021
+        && (!ent->inverseClipBoundary.empty() || (ent->flags & 0x10) != 0)) {
         m_writeError = true;
         return false;
     }
@@ -11935,8 +11954,6 @@ bool dxfRW::writeUnderlay(DRW_Underlay *ent) {
 }
 
 bool dxfRW::writeUnderlayDefinition(DRW_UnderlayDefinition *ent) {
-    if (version <= DRW::AC1009)
-        return rejectUnsupportedDxfWrite("UNDERLAY definition");
     if (!preflightTableEntry(ent)
         || ent->kind < DRW_UnderlayDefinition::PDF
         || ent->kind > DRW_UnderlayDefinition::DWF
@@ -11944,6 +11961,8 @@ bool dxfRW::writeUnderlayDefinition(DRW_UnderlayDefinition *ent) {
         || ent->parentHandle == 0u || ent->parentHandle == DRW::NoHandle
         || ent->filename.empty())
         return false;
+    if (!supportsUnderlayVersion(version, ent->kind))
+        return rejectUnsupportedDxfWrite("UNDERLAY definition version profile");
     const char* tag = (ent->kind == DRW_UnderlayDefinition::DGN) ? "DGNDEFINITION"
                     : (ent->kind == DRW_UnderlayDefinition::DWF) ? "DWFDEFINITION"
                     : "PDFDEFINITION";

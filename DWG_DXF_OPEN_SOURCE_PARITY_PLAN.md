@@ -479,10 +479,19 @@ eligible reader. The exact package and environment result are in the
   2D open/insert profile is recorded in
   [the FreeCAD route receipt](docs/research/p8-macos-freecad-dwg2dxf-open-insert-qualification-2026-11-01.json);
   it does not qualify 3D semantics or other platforms. The generated Underlay
-  adapter route now closes PDF/DGN/DWF definitions and references through the
+  adapter route closes PDF/DGN/DWF definitions and references through the
   named-object dictionary, with AC1024/AC1032 ASCII/Binary readback and atomic
   missing-target/wrong-kind refusal plus retry; see the [Underlay graph
   receipt](docs/research/p8-underlay-definition-graph-adapter-2026-11-02.json).
+  Both definition and reference writers now enforce kind-specific target
+  floors: DWF at AC1021 and DGN/PDF at AC1024. Autodesk documents DWF before
+  AutoCAD 2007 as unsupported, DGN before AutoCAD 2008 as unsupported, and PDF
+  before AutoCAD 2010 as unsupported. Since AC1021 spans 2007–2009, requiring
+  AC1024 for DGN conservatively avoids writing to the ambiguous 2007 target;
+  this version mapping is an implementation safeguard, not a new format claim.
+  Generated ASCII/Binary controls verify lower-version refusal preserves the
+  destination and a same-adapter retry at the first admitted target reads back
+  typed definitions and references; see the [Underlay target-version receipt](docs/research/p8-underlay-target-version-gates-2026-11-02.json).
   This proves transport only, not native consumer semantics or remaining BLOCK
   callback coverage.
 - The optional desktop and native Linux/Windows FreeCAD CMake gates now bind to
