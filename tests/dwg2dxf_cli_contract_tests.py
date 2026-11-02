@@ -899,68 +899,79 @@ def check_partial_dwg_read_cli(converter, root, writer):
     """Exercise strict refusal and the explicit partial CLI route locally."""
     if writer is None:
         raise AssertionError("partial-read CLI control requires the local DWG writer")
-    source = root / "generated partial-read source.dwg"
-    generated = run_bounded(
-        [str(writer), "--generate-cli-partial-read-source", str(source)],
-        10, 131072, cwd=root)
-    if generated.returncode != 0 or not source.is_file():
-        raise AssertionError(f"could not author partial-read DWG locally: {generated!r}")
-    original = source.read_bytes()
-    if original[:6] != b"AC1027":
-        raise AssertionError("partial-read DWG generator emitted the wrong version")
+    checked = 0
+    for revision, version in ((b"AC1021", "AC1021"),
+                              (b"AC1027", "AC1027")):
+        source = root / f"generated partial-read source {version}.dwg"
+        generated = run_bounded(
+            [str(writer), "--generate-cli-partial-read-source", str(source), version],
+            10, 131072, cwd=root)
+        if generated.returncode != 0 or not source.is_file():
+            raise AssertionError(
+                f"could not author {version} partial-read DWG locally: {generated!r}")
+        original = source.read_bytes()
+        if original[:6] != revision:
+            raise AssertionError(
+                f"partial-read DWG generator emitted the wrong version for {version}")
 
-    strict_output = root / "partial-read strict result.dxf"
-    strict_output.write_bytes(SENTINEL)
-    strict = run_bounded(
-        [str(converter), str(source), "-o", str(strict_output), "-y", "-d"],
-        10, 2 * 1024 * 1024, cwd=root)
-    strict_required = (
-        b"DWG read observations: schema=1 operationSucceeded=true sourceVersion=AC1027",
-        b"entityParseFailures=1",
-        b"failed=1",
-        b"strict-complete conversion requires successful, complete DWG read disposition",
-    )
-    if (strict.returncode != 1 or strict_output.read_bytes() != SENTINEL
-            or source.read_bytes() != original
-            or any(item not in strict.stderr for item in strict_required)
-            or b"WARNING: explicit partial DWG read mode" in strict.stderr):
-        raise AssertionError(
-            f"strict partial-read refusal was not diagnosed atomically: {strict!r}")
+        strict_output = root / f"partial-read strict result {version}.dxf"
+        strict_output.write_bytes(SENTINEL)
+        strict = run_bounded(
+            [str(converter), str(source), "-o", str(strict_output), "-y", "-d"],
+            10, 2 * 1024 * 1024, cwd=root)
+        strict_required = (
+            b"DWG read observations: schema=1 operationSucceeded=true sourceVersion="
+            + revision,
+            b"entityParseFailures=1",
+            b"failed=1",
+            b"strict-complete conversion requires successful, complete DWG read disposition",
+        )
+        if (strict.returncode != 1 or strict_output.read_bytes() != SENTINEL
+                or source.read_bytes() != original
+                or any(item not in strict.stderr for item in strict_required)
+                or b"WARNING: explicit partial DWG read mode" in strict.stderr):
+            raise AssertionError(
+                f"strict {version} partial-read refusal was not diagnosed atomically: "
+                f"{strict!r}")
+        checked += 1
 
-    partial_output = root / "partial-read admitted result.dxf"
-    partial = run_bounded(
-        [str(converter), str(source), "-o", str(partial_output),
-         "--allow-partial-dwg-read", "-d"],
-        10, 2 * 1024 * 1024, cwd=root)
-    partial_required = (
-        b"WARNING: explicit partial DWG read mode",
-        b"Owner/reference checks remain strict.",
-        b"entityParseFailures=1",
-        b"failed=1",
-    )
-    payload = partial_output.read_bytes() if partial_output.is_file() else b""
-    line_count = sum(1 for line in payload.splitlines() if line.strip() == b"LINE")
-    if (partial.returncode != 0 or b"Success:" not in partial.stdout
-            or any(item not in partial.stderr for item in partial_required)
-            or not output_has_revision(payload, b"AC1027", False)
-            or line_count != 1 or source.read_bytes() != original):
-        raise AssertionError(
-            f"explicit partial-read route did not warn and publish only retained data: "
-            f"{partial!r}")
+        partial_output = root / f"partial-read admitted result {version}.dxf"
+        partial = run_bounded(
+            [str(converter), str(source), "-o", str(partial_output),
+             "--allow-partial-dwg-read", "-d"],
+            10, 2 * 1024 * 1024, cwd=root)
+        partial_required = (
+            b"WARNING: explicit partial DWG read mode",
+            b"Owner/reference checks remain strict.",
+            b"entityParseFailures=1",
+            b"failed=1",
+        )
+        payload = partial_output.read_bytes() if partial_output.is_file() else b""
+        line_count = sum(1 for line in payload.splitlines() if line.strip() == b"LINE")
+        if (partial.returncode != 0 or b"Success:" not in partial.stdout
+                or any(item not in partial.stderr for item in partial_required)
+                or not output_has_revision(payload, revision, False)
+                or line_count != 1 or source.read_bytes() != original):
+            raise AssertionError(
+                f"explicit {version} partial-read route did not warn and publish only "
+                f"retained data: {partial!r}")
+        checked += 1
 
-    readback = root / "partial-read readback.dxf"
-    reopened = run_bounded(
-        [str(converter), str(partial_output), "-o", str(readback)],
-        10, 131072, cwd=root)
-    readback_payload = readback.read_bytes() if readback.is_file() else b""
-    if (reopened.returncode != 0 or not output_has_revision(
-            readback_payload, b"AC1027", False)
-            or sum(1 for line in readback_payload.splitlines()
-                   if line.strip() == b"LINE") != 1
-            or partial_output.read_bytes() != payload or source.read_bytes() != original):
-        raise AssertionError(
-            f"partial output did not reopen with the retained LINE only: {reopened!r}")
-    return 3
+        readback = root / f"partial-read readback {version}.dxf"
+        reopened = run_bounded(
+            [str(converter), str(partial_output), "-o", str(readback)],
+            10, 131072, cwd=root)
+        readback_payload = readback.read_bytes() if readback.is_file() else b""
+        if (reopened.returncode != 0 or not output_has_revision(
+                readback_payload, revision, False)
+                or sum(1 for line in readback_payload.splitlines()
+                       if line.strip() == b"LINE") != 1
+                or partial_output.read_bytes() != payload or source.read_bytes() != original):
+            raise AssertionError(
+                f"{version} partial output did not reopen with the retained LINE only: "
+                f"{reopened!r}")
+        checked += 1
+    return checked
 
 
 def check_source_disposition_projection(converter, root, writer):

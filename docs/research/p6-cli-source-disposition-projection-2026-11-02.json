@@ -32,14 +32,14 @@
   },
   "validation": {
     "build": "PASS: cmake --build build-gcc --target dwg2dxf libdxfrw_dwg_local_roundtrip -j2",
-    "test": "PASS: python3 -B tests/dwg2dxf_cli_contract_tests.py --converter $PWD/build-gcc/dwg2dxf/dwg2dxf --writer $PWD/build-gcc/libdxfrw_dwg_local_roundtrip --source-disposition-only (4 controls); --fast-only (103 option, 47 batch, 2 read-observation, 3 partial-read and 4 source-disposition controls)",
+    "test": "PASS: python3 -B tests/dwg2dxf_cli_contract_tests.py --converter $PWD/build-gcc/dwg2dxf/dwg2dxf --writer $PWD/build-gcc/libdxfrw_dwg_local_roundtrip --fast-only (103 option controls, 47 batch controls, 2 read-observation controls, 6 partial-read controls, 4 source-disposition controls)",
     "diffCheck": "PASS: git diff --check",
     "sha256": {
       "dwg2dxf/main.cpp": "e80733e7133e3a1eb77311052b93e74b0fcf6f1fb6aa2fbf2fe00028b5fd27ae",
-      "tests/dwg2dxf_cli_contract_tests.py": "c9b854460b150ae3d3ed9a17053e95b6e7dc286b74b0d98ffcee7860f583d4a4",
-      "tests/dwg_local_roundtrip_tests.cpp": "6a88fec49ad99e972a52db7003dbf82480f730604f2eff032fb49b38d2558fbe",
+      "tests/dwg2dxf_cli_contract_tests.py": "99ff74492f789b193d2b44a210c59b4a37f12acc65a7a57c97a360b4eb00c357",
+      "tests/dwg_local_roundtrip_tests.cpp": "ee765a23f31804d9bdd8d7af9a83fb0625e9ae3b116cea9841e29a63641ab7c2",
       "build-gcc/dwg2dxf/dwg2dxf": "32a09aebcad165c22f60288a927ea1b0e40775c52829d08233eba8affd7c832f",
-      "build-gcc/libdxfrw_dwg_local_roundtrip": "31fa3dc95737d94e699e9feb886bb60fca1d2435cd029d7503b7a501f814e13a"
+      "build-gcc/libdxfrw_dwg_local_roundtrip": "8936fc40deb2e7d553632f7bbfa22428e45dfccbc5453f5c9cbce5f7dd462aaf"
     }
   },
   "limits": [

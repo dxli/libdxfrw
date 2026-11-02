@@ -34483,15 +34483,26 @@ int main(int argc, char** argv) {
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     }
-    if (argc == 3
+    if ((argc == 3 || argc == 4)
         && std::string(argv[1]) == "--generate-cli-partial-read-source") {
         if (std::filesystem::exists(argv[2])) {
             std::cerr << "Refusing to replace an existing CLI partial-read source\n";
             return 1;
         }
+        DRW::Version version = DRW::AC1027;
+        if (argc == 4) {
+            const std::string token = argv[3];
+            if (token == "AC1021")
+                version = DRW::AC1021;
+            else if (token != "AC1027") {
+                std::cerr << "Unsupported CLI partial-read source version: "
+                          << token << '\n';
+                return 1;
+            }
+        }
         dwgRW writer(argv[2]);
         ReadOutcomeControl source(&writer, 1);
-        if (!writer.write(&source, DRW::AC1027, true) || !source.wrote) {
+        if (!writer.write(&source, version, true) || !source.wrote) {
             const DRW_OperationDiagnostic diagnostic = writer.getLastDiagnostic();
             std::cerr << "Could not generate CLI partial-read DWG source: "
                       << diagnostic.code << " — " << diagnostic.message << '\n';
