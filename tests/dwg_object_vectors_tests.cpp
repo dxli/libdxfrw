@@ -5,6 +5,8 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <map>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -15,6 +17,10 @@
 #include "intern/dwgbuffer.h"
 #include "intern/dwgbufferw.h"
 #include "intern/dxfreader.h"
+#define private public
+#include "libdxfrw.h"
+#undef private
+#include "intern/dxfwriter.h"
 #include "intern/dwgreader.h"
 #include "intern/dwg_fixed_handles.h"
 #include "intern/dwgutil.h"
@@ -122,6 +128,7 @@ public:
 class DimensionAssociationCodecProbe final
     : public DRW_DimensionAssociation {
 public:
+    using DRW_DimensionAssociation::parseCode;
     using DRW_DimensionAssociation::encodeDwg;
     using DRW_DimensionAssociation::parseDwg;
 };
@@ -11989,6 +11996,127 @@ bool makeDimensionAssociationDetailFrame(DimensionAssociationFrame& frame) {
     return true;
 }
 
+void testDimensionAssociationDxfOutputReadback(
+        TestContext& t, DRW_DimensionAssociation& source, bool binary) {
+    const std::string format = binary ? "Binary" : "ASCII";
+    std::ostringstream output;
+    dxfRW owner("");
+    owner.version = DRW::AC1032;
+    owner.binFile = binary;
+    owner.setHandleRemap({
+        {0x20u, 0x21u}, {0x21u, 0x22u}, {0x30u, 0x31u},
+        {0x40u, 0x41u}, {0x41u, 0x42u}, {0x42u, 0x43u},
+        {0x50u, 0x51u}, {0xA100u, 0xA101u}});
+    if (binary)
+        owner.writer = std::make_unique<dxfWriterBinary>(&output);
+    else
+        owner.writer = std::make_unique<dxfWriterAscii>(&output);
+
+    const bool wrote = owner.writeDimensionAssociation(&source)
+        && owner.writer->writeString(0, "WIRE_END")
+        && !owner.writer->hasWriteError();
+    t.expect(wrote, "DIMASSOC " + format
+                      + " writer emits the parsed source profile");
+    if (!wrote)
+        return;
+
+    std::istringstream input(output.str());
+    std::unique_ptr<dxfReader> reader;
+    if (binary)
+        reader = std::make_unique<dxfReaderBinary>(&input);
+    else
+        reader = std::make_unique<dxfReaderAscii>(&input);
+
+    DimensionAssociationCodecProbe readback;
+    int code = 0;
+    const bool firstRecord = reader->readRec(&code) && code == 0
+        && reader->getString() == "DIMASSOC";
+    bool parsed = firstRecord;
+    bool endMarker = false;
+    while (parsed && reader->readRec(&code)) {
+        if (code == 0) {
+            endMarker = reader->getString() == "WIRE_END";
+            break;
+        }
+        if (!readback.parseCode(code, reader))
+            parsed = false;
+    }
+    t.expect(firstRecord && parsed && endMarker,
+             "DIMASSOC " + format
+                 + " stream parses back as one complete typed record");
+    if (!firstRecord || !parsed || !endMarker)
+        return;
+
+    const auto& refs = readback.m_osnapRefs;
+    const bool commonFieldsMatch = readback.handle == 0xA101u
+        && readback.parentHandle == 0x21u
+        && readback.reactorHandles == std::vector<std::uint32_t>{0x22u}
+        && readback.xDictHandle == 0u
+        && readback.m_dimensionHandle == 0x31u
+        && readback.m_associativityFlags == 0x07u
+        && readback.m_isTransSpace
+        && readback.m_rotatedDimensionType == 4u
+        && refs.size() == 3u && !readback.m_hasUnrepresentableDetail;
+    t.expect(commonFieldsMatch, "DIMASSOC " + format
+                 + " readback preserves common fields and remaps every link");
+    if (refs.size() != 3u)
+        return;
+
+    const auto& pointRef = refs[0];
+    const auto& intersectionRef = refs[1];
+    const auto& xrefRef = refs[2];
+    const bool detailFieldsMatch = pointRef.m_className == "AcDbOsnapPointRef"
+        && pointRef.m_hasObjectOsnapType && pointRef.m_objectOsnapType == 1u
+        && pointRef.m_objectHandle == 0x41u
+        && pointRef.m_hasSubentType && pointRef.m_subentType == 2
+        && pointRef.m_hasGsMarker && pointRef.m_gsMarker == 9
+        && pointRef.m_hasNearParameter && pointRef.m_nearParameter == 1.0
+        && pointRef.m_hasOsnapPoint && pointRef.m_osnapPoint.x == 1.25
+        && pointRef.m_osnapPoint.y == -2.5
+        && pointRef.m_osnapPoint.z == 2.0e50
+        && pointRef.m_hasLastPointRef && pointRef.m_lastPointRef == 1
+        && intersectionRef.m_className == "AcDbOsnapPointRef"
+        && intersectionRef.m_hasObjectOsnapType
+        && intersectionRef.m_objectOsnapType == 6u
+        && intersectionRef.m_objectHandle == 0x42u
+        && intersectionRef.m_hasSubentType
+        && intersectionRef.m_subentType == 3
+        && intersectionRef.m_hasGsMarker
+        && intersectionRef.m_gsMarker == 10
+        && intersectionRef.m_hasNearParameter
+        && std::abs(intersectionRef.m_nearParameter
+                    - 0.04914376136317) < 1e-14
+        && intersectionRef.m_hasOsnapPoint
+        && intersectionRef.m_osnapPoint.x == -3.0
+        && intersectionRef.m_osnapPoint.y == 4.5
+        && intersectionRef.m_osnapPoint.z == 6.0
+        && intersectionRef.m_hasIntersectionObjectHandle
+        && intersectionRef.m_intersectionObjectHandle == 0x51u
+        && intersectionRef.m_hasIntersectionSubentType
+        && intersectionRef.m_intersectionSubentType == 5
+        && intersectionRef.m_hasIntersectionGsMarker
+        && intersectionRef.m_intersectionGsMarker == 0
+        && intersectionRef.m_hasIntersectionXrefObjectHandleString
+        && intersectionRef.m_intersectionXrefObjectHandleString
+            == "xref-intersection-6"
+        && intersectionRef.m_hasLastPointRef
+        && intersectionRef.m_lastPointRef == 0
+        && xrefRef.m_className == "AcDbOsnapPointRef"
+        && xrefRef.m_hasObjectOsnapType
+        && xrefRef.m_objectOsnapType == 13u
+        && xrefRef.m_objectHandle == 0x43u
+        && xrefRef.m_hasSubentType && xrefRef.m_subentType == 4
+        && xrefRef.m_hasGsMarker && xrefRef.m_gsMarker == 12
+        && xrefRef.m_hasNearParameter && xrefRef.m_nearParameter == 2.0
+        && xrefRef.m_hasOsnapPoint && xrefRef.m_osnapPoint.x == 7.0
+        && xrefRef.m_osnapPoint.y == 8.0 && xrefRef.m_osnapPoint.z == 9.0
+        && xrefRef.m_hasXrefObjectHandleString
+        && xrefRef.m_xrefObjectHandleString == "xref-main-13"
+        && xrefRef.m_hasLastPointRef && xrefRef.m_lastPointRef == 1;
+    t.expect(detailFieldsMatch, "DIMASSOC " + format
+                 + " readback preserves all osnap fields and opaque XREF paths");
+}
+
 void testDimensionAssociationDwgDetailReadback(TestContext& t) {
     DimensionAssociationFrame frame;
     const bool built = makeDimensionAssociationDetailFrame(frame);
@@ -12079,6 +12207,11 @@ void testDimensionAssociationDwgDetailReadback(TestContext& t) {
                      && xrefRef.m_osnapPoint.z == 9.0
                      && xrefRef.m_lastPointRef == 1,
                  "DIMASSOC non-intersection osnap projects the main XREF path");
+    }
+
+    if (read && commonFieldsMatch) {
+        testDimensionAssociationDxfOutputReadback(t, parsed, false);
+        testDimensionAssociationDxfOutputReadback(t, parsed, true);
     }
 
     dwgBufferW body(&codec), strings(&codec), handles(&codec);

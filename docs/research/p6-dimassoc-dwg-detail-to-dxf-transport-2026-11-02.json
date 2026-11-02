@@ -37,7 +37,7 @@
       "CMakeLists.txt",
       "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md"
     ],
-    "summary": "The parser now stores the documented osnap type, main subentity and GS marker, one XREF path, near parameter, WCS point, one intersection handle/subentity/marker/path for intersection types 6 and 11, and last-point flag in the existing DRW_DimensionAssociationOsnapRef model. AC1018 strings are read inline from the object body; AC1021+ strings use the detached string stream. Unknown classes, excess handle/path cardinalities, missing intersection geometry, and out-of-range DXF subentity values keep the record loss-guarded. Detailed DIMASSOC remains refused by the DWG encoder.",
+    "summary": "The parser now stores the documented osnap type, main subentity and GS marker, one XREF path, near parameter, WCS point, one intersection handle/subentity/marker/path for intersection types 6 and 11, and last-point flag in the existing DRW_DimensionAssociationOsnapRef model. AC1018 strings are read inline from the object body; AC1021+ strings use the detached string stream. Unknown classes, excess handle/path cardinalities, missing intersection geometry, and out-of-range DXF subentity values keep the record loss-guarded. The generated AC1024 profile now also writes to ASCII and Binary DXF with handle remapping and typed readback of all modeled fields. Detailed DIMASSOC remains refused by the DWG encoder.",
     "wireChanges": false,
     "publicLayoutChanged": false,
     "generatedBytes": "The test constructs AC1018 and AC1024 frames from scratch in C++; no DWG/DXF sample file was added.",
@@ -48,11 +48,11 @@
     "baseRevision": "f7c70ac5",
     "workingTreeSourceSha256": {
       "src/drw_objects.cpp": "a5c5acd339b8b5d754322ec7e07fcd9bb8ffbe14691626f38d68ae6909fc9b97",
-      "tests/dwg_object_vectors_tests.cpp": "998e8651bf9840a7d2fe58eb10aa77f24a750ca71e8e0f971245cc2d05c1211b",
+      "tests/dwg_object_vectors_tests.cpp": "7534d34f1bc32515199c6b3e71113f2887877355f9b32dad37373c35a9d4598f",
       "CMakeLists.txt": "274cee11b26fe435c9324449e1a3c4de379d28415ad928429ef235452d63b600"
     },
     "executables": {
-      "libdxfrw_dwg_object_vectors_tests": "d2ecfb6bf283b0170547bb5004adc09c936ece03514b92532eb8a61aa6a95585",
+      "libdxfrw_dwg_object_vectors_tests": "3888605d4fe3aa5489e2d05ab28aef3ae134293a8b6e94bcc0a88ec8457decf1",
       "libdxfrw_hardening_tests": "5784761e60da02cb2d188a05fefe9907a480cb056cdbac49f3d3a61366b327da",
       "dwg2dxf": "c29ab65dbecacd2abfaa7607386b1f9a6afb1e841b4c70183a7d8bf607f7d57f"
     }
@@ -73,6 +73,18 @@
       ],
       "result": "PASS",
       "interpretation": "Codec behavior, body bounds, inline/detached string handling and field projection controls only; the vectors are locally authored and do not independently establish a producer's DWG body layout."
+    },
+    "generatedDxfOutputReadback": {
+      "selector": "--dimassoc-dwg-detail-readback",
+      "formats": ["ASCII DXF", "Binary DXF"],
+      "covers": [
+        "production DIMASSOC writer output from the parsed generated AC1024 profile",
+        "typed readback of the emitted record",
+        "remapped object, owner, reactor, dimension, main osnap and intersection handles",
+        "all modeled osnap fields, WCS points, last-point flags, and opaque XREF strings"
+      ],
+      "result": "PASS",
+      "interpretation": "Locally authored generated-vector transport proof only; it is not physical DWG source-to-output proof, independent producer evidence, native associative evaluation, or support qualification."
     },
     "localAC1021Witness": {
       "path": "tests/samples/AC1021/architectural_-_annotation_scaling_and_multileaders.dwg",
@@ -121,7 +133,7 @@
   },
   "validation": {
     "build": {
-      "command": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests libdxfrw_hardening_tests dwg2dxf -j2",
+      "command": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j2",
       "result": "PASS"
     },
     "focusedGeneratedSelector": {
@@ -132,6 +144,7 @@
       "command": "build-gcc/libdxfrw_hardening_tests --dimassoc-documented-scalar-fields",
       "result": "PASS; existing ASCII/Binary DXF field read/write controls remain green"
     },
+    "diffCheck": "PASS",
     "physicalReaderCheckpoint": {
       "command": "build-gcc/dwg2dxf/dwg2dxf tests/samples/AC1021/architectural_-_annotation_scaling_and_multileaders.dwg -y -d -v2007 /private/tmp/arch-ac1021-dimassoc-final.dxf",
       "result": "7 DIMASSOC callbacks; strict export later refused at the unrelated 36-record typed-proxy preflight",
@@ -144,11 +157,10 @@
       "traceSha256": "dbcf51b08f0aba2ca396eaa2cc7e76e12450739d80343b7dc111323e3449bcda",
       "executableSha256": "c29ab65dbecacd2abfaa7607386b1f9a6afb1e841b4c70183a7d8bf607f7d57f"
     },
-    "diffCheck": "PASS",
     "fullSuites": false
   },
   "limitations": [
-    "The local AC1021 source does not pass strict whole-document export, so there is no physical DIMASSOC source-to-output/readback proof in this slice.",
+    "The local AC1021 source does not pass strict whole-document export, so there is no physical DIMASSOC source-to-output/readback proof in this slice; generated ASCII/Binary output coverage cannot substitute for that source binding.",
     "The generated AC1024 frame validates implementation behavior, not an independently observed DWG byte layout.",
     "ODA v5.4.1 does not specify this body; the AC1018 physical comparison is one peer/source profile, not universal version qualification.",
     "Live associative dimension updates and native CAD interpretation are unqualified.",
@@ -158,9 +170,9 @@
   "planImpact": {
     "phase": "P6",
     "status": "OPEN",
-    "completedSlice": "AC1018 inline-string and AC1021+ detached-string parsing for the bounded known DIMASSOC osnap profile",
+    "completedSlice": "AC1018 inline-string and AC1021+ detached-string parsing for the bounded known DIMASSOC osnap profile, plus generated AC1024 ASCII/Binary writer output, handle remapping and typed readback",
     "remaining": "Physical source-to-DXF closure when an eligible complete source is available; broader AC1018 producer qualification; associative evaluation; remaining DWG semantic/version audit",
-    "nextReadyPacket": "Use a source with resolved DIMASSOC dimension/main/intersection targets and no earlier strict-output blocker to verify actual ASCII/Binary emitted fields and readback; preserve the existing loss guards and DWG encoder refusal.",
+    "nextReadyPacket": "Find an eligible source whose complete read disposition and resolved DIMASSOC targets permit strict output, then verify the physical source-to-ASCII/Binary-to-typed-readback path. Until one exists, continue independent P4/P5/P6 implementation packets without treating generated transport as physical-source evidence.",
     "externalDisposition": {
       "J256": "DEFERRED_EXTERNAL",
       "J260": "DEFERRED_EXTERNAL",
