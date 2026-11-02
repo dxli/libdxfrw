@@ -889,6 +889,7 @@ void DRW_Header::write(const std::unique_ptr<dxfWriter>& writer, DRW::Version ve
     if (!canWriteDxfHeaderStructure()
         || !canWriteDxfUnknownHeaderVariables()
         || !canWriteDxfLinetypeScale()
+        || !canWriteDxfCeltscale()
         || !canWriteDxfPsltscale()
         || !canWriteDxfMsltscale(ver)
         || !canWriteDxfMeasurement()) {
@@ -2701,6 +2702,32 @@ bool DRW_Header::canWriteDxfLinetypeScale() const noexcept {
         || (value != nullptr && value->type() == DRW_Variant::DOUBLE
             && value->code() == 40 && std::isfinite(value->content.d)
             && value->content.d != 0.0);
+}
+
+bool DRW_Header::canWriteDxfCeltscale() const noexcept {
+    const DRW_Variant* value = nullptr;
+    bool present = false;
+    const auto accept = [&](std::string_view key,
+                            const DRW_Variant* candidate) {
+        if (key != "$CELTSCALE" && key != "CELTSCALE")
+            return true;
+        if (present)
+            return false;
+        present = true;
+        value = candidate;
+        return true;
+    };
+    for (const auto& item : vars) {
+        if (!accept(item.first, item.second))
+            return false;
+    }
+    for (const auto& item : customVars) {
+        if (!accept(item.first, item.second))
+            return false;
+    }
+    return !present
+        || (value != nullptr && value->type() == DRW_Variant::DOUBLE
+            && value->code() == 40 && std::isfinite(value->content.d));
 }
 
 bool DRW_Header::canWriteDxfZeroOrOneIntegerHeaderVariable(

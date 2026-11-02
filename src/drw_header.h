@@ -212,6 +212,9 @@ public:
     /// Preserve a valid, nonzero global linetype scale; input parsing remains
     /// tolerant so callers can diagnose or repair an invalid source value.
     bool canWriteDxfLinetypeScale() const noexcept;
+    /// Require an explicit current-entity linetype scale to be one finite
+    /// group-40 real. No sign/zero restriction is inferred from the docs.
+    bool canWriteDxfCeltscale() const noexcept;
     /// Validate the documented 0/1 values for paper-space and model-space
     /// linetype scaling. Missing PSLTSCALE keeps its canonical default; missing
     /// MSLTSCALE remains absent.

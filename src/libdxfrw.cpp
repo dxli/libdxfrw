@@ -4451,6 +4451,7 @@ bool dxfRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
         || !header.canWriteDxfHeaderStructure()
         || !header.canWriteDxfUnknownHeaderVariables()
         || !header.canWriteDxfLinetypeScale()
+        || !header.canWriteDxfCeltscale()
         || !header.canWriteDxfPsltscale()
         || !header.canWriteDxfMsltscale(version)
         || !header.canWriteDxfMeasurement()

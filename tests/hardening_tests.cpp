@@ -1433,8 +1433,9 @@ void testDxfLinetypeScaleHeaderDomain(TestContext& t) {
         header.write(writer, DRW::AC1027);
         return !writer->hasWriteError() && record.commit();
     };
-    const auto readLinetypeScale = [](const std::string& bytes, bool binary,
-                                      double& value) {
+    const auto readHeaderScale = [](const std::string& bytes, bool binary,
+                                    const std::string& variable,
+                                    double& value) {
         std::istringstream input(bytes, std::ios::in | std::ios::binary);
         std::unique_ptr<dxfReader> reader = binary
             ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
@@ -1450,7 +1451,7 @@ void testDxfLinetypeScaleHeaderDomain(TestContext& t) {
                 return std::isfinite(value);
             }
             if (code == 9)
-                expectingValue = reader->getString() == "$LTSCALE";
+                expectingValue = reader->getString() == variable;
         }
         return false;
     };
@@ -1463,8 +1464,8 @@ void testDxfLinetypeScaleHeaderDomain(TestContext& t) {
         validHeader.addDouble("$LTSCALE", 0.5, 40);
         const bool valid = emitHeader(validWriter, validHeader);
         double parsedScale = 0.0;
-        t.expect(valid && readLinetypeScale(validOutput.str(), binary,
-                                            parsedScale)
+        t.expect(valid && readHeaderScale(validOutput.str(), binary,
+                                          "$LTSCALE", parsedScale)
                      && parsedScale == 0.5,
                  "DXF HEADER preserves a nonzero LTSCALE in ASCII/Binary output");
 
@@ -1474,8 +1475,8 @@ void testDxfLinetypeScaleHeaderDomain(TestContext& t) {
         DRW_Header absentHeader;
         const bool absent = emitHeader(absentWriter, absentHeader);
         parsedScale = 0.0;
-        t.expect(absent && readLinetypeScale(absentOutput.str(), binary,
-                                             parsedScale)
+        t.expect(absent && readHeaderScale(absentOutput.str(), binary,
+                                           "$LTSCALE", parsedScale)
                      && parsedScale == 1.0,
                  "absent LTSCALE retains the existing unit default in ASCII/Binary output");
 
@@ -1549,10 +1550,116 @@ void testDxfLinetypeScaleHeaderDomain(TestContext& t) {
         DRW_Header correctedHeader;
         correctedHeader.addDouble("$LTSCALE", 1.25, 40);
         t.expect(emitHeader(retryWriter, correctedHeader)
-                     && readLinetypeScale(retryOutput.str(), binary,
-                                          parsedScale)
+                     && readHeaderScale(retryOutput.str(), binary,
+                                        "$LTSCALE", parsedScale)
                      && parsedScale == 1.25,
                  "same writer accepts corrected LTSCALE after atomic rollback");
+
+        for (const double scale : {0.5, 0.0, -2.0}) {
+            std::ostringstream celtscaleOutput(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> celtscaleWriter = makeWriter(
+                binary, &celtscaleOutput);
+            DRW_Header celtscaleHeader;
+            celtscaleHeader.addDouble("$CELTSCALE", scale, 40);
+            double parsedCeltscale = 0.0;
+            t.expect(emitHeader(celtscaleWriter, celtscaleHeader)
+                         && readHeaderScale(celtscaleOutput.str(), binary,
+                                            "$CELTSCALE", parsedCeltscale)
+                         && parsedCeltscale == scale,
+                     "finite CELTSCALE values round-trip without an inferred sign/zero range");
+        }
+
+        std::ostringstream absentCeltscaleOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> absentCeltscaleWriter = makeWriter(
+            binary, &absentCeltscaleOutput);
+        DRW_Header absentCeltscaleHeader;
+        double parsedCeltscale = 0.0;
+        t.expect(emitHeader(absentCeltscaleWriter, absentCeltscaleHeader)
+                     && readHeaderScale(absentCeltscaleOutput.str(), binary,
+                                        "$CELTSCALE", parsedCeltscale)
+                     && parsedCeltscale == 1.0,
+                 "absent CELTSCALE keeps the existing default in ASCII/Binary output");
+
+        const auto refusesCeltscale = [&](DRW_Header& header) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
+            return !emitHeader(writer, header) && output.str().empty();
+        };
+        for (const double invalid : {
+                 std::numeric_limits<double>::infinity(),
+                 -std::numeric_limits<double>::infinity(),
+                 std::numeric_limits<double>::quiet_NaN()}) {
+            DRW_Header invalidCeltscale;
+            invalidCeltscale.addDouble("$CELTSCALE", invalid, 40);
+            t.expect(refusesCeltscale(invalidCeltscale),
+                     "non-finite CELTSCALE is refused before HEADER publication");
+        }
+        DRW_Header wrongCeltscaleType;
+        wrongCeltscaleType.addInt("$CELTSCALE", 7, 70);
+        t.expect(refusesCeltscale(wrongCeltscaleType),
+                 "wrong CELTSCALE type is not silently replaced with default 1.0");
+        DRW_Header wrongCeltscaleGroup;
+        wrongCeltscaleGroup.addDouble("$CELTSCALE", 2.0, 41);
+        t.expect(refusesCeltscale(wrongCeltscaleGroup),
+                 "wrong CELTSCALE group code is refused instead of defaulted");
+        DRW_Header duplicateCeltscaleAliases;
+        duplicateCeltscaleAliases.addDouble("$CELTSCALE", 1.0, 40);
+        duplicateCeltscaleAliases.addDouble("CELTSCALE", 2.0, 40);
+        t.expect(refusesCeltscale(duplicateCeltscaleAliases),
+                 "conflicting CELTSCALE key aliases are refused");
+        DRW_Header caseFoldedCeltscaleAlias;
+        caseFoldedCeltscaleAlias.addDouble("$CELTSCALE", 1.0, 40);
+        caseFoldedCeltscaleAlias.addDouble("$celtscale", 2.0, 40);
+        t.expect(refusesCeltscale(caseFoldedCeltscaleAlias),
+                 "case-folded CELTSCALE alias is refused as ambiguous");
+
+        std::ostringstream malformedCeltscaleSource(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> malformedCeltscaleWriter = makeWriter(
+            binary, &malformedCeltscaleSource);
+        const bool malformedSourceWritten =
+            malformedCeltscaleWriter->writeString(9, "$CELTSCALE")
+            && malformedCeltscaleWriter->writeInt16(70, 7);
+        std::istringstream malformedCeltscaleInput(
+            malformedCeltscaleSource.str(), std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> malformedCeltscaleReader = binary
+            ? std::unique_ptr<dxfReader>(
+                  new dxfReaderBinary(&malformedCeltscaleInput))
+            : std::unique_ptr<dxfReader>(
+                  new dxfReaderAscii(&malformedCeltscaleInput));
+        malformedCeltscaleReader->setVersion("AC1027", true);
+        ExposedHeader retainedMalformedCeltscale;
+        bool malformedCeltscaleParsed = malformedSourceWritten;
+        while (malformedCeltscaleReader->readRec(&code))
+            malformedCeltscaleParsed = retainedMalformedCeltscale.parseCode(
+                code, malformedCeltscaleReader) && malformedCeltscaleParsed;
+        const auto retainedCeltscale =
+            retainedMalformedCeltscale.vars.find("$CELTSCALE");
+        t.expect(malformedCeltscaleParsed
+                     && retainedCeltscale
+                            != retainedMalformedCeltscale.vars.end()
+                     && retainedCeltscale->second != nullptr
+                     && retainedCeltscale->second->type()
+                            == DRW_Variant::INTEGER
+                     && retainedCeltscale->second->content.i == 7
+                     && refusesCeltscale(retainedMalformedCeltscale),
+                 "tolerant input retains malformed CELTSCALE while typed output refuses it");
+
+        std::ostringstream celtscaleRetryOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> celtscaleRetryWriter = makeWriter(
+            binary, &celtscaleRetryOutput);
+        DRW_Header invalidCeltscaleRetry;
+        invalidCeltscaleRetry.addInt("$CELTSCALE", 7, 70);
+        t.expect(!emitHeader(celtscaleRetryWriter, invalidCeltscaleRetry)
+                     && celtscaleRetryOutput.str().empty()
+                     && !celtscaleRetryWriter->hasWriteError(),
+                 "wrong CELTSCALE type rolls back HEADER bytes before retry");
+        DRW_Header correctedCeltscaleRetry;
+        correctedCeltscaleRetry.addDouble("$CELTSCALE", -1.5, 40);
+        t.expect(emitHeader(celtscaleRetryWriter, correctedCeltscaleRetry)
+                     && readHeaderScale(celtscaleRetryOutput.str(), binary,
+                                        "$CELTSCALE", parsedCeltscale)
+                     && parsedCeltscale == -1.5,
+                 "same writer accepts corrected finite CELTSCALE after rollback");
     }
 }
 

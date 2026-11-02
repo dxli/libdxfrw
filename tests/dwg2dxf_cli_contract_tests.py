@@ -117,6 +117,29 @@ def check_options(converter, root):
                 raise AssertionError(f"{alias_label}: alias identity changed during refusal")
             checked += 1
 
+    malformed_celtscale = root / "wrong type CELTSCALE.dxf"
+    malformed_celtscale_bytes = SOURCE.replace(
+        b"9\n$ACADVER\n1\nAC1021\n",
+        b"9\n$ACADVER\n1\nAC1021\n9\n$CELTSCALE\n70\n7\n", 1)
+    malformed_celtscale.write_bytes(malformed_celtscale_bytes)
+    for binary in (False, True):
+        protected_output = root / ("wrong type CELTSCALE "
+                                   + ("binary" if binary else "ascii")
+                                   + " output.dxf")
+        protected_output.write_bytes(SENTINEL)
+        arguments = [malformed_celtscale, "-o", protected_output,
+                     "-v2010", "-y"]
+        if binary:
+            arguments.append("-b")
+        result = invoke(arguments)
+        if (result.returncode != 1
+                or protected_output.read_bytes() != SENTINEL
+                or malformed_celtscale.read_bytes() != malformed_celtscale_bytes):
+            raise AssertionError(
+                "typed output silently replaced malformed CELTSCALE or changed "
+                f"the protected destination: {result!r}")
+        checked += 1
+
     def reject(label, arguments, paths):
         nonlocal checked
         before = {path: path.read_bytes() if path.exists() else None for path in paths}
