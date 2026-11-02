@@ -209,6 +209,9 @@ public:
     bool getDxfMaterialReferenceHandle(std::uint32_t& handle,
                                        bool& present) const noexcept;
     bool canWriteDxfMaterialReference(DRW::Version target) const noexcept;
+    /// Preserve a valid, nonzero global linetype scale; input parsing remains
+    /// tolerant so callers can diagnose or repair an invalid source value.
+    bool canWriteDxfLinetypeScale() const noexcept;
     /// Return whether the dimension-variable family can be represented in the
     /// requested DXF revision without dropping modern split-variable values.
     bool canWriteDxfDimensionVariables(DRW::Version target) const;

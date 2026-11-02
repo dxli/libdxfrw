@@ -80,6 +80,11 @@ public:
     using DRW_LType::validateDxf;
 };
 
+class ExposedHeader : public DRW_Header {
+public:
+    using DRW_Header::parseCode;
+};
+
 class ExposedMLineStyle : public DRW_MLineStyle {
 public:
     using DRW_MLineStyle::parseCode;
@@ -1410,6 +1415,143 @@ void testLTypeGroup9EncodedLength(TestContext& t) {
         t.expect(corrected && !retryOutput.str().empty()
                      && !retryWriter.hasWriteError(),
                  "same writer commits a corrected group-9 record after rollback");
+    }
+}
+
+void testDxfLinetypeScaleHeaderDomain(TestContext& t) {
+    const auto makeWriter = [](bool binary, std::ostream* output) {
+        std::unique_ptr<dxfWriter> writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(output))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(output));
+        writer->setVersion("AC1027", true);
+        return writer;
+    };
+    const auto emitHeader = [](const std::unique_ptr<dxfWriter>& writer,
+                               DRW_Header& header) {
+        DxfWriterRecordScope record(*writer);
+        header.write(writer, DRW::AC1027);
+        return !writer->hasWriteError() && record.commit();
+    };
+    const auto readLinetypeScale = [](const std::string& bytes, bool binary,
+                                      double& value) {
+        std::istringstream input(bytes, std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        bool expectingValue = false;
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (expectingValue) {
+                if (code != 40)
+                    return false;
+                value = reader->getDouble();
+                return std::isfinite(value);
+            }
+            if (code == 9)
+                expectingValue = reader->getString() == "$LTSCALE";
+        }
+        return false;
+    };
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream validOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> validWriter = makeWriter(
+            binary, &validOutput);
+        DRW_Header validHeader;
+        validHeader.addDouble("$LTSCALE", 0.5, 40);
+        const bool valid = emitHeader(validWriter, validHeader);
+        double parsedScale = 0.0;
+        t.expect(valid && readLinetypeScale(validOutput.str(), binary,
+                                            parsedScale)
+                     && parsedScale == 0.5,
+                 "DXF HEADER preserves a nonzero LTSCALE in ASCII/Binary output");
+
+        std::ostringstream absentOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> absentWriter = makeWriter(
+            binary, &absentOutput);
+        DRW_Header absentHeader;
+        const bool absent = emitHeader(absentWriter, absentHeader);
+        parsedScale = 0.0;
+        t.expect(absent && readLinetypeScale(absentOutput.str(), binary,
+                                             parsedScale)
+                     && parsedScale == 1.0,
+                 "absent LTSCALE retains the existing unit default in ASCII/Binary output");
+
+        for (const double invalid : {0.0,
+                                     std::numeric_limits<double>::infinity(),
+                                     -std::numeric_limits<double>::infinity(),
+                                     std::numeric_limits<double>::quiet_NaN()}) {
+            std::ostringstream invalidOutput(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> invalidWriter = makeWriter(
+                binary, &invalidOutput);
+            DRW_Header invalidHeader;
+            invalidHeader.addDouble("$LTSCALE", invalid, 40);
+            t.expect(!emitHeader(invalidWriter, invalidHeader)
+                         && invalidOutput.str().empty(),
+                     "DXF HEADER atomically refuses zero or non-finite LTSCALE");
+        }
+
+        const auto refusesHeader = [&](DRW_Header& header) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
+            return !emitHeader(writer, header) && output.str().empty();
+        };
+        DRW_Header wrongType;
+        wrongType.addInt("$LTSCALE", 1, 70);
+        t.expect(refusesHeader(wrongType),
+                 "DXF HEADER refuses LTSCALE supplied with a non-real DXF type");
+        DRW_Header wrongGroup;
+        wrongGroup.addDouble("$LTSCALE", 1.0, 41);
+        t.expect(refusesHeader(wrongGroup),
+                 "DXF HEADER refuses LTSCALE supplied with a noncanonical group code");
+        DRW_Header conflictingAliases;
+        conflictingAliases.addDouble("$LTSCALE", 1.0, 40);
+        conflictingAliases.addDouble("LTSCALE", 2.0, 40);
+        t.expect(refusesHeader(conflictingAliases),
+                 "DXF HEADER refuses conflicting dollar and bare LTSCALE aliases");
+
+        // Source parsing is intentionally tolerant: invalid saved values are
+        // retained for diagnosis, while typed output refuses them.
+        std::ostringstream source(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> sourceWriter = makeWriter(binary, &source);
+        t.expect(sourceWriter->writeString(9, "$LTSCALE")
+                     && sourceWriter->writeDouble(40, 0.0),
+                 "zero LTSCALE source control is encoded");
+        std::istringstream sourceInput(source.str(),
+                                      std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> sourceReader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&sourceInput))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&sourceInput));
+        sourceReader->setVersion("AC1027", true);
+        ExposedHeader parsedHeader;
+        int code = 0;
+        bool parsed = true;
+        while (sourceReader->readRec(&code))
+            parsed = parsedHeader.parseCode(code, sourceReader) && parsed;
+        const auto parsedValue = parsedHeader.vars.find("$LTSCALE");
+        t.expect(parsed && parsedValue != parsedHeader.vars.end()
+                     && parsedValue->second != nullptr
+                     && parsedValue->second->type() == DRW_Variant::DOUBLE
+                     && parsedValue->second->content.d == 0.0,
+                 "DXF HEADER parser retains an explicit zero LTSCALE for tolerant reading");
+
+        std::ostringstream retryOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> retryWriter = makeWriter(
+            binary, &retryOutput);
+        DRW_Header invalidHeader;
+        invalidHeader.addDouble("$LTSCALE", 0.0, 40);
+        t.expect(!emitHeader(retryWriter, invalidHeader)
+                     && retryOutput.str().empty()
+                     && !retryWriter->hasWriteError(),
+                 "invalid LTSCALE rollback restores writer state before retry");
+        DRW_Header correctedHeader;
+        correctedHeader.addDouble("$LTSCALE", 1.25, 40);
+        t.expect(emitHeader(retryWriter, correctedHeader)
+                     && readLinetypeScale(retryOutput.str(), binary,
+                                          parsedScale)
+                     && parsedScale == 1.25,
+                 "same writer accepts corrected LTSCALE after atomic rollback");
     }
 }
 
@@ -24425,6 +24567,18 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::cout << "LTYPE group-9 encoded length: PASS\n";
+        return 0;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--ltype-scale-header-domain") {
+        TestContext focused;
+        testDxfLinetypeScaleHeaderDomain(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " LTYPE scale HEADER assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "LTYPE scale HEADER domain: PASS\n";
         return 0;
     }
     if (argc == 2

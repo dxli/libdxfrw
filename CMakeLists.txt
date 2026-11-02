@@ -1743,6 +1743,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_ltype_group9_encoded_length PROPERTIES
         LABELS "fast;dxf;reader;writer;ltype;transaction;generated"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_ltype_scale_header_domain
+        COMMAND libdxfrw_hardening_tests --ltype-scale-header-domain)
+    set_tests_properties(libdxfrw_ltype_scale_header_domain PROPERTIES
+        LABELS "fast;dxf;reader;writer;ltype;header;transaction;generated"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_scale_units_dxf_domain
         COMMAND libdxfrw_hardening_tests --dxf-scale-units-domain)
     set_tests_properties(libdxfrw_scale_units_dxf_domain PROPERTIES

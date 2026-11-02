@@ -887,7 +887,8 @@ bool DRW_Header::finalizeDxfHeader(const std::unique_ptr<dxfReader>& reader) {
 void DRW_Header::write(const std::unique_ptr<dxfWriter>& writer, DRW::Version ver){
 /*RLZ: TODO complete all vars to AC1024*/
     if (!canWriteDxfHeaderStructure()
-        || !canWriteDxfUnknownHeaderVariables()) {
+        || !canWriteDxfUnknownHeaderVariables()
+        || !canWriteDxfLinetypeScale()) {
         writer->markWriteError();
         return;
     }
@@ -1100,10 +1101,16 @@ void DRW_Header::write(const std::unique_ptr<dxfWriter>& writer, DRW::Version ve
             writer->writeInt16(70, 2);
     }
     writer->writeString(9, "$LTSCALE");
-    if (getDouble("$LTSCALE", &varDouble))
-        writer->writeDouble(40, varDouble);
-    else
+    if (getDouble("$LTSCALE", &varDouble)) {
+        // Autodesk documents that LTSCALE cannot be zero. Preserve malformed
+        // values on input, but do not emit an explicitly invalid scale.
+        if (!std::isfinite(varDouble) || varDouble == 0.0)
+            writer->markWriteError();
+        else
+            writer->writeDouble(40, varDouble);
+    } else {
         writer->writeDouble(40, 1.0);
+    }
     if (ver == DRW::AC1009){
         writer->writeString(9, "$OSMODE");
         if (getInt("$OSMODE", &varInt))
@@ -2673,6 +2680,24 @@ bool DRW_Header::canWriteDxfMaterialReference(DRW::Version target) const noexcep
     bool present = false;
     return getDxfMaterialReferenceHandle(handle, present)
         && (!present || target >= DRW::AC1021);
+}
+
+bool DRW_Header::canWriteDxfLinetypeScale() const noexcept {
+    const DRW_Variant* value = nullptr;
+    bool present = false;
+    for (const auto& item : vars) {
+        const std::string_view key(item.first);
+        if (key != "$LTSCALE" && key != "LTSCALE")
+            continue;
+        if (present)
+            return false;
+        present = true;
+        value = item.second;
+    }
+    return !present
+        || (value != nullptr && value->type() == DRW_Variant::DOUBLE
+            && value->code() == 40 && std::isfinite(value->content.d)
+            && value->content.d != 0.0);
 }
 
 bool DRW_Header::canWriteDxfVisualStyleReferences(DRW::Version target) const {

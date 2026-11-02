@@ -4450,6 +4450,7 @@ bool dxfRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
         || !header.canWriteDxfMaterialReference(version)
         || !header.canWriteDxfHeaderStructure()
         || !header.canWriteDxfUnknownHeaderVariables()
+        || !header.canWriteDxfLinetypeScale()
         || !header.canWriteDxfDimensionVariables(version)
         || !header.canWriteDxfVisualStyleReferences(version)
         || !header.canWriteDxfCustomProperties(version)
