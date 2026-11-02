@@ -1,0 +1,66 @@
+{
+  "schema": "libdxfrw-p5-ac1027-tablecontent-attdef-span-mismatch-v1",
+  "recordedAt": "2026-11-02",
+  "status": "OPEN_FAIL_CLOSED_SOURCE_SPAN_RECONCILIATION_REQUIRED",
+  "scope": "One public AC1027 TABLECONTENT object whose typed parser reaches the first attributed cell and rejects the next handle-stream reference role.",
+  "source": {
+    "path": "/private/tmp/dwg-example-2013.dwg",
+    "version": "AC1027",
+    "sha256": "ce80953e4881899cde8c42b97919feb2697259554ca54dc4005b19068a12c18f",
+    "committedFixture": false,
+    "fixturePolicy": "The public sample remains outside the repository; no DWG or DXF fixture was added."
+  },
+  "specification": {
+    "title": "Open Design Specification for .dwg files v5.4.1",
+    "path": "/Users/dli/doc/dwg/OpenDesign_Specification_for_.dwg_files (1).pdf",
+    "sha256": "1ed2e02722862188120da606e4b6a816fa4014c96de68da2f84a2ecda09461e7",
+    "section": "20.4.97 TABLECONTENT",
+    "rule": "After each cell-content payload, the attribute count is followed by ATTDEF handles encoded as soft pointers, then TV text and a BL index."
+  },
+  "observedObject": {
+    "handle": "0xC94",
+    "type": 529,
+    "bodyBits": 115913,
+    "columns": 9,
+    "rows": 20,
+    "firstFailure": "row 0, cell 0, first ATTDEF reference",
+    "expectedReferenceRole": "soft pointer (handle code 0x04)",
+    "observedNextReference": {
+      "handleCode": "0x05",
+      "reference": "0x11",
+      "encodedSizeBytes": 1
+    },
+    "sourceSpanStatus": "unresolved; the observation may indicate prior handle-stream offset drift and does not establish a producer deviation from ODA"
+  },
+  "evidence": {
+    "libdxfrwTrace": {
+      "path": "/private/tmp/libdxfrw_example_2013_debug3.log",
+      "sha256": "2037c58f278cc6691414ec865e2ef9e8cde8b2577f62c8af5242bf2b48690584",
+      "observations": [
+        "The AC1027 TABLECONTENT dispatch resolves handle 0xC94, reads the 9-column and 20-row framing, and reaches row 0 cell 0.",
+        "The bounded role probe sees handle code 0x05/reference 0x11 where the current ATTDEF decoder requires code 0x04; parsing fails without publishing the TABLECONTENT typed callback."
+      ],
+      "instrumentation": "The trace included temporary diagnostic logging in the handle-role probe; those source edits were reverted. Parser behavior and the observed values were unchanged by the diagnostic."
+    },
+    "libreDwgPeer": {
+      "version": "LibreDWG 0.14",
+      "readTracePath": "/private/tmp/example_2013_libredwg_read.log",
+      "readTraceSha256": "b15473afb2663aa21f2ca35d0c0a4b3e1b2255b70a20a8eeb7bee3fe5b2d5fb0",
+      "dxfPath": "/private/tmp/libredwg_example_2013.dxf",
+      "dxfSha256": "a0638bb87134f2fd167be0cab197b38090e8764cb6110ed587a94344f9904b79",
+      "finding": "The peer reports TABLECONTENT type 529 as an unknown class object and retains it as UNKNOWN_OBJ. Its result does not independently decode or adjudicate this object's ATTDEF span or handle role."
+    }
+  },
+  "implementationBoundary": {
+    "currentBehavior": "Keep the TABLECONTENT parse failed and the source frame incomplete; strict complete conversion remains refused.",
+    "prohibitedInference": "Do not accept the observed hard-pointer role or reference 0x11 as an ATTDEF target, and do not adjust the expected role until preceding body/string/handle spans are reconciled.",
+    "nextWork": "Trace the complete handle ledger and corresponding body/string positions through the first cell content, attribute count, ATTDEF reference, text/index, and following fields. Adjudicate against ODA and an independent decoder that implements TABLECONTENT; add a generated regression only after the exact wire profile is established."
+  },
+  "doesNotEstablish": [
+    "a producer violation of ODA §20.4.97",
+    "that handle 0x11 is the intended ATTDEF target",
+    "complete TABLECONTENT or AC1027 DWG support",
+    "native TABLE rendering or semantic equivalence",
+    "strict whole-document output qualification"
+  ]
+}

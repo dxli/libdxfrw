@@ -252,6 +252,18 @@ census receipt](docs/research/p5-viewport-layer-override-local-corpus-census-202
 6. Qualify native TABLE rendering independently. This gate concerns consumer
    geometry, merge visibility and rendered style; serializer/readback evidence
    remains scoped to its witnessed source profiles and does not close this gate.
+7. **AC1027 source TABLECONTENT span discrepancy:** on the public
+   `example_2013.dwg` source, object `0xC94` (type 529) parses its 9 columns and
+   20 rows, then fails at row 0/cell 0's first ATTDEF reference. ODA §20.4.97
+   specifies that reference as a soft pointer; the bounded diagnostic observes
+   the next handle-stream item as code `0x05`, reference `0x11`. Treat this as
+   unresolved stream alignment, not proof that the producer violates ODA. Keep
+   the TABLECONTENT frame incomplete and strict output refused until the prior
+   body/string/handle spans and the target role are reconciled against an
+   independent decoder that implements this class. LibreDWG 0.14 reports the
+   object as `UNKNOWN_OBJ`, so it does not adjudicate the schema. The source and
+   all traces remain external to the repository; see the [source-bound span
+   mismatch receipt](docs/research/p5-ac1027-tablecontent-attdef-handle-span-mismatch-2026-11-02.json).
 
 ## P6 — residual semantic and version audit
 
