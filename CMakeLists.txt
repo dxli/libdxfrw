@@ -1350,6 +1350,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_plotsettings_dwg_decode_roundtrip
         PROPERTIES LABELS "fast;dwg;object-vectors;plotsettings;generated"
                    TIMEOUT 15)
+    add_test(NAME libdxfrw_scale_dwg_unit_domains
+        COMMAND libdxfrw_dwg_object_vectors_tests --scale-dwg-unit-domains)
+    set_tests_properties(libdxfrw_scale_dwg_unit_domains PROPERTIES
+        LABELS "fast;dwg;object-vectors;scale;generated"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_dimassoc_dwg_detail_readback
         COMMAND libdxfrw_dwg_object_vectors_tests
             --dimassoc-dwg-detail-readback)

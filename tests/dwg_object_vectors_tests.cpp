@@ -85,6 +85,12 @@ public:
     using DRW_Sun::parseDwg;
 };
 
+class ScaleCodecProbe final : public DRW_Scale {
+public:
+    using DRW_Scale::encodeDwg;
+    using DRW_Scale::parseDwg;
+};
+
 class MLeaderStyleCodecProbe final : public DRW_MLeaderStyle {
 public:
     using DRW_MLeaderStyle::parseCode;
@@ -18790,9 +18796,123 @@ void testR2018OuterAnnotativeStateCopyReset(TestContext& t) {
              "ATTDEF reset clears prompt and outer APPID identity/payload");
 }
 
+bool makeAc1014ScaleUnitFrame(double paperUnits, double drawingUnits,
+                              std::vector<std::uint8_t>& bytes) {
+    constexpr DRW::Version version = DRW::AC1014;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    dwgBufferW body(&codec);
+    body.putBitShort(0u); // unknown flag
+    body.putVariableText(version, "");
+    body.putBitDouble(paperUnits);
+    body.putBitDouble(drawingUnits);
+    body.putBit(0u); // not the 1:1 unit scale
+    if (!body.isGood())
+        return false;
+
+    const auto putObject = [&](dwgBufferW& output,
+                               std::uint32_t objectSize) {
+        output.putObjType(version, 1u); // direct-parser test type
+        dwgHandle ownHandle;
+        ownHandle.ref = 0x550u;
+        ownHandle.ref64 = ownHandle.ref;
+        output.putHandle(ownHandle);
+        output.putBitShort(0u); // no EED
+        output.putRawLong32(objectSize);
+        output.putBitLong(0); // no reactors
+        appendBits(output, body);
+        return output.isGood();
+    };
+
+    dwgBufferW sizing(&codec);
+    if (!putObject(sizing, 0u)
+        || sizing.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    dwgBufferW object(&codec);
+    const auto objectSize = static_cast<std::uint32_t>(sizing.bitCount());
+    if (!putObject(object, objectSize)
+        || object.bitCount() != sizing.bitCount())
+        return false;
+    bytes = object.data();
+    return true;
+}
+
+void testScaleDwgPositiveUnitDomain(TestContext& t) {
+    const std::array<DRW::Version, 6> versions{{
+        DRW::AC1015, DRW::AC1018, DRW::AC1021,
+        DRW::AC1024, DRW::AC1027, DRW::AC1032
+    }};
+    const std::array<double, 4> invalidValues{{
+        0.0, -1.0, std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::infinity()
+    }};
+
+    for (DRW::Version version : versions) {
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        for (bool paperUnit : {true, false}) {
+            for (double invalid : invalidValues) {
+                ScaleCodecProbe scale;
+                scale.name = "";
+                scale.paperUnits = paperUnit ? invalid : 1.0;
+                scale.drawingUnits = paperUnit ? 48.0 : invalid;
+                dwgBufferW body(&codec);
+                dwgBufferW strings(&codec);
+                t.expect(!scale.encodeDwg(version, &body, &strings)
+                             && body.bitCount() == 0u
+                             && strings.bitCount() == 0u,
+                         "DWG SCALE refuses non-positive/non-finite units before emission");
+            }
+        }
+
+        ScaleCodecProbe valid;
+        valid.paperUnits = 0.25;
+        valid.drawingUnits = 48.0;
+        dwgBufferW validBody(&codec);
+        dwgBufferW validStrings(&codec);
+        t.expect(valid.encodeDwg(version, &validBody, &validStrings)
+                     && validBody.bitCount() != 0u,
+                 "DWG SCALE accepts a positive finite scale across writer revisions");
+    }
+
+    for (bool paperUnit : {true, false}) {
+        for (double invalid : invalidValues) {
+            const double paperUnits = paperUnit ? invalid : 1.0;
+            const double drawingUnits = paperUnit ? 48.0 : invalid;
+            std::vector<std::uint8_t> bytes;
+            const bool built = makeAc1014ScaleUnitFrame(
+                paperUnits, drawingUnits, bytes);
+            t.expect(built, "generated AC1014 SCALE invalid-unit frame builds");
+            if (!built)
+                continue;
+
+            DRW_TextCodec codec;
+            codec.setVersion(DRW::AC1014, false);
+            dwgBuffer input(bytes.data(), bytes.size(), &codec);
+            ScaleCodecProbe parsed;
+            parsed.name = "stale";
+            parsed.paperUnits = 3.0;
+            parsed.drawingUnits = 4.0;
+            const bool read = parsed.parseDwg(DRW::AC1014, &input);
+            t.expect(!read && !input.isGood() && parsed.name.empty()
+                         && parsed.paperUnits == 1.0
+                         && parsed.drawingUnits == 1.0,
+                     "DWG SCALE rejects invalid units and clears partial typed state");
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--scale-dwg-unit-domains") {
+        TestContext context;
+        testScaleDwgPositiveUnitDomain(context);
+        std::cout << "DWG SCALE unit domains: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--table-cell-overrides") {
         TestContext context;
         testR2007TableCellTypeReaderVectors(context);
@@ -19453,6 +19573,7 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     TestContext context;
+    testScaleDwgPositiveUnitDomain(context);
     testGroupVectors(context);
     testDictionaryVectors(context);
     testXRecordVectors(context);

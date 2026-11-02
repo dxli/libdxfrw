@@ -20633,7 +20633,8 @@ bool DRW_SpatialIndex::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
 bool DRW_Scale::encodeDwg(DRW::Version version, dwgBufferW *buf,
                            dwgBufferW *strBuf) const {
     if (buf == nullptr || !std::isfinite(paperUnits)
-        || !std::isfinite(drawingUnits))
+        || !std::isfinite(drawingUnits) || paperUnits <= 0.0
+        || drawingUnits <= 0.0)
         return false;
     dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
     buf->putBitShort(flag);
@@ -22449,7 +22450,7 @@ bool DRW_Scale::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     };
     const auto readFiniteBitDouble = [bodyBuf, version, bodyEnd](double& value) {
         return readBitDoubleWithinBody(bodyBuf, version, bodyEnd, value)
-            && std::isfinite(value);
+            && std::isfinite(value) && value > 0.0;
     };
     if (!readBitShortWithinBody(bodyBuf, version, bodyEnd, parsedFlag)) {
         return fail();
