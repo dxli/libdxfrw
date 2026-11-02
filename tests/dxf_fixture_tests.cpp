@@ -22409,7 +22409,7 @@ bool writeDimensionOcsControl(const std::filesystem::path& path,
             const DRW_Coord& text, const DRW_Coord& clone) {
         return string(0, "DIMENSION") && string(100, "AcDbEntity")
             && string(8, "0") && string(100, "AcDbDimension")
-            && string(2, blockName) && shortValue(70, type)
+            && string(2, blockName) && shortValue(70, type | 32)
             && real(10, definition.x) && real(20, definition.y)
             && real(30, definition.z) && real(11, text.x)
             && real(21, text.y) && real(31, text.z)
@@ -22438,6 +22438,38 @@ bool writeDimensionOcsControl(const std::filesystem::path& path,
         && real(16, 14.0) && real(26, 15.0) && real(36, 16.0)
         && real(50, 30.0) && real(51, 5.0)
         && real(210, 1.0) && real(220, 0.0) && real(230, 0.0)
+        && common(1, "*D3", {100.0, 101.0, 102.0}, {18.0, 19.0, 20.0},
+                  {21.0, 22.0, 23.0})
+        && string(100, "AcDbAlignedDimension")
+        && real(13, 110.0) && real(23, 111.0) && real(33, 112.0)
+        && real(14, 120.0) && real(24, 121.0) && real(34, 122.0)
+        && real(210, 1.0) && real(220, 0.0) && real(230, 0.0)
+        && common(3, "*D4", {200.0, 201.0, 202.0}, {23.0, 24.0, 25.0},
+                  {26.0, 27.0, 28.0})
+        && string(100, "AcDbDiametricDimension")
+        && real(15, 210.0) && real(25, 211.0) && real(35, 212.0)
+        && real(40, 7.0)
+        && real(210, 1.0) && real(220, 0.0) && real(230, 0.0)
+        && common(4, "*D5", {300.0, 301.0, 302.0}, {28.0, 29.0, 30.0},
+                  {31.0, 32.0, 33.0})
+        && string(100, "AcDbRadialDimension")
+        && real(15, 310.0) && real(25, 311.0) && real(35, 312.0)
+        && real(40, 8.0)
+        && real(210, 1.0) && real(220, 0.0) && real(230, 0.0)
+        && common(5, "*D6", {400.0, 401.0, 402.0}, {33.0, 34.0, 35.0},
+                  {36.0, 37.0, 38.0})
+        && string(100, "AcDb3PointAngularDimension")
+        && real(13, 410.0) && real(23, 411.0) && real(33, 412.0)
+        && real(14, 420.0) && real(24, 421.0) && real(34, 422.0)
+        && real(15, 430.0) && real(25, 431.0) && real(35, 432.0)
+        && real(210, 1.0) && real(220, 0.0) && real(230, 0.0)
+        && common(6, "*D7", {500.0, 501.0, 502.0}, {38.0, 39.0, 40.0},
+                  {41.0, 42.0, 43.0})
+        && string(100, "AcDbOrdinateDimension")
+        && real(13, 510.0) && real(23, 511.0) && real(33, 512.0)
+        && real(14, 520.0) && real(24, 521.0) && real(34, 522.0)
+        && shortValue(71, 1)
+        && real(210, 1.0) && real(220, 0.0) && real(230, 0.0)
         && string(0, "ENDSEC") && string(0, "EOF");
     return written && !writer->hasWriteError() && output.good();
 }
@@ -22459,9 +22491,14 @@ public:
     };
 
     void addHeader(const DRW_Header*) override {}
+    void addDimAlign(const DRW_DimAligned* value) override {
+        recordCommon(value);
+        dimensions.back().first = value->getDef1Point();
+        dimensions.back().second = value->getDef2Point();
+    }
     void addDimLinear(const DRW_DimLinear* value) override {
         DimensionState state;
-        state.type = 0;
+        state.type = value->type & 0x07;
         state.definition = value->getDefPoint();
         state.text = value->getTextPoint();
         state.clone = value->getClonepoint();
@@ -22472,9 +22509,17 @@ public:
         state.horizontalDirection = value->getHDir();
         dimensions.push_back(state);
     }
+    void addDimDiametric(const DRW_DimDiametric* value) override {
+        recordCommon(value);
+        dimensions.back().first = value->getDiameter1Point();
+    }
+    void addDimRadial(const DRW_DimRadial* value) override {
+        recordCommon(value);
+        dimensions.back().first = value->getDiameterPoint();
+    }
     void addDimAngular(const DRW_DimAngular* value) override {
         DimensionState state;
-        state.type = 2;
+        state.type = value->type & 0x07;
         state.definition = value->getDefPoint();
         state.text = value->getTextPoint();
         state.first = value->getFirstLine1();
@@ -22485,8 +22530,29 @@ public:
         state.horizontalDirection = value->getHDir();
         dimensions.push_back(state);
     }
+    void addDimAngular3P(const DRW_DimAngular3p* value) override {
+        recordCommon(value);
+        dimensions.back().first = value->getFirstLine();
+        dimensions.back().second = value->getSecondLine();
+        dimensions.back().third = value->getVertexPoint();
+    }
+    void addDimOrdinate(const DRW_DimOrdinate* value) override {
+        recordCommon(value);
+        dimensions.back().first = value->getFirstLine();
+        dimensions.back().second = value->getSecondLine();
+    }
 
     std::vector<DimensionState> dimensions;
+
+private:
+    void recordCommon(const DRW_Dimension* value) {
+        DimensionState state;
+        state.type = value->type & 0x07;
+        state.definition = value->getDefPoint();
+        state.text = value->getTextPoint();
+        state.extrusion = value->getExtrusion();
+        dimensions.push_back(state);
+    }
 };
 
 void testDimensionOcsExtrusion(TestContext& t) {
@@ -22513,15 +22579,68 @@ void testDimensionOcsExtrusion(TestContext& t) {
             dxfRW reader(path.string().c_str());
             const bool read = generated
                 && reader.read(&capture, applyExtrusion);
-            t.expect(read && capture.dimensions.size() == 2u,
-                     "linear and angular DIMENSION callbacks are preserved");
-            if (!read || capture.dimensions.size() != 2u)
+            const std::array<int, 7> types{{0, 2, 1, 3, 4, 5, 6}};
+            const std::array<DRW_Coord, 7> definitions{{
+                {20.0, 21.0, 22.0}, {60.0, 61.0, 62.0},
+                {100.0, 101.0, 102.0}, {200.0, 201.0, 202.0},
+                {300.0, 301.0, 302.0}, {400.0, 401.0, 402.0},
+                {500.0, 501.0, 502.0}}};
+            const std::array<DRW_Coord, 7> textPoints{{
+                {2.0, 3.0, 4.0}, {8.0, 9.0, 10.0},
+                {18.0, 19.0, 20.0}, {23.0, 24.0, 25.0},
+                {28.0, 29.0, 30.0}, {33.0, 34.0, 35.0},
+                {38.0, 39.0, 40.0}}};
+            const std::array<DRW_Coord, 7> firstPoints{{
+                {30.0, 31.0, 32.0}, {70.0, 71.0, 72.0},
+                {110.0, 111.0, 112.0}, {210.0, 211.0, 212.0},
+                {310.0, 311.0, 312.0}, {410.0, 411.0, 412.0},
+                {510.0, 511.0, 512.0}}};
+            const std::array<DRW_Coord, 7> secondPoints{{
+                {40.0, 41.0, 42.0}, {80.0, 81.0, 82.0},
+                {120.0, 121.0, 122.0}, {0.0, 0.0, 0.0},
+                {0.0, 0.0, 0.0}, {420.0, 421.0, 422.0},
+                {520.0, 521.0, 522.0}}};
+            const std::array<DRW_Coord, 7> thirdPoints{{
+                {0.0, 0.0, 0.0}, {90.0, 91.0, 92.0},
+                {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0},
+                {0.0, 0.0, 0.0}, {430.0, 431.0, 432.0},
+                {0.0, 0.0, 0.0}}};
+            t.expect(read && capture.dimensions.size() == definitions.size(),
+                     "all seven standard DIMENSION subtype callbacks are preserved");
+            if (!read || capture.dimensions.size() != definitions.size())
                 continue;
 
             const auto& linear = capture.dimensions[0];
             const auto& angular = capture.dimensions[1];
-            t.expect(linear.type == 0 && angular.type == 2,
-                     "DXF dimension subtype dispatch remains intact");
+            for (std::size_t i = 0u; i < definitions.size(); ++i) {
+                const auto& dimension = capture.dimensions[i];
+                const DRW_Coord expectedText = applyExtrusion
+                    ? DRW_Coord(textPoints[i].z, textPoints[i].x,
+                                textPoints[i].y)
+                    : textPoints[i];
+                t.expect(dimension.type == types[i]
+                             && equalPoint(dimension.definition,
+                                           definitions[i].x,
+                                           definitions[i].y,
+                                           definitions[i].z)
+                             && equalPoint(dimension.text, expectedText.x,
+                                           expectedText.y, expectedText.z)
+                             && equalPoint(dimension.first,
+                                           firstPoints[i].x,
+                                           firstPoints[i].y,
+                                           firstPoints[i].z)
+                             && equalPoint(dimension.second,
+                                           secondPoints[i].x,
+                                           secondPoints[i].y,
+                                           secondPoints[i].z)
+                             && equalPoint(dimension.third,
+                                           thirdPoints[i].x,
+                                           thirdPoints[i].y,
+                                           thirdPoints[i].z)
+                             && equalPoint(dimension.extrusion,
+                                           1.0, 0.0, 0.0),
+                         "standard DIMENSION subtype preserves WCS and converts OCS fields");
+            }
             t.expect(equalPoint(linear.definition, 20.0, 21.0, 22.0)
                          && equalPoint(linear.first, 30.0, 31.0, 32.0)
                          && equalPoint(linear.second, 40.0, 41.0, 42.0)
