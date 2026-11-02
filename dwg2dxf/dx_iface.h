@@ -754,6 +754,9 @@ public:
     void addTolerance(const DRW_Tolerance& data) override{
         retainTypedEntity<DRW_Tolerance>(data);
     }
+    void addCamera(const DRW_Camera& data) override{
+        retainTypedEntity<DRW_Camera>(data);
+    }
     virtual void addText(const DRW_Text& data) override{
         if (const auto* rtext = dynamic_cast<const DRW_RText*>(&data))
             retainTypedEntity<DRW_RText>(*rtext);

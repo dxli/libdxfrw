@@ -6762,6 +6762,10 @@ Steps:
    readback in both raw and `applyExtrusion` modes, with subtype-only field
    sentinels. The focused `libdxfrw_dwg_local_roundtrip` control passes 1/1;
    see the [BLOCK surface staging receipt](docs/research/s8-1a-block-surface-staging-2026-11-02.json).
+   The `dx_iface` adapter now also retains CAMERA callbacks and routes the
+   entity through the existing `dxfRW::writeCamera` serializer. The generated
+   named-BLOCK check covers ASCII/Binary output and readback with the optional
+   VIEW reference absent; it does not qualify code 340 reference resolution.
    The existing `libdxfrw_block_owners` generated matrix also passes for its
    selected BLOCK-reachable callback set across ASCII/Binary and both extended
    modes. It checks typed/raw event order, copied payload lifetime after parser

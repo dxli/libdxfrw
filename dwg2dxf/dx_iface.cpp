@@ -70737,6 +70737,12 @@ void dx_iface::writeEntity(DRW_Entity* e){
     case DRW::TOLERANCE:
         written = dxfW->writeTolerance(static_cast<DRW_Tolerance*>(e));
         break;
+    case DRW::CAMERA:
+        if (auto* camera = dynamic_cast<DRW_Camera*>(e))
+            written = dxfW->writeCamera(camera);
+        else
+            written = dxfW->writeCamera(nullptr);
+        break;
     case DRW::TEXT:
         if (auto* rtext = dynamic_cast<DRW_RText*>(e))
             written = dxfW->writeRText(rtext);
