@@ -9457,7 +9457,7 @@ bool dxfRW::writeDimension(DRW_Dimension *ent) {
             case DRW::DIMLINEAR: {
             DRW_DimAligned * dd = (DRW_DimAligned*)ent;
             writer->writeString(100, "AcDbAlignedDimension");
-                DRW_Coord crd = dd->getClonepoint();
+                DRW_Coord crd = ent->getDxfClonePoint();
                 if (crd.x != 0 || crd.y != 0 || crd.z != 0) {
                 writer->writeDouble(12, crd.x);
                 writer->writeDouble(22, crd.y);

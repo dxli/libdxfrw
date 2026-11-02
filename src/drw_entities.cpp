@@ -25852,8 +25852,9 @@ bool DRW_DimAngular::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint3
     if (!encodeDwgCommon(version, buf)) return false;
     if (!encodeDwgDimBase(version, buf, strBuf)) return false;
     // arcPoint is 2RD (not 3BD) in parseDwg — only x and y
-    buf->putRawDouble(getPt6().x);
-    buf->putRawDouble(getPt6().y);
+    const DRW_Coord dxfArcPoint = getDxfArcPoint();
+    buf->putRawDouble(dxfArcPoint.x);
+    buf->putRawDouble(dxfArcPoint.y);
     buf->put3BitDouble(getPt3());       // def1 (line 1 start)
     buf->put3BitDouble(getPt4());       // def2 (line 1 end)
     buf->put3BitDouble(getPt5());       // circlePoint (center)
@@ -26056,7 +26057,7 @@ bool DRW_DimArc::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
     buf->putBitDouble(arcEndAngle);
     buf->putBit(hasLeader ? 1 : 0);
     // ODA §20.4.19: leader points are UNCONDITIONAL — always written; default to ext-line pts
-    DRW_Coord lp1 = hasLeader ? getPt6()    : getPt3();
+    DRW_Coord lp1 = hasLeader ? getDxfArcPoint() : getPt3();
     DRW_Coord lp2 = hasLeader ? leaderPt2   : getPt4();
     buf->put3BitDouble(lp1);             // leader point 1 (code 16)
     buf->put3BitDouble(lp2);             // leader point 2 (code 17)
