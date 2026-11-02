@@ -893,6 +893,7 @@ void DRW_Header::write(const std::unique_ptr<dxfWriter>& writer, DRW::Version ve
         || !canWriteDxfPsltscale()
         || !canWriteDxfMsltscale(ver)
         || !canWriteDxfMeasurement()
+        || !canWriteDxfUcsBaseVariables()
         || !canWriteDxfInsunits(ver)
         || !canWriteDxfCelweight()
         || !canWriteDxfEndcaps()
@@ -2794,6 +2795,38 @@ bool DRW_Header::canWriteDxfMsltscale(DRW::Version target) const noexcept {
 
 bool DRW_Header::canWriteDxfMeasurement() const noexcept {
     return canWriteDxfZeroOrOneIntegerHeaderVariable("$MEASUREMENT");
+}
+
+bool DRW_Header::canWriteDxfUcsBaseVariables() const noexcept {
+    const auto valid = [this](const char* dollarName) noexcept {
+        if (dollarName == nullptr || dollarName[0] != '$')
+            return false;
+        const std::string_view dollarKey(dollarName);
+        const std::string_view bareKey = dollarKey.substr(1u);
+        const DRW_Variant* value = nullptr;
+        bool present = false;
+        const auto inspect = [&](const auto& values) noexcept {
+            for (const auto& item : values) {
+                const std::string_view key(item.first);
+                if (!headerNamesEqualIgnoringAsciiCase(key, dollarKey)
+                    && !headerNamesEqualIgnoringAsciiCase(key, bareKey))
+                    continue;
+                // The writer looks up only the canonical dollar spelling. A
+                // folded, duplicate, or custom-map alias would otherwise be
+                // silently replaced by the empty default.
+                if ((key != dollarKey && key != bareKey) || present
+                    || item.second == nullptr)
+                    return false;
+                present = true;
+                value = item.second;
+            }
+            return true;
+        };
+        return inspect(vars) && inspect(customVars)
+            && (!present || (value->type() == DRW_Variant::STRING
+                && value->code() == 2));
+    };
+    return valid("$UCSBASE") && valid("$PUCSBASE");
 }
 
 bool DRW_Header::getDxfHeaderIntegerValue(

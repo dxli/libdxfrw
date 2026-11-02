@@ -1773,6 +1773,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_measurement_header_domain PROPERTIES
         LABELS "fast;dxf;reader;writer;header;transaction;generated"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_ucs_base_header_fields
+        COMMAND libdxfrw_hardening_tests --dxf-ucs-base-header-fields)
+    set_tests_properties(libdxfrw_ucs_base_header_fields PROPERTIES
+        LABELS "fast;dxf;reader;writer;header;ucs;transaction;generated"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_insunits_header_domain
         COMMAND libdxfrw_hardening_tests --dxf-insunits-header-domain)
     set_tests_properties(libdxfrw_insunits_header_domain PROPERTIES

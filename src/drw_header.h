@@ -227,6 +227,10 @@ public:
     /// Preserve explicit measurement selection only for the documented
     /// imperial/metric values; absence remains distinct from either value.
     bool canWriteDxfMeasurement() const noexcept;
+    /// Preserve `$UCSBASE` and `$PUCSBASE` only as their documented group-2
+    /// strings. This checks field representation, not table-name resolution
+    /// or native orthographic UCS behavior.
+    bool canWriteDxfUcsBaseVariables() const noexcept;
     /// Preserve the documented INSUNITS code range (0-24) and refuse it on
     /// DXF revisions before the variable is emitted. This is scalar admission
     /// only; platform-specific unit conversion support is separate.

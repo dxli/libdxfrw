@@ -2029,6 +2029,143 @@ void testDxfMeasurementHeaderDomain(TestContext& t) {
     }
 }
 
+void testDxfUcsBaseHeaderFields(TestContext& t) {
+    const auto makeWriter = [](bool binary, std::ostream* output) {
+        std::unique_ptr<dxfWriter> writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(output))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(output));
+        writer->setVersion("AC1027", true);
+        return writer;
+    };
+    const auto emitHeader = [](const std::unique_ptr<dxfWriter>& writer,
+                               DRW_Header& header) {
+        DxfWriterRecordScope record(*writer);
+        header.write(writer, DRW::AC1027);
+        return !writer->hasWriteError() && record.commit();
+    };
+    const auto readHeaderString = [](const std::string& bytes, bool binary,
+                                     const std::string& variable,
+                                     std::string& value) {
+        std::istringstream input(bytes, std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        bool expectingValue = false;
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (expectingValue) {
+                if (code != 2)
+                    return false;
+                value = reader->getString();
+                return true;
+            }
+            if (code == 9)
+                expectingValue = reader->getString() == variable;
+        }
+        return false;
+    };
+
+    for (const bool binary : {false, true}) {
+        DRW_Header valid;
+        valid.addStr("$UCSBASE", "ORTHO-BASE", 2);
+        valid.addStr("$PUCSBASE", "PAPER-BASE", 2);
+        std::ostringstream validOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> validWriter = makeWriter(binary, &validOutput);
+        std::string modelBase;
+        std::string paperBase;
+        t.expect(emitHeader(validWriter, valid)
+                     && readHeaderString(validOutput.str(), binary,
+                                         "$UCSBASE", modelBase)
+                     && modelBase == "ORTHO-BASE"
+                     && readHeaderString(validOutput.str(), binary,
+                                         "$PUCSBASE", paperBase)
+                     && paperBase == "PAPER-BASE",
+                 "UCSBASE and PUCSBASE group-2 names round-trip in ASCII/Binary DXF");
+
+        DRW_Header defaults;
+        std::ostringstream defaultOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> defaultWriter = makeWriter(binary, &defaultOutput);
+        t.expect(emitHeader(defaultWriter, defaults)
+                     && readHeaderString(defaultOutput.str(), binary,
+                                         "$UCSBASE", modelBase)
+                     && modelBase.empty()
+                     && readHeaderString(defaultOutput.str(), binary,
+                                         "$PUCSBASE", paperBase)
+                     && paperBase.empty(),
+                 "absent UCS base names retain the documented empty-string defaults");
+
+        const auto refuses = [&](DRW_Header& header) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
+            return !emitHeader(writer, header) && output.str().empty();
+        };
+        for (const std::string name : {"$UCSBASE", "$PUCSBASE"}) {
+            DRW_Header wrongType;
+            wrongType.addInt(name, 1, 70);
+            t.expect(refuses(wrongType),
+                     name + " wrong value type is refused");
+            DRW_Header wrongGroup;
+            wrongGroup.addStr(name, "BASE", 1);
+            t.expect(refuses(wrongGroup),
+                     name + " wrong group code is refused");
+            DRW_Header duplicateAlias;
+            duplicateAlias.addStr(name, "BASE-A", 2);
+            duplicateAlias.addStr(name.substr(1u), "BASE-B", 2);
+            t.expect(refuses(duplicateAlias),
+                     name + " duplicate dollar/bare aliases are refused");
+            DRW_Header foldedAlias;
+            foldedAlias.addStr(name == "$UCSBASE" ? "$ucsbase" : "$pucsbase",
+                               "BASE", 2);
+            t.expect(refuses(foldedAlias),
+                     name + " case-folded key is refused instead of defaulted");
+        }
+
+        std::ostringstream malformedSource(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> sourceWriter = makeWriter(binary, &malformedSource);
+        const bool sourceWritten = sourceWriter->writeString(9, "$UCSBASE")
+            && sourceWriter->writeInt16(70, 4);
+        std::istringstream sourceInput(malformedSource.str(),
+                                       std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> sourceReader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&sourceInput))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&sourceInput));
+        sourceReader->setVersion("AC1027", true);
+        ExposedHeader parsed;
+        bool parsedOk = sourceWritten;
+        int code = 0;
+        while (sourceReader->readRec(&code))
+            parsedOk = parsed.parseCode(code, sourceReader) && parsedOk;
+        const auto retained = parsed.vars.find("$UCSBASE");
+        t.expect(parsedOk && retained != parsed.vars.end()
+                     && retained->second != nullptr
+                     && retained->second->type() == DRW_Variant::INTEGER
+                     && retained->second->content.i == 4
+                     && !parsed.canWriteDxfUcsBaseVariables(),
+                 "tolerant HEADER input retains malformed UCS base values for diagnosis");
+
+        std::ostringstream retryOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> retryWriter = makeWriter(binary, &retryOutput);
+        DRW_Header invalidRetry;
+        invalidRetry.addInt("$UCSBASE", 4, 70);
+        t.expect(!emitHeader(retryWriter, invalidRetry)
+                     && retryOutput.str().empty()
+                     && !retryWriter->hasWriteError(),
+                 "invalid UCS base HEADER rolls back atomically");
+        DRW_Header corrected;
+        corrected.addStr("$UCSBASE", "ORTHO-BASE", 2);
+        corrected.addStr("$PUCSBASE", "PAPER-BASE", 2);
+        t.expect(emitHeader(retryWriter, corrected)
+                     && readHeaderString(retryOutput.str(), binary,
+                                         "$UCSBASE", modelBase)
+                     && modelBase == "ORTHO-BASE"
+                     && readHeaderString(retryOutput.str(), binary,
+                                         "$PUCSBASE", paperBase)
+                     && paperBase == "PAPER-BASE",
+                 "same ASCII/Binary writer accepts corrected UCS base strings after refusal");
+    }
+}
+
 void testDxfInsunitsHeaderDomain(TestContext& t) {
     const auto makeWriter = [](bool binary, std::ostream* output,
                                const char* version = "AC1027") {
@@ -25698,6 +25835,18 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::cout << "MEASUREMENT HEADER domain: PASS\n";
+        return 0;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--dxf-ucs-base-header-fields") {
+        TestContext focused;
+        testDxfUcsBaseHeaderFields(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " UCS base HEADER assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "UCS base HEADER fields: PASS\n";
         return 0;
     }
     if (argc == 2
