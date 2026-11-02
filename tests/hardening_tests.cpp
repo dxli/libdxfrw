@@ -2564,6 +2564,26 @@ void testDxfMeshCreaseValueDomains(TestContext& t) {
                  && parsed.creases == valid.creases,
              "MESH parser accepts and retains documented crease values");
 
+    ExposedMesh prefixCreases;
+    t.expect(parseDxfRecords(prefixCreases, makeRecords({0.25}))
+                 && prefixCreases.edges == valid.edges
+                 && prefixCreases.creases == std::vector<double>{0.25},
+             "MESH parser retains a shorter edge-order crease prefix");
+    for (const bool binary : {false, true}) {
+        std::ostringstream output(std::ios::out | std::ios::binary);
+        dxfRW codec(nullptr);
+        codec.version = DRW::AC1027;
+        codec.binFile = binary;
+        codec.writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+        codec.writer->setVersion("AC1027", true);
+        ExposedMesh prefixOutput = valid;
+        prefixOutput.creases = {0.25};
+        t.expect(codec.writeMesh(&prefixOutput) && !output.str().empty(),
+                 "MESH ASCII/Binary writers retain a shorter edge-order crease prefix");
+    }
+
     const std::vector<double> excessCreases = {0.0, 0.25, 0.5, 0.75};
     ExposedMesh excessInput;
     t.expect(!parseDxfRecords(excessInput, makeRecords(excessCreases)),

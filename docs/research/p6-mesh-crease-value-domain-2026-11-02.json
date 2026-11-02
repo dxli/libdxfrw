@@ -18,7 +18,7 @@
     "dxfWrite": "Shared MESH geometry validation refuses invalid values or a crease vector longer than the edge vector before emitting the entity record.",
     "dwgRead": "Reject a bounded decoded crease count larger than the parsed level-0 edge count before reserving or reading values; invalid crease scalars are still rejected before publication.",
     "dwgWrite": "Shared MESH geometry validation refuses invalid values or a crease vector longer than the edge vector before emitting the object body.",
-    "semanticLimit": "The count bound prevents a crease value from addressing a nonexistent positional edge, matching the independent reader's indexing behavior. Sparse/prefix interpretation, subdivision evaluation, native rendering, and 3D solid meaning remain unqualified."
+    "semanticLimit": "The same-index prefix mapping is corroborated by the independent reader and the generated libdxfrw parser/writer controls. This does not establish physical producer breadth, native crease effect, subdivision evaluation, rendering, or 3D solid meaning."
   },
   "evidence": [
     {
@@ -36,6 +36,7 @@
     "result": "PASS (1/1)",
     "coverage": [
       "Generated MESH parse accepts and retains -1, 0, and positive values.",
+      "Generated DXF parser accepts and retains one crease value for a three-edge level-0 mesh; ASCII/Binary writers accept and emit that shorter vector.",
       "Generated DXF parser rejects four crease values for three level-0 edges.",
       "Generated ASCII/Binary DXF writer refusal for excess crease count is atomic.",
       "Generated DWG writer refusal for excess crease count is atomic across AC1015, AC1018, AC1021, AC1024, AC1027, and AC1032.",
