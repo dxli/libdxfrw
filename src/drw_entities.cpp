@@ -13842,12 +13842,16 @@ bool DRW_Underlay::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
     case 11: {
         if (clipBoundary.size() >= kMaxClipVertices)
             return false;
-        ++m_currentClipVertexIdx;
-        if (m_currentClipVertexIdx >= static_cast<int>(clipBoundary.size())) {
-            if (!DRW::resize(clipBoundary, m_currentClipVertexIdx + 1))
+        const int candidateVertexIdx = m_currentClipVertexIdx + 1;
+        if (candidateVertexIdx < 0
+            || candidateVertexIdx >= static_cast<int>(kMaxClipVertices))
+            return false;
+        if (candidateVertexIdx >= static_cast<int>(clipBoundary.size())) {
+            if (!DRW::resize(clipBoundary, candidateVertexIdx + 1))
                 return false;
         }
-        clipBoundary[m_currentClipVertexIdx].x = reader->getDouble();
+        clipBoundary[candidateVertexIdx].x = reader->getDouble();
+        m_currentClipVertexIdx = candidateVertexIdx;
         break;
     }
     case 21:
@@ -13860,10 +13864,10 @@ bool DRW_Underlay::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         const int count = reader->getInt32();
         if (!isValidCount(count, static_cast<std::int32_t>(kMaxClipVertices)))
             return false;
-        m_inverseClipVertexCount = static_cast<std::uint32_t>(count);
-        m_inverseClipCountSeen = true;
         if (!DRW::reserve(inverseClipBoundary, count))
             return false;
+        m_inverseClipVertexCount = static_cast<std::uint32_t>(count);
+        m_inverseClipCountSeen = true;
         break;
     }
     case 12: {
@@ -13871,14 +13875,21 @@ bool DRW_Underlay::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
             || (m_inverseClipCountSeen
                 && inverseClipBoundary.size() >= m_inverseClipVertexCount))
             return false;
-        ++m_currentInverseClipVertexIdx;
-        if (m_currentInverseClipVertexIdx
+        const int candidateVertexIdx = m_currentInverseClipVertexIdx + 1;
+        if (candidateVertexIdx < 0
+            || candidateVertexIdx >= static_cast<int>(kMaxClipVertices)
+            || (m_inverseClipCountSeen
+                && candidateVertexIdx
+                    >= static_cast<int>(m_inverseClipVertexCount)))
+            return false;
+        if (candidateVertexIdx
             >= static_cast<int>(inverseClipBoundary.size())) {
             if (!DRW::resize(inverseClipBoundary,
-                             m_currentInverseClipVertexIdx + 1))
+                             candidateVertexIdx + 1))
                 return false;
         }
-        inverseClipBoundary[m_currentInverseClipVertexIdx].x = reader->getDouble();
+        inverseClipBoundary[candidateVertexIdx].x = reader->getDouble();
+        m_currentInverseClipVertexIdx = candidateVertexIdx;
         break;
     }
     case 22:

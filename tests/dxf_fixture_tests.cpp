@@ -22454,6 +22454,67 @@ void testUnderlayOcsExtrusion(TestContext& t) {
     }
 }
 
+void testUnderlayDxfAllocationFailure(TestContext& t) {
+    const auto parseRecord = [](DRW_Underlay& underlay, int expectedCode,
+                                std::string_view value,
+                                long allocationFailure = -1) {
+        const std::string record = std::to_string(expectedCode) + "\n"
+            + std::string(value) + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int code = 0;
+        if (!reader->readRec(&code) || code != expectedCode)
+            return false;
+        MaterialAllocationFailure failure(allocationFailure);
+        return underlay.parseCode(code, reader);
+    };
+
+    {
+        DRW_Underlay underlay;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(underlay, 11, "1.25", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = underlay.clipBoundary.empty();
+        const bool retried = parseRecord(underlay, 11, "1.25")
+            && parseRecord(underlay, 21, "2.5")
+            && underlay.clipBoundary.size() == 1u
+            && underlay.clipBoundary.front().x == 1.25
+            && underlay.clipBoundary.front().y == 2.5;
+        t.expect(rejected && failedOnce && rolledBack && retried,
+                 "UNDERLAY clip vertex growth preserves the occurrence index for retry");
+    }
+
+    {
+        DRW_Underlay underlay;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(underlay, 170, "1", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool retried = parseRecord(underlay, 170, "1")
+            && parseRecord(underlay, 12, "3.75")
+            && parseRecord(underlay, 22, "4.5")
+            && underlay.inverseClipBoundary.size() == 1u
+            && underlay.inverseClipBoundary.front().x == 3.75
+            && underlay.inverseClipBoundary.front().y == 4.5;
+        t.expect(rejected && failedOnce && retried,
+                 "UNDERLAY inverse-clip count commits only after reservation and retries");
+    }
+
+    {
+        DRW_Underlay underlay;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(underlay, 12, "3.75", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = underlay.inverseClipBoundary.empty();
+        const bool retried = parseRecord(underlay, 12, "3.75")
+            && parseRecord(underlay, 22, "4.5")
+            && underlay.inverseClipBoundary.size() == 1u
+            && underlay.inverseClipBoundary.front().x == 3.75
+            && underlay.inverseClipBoundary.front().y == 4.5;
+        t.expect(rejected && failedOnce && rolledBack && retried,
+                 "UNDERLAY inverse-clip vertex growth is retryable after allocation failure");
+    }
+}
+
 bool writeDimensionOcsControl(const std::filesystem::path& path,
                              bool binary) {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
@@ -61524,6 +61585,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testUnderlayOcsExtrusion(context);
         std::cout << "DXF underlay OCS extrusion controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--underlay-dxf-allocation-failure") {
+        TestContext context;
+        testUnderlayDxfAllocationFailure(context);
+        std::cout << "UNDERLAY DXF allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
