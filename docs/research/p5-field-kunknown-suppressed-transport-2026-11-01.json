@@ -77,5 +77,9 @@
     "Establish exact physical source-to-DXF output and fresh readback on an eligible complete source profile.",
     "Qualify native FIELD evaluation independently from cached-value transport."
   ],
-  "planEffect": "Closes only generated type-0 suppressed transport. It does not close the physical flags=2 checksum-child suffix, the physical AcObjProp schemas, or native FIELD semantics. P5 remains OPEN and no support claim is promoted."
+  "planEffect": "Closes only generated type-0 suppressed transport. It does not close the physical flags=2 checksum-child suffix, the physical AcObjProp schemas, or native FIELD semantics. P5 remains OPEN and no support claim is promoted.",
+  "physicalFlags2ReaderConflict": {
+    "receipt": "docs/research/p5-ac1021-field-flags2-child-reader-conflict-2026-11-01.json",
+    "disposition": "ACadSharp and a temporary FIELD flags&0x01 candidate parse 71 flags=2/type=2 checksum children as BD doubles, matching exact field handles and values 71/71. This conflicts with ODA §20.4.99 and current LibreDWG master suppression. No code change is retained; keep the 71 containing FIELD records raw-only until producer-bound span evidence adjudicates the layout."
+  }
 }

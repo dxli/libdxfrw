@@ -167,11 +167,11 @@
     "rules": [
       "A FIELD child value is a TV key followed by a Value payload.",
       "R2007+ Value begins with BL flags and then a BL data type.",
-      "ODA \u00a720.4.99 says the type-specific variant is absent when bit 1 in Flags is set; this FIELD path suppresses the low two flag bits, consistent with LibreDWG master implementation but not treated as semantic evidence.",
+      "ODA §20.4.99 says the type-specific variant is absent when bit 1 in Flags is set; this FIELD path suppresses the low two flag bits, consistent with LibreDWG master implementation but not treated as semantic evidence.",
       "Data type 2 carries a BD double when its payload is present.",
       "Data type 64 is an Object Id carried as an H soft pointer in the handle stream."
     ],
-    "scopeLimit": "The exact handle join locates all 42 peer-selected AcObjProp roots among local raw-only shells, but their unexplained object-data suffixes keep them incomplete. Separately, 71 _text records have ACFD_FIELDTEXT_CHECKSUM children with flags=2/type=2; suppressing that CadValue payload per ODA leaves a 34-bit body suffix on each record. Preserve the whole record raw-only until a producer-backed schema identifies that suffix. LibreDWG JSON omits the child payload; this peer agreement does not resolve the physical body tail or establish semantic support."
+    "scopeLimit": "The exact handle join locates all 42 peer-selected AcObjProp roots among local raw-only shells, but their unexplained object-data suffixes keep them incomplete. Separately, 71 _text records have ACFD_FIELDTEXT_CHECKSUM children with flags=2/type=2; suppressing that CadValue payload per ODA leaves a 34-bit body suffix on each record. Preserve the whole record raw-only until a producer-backed schema identifies that suffix. LibreDWG JSON omits the child payload; this peer agreement does not resolve the physical body tail or establish semantic support. ACadSharp uses Flags&0x01 as its empty check and reads the 71 children as doubles; a temporary candidate parse matched its handle/value map 71/71. This is a conflicting implementation parse, not a schema decision. The ODA rule and current LibreDWG source still support suppression; see the reader-conflict receipt."
   },
   "implementationBoundary": {
     "admit": "The generated vector admits AC1021 root profile flags=4/type=2 as opaque flag metadata plus a finite BD double. The physical census types 15 AcExpr roots and retains the other 127 FIELD records as raw-only incomplete shells; none is marked complete or enabled for output.",
@@ -196,7 +196,7 @@
     "focusedTestResult": "Passed, 1/1.",
     "physicalSelector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --field-ac1021-physical-profile-census tests/samples/AC1021/blocks_and_tables_-_imperial.dwg",
     "physicalSelectorResult": "Passed. Current FIELD census: 15 typed AcExpr records, 142 raw FIELD callbacks, 127 raw-only shells. All 42 peer-selected AcObjProp root handles match raw-only local shells.",
-    "scope": "Generated fast vectors, 24 focused tests, direct local-source census and debug trace only. The AC1021 inputs are pre-existing untracked files and were not staged or committed. No full suite, fixture file, strict output/readback, or native consumer qualification.",
+    "scope": "Generated fast vectors, 24 focused tests, direct local-source census and debug trace only. The AC1021 inputs are pre-existing untracked files and were not staged or committed. No full suite, fixture file, strict output/readback, or native consumer qualification. A temporary alternate flag interpretation was compared with ACadSharp on the exact physical source (71/71 handle/value matches); this differential is recorded as unresolved and did not change committed parser behavior.",
     "traceCommand": "build-gcc/dwg2dxf/dwg2dxf tests/samples/AC1021/blocks_and_tables_-_imperial.dwg -y -d -v2010 /tmp/field-flags-ac1021-current.dxf",
     "traceResult": "Current trace: 71 records leave 34 body bits, 41 leave 258 bits, one (0x1481E) leaves 210 bits; 13 child CadValue profiles are unsupported and one child-value count is out of range. All 71 34-bit tails are in the _text/ACFD_FIELDTEXT_CHECKSUM flags=2/type=2 profile. Strict CLI output is refused because the source read disposition is incomplete. No source-to-output/readback or native semantic claim.",
     "buildResult": "Passed with -Werror.",
@@ -211,12 +211,30 @@
     "temporaryDiagnosticInstrumentation": "None in committed source; the tail BL probe was removed before the final build and trace."
   },
   "remaining": [
-    "Resolve the 34-bit suffix on the 71 ACFD_FIELDTEXT_CHECKSUM child profiles against ODA and producer-backed evidence; preserve the enclosing FIELD frames as raw-only until fully explained.",
+    "Adjudicate the ACadSharp flags=2/BD alternative against ODA §20.4.99 and current LibreDWG using producer-bound physical span evidence; resolve the 34-bit suffix on all 71 ACFD_FIELDTEXT_CHECKSUM children and keep their enclosing FIELD records raw-only until fully explained.",
     "Resolve the object-data suffix schema for the 42 AcObjProp roots (41 tails measure 258 bits; handle 0x1481E has a 210-bit tail).",
     "Resolve the four ObjectPropertyId child type-2/type-64 differential and prove each target role; do not enable the source profile before body and handle schemas are complete.",
     "Resolve the 13 unsupported child CadValue profiles and the remaining child-count framing failure.",
     "Add isolated ASCII/Binary DXF output and typed readback proof for a resolved profile, with unresolved edges refused.",
     "Keep native FIELD evaluation and whole-source export qualification separate."
   ],
-  "planEffect": "FIELD parsing now follows ODA low-bit payload suppression and retains undecodable physical records as raw-only; the 34-bit suffix family is an explicit P5 blocker. TABLE flags=2 behavior remains unchanged under its bounded source evidence. P5 remains OPEN; the AC1021 sample remains unqualified."
+  "planEffect": "FIELD parsing now follows ODA low-bit payload suppression and retains undecodable physical records as raw-only; the 34-bit suffix family is an explicit P5 blocker. TABLE flags=2 behavior remains unchanged under its bounded source evidence. P5 remains OPEN; the AC1021 sample remains unqualified. A second reader parses the 71 flags=2 tails as matching BD values, but the conflict does not qualify an override or promote support.",
+  "readerConflict": {
+    "receipt": "docs/research/p5-ac1021-field-flags2-child-reader-conflict-2026-11-01.json",
+    "disposition": "ACadSharp and a temporary FIELD flags&0x01 candidate parse 71 flags=2/type=2 checksum children as BD doubles, matching exact field handles and values 71/71. This conflicts with ODA §20.4.99 and current LibreDWG master suppression. No code change is retained; keep the 71 containing FIELD records raw-only until producer-bound span evidence adjudicates the layout."
+  },
+  "validationAfterReaderConflict": {
+    "build": "cmake --build build-gcc --target libdxfrw_wave1_tests libdxfrw_dwg_object_vectors_tests libdxfrw_dwg2dxf_adapter_tests dwg2dxf -j2",
+    "result": "Passed with -Werror after restoring the committed FIELD suppression rule.",
+    "focusedTests": {
+      "command": "ctest --test-dir build-gcc -R 'libdxfrw_field_|libdxfrw_wave1' --output-on-failure",
+      "result": "Passed, 17/17 fast tests."
+    },
+    "physicalSelector": {
+      "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --field-ac1021-physical-profile-census tests/samples/AC1021/blocks_and_tables_-_imperial.dwg",
+      "exitCode": 0,
+      "result": "Current implementation: 15 complete typed AcExpr records, 142 raw FIELD frames, 127 raw-only shells; all 42 peer-selected AcObjProp handles still match raw-only local shells."
+    },
+    "noFullSuite": true
+  }
 }

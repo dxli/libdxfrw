@@ -4574,7 +4574,9 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
                     std::int32_t unknownChildValueType = 1024,
                     bool knownUnknownRootValue = false,
                     bool appendOpaqueBodyTail = false,
-                    std::int32_t childFormatFlagsOverride = -1) {
+                    std::int32_t childFormatFlagsOverride = -1,
+                    bool append34BitBodyTail = false,
+                    const char* childKeyOverride = nullptr) {
     constexpr std::uint32_t fieldHandle = 0xA100u;
 
     DRW_TextCodec codec;
@@ -4671,7 +4673,8 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
 
     if (typedChildValueType != 0) {
         DRW_Field::ChildValue child;
-        child.m_key = "TYPED_CHILD";
+        child.m_key = childKeyOverride == nullptr
+            ? "TYPED_CHILD" : childKeyOverride;
         DRW_CadValue& value = child.m_value;
         value.m_formatFlags = 0;
         value.m_dataType = typedChildValueType;
@@ -4880,6 +4883,14 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
     }
     if (appendOpaqueBodyTail)
         body.putRawLong32(0xA1B2C3D4u);
+    if (append34BitBodyTail) {
+        const std::size_t tailStart = body.bitCount();
+        body.putBit(0u);
+        body.putBit(0u);
+        body.putRawLong32(0xA1B2C3D4u);
+        if (body.bitCount() - tailStart != 34u)
+            return false;
+    }
 
     dwgBufferW object(&codec);
     object.putObjType(version, 1u);
@@ -5637,6 +5648,43 @@ void testFieldCadValueUnqualifiedFormatFlags(TestContext& t) {
                      && body.bitCount() == 0u && strings.bitCount() == 0u
                      && handles.bitCount() == 0u,
                  "AC1021 FIELD with unmodeled object-data tail remains a bounded incomplete shell");
+    }
+
+    FieldFrame checksumTailFrame;
+    const bool checksumTailBuilt = makeFieldFrame(
+        false, false, checksumTailFrame, false, false, false, false,
+        DRW::AC1021, false, false, false, 0, 2, 0, -1, 1024, false,
+        false, 2, true, "ACFD_FIELDTEXT_CHECKSUM");
+    t.expect(checksumTailBuilt,
+             "AC1021 flags-2/type-2 FIELD child with a 34-bit body tail builds");
+    if (checksumTailBuilt) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1021, false);
+        dwgBuffer input(checksumTailFrame.bytes.data(),
+                        checksumTailFrame.bytes.size(), &codec);
+        FieldCodecProbe parsed;
+        const bool read = parsed.parseDwg(
+            DRW::AC1021, &input, checksumTailFrame.handleBits);
+        dwgBufferW body, strings, handles;
+        const bool encoded = parsed.encodeDwg(
+            DRW::AC1021, &body, &strings, &handles);
+        const DRW_Field::ChildValue* checksum =
+            parsed.m_childValues.size() == 1u
+                ? &parsed.m_childValues.front() : nullptr;
+        t.expect(read && input.isGood() && !parsed.hasCompleteDwgPayload()
+                     && !parsed.isDwgPayloadValid(DRW::AC1021) && !encoded
+                     && checksum != nullptr
+                     && checksum->m_key == "ACFD_FIELDTEXT_CHECKSUM"
+                     && checksum->m_value.m_formatFlags == 2
+                     && checksum->m_value.m_dataType == 2
+                     && !checksum->m_value.hasDwgFieldPayload(DRW::AC1021)
+                     && checksum->m_value.m_value.type()
+                         == DRW_Variant::INVALID
+                     && body.bitCount() == 0u
+                     && strings.bitCount() == 0u
+                     && handles.bitCount() == 0u,
+                 "AC1021 flags-2/type-2 FIELD child remains incomplete when "
+                 "its following unexplained 34-bit body tail");
     }
 
     for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
