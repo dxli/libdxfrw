@@ -24139,6 +24139,16 @@ bool DRW_Dimension::parseCode(int code, const std::unique_ptr<dxfReader>& reader
     return true;
 }
 
+void DRW_Dimension::applyExtrusion() {
+    if (!haveExtrusion)
+        return;
+
+    calculateAxis(extPoint);
+    extrudePoint(extPoint, &textPoint);
+    extrudePoint(extPoint, &clonePoint);
+    extrudePoint(extPoint, &arcPoint);
+}
+
 bool DRW_Dimension::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
 {
     DRW_UNUSED( version);

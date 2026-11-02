@@ -20289,6 +20289,8 @@ bool dxfRW::processDimension() {
             // retains its raw getString() call; normalize at the callback
             // boundary using the active DXF code page instead.
             dim.setName(reader->toUtf8String(dim.getName(), 2));
+            if (applyExt)
+                dim.applyExtrusion();
             int type = dim.type & 0x0F;
         switch (type) {
             case 0: {

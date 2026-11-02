@@ -22346,6 +22346,173 @@ void testUnderlayOcsExtrusion(TestContext& t) {
     }
 }
 
+bool writeDimensionOcsControl(const std::filesystem::path& path,
+                             bool binary) {
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output)
+        return false;
+    if (binary)
+        output.write("AutoCAD Binary DXF\r\n\x1a\0", 22);
+    std::unique_ptr<dxfWriter> writer = binary
+        ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+        : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+    writer->setVersion("AC1027", true);
+    const auto string = [&writer](int code, const char* value) {
+        return writer->writeString(code, value);
+    };
+    const auto real = [&writer](int code, double value) {
+        return writer->writeDouble(code, value);
+    };
+    const auto shortValue = [&writer](int code, int value) {
+        return writer->writeInt16(code, value);
+    };
+    const auto common = [&string, &real, &shortValue](
+            int type, const char* blockName, const DRW_Coord& definition,
+            const DRW_Coord& text, const DRW_Coord& clone) {
+        return string(0, "DIMENSION") && string(100, "AcDbEntity")
+            && string(8, "0") && string(100, "AcDbDimension")
+            && string(2, blockName) && shortValue(70, type)
+            && real(10, definition.x) && real(20, definition.y)
+            && real(30, definition.z) && real(11, text.x)
+            && real(21, text.y) && real(31, text.z)
+            && real(12, clone.x) && real(22, clone.y)
+            && real(32, clone.z) && string(1, "<>")
+            && string(3, "STANDARD");
+    };
+    const bool written = string(0, "SECTION") && string(2, "HEADER")
+        && string(9, "$ACADVER") && string(1, "AC1027")
+        && string(0, "ENDSEC") && string(0, "SECTION")
+        && string(2, "ENTITIES")
+        && common(0, "*D1", {20.0, 21.0, 22.0}, {2.0, 3.0, 4.0},
+                  {5.0, 6.0, 7.0})
+        && string(100, "AcDbAlignedDimension")
+        && real(13, 30.0) && real(23, 31.0) && real(33, 32.0)
+        && real(14, 40.0) && real(24, 41.0) && real(34, 42.0)
+        && string(100, "AcDbRotatedDimension")
+        && real(50, 15.0) && real(51, 10.0)
+        && real(210, 1.0) && real(220, 0.0) && real(230, 0.0)
+        && common(2, "*D2", {60.0, 61.0, 62.0}, {8.0, 9.0, 10.0},
+                  {11.0, 12.0, 13.0})
+        && string(100, "AcDb2LineAngularDimension")
+        && real(13, 70.0) && real(23, 71.0) && real(33, 72.0)
+        && real(14, 80.0) && real(24, 81.0) && real(34, 82.0)
+        && real(15, 90.0) && real(25, 91.0) && real(35, 92.0)
+        && real(16, 14.0) && real(26, 15.0) && real(36, 16.0)
+        && real(50, 30.0) && real(51, 5.0)
+        && real(210, 1.0) && real(220, 0.0) && real(230, 0.0)
+        && string(0, "ENDSEC") && string(0, "EOF");
+    return written && !writer->hasWriteError() && output.good();
+}
+
+class DxfDimensionOcsCapture final : public dx_iface {
+public:
+    struct DimensionState {
+        int type{0};
+        DRW_Coord definition;
+        DRW_Coord text;
+        DRW_Coord clone;
+        DRW_Coord first;
+        DRW_Coord second;
+        DRW_Coord third;
+        DRW_Coord arc;
+        DRW_Coord extrusion;
+        double angle{0.0};
+        double horizontalDirection{0.0};
+    };
+
+    void addHeader(const DRW_Header*) override {}
+    void addDimLinear(const DRW_DimLinear* value) override {
+        DimensionState state;
+        state.type = 0;
+        state.definition = value->getDefPoint();
+        state.text = value->getTextPoint();
+        state.clone = value->getClonepoint();
+        state.first = value->getDef1Point();
+        state.second = value->getDef2Point();
+        state.extrusion = value->getExtrusion();
+        state.angle = value->getAngle();
+        state.horizontalDirection = value->getHDir();
+        dimensions.push_back(state);
+    }
+    void addDimAngular(const DRW_DimAngular* value) override {
+        DimensionState state;
+        state.type = 2;
+        state.definition = value->getDefPoint();
+        state.text = value->getTextPoint();
+        state.first = value->getFirstLine1();
+        state.second = value->getFirstLine2();
+        state.third = value->getSecondLine1();
+        state.arc = value->getDimPoint();
+        state.extrusion = value->getExtrusion();
+        state.horizontalDirection = value->getHDir();
+        dimensions.push_back(state);
+    }
+
+    std::vector<DimensionState> dimensions;
+};
+
+void testDimensionOcsExtrusion(TestContext& t) {
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto equalPoint = [](const DRW_Coord& actual,
+                               double x, double y, double z) {
+        return actual.x == x && actual.y == y && actual.z == z;
+    };
+    for (const bool binary : {false, true}) {
+        const std::filesystem::path path =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-dimension-ocs-extrusion-" + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        std::error_code error;
+        std::filesystem::remove(path, error);
+        const bool generated = writeDimensionOcsControl(path, binary);
+        t.expect(generated,
+                 binary ? "generated binary DIMENSION OCS source is written"
+                        : "generated ASCII DIMENSION OCS source is written");
+
+        for (const bool applyExtrusion : {false, true}) {
+            DxfDimensionOcsCapture capture;
+            dxfRW reader(path.string().c_str());
+            const bool read = generated
+                && reader.read(&capture, applyExtrusion);
+            t.expect(read && capture.dimensions.size() == 2u,
+                     "linear and angular DIMENSION callbacks are preserved");
+            if (!read || capture.dimensions.size() != 2u)
+                continue;
+
+            const auto& linear = capture.dimensions[0];
+            const auto& angular = capture.dimensions[1];
+            t.expect(linear.type == 0 && angular.type == 2,
+                     "DXF dimension subtype dispatch remains intact");
+            t.expect(equalPoint(linear.definition, 20.0, 21.0, 22.0)
+                         && equalPoint(linear.first, 30.0, 31.0, 32.0)
+                         && equalPoint(linear.second, 40.0, 41.0, 42.0)
+                         && equalPoint(angular.definition, 60.0, 61.0, 62.0)
+                         && equalPoint(angular.first, 70.0, 71.0, 72.0)
+                         && equalPoint(angular.second, 80.0, 81.0, 82.0)
+                         && equalPoint(angular.third, 90.0, 91.0, 92.0),
+                     "WCS dimension definition points are unchanged");
+            t.expect(applyExtrusion
+                         ? equalPoint(linear.text, 4.0, 2.0, 3.0)
+                             && equalPoint(linear.clone, 7.0, 5.0, 6.0)
+                             && equalPoint(angular.text, 10.0, 8.0, 9.0)
+                             && equalPoint(angular.arc, 16.0, 14.0, 15.0)
+                         : equalPoint(linear.text, 2.0, 3.0, 4.0)
+                             && equalPoint(linear.clone, 5.0, 6.0, 7.0)
+                             && equalPoint(angular.text, 8.0, 9.0, 10.0)
+                             && equalPoint(angular.arc, 14.0, 15.0, 16.0),
+                     "applyExtrusion converts only the dimension OCS point fields");
+            t.expect(equalPoint(linear.extrusion, 1.0, 0.0, 0.0)
+                         && equalPoint(angular.extrusion, 1.0, 0.0, 0.0)
+                         && linear.angle == 15.0
+                         && linear.horizontalDirection == 10.0
+                         && angular.horizontalDirection == 5.0,
+                     "dimension normals and available local angles remain unchanged");
+        }
+        std::filesystem::remove(path, error);
+    }
+}
+
 bool writePolylineOcsExtrusionControl(const std::filesystem::path& path,
                                      bool binary) {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
@@ -61120,6 +61287,13 @@ int main(int argc, char** argv) {
         TestContext context;
         testUnderlayOcsExtrusion(context);
         std::cout << "DXF underlay OCS extrusion controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--dimension-ocs-extrusion") {
+        TestContext context;
+        testDimensionOcsExtrusion(context);
+        std::cout << "DXF DIMENSION OCS extrusion controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
