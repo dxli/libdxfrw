@@ -5598,6 +5598,109 @@ void testFieldCadValueUnqualifiedFormatFlags(TestContext& t) {
     }
 
     for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+        for (const std::int32_t dataType : {8}) {
+            FieldFrame frame;
+            const bool built = makeFieldFrame(
+                false, false, frame, false, false, false, false, version,
+                false, false, false, dataType, 0, 0, 0x04);
+            t.expect(built,
+                     "FIELD root flags=4/type=" + std::to_string(dataType)
+                         + " frame builds for "
+                         + std::to_string(static_cast<int>(version)));
+            if (!built)
+                continue;
+
+            DRW_TextCodec codec;
+            codec.setVersion(version, false);
+            dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+            FieldCodecProbe parsed;
+            const bool read = parsed.parseDwg(version, &input,
+                                              frame.handleBits);
+            dwgBufferW body, strings, handles;
+            const bool encoded = parsed.encodeDwg(
+                version, &body, &strings, &handles);
+
+            FieldCodecProbe expected;
+            expected.parentHandle = 0xA200u;
+            expected.setDwgCommonObjectState(0, 1, false);
+            expected.m_evaluatorId = "ACAD";
+            expected.m_fieldCode = "GENERATED_FIELD";
+            expected.m_evaluationStatusFlags = 2;
+            expected.m_value.m_formatFlags = 0x04;
+            expected.m_value.m_dataType = dataType;
+            expected.m_value.m_dataSize = 8;
+            expected.m_value.m_rawData = {
+                0x10u, 0x11u, 0x12u, 0x13u,
+                0x14u, 0x15u, 0x16u, 0x17u};
+            expected.m_value.m_value.addBinary(
+                310, expected.m_value.m_rawData);
+            expected.m_value.m_unitType = 1;
+            expected.m_value.m_formatString = "date";
+            expected.m_value.m_valueString = "2026-10-22";
+            expected.m_valueString = "42";
+            expected.m_valueStringLength = 2;
+            dwgBufferW expectedBody, expectedStrings, expectedHandles;
+            const bool expectedEncoded = expected.encodeDwg(
+                version, &expectedBody, &expectedStrings, &expectedHandles);
+            const bool exactStreams = expectedEncoded
+                && body.bitCount() == expectedBody.bitCount()
+                && body.data() == expectedBody.data()
+                && strings.bitCount() == expectedStrings.bitCount()
+                && strings.data() == expectedStrings.data()
+                && handles.bitCount() == expectedHandles.bitCount()
+                && handles.data() == expectedHandles.data();
+            const bool expectedValue =
+                parsed.m_value.m_value.type() == DRW_Variant::BINARY
+                && parsed.m_value.m_rawData == expected.m_value.m_rawData;
+            t.expect(read && input.isGood()
+                         && parsed.hasCompleteDwgPayload()
+                         && parsed.isDwgPayloadValid(version) && encoded
+                         && exactStreams && expectedValue
+                         && parsed.m_value.m_formatFlags == 0x04
+                         && parsed.m_value.m_dataType == dataType
+                         && parsed.m_value.m_unitType == 1
+                         && parsed.m_value.m_formatString
+                                == expected.m_value.m_formatString
+                         && parsed.m_value.m_valueString
+                                == expected.m_value.m_valueString
+                         && parsed.m_valueString == "42"
+                         && parsed.m_valueStringLength == 2,
+                     "FIELD root flags=4/type=" + std::to_string(dataType)
+                         + " preserves exact typed transport for "
+                         + std::to_string(static_cast<int>(version)));
+        }
+    }
+
+    for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+        FieldFrame frame;
+        const bool built = makeFieldFrame(
+            false, false, frame, false, false, false, false, version,
+            false, false, false, 4, 0, 0, 0x04);
+        t.expect(built,
+                 "FIELD root flags=4/type=4 control frame builds for "
+                     + std::to_string(static_cast<int>(version)));
+        if (!built)
+            continue;
+
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+        FieldCodecProbe parsed;
+        const bool read = parsed.parseDwg(version, &input, frame.handleBits);
+        dwgBufferW body, strings, handles;
+        const bool encoded = parsed.encodeDwg(
+            version, &body, &strings, &handles);
+        t.expect(read && input.isGood() && !parsed.hasCompleteDwgPayload()
+                     && !parsed.isDwgPayloadValid(version) && !encoded
+                     && parsed.m_value.m_formatFlags == 0x04
+                     && parsed.m_value.m_dataType == 0
+                     && body.bitCount() == 0 && strings.bitCount() == 0
+                     && handles.bitCount() == 0,
+                 "FIELD root flags=4/type=4 remains an incomplete shell for "
+                     + std::to_string(static_cast<int>(version)));
+    }
+
+    for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
         for (const std::int32_t flags : unsupportedFlags) {
             FieldCodecProbe constructed;
             constructed.setDwgCommonObjectState(0, 1, false);

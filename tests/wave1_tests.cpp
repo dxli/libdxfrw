@@ -6694,6 +6694,51 @@ void testFieldCadValueEmissionPreflight(TestContext& t) {
                          && doubles == ((flags & 1) == 0 ? 1 : 0),
                      "ASCII/Binary FIELD payload uses bit 0; flag 2 retains its scalar");
         }
+
+        DRW_Field flaggedDate;
+        flaggedDate.handle = 0xA611u;
+        flaggedDate.m_evaluatorId = "AcVar";
+        flaggedDate.m_fieldCode = "\\AcVar PlotDate";
+        flaggedDate.m_value.m_formatFlags = 0x04;
+        flaggedDate.m_value.m_dataType = 8;
+        flaggedDate.m_value.m_dataSize = 8;
+        flaggedDate.m_value.m_rawData = {
+            0xD6u, 0x07u, 0x0Cu, 0x00u, 0x02u, 0x00u, 0x05u, 0x00u};
+        flaggedDate.m_value.m_value.addBinary(
+            310, flaggedDate.m_value.m_rawData);
+        flaggedDate.m_value.m_unitType = 0;
+        flaggedDate.m_value.m_formatString = "M/d/yyyy";
+        flaggedDate.m_value.m_valueString = "12/5/2006";
+        flaggedDate.m_valueString = "12/5/2006";
+        flaggedDate.m_valueStringLength = 9;
+        std::ostringstream flaggedOutput;
+        dxfRW flaggedWriter("");
+        flaggedWriter.version = DRW::AC1021;
+        flaggedWriter.binFile = binary;
+        flaggedWriter.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&flaggedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&flaggedOutput));
+        const bool flaggedWritten = flaggedWriter.writeField(&flaggedDate)
+            && flaggedWriter.writer->writeString(0, "WIRE_END");
+        bool flaggedEnded = false;
+        const auto flaggedTags = numericWireProjection(
+            flaggedOutput.str(), binary, flaggedEnded);
+        const auto dateChunks = std::count_if(
+            flaggedTags.begin(), flaggedTags.end(),
+            [](const std::string& tag) { return tag.rfind("310:", 0) == 0; });
+        t.expect(flaggedWritten && flaggedEnded
+                     && std::find(flaggedTags.begin(), flaggedTags.end(),
+                                  "93:4") != flaggedTags.end()
+                     && std::find(flaggedTags.begin(), flaggedTags.end(),
+                                  "90:8") != flaggedTags.end()
+                     && std::find(flaggedTags.begin(), flaggedTags.end(),
+                                  "92:8") != flaggedTags.end()
+                     && dateChunks == 1,
+                 binary
+                     ? "Binary FIELD keeps opaque root flag 4 and type-8 date bytes"
+                     : "ASCII FIELD keeps opaque root flag 4 and type-8 date bytes");
     }
 }
 

@@ -2446,10 +2446,21 @@ enum class CadValueReadResult {
     Error,
 };
 
+bool hasSupportedCadValueFormatFlags(
+    DRW::Version version, const DRW_CadValue& value,
+    bool allowObservedRootProfile = false) {
+    if (version <= DRW::AC1018)
+        return value.m_formatFlags == 0;
+    if ((value.m_formatFlags & ~0x03) == 0)
+        return true;
+    return allowObservedRootProfile && value.m_formatFlags == 0x04
+        && value.m_dataType == 8;
+}
+
 CadValueReadResult readCadValue(
     DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
     std::uint32_t bodySize, std::uint32_t stringSize, DRW_CadValue& value,
-    bool& hasHandle) {
+    bool& hasHandle, bool allowObservedRootProfile = false) {
     if (buf == nullptr || strBuf == nullptr || !buf->isGood()
         || !strBuf->isGood())
         return CadValueReadResult::Error;
@@ -2480,13 +2491,36 @@ CadValueReadResult readCadValue(
     if (detachedStrings && !readLong(value.m_formatFlags))
         return CadValueReadResult::Error;
     if (detachedStrings && (value.m_formatFlags & ~0x03) != 0) {
-        // Retain unqualified flags through the bounded raw FIELD fallback.
-        DRW_DBG("unsupported FIELD CadValue format flags: ");
-        DRW_DBG(value.m_formatFlags); DRW_DBG("\n");
-        return CadValueReadResult::Unsupported;
+        const bool candidateRootProfile = allowObservedRootProfile
+            && value.m_formatFlags == 0x04;
+        if (!candidateRootProfile) {
+            // Retain unqualified flags through the bounded raw FIELD fallback.
+            DRW_DBG("unsupported FIELD CadValue format flags: ");
+            DRW_DBG(value.m_formatFlags); DRW_DBG("\n");
+            return CadValueReadResult::Unsupported;
+        }
+
+        // Probe without advancing the source cursor. This exact root profile
+        // is admitted only for the physically witnessed kDate type.
+        dwgBuffer typeProbe = buf->forkIndependent();
+        std::int32_t candidateType = 0;
+        if (!readBitLongWithinBody(&typeProbe, version, bodySize,
+                                   candidateType))
+            return CadValueReadResult::Error;
+        if (candidateType != 8) {
+            DRW_DBG("unsupported FIELD CadValue format flags: ");
+            DRW_DBG(value.m_formatFlags); DRW_DBG("\n");
+            return CadValueReadResult::Unsupported;
+        }
     }
     if (!readLong(value.m_dataType)) {
         return CadValueReadResult::Error;
+    }
+    if (!hasSupportedCadValueFormatFlags(version, value,
+                                         allowObservedRootProfile)) {
+        DRW_DBG("unsupported FIELD CadValue format flags: ");
+        DRW_DBG(value.m_formatFlags); DRW_DBG("\n");
+        return CadValueReadResult::Unsupported;
     }
     if (!value.hasDwgPayload(version)
         && value.m_dataType != 0 && value.m_dataType != 1
@@ -10809,7 +10843,7 @@ bool DRW_Field::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     bool valueHasHandle = false;
     const CadValueReadResult valueResult =
         readCadValue(version, bodyBuf, bodyStringBuf, bodyEnd, stringEnd,
-                     m_value, valueHasHandle);
+                     m_value, valueHasHandle, true);
     if (valueResult == CadValueReadResult::Unsupported) {
       DRW_DBG("FIELD value payload unsupported; keeping FIELD shell\n");
       return finishSoft();
@@ -21192,11 +21226,12 @@ bool isValidCadValue(const DRW_CadValue& value) {
     return true;
 }
 
-bool isWritableCadValue(DRW::Version version, const DRW_CadValue& value) {
+bool isWritableCadValue(DRW::Version version, const DRW_CadValue& value,
+                        bool allowObservedRootProfile = false) {
     if (!isValidCadValue(value))
         return false;
-    if ((version > DRW::AC1018 && (value.m_formatFlags & ~0x03) != 0)
-        || (version <= DRW::AC1018 && value.m_formatFlags != 0))
+    if (!hasSupportedCadValueFormatFlags(version, value,
+                                         allowObservedRootProfile))
         return false;
     if (!value.hasDwgPayload(version)) {
         // ODA §20.4.99 retains the data-type BL while flag bit 0 suppresses
@@ -21252,8 +21287,10 @@ bool isWritableCadValue(DRW::Version version, const DRW_CadValue& value) {
 // bytes and typed values. Unsupported types (including 128 and 256) fail
 // closed rather than being emitted with a guessed layout.
 bool writeCadValue(DRW::Version version, dwgBufferW *buf, dwgBufferW *strBuf,
-                   const DRW_CadValue& value) {
-    if (buf == nullptr || !isWritableCadValue(version, value))
+                   const DRW_CadValue& value,
+                   bool allowObservedRootProfile = false) {
+    if (buf == nullptr
+        || !isWritableCadValue(version, value, allowObservedRootProfile))
         return false;
 
     dwgBufferW *textBuf = strBuf != nullptr && version > DRW::AC1018
@@ -21691,9 +21728,10 @@ bool DRW_Field::isDwgPayloadValid(DRW::Version version) const noexcept {
       dwgReferencePolicy(version, DwgReferenceKind::ChildField);
   const DwgReferencePolicy objectPolicy =
       dwgReferencePolicy(version, DwgReferenceKind::Object);
-  const auto validCadValue = [version](const DRW_CadValue &value) {
+  const auto validCadValue = [version](const DRW_CadValue &value,
+                                       bool allowObservedRootProfile) {
     const bool hasObjectHandle = cadValueHasDwgObjectHandle(version, value);
-    return isWritableCadValue(version, value) &&
+    return isWritableCadValue(version, value, allowObservedRootProfile) &&
            (!hasObjectHandle || value.m_handle != DRW::NoHandle);
   };
   if (version < DRW::AC1015 || m_childHandles.size() > kMaxItems ||
@@ -21703,7 +21741,7 @@ bool DRW_Field::isDwgPayloadValid(DRW::Version version) const noexcept {
       reactorHandles.size() > dwgSafety::MaxReactorCount || xDictFlag > 1 ||
       !childPolicy.hasHandleStreamSlot || childPolicy.allowsNull ||
       !objectPolicy.hasHandleStreamSlot || objectPolicy.allowsNull ||
-      !validCadValue(m_value)) {
+      !validCadValue(m_value, true)) {
     return false;
   }
   if (std::any_of(
@@ -21716,7 +21754,7 @@ bool DRW_Field::isDwgPayloadValid(DRW::Version version) const noexcept {
   }
   return std::all_of(m_childValues.cbegin(), m_childValues.cend(),
                      [&validCadValue](const ChildValue &child) {
-                       return validCadValue(child.m_value);
+                       return validCadValue(child.m_value, false);
                      });
 }
 
@@ -21748,7 +21786,7 @@ bool DRW_Field::encodeDwg(DRW::Version version, dwgBufferW *buf,
   buf->putBitLong(m_evaluationErrorCode);
   sb->putVariableText(version, m_evaluationErrorMessage);
 
-  if (!writeCadValue(version, buf, sb, m_value))
+  if (!writeCadValue(version, buf, sb, m_value, true))
     return false;
 
   sb->putVariableText(version, m_valueString);

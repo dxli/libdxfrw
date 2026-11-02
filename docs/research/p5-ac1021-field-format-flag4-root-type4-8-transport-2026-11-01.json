@@ -1,0 +1,100 @@
+{
+  "receipt": "p5-ac1021-field-format-flag4-root-type4-8-transport-2026-11-01",
+  "recordedAt": "2026-11-01",
+  "phase": "P5",
+  "readiness": "implemented narrow transport profile; P5 remains open and no support claim is made",
+  "sourceWitness": {
+    "path": "tests/samples/AC1021/architectural_-_annotation_scaling_and_multileaders.dwg",
+    "sha256": "0e74f0aa84b1323c922345f067739c42ee26213dea010b407b87a94212271654",
+    "provenance": "Pre-existing untracked local input; not staged or committed.",
+    "peer": {
+      "name": "LibreDWG dwgread",
+      "version": "0.14",
+      "outputPath": "/tmp/libdxfrw-ac1021-fields-peer.json",
+      "outputSha256": "3509844888403e516b923174b5b9d8cb046a9b61d32b119069a8a0b7bebffc1c",
+      "counts": {
+        "rootFormatFlag4Type4": 4,
+        "rootFormatFlag4Type8": 1
+      },
+      "handles": ["0x2392", "0x2393", "0x2394", "0x2395", "0x2396"],
+      "qualifier": "Peer parser is layout corroboration only; its values are not independent semantic evidence."
+    }
+  },
+  "authority": {
+    "document": "Open Design Specification for .dwg files v5.4.1",
+    "section": "20.4.99 Value",
+    "source": "https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf",
+    "rules": [
+      "R2007+ stores format flags as BL group 93 and data type as BL group 90.",
+      "A set first flag bit suppresses the type-specific payload; with that bit clear, type-specific fields follow.",
+      "Type 4 is TV; type 8 is BL byte count followed by that many bytes."
+    ],
+    "scopeLimit": "The specification does not assign semantic meaning to flag value 4. Preserve that integer as opaque metadata. A flags=4/type=8 root profile is admitted; type 4 remains refused because the local physical sample does not retain body alignment under the ODA TV interpretation, while LibreDWG's implementation uses a different R2007+ encoding."
+  },
+  "currentFailure": {
+    "code": "readCadValue rejected format flags 4 before the data-type BL; isWritableCadValue rejected flags outside 0x03.",
+    "physicalTraceBeforeChange": "The local AC1021 read retained five FIELD roots at handles 0x2392-0x2396 as incomplete raw shells."
+  },
+  "implementationBoundary": {
+    "admit": "Only main/root FIELD values with AC1021+ flags=4 and data type 8; preserve the exact flags and date byte payload using the ODA-described type layout.",
+    "keepRefused": [
+      "flags=4 with any other data type, including type 4",
+      "flags=76 observed in local child parsing",
+      "all other unknown format flags",
+      "native FIELD evaluation and whole-source export qualification"
+    ],
+    "compatibility": "No public API changes. Existing DWG writer and DXF FIELD group-93 output must retain the exact flag and typed payload."
+  },
+  "owningValidation": {
+    "buildTarget": "libdxfrw_dwg_object_vectors_tests",
+    "selector": "libdxfrw_field_unqualified_format_flags",
+    "plannedVectors": [
+      "AC1021 and AC1024 root flags=4/type=8 exact date bytes roundtrip",
+      "AC1021 and AC1024 root flags=4/type=4 remain incomplete",
+      "flags=4 with type 1, flags=8, flags=16, and flags=76 remain refused"
+    ],
+    "conditionalEscalation": "Rebuild dwg2dxf and rerun the local AC1021 trace only if the focused vectors pass; full CLI success is not expected while unrelated flag/child profiles and proxy graphics remain."
+  },
+  "diagnosticAttempt": {
+    "trace": "/tmp/libdxfrw-ac1021-field-flag4.log",
+    "temporaryResult": "When flags=4/type=4 was provisionally parsed using the ODA TV layout, all four physical type-4 roots reached an out-of-range child-value count. This diagnostic path was narrowed and is not in the final implementation.",
+    "handles": ["0x2392", "0x2394", "0x2395", "0x2396"]
+  },
+  "postChangeObservation": {
+    "physicalTrace": "/tmp/libdxfrw-ac1021-field-flag4-final.log",
+    "completeFieldParses": 30,
+    "flag4Records": {
+      "type8": {
+        "handle": "0x2393",
+        "result": "complete parse with one child value"
+      },
+      "type4": {
+        "handles": ["0x2392", "0x2394", "0x2395", "0x2396"],
+        "result": "all remain incomplete under explicit refusal; the diagnostic ODA TV attempt misaligned the subsequent child-value count"
+      }
+    },
+    "otherResiduals": {
+      "unsupportedFormatFlagDecodes": 20,
+      "childValueCountFailures": 16,
+      "strictOutputRefusal": "36 unpreserved proxy-graphics records"
+    },
+    "decision": "Keep only flags=4/type=8 root transport. Preserve/refuse type 4 pending an authoritative resolution of its ODA-versus-LibreDWG layout difference."
+  },
+  "validation": {
+    "build": {
+      "command": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests libdxfrw_wave1_tests libdxfrw_dwg2dxf_adapter_tests dwg2dxf -j2",
+      "result": "passed"
+    },
+    "focusedTests": {
+      "command": "ctest --test-dir build-gcc -R '^(libdxfrw_field_unqualified_format_flags|libdxfrw_field_cadvalue_unknown_type|libdxfrw_field_cadvalue_string|libdxfrw_field_cadvalue_date_payload|libdxfrw_field_unknown_child_cadvalue_versions|libdxfrw_acad_field_writer_candidate|libdxfrw_fieldlist_membership_output|libdxfrw_field_graph_export_refusal)$' --output-on-failure",
+      "result": "passed, 8/8",
+      "additionalDXFOutputControl": "The existing ACAD_FIELD writer candidate now checks ASCII and Binary DXF retain group 93=4, group 90=8, group 92=8, and one group-310 date payload chunk for the admitted root profile."
+    },
+    "physicalCheck": {
+      "command": "build-gcc/dwg2dxf/dwg2dxf tests/samples/AC1021/architectural_-_annotation_scaling_and_multileaders.dwg -y -d -v2010 /tmp/libdxfrw-ac1021-field-flag4.dxf",
+      "exitCode": 1,
+      "limitation": "The invocation is an input trace only. Strict output is refused by the unrelated proxy-graphics records listed above."
+    }
+  },
+  "fixturePolicy": "Use generated in-memory vectors and the existing local input; add no DWG/DXF fixture file."
+}
