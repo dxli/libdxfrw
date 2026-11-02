@@ -81,6 +81,42 @@ def check_options(converter, root):
         return run_bounded([str(converter), *map(str, arguments)], 5, 131072,
                            cwd=root)
 
+    aliases = [("same path", source)]
+    for label, create_alias in (("symlink", getattr(os, "symlink", None)),
+                                ("hardlink", getattr(os, "link", None))):
+        if create_alias is None:
+            continue
+        alias = root / ("source " + label + ".dxf")
+        try:
+            create_alias(source, alias)
+        except (AttributeError, NotImplementedError, OSError):
+            # Some Windows configurations do not grant unprivileged symlink
+            # creation; count only aliases the filesystem actually created.
+            continue
+        aliases.append((label, alias))
+
+    for alias_label, alias_path in aliases:
+        routes = (
+            ("positional", [source, "-y", "-v2010", alias_path]),
+            ("FreeCAD -o", [source, "-o", alias_path, "-v2010", "-y"]),
+            ("positional without overwrite", [source, "-v2010", alias_path]),
+        )
+        for route, arguments in routes:
+            source.write_bytes(SOURCE)
+            if alias_path != source and alias_path.read_bytes() != SOURCE:
+                raise AssertionError(f"{alias_label}: alias did not resolve to source bytes")
+            result = invoke(arguments)
+            if (result.returncode != 1 or b"output aliases input" not in result.stdout
+                    or b"Success:" in result.stdout or b"overwrite Y/N" in result.stdout
+                    or source.read_bytes() != SOURCE
+                    or alias_path.read_bytes() != SOURCE):
+                raise AssertionError(
+                    f"{alias_label} on {route}: input/output alias was not refused "
+                    f"unchanged: {result!r}")
+            if alias_path != source and not os.path.samefile(source, alias_path):
+                raise AssertionError(f"{alias_label}: alias identity changed during refusal")
+            checked += 1
+
     def reject(label, arguments, paths):
         nonlocal checked
         before = {path: path.read_bytes() if path.exists() else None for path in paths}

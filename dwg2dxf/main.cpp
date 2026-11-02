@@ -14,6 +14,7 @@
 #include <fstream>
 #include <filesystem>
 #include <set>
+#include <system_error>
 #include <sys/stat.h>
 
 #include "dx_iface.h"
@@ -69,6 +70,33 @@ bool convertFile(std::string inName, std::string outName, DRW::Version ver,
     if (badState) {
         std::cout << "Error can't open " << inName << std::endl;
         return false;
+    }
+    // A same-file conversion truncates the source when the DXF writer opens
+    // its destination. Check filesystem identity before prompting or granting
+    // overwrite authority; equivalent() also catches symlink and hard-link
+    // aliases that lexical path comparisons miss.
+    namespace fs = std::filesystem;
+    std::error_code identityError;
+    const fs::path inputPath = fs::u8path(inName);
+    const fs::path outputPath = fs::u8path(outName);
+    const bool outputExists = fs::exists(outputPath, identityError);
+    if (identityError) {
+        std::cout << "Error: cannot safely inspect output identity for "
+                  << outName << ": " << identityError.message() << std::endl;
+        return false;
+    }
+    if (outputExists) {
+        const bool aliasesInput = fs::equivalent(inputPath, outputPath, identityError);
+        if (identityError) {
+            std::cout << "Error: cannot safely compare input/output identity for "
+                      << inName << " and " << outName << ": "
+                      << identityError.message() << std::endl;
+            return false;
+        }
+        if (aliasesInput) {
+            std::cout << "Error: output aliases input; refusing conversion" << std::endl;
+            return false;
+        }
     }
     //verify if output file exist
     struct stat outStat;
