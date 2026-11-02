@@ -22726,6 +22726,61 @@ void testLeaderDxfAllocationFailure(TestContext& t) {
 }
 
 
+void testSplineDxfAllocationFailure(TestContext& t) {
+    struct SplineParseProbe final : DRW_Spline {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+    };
+    const auto parseRecord = [](SplineParseProbe& spline, int expectedCode,
+                                std::string_view value,
+                                long allocationFailure = -1) {
+        const std::string record = std::to_string(expectedCode) + "\n"
+            + std::string(value) + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int code = 0;
+        if (!reader->readRec(&code) || code != expectedCode)
+            return false;
+        MaterialAllocationFailure failure(allocationFailure);
+        return spline.parse(code, reader);
+    };
+
+    for (long allocationFailure = 0; allocationFailure < 3;
+         ++allocationFailure) {
+        SplineParseProbe spline;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(
+            spline, 10, "1.25", allocationFailure);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = spline.controllist.empty();
+        const bool xRetried = parseRecord(spline, 10, "1.25");
+        const bool yRetried = parseRecord(spline, 20, "2.5");
+        const bool retried = xRetried && yRetried
+            && spline.controllist.size() == 1u
+            && spline.controllist.front()
+            && spline.controllist.front()->x == 1.25
+            && spline.controllist.front()->y == 2.5;
+        t.expect(rejected && failedOnce && rolledBack && retried,
+                 "SPLINE control-point allocation failure preserves its component cursor for retry");
+    }
+
+    for (const int code : {40, 41}) {
+        SplineParseProbe spline;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(spline, code, "0.75", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = code == 40 ? spline.knotslist.empty()
+                                            : spline.weightlist.empty();
+        const bool retried = parseRecord(spline, code, "0.75")
+            && (code == 40 ? spline.knotslist == std::vector<double>{0.75}
+                           : spline.weightlist == std::vector<double>{0.75});
+        t.expect(rejected && failedOnce && rolledBack && retried,
+                 "SPLINE scalar-list allocation failure returns false and retries the same group");
+    }
+}
+
+
 void testDimensionOcsExtrusion(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
@@ -61641,6 +61696,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testLeaderDxfAllocationFailure(context);
         std::cout << "LEADER DXF allocation-failure and retry controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--spline-dxf-allocation-failure") {
+        TestContext context;
+        testSplineDxfAllocationFailure(context);
+        std::cout << "SPLINE DXF allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

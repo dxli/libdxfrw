@@ -20200,10 +20200,18 @@ bool DRW_Spline::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         std::vector<std::shared_ptr<DRW_Coord>>& points,
         std::shared_ptr<DxfPointComponentCursor>& cursor,
         int component, bool countSeen, std::int32_t expectedCount) {
-        if (!cursor)
-            cursor = std::make_shared<DxfPointComponentCursor>();
-        std::size_t* componentCount = component == 0 ? &cursor->x
-            : component == 1 ? &cursor->y : &cursor->z;
+        std::shared_ptr<DxfPointComponentCursor> newCursor;
+        DxfPointComponentCursor* cursorValue = cursor.get();
+        if (cursorValue == nullptr) {
+            try {
+                newCursor = std::make_shared<DxfPointComponentCursor>();
+            } catch (...) {
+                return false;
+            }
+            cursorValue = newCursor.get();
+        }
+        std::size_t* componentCount = component == 0 ? &cursorValue->x
+            : component == 1 ? &cursorValue->y : &cursorValue->z;
         if (*componentCount >= static_cast<std::size_t>(kMaxDxfItems)
             || (countSeen
                 && *componentCount
@@ -20211,20 +20219,34 @@ bool DRW_Spline::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             return false;
         if (*componentCount > points.size())
             return false;
-        if (*componentCount == points.size())
-            points.push_back(std::make_shared<DRW_Coord>());
-        if (!points[*componentCount])
-            points[*componentCount] = std::make_shared<DRW_Coord>();
+
+        const std::size_t index = *componentCount;
+        std::shared_ptr<DRW_Coord> point;
+        if (index == points.size() || !points[index]) {
+            point = makeCoordNoThrow();
+            if (!point)
+                return false;
+            if (index == points.size()) {
+                if (!DRW::reserve(points, static_cast<int>(index + 1u)))
+                    return false;
+                points.push_back(point);
+            } else {
+                points[index] = point;
+            }
+        } else {
+            point = points[index];
+        }
 
         const double value = reader->getDouble();
-        DRW_Coord& point = *points[*componentCount];
         if (component == 0)
-            point.x = value;
+            point->x = value;
         else if (component == 1)
-            point.y = value;
+            point->y = value;
         else
-            point.z = value;
+            point->z = value;
         ++*componentCount;
+        if (newCursor)
+            cursor = std::move(newCursor);
         return true;
     };
 
@@ -20336,14 +20358,22 @@ bool DRW_Spline::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             || (m_dxfKnotCountSeen
                 && knotslist.size() >= static_cast<std::size_t>(nknots)))
             return false;
-        knotslist.push_back(reader->getDouble());
+        try {
+            knotslist.push_back(reader->getDouble());
+        } catch (...) {
+            return false;
+        }
         break;
     case 41:
         if (weightlist.size() >= static_cast<std::size_t>(kMaxDxfItems)
             || (m_dxfControlCountSeen
                 && weightlist.size() >= static_cast<std::size_t>(ncontrol)))
             return false;
-        weightlist.push_back(reader->getDouble());
+        try {
+            weightlist.push_back(reader->getDouble());
+        } catch (...) {
+            return false;
+        }
         break;
     default:
         return DRW_Entity::parseCode(code, reader);

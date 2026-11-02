@@ -2286,6 +2286,11 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dxf_fixture_tests --leader-dxf-allocation-failure)
     set_tests_properties(libdxfrw_leader_dxf_allocation_failure PROPERTIES
         LABELS "fast;dxf;reader;leader;allocation;retry" TIMEOUT 30)
+    add_test(NAME libdxfrw_spline_dxf_allocation_failure
+        COMMAND libdxfrw_dxf_fixture_tests
+            --spline-dxf-allocation-failure)
+    set_tests_properties(libdxfrw_spline_dxf_allocation_failure PROPERTIES
+        LABELS "fast;dxf;reader;spline;allocation;retry" TIMEOUT 30)
     add_test(NAME libdxfrw_classes_wire_census
         COMMAND libdxfrw_dxf_fixture_tests --classes-wire-census)
     set_tests_properties(libdxfrw_classes_wire_census PROPERTIES
