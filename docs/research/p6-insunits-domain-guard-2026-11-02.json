@@ -16,7 +16,7 @@
     ]
   },
   "implementation": {
-    "publicApi": "DRW_Header::Units now names USSurveyFoot=21, USSurveyInch=22, USSurveyYard=23, USSurveyMile=24, and UnitCount=25.",
+    "publicApi": "DRW_Header::Units now names USSurveyFoot=21, USSurveyInch=22, USSurveyYard=23, USSurveyMile=24, and UnitCount=25. DRW_Header::measurement classifies all four survey values as English units.",
     "dxfOutput": "Validate canonical dollar/bare aliases, integer type, group 70, and the 0-24 range. Refuse an explicit INSUNITS value for targets before AC1015, where the writer would otherwise omit it.",
     "dwgOutput": "DRW_Header::encodeDwgForWriter validates aliases, type, group 70, and range before changing the output streams; invalid values cannot be narrowed to UInt16 silently.",
     "input": "Tolerant DXF parsing remains unchanged and retains unsupported integer source values for diagnosis."
@@ -31,6 +31,7 @@
       "Tolerant DXF input retention for code 25.",
       "Atomic DXF refusal and corrected same-writer retry.",
       "Refusal rather than silent omission on pre-AC1015 DXF targets.",
+      "DRW_Header::measurement classifies codes 21-24 as English.",
       "DWG header encoding accepts representative values 0, 20, 21, and 24 and refuses -1/25 without emitting bits for all six supported writer revisions."
     ]
   },

@@ -2190,6 +2190,15 @@ void testDxfInsunitsHeaderDomain(TestContext& t) {
                       && DRW_Header::USSurveyMile == 24
                       && DRW_Header::UnitCount == 25,
                   "INSUNITS survey units complete the public enum through 24");
+    for (const int imperialUnit : {
+             DRW_Header::Units::USSurveyFoot,
+             DRW_Header::Units::USSurveyInch,
+             DRW_Header::Units::USSurveyYard,
+             DRW_Header::Units::USSurveyMile}) {
+        t.expect(DRW_Header::measurement(imperialUnit)
+                     == DRW_Header::Units::English,
+                 "US survey INSUNITS values retain English measurement classification");
+    }
 
     constexpr std::array<DRW::Version, 6> dwgVersions{{
         DRW::AC1015, DRW::AC1018, DRW::AC1021,

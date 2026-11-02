@@ -4605,6 +4605,10 @@ int DRW_Header::measurement(const int unit) {
         case Units::Microinch:
         case Units::Mil:
         case Units::Yard:
+        case Units::USSurveyFoot:
+        case Units::USSurveyInch:
+        case Units::USSurveyYard:
+        case Units::USSurveyMile:
             return Units::English;
 
         default:
