@@ -1143,6 +1143,11 @@ add_test(NAME dwg2dxf_typed_entity_capture_limits
     COMMAND libdxfrw_dwg2dxf_adapter_tests --typed-entity-capture-limits)
 set_tests_properties(dwg2dxf_typed_entity_capture_limits PROPERTIES
     LABELS "fast;dxf;adapter;entities" TIMEOUT 10)
+add_test(NAME dwg2dxf_hatch_mpolygon_runtime_dispatch
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --hatch-mpolygon-runtime-dispatch)
+set_tests_properties(dwg2dxf_hatch_mpolygon_runtime_dispatch PROPERTIES
+    LABELS "fast;dxf;adapter;entities;hatch;mpolygon;transaction"
+    TIMEOUT 15)
 add_test(NAME dwg2dxf_dictionary_default_typed_capture_limits
     COMMAND libdxfrw_dwg2dxf_adapter_tests
         --dictionary-default-typed-capture-limits)

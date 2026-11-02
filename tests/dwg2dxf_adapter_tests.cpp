@@ -19873,6 +19873,96 @@ bool typedEntityCallbackCaptureLimitsFailClosed() {
     return true;
 }
 
+bool hatchMPolygonRuntimeDispatchGuard() {
+    const auto runCase = [](bool sourceIsMPolygon, bool binary) {
+        dx_data data;
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        if (sourceIsMPolygon) {
+            DRW_MPolygon source;
+            source.fillColorAci = 42;
+            source.annotatedBoundary = 1;
+            source.xDirX = 1.25;
+            source.xDirY = -2.0;
+            adapter.addMPolygon(&source);
+        } else {
+            DRW_Hatch source;
+            adapter.addHatch(&source);
+        }
+        if (data.mBlock == nullptr || data.mBlock->ent.size() != 1u
+            || data.mBlock->ent.front() == nullptr
+            || data.typedEntityCaptureFailed)
+            return fail("HATCH/MPOLYGON callback did not retain its source subtype");
+
+        DRW_Entity* const retained = data.mBlock->ent.front();
+        const DRW::ETYPE correctType = sourceIsMPolygon
+            ? DRW::MPOLYGON : DRW::HATCH;
+        const DRW::ETYPE wrongType = sourceIsMPolygon
+            ? DRW::HATCH : DRW::MPOLYGON;
+        retained->eType = wrongType;
+
+        const auto path = std::filesystem::temp_directory_path()
+            / ("libdxfrw-hatch-mpolygon-runtime-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + ".dxf");
+        if (std::filesystem::exists(path))
+            return fail("HATCH/MPOLYGON runtime output path unexpectedly exists");
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{path};
+        const std::string sentinel = "HATCH_MPOLYGON_DISPATCH_DESTINATION\n";
+        { std::ofstream previous(path, std::ios::binary);
+          previous << sentinel; }
+        if (adapter.fileExport(path.string(), DRW::AC1027, binary,
+                               &data, false, true))
+            return fail("mismatched HATCH/MPOLYGON runtime subtype was emitted");
+        std::ifstream previous(path, std::ios::binary);
+        const std::string retainedBytes(
+            (std::istreambuf_iterator<char>(previous)), {});
+        previous.close();
+        if (retainedBytes != sentinel)
+            return fail("mismatched HATCH/MPOLYGON subtype changed the destination");
+
+        retained->eType = correctType;
+        if (!adapter.fileExport(path.string(), DRW::AC1027, binary,
+                                &data, false, true))
+            return fail("corrected HATCH/MPOLYGON subtype did not retry successfully");
+        dx_data readback;
+        dx_iface reader;
+        if (!reader.fileImport(path.string(), &readback, false)
+            || readback.mBlock == nullptr
+            || readback.mBlock->ent.size() != 1u)
+            return fail("corrected HATCH/MPOLYGON subtype did not read back");
+        const DRW_Entity* const actual = readback.mBlock->ent.front();
+        if (sourceIsMPolygon) {
+            const auto* polygon = dynamic_cast<const DRW_MPolygon*>(actual);
+            if (polygon == nullptr || polygon->eType != DRW::MPOLYGON
+                || polygon->fillColorAci != 42
+                || polygon->annotatedBoundary != 1
+                || polygon->xDirX != 1.25 || polygon->xDirY != -2.0)
+                return fail("MPOLYGON-specific fields were lost on corrected retry");
+        } else if (actual == nullptr || actual->eType != DRW::HATCH
+                   || dynamic_cast<const DRW_MPolygon*>(actual) != nullptr) {
+            return fail("corrected HATCH retry changed the runtime subtype");
+        }
+        return true;
+    };
+
+    for (const bool sourceIsMPolygon : {false, true}) {
+        for (const bool binary : {false, true}) {
+            if (!runCase(sourceIsMPolygon, binary))
+                return false;
+        }
+    }
+    return true;
+}
+
 bool evaluationGraphCaptureLimitsFailClosed(bool binary) {
     dx_data data;
     dx_iface iface;
@@ -62474,6 +62564,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--typed-entity-capture-limits")
         return typedEntityCallbackCaptureLimitsFailClosed() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--hatch-mpolygon-runtime-dispatch")
+        return hatchMPolygonRuntimeDispatchGuard() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--evaluation-graph-capture-limits")
         return evaluationGraphCaptureLimitsFailClosed(false)

@@ -71340,10 +71340,22 @@ void dx_iface::writeEntity(DRW_Entity* e){
         written = dxfW->writeMultiLeader(static_cast<DRW_MLeader*>(e));
         break;
     case DRW::HATCH:
-        written = dxfW->writeHatch(static_cast<DRW_Hatch*>(e));
+        if (auto* hatch = dynamic_cast<DRW_Hatch*>(e)) {
+            // MPOLYGON inherits the common boundary model, but writing it as a
+            // HATCH drops its distinct version/fill/annotated-boundary data.
+            if (dynamic_cast<DRW_MPolygon*>(e) != nullptr)
+                dxfW->writeRawDxfEntity(nullptr);
+            else
+                written = dxfW->writeHatch(hatch);
+        } else {
+            dxfW->writeRawDxfEntity(nullptr);
+        }
         break;
     case DRW::MPOLYGON:
-        written = dxfW->writeMPolygon(static_cast<DRW_MPolygon*>(e));
+        if (auto* polygon = dynamic_cast<DRW_MPolygon*>(e))
+            written = dxfW->writeMPolygon(polygon);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::VIEWPORT: {
         auto* viewport = static_cast<DRW_Viewport*>(e);

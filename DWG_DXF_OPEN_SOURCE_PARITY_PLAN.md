@@ -484,6 +484,14 @@ eligible reader. The exact package and environment result are in the
   retry, and line-geometry readback; see the [3D dispatch receipt](docs/research/p8-3d-entity-runtime-type-dispatch-2026-11-02.json).
   This protects callback integrity only; it does not qualify 3D payload syntax,
   topology/kernel meaning, native consumers, or whole BLOCK inventory.
+  The same adapter now checks the HATCH/MPOLYGON subtype boundary in both
+  directions: a plain HATCH cannot enter the MPOLYGON writer, and an MPOLYGON
+  cannot be serialized as HATCH with its distinct fields dropped. Generated
+  ASCII/Binary refusal, destination-preservation, corrected-retry and typed
+  readback controls retain fill ACI, annotated-boundary and offset-vector
+  values; see the [HATCH/MPOLYGON dispatch receipt](docs/research/p8-hatch-mpolygon-runtime-dispatch-2026-11-02.json).
+  This is adapter integrity/transport evidence only and does not qualify native
+  fill, boundary or rendering semantics.
   The limited macOS ARM64
   2D open/insert profile is recorded in
   [the FreeCAD route receipt](docs/research/p8-macos-freecad-dwg2dxf-open-insert-qualification-2026-11-01.json);
