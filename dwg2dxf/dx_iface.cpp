@@ -71410,7 +71410,13 @@ void dx_iface::writeEntity(DRW_Entity* e){
     case DRW::E3DSOLID:
     case DRW::REGION:
     case DRW::BODY:
-        written = dxfW->writeModelerGeometry(static_cast<DRW_ModelerGeometry*>(e));
+        if (auto* modeler = dynamic_cast<DRW_ModelerGeometry*>(e)) {
+            written = dxfW->writeModelerGeometry(modeler);
+        } else {
+            // The public eType can be changed independently of the runtime
+            // object. Do not reinterpret a different entity as a modeler body.
+            dxfW->writeRawDxfEntity(nullptr);
+        }
         break;
     default:
         break;

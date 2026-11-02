@@ -475,7 +475,16 @@ eligible reader. The exact package and environment result are in the
   3D-consumer probe pass; see the [local API and 3D probe receipt](docs/research/p8-local-compat-and-generated-3d-probe-2026-11-02.json).
   These checks cover API shape and generated record delivery only, not native
   application behavior. Qualify intended 3D consumers and remaining FreeCAD
-  `dwg2dxf` profiles without dropping required geometry. The limited macOS ARM64
+  `dwg2dxf` profiles without dropping required geometry. The concrete BLOCK
+  serializer now runtime-checks `DRW_ModelerGeometry` before dispatching public
+  `eType` tags `3DSOLID`, `REGION`, and `BODY`; a mismatched
+  object fails atomically instead of being reinterpreted through an invalid
+  cast. Generated ASCII/Binary controls cover all three tags, existing-file
+  preservation, same-adapter correction/retry, and line-geometry readback; see
+  the [modeler dispatch receipt](docs/research/p8-modeler-runtime-type-dispatch-2026-11-02.json).
+  This protects callback integrity only; it does not qualify modeler payload
+  syntax, kernel meaning, native consumers, or whole BLOCK inventory.
+  The limited macOS ARM64
   2D open/insert profile is recorded in
   [the FreeCAD route receipt](docs/research/p8-macos-freecad-dwg2dxf-open-insert-qualification-2026-11-01.json);
   it does not qualify 3D semantics or other platforms. The generated Underlay
