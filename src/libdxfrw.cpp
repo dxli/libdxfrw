@@ -12267,9 +12267,9 @@ bool dxfRW::writeMesh(DRW_Mesh *ent) {
 bool dxfRW::writeShape(DRW_Shape *ent) {
     if (!preflightEntity(ent))
         return false;
-    // DXF SHAPE (AcDbShape). The DWG stores only a glyph index; the glyph name
-    // lives in the external .shx and is unrecoverable, so group 2 carries the
-    // SHAPEFILE/STYLE record name (resolved on read), matching libredwg/ACadSharp.
+    // DXF group 2 is the SHX shape name. A DWG SHAPE stores a glyph index and
+    // SHAPEFILE reference instead; an adapter must not substitute the STYLE
+    // table record name for the missing glyph name.
     // m_rotation/m_oblique are radians (DRW_Shape::parseDwg keeps them un-scaled,
     // unlike DRW_Text) -> convert to DXF degrees.
     const auto finite = [](const DRW_Coord& point) {
@@ -12279,7 +12279,7 @@ bool dxfRW::writeShape(DRW_Shape *ent) {
     if (!finite(ent->m_insertionPoint) || !finite(ent->m_extrusion)
         || !std::isfinite(ent->m_scale) || !std::isfinite(ent->m_rotation)
         || !std::isfinite(ent->m_widthFactor) || !std::isfinite(ent->m_oblique)
-        || !std::isfinite(ent->m_thickness)) {
+        || !std::isfinite(ent->m_thickness) || ent->m_styleName.empty()) {
         m_writeError = true;
         return false;
     }

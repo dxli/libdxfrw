@@ -22313,12 +22313,45 @@ bool runDxfSurfaceRoundTrip(bool binary,
         static_cast<std::uint32_t>(ole->m_payloadBytes.size());
     ole->m_declaredPayloadLength = ole->m_payloadByteCount;
     surfaceBlock->ent.push_back(ole);
+    auto* shape = new DRW_Shape();
+    shape->handle = 0xFC0Bu;
+    shape->parentHandle = surfaceBlockRecordHandle;
+    shape->m_insertionPoint = DRW_Coord(8.0, 9.0, 10.0);
+    shape->m_scale = 1.75;
+    shape->m_rotation = 0.5;
+    shape->m_widthFactor = 0.8;
+    shape->m_oblique = 0.1;
+    shape->m_thickness = 0.25;
+    shape->m_extrusion = DRW_Coord(0.0, 0.0, 1.0);
+    surfaceBlock->ent.push_back(shape);
     source.blocks.push_back(surfaceBlock);
 
     dx_iface exporter;
+    const std::string rejectedDestination = "SHAPE_DESTINATION_SENTINEL";
+    {
+        std::ofstream prior(output, std::ios::binary);
+        prior << rejectedDestination;
+    }
+    const bool namelessShapeAccepted = exporter.fileExport(
+        output.string(), DRW::AC1027, binary, &source, false);
+    std::ifstream priorInput(output, std::ios::binary);
+    const std::string priorContents(
+        std::istreambuf_iterator<char>{priorInput},
+        std::istreambuf_iterator<char>{});
+    priorInput.close();
+    if (namelessShapeAccepted || priorContents != rejectedDestination) {
+        std::cerr << "Nameless DXF SHAPE was emitted or changed the existing "
+                     "destination ("
+                  << encoding << ")\n";
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
+    shape->m_styleName = "BLOCK_GLYPH";
     if (!exporter.fileExport(output.string(), DRW::AC1027, binary, &source,
                              false)) {
-        std::cerr << "DXF surface export failed (" << encoding << ")\n";
+        std::cerr << "DXF surface/shape export or corrected retry failed ("
+                  << encoding << ")\n";
         if (!keepOutput)
             std::filesystem::remove(output, ec);
         return false;
@@ -22341,7 +22374,7 @@ bool runDxfSurfaceRoundTrip(bool binary,
     };
     const auto blockTailMatches = [&](const dx_ifaceBlock* target,
                                       std::size_t prefixCount) {
-        if (target == nullptr || target->ent.size() != prefixCount + 5u)
+        if (target == nullptr || target->ent.size() != prefixCount + 6u)
             return false;
         auto entityIt = target->ent.begin();
         for (std::size_t index = 0; index < prefixCount; ++index)
@@ -22410,13 +22443,25 @@ bool runDxfSurfaceRoundTrip(bool binary,
                 != ole2->m_declaredPayloadLength)
             return false;
         const auto* capturedOle =
-            dynamic_cast<const DRW_OleFrame*>(*entityIt);
+            dynamic_cast<const DRW_OleFrame*>(*entityIt++);
         if (capturedOle == nullptr || capturedOle->eType != DRW::OLEFRAME
             || capturedOle->m_flags != ole->m_flags
             || capturedOle->m_payloadBytes != ole->m_payloadBytes
             || !capturedOle->m_payloadPresent
             || capturedOle->m_declaredPayloadLength
                 != ole->m_declaredPayloadLength)
+            return false;
+        const auto* capturedShape =
+            dynamic_cast<const DRW_Shape*>(*entityIt);
+        if (capturedShape == nullptr || capturedShape->eType != DRW::SHAPE
+            || capturedShape->m_styleName != shape->m_styleName
+            || !sameCoord(capturedShape->m_insertionPoint,
+                          shape->m_insertionPoint)
+            || capturedShape->m_scale != shape->m_scale
+            || capturedShape->m_rotation != shape->m_rotation
+            || capturedShape->m_widthFactor != shape->m_widthFactor
+            || capturedShape->m_oblique != shape->m_oblique
+            || capturedShape->m_thickness != shape->m_thickness)
             return false;
         return true;
     };
@@ -22430,7 +22475,7 @@ bool runDxfSurfaceRoundTrip(bool binary,
             }
         }
         if (target == nullptr
-            || target->ent.size() != sourceSurfaces.size() + 5u)
+            || target->ent.size() != sourceSurfaces.size() + 6u)
             return false;
         const std::array<DRW::ETYPE, 6> expectedTypes {{
             DRW::PLANESURFACE, DRW::EXTRUDEDSURFACE,

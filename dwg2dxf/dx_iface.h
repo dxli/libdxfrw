@@ -757,6 +757,14 @@ public:
     void addCamera(const DRW_Camera& data) override{
         retainTypedEntity<DRW_Camera>(data);
     }
+    void addShape(const DRW_Shape& data) override {
+        if (data.eType != DRW::SHAPE) {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
+            return;
+        }
+        retainTypedEntity<DRW_Shape>(data);
+    }
     void addOle2Frame(const DRW_Ole2Frame& data) override {
         if (data.eType != DRW::OLE2FRAME) {
             if (cData != nullptr)

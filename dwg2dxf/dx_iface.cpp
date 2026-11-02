@@ -15106,6 +15106,13 @@ bool addOleFrameRetainedBytes(
         && estimate <= kMaxAdapterTypedEntityRetainedBytes;
 }
 
+bool addShapeRetainedBytes(
+        const DRW_Shape& shape, std::size_t& estimate) noexcept {
+    return addStringPayloadBytes(shape.m_styleName, estimate)
+        && addVectorPayloadBytes(shape.m_rawBytes, estimate)
+        && estimate <= kMaxAdapterTypedEntityRetainedBytes;
+}
+
 bool addAttributeRetainedBytes(
         const DRW_Attrib& attribute, std::size_t& estimate) noexcept {
     if (!addStringPayloadBytes(attribute.tag, estimate)
@@ -15414,6 +15421,10 @@ bool estimateTypedEntityRetainedBytes(
     if (const auto* section =
             dynamic_cast<const DRW_SectionObject*>(&entity)) {
         if (!addSectionObjectRetainedBytes(*section, estimate))
+            return false;
+    }
+    if (const auto* shape = dynamic_cast<const DRW_Shape*>(&entity)) {
+        if (!addShapeRetainedBytes(*shape, estimate))
             return false;
     }
     if (const auto* ole2 = dynamic_cast<const DRW_Ole2Frame*>(&entity)) {
@@ -70804,6 +70815,24 @@ void dx_iface::writeEntity(DRW_Entity* e){
             written = dxfW->writeCamera(camera);
         else
             written = dxfW->writeCamera(nullptr);
+        break;
+    case DRW::SHAPE:
+        if (auto* shape = dynamic_cast<DRW_Shape*>(e)) {
+            // DWG stores a glyph index plus a SHAPEFILE table handle, not the
+            // SHX symbol name required by DXF group 2. The current DWG reader
+            // can resolve the STYLE row but cannot recover that glyph name.
+            // Keep this source profile fail-closed until an SHX-backed map is
+            // available; DXF-origin shape names remain directly writable.
+            if (cData != nullptr
+                && cData->sourceFormat == dx_source_format::DWG
+                && shape->m_shapeFileHandle != 0u) {
+                written = dxfW->writeShape(nullptr);
+            } else {
+                written = dxfW->writeShape(shape);
+            }
+        } else {
+            written = dxfW->writeShape(nullptr);
+        }
         break;
     case DRW::OLE2FRAME:
         if (auto* ole2 = dynamic_cast<DRW_Ole2Frame*>(e))
