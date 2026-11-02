@@ -614,6 +614,13 @@ def check_batch(converter, root, writer):
     output, result = invoke(mixed, "mixed missing first", 1)
     if not (output / output_name(source)).is_file() or b"Failed:" not in result.stdout:
         raise AssertionError("mixed batch did not continue/report independent item")
+    mixed = (str(source) + "\n" + str(missing) + "\n").encode("utf-8")
+    output, result = invoke(mixed, "mixed missing last", 1)
+    if (set(output.iterdir()) != {output / output_name(source)}
+            or b"Success:" not in result.stdout or b"Failed:" not in result.stdout):
+        raise AssertionError(
+            "success-first mixed batch did not publish the valid item and report "
+            "the later failure")
     output, _ = invoke((str(missing) + "\n").encode(), "missing only", 1)
     if list(output.iterdir()):
         raise AssertionError("missing-only batch published output")
