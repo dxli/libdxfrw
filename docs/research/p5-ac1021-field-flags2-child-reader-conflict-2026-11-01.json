@@ -367,10 +367,10 @@
   ],
   "fixturePolicy": "No DWG or DXF fixtures were added or committed. The source DWG remains a pre-existing local untracked input.",
   "implementationReadiness": {
-    "guardRegression": "Added a generated in-memory AC1021 FIELD with an ACFD_FIELDTEXT_CHECKSUM flags=2/type=2 child followed by an opaque 34-bit body tail. It must remain incomplete, expose no typed child value, and refuse DWG re-encoding.",
+        "guardRegression": "Added a generated in-memory AC1021 FIELD with an ACFD_FIELDTEXT_CHECKSUM flags=2/type=2 child followed by an opaque 34-bit body tail. It remains incomplete, exposes no typed child value, and refuses DWG re-encoding; the same parser instance then accepts and encodes a corrected complete frame on retry.",
     "testFile": "tests/dwg_object_vectors_tests.cpp",
     "build": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j2",
-    "fastTest": "ctest --test-dir build-gcc -R ^libdxfrw_field_unqualified_format_flags$ --output-on-failure",
-    "result": "Build passed with -Werror; focused test passed 1/1. Control was authored in memory; no DWG/DXF fixture file was added."
+        "fastTest": "ctest --test-dir build-gcc -R ^libdxfrw_field_unqualified_format_flags$ --output-on-failure",
+        "result": "Build passed with -Werror; focused test passed 1/1, including corrected same-object retry and successful encoding. Control was authored in memory; no DWG/DXF fixture file was added."
   }
 }

@@ -186,7 +186,7 @@ census receipt](docs/research/p5-viewport-layer-override-local-corpus-census-202
    candidate matched all 71 handle/value pairs; this conflicts with current
    LibreDWG and is not enough to override the specification. Keep the records
    raw-only until an eligible producer source or bounded independent reader
-   adjudicates the spans. See the [reader-conflict receipt](docs/research/p5-ac1021-field-flags2-child-reader-conflict-2026-11-01.json). A generated in-memory AC1021 control with a flags=2/type=2 child and opaque 34-bit tail now verifies that this boundary remains incomplete; no DWG/DXF fixture was added. The type-8 receipt records
+   adjudicates the spans. See the [reader-conflict receipt](docs/research/p5-ac1021-field-flags2-child-reader-conflict-2026-11-01.json). A generated in-memory AC1021 control with a flags=2/type=2 child and opaque 34-bit tail verifies that this boundary remains incomplete; the same parser instance also accepts and encodes a corrected complete frame on retry. No DWG/DXF fixture was added. The type-8 receipt records
    the group-98 wire-type
    disagreement and unresolved child-count framing for type-4 roots. For the
    physical AC1021 FIELD population, only 15 `AcExpr` records presently parse

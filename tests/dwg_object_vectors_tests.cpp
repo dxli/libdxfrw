@@ -5685,6 +5685,35 @@ void testFieldCadValueUnqualifiedFormatFlags(TestContext& t) {
                      && handles.bitCount() == 0u,
                  "AC1021 flags-2/type-2 FIELD child remains incomplete when "
                  "its following unexplained 34-bit body tail");
+
+        FieldFrame correctedRetryFrame;
+        const bool correctedRetryBuilt =
+            makeFieldFrame(false, false, correctedRetryFrame);
+        t.expect(correctedRetryBuilt,
+                 "valid AC1021 FIELD correction frame builds for same-object retry");
+        if (correctedRetryBuilt) {
+            dwgBuffer retryInput(correctedRetryFrame.bytes.data(),
+                                 correctedRetryFrame.bytes.size(), &codec);
+            const bool retried = parsed.parseDwg(
+                DRW::AC1021, &retryInput, correctedRetryFrame.handleBits);
+            dwgBufferW retryBody, retryStrings, retryHandles;
+            const bool retryEncoded = retried && parsed.encodeDwg(
+                DRW::AC1021, &retryBody, &retryStrings, &retryHandles);
+            t.expect(retried && retryInput.isGood(),
+                     "AC1021 FIELD same-object retry parses the corrected frame");
+            t.expect(parsed.hasCompleteDwgPayload(),
+                     "AC1021 FIELD corrected retry marks the new body complete");
+            t.expect(parsed.m_childValues.empty()
+                         && parsed.m_value.m_dataType == 1
+                         && parsed.m_valueString == "42",
+                     "AC1021 FIELD corrected retry replaces the incomplete typed state");
+            t.expect(parsed.isDwgPayloadValid(DRW::AC1021),
+                     "AC1021 FIELD corrected retry is valid for DWG encoding");
+            t.expect(retryEncoded && retryBody.bitCount() != 0u
+                         && retryStrings.bitCount() != 0u
+                         && retryHandles.isGood(),
+                     "AC1021 FIELD corrected same-object retry encodes successfully");
+        }
     }
 
     for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
