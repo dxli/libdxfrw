@@ -4570,7 +4570,9 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
                     std::int32_t typedRootValueType = 0,
                     std::int32_t typedChildValueType = 0,
                     std::int32_t unsupportedChildValueType = 0,
-                    std::int32_t rootFormatFlagsOverride = -1) {
+                    std::int32_t rootFormatFlagsOverride = -1,
+                    std::int32_t unknownChildValueType = 1024,
+                    bool knownUnknownRootValue = false) {
     constexpr std::uint32_t fieldHandle = 0xA100u;
 
     DRW_TextCodec codec;
@@ -4591,6 +4593,11 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
         source.m_value.m_unitType = 1;
         source.m_value.m_formatString = "0.0";
         source.m_value.m_valueString = "42.5";
+    } else if (knownUnknownRootValue) {
+        source.m_value.m_formatFlags = 0;
+        source.m_value.m_dataType = 0;
+        source.m_value.m_value.addInt(91, 42);
+        source.m_value.m_unitType = 12;
     } else if (unknownRootValue || unqualifiedUnknownRootValue) {
         source.m_value.m_formatFlags = 0;
         // Start from an encodable kLong value, then rewrite its data-type BL
@@ -4823,9 +4830,14 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
         }
         if (unknownChildValue) {
             body.putBitLong(1);
-            body.putBitLong(0); // no special R2007 value formatting flags
-            body.putBitLong(1024); // unknown CadValue kind, no guessed payload
             strings.putVariableText(version, "UNKNOWN_CAD_VALUE");
+            body.putBitLong(0); // no special R2007 value formatting flags
+            body.putBitLong(unknownChildValueType);
+            if (unknownChildValueType == 0) {
+                body.putBitLong(43); // kUnknown BL transport value
+                body.putBitLong(12); // suppress detached value string
+                strings.putVariableText(version, ""); // format string
+            }
         } else if (unsupportedChildValueType == 128
                    || unsupportedChildValueType == 256) {
             body.putBitLong(1);
@@ -5446,34 +5458,54 @@ void testFieldUnsupportedChildCadValueBuffers(TestContext& t) {
 
 void testFieldUnknownChildCadValueVersions(TestContext& t) {
     for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
-        FieldFrame frame;
-        const bool built = makeFieldFrame(
-            false, false, frame, true, false, false, false, version);
-        t.expect(built,
-                 "FIELD unknown child CadValue frame builds for version "
-                     + std::to_string(static_cast<int>(version)));
-        if (!built)
-            continue;
+        for (const std::int32_t dataType : {0, 1024}) {
+            FieldFrame frame;
+            const bool built = makeFieldFrame(
+                false, false, frame, true, false, false, false, version,
+                false, false, false, 0, 0, 0, -1, dataType);
+            t.expect(built,
+                     "FIELD child CadValue frame builds for version "
+                         + std::to_string(static_cast<int>(version))
+                         + " type=" + std::to_string(dataType));
+            if (!built)
+                continue;
 
-        DRW_TextCodec codec;
-        codec.setVersion(version, false);
-        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
-        FieldCodecProbe parsed;
-        const bool read = parsed.parseDwg(version, &input, frame.handleBits);
-        t.expect(read && input.isGood() && !parsed.hasCompleteDwgPayload()
-                     && parsed.handle == 0xA100u
-                     && parsed.parentHandle == 0xA200u
-                     && parsed.m_childValues.empty(),
-                 "FIELD unknown child kind remains an incomplete bounded shell "
-                     + std::to_string(static_cast<int>(version)));
+            DRW_TextCodec codec;
+            codec.setVersion(version, false);
+            dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+            FieldCodecProbe parsed;
+            const bool read = parsed.parseDwg(version, &input, frame.handleBits);
+            const bool knownUnknownType = dataType == 0;
+            const DRW_CadValue* child = parsed.m_childValues.size() == 1u
+                ? &parsed.m_childValues.front().m_value : nullptr;
+            t.expect(read && input.isGood()
+                         && parsed.hasCompleteDwgPayload() == knownUnknownType
+                         && parsed.handle == 0xA100u
+                         && parsed.parentHandle == 0xA200u
+                         && (knownUnknownType
+                                 ? child != nullptr
+                                       && child->m_dataType == 0
+                                       && child->m_value.type()
+                                              == DRW_Variant::INTEGER
+                                       && child->m_value.i_val() == 43
+                                 : parsed.m_childValues.empty()),
+                     "FIELD child type 0 retains its known BL frame while "
+                     "unknown type 1024 remains an incomplete shell for "
+                         + std::to_string(static_cast<int>(version)));
 
-        dwgBufferW body, strings, handles;
-        const bool encoded = parsed.encodeDwg(
-            version, &body, &strings, &handles);
-        t.expect(!encoded && body.bitCount() == 0
-                     && strings.bitCount() == 0 && handles.bitCount() == 0,
-                 "FIELD unknown child shell refuses typed rewrite before output "
-                     + std::to_string(static_cast<int>(version)));
+            dwgBufferW body, strings, handles;
+            const bool encoded = parsed.encodeDwg(
+                version, &body, &strings, &handles);
+            t.expect(encoded == knownUnknownType
+                         && (knownUnknownType
+                                 ? body.bitCount() > 0
+                                 : body.bitCount() == 0
+                                       && strings.bitCount() == 0
+                                       && handles.bitCount() == 0),
+                     "FIELD child type 0 BL transport can be rewritten while "
+                     "unknown type 1024 is refused for "
+                         + std::to_string(static_cast<int>(version)));
+        }
     }
 }
 
@@ -5617,19 +5649,89 @@ void testFieldCadValueUnknownType(TestContext& t) {
                 ? parsed.m_value.m_value.type() == DRW_Variant::INVALID
                 : parsed.m_value.m_value.type() == DRW_Variant::INTEGER
                     && parsed.m_value.m_value.i_val() == 42;
+            const bool complete = !unqualifiedFlag;
             t.expect(read && input.isGood()
-                         && !parsed.hasCompleteDwgPayload()
-                         && !parsed.isDwgPayloadValid(version)
+                         && parsed.hasCompleteDwgPayload() == complete
+                         && parsed.isDwgPayloadValid(version) == complete
                          && parsed.m_value.m_dataType == 0 && payloadRetained,
-                     "FIELD kUnknown stays semantically incomplete with "
-                     "known BL or unqualified flag framing for "
+                     "FIELD kUnknown BL transport is retained while "
+                     "unqualified flag framing remains refused for "
                          + std::to_string(static_cast<int>(version)));
             dwgBufferW body, strings, handles;
-            t.expect(!parsed.encodeDwg(version, &body, &strings, &handles),
-                     "FIELD writer refuses to serialize incomplete kUnknown "
-                     "payload for "
+            const bool encoded = parsed.encodeDwg(
+                version, &body, &strings, &handles);
+            t.expect(encoded == complete
+                         && (complete
+                                 ? body.bitCount() > 0
+                                 : body.bitCount() == 0
+                                       && strings.bitCount() == 0
+                                       && handles.bitCount() == 0),
+                     "FIELD writer preserves known kUnknown BL transport and "
+                     "refuses unqualified flag framing for "
                          + std::to_string(static_cast<int>(version)));
         }
+    }
+
+    for (const DRW::Version version : {DRW::AC1018}) {
+        FieldFrame frame;
+        const bool built = makeFieldFrame(
+            false, false, frame, false, false, false, false, version,
+            false, false, false, 0, 0, 0, -1, 1024, true);
+        t.expect(built,
+                 "legacy FIELD kUnknown BL frame builds for "
+                     + std::to_string(static_cast<int>(version)));
+        if (!built)
+            continue;
+
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+        FieldCodecProbe parsed;
+        const bool read = parsed.parseDwg(version, &input, frame.handleBits);
+        dwgBufferW body, strings, handles;
+        const bool encoded = parsed.encodeDwg(version, &body, &strings, &handles);
+        t.expect(read && input.isGood() && parsed.hasCompleteDwgPayload(),
+                 "legacy FIELD kUnknown BL frame parses completely for "
+                     + std::to_string(static_cast<int>(version)));
+        t.expect(parsed.isDwgPayloadValid(version)
+                     && parsed.m_value.m_dataType == 0
+                     && parsed.m_value.m_value.type() == DRW_Variant::INTEGER
+                     && parsed.m_value.m_value.i_val() == 42,
+                 "legacy FIELD kUnknown BL value is retained for "
+                     + std::to_string(static_cast<int>(version)));
+        t.expect(encoded && body.bitCount() > 0,
+                 "legacy FIELD kUnknown BL payload re-encodes for "
+                     + std::to_string(static_cast<int>(version)));
+    }
+
+    for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+        FieldFrame suppressedFrame;
+        const bool built = makeFieldFrame(
+            false, false, suppressedFrame, false, false, false, false,
+            version, false, true, false, 0, 0, 0, 0x03);
+        t.expect(built,
+                 "FIELD kUnknown payload-suppressed frame builds for "
+                     + std::to_string(static_cast<int>(version)));
+        if (!built)
+            continue;
+
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        dwgBuffer input(suppressedFrame.bytes.data(),
+                        suppressedFrame.bytes.size(), &codec);
+        FieldCodecProbe parsed;
+        const bool read = parsed.parseDwg(
+            version, &input, suppressedFrame.handleBits);
+        dwgBufferW body, strings, handles;
+        const bool encoded = parsed.encodeDwg(
+            version, &body, &strings, &handles);
+        t.expect(read && input.isGood() && !parsed.hasCompleteDwgPayload()
+                     && !parsed.isDwgPayloadValid(version) && !encoded
+                     && body.bitCount() == 0 && strings.bitCount() == 0
+                     && handles.bitCount() == 0,
+                 "FIELD kUnknown payload-suppressed/general flag remains "
+                 "unqualified for "
+                     + std::to_string(static_cast<int>(version)));
     }
 
     for (const DRW::Version version : {
@@ -5654,16 +5756,41 @@ void testFieldCadValueUnknownType(TestContext& t) {
             const bool valid = constructed.isDwgPayloadValid(version);
             const bool encoded = constructed.encodeDwg(
                 version, &body, &strings, &handles);
-            t.expect(!valid && !encoded && body.bitCount() == 0
-                         && strings.bitCount() == 0
-                         && handles.bitCount() == 0,
-                     "FIELD writer refuses constructed kUnknown type 0 for "
+            const bool transportSupported = formatFlags[i] == 0;
+            t.expect(valid == transportSupported
+                         && encoded == transportSupported
+                         && (transportSupported
+                                 ? body.bitCount() > 0
+                                 : body.bitCount() == 0
+                                       && strings.bitCount() == 0
+                                       && handles.bitCount() == 0),
+                     "FIELD writer preserves canonical kUnknown type 0 "
+                     "transport for "
                          + std::to_string(static_cast<int>(version))
                          + ((formatFlags[i] & 0x08) != 0
                                 ? " with an unqualified format flag"
                                 : " with a BL payload"));
         }
     }
+
+    FieldCodecProbe malformed;
+    malformed.setDwgCommonObjectState(0, 1, false);
+    malformed.m_evaluatorId = "ACAD";
+    malformed.m_fieldCode = "UNKNOWN_CAD_VALUE_WITH_EXTRA_BYTES";
+    malformed.m_value.m_dataType = 0;
+    malformed.m_value.m_value.addInt(91, 42);
+    malformed.m_value.m_dataSize = 1u;
+    malformed.m_value.m_rawData = {0x2Au};
+    malformed.m_value.m_unitType = 12;
+    dwgBufferW malformedBody, malformedStrings, malformedHandles;
+    t.expect(!malformed.isDwgPayloadValid(DRW::AC1021)
+                 && !malformed.encodeDwg(DRW::AC1021, &malformedBody,
+                                          &malformedStrings,
+                                          &malformedHandles)
+                 && malformedBody.bitCount() == 0
+                 && malformedStrings.bitCount() == 0
+                 && malformedHandles.bitCount() == 0,
+             "FIELD kUnknown BL writer refuses extra data it cannot encode");
 }
 
 void testFieldOversizedChildValueCount(TestContext& t) {
@@ -17326,7 +17453,8 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--field-cadvalue-unknown-type") {
         TestContext context;
         testFieldCadValueUnknownType(context);
-        std::cout << "AC1021/AC1024 FIELD CadValue kUnknown semantics: "
+        std::cout << "AC1015/AC1018/AC1021/AC1024 FIELD CadValue "
+                     "kUnknown transport: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

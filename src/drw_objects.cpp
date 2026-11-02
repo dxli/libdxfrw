@@ -2497,17 +2497,12 @@ CadValueReadResult readCadValue(
     if (value.hasDwgPayload(version)) {
         switch (value.m_dataType) {
         case 0:
-            if (!readLong(parsed))
-                return CadValueReadResult::Error;
-            // ODA §20.4.99 defines the framing as BL but the value kind as
-            // Unknown. Retain the observed payload for diagnostics, then let
-            // FIELD's bounded fallback expose an incomplete shell rather
-            // than a semantically complete integer.
-            value.m_value.addInt(91, parsed);
-            return CadValueReadResult::Unsupported;
         case 1:
             if (!readLong(parsed))
                 return CadValueReadResult::Error;
+            // ODA §20.4.99 defines kUnknown's wire payload as BL. Keep the
+            // integer as transport data; this does not assign application
+            // meaning to the unknown value.
             value.m_value.addInt(91, parsed);
             break;
         case 2: {
@@ -10822,11 +10817,6 @@ bool DRW_Field::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
         valueHasHandle !=
             DRW_Field::cadValueHasDwgObjectHandle(version, m_value))
       return fail();
-    if (m_value.m_dataType == 0) {
-      DRW_DBG("FIELD kUnknown value; keeping incomplete FIELD shell\n");
-      return finishSoft();
-    }
-
     if (!readText(m_valueString) || !readLong(m_valueStringLength))
       return fail();
 
@@ -10876,10 +10866,6 @@ bool DRW_Field::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
           !objectBodyFitsSize(currentObjectDwgBit(&bodyProbe), bodyEnd) ||
           !objectBodyFitsSize(currentObjectDwgBit(textProbe), stringEnd))
         return fail();
-      if (childValue.m_value.m_dataType == 0) {
-        DRW_DBG("FIELD child kUnknown value; keeping incomplete FIELD shell\n");
-        return finishSoft();
-      }
       *bodyBuf = bodyProbe;
       if (version > DRW::AC1018)
         *bodyStringBuf = stringProbe;
@@ -21211,10 +21197,10 @@ bool isWritableCadValue(DRW::Version version, const DRW_CadValue& value) {
     if ((version > DRW::AC1018 && (value.m_formatFlags & ~0x03) != 0)
         || (version <= DRW::AC1018 && value.m_formatFlags != 0))
         return false;
-    // ODA §20.4.99 names type 0 kUnknown. Its framing can be decoded, but it
-    // has no known typed semantics; in particular, the R2007+ empty-value
-    // flag must not make an unknown kind writable as a complete FIELD value.
-    if (value.m_dataType == 0)
+    // ODA §20.4.99 defines the payload framing for kUnknown as BL, so preserve
+    // that transport value. A suppressed/absent kUnknown payload is not
+    // admitted: its meaning depends on the R2007+ general-value flag profile.
+    if (value.m_dataType == 0 && !value.hasDwgPayload(version))
         return false;
 
     if (!value.hasDwgPayload(version)) {
@@ -21227,12 +21213,14 @@ bool isWritableCadValue(DRW::Version version, const DRW_CadValue& value) {
             && value.m_handle == 0u;
     }
     if ((value.m_dataType != 64 && value.m_handle != 0u)
-        || ((value.m_dataType == 1 || value.m_dataType == 2
+        || ((value.m_dataType == 0 || value.m_dataType == 1
+             || value.m_dataType == 2
              || value.m_dataType == 4 || value.m_dataType == 64)
             && (value.m_dataSize != 0u || !value.m_rawData.empty())))
         return false;
 
     switch (value.m_dataType) {
+    case 0:
     case 1:
         return value.m_value.type() == DRW_Variant::INTEGER;
     case 2:
