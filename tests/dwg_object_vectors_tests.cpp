@@ -59,6 +59,13 @@ public:
     using DRW_Dictionary::encodeDwg;
 };
 
+class DictionaryWithDefaultCodecProbe final
+    : public DRW_DictionaryWithDefault {
+public:
+    using DRW_DictionaryWithDefault::encodeDwg;
+    using DRW_DictionaryWithDefault::parseDwg;
+};
+
 using XRecordEncodeProbe = xrecord_test::CodecProbe;
 
 class FieldCodecProbe final : public DRW_Field {
@@ -18837,6 +18844,126 @@ bool makeAc1014ScaleUnitFrame(double paperUnits, double drawingUnits,
     return true;
 }
 
+bool makeDictionaryWithDefaultHandleRoleFrame(
+    bool wrongDefaultHandleRole, std::vector<std::uint8_t>& bytes) {
+    constexpr DRW::Version version = DRW::AC1015;
+    constexpr std::uint32_t objectHandle = 0x550u;
+    constexpr std::uint32_t ownerHandle = 0x500u;
+    constexpr std::uint32_t entryHandle = 0x551u;
+    constexpr std::uint32_t sentinelHandle = 0x552u;
+
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+
+    DictionaryWithDefaultCodecProbe source;
+    source.handle = objectHandle;
+    source.parentHandle = ownerHandle;
+    source.cloning = 1;
+    source.hardOwner = 1;
+    source.m_entries.push_back({"Default", entryHandle});
+    source.m_defaultEntryHandle = entryHandle;
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    if (!source.encodeDwg(version, &body, &strings, &handles)
+        || !strings.isGood() || !strings.data().empty()
+        || handles.handleOccurrences().size() != 4u)
+        return false;
+
+    const auto& handleOccurrences = handles.handleOccurrences();
+    const DRW::DwgHandleWriteOccurrence defaultOccurrence =
+        handleOccurrences.back();
+    if (defaultOccurrence.code != DRW::DwgHardPointer
+        || defaultOccurrence.reference != entryHandle
+        || (defaultOccurrence.startBit & 7u) != 0u)
+        return false;
+
+    dwgHandle sentinel;
+    sentinel.code = DRW::DwgSoftPointer;
+    sentinel.ref = sentinelHandle;
+    sentinel.ref64 = sentinelHandle;
+    handles.putHandle(sentinel);
+    if (!handles.isGood())
+        return false;
+
+    if (wrongDefaultHandleRole) {
+        const std::size_t headerOffset = static_cast<std::size_t>(
+            defaultOccurrence.startBit / 8u);
+        if (headerOffset >= handles.data().size())
+            return false;
+        const std::uint8_t encodedSize = static_cast<std::uint8_t>(
+            handles.data()[headerOffset] & 0x0Fu);
+        handles.data()[headerOffset] = static_cast<std::uint8_t>(
+            (DRW::DwgSoftPointer << 4u) | encodedSize);
+    }
+
+    dwgBufferW frame(&codec);
+    frame.putObjType(version, DRW_DictionaryWithDefault::kDwgClassNum);
+    const std::uint64_t sizeFieldBit = frame.bitCount();
+    frame.putRawLong32(0u); // patched to the start of the handle stream
+    dwgHandle ownHandle;
+    ownHandle.ref = objectHandle;
+    frame.putHandle(ownHandle);
+    frame.putBitShort(0u); // no EED
+    frame.putBitLong(0); // no reactors
+    appendBits(frame, body);
+    if (!frame.isGood()
+        || frame.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    frame.patchRawLong32AtBit(
+        sizeFieldBit, static_cast<std::uint32_t>(frame.bitCount()));
+    appendBits(frame, handles);
+    if (!frame.isGood())
+        return false;
+    bytes = frame.data();
+    return true;
+}
+
+void testDictionaryWithDefaultHandleRole(TestContext& t) {
+    std::vector<std::uint8_t> validBytes;
+    const bool validFrameBuilt =
+        makeDictionaryWithDefaultHandleRoleFrame(false, validBytes);
+    t.expect(validFrameBuilt,
+             "DICTIONARYWDFLT generated hard-pointer frame builds");
+    if (validFrameBuilt) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1015, false);
+        dwgBuffer input(validBytes.data(), validBytes.size(), &codec);
+        DictionaryWithDefaultCodecProbe parsed;
+        const bool read = parsed.parseDwg(DRW::AC1015, &input);
+        t.expect(read && input.isGood() && parsed.hasCompleteDwgEntries()
+                     && parsed.handle == 0x550u
+                     && parsed.m_defaultEntryHandle == 0x551u
+                     && parsed.m_entries.size() == 1u
+                     && parsed.m_entries.front().m_name == "Default"
+                     && parsed.m_entries.front().m_handle == 0x551u,
+                 "DICTIONARYWDFLT accepts its ODA hard-pointer default entry");
+        const dwgHandle sentinel = input.getHandle();
+        t.expect(input.isGood() && sentinel.code == DRW::DwgSoftPointer
+                     && sentinel.ref == 0x552u,
+                 "DICTIONARYWDFLT default-handle role check preserves stream alignment");
+    }
+
+    std::vector<std::uint8_t> wrongRoleBytes;
+    const bool wrongRoleFrameBuilt =
+        makeDictionaryWithDefaultHandleRoleFrame(true, wrongRoleBytes);
+    t.expect(wrongRoleFrameBuilt,
+             "DICTIONARYWDFLT generated wrong-role frame builds");
+    if (wrongRoleFrameBuilt) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1015, false);
+        dwgBuffer input(wrongRoleBytes.data(), wrongRoleBytes.size(), &codec);
+        DictionaryWithDefaultCodecProbe rejected;
+        rejected.m_defaultEntryHandle = 0xDEADu;
+        rejected.m_entries.push_back({"stale", 0xDEADu});
+        const bool read = rejected.parseDwg(DRW::AC1015, &input);
+        t.expect(!read && !input.isGood()
+                     && rejected.m_defaultEntryHandle == 0u
+                     && rejected.m_entries.empty()
+                     && !rejected.hasCompleteDwgEntries(),
+                 "DICTIONARYWDFLT rejects soft-pointer default and rolls back typed state");
+    }
+}
+
 void testScaleDwgPositiveUnitDomain(TestContext& t) {
     const std::array<DRW::Version, 6> versions{{
         DRW::AC1015, DRW::AC1018, DRW::AC1021,
@@ -18905,6 +19032,14 @@ void testScaleDwgPositiveUnitDomain(TestContext& t) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--dictionary-default-handle-role") {
+        TestContext context;
+        testDictionaryWithDefaultHandleRole(context);
+        std::cout << "DICTIONARYWDFLT default handle role: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
     if (argc == 2
         && std::string(argv[1]) == "--scale-dwg-unit-domains") {
         TestContext context;

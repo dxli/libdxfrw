@@ -1355,6 +1355,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_scale_dwg_unit_domains PROPERTIES
         LABELS "fast;dwg;object-vectors;scale;generated"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_dictionary_default_handle_role
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --dictionary-default-handle-role)
+    set_tests_properties(libdxfrw_dictionary_default_handle_role PROPERTIES
+        LABELS "fast;dwg;object-vectors;graph;generated"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_dimassoc_dwg_detail_readback
         COMMAND libdxfrw_dwg_object_vectors_tests
             --dimassoc-dwg-detail-readback)

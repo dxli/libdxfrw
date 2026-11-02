@@ -108,6 +108,8 @@ engines.
    typed output or a proven end-to-end replay path. Keep unresolved records
    refused. Never weaken the completeness predicate, emit a partial graph, or
    infer edges from adjacent handle values.
+   The generated `DICTIONARYWDFLT` vector now rejects a zero or non-hard-pointer default edge before typed publication; its following soft-pointer sentinel proves cursor alignment, and the malformed frame proves state rollback. The owning fast test passes. This establishes only the wire role: target existence/type, ownership, and output closure remain open. See [the default-handle role receipt](docs/research/p4-dictionary-default-handle-role-guard-2026-11-02.json).
+
 3. **Recursive closure:** follow only source-required edges reached from the
    admitted graph. Reuse a qualified provider when it closes the exact target
    role; otherwise resolve that source-required body and its descendants, and

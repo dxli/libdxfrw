@@ -10001,8 +10001,10 @@ bool DRW_DictionaryWithDefault::parseDwg(DRW::Version version, dwgBuffer *buf, s
     if (!readDwgObjectHandleWithinFrame(version, *buf, true, defaultH)) {
         return fail();
     }
-    if (defaultH.ref == 0)
+    if (defaultH.ref == 0 || defaultH.code != DRW::DwgHardPointer) {
+        DRW_DBG("DICTIONARYWDFLT default entry is not a hard pointer\n");
         return fail();
+    }
     m_defaultEntryHandle = defaultH.ref;
     DRW_DBG("default entry Handle: "); DRW_DBGHL(defaultH.code, defaultH.size, defaultH.ref); DRW_DBG("\n");
     return true;
