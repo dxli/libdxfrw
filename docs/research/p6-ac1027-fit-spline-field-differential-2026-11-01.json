@@ -45,7 +45,10 @@
       "capturedJson": "/private/tmp/libdxfrw-ac1027-splines.json",
       "capturedJsonSha256": "514b54b6f56f38ead94d81517048b940fe71ce99e54d04b1d07cbeb9927975fb"
     },
-    "existingGeneratedControl": "tests/dwg_local_roundtrip_tests.cpp::runR2013SplineBitLongBoundaryTest directly writes nontrivial BL values for both fields, checks decoded fields and verifies the following-body sentinel alignment. It was not rerun for this documentation/evidence update."
+    "existingGeneratedControls": [
+      "tests/dwg_local_roundtrip_tests.cpp::runR2013SplineBitLongBoundaryTest directly writes nontrivial BL values for both fields, checks decoded fields and verifies following-body sentinel alignment.",
+      "The --spline-fit-only-dxf selector creates literal ASCII/Binary DXF input, checks parsed fit-only data, audits emitted group codes, and reads back the output while checking the following LINE. It passed directly and is now registered as CTest libdxfrw_spline_fit_only_dxf."
+    ]
   },
   "independentReader": {
     "tool": "LibreDWG dwgread 0.14",
@@ -75,8 +78,29 @@
     ]
   },
   "decision": "The existing AC1027 parser field widths and typed values agree with ODA v5.4.1 and an independent DWG reader for these two fit-only records. This witness gives no basis for a parser change; retain the current BL decoding path.",
+  "isolatedDxfOutputReadback": {
+    "scratchHarness": "/private/tmp/ac1027-spline-dxf-roundtrip.cpp",
+    "sourceSha256": "4001367f1868f04582782aa6d985e1f8eb4b10feed0cd47c6b676a688e14677e",
+    "executable": "/private/tmp/ac1027-spline-dxf-roundtrip",
+    "executableSha256": "cb44d00c256c9ea4e2b3d7d4acb389bc78b11d28b780844d77465435c32e2e4b",
+    "command": "/private/tmp/ac1027-spline-dxf-roundtrip /private/tmp/dwg-example-2013.dwg",
+    "result": "PASS; both captured typed SPLINE records exported to AC1027 ASCII and Binary DXF, were imported again, and matched flags, degree, fit count, fit tolerance, tangents and ordered fit points.",
+    "outputSha256": {
+      "ascii": "947c9ee4d54257854272f3ae98986c8dbd500c9de012e08e83553b7e9d1e6bcd",
+      "binary": "450e175cde6ef10c3535768a568a93b62dabe3d3d980650b5f6fbe71ba63464d"
+    },
+    "scope": "This isolated typed-entity projection bypasses whole-document conversion. It does not compare or preserve splFlag1/knotParam as independent DXF fields and does not qualify curve equivalence or native behavior."
+  },
+  "fastSelector": {
+    "ctest": "libdxfrw_spline_fit_only_dxf",
+    "registration": "CMakeLists.txt",
+    "command": "ctest --test-dir build-gcc -R '^libdxfrw_spline_fit_only_dxf$' --output-on-failure",
+    "result": "PASS; CTest 1/1, 0.07 seconds, covering generated ASCII/Binary input, raw output audit and readback.",
+    "testExecutableSha256": "68502f89afec7c3e0963930fa22a435e0518051e85febacf833f917790413806",
+    "testSourceSha256": "2fd11e8c210c03e534d7e32c772c948496487a9ba2e584e103d9e2b76f3bffd3"
+  },
   "limits": [
-    "This is a two-record read-field differential, not SPLINE curve evaluation, DXF output/readback, or native CAD acceptance.",
+    "This is a two-record read-field differential plus isolated DXF field transport/readback, not SPLINE curve evaluation or native CAD acceptance.",
     "The drawing read has unrelated parse failures and orphaned DataStorage; it is not a complete-conversion witness.",
     "Strict whole-file output remains refused at the standalone TABLEGEOMETRY dependency, as recorded in p6-ac1027-exact-header-size-exclusion-2026-11-01.json.",
     "One public AC1027 sample does not qualify every R2013+ producer, spline scenario, edit path, or support claim."

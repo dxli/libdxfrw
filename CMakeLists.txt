@@ -971,6 +971,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dwg_local_roundtrip --dxf-spline-helix-source-identities)
     set_tests_properties(libdxfrw_dxf_spline_helix_source_identities PROPERTIES
         LABELS "fast;dxf;geometry;identity;generated" TIMEOUT 15)
+    add_test(NAME libdxfrw_spline_fit_only_dxf
+        COMMAND libdxfrw_dwg_local_roundtrip --spline-fit-only-dxf)
+    set_tests_properties(libdxfrw_spline_fit_only_dxf PROPERTIES
+        LABELS "fast;dxf;geometry;generated" TIMEOUT 30)
     add_test(NAME libdxfrw_table_content_dwg_object_roundtrip
         COMMAND libdxfrw_dwg_local_roundtrip --table-content-dwg-object-roundtrip)
     set_tests_properties(libdxfrw_table_content_dwg_object_roundtrip PROPERTIES
