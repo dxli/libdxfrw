@@ -22367,12 +22367,20 @@ bool DRW_Scale::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     case 70:
         flag = reader->getInt32();
         break;
-    case 140:
-        paperUnits = reader->getDouble();
+    case 140: {
+        const double parsedPaperUnits = reader->getDouble();
+        if (!std::isfinite(parsedPaperUnits) || parsedPaperUnits <= 0.0)
+            return false;
+        paperUnits = parsedPaperUnits;
         break;
-    case 141:
-        drawingUnits = reader->getDouble();
+    }
+    case 141: {
+        const double parsedDrawingUnits = reader->getDouble();
+        if (!std::isfinite(parsedDrawingUnits) || parsedDrawingUnits <= 0.0)
+            return false;
+        drawingUnits = parsedDrawingUnits;
         break;
+    }
     case 290:
         isUnitScale = reader->getBool();
         break;

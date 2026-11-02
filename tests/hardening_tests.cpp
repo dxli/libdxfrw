@@ -11163,6 +11163,132 @@ void testDxfScaleNameOwnerBudget(TestContext& t) {
     }
 }
 
+void testDxfScaleUnitDomain(TestContext& t) {
+    const auto parseUnit = [](ExposedScale& scale, int code, double value,
+                              bool binary) {
+        std::ostringstream encoded(std::ios::out | std::ios::binary);
+        if (binary || std::isfinite(value)) {
+            std::unique_ptr<dxfWriter> writer = binary
+                ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&encoded))
+                : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&encoded));
+            writer->setVersion("AC1027", true);
+            if (!writer->writeDouble(code, value) || writer->hasWriteError())
+                return false;
+        } else {
+            encoded << code << '\n'
+                    << (std::isnan(value) ? "nan" : "inf") << '\n';
+        }
+
+        std::istringstream input(encoded.str(),
+                                 std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        int parsedCode = 0;
+        return reader->readRec(&parsedCode) && parsedCode == code
+            && scale.parseCode(parsedCode, reader);
+    };
+    const auto unitValue = [](const ExposedScale& scale, int code) {
+        return code == 140 ? scale.paperUnits : scale.drawingUnits;
+    };
+
+    for (const bool binary : {false, true}) {
+        for (const int code : {140, 141}) {
+            ExposedScale valid;
+            t.expect(parseUnit(valid, code, 0.25, binary)
+                         && unitValue(valid, code) == 0.25,
+                     "SCALE accepts positive finite unit values in ASCII/Binary DXF");
+
+            for (const double value : {0.0, -1.0}) {
+                ExposedScale invalid;
+                const double prior = code == 140 ? 2.0 : 3.0;
+                if (code == 140)
+                    invalid.paperUnits = prior;
+                else
+                    invalid.drawingUnits = prior;
+                t.expect(!parseUnit(invalid, code, value, binary)
+                             && unitValue(invalid, code) == prior,
+                         "SCALE rejects zero/negative units without changing typed state");
+            }
+            if (!binary) {
+                for (const double value : {
+                         std::numeric_limits<double>::quiet_NaN(),
+                         std::numeric_limits<double>::infinity()}) {
+                    ExposedScale invalid;
+                    const double prior = code == 140 ? 2.0 : 3.0;
+                    if (code == 140)
+                        invalid.paperUnits = prior;
+                    else
+                        invalid.drawingUnits = prior;
+                    t.expect(!parseUnit(invalid, code, value, false)
+                                 && unitValue(invalid, code) == prior,
+                             "SCALE rejects non-finite units without changing typed state");
+                }
+            }
+        }
+
+        const auto writeScaleWithUnit = [binary](int code, double value) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            dxfRW codec(nullptr);
+            codec.version = DRW::AC1027;
+            codec.binFile = binary;
+            codec.writer = binary
+                ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+                : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+            codec.writer->setVersion("AC1027", true);
+            DRW_Scale scale;
+            scale.handle = 0x520u;
+            scale.name = "1:48";
+            scale.paperUnits = 1.0;
+            scale.drawingUnits = 48.0;
+            if (code == 140)
+                scale.paperUnits = value;
+            else
+                scale.drawingUnits = value;
+            const bool written = codec.writeScale(&scale);
+            return std::make_pair(written, output.str());
+        };
+        const auto readBackScale = [binary](const std::string& content,
+                                             DRW_Scale& output) {
+            std::istringstream input(content,
+                                     std::ios::in | std::ios::binary);
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+                : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+            reader->setVersion("AC1027", true);
+            ExposedScale parsed;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (!parsed.parseCode(code, reader))
+                    return false;
+            }
+            output = parsed;
+            return true;
+        };
+
+        for (const int code : {140, 141}) {
+            const double validValue = code == 140 ? 0.25 : 24.0;
+            const auto valid = writeScaleWithUnit(code, validValue);
+            DRW_Scale readback;
+            const bool read = valid.first
+                && readBackScale(valid.second, readback);
+            t.expect(read && readback.paperUnits == (code == 140 ? validValue : 1.0)
+                         && readback.drawingUnits
+                             == (code == 141 ? validValue : 48.0),
+                     "SCALE writer output reads back with both annotation units");
+            for (const double value : {
+                     0.0, -1.0,
+                     std::numeric_limits<double>::quiet_NaN(),
+                     std::numeric_limits<double>::infinity()}) {
+                const auto invalid = writeScaleWithUnit(code, value);
+                t.expect(!invalid.first && invalid.second.empty(),
+                         "SCALE writer refuses invalid annotation units before output");
+            }
+        }
+    }
+}
+
 void testDxfPointCloudDefFilenameOwnerBudget(TestContext& t) {
     const std::string oldFilename = "old-pointcloud.pts";
     const std::string sourceFilename(256u, 'P');
@@ -24484,6 +24610,18 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::cout << "SCALE name-owner budget: PASS\n";
+        return 0;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--dxf-scale-units-domain") {
+        TestContext focused;
+        testDxfScaleUnitDomain(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " SCALE unit-domain assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "SCALE units domain: PASS\n";
         return 0;
     }
     if (argc == 2

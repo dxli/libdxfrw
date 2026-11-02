@@ -1728,6 +1728,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_ltype_shape_number_dxf_width PROPERTIES
         LABELS "fast;dxf;reader;writer;ltype;generated"
         TIMEOUT 10)
+    add_test(NAME libdxfrw_scale_units_dxf_domain
+        COMMAND libdxfrw_hardening_tests --dxf-scale-units-domain)
+    set_tests_properties(libdxfrw_scale_units_dxf_domain PROPERTIES
+        LABELS "fast;dxf;reader;writer;scale;generated"
+        TIMEOUT 10)
     add_test(NAME libdxfrw_dbcolor_book_name_owner_budget
         COMMAND libdxfrw_hardening_tests
             --dxf-dbcolor-book-name-owner-budget)
