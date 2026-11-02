@@ -21658,7 +21658,9 @@ bool DRW_TableContentObject::validateDwgPayload(DRW::Version version) const {
         return false;
     bool hasStyleReference = false;
     std::vector<std::uint32_t> referencedFields;
-    referencedFields.reserve(m_content.m_fieldHandles.size());
+    if (!DRW::reserve(referencedFields,
+                      static_cast<int>(m_content.m_fieldHandles.size())))
+        return false;
     for (const DRW_TableColumn& column : m_content.m_columns) {
         if (!validTableContentText(column.m_name)
             || !std::isfinite(column.m_width) || column.m_width < 0.0
@@ -21740,7 +21742,12 @@ bool DRW_TableContentObject::validateDwgPayload(DRW::Version version) const {
     // its multiset without imposing an order on the source ownership list.
     if (referencedFields.size() != m_content.m_fieldHandles.size())
         return false;
-    auto ownedFields = m_content.m_fieldHandles;
+    std::vector<std::uint32_t> ownedFields;
+    if (!DRW::reserve(ownedFields,
+                      static_cast<int>(m_content.m_fieldHandles.size())))
+        return false;
+    for (std::uint32_t handle : m_content.m_fieldHandles)
+        ownedFields.push_back(handle);
     std::sort(referencedFields.begin(), referencedFields.end());
     std::sort(ownedFields.begin(), ownedFields.end());
     if (referencedFields != ownedFields)
@@ -21748,7 +21755,9 @@ bool DRW_TableContentObject::validateDwgPayload(DRW::Version version) const {
 
     // At most 200,000 cells are visited before either accepting all disjoint
     // ranges or detecting the first overlap; avoid a quadratic range census.
-    std::vector<bool> merged(rows * columns, false);
+    std::vector<std::uint8_t> merged;
+    if (!DRW::resize(merged, static_cast<int>(rows * columns)))
+        return false;
     for (const DRW_TableMergedRange& range : m_content.m_mergedRanges) {
         if (range.m_topRow < 0 || range.m_leftColumn < 0
             || range.m_bottomRow < range.m_topRow
@@ -21760,9 +21769,9 @@ bool DRW_TableContentObject::validateDwgPayload(DRW::Version version) const {
             for (int col = range.m_leftColumn; col <= range.m_rightColumn; ++col) {
                 const std::size_t index = static_cast<std::size_t>(row) * columns
                     + static_cast<std::size_t>(col);
-                if (merged[index])
+                if (merged[index] != 0u)
                     return false;
-                merged[index] = true;
+                merged[index] = 1u;
             }
         }
     }

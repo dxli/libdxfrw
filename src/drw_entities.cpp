@@ -2313,6 +2313,22 @@ DRW_DwgSubrecordRange makeDwgSubrecordRange(const char *name, std::uint64_t star
     return range;
 }
 
+bool appendDwgSubrecordRange(
+        std::vector<DRW_DwgSubrecordRange> *ranges, const char *name,
+        std::uint64_t startBit, std::uint64_t endBit, DRW::Version version,
+        std::uint32_t count, bool parseComplete) noexcept {
+    if (ranges == nullptr)
+        return true;
+    try {
+        ranges->push_back(makeDwgSubrecordRange(
+            name, startBit, endBit, version, count, parseComplete));
+    } catch (...) {
+        DRW_DBG("TABLE subrecord range allocation failed\n");
+        return false;
+    }
+    return true;
+}
+
 bool isValidSplineDegree(int degree) {
     return degree >= 1 && degree <= kMaxSplineDegree;
 }
@@ -3023,11 +3039,10 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
     }
 
     const bool good = buf->isGood() && (!strBuf || strBuf->isGood()) && (!hdlBuf || hdlBuf->isGood());
-    if (ranges != nullptr) {
-        ranges->push_back(makeDwgSubrecordRange(
-            "r2007-table-cell-overrides", startBit, currentDwgBit(buf),
-            version, cell.m_overrideFlags, good));
-    }
+    if (!appendDwgSubrecordRange(
+            ranges, "r2007-table-cell-overrides", startBit,
+            currentDwgBit(buf), version, cell.m_overrideFlags, good))
+        return false;
     return good;
 }
 
@@ -3058,11 +3073,10 @@ bool parseR2007TableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf
     // anonymous-block fallback and leave semantic content incomplete.
     if (version > DRW::AC1018 && cell.m_type != 1 && cell.m_type != 2) {
         DRW_DBG("Unsupported R2007 TABLE cell type: "); DRW_DBG(cell.m_type); DRW_DBG("\n");
-        if (ranges != nullptr) {
-            ranges->push_back(makeDwgSubrecordRange(
-                "r2007-table-cell", startBit, currentDwgBit(buf), version,
-                cell.m_type, false));
-        }
+        if (!appendDwgSubrecordRange(
+                ranges, "r2007-table-cell", startBit, currentDwgBit(buf),
+                version, cell.m_type, false))
+            return false;
         return false;
     }
 
@@ -3296,10 +3310,11 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
     }
 
     const bool good = buf->isGood() && (!strBuf || strBuf->isGood()) && (!hdlBuf || hdlBuf->isGood());
-    if (ranges != nullptr && (maskCount != 0 || currentDwgBit(buf) != startBit)) {
-        ranges->push_back(makeDwgSubrecordRange(
-            "r2007-table-overrides", startBit, currentDwgBit(buf),
-            version, maskCount, good));
+    if (maskCount != 0 || currentDwgBit(buf) != startBit) {
+        if (!appendDwgSubrecordRange(
+                ranges, "r2007-table-overrides", startBit,
+                currentDwgBit(buf), version, maskCount, good))
+            return false;
     }
     return good;
 }
@@ -3336,11 +3351,10 @@ bool skipTableContentFormat(DRW::Version version, dwgBuffer *buf,
         || !skipTableBitDouble(*buf, bounds.bodyEndBit)) // text height
         return false;
     const bool good = buf->isGood() && (!strBuf || strBuf->isGood()) && (!hdlBuf || hdlBuf->isGood());
-    if (ranges != nullptr) {
-        ranges->push_back(makeDwgSubrecordRange(
-            "table-content-format", startBit, currentDwgBit(buf),
-            version, 1, good));
-    }
+    if (!appendDwgSubrecordRange(
+            ranges, "table-content-format", startBit, currentDwgBit(buf),
+            version, 1, good))
+        return false;
     return good;
 }
 
@@ -3367,12 +3381,12 @@ bool skipTableCellStyle(DRW::Version version, dwgBuffer *buf,
     DRW_DBG("/"); DRW_DBG(dataFlags); DRW_DBG("/");
     DRW_DBG(currentDwgBit(buf)); DRW_DBG("\n");
     if (!hasData) {
-        if (ranges != nullptr) {
-            ranges->push_back(makeDwgSubrecordRange(
-                "table-cell-style", startBit, currentDwgBit(buf),
-                version, 0, buf->isGood()));
-        }
-        return buf->isGood();
+        const bool good = buf->isGood();
+        if (!appendDwgSubrecordRange(
+                ranges, "table-cell-style", startBit, currentDwgBit(buf),
+                version, 0, good))
+            return false;
+        return good;
     }
 
     // The parser consumes cell-style and content-format properties for
@@ -3438,11 +3452,10 @@ bool skipTableCellStyle(DRW::Version version, dwgBuffer *buf,
     }
 
     const bool good = buf->isGood() && (!strBuf || strBuf->isGood()) && (!hdlBuf || hdlBuf->isGood());
-    if (ranges != nullptr) {
-        ranges->push_back(makeDwgSubrecordRange(
-            "table-cell-style", startBit, currentDwgBit(buf),
-            version, borders, good));
-    }
+    if (!appendDwgSubrecordRange(
+            ranges, "table-cell-style", startBit, currentDwgBit(buf),
+            version, borders, good))
+        return false;
     return good;
 }
 
@@ -3685,12 +3698,13 @@ bool parseTableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
                 return false;
             cell.m_geometryRecordFlags = geometryRecordFlags;
         }
-        if (ranges != nullptr) {
-            const bool geometryGood = buf->isGood() && (!hdlBuf || hdlBuf->isGood());
-            ranges->push_back(makeDwgSubrecordRange(
-                "table-cell-geometry-tail", geometryStartBit, currentDwgBit(buf),
-                version, cell.m_geometryFlags, geometryGood));
-        }
+        const bool geometryGood = buf->isGood()
+            && (!hdlBuf || hdlBuf->isGood());
+        if (!appendDwgSubrecordRange(
+                ranges, "table-cell-geometry-tail", geometryStartBit,
+                currentDwgBit(buf), version, cell.m_geometryFlags,
+                geometryGood))
+            return false;
     }
 
     const bool good = buf->isGood() && (!strBuf || strBuf->isGood()) && (!hdlBuf || hdlBuf->isGood());
@@ -12594,12 +12608,13 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
         m_horizontalDirection = parsedHorizontalDirection;
 
         const std::uint64_t breakStartBit = currentDwgBit(buf);
-        const auto markBreakTailIncomplete = [this, &commit, buf,
+        const auto markBreakTailIncomplete = [this, &commit, &fail, buf,
                                               breakStartBit, version]() {
             m_semanticContentComplete = false;
-            m_content.m_subrecordRanges.push_back(makeDwgSubrecordRange(
-                "table-break-data", breakStartBit, currentDwgBit(buf),
-                version, 0u, false));
+            if (!appendDwgSubrecordRange(
+                    &m_content.m_subrecordRanges, "table-break-data",
+                    breakStartBit, currentDwgBit(buf), version, 0u, false))
+                return fail();
             return commit();
         };
         std::int32_t breakDataFlag = 0;
@@ -12641,12 +12656,14 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
             if (manualPositionCount < 0
                 || static_cast<std::uint32_t>(manualPositionCount)
                        > kMaxTableItems) {
-                m_content.m_subrecordRanges.push_back(makeDwgSubrecordRange(
-                    "table-break-data", breakStartBit, currentDwgBit(buf),
-                    version, manualPositionCount > 0
-                        ? static_cast<std::uint32_t>(manualPositionCount)
-                        : 0u,
-                    false));
+                if (!appendDwgSubrecordRange(
+                        &m_content.m_subrecordRanges, "table-break-data",
+                        breakStartBit, currentDwgBit(buf), version,
+                        manualPositionCount > 0
+                            ? static_cast<std::uint32_t>(manualPositionCount)
+                            : 0u,
+                        false))
+                    return fail();
                 m_semanticContentComplete = false;
                 return commit();
             }
@@ -12662,10 +12679,12 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
                                            ignoredPositionType))
                     return fail();
             }
-            m_content.m_subrecordRanges.push_back(makeDwgSubrecordRange(
-                "table-break-data", breakStartBit, currentDwgBit(buf),
-                version, static_cast<std::uint32_t>(manualPositionCount),
-                buf->isGood()));
+            if (!appendDwgSubrecordRange(
+                    &m_content.m_subrecordRanges, "table-break-data",
+                    breakStartBit, currentDwgBit(buf), version,
+                    static_cast<std::uint32_t>(manualPositionCount),
+                    buf->isGood()))
+                return fail();
         }
 
         const std::uint64_t rowRangeStartBit = currentDwgBit(buf);
@@ -12674,11 +12693,13 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
             return fail();
         if (rowRangeCount <= 0
             || static_cast<std::uint32_t>(rowRangeCount) > kMaxTableItems) {
-            m_content.m_subrecordRanges.push_back(makeDwgSubrecordRange(
-                "table-row-ranges", rowRangeStartBit, currentDwgBit(buf),
-                version, rowRangeCount > 0
-                    ? static_cast<std::uint32_t>(rowRangeCount) : 0u,
-                false));
+            if (!appendDwgSubrecordRange(
+                    &m_content.m_subrecordRanges, "table-row-ranges",
+                    rowRangeStartBit, currentDwgBit(buf), version,
+                    rowRangeCount > 0
+                        ? static_cast<std::uint32_t>(rowRangeCount) : 0u,
+                    false))
+                return fail();
             // ODA §20.4.96.2 states that there is always at least one row
             // range. Preserve the complete TABLECONTENT while reporting this
             // optional postamble as incomplete.
@@ -12693,10 +12714,11 @@ bool DRW_Table::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
                 || !readBoundedBitLong(*buf, bodyEndBit, ignoredRangeValue))
                 return fail();
         }
-        m_content.m_subrecordRanges.push_back(makeDwgSubrecordRange(
-            "table-row-ranges", rowRangeStartBit, currentDwgBit(buf),
-            version, static_cast<std::uint32_t>(rowRangeCount),
-            buf->isGood()));
+        if (!appendDwgSubrecordRange(
+                &m_content.m_subrecordRanges, "table-row-ranges",
+                rowRangeStartBit, currentDwgBit(buf), version,
+                static_cast<std::uint32_t>(rowRangeCount), buf->isGood()))
+            return fail();
 
         if (!buf->isGood() || !sBuf->isGood() || !hBuff.isGood())
             return fail();
