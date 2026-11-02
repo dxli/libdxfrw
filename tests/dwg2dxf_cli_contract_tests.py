@@ -1019,6 +1019,46 @@ def check_source_disposition_projection(converter, root, writer):
             f"required-version feature mask was not projected atomically: {masked!r}")
     checked += 1
 
+    admitted_output = root / "required versions admitted AC1032.dxf"
+    admitted = run_bounded(
+        [str(converter), str(required_versions), "-o", str(admitted_output),
+         "-v2018", "-y", "-d"], 10, 131072, cwd=root)
+
+    def has_required_versions_mask(payload):
+        lines = [line.strip() for line in payload.splitlines()]
+        return sum(
+            lines[index:index + 4]
+            == [b"9", b"$REQUIREDVERSIONS", b"160", b"1"]
+            for index in range(max(0, len(lines) - 3))) == 1
+
+    admitted_bytes = (admitted_output.read_bytes()
+                      if admitted_output.is_file() else b"")
+    if (admitted.returncode != 0
+            or required_versions.read_bytes() != required_versions_bytes
+            or b"sourceRequiredVersionsStatus=present" not in admitted.stderr
+            or b"sourceRequiredVersionsMask=0x0000000000000001" not in admitted.stderr
+            or b"sourceRequiredVersionsOutput=admitted" not in admitted.stderr
+            or not output_has_revision(admitted_bytes, b"AC1032", False)
+            or not has_required_versions_mask(admitted_bytes)):
+        raise AssertionError(
+            f"supported required-version mask did not survive AC1032 output: {admitted!r}")
+
+    admitted_readback = root / "required versions admitted readback.dxf"
+    reread = run_bounded(
+        [str(converter), str(admitted_output), "-o", str(admitted_readback),
+         "-v2018", "-y", "-d"], 10, 131072, cwd=root)
+    reread_bytes = (admitted_readback.read_bytes()
+                    if admitted_readback.is_file() else b"")
+    if (reread.returncode != 0
+            or b"sourceRequiredVersionsStatus=present" not in reread.stderr
+            or b"sourceRequiredVersionsMask=0x0000000000000001" not in reread.stderr
+            or b"sourceRequiredVersionsOutput=admitted" not in reread.stderr
+            or not has_required_versions_mask(reread_bytes)
+            or admitted_output.read_bytes() != admitted_bytes):
+        raise AssertionError(
+            f"supported required-version mask failed AC1032 readback: {reread!r}")
+    checked += 2
+
     issue_pairs = [
         (0, b"SECTION"), (2, b"HEADER"), (9, b"$ACADVER"), (1, b"AC1021"),
         (9, b"$DWGCODEPAGE"), (3, b"ANSI_1252"), (0, b"ENDSEC"),
