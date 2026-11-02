@@ -238,6 +238,15 @@ failing-stage diagnostic.
 Research a new reader only for a named missing semantic operation; wrapping the
 same parser is not an independent oracle.
 
+**Independent reader preflight:** The user-selected official CAD Assistant
+macOS ARM64 DMG was fetched and its disk-image CRC verified. This shell cannot
+mount it because DiskManagement is unavailable; the 7-Zip extracted app and
+main executable fail strict `codesign` verification, so neither was launched.
+Treat extraction damage as possible and the candidate as unqualified; do not
+bypass signature checks. Reattempt only with a native verified mount or another
+eligible reader. The exact package and environment result are in the
+[CAD Assistant preflight receipt](docs/research/p7-cad-assistant-arm64-integrity-preflight-2026-11-01.json).
+
 ## P8 — consumer, platform, packaging and release gates
 
 - Preserve LibreCAD/LibreCAD_3 callback/default behavior; new callbacks remain
