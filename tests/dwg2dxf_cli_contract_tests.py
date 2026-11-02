@@ -1000,6 +1000,27 @@ def check_source_disposition_projection(converter, root, writer):
             f"malformed HEADER was not projected as repair-required: {malformed!r}")
     checked += 1
 
+    repeated_group_header = root / "repeated HEADER group code.dxf"
+    repeated_group_output = root / "repeated HEADER group destination.dxf"
+    repeated_group_bytes = SOURCE.replace(
+        b"0\nENDSEC\n0\nSECTION\n2\nENTITIES",
+        b"9\n$INSBASE\n10\n0\n20\n0\n30\n0\n10\n1\n"
+        b"0\nENDSEC\n0\nSECTION\n2\nENTITIES", 1)
+    repeated_group_header.write_bytes(repeated_group_bytes)
+    repeated_group_output.write_bytes(SENTINEL)
+    repeated_group = run_bounded(
+        [str(converter), str(repeated_group_header), "-o",
+         str(repeated_group_output), "-y", "-d"], 10, 131072, cwd=root)
+    if (repeated_group.returncode != 1
+            or repeated_group_output.read_bytes() != SENTINEL
+            or repeated_group_header.read_bytes() != repeated_group_bytes
+            or b"sourceRepairAction=none" not in repeated_group.stderr
+            or b"sourceHeaderStructure=repair-required" not in repeated_group.stderr):
+        raise AssertionError(
+            "repeated group code inside one HEADER variable was not refused "
+            f"atomically: {repeated_group!r}")
+    checked += 1
+
     required_versions = root / "required versions mask.dxf"
     required_versions_output = root / "required versions destination.dxf"
     required_versions_bytes = SOURCE.replace(
