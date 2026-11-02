@@ -8204,8 +8204,8 @@ bool DRW_LType::validateDxf() const {
                                && segment.shapeFlags >= 0
                                && segment.shapeFlags <= 0x0F;
                        })
-        && flags >= 0
-        && flags <= std::numeric_limits<std::int16_t>::max()
+        && flags >= 0 && (flags & ~0x70) == 0
+        && ((flags & 0x20) == 0 || (flags & 0x10) != 0)
         && dwgSafety::validReactorCount(numReactors)
         && reactorHandles.size() <= dwgSafety::MaxReactorCount
         && xDictFlag <= 1;

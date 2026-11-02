@@ -1105,6 +1105,87 @@ void testLTypeShapeNumberDxfWidth(TestContext& t) {
     }
 }
 
+void testLTypeStandardFlagDxfDomain(TestContext& t) {
+    const auto parseFlags = [](ExposedLType& lineType, int flags,
+                               bool binary) {
+        std::ostringstream encoded(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&encoded))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&encoded));
+        writer->setVersion("AC1027", true);
+        if (!writer->writeInt16(70, flags) || writer->hasWriteError())
+            return false;
+        writer.reset();
+        std::istringstream input(encoded.str(),
+                                 std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        int code = 0;
+        return reader->readRec(&code) && code == 70
+            && lineType.parseCode(code, reader);
+    };
+
+    const auto makeLineType = [](int flags) {
+        ExposedLType lineType;
+        lineType.name = "LTYPE_FLAGS_TEST";
+        lineType.flags = flags;
+        lineType.size = 1;
+        lineType.length = 1.0;
+        lineType.path.push_back(1.0);
+        DRW_LTypeSegment segment;
+        segment.length = 1.0;
+        lineType.segments.push_back(segment);
+        return lineType;
+    };
+
+    for (const bool binary : {false, true}) {
+        for (const int flags : {0, 0x10, 0x30, 0x40, 0x70}) {
+            ExposedLType parsed;
+            t.expect(parseFlags(parsed, flags, binary)
+                         && parsed.flags == flags,
+                     "LTYPE parser retains documented standard flags in ASCII/Binary DXF");
+            ExposedLType candidate = makeLineType(flags);
+            t.expect(candidate.validateDxf(),
+                     "LTYPE admits documented standard flag combinations");
+        }
+        for (const int flags : {1, 0x20, 0x80, -1}) {
+            ExposedLType parsed;
+            t.expect(parseFlags(parsed, flags, binary)
+                         && parsed.flags == flags,
+                     "LTYPE parser preserves unsupported flag values for tolerant reading");
+            ExposedLType candidate = makeLineType(flags);
+            t.expect(!candidate.validateDxf(),
+                     "LTYPE typed validation rejects undocumented or inconsistent flags");
+        }
+
+        const auto writeFlags = [binary, &makeLineType](int flags) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            dxfRW codec(nullptr);
+            codec.version = DRW::AC1027;
+            codec.binFile = binary;
+            codec.writer = binary
+                ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+                : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+            codec.writer->setVersion("AC1027", true);
+            ExposedLType lineType = makeLineType(flags);
+            const bool written = codec.writeLineType(&lineType);
+            return std::make_pair(written, output.str());
+        };
+        for (const int flags : {0, 0x10, 0x30, 0x40, 0x70}) {
+            const auto result = writeFlags(flags);
+            t.expect(result.first && !result.second.empty(),
+                     "LTYPE writer emits documented standard flag combinations");
+        }
+        for (const int flags : {1, 0x20, 0x80, -1}) {
+            const auto result = writeFlags(flags);
+            t.expect(!result.first && result.second.empty(),
+                     "LTYPE writer refuses unsupported flags before emitting a record");
+        }
+    }
+}
+
 void testLeaderAdvisoryCountState(TestContext& t) {
     ExposedLeader source;
     t.expect(parseDxfRecords(source, "76\n99\n10\n1\n20\n2\n30\n3\n10\n4\n20\n6\n30\n0\n")
@@ -24081,6 +24162,18 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::cout << "LTYPE shape-number DXF width: PASS\n";
+        return 0;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--ltype-standard-flag-dxf-domain") {
+        TestContext focused;
+        testLTypeStandardFlagDxfDomain(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " LTYPE standard-flag assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "LTYPE standard flag DXF domain: PASS\n";
         return 0;
     }
     if (argc == 2
