@@ -8203,7 +8203,6 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
       mit = ObjectMap.find(*it);
       if (mit == ObjectMap.end()) {
         DRW_DBG("\nWARNING: Layer not found (handle skipped)\n");
-        m_layerNameOrder.emplace_back(); // keep proxy index alignment
       } else {
         oc = mit->second;
         eraseObject(mit);

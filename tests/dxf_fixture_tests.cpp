@@ -13214,70 +13214,96 @@ void testLeaderPointComponentOrder(TestContext& t) {
     }
 }
 
-void testMLineVectorComponentOrder(TestContext& t) {
-    const auto nonce = std::chrono::steady_clock::now()
-        .time_since_epoch().count();
-    const std::array<DRW_MLineVertex, 2> expectedVertices{{
-        {{1.25, 2.5, 3.75}, {7.25, 8.5, 9.75}, {13.25, 14.5, 15.75},
-         {{0.125}}, {{0.375}}},
-        {{4.5, 5.75, 6.125}, {10.125, 11.25, 12.5}, {16.125, 17.25, 18.5},
-         {{0.625}}, {{0.875}}}}};
-    for (const bool binary : {false, true}) {
-        const std::string format = binary ? "binary" : "ASCII";
-        const std::string suffix = binary ? "-binary" : "-ascii";
-        const auto pathFor = [nonce, &suffix](const char* kind) {
-            return std::filesystem::temp_directory_path()
-                / (std::string("libdxfrw-mline-order-")
-                   + std::to_string(nonce) + suffix + "-" + kind + ".dxf");
-        };
-        const std::filesystem::path controlPath = pathFor("control");
-        std::error_code error;
-        std::filesystem::remove(controlPath, error);
-        const bool generated = writeMLineVectorComponentOrderControl(
-            controlPath, binary, expectedVertices);
-        t.expect(generated,
-                 (format + " literal MLINE component-order control is generated")
-                     .c_str());
-
-        dx_data decoded;
-        dx_iface reader;
-        const bool imported = generated
-            && reader.fileImport(controlPath.string(), &decoded, false);
-        const DRW_MLine* decodedMLine = imported && decoded.mBlock != nullptr
-                && !decoded.mBlock->ent.empty()
-            ? dynamic_cast<const DRW_MLine*>(decoded.mBlock->ent.front())
-            : nullptr;
-        bool vectorsMatch = decodedMLine != nullptr
-            && decodedMLine->numVerts == expectedVertices.size()
-            && decodedMLine->numLines == 1u
-            && decodedMLine->vertlist.size() == expectedVertices.size();
-        const auto same = [](const DRW_Coord& lhs, const DRW_Coord& rhs) {
-            return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
-        };
-        for (std::size_t index = 0; vectorsMatch
-             && index < expectedVertices.size(); ++index) {
-            const DRW_MLineVertex& actual = decodedMLine->vertlist[index];
-            const DRW_MLineVertex& expected = expectedVertices[index];
-            vectorsMatch = same(actual.position, expected.position)
-                && same(actual.vertexDir, expected.vertexDir)
-                && same(actual.miterDir, expected.miterDir)
-                && actual.segParms == expected.segParms
-                && actual.areaFillParms == expected.areaFillParms;
+void testLeaderDxfAllocationFailure(TestContext& t) {
+    struct LeaderParseProbe final : DRW_Leader {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
         }
-        const DRW_Line* decodedLine = imported && decoded.mBlock != nullptr
-                && decoded.mBlock->ent.size() == 2u
-            ? dynamic_cast<const DRW_Line*>(decoded.mBlock->ent.back())
-            : nullptr;
-        t.expect(imported && vectorsMatch,
-                 (format + " MLINE preserves every XYZ occurrence and parameter block")
-                     .c_str());
-        t.expect(decodedLine != nullptr
-                     && decodedLine->basePoint.x == 31.0
-                     && decodedLine->secPoint.z == 36.0,
-                 (format + " MLINE permutation preserves following LINE")
-                     .c_str());
+    };
+    const auto parseRecord = [](LeaderParseProbe& leader, int expectedCode,
+                                std::string_view value,
+                                long allocationFailure = -1) {
+        const std::string record = std::to_string(expectedCode) + "\n"
+            + std::string(value) + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int code = 0;
+        if (!reader->readRec(&code) || code != expectedCode)
+            return false;
+        MaterialAllocationFailure failure(allocationFailure);
+        return leader.parse(code, reader);
+    };
 
-        std::filesystem::remove(controlPath, error);
+    for (long allocationFailure = 0; allocationFailure < 3;
+         ++allocationFailure) {
+        LeaderParseProbe leader;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(
+            leader, 10, "1.25", allocationFailure);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = leader.vertexlist.empty();
+        const bool retried = parseRecord(leader, 10, "1.25")
+            && parseRecord(leader, 20, "2.5")
+            && leader.vertexlist.size() == 1u
+            && leader.vertexlist.front()
+            && leader.vertexlist.front()->x == 1.25
+            && leader.vertexlist.front()->y == 2.5;
+        t.expect(rejected && failedOnce && rolledBack && retried,
+                 "LEADER point allocation failure preserves the field ordinal and retries cleanly");
+    }
+}
+
+void testSplineDxfAllocationFailure(TestContext& t) {
+    struct SplineParseProbe final : DRW_Spline {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+    };
+    const auto parseRecord = [](SplineParseProbe& spline, int expectedCode,
+                                std::string_view value,
+                                long allocationFailure = -1) {
+        const std::string record = std::to_string(expectedCode) + "\n"
+            + std::string(value) + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int code = 0;
+        if (!reader->readRec(&code) || code != expectedCode)
+            return false;
+        MaterialAllocationFailure failure(allocationFailure);
+        return spline.parse(code, reader);
+    };
+
+    for (long allocationFailure = 0; allocationFailure < 3;
+         ++allocationFailure) {
+        SplineParseProbe spline;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(
+            spline, 10, "1.25", allocationFailure);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = spline.controllist.empty();
+        const bool xRetried = parseRecord(spline, 10, "1.25");
+        const bool yRetried = parseRecord(spline, 20, "2.5");
+        const bool retried = xRetried && yRetried
+            && spline.controllist.size() == 1u
+            && spline.controllist.front()
+            && spline.controllist.front()->x == 1.25
+            && spline.controllist.front()->y == 2.5;
+        t.expect(rejected && failedOnce && rolledBack && retried,
+                 "SPLINE control-point allocation failure preserves its component cursor for retry");
+    }
+
+    for (const int code : {40, 41}) {
+        SplineParseProbe spline;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(spline, code, "0.75", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = code == 40 ? spline.knotslist.empty()
+                                            : spline.weightlist.empty();
+        const bool retried = parseRecord(spline, code, "0.75")
+            && (code == 40 ? spline.knotslist == std::vector<double>{0.75}
+                           : spline.weightlist == std::vector<double>{0.75});
+        t.expect(rejected && failedOnce && rolledBack && retried,
+                 "SPLINE scalar-list allocation failure returns false and retries the same group");
     }
 }
 
@@ -13683,6 +13709,219 @@ void testMeshDxfAllocationFailure(TestContext& t) {
              "MESH face-list reservations and face construction roll back and retry after allocation failure");
 }
 
+void testMPolygonDegenerateCountDomain(TestContext& t) {
+    struct MPolygonParseProbe final : DRW_MPolygon {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+        bool valid() const { return validateDxf(); }
+    };
+    const auto parseRecord = [](MPolygonParseProbe& polygon, int code,
+                                const char* value) {
+        const std::string record = std::to_string(code) + "\n" + value + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int parsedCode = 0;
+        return reader->readRec(&parsedCode) && parsedCode == code
+            && polygon.parse(parsedCode, reader);
+    };
+
+    for (const char* invalidValue : {"-1", "10001"}) {
+        MPolygonParseProbe polygon;
+        const bool rejected = !parseRecord(polygon, 99, invalidValue);
+        const bool unchanged = polygon.degenerateLoops == 0
+            && polygon.valid();
+        const bool retried = parseRecord(polygon, 99, "3")
+            && polygon.degenerateLoops == 3 && polygon.valid();
+        t.expect(rejected && unchanged && retried,
+                 "MPOLYGON group-99 invalid count preserves model state for corrected retry");
+    }
+
+    MPolygonParseProbe maximum;
+    const bool maximumAccepted = parseRecord(
+        maximum, 99, "10000") && maximum.degenerateLoops == 10000
+        && maximum.valid();
+    t.expect(maximumAccepted,
+             "MPOLYGON group-99 accepts the bounded count ceiling");
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto path = std::filesystem::temp_directory_path()
+        / ("libdxfrw-mpolygon-degenerate-count-"
+           + std::to_string(nonce) + ".dxf");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code error;
+            std::filesystem::remove(path, error);
+        }
+    } cleanup{path};
+    struct MPolygonWriterAdapter final : dx_iface {
+        DRW_MPolygon polygon;
+        bool rejectedByEntityWriter{false};
+        void writeEntities() override {
+            if (dxfW == nullptr || !dxfW->writeMPolygon(&polygon))
+                rejectedByEntityWriter = true;
+        }
+    };
+
+    const std::string previous = "previous destination bytes\n";
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output << previous;
+    }
+    dxfRW codec(path.string().c_str());
+    dx_data data;
+    MPolygonWriterAdapter writer;
+    writer.cData = &data;
+    writer.currentBlock = data.mBlock;
+    writer.dxfW = &codec;
+    const auto destinationIsPrevious = [&path, &previous]() {
+        std::ifstream input(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input),
+                           std::istreambuf_iterator<char>()) == previous;
+    };
+
+    writer.polygon.degenerateLoops = -1;
+    writer.rejectedByEntityWriter = false;
+    const bool negativeRejected = !codec.write(&writer, DRW::AC1027, false)
+        && writer.rejectedByEntityWriter && destinationIsPrevious();
+    writer.polygon.degenerateLoops = 10001;
+    writer.rejectedByEntityWriter = false;
+    const bool overBudgetRejected = !codec.write(&writer, DRW::AC1027, false)
+        && writer.rejectedByEntityWriter && destinationIsPrevious();
+
+    writer.polygon.degenerateLoops = 3;
+    writer.rejectedByEntityWriter = false;
+    const bool retryWritten = codec.write(&writer, DRW::AC1027, false)
+        && !writer.rejectedByEntityWriter;
+    dx_data decoded;
+    dx_iface importer;
+    const bool imported = retryWritten
+        && importer.fileImport(path.string(), &decoded, false);
+    const DRW_MPolygon* decodedMPolygon = nullptr;
+    if (imported && decoded.mBlock != nullptr) {
+        for (const DRW_Entity* entity : decoded.mBlock->ent) {
+            if (const auto* polygon = dynamic_cast<const DRW_MPolygon*>(entity))
+                decodedMPolygon = polygon;
+        }
+    }
+    t.expect(negativeRejected && overBudgetRejected && retryWritten
+                 && imported && decodedMPolygon != nullptr
+                 && decodedMPolygon->degenerateLoops == 3,
+             "MPOLYGON typed writer rejects invalid group 99 atomically and retries with exact readback");
+}
+
+void testMPolygonAciDomain(TestContext& t) {
+    struct MPolygonParseProbe final : DRW_MPolygon {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+        bool valid() const { return validateDxf(); }
+    };
+    const auto parseRecord = [](MPolygonParseProbe& polygon, int code,
+                                const char* value) {
+        const std::string record = std::to_string(code) + "\n" + value + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int parsedCode = 0;
+        return reader->readRec(&parsedCode) && parsedCode == code
+            && polygon.parse(parsedCode, reader);
+    };
+
+    for (const char* invalidValue : {"-1", "257"}) {
+        MPolygonParseProbe polygon;
+        polygon.fillColorAci = 23;
+        const bool rejected = !parseRecord(polygon, 63, invalidValue);
+        const bool unchanged = polygon.fillColorAci == 23 && polygon.valid();
+        const bool retried = parseRecord(polygon, 63, "256")
+            && polygon.fillColorAci == 256 && polygon.valid();
+        t.expect(rejected && unchanged && retried,
+                 "MPOLYGON invalid group-63 ACI preserves model state for corrected retry");
+    }
+
+    for (const int colorIndex : {0, 1, 255, 256}) {
+        MPolygonParseProbe polygon;
+        const std::string value = std::to_string(colorIndex);
+        const bool accepted = parseRecord(polygon, 63, value.c_str())
+            && polygon.fillColorAci == colorIndex && polygon.valid();
+        const std::string label =
+            "MPOLYGON group-63 ACI accepts documented index " + value;
+        t.expect(accepted, label.c_str());
+    }
+
+    struct MPolygonWriterAdapter final : dx_iface {
+        DRW_MPolygon polygon;
+        bool rejectedByEntityWriter{false};
+        void writeEntities() override {
+            if (dxfW == nullptr || !dxfW->writeMPolygon(&polygon))
+                rejectedByEntityWriter = true;
+        }
+    };
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    for (const bool binary : {false, true}) {
+        const auto path = std::filesystem::temp_directory_path()
+            / ("libdxfrw-mpolygon-aci-" + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code error;
+                std::filesystem::remove(path, error);
+            }
+        } cleanup{path};
+        const std::string previous = "previous destination bytes\n";
+        {
+            std::ofstream output(path, std::ios::binary | std::ios::trunc);
+            output << previous;
+        }
+
+        dxfRW codec(path.string().c_str());
+        dx_data data;
+        MPolygonWriterAdapter writer;
+        writer.cData = &data;
+        writer.currentBlock = data.mBlock;
+        writer.dxfW = &codec;
+        const auto destinationIsPrevious = [&path, &previous]() {
+            std::ifstream input(path, std::ios::binary);
+            return std::string(std::istreambuf_iterator<char>(input),
+                               std::istreambuf_iterator<char>()) == previous;
+        };
+        writer.polygon.fillColorAci = -1;
+        writer.rejectedByEntityWriter = false;
+        const bool negativeRejected = !codec.write(&writer, DRW::AC1027, binary)
+            && writer.rejectedByEntityWriter && destinationIsPrevious();
+        writer.polygon.fillColorAci = 257;
+        writer.rejectedByEntityWriter = false;
+        const bool overRangeRejected = !codec.write(&writer, DRW::AC1027, binary)
+            && writer.rejectedByEntityWriter && destinationIsPrevious();
+
+        writer.polygon.fillColorAci = 256;
+        writer.rejectedByEntityWriter = false;
+        const bool retryWritten = codec.write(&writer, DRW::AC1027, binary)
+            && !writer.rejectedByEntityWriter;
+        dx_data decoded;
+        dx_iface importer;
+        const bool imported = retryWritten
+            && importer.fileImport(path.string(), &decoded, false);
+        const DRW_MPolygon* decodedMPolygon = nullptr;
+        if (imported && decoded.mBlock != nullptr) {
+            for (const DRW_Entity* entity : decoded.mBlock->ent) {
+                if (const auto* polygon = dynamic_cast<const DRW_MPolygon*>(entity))
+                    decodedMPolygon = polygon;
+            }
+        }
+        const std::string label =
+            std::string("MPOLYGON group-63 ACI writer refusal/retry/readback (")
+            + (binary ? "Binary" : "ASCII") + ")";
+        t.expect(negativeRejected && overRangeRejected && retryWritten
+                     && imported && decodedMPolygon != nullptr
+                     && decodedMPolygon->fillColorAci == 256,
+                 label.c_str());
+    }
+}
+
 void testHatchGradientStopColorDomain(TestContext& t) {
     struct HatchParseProbe final : DRW_Hatch {
         bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
@@ -13770,6 +14009,73 @@ void testHatchGradientStopColorDomain(TestContext& t) {
     const bool invalidAciRejected = !typed.valid();
     t.expect(validTypedStops && invalidRgbRejected && invalidAciRejected,
              "HATCH typed validation rejects out-of-domain gradient stop scalars");
+}
+
+void testMLineVectorComponentOrder(TestContext& t) {
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const std::array<DRW_MLineVertex, 2> expectedVertices{{
+        {{1.25, 2.5, 3.75}, {7.25, 8.5, 9.75}, {13.25, 14.5, 15.75},
+         {{0.125}}, {{0.375}}},
+        {{4.5, 5.75, 6.125}, {10.125, 11.25, 12.5}, {16.125, 17.25, 18.5},
+         {{0.625}}, {{0.875}}}}};
+    for (const bool binary : {false, true}) {
+        const std::string format = binary ? "binary" : "ASCII";
+        const std::string suffix = binary ? "-binary" : "-ascii";
+        const auto pathFor = [nonce, &suffix](const char* kind) {
+            return std::filesystem::temp_directory_path()
+                / (std::string("libdxfrw-mline-order-")
+                   + std::to_string(nonce) + suffix + "-" + kind + ".dxf");
+        };
+        const std::filesystem::path controlPath = pathFor("control");
+        std::error_code error;
+        std::filesystem::remove(controlPath, error);
+        const bool generated = writeMLineVectorComponentOrderControl(
+            controlPath, binary, expectedVertices);
+        t.expect(generated,
+                 (format + " literal MLINE component-order control is generated")
+                     .c_str());
+
+        dx_data decoded;
+        dx_iface reader;
+        const bool imported = generated
+            && reader.fileImport(controlPath.string(), &decoded, false);
+        const DRW_MLine* decodedMLine = imported && decoded.mBlock != nullptr
+                && !decoded.mBlock->ent.empty()
+            ? dynamic_cast<const DRW_MLine*>(decoded.mBlock->ent.front())
+            : nullptr;
+        bool vectorsMatch = decodedMLine != nullptr
+            && decodedMLine->numVerts == expectedVertices.size()
+            && decodedMLine->numLines == 1u
+            && decodedMLine->vertlist.size() == expectedVertices.size();
+        const auto same = [](const DRW_Coord& lhs, const DRW_Coord& rhs) {
+            return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+        };
+        for (std::size_t index = 0; vectorsMatch
+             && index < expectedVertices.size(); ++index) {
+            const DRW_MLineVertex& actual = decodedMLine->vertlist[index];
+            const DRW_MLineVertex& expected = expectedVertices[index];
+            vectorsMatch = same(actual.position, expected.position)
+                && same(actual.vertexDir, expected.vertexDir)
+                && same(actual.miterDir, expected.miterDir)
+                && actual.segParms == expected.segParms
+                && actual.areaFillParms == expected.areaFillParms;
+        }
+        const DRW_Line* decodedLine = imported && decoded.mBlock != nullptr
+                && decoded.mBlock->ent.size() == 2u
+            ? dynamic_cast<const DRW_Line*>(decoded.mBlock->ent.back())
+            : nullptr;
+        t.expect(imported && vectorsMatch,
+                 (format + " MLINE preserves every XYZ occurrence and parameter block")
+                     .c_str());
+        t.expect(decodedLine != nullptr
+                     && decodedLine->basePoint.x == 31.0
+                     && decodedLine->secPoint.z == 36.0,
+                 (format + " MLINE permutation preserves following LINE")
+                     .c_str());
+
+        std::filesystem::remove(controlPath, error);
+    }
 }
 
 void testMLineDxfAllocationFailure(TestContext& t) {
@@ -13914,220 +14220,6 @@ void testMLineDxfAllocationFailure(TestContext& t) {
         t.expect(setup && rejected && failedOnce && retried,
                  "MLINE fill-vector allocation failure preserves the active segment for retry");
     }
-}
-
-
-void testMPolygonAciDomain(TestContext& t) {
-    struct MPolygonParseProbe final : DRW_MPolygon {
-        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
-            return parseCode(code, reader);
-        }
-        bool valid() const { return validateDxf(); }
-    };
-    const auto parseRecord = [](MPolygonParseProbe& polygon, int code,
-                                const char* value) {
-        const std::string record = std::to_string(code) + "\n" + value + "\n";
-        std::istringstream input(record);
-        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
-        int parsedCode = 0;
-        return reader->readRec(&parsedCode) && parsedCode == code
-            && polygon.parse(parsedCode, reader);
-    };
-
-    for (const char* invalidValue : {"-1", "257"}) {
-        MPolygonParseProbe polygon;
-        polygon.fillColorAci = 23;
-        const bool rejected = !parseRecord(polygon, 63, invalidValue);
-        const bool unchanged = polygon.fillColorAci == 23 && polygon.valid();
-        const bool retried = parseRecord(polygon, 63, "256")
-            && polygon.fillColorAci == 256 && polygon.valid();
-        t.expect(rejected && unchanged && retried,
-                 "MPOLYGON invalid group-63 ACI preserves model state for corrected retry");
-    }
-
-    for (const int colorIndex : {0, 1, 255, 256}) {
-        MPolygonParseProbe polygon;
-        const std::string value = std::to_string(colorIndex);
-        const bool accepted = parseRecord(polygon, 63, value.c_str())
-            && polygon.fillColorAci == colorIndex && polygon.valid();
-        const std::string label =
-            "MPOLYGON group-63 ACI accepts documented index " + value;
-        t.expect(accepted, label.c_str());
-    }
-
-    struct MPolygonWriterAdapter final : dx_iface {
-        DRW_MPolygon polygon;
-        bool rejectedByEntityWriter{false};
-        void writeEntities() override {
-            if (dxfW == nullptr || !dxfW->writeMPolygon(&polygon))
-                rejectedByEntityWriter = true;
-        }
-    };
-    const auto nonce = std::chrono::steady_clock::now()
-        .time_since_epoch().count();
-    for (const bool binary : {false, true}) {
-        const auto path = std::filesystem::temp_directory_path()
-            / ("libdxfrw-mpolygon-aci-" + std::to_string(nonce)
-               + (binary ? "-binary.dxf" : "-ascii.dxf"));
-        struct Cleanup {
-            std::filesystem::path path;
-            ~Cleanup() {
-                std::error_code error;
-                std::filesystem::remove(path, error);
-            }
-        } cleanup{path};
-        const std::string previous = "previous destination bytes\n";
-        {
-            std::ofstream output(path, std::ios::binary | std::ios::trunc);
-            output << previous;
-        }
-
-        dxfRW codec(path.string().c_str());
-        dx_data data;
-        MPolygonWriterAdapter writer;
-        writer.cData = &data;
-        writer.currentBlock = data.mBlock;
-        writer.dxfW = &codec;
-        const auto destinationIsPrevious = [&path, &previous]() {
-            std::ifstream input(path, std::ios::binary);
-            return std::string(std::istreambuf_iterator<char>(input),
-                               std::istreambuf_iterator<char>()) == previous;
-        };
-        writer.polygon.fillColorAci = -1;
-        writer.rejectedByEntityWriter = false;
-        const bool negativeRejected = !codec.write(&writer, DRW::AC1027, binary)
-            && writer.rejectedByEntityWriter && destinationIsPrevious();
-        writer.polygon.fillColorAci = 257;
-        writer.rejectedByEntityWriter = false;
-        const bool overRangeRejected = !codec.write(&writer, DRW::AC1027, binary)
-            && writer.rejectedByEntityWriter && destinationIsPrevious();
-
-        writer.polygon.fillColorAci = 256;
-        writer.rejectedByEntityWriter = false;
-        const bool retryWritten = codec.write(&writer, DRW::AC1027, binary)
-            && !writer.rejectedByEntityWriter;
-        dx_data decoded;
-        dx_iface importer;
-        const bool imported = retryWritten
-            && importer.fileImport(path.string(), &decoded, false);
-        const DRW_MPolygon* decodedMPolygon = nullptr;
-        if (imported && decoded.mBlock != nullptr) {
-            for (const DRW_Entity* entity : decoded.mBlock->ent) {
-                if (const auto* polygon = dynamic_cast<const DRW_MPolygon*>(entity))
-                    decodedMPolygon = polygon;
-            }
-        }
-        const std::string label =
-            std::string("MPOLYGON group-63 ACI writer refusal/retry/readback (")
-            + (binary ? "Binary" : "ASCII") + ")";
-        t.expect(negativeRejected && overRangeRejected && retryWritten
-                     && imported && decodedMPolygon != nullptr
-                     && decodedMPolygon->fillColorAci == 256,
-                 label.c_str());
-    }
-}
-
-void testMPolygonDegenerateCountDomain(TestContext& t) {
-    struct MPolygonParseProbe final : DRW_MPolygon {
-        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
-            return parseCode(code, reader);
-        }
-        bool valid() const { return validateDxf(); }
-    };
-    const auto parseRecord = [](MPolygonParseProbe& polygon, int code,
-                                const char* value) {
-        const std::string record = std::to_string(code) + "\n" + value + "\n";
-        std::istringstream input(record);
-        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
-        int parsedCode = 0;
-        return reader->readRec(&parsedCode) && parsedCode == code
-            && polygon.parse(parsedCode, reader);
-    };
-
-    for (const char* invalidValue : {"-1", "10001"}) {
-        MPolygonParseProbe polygon;
-        const bool rejected = !parseRecord(polygon, 99, invalidValue);
-        const bool unchanged = polygon.degenerateLoops == 0
-            && polygon.valid();
-        const bool retried = parseRecord(polygon, 99, "3")
-            && polygon.degenerateLoops == 3 && polygon.valid();
-        t.expect(rejected && unchanged && retried,
-                 "MPOLYGON group-99 invalid count preserves model state for corrected retry");
-    }
-
-    MPolygonParseProbe maximum;
-    const bool maximumAccepted = parseRecord(
-        maximum, 99, "10000") && maximum.degenerateLoops == 10000
-        && maximum.valid();
-    t.expect(maximumAccepted,
-             "MPOLYGON group-99 accepts the bounded count ceiling");
-
-    const auto nonce = std::chrono::steady_clock::now()
-        .time_since_epoch().count();
-    const auto path = std::filesystem::temp_directory_path()
-        / ("libdxfrw-mpolygon-degenerate-count-"
-           + std::to_string(nonce) + ".dxf");
-    struct Cleanup {
-        std::filesystem::path path;
-        ~Cleanup() {
-            std::error_code error;
-            std::filesystem::remove(path, error);
-        }
-    } cleanup{path};
-    struct MPolygonWriterAdapter final : dx_iface {
-        DRW_MPolygon polygon;
-        bool rejectedByEntityWriter{false};
-        void writeEntities() override {
-            if (dxfW == nullptr || !dxfW->writeMPolygon(&polygon))
-                rejectedByEntityWriter = true;
-        }
-    };
-
-    const std::string previous = "previous destination bytes\n";
-    {
-        std::ofstream output(path, std::ios::binary | std::ios::trunc);
-        output << previous;
-    }
-    dxfRW codec(path.string().c_str());
-    dx_data data;
-    MPolygonWriterAdapter writer;
-    writer.cData = &data;
-    writer.currentBlock = data.mBlock;
-    writer.dxfW = &codec;
-    const auto destinationIsPrevious = [&path, &previous]() {
-        std::ifstream input(path, std::ios::binary);
-        return std::string(std::istreambuf_iterator<char>(input),
-                           std::istreambuf_iterator<char>()) == previous;
-    };
-
-    writer.polygon.degenerateLoops = -1;
-    writer.rejectedByEntityWriter = false;
-    const bool negativeRejected = !codec.write(&writer, DRW::AC1027, false)
-        && writer.rejectedByEntityWriter && destinationIsPrevious();
-    writer.polygon.degenerateLoops = 10001;
-    writer.rejectedByEntityWriter = false;
-    const bool overBudgetRejected = !codec.write(&writer, DRW::AC1027, false)
-        && writer.rejectedByEntityWriter && destinationIsPrevious();
-
-    writer.polygon.degenerateLoops = 3;
-    writer.rejectedByEntityWriter = false;
-    const bool retryWritten = codec.write(&writer, DRW::AC1027, false)
-        && !writer.rejectedByEntityWriter;
-    dx_data decoded;
-    dx_iface importer;
-    const bool imported = retryWritten
-        && importer.fileImport(path.string(), &decoded, false);
-    const DRW_MPolygon* decodedMPolygon = nullptr;
-    if (imported && decoded.mBlock != nullptr) {
-        for (const DRW_Entity* entity : decoded.mBlock->ent) {
-            if (const auto* polygon = dynamic_cast<const DRW_MPolygon*>(entity))
-                decodedMPolygon = polygon;
-        }
-    }
-    t.expect(negativeRejected && overBudgetRejected && retryWritten
-                 && imported && decodedMPolygon != nullptr
-                 && decodedMPolygon->degenerateLoops == 3,
-             "MPOLYGON typed writer rejects invalid group 99 atomically and retries with exact readback");
 }
 
 void testHatchSplinePointComponentOrder(TestContext& t) {
@@ -23534,101 +23626,6 @@ private:
         dimensions.push_back(state);
     }
 };
-
-void testLeaderDxfAllocationFailure(TestContext& t) {
-    struct LeaderParseProbe final : DRW_Leader {
-        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
-            return parseCode(code, reader);
-        }
-    };
-    const auto parseRecord = [](LeaderParseProbe& leader, int expectedCode,
-                                std::string_view value,
-                                long allocationFailure = -1) {
-        const std::string record = std::to_string(expectedCode) + "\n"
-            + std::string(value) + "\n";
-        std::istringstream input(record);
-        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
-        int code = 0;
-        if (!reader->readRec(&code) || code != expectedCode)
-            return false;
-        MaterialAllocationFailure failure(allocationFailure);
-        return leader.parse(code, reader);
-    };
-
-    for (long allocationFailure = 0; allocationFailure < 3;
-         ++allocationFailure) {
-        LeaderParseProbe leader;
-        const std::size_t failuresBefore = materialFailedAllocations;
-        const bool rejected = !parseRecord(
-            leader, 10, "1.25", allocationFailure);
-        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
-        const bool rolledBack = leader.vertexlist.empty();
-        const bool retried = parseRecord(leader, 10, "1.25")
-            && parseRecord(leader, 20, "2.5")
-            && leader.vertexlist.size() == 1u
-            && leader.vertexlist.front()
-            && leader.vertexlist.front()->x == 1.25
-            && leader.vertexlist.front()->y == 2.5;
-        t.expect(rejected && failedOnce && rolledBack && retried,
-                 "LEADER point allocation failure preserves the field ordinal and retries cleanly");
-    }
-}
-
-
-void testSplineDxfAllocationFailure(TestContext& t) {
-    struct SplineParseProbe final : DRW_Spline {
-        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
-            return parseCode(code, reader);
-        }
-    };
-    const auto parseRecord = [](SplineParseProbe& spline, int expectedCode,
-                                std::string_view value,
-                                long allocationFailure = -1) {
-        const std::string record = std::to_string(expectedCode) + "\n"
-            + std::string(value) + "\n";
-        std::istringstream input(record);
-        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
-        int code = 0;
-        if (!reader->readRec(&code) || code != expectedCode)
-            return false;
-        MaterialAllocationFailure failure(allocationFailure);
-        return spline.parse(code, reader);
-    };
-
-    for (long allocationFailure = 0; allocationFailure < 3;
-         ++allocationFailure) {
-        SplineParseProbe spline;
-        const std::size_t failuresBefore = materialFailedAllocations;
-        const bool rejected = !parseRecord(
-            spline, 10, "1.25", allocationFailure);
-        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
-        const bool rolledBack = spline.controllist.empty();
-        const bool xRetried = parseRecord(spline, 10, "1.25");
-        const bool yRetried = parseRecord(spline, 20, "2.5");
-        const bool retried = xRetried && yRetried
-            && spline.controllist.size() == 1u
-            && spline.controllist.front()
-            && spline.controllist.front()->x == 1.25
-            && spline.controllist.front()->y == 2.5;
-        t.expect(rejected && failedOnce && rolledBack && retried,
-                 "SPLINE control-point allocation failure preserves its component cursor for retry");
-    }
-
-    for (const int code : {40, 41}) {
-        SplineParseProbe spline;
-        const std::size_t failuresBefore = materialFailedAllocations;
-        const bool rejected = !parseRecord(spline, code, "0.75", 0);
-        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
-        const bool rolledBack = code == 40 ? spline.knotslist.empty()
-                                            : spline.weightlist.empty();
-        const bool retried = parseRecord(spline, code, "0.75")
-            && (code == 40 ? spline.knotslist == std::vector<double>{0.75}
-                           : spline.weightlist == std::vector<double>{0.75});
-        t.expect(rejected && failedOnce && rolledBack && retried,
-                 "SPLINE scalar-list allocation failure returns false and retries the same group");
-    }
-}
-
 
 void testDimensionOcsExtrusion(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now()
@@ -62233,7 +62230,6 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--mesh-raw-field-tags") {
         TestContext context;
         testMeshRawFieldTags(context);
-    testMeshDxfAllocationFailure(context);
         std::cout << "MESH raw-field and coordinate-triplet controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
@@ -62255,18 +62251,18 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
-        && std::string(argv[1]) == "--mline-vector-component-order") {
+        && std::string(argv[1]) == "--leader-dxf-allocation-failure") {
         TestContext context;
-        testMLineVectorComponentOrder(context);
-        std::cout << "MLINE vector coordinate-group ordering controls: "
+        testLeaderDxfAllocationFailure(context);
+        std::cout << "LEADER DXF allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
-        && std::string(argv[1]) == "--mline-dxf-allocation-failure") {
+        && std::string(argv[1]) == "--spline-dxf-allocation-failure") {
         TestContext context;
-        testMLineDxfAllocationFailure(context);
-        std::cout << "MLINE DXF allocation-failure and retry controls: "
+        testSplineDxfAllocationFailure(context);
+        std::cout << "SPLINE DXF allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
@@ -62275,6 +62271,29 @@ int main(int argc, char** argv) {
         TestContext context;
         testHatchSplineDxfAllocationFailure(context);
         std::cout << "HATCH spline DXF allocation-failure and retry controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--mpolygon-degenerate-count-domain") {
+        TestContext context;
+        testMPolygonDegenerateCountDomain(context);
+        std::cout << "MPOLYGON group-99 count-domain controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--mpolygon-aci-domain") {
+        TestContext context;
+        testMPolygonAciDomain(context);
+        std::cout << "MPOLYGON group-63 ACI-domain controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--hatch-gradient-stop-color-domain") {
+        TestContext context;
+        testHatchGradientStopColorDomain(context);
+        std::cout << "HATCH gradient-stop color-domain controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
@@ -62295,26 +62314,26 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
-        && std::string(argv[1]) == "--hatch-gradient-stop-color-domain") {
+        && std::string(argv[1]) == "--hatch-spline-point-component-order") {
         TestContext context;
-        testHatchGradientStopColorDomain(context);
-        std::cout << "HATCH gradient-stop color-domain controls: "
+        testHatchSplinePointComponentOrder(context);
+        std::cout << "HATCH spline-edge coordinate ordering controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
-        && std::string(argv[1]) == "--mpolygon-aci-domain") {
+        && std::string(argv[1]) == "--mline-vector-component-order") {
         TestContext context;
-        testMPolygonAciDomain(context);
-        std::cout << "MPOLYGON group-63 ACI-domain controls: "
+        testMLineVectorComponentOrder(context);
+        std::cout << "MLINE vector coordinate-group ordering controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
-        && std::string(argv[1]) == "--mpolygon-degenerate-count-domain") {
+        && std::string(argv[1]) == "--mline-dxf-allocation-failure") {
         TestContext context;
-        testMPolygonDegenerateCountDomain(context);
-        std::cout << "MPOLYGON group-99 count-domain controls: "
+        testMLineDxfAllocationFailure(context);
+        std::cout << "MLINE DXF allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
@@ -62594,22 +62613,6 @@ int main(int argc, char** argv) {
         TestContext context;
         testUnderlayDxfAllocationFailure(context);
         std::cout << "UNDERLAY DXF allocation-failure and retry controls: "
-                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
-        return context.failures == 0 ? 0 : 1;
-    }
-    if (argc == 2
-        && std::string(argv[1]) == "--leader-dxf-allocation-failure") {
-        TestContext context;
-        testLeaderDxfAllocationFailure(context);
-        std::cout << "LEADER DXF allocation-failure and retry controls: "
-                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
-        return context.failures == 0 ? 0 : 1;
-    }
-    if (argc == 2
-        && std::string(argv[1]) == "--spline-dxf-allocation-failure") {
-        TestContext context;
-        testSplineDxfAllocationFailure(context);
-        std::cout << "SPLINE DXF allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
@@ -63046,6 +63049,7 @@ int main(int argc, char** argv) {
     testHiddenZeroHeightAttrib(context);
     testZeroHeightTextFamily(context);
     testMeshRawFieldTags(context);
+    testMeshDxfAllocationFailure(context);
     testLwPolylinePointComponentOrder(context);
     testTextObliqueDxfWireDegrees(context);
     testDxfBinaryGroupWidthGuard(context);

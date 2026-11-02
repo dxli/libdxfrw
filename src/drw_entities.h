@@ -1167,16 +1167,20 @@ public:
     std::uint16_t version = 2;          /*!< subdivision-mesh version, code 71 */
     bool blendCrease = false;           /*!< blend-crease flag, code 72 */
     std::int32_t subdivisionLevel = 0;  /*!< subdivision level, code 91 */
-    // Kept for source compatibility with older callers. The DWG MESH layout
-    // stores subdivisionLevel at 91 and has no separate refined-vertex vector,
-    // so this compatibility field is not serialized.
+    // Kept for source compatibility with older callers. The supported MESH
+    // wire profile has subdivisionLevel at 91 and no separate refined-vertex
+    // vector; output refuses a non-empty value rather than dropping it.
     std::vector<DRW_Coord> subdivVertices;
     std::vector<DRW_Coord> vertices;        /*!< base-cage vertices (code 10, count 92) */
     /*!< each face = list of vertex indices into `vertices` (flat stream, count 93) */
     std::vector<std::vector<std::int32_t>> faces;
     std::vector<std::pair<std::int32_t,std::int32_t>> edges;  /*!< edge index pairs, count 94 */
     std::vector<double> creases;        /*!< per-edge crease values, code 140, count 95 */
-    std::int32_t unknown = 0;            /*!< trailing DWG BL */
+    // Compatibility slot for the undocumented DWG MESH tail. The reader only
+    // admits the observed 10 profile (currently projected as mask 1); a zero
+    // default is encoded using that same canonical tail. Other masks remain
+    // unqualified, and DXF has no corresponding fields.
+    std::int32_t unknown = 0;
     std::vector<DRW_MeshPropertyOverride> propertyOverrides; /*!< DXF override metadata */
 
 private:

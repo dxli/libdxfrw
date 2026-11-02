@@ -66,20 +66,6 @@ public:
     using DRW_DictionaryWithDefault::parseDwg;
 };
 
-class MeshCodecProbe final : public DRW_Mesh {
-public:
-    using DRW_Mesh::parseDwg;
-    using DRW_Mesh::resetDwgState;
-    using DRW_Entity::encodeDwgCommon;
-    using DRW_Entity::encodeDwgEntHandle;
-
-    bool encodeCommonPrefix(DRW::Version version, dwgBufferW *body,
-                            dwgBufferW *strings) {
-        oType = DRW_Mesh::kDwgClassNum;
-        return encodeDwgCommon(version, body, strings);
-    }
-};
-
 using XRecordEncodeProbe = xrecord_test::CodecProbe;
 
 class FieldCodecProbe final : public DRW_Field {
@@ -276,6 +262,20 @@ public:
     using DRW_Attdef::encodeDwg;
     using DRW_Attdef::parseDwg;
     using DRW_Attdef::resetDwgState;
+};
+
+class MeshCodecProbe final : public DRW_Mesh {
+public:
+    using DRW_Mesh::parseDwg;
+    using DRW_Mesh::resetDwgState;
+    using DRW_Entity::encodeDwgCommon;
+    using DRW_Entity::encodeDwgEntHandle;
+
+    bool encodeCommonPrefix(DRW::Version version, dwgBufferW *body,
+                            dwgBufferW *strings) {
+        oType = DRW_Mesh::kDwgClassNum;
+        return encodeDwgCommon(version, body, strings);
+    }
 };
 
 struct GeoDataFrame {
@@ -19319,7 +19319,7 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--mesh-dwg-crease-count-guard") {
         TestContext context;
         testMeshDwgCreaseCountGuard(context);
-        std::cout << "AC1024 MESH DWG face/tail/crease controls: "
+        std::cout << "AC1024 MESH DWG crease-count reader guard: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
@@ -19334,8 +19334,7 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--scale-dwg-unit-domains") {
         TestContext context;
-        testMeshDwgCreaseCountGuard(context);
-    testScaleDwgPositiveUnitDomain(context);
+        testScaleDwgPositiveUnitDomain(context);
         std::cout << "DWG SCALE unit domains: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
@@ -20000,6 +19999,7 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     TestContext context;
+    testMeshDwgCreaseCountGuard(context);
     testScaleDwgPositiveUnitDomain(context);
     testGroupVectors(context);
     testDictionaryVectors(context);

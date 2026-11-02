@@ -2310,10 +2310,6 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dxf_fixture_tests --mline-vector-component-order)
     set_tests_properties(libdxfrw_mline_vector_component_order PROPERTIES
         LABELS "fast;dxf;geometry" TIMEOUT 30)
-    add_test(NAME libdxfrw_mline_dxf_allocation_failure
-        COMMAND libdxfrw_dxf_fixture_tests --mline-dxf-allocation-failure)
-    set_tests_properties(libdxfrw_mline_dxf_allocation_failure PROPERTIES
-        LABELS "fast;dxf;reader;mline;allocation;retry" TIMEOUT 30)
     add_test(NAME libdxfrw_lwpolyline_point_component_order
         COMMAND libdxfrw_dxf_fixture_tests --lwpolyline-point-component-order)
     set_tests_properties(libdxfrw_lwpolyline_point_component_order PROPERTIES
@@ -2341,11 +2337,6 @@ if(LIBDXFRW_BUILD_TESTS)
             --hatch-dxf-allocation-failure)
     set_tests_properties(libdxfrw_hatch_dxf_allocation_failure PROPERTIES
         LABELS "fast;dxf;reader;hatch;allocation;retry" TIMEOUT 30)
-    add_test(NAME libdxfrw_hatch_gradient_stop_color_domain
-        COMMAND libdxfrw_dxf_fixture_tests
-            --hatch-gradient-stop-color-domain)
-    set_tests_properties(libdxfrw_hatch_gradient_stop_color_domain PROPERTIES
-        LABELS "fast;dxf;reader;hatch;gradient;validation;retry" TIMEOUT 30)
     add_test(NAME libdxfrw_mesh_dxf_allocation_failure
         COMMAND libdxfrw_dxf_fixture_tests --mesh-dxf-allocation-failure)
     set_tests_properties(libdxfrw_mesh_dxf_allocation_failure PROPERTIES
@@ -2359,11 +2350,20 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dxf_fixture_tests --mpolygon-aci-domain)
     set_tests_properties(libdxfrw_mpolygon_aci_domain PROPERTIES
         LABELS "fast;dxf;reader;writer;mpolygon;validation;retry" TIMEOUT 30)
+    add_test(NAME libdxfrw_hatch_gradient_stop_color_domain
+        COMMAND libdxfrw_dxf_fixture_tests
+            --hatch-gradient-stop-color-domain)
+    set_tests_properties(libdxfrw_hatch_gradient_stop_color_domain PROPERTIES
+        LABELS "fast;dxf;reader;hatch;gradient;validation;retry" TIMEOUT 30)
     add_test(NAME libdxfrw_hatch_spline_point_component_order
         COMMAND libdxfrw_dxf_fixture_tests
             --hatch-spline-point-component-order)
     set_tests_properties(libdxfrw_hatch_spline_point_component_order PROPERTIES
         LABELS "fast;dxf;reader;hatch;spline;geometry" TIMEOUT 30)
+    add_test(NAME libdxfrw_mline_dxf_allocation_failure
+        COMMAND libdxfrw_dxf_fixture_tests --mline-dxf-allocation-failure)
+    set_tests_properties(libdxfrw_mline_dxf_allocation_failure PROPERTIES
+        LABELS "fast;dxf;reader;mline;allocation;retry" TIMEOUT 30)
     add_test(NAME libdxfrw_classes_wire_census
         COMMAND libdxfrw_dxf_fixture_tests --classes-wire-census)
     set_tests_properties(libdxfrw_classes_wire_census PROPERTIES

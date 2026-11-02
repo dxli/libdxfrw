@@ -3492,7 +3492,9 @@ public:
             dimAssoc.m_isTransSpace = false;
             dimAssoc.m_rotatedDimensionType = 2;
             DRW_DimensionAssociationOsnapRef osnap;
-            osnap.m_className = "AcDbLine";
+            // The OSNAP payload class is AcDbOsnapPointRef; the associated
+            // geometry class is carried by the referenced handle below.
+            osnap.m_className = "AcDbOsnapPointRef";
             osnap.m_objectHandle = modelSpaceLineHandle_;
             dimAssoc.m_osnapRefs.push_back(std::move(osnap));
             wroteDimensionAssociation_ = registeredDimensionAssociation_
@@ -6143,7 +6145,8 @@ public:
                 && data.m_dimensionHandle == modelSpaceLineHandle_
                 && data.m_associativityFlags == 1
                 && data.m_osnapRefs.size() == 1
-                && data.m_osnapRefs.front().m_className == "AcDbLine"
+                && data.m_osnapRefs.front().m_className
+                    == "AcDbOsnapPointRef"
                 && data.m_osnapRefs.front().m_objectHandle
                     == modelSpaceLineHandle_
                 && !data.m_hasUnrepresentableDetail;

@@ -2255,8 +2255,8 @@ uses `max_digits10`, with exact tag readback of adjacent doubles, maximum and
 minimum normal values, a finite subnormal, signed zero and adversarial 3D
 coordinates. Four focused locale/process-locale/ASCII-CLI/binary-CLI checks
 pass in 0.63 seconds; an exact little-endian boundary control verifies binary
-double bytes. The explicit six-digit ARCALIGNEDTEXT string helper and raw/typed
-ERANGE-policy difference remain separate. No external fixture, DWG layout,
+double bytes. The six-digit ARCALIGNEDTEXT D2T formatter is corrected in S5.21 below;
+the selected raw/typed ERANGE policy is resolved in S5.22 below. No external fixture, DWG layout,
 CAD-kernel result or support claim follows.
 
 ODA v5.4.1 §24.2.2.7.1 requires one zero-based search-index entry per
@@ -4946,6 +4946,15 @@ ODA ACAD2013 acceptance for the observed tuple only. This slice is independent o
 additional DWG parser edits; do not wait for generic ACIS decoding or a DWG
 writer.
 
+Separate P6 AC1032 reader recheck: the bounded AC1027-origin reversed
+schema-index table-role profile retained in the ODA-resaved AC1032 Cover file
+is now parsed only when the existing structural guard matches; generated
+malformed-profile controls remain refused. The current reader reaches the
+CLASSES end marker and publishes 115 frames with zero DataStorage link or
+orphan failures, but strict conversion still refuses on a HEADER compatibility
+warning and an unclaimed-suffix warning, and emits no DXF. This is not S2.3 ACDSDATA projection/readback or
+3D semantic evidence. See the [P6 DataStorage profile receipt](docs/research/p6-ac1027-cover-ac1032-datastorage-role-profile-2026-11-02.json).
+
 Dependencies: S0.6, S1.1, S2.1, S2.2, and S3.2.2. Research now covers the
 exact observed sample facts, installed ODA acceptance route, the
 ACadSharp-maintained multi-entity AC1027 sample, Autodesk's published
@@ -6771,7 +6780,7 @@ Steps:
    The `dx_iface` adapter now also retains CAMERA callbacks and routes the
    entity through the existing `dxfRW::writeCamera` serializer. The generated
    named-BLOCK check covers ASCII/Binary output and readback with the optional
-   VIEW reference absent; it does not qualify code 340 reference resolution. A generated subtype guard now checks runtime types before surface callback copying, DXF serialization, or DWG field encoding; it preserves the base-class plane profile and rejects mismatches before publication. See the [runtime-type guard receipt](docs/research/s8-1a-direct-surface-runtime-type-guard-2026-11-02.json). This does not qualify native surface semantics or B-rep validity.
+   VIEW reference absent; it does not qualify code 340 reference resolution.
    The existing `libdxfrw_block_owners` generated matrix also passes for its
    selected BLOCK-reachable callback set across ASCII/Binary and both extended
    modes. It checks typed/raw event order, copied payload lifetime after parser
@@ -6806,6 +6815,36 @@ Steps:
    return is enabled; leak detection is explicitly off. This is not the full
    suite, native CAD, B-rep/ACDS semantics or ABI qualification, and does not
    bind later encoding/dictionary integrations. Historical reports stay intact.
+
+   **S8.1a direct-adapter and serializer runtime subtype guard (2026-11-02;
+   generated fast slice, uncommitted):** `dx_iface::addSurface` checks the C++
+   dynamic type before copying any of the six `DRW_Surface` subtypes. Null,
+   unsupported enum, base-only object with a derived `eType`, and concrete
+   subtype/eType mismatches set the existing typed-capture failure flag and
+   publish no typed entity. `dxfRW::writeSurface` independently validates the
+   runtime subtype before reading subtype-specific fields, while retaining the
+   historical base-class representation for a plane. The DWG surface codec
+   also checks `eType` against the runtime subtype before writing common or
+   subtype-specific body data, so a mislabeled surface cannot publish a frame
+   before a corrected same-handle retry. The concrete adapter's
+   surface dispatcher reports a mismatched runtime type as a write error
+   instead of silently dropping the entity and publishing a partial DXF. The
+   focused adapter test retains all six actual subtypes, rejects invalid
+   callback variants, and verifies that mutating a captured LINE's `eType` to
+   PLANESURFACE refuses export without publishing a file. The modeler writer
+   matrix checks mismatched subtype rejection, plane base-class compatibility,
+   and corrected-type retry. Local DWG round-trip surface assertions pass
+   across the writer matrix, including same-handle retry. The aggregate local
+   round-trip CTest now passes its selected DIMASSOC/object-carrier readback
+   and generated DIMENSION frame controls after the native-frame writer
+   correction recorded in the parity plan. The surface-focused fast CTests
+   pass (2/2);
+   `lc3_compat_check` builds and the scoped diff check passes. This removes enum-trusting downcast
+   hazards at the concrete adapter and serializer boundaries; it does not
+   qualify block callback completeness, native surface semantics, B-rep
+   validity, ABI, or application support. No fixture or public interface
+   change was added. See
+   [`s8-1a-direct-surface-runtime-type-guard-2026-11-02.json`](docs/research/s8-1a-direct-surface-runtime-type-guard-2026-11-02.json).
 
 2. **S8.2 — Existing 2D source-compatibility gate (required after each API
    slice).** Compile the locked `lc3_compat_check` consumer and representative
@@ -7075,16 +7114,7 @@ Steps:
    change is needed. This self-generated writer/readback checks callback field
    delivery only; ARC/CIRCLE family support and third-party interoperability
    remain unqualified. Runtime files stay temporary.
-15. **S8.8 — Cover selected PFACE values in the 3D-consumer probe.** Extend
-   the runtime-generated AC1027 ASCII/binary vector with a PFACE POLYLINE,
-   four nonzero-Z vertex records, and one typed face record whose zero source
-   flags require the writer to emit the DXF face-record marker. At the
-   consumer, assert the parent PFACE flag/declaration, all relevant XYZ, the
-   emitted/parsed group-70 marker, and all four signed one-based face indices.
-   Read the same vector through both `ext` modes to guard WCS vertex delivery.
-   Keep these fields explicitly distinct from DWG child ownership/handles and
-   target interoperability; the vector is generated at test runtime.
-16. **S8.9 — Match FreeCAD's `dwg2dxf` converter invocation.** FreeCAD's
+15. **S8.9 — Match FreeCAD's `dwg2dxf` converter invocation.** FreeCAD's
    `Draft/importDWG.py` resolves `dwg2dxf` and invokes exactly
    `dwg2dxf <input.dwg> -o <output.dxf>` (no `-y`, output-version flag, or
    shell quoting layer), then passes the result to FreeCAD's DXF importer.
@@ -9141,7 +9171,12 @@ Latest implementation-item ledger addition:
 | S5.17.1–.2 | COMMITTED / RESEARCHED | Added separate archival GEODATA v1 fields and modern field routing in `DRW_GeoData::parseCode`, with in-memory ASCII/binary v1 and modern controls, copy/reset coverage, and generated-reader checks; commits `8b15424`, `f666dc5`, and `35c57cd` record research, tests, and parser/model work. Research reconciles Autodesk 2009's legacy map with Autodesk 2016/2020 and ezdxf's modern R2010 map without treating peer semantics as normative. Exact values are locally-authored vectors only; no external drawing is admitted, and no reprojection/Civil/DWG support claim follows. |
 | S5.17.3 | COMMITTED | Added version-aware GEODATA DXF output for documented v1/v2, preserving the previous modern-v2 group order and emitting the full archival/Civil v1 map. Group 90 defaults to documented v2; typed v3 rejects before output/state changes. ASCII/binary vectors lock the code order, all v1/Civil values after typed readback, and modern v2 parity. Transactional negatives cover signed group-70 overflow, non-finite values, >255-byte v1 text, oversized mesh counts, nonzero 2D mesh Z, Civil fields without their marker, the DWG-only Civil tail, unsafe modern text, and mixing schema-exclusive fields; every rejection leaves a same-writer retry usable. Focused `libdxfrw_wave1`, `libdxfrw_dwg_local_roundtrip`, and `libdxfrw_dxf_fixtures` pass 3/3 in 5.33s; `lc3_compat_check` builds; `git diff --check` passes. These are locally-authored DXF controls only; no independent producer/reader, CRS transform, Civil 3D, DWG, or geometry support is claimed. |
 | S5.18 | COMMITTED / LOCAL_IMPLEMENTATION_COMPLETE | Plan-Slice:7R.2d closes the last local gate after writer57b98cd/admissiondaf6a0f/planning1c85111/publication98f0eae. Same-data16 successful exports/eight rejection controls preserve parent/compound-child/block source IDs through repeat, late veto/exception/record/limit failure and corrected retry; detached HATCH handle0 is included. Per-call owning-child restoration avoids cross-callback journals, bounds snapshots before allocation and leaves direct-codec/no-HATCH contracts unchanged. Focused ASan/UBSan16/8, strict TUs/lc3 and existing local/fixture CTests2/2 in5.27s pass; actual generated ASCII/binary CLI conversions/exact verifiers pass twice with identical per-encoding hashes. Parent98f0eae reproduces mutation/failed reuse. Durable source/binary/CLI report: docs/research/hatch-same-data-retry-2026-10-15.json. Scoped local closure only: no native edit/update, fill/render, DWG/ABI or support/J promotion; no external fixture or CTest registration. |
-| S5.19 / parity7Y.2a | COMMITTED | `291858e`: ASCII DXF now defaults to binary64 `max_digits10`; the old `nextafter(1.0, 2.0) -> 1` precision loss is repaired. Eight runtime tag controls cover adversarial XYZ, adjacent negative values, maximum/minimum normal, finite subnormal and signed zero; exact reader equality/sign, caller locale/stream state and explicit little-endian binary bytes pass. Actual generated ASCII/binary CLI conversions retain the difficult XYZ fields exactly. `cmake --build build --target libdxfrw_numeric_locale_tests dwg2dxf --parallel 2` and four focused numeric CTests pass (4/4, 0.63s); `git diff --check` passes. No fixture or registration added. Explicit ARCALIGNEDTEXT six-digit string conversion and raw/typed ERANGE policy remain separate; no DWG, native/platform or geometry-support claim. |
+| S5.19 / parity7Y.2a | COMMITTED | `291858e`: ASCII DXF now defaults to binary64 `max_digits10`; the old `nextafter(1.0, 2.0) -> 1` precision loss is repaired. Eight runtime tag controls cover adversarial XYZ, adjacent negative values, maximum/minimum normal, finite subnormal and signed zero; exact reader equality/sign, caller locale/stream state and explicit little-endian binary bytes pass. Actual generated ASCII/binary CLI conversions retain the difficult XYZ fields exactly. `cmake --build build --target libdxfrw_numeric_locale_tests dwg2dxf --parallel 2` and four focused numeric CTests pass (4/4, 0.63s); `git diff --check` passes. No fixture or registration added. Raw/typed ERANGE policy remains separate; no DWG, native/platform or geometry-support claim. |
+| S5.20 | IMPLEMENTED_UNCOMMITTED | `DRW_Viewport::parseCode()` now ignores undocumented group 46 instead of aliasing it to circle zoom; Autodesk documents circle zoom at group 72. A runtime-generated ASCII VIEWPORT control sets group 72=725 then group 46=2500 and confirms typed `circleZoom` remains 725. `libdxfrw_dwg_local_roundtrip` builds and focused CTest `dxf_viewport_undocumented_group46_isolation` passes 1/1. Input is temporary and removed; no fixture added. Receipt: `docs/research/p5-viewport-undocumented-group46-isolation-2026-11-02.json`. This is parser field isolation only; raw preservation, Binary DXF, native rendering/references, and support claims remain open. |
+| S5.21 | IMPLEMENTED_UNCOMMITTED | Replaced six-significant-digit ARCALIGNEDTEXT D2T conversion with `max_digits10`, preserving adjacent finite binary64 values for all six DXF groups 41–46; increased the parser reservation bound to 24 bytes for the longest finite spelling. The generated numeric fast test proves exact recovery, 47-byte atomic refusal, and successful 48-byte corrected retry for the 24-byte negative-maximum spelling; a direct AC1027 DWG string-stream control also verifies exact fallback emission from an adjacent-double height. `libdxfrw_numeric_locale_tests` builds; focused numeric and process-locale CTests pass 2/2. Inputs are in memory; no fixture added. Receipt: `docs/research/p6-arcalignedtext-d2t-binary64-preservation-2026-11-02.json`. This does not qualify a full physical DWG conversion or native rendering; the selected raw/typed ERANGE behavior is resolved in S5.22; support claims remain open. |
+| S5.22 | IMPLEMENTED_UNCOMMITTED | Defined the selected ARCALIGNEDTEXT D2T ERANGE behavior. `parseFinitePrefix()` accepts finite nonzero subnormals when `strtod` reports ERANGE and rejects overflow/nonfinite values plus nonzero source text that underflows to zero. Typed Binary-DXF group-42 input preserves `denorm_min` through `applyArcApproximation`; strict ASCII output refuses `1e-9999` atomically, preserves a sentinel destination, then succeeds on the same adapter after correction to `denorm_min` and exact fresh readback. The numeric and process-locale CTests pass 2/2. No fixture added. Receipt: `docs/research/p6-arcalignedtext-d2t-erange-policy-2026-11-02.json`. The strict writer's trailing-byte refusal is implemented in S5.23; the complete producer lexical grammar and support claims remain open. |
+| S5.23 | IMPLEMENTED_UNCOMMITTED | Strict ARCALIGNEDTEXT output now requires a complete finite D2T numeric token, preventing values such as `2.25trailing` or embedded-NUL suffixes from being silently truncated to a prefix. The read-only approximation keeps its established prefix behavior. Generated ASCII/Binary controls cover all six fields, atomic destination/model preservation, corrected same-adapter retry and typed readback; direct numeric tests cover whitespace, C-locale syntax, subnormal, invalid-range and embedded-NUL boundaries. Build passes; the focused adapter/numeric/process-locale CTests pass 3/3 in 1.19s. Inputs are generated and no fixture was added. Receipt: `docs/research/p6-arcalignedtext-d2t-complete-token-guard-2026-11-02.json`. This is a prefix-truncation loss guard, not normative producer grammar or physical/native support evidence. |
+| S5.24 / P6-MESH | IMPLEMENTED_UNCOMMITTED | Added a generated AC1024 DWG MESH runtime vector for the existing crease-count guard. The valid one-edge/one-crease frame reads the exact edge/value; the malformed one-edge/two-crease frame refuses, clears previously populated state, and permits a corrected retry on the same object. The focused object-vector target builds and `libdxfrw_mesh_dwg_crease_count_guard` passes 1/1 in 0.26s. No fixture or production parser change was added. Receipt: `docs/research/p6-mesh-dwg-crease-count-reader-guard-2026-11-02.json`. This is generated parser-guard coverage only; physical producer breadth, crease effect, subdivision, geometry, native semantics, and support claims remain open. |
 | S8.15.8 | COMMITTED | Added locally-authored `tests/fixtures/dxf/ac1015_helix_freecad_control.dxf` and opt-in ODA CTest `dwg2dxf_freecad_3d_helix_cli`; generated DWG/DXF outputs remain under `build/`. The source contains a nonplanar rational HELIX (13 ordered controls/weights, 17 knots, axis `(0,0,1)`, radius 1, one turn, height 4) and a separate nonplanar weighted cubic SPLINE. The exact FreeCAD argv test and public DXF readback preserve rational group-70 flag `0x04`, degree/counts, ordered WCS controls/weights, absent planar normals, and HELIX trailer; it caught and fixed weighted DWG SPLINE output incorrectly using linear bit `0x10`. Focused internal round-trip and ODA Spline/HELIX route tests pass; no generated files enter source. Current FreeCAD `main` C++ `dxf.cpp` maps SPLINE to `ReadSpline()` and falls through to `ReadUnknownEntity()` for HELIX, so classify this as converter-supported/preserved but downstream-unsupported in that importer. Do not rewrite the entity; a positive FreeCAD HELIX shape claim requires a separate upstream importer change. Target-authored DWGs and other versions remain unqualified. |
 | S8.15.9.1 | COMMITTED | Added locally authored `tests/fixtures/dwg/ac1015_ellipse_freecad_control.dwgadd`, `tests/fixtures/dxf/ac1015_ellipse_freecad_control.dxf`, and opt-in `dwg2dxf_freecad_3d_ellipse_cli`. The DWGADD recipe emits only two planar AC1015 ELLIPSE controls (full and partial) because LibreDWG `dwgadd` cannot faithfully express the elevated/tilted vectors needed by `.9.2`. In a build-tree path containing spaces, the CTest invokes exact FreeCAD argv `dwg2dxf input -o output`, verifies the AC1015 signature/header and both entity field sequences (center, WCS major axis, ratio, parameters, omitted default extrusion), then repeats the checks after public DXF readback. Focused CTest passes 1/1. The locally authored elevated/tilted DXF source is reserved for an independent writer; it is not exercised by this DWGADD test. This is self-generated planar conversion/readback evidence only, not independent DWG interoperability, FreeCAD shape support, or general ELLIPSE support. All generated DWG/DXF outputs stay under `build/`; no generated drawing fixture is tracked. |
 | S8.15.9.2 | COMMITTED | Added opt-in `dwg2dxf_freecad_3d_ellipse_oda_cli` and `tests/run_freecad_3d_ellipse_oda_cli_test.cmake`. ODA File Converter 27.1.0.0 writes the locally-authored AC1015 control only under build/temp; the fast CTest checks all three independent ELLIPSE field sets before conversion and after public DXF readback, and passes 1/1. Added `tests/freecad_dwg2dxf_3d_ellipse_check.FCMacro` to enforce an isolated FreeCAD config, capture executable/hash/argv/status and identical DWG→DXF→C++ importer handoffs, then compare resulting curve plane, major-axis direction, radii, closure, parameters, and endpoints to analytic expectations. FreeCAD 1.1.3 revision `145529fe741292ff0b3977a01195bf0247425794`, macOS 27 arm64, C++ importer mode 2, with `dwg2dxf` found on PATH (SHA-256 `5b7d23baf049746597bf0ca0a78141e94e260dfb0086aa3d468ac702df063f45`): the default-XY full ellipse matches; elevated and tilted partial ellipses are silently built as closed full +Z ellipses, with tilted normal/major-axis direction and arc endpoints lost, though FreeCAD reports no unsupported features. Thus converter output is field-preserving; only this full-XY control is a positive pinned-FreeCAD result, and partial/tilted rows remain downstream-unsupported. An earlier ODA `-4960` failure did not recur on unmodified CLI retry; no UI-lock bypass was used. Locally-authored DXF source SHA-256 `078a9982f049ee4c669f878b6cc8cc6dfcd292b72d8f394fe7c2c258b9fa7cc7`; generated DWG/DXF files were not added to source. Other FreeCAD versions/importers, target-authored DWG interoperability, and general ELLIPSE support remain unqualified. |

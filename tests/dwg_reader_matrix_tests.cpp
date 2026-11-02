@@ -14377,12 +14377,12 @@ void testHeaderCompatibilityProfile(TestContext& t) {
                      && reader.diagnostics().front().severity == DwgIntegritySeverity::Error,
                  "opaque suffix cannot rescue malformed compatible body: " + name);
     }
-    for (const DRW::Version version : {DRW::AC1024, DRW::AC1027}) {
+    for (const DRW::Version version : {DRW::AC1018, DRW::AC1021}) {
         auto bytes = compatible;
         HeaderSectionReader reader(bytes, 0u, version, 55u);
         DRW_Header header;
         t.expect(!reader.readDwgHeader(header) && header.vars.empty(),
-                 "AC1032 compatibility is not extrapolated to unwitnessed versions");
+                 "AC1032 excluded-size compatibility is not extrapolated to pre-R2010 versions");
     }
     auto fakeTail = canonical;
     fakeTail.insert(fakeTail.end(), 739u, 0xA5u);

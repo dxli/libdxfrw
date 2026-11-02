@@ -2900,7 +2900,6 @@ void testDxfMeshCreaseValueDomains(TestContext& t) {
     }
 }
 
-
 void testLeaderAdvisoryCountState(TestContext& t) {
     ExposedLeader source;
     t.expect(parseDxfRecords(source, "76\n99\n10\n1\n20\n2\n30\n3\n10\n4\n20\n6\n30\n0\n")
