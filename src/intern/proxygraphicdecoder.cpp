@@ -806,8 +806,7 @@ DRW_ProxyGraphicDecodeResult DRW_ProxyGraphicDecoder::decode(
                            && !layerNames[layer].empty()) {
                     state.layer = layerNames[layer];
                 } else {
-                    context.fail(
-                        DRW_ProxyGraphicStopReason::InvalidResourceReference);
+                    ++result.unresolvedResourceReferenceCount;
                 }
             }
             break;
@@ -828,8 +827,8 @@ DRW_ProxyGraphicDecodeResult DRW_ProxyGraphicDecoder::decode(
                          && !ltypeNames[lineType].empty()) {
                     state.lineType = ltypeNames[lineType];
                 } else {
-                    context.fail(
-                        DRW_ProxyGraphicStopReason::InvalidResourceReference);
+                    ++result.unresolvedResourceReferenceCount;
+                    state.lineType = "BYLAYER";
                 }
             }
             break;

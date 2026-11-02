@@ -11108,6 +11108,11 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
               DRW_ProxyGraphicDecoder::decode(host.proxyGraphics, version, sink,
                                               host, m_layerNameOrder,
                                               m_ltypeNameOrder);
+          if (decoded.unresolvedResourceReferenceCount != 0u) {
+            DRW_DBG("proxy graphics unresolved layer/linetype references=");
+            DRW_DBG(decoded.unresolvedResourceReferenceCount);
+            DRW_DBG("; retained the record with rendering fallback\n");
+          }
           switch (decoded.stopReason) {
           case DRW_ProxyGraphicStopReason::Complete:
           case DRW_ProxyGraphicStopReason::ShortHeader:

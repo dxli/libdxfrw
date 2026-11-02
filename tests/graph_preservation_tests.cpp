@@ -15576,10 +15576,11 @@ void testProxyResourceIndexResolution(TestContext& t) {
         DRW_ProxyGraphicDecoder::decode(
             makeResourceStream(18u, 1u), DRW::AC1021,
             rejectedLinetypeCapture, parent, {}, incompleteLinetypes);
-    t.expect(rejectedLinetype.stopReason
-                     == DRW_ProxyGraphicStopReason::InvalidResourceReference
-                 && rejectedLinetypeCapture.circles.empty(),
-             "proxy linetype index with an incomplete source table is refused");
+    t.expect(rejectedLinetype.completed()
+                 && rejectedLinetype.unresolvedResourceReferenceCount == 1u
+                 && rejectedLinetypeCapture.circles.size() == 1u
+                 && rejectedLinetypeCapture.circles.front().lineType == "BYLAYER",
+             "proxy linetype index with an incomplete source table is counted and keeps the rendering fallback");
 
     const std::vector<std::string> incompleteLayers = {"SOURCE_LAYER_0", ""};
     ProxyGraphicCapture rejectedLayerCapture;
@@ -15587,10 +15588,12 @@ void testProxyResourceIndexResolution(TestContext& t) {
         DRW_ProxyGraphicDecoder::decode(
             makeResourceStream(16u, 1u), DRW::AC1021,
             rejectedLayerCapture, parent, incompleteLayers);
-    t.expect(rejectedLayer.stopReason
-                     == DRW_ProxyGraphicStopReason::InvalidResourceReference
-                 && rejectedLayerCapture.circles.empty(),
-             "proxy layer index pointing to a missing source record is refused");
+    t.expect(rejectedLayer.completed()
+                 && rejectedLayer.unresolvedResourceReferenceCount == 1u
+                 && rejectedLayerCapture.circles.size() == 1u
+                 && rejectedLayerCapture.circles.front().layer
+                        == "ADAPTER_LAYER_ORDER",
+             "proxy layer index pointing to a missing source record is counted and keeps the parent fallback");
 }
 
 void testProxyShellMultiFaceFraming(TestContext& t) {

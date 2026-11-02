@@ -43,7 +43,6 @@ enum class DRW_ProxyGraphicStopReason : unsigned char {
     PrimitiveLimit,
     MatrixDepthLimit,
     ResourceLimit,
-    InvalidResourceReference,
     AllocationFailure,
     SinkRefused
 };
@@ -63,6 +62,7 @@ struct DRW_ProxyGraphicDecodeResult {
     std::size_t emittedPrimitiveCount {0};
     std::size_t recognizedPrimitiveChunkCount {0};
     std::size_t skippedUnsupportedChunkCount {0};
+    std::size_t unresolvedResourceReferenceCount {0};
     std::size_t consumedByteCount {0};
     DRW_ProxyGraphicStopReason stopReason {
         DRW_ProxyGraphicStopReason::Complete};
@@ -99,11 +99,11 @@ public:
     //! lineweight draw-state.  @p layerNames / @p ltypeNames are the file's
     //! layer / linetype names in storage order — the index space the proxy's
     //! ATTRIBUTE_LAYER (16) / ATTRIBUTE_LINETYPE (18) opcodes reference; pass
-    //! empty to leave those attributes inherited from @p parent. If a table is
-    //! supplied, an index that is out of range or points to a missing record
-    //! stops decoding with InvalidResourceReference. Malformed streams also
-    //! stop and are reported in the result. A sink may decline an event;
-    //! exceptions from a sink are intentionally not swallowed.
+    //! empty to leave those attributes inherited from @p parent. If a supplied
+    //! table lacks an index or its record, the result counts that unresolved
+    //! reference and decoding retains the legacy rendering fallback. Malformed
+    //! streams stop and are reported in the result. A sink may decline an
+    //! event; exceptions from a sink are intentionally not swallowed.
     static DRW_ProxyGraphicDecodeResult decode(
         const std::string &bytes, DRW::Version version,
         DRW_ProxyGraphicSink &sink, const DRW_Entity &parent,
