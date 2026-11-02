@@ -695,6 +695,13 @@ public:
     std::size_t tableContentRetainedRecords{0};
     std::size_t tableContentRetainedBytes{0};
     bool tableContentCaptureFailed{false};
+    // Standalone TABLEGEOMETRY cache callbacks are retained separately from
+    // TABLECONTENT. Writer support is limited to the bounded null-cell-pointer
+    // profile; unsupported references remain a sticky export refusal.
+    std::vector<DRW_TableGeometry> tableGeometries;
+    std::size_t tableGeometryRetainedRecords{0};
+    std::size_t tableGeometryRetainedBytes{0};
+    bool tableGeometryCaptureFailed{false};
     // Retain decoded DATALINK callbacks so export can reject an unqualified
     // object graph instead of silently dropping external-data connections.
     std::vector<DRW_DataLink> dataLinks;

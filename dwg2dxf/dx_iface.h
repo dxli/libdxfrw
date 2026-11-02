@@ -2145,6 +2145,11 @@ public:
             if (!dxfW->writeTableContent(&content))
                 return;
         }
+        objectWritePhase = "TABLEGEOMETRY records";
+        for (DRW_TableGeometry& geometry : cData->tableGeometries) {
+            if (!dxfW->writeTableGeometry(&geometry))
+                return;
+        }
         objectWritePhase = "associative records";
         if (m_dxfAssociativeReplayPrepared) {
             for (DxfAssociativeReplaySource& source :

@@ -31158,6 +31158,117 @@ bool dxfRW::writeTableContent(DRW_TableContentObject *ent) {
     return true;
 }
 
+bool dxfRW::writeTableGeometry(DRW_TableGeometry *ent) {
+    const auto fail = [this]() {
+        m_writeError = true;
+        return false;
+    };
+    if (version < DRW::AC1021 || version > DRW::AC1032
+        || !preflightTableEntry(ent) || ent == nullptr
+        || ent->handle == 0u
+        || ent->parentHandle == DRW::NoHandle
+        || ent->m_rowCount < 0
+        || ent->m_rowCount > DRW_TableGeometry::kMaxRows
+        || ent->m_columnCount < 0
+        || ent->m_columnCount > DRW_TableGeometry::kMaxColumns
+        || ent->m_cellCount < 0
+        || ent->m_cellCount > DRW_TableGeometry::kMaxCells
+        || ent->m_cells.size() != static_cast<std::size_t>(ent->m_cellCount)
+        || static_cast<std::int64_t>(ent->m_rowCount)
+                * ent->m_columnCount != ent->m_cellCount
+        // The current typed/raw reader profile does not yet model these
+        // common-object fields for TABLEGEOMETRY. Preserve them by refusal.
+        || !ent->reactorHandles.empty() || ent->xDictHandle != 0u
+        || !ent->appData.empty() || !ent->extData.empty())
+        return fail();
+
+    std::size_t totalContents = 0u;
+    for (const DRW_TableGeometryCell& cell : ent->m_cells) {
+        // The current independent AC1027 source witness has flags=3, null
+        // references, planar coordinates, and zero in the unknown content
+        // field. ODA §20.4.103 labels the reference as an unknown soft
+        // pointer, so non-null targets remain unqualified.
+        if (cell.m_flags != 3 || cell.m_unknownHandle != 0u
+            || cell.m_contents.size()
+                > static_cast<std::size_t>(DRW_TableGeometry::kMaxContentGeometry)
+                    - totalContents)
+            return fail();
+        totalContents += cell.m_contents.size();
+        if (!std::isfinite(cell.m_widthWithGap)
+            || !std::isfinite(cell.m_heightWithGap)
+            || cell.m_widthWithGap < 0.0 || cell.m_heightWithGap < 0.0)
+            return fail();
+        for (const DRW_TableGeometryContent& content : cell.m_contents) {
+            if (!std::isfinite(content.m_topLeft.x)
+                || !std::isfinite(content.m_topLeft.y)
+                || !std::isfinite(content.m_topLeft.z)
+                || !std::isfinite(content.m_center.x)
+                || !std::isfinite(content.m_center.y)
+                || !std::isfinite(content.m_center.z)
+                || !std::isfinite(content.m_contentWidth)
+                || !std::isfinite(content.m_contentHeight)
+                || !std::isfinite(content.m_width)
+                || !std::isfinite(content.m_height)
+                || content.m_topLeft.z != 0.0
+                || content.m_center.z != 0.0
+                || content.m_contentWidth < 0.0
+                || content.m_contentHeight < 0.0
+                || content.m_width < 0.0 || content.m_height < 0.0
+                || content.m_unknown != 0)
+                return fail();
+        }
+    }
+
+    const std::uint32_t handle = remapObjectHandle(ent->handle);
+    if (handle == 0u || handle == DRW::NoHandle
+        || isDxfFixedOutputHandle(handle) || !reserveHandle(handle))
+        return fail();
+
+    RecordStateScope state(*this, ent);
+    DxfWriterRecordScope record(*writer);
+    if (!writer->writeString(0, "TABLEGEOMETRY")
+        || !writer->writeString(5, toHexStr(handle))
+        || !writeTableEntryAppData(*ent))
+        return fail();
+    writeObjectOwner(ent->parentHandle);
+    if (writer->hasWriteError()
+        || !writer->writeString(100, "AcDbTableGeometry")
+        || !writer->writeInt32(90, ent->m_rowCount)
+        || !writer->writeInt32(91, ent->m_columnCount)
+        || !writer->writeInt32(92, ent->m_cellCount))
+        return fail();
+
+    for (const DRW_TableGeometryCell& cell : ent->m_cells) {
+        if (!writer->writeInt32(93, cell.m_flags)
+            || !writer->writeDouble(40, cell.m_widthWithGap)
+            || !writer->writeDouble(41, cell.m_heightWithGap)
+            || !writer->writeString(330, "0")
+            || !writer->writeInt32(94,
+                static_cast<std::int32_t>(cell.m_contents.size())))
+            return fail();
+        for (const DRW_TableGeometryContent& content : cell.m_contents) {
+            if (!writer->writeDouble(10, content.m_topLeft.x)
+                || !writer->writeDouble(20, content.m_topLeft.y)
+                || !writer->writeDouble(30, content.m_topLeft.z)
+                || !writer->writeDouble(11, content.m_center.x)
+                || !writer->writeDouble(21, content.m_center.y)
+                || !writer->writeDouble(31, content.m_center.z)
+                || !writer->writeDouble(43, content.m_contentWidth)
+                || !writer->writeDouble(44, content.m_contentHeight)
+                || !writer->writeDouble(45, content.m_width)
+                || !writer->writeDouble(46, content.m_height)
+                || !writer->writeInt32(95, content.m_unknown))
+                return fail();
+        }
+    }
+
+    if (writer->hasWriteError() || !preflightDxfWrite()
+        || !record.commit())
+        return fail();
+    state.commit();
+    return true;
+}
+
 bool dxfRW::writeDictionaryVar(DRW_DictionaryVar *ent) {
     if (version < DRW::AC1014 || !preflightTableEntry(ent)
         || ent->handle == 0) {

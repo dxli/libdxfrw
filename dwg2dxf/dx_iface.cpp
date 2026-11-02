@@ -14544,6 +14544,9 @@ constexpr std::size_t kMaxAdapterDataLinkRetainedBytes =
 constexpr std::size_t kMaxAdapterTableContentRecords = 100000u;
 constexpr std::size_t kMaxAdapterTableContentRetainedBytes =
     DRW::kMaxDxfBinaryPayloadBytes;
+constexpr std::size_t kMaxAdapterTableGeometryRecords = 100000u;
+constexpr std::size_t kMaxAdapterTableGeometryRetainedBytes =
+    DRW::kMaxDxfBinaryPayloadBytes;
 constexpr std::size_t kMaxAdapterXRecordRecords = 100000u;
 constexpr std::size_t kMaxAdapterXRecordItems = 1000000u;
 constexpr std::size_t kMaxAdapterXRecordRetainedBytes =
@@ -53603,6 +53606,34 @@ void dx_iface::addTableContent(const DRW_TableContentObject& data) {
 void dx_iface::addTableGeometry(const DRW_TableGeometry& data) {
     if (!cData) return;
     cData->standaloneTableGeometryPresent = true;
+    if (cData->tableGeometryCaptureFailed) return;
+    if (cData->tableGeometryRetainedRecords
+        >= kMaxAdapterTableGeometryRecords
+        || std::any_of(cData->tableGeometries.cbegin(),
+                       cData->tableGeometries.cend(),
+                       [&data](const DRW_TableGeometry& value) {
+                           return value.handle == data.handle;
+                       })) {
+        cData->tableGeometryCaptureFailed = true;
+        return;
+    }
+    std::size_t estimatedBytes = 0u;
+    if (!estimateTableGeometrySourceBytes(data, estimatedBytes)
+        || cData->tableGeometryRetainedBytes
+            > kMaxAdapterTableGeometryRetainedBytes
+        || estimatedBytes > kMaxAdapterTableGeometryRetainedBytes
+                                - cData->tableGeometryRetainedBytes) {
+        cData->tableGeometryCaptureFailed = true;
+        return;
+    }
+    try {
+        cData->tableGeometries.push_back(data);
+        ++cData->tableGeometryRetainedRecords;
+        cData->tableGeometryRetainedBytes += estimatedBytes;
+    } catch (...) {
+        cData->tableGeometryCaptureFailed = true;
+        return;
+    }
     if (!tableSourceCaptureOpen()) return;
     auto& source = cData->m_tableDxfSource;
     std::size_t bytes = 0u;
@@ -65943,9 +65974,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             "unmodeled OBJECTS record has no qualified owner/remap/output route");
         return false;
     }
-    if (cData->standaloneTableGeometryPresent) {
+    if (cData->tableGeometryCaptureFailed
+        || (cData->standaloneTableGeometryPresent
+            && cData->tableGeometries.empty())) {
         std::cerr << "DXF export refused: standalone TABLEGEOMETRY "
-                     "has no qualified replay path; output would be incomplete\n";
+                     "capture is incomplete; output would be incomplete\n";
         return false;
     }
     if (cData->tableContentCaptureFailed

@@ -431,6 +431,10 @@ public:
     /// unlinked scalar cells. Referenced DATALINK/FIELD/block targets must be
     /// emitted by the caller.
     bool writeTableContent(DRW_TableContentObject *ent);
+    /// Emits the bounded AC1021+ planar TABLEGEOMETRY cache profile (cell
+    /// flags 3, null cell references, zero unknown content field). Non-null
+    /// references and unrepresented metadata are refused.
+    bool writeTableGeometry(DRW_TableGeometry *ent);
     bool writeLayer(DRW_Layer *ent);
     bool writeDimstyle(DRW_Dimstyle *ent);
     bool writeTextstyle(DRW_Textstyle *ent);

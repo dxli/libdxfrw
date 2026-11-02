@@ -1,5 +1,6 @@
 #include "dx_iface.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstring>
@@ -37,19 +38,26 @@ public:
     void clearObservations() { geometry.clear(); raw.clear(); unknown.clear(); }
 };
 
-Tags source(const std::string& version, const std::string& name) {
+Tags source(const std::string& version, const std::string& name,
+            bool nullCellReferences = false, bool witnessedProfile = false) {
     Tags result{{0,"SECTION"},{2,"HEADER"},{9,"$ACADVER"},{1,version},{0,"ENDSEC"},
         {0,"SECTION"},{2,"OBJECTS"},{0,name},{5,"A0"},{330,"F0"},{100,"AcDbTableGeometry"},
         {90,"1"},{91,"2"},{92,"2"}};
     const std::array<int,10> codes{{10,20,30,11,21,31,43,44,45,46}};
     unsigned seed = 1u;
     for (int cell = 0; cell != 2; ++cell) {
-        result.insert(result.end(), {{93,std::to_string(-3-cell)},{40,std::to_string(25+cell)},
-            {41,std::to_string(9+cell)},{330,cell == 0 ? "A1" : "A2"},{94,std::to_string(cell+1)}});
+        result.insert(result.end(), {{93,witnessedProfile ? "3" : std::to_string(-3-cell)},
+            {40,std::to_string(25+cell)},{41,std::to_string(9+cell)},
+            {330,nullCellReferences ? "0" : (cell == 0 ? "A1" : "A2")},
+            {94,std::to_string(cell+1)}});
         for (int content = 0; content <= cell; ++content, ++seed) {
-            for (std::size_t i = 0; i != codes.size(); ++i)
-                result.push_back({codes[i],std::to_string(seed*16u+i)+".25"});
-            result.push_back({95,std::to_string(-7-static_cast<int>(seed))});
+            for (std::size_t i = 0; i != codes.size(); ++i) {
+                const bool zeroZ = witnessedProfile && (codes[i] == 30 || codes[i] == 31);
+                result.push_back({codes[i],zeroZ ? "0"
+                    : std::to_string(seed*16u+i)+".25"});
+            }
+            result.push_back({95,witnessedProfile ? "0"
+                : std::to_string(-7-static_cast<int>(seed))});
         }
     }
     result.insert(result.end(), {{0,"ENDSEC"},{0,"EOF"}});
@@ -81,7 +89,8 @@ std::string bytes(const std::filesystem::path& path) {
     return std::string(std::istreambuf_iterator<char>(stream),{});
 }
 
-bool expected(const Probe& probe, const dx_data& data, std::uint32_t owner = 0xF0u) {
+bool expected(const Probe& probe, const dx_data& data, std::uint32_t owner = 0xF0u,
+              bool nullCellReferences = false, bool witnessedProfile = false) {
     if (probe.geometry.size() != 1u || probe.raw.size() != 1u || !probe.unknown.empty()
         || data.unmodeledDxfObjectSeen || !data.standaloneTableGeometryPresent) return false;
     const auto& value = probe.geometry.front();
@@ -91,20 +100,54 @@ bool expected(const Probe& probe, const dx_data& data, std::uint32_t owner = 0xF
     unsigned seed = 1u;
     for (std::size_t cellIndex = 0; cellIndex != 2u; ++cellIndex) {
         const auto& cell = value.m_cells[cellIndex];
-        if (cell.m_flags != -3-static_cast<int>(cellIndex) || cell.m_widthWithGap != 25+cellIndex
-            || cell.m_heightWithGap != 9+cellIndex || cell.m_unknownHandle != 0xA1u+cellIndex
+        if (cell.m_flags != (witnessedProfile ? 3 : -3-static_cast<int>(cellIndex))
+            || cell.m_widthWithGap != 25+cellIndex
+            || cell.m_heightWithGap != 9+cellIndex
+            || cell.m_unknownHandle != (nullCellReferences ? 0u : 0xA1u+cellIndex)
             || cell.m_contents.size() != cellIndex+1u) return false;
         for (const auto& content : cell.m_contents) {
             const std::array<double,10> actual{{content.m_topLeft.x,content.m_topLeft.y,content.m_topLeft.z,
                 content.m_center.x,content.m_center.y,content.m_center.z,content.m_contentWidth,
                 content.m_contentHeight,content.m_width,content.m_height}};
             for (std::size_t i = 0; i != actual.size(); ++i)
-                if (actual[i] != seed*16u+i+0.25) return false;
-            if (content.m_unknown != -7-static_cast<int>(seed)) return false;
+                if (actual[i] != ((witnessedProfile && (i == 2u || i == 5u))
+                        ? 0.0 : seed*16u+i+0.25)) return false;
+            if (content.m_unknown != (witnessedProfile ? 0 : -7-static_cast<int>(seed)))
+                return false;
             ++seed;
         }
     }
     return true;
+}
+
+bool rawObjectMatches(const DRW_RawDxfObject& raw, const Tags& sourceTags) {
+    const auto object = std::find_if(sourceTags.cbegin(), sourceTags.cend(),
+        [](const Tag& tag) { return tag.code == 0 && tag.value == "TABLEGEOMETRY"; });
+    if (object == sourceTags.cend()) return false;
+    const auto end = std::find_if(std::next(object), sourceTags.cend(),
+        [](const Tag& tag) { return tag.code == 0; });
+    const auto first = static_cast<std::size_t>(std::distance(sourceTags.cbegin(), object)) + 1u;
+    const auto last = static_cast<std::size_t>(std::distance(sourceTags.cbegin(), end));
+    if (raw.groups.size() != last - first) return false;
+    for (std::size_t i = 0; i != raw.groups.size(); ++i) {
+        const Tag& expectedTag = sourceTags[first + i];
+        const DRW_Variant& actual = raw.groups[i];
+        if (actual.code() != expectedTag.code) return false;
+        if (expectedTag.code >= 10 && expectedTag.code <= 59) {
+            if (actual.type() != DRW_Variant::DOUBLE
+                || actual.d_val() != std::stod(expectedTag.value)) return false;
+        } else if (expectedTag.code >= 90 && expectedTag.code <= 99) {
+            if ((actual.type() != DRW_Variant::INTEGER
+                    && actual.type() != DRW_Variant::INTEGER64)
+                || (actual.type() == DRW_Variant::INTEGER
+                    ? static_cast<std::int64_t>(actual.i_val())
+                    : actual.i64_val()) != std::stoll(expectedTag.value)) return false;
+        } else if (actual.type() != DRW_Variant::STRING || !actual.content.s
+                   || *actual.content.s != expectedTag.value) {
+            return false;
+        }
+    }
+    return raw.name == "TABLEGEOMETRY";
 }
 
 std::size_t slot(const Tags& tags, int code) {
@@ -194,6 +237,59 @@ bool tests(const std::filesystem::path& directory) {
             || probe.geometry.front().m_rowCount!=5000 || probe.raw.front().parentHandle!=0u)
             return fail("bounded maximum cell count was not decoded");
     }
+    unsigned writerRoutes=0u,writerFailures=0u,writerRetries=0u;
+    unsigned versionRefusals=0u,versionRetries=0u;
+    const std::array<DRW::Version,4> outputVersions{{
+        DRW::AC1021,DRW::AC1024,DRW::AC1027,DRW::AC1032}};
+    for (DRW::Version outputVersion : outputVersions)
+    for (bool inputBinary : {false,true}) for (bool outputBinary : {false,true}) {
+        const Tags witnessed = source("AC1032", "TABLEGEOMETRY", true, true);
+        Probe sourceReader; dx_data retained;
+        if (!write(input,witnessed,inputBinary)
+            || !sourceReader.fileImport(input.string(),&retained,false)
+            || !expected(sourceReader,retained,0xF0u,true,true))
+            return fail("bounded writer source profile was not captured");
+
+        dx_iface exporter;
+        const auto readback = [&]() {
+            Probe reader; dx_data decoded;
+            return reader.fileImport(output.string(),&decoded,false)
+                && expected(reader,decoded,0xF0u,true,true)
+                && reader.raw.size()==1u
+                && rawObjectMatches(reader.raw.front(),witnessed);
+        };
+        if (outputVersion == DRW::AC1021) {
+            const std::string sentinel="KEEP_UNSUPPORTED_TABLE_GEOMETRY_VERSION\n";
+            {std::ofstream stream(output,std::ios::binary); stream<<sentinel;}
+            if (exporter.fileExport(output.string(),DRW::AC1018,outputBinary,
+                                    &retained,false,false)
+                || bytes(output)!=sentinel)
+                return fail("pre-AC1021 TABLEGEOMETRY output did not fail atomically");
+            ++versionRefusals;
+        }
+        if (!exporter.fileExport(output.string(),outputVersion,outputBinary,
+                                 &retained,false,false)
+            || !readback())
+            return fail("bounded TABLEGEOMETRY ASCII/Binary writer fields did not read back");
+        if (outputVersion == DRW::AC1021) ++versionRetries;
+        ++writerRoutes;
+
+        retained.tableGeometries.front().m_cells.front().m_unknownHandle=0xA1u;
+        const std::string sentinel="KEEP_TABLE_GEOMETRY_DESTINATION\n";
+        {std::ofstream stream(output,std::ios::binary); stream<<sentinel;}
+        if (exporter.fileExport(output.string(),outputVersion,outputBinary,
+                                &retained,false,false)
+            || bytes(output)!=sentinel)
+            return fail("unqualified TABLEGEOMETRY cell reference did not fail atomically");
+        ++writerFailures;
+
+        retained.tableGeometries.front().m_cells.front().m_unknownHandle=0u;
+        if (!exporter.fileExport(output.string(),outputVersion,outputBinary,
+                                 &retained,false,false)
+            || !readback())
+            return fail("same-exporter TABLEGEOMETRY correction did not retry/read back");
+        ++writerRetries;
+    }
     for (bool binary : {false,true}) for (bool strict : {false,true}) for (int kind=0; kind!=6; ++kind) {
         const bool content=kind==0 || kind==2;
         dx_data data, clean; dx_iface importer, exporter;
@@ -233,8 +329,13 @@ bool tests(const std::filesystem::path& directory) {
     }
     std::cout<<"TABLEGEOMETRY: "<<positives<<" projections; "<<fallbacks<<" raw fallbacks/"<<retries
              <<" corrected imports; 16 typed/16 raw null-owner and 4 empty/maximum-cell controls; "
-             <<refusals<<" atomic table-dependency refusals/readbacks\n";
-    return positives==16u && fallbacks==320u && retries==320u && refusals==24u;
+             <<writerRoutes<<" ASCII/Binary writer/readbacks, "<<writerFailures
+             <<" atomic refusals/"<<writerRetries<<" same-exporter retries; "
+             <<versionRefusals<<" pre-AC1021 refusals/"<<versionRetries
+             <<" AC1021 retries; "<<refusals<<" atomic table-dependency refusals/readbacks\n";
+    return positives==16u && fallbacks==320u && retries==320u && refusals==24u
+        && writerRoutes==16u && writerFailures==16u && writerRetries==16u
+        && versionRefusals==4u && versionRetries==4u;
 }
 
 int inspect(const char* path) {
