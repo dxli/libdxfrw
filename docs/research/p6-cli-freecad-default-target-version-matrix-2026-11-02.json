@@ -4,7 +4,7 @@
   "date": "2026-11-02",
   "status": "FAST_VALIDATED",
   "supportClaimEffect": "none",
-  "scope": "Verify the FreeCAD-compatible -o route chooses its documented default DXF target from an imported DXF source revision and honors ASCII/Binary output selection.",
+  "scope": "Verify the FreeCAD-compatible -o route chooses its documented default DXF target from imported DXF source revisions and from locally authored DWG source profiles, and honors ASCII/Binary output selection.",
   "profiles": [
     {
       "source": "AC1009",
@@ -45,31 +45,46 @@
   ],
   "control": {
     "file": "tests/dwg2dxf_cli_contract_tests.py",
-    "function": "check_default_output_versions",
-    "selector": "--options-only",
+    "function": "check_default_output_versions and check_default_dwg_output_versions",
+    "selector": "--options-only (DXF source matrix); --batch-only / --fast-only (DWG source matrix)",
     "existingCtest": "dwg2dxf_cli_contract",
-    "runtimeAuthoredInput": "The existing minimal SOURCE DXF is written in a temporary directory and only its $ACADVER value is varied.",
+    "runtimeAuthoredInput": "The minimal SOURCE DXF is written in a temporary directory with only $ACADVER varied. AC1021 and AC1027 DWGs are written by the local test writer at runtime; no binary fixture is committed.",
     "route": "dwg2dxf <source.dxf> -o <output.dxf> [-b]",
     "assertions": [
       "All nine source revision headers select the expected default target, including the AC1012 compatibility mapping to AC1014.",
       "Each target is emitted as ASCII and Binary DXF with the exact $ACADVER value.",
       "Binary DXF is checked with the R12 one-byte group-code framing for AC1009 and two-byte framing for later revisions.",
-      "All inputs remain byte-identical and each invocation exits successfully."
+      "All inputs remain byte-identical and each invocation exits successfully.",
+      "Locally authored AC1021 and AC1027 DWG sources select the same default DXF target through FreeCAD -o in ASCII and Binary.",
+      "Binary outputs from both DWG profiles are reopened through FreeCAD -o and read back as ASCII at the same target revision."
     ],
-    "controls": 18,
+    "controls": 24,
     "fixtureFilesAdded": 0
   },
   "validation": {
-    "build": "PASS: cmake --build build-gcc --target dwg2dxf -j2",
-    "test": "PASS: python3 -B tests/dwg2dxf_cli_contract_tests.py --converter build-gcc/dwg2dxf/dwg2dxf --options-only (96 total controls)",
+    "build": "PASS: cmake --build build-gcc --target dwg2dxf libdxfrw_dwg_local_roundtrip -j2",
+    "test": "PASS: dwg2dxf_cli_contract CTest 1/1 (8.96s) after rebuilding both current executables; options-only 96 controls; batch-only 33 bounded controls including four default DWG outputs and two binary readbacks.",
     "diffCheck": "PASS: git diff --check",
     "sha256": {
-      "tests/dwg2dxf_cli_contract_tests.py": "80f2e8feb30bdc764f89427ab24db83e62687cfb0c8d5dc9d5f91491717fbfe6",
-      "build-gcc/dwg2dxf/dwg2dxf": "04a96d39d968708006679eb5861ffc3b2b488bb3dd9d8d76eca74b235c5cfaa0"
+      "tests/dwg2dxf_cli_contract_tests.py": "66effb668a2f99669e3a6777033962b168cbfd05666e7c5fa7d91321a33cc201",
+      "build-gcc/dwg2dxf/dwg2dxf": "04a96d39d968708006679eb5861ffc3b2b488bb3dd9d8d76eca74b235c5cfaa0",
+      "build-gcc/libdxfrw_dwg_local_roundtrip": "8774bc5b5d44d8ff95018bdd72533b932cf9bc5a88e4db00e47576c441b9b2a0"
     }
   },
   "limits": [
-    "This receipt covers source DXF default-version selection through the FreeCAD -o route; DWG-derived defaults, explicit-version semantics outside existing controls, and native CAD acceptance remain separately scoped.",
+    "This receipt covers source-DXF defaults for all supported revision headers and generated AC1021/AC1027 DWG defaults through FreeCAD -o; other DWG-derived versions, explicit-version semantics outside existing controls, and native CAD acceptance remain separately scoped.",
     "This is CLI contract evidence, not a DWG/DXF semantic support claim."
+  ],
+  "dwgProfiles": [
+    {
+      "source": "AC1021",
+      "origin": "libdxfrw_dwg_local_roundtrip --generate-cli-batch-source (locally authored at runtime)",
+      "expectedTarget": "AC1021"
+    },
+    {
+      "source": "AC1027",
+      "origin": "libdxfrw_dwg_local_roundtrip --generate-cli-batch-source ... AC1027 (locally authored at runtime)",
+      "expectedTarget": "AC1027"
+    }
   ]
 }

@@ -71,6 +71,23 @@ def check_pre_r13_marker_failure(converter, root):
     return checked
 
 
+def output_has_revision(payload, revision, binary):
+    if payload.startswith(BINARY_PREFIX) != binary:
+        return False
+    if binary:
+        # R12 Binary DXF stores group codes 0..254 in one byte. Later DXF
+        # revisions store group codes as little-endian 16-bit values.
+        code_width = 1 if revision == b"AC1009" else 2
+        code_9 = b"\x09" if code_width == 1 else b"\x09\x00"
+        code_1 = b"\x01" if code_width == 1 else b"\x01\x00"
+        field = code_9 + b"$ACADVER\x00" + code_1 + revision + b"\x00"
+        return payload.count(field) == 1
+    lines = [line.strip() for line in payload.splitlines()]
+    return sum(
+        lines[index:index + 4] == [b"9", b"$ACADVER", b"1", revision]
+        for index in range(max(0, len(lines) - 3))) == 1
+
+
 def check_default_output_versions(converter, root, invoke):
     """Pin FreeCAD -o default-version selection and output encoding."""
     profiles = (
@@ -102,31 +119,59 @@ def check_default_output_versions(converter, root, invoke):
                     f"FreeCAD default output version failed for "
                     f"{source_revision!r}/{binary}: {result!r}")
             payload = output.read_bytes()
-            if payload.startswith(BINARY_PREFIX) != binary:
+            if not output_has_revision(payload, output_revision, binary):
                 raise AssertionError(
-                    f"FreeCAD default output kind changed for "
-                    f"{source_revision!r}/{binary}")
-            if binary:
-                code_width = 1 if source_revision == b"AC1009" else 2
-                code_9 = b"\x09" if code_width == 1 else b"\x09\x00"
-                code_1 = b"\x01" if code_width == 1 else b"\x01\x00"
-                revision = (code_9 + b"$ACADVER\x00" + code_1
-                            + output_revision + b"\x00")
-                if payload.count(revision) != 1:
-                    raise AssertionError(
-                        f"binary FreeCAD default target for {source_revision!r} "
-                        f"did not encode exactly {output_revision!r}")
-            else:
-                lines = [line.strip() for line in payload.splitlines()]
-                version_records = sum(
-                    lines[index:index + 4]
-                    == [b"9", b"$ACADVER", b"1", output_revision]
-                    for index in range(max(0, len(lines) - 3)))
-                if version_records != 1:
-                    raise AssertionError(
-                        f"ASCII FreeCAD default target for {source_revision!r} "
-                        f"did not encode exactly {output_revision!r}")
+                    f"FreeCAD default output for {source_revision!r}/{binary} "
+                    f"did not encode exactly {output_revision!r}")
             checked += 1
+    return checked
+
+
+def check_default_dwg_output_versions(converter, root, writer,
+                                      ac1021_source):
+    """Pin DWG-derived FreeCAD -o defaults for the generated source profiles."""
+    ac1027_source = root / "default-version-source-AC1027.dwg"
+    generated = run_bounded(
+        [str(writer), "--generate-cli-batch-source", str(ac1027_source),
+         "AC1027"], 10, 131072, cwd=root)
+    if generated.returncode != 0 or not ac1027_source.is_file():
+        raise AssertionError(f"could not author AC1027 default-version source: {generated!r}")
+
+    checked = 0
+    for revision, source in ((b"AC1021", ac1021_source),
+                             (b"AC1027", ac1027_source)):
+        original = source.read_bytes()
+        if original[:6] != revision:
+            raise AssertionError(f"generated DWG source has wrong revision: {source}")
+        for binary in (False, True):
+            output = root / (
+                f"default-version-dwg-output-{revision.decode()}-"
+                f"{'binary' if binary else 'ascii'}.dxf")
+            arguments = [str(converter), str(source), "-o", str(output)]
+            if binary:
+                arguments.append("-b")
+            result = run_bounded(arguments, 10, 2 * 1024 * 1024, cwd=root)
+            payload = output.read_bytes() if output.is_file() else b""
+            if (result.returncode != 0 or source.read_bytes() != original
+                    or not output_has_revision(payload, revision, binary)):
+                raise AssertionError(
+                    f"DWG-derived default target failed for "
+                    f"{revision.decode()}/{binary}: {result!r}")
+            checked += 1
+
+            if binary:
+                readback = root / f"default-version-dwg-readback-{revision.decode()}.dxf"
+                readback_result = run_bounded(
+                    [str(converter), str(output), "-o", str(readback)],
+                    10, 2 * 1024 * 1024, cwd=root)
+                readback_payload = readback.read_bytes() if readback.is_file() else b""
+                if (readback_result.returncode != 0
+                        or not output_has_revision(readback_payload, revision, False)
+                        or output.read_bytes() != payload):
+                    raise AssertionError(
+                        f"Binary DWG-derived default output did not read back "
+                        f"as {revision.decode()}: {readback_result!r}")
+                checked += 1
     return checked
 
 
@@ -588,6 +633,8 @@ def check_batch(converter, root, writer):
     if generated.returncode != 0 or not dwg_source.is_file():
         raise AssertionError(f"could not author CLI batch DWG control locally: {generated!r}")
     case_dwg_source = dwg_source
+    checked += check_default_dwg_output_versions(
+        converter, root, writer, dwg_source)
 
     def aliases_in_directory(directory, first_name, second_name):
         first = directory / first_name
