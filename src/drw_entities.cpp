@@ -8414,7 +8414,9 @@ bool DRW_Mesh::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t bs){
     if (!buf->isGood()) return fail();
 
     std::uint32_t nCrease = 0;                        // BL crease count (95)
-    if (!readCount(2, nCrease)) return fail(); // minimum-width BD value
+    if (!readCount(2, nCrease)
+        || nCrease > parsedEdges.size())
+        return fail(); // each crease value addresses an existing level-0 edge
     if (!DRW::reserve(parsedCreases, static_cast<int>(nCrease)))
         return fail();
     for (std::uint32_t i = 0; i < nCrease; ++i) {
@@ -8634,7 +8636,8 @@ bool DRW_Mesh::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         if (m_dxfPhaseCounts[1] != 0 || m_dxfEdgeFrom != -1)
             return false;
         const std::int32_t count = reader->getInt32();
-        if (!isValidCount(count, DRW_Mesh::kMaxMeshItems))
+        if (!isValidCount(count, DRW_Mesh::kMaxMeshItems)
+            || static_cast<std::size_t>(count) > edges.size())
             return false;
         m_dxfState = 95;
         m_dxfPhaseCounts[2] = count;
@@ -8666,7 +8669,8 @@ bool DRW_Mesh::validateGeometry() const {
         || vertices.size() > static_cast<std::size_t>(kMaxMeshItems)
         || edges.size() > static_cast<std::size_t>(kMaxMeshItems)
         || faces.size() > static_cast<std::size_t>(kMaxMeshItems)
-        || creases.size() > static_cast<std::size_t>(kMaxMeshItems))
+        || creases.size() > static_cast<std::size_t>(kMaxMeshItems)
+        || creases.size() > edges.size())
         return false;
 
     const auto finite = [](const DRW_Coord& point) {

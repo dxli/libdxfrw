@@ -2564,6 +2564,26 @@ void testDxfMeshCreaseValueDomains(TestContext& t) {
                  && parsed.creases == valid.creases,
              "MESH parser accepts and retains documented crease values");
 
+    const std::vector<double> excessCreases = {0.0, 0.25, 0.5, 0.75};
+    ExposedMesh excessInput;
+    t.expect(!parseDxfRecords(excessInput, makeRecords(excessCreases)),
+             "MESH parser rejects more edge creases than level-0 edges");
+
+    ExposedMesh excessOutput = valid;
+    excessOutput.creases = excessCreases;
+    for (const bool binary : {false, true}) {
+        std::ostringstream output(std::ios::out | std::ios::binary);
+        dxfRW codec(nullptr);
+        codec.version = DRW::AC1027;
+        codec.binFile = binary;
+        codec.writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+        codec.writer->setVersion("AC1027", true);
+        t.expect(!codec.writeMesh(&excessOutput) && output.str().empty(),
+                 "MESH ASCII/Binary writers refuse excess edge creases atomically");
+    }
+
     for (const double invalidValue : {-2.0, -0.5,
                                       -std::numeric_limits<double>::denorm_min()}) {
         ExposedMesh invalidOutput = valid;
@@ -2597,6 +2617,16 @@ void testDxfMeshCreaseValueDomains(TestContext& t) {
                      && handles.bitCount() == 0u
                      && strings.bitCount() == 0u,
                  "DWG MESH writer rejects invalid crease values before emission");
+
+        ExposedMesh excess = valid;
+        excess.creases = excessCreases;
+        dwgBufferW excessData, excessHandles, excessStrings;
+        t.expect(!excess.encodeDwg(version, &excessData, 0,
+                                   &excessStrings, &excessHandles)
+                     && excessData.bitCount() == 0u
+                     && excessHandles.bitCount() == 0u
+                     && excessStrings.bitCount() == 0u,
+                 "DWG MESH writer refuses excess edge creases before emission");
     }
 }
 
