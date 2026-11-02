@@ -15062,6 +15062,33 @@ bool addToleranceRetainedBytes(
         && estimate <= kMaxAdapterTypedEntityRetainedBytes;
 }
 
+bool addGeoPositionMarkerRetainedBytes(
+        const DRW_GeoPositionMarker& marker,
+        std::size_t& estimate) noexcept {
+    if (!addStringPayloadBytes(marker.m_notes, estimate))
+        return false;
+    if (marker.mtext != nullptr) {
+        // The callback copy owns a separate embedded MTEXT object, including
+        // its common entity payload as well as text-specific storage.
+        if (!addAssociativeRetainedBytes(sizeof(DRW_MText), estimate)
+            || !addEntityCommonRetainedBytes(*marker.mtext, estimate)
+            || !addTextRetainedBytes(*marker.mtext, estimate))
+            return false;
+    }
+    return estimate <= kMaxAdapterTypedEntityRetainedBytes;
+}
+
+bool addSectionObjectRetainedBytes(
+        const DRW_SectionObject& section,
+        std::size_t& estimate) noexcept {
+    return section.m_verts.size() <= DRW_SectionObject::kMaxVertices
+        && section.m_blVerts.size() <= DRW_SectionObject::kMaxVertices
+        && addStringPayloadBytes(section.m_name, estimate)
+        && addVectorPayloadBytes(section.m_verts, estimate)
+        && addVectorPayloadBytes(section.m_blVerts, estimate)
+        && estimate <= kMaxAdapterTypedEntityRetainedBytes;
+}
+
 bool addAttributeRetainedBytes(
         const DRW_Attrib& attribute, std::size_t& estimate) noexcept {
     if (!addStringPayloadBytes(attribute.tag, estimate)
@@ -15360,6 +15387,16 @@ bool estimateTypedEntityRetainedBytes(
     if (const auto* tolerance =
             dynamic_cast<const DRW_Tolerance*>(&entity)) {
         if (!addToleranceRetainedBytes(*tolerance, estimate))
+            return false;
+    }
+    if (const auto* marker =
+            dynamic_cast<const DRW_GeoPositionMarker*>(&entity)) {
+        if (!addGeoPositionMarkerRetainedBytes(*marker, estimate))
+            return false;
+    }
+    if (const auto* section =
+            dynamic_cast<const DRW_SectionObject*>(&entity)) {
+        if (!addSectionObjectRetainedBytes(*section, estimate))
             return false;
     }
     if (const auto* attribute = dynamic_cast<const DRW_Attrib*>(&entity)) {
@@ -70742,6 +70779,18 @@ void dx_iface::writeEntity(DRW_Entity* e){
             written = dxfW->writeCamera(camera);
         else
             written = dxfW->writeCamera(nullptr);
+        break;
+    case DRW::GEOPOSITIONMARKER:
+        if (auto* marker = dynamic_cast<DRW_GeoPositionMarker*>(e))
+            written = dxfW->writeGeoPositionMarker(marker);
+        else
+            written = dxfW->writeGeoPositionMarker(nullptr);
+        break;
+    case DRW::SECTION:
+        if (auto* section = dynamic_cast<DRW_SectionObject*>(e))
+            written = dxfW->writeSectionObject(section);
+        else
+            written = dxfW->writeSectionObject(nullptr);
         break;
     case DRW::TEXT:
         if (auto* rtext = dynamic_cast<DRW_RText*>(e))

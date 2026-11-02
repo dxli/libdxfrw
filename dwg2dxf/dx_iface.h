@@ -757,6 +757,13 @@ public:
     void addCamera(const DRW_Camera& data) override{
         retainTypedEntity<DRW_Camera>(data);
     }
+    void addGeoPositionMarker(
+            const DRW_GeoPositionMarker& data) override {
+        retainTypedEntity<DRW_GeoPositionMarker>(data);
+    }
+    void addSectionObject(const DRW_SectionObject& data) override {
+        retainTypedEntity<DRW_SectionObject>(data);
+    }
     virtual void addText(const DRW_Text& data) override{
         if (const auto* rtext = dynamic_cast<const DRW_RText*>(&data))
             retainTypedEntity<DRW_RText>(*rtext);

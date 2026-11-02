@@ -22257,6 +22257,36 @@ bool runDxfSurfaceRoundTrip(bool binary,
     camera->parentHandle = surfaceBlockRecordHandle;
     camera->m_viewHandle = 0u;
     surfaceBlock->ent.push_back(camera);
+    auto* geoMarker = new DRW_GeoPositionMarker();
+    geoMarker->handle = 0xFC07u;
+    geoMarker->parentHandle = surfaceBlockRecordHandle;
+    geoMarker->m_classVersion = 2u;
+    geoMarker->m_position = DRW_Coord(11.0, 12.0, 13.0);
+    geoMarker->m_radius = 1.5;
+    geoMarker->m_notes = "BLOCK marker";
+    geoMarker->m_landingGap = 0.25;
+    geoMarker->m_mtextVisible = true;
+    geoMarker->m_textAlignment = 3u;
+    geoMarker->m_enableFrameText = true;
+    geoMarker->mtext = std::make_unique<DRW_MText>();
+    geoMarker->mtext->text = "embedded BLOCK marker text";
+    geoMarker->mtext->height = 0.75;
+    surfaceBlock->ent.push_back(geoMarker);
+    auto* section = new DRW_SectionObject();
+    section->handle = 0xFC08u;
+    section->parentHandle = surfaceBlockRecordHandle;
+    section->m_state = 3u;
+    section->m_flags = 5u;
+    section->m_name = "BLOCK section";
+    section->m_vertDir = DRW_Coord(0.0, 0.0, 1.0);
+    section->m_topHeight = 4.0;
+    section->m_bottomHeight = -2.0;
+    section->m_indicatorAlpha = 17u;
+    section->m_indicatorColor = 6u;
+    section->m_verts = {DRW_Coord(1.0, 2.0, 3.0),
+                        DRW_Coord(4.0, 5.0, 6.0)};
+    section->m_blVerts = {DRW_Coord(-1.0, -2.0, -3.0)};
+    surfaceBlock->ent.push_back(section);
     source.blocks.push_back(surfaceBlock);
 
     dx_iface exporter;
@@ -22271,8 +22301,9 @@ bool runDxfSurfaceRoundTrip(bool binary,
     dx_iface importer;
     if (!importer.fileImport(output.string(), &imported, false)) {
         std::cerr << "DXF surface import failed (" << encoding << ")\n";
-        if (!keepOutput)
+        if (!keepOutput) {
             std::filesystem::remove(output, ec);
+        }
         return false;
     }
     std::array<bool, 6> seen{};
@@ -22282,7 +22313,63 @@ bool runDxfSurfaceRoundTrip(bool binary,
     const auto sameMatrix = [](const auto& a, const auto& b) {
         return a == b;
     };
-    const auto blockSurfaceTypesMatch = [&](const dx_data& data) {
+    const auto blockTailMatches = [&](const dx_ifaceBlock* target,
+                                      std::size_t prefixCount) {
+        if (target == nullptr || target->ent.size() != prefixCount + 3u)
+            return false;
+        auto entityIt = target->ent.begin();
+        for (std::size_t index = 0; index < prefixCount; ++index)
+            ++entityIt;
+        const auto* capturedCamera =
+            dynamic_cast<const DRW_Camera*>(*entityIt++);
+        if (capturedCamera == nullptr
+            || capturedCamera->eType != DRW::CAMERA
+            || capturedCamera->m_viewHandle != camera->m_viewHandle)
+            return false;
+        const auto* capturedMarker =
+            dynamic_cast<const DRW_GeoPositionMarker*>(*entityIt++);
+        if (capturedMarker == nullptr
+            || capturedMarker->eType != DRW::GEOPOSITIONMARKER
+            || capturedMarker->m_classVersion != geoMarker->m_classVersion
+            || !sameCoord(capturedMarker->m_position, geoMarker->m_position)
+            || capturedMarker->m_radius != geoMarker->m_radius
+            || capturedMarker->m_notes != geoMarker->m_notes
+            || capturedMarker->m_landingGap != geoMarker->m_landingGap
+            || capturedMarker->m_mtextVisible != geoMarker->m_mtextVisible
+            || capturedMarker->m_textAlignment != geoMarker->m_textAlignment
+            || capturedMarker->m_enableFrameText != geoMarker->m_enableFrameText
+            || capturedMarker->mtext == nullptr
+            || capturedMarker->mtext->text != geoMarker->mtext->text
+            || capturedMarker->mtext->height != geoMarker->mtext->height)
+            return false;
+        const auto* capturedSection =
+            dynamic_cast<const DRW_SectionObject*>(*entityIt);
+        if (capturedSection == nullptr
+            || capturedSection->eType != DRW::SECTION
+            || capturedSection->m_state != section->m_state
+            || capturedSection->m_flags != section->m_flags
+            || capturedSection->m_name != section->m_name
+            || !sameCoord(capturedSection->m_vertDir, section->m_vertDir)
+            || capturedSection->m_topHeight != section->m_topHeight
+            || capturedSection->m_bottomHeight != section->m_bottomHeight
+            || capturedSection->m_indicatorAlpha != section->m_indicatorAlpha
+            || capturedSection->m_indicatorColor != section->m_indicatorColor
+            || capturedSection->m_verts.size() != section->m_verts.size()
+            || capturedSection->m_blVerts.size() != section->m_blVerts.size())
+            return false;
+        for (std::size_t point = 0; point < section->m_verts.size(); ++point) {
+            if (!sameCoord(capturedSection->m_verts[point],
+                           section->m_verts[point]))
+                return false;
+        }
+        for (std::size_t point = 0; point < section->m_blVerts.size(); ++point) {
+            if (!sameCoord(capturedSection->m_blVerts[point],
+                           section->m_blVerts[point]))
+                return false;
+        }
+        return true;
+    };
+    const auto blockEntitiesMatch = [&](const dx_data& data) {
         const dx_ifaceBlock* target = nullptr;
         for (const dx_ifaceBlock* block : data.blocks) {
             if (block != nullptr && block->name == "SURFACE_BLOCK") {
@@ -22292,7 +22379,7 @@ bool runDxfSurfaceRoundTrip(bool binary,
             }
         }
         if (target == nullptr
-            || target->ent.size() != sourceSurfaces.size() + 1u)
+            || target->ent.size() != sourceSurfaces.size() + 3u)
             return false;
         const std::array<DRW::ETYPE, 6> expectedTypes {{
             DRW::PLANESURFACE, DRW::EXTRUDEDSURFACE,
@@ -22365,27 +22452,40 @@ bool runDxfSurfaceRoundTrip(bool binary,
                 || surface->vIsolines != sourceSurfaces[index]->vIsolines)
                 return false;
         }
-        const auto* capturedCamera = dynamic_cast<const DRW_Camera*>(
-            *entityIt);
-        return capturedCamera != nullptr
-            && capturedCamera->eType == DRW::CAMERA
-            && capturedCamera->m_viewHandle == camera->m_viewHandle;
+        return blockTailMatches(target, sourceSurfaces.size());
     };
-    const auto importBlockSurfaces = [&](bool applyExtrusion) {
+    const auto importBlockEntities = [&](const std::filesystem::path& input,
+                                         bool applyExtrusion) {
         dx_data blockImported;
         dx_iface blockImporter;
         blockImporter.cData = &blockImported;
         blockImporter.currentBlock = blockImported.mBlock;
-        const std::string outputName = output.string();
-        dxfRW reader(outputName.c_str());
+        const std::string inputName = input.string();
+        dxfRW reader(inputName.c_str());
         return reader.read(&blockImporter, applyExtrusion)
             && !blockImported.typedEntityCaptureFailed
-            && blockSurfaceTypesMatch(blockImported);
+            && blockEntitiesMatch(blockImported);
     };
-    if (!blockSurfaceTypesMatch(imported)
-        || !importBlockSurfaces(true)) {
-        std::cerr << "DXF BLOCK surface callback staging/replay mismatch ("
-                  << encoding << ")\n";
+    dx_data oversizedSectionCaptureData;
+    dx_iface oversizedSectionCapture;
+    oversizedSectionCapture.cData = &oversizedSectionCaptureData;
+    oversizedSectionCapture.currentBlock =
+        oversizedSectionCaptureData.mBlock;
+    DRW_SectionObject oversizedSection;
+    oversizedSection.m_verts.resize(DRW_SectionObject::kMaxVertices + 1u);
+    oversizedSectionCapture.addSectionObject(oversizedSection);
+    const bool oversizedSectionCaptureRejected =
+        oversizedSectionCaptureData.typedEntityCaptureFailed
+        && oversizedSectionCaptureData.mBlock->ent.empty();
+    const bool capturedBlockMatches = blockEntitiesMatch(imported);
+    const bool directBlockReadMatches = importBlockEntities(output, true);
+    if (!capturedBlockMatches || !directBlockReadMatches
+        || !oversizedSectionCaptureRejected) {
+        std::cerr << "DXF BLOCK typed-entity callback staging/replay mismatch ("
+                  << encoding << "): captured=" << capturedBlockMatches
+                  << " direct-callback=" << directBlockReadMatches
+                  << " oversized-section-rejected="
+                  << oversizedSectionCaptureRejected << '\n';
         if (!keepOutput)
             std::filesystem::remove(output, ec);
         return false;
@@ -22576,93 +22676,6 @@ bool runDxfSurfaceRejectsMalformed(const std::filesystem::path& directory) {
     if (!exporter.fileExport(sourcePath.string(), DRW::AC1027, false, &source,
                              false)) {
         std::filesystem::remove(sourcePath, ec);
-    bool fieldsMatch = true;
-    for (const DRW_Entity* entity : imported.mBlock->ent) {
-        if (entity == nullptr)
-            continue;
-        switch (entity->eType) {
-        case DRW::PLANESURFACE: {
-            seen[0] = true;
-            const auto* value = static_cast<const DRW_PlaneSurface*>(entity);
-            fieldsMatch = fieldsMatch
-                && value->modelerFormatVersion == plane->modelerFormatVersion
-                && value->uIsolines == plane->uIsolines
-                && value->vIsolines == plane->vIsolines;
-            break;
-        }
-        case DRW::EXTRUDEDSURFACE: {
-            seen[1] = true;
-            const auto* value = static_cast<const DRW_ExtrudedSurface*>(entity);
-            fieldsMatch = fieldsMatch
-                && value->modelerFormatVersion == extruded->modelerFormatVersion
-                && value->uIsolines == extruded->uIsolines
-                && value->vIsolines == extruded->vIsolines
-                && value->classId == extruded->classId
-                && value->dxfBinaryData == extruded->dxfBinaryData
-                && sameCoord(value->sweepVector, extruded->sweepVector)
-                && sameCoord(value->referenceVector, extruded->referenceVector)
-                && sameMatrix(value->extrudedTransform, extruded->extrudedTransform)
-                && sameMatrix(value->sweepEntityTransform, extruded->sweepEntityTransform)
-                && sameMatrix(value->pathEntityTransform, extruded->pathEntityTransform)
-                && value->draftAngle == extruded->draftAngle
-                && value->draftStartDistance == extruded->draftStartDistance
-                && value->draftEndDistance == extruded->draftEndDistance
-                && value->twistAngle == extruded->twistAngle
-                && value->scaleFactor == extruded->scaleFactor
-                && value->alignAngle == extruded->alignAngle
-                && value->solid == extruded->solid
-                && value->sweepAlignmentFlags == extruded->sweepAlignmentFlags
-                && value->pathFlags == extruded->pathFlags
-                && value->alignStart == extruded->alignStart
-                && value->bank == extruded->bank
-                && value->basePointSet == extruded->basePointSet
-                && value->sweepEntityTransformComputed
-                       == extruded->sweepEntityTransformComputed
-                && value->pathEntityTransformComputed
-                       == extruded->pathEntityTransformComputed;
-            break;
-        }
-        case DRW::REVOLVEDSURFACE: {
-            seen[2] = true;
-            const auto* value = static_cast<const DRW_RevolvedSurface*>(entity);
-            fieldsMatch = fieldsMatch
-                && value->modelerFormatVersion == revolved->modelerFormatVersion
-                && value->uIsolines == revolved->uIsolines
-                && value->vIsolines == revolved->vIsolines
-                && value->id == revolved->id
-                && value->dxfBinaryData == revolved->dxfBinaryData
-                && sameCoord(value->axisPoint, revolved->axisPoint)
-                && sameCoord(value->axisVector, revolved->axisVector)
-                && value->revolveAngle == revolved->revolveAngle
-                && value->startAngle == revolved->startAngle
-                && sameMatrix(value->transform, revolved->transform)
-                && value->draftAngle == revolved->draftAngle
-                && value->draftStartDistance == revolved->draftStartDistance
-                && value->draftEndDistance == revolved->draftEndDistance
-                && value->twistAngle == revolved->twistAngle
-                && value->solid == revolved->solid
-                && value->closeToAxis == revolved->closeToAxis;
-            break;
-        }
-        case DRW::SWEPTSURFACE: {
-            seen[3] = true;
-            const auto* value = static_cast<const DRW_SweptSurface*>(entity);
-            fieldsMatch = fieldsMatch
-                && value->modelerFormatVersion == swept->modelerFormatVersion
-                && value->uIsolines == swept->uIsolines
-                && value->vIsolines == swept->vIsolines
-                && value->sweepEntityId == swept->sweepEntityId
-                && value->sweepData == swept->sweepData
-                && value->pathEntityId == swept->pathEntityId
-                && value->pathData == swept->pathData
-                && sameCoord(value->referenceVector, swept->referenceVector)
-                && sameMatrix(value->sweepEntityTransform, swept->sweepEntityTransform)
-                && sameMatrix(value->pathEntityTransform, swept->pathEntityTransform)
-                && sameMatrix(value->sweepEntityTransformed, swept->sweepEntityTransformed)
-                && sameMatrix(value->pathEntityTransformed, swept->pathEntityTransformed)
-                && value->draftAngle == swept->draftAngle
-                && value->draftStartDistance == swept->draftStartDistance
-                && value->draftEndDistance == swept->draftEndDistance
         return false;
     }
     std::ifstream input(sourcePath, std::ios::binary);

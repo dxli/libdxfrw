@@ -19319,6 +19319,11 @@ bool dxfRW::processGeoPositionMarker() {
     int code;
     DRW_GeoPositionMarker marker;
     DRW_RawDxfObject raw;
+    bool readingEmbeddedMText = false;
+    bool embeddedBaseXSeen = false;
+    bool embeddedBaseYSeen = false;
+    bool embeddedHeightSeen = false;
+    bool embeddedTextSeen = false;
     if (!copyRawDxfCarrierName(raw, nextentity))
         return setError(DRW::BAD_CODE_PARSED);
     while (reader->readRec(&code)) {
@@ -19328,6 +19333,13 @@ bool dxfRW::processGeoPositionMarker() {
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!acceptEntityCallbackBoundary())
                 return setError(DRW::BAD_READ_ENTITIES);
+            if (marker.m_enableFrameText != (marker.mtext != nullptr)
+                || (marker.mtext != nullptr
+                    && (!embeddedBaseXSeen || !embeddedBaseYSeen
+                        || !embeddedHeightSeen || !embeddedTextSeen)))
+                return setError(DRW::BAD_CODE_PARSED);
+            if (marker.mtext != nullptr)
+                marker.mtext->updateAngle();
             if (!validateCapturedRawDxfObject(raw, binFile, reader->classifierProfile()))
                 return setError(DRW::BAD_CODE_PARSED);
             marker.handle = raw.handle;
@@ -19335,6 +19347,60 @@ bool dxfRW::processGeoPositionMarker() {
             iface->addGeoPositionMarker(marker);
             iface->addRawDxfEntity(raw);
             return true;
+        }
+
+        if (code == 101 && reader->getStringView() == "Embedded Object") {
+            if (readingEmbeddedMText || marker.mtext != nullptr
+                || !captureRawGroup(raw, code, /*validateHandles=*/true))
+                return setError(DRW::BAD_CODE_PARSED);
+            try {
+                marker.mtext = std::make_unique<DRW_MText>();
+            } catch (...) {
+                return setError(DRW::BAD_CODE_PARSED);
+            }
+            marker.mtext->m_dxfOrientationScope.mode =
+                DRW_MText::DxfOrientationScope::Mode::EmbeddedAttributeMText;
+            readingEmbeddedMText = true;
+            continue;
+        }
+
+        // Embedded MTEXT uses ordinary entity group codes after its 101
+        // marker. XDATA is the outer GEO marker tail in the supported profile;
+        // the complete source record remains available for raw replay.
+        if (readingEmbeddedMText
+            && ((code == 100
+                 && reader->getStringView() == "AcDbGeoPositionMarker")
+                || code >= 1000))
+            readingEmbeddedMText = false;
+        if (readingEmbeddedMText) {
+            if (!captureRawGroup(raw, code, /*validateHandles=*/true))
+                return setError(DRW::BAD_CODE_PARSED);
+            switch (code) {
+            case 10:
+                if (embeddedBaseXSeen)
+                    return setError(DRW::BAD_CODE_PARSED);
+                embeddedBaseXSeen = true;
+                break;
+            case 20:
+                if (embeddedBaseYSeen)
+                    return setError(DRW::BAD_CODE_PARSED);
+                embeddedBaseYSeen = true;
+                break;
+            case 40:
+                if (embeddedHeightSeen)
+                    return setError(DRW::BAD_CODE_PARSED);
+                embeddedHeightSeen = true;
+                break;
+            case 1:
+            case 3:
+                embeddedTextSeen = true;
+                break;
+            default:
+                break;
+            }
+            if (!marker.mtext->parseCode(code, reader))
+                return setError(DRW::BAD_CODE_PARSED);
+            continue;
         }
 
         if (code == 102) {
