@@ -1021,6 +1021,32 @@ def check_source_disposition_projection(converter, root, writer):
             f"atomically: {repeated_group!r}")
     checked += 1
 
+    additional_header_profiles = {
+        "duplicate LTSCALE": (
+            b"9\n$LTSCALE\n40\n1.0\n9\n$LTSCALE\n40\n2.0\n"),
+        "repeated EXTMIN component": (
+            b"9\n$EXTMIN\n10\n0.0\n10\n1.0\n20\n0.0\n30\n0.0\n"),
+    }
+    for index, (description, fields) in enumerate(additional_header_profiles.items()):
+        header = root / f"{description} header structure.dxf"
+        output = root / f"{description} header destination.dxf"
+        header_bytes = SOURCE.replace(
+            b"0\nENDSEC\n0\nSECTION\n2\nENTITIES",
+            fields + b"0\nENDSEC\n0\nSECTION\n2\nENTITIES", 1)
+        header.write_bytes(header_bytes)
+        output.write_bytes(SENTINEL)
+        result = run_bounded(
+            [str(converter), str(header), "-o", str(output), "-y", "-d"],
+            10, 131072, cwd=root)
+        if (result.returncode != 1 or output.read_bytes() != SENTINEL
+                or header.read_bytes() != header_bytes
+                or b"sourceRepairAction=none" not in result.stderr
+                or b"sourceHeaderStructure=repair-required" not in result.stderr):
+            raise AssertionError(
+                f"{description} HEADER shape was not reported/refused atomically: "
+                f"{result!r}")
+        checked += 1
+
     required_versions = root / "required versions mask.dxf"
     required_versions_output = root / "required versions destination.dxf"
     required_versions_bytes = SOURCE.replace(
