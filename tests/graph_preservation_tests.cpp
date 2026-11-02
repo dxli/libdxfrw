@@ -15478,6 +15478,38 @@ void appendProxyChunk(std::vector<std::uint8_t>& stream,
     stream.insert(stream.end(), payload.begin(), payload.end());
 }
 
+void testProxyLinetypeSentinels(TestContext& t) {
+    const std::pair<std::uint32_t, const char*> profiles[] = {
+        {0xFFFFFFFEu, "BYBLOCK"}, {0xFFFFFFFFu, "BYLAYER"},
+        {32766u, "BYBLOCK"}, {32767u, "BYLAYER"}};
+    for (const auto& profile : profiles) {
+        std::vector<std::uint8_t> stream(8u, 0u);
+        std::vector<std::uint8_t> lineType;
+        appendU32(lineType, profile.first);
+        appendProxyChunk(stream, 18u, lineType);
+        std::vector<std::uint8_t> circle;
+        appendDouble(circle, 0.0); appendDouble(circle, 0.0);
+        appendDouble(circle, 0.0); // center
+        appendDouble(circle, 1.0); // radius
+        appendDouble(circle, 0.0); appendDouble(circle, 0.0);
+        appendDouble(circle, 1.0); // normal
+        appendProxyChunk(stream, 2u, circle);
+
+        const std::string encoded(
+            reinterpret_cast<const char*>(stream.data()), stream.size());
+        DRW_Point parent;
+        ProxyGraphicCapture capture;
+        const DRW_ProxyGraphicDecodeResult decoded =
+            DRW_ProxyGraphicDecoder::decode(
+                encoded, DRW::AC1021, capture, parent);
+        t.expect(decoded.completed() && capture.circles.size() == 1u
+                     && capture.circles[0].lineType == profile.second,
+                 std::string("proxy linetype sentinel ")
+                     + std::to_string(profile.first) + " maps to "
+                     + profile.second);
+    }
+}
+
 void testProxyShellMultiFaceFraming(TestContext& t) {
     // A proxy stream has an eight-byte header followed by independently sized
     // chunks. The shell face-entry count is a count of longs, not faces.
@@ -15577,6 +15609,7 @@ int main() {
     testAcisRootedBodyProjectionFailures(context);
     testModelerLazyDecode(context);
     testProxyBounds(context);
+    testProxyLinetypeSentinels(context);
     testProxyShellMultiFaceFraming(context);
     testDataStorageCapabilities(context);
     if (context.failures != 0) {

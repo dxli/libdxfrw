@@ -808,8 +808,13 @@ DRW_ProxyGraphicDecodeResult DRW_ProxyGraphicDecoder::decode(
             if (payloadLength >= 4) {
                 std::uint32_t lineType = 0;
                 std::memcpy(&lineType, payload, sizeof(lineType));
-                if (lineType == 32766u) state.lineType = "BYBLOCK";
-                else if (lineType == 32767u) state.lineType = "BYLAYER";
+                // ODA §29 defines the 32-bit sentinel values. Keep the
+                // observed AC1021 low-16-bit 0x7FFF value and existing
+                // 0x7FFE counterpart without conflating BYBLOCK with BYLAYER.
+                if (lineType == 0xFFFFFFFEu || lineType == 32766u)
+                    state.lineType = "BYBLOCK";
+                else if (lineType == 0xFFFFFFFFu || lineType == 32767u)
+                    state.lineType = "BYLAYER";
                 else if (lineType < ltypeNames.size() && !ltypeNames[lineType].empty())
                     state.lineType = ltypeNames[lineType];
                 else state.lineType = "BYLAYER";
