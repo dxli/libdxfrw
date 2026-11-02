@@ -39,14 +39,17 @@ public:
 };
 
 Tags source(const std::string& version, const std::string& name,
-            bool nullCellReferences = false, bool witnessedProfile = false) {
+            bool nullCellReferences = false, bool witnessedProfile = false,
+            std::array<int,2> witnessedFlags = {{3,3}}) {
     Tags result{{0,"SECTION"},{2,"HEADER"},{9,"$ACADVER"},{1,version},{0,"ENDSEC"},
         {0,"SECTION"},{2,"OBJECTS"},{0,name},{5,"A0"},{330,"F0"},{100,"AcDbTableGeometry"},
         {90,"1"},{91,"2"},{92,"2"}};
     const std::array<int,10> codes{{10,20,30,11,21,31,43,44,45,46}};
     unsigned seed = 1u;
     for (int cell = 0; cell != 2; ++cell) {
-        result.insert(result.end(), {{93,witnessedProfile ? "3" : std::to_string(-3-cell)},
+        result.insert(result.end(), {{93,witnessedProfile
+                ? std::to_string(witnessedFlags[static_cast<std::size_t>(cell)])
+                : std::to_string(-3-cell)},
             {40,std::to_string(25+cell)},{41,std::to_string(9+cell)},
             {330,nullCellReferences ? "0" : (cell == 0 ? "A1" : "A2")},
             {94,std::to_string(cell+1)}});
@@ -90,7 +93,8 @@ std::string bytes(const std::filesystem::path& path) {
 }
 
 bool expected(const Probe& probe, const dx_data& data, std::uint32_t owner = 0xF0u,
-              bool nullCellReferences = false, bool witnessedProfile = false) {
+              bool nullCellReferences = false, bool witnessedProfile = false,
+              std::array<int,2> witnessedFlags = {{3,3}}) {
     if (probe.geometry.size() != 1u || probe.raw.size() != 1u || !probe.unknown.empty()
         || data.unmodeledDxfObjectSeen || !data.standaloneTableGeometryPresent) return false;
     const auto& value = probe.geometry.front();
@@ -100,7 +104,8 @@ bool expected(const Probe& probe, const dx_data& data, std::uint32_t owner = 0xF
     unsigned seed = 1u;
     for (std::size_t cellIndex = 0; cellIndex != 2u; ++cellIndex) {
         const auto& cell = value.m_cells[cellIndex];
-        if (cell.m_flags != (witnessedProfile ? 3 : -3-static_cast<int>(cellIndex))
+        if (cell.m_flags != (witnessedProfile
+                ? witnessedFlags[cellIndex] : -3-static_cast<int>(cellIndex))
             || cell.m_widthWithGap != 25+cellIndex
             || cell.m_heightWithGap != 9+cellIndex
             || cell.m_unknownHandle != (nullCellReferences ? 0u : 0xA1u+cellIndex)
@@ -239,22 +244,25 @@ bool tests(const std::filesystem::path& directory) {
     }
     unsigned writerRoutes=0u,writerFailures=0u,writerRetries=0u;
     unsigned versionRefusals=0u,versionRetries=0u;
+    unsigned flagRefusals=0u,flagRetries=0u;
     const std::array<DRW::Version,4> outputVersions{{
         DRW::AC1021,DRW::AC1024,DRW::AC1027,DRW::AC1032}};
+    const std::array<std::array<int,2>,2> flagProfiles{{{3,3},{4,7}}};
+    for (const auto& flags : flagProfiles)
     for (DRW::Version outputVersion : outputVersions)
     for (bool inputBinary : {false,true}) for (bool outputBinary : {false,true}) {
-        const Tags witnessed = source("AC1032", "TABLEGEOMETRY", true, true);
+        const Tags witnessed = source("AC1032", "TABLEGEOMETRY", true, true, flags);
         Probe sourceReader; dx_data retained;
         if (!write(input,witnessed,inputBinary)
             || !sourceReader.fileImport(input.string(),&retained,false)
-            || !expected(sourceReader,retained,0xF0u,true,true))
+            || !expected(sourceReader,retained,0xF0u,true,true,flags))
             return fail("bounded writer source profile was not captured");
 
         dx_iface exporter;
         const auto readback = [&]() {
             Probe reader; dx_data decoded;
             return reader.fileImport(output.string(),&decoded,false)
-                && expected(reader,decoded,0xF0u,true,true)
+                && expected(reader,decoded,0xF0u,true,true,flags)
                 && reader.raw.size()==1u
                 && rawObjectMatches(reader.raw.front(),witnessed);
         };
@@ -273,6 +281,24 @@ bool tests(const std::filesystem::path& directory) {
             return fail("bounded TABLEGEOMETRY ASCII/Binary writer fields did not read back");
         if (outputVersion == DRW::AC1021) ++versionRetries;
         ++writerRoutes;
+
+        if (flags[0] == 4 && outputVersion == DRW::AC1021
+            && !inputBinary && !outputBinary) {
+            retained.tableGeometries.front().m_cells.front().m_flags=5;
+            const std::string flagSentinel="KEEP_UNQUALIFIED_TABLE_GEOMETRY_FLAGS\n";
+            {std::ofstream stream(output,std::ios::binary); stream<<flagSentinel;}
+            if (exporter.fileExport(output.string(),outputVersion,outputBinary,
+                                    &retained,false,false)
+                || bytes(output)!=flagSentinel)
+                return fail("unqualified TABLEGEOMETRY flags did not fail atomically");
+            ++flagRefusals;
+            retained.tableGeometries.front().m_cells.front().m_flags=flags[0];
+            if (!exporter.fileExport(output.string(),outputVersion,outputBinary,
+                                     &retained,false,false)
+                || !readback())
+                return fail("same-exporter TABLEGEOMETRY flag correction did not retry");
+            ++flagRetries;
+        }
 
         retained.tableGeometries.front().m_cells.front().m_unknownHandle=0xA1u;
         const std::string sentinel="KEEP_TABLE_GEOMETRY_DESTINATION\n";
@@ -331,11 +357,14 @@ bool tests(const std::filesystem::path& directory) {
              <<" corrected imports; 16 typed/16 raw null-owner and 4 empty/maximum-cell controls; "
              <<writerRoutes<<" ASCII/Binary writer/readbacks, "<<writerFailures
              <<" atomic refusals/"<<writerRetries<<" same-exporter retries; "
+             <<flagRefusals<<" unqualified-flag refusals/"<<flagRetries
+             <<" same-exporter retries; "
              <<versionRefusals<<" pre-AC1021 refusals/"<<versionRetries
              <<" AC1021 retries; "<<refusals<<" atomic table-dependency refusals/readbacks\n";
     return positives==16u && fallbacks==320u && retries==320u && refusals==24u
-        && writerRoutes==16u && writerFailures==16u && writerRetries==16u
-        && versionRefusals==4u && versionRetries==4u;
+        && writerRoutes==32u && writerFailures==32u && writerRetries==32u
+        && flagRefusals==1u && flagRetries==1u
+        && versionRefusals==8u && versionRetries==8u;
 }
 
 int inspect(const char* path) {

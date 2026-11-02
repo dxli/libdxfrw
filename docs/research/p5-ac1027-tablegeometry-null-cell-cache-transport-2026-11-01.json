@@ -32,10 +32,18 @@
       "total_content_records": 8
     },
     "profile_values": {
-      "cell_flags": [3],
-      "cell_soft_pointer_targets": [0],
-      "content_unknown_values": [0],
-      "content_z_values": [0]
+      "cell_flags": [
+        3
+      ],
+      "cell_soft_pointer_targets": [
+        0
+      ],
+      "content_unknown_values": [
+        0
+      ],
+      "content_z_values": [
+        0
+      ]
     },
     "numeric_values_compared": 628,
     "comparison_breakdown": "180 cells x (flags, width-with-gap, height-with-gap) plus 8 content records x (six coordinates, four dimensions, one unknown field). Root handles, ownership, grid, cell count and content counts were checked separately.",
@@ -66,7 +74,7 @@
     "admitted_output_profile": [
       "AC1021 through AC1032 DXF output.",
       "Nonzero object handle and explicit nonzero owner handle.",
-      "Cell flags exactly 3 and per-cell soft-pointer target null.",
+      "The AC1027 witness itself has cell flags exactly 3; the writer later added source-backed flag values 4 and 7, documented in p5-acadsharp-tablegeometry-flag-profile-2026-11-01.json.",
       "Planar content coordinates, zero unknown content field, finite values and nonnegative dimensions.",
       "No reactors, extension dictionary, appdata, extData, or unsupported DataStorage metadata."
     ],
@@ -98,7 +106,7 @@
     "The generated tests use an isolated synthetic owner and do not prove complete owner-graph replay.",
     "The sample's TABLEGEOMETRY owner graph is source evidence only; full strict graph closure remains open in P4.",
     "This does not establish native TABLE rendering, cell visibility, geometry semantics, or general TABLE support.",
-    "Non-null cell targets, non-default flags, non-planar content, nonzero group-95 values, other common metadata, and the DWG group-95 bit-stream type remain unqualified."
+    "Non-null cell targets, flag values outside {3,4,7}, non-planar content, nonzero group-95 values, other common metadata, and the DWG group-95 bit-stream type remain unqualified."
   ],
   "next_actions": [
     "P6: search for an eligible physical TABLEGEOMETRY source with a nonzero final content field; compare its DWG bit span against ODA before any parser change.",

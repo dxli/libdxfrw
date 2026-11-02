@@ -696,8 +696,9 @@ public:
     std::size_t tableContentRetainedBytes{0};
     bool tableContentCaptureFailed{false};
     // Standalone TABLEGEOMETRY cache callbacks are retained separately from
-    // TABLECONTENT. Writer support is limited to the bounded null-cell-pointer
-    // profile; unsupported references remain a sticky export refusal.
+    // TABLECONTENT. Writer support is limited to source-observed flags 3/4/7,
+    // planar cells with null soft pointers; unsupported metadata is a sticky
+    // export refusal.
     std::vector<DRW_TableGeometry> tableGeometries;
     std::size_t tableGeometryRetainedRecords{0};
     std::size_t tableGeometryRetainedBytes{0};

@@ -31184,11 +31184,12 @@ bool dxfRW::writeTableGeometry(DRW_TableGeometry *ent) {
 
     std::size_t totalContents = 0u;
     for (const DRW_TableGeometryCell& cell : ent->m_cells) {
-        // The current independent AC1027 source witness has flags=3, null
-        // references, planar coordinates, and zero in the unknown content
-        // field. ODA §20.4.103 labels the reference as an unknown soft
-        // pointer, so non-null targets remain unqualified.
-        if (cell.m_flags != 3 || cell.m_unknownHandle != 0u
+        // Independent AC1021/24/27 sources cover flag values 3, 4 and 7,
+        // null references, planar coordinates, and zero in the unknown
+        // content field. ODA §20.4.103 labels the reference as an unknown
+        // soft pointer, so non-null targets remain unqualified.
+        if ((cell.m_flags != 3 && cell.m_flags != 4 && cell.m_flags != 7)
+            || cell.m_unknownHandle != 0u
             || cell.m_contents.size()
                 > static_cast<std::size_t>(DRW_TableGeometry::kMaxContentGeometry)
                     - totalContents)
