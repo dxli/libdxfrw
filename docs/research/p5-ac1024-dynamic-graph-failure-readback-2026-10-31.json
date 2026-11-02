@@ -58,7 +58,7 @@
       "All three constraint groups, owner handles, body/action parse state, counts and ordered action references",
       "All six dependency fields and flags, group owners, parameter/body target roles and dependency-body names"
     ],
-    "known_projection_boundary": "EvalExpr parentId is not emitted by the current admitted DXF projection. For source handle 0x1111 (BLOCKLINEARGRIP), the source sentinel 0xFFFFFFFF reads back as 0. The roundtrip test deliberately does not equate this parser/default state; native or authoritative field evidence must decide whether it is semantics-neutral or whether the projection needs another field."
+    "known_projection_boundary": "EvalExpr parentId is not emitted by the current admitted DXF projection. The pre-normalization readback for source handle 0x1111 (BLOCKLINEARGRIP) was 0; the focused physical-source control now confirms that the isolated ASCII/Binary typed readback uses UINT32_MAX. This import-default alignment does not establish whether omitting the source sentinel preserves native semantics."
   },
   "validation": {
     "build": {
@@ -69,7 +69,7 @@
     "newSelector": {
       "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --dynamic-block-graph-failure-readback tests/samples/AC1024/architectural_example-imperial.dwg",
       "exitCode": 0,
-      "result": "PASS for DWG-origin and DXF-origin paths in both encodings. The DXF-origin path proves source mutation refusal, destination rollback, corrected retry, exact staged typed/raw dynamic and associative bodies, and fresh readback. Expected graph rejection diagnostics are emitted for deliberately invalid edge/owner controls. Generated outputs are removed by the test."
+      "result": "PASS at baseCommit only for DWG-origin and DXF-origin paths in both encodings. This historical result does not reproduce on current code; see currentCodeRecheck."
     },
     "existingFocusedControl": {
       "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --dynamic-block-visibility-composed-graph",
@@ -78,9 +78,19 @@
     },
     "testExecutableSha256": "d95700d17fba22995c3a969f63a3de0b92f73a0f91b1beb01a66ad59668af193"
   },
+  "currentCodeRecheck": {
+    "codeCommit": "a2de17c2",
+    "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --dynamic-block-graph-failure-readback tests/samples/AC1024/architectural_example-imperial.dwg",
+    "testSourceSha256": "50d35fb7bc653691bf9e2531b3b6e378257fed46d84e54893b92f84324678d4f",
+    "testExecutableSha256": "d28f033d63deec1dd55201e1afc47a0e5878a7012bea5037c8eb1a82d263d77c",
+    "exitCode": 1,
+    "result": "The intentionally malformed graph was refused, but corrected whole-document retry does not reach fresh readback: strict finalization reports only 484/490 opaque DWG callbacks qualified. The six remaining callbacks are SORTENTSTABLE handles 0x1BB9 (Door - Imperial), 0x1BBA (Window - Imperial), 0x1F66 (*U4), 0x1FB3 (*U5), 0x2037 (*U6), and 0x2090 (*U7). Their owners are all outside *MODEL_SPACE/*PAPER_SPACE. The selector therefore fails its retry expectation under current strict owner-scope qualification.",
+    "interpretation": "This is the existing P4 SORTENTSTABLE owner-scope boundary. Preserve strict refusal; do not weaken whole-document qualification to make the dynamic-block selector pass. The isolated physical-grip profile remains covered by the focused oriented-grip selector.",
+    "fixturePolicy": "The existing local DWG input was not staged or committed."
+  },
   "remaining": [
     "Independent native dynamic-block semantics for both roots, visibility, parameter/action behavior, and reachable geometry",
-    "Resolve the EvalExpr parentId DXF-projection boundary with authoritative field or independent semantic evidence",
+    "Obtain primary field evidence or an independent native evaluator to determine whether omitting EvalExpr parentId from DXF preserves semantics",
     "All other open P4-P9 gates"
   ]
 }

@@ -9539,6 +9539,18 @@ bool dynamicBlockOrientedGripRecordOutputProfiles(
         || counts["BLOCKLINEARGRIP"] != 4u
         || physicalProfiles.size() != 9u)
         return fail("physical source oriented-grip class counts changed");
+    constexpr std::uint32_t witnessedLinearGripHandle = 0x1111u;
+    const auto witnessedLinearGrip = std::find_if(
+        physicalProfiles.begin(), physicalProfiles.end(),
+        [](const DRW_DynamicBlockObject& object) {
+            return object.handle == witnessedLinearGripHandle;
+        });
+    if (witnessedLinearGrip == physicalProfiles.end()
+        || witnessedLinearGrip->m_recordName != "BLOCKLINEARGRIP"
+        || !witnessedLinearGrip->m_evalExprParsed
+        || witnessedLinearGrip->m_parentId
+            != std::numeric_limits<std::uint32_t>::max())
+        return fail("source-bound BLOCKLINEARGRIP EvalExpr sentinel changed");
     for (const DRW_DynamicBlockObject& object : physicalProfiles)
         for (const bool binary : {false, true})
             if (!writeAndRead(object, binary, object.m_recordName + "-"

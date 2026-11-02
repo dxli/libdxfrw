@@ -10,7 +10,7 @@
       "sha256": "52d14a7bdb946099d3cf16fd276d19bd8924348fd02b2ddd0003cd4f6b34cce7",
       "version": "AC1024",
       "repositoryFixture": false,
-      "relevantSourceObservation": "The existing source-bound readback receipt identifies BLOCKLINEARGRIP 0x1111 with EvalExpr.parentId 0xFFFFFFFF and observed fresh DXF readback as 0."
+      "relevantSourceObservation": "The existing source-bound receipt identifies BLOCKLINEARGRIP 0x1111 with EvalExpr.parentId 0xFFFFFFFF. The prior fresh DXF readback was 0; the follow-up physical control now requires the same in-memory default after isolated ASCII and Binary typed readback."
     },
     "generatedProfiles": [
       "BLOCKALIGNMENTGRIP",
@@ -46,17 +46,19 @@
       "command": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j2",
       "result": "PASS",
       "librarySha256": "de1e048fddc78fb4d799ce08b17cdb3d3ef0710d9d7ecb834600a002938abcd2",
-      "testExecutableSha256": "137cfe3bfa664c569c2377abcea355846cbd51c14b611267df79f6347d3b2c53"
+      "testExecutableSha256": "d28f033d63deec1dd55201e1afc47a0e5878a7012bea5037c8eb1a82d263d77c"
     },
     "focusedCtest": {
       "command": "ctest --test-dir build-gcc -R '^dwg2dxf_dynamic_block_(oriented_grips|visibility_parameter|visibility_parameter_door_profile)$' --output-on-failure",
-      "result": "PASS: 3/3, 0.69 seconds",
+      "result": "PASS: 3/3, 0.19 seconds",
       "coverage": "Generated ASCII/Binary output and fresh typed readback assert UINT32_MAX for the unrepresented parentId default in oriented-grip and visibility-parameter profiles. The oriented-grip test covers alignment, flip, and linear subclasses. Existing exact wire, destination-preservation, malformed-record, and same-writer retry controls remain active."
     },
     "physicalSourceCheck": {
       "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --dynamic-block-oriented-grips tests/samples/AC1024/architectural_example-imperial.dwg",
-      "result": "PASS: 2 alignment, 3 flip, and 4 linear source grips; exact DXF wire and fresh typed ASCII/Binary readback.",
-      "sourceSha256": "52d14a7bdb946099d3cf16fd276d19bd8924348fd02b2ddd0003cd4f6b34cce7"
+      "result": "PASS: 2 alignment, 3 flip, and 4 linear source grips; exact DXF wire and fresh typed ASCII/Binary readback. The source-bound BLOCKLINEARGRIP handle 0x1111 is required to carry parentId UINT32_MAX, and the typed readback control requires that same normalized import default.",
+      "sourceSha256": "52d14a7bdb946099d3cf16fd276d19bd8924348fd02b2ddd0003cd4f6b34cce7",
+      "testSourceSha256": "50d35fb7bc653691bf9e2531b3b6e378257fed46d84e54893b92f84324678d4f",
+      "testExecutableSha256": "d28f033d63deec1dd55201e1afc47a0e5878a7012bea5037c8eb1a82d263d77c"
     },
     "beforeFixRegression": "After tightening the generated readback assertions but before changing the parser, the oriented-grip and visibility-parameter focused tests failed on ASCII readback because parentId was 0. Both passed after the parser change.",
     "fixturePolicy": "The DWG remained an existing local investigation input and was not staged or committed. Generated ASCII/Binary controls create their own content; no fixture was added."
@@ -68,7 +70,7 @@
     "Do not promote dynamic-block, DWG, or DXF support claims from this receipt."
   ],
   "remaining": [
-    "Obtain primary field evidence or an independent native evaluator to decide whether the unrepresented source parentId affects semantics.",
+    "Obtain primary field evidence or an independent native evaluator to decide whether omitting the source parentId from DXF affects semantics.",
     "Qualify native evaluation for both roots, visibility, parameter/action behavior, and reachable geometry.",
     "Continue independently actionable P4/P5 implementation work without waiting on the native evaluator."
   ]
