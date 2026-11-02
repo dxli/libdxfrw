@@ -152,6 +152,17 @@ Remaining implementation/evidence work includes native dictionary collation,
 layer style overrides, and VIEWPORT references 335/343/344/91. Verify coupled
 dictionary keys, names, body fields and consumers.
 
+**VIEWPORT layer-override reference census:** The nine available local AC1024
+DWGs were converted and inspected with LibreDWG 0.14. Its DXF outputs contain
+16 VIEWPORT records and none of codes 335/343/344/91. Its direct JSON exposes
+12 VIEWPORT records across the parseable files, with no corresponding override
+members. This is not evidence that the DWGs lack those fields: the peer may
+omit them, one JSON output is malformed, and two parseable inputs expose no
+VIEWPORT records. Do not implement a guessed mapping or promote support from
+this absence; obtain an eligible source with the physical references, target
+roles, coupled layer/dictionary records and native behavior. See the [local
+census receipt](docs/research/p5-viewport-layer-override-local-corpus-census-2026-11-01.json).
+
 **TABLE:**
 
 1. **Nested FIELD graphs:** qualify physical producer/version profiles and
