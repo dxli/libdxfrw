@@ -1,0 +1,67 @@
+{
+  "schema": "libdxfrw-p5-field-suppressed-type0-transport-v1",
+  "date": "2026-11-01",
+  "qualificationEligible": false,
+  "supportClaimsPromoted": false,
+  "scope": "Bounded DWG FIELD CadValue transport for type 0 with the R2007+ payload-suppression flag set. The value remains semantically unknown; this receipt does not establish FIELD evaluation or complete-source output support.",
+  "authority": {
+    "document": "Open Design Specification for .dwg files v5.4.1",
+    "section": "20.4.99 Value",
+    "rule": "R2007+ stores Flags as BL code 93 followed by Data type as BL code 90. When the first flag bit is set, the type-specific payload is absent. Type 0 (Unknown) is BL only when that payload is present; the type BL remains in the suppressed profile."
+  },
+  "corroboratingImplementation": {
+    "project": "LibreDWG master",
+    "file": "src/dwg_spec_shared.h",
+    "url": "https://github.com/LibreDWG/libredwg/blob/master/src/dwg_spec_shared.h#L586-L655",
+    "rule": "TABLE_value_fields reads format_flags and data_type, then skips the type-specific switch for R2007+ when format_flags & 1 is nonzero. This is implementation corroboration, not normative authority or independent semantic evidence."
+  },
+  "implementation": {
+    "files": [
+      "src/drw_objects.cpp",
+      "tests/dwg_object_vectors_tests.cpp"
+    ],
+    "behavior": [
+      "Accept the bounded type-0 value when its recognized R2007+ flags suppress the payload.",
+      "Retain the type, flags, unit/format metadata, surrounding FIELD value string and following stream alignment without inventing an application value.",
+      "Permit DWG re-encoding only when the absent-payload value has no variant, raw bytes, data size or object handle.",
+      "Keep unsupported flags, unknown nonzero data types and malformed extra payload state refused."
+    ],
+    "fixturePolicy": "Coverage uses generated in-memory vectors. No DWG or DXF fixture was added or committed."
+  },
+  "validation": {
+    "build": {
+      "command": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests libdxfrw_wave1_tests libdxfrw_dwg2dxf_adapter_tests dwg2dxf -j2",
+      "result": "passed"
+    },
+    "fastTests": {
+      "command": "ctest --test-dir build-gcc -R '^(libdxfrw_field_cadvalue_unknown_type|libdxfrw_field_unknown_child_cadvalue_versions|libdxfrw_acad_field_writer_candidate|libdxfrw_fieldlist_membership_output)$' --output-on-failure",
+      "result": "passed, 4/4",
+      "coverage": [
+        "Generated AC1021 and AC1024 suppressed type-0 root values parse as complete transport and re-encode.",
+        "The encoded value carries no in-memory scalar, raw bytes, data size or handle; following FIELD metadata remains aligned.",
+        "Writer accepts only the bounded type-0 suppressed profile or type-0 BL payload profile; unsupported flags and extra state remain refused.",
+        "Existing FIELD child-version, DXF candidate writer and FIELDLIST output controls remain green."
+      ]
+    },
+    "localPhysicalInput": {
+      "path": "tests/samples/AC1021/architectural_-_annotation_scaling_and_multileaders.dwg",
+      "sha256": "0e74f0aa84b1323c922345f067739c42ee26213dea010b407b87a94212271654",
+      "provenance": "Pre-existing untracked local input; not staged or committed.",
+      "observedProfile": "The existing peer census records 29 root values with flags=3 and type=0.",
+      "postChangeTrace": {
+        "command": "build-gcc/dwg2dxf/dwg2dxf tests/samples/AC1021/architectural_-_annotation_scaling_and_multileaders.dwg -y -d -v2010 /tmp/libdxfrw-ac1021-field-suppressed.dxf",
+        "exitCode": 1,
+        "unsupportedFieldFlagDecodes": 21,
+        "childValueCountFailures": 16,
+        "strictOutputRefusal": "36 unpreserved proxy-graphics records",
+        "qualification": "No physical source-to-DXF output/readback claim. These separate FIELD and proxy blockers remain open."
+      }
+    }
+  },
+  "residuals": [
+    "Resolve the other physical AC1021 FIELD flag profiles and child-value-count/framing failures from authoritative evidence.",
+    "Establish exact physical source-to-DXF output and fresh readback on an eligible complete source profile.",
+    "Qualify native FIELD evaluation independently from cached-value transport."
+  ],
+  "planEffect": "Closes only the generated, payload-suppressed type-0 transport subtask. P5 remains OPEN; the local AC1021 architectural source remains unqualified."
+}

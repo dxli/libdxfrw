@@ -2489,7 +2489,8 @@ CadValueReadResult readCadValue(
         return CadValueReadResult::Error;
     }
     if (!value.hasDwgPayload(version)
-        && value.m_dataType != 1 && value.m_dataType != 2
+        && value.m_dataType != 0 && value.m_dataType != 1
+        && value.m_dataType != 2
         && value.m_dataType != 4 && value.m_dataType != 8
         && value.m_dataType != 16 && value.m_dataType != 32
         && value.m_dataType != 64 && value.m_dataType != 512)
@@ -21197,15 +21198,14 @@ bool isWritableCadValue(DRW::Version version, const DRW_CadValue& value) {
     if ((version > DRW::AC1018 && (value.m_formatFlags & ~0x03) != 0)
         || (version <= DRW::AC1018 && value.m_formatFlags != 0))
         return false;
-    // ODA §20.4.99 defines the payload framing for kUnknown as BL, so preserve
-    // that transport value. A suppressed/absent kUnknown payload is not
-    // admitted: its meaning depends on the R2007+ general-value flag profile.
-    if (value.m_dataType == 0 && !value.hasDwgPayload(version))
-        return false;
-
     if (!value.hasDwgPayload(version)) {
-        const bool knownType = value.m_dataType == 1 || value.m_dataType == 2
-            || value.m_dataType == 4 || value.m_dataType == 8
+        // ODA §20.4.99 retains the data-type BL while flag bit 0 suppresses
+        // the type-specific payload. Preserve this bounded type-0 profile as
+        // an empty transport value; it carries no inferred application value.
+        const bool knownType =
+            value.m_dataType == 0 || value.m_dataType == 1
+            || value.m_dataType == 2 || value.m_dataType == 4
+            || value.m_dataType == 8
             || value.m_dataType == 16 || value.m_dataType == 32
             || value.m_dataType == 64 || value.m_dataType == 512;
         return knownType && value.m_value.type() == DRW_Variant::INVALID

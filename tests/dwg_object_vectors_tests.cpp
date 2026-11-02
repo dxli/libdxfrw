@@ -5725,20 +5725,52 @@ void testFieldCadValueUnknownType(TestContext& t) {
         dwgBufferW body, strings, handles;
         const bool encoded = parsed.encodeDwg(
             version, &body, &strings, &handles);
-        t.expect(read && input.isGood() && !parsed.hasCompleteDwgPayload()
-                     && !parsed.isDwgPayloadValid(version) && !encoded
-                     && body.bitCount() == 0 && strings.bitCount() == 0
-                     && handles.bitCount() == 0,
-                 "FIELD kUnknown payload-suppressed/general flag remains "
-                 "unqualified for "
+        FieldCodecProbe expected;
+        expected.parentHandle = 0xA200u;
+        expected.setDwgCommonObjectState(0, 1, false);
+        expected.m_evaluatorId = "ACAD";
+        expected.m_fieldCode = "GENERATED_FIELD";
+        expected.m_evaluationStatusFlags = 2;
+        expected.m_value.m_formatFlags = 0x03;
+        expected.m_value.m_dataType = 0;
+        expected.m_value.m_unitType = 12;
+        expected.m_valueString = "42";
+        expected.m_valueStringLength = 2;
+        dwgBufferW expectedBody, expectedStrings, expectedHandles;
+        const bool expectedEncoded = expected.encodeDwg(
+            version, &expectedBody, &expectedStrings, &expectedHandles);
+        const bool exactStreams = expectedEncoded
+            && body.bitCount() == expectedBody.bitCount()
+            && body.data() == expectedBody.data()
+            && strings.bitCount() == expectedStrings.bitCount()
+            && strings.data() == expectedStrings.data()
+            && handles.bitCount() == expectedHandles.bitCount()
+            && handles.data() == expectedHandles.data();
+        t.expect(read && input.isGood() && parsed.hasCompleteDwgPayload()
+                     && parsed.isDwgPayloadValid(version) && encoded
+                     && exactStreams
+                     && parsed.m_value.m_formatFlags == 0x03
+                     && parsed.m_value.m_dataType == 0
+                     && parsed.m_value.m_value.type() == DRW_Variant::INVALID
+                     && parsed.m_value.m_dataSize == 0
+                     && parsed.m_value.m_rawData.empty()
+                     && parsed.m_value.m_handle == 0
+                     && parsed.m_value.m_unitType == 12
+                     && parsed.m_value.m_formatString.empty()
+                     && parsed.m_value.m_valueString.empty()
+                     && parsed.m_valueString == "42"
+                     && parsed.m_valueStringLength == 2,
+                 "FIELD kUnknown suppressed payload retains only its bounded "
+                 "transport profile for "
                      + std::to_string(static_cast<int>(version)));
     }
 
     for (const DRW::Version version : {
              DRW::AC1015, DRW::AC1018, DRW::AC1021, DRW::AC1024}) {
-        const std::array<std::int32_t, 2> formatFlags{{
-            0, version > DRW::AC1018 ? 0x08 : 0}};
-        const std::size_t flagCount = version > DRW::AC1018 ? 2u : 1u;
+        const std::array<std::int32_t, 3> formatFlags{{
+            0, version > DRW::AC1018 ? 0x03 : 0,
+            version > DRW::AC1018 ? 0x08 : 0}};
+        const std::size_t flagCount = version > DRW::AC1018 ? 3u : 1u;
         for (std::size_t i = 0; i < flagCount; ++i) {
             FieldCodecProbe constructed;
             constructed.setDwgCommonObjectState(0, 1, false);
@@ -5746,7 +5778,7 @@ void testFieldCadValueUnknownType(TestContext& t) {
             constructed.m_fieldCode = "UNKNOWN_CAD_VALUE";
             constructed.m_value.m_formatFlags = formatFlags[i];
             constructed.m_value.m_dataType = 0;
-            if ((formatFlags[i] & 0x08) == 0)
+            if (constructed.m_value.hasDwgPayload(version))
                 constructed.m_value.m_value.addInt(91, 42);
             constructed.m_value.m_unitType = 12;
             constructed.m_valueString = "42";
@@ -5756,7 +5788,8 @@ void testFieldCadValueUnknownType(TestContext& t) {
             const bool valid = constructed.isDwgPayloadValid(version);
             const bool encoded = constructed.encodeDwg(
                 version, &body, &strings, &handles);
-            const bool transportSupported = formatFlags[i] == 0;
+            const bool transportSupported = formatFlags[i] == 0
+                || (version > DRW::AC1018 && formatFlags[i] == 0x03);
             t.expect(valid == transportSupported
                          && encoded == transportSupported
                          && (transportSupported
@@ -5764,12 +5797,14 @@ void testFieldCadValueUnknownType(TestContext& t) {
                                  : body.bitCount() == 0
                                        && strings.bitCount() == 0
                                        && handles.bitCount() == 0),
-                     "FIELD writer preserves canonical kUnknown type 0 "
+                     "FIELD writer preserves bounded kUnknown type 0 "
                      "transport for "
                          + std::to_string(static_cast<int>(version))
                          + ((formatFlags[i] & 0x08) != 0
                                 ? " with an unqualified format flag"
-                                : " with a BL payload"));
+                                : ((formatFlags[i] & 0x01) != 0
+                                       ? " with a suppressed payload"
+                                       : " with a BL payload")));
         }
     }
 
