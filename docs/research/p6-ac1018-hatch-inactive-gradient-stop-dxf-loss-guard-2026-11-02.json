@@ -3,21 +3,21 @@
   "id": "p6-ac1018-hatch-inactive-gradient-stop-dxf-loss-guard-2026-11-02",
   "date": "2026-11-02",
   "title": "AC1018 HATCH inactive-gradient stop DXF loss guard",
-  "status": "RETAINED_STOPS_FAIL_CLOSED; INACTIVE_COMPANION_TRANSPORT_VERIFIED; ASCII_BINARY_ATOMIC_REFUSAL_AND_RETRY_VERIFIED",
+  "status": "RETAINED_STOPS_FAIL_CLOSED; INACTIVE_COMPANION_TRANSPORT_VERIFIED; SELECTED_AC1018_SOURCE_ASCII_BINARY_READBACK_VERIFIED",
   "supportClaimEffect": "none",
   "scope": "Prevent silent loss when a parsed DWG HATCH or MPOLYGON has isGradient=0 but retains gradient color stops, while preserving representable non-default inactive companion metadata when the caller explicitly resolves those unsupported stops. Both DXF writers emit a complete zero-stop gradient group set when inactive companion values are present. The guard keeps the entity available for an explicitly corrected retry.",
   "binding": {
-    "repositoryCommitBeforeSlice": "553758d2",
+    "repositoryCommitBeforeSlice": "fb4bcd00",
     "sourceSha256": {
       "src/drw_entities.cpp": "ed3d3e82dc6325480292557e0f4a0f1859f1d67ceec233f018a3aebf5c50827b",
       "src/libdxfrw.cpp": "66e6ca755208fa4f78e5a7ecc61607fb7e12c311a900bc7707de53d0ca783b24",
-      "tests/dwg_fixture_tests.cpp": "e8ab72faae1c32a26a97397cd067f8be003c712310e713584c0d43ee4884147d",
+      "tests/dwg_fixture_tests.cpp": "9ee75351e547cc695af20bce66e2887be3adf4ac8dcc3f492f67425c900baaa0",
       "CMakeLists.txt": "3522977a843bc13a6ca0c408300ebf005398dd454d4dde7f564608e8af879cf6",
-      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "b1d3346eda9f354d2fc6f716f12e75622af58fb94adc8444a355c622a2a8630a"
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "34d3c46a565ad78a192a586ddc1396a76317adfbfc523a5e76a508304bb4304e"
     },
     "executables": {
       "build-gcc/libdxfrw.a": "25f99aa0480a2b5dcec5ea0fc8c3744469ed04df423ae978c3add5d18929663f",
-      "build-gcc/libdxfrw_dwg_fixture_tests": "2602043f97c09fddda8ca09ccfb36e940d66c79a2c05c4b3e6cdf793e8e29e6a"
+      "build-gcc/libdxfrw_dwg_fixture_tests": "ca427ab1cb8db96360de32092165fb37d927b5f6f3b7e072222f6de4302cbb28"
     }
   },
   "authority": {
@@ -44,6 +44,14 @@
     "tracePath": "/private/tmp/libdxfrw-hatch-profile-final.log",
     "traceSha256": "f2b083c9d69e45a678788d90914d5223c582e04bed8864f7e651d4e8227c5b3d",
     "readDisposition": "The source import reports 474 entity parse failures elsewhere in the drawing. This checks one typed record only and does not qualify whole-file output.",
+    "selectedRecordOutput": {
+      "command": "build-gcc/libdxfrw_dwg_fixture_tests --hatch-source-profile /Users/dli/doc/dwg/Extruder2.dwg",
+      "targetVersion": "AC1027",
+      "encodings": ["ASCII", "Binary DXF"],
+      "callerResolution": "The selected HATCH was copied into an isolated document and its two unrepresentable stops were explicitly cleared before export.",
+      "readback": "PASS for both encodings: one typed HATCH retained isGradient=0, all inactive companion fields (reserved, angle, shift, single-color flag, tint and name), zero stops, both type-7 loops, vertex coordinates, bulges and closed-polyline flags.",
+      "scope": "Selected-record transport only. This is not conversion of the source drawing and does not establish the discarded stop values' native meaning."
+    },
     "independentProjection": {
       "reader": "LibreDWG dwgread 0.14",
       "projectionPath": "/private/tmp/libdxfrw-mpolygon-peer-census/Extruder2.dwg.json",
@@ -69,13 +77,13 @@
   },
   "affectedCohort": {
     "command": "ctest --test-dir build-gcc -R '^(libdxfrw_hatch_mpolygon_inactive_gradient_guard|libdxfrw_dwg_fixtures)$' --output-on-failure",
-    "result": "PASS 2/2 in 0.72 seconds",
+    "result": "PASS 2/2 in 0.26 seconds",
     "asanRun": "Not run; this scalar group-emission change adds no allocation, ownership, parser-bound, or lifetime behavior."
   },
   "limitations": [
     "This guard does not determine whether the inactive stops have native rendering meaning; that remains independently unqualified.",
     "The source drawing has unrelated entity parse failures and was not converted as a whole.",
-    "Selected HATCH import and generated HATCH/MPOLYGON refusal/readback controls do not qualify the inactive stops' native meaning, general HATCH/MPOLYGON geometry, annotation, physical-source writer output, or consumer support.",
+    "The selected source HATCH profile requires explicit removal of the inactive stops and does not qualify their native meaning, general HATCH/MPOLYGON geometry, annotation, whole-source writer output, or consumer support.",
     "No external DWG/DXF fixture was added and no support claim is promoted."
   ]
 }

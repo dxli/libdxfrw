@@ -762,6 +762,97 @@ int testPhysicalInactiveGradientHatch(const char* sourcePath) {
             return 1;
         }
     }
+
+    // The physical source contains stop records even though its gradient flag
+    // is clear. Exercise the selected record as a standalone source-to-DXF
+    // projection after the caller explicitly removes those unrepresentable
+    // stops; never convert or claim completeness for the rest of this file.
+    DRW_Hatch resolvedHatch(*sourceHatch);
+    resolvedHatch.gradColors.clear();
+    const auto outputMatchesSelectedFields = [&](const DRW_Hatch* output) {
+        if (output == nullptr || output->isGradient != 0
+            || output->gradReserved != sourceHatch->gradReserved
+            || output->gradAngle != sourceHatch->gradAngle
+            || output->gradShift != sourceHatch->gradShift
+            || output->singleColor != sourceHatch->singleColor
+            || output->gradTint != sourceHatch->gradTint
+            || output->gradName != sourceHatch->gradName
+            || !output->gradColors.empty()
+            || output->looplist.size() != sourceHatch->looplist.size())
+            return false;
+
+        for (std::size_t loopIndex = 0;
+             loopIndex < sourceHatch->looplist.size(); ++loopIndex) {
+            const auto& sourceLoop = sourceHatch->looplist[loopIndex];
+            const auto& outputLoop = output->looplist[loopIndex];
+            if (!sourceLoop || !outputLoop
+                || outputLoop->type != sourceLoop->type
+                || outputLoop->objlist.size() != sourceLoop->objlist.size())
+                return false;
+
+            const auto* sourcePolyline = sourceLoop->objlist.size() == 1u
+                ? dynamic_cast<const DRW_LWPolyline*>(
+                      sourceLoop->objlist.front().get())
+                : nullptr;
+            const auto* outputPolyline = outputLoop->objlist.size() == 1u
+                ? dynamic_cast<const DRW_LWPolyline*>(
+                      outputLoop->objlist.front().get())
+                : nullptr;
+            if (sourcePolyline == nullptr || outputPolyline == nullptr
+                || outputPolyline->flags != sourcePolyline->flags
+                || outputPolyline->vertlist.size()
+                    != sourcePolyline->vertlist.size())
+                return false;
+            for (std::size_t vertexIndex = 0;
+                 vertexIndex < sourcePolyline->vertlist.size(); ++vertexIndex) {
+                const auto& sourceVertex = sourcePolyline->vertlist[vertexIndex];
+                const auto& outputVertex = outputPolyline->vertlist[vertexIndex];
+                if (!sourceVertex || !outputVertex
+                    || outputVertex->x != sourceVertex->x
+                    || outputVertex->y != sourceVertex->y
+                    || outputVertex->bulge != sourceVertex->bulge)
+                    return false;
+            }
+        }
+        return true;
+    };
+
+    for (const bool binary : {false, true}) {
+        dx_data selectedData;
+        selectedData.mBlock->ent.push_back(new DRW_Hatch(resolvedHatch));
+        const std::filesystem::path outputPath = temporaryDxfPath(
+            binary ? "physical-hatch-inactive-gradient-binary"
+                   : "physical-hatch-inactive-gradient-ascii");
+        FixtureInterface writer;
+        const bool exported = writer.fileExport(
+            outputPath.string(), DRW::AC1027, binary, &selectedData, false);
+        FixtureInterface reader;
+        dx_data outputData;
+        const bool read = exported && reader.fileImport(
+            outputPath.string(), &outputData, false);
+        const DRW_Hatch* outputHatch = nullptr;
+        std::size_t outputHatchCount = 0u;
+        if (read && outputData.mBlock != nullptr) {
+            for (const DRW_Entity* entity : outputData.mBlock->ent) {
+                const auto* candidate = dynamic_cast<const DRW_Hatch*>(entity);
+                if (candidate != nullptr
+                    && dynamic_cast<const DRW_MPolygon*>(entity) == nullptr) {
+                    outputHatch = candidate;
+                    ++outputHatchCount;
+                }
+            }
+        }
+        const bool outputMatches = exported && read && outputHatchCount == 1u
+            && outputMatchesSelectedFields(outputHatch);
+        std::error_code ec;
+        std::filesystem::remove(outputPath, ec);
+        if (!outputMatches) {
+            std::cerr << "FAIL: physical HATCH 0x173 selected-record "
+                      << (binary ? "Binary" : "ASCII")
+                      << " output/readback\n";
+            return 1;
+        }
+    }
     std::cout << "Physical AC1018 HATCH 0x173 inactive-gradient profile: PASS\n";
     return 0;
 }
