@@ -14058,14 +14058,42 @@ void testHeaderVersionEnvelopes(TestContext& t) {
              "AC1024 excluded-size profile is gated to app maintenance >3");
 
     auto ac1027Excluded = makeHeaderSection<dwgWriter27>(
-        t, "AC1027 excluded-word negative");
+        t, "AC1027 excluded-word exact profile");
     excludeHeaderHighSizeWordFromCount(ac1027Excluded);
+    dwgBuffer ac1027ExcludedView(
+        ac1027Excluded.data(), ac1027Excluded.size());
+    const bool ac1027ExcludedPositioned =
+        ac1027ExcludedView.setPosition(16u);
+    const auto ac1027ExcludedEnvelope = ac1027ExcludedPositioned
+        ? inspectDwgHeaderEnvelope(
+            ac1027ExcludedView, DRW::AC1027, 6u)
+        : DwgHeaderEnvelope{};
+    t.expect(ac1027ExcludedEnvelope.error == DwgHeaderEnvelopeError::None
+                 && ac1027ExcludedEnvelope.excludesHighSizeWord
+                 && ac1027ExcludedEnvelope.highSizeWord == 0u
+                 && ac1027ExcludedEnvelope.unclaimedBytes == 0u
+                 && ac1027ExcludedEnvelope.payloadEnd + 18u
+                        == ac1027Excluded.size(),
+             "AC1027 MV>3 admits exact zero-word excluded-size profile");
     HeaderSectionReader ac1027ExcludedReader(
         ac1027Excluded, 0u, DRW::AC1027, 6u);
     DRW_Header ac1027ExcludedHeader;
-    t.expect(!ac1027ExcludedReader.readDwgHeader(ac1027ExcludedHeader)
-                 && ac1027ExcludedHeader.vars.empty(),
-             "AC1027 excluded-size profile stays closed without a real witness");
+    t.expect(ac1027ExcludedReader.readDwgHeader(ac1027ExcludedHeader)
+                 && ac1027ExcludedHeader.vars.count("LUNITS") == 1u
+                 && ac1027ExcludedReader.diagnostics().size() == 1u
+                 && ac1027ExcludedReader.diagnostics()[0].kind
+                        == DwgIntegrityCheckKind::HeaderSectionCompatibility,
+             "AC1027 MV>3 exact excluded-size profile parses with compatibility diagnostic");
+    HeaderSectionReader ac1027Maintenance29Reader(
+        ac1027Excluded, 0u, DRW::AC1027, 29u);
+    DRW_Header ac1027Maintenance29Header;
+    t.expect(ac1027Maintenance29Reader.readDwgHeader(
+                 ac1027Maintenance29Header)
+                 && ac1027Maintenance29Header.vars.count("LUNITS") == 1u
+                 && ac1027Maintenance29Reader.diagnostics().size() == 1u
+                 && ac1027Maintenance29Reader.diagnostics()[0].kind
+                        == DwgIntegrityCheckKind::HeaderSectionCompatibility,
+             "AC1027 maintenance-29 exact excluded-size profile is admitted");
 
     for (const auto& mismatch : {
              std::pair<const std::vector<std::uint8_t>*, std::uint8_t>{&ac1024High, 3u},
@@ -17130,6 +17158,13 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--header-date-time-validation") {
         TestContext focused;
         testHeaderDateTimeEncoding(focused);
+        std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--header-version-envelopes") {
+        TestContext focused;
+        testHeaderVersionEnvelopes(focused);
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

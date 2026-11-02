@@ -167,7 +167,7 @@ inline DwgHeaderEnvelope inspectDwgHeaderEnvelope(
         version, appMaintenanceVersion, true);
     if (version == DRW::AC1027 && appMaintenanceVersion > 3u) {
         return compatible.error == DwgHeaderEnvelopeError::None
-                && suffixAllowed && compatible.unclaimedBytes != 0u
+                && suffixAllowed
             ? compatible : canonical;
     }
     return compatible.error == DwgHeaderEnvelopeError::None

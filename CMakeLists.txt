@@ -1166,6 +1166,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_dwg_r2018_auxheader_trailer PROPERTIES
         LABELS "fast;dwg;header;generated;AC1027;AC1032"
         TIMEOUT 30)
+    add_test(NAME libdxfrw_dwg_header_version_envelopes
+        COMMAND libdxfrw_dwg_reader_matrix_tests
+            --header-version-envelopes)
+    set_tests_properties(libdxfrw_dwg_header_version_envelopes PROPERTIES
+        LABELS "fast;dwg;header;generated;AC1027"
+        TIMEOUT 30)
     add_test(NAME libdxfrw_dwg_tablestyle_malformed_count_dispatch
         COMMAND libdxfrw_dwg_reader_matrix_tests
             --tablestyle-malformed-count-dispatch)
