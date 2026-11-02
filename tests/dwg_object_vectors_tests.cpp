@@ -5678,6 +5678,41 @@ void testFieldCadValueUnqualifiedFormatFlags(TestContext& t) {
                  "AC1021 FIELD with unmodeled object-data tail remains a bounded incomplete shell");
     }
 
+    FieldFrame checksumFrame;
+    const bool checksumBuilt = makeFieldFrame(
+        false, false, checksumFrame, false, false, false, false,
+        DRW::AC1021, false, false, false, 0, 2, 0, -1, 1024, false,
+        false, 2, false, "ACFD_FIELDTEXT_CHECKSUM");
+    t.expect(checksumBuilt,
+             "AC1021 flags-2/type-2 FIELD checksum child with its BD payload builds");
+    if (checksumBuilt) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1021, false);
+        dwgBuffer input(checksumFrame.bytes.data(), checksumFrame.bytes.size(),
+                        &codec);
+        FieldCodecProbe parsed;
+        const bool read = parsed.parseDwg(
+            DRW::AC1021, &input, checksumFrame.handleBits);
+        dwgBufferW body, strings, handles;
+        const bool encoded = parsed.encodeDwg(
+            DRW::AC1021, &body, &strings, &handles);
+        const DRW_Field::ChildValue* checksum =
+            parsed.m_childValues.size() == 1u
+                ? &parsed.m_childValues.front() : nullptr;
+        t.expect(read && input.isGood() && parsed.hasCompleteDwgPayload()
+                     && parsed.isDwgPayloadValid(DRW::AC1021) && encoded
+                     && checksum != nullptr
+                     && checksum->m_key == "ACFD_FIELDTEXT_CHECKSUM"
+                     && checksum->m_value.m_formatFlags == 2
+                     && checksum->m_value.m_dataType == 2
+                     && checksum->m_value.hasDwgFieldPayload(DRW::AC1021)
+                     && checksum->m_value.m_value.type() == DRW_Variant::DOUBLE
+                     && checksum->m_value.m_value.d_val() == 43.5
+                     && body.bitCount() != 0u && strings.bitCount() != 0u
+                     && handles.isGood(),
+                 "AC1021 flags-2/type-2 checksum child reads and re-encodes its BD payload");
+    }
+
     FieldFrame checksumTailFrame;
     const bool checksumTailBuilt = makeFieldFrame(
         false, false, checksumTailFrame, false, false, false, false,
@@ -5705,9 +5740,9 @@ void testFieldCadValueUnqualifiedFormatFlags(TestContext& t) {
                      && checksum->m_key == "ACFD_FIELDTEXT_CHECKSUM"
                      && checksum->m_value.m_formatFlags == 2
                      && checksum->m_value.m_dataType == 2
-                     && !checksum->m_value.hasDwgFieldPayload(DRW::AC1021)
-                     && checksum->m_value.m_value.type()
-                         == DRW_Variant::INVALID
+                     && checksum->m_value.hasDwgFieldPayload(DRW::AC1021)
+                     && checksum->m_value.m_value.type() == DRW_Variant::DOUBLE
+                     && checksum->m_value.m_value.d_val() == 43.5
                      && body.bitCount() == 0u
                      && strings.bitCount() == 0u
                      && handles.bitCount() == 0u,
@@ -9700,7 +9735,7 @@ void testCadValuePayloadPresence(TestContext& t) {
                                             flags, type),
                              "FIELD reads the explicit type and applies its own low-flag payload rule");
                     const bool expectedHandle = type == 64
-                        && (flags & 3) == 0;
+                        && (flags & 1) == 0;
                     t.expect(DRW_Field::cadValueHasDwgObjectHandle(version, parsed.m_value)
                                  == expectedHandle,
                              "FIELD object-ID handle slot follows the payload-presence bit");
@@ -9757,7 +9792,7 @@ void testCadValuePayloadPresence(TestContext& t) {
     }
 
     for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
-        for (const std::int32_t flags : {1, 2, 3}) {
+        for (const std::int32_t flags : {1, 3}) {
             for (const int childType : {2, 64}) {
                 FieldFrame childFrame;
                 const bool childBuilt = makeFieldFrame(

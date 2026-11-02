@@ -30531,11 +30531,25 @@ bool physicalAc1021FieldFlag4Type2ProfileCensus(
     std::size_t typedRoots = 0u;
     std::size_t acExprRoots = 0u;
     std::size_t acObjPropRoots = 0u;
+    std::size_t checksumFieldRecords = 0u;
     std::set<std::uint32_t> typedFieldHandles;
     std::map<std::string, std::map<std::pair<int, int>, std::size_t>>
         childValueProfiles;
     for (const DRW_Field& field : data.fields) {
         typedFieldHandles.insert(field.handle);
+        for (const DRW_Field::ChildValue& child : field.m_childValues) {
+            if (child.m_key != "ACFD_FIELDTEXT_CHECKSUM")
+                continue;
+            ++checksumFieldRecords;
+            if (!field.hasCompleteDwgPayload()
+                || !field.isDwgPayloadValid(DRW::AC1021)
+                || child.m_value.m_formatFlags != 2
+                || child.m_value.m_dataType != 2
+                || !child.m_value.hasDwgFieldPayload(DRW::AC1021)
+                || child.m_value.m_value.type() != DRW_Variant::DOUBLE
+                || !std::isfinite(child.m_value.m_value.d_val()))
+                return fail("AC1021 checksum child did not consume a valid flags=2/type=2 BD payload");
+        }
         if (field.m_value.m_formatFlags != 4
             || field.m_value.m_dataType != 2)
             continue;
@@ -30597,6 +30611,7 @@ bool physicalAc1021FieldFlag4Type2ProfileCensus(
     std::cerr << "AC1021 FIELD profile: total=" << data.fields.size()
               << " rawFieldFrames=" << rawFieldHandles.size()
               << " rawOnlyShells=" << rawOnlyFieldHandles.size()
+              << " checksumFields=" << checksumFieldRecords
               << " peerAcObjPropRawOnly="
               << (peerRootHandlesAreRawOnly ? peerAcObjPropHandles.size() : 0u)
               << " typed=" << typedRoots << " AcExpr=" << acExprRoots
@@ -30607,13 +30622,14 @@ bool physicalAc1021FieldFlag4Type2ProfileCensus(
                       << ",type=" << profile.first.second << ")="
                       << profile.second;
     std::cerr << '\n';
-    if (data.fields.size() != 15u || typedRoots != 15u || acExprRoots != 15u
+    if (data.fields.size() != 86u || typedRoots != 15u || acExprRoots != 15u
         || acObjPropRoots != 0u
+        || checksumFieldRecords != 71u
         || rawFieldHandles.size() != 142u
-        || rawOnlyFieldHandles.size() != 127u
+        || rawOnlyFieldHandles.size() != 56u
         || peerAcObjPropHandles.size() != 42u
         || !peerRootHandlesAreRawOnly)
-        return fail("AC1021 FIELD census differs from the source-bounded flag/tail profile");
+        return fail("AC1021 FIELD census differs from the source-bounded flags=2 payload profile");
     return true;
 }
 

@@ -3837,10 +3837,11 @@ struct DRW_CadValue {
   [[nodiscard]] bool hasDwgPayload(DRW::Version version) const noexcept {
     return version <= DRW::AC1018 || (m_formatFlags & 0x01) == 0;
   }
-  // ODA §20.4.99 says bit 1 suppresses the type-specific FIELD payload, while
-  // retaining the preceding data-type BL. LibreDWG applies both low bits.
+  // ODA §20.4.99: format flag bit 1 (mask 0x01) suppresses the type-specific
+  // FIELD payload while retaining the data-type BL. Flag bit 2 alone does not
+  // suppress it; the AC1021 checksum-child source profile uses flags=2/type=2.
   [[nodiscard]] bool hasDwgFieldPayload(DRW::Version version) const noexcept {
-    return version <= DRW::AC1018 || (m_formatFlags & 0x03) == 0;
+    return version <= DRW::AC1018 || (m_formatFlags & 0x01) == 0;
   }
 };
 
