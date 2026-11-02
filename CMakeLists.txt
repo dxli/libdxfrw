@@ -1733,6 +1733,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_ltype_standard_flag_dxf_domain PROPERTIES
         LABELS "fast;dxf;reader;writer;ltype;generated"
         TIMEOUT 10)
+    add_test(NAME libdxfrw_ltype_element_flag_read_tolerance
+        COMMAND libdxfrw_hardening_tests --ltype-element-flag-read-tolerance)
+    set_tests_properties(libdxfrw_ltype_element_flag_read_tolerance PROPERTIES
+        LABELS "fast;dxf;reader;writer;ltype;generated"
+        TIMEOUT 10)
     add_test(NAME libdxfrw_scale_units_dxf_domain
         COMMAND libdxfrw_hardening_tests --dxf-scale-units-domain)
     set_tests_properties(libdxfrw_scale_units_dxf_domain PROPERTIES

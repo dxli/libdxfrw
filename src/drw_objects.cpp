@@ -4640,11 +4640,17 @@ bool DRW_LType::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     case 74:
         if (segments.empty())
             return false;
-        segments.back().shapeFlags = reader->getInt32();
-        // Complex linetypes may set bit 8 in addition to rotation/text/shape.
-        if (segments.back().shapeFlags < 0
-            || segments.back().shapeFlags > 0x0F)
-            return false;
+        {
+            const int parsedShapeFlags = reader->getInt32();
+            // Group 74 is a 16-bit DXF value. Preserve nonnegative values
+            // outside this writer's modeled flag mask on input; typed DXF
+            // output remains bounded by validateDxf().
+            if (parsedShapeFlags < 0
+                || parsedShapeFlags
+                    > std::numeric_limits<std::int16_t>::max())
+                return false;
+            segments.back().shapeFlags = parsedShapeFlags;
+        }
         break;
     case 75:
         if (segments.empty())

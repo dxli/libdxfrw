@@ -1186,6 +1186,87 @@ void testLTypeStandardFlagDxfDomain(TestContext& t) {
     }
 }
 
+void testLTypeElementFlagReadTolerance(TestContext& t) {
+    const auto makeLineType = [](int shapeFlags) {
+        ExposedLType lineType;
+        lineType.name = "ELEMENT_FLAG_READ";
+        lineType.size = 1;
+        lineType.length = 1.0;
+        lineType.path.push_back(1.0);
+        DRW_LTypeSegment segment;
+        segment.length = 1.0;
+        segment.shapeFlags = shapeFlags;
+        lineType.segments.push_back(segment);
+        return lineType;
+    };
+
+    const auto parseShapeFlags = [](ExposedLType& lineType, int value,
+                                    bool binary) {
+        std::ostringstream encoded(std::ios::out | std::ios::binary);
+        if (binary) {
+            dxfWriterBinary writer(&encoded);
+            writer.setVersion("AC1027", true);
+            if (!writer.writeInt16(74, value) || writer.hasWriteError())
+                return false;
+        } else {
+            encoded << "74\n" << value << '\n';
+        }
+        std::istringstream input(encoded.str(),
+                                 std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        int code = 0;
+        return reader->readRec(&code) && code == 74
+            && lineType.parseCode(code, reader);
+    };
+
+    for (const bool binary : {false, true}) {
+        for (const int flags : {0, 8, 15, 16, 0x7FFF}) {
+            ExposedLType parsed = makeLineType(3);
+            t.expect(parseShapeFlags(parsed, flags, binary)
+                         && parsed.segments.back().shapeFlags == flags,
+                     "LTYPE parser retains nonnegative signed-16-bit element flags in ASCII/Binary DXF");
+            t.expect(parsed.validateDxf() == (flags <= 0x0F),
+                     "LTYPE writer admission remains limited to the modeled element-flag range");
+
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            dxfRW codec(nullptr);
+            codec.version = DRW::AC1027;
+            codec.binFile = binary;
+            codec.writer = binary
+                ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+                : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+            codec.writer->setVersion("AC1027", true);
+            ExposedLType candidate = makeLineType(flags);
+            const bool written = codec.writeLineType(&candidate);
+            if (flags <= 0x0F) {
+                t.expect(written && !output.str().empty(),
+                         "LTYPE writer retains modeled element-flag output behavior");
+            } else {
+                t.expect(!written && output.str().empty(),
+                         "LTYPE writer refuses unmodeled element flags before emitting bytes");
+            }
+        }
+
+        ExposedLType negative = makeLineType(5);
+        t.expect(!parseShapeFlags(negative, -1, binary)
+                     && negative.segments.back().shapeFlags == 5,
+                 "LTYPE parser rejects negative element flags without mutating prior state");
+    }
+
+    ExposedLType oversized = makeLineType(5);
+    std::istringstream input("74\n32768\n");
+    std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+    reader->setVersion("AC1027", true);
+    int code = 0;
+    t.expect(reader->readRec(&code) && code == 74
+                 && !oversized.parseCode(code, reader)
+                 && oversized.segments.back().shapeFlags == 5,
+             "ASCII LTYPE parser rejects values beyond signed-16-bit width without mutation");
+}
+
 void testLeaderAdvisoryCountState(TestContext& t) {
     ExposedLeader source;
     t.expect(parseDxfRecords(source, "76\n99\n10\n1\n20\n2\n30\n3\n10\n4\n20\n6\n30\n0\n")
@@ -24174,6 +24255,18 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::cout << "LTYPE standard flag DXF domain: PASS\n";
+        return 0;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--ltype-element-flag-read-tolerance") {
+        TestContext focused;
+        testLTypeElementFlagReadTolerance(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " LTYPE element-flag assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "LTYPE element-flag read tolerance: PASS\n";
         return 0;
     }
     if (argc == 2
