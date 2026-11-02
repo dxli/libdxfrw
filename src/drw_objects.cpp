@@ -4649,11 +4649,14 @@ bool DRW_LType::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     case 75:
         if (segments.empty())
             return false;
-        segments.back().complexShapeCode = reader->getInt32();
-        if (segments.back().complexShapeCode < 0
-            || segments.back().complexShapeCode
-                   > std::numeric_limits<std::uint16_t>::max())
-            return false;
+        {
+            const int parsedShapeNumber = reader->getInt32();
+            if (parsedShapeNumber < 0
+                || parsedShapeNumber
+                   > std::numeric_limits<std::int16_t>::max())
+                return false;
+            segments.back().complexShapeCode = parsedShapeNumber;
+        }
         break;
     case 340:
         if (segments.empty() || !reader->isValidHandleString())
@@ -8196,7 +8199,8 @@ bool DRW_LType::validateDxf() const {
                                && std::isfinite(segment.scale)
                                && std::isfinite(segment.rotation)
                                && segment.complexShapeCode >= 0
-                               && segment.complexShapeCode <= 0xFFFF
+                               && segment.complexShapeCode
+                                      <= std::numeric_limits<std::int16_t>::max()
                                && segment.shapeFlags >= 0
                                && segment.shapeFlags <= 0x0F;
                        })

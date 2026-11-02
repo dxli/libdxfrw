@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -991,7 +992,7 @@ void testLTypeAlignmentDxfDomain(TestContext& t) {
                 : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
             codec.writer->setVersion("AC1027", true);
 
-            DRW_LType lineType;
+            ExposedLType lineType;
             lineType.name = "ALIGNMENT_TEST";
             lineType.alignment = alignment;
             lineType.size = 1;
@@ -1010,6 +1011,97 @@ void testLTypeAlignmentDxfDomain(TestContext& t) {
         const auto invalidWrite = writerAccepts(64);
         t.expect(!invalidWrite.first && invalidWrite.second.empty(),
                  "LTYPE writer refuses non-A alignment before emitting bytes");
+    }
+}
+
+void testLTypeShapeNumberDxfWidth(TestContext& t) {
+    const auto makeLineType = [](int shapeNumber) {
+        ExposedLType lineType;
+        lineType.name = "SHAPE_LIMIT";
+        lineType.size = 1;
+        lineType.length = 1.0;
+        lineType.path.push_back(1.0);
+        DRW_LTypeSegment segment;
+        segment.length = 1.0;
+        segment.shapeFlags = 0x04;
+        segment.complexShapeCode = shapeNumber;
+        lineType.segments.push_back(segment);
+        return lineType;
+    };
+
+    const auto parseShapeNumber = [](ExposedLType& lineType, int value,
+                                     bool binary) {
+        std::ostringstream encoded(std::ios::out | std::ios::binary);
+        if (binary) {
+            dxfWriterBinary writer(&encoded);
+            writer.setVersion("AC1027", true);
+            if (!writer.writeInt16(75, value) || writer.hasWriteError())
+                return false;
+        } else {
+            encoded << "75\n" << value << '\n';
+        }
+        std::istringstream input(encoded.str(),
+                                 std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        int code = 0;
+        return reader->readRec(&code) && code == 75
+            && lineType.parseCode(code, reader);
+    };
+
+    for (const bool binary : {false, true}) {
+        ExposedLType valid = makeLineType(123);
+        t.expect(parseShapeNumber(valid, 32767, binary)
+                     && valid.segments.back().complexShapeCode == 32767
+                     && valid.validateDxf(),
+                 "LTYPE accepts the largest signed 16-bit shape number in ASCII/Binary DXF");
+
+        for (const int value : {-1, -32768}) {
+            ExposedLType invalid = makeLineType(123);
+            t.expect(!parseShapeNumber(invalid, value, binary)
+                         && invalid.segments.back().complexShapeCode == 123,
+                     "LTYPE rejects negative signed group-75 values without mutation");
+        }
+        if (!binary) {
+            ExposedLType oversized = makeLineType(123);
+            t.expect(!parseShapeNumber(oversized, 32768, false)
+                         && oversized.segments.back().complexShapeCode == 123,
+                     "ASCII LTYPE parser rejects group-75 values beyond signed 16-bit range");
+        }
+
+        const auto writerResult = [binary](int shapeNumber) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            dxfRW codec(nullptr);
+            codec.version = DRW::AC1027;
+            codec.binFile = binary;
+            codec.writer = binary
+                ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+                : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+            codec.writer->setVersion("AC1027", true);
+            ExposedLType lineType;
+            lineType.name = "SHAPE_LIMIT";
+            lineType.size = 1;
+            lineType.length = 1.0;
+            lineType.path.push_back(1.0);
+            DRW_LTypeSegment segment;
+            segment.length = 1.0;
+            segment.shapeFlags = 0x04;
+            segment.complexShapeCode = shapeNumber;
+            lineType.segments.push_back(segment);
+            const bool modelValid = lineType.validateDxf();
+            const bool written = codec.writeLineType(&lineType);
+            return std::make_tuple(modelValid, written, output.str());
+        };
+        const auto validWrite = writerResult(32767);
+        t.expect(std::get<0>(validWrite) && std::get<1>(validWrite)
+                     && !std::get<2>(validWrite).empty(),
+                 "LTYPE writer emits the largest signed 16-bit shape number");
+        const auto invalidWrite = writerResult(32768);
+        t.expect(!std::get<0>(invalidWrite) && !std::get<1>(invalidWrite)
+                     && std::get<2>(invalidWrite).empty(),
+                 "LTYPE writer refuses an oversized shape number before output");
     }
 }
 
@@ -23783,6 +23875,18 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::cout << "LTYPE alignment DXF domain: PASS\n";
+        return 0;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--ltype-shape-number-dxf-width") {
+        TestContext focused;
+        testLTypeShapeNumberDxfWidth(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " LTYPE shape-number width assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "LTYPE shape-number DXF width: PASS\n";
         return 0;
     }
     if (argc == 2
