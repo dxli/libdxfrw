@@ -4,6 +4,7 @@
 
 #include <cerrno>
 #include <charconv>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <locale>
@@ -95,12 +96,37 @@ inline bool isSpace(char value) {
         || value == '\n' || value == '\v' || value == '\f';
 }
 
-// Match std::stod's former prefix/range behavior for legacy string-backed
-// ARCALIGNEDTEXT fields, without its dependence on LC_NUMERIC.
-inline bool parsePrefix(const std::string& text, double& value) {
+// ARCALIGNEDTEXT D2T fields become binary64 DXF values. Preserve representable
+// nonzero subnormals even when strtod reports ERANGE; refuse overflow and
+// nonzero source values that underflow all the way to zero, which strict
+// output cannot represent without silently changing the value.
+inline bool parseFinitePrefix(const std::string& text, double& value) {
     char* end = nullptr;
     value = strtodC(text.c_str(), &end);
-    return end != text.c_str() && errno != ERANGE && errno != ENOMEM;
+    const int conversionError = errno;
+    return end != text.c_str() && conversionError != ENOMEM
+        && std::isfinite(value)
+        && !(conversionError == ERANGE && value == 0.0);
+}
+
+// Strict writers must not turn a numeric prefix into a different value by
+// silently discarding trailing source text. Keep the prefix helper available
+// to tolerant/read-only projections whose compatibility contract permits it.
+inline bool parseFiniteToken(const std::string& text, double& value) {
+    char* end = nullptr;
+    const double parsed = strtodC(text.c_str(), &end);
+    const int conversionError = errno;
+    if (end == text.c_str() || conversionError == ENOMEM
+        || !std::isfinite(parsed)
+        || (conversionError == ERANGE && parsed == 0.0))
+        return false;
+    const char* const limit = text.c_str() + text.size();
+    while (end < limit && isSpace(*end))
+        ++end;
+    if (end != limit)
+        return false;
+    value = parsed;
+    return true;
 }
 
 // Numeric tags must recover the input double; 16 digits can collapse adjacent values.

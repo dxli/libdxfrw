@@ -14684,7 +14684,7 @@ void DRW_ArcAlignedText::applyArcApproximation(){
     // Height from the text-size D2T string when parseable, else a fraction of
     // the radius so the approximation is at least visible.
     double h = 0.0;
-    if (!DxfNumeric::parsePrefix(m_textSize, h)) h = 0.0;
+    if (!DxfNumeric::parseFinitePrefix(m_textSize, h)) h = 0.0;
     if (h > 0.0)
         height = h;
     else if (height <= 0.0)
@@ -14695,9 +14695,10 @@ void DRW_ArcAlignedText::applyArcApproximation(){
 // it: the DWG body carries these as text ("2.5", "1", "0"), while the DXF path
 // reads them as doubles (group codes 41-46 fall in the double range, so the
 // reader populates doubleData and leaves strData stale — getString() is unsafe
-// here). Keep the historical six-significant-digit compact textual form.
+// here). Preserve the parsed binary64 value when adapting it to the DWG text
+// carrier; six significant digits collapse distinct DXF values.
 static std::string arcAlignedD2T(double v){
-    return DxfNumeric::formatDouble(v, 6);
+    return DxfNumeric::formatDouble(v);
 }
 
 static std::string arcAlignedStringOrDefault(const UTF8STRING& value,
@@ -14758,10 +14759,12 @@ bool DRW_ArcAlignedText::parseCode(int code, const std::unique_ptr<dxfReader>& r
     // AcDbEntity common parser.  Angles (50/51) are DXF degrees -> radians.
     const auto parseD2TField = [this, &reader](std::size_t index,
                                                 UTF8STRING& destination) {
-        // Six significant digits plus sign, decimal point and the three-digit
-        // double exponent fit in 13 bytes; reserve 16 before formatting to
-        // cover the transient value as well as its eventual field owner.
-        constexpr std::size_t kMaxD2TTextBytes = 16u;
+        // max_digits10 significant digits plus sign, decimal point and a
+        // signed three-digit exponent fit in 24 bytes for every finite double.
+        // Reserve the worst case before formatting and retaining the result.
+        constexpr std::size_t kMaxD2TTextBytes =
+            static_cast<std::size_t>(
+                std::numeric_limits<double>::max_digits10) + 7u;
         const auto& budget = reader->retainedByteBudget();
         DxfReadRetainedReservation formattedOutput(budget,
                                                    kMaxD2TTextBytes);

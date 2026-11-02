@@ -1,18 +1,25 @@
 #include "dx_iface.h"
 #include "intern/dxfreader.h"
 #include "intern/dxfwriter.h"
+#include "intern/dxfnumber.h"
+#include "intern/dwgbuffer.h"
+#include "intern/dwgbufferw.h"
+#include "intern/drw_textcodec.h"
 
+#include <array>
 #include <clocale>
 #include <cmath>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <locale>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -69,6 +76,33 @@ bool testTypedInput() {
     ok = expect(!invalidReader.readRec(&code),
                 "embedded NUL bypassed full integer token consumption") && ok;
     return ok;
+}
+
+bool testFiniteNumericToken() {
+    double value = 17.0;
+    bool ok = expect(DxfNumeric::parseFiniteToken(" \t+1.25e1 \r", value)
+                         && value == 12.5,
+                     "strict numeric token rejected surrounding whitespace")
+        && expect(DxfNumeric::parseFiniteToken("0x1.4p+1", value)
+                      && value == 2.5,
+                  "strict numeric token changed existing C-strtod compatibility");
+    for (const std::string& token : {
+             std::string("2.25tail"), std::string("1,25"),
+             std::string("nan"), std::string("inf"),
+             std::string("1e9999"), std::string("1e-9999"),
+             std::string("2.25\0tail", 9u)}) {
+        value = 17.0;
+        ok = expect(!DxfNumeric::parseFiniteToken(token, value)
+                        && value == 17.0,
+                    "strict numeric token accepted a suffix or invalid range")
+            && ok;
+    }
+    const double subnormal = std::numeric_limits<double>::denorm_min();
+    return expect(DxfNumeric::parseFiniteToken(
+                      "4.9406564584124654e-324", value)
+                      && value == subnormal,
+                  "strict numeric token rejected a representable subnormal")
+        && ok;
 }
 
 bool testOutput() {
@@ -181,16 +215,29 @@ bool testRawInput(const std::filesystem::path& directory) {
 class ArcText final : public DRW_ArcAlignedText {
 public:
     using DRW_ArcAlignedText::parseCode;
+    using DRW_ArcAlignedText::encodeDwg;
 };
 
 class ArcSink final : public dx_iface {
 public:
+    explicit ArcSink(std::string textSize = "2.5",
+                     std::string xScale = "1.25")
+        : textSize_(std::move(textSize)), xScale_(std::move(xScale)) {}
+
+    void setTextSize(std::string textSize) {
+        textSize_ = std::move(textSize);
+    }
+
     void writeEntities() override {
         DRW_ArcAlignedText text;
         text.text = "locale sentinel"; text.m_radius = 12.5;
-        text.m_textSize = "2.5"; text.m_xScale = "1.25";
+        text.m_textSize = textSize_; text.m_xScale = xScale_;
         dxfW->writeArcAlignedText(&text);
     }
+
+private:
+    std::string textSize_;
+    std::string xScale_;
 };
 
 bool testStringBackedNumeric(const std::filesystem::path& directory) {
@@ -217,7 +264,166 @@ bool testStringBackedNumeric(const std::filesystem::path& directory) {
         else if (arc && code == 42) foundSize = output.getDouble() == 2.5;
         else if (arc && code == 41) foundScale = output.getDouble() == 1.25;
     }
-    return expect(foundSize && foundScale, "ARCALIGNEDTEXT writer truncated dot-decimal string fields");
+    if (!expect(foundSize && foundScale,
+                "ARCALIGNEDTEXT writer truncated dot-decimal string fields"))
+        return false;
+
+    const auto rangePath = directory / "arc text range.dxf";
+    const std::string sentinel = "preserve D2T destination on underflow refusal";
+    {
+        std::ofstream output(rangePath, std::ios::binary | std::ios::trunc);
+        output.write(sentinel.data(),
+                     static_cast<std::streamsize>(sentinel.size()));
+        if (!output)
+            return expect(false,
+                "ARCALIGNEDTEXT D2T range sentinel setup failed");
+    }
+    ArcSink rangeSink("1e-9999", "1.25");
+    if (rangeSink.fileExport(rangePath.string(), DRW::AC1027, false, &data,
+                             false))
+        return expect(false,
+            "ARCALIGNEDTEXT D2T underflow-to-zero output was admitted");
+    {
+        std::ifstream preserved(rangePath, std::ios::binary);
+        const std::string contents(
+            (std::istreambuf_iterator<char>(preserved)),
+            std::istreambuf_iterator<char>());
+        if (!expect(contents == sentinel,
+                    "ARCALIGNEDTEXT D2T refusal changed its destination"))
+            return false;
+    }
+
+    const double subnormal = std::numeric_limits<double>::denorm_min();
+    rangeSink.setTextSize(DxfNumeric::formatDouble(subnormal));
+    if (!rangeSink.fileExport(rangePath.string(), DRW::AC1027, false, &data,
+                              false))
+        return expect(false,
+            "ARCALIGNEDTEXT D2T subnormal corrected retry failed");
+    {
+        std::ifstream input(rangePath);
+        dxfReaderAscii output(&input);
+        int code = 0;
+        bool inArcText = false;
+        bool foundSubnormal = false;
+        while (output.readRec(&code)) {
+            if (code == 0) {
+                inArcText = output.getString() == "ARCALIGNEDTEXT";
+            } else if (inArcText && code == 42) {
+                foundSubnormal = output.getDouble() == subnormal;
+                break;
+            }
+        }
+        if (!expect(foundSubnormal,
+                    "ARCALIGNEDTEXT D2T subnormal DXF readback changed value"))
+            return false;
+    }
+
+    const std::array<std::pair<int, double>, 6> d2tFields{{
+        {41, std::nextafter(1.0, 2.0)},
+        {42, std::nextafter(2.0, 3.0)},
+        {43, std::nextafter(0.75, 1.0)},
+        {44, -std::numeric_limits<double>::max()},
+        {45, std::nextafter(-1.0, 0.0)},
+        {46, std::nextafter(16.0, 17.0)}}};
+    for (const auto& field : d2tFields) {
+        std::stringstream encoded(std::ios::in | std::ios::out
+                                  | std::ios::binary);
+        dxfWriterBinary encodedWriter(&encoded);
+        if (!encodedWriter.writeDouble(field.first, field.second))
+            return expect(false, "ARCALIGNEDTEXT D2T precision input encode failed");
+
+        std::unique_ptr<dxfReader> fieldReader =
+            std::make_unique<dxfReaderBinary>(&encoded);
+        int fieldCode = 0;
+        if (!fieldReader->readRec(&fieldCode) || fieldCode != field.first)
+            return expect(false, "ARCALIGNEDTEXT D2T precision input read failed");
+
+        ArcText parsed;
+        std::shared_ptr<DxfReadRetainedBudget> budget;
+        if (field.first == 44) {
+            // The exact spelling of negative DBL_MAX is 24 bytes. Parsing
+            // transiently reserves that bound and then retains the field, so
+            // the exact peak is 48 bytes; one byte less must refuse cleanly.
+            auto shortBudget = std::make_shared<DxfReadRetainedBudget>(47u);
+            fieldReader->setRetainedByteBudget(shortBudget);
+            if (parsed.parseCode(fieldCode, fieldReader)
+                || !parsed.m_offsetFromArc.empty()
+                || !shortBudget->exceeded())
+                return expect(false,
+                    "ARCALIGNEDTEXT D2T short-budget input was not refused atomically");
+            budget = std::make_shared<DxfReadRetainedBudget>(48u);
+            fieldReader->setRetainedByteBudget(budget);
+        }
+        if (!parsed.parseCode(fieldCode, fieldReader))
+            return expect(false, "ARCALIGNEDTEXT D2T precision retry failed");
+
+        const UTF8STRING* spelling = nullptr;
+        switch (field.first) {
+        case 41: spelling = &parsed.m_xScale; break;
+        case 42: spelling = &parsed.m_textSize; break;
+        case 43: spelling = &parsed.m_charSpacing; break;
+        case 44: spelling = &parsed.m_offsetFromArc; break;
+        case 45: spelling = &parsed.m_rightOffset; break;
+        case 46: spelling = &parsed.m_leftOffset; break;
+        default: break;
+        }
+        double recovered = 0.0;
+        if (spelling == nullptr
+            || !DxfNumeric::parseFinitePrefix(*spelling, recovered)
+            || recovered != field.second)
+            return expect(false,
+                "ARCALIGNEDTEXT D2T conversion lost a finite binary64 value");
+        if (field.first == 44
+            && (!expect(spelling->size() == 24u,
+                        "ARCALIGNEDTEXT D2T worst-case spelling changed")
+                || budget == nullptr || budget->used() != spelling->size()))
+            return expect(false,
+                "ARCALIGNEDTEXT D2T exact retained-byte accounting failed");
+    }
+
+    std::stringstream subnormalInput(std::ios::in | std::ios::out
+                                     | std::ios::binary);
+    dxfWriterBinary subnormalWriter(&subnormalInput);
+    if (!subnormalWriter.writeDouble(42, subnormal))
+        return expect(false,
+            "ARCALIGNEDTEXT subnormal input encode failed");
+    std::unique_ptr<dxfReader> subnormalReader =
+        std::make_unique<dxfReaderBinary>(&subnormalInput);
+    int subnormalCode = 0;
+    ArcText subnormalText;
+    if (!subnormalReader->readRec(&subnormalCode)
+        || subnormalCode != 42
+        || !subnormalText.parseCode(subnormalCode, subnormalReader))
+        return expect(false,
+            "ARCALIGNEDTEXT typed subnormal field parse failed");
+    subnormalText.applyArcApproximation();
+    if (!expect(subnormalText.height == subnormal,
+                "ARCALIGNEDTEXT approximation dropped a representable subnormal height"))
+        return false;
+
+    ArcText dwgText;
+    dwgText.handle = 0x42u;
+    dwgText.text = "D2T precision";
+    dwgText.height = std::nextafter(2.0, 3.0);
+    dwgText.widthscale = 1.0;
+    dwgBufferW body;
+    dwgBufferW strings;
+    dwgBufferW handles;
+    if (!dwgText.encodeDwg(DRW::AC1027, &body, 0u, &strings, &handles))
+        return expect(false, "ARCALIGNEDTEXT DWG D2T fallback encode failed");
+    DRW_TextCodec codec;
+    codec.setVersion("AC1027", false);
+    dwgBuffer stringReader(strings.data().data(), strings.data().size(),
+                           &codec);
+    const UTF8STRING encodedTextSize =
+        stringReader.getVariableText(DRW::AC1027);
+    double encodedHeight = 0.0;
+    if (!stringReader.isGood()
+        || !DxfNumeric::parseFinitePrefix(encodedTextSize, encodedHeight)
+        || encodedHeight != dwgText.height)
+        return expect(false,
+            "ARCALIGNEDTEXT DWG D2T fallback lost binary64 precision");
+    return true;
 }
 
 bool generate(const std::string& path, bool binary) {
@@ -265,6 +471,7 @@ bool verify(const std::string& path) {
 bool run(const std::filesystem::path& directory) {
     bool ok = testOutput();
     ok = testTypedInput() && ok;
+    ok = testFiniteNumericToken() && ok;
     ok = testRawInput(directory) && ok;
     ok = testStringBackedNumeric(directory) && ok;
     for (bool binary : {false, true}) {

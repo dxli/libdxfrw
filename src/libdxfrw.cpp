@@ -11650,7 +11650,7 @@ static bool arcAlignedDxfValue(const UTF8STRING& value, double fallback,
         result = fallback;
         return std::isfinite(result);
     }
-    return DxfNumeric::parsePrefix(value, result) && std::isfinite(result);
+    return DxfNumeric::parseFiniteToken(value, result);
 }
 
 bool dxfRW::writeRText(DRW_RText *ent) {

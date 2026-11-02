@@ -25980,10 +25980,13 @@ bool qualifyArcAlignedTextD2tOutputGuard() {
 
         for (std::size_t fieldIndex = 0; fieldIndex < fields.size();
              ++fieldIndex) {
-            for (const std::string invalid : {"not-a-number", "nan"}) {
+            for (const std::string invalid : {
+                     "not-a-number", "nan", "2.25trailing"}) {
                 const std::filesystem::path output = directory
                     / ("retry-" + suffix + "-" + std::to_string(fieldIndex)
-                       + (invalid == "nan" ? "-nonfinite.dxf" : "-malformed.dxf"));
+                       + (invalid == "nan" ? "-nonfinite.dxf"
+                          : invalid == "not-a-number" ? "-malformed.dxf"
+                                                       : "-trailing.dxf"));
                 {
                     std::ofstream previous(output, std::ios::binary);
                     if (!previous)
