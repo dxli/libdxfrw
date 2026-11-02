@@ -1,0 +1,39 @@
+{
+  "schema": "libdxfrw-p6-mesh-crease-value-domain-v1",
+  "completedAt": "2026-11-02",
+  "status": "SUBDMESH_CREASE_VALUE_DOMAIN_ENFORCED",
+  "supportClaimEffect": "none",
+  "field": {
+    "dxfGroup": 140,
+    "domain": "Finite values equal to -1 or greater than or equal to 0.",
+    "meaning": {
+      "-1": "Always retain the crease.",
+      "0": "Never apply the crease.",
+      "positive": "Begin applying the crease at the specified subdivision level."
+    }
+  },
+  "implementation": {
+    "dxfRead": "Reject an invalid crease value before adding it to the MESH model.",
+    "dxfWrite": "Shared MESH output validation refuses invalid values before emitting the entity record.",
+    "dwgRead": "Reject an invalid decoded crease value before publishing the parsed MESH object.",
+    "dwgWrite": "Shared MESH geometry validation refuses invalid values before emitting the object body.",
+    "semanticLimit": "This closes a scalar domain only. Subdivision evaluation, crease-to-edge association semantics, native rendering, and 3D solid meaning remain unqualified."
+  },
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_hardening_tests -j2",
+    "focusedTest": "ctest --test-dir build-gcc -R '^libdxfrw_mesh_crease_value_domains$' --output-on-failure",
+    "result": "PASS (1/1)",
+    "coverage": [
+      "Generated MESH parse accepts and retains -1, 0, and positive values.",
+      "Generated ASCII/Binary DXF writer controls accept the documented values and atomically refuse -2, -0.5, and a negative subnormal value.",
+      "Generated DWG encoder controls refuse invalid crease values before writing any body, handle, or string bits for AC1015, AC1018, AC1021, AC1024, AC1027, and AC1032.",
+      "No DWG/DXF fixture files or dependencies were added."
+    ]
+  },
+  "sources": [
+    "https://help.autodesk.com/cloudhelp/2017/ENU/OARXMAC-RefGuide/files/OREFMAC-AcDbSubDMesh__setCrease_AcDbFullSubentPathArray__double.html",
+    "https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-4B9ADA67-87C8-4673-A579-6E4C76FF7025.htm"
+  ],
+  "inputFixturesAdded": 0,
+  "supportClaimsPromoted": 0
+}

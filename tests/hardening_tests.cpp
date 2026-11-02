@@ -202,6 +202,7 @@ public:
 class ExposedMesh : public DRW_Mesh {
 public:
     using DRW_Mesh::parseCode;
+    using DRW_Mesh::encodeDwg;
 };
 
 class ExposedHatch : public DRW_Hatch {
@@ -2514,6 +2515,88 @@ void testDxfAttributePromptHeaderDomains(TestContext& t) {
                      std::string(domain.name)
                          + " is not rejected or emitted when target omits it");
         }
+    }
+}
+
+void testDxfMeshCreaseValueDomains(TestContext& t) {
+    ExposedMesh valid;
+    valid.handle = 0xA100u;
+    valid.version = 2;
+    valid.subdivisionLevel = 2;
+    valid.vertices = {{0.0, 0.0, 0.0}, {1.0, 0.0, 0.0},
+                      {0.0, 1.0, 0.0}};
+    valid.faces = {{0, 1, 2}};
+    valid.edges = {{0, 1}, {1, 2}, {2, 0}};
+    valid.creases = {-1.0, 0.0, 0.5};
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output(std::ios::out | std::ios::binary);
+        dxfRW codec(nullptr);
+        codec.version = DRW::AC1027;
+        codec.binFile = binary;
+        codec.writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+        codec.writer->setVersion("AC1027", true);
+        ExposedMesh validOutput = valid;
+        t.expect(codec.writeMesh(&validOutput) && !output.str().empty(),
+                 "MESH writer accepts -1, zero, and positive crease values");
+    }
+
+    const auto makeRecords = [](const std::vector<double>& creases) {
+        std::ostringstream records;
+        records << "100\nAcDbSubDMesh\n71\n2\n72\n0\n91\n2\n"
+                   "92\n3\n"
+                   "10\n0\n20\n0\n30\n0\n"
+                   "10\n1\n20\n0\n30\n0\n"
+                   "10\n0\n20\n1\n30\n0\n"
+                   "93\n4\n90\n3\n90\n0\n90\n1\n90\n2\n"
+                   "94\n3\n90\n0\n90\n1\n90\n1\n90\n2\n90\n2\n90\n0\n"
+               << "95\n" << creases.size() << '\n';
+        for (double crease : creases)
+            records << "140\n" << crease << '\n';
+        records << "90\n0\n";
+        return records.str();
+    };
+
+    ExposedMesh parsed;
+    t.expect(parseDxfRecords(parsed, makeRecords(valid.creases))
+                 && parsed.creases == valid.creases,
+             "MESH parser accepts and retains documented crease values");
+
+    for (const double invalidValue : {-2.0, -0.5,
+                                      -std::numeric_limits<double>::denorm_min()}) {
+        ExposedMesh invalidOutput = valid;
+        invalidOutput.creases[1] = invalidValue;
+        for (const bool binary : {false, true}) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            dxfRW codec(nullptr);
+            codec.version = DRW::AC1027;
+            codec.binFile = binary;
+            codec.writer = binary
+                ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+                : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+            codec.writer->setVersion("AC1027", true);
+            t.expect(!codec.writeMesh(&invalidOutput) && output.str().empty(),
+                     "MESH DXF writer rejects negative crease values except -1");
+        }
+
+        ExposedMesh invalidInput;
+        t.expect(!parseDxfRecords(invalidInput, makeRecords({-1.0, invalidValue, 0.5})),
+                 "MESH DXF parser rejects invalid negative crease values");
+    }
+
+    for (const DRW::Version version : {DRW::AC1015, DRW::AC1018,
+                                       DRW::AC1021, DRW::AC1024,
+                                       DRW::AC1027, DRW::AC1032}) {
+        ExposedMesh invalid = valid;
+        invalid.creases[2] = -0.5;
+        dwgBufferW data, handles, strings;
+        t.expect(!invalid.encodeDwg(version, &data, 0, &strings, &handles)
+                     && data.bitCount() == 0u
+                     && handles.bitCount() == 0u
+                     && strings.bitCount() == 0u,
+                 "DWG MESH writer rejects invalid crease values before emission");
     }
 }
 
@@ -25617,6 +25700,18 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--dxf-mesh-crease-value-domains") {
+        TestContext focused;
+        testDxfMeshCreaseValueDomains(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " MESH crease-domain assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "MESH crease value domains: PASS\n";
+        return 0;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--dxf-geodata-modern-text-preflight") {
         TestContext focused;
         testDxfGeoDataModernTextPreflightView(focused);
@@ -26871,6 +26966,7 @@ int main(int argc, char** argv) {
     testDxfLineweightHeaderDomains(context);
     testDxfOrientationAttributeHeaderDomains(context);
     testDxfAttributePromptHeaderDomains(context);
+    testDxfMeshCreaseValueDomains(context);
     testLeaderAdvisoryCountState(context);
     testPublicOwnershipContracts(context);
     testEmbeddedAttributeTextRouting(context);

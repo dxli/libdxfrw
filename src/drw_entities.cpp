@@ -41,6 +41,10 @@
 
 namespace {
 
+bool isValidSubDMeshCreaseValue(double value) noexcept {
+    return std::isfinite(value) && (value == -1.0 || value >= 0.0);
+}
+
 DRW_Coord extrusionUnitVector(DRW_Coord direction) {
     // The arbitrary-axis rule assumes a unit normal. Keep its original
     // direction in the public entity, but normalize the temporary basis for
@@ -8415,7 +8419,8 @@ bool DRW_Mesh::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t bs){
         return fail();
     for (std::uint32_t i = 0; i < nCrease; ++i) {
         double crease = 0.0;
-        if (!readBoundedBitDouble(*buf, bodyEndBit, crease))
+        if (!readBoundedBitDouble(*buf, bodyEndBit, crease)
+            || !isValidSubDMeshCreaseValue(crease))
             return fail();
         parsedCreases.push_back(crease);
     }
@@ -8642,7 +8647,7 @@ bool DRW_Mesh::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             return false;
         {
             const double value = reader->getDouble();
-            if (!std::isfinite(value))
+            if (!isValidSubDMeshCreaseValue(value))
                 return false;
             creases.push_back(value);
         }
@@ -8670,7 +8675,7 @@ bool DRW_Mesh::validateGeometry() const {
     };
     if (!std::all_of(vertices.cbegin(), vertices.cend(), finite)
         || !std::all_of(creases.cbegin(), creases.cend(),
-                        [](double value) { return std::isfinite(value); }))
+                        isValidSubDMeshCreaseValue))
         return false;
     std::int32_t faceStreamCount = 0;
     for (const auto& face : faces) {
