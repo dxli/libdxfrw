@@ -860,6 +860,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_acad_field_writer_candidate PROPERTIES
         LABELS "fast;dxf;writer;field"
         TIMEOUT 10)
+    add_test(NAME libdxfrw_field_dxf_versioned_wire_profiles
+        COMMAND libdxfrw_wave1_tests --field-dxf-versioned-wire-profiles)
+    set_tests_properties(libdxfrw_field_dxf_versioned_wire_profiles PROPERTIES
+        LABELS "fast;dxf;writer;field;generated"
+        TIMEOUT 10)
     add_test(NAME libdxfrw_solid_nondefault_ocs
         COMMAND libdxfrw_wave1_tests --solid-nondefault-ocs)
     set_tests_properties(libdxfrw_solid_nondefault_ocs PROPERTIES

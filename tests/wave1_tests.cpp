@@ -6505,6 +6505,55 @@ void testFieldDxfVersionedWireProfiles(TestContext& t) {
     t.expect(!rejectingLegacyWriter.writeField(&legacyWithModernPayload)
                  && rejectedLegacy.str().empty(),
              "legacy FIELD refuses unrepresentable nested CadValue strings");
+
+    const auto expectLegacyFormatFlagsRejected =
+        [&t](DRW_Field& field, const char* asciiLabel,
+             const char* binaryLabel) {
+            for (const bool binary : {false, true}) {
+                DRW_Field attempt = field;
+                std::ostringstream output;
+                dxfRW writer("");
+                writer.version = DRW::AC1018;
+                writer.binFile = binary;
+                writer.writer = binary
+                    ? std::unique_ptr<dxfWriter>(
+                          std::make_unique<dxfWriterBinary>(&output))
+                    : std::unique_ptr<dxfWriter>(
+                          std::make_unique<dxfWriterAscii>(&output));
+                t.expect(!writer.writeField(&attempt) && output.str().empty(),
+                         binary ? binaryLabel : asciiLabel);
+                attempt.m_value.m_formatFlags = 0;
+                for (DRW_Field::ChildValue& child : attempt.m_childValues)
+                    child.m_value.m_formatFlags = 0;
+                bool retried = writer.writeField(&attempt)
+                    && writer.writer->writeString(0, "WIRE_END");
+                bool ended = false;
+                (void)numericWireProjection(output.str(), binary, ended);
+                t.expect(retried && ended,
+                         binary
+                             ? "legacy FIELD Binary writer retries after flag correction"
+                             : "legacy FIELD ASCII writer retries after flag correction");
+            }
+        };
+
+    DRW_Field legacyWithUnmappedFormatFlags = legacy;
+    legacyWithUnmappedFormatFlags.m_value.m_formatFlags = 2;
+    expectLegacyFormatFlagsRejected(
+        legacyWithUnmappedFormatFlags,
+        "legacy FIELD refuses root CadValue flags atomically in ASCII",
+        "legacy FIELD refuses root CadValue flags atomically in Binary");
+
+    DRW_Field legacyWithUnmappedChildFlags = legacy;
+    DRW_Field::ChildValue legacyChild;
+    legacyChild.m_key = "LEGACY_CHILD";
+    legacyChild.m_value.m_formatFlags = 2;
+    legacyChild.m_value.m_dataType = 2;
+    legacyChild.m_value.m_value = DRW_Variant(140, 2.75);
+    legacyWithUnmappedChildFlags.m_childValues.push_back(legacyChild);
+    expectLegacyFormatFlagsRejected(
+        legacyWithUnmappedChildFlags,
+        "legacy FIELD refuses child CadValue flags atomically in ASCII",
+        "legacy FIELD refuses child CadValue flags atomically in Binary");
 }
 
 void testFieldDxfVersionFloor(TestContext& t) {
@@ -6672,7 +6721,7 @@ void testFieldCadValueEmissionPreflight(TestContext& t) {
             field.m_fieldCode = "CADVALUE_FLAG_TRANSPORT";
             field.m_value.m_formatFlags = flags;
             field.m_value.m_dataType = 2;
-            if ((flags & 3) == 0)
+            if ((flags & 1) == 0)
                 field.m_value.m_value.addDouble(140, 42.5);
             field.m_value.m_unitType = 1;
             field.m_value.m_formatString = "0.0";
@@ -6691,9 +6740,48 @@ void testFieldCadValueEmissionPreflight(TestContext& t) {
             const auto doubles = std::count(tags.begin(), tags.end(), "140:0x1.54p+5");
             t.expect(written && ended
                          && std::find(tags.begin(), tags.end(), "93:" + std::to_string(flags)) != tags.end()
-                         && doubles == ((flags & 3) == 0 ? 1 : 0),
+                         && doubles == ((flags & 1) == 0 ? 1 : 0),
                      "ASCII/Binary FIELD payload follows low format flag bits");
         }
+
+        DRW_Field checksumChild;
+        checksumChild.handle = 0xA612u;
+        checksumChild.m_evaluatorId = "AcExpr";
+        checksumChild.m_fieldCode = "FIELD_CHECKSUM_CHILD_FLAGS2";
+        DRW_Field::ChildValue checksumValue;
+        checksumValue.m_key = "ACFD_FIELDTEXT_CHECKSUM";
+        checksumValue.m_value.m_formatFlags = 2;
+        checksumValue.m_value.m_dataType = 2;
+        checksumValue.m_value.m_value = DRW_Variant(140, 42.5);
+        checksumChild.m_childValues.push_back(checksumValue);
+        std::ostringstream checksumChildOutput;
+        dxfRW checksumChildWriter("");
+        checksumChildWriter.version = DRW::AC1021;
+        checksumChildWriter.binFile = binary;
+        checksumChildWriter.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&checksumChildOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&checksumChildOutput));
+        const bool checksumChildWritten = checksumChildWriter.writeField(
+            &checksumChild)
+            && checksumChildWriter.writer->writeString(0, "WIRE_END");
+        bool checksumChildEnded = false;
+        const auto checksumChildTags = numericWireProjection(
+            checksumChildOutput.str(), binary, checksumChildEnded);
+        t.expect(checksumChildWritten && checksumChildEnded
+                     && std::find(checksumChildTags.begin(),
+                                  checksumChildTags.end(), "93:2")
+                         != checksumChildTags.end()
+                     && std::find(checksumChildTags.begin(),
+                                  checksumChildTags.end(),
+                                  "6:ACFD_FIELDTEXT_CHECKSUM")
+                         != checksumChildTags.end()
+                     && std::find(checksumChildTags.begin(),
+                                  checksumChildTags.end(),
+                                  "140:0x1.54p+5")
+                         != checksumChildTags.end(),
+                 "AC1021 ASCII/Binary FIELD checksum child writes flags=2 and its BD value");
 
         DRW_Field flaggedDate;
         flaggedDate.handle = 0xA611u;
@@ -15572,6 +15660,15 @@ int main(int argc, char** argv) {
         testFieldDxfVersionFloor(focused);
         testFieldCadValueEmissionPreflight(focused);
         std::cout << "ACAD_FIELD extension-dictionary writer candidate: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--field-dxf-versioned-wire-profiles") {
+        TestContext focused;
+        testFieldDxfVersionedWireProfiles(focused);
+        testFieldCadValueEmissionPreflight(focused);
+        std::cout << "FIELD versioned DXF wire profiles: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

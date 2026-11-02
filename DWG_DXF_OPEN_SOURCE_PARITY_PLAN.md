@@ -311,6 +311,15 @@ TABLE semantics, or promote any support claim.
 
 **AC1021 FIELD flags=2/type=2 payload correction:** ODA v5.4.1 §20.4.99 and the current LibreDWG schema gate the type-specific value only on bit 0 (`0x01`). The parser now consumes the BD value for the physical `ACFD_FIELDTEXT_CHECKSUM` children; all 71 local source-profile children complete, while 42 peer-selected `AcObjProp.16.2` records remain raw-only. Generated controls verify re-encoding and continued refusal of an unexplained suffix. Thirteen focused FIELD CTests pass, and the physical census remains incomplete for other records. This does not qualify source-to-DXF output or native FIELD evaluation. See [the payload-resolution receipt](docs/research/p5-ac1021-field-flags2-checksum-payload-resolution-2026-11-02.json).
 
+**Legacy FIELD DXF flag guard:** AC1018 serialization now refuses nonzero root
+or child CadValue format flags before emitting bytes. Autodesk's FIELD DXF
+group-code table identifies group 93 as the data-set count and lists no
+CadValue format-flags carrier. The focused ASCII/Binary control verifies
+atomic refusal and same-writer correction retry, while the AC1021 checksum
+control still emits flags=2 with its BD value. This generated representability
+guard does not qualify physical legacy FIELD prevalence, source-to-output
+conversion, or native evaluation; see the [guard receipt](docs/research/p5-field-legacy-dxf-format-flag-guard-2026-11-02.json).
+
 ## P6 — residual semantic and version audit
 
 Audit only a current failing source/profile; do not revive historical defects whose

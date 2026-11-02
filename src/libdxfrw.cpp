@@ -1490,9 +1490,17 @@ bool canWriteDxfField(DRW::Version version, const DRW_Field& field) {
         && !field.m_value.m_formatString.empty()
         && field.m_formatString != field.m_value.m_formatString)
         return false;
+    // The legacy FIELD cache path has no CadValue flag slot; refuse flags
+    // before output begins instead of silently dropping the root or child.
     if (!modernValues
         && (!field.m_value.m_formatString.empty()
-            || !field.m_value.m_valueString.empty()))
+            || !field.m_value.m_valueString.empty()
+            || field.m_value.m_formatFlags != 0
+            || std::any_of(field.m_childValues.begin(),
+                           field.m_childValues.end(),
+                [](const DRW_Field::ChildValue& child) {
+                    return child.m_value.m_formatFlags != 0;
+                })))
         return false;
     const auto canWriteValue = [version](const DRW_CadValue& source) {
         if (version <= DRW::AC1018
@@ -32110,12 +32118,18 @@ bool dxfRW::writeSortEntsTable(DRW_SortEntsTable *ent) {
 bool dxfRW::writeField(DRW_Field *ent) {
     if (version < DRW::AC1018)
         return rejectUnsupportedDxfWrite("FIELD");
-    if (!preflightTableEntry(ent))
+    if (!preflightDxfWrite())
         return false;
-    if (ent == nullptr || writer == nullptr || !canWriteDxfField(version, *ent)) {
+    if (ent == nullptr || writer == nullptr) {
         m_writeError = true;
         return false;
     }
+    // A representability refusal happens before record emission. Keep the
+    // writer usable so callers can correct the FIELD and retry.
+    if (!canWriteDxfField(version, *ent))
+        return false;
+    if (!preflightTableEntry(ent))
+        return false;
 
     auto writeString = [this](int code, const std::string& value) {
         return writer->writeString(code, value);
