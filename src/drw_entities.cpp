@@ -41,6 +41,14 @@
 
 namespace {
 
+std::shared_ptr<DRW_Vertex2D> makeVertex2DNoThrow() noexcept {
+    try {
+        return std::make_shared<DRW_Vertex2D>();
+    } catch (...) {
+        return {};
+    }
+}
+
 std::shared_ptr<DRW_Coord> makeCoordNoThrow() noexcept {
     try {
         return std::make_shared<DRW_Coord>();
@@ -18169,12 +18177,15 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     const bool isCoordinateX = code >= 10 && code <= 13;
     if (!isValidDxfCoordinateTransition(code))
         return false;
-    if (m_dxfPendingCoordinateGroup != 0)
-        m_dxfPendingCoordinateGroup = 0;
     const bool isSplinePointComponent = spline
         && (code == 10 || code == 20 || code == 11 || code == 21);
-    if (isCoordinateX && !isSplinePointComponent)
-        m_dxfPendingCoordinateGroup = code;
+    const auto commitCoordinateTransition = [this, code, isCoordinateX,
+                                               isSplinePointComponent]() {
+        if (isCoordinateX && !isSplinePointComponent)
+            m_dxfPendingCoordinateGroup = code;
+        else if (m_dxfPendingCoordinateGroup != 0)
+            m_dxfPendingCoordinateGroup = 0;
+    };
 
     const auto splinePointAt = [](
             std::vector<std::shared_ptr<DRW_Coord>>& points,
@@ -18186,10 +18197,13 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             return nullptr;
         const std::size_t required = static_cast<std::size_t>(index) + 1u;
         if (required > points.size()) {
-            if (!DRW::reserve(points, static_cast<std::int32_t>(required)))
+            if (static_cast<std::size_t>(index) != points.size()
+                || !DRW::reserve(points, static_cast<int>(required)))
                 return nullptr;
-            while (points.size() < required)
-                points.push_back(std::make_shared<DRW_Coord>());
+            std::shared_ptr<DRW_Coord> point = makeCoordNoThrow();
+            if (!point)
+                return nullptr;
+            points.push_back(point);
         }
         return points[index];
     };
@@ -18235,16 +18249,35 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                     >= static_cast<std::size_t>(m_dxfLoopEdgeCountExpected)))
             return false;
         const int edgeType = reader->getInt32();
-        if (edgeType == 1){ //line
-            addLine();
-        } else if (edgeType == 2){ //arc
-            addArc();
-        } else if (edgeType == 3){ //elliptic arc
-            addEllipse();
-        } else if (edgeType == 4){ //spline
-            addSpline();
-        } else {
+        if (edgeType < 1 || edgeType > 4)
             return false;
+
+        const std::size_t required = loop->objlist.size() + 1u;
+        if (!DRW::reserve(loop->objlist, static_cast<int>(required)))
+            return false;
+        if (edgeType == 1) { // line
+            const auto next = std::make_shared<DRW_Line>();
+            loop->objlist.push_back(next);
+            clearEntities();
+            line = next;
+            pt = next;
+        } else if (edgeType == 2) { // arc
+            const auto next = std::make_shared<DRW_Arc>();
+            loop->objlist.push_back(next);
+            clearEntities();
+            arc = next;
+            pt = next;
+        } else if (edgeType == 3) { // elliptic arc
+            const auto next = std::make_shared<DRW_Ellipse>();
+            loop->objlist.push_back(next);
+            clearEntities();
+            ellipse = next;
+            pt = next;
+        } else { // spline
+            const auto next = std::make_shared<DRW_Spline>();
+            loop->objlist.push_back(next);
+            clearEntities();
+            spline = next;
         }
         break;
     }
@@ -18257,12 +18290,13 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                     && m_dxfSplineControlXCount
                         >= static_cast<std::uint32_t>(m_dxfSplineControlCountExpected)))
                 return false;
-            const std::uint32_t index = m_dxfSplineControlXCount++;
+            const std::uint32_t index = m_dxfSplineControlXCount;
             const auto point = splinePointAt(
                 spline->controllist, index, m_dxfSplineControlCountExpected);
             if (!point)
                 return false;
             point->x = reader->getDouble();
+            ++m_dxfSplineControlXCount;
             break;
         }
         if (pt) pt->basePoint.x = reader->getDouble();
@@ -18272,14 +18306,23 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                     && pline->vertlist.size()
                         >= static_cast<std::size_t>(m_dxfPolylineVertexCountExpected)))
                 return false;
+            const std::size_t required = pline->vertlist.size() + 1u;
+            if (!DRW::reserve(pline->vertlist, static_cast<int>(required)))
+                return false;
             plvert = pline->addVertex();
             plvert->x = reader->getDouble();
         } else if (m_dxfSeedPointsExpected < 0) {
-            return DRW_Point::parseCode(code, reader);
+            const bool parsed = DRW_Point::parseCode(code, reader);
+            if (parsed)
+                commitCoordinateTransition();
+            return parsed;
         } else {
             // After group 98 the boundary path is closed; seed-point
             // coords arrive as group-10/20 pairs.
             if (seedPoints.size() >= static_cast<std::size_t>(m_dxfSeedPointsExpected))
+                return false;
+            const std::size_t required = seedPoints.size() + 1u;
+            if (!DRW::reserve(seedPoints, static_cast<int>(required)))
                 return false;
             DRW_Coord seed;
             seed.x = reader->getDouble();
@@ -18294,12 +18337,13 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                     && m_dxfSplineControlYCount
                         >= static_cast<std::uint32_t>(m_dxfSplineControlCountExpected)))
                 return false;
-            const std::uint32_t index = m_dxfSplineControlYCount++;
+            const std::uint32_t index = m_dxfSplineControlYCount;
             const auto point = splinePointAt(
                 spline->controllist, index, m_dxfSplineControlCountExpected);
             if (!point)
                 return false;
             point->y = reader->getDouble();
+            ++m_dxfSplineControlYCount;
             break;
         }
         if (pt) pt->basePoint.y = reader->getDouble();
@@ -18309,7 +18353,10 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                 return false;
             seedPoints.back().y = reader->getDouble();
         } else {
-            return DRW_Point::parseCode(code, reader);
+            const bool parsed = DRW_Point::parseCode(code, reader);
+            if (parsed)
+                commitCoordinateTransition();
+            return parsed;
         }
         break;
     case 11:
@@ -18321,12 +18368,13 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                     && m_dxfSplineFitXCount
                         >= static_cast<std::uint32_t>(m_dxfSplineFitCountExpected)))
                 return false;
-            const std::uint32_t index = m_dxfSplineFitXCount++;
+            const std::uint32_t index = m_dxfSplineFitXCount;
             const auto point = splinePointAt(
                 spline->fitlist, index, m_dxfSplineFitCountExpected);
             if (!point)
                 return false;
             point->x = reader->getDouble();
+            ++m_dxfSplineFitXCount;
             break;
         }
         if (line) line->secPoint.x = reader->getDouble();
@@ -18340,12 +18388,13 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                     && m_dxfSplineFitYCount
                         >= static_cast<std::uint32_t>(m_dxfSplineFitCountExpected)))
                 return false;
-            const std::uint32_t index = m_dxfSplineFitYCount++;
+            const std::uint32_t index = m_dxfSplineFitYCount;
             const auto point = splinePointAt(
                 spline->fitlist, index, m_dxfSplineFitCountExpected);
             if (!point)
                 return false;
             point->y = reader->getDouble();
+            ++m_dxfSplineFitYCount;
             break;
         }
         if (line) line->secPoint.y = reader->getDouble();
@@ -18371,6 +18420,10 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                     && spline->knotslist.size()
                         >= static_cast<std::size_t>(m_dxfSplineKnotCountExpected)))
                 return false;
+            const std::size_t required = spline->knotslist.size() + 1u;
+            if (!DRW::reserve(spline->knotslist,
+                              static_cast<int>(required)))
+                return false;
             spline->knotslist.push_back(reader->getDouble());
             break;
         }
@@ -18387,6 +18440,10 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                 || (m_dxfSplineControlCountExpected >= 0
                     && spline->weightlist.size()
                         >= static_cast<std::size_t>(m_dxfSplineControlCountExpected)))
+                return false;
+            const std::size_t required = spline->weightlist.size() + 1u;
+            if (!DRW::reserve(spline->weightlist,
+                              static_cast<int>(required)))
                 return false;
             spline->weightlist.push_back(reader->getDouble());
             break;
@@ -18435,11 +18492,17 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     case 79: // dash count — the 49s that follow will accumulate
         if (patternLines.empty() || m_dxfPatternDashCountSeen)
             return false;
-        m_dxfPatternDashCountExpected = reader->getInt32();
-        if (!isValidCount(m_dxfPatternDashCountExpected, kMaxHatchItems))
-            return false;
-        m_dxfPatternDashCountSeen = true;
-        return DRW::reserve(patternLines.back().dashList, m_dxfPatternDashCountExpected);
+        {
+            const int count = reader->getInt32();
+            auto& dashes = patternLines.back().dashList;
+            if (!isValidCount(count, kMaxHatchItems)
+                || dashes.size() > static_cast<std::size_t>(count)
+                || !DRW::reserve(dashes, count))
+                return false;
+            m_dxfPatternDashCountExpected = count;
+            m_dxfPatternDashCountSeen = true;
+        }
+        return true;
     case 49:
         if (patternLines.empty()
             || patternLines.back().dashList.size() >= static_cast<std::size_t>(kMaxHatchItems)
@@ -18480,11 +18543,15 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         if (spline) {
             if (m_dxfSplineKnotCountExpected >= 0)
                 return false;
-            spline->nknots = reader->getInt32();
-            if (!isValidCount(spline->nknots, kMaxHatchItems))
+            const int count = reader->getInt32();
+            if (!isValidCount(count, kMaxHatchItems)
+                || spline->knotslist.size()
+                    > static_cast<std::size_t>(count)
+                || !DRW::reserve(spline->knotslist, count))
                 return false;
-            m_dxfSplineKnotCountExpected = spline->nknots;
-            return DRW::reserve(spline->knotslist, spline->nknots);
+            spline->nknots = count;
+            m_dxfSplineKnotCountExpected = count;
+            return true;
         }
         break;
     case 96:
@@ -18492,39 +18559,43 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         if (spline) {
             if (m_dxfSplineControlCountExpected >= 0)
                 return false;
-            spline->ncontrol = reader->getInt32();
-            if (!isValidCount(spline->ncontrol, kMaxHatchItems))
+            const int count = reader->getInt32();
+            if (!isValidCount(count, kMaxHatchItems))
                 return false;
             if (m_dxfSplineControlXCount
-                    > static_cast<std::uint32_t>(spline->ncontrol)
+                    > static_cast<std::uint32_t>(count)
                 || m_dxfSplineControlYCount
-                    > static_cast<std::uint32_t>(spline->ncontrol)
+                    > static_cast<std::uint32_t>(count)
                 || spline->controllist.size()
-                    > static_cast<std::size_t>(spline->ncontrol))
+                    > static_cast<std::size_t>(count)
+                || spline->weightlist.size()
+                    > static_cast<std::size_t>(count)
+                || !DRW::reserve(spline->controllist, count))
                 return false;
-            m_dxfSplineControlCountExpected = spline->ncontrol;
-            return DRW::reserve(spline->controllist, spline->ncontrol);
+            spline->ncontrol = count;
+            m_dxfSplineControlCountExpected = count;
+            return true;
         }
         break;
     case 97:
         if (spline) {
             if (!m_splineNfitSet) {
                 // First 97 in this spline edge = fit-point count (nfit).
-                spline->nfit = reader->getInt32();
-                if (!isValidCount(spline->nfit, kMaxHatchItems))
+                const int count = reader->getInt32();
+                if (!isValidCount(count, kMaxHatchItems))
                     return false;
                 if (m_dxfSplineFitCountExpected >= 0)
                     return false;
                 if (m_dxfSplineFitXCount
-                        > static_cast<std::uint32_t>(spline->nfit)
+                        > static_cast<std::uint32_t>(count)
                     || m_dxfSplineFitYCount
-                        > static_cast<std::uint32_t>(spline->nfit)
+                        > static_cast<std::uint32_t>(count)
                     || spline->fitlist.size()
-                        > static_cast<std::size_t>(spline->nfit))
+                        > static_cast<std::size_t>(count)
+                    || !DRW::reserve(spline->fitlist, count))
                     return false;
-                m_dxfSplineFitCountExpected = spline->nfit;
-                if (!DRW::reserve(spline->fitlist, spline->nfit))
-                    return false;
+                spline->nfit = count;
+                m_dxfSplineFitCountExpected = count;
                 // Fit-count consumption is independent of edge lifetime.
                 // Optional tangents may follow even when nfit is zero. Keep
                 // the spline active until a new edge or the second group 97
@@ -18534,31 +18605,32 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                 // Second 97 while spline is active = loop boundary handle count.
                 if (!validateCurrentSplineDxf())
                     return false;
+                const int count = reader->getInt32();
+                if (!isValidCount(count, kMaxHatchItems)
+                    || m_dxfBoundaryHandleCountSeen
+                    || (count > 0 && loop
+                        && !DRW::reserve(loop->m_boundaryHandles, count)))
+                    return false;
                 spline.reset();
                 m_splineNfitSet = false;
-                m_boundaryHandleCount = reader->getInt32();
-                if (!isValidCount(m_boundaryHandleCount, kMaxHatchItems))
-                    return false;
-                if (m_dxfBoundaryHandleCountSeen)
-                    return false;
+                m_boundaryHandleCount = count;
                 m_dxfBoundaryHandleCountSeen = true;
-                if (m_boundaryHandleCount > 0 && loop
-                    && !DRW::reserve(loop->m_boundaryHandles, m_boundaryHandleCount))
-                    return false;
             }
             break;
         }
         // No active spline: this is the loop boundary handle count.
-        m_splineNfitSet = false;
         if (m_dxfBoundaryHandleCountSeen)
             return false;
-        m_boundaryHandleCount = reader->getInt32();
-        if (!isValidCount(m_boundaryHandleCount, kMaxHatchItems))
-            return false;
+        {
+            const int count = reader->getInt32();
+            if (!isValidCount(count, kMaxHatchItems)
+                || (count > 0 && loop
+                    && !DRW::reserve(loop->m_boundaryHandles, count)))
+                return false;
+            m_splineNfitSet = false;
+            m_boundaryHandleCount = count;
+        }
         m_dxfBoundaryHandleCountSeen = true;
-        if (m_boundaryHandleCount > 0 && loop
-            && !DRW::reserve(loop->m_boundaryHandles, m_boundaryHandleCount))
-            return false;
         break;
     case 330:
         if (m_boundaryHandleCount > 0 && loop) {
@@ -18599,29 +18671,52 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     case 78:
         if (m_dxfPatternLineCountSeen)
             return false;
-        deflines = reader->getInt32();
-        if (!isValidCount(deflines, kMaxHatchItems))
-            return false;
-        m_dxfPatternLineCountExpected = deflines;
-        m_dxfPatternLineCountSeen = true;
-        if (patternLines.size() > static_cast<std::size_t>(deflines))
-            return false;
+        {
+            const int count = reader->getInt32();
+            if (!isValidCount(count, kMaxHatchItems)
+                || patternLines.size() > static_cast<std::size_t>(count))
+                return false;
+            deflines = count;
+            m_dxfPatternLineCountExpected = count;
+            m_dxfPatternLineCountSeen = true;
+        }
         break;
     case 91:
         if (m_dxfLoopCountSeen)
             return false;
-        loopsnum = reader->getInt32();
-        if (!isValidCount(loopsnum, kMaxHatchItems))
-            return false;
-        m_dxfLoopCountExpected = loopsnum;
-        m_dxfLoopCountSeen = true;
-        return DRW::reserve( looplist, loopsnum);
+        {
+            const int count = reader->getInt32();
+            if (!isValidCount(count, kMaxHatchItems)
+                || looplist.size() > static_cast<std::size_t>(count)
+                || !DRW::reserve(looplist, count))
+                return false;
+            loopsnum = count;
+            m_dxfLoopCountExpected = count;
+            m_dxfLoopCountSeen = true;
+        }
+        break;
     case 92: {
         if (!validateCurrentBoundaryPathDxf())
             return false;
         if (m_dxfLoopCountExpected >= 0
             && looplist.size() >= static_cast<std::size_t>(m_dxfLoopCountExpected))
             return false;
+        if (looplist.size() >= static_cast<std::size_t>(kMaxHatchItems))
+            return false;
+        const int loopType = reader->getInt32();
+        std::shared_ptr<DRW_HatchLoop> nextLoop =
+            std::make_shared<DRW_HatchLoop>(loopType);
+        std::shared_ptr<DRW_LWPolyline> nextPolyline;
+        if (loopType & 2) {
+            nextPolyline = std::make_shared<DRW_LWPolyline>();
+            if (!DRW::reserve(nextLoop->objlist, 1))
+                return false;
+            nextLoop->objlist.push_back(nextPolyline);
+        }
+        const std::size_t requiredLoopCount = looplist.size() + 1u;
+        if (!DRW::reserve(looplist, static_cast<int>(requiredLoopCount)))
+            return false;
+
         clearEntities();
         m_dxfLoopEdgeCountExpected = -1;
         m_dxfLoopEdgeCountSeen = false;
@@ -18629,34 +18724,35 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         m_dxfPolylineVertexCountSeen = false;
         m_dxfBoundaryHandleCountSeen = false;
         m_boundaryHandleCount = 0;
-        loop = std::make_shared<DRW_HatchLoop>(reader->getInt32());
-        looplist.push_back(loop);
-        if (reader->getInt32() & 2) {
-            ispol = true;
-            clearEntities();
-            pline = std::make_shared<DRW_LWPolyline>();
-            loop->objlist.push_back(pline);
-        } else ispol = false;
+        looplist.push_back(nextLoop);
+        loop = std::move(nextLoop);
+        pline = std::move(nextPolyline);
+        ispol = (loopType & 2) != 0;
         break;
     }
     case 93:
         if (pline) {
             if (m_dxfPolylineVertexCountSeen)
                 return false;
-            pline->vertexnum = reader->getInt32();
-            if (!isValidCount(pline->vertexnum, kMaxHatchItems))
+            const int count = reader->getInt32();
+            if (!isValidCount(count, kMaxHatchItems)
+                || pline->vertlist.size() > static_cast<std::size_t>(count)
+                || !DRW::reserve(pline->vertlist, count))
                 return false;
-            m_dxfPolylineVertexCountExpected = pline->vertexnum;
+            pline->vertexnum = count;
+            m_dxfPolylineVertexCountExpected = count;
             m_dxfPolylineVertexCountSeen = true;
         } else if (loop) {
             if (m_dxfLoopEdgeCountSeen)
                 return false;
-            loop->numedges = reader->getInt32();//aqui reserve
-            if (!isValidCount(loop->numedges, kMaxHatchItems))
+            const int count = reader->getInt32();
+            if (!isValidCount(count, kMaxHatchItems))
                 return false;
-            if (loop->objlist.size() > static_cast<std::size_t>(loop->numedges))
+            if (loop->objlist.size() > static_cast<std::size_t>(count)
+                || !DRW::reserve(loop->objlist, count))
                 return false;
-            m_dxfLoopEdgeCountExpected = loop->numedges;
+            loop->numedges = count;
+            m_dxfLoopEdgeCountExpected = count;
             m_dxfLoopEdgeCountSeen = true;
         }
         break;
@@ -18665,11 +18761,12 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             return false;
         if (m_dxfSeedPointCountSeen)
             return false;
-        clearEntities();
         const int count = reader->getInt32();
         if (!isValidCount(count, kMaxHatchItems)
+            || seedPoints.size() > static_cast<std::size_t>(count)
             || !DRW::reserve(seedPoints, count))
             return false;
+        clearEntities();
         m_dxfSeedPointsExpected = count;
         m_dxfSeedPointCountSeen = true;
         break;
@@ -18690,13 +18787,18 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         singleColor = reader->getInt32();
         break;
     case 453: {
-        if (!noteDxfGradientField(DxfGradient453))
+        const std::uint16_t field = static_cast<std::uint16_t>(
+            DxfGradient453);
+        if ((m_dxfGradientFieldsSeen & field) != 0u)
             return false;
         const int n = reader->getInt32();
         if (!isValidCount(n, kMaxHatchItems)
+            || gradColors.size() > static_cast<std::size_t>(n)
             || !DRW::reserve(gradColors, n))
             return false;
         m_dxfGradientColorCountExpected = n;
+        m_dxfGradientFieldsSeen = static_cast<std::uint16_t>(
+            m_dxfGradientFieldsSeen | field);
         break;
     }
     case 460:
@@ -18715,16 +18817,19 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         gradTint = reader->getDouble();
         break;
     case 463: {
-        m_dxfGradientFieldsSeen = static_cast<std::uint16_t>(
-            m_dxfGradientFieldsSeen | DxfGradient463);
         if (m_dxfGradientColorCountExpected >= 0
             && gradColors.size() >= static_cast<std::size_t>(m_dxfGradientColorCountExpected))
             return false;
         if (gradColors.size() >= static_cast<std::size_t>(kMaxHatchItems))
             return false;
+        const std::size_t required = gradColors.size() + 1u;
+        if (!DRW::reserve(gradColors, static_cast<int>(required)))
+            return false;
         DRW_Hatch::GradientStop stop;
         stop.value = reader->getDouble();
         gradColors.push_back(stop);
+        m_dxfGradientFieldsSeen = static_cast<std::uint16_t>(
+            m_dxfGradientFieldsSeen | DxfGradient463);
         break;
     }
     case 421:
@@ -18776,6 +18881,7 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         return DRW_Point::parseCode(code, reader);
     }
 
+    commitCoordinateTransition();
     return true;
     }
     catch (...) {

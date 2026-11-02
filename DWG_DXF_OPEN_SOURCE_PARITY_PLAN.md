@@ -345,6 +345,8 @@ failing-stage diagnostic.
 
 **SPLINE DXF parser allocation retry:** Control/fit point coordinates are staged until point storage and the component cursor are ready; knot and weight insertion failures return through the parser without advancing state. Generated fault injection covers cursor creation, coordinate creation, point-vector reserve, knot growth and weight growth, then retries the same groups. The focused SPLINE/LEADER/UNDERLAY/MLINE controls pass 7/7. This is parser safety evidence only; broader SPLINE semantics, producer prevalence and native curve interpretation remain open. See [the allocation/retry receipt](docs/research/p6-spline-dxf-allocation-failure-retry-2026-11-02.json).
 
+**HATCH DXF parser retry safety:** The parser keeps loop/edge construction, count declarations, point cursors, gradient-stop state, and spline boundary arrays retryable after allocation failure or invalid counts. Generated allocation-failure controls cover same-group retry; ASCII/Binary point-order readback is separately registered. The focused parser/adjacent regression cohort passes 11/11 in 0.75 seconds. This is parser-safety evidence only; it does not qualify DWG HATCH support or native rendering. See [HATCH allocation receipt](docs/research/p6-hatch-dxf-allocation-retry-2026-11-02.json) and [HATCH spline allocation receipt](docs/research/p6-hatch-spline-dxf-allocation-retry-2026-11-02.json).
+
 ## P7 — ACIS/ACDS and independent 3D meaning
 
 - Complete the original DWG entity → owner/key → AcDs segment → SAT/SAB join,

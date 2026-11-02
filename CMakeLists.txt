@@ -2291,6 +2291,21 @@ if(LIBDXFRW_BUILD_TESTS)
             --spline-dxf-allocation-failure)
     set_tests_properties(libdxfrw_spline_dxf_allocation_failure PROPERTIES
         LABELS "fast;dxf;reader;spline;allocation;retry" TIMEOUT 30)
+    add_test(NAME libdxfrw_hatch_spline_dxf_allocation_failure
+        COMMAND libdxfrw_dxf_fixture_tests
+            --hatch-spline-dxf-allocation-failure)
+    set_tests_properties(libdxfrw_hatch_spline_dxf_allocation_failure PROPERTIES
+        LABELS "fast;dxf;reader;hatch;spline;allocation;retry" TIMEOUT 30)
+    add_test(NAME libdxfrw_hatch_dxf_allocation_failure
+        COMMAND libdxfrw_dxf_fixture_tests
+            --hatch-dxf-allocation-failure)
+    set_tests_properties(libdxfrw_hatch_dxf_allocation_failure PROPERTIES
+        LABELS "fast;dxf;reader;hatch;allocation;retry" TIMEOUT 30)
+    add_test(NAME libdxfrw_hatch_spline_point_component_order
+        COMMAND libdxfrw_dxf_fixture_tests
+            --hatch-spline-point-component-order)
+    set_tests_properties(libdxfrw_hatch_spline_point_component_order PROPERTIES
+        LABELS "fast;dxf;reader;hatch;spline;geometry" TIMEOUT 30)
     add_test(NAME libdxfrw_classes_wire_census
         COMMAND libdxfrw_dxf_fixture_tests --classes-wire-census)
     set_tests_properties(libdxfrw_classes_wire_census PROPERTIES

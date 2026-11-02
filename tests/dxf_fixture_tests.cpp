@@ -13281,6 +13281,345 @@ void testMLineVectorComponentOrder(TestContext& t) {
     }
 }
 
+void testHatchSplineDxfAllocationFailure(TestContext& t) {
+    struct HatchParseProbe final : DRW_Hatch {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+    };
+    const auto parseRecord = [](HatchParseProbe& hatch, int expectedCode,
+                                std::string_view value,
+                                long allocationFailure = -1) {
+        const std::string record = std::to_string(expectedCode) + "\n"
+            + std::string(value) + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int code = 0;
+        if (!reader->readRec(&code) || code != expectedCode)
+            return false;
+        MaterialAllocationFailure failure(allocationFailure);
+        return hatch.parse(code, reader);
+    };
+    const auto beginSplineEdge = [&parseRecord](HatchParseProbe& hatch) {
+        return parseRecord(hatch, 92, "0")
+            && parseRecord(hatch, 72, "4")
+            && !hatch.looplist.empty()
+            && !hatch.looplist.front()->objlist.empty()
+            && dynamic_cast<DRW_Spline*>(
+                hatch.looplist.front()->objlist.front().get()) != nullptr;
+    };
+    const auto getSpline = [](HatchParseProbe& hatch) {
+        return !hatch.looplist.empty() && !hatch.looplist.front()->objlist.empty()
+            ? dynamic_cast<DRW_Spline*>(
+                hatch.looplist.front()->objlist.front().get())
+            : nullptr;
+    };
+
+    for (const int code : {95, 96, 97}) {
+        HatchParseProbe hatch;
+        const bool setup = beginSplineEdge(hatch);
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(hatch, code, "1", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        DRW_Spline* spline = getSpline(hatch);
+        const bool retry = parseRecord(hatch, code, "1");
+        const bool countCommitted = spline != nullptr
+            && (code == 95 ? spline->nknots == 1
+                : code == 96 ? spline->ncontrol == 1 : spline->nfit == 1);
+        t.expect(setup && rejected && failedOnce && retry && countCommitted,
+                 "HATCH spline array-count allocation failure leaves the count uncommitted for retry");
+    }
+
+    for (const int code : {40, 42}) {
+        HatchParseProbe hatch;
+        const bool setup = beginSplineEdge(hatch);
+        DRW_Spline* spline = getSpline(hatch);
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(hatch, code, "0.75", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = spline != nullptr
+            && (code == 40 ? spline->knotslist.empty()
+                           : spline->weightlist.empty());
+        const bool retried = parseRecord(hatch, code, "0.75")
+            && spline != nullptr
+            && (code == 40 ? spline->knotslist == std::vector<double>{0.75}
+                           : spline->weightlist == std::vector<double>{0.75});
+        t.expect(setup && rejected && failedOnce && rolledBack && retried,
+                 "HATCH spline knot/weight allocation failure preserves the same group for retry");
+    }
+
+    {
+        HatchParseProbe hatch;
+        const bool setup = beginSplineEdge(hatch)
+            && parseRecord(hatch, 94, "1")
+            && parseRecord(hatch, 95, "4")
+            && parseRecord(hatch, 40, "0")
+            && parseRecord(hatch, 40, "0")
+            && parseRecord(hatch, 40, "1")
+            && parseRecord(hatch, 40, "1")
+            && parseRecord(hatch, 96, "2")
+            && parseRecord(hatch, 10, "0")
+            && parseRecord(hatch, 20, "0")
+            && parseRecord(hatch, 10, "1")
+            && parseRecord(hatch, 20, "0")
+            && parseRecord(hatch, 97, "0");
+        const auto loop = setup ? hatch.looplist.front()
+                                : std::shared_ptr<DRW_HatchLoop>{};
+        DRW_Spline* spline = getSpline(hatch);
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(hatch, 97, "1", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = loop && loop->m_boundaryHandles.empty()
+            && spline != nullptr;
+        const bool retried = parseRecord(hatch, 97, "1")
+            && parseRecord(hatch, 330, "A")
+            && loop && loop->m_boundaryHandles
+                == std::vector<std::uint32_t>{0xAu};
+        t.expect(setup && rejected && failedOnce && rolledBack && retried,
+                 "HATCH spline boundary-handle reserve failure preserves the active spline and retries");
+    }
+
+    for (const int componentCode : {10, 11}) {
+        for (long allocationFailure = 0; allocationFailure < 2;
+             ++allocationFailure) {
+            HatchParseProbe hatch;
+            const bool setup = beginSplineEdge(hatch);
+            DRW_Spline* spline = getSpline(hatch);
+            if (!setup || spline == nullptr) {
+                t.expect(false,
+                         "HATCH spline point allocation control is initialized");
+                continue;
+            }
+            const std::size_t failuresBefore = materialFailedAllocations;
+            const bool rejected = !parseRecord(
+                hatch, componentCode, "1.25", allocationFailure);
+            const bool failedOnce = materialFailedAllocations
+                == failuresBefore + 1u;
+            const auto& points = componentCode == 10
+                ? spline->controllist : spline->fitlist;
+            const bool rolledBack = points.empty();
+            const int yCode = componentCode == 10 ? 20 : 21;
+            const bool retry = parseRecord(hatch, componentCode, "1.25")
+                && parseRecord(hatch, yCode, "2.5")
+                && points.size() == 1u && points.front()
+                && points.front()->x == 1.25
+                && points.front()->y == 2.5;
+            t.expect(setup && spline != nullptr && rejected && failedOnce
+                         && rolledBack && retry,
+                     "HATCH spline point allocation failure preserves its per-component ordinal for retry");
+        }
+    }
+}
+
+void testHatchDxfAllocationFailure(TestContext& t) {
+    struct HatchParseProbe final : DRW_Hatch {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+    };
+    const auto parseRecord = [](HatchParseProbe& hatch, int expectedCode,
+                                std::string_view value,
+                                long allocationFailure = -1) {
+        const std::string record = std::to_string(expectedCode) + "\n"
+            + std::string(value) + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int code = 0;
+        if (!reader->readRec(&code) || code != expectedCode)
+            return false;
+        MaterialAllocationFailure failure(allocationFailure);
+        return hatch.parse(code, reader);
+    };
+
+    {
+        HatchParseProbe hatch;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(hatch, 91, "1", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool retried = parseRecord(hatch, 91, "1");
+        t.expect(rejected && failedOnce && retried && hatch.loopsnum == 1,
+                 "HATCH loop-count reserve failure leaves count state retryable");
+    }
+
+    {
+        HatchParseProbe hatch;
+        const bool setup = parseRecord(hatch, 78, "1")
+            && parseRecord(hatch, 53, "0");
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(hatch, 79, "1", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool retried = parseRecord(hatch, 79, "1")
+            && parseRecord(hatch, 49, "0.5")
+            && hatch.patternLines.size() == 1u
+            && hatch.patternLines.front().dashList == std::vector<double>{0.5};
+        t.expect(setup && rejected && failedOnce && retried,
+                 "HATCH pattern dash-count reserve failure preserves same-group retry");
+    }
+
+    {
+        HatchParseProbe hatch;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(hatch, 453, "2", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool retried = parseRecord(hatch, 453, "2")
+            && parseRecord(hatch, 463, "0")
+            && parseRecord(hatch, 463, "1")
+            && hatch.gradColors.size() == 2u
+            && hatch.gradColors[0].value == 0.0
+            && hatch.gradColors[1].value == 1.0;
+        t.expect(rejected && failedOnce && retried,
+                 "HATCH gradient-stop count reserve failure preserves same-group retry");
+    }
+
+    {
+        HatchParseProbe hatch;
+        const bool setup = parseRecord(hatch, 53, "0");
+        const bool rejected = !parseRecord(hatch, 78, "0");
+        const bool retried = parseRecord(hatch, 78, "1");
+        t.expect(setup && rejected && retried && hatch.deflines == 1,
+                 "HATCH invalid pattern-line count does not commit state before retry");
+    }
+
+    {
+        HatchParseProbe hatch;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(hatch, 98, "1", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool retried = parseRecord(hatch, 98, "1")
+            && parseRecord(hatch, 10, "3.25")
+            && parseRecord(hatch, 20, "4.5")
+            && hatch.seedPoints.size() == 1u
+            && hatch.seedPoints.front().x == 3.25
+            && hatch.seedPoints.front().y == 4.5;
+        t.expect(rejected && failedOnce && retried,
+                 "HATCH seed-point count allocation failure preserves the count and coordinates for retry");
+    }
+
+    {
+        HatchParseProbe hatch;
+        const bool setup = parseRecord(hatch, 92, "2");
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(hatch, 93, "1", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool retried = parseRecord(hatch, 93, "1")
+            && parseRecord(hatch, 10, "1.25")
+            && parseRecord(hatch, 20, "2.5")
+            && !hatch.looplist.empty()
+            && hatch.looplist.front()->objlist.size() == 1u
+            && dynamic_cast<const DRW_LWPolyline*>(
+                hatch.looplist.front()->objlist.front().get()) != nullptr
+            && dynamic_cast<const DRW_LWPolyline*>(
+                hatch.looplist.front()->objlist.front().get())->vertlist.size() == 1u;
+        t.expect(setup && rejected && failedOnce && retried,
+                 "HATCH polyline vertex-count reserve failure preserves count and retries");
+    }
+
+    {
+        HatchParseProbe hatch;
+        const bool setup = parseRecord(hatch, 92, "0");
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(hatch, 93, "1", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool retried = parseRecord(hatch, 93, "1");
+        t.expect(setup && rejected && failedOnce && retried,
+                 "HATCH edge-count reserve failure does not commit the count or edge state");
+    }
+
+    for (long allocationFailure = 0; allocationFailure < 4;
+         ++allocationFailure) {
+        HatchParseProbe hatch;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(
+            hatch, 92, "2", allocationFailure);
+        const bool failedOnce = materialFailedAllocations
+            == failuresBefore + 1u;
+        const bool rolledBack = hatch.looplist.empty();
+        const bool retried = parseRecord(hatch, 92, "2")
+            && hatch.looplist.size() == 1u
+            && hatch.looplist.front()->objlist.size() == 1u
+            && dynamic_cast<const DRW_LWPolyline*>(
+                hatch.looplist.front()->objlist.front().get()) != nullptr;
+        t.expect(rejected && failedOnce && rolledBack && retried,
+                 "HATCH boundary-loop construction rolls back every allocation failure and retries");
+    }
+
+    for (int edgeType = 1; edgeType <= 4; ++edgeType) {
+        for (long allocationFailure = 0; allocationFailure < 2;
+             ++allocationFailure) {
+            HatchParseProbe hatch;
+            const bool setup = parseRecord(hatch, 92, "0")
+                && !hatch.looplist.empty();
+            const auto loop = setup ? hatch.looplist.front()
+                                    : std::shared_ptr<DRW_HatchLoop>{};
+            const std::size_t failuresBefore = materialFailedAllocations;
+            const bool rejected = !parseRecord(
+                hatch, 72, std::to_string(edgeType), allocationFailure);
+            const bool failedOnce = materialFailedAllocations
+                == failuresBefore + 1u;
+            const bool rolledBack = loop && loop->objlist.empty();
+            const bool retried = parseRecord(
+                hatch, 72, std::to_string(edgeType))
+                && loop && loop->objlist.size() == 1u;
+            const DRW_Entity* edge = retried
+                ? loop->objlist.front().get() : nullptr;
+            const bool correctType = edgeType == 1
+                ? dynamic_cast<const DRW_Line*>(edge) != nullptr
+                : edgeType == 2
+                    ? dynamic_cast<const DRW_Arc*>(edge) != nullptr
+                    : edgeType == 3
+                        ? dynamic_cast<const DRW_Ellipse*>(edge) != nullptr
+                        : dynamic_cast<const DRW_Spline*>(edge) != nullptr;
+            t.expect(setup && rejected && failedOnce && rolledBack
+                         && retried && correctType,
+                     "HATCH boundary-edge construction rolls back and retries for every edge type");
+        }
+    }
+
+    for (long allocationFailure = 0; allocationFailure < 2;
+         ++allocationFailure) {
+        HatchParseProbe hatch;
+        const bool setup = parseRecord(hatch, 92, "2")
+            && !hatch.looplist.empty()
+            && hatch.looplist.front()->objlist.size() == 1u;
+        const auto polyline = setup
+            ? std::dynamic_pointer_cast<DRW_LWPolyline>(
+                hatch.looplist.front()->objlist.front())
+            : std::shared_ptr<DRW_LWPolyline>{};
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(
+            hatch, 10, "1.25", allocationFailure);
+        const bool failedOnce = materialFailedAllocations
+            == failuresBefore + 1u;
+        const bool rolledBack = polyline && polyline->vertlist.empty();
+        const bool retried = parseRecord(hatch, 10, "1.25")
+            && parseRecord(hatch, 20, "2.5")
+            && polyline && polyline->vertlist.size() == 1u
+            && polyline->vertlist.front()->x == 1.25
+            && polyline->vertlist.front()->y == 2.5;
+        t.expect(setup && rejected && failedOnce && rolledBack && retried,
+                 "HATCH polyline point allocation failure leaves group-10 cursor unchanged for retry");
+    }
+
+    {
+        HatchParseProbe hatch;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(hatch, 463, "0.5", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = hatch.gradColors.empty();
+        const bool retried = parseRecord(hatch, 463, "0.5")
+            && hatch.gradColors.size() == 1u
+            && hatch.gradColors.front().value == 0.5;
+        if (!(rejected && failedOnce && rolledBack && retried))
+            std::cerr << "HATCH gradient-stop diagnostic rejected=" << rejected
+                      << " failedOnce=" << failedOnce << " rolledBack="
+                      << rolledBack << " retried=" << retried
+                      << " failedAllocations="
+                      << materialFailedAllocations - failuresBefore << '\n';
+        t.expect(rejected && failedOnce && rolledBack && retried,
+                 "HATCH gradient-stop allocation failure preserves the same group for retry");
+    }
+}
+
 void testHatchSplinePointComponentOrder(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
@@ -61409,6 +61748,22 @@ int main(int argc, char** argv) {
         TestContext context;
         testMLineVectorComponentOrder(context);
         std::cout << "MLINE vector coordinate-group ordering controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--hatch-spline-dxf-allocation-failure") {
+        TestContext context;
+        testHatchSplineDxfAllocationFailure(context);
+        std::cout << "HATCH spline DXF allocation-failure and retry controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--hatch-dxf-allocation-failure") {
+        TestContext context;
+        testHatchDxfAllocationFailure(context);
+        std::cout << "HATCH DXF allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
