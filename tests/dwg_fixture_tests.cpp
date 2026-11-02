@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <cstdint>
 #include <cmath>
 #include <chrono>
@@ -207,6 +208,109 @@ void testAdvancedTargetFixtures(TestContext& t) {
                      && std::fabs(interface_.largeRadialChord.x - 10.0) < 1e-12
                      && std::fabs(interface_.largeRadialChord.y) < 1e-12,
                  "large radial callback preserves jog/center/chord points");
+
+        DRW_DimLargeRadial* sourceDimension = nullptr;
+        std::size_t sourceDimensionCount = 0u;
+        for (DRW_Entity* entity : data.mBlock->ent) {
+            if (auto* candidate = dynamic_cast<DRW_DimLargeRadial*>(entity)) {
+                sourceDimension = candidate;
+                ++sourceDimensionCount;
+            }
+        }
+        t.expect(sourceDimensionCount == 1u,
+                 "large radial fixture has one typed source record");
+        if (sourceDimensionCount == 1u) {
+            const auto sameCoord = [](const DRW_Coord& left,
+                                      const DRW_Coord& right) {
+                return std::fabs(left.x - right.x) < 1e-12
+                    && std::fabs(left.y - right.y) < 1e-12
+                    && std::fabs(left.z - right.z) < 1e-12;
+            };
+            for (const bool binary : {false, true}) {
+                dx_data isolated;
+                isolated.headerC = data.headerC;
+                isolated.sourceVersion = data.sourceVersion;
+                isolated.lineTypes = data.lineTypes;
+                isolated.layers = data.layers;
+                isolated.dimStyles = data.dimStyles;
+                isolated.textStyles = data.textStyles;
+                isolated.appIds = data.appIds;
+                auto* isolatedDimension =
+                    new DRW_DimLargeRadial(*sourceDimension);
+                // Keep this record-only probe free of an unresolved group-2
+                // edge to the fixture's picture block, which is intentionally
+                // outside the selected-record projection.
+                isolatedDimension->setName("");
+                isolated.mBlock->ent.push_back(isolatedDimension);
+
+                const std::filesystem::path output = temporaryDxfPath(
+                    binary ? "large-radial-binary"
+                           : "large-radial-ascii");
+                dx_iface exporter;
+                const bool exported = exporter.fileExport(
+                    output.string(), isolated.sourceVersion, binary,
+                    &isolated, false);
+                t.expect(exported,
+                         binary
+                             ? "large radial binary DXF record exports"
+                             : "large radial ASCII DXF record exports");
+
+                if (exported) {
+                    FixtureInterface reader;
+                    dx_data reopened;
+                    const bool readBack = reader.fileImport(
+                        output.string(), &reopened, false);
+                    DRW_DimLargeRadial* actual = nullptr;
+                    std::size_t actualCount = 0u;
+                    if (readBack && reopened.mBlock != nullptr) {
+                        for (DRW_Entity* entity : reopened.mBlock->ent) {
+                            if (auto* candidate =
+                                    dynamic_cast<DRW_DimLargeRadial*>(entity)) {
+                                actual = candidate;
+                                ++actualCount;
+                            }
+                        }
+                    }
+                    const bool matches = actualCount == 1u
+                        && actual != nullptr
+                        && actual->getText() == sourceDimension->getText()
+                        && actual->getStyle() == sourceDimension->getStyle()
+                        && actual->type == sourceDimension->type
+                        && actual->getAlign() == sourceDimension->getAlign()
+                        && actual->getTextLineStyle()
+                            == sourceDimension->getTextLineStyle()
+                        && actual->getTextLineFactor()
+                            == sourceDimension->getTextLineFactor()
+                        && actual->getDir() == sourceDimension->getDir()
+                        && actual->getHDir() == sourceDimension->getHDir()
+                        && actual->getFlipArrow1()
+                            == sourceDimension->getFlipArrow1()
+                        && actual->getFlipArrow2()
+                            == sourceDimension->getFlipArrow2()
+                        && actual->getMeasureValue()
+                            == sourceDimension->getMeasureValue()
+                        && sameCoord(actual->getExtrusion(),
+                                     sourceDimension->getExtrusion())
+                        && sameCoord(actual->getCenterPoint(),
+                                     sourceDimension->getCenterPoint())
+                        && sameCoord(actual->getTextPoint(),
+                                     sourceDimension->getTextPoint())
+                        && sameCoord(actual->getChordPoint(),
+                                     sourceDimension->getChordPoint())
+                        && sameCoord(actual->overrideCenterPoint,
+                                     sourceDimension->overrideCenterPoint)
+                        && sameCoord(actual->jogPoint,
+                                     sourceDimension->jogPoint)
+                        && actual->jogAngle == sourceDimension->jogAngle;
+                    t.expect(readBack && matches,
+                             binary
+                                 ? "large radial binary DXF readback preserves typed fields"
+                                 : "large radial ASCII DXF readback preserves typed fields");
+                }
+                std::error_code ec;
+                std::filesystem::remove(output, ec);
+            }
+        }
     }
 }
 
