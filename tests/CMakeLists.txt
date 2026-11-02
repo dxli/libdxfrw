@@ -1056,6 +1056,10 @@ target_include_directories(libdxfrw_dwg2dxf_adapter_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
 )
 target_link_libraries(libdxfrw_dwg2dxf_adapter_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_ucs_base_name_target_closure
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --ucs-base-name-target-closure)
+set_tests_properties(libdxfrw_ucs_base_name_target_closure PROPERTIES
+    LABELS "fast;dxf;header;graph;adapter;transaction" TIMEOUT 60)
 add_test(NAME libdxfrw_sortents_adapter
     COMMAND libdxfrw_dwg2dxf_adapter_tests --sortents-adapter
         "${CMAKE_CURRENT_BINARY_DIR}/sortents-adapter")

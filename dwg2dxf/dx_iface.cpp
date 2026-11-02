@@ -62971,6 +62971,105 @@ std::string layoutSymbolKey(std::string value) {
     return value;
 }
 
+bool isAsciiName(std::string_view value) noexcept {
+    return std::all_of(value.begin(), value.end(), [](unsigned char byte) {
+        return byte < 0x80u;
+    });
+}
+
+bool readUcsBaseHeaderValue(const DRW_Header& header, const char* key,
+                            std::string& value) {
+    if (key == nullptr || key[0] != '$')
+        return false;
+    const auto found = header.vars.find(key);
+    const auto alternate = header.vars.find(key + 1);
+    const DRW_Variant* variant = found != header.vars.end()
+        ? found->second
+        : alternate != header.vars.end() ? alternate->second : nullptr;
+    value.clear();
+    if (variant == nullptr)
+        return found == header.vars.end() && alternate == header.vars.end();
+    if (variant->type() != DRW_Variant::STRING || variant->code() != 2)
+        return false;
+    value = variant->c_str();
+    return true;
+}
+
+bool validateUcsBaseHeaderTargets(const dx_data& data,
+                                  std::string& failure) {
+    failure.clear();
+    try {
+        if (!data.headerC.canWriteDxfUcsBaseVariables()) {
+            failure = "UCSBASE/PUCSBASE HEADER values are malformed or aliased";
+            return false;
+        }
+
+        std::map<std::string, std::pair<const DRW_UCS*, std::size_t>> names;
+        for (const DRW_UCS& ucs : data.ucsList) {
+            std::string key;
+            if (!dx_symbol_output::nameKey(ucs.name, key) || key.empty()) {
+                failure = "UCS table contains an invalid UTF-8 or empty symbol name";
+                return false;
+            }
+            auto& target = names[key];
+            if (target.second == 0u)
+                target.first = &ucs;
+            ++target.second;
+        }
+
+        const auto resolve = [&data, &names, &failure](const char* variable) {
+            std::string name;
+            if (!readUcsBaseHeaderValue(data.headerC, variable, name)) {
+                failure = std::string(variable)
+                    + " is not a writable group-2 string";
+                return false;
+            }
+            // Autodesk documents the empty initial value and the built-in
+            // WORLD UCS. Neither requires a serialized named-UCS record.
+            if (name.empty())
+                return true;
+            std::string key;
+            if (!dx_symbol_output::nameKey(name, key)) {
+                failure = std::string(variable)
+                    + " is not valid UTF-8 or exceeds the bounded symbol-name size";
+                return false;
+            }
+            const auto target = names.find(key);
+            const bool worldName = isAsciiName(name) && key == "world";
+            if (target == names.end())
+                return worldName;
+            if (target->second.second != 1u) {
+                failure = std::string(variable)
+                    + " resolves to multiple case-insensitive UCS table names";
+                return false;
+            }
+            const std::string& tableName = target->second.first->name;
+            if ((!isAsciiName(name) || !isAsciiName(tableName))
+                && name != tableName) {
+                failure = std::string(variable)
+                    + " has a non-ASCII case variant whose native symbol collation is unqualified";
+                return false;
+            }
+            return true;
+        };
+
+        // The canonical DXF writer emits these as standard HEADER variables.
+        // A copy in customVars would also be emitted through the unknown-
+        // variable path, making the effective value depend on duplicate order.
+        for (const char* key : {"$UCSBASE", "UCSBASE", "$PUCSBASE", "PUCSBASE"}) {
+            if (data.headerC.customVars.find(key)
+                != data.headerC.customVars.end()) {
+                failure = "UCSBASE/PUCSBASE must use the standard HEADER variable map";
+                return false;
+            }
+        }
+        return resolve("$UCSBASE") && resolve("$PUCSBASE");
+    } catch (...) {
+        failure.clear();
+        return false;
+    }
+}
+
 bool validateLayoutGraph(const dx_data& data, DRW::Version targetVersion,
                          const std::vector<std::uint32_t>& resolvedSunHandles,
                          std::string& failure) {
@@ -66165,6 +66264,15 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                != dx_dwgReadCompletenessPolicy::AllowPartial) {
         reportPreflightFailure("unknown DWG read completeness policy");
         return false;
+    }
+    if (requireResolvedOwners
+        || readCompletenessPolicy
+               == dx_dwgReadCompletenessPolicy::RequireComplete) {
+        std::string ucsBaseFailure;
+        if (!validateUcsBaseHeaderTargets(*cData, ucsBaseFailure)) {
+            reportPreflightFailure(ucsBaseFailure);
+            return false;
+        }
     }
     if (requireResolvedOwners && cData->unmodeledDxfObjectSeen) {
         reportPreflightFailure(
