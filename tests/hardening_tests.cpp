@@ -2383,6 +2383,139 @@ void testDxfOrientationAttributeHeaderDomains(TestContext& t) {
     testDxfIntegerHeaderDomains(t, domains);
 }
 
+void testDxfAttributePromptHeaderDomains(TestContext& t) {
+    struct Domain {
+        const char* name;
+    };
+    const Domain domains[] = {{"$ATTDIA"}, {"$ATTREQ"}};
+    const auto makeWriter = [](const char* version, std::ostream* output) {
+        std::unique_ptr<dxfWriter> writer(new dxfWriterAscii(output));
+        writer->setVersion(version, true);
+        return writer;
+    };
+    const auto emitHeader = [](const std::unique_ptr<dxfWriter>& writer,
+                               DRW_Header& header, DRW::Version version) {
+        DxfWriterRecordScope record(*writer);
+        header.write(writer, version);
+        return !writer->hasWriteError() && record.commit();
+    };
+    const auto readValue = [](const std::string& bytes, const char* name,
+                              bool& found, int& value) {
+        found = false;
+        std::istringstream input(bytes, std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        reader->setVersion("AC1009", true);
+        bool expectingValue = false;
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (expectingValue) {
+                if (code != 70)
+                    return false;
+                value = reader->getInt32();
+                found = true;
+                return true;
+            }
+            if (code == 9)
+                expectingValue = reader->getString() == name;
+        }
+        return true;
+    };
+
+    for (const Domain& domain : domains) {
+        for (const int validValue : {0, 1}) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter("AC1009", &output);
+            DRW_Header header;
+            header.addInt(domain.name, validValue, 70);
+            bool found = false;
+            int parsedValue = 0;
+            t.expect(emitHeader(writer, header, DRW::AC1009)
+                         && readValue(output.str(), domain.name, found, parsedValue)
+                         && found && parsedValue == validValue,
+                     std::string(domain.name)
+                         + " documented legacy value round-trips in AC1009 ASCII DXF");
+        }
+
+        for (const int invalidValue : {-1, 2}) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter("AC1009", &output);
+            DRW_Header header;
+            header.addInt(domain.name, invalidValue, 70);
+            t.expect(!emitHeader(writer, header, DRW::AC1009)
+                         && output.str().empty(),
+                     std::string(domain.name)
+                         + " refuses an out-of-domain legacy value atomically");
+        }
+
+        const auto refuses = [&](DRW_Header& header) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter("AC1009", &output);
+            return !emitHeader(writer, header, DRW::AC1009) && output.str().empty();
+        };
+        DRW_Header wrongType;
+        wrongType.addStr(domain.name, "1", 1);
+        t.expect(refuses(wrongType),
+                 std::string(domain.name) + " refuses a wrong variant type");
+        DRW_Header wrongGroup;
+        wrongGroup.addInt(domain.name, 1, 71);
+        t.expect(refuses(wrongGroup),
+                 std::string(domain.name) + " refuses a wrong group code");
+        DRW_Header aliases;
+        aliases.addInt(domain.name, 1, 70);
+        aliases.addInt(domain.name + 1, 1, 70);
+        t.expect(refuses(aliases),
+                 std::string(domain.name)
+                     + " refuses dollar/bare aliases together");
+
+        std::ostringstream retryOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> retryWriter = makeWriter("AC1009", &retryOutput);
+        DRW_Header invalidRetry;
+        invalidRetry.addInt(domain.name, 2, 70);
+        t.expect(!emitHeader(retryWriter, invalidRetry, DRW::AC1009)
+                     && retryOutput.str().empty() && !retryWriter->hasWriteError(),
+                 std::string(domain.name)
+                     + " failure restores the writer for corrected retry");
+        DRW_Header correctedRetry;
+        correctedRetry.addInt(domain.name, 1, 70);
+        t.expect(emitHeader(retryWriter, correctedRetry, DRW::AC1009),
+                 std::string(domain.name)
+                     + " corrected value retries on the same writer");
+
+        std::ostringstream source;
+        source << "9\n" << domain.name << "\n70\n2\n";
+        std::istringstream input(source.str());
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        reader->setVersion("AC1009", true);
+        ExposedHeader parsed;
+        int code = 0;
+        bool read = true;
+        while (reader->readRec(&code))
+            read = parsed.parseCode(code, reader) && read;
+        const auto stored = parsed.vars.find(domain.name);
+        t.expect(read && stored != parsed.vars.end() && stored->second != nullptr
+                     && stored->second->type() == DRW_Variant::INTEGER
+                     && stored->second->code() == 70
+                     && stored->second->content.i == 2,
+                 std::string(domain.name)
+                     + " tolerant input retains unsupported integer values");
+
+        for (const char* modernVersion : {"AC1012", "AC1014", "AC1027"}) {
+            const DRW::Version target =
+                std::string(modernVersion) == "AC1012" ? DRW::AC1012
+                : std::string(modernVersion) == "AC1014" ? DRW::AC1014
+                                                          : DRW::AC1027;
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter(modernVersion, &output);
+            DRW_Header header;
+            header.addInt(domain.name, 2, 70);
+            t.expect(emitHeader(writer, header, target)
+                         && output.str().find(domain.name) == std::string::npos,
+                     std::string(domain.name)
+                         + " is not rejected or emitted when target omits it");
+        }
+    }
+}
+
 void testLeaderAdvisoryCountState(TestContext& t) {
     ExposedLeader source;
     t.expect(parseDxfRecords(source, "76\n99\n10\n1\n20\n2\n30\n3\n10\n4\n20\n6\n30\n0\n")
@@ -25471,6 +25604,18 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--dxf-attribute-prompt-header-domains") {
+        TestContext focused;
+        testDxfAttributePromptHeaderDomains(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " attribute prompt HEADER assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "Attribute prompt HEADER domains: PASS\n";
+        return 0;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--dxf-geodata-modern-text-preflight") {
         TestContext focused;
         testDxfGeoDataModernTextPreflightView(focused);
@@ -26724,6 +26869,7 @@ int main(int argc, char** argv) {
     testDxfInsunitsHeaderDomain(context);
     testDxfLineweightHeaderDomains(context);
     testDxfOrientationAttributeHeaderDomains(context);
+    testDxfAttributePromptHeaderDomains(context);
     testLeaderAdvisoryCountState(context);
     testPublicOwnershipContracts(context);
     testEmbeddedAttributeTextRouting(context);
