@@ -18845,13 +18845,18 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     }
     case 421:
         if (!gradColors.empty()) {
-            gradColors.back().rgb = reader->getInt32();
+            const int rgb = reader->getInt32();
+            if (rgb < 0 || rgb > 0x00FFFFFF)
+                return false;
+            gradColors.back().rgb = rgb;
             gradColors.back().colorMethod = 0xC2u;
         }
         break;
     case 63:
         if (!gradColors.empty()) {
             const int colorIndex = reader->getInt32();
+            if (colorIndex < 0 || colorIndex > 256)
+                return false;
             gradColors.back().aciColor = colorIndex;
             gradColors.back().colorMethod = colorIndex == 0 ? 0xC1u
                 : colorIndex == 256 ? 0xC0u : 0xC3u;
@@ -18972,6 +18977,11 @@ bool DRW_Hatch::validateDxf() const {
     if (!validateCurrentBoundaryPathDxf()
         || !validateCurrentPatternLineDxf())
         return false;
+    for (const GradientStop& stop : gradColors) {
+        if (stop.rgb < -1 || stop.rgb > 0x00FFFFFF
+            || stop.aciColor < 0 || stop.aciColor > 256)
+            return false;
+    }
     // DWG stores gradient companions even when the fill flag is clear. DXF
     // permits those companion groups with a zero stop count, but cannot carry
     // color stops under a disabled gradient. Refuse rather than silently drop

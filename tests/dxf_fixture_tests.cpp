@@ -13683,6 +13683,95 @@ void testMeshDxfAllocationFailure(TestContext& t) {
              "MESH face-list reservations and face construction roll back and retry after allocation failure");
 }
 
+void testHatchGradientStopColorDomain(TestContext& t) {
+    struct HatchParseProbe final : DRW_Hatch {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+        bool valid() const { return validateDxf(); }
+    };
+    const auto parseRecord = [](HatchParseProbe& hatch, int code,
+                                const char* value) {
+        const std::string record = std::to_string(code) + "\n" + value + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int parsedCode = 0;
+        return reader->readRec(&parsedCode) && parsedCode == code
+            && hatch.parse(parsedCode, reader);
+    };
+    const auto addGradientStop = [&parseRecord](HatchParseProbe& hatch) {
+        return parseRecord(hatch, 463, "0.0")
+            && hatch.gradColors.size() == 1u;
+    };
+
+    for (const char* invalidValue : {"-1", "16777216"}) {
+        HatchParseProbe hatch;
+        const bool prepared = addGradientStop(hatch);
+        const bool rejected = prepared && !parseRecord(hatch, 421, invalidValue);
+        const bool unchanged = hatch.gradColors.size() == 1u
+            && hatch.gradColors.front().rgb == -1
+            && hatch.gradColors.front().colorMethod == 0;
+        const bool retried = parseRecord(hatch, 421, "16777215")
+            && hatch.gradColors.size() == 1u
+            && hatch.gradColors.front().rgb == 0x00FFFFFF
+            && hatch.gradColors.front().colorMethod == 0xC2u;
+        t.expect(rejected && unchanged && retried,
+                 "HATCH gradient RGB rejects malformed group 421 without mutation and permits corrected retry");
+    }
+    for (const int rgb : {0, 0x00FFFFFF}) {
+        HatchParseProbe hatch;
+        const std::string value = std::to_string(rgb);
+        const bool accepted = addGradientStop(hatch)
+            && parseRecord(hatch, 421, value.c_str())
+            && hatch.gradColors.front().rgb == rgb
+            && hatch.gradColors.front().colorMethod == 0xC2u;
+        const std::string label = "HATCH gradient RGB accepts endpoint "
+            + value;
+        t.expect(accepted, label.c_str());
+    }
+
+    for (const char* invalidValue : {"-1", "257"}) {
+        HatchParseProbe hatch;
+        const bool prepared = addGradientStop(hatch);
+        const bool rejected = prepared && !parseRecord(hatch, 63, invalidValue);
+        const bool unchanged = hatch.gradColors.size() == 1u
+            && hatch.gradColors.front().aciColor == 0
+            && hatch.gradColors.front().colorMethod == 0;
+        const bool retried = parseRecord(hatch, 63, "256")
+            && hatch.gradColors.size() == 1u
+            && hatch.gradColors.front().aciColor == 256
+            && hatch.gradColors.front().colorMethod == 0xC0u;
+        t.expect(rejected && unchanged && retried,
+                 "HATCH gradient ACI rejects malformed group 63 without mutation and permits corrected retry");
+    }
+    for (const int colorIndex : {0, 1, 255, 256}) {
+        HatchParseProbe hatch;
+        const std::string value = std::to_string(colorIndex);
+        const bool accepted = addGradientStop(hatch)
+            && parseRecord(hatch, 63, value.c_str())
+            && hatch.gradColors.front().aciColor == colorIndex;
+        const std::string label =
+            "HATCH gradient ACI accepts documented index " + value;
+        t.expect(accepted, label.c_str());
+    }
+
+    HatchParseProbe typed;
+    typed.isGradient = 1;
+    DRW_Hatch::GradientStop first;
+    first.value = 0.0;
+    DRW_Hatch::GradientStop last;
+    last.value = 1.0;
+    typed.gradColors = {first, last};
+    const bool validTypedStops = typed.valid();
+    typed.gradColors.front().rgb = 0x01000000;
+    const bool invalidRgbRejected = !typed.valid();
+    typed.gradColors.front().rgb = -1;
+    typed.gradColors.front().aciColor = 257;
+    const bool invalidAciRejected = !typed.valid();
+    t.expect(validTypedStops && invalidRgbRejected && invalidAciRejected,
+             "HATCH typed validation rejects out-of-domain gradient stop scalars");
+}
+
 void testHatchSplinePointComponentOrder(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
@@ -61836,6 +61925,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testMeshDxfAllocationFailure(context);
         std::cout << "MESH DXF allocation-failure and retry controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--hatch-gradient-stop-color-domain") {
+        TestContext context;
+        testHatchGradientStopColorDomain(context);
+        std::cout << "HATCH gradient-stop color-domain controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

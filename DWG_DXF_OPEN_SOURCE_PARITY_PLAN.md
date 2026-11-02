@@ -349,6 +349,8 @@ failing-stage diagnostic.
 
 **MESH DXF face-allocation retry safety:** Bounded vertex/face reservations and per-face index reservation now leave group counts, cursor state, and face lists retryable on injected allocation failure. The focused `libdxfrw_mesh_dxf_allocation_failure` CTest passes 1/1 in 0.04 seconds. No fixture or support claim was added. Physical MESH producer profiles and native geometry semantics remain open. See [MESH DXF allocation receipt](docs/research/p6-mesh-dxf-face-allocation-rollback-2026-11-02.json).
 
+**HATCH gradient color scalar admission:** Explicit group-421 RGB and group-63 ACI values are checked before mutating the active stop, and typed-model validation enforces the same 24-bit RGB and 0..256 ACI bounds. The focused HATCH/MPOLYGON cohort passes 5/5 in 0.82 seconds. This establishes scalar admission and retry only; gradient rendering, physical producer breadth, and native semantics remain open. See [the HATCH gradient-color receipt](docs/research/p6-hatch-gradient-stop-color-domain-2026-11-02.json).
+
 ## P7 — ACIS/ACDS and independent 3D meaning
 
 - Complete the original DWG entity → owner/key → AcDs segment → SAT/SAB join,
