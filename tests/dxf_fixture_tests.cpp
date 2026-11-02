@@ -22228,6 +22228,124 @@ void testTextOcsExtrusion(TestContext& t) {
     }
 }
 
+bool writeUnderlayOcsControl(const std::filesystem::path& path,
+                             bool binary) {
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output)
+        return false;
+    if (binary)
+        output.write("AutoCAD Binary DXF\r\n\x1a\0", 22);
+    std::unique_ptr<dxfWriter> writer = binary
+        ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+        : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+    writer->setVersion("AC1027", true);
+    const auto string = [&writer](int code, const char* value) {
+        return writer->writeString(code, value);
+    };
+    const auto real = [&writer](int code, double value) {
+        return writer->writeDouble(code, value);
+    };
+    const auto writeUnderlay = [&string, &real](
+            const char* type, double x, double y, double z) {
+        return string(0, type) && string(100, "AcDbEntity")
+            && string(8, "0") && string(100, "AcDbUnderlayReference")
+            && real(10, x) && real(20, y)
+            && real(30, z) && real(41, 1.0) && real(42, 1.0)
+            && real(43, 1.0) && real(50, 30.0)
+            && real(210, 1.0) && real(220, 0.0) && real(230, 0.0)
+            && real(11, -1.0) && real(21, -2.0)
+            && real(11, 3.0) && real(21, 4.0);
+    };
+    const bool written = string(0, "SECTION") && string(2, "HEADER")
+        && string(9, "$ACADVER") && string(1, "AC1027")
+        && string(0, "ENDSEC") && string(0, "SECTION")
+        && string(2, "ENTITIES")
+        && writeUnderlay("PDFUNDERLAY", 2.0, 3.0, 4.0)
+        && writeUnderlay("DGNUNDERLAY", -2.0, 5.0, 6.0)
+        && writeUnderlay("DWFUNDERLAY", 9.0, -3.0, 7.0)
+        && string(0, "ENDSEC") && string(0, "EOF");
+    return written && !writer->hasWriteError() && output.good();
+}
+
+class DxfUnderlayOcsCapture final : public dx_iface {
+public:
+    struct UnderlayState {
+        DRW_Underlay::Kind kind{DRW_Underlay::PDF};
+        DRW_Coord position;
+        DRW_Coord extrusion;
+        double rotation{0.0};
+        std::vector<DRW_Coord> clipBoundary;
+    };
+
+    void addHeader(const DRW_Header*) override {}
+    void addUnderlay(const DRW_Underlay* value) override {
+        if (value == nullptr)
+            return;
+        underlays.push_back({value->kind, value->position, value->extPoint,
+                             value->rotation, value->clipBoundary});
+    }
+
+    std::vector<UnderlayState> underlays;
+};
+
+void testUnderlayOcsExtrusion(TestContext& t) {
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto equalPoint = [](const DRW_Coord& actual,
+                               double x, double y, double z) {
+        return actual.x == x && actual.y == y && actual.z == z;
+    };
+    const std::array<DRW_Underlay::Kind, 3> kinds{{
+        DRW_Underlay::PDF, DRW_Underlay::DGN, DRW_Underlay::DWF}};
+    const std::array<DRW_Coord, 3> ocsPositions{{
+        {2.0, 3.0, 4.0}, {-2.0, 5.0, 6.0}, {9.0, -3.0, 7.0}}};
+    const std::array<DRW_Coord, 3> wcsPositions{{
+        {4.0, 2.0, 3.0}, {6.0, -2.0, 5.0}, {7.0, 9.0, -3.0}}};
+
+    for (const bool binary : {false, true}) {
+        const std::filesystem::path path =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-underlay-ocs-extrusion-" + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        std::error_code error;
+        std::filesystem::remove(path, error);
+        const bool generated = writeUnderlayOcsControl(path, binary);
+        t.expect(generated,
+                 binary ? "generated binary underlay OCS source is written"
+                        : "generated ASCII underlay OCS source is written");
+
+        for (const bool applyExtrusion : {false, true}) {
+            DxfUnderlayOcsCapture capture;
+            dxfRW reader(path.string().c_str());
+            const bool read = generated
+                && reader.read(&capture, applyExtrusion);
+            t.expect(read && capture.underlays.size() == kinds.size(),
+                     "PDF, DGN and DWF underlay callbacks are preserved");
+            if (!read || capture.underlays.size() != kinds.size())
+                continue;
+
+            for (std::size_t i = 0; i < kinds.size(); ++i) {
+                const auto& underlay = capture.underlays[i];
+                const DRW_Coord& expected = applyExtrusion
+                    ? wcsPositions[i] : ocsPositions[i];
+                t.expect(underlay.kind == kinds[i]
+                             && equalPoint(underlay.position, expected.x,
+                                           expected.y, expected.z),
+                         "applyExtrusion selects each underlay's OCS/WCS insertion point");
+                t.expect(equalPoint(underlay.extrusion, 1.0, 0.0, 0.0)
+                             && underlay.rotation == 30.0
+                             && underlay.clipBoundary.size() == 2u
+                             && underlay.clipBoundary[0].x == -1.0
+                             && underlay.clipBoundary[0].y == -2.0
+                             && underlay.clipBoundary[1].x == 3.0
+                             && underlay.clipBoundary[1].y == 4.0,
+                         "normal, local rotation and clipping rectangle are preserved");
+            }
+        }
+        std::filesystem::remove(path, error);
+    }
+}
+
 bool writePolylineOcsExtrusionControl(const std::filesystem::path& path,
                                      bool binary) {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
@@ -60995,6 +61113,13 @@ int main(int argc, char** argv) {
         TestContext context;
         testPolylineOcsExtrusion(context);
         std::cout << "DXF classic POLYLINE OCS extrusion controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--underlay-ocs-extrusion") {
+        TestContext context;
+        testUnderlayOcsExtrusion(context);
+        std::cout << "DXF underlay OCS extrusion controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

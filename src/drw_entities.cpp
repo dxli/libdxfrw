@@ -13771,7 +13771,10 @@ bool DRW_Underlay::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
     case 42: scale.y = reader->getDouble(); break;
     case 43: scale.z = reader->getDouble(); break;
     case 50: rotation = reader->getDouble(); break;  // degrees in DXF
-    case 210: extPoint.x = reader->getDouble(); break;
+    case 210:
+        haveExtrusion = true;
+        extPoint.x = reader->getDouble();
+        break;
     case 220: extPoint.y = reader->getDouble(); break;
     case 230: extPoint.z = reader->getDouble(); break;
     case 280: {
@@ -13848,6 +13851,16 @@ bool DRW_Underlay::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         return DRW_Entity::parseCode(code, reader);
     }
     return true;
+}
+
+void DRW_Underlay::applyExtrusion() {
+    if (!haveExtrusion)
+        return;
+
+    // Underlay position uses OCS/ECS coordinates. Clip vertices remain in
+    // the underlay's local 2D space and are intentionally not transformed.
+    calculateAxis(extPoint);
+    extrudePoint(extPoint, &position);
 }
 
 void DRW_Underlay::resetDwgState() {

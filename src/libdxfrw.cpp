@@ -18649,6 +18649,8 @@ bool dxfRW::processUnderlay(const std::string& kind) {
             DRW_DBG(nextentity); DRW_DBG("\n");
             if (!acceptEntityCallbackBoundary())
                 return setError(DRW::BAD_READ_ENTITIES);
+            if (applyExt)
+                u.applyExtrusion();
             iface->addUnderlay(&u);
             return true;
         }

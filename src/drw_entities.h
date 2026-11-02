@@ -2417,7 +2417,7 @@ public:
         }
         return *this;
     }
-    void applyExtrusion() override {}
+    void applyExtrusion() override;
 protected:
     void resetDwgState();
     bool parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs=0) override;
