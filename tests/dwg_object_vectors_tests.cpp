@@ -12088,6 +12088,128 @@ void testDimensionAssociationDwgDetailReadback(TestContext& t) {
              "detailed DIMASSOC remains refused by the unqualified DWG encoder");
 }
 
+bool makeAc1018DimensionAssociationFrame(DimensionAssociationFrame& frame) {
+    constexpr DRW::Version version = DRW::AC1018;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    dwgBufferW body(&codec), handles(&codec);
+    body.putBitLong(1); // first association slot
+    body.putBit(0u); // model space
+    body.putRawChar8(0u); // rotated type
+    body.putVariableText(version, "AcDbOsnapPointRef");
+    body.putRawChar8(1u); // endpoint osnap
+    body.putBitLong(1); // one main object handle
+    body.putBitLong(2); // main subentity type
+    body.putBitLong(12); // main GS marker
+    body.putBitLong(0); // no main XREF path
+    body.putBitDouble(0.25);
+    body.put3BitDouble({1.5, -2.25, 3.75});
+    body.putBit(0u); // no last-point reference
+
+    const auto putObjectHeaderAndBody = [&](dwgBufferW& target,
+                                            std::uint32_t objectSize) {
+        target.putObjType(version, 1u); // direct-codec placeholder type
+        target.putRawLong32(objectSize);
+        dwgHandle ownHandle;
+        ownHandle.ref = 0xA100u;
+        target.putHandle(ownHandle);
+        target.putBitShort(0u); // no EED
+        target.putBitLong(0); // no reactors
+        target.putBit(1u); // no extension-dictionary handle follows
+        appendBits(target, body);
+        return target.isGood();
+    };
+
+    dwgBufferW sizing(&codec);
+    if (!putObjectHeaderAndBody(sizing, 0u)
+        || sizing.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    dwgBufferW object(&codec);
+    const std::uint32_t objectSize =
+        static_cast<std::uint32_t>(sizing.bitCount());
+    if (!putObjectHeaderAndBody(object, objectSize)
+        || object.bitCount() != sizing.bitCount())
+        return false;
+
+    const auto putHandle = [&handles](std::uint32_t reference) {
+        dwgHandle value;
+        value.code = DRW::DwgSoftPointer;
+        value.ref = reference;
+        value.ref64 = reference;
+        handles.putHandle(value);
+    };
+    putHandle(0x20u); // owner
+    putHandle(0x30u); // dimension
+    putHandle(0x40u); // osnap geometry
+    if (!object.isGood() || !handles.isGood())
+        return false;
+    frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+    appendBits(object, handles);
+    if (!object.isGood())
+        return false;
+    frame.bytes = object.data();
+    return true;
+}
+
+void testDimensionAssociationAc1018Readback(TestContext& t) {
+    DimensionAssociationFrame frame;
+    const bool built = makeAc1018DimensionAssociationFrame(frame);
+    t.expect(built,
+             "generated AC1018 DIMASSOC inline-text frame builds from scratch");
+    if (!built)
+        return;
+
+    DRW_TextCodec codec;
+    codec.setVersion(DRW::AC1018, false);
+    DimensionAssociationCodecProbe parsed;
+    parsed.m_associativityFlags = 0x0Fu;
+    std::vector<std::uint8_t> truncated = frame.bytes;
+    if (!truncated.empty())
+        truncated.pop_back();
+    dwgBuffer truncatedInput(truncated.data(), truncated.size(), &codec);
+    const bool rejected = !parsed.parseDwg(DRW::AC1018, &truncatedInput,
+                                           frame.handleBits)
+        && !truncatedInput.isGood() && parsed.handle == 0u
+        && parsed.m_associativityFlags == 0u && parsed.m_osnapRefs.empty();
+    t.expect(rejected,
+             "AC1018 truncated DIMASSOC resets before corrected-input retry");
+
+    dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+    const bool read = parsed.parseDwg(DRW::AC1018, &input, frame.handleBits);
+    const bool fieldsMatch = parsed.handle == 0xA100u
+        && parsed.parentHandle == 0x20u && parsed.reactorHandles.empty()
+        && parsed.xDictHandle == 0u && parsed.m_dimensionHandle == 0x30u
+        && parsed.m_associativityFlags == 1u && !parsed.m_isTransSpace
+        && parsed.m_rotatedDimensionType == 0u
+        && parsed.m_osnapRefs.size() == 1u
+        && !parsed.m_hasUnrepresentableDetail;
+    const bool refMatches = parsed.m_osnapRefs.size() == 1u
+        && parsed.m_osnapRefs[0].m_className == "AcDbOsnapPointRef"
+        && parsed.m_osnapRefs[0].m_hasObjectOsnapType
+        && parsed.m_osnapRefs[0].m_objectOsnapType == 1u
+        && parsed.m_osnapRefs[0].m_objectHandle == 0x40u
+        && parsed.m_osnapRefs[0].m_hasSubentType
+        && parsed.m_osnapRefs[0].m_subentType == 2
+        && parsed.m_osnapRefs[0].m_hasGsMarker
+        && parsed.m_osnapRefs[0].m_gsMarker == 12
+        && parsed.m_osnapRefs[0].m_hasNearParameter
+        && parsed.m_osnapRefs[0].m_nearParameter == 0.25
+        && parsed.m_osnapRefs[0].m_hasOsnapPoint
+        && parsed.m_osnapRefs[0].m_osnapPoint.x == 1.5
+        && parsed.m_osnapRefs[0].m_osnapPoint.y == -2.25
+        && parsed.m_osnapRefs[0].m_osnapPoint.z == 3.75
+        && parsed.m_osnapRefs[0].m_hasLastPointRef
+        && parsed.m_osnapRefs[0].m_lastPointRef == 0;
+    t.expect(read && input.isGood() && fieldsMatch && refMatches,
+             "AC1018 inline text and osnap body fields parse with exact links");
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    t.expect(!parsed.encodeDwg(DRW::AC1018, &body, &strings, &handles)
+                 && body.data().empty() && strings.data().empty()
+                 && handles.data().empty(),
+             "AC1018 detailed DIMASSOC stays refused by DWG encoder");
+}
+
 void testLayoutVectors(TestContext& t) {
     for (DRW::Version version : kVersions) {
         LayoutEncodeProbe object;
@@ -19067,7 +19189,8 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--dimassoc-dwg-detail-readback") {
         TestContext context;
         testDimensionAssociationDwgDetailReadback(context);
-        std::cout << "AC1024 DIMASSOC DWG detail readback: "
+        testDimensionAssociationAc1018Readback(context);
+        std::cout << "AC1018/AC1024 DIMASSOC DWG detail readback: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
@@ -19079,6 +19202,7 @@ int main(int argc, char** argv) {
     testPlotSettingsVectors(context);
     testPlotSettingsDwgDecodeRoundTrip(context);
     testDimensionAssociationDwgDetailReadback(context);
+    testDimensionAssociationAc1018Readback(context);
     testLayoutVectors(context);
     testR2007TableCellTypeReaderVectors(context);
     testTablePlacementVectors(context);
