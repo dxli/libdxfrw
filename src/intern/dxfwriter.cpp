@@ -692,6 +692,26 @@ bool dxfWriter::writeUtf8String(int code, std::string_view text) {
     return m_textFailure == TextFailure::NoFailure && writeString(code, encoded);
 }
 
+bool dxfWriter::writeUtf8StringBounded(int code, std::string_view text,
+                                       std::size_t maxEncodedBytes) {
+    // On compatible modern DXF output, ordinary UTF-8 strings can be sent
+    // directly to the synchronous sink. ASCII text-mode controls still need
+    // escaping first, so they take the conversion path below.
+    if (usesCompatibleModernDxfUtf8()
+        && (m_binaryStrings || !hasDxfAsciiControlToEscape(text))) {
+        if (text.size() > maxEncodedBytes)
+            return recordWriteResult(false);
+        return writeString(code, text);
+    }
+
+    std::string encoded = fromUtf8String(text);
+    if (hasWriteError())
+        return false;
+    if (encoded.size() > maxEncodedBytes)
+        return recordWriteResult(false);
+    return writeString(code, encoded);
+}
+
 bool dxfWriter::writeUtf8Chunks(std::string_view text, int continuationCode,
                                int finalCode, std::size_t maxBytes) {
     std::string encoded;

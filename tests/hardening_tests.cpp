@@ -1267,6 +1267,152 @@ void testLTypeElementFlagReadTolerance(TestContext& t) {
              "ASCII LTYPE parser rejects values beyond signed-16-bit width without mutation");
 }
 
+void testLTypeGroup9EncodedLength(TestContext& t) {
+    struct TargetProfile {
+        const char* versionName;
+        DRW::Version version;
+        const char* codePage;
+    };
+    const TargetProfile targets[] = {
+        {"AC1012", DRW::AC1012, "ANSI_1252"},
+        {"AC1015", DRW::AC1015, "ANSI_1252"},
+        {"AC1021", DRW::AC1021, "ANSI_1252"},
+    };
+
+    const auto makeLineType = [](const std::string& text) {
+        ExposedLType lineType;
+        lineType.name = "GROUP9_LIMIT";
+        lineType.size = 1;
+        lineType.length = 1.0;
+        lineType.path.push_back(1.0);
+        DRW_LTypeSegment segment;
+        segment.length = 1.0;
+        segment.shapeFlags = 0x02;
+        segment.text = text;
+        lineType.segments.push_back(std::move(segment));
+        return lineType;
+    };
+
+    const auto writeLineType = [&](const TargetProfile& target, bool binary,
+                                   const std::string& text) {
+        std::ostringstream output(std::ios::out | std::ios::binary);
+        dxfRW codec(nullptr);
+        codec.version = target.version;
+        codec.binFile = binary;
+        codec.writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+        codec.writer->setVersion(target.versionName, true);
+        codec.writer->setCodePage(target.codePage);
+        ExposedLType lineType = makeLineType(text);
+        const bool written = codec.writeLineType(&lineType);
+        return std::make_pair(written, output.str());
+    };
+
+    const auto readsBackText = [&](const TargetProfile& target, bool binary,
+                                   const std::string& bytes,
+                                   const std::string& expected) {
+        std::istringstream input(bytes, std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion(target.versionName, true);
+        reader->setCodePage(target.codePage);
+        ExposedLType parsed;
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (!parsed.parseCode(code, reader))
+                return false;
+        }
+        return parsed.segments.size() == 1u
+            && parsed.segments.front().text == expected
+            && parsed.validateDxf();
+    };
+
+    const std::string atLimit(255u, 'x');
+    const std::string overLimit(256u, 'x');
+    for (const TargetProfile& target : targets) {
+        for (const bool binary : {false, true}) {
+            const auto accepted = writeLineType(target, binary, atLimit);
+            t.expect(accepted.first && !accepted.second.empty()
+                         && readsBackText(target, binary, accepted.second,
+                                          atLimit),
+                     "LTYPE group-9 255-byte text writes and reads back in ASCII/Binary DXF");
+
+            const auto refused = writeLineType(target, binary, overLimit);
+            t.expect(!refused.first && refused.second.empty(),
+                     "LTYPE group-9 text above the conservative 255-byte bound is atomically refused");
+        }
+    }
+
+    const std::string latin1AtLimit = std::string(254u, 'x') + u8"é";
+    const std::string latin1OverLimit = std::string(255u, 'x') + u8"é";
+    const std::string utf8AtLimit = std::string(253u, 'x') + u8"é";
+    const std::string utf8OverLimit = std::string(254u, 'x') + u8"é";
+    for (const bool binary : {false, true}) {
+        const auto legacyAccepted = writeLineType(
+            targets[0], binary, latin1AtLimit);
+        t.expect(legacyAccepted.first
+                     && readsBackText(targets[0], binary,
+                                      legacyAccepted.second, latin1AtLimit),
+                 "LTYPE group-9 bound uses ANSI code-page bytes and round-trips Unicode");
+        const auto legacyRefused = writeLineType(
+            targets[0], binary, latin1OverLimit);
+        t.expect(!legacyRefused.first && legacyRefused.second.empty(),
+                 "LTYPE group-9 refusal measures the converted legacy code-page value");
+
+        const auto modernAccepted = writeLineType(
+            targets[2], binary, utf8AtLimit);
+        t.expect(modernAccepted.first
+                     && readsBackText(targets[2], binary,
+                                      modernAccepted.second, utf8AtLimit),
+                 "R2007+ LTYPE group-9 bound measures emitted UTF-8 bytes");
+        const auto modernRefused = writeLineType(
+            targets[2], binary, utf8OverLimit);
+        t.expect(!modernRefused.first && modernRefused.second.empty(),
+                 "R2007+ LTYPE group-9 refuses UTF-8 over the encoded-byte bound");
+    }
+
+    const std::string asciiEscapedAtLimit = std::string(253u, 'x') + '^';
+    const auto asciiEscaped = writeLineType(
+        targets[2], false, asciiEscapedAtLimit);
+    t.expect(asciiEscaped.first && !asciiEscaped.second.empty(),
+             "ASCII DXF group-9 bound is measured after caret-control escaping");
+    const std::string encodedCaretGroup = "9\n"
+        + std::string(253u, 'x') + "^ \n";
+    t.expect(asciiEscaped.second.find(encodedCaretGroup)
+                 != std::string::npos,
+             "ASCII DXF group-9 counts the emitted caret escape bytes");
+    const auto asciiEscapedOver = writeLineType(
+        targets[2], false, std::string(254u, 'x') + '^');
+    t.expect(!asciiEscapedOver.first && asciiEscapedOver.second.empty(),
+             "ASCII DXF refuses group-9 text whose caret escaping exceeds the byte bound");
+
+    // A rejected write must roll back the writer's sticky failure state so a
+    // corrected record can be committed through the same writer.
+    std::ostringstream retryOutput(std::ios::out | std::ios::binary);
+    dxfWriterAscii retryWriter(&retryOutput);
+    retryWriter.setVersion("AC1027", true);
+    bool rejectedOverLimit = false;
+    {
+        DxfWriterRecordScope record(retryWriter);
+        rejectedOverLimit = retryWriter.writeString(0, "LTYPE")
+            && !retryWriter.writeUtf8StringBounded(9, overLimit, 255u);
+    }
+    t.expect(rejectedOverLimit && retryOutput.str().empty()
+                 && !retryWriter.hasWriteError(),
+             "LTYPE group-9 length failure rolls back staged bytes and writer error state");
+    {
+        DxfWriterRecordScope record(retryWriter);
+        const bool corrected = retryWriter.writeString(0, "LTYPE")
+            && retryWriter.writeUtf8StringBounded(9, atLimit, 255u)
+            && record.commit();
+        t.expect(corrected && !retryOutput.str().empty()
+                     && !retryWriter.hasWriteError(),
+                 "same writer commits a corrected group-9 record after rollback");
+    }
+}
+
 void testLeaderAdvisoryCountState(TestContext& t) {
     ExposedLeader source;
     t.expect(parseDxfRecords(source, "76\n99\n10\n1\n20\n2\n30\n3\n10\n4\n20\n6\n30\n0\n")
@@ -24267,6 +24413,18 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::cout << "LTYPE element-flag read tolerance: PASS\n";
+        return 0;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--ltype-group9-encoded-length") {
+        TestContext focused;
+        testLTypeGroup9EncodedLength(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " LTYPE group-9 length assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "LTYPE group-9 encoded length: PASS\n";
         return 0;
     }
     if (argc == 2

@@ -64,6 +64,11 @@ public:
         return writeString(code, text);
     }
     bool writeUtf8String(int code, std::string_view text);
+    // Write a semantic UTF-8 string only when the encoded DXF value fits the
+    // field's byte limit. The limit is checked after the configured DXF
+    // version/code-page conversion.
+    bool writeUtf8StringBounded(int code, std::string_view text,
+                                std::size_t maxEncodedBytes);
     bool writeUtf8Caps(int code, const std::string& text);
     std::string fromUtf8String(std::string_view text);
     bool writeUtf8Chunks(std::string_view text, int continuationCode,

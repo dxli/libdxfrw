@@ -6055,6 +6055,11 @@ bool dxfRW::writeLineType(DRW_LType *ent){
     DxfWriterRecordScope record(*writer);
     bool result = true;
     const auto write = [&result](bool ok) { result = ok && result; };
+    // Autodesk's current ObjectARX table names group 9 explicitly and gives
+    // it a 255-character maximum (fewer for Unicode). A separate group-range
+    // table documents 2049 for codes 0-9 in AutoCAD 2000+, so use the direct
+    // code-9 bound until a qualifying native profile resolves the discrepancy.
+    constexpr std::size_t kMaxLTypeTextEncodedBytes = 255u;
     std::uint32_t allocatedHandle = 0;
     if (version > DRW::AC1009 && !allocateDxfHandle(allocatedHandle))
         return false;
@@ -6115,7 +6120,8 @@ bool dxfRW::writeLineType(DRW_LType *ent){
                 write(writer->writeDouble(44, segment.xOffset));
                 write(writer->writeDouble(45, segment.yOffset));
                 if ((segment.shapeFlags & 0x02) != 0)
-                    write(writer->writeUtf8String(9, segment.text));
+                    write(writer->writeUtf8StringBounded(
+                        9, segment.text, kMaxLTypeTextEncodedBytes));
             }
         }
     }
