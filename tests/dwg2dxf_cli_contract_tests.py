@@ -383,6 +383,43 @@ def check_options(converter, root):
             raise AssertionError(f"documented legacy {token}: wrong output revision/kind")
         checked += 1
 
+    # Legacy output remains interactive when overwrite authority is absent.
+    # run_bounded supplies EOF on stdin, so this verifies the prompt/cancel path
+    # without a tty or an unbounded test wait.
+    destination.write_bytes(SENTINEL)
+    result = invoke([source, "-v2007", destination])
+    if (result.returncode != 1 or b"overwrite Y/N" not in result.stdout
+            or b"Cancelled." not in result.stdout or b"Success:" in result.stdout
+            or destination.read_bytes() != SENTINEL or source.read_bytes() != SOURCE):
+        raise AssertionError(
+            f"legacy overwrite prompt did not cancel safely at stdin EOF: {result!r}")
+    checked += 1
+
+    # FreeCAD's -o form never prompts. Missing -y refuses an existing file;
+    # -y/-Y authorizes replacement for both ASCII and Binary output.
+    destination.write_bytes(SENTINEL)
+    result = invoke([source, "-o", destination])
+    if (result.returncode != 1 or b"refusing to overwrite" not in result.stdout
+            or b"overwrite Y/N" in result.stdout or destination.read_bytes() != SENTINEL
+            or source.read_bytes() != SOURCE):
+        raise AssertionError(f"FreeCAD -o overwrote without authority: {result!r}")
+    checked += 1
+
+    for token in ("-y", "-Y"):
+        for binary in (False, True):
+            destination.write_bytes(SENTINEL)
+            arguments = [source, "-o", destination, token]
+            if binary:
+                arguments.append("-b")
+            result = invoke(arguments)
+            payload = destination.read_bytes()
+            if (result.returncode != 0 or not output_has_revision(
+                    payload, b"AC1021", binary)
+                    or source.read_bytes() != SOURCE):
+                raise AssertionError(
+                    f"FreeCAD {token} overwrite failed for binary={binary}: {result!r}")
+            checked += 1
+
     # SOURCE intentionally has HEADER and ENTITIES but no TABLES section. A
     # successful consumer import must be exportable and remain importable after
     # the adapter synthesizes its canonical layer table. Author both files in
