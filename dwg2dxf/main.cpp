@@ -141,7 +141,13 @@ void reportCliConversionProjection(const dx_data& data,
         ? requiredVersions->second : nullptr;
     const bool wellTypedMask = requiredValue != nullptr
         && requiredValue->type() == DRW_Variant::INTEGER64
-        && requiredValue->code() == 160;
+        && requiredValue->code() == 160
+        // The variant's final value alone cannot reveal a repeated group 160
+        // or duplicate variable: parsing keeps a usable-looking value while
+        // separately marking the source field malformed. Probe the newest
+        // supported target to report source shape independently of the
+        // user's selected output version.
+        && data.headerC.canWriteDxfRequiredVersions(DRW::AC1032);
     const DwgReadObservations& dwgObservations = data.dwgReadOutcome.observations;
     std::cerr << "CLI source disposition projection: schema=1 "
               << "sourceRepairAction=none "

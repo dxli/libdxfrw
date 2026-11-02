@@ -1080,6 +1080,37 @@ def check_source_disposition_projection(converter, root, writer):
             f"supported required-version mask failed AC1032 readback: {reread!r}")
     checked += 2
 
+    malformed_required_version_fields = {
+        "duplicate variable": (
+            b"9\n$REQUIREDVERSIONS\n160\n1\n"
+            b"9\n$REQUIREDVERSIONS\n160\n2\n"),
+        "repeated group 160": (
+            b"9\n$REQUIREDVERSIONS\n160\n1\n160\n2\n"),
+        "wrong group code": b"9\n$REQUIREDVERSIONS\n70\n1\n",
+    }
+    for index, (description, fields) in enumerate(
+            malformed_required_version_fields.items()):
+        malformed_source = root / f"malformed required versions {index}.dxf"
+        malformed_output = root / f"malformed required versions destination {index}.dxf"
+        malformed_bytes = SOURCE.replace(
+            b"0\nENDSEC\n0\nSECTION\n2\nENTITIES",
+            fields + b"0\nENDSEC\n0\nSECTION\n2\nENTITIES", 1)
+        malformed_source.write_bytes(malformed_bytes)
+        malformed_output.write_bytes(SENTINEL)
+        malformed_mask = run_bounded(
+            [str(converter), str(malformed_source), "-o", str(malformed_output),
+             "-v2018", "-y", "-d"], 10, 131072, cwd=root)
+        if (malformed_mask.returncode != 1
+                or malformed_output.read_bytes() != SENTINEL
+                or malformed_source.read_bytes() != malformed_bytes
+                or b"sourceRequiredVersionsStatus=malformed" not in malformed_mask.stderr
+                or b"sourceRequiredVersionsMask=unknown" not in malformed_mask.stderr
+                or b"sourceRequiredVersionsOutput=refused" not in malformed_mask.stderr):
+            raise AssertionError(
+                f"{description} REQUIREDVERSIONS was not diagnosed and refused "
+                f"atomically: {malformed_mask!r}")
+        checked += 1
+
     issue_pairs = [
         (0, b"SECTION"), (2, b"HEADER"), (9, b"$ACADVER"), (1, b"AC1021"),
         (9, b"$DWGCODEPAGE"), (3, b"ANSI_1252"), (0, b"ENDSEC"),
