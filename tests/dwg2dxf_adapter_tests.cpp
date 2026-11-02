@@ -25747,6 +25747,151 @@ bool qualifyMLeaderAdapterSerializer() {
     return true;
 }
 
+bool qualifyArcAlignedTextD2tOutputGuard() {
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch()
+                           .count();
+    const std::filesystem::path directory =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-arcalignedtext-d2t-"
+           + std::to_string(nonce));
+    std::filesystem::create_directories(directory);
+
+    using D2TField = UTF8STRING DRW_ArcAlignedText::*;
+    const std::array<D2TField, 6> fields{{
+        &DRW_ArcAlignedText::m_xScale,
+        &DRW_ArcAlignedText::m_textSize,
+        &DRW_ArcAlignedText::m_charSpacing,
+        &DRW_ArcAlignedText::m_offsetFromArc,
+        &DRW_ArcAlignedText::m_rightOffset,
+        &DRW_ArcAlignedText::m_leftOffset}};
+    const std::array<UTF8STRING, 6> values{{
+        "1.125", "2.25", "1.375", "-0.125", "0.25", "-0.375"}};
+    const auto makeSource = [&]() {
+        auto data = std::make_unique<dx_data>();
+        auto* text = new DRW_ArcAlignedText();
+        text->handle = 0xA700u;
+        text->parentHandle = DRW::DxfModelSpaceBlockRecordHandle;
+        text->style = "Standard";
+        text->text = "D2T output guard";
+        text->m_center = DRW_Coord(12.0, -4.0, 0.0);
+        text->m_radius = 8.0;
+        text->m_startAngle = 0.25;
+        text->m_endAngle = 2.5;
+        text->height = 2.25;
+        text->widthscale = 1.125;
+        for (std::size_t index = 0; index < fields.size(); ++index)
+            text->*fields[index] = values[index];
+        data->mBlock->ent.push_back(text);
+        return std::pair<std::unique_ptr<dx_data>, DRW_ArcAlignedText*>{
+            std::move(data), text};
+    };
+    const auto findArcText = [](dx_data& data) -> DRW_ArcAlignedText* {
+        if (data.mBlock == nullptr)
+            return nullptr;
+        for (DRW_Entity* entity : data.mBlock->ent) {
+            if (auto* text = dynamic_cast<DRW_ArcAlignedText*>(entity))
+                return text;
+        }
+        return nullptr;
+    };
+    const auto hasValues = [&fields, &values](
+            const DRW_ArcAlignedText* text) {
+        if (text == nullptr)
+            return false;
+        for (std::size_t index = 0; index < fields.size(); ++index) {
+            if (text->*fields[index] != values[index])
+                return false;
+        }
+        return true;
+    };
+    const auto readWholeFile = [](const std::filesystem::path& path) {
+        std::ifstream input(path, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(input)),
+                           std::istreambuf_iterator<char>());
+    };
+    const std::string sentinel =
+        "existing ARCALIGNEDTEXT destination survives\n";
+
+    for (const bool binary : {false, true}) {
+        const std::string suffix = binary ? "binary" : "ascii";
+
+        // Empty D2T fields retain the existing compatibility projection.
+        const std::filesystem::path defaultOutput = directory
+            / ("defaults-" + suffix + ".dxf");
+        auto defaultSource = makeSource();
+        for (const D2TField field : fields)
+            defaultSource.second->*field = "";
+        dx_iface defaultWriter;
+        if (!defaultWriter.fileExport(defaultOutput.string(), DRW::AC1027,
+                                      binary, defaultSource.first.get(), true))
+            return fail("empty ARCALIGNEDTEXT D2T defaults did not export");
+        dx_data defaultReadback;
+        dx_iface defaultReader;
+        if (!defaultReader.fileImport(defaultOutput.string(), &defaultReadback,
+                                      false))
+            return fail("defaulted ARCALIGNEDTEXT output did not read back");
+        DRW_ArcAlignedText* defaultText = findArcText(defaultReadback);
+        if (defaultText == nullptr || defaultText->m_xScale != "1.125"
+            || defaultText->m_textSize != "2.25"
+            || defaultText->m_charSpacing != "1"
+            || defaultText->m_offsetFromArc != "0"
+            || defaultText->m_rightOffset != "0"
+            || defaultText->m_leftOffset != "0")
+            return fail("empty ARCALIGNEDTEXT D2T fields changed their defaults");
+
+        for (std::size_t fieldIndex = 0; fieldIndex < fields.size();
+             ++fieldIndex) {
+            for (const std::string invalid : {"not-a-number", "nan"}) {
+                const std::filesystem::path output = directory
+                    / ("retry-" + suffix + "-" + std::to_string(fieldIndex)
+                       + (invalid == "nan" ? "-nonfinite.dxf" : "-malformed.dxf"));
+                {
+                    std::ofstream previous(output, std::ios::binary);
+                    if (!previous)
+                        return fail("could not seed ARCALIGNEDTEXT destination");
+                    previous << sentinel;
+                }
+
+                auto source = makeSource();
+                source.second->*fields[fieldIndex] = invalid;
+                const std::uint32_t sourceHandle = source.second->handle;
+                const std::uint32_t sourceOwner = source.second->parentHandle;
+                dx_iface writer;
+                const bool refused = !writer.fileExport(
+                    output.string(), DRW::AC1027, binary, source.first.get(),
+                    true);
+                if (!refused || readWholeFile(output) != sentinel
+                    || (source.second->*fields[fieldIndex]) != invalid
+                    || source.second->handle != sourceHandle
+                    || source.second->parentHandle != sourceOwner)
+                    return fail("malformed/nonfinite ARCALIGNEDTEXT D2T did not refuse atomically");
+
+                source.second->*fields[fieldIndex] = values[fieldIndex];
+                if (!writer.fileExport(output.string(), DRW::AC1027, binary,
+                                       source.first.get(), true))
+                    return fail("corrected ARCALIGNEDTEXT D2T failed same-adapter retry");
+                dx_data readback;
+                dx_iface reader;
+                if (!reader.fileImport(output.string(), &readback, false)
+                    || !hasValues(findArcText(readback)))
+                    return fail("corrected ARCALIGNEDTEXT output lost D2T values on readback");
+                if (source.second->handle != sourceHandle
+                    || source.second->parentHandle != sourceOwner
+                    || !hasValues(source.second))
+                    return fail("ARCALIGNEDTEXT output or retry mutated caller model");
+                std::error_code ignored;
+                std::filesystem::remove(output, ignored);
+            }
+        }
+        std::error_code ignored;
+        std::filesystem::remove(defaultOutput, ignored);
+    }
+    std::error_code ignored;
+    std::filesystem::remove(directory, ignored);
+    return true;
+}
+
 bool writeBinaryDxfControl(const std::string& path,
                            const std::string& asciiDrawing,
                            const std::string& version) {
@@ -61429,6 +61574,9 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--mleader-adapter-writer")
         return qualifyMLeaderAdapterSerializer()
                 && objectContextDataLossRefusesExport() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--arcalignedtext-d2t-output-guard")
+        return qualifyArcAlignedTextD2tOutputGuard() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--retain-named-object-callbacks")
         return retainNamedObjectCallbacks() ? 0 : 1;
     if (argc == 2

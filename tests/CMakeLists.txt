@@ -1532,6 +1532,15 @@ set_tests_properties(dwg2dxf_mleader_adapter_writer PROPERTIES
     TIMEOUT 10
 )
 
+add_test(
+    NAME dwg2dxf_arcalignedtext_d2t_output_guard
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --arcalignedtext-d2t-output-guard
+)
+set_tests_properties(dwg2dxf_arcalignedtext_d2t_output_guard PROPERTIES
+    LABELS "fast;dxf;adapter;annotation;generated"
+    TIMEOUT 30
+)
+
 # The concrete converter adapter must own every decoded named-object callback;
 # the in-memory WDFLT control also guards copied parse-validity evidence.
 add_test(

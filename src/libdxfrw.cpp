@@ -11628,11 +11628,13 @@ bool dxfRW::writeText(DRW_Text *ent) {
     return !writer->hasWriteError();
 }
 
-static double arcAlignedDxfValue(const UTF8STRING& value, double fallback) {
-    if (value.empty())
-        return fallback;
-    double parsed = 0.0;
-    return DxfNumeric::parsePrefix(value, parsed) ? parsed : fallback;
+static bool arcAlignedDxfValue(const UTF8STRING& value, double fallback,
+                               double& result) {
+    if (value.empty()) {
+        result = fallback;
+        return std::isfinite(result);
+    }
+    return DxfNumeric::parsePrefix(value, result) && std::isfinite(result);
 }
 
 bool dxfRW::writeRText(DRW_RText *ent) {
@@ -11666,6 +11668,25 @@ bool dxfRW::writeArcAlignedText(DRW_ArcAlignedText *ent) {
         return rejectUnsupportedDxfWrite("ARCALIGNEDTEXT");
     if (!preflightEntity(ent))
         return false;
+    double xScale = 0.0;
+    double textSize = 0.0;
+    double charSpacing = 0.0;
+    double offsetFromArc = 0.0;
+    double rightOffset = 0.0;
+    double leftOffset = 0.0;
+    if (!arcAlignedDxfValue(ent->m_xScale,
+                            ent->widthscale > 0.0 ? ent->widthscale : 1.0,
+                            xScale)
+        || !arcAlignedDxfValue(ent->m_textSize,
+                               ent->height > 0.0 ? ent->height : 0.0,
+                               textSize)
+        || !arcAlignedDxfValue(ent->m_charSpacing, 1.0, charSpacing)
+        || !arcAlignedDxfValue(ent->m_offsetFromArc, 0.0, offsetFromArc)
+        || !arcAlignedDxfValue(ent->m_rightOffset, 0.0, rightOffset)
+        || !arcAlignedDxfValue(ent->m_leftOffset, 0.0, leftOffset)) {
+        return rejectDxfWriteWithReason(
+            "ARCALIGNEDTEXT", "D2T parameters must be finite numeric values");
+    }
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "ARCALIGNEDTEXT");
     if (!writeEntity(ent))
@@ -11681,14 +11702,12 @@ bool dxfRW::writeArcAlignedText(DRW_ArcAlignedText *ent) {
     writer->writeDouble(20, ent->m_center.y);
     writer->writeDouble(30, ent->m_center.z);
     writer->writeDouble(40, ent->m_radius);
-    writer->writeDouble(41, arcAlignedDxfValue(
-        ent->m_xScale, ent->widthscale > 0.0 ? ent->widthscale : 1.0));
-    writer->writeDouble(42, arcAlignedDxfValue(
-        ent->m_textSize, ent->height > 0.0 ? ent->height : 0.0));
-    writer->writeDouble(43, arcAlignedDxfValue(ent->m_charSpacing, 1.0));
-    writer->writeDouble(44, arcAlignedDxfValue(ent->m_offsetFromArc, 0.0));
-    writer->writeDouble(45, arcAlignedDxfValue(ent->m_rightOffset, 0.0));
-    writer->writeDouble(46, arcAlignedDxfValue(ent->m_leftOffset, 0.0));
+    writer->writeDouble(41, xScale);
+    writer->writeDouble(42, textSize);
+    writer->writeDouble(43, charSpacing);
+    writer->writeDouble(44, offsetFromArc);
+    writer->writeDouble(45, rightOffset);
+    writer->writeDouble(46, leftOffset);
     writer->writeDouble(50, ent->m_startAngle * ARAD);
     writer->writeDouble(51, ent->m_endAngle * ARAD);
     writer->writeInt32(90, ent->m_rawColor);
