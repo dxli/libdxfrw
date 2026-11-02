@@ -2,7 +2,7 @@
   "schema": "libdxfrw-implementation-slice-v1",
   "id": "s8-1a-block-surface-staging-2026-11-02",
   "date": "2026-11-02",
-  "status": "IMPLEMENTED_UNCOMMITTED",
+  "status": "COMMITTED_IMPLEMENTATION",
   "repositoryHead": "5e4fad180fe9c32b39429cd1a28639a716adc82b",
   "scope": {
     "plan": "DWG_DXF_3D_SUPPORT_PLAN.md S8.1a / PAR-118",
@@ -64,7 +64,8 @@
     "No external DWG/DXF fixture or public callback/interface change was added."
   ],
   "repositoryState": {
-    "commitStatus": "UNCOMMITTED",
-    "reason": "The shared worktree contains broader unrelated implementation changes; this slice was not isolated into a commit."
+    "commitStatus": "COMMITTED",
+    "implementationCommit": "8d2f48a7",
+    "reason": "The verified BLOCK surface tests, scoped S8.1a plan update, and receipt were committed; unrelated worktree changes remain unstaged."
   }
 }
