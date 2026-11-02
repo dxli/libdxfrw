@@ -1189,6 +1189,102 @@ def check_source_disposition_projection(converter, root, writer):
             f"DXF malformed-escape issue mask was not projected exactly: {escaped!r}")
     checked += 1
 
+    undefined_pairs = [
+        (0, b"SECTION"), (2, b"HEADER"), (9, b"$ACADVER"), (1, b"AC1015"),
+        (9, b"$DWGCODEPAGE"), (3, b"ANSI_1252"), (0, b"ENDSEC"),
+        (0, b"SECTION"), (2, b"ENTITIES"), (0, b"TEXT"), (5, b"A0"),
+        (8, b"0"), (10, 1.0), (20, 2.0), (40, 1.0), (1, b"L\x81R"),
+        (0, b"ENDSEC")]
+    undefined_source = root / "decoder undefined legacy byte.dxf"
+    undefined_output = root / "decoder undefined legacy destination.dxf"
+    undefined_bytes = encode_authored_pairs(undefined_pairs, False)
+    undefined_source.write_bytes(undefined_bytes)
+    undefined_output.write_bytes(SENTINEL)
+    undefined = run_bounded(
+        [str(converter), str(undefined_source), "-o", str(undefined_output),
+         "-y", "-d", "--dxf-codepage-policy=exact-named"],
+        10, 131072, cwd=root)
+    projection = next((line for line in undefined.stderr.splitlines()
+                       if line.startswith(b"CLI source disposition projection:")), b"")
+    undefined_mask = next((field.split(b"=", 1)[1] for field in projection.split()
+                           if field.startswith(b"sourceDxfTextIssueMask=")), b"")
+    if (undefined.returncode != 1 or undefined_output.read_bytes() != SENTINEL
+            or undefined_source.read_bytes() != undefined_bytes
+            or b"inputCodePagePolicy=exact-named" not in projection
+            or undefined_mask != b"0x0000000000000140"):
+        raise AssertionError(
+            "DXF undefined legacy-byte issue mask was not projected exactly: "
+            f"{undefined!r}")
+    checked += 1
+
+    exact_issue_cases = [
+        ("unrepresented MIF", b"AC1015", b"ANSI_1252", b"\\M+48861",
+         "--dxf-codepage-policy=exact-named", b"exact-named",
+         b"0x0000000000000400"),
+        ("invalid scalar CIF", b"AC1015", b"ANSI_1252", b"\\U+D800",
+         "--dxf-codepage-policy=exact-named", b"exact-named",
+         b"0x0000000000000c00"),
+        ("unknown codepage with exact mapping", b"AC1015", b"unknown-local", b"\xe9",
+         "--dxf-codepage-policy=exact-named", b"exact-named",
+         b"0x0000000000000084"),
+        ("unspecified codepage", b"AC1015", None, b"\xe9",
+         "--dxf-codepage-policy=exact-named", b"exact-named",
+         b"0x0000000000000001"),
+        ("legacy UTF-16 profile", b"AC1015", b"UTF16", b"AB",
+         "--dxf-codepage-policy=exact-named", b"exact-named",
+         b"0x0000000000005100"),
+        ("legacy UTF-8 profile", b"AC1015", b"UTF8", b"\xc3\xa9",
+         "--dxf-codepage-policy=exact-named", b"exact-named",
+         b"0x0000000000004000"),
+        ("compatibility codepage alias", b"AC1015", b"ISO8859-4", b"L\xa1R",
+         "--dxf-codepage-policy=compatible", b"compatible",
+         b"0x0000000000000142"),
+        ("unspecified source revision", None, b"ANSI_1252", b"L\xe9R",
+         "--dxf-codepage-policy=exact-named", b"exact-named",
+         b"0x0000000000002000"),
+        ("unknown codepage with compatible mapping", b"AC1015", b"unknown-local", b"\xe9",
+         "--dxf-codepage-policy=compatible", b"compatible",
+         b"0x0000000000000008"),
+        ("malformed legacy UTF-16", b"AC1015", b"UTF16", b"\x00\xd8",
+         "--dxf-codepage-policy=exact-named", b"exact-named",
+         b"0x0000000000005180"),
+        ("reapplied UTF-8 codepage", b"AC1015", b"UTF8", b"\xc3\xa9",
+         "--dxf-codepage-policy=compatible", b"compatible",
+         b"0x0000000000000010"),
+    ]
+    for index, (description, revision, page, value, policy_option,
+                expected_policy, expected_mask) in enumerate(exact_issue_cases):
+        pairs = [(0, b"SECTION"), (2, b"HEADER")]
+        if revision is not None:
+            pairs.extend([(9, b"$ACADVER"), (1, revision)])
+        if page is not None:
+            pairs.extend([(9, b"$DWGCODEPAGE"), (3, page)])
+        pairs.extend([
+            (0, b"ENDSEC"), (0, b"SECTION"), (2, b"ENTITIES"),
+            (0, b"TEXT"), (5, b"A0"), (8, b"0"), (10, 1.0),
+            (20, 2.0), (40, 1.0), (1, value), (0, b"ENDSEC")])
+        source = root / f"decoder exact issue {index}.dxf"
+        output = root / f"decoder exact issue destination {index}.dxf"
+        original = encode_authored_pairs(pairs, False)
+        source.write_bytes(original)
+        output.write_bytes(SENTINEL)
+        result = run_bounded(
+            [str(converter), str(source), "-o", str(output), "-y", "-d",
+             policy_option], 10, 131072, cwd=root)
+        projection = next((line for line in result.stderr.splitlines()
+                           if line.startswith(
+                               b"CLI source disposition projection:")), b"")
+        issue_mask = next((field.split(b"=", 1)[1] for field in projection.split()
+                           if field.startswith(b"sourceDxfTextIssueMask=")), b"")
+        if (result.returncode != 1 or output.read_bytes() != SENTINEL
+                or source.read_bytes() != original
+                or b"inputCodePagePolicy=" + expected_policy not in projection
+                or issue_mask != expected_mask):
+            raise AssertionError(
+                f"{description} DXF issue mask was not projected exactly/atomically: "
+                f"{result!r}")
+    checked += len(exact_issue_cases)
+
     if writer is None:
         raise AssertionError("skip projection control requires the local DWG writer")
     skipped_source = root / "generated skipped-record source.dwg"
@@ -1239,6 +1335,35 @@ def check_source_disposition_projection(converter, root, writer):
         raise AssertionError(
             "three same-class skipped DWG objects were not aggregated/refused "
             f"atomically: {multiple_skipped!r}")
+    checked += 1
+
+    multi_class_source = root / "generated distinct skipped-class source.dwg"
+    multi_class_generated = run_bounded(
+        [str(writer), "--generate-cli-skip-source-multi-class", str(multi_class_source)],
+        10, 131072, cwd=root)
+    if multi_class_generated.returncode != 0 or not multi_class_source.is_file():
+        raise AssertionError(
+            f"could not author distinct-class skipped-record DWG locally: "
+            f"{multi_class_generated!r}")
+    multi_class_bytes = multi_class_source.read_bytes()
+    multi_class_output = root / "distinct skipped-class destination.dxf"
+    multi_class_output.write_bytes(SENTINEL)
+    multi_class_skipped = run_bounded(
+        [str(converter), str(multi_class_source), "-o", str(multi_class_output),
+         "-v2013", "-y", "-d"], 10, 2 * 1024 * 1024, cwd=root)
+    projection = next((line for line in multi_class_skipped.stderr.splitlines()
+                       if line.startswith(b"CLI source disposition projection:")), b"")
+    if (multi_class_skipped.returncode != 1
+            or multi_class_output.read_bytes() != SENTINEL
+            or multi_class_source.read_bytes() != multi_class_bytes
+            or b"sourceDwgSkippedCustomClassInstances=3" not in projection
+            or b"sourceDwgSkippedUnsupportedObjectInstances=3" not in projection
+            or b"skippedCustomClasses: sourceNames=3 observedInstances=3" not in multi_class_skipped.stderr
+            or b"skippedUnsupportedObjects: sourceNames=3 observedInstances=3" not in multi_class_skipped.stderr
+            or b"strict-complete conversion requires" not in multi_class_skipped.stderr):
+        raise AssertionError(
+            "three distinct unknown classes were not counted and refused "
+            f"atomically: {multi_class_skipped!r}")
     checked += 1
     return checked
 
