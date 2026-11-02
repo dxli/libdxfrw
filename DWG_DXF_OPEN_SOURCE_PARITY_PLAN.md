@@ -125,8 +125,18 @@ engines.
 vector now checks the modeled AcDbPlotSettings prefix fields, common owner/
 reactor/extension-dictionary handles, plot-view/shade handle roles, and
 truncated-handle reset/retry. The vector is encoder/parser consistency evidence;
-it does not replace physical producer field-span/role proof or whole-document
-graph closure. See the [codec round-trip receipt](docs/research/p4-plotsettings-r2007plus-dwg-codec-decode-roundtrip-2026-11-02.json).
+it does not replace independent producer field-span/role proof. Current strict
+AC1015 DWG-to-DXF output and a fresh DXF re-import also pass for one locally
+generated writer profile: LibreDWG 0.14 independently reads NOD `0x0C` →
+dictionary `0x5E` → `LIBDXFRW_PLOTSETTINGS_90` → PLOTSETTINGS `0x5A`, and the
+current output preserves the decoded fields and reference roles. Because that
+DWG was generated through the LibreCAD/libdxfrw writer path, this qualifies only
+that bounded generated profile. The tracked `ordinary_enc_AC1015.dwg` remains
+refused because both readers identify its extension-dictionary target `0x38` as
+missing; do not synthesize it. Neither result qualifies external producer
+breadth, native plotting, or whole-document closure. See the [codec round-trip
+receipt](docs/research/p4-plotsettings-r2007plus-dwg-codec-decode-roundtrip-2026-11-02.json)
+and [current strict readback receipt](docs/research/p4-plotsettings-ac1015-current-strict-readback-2026-11-02.json).
 
 After actual prerequisites close, run one composed strict CLI checkpoint. A
 successful process exit or record count alone is not closure. For AC1018 opt-in
