@@ -8082,6 +8082,7 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
     ret2 = ret2 && stageControlReceipt(oc, kLTypeTable, ltControl);
     if (!ret2) {
       ltControl.handlesList.clear();
+      ltControl.orderedHandleSlots.clear();
       DRW_DBG("\nWARNING: LineType control parse failed\n");
     }
     if (ret)
@@ -8137,6 +8138,7 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
     ret2 = ret2 && stageControlReceipt(oc, kLayerTable, layControl);
     if (!ret2) {
       layControl.handlesList.clear();
+      layControl.orderedHandleSlots.clear();
       DRW_DBG("\nWARNING: Layer control parse failed\n");
     }
     if (ret)
@@ -8159,16 +8161,24 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
         ret2 = parseTableRecord(oc, kLayerTable, la);
         ret = ret && ret2;
         if (ret2) {
-          const std::string layerName = la->name;
-          if (insertTableRecord(layermap, std::move(la), "layer", oc.handle,
-                                kLayerTable.recordType))
-            m_layerNameOrder.push_back(layerName); // proxy op16 index space
-          else
-            m_layerNameOrder.emplace_back();
+          (void)insertTableRecord(layermap, std::move(la), "layer", oc.handle,
+                                  kLayerTable.recordType);
         } else {
-          m_layerNameOrder.emplace_back(); // keep proxy index alignment
           DRW_DBG("\nWARNING: Layer record parseDwg failed (handle skipped)\n");
         }
+      }
+    }
+    m_layerNameOrder.clear();
+    if (!DRW::reserve(m_layerNameOrder,
+                      static_cast<int>(layControl.orderedHandleSlots.size())))
+      return abortTablePhase();
+    for (const std::uint32_t layerHandle : layControl.orderedHandleSlots) {
+      const auto layer = layermap.find(layerHandle);
+      if (layerHandle == 0u || layer == layermap.end() ||
+          layer->second == nullptr) {
+        m_layerNameOrder.emplace_back();
+      } else {
+        m_layerNameOrder.push_back(layer->second->name);
       }
     }
   }
@@ -14299,11 +14309,16 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
       static_cast<std::uint64_t>(numEntries) + phantomEntryCount;
   std::list<std::uint32_t> parsedHandles;
   std::list<std::uint32_t> parsedPhantoms;
+  std::vector<std::uint32_t> parsedHandleSlots;
+  if (!DRW::reserve(parsedHandleSlots,
+                    static_cast<int>(childHandleCount)))
+    return fail();
   std::unordered_set<std::uint32_t> seenHandles;
 
   for (std::uint64_t i = 0; i < childHandleCount; i++) {
     if (!readDwgHandleChecked(*hBuf, handle, true, objectH))
       return fail();
+    parsedHandleSlots.push_back(objectH.ref);
     if (objectH.ref != 0) { // in vports R14  I found some NULL handles
       if (!seenHandles.insert(objectH.ref).second)
         return fail();
@@ -14331,5 +14346,6 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   }
   handlesList = std::move(parsedHandles);
   phantomHandles = std::move(parsedPhantoms);
+  orderedHandleSlots = std::move(parsedHandleSlots);
   return buf->isGood() && hBuf->isGood() ? true : fail();
 }

@@ -1293,6 +1293,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_dwg_mixed_missing_block_ownership PROPERTIES
         LABELS "fast;dwg;ownership;generated"
         TIMEOUT 30)
+    add_test(NAME libdxfrw_dwg_control_handle_slots
+        COMMAND libdxfrw_dwg_reader_matrix_tests --control-handle-slots)
+    set_tests_properties(libdxfrw_dwg_control_handle_slots PROPERTIES
+        LABELS "fast;dwg;tables;proxy;generated"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_dwg_space_block_delimiter_owner
         COMMAND libdxfrw_dwg_reader_matrix_tests --space-block-delimiter-owner)
     set_tests_properties(libdxfrw_dwg_space_block_delimiter_owner PROPERTIES

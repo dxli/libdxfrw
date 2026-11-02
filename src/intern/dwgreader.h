@@ -1111,11 +1111,15 @@ public:
     DRW_TableEntry::reset();
     handlesList.clear();
     phantomHandles.clear();
+    orderedHandleSlots.clear();
   }
   bool parseDwg(DRW::Version version, dwgBuffer *buf,
                 std::uint32_t bs = 0) override;
   std::list<std::uint32_t> handlesList;
   std::list<std::uint32_t> phantomHandles;
+  // Declared table-entry references in wire order, preserving null handles.
+  // Phantom entries, when present, follow the declared entries.
+  std::vector<std::uint32_t> orderedHandleSlots;
 };
 
 class DwgCodePageTestAccess;
@@ -2061,11 +2065,10 @@ public:
   std::vector<DRW_DwgFramePublication> m_deferredTableFramePublications;
   std::unordered_map<std::uint32_t, DRW_LType *> ltypemap;
   std::unordered_map<std::uint32_t, DRW_Layer *> layermap;
-  /// Layer / linetype names in file storage order (the handlesList iteration
-  /// order). This is the index space the proxy-graphics ATTRIBUTE_LAYER(16) /
-  /// ATTRIBUTE_LINETYPE(18) opcodes reference; each slot is index-aligned with
-  /// the control's handlesList (empty string for a missing record). Verified
-  /// byte-identical to the dwgread/LibreDWG layer order. See
+  /// Layer names in declared LAYER_CONTROL slot order, retaining null slots;
+  /// source proxy ATTRIBUTE_LAYER indices address this space. Linetype order
+  /// remains the existing compact control-handle order until a physical source
+  /// proves its null-slot indexing semantics. See
   /// DRW_ProxyGraphicDecoder::decode.
   std::vector<std::string> m_layerNameOrder;
   std::vector<std::string> m_ltypeNameOrder;

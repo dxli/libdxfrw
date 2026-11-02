@@ -6962,6 +6962,17 @@ public:
         return dwgReader::readDwgTables(header, &input);
     }
 
+    bool parseControlFrame(const std::vector<std::uint8_t>& bytes,
+                           DRW_ObjControl& control) {
+        dwgBuffer input(bytes.data(), bytes.size(), &decoder);
+        DwgObjectFrame frame;
+        if (!frame.readAt(input, DRW::AC1015, 0u))
+            return false;
+        dwgBuffer body(frame.body().data(), frame.body().size(), &decoder);
+        return control.parseDwg(DRW::AC1015, &body, frame.bodyBitSize())
+            && body.isGood();
+    }
+
     bool readTrackedAc1015Header(
         DRW_Header& header,
         std::map<std::int16_t, std::uint32_t>& controlHandles) {
@@ -7113,6 +7124,35 @@ struct GeneratedTableControls {
         return true;
     }
 };
+
+void testDwgControlPreservesDeclaredHandleSlots(TestContext& t) {
+    std::vector<std::uint32_t> entries;
+    entries.reserve(54u);
+    for (std::uint32_t index = 0u; index < 54u; ++index) {
+        entries.push_back(index >= 44u && index <= 48u
+                              ? 0u
+                              : 0xA000u + index);
+    }
+    const std::vector<std::uint8_t> frame = GeneratedTableControls::makeFrame(
+        DRW::DwgLayerControlObjectType, 0x9000u, entries, {});
+    std::vector<std::uint8_t> emptyInput;
+    TableControlRecoveryReader reader(emptyInput);
+    DRW_ObjControl control;
+    const bool parsed = reader.parseControlFrame(frame, control);
+
+    std::vector<std::uint32_t> nonNullHandles;
+    for (const std::uint32_t handle : entries) {
+        if (handle != 0u)
+            nonNullHandles.push_back(handle);
+    }
+    const std::vector<std::uint32_t> parsedHandles(
+        control.handlesList.begin(), control.handlesList.end());
+    t.expect(parsed && control.orderedHandleSlots == entries,
+             "LAYER_CONTROL preserves null references at their declared table indices");
+    t.expect(parsedHandles == nonNullHandles
+                 && control.phantomHandles.empty(),
+             "generic table ownership handles remain compact and null slots do not become references");
+}
 
 void testErasedBlockRecordTableRecovery(TestContext& t) {
     const auto samplePath = std::filesystem::path(
@@ -17221,6 +17261,13 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--erased-block-record-table-recovery") {
         TestContext focused;
         testErasedBlockRecordTableRecovery(focused);
+        std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--control-handle-slots") {
+        TestContext focused;
+        testDwgControlPreservesDeclaredHandleSlots(focused);
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
