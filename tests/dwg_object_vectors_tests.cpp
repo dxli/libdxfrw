@@ -7177,12 +7177,11 @@ struct TableContentStyleIds {
 
 bool testTableCadValueHasPayload(DRW::Version version, std::int32_t flags,
                                 int dataType) {
-    // ODA §20.4.99 default, plus only the two AC1021 TABLE profiles that are
-    // bounded by physical source evidence: checksum doubles and native strings.
-    const bool observedAc1021NativeString = version == DRW::AC1021
-        && (flags == 0x04 || flags == 0x06) && dataType == 4;
-    return version <= DRW::AC1018 || observedAc1021NativeString
-        || (flags & 0x03) == 0;
+    // ODA §20.4.99 uses one-based bit names: bit 1 (mask 0x01) marks kGeneral
+    // and suppresses its variant. AC1021 native strings have a special body
+    // encoding but the same payload-presence rule.
+    (void)dataType;
+    return version <= DRW::AC1018 || (flags & 0x01) == 0;
 }
 
 bool makeR2007TableContentObjectFrame(R2007TableContentObjectFrame& frame,
@@ -9228,6 +9227,8 @@ void testTableCellValueUnitTypeDomain(TestContext& t) {
 }
 
 void testTableCellGeneralValueFormatFlag(TestContext& t) {
+    const std::vector<std::uint8_t> expectedRaw{
+        0xA1u, 0xB2u, 0xC3u, 0xD4u};
     R2007TableContentObjectFrame ac1021Frame;
     const bool ac1021Built = makeR2007TableContentObjectFrame(
         ac1021Frame, false, 0u, 0xA710u, false, 0u, 0u,
@@ -9252,13 +9253,13 @@ void testTableCellGeneralValueFormatFlag(TestContext& t) {
                      && parsed.m_semanticContentComplete && content != nullptr
                      && content->m_value.m_formatFlags == 0x02
                      && content->m_value.m_dataType == 512
-                     && content->m_value.m_dataSize == 0u
-                     && content->m_value.m_rawData.empty()
-                     && content->m_value.m_value.type() == DRW_Variant::INVALID
+                     && content->m_value.m_dataSize == expectedRaw.size()
+                     && content->m_value.m_rawData == expectedRaw
+                     && content->m_value.m_value.type() == DRW_Variant::BINARY
                      && content->m_value.m_unitType == 1
                      && content->m_value.m_formatString == "0.0"
                      && content->m_value.m_valueString == "42.5",
-                 "AC1021 TABLECONTENT suppresses unsupported kGeneral payload under ODA flags");
+                 "AC1021 TABLECONTENT retains flags=2 general payload under ODA bit-1 rule");
     }
 
     R2010EmbeddedTableFrame ac1024Frame;
@@ -9286,14 +9287,14 @@ void testTableCellGeneralValueFormatFlag(TestContext& t) {
                      && parsed.m_semanticContentComplete && content != nullptr
                      && content->m_value.m_formatFlags == 0x02
                      && content->m_value.m_dataType == 512
-                     && content->m_value.m_dataSize == 0u
-                     && content->m_value.m_rawData.empty()
-                     && content->m_value.m_value.type() == DRW_Variant::INVALID
+                     && content->m_value.m_dataSize == expectedRaw.size()
+                     && content->m_value.m_rawData == expectedRaw
+                     && content->m_value.m_value.type() == DRW_Variant::BINARY
                      && content->m_value.m_unitType == 1
                      && content->m_value.m_formatString == "0.00"
                      && content->m_value.m_valueString == "42.50"
                      && cursorBit(input) == ac1024Frame.tableDataEndBit,
-                 "AC1024 TABLE suppresses the type-specific payload and preserves the following table-tail boundary");
+                 "AC1024 TABLE retains flags=2 payload and preserves the following table-tail boundary");
     }
 }
 
@@ -9339,7 +9340,7 @@ void testCadValuePayloadPresence(TestContext& t) {
                                  && parsed.isDwgPayloadValid(version)
                                  && matches(version, true, parsed.m_value,
                                             flags, type),
-                             "FIELD always reads explicit type and suppresses payload for low flag bits");
+                             "FIELD reads the explicit type and applies its own low-flag payload rule");
                     const bool expectedHandle = type == 64
                         && (flags & 3) == 0;
                     t.expect(DRW_Field::cadValueHasDwgObjectHandle(version, parsed.m_value)
@@ -9392,9 +9393,7 @@ void testCadValuePayloadPresence(TestContext& t) {
                         content.m_rows[0].m_cells[0].m_contents[0].m_value,
                         flags, type);
                 t.expect(valueMatches,
-                         version == DRW::AC1021
-                             ? "AC1021 TABLE payload exceptions stay limited to source-backed profiles"
-                             : "R2010+ TABLE payload/handle presence follows ODA low-bit suppression");
+                         "TABLE payload/handle presence follows ODA bit-1 mask 0x01 suppression");
             }
         }
     }

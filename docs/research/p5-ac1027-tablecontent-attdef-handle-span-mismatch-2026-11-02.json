@@ -2,7 +2,7 @@
   "schema": "libdxfrw-p5-ac1027-tablecontent-attdef-span-mismatch-v1",
   "recordedAt": "2026-11-02",
   "status": "OPEN_FAIL_CLOSED_SOURCE_SPAN_RECONCILIATION_REQUIRED",
-  "scope": "One public AC1027 TABLECONTENT object whose typed parser reaches the first attributed cell and rejects the next handle-stream reference role.",
+  "scope": "One public AC1027 TABLECONTENT object whose typed parser reaches the first attributed cell and rejects the first ATTDEF handle-stream reference role.",
   "source": {
     "path": "/private/tmp/dwg-example-2013.dwg",
     "version": "AC1027",
@@ -30,7 +30,13 @@
       "reference": "0x11",
       "encodedSizeBytes": 1
     },
-    "sourceSpanStatus": "unresolved; the observation may indicate prior handle-stream offset drift and does not establish a producer deviation from ODA"
+    "sourceSpanStatus": "unresolved; the observation may indicate prior body/string/handle offset drift and does not establish a producer deviation from ODA",
+    "currentMask01Recheck": {
+      "cadValue": {"formatFlags": 2, "dataType": 2, "payloadPresent": true},
+      "followingState": "The parser reads the linked-data state and an attribute count of 1, then fails while reading the first ATTDEF handle.",
+      "tracePath": "/private/tmp/dwg-example-2013-cadvalue-final-trace.log",
+      "traceSha256": "22f37655e8eb36b925928bc2e2d52862ccf540791bd2055a5cc3c05b5b3d8d3"
+    }
   },
   "evidence": {
     "libdxfrwTrace": {
@@ -41,6 +47,17 @@
         "The bounded role probe sees handle code 0x05/reference 0x11 where the current ATTDEF decoder requires code 0x04; parsing fails without publishing the TABLECONTENT typed callback."
       ],
       "instrumentation": "The trace included temporary diagnostic logging in the handle-role probe; those source edits were reverted. Parser behavior and the observed values were unchanged by the diagnostic."
+    },
+    "libdxfrwCurrentCodeRecheck": {
+      "path": "/private/tmp/dwg-example-2013-cadvalue-final-trace.log",
+      "sha256": "22f37655e8eb36b925928bc2e2d52862ccf540791bd2055a5cc3c05b5b3d8d3",
+      "observations": [
+        "The corrected ODA mask-0x01 rule consumes the source flags=2/type=2 payload.",
+        "The first cell's custom data and linked-data state parse; the parser records one attribute and then the cell parse is incomplete at row 0/cell 0.",
+        "The previous bounded handle-role probe for this same source path observed code 0x05/reference 0x11 at the first ATTDEF slot."
+      ],
+      "conversionExit": 1,
+      "dxfOutputCreated": false
     },
     "libreDwgPeer": {
       "version": "LibreDWG 0.14",

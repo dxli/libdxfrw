@@ -265,17 +265,17 @@ census receipt](docs/research/p5-viewport-layer-override-local-corpus-census-202
    all traces remain external to the repository; see the [source-bound span
    mismatch receipt](docs/research/p5-ac1027-tablecontent-attdef-handle-span-mismatch-2026-11-02.json).
 
-**TABLE CadValue flag scope:** ordinary R2007+ TABLE values follow ODA
-§20.4.99: either low format-flag bit suppresses the type-specific payload.
-The observed AC1021 flags=2/type=2 payload is admitted only while consuming the
-exact custom-data key `ACAD_ROUNDTRIP_2008_CELL_CHECKSUM`; it is not a general
-cell-value exception. The separate AC1021 flags=4/6, type=4 native-string
-carrier remains bounded to its source-backed profile. Generated vectors cover
-suppressed flags=2 payloads and following-field alignment. This corrects the
-older receipt's broader generic-TABLE interpretation, recorded in the
-[flag-scope correction receipt](docs/research/p5-table-cadvalue-oda-flags-and-ac1021-checksum-scope-2026-11-02.json).
-It does not resolve the AC1027 first-cell ATTDEF span discrepancy, qualify
-native TABLE semantics, or promote any support claim.
+**TABLE CadValue flag scope:** ODA §20.4.99 uses one-based bit names: bit 1
+(`0x01`) marks `kGeneral` and suppresses the type-specific payload; setting
+only bit 2 (`0x02`) does not suppress it. The AC1021 flags=2/type=2 checksum payload
+therefore follows the ordinary present-payload rule; its custom key records
+source lineage but does not require a parser exception. The AC1021 flags=4/6,
+type=4 native-string carrier has a distinct body encoding. Generated vectors
+cover flags 0–3 and following-field alignment. The current flag-numbering
+recheck is recorded in the
+[flag-scope receipt](docs/research/p5-table-cadvalue-oda-flags-and-ac1021-checksum-scope-2026-11-02.json).
+It does not resolve the AC1027 TABLECONTENT span discrepancy, qualify native
+TABLE semantics, or promote any support claim.
 
 ## P6 — residual semantic and version audit
 
