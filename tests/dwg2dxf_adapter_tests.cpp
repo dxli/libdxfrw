@@ -19942,7 +19942,8 @@ bool generateRootMLeaderStyleControl(const std::filesystem::path& path,
                                      bool includeAlternateBlockRecord = false,
                                      std::int32_t rawLeaderColor = 0,
                                      std::int32_t rawTextColor = 0,
-                                     std::int32_t rawBlockColor = 0);
+                                     std::int32_t rawBlockColor = 0,
+                                     bool includeMLeaderBlockContext = false);
 
 bool readDxfObjectsRecordOrder(
     const std::filesystem::path& path, bool binary,
@@ -25619,6 +25620,84 @@ bool qualifyMLeaderAdapterSerializer() {
         if (!retryReader.fileImport(emittedOutput.string(), &retried, false)
             || findMLeader(retried) == nullptr)
             return fail("corrected MLEADER retry did not read back");
+
+        const std::filesystem::path blockSource = directory
+            / ("block-context-" + suffix + ".dxf");
+        const std::filesystem::path blockOutput = directory
+            / ("block-context-output-" + suffix + ".dxf");
+        if (!generateRootMLeaderStyleControl(
+                blockSource, binary, true, 0, true, false, 0.0, 0.0,
+                false, 0, false, false, false, false, false, false, false,
+                false, 0, 0, 0, true))
+            return fail("could not generate rooted MLEADER block-content profile");
+        dx_data blockGraph;
+        dx_iface blockReader;
+        if (!blockReader.fileImport(blockSource.string(), &blockGraph, false))
+            return fail("could not parse rooted MLEADER block-content profile");
+        DRW_MLeader* blockMLeader = findMLeader(blockGraph);
+        if (blockMLeader == nullptr || blockMLeader->context.hasTextContents
+            || !blockMLeader->context.hasContentsBlock
+            || blockMLeader->context.blockTableRecordHandle.ref != 0x21u
+            || blockMLeader->context.textStyleHandle.ref != 0u)
+            return fail("generated MLEADER block-content source was not typed correctly");
+        dx_iface blockWriter;
+        if (!blockWriter.fileExport(blockOutput.string(), DRW::AC1027,
+                                    binary, &blockGraph, true))
+            return fail("rooted MLEADER block-content export failed");
+        if (blockMLeader->handle != 0x40u
+            || blockMLeader->parentHandle != 0x1Fu
+            || blockMLeader->styleHandle.ref != 0x1Cu
+            || blockMLeader->context.blockTableRecordHandle.ref != 0x21u
+            || blockMLeader->context.blockScale.x != 1.5
+            || blockMLeader->context.blockTransform.size() != 16u)
+            return fail("MLEADER block-content export changed the caller's model");
+        dx_data blockRoundtrip;
+        dx_iface blockRoundtripReader;
+        if (!blockRoundtripReader.fileImport(blockOutput.string(),
+                                             &blockRoundtrip, false))
+            return fail("rooted MLEADER block-content output did not read back");
+        DRW_MLeader* blockRoundtripMLeader = findMLeader(blockRoundtrip);
+        if (blockRoundtripMLeader == nullptr
+            || blockRoundtrip.mLeaderStyles.size() != 1u
+            || blockRoundtripMLeader->styleHandle.ref
+                != blockRoundtrip.mLeaderStyles.front().handle
+            || blockRoundtripMLeader->context.hasTextContents
+            || !blockRoundtripMLeader->context.hasContentsBlock
+            || blockRoundtripMLeader->context.textStyleHandle.ref != 0u
+            || !hasUniqueHandle(blockRoundtrip.blockRecords,
+                blockRoundtripMLeader->context.blockTableRecordHandle.ref)
+            || blockRoundtripMLeader->context.blockNormal.z != -1.0
+            || blockRoundtripMLeader->context.blockLocation.x != 8.25
+            || blockRoundtripMLeader->context.blockLocation.y != -9.5
+            || blockRoundtripMLeader->context.blockLocation.z != 10.75
+            || blockRoundtripMLeader->context.blockScale.x != 1.5
+            || blockRoundtripMLeader->context.blockScale.y != 2.5
+            || blockRoundtripMLeader->context.blockScale.z != 3.5
+            || blockRoundtripMLeader->context.blockRotation != 0.75
+            || blockRoundtripMLeader->context.blockTransform.size() != 16u)
+            return fail("MLEADER block-content fields or target role changed on readback");
+        const auto blockDefinition = std::find_if(
+            blockRoundtrip.blocks.begin(), blockRoundtrip.blocks.end(),
+            [](const dx_ifaceBlock* block) {
+                return block != nullptr
+                    && block->name == "MLEADER_ALT_ARROW";
+            });
+        if (blockDefinition == blockRoundtrip.blocks.end()
+            || (*blockDefinition)->parentHandle
+                != blockRoundtripMLeader->context.blockTableRecordHandle.ref
+            || std::count_if((*blockDefinition)->ent.begin(),
+                             (*blockDefinition)->ent.end(),
+                [](const DRW_Entity* entity) {
+                    return entity != nullptr && entity->eType == DRW::LINE;
+                }) != 1)
+            return fail("MLEADER content BLOCK_RECORD graph did not read back with its LINE");
+        for (std::size_t index = 0;
+             index < blockRoundtripMLeader->context.blockTransform.size();
+             ++index) {
+            if (blockRoundtripMLeader->context.blockTransform[index]
+                != static_cast<double>(index + 1u))
+                return fail("MLEADER block transform changed on readback");
+        }
 
         for (const MLeaderMutator& invalid : invalidReferences) {
             dx_data invalidGraph;
@@ -53756,7 +53835,10 @@ bool generateRootMLeaderStyleControl(const std::filesystem::path& path,
                                      bool includeAlternateBlockRecord,
                                      std::int32_t rawLeaderColor,
                                      std::int32_t rawTextColor,
-                                     std::int32_t rawBlockColor) {
+                                     std::int32_t rawBlockColor,
+                                     bool includeMLeaderBlockContext) {
+    includeAlternateBlockRecord = includeAlternateBlockRecord
+        || (includeMLeader && includeMLeaderBlockContext);
     std::ofstream output(path, std::ios::binary);
     if (!output)
         return fail("could not create root MLEADERSTYLE control");
@@ -54049,19 +54131,37 @@ bool generateRootMLeaderStyleControl(const std::filesystem::path& path,
         writer->writeDouble(10, 0.0);
         writer->writeDouble(20, 0.0);
         writer->writeDouble(30, 0.0);
-        writer->writeBool(290, true);
-        writer->writeString(304, "generated MLEADER text");
-        writer->writeDouble(11, 0.0);
-        writer->writeDouble(21, 0.0);
-        writer->writeDouble(31, 1.0);
-        writer->writeString(340, "31");
-        writer->writeDouble(12, 1.0);
-        writer->writeDouble(22, 2.0);
-        writer->writeDouble(32, 0.0);
-        writer->writeDouble(13, 1.0);
-        writer->writeDouble(23, 0.0);
-        writer->writeDouble(33, 0.0);
-        writer->writeBool(296, false);
+        writer->writeBool(290, !includeMLeaderBlockContext);
+        if (includeMLeaderBlockContext) {
+            writer->writeBool(296, true);
+            writer->writeDouble(14, 0.0);
+            writer->writeDouble(24, 0.0);
+            writer->writeDouble(34, -1.0);
+            writer->writeDouble(15, 8.25);
+            writer->writeDouble(25, -9.5);
+            writer->writeDouble(35, 10.75);
+            writer->writeDouble(16, 1.5);
+            writer->writeDouble(26, 2.5);
+            writer->writeDouble(36, 3.5);
+            writer->writeDouble(46, 0.75);
+            writer->writeInt32(93, 0);
+            writer->writeString(341, "21");
+            for (int index = 0; index < 16; ++index)
+                writer->writeDouble(47, static_cast<double>(index + 1));
+        } else {
+            writer->writeString(304, "generated MLEADER text");
+            writer->writeDouble(11, 0.0);
+            writer->writeDouble(21, 0.0);
+            writer->writeDouble(31, 1.0);
+            writer->writeString(340, "31");
+            writer->writeDouble(12, 1.0);
+            writer->writeDouble(22, 2.0);
+            writer->writeDouble(32, 0.0);
+            writer->writeDouble(13, 1.0);
+            writer->writeDouble(23, 0.0);
+            writer->writeDouble(33, 0.0);
+            writer->writeBool(296, false);
+        }
         writer->writeString(302, "LEADER{");
         writer->writeBool(290, true);
         writer->writeBool(291, true);
