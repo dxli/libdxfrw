@@ -2225,6 +2225,154 @@ void testDxfInsunitsHeaderDomain(TestContext& t) {
     }
 }
 
+void testDxfLineweightHeaderDomains(TestContext& t) {
+    struct Domain {
+        const char* name;
+        int groupCode;
+        std::vector<int> validValues;
+        std::vector<int> invalidValues;
+    };
+    const std::vector<Domain> domains{
+        {"$CELWEIGHT", 370,
+         {-3, -2, -1, 0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50,
+          53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211},
+         {-4, 1, 6, 212}},
+        {"$ENDCAPS", 280, {0, 1, 2, 3}, {-1, 4}},
+        {"$JOINSTYLE", 280, {0, 1, 2, 3}, {-1, 4}},
+        {"$LWDISPLAY", 290, {0, 1}, {-1, 2}},
+        {"$XEDIT", 290, {0, 1}, {-1, 2}}
+    };
+    const auto makeWriter = [](bool binary, std::ostream* output) {
+        std::unique_ptr<dxfWriter> writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(output))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(output));
+        writer->setVersion("AC1027", true);
+        return writer;
+    };
+    const auto emitHeader = [](const std::unique_ptr<dxfWriter>& writer,
+                               DRW_Header& header) {
+        DxfWriterRecordScope record(*writer);
+        header.write(writer, DRW::AC1027);
+        return !writer->hasWriteError() && record.commit();
+    };
+    const auto readValue = [](const std::string& bytes, bool binary,
+                              const char* name, int expectedCode,
+                              bool& found, int& value) {
+        found = false;
+        std::istringstream input(bytes, std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        bool expectingValue = false;
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (expectingValue) {
+                if (code != expectedCode)
+                    return false;
+                value = reader->getInt32();
+                found = true;
+                return true;
+            }
+            if (code == 9)
+                expectingValue = reader->getString() == name;
+        }
+        return true;
+    };
+
+    for (const bool binary : {false, true}) {
+        for (const Domain& domain : domains) {
+            for (const int validValue : domain.validValues) {
+                std::ostringstream output(std::ios::out | std::ios::binary);
+                std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
+                DRW_Header header;
+                header.addInt(domain.name, validValue, domain.groupCode);
+                bool found = false;
+                int parsedValue = 0;
+                t.expect(emitHeader(writer, header)
+                             && readValue(output.str(), binary, domain.name,
+                                          domain.groupCode, found, parsedValue)
+                             && found && parsedValue == validValue,
+                         std::string(domain.name)
+                             + " documented values round-trip in ASCII/Binary DXF");
+            }
+            for (const int invalidValue : domain.invalidValues) {
+                std::ostringstream output(std::ios::out | std::ios::binary);
+                std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
+                DRW_Header header;
+                header.addInt(domain.name, invalidValue, domain.groupCode);
+                t.expect(!emitHeader(writer, header) && output.str().empty(),
+                         std::string(domain.name)
+                             + " refuses an out-of-domain value atomically");
+            }
+
+            const auto refuses = [&](DRW_Header& header) {
+                std::ostringstream output(std::ios::out | std::ios::binary);
+                std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
+                return !emitHeader(writer, header) && output.str().empty();
+            };
+            DRW_Header wrongType;
+            wrongType.addStr(domain.name, "1", 1);
+            t.expect(refuses(wrongType),
+                     std::string(domain.name) + " refuses a wrong variant type");
+            DRW_Header wrongGroup;
+            wrongGroup.addInt(domain.name, domain.validValues.front(),
+                              domain.groupCode + 1);
+            t.expect(refuses(wrongGroup),
+                     std::string(domain.name) + " refuses a wrong group code");
+            DRW_Header aliases;
+            aliases.addInt(domain.name, domain.validValues.front(),
+                           domain.groupCode);
+            const std::string bareName(domain.name + 1);
+            aliases.addInt(bareName, domain.validValues.front(), domain.groupCode);
+            t.expect(refuses(aliases),
+                     std::string(domain.name) + " refuses dollar/bare aliases together");
+
+            std::ostringstream retryOutput(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> retryWriter = makeWriter(
+                binary, &retryOutput);
+            DRW_Header invalidRetry;
+            invalidRetry.addInt(domain.name, domain.invalidValues.front(),
+                                domain.groupCode);
+            t.expect(!emitHeader(retryWriter, invalidRetry)
+                         && retryOutput.str().empty()
+                         && !retryWriter->hasWriteError(),
+                     std::string(domain.name)
+                         + " failure restores the writer for a corrected retry");
+            DRW_Header correctedRetry;
+            correctedRetry.addInt(domain.name, domain.validValues.front(),
+                                  domain.groupCode);
+            t.expect(emitHeader(retryWriter, correctedRetry),
+                     std::string(domain.name) + " corrected value retries on same writer");
+        }
+    }
+
+    for (const Domain& domain : {domains[0], domains[1], domains[2]}) {
+        const int invalidValue = domain.name == std::string("$CELWEIGHT") ? 6
+            : domain.name == std::string("$ENDCAPS") ? 4 : -1;
+        std::ostringstream source(std::ios::out | std::ios::binary);
+        dxfWriterAscii sourceWriter(&source);
+        sourceWriter.setVersion("AC1027", true);
+        t.expect(sourceWriter.writeString(9, domain.name)
+                     && sourceWriter.writeInt16(domain.groupCode, invalidValue),
+                 "unsupported lineweight-default input control is encoded");
+        std::istringstream input(source.str(), std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        ExposedHeader parsed;
+        int code = 0;
+        bool read = true;
+        while (reader->readRec(&code))
+            read = parsed.parseCode(code, reader) && read;
+        const auto stored = parsed.vars.find(domain.name);
+        t.expect(read && stored != parsed.vars.end() && stored->second != nullptr
+                     && stored->second->type() == DRW_Variant::INTEGER
+                     && stored->second->content.i == invalidValue,
+                 std::string(domain.name)
+                     + " tolerant input retains its unsupported integer value");
+    }
+}
+
 void testLeaderAdvisoryCountState(TestContext& t) {
     ExposedLeader source;
     t.expect(parseDxfRecords(source, "76\n99\n10\n1\n20\n2\n30\n3\n10\n4\n20\n6\n30\n0\n")
@@ -25288,6 +25436,18 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--dxf-lineweight-header-domains") {
+        TestContext focused;
+        testDxfLineweightHeaderDomains(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " lineweight HEADER assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "Lineweight HEADER domains: PASS\n";
+        return 0;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--dxf-geodata-modern-text-preflight") {
         TestContext focused;
         testDxfGeoDataModernTextPreflightView(focused);
@@ -26539,6 +26699,7 @@ int main(int argc, char** argv) {
     testDxfLinetypeDisplayScaleDomains(context);
     testDxfMeasurementHeaderDomain(context);
     testDxfInsunitsHeaderDomain(context);
+    testDxfLineweightHeaderDomains(context);
     testLeaderAdvisoryCountState(context);
     testPublicOwnershipContracts(context);
     testEmbeddedAttributeTextRouting(context);

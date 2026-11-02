@@ -893,7 +893,12 @@ void DRW_Header::write(const std::unique_ptr<dxfWriter>& writer, DRW::Version ve
         || !canWriteDxfPsltscale()
         || !canWriteDxfMsltscale(ver)
         || !canWriteDxfMeasurement()
-        || !canWriteDxfInsunits(ver)) {
+        || !canWriteDxfInsunits(ver)
+        || !canWriteDxfCelweight()
+        || !canWriteDxfEndcaps()
+        || !canWriteDxfJoinstyle()
+        || !canWriteDxfLwdisplay()
+        || !canWriteDxfXedit()) {
         writer->markWriteError();
         return;
     }
@@ -2785,9 +2790,13 @@ bool DRW_Header::canWriteDxfMeasurement() const noexcept {
     return canWriteDxfZeroOrOneIntegerHeaderVariable("$MEASUREMENT");
 }
 
-bool DRW_Header::getInsunitsValue(int& value, bool& present) const noexcept {
-    constexpr std::string_view dollarKey = "$INSUNITS";
-    constexpr std::string_view bareKey = "INSUNITS";
+bool DRW_Header::getDxfHeaderIntegerValue(
+        const char* dollarName, int groupCode, int& value,
+        bool& present) const noexcept {
+    if (dollarName == nullptr || dollarName[0] != '$')
+        return false;
+    const std::string_view dollarKey(dollarName);
+    const std::string_view bareKey = dollarKey.substr(1u);
     value = 0;
     present = false;
     const auto inspect = [&](const auto& values) {
@@ -2799,7 +2808,7 @@ bool DRW_Header::getInsunitsValue(int& value, bool& present) const noexcept {
             if ((key != dollarKey && key != bareKey) || present
                 || item.second == nullptr
                 || item.second->type() != DRW_Variant::INTEGER
-                || item.second->code() != 70)
+                || item.second->code() != groupCode)
                 return false;
             value = item.second->content.i;
             present = true;
@@ -2809,21 +2818,65 @@ bool DRW_Header::getInsunitsValue(int& value, bool& present) const noexcept {
     return inspect(vars) && inspect(customVars);
 }
 
-bool DRW_Header::canWriteDxfInsunits(DRW::Version target) const noexcept {
+bool DRW_Header::canWriteDxfHeaderIntegerRange(
+        const char* dollarName, int groupCode, int minimum, int maximum,
+        bool* foundValue) const noexcept {
+    if (minimum > maximum)
+        return false;
     int value = 0;
     bool present = false;
-    if (!getInsunitsValue(value, present))
+    if (!getDxfHeaderIntegerValue(dollarName, groupCode, value, present))
         return false;
-    return !present
-        || (target > DRW::AC1014 && value >= 0
-            && value < static_cast<int>(UnitCount));
+    if (foundValue != nullptr)
+        *foundValue = present;
+    return !present || (value >= minimum && value <= maximum);
+}
+
+bool DRW_Header::canWriteDxfInsunits(DRW::Version target) const noexcept {
+    bool present = false;
+    if (!canWriteDxfHeaderIntegerRange(
+            "$INSUNITS", 70, 0, static_cast<int>(UnitCount) - 1,
+            &present))
+        return false;
+    return !present || target > DRW::AC1014;
 }
 
 bool DRW_Header::canWriteDwgInsunits() const noexcept {
     int value = 0;
     bool present = false;
-    return getInsunitsValue(value, present)
+    return getDxfHeaderIntegerValue("$INSUNITS", 70, value, present)
         && (!present || (value >= 0 && value < static_cast<int>(UnitCount)));
+}
+
+bool DRW_Header::canWriteDxfCelweight() const noexcept {
+    int value = 0;
+    bool present = false;
+    if (!getDxfHeaderIntegerValue("$CELWEIGHT", 370, value, present))
+        return false;
+    if (!present)
+        return true;
+    constexpr std::array<int, 27> validLineweights{{
+        -3, -2, -1, 0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40,
+        50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211
+    }};
+    return std::find(validLineweights.begin(), validLineweights.end(), value)
+        != validLineweights.end();
+}
+
+bool DRW_Header::canWriteDxfEndcaps() const noexcept {
+    return canWriteDxfHeaderIntegerRange("$ENDCAPS", 280, 0, 3);
+}
+
+bool DRW_Header::canWriteDxfJoinstyle() const noexcept {
+    return canWriteDxfHeaderIntegerRange("$JOINSTYLE", 280, 0, 3);
+}
+
+bool DRW_Header::canWriteDxfLwdisplay() const noexcept {
+    return canWriteDxfHeaderIntegerRange("$LWDISPLAY", 290, 0, 1);
+}
+
+bool DRW_Header::canWriteDxfXedit() const noexcept {
+    return canWriteDxfHeaderIntegerRange("$XEDIT", 290, 0, 1);
 }
 
 bool DRW_Header::canWriteDxfVisualStyleReferences(DRW::Version target) const {

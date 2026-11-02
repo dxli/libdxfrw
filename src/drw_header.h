@@ -231,6 +231,11 @@ public:
     /// DXF revisions before the variable is emitted. This is scalar admission
     /// only; platform-specific unit conversion support is separate.
     bool canWriteDxfInsunits(DRW::Version target) const noexcept;
+    bool canWriteDxfCelweight() const noexcept;
+    bool canWriteDxfEndcaps() const noexcept;
+    bool canWriteDxfJoinstyle() const noexcept;
+    bool canWriteDxfLwdisplay() const noexcept;
+    bool canWriteDxfXedit() const noexcept;
     /// Return whether the dimension-variable family can be represented in the
     /// requested DXF revision without dropping modern split-variable values.
     bool canWriteDxfDimensionVariables(DRW::Version target) const;
@@ -407,7 +412,11 @@ private:
                                       int& legacyUnit, int& legacyFit,
                                       int& linearUnit, int& fraction,
                                       int& textArrowFit, int& textMove) const;
-    bool getInsunitsValue(int& value, bool& present) const noexcept;
+    bool getDxfHeaderIntegerValue(const char* dollarName, int groupCode,
+                                  int& value, bool& present) const noexcept;
+    bool canWriteDxfHeaderIntegerRange(const char* dollarName, int groupCode,
+                                       int minimum, int maximum,
+                                       bool* foundValue = nullptr) const noexcept;
     bool canWriteDwgInsunits() const noexcept;
     static bool matchesIntVar(const std::unordered_map<std::string, DRW_Variant*>& values,
                               const char* key, int code, int value);
