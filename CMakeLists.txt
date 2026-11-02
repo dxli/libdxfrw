@@ -1334,6 +1334,11 @@ if(LIBDXFRW_BUILD_TESTS)
     target_link_libraries(libdxfrw_graph_preservation_tests PRIVATE dxfrw)
     add_test(NAME libdxfrw_graph_preservation
         COMMAND libdxfrw_graph_preservation_tests)
+    add_test(NAME libdxfrw_datastorage_bounds
+        COMMAND libdxfrw_graph_preservation_tests --datastorage-bounds)
+    set_tests_properties(libdxfrw_datastorage_bounds PROPERTIES
+        LABELS "fast;dwg;generated;datastorage"
+        TIMEOUT 30)
 
     add_executable(libdxfrw_writer_primitives_tests
         tests/writer_primitives_tests.cpp)

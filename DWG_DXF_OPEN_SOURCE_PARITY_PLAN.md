@@ -370,6 +370,14 @@ failing-stage diagnostic.
 
 **MESH DWG bounded face/tail profile:** The AC1024 parser now reserves the face-record bound, rejects faces below three vertices, aligns crease counts with existing level-0 edges, and admits only the physically observed `10` tail while keeping alternate patterns refused. The DWG writer emits that canonical observed bit pair and refuses other masks; DXF output refuses unrepresented tail/subdivision-vector data. Three focused MESH CTests pass 3/3 in 0.41 seconds. The field layout/meaning remains disputed, no `AcDbSubDMesh` body layout appears in ODA v5.4.1, and no 3D semantic support claim follows. See the [face-count](docs/research/p6-mesh-dwg-face-count-domain-2026-11-02.json), [face-allocation](docs/research/p6-mesh-dwg-face-record-reserve-guard-2026-11-02.json), [tail-profile](docs/research/p6-mesh-tail-canonical-profile-guard-2026-11-02.json), [peer-span](docs/research/p6-mesh-tail-peer-span-ambiguity-2026-11-02.json), and [subdivision-vector census](docs/research/p6-mesh-subdivvertices-corpus-census-2026-11-02.json) receipts.
 
+**AC1027 DataStorage table-role profile in the AC1032 resave:** The ODA-resaved
+AC1032 sample retains the exact bounded schema-index table-role profile
+observed in the AC1027 source. The parser admits that profile for both observed
+revisions while preserving ODA's documented order as the default and rejecting
+malformed references. The local AC1032 Cover read still refuses strict output
+because of its unresolved HEADER suffix; this establishes structural profile
+recognition only. See the [profile recheck receipt](docs/research/p6-ac1027-cover-ac1032-datastorage-role-profile-2026-11-02.json).
+
 ## P7 — ACIS/ACDS and independent 3D meaning
 
 - Complete the original DWG entity → owner/key → AcDs segment → SAT/SAB join,

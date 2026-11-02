@@ -763,7 +763,10 @@ void readSchemaIndex(const ByteReader& r, DRW_DataStorageSection& section) {
 bool hasAc1027ReversedSchemaTableRoles(
     const ByteReader& r, const DRW_DataStorageSection& section,
     std::uint32_t& schemaSegmentIndex) {
-    if (section.m_version != DRW::AC1027
+    const bool versionRetainsAc1027Profile =
+        section.m_version == DRW::AC1027
+        || section.m_version == DRW::AC1032;
+    if (!versionRetainsAc1027Profile
         || section.schemaIndexUnknownPropertyCount
                != section.schemaPropertyEntries.size()
         || section.schemaIndexPropertyEntryCount
@@ -2073,13 +2076,14 @@ DRW_DataStorageSection DRW_parseDataStorage(const std::uint8_t* data,
         && hasAc1027ReversedSchemaTableRoles(
             r, section, compatibleSchemaSegmentIndex);
     if (reversedSchemaTableRoles) {
-        // The observed AC1027 app-maintenance-4 producer profile stores
-        // schema roots in the first schidx table and unknown-property headers
-        // in the second. Keep the ODA-described order as the default; switch
-        // only when the exact bounded, contiguous layout is self-consistent.
+        // The observed AC1027 producer profile stores schema roots in the
+        // first schidx table and unknown-property headers in the second. An
+        // ODA-resaved AC1032 sample retains the same bounded table layout.
+        // Keep the ODA-described order as the default; switch only when the
+        // exact bounded, contiguous layout is self-consistent.
         pushDiag(section,
                  "datastorage-ac1027-schema-table-role-compatibility",
-                 "AC1027 DataStorage uses the validated alternate schema-index table roles",
+                 "DataStorage retains the validated AC1027 schema-index table-role profile",
                  0, false,
                  section.segments[compatibleSchemaSegmentIndex].offset, true);
     }

@@ -13712,46 +13712,66 @@ void testDataStorageDefaultSchemaOnlySection(TestContext& t) {
         putAlternateU32(entry + 8u, static_cast<std::uint32_t>(index));
     }
 
-    const DRW_DataStorageSection alternateParsed =
+    const auto acceptsAlternateTableRoleProfile =
+        [&schemaOffsets, &unknownPropertyFlags](
+            const DRW_DataStorageSection& parsed, DRW::Version version) {
+            const bool identifiesAlternateTableRoles = std::any_of(
+                parsed.diagnostics.cbegin(), parsed.diagnostics.cend(),
+                [](const DRW_DataStorageDiagnostic& diagnostic) {
+                    return diagnostic.code
+                               == "datastorage-ac1027-schema-table-role-compatibility"
+                        && diagnostic.kind
+                            == DRW_DataStorageDiagnostic::Kind::SupportedOpaque;
+                });
+            return parsed.m_version == version
+                && parsed.structurallyValid && parsed.replayAllowed
+                && parsed.schemaCount == schemaOffsets.size()
+                && parsed.schemaUnknownProperties.size()
+                    == unknownPropertyFlags.size()
+                && !parsed.schemas.empty()
+                && parsed.schemas.front().index == 0u
+                && parsed.schemas.front().indexes
+                    == std::vector<std::uint64_t>{0u, 1u}
+                && !parsed.schemaUnknownProperties.empty()
+                && parsed.schemaUnknownProperties.front().localOffset == 0u
+                && identifiesAlternateTableRoles;
+        };
+    const DRW_DataStorageSection alternateParsedAc1027 =
         DRW_parseDataStorage(alternateTableRoles, DRW::AC1027);
-    const bool identifiesAlternateTableRoles = std::any_of(
-        alternateParsed.diagnostics.cbegin(),
-        alternateParsed.diagnostics.cend(),
-        [](const DRW_DataStorageDiagnostic& diagnostic) {
-            return diagnostic.code
-                == "datastorage-ac1027-schema-table-role-compatibility"
-                && diagnostic.kind
-                    == DRW_DataStorageDiagnostic::Kind::SupportedOpaque;
-        });
-    t.expect(alternateParsed.structurallyValid
-                 && alternateParsed.replayAllowed
-                 && alternateParsed.schemaCount == schemaOffsets.size()
-                 && alternateParsed.schemaUnknownProperties.size()
-                     == unknownPropertyFlags.size()
-                 && alternateParsed.schemas.front().index == 0u
-                 && alternateParsed.schemas.front().indexes
-                     == std::vector<std::uint64_t>{0u, 1u}
-                 && alternateParsed.schemaUnknownProperties.front().localOffset
-                     == 0u
-                 && identifiesAlternateTableRoles,
-             "DataStorage accepts the bounded AC1027 profile with schema roots in schidx table one");
+    t.expect(acceptsAlternateTableRoleProfile(alternateParsedAc1027,
+                                              DRW::AC1027),
+             "DataStorage accepts the bounded AC1027 alternate table-role profile");
+
+    const DRW_DataStorageSection alternateParsedAc1032 =
+        DRW_parseDataStorage(alternateTableRoles, DRW::AC1032);
+    t.expect(acceptsAlternateTableRoleProfile(alternateParsedAc1032,
+                                              DRW::AC1032),
+             "DataStorage accepts the bounded AC1027 table-role profile retained by AC1032");
 
     std::vector<std::uint8_t> malformedAlternateRoles = alternateTableRoles;
     overwriteU32(malformedAlternateRoles,
                  alternatePropertiesHeader + 16u + 12u + 4u, 12u);
-    const DRW_DataStorageSection rejectedAlternateRoles =
+    const DRW_DataStorageSection rejectedAlternateRolesAc1027 =
         DRW_parseDataStorage(malformedAlternateRoles, DRW::AC1027);
-    const bool didNotSelectAlternateRoles = std::none_of(
-        rejectedAlternateRoles.diagnostics.cbegin(),
-        rejectedAlternateRoles.diagnostics.cend(),
-        [](const DRW_DataStorageDiagnostic& diagnostic) {
-            return diagnostic.code
-                == "datastorage-ac1027-schema-table-role-compatibility";
-        });
-    t.expect(!rejectedAlternateRoles.structurallyValid
-                 && !rejectedAlternateRoles.replayAllowed
-                 && didNotSelectAlternateRoles,
+    const DRW_DataStorageSection rejectedAlternateRolesAc1032 =
+        DRW_parseDataStorage(malformedAlternateRoles, DRW::AC1032);
+    const auto rejectsMalformedAlternateTableRoles = [](
+        const DRW_DataStorageSection& parsed) {
+        const bool didNotSelectAlternateRoles = std::none_of(
+            parsed.diagnostics.cbegin(), parsed.diagnostics.cend(),
+            [](const DRW_DataStorageDiagnostic& diagnostic) {
+                return diagnostic.code
+                    == "datastorage-ac1027-schema-table-role-compatibility";
+            });
+        return !parsed.structurallyValid && !parsed.replayAllowed
+            && didNotSelectAlternateRoles;
+    };
+    t.expect(rejectsMalformedAlternateTableRoles(
+                 rejectedAlternateRolesAc1027),
              "DataStorage malformed AC1027 alternate references remain fail-closed");
+    t.expect(rejectsMalformedAlternateTableRoles(
+                 rejectedAlternateRolesAc1032),
+             "DataStorage malformed AC1032 retained-profile references remain fail-closed");
 }
 
 void testFramePublicationContract(TestContext& t) {
@@ -15678,8 +15698,23 @@ void testDataStorageCapabilities(TestContext& t) {
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
     TestContext context;
+    if (argc == 2 && std::string(argv[1]) == "--datastorage-bounds") {
+        testDataStorageBounds(context);
+        if (context.failures != 0) {
+            std::cerr << context.failures
+                      << " graph/preservation assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "DataStorage bounds tests: PASS\n";
+        return 0;
+    }
+    if (argc != 1) {
+        std::cerr << "Usage: libdxfrw_graph_preservation_tests"
+                     " [--datastorage-bounds]\n";
+        return 2;
+    }
     testFramePublicationContract(context);
     testDataStorageBounds(context);
     testDataStorageBlobPages(context);
