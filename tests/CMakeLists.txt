@@ -1921,6 +1921,10 @@ add_test(NAME libdxfrw_layout_graph_read_contract
     COMMAND libdxfrw_dxf_fixture_tests --layout-graph-read-contract)
 set_tests_properties(libdxfrw_layout_graph_read_contract PROPERTIES
     LABELS "fast;dxf;adapter;layout;graph;compatibility" TIMEOUT 60)
+add_test(NAME libdxfrw_layer_viewport_override_xrecord_transport
+    COMMAND libdxfrw_dxf_fixture_tests --layer-viewport-overrides)
+set_tests_properties(libdxfrw_layer_viewport_override_xrecord_transport PROPERTIES
+    LABELS "fast;dxf;adapter;layer;viewport;xrecord;generated" TIMEOUT 60)
 add_test(NAME libdxfrw_cellstylemap_source_profiles
     COMMAND libdxfrw_table_content_dxf_tests --cell-style-map-source)
 set_tests_properties(libdxfrw_cellstylemap_source_profiles PROPERTIES

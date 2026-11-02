@@ -1185,7 +1185,9 @@ bool writeLayoutGraphControl(const std::filesystem::path& path, bool binary,
                              bool includeShadeTarget = false,
                              const char* styleHandle = "703",
                              int shadePlotMode = 4,
-                             bool modelLayoutVportTarget = false) {
+                             bool modelLayoutVportTarget = false,
+                             bool includeLayerViewportOverrides = false,
+                             std::uint8_t layerViewportOverrideProfileMask = 0x0Fu) {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     if (!output)
         return false;
@@ -1201,6 +1203,9 @@ bool writeLayoutGraphControl(const std::filesystem::path& path, bool binary,
     const auto integer = [&writer](int code, int value) {
         return writer->writeInt16(code, value);
     };
+    const std::uint8_t layerOverrideMask = includeLayerViewportOverrides
+        ? static_cast<std::uint8_t>(layerViewportOverrideProfileMask & 0x0Fu)
+        : 0u;
     const auto blockRecord = [&string, &integer](const char* handle,
                                                   const char* name,
                                                   const char* layoutHandle) {
@@ -1210,10 +1215,14 @@ bool writeLayoutGraphControl(const std::filesystem::path& path, bool binary,
             && integer(70, 0) && integer(280, 1) && integer(281, 0)
             && string(340, layoutHandle);
     };
-    const auto layer = [&string, &integer](const char* handle,
-                                            const char* name) {
+    const auto layer = [&string, &integer, layerOverrideMask](
+                           const char* handle, const char* name) {
         return string(0, "LAYER") && string(5, handle)
             && string(330, "2") && string(100, "AcDbSymbolTableRecord")
+            && (!(layerOverrideMask != 0u
+                    && std::string(name) == "FROZEN_TARGET")
+                || (string(102, "{ACAD_XDICTIONARY")
+                    && string(360, "B3") && string(102, "}")))
             && string(100, "AcDbLayerTableRecord") && string(2, name)
             && integer(70, 0) && integer(62, 7)
             && string(6, "CONTINUOUS");
@@ -1344,6 +1353,66 @@ bool writeLayoutGraphControl(const std::filesystem::path& path, bool binary,
             && string(330, recordHandle) && string(100, "AcDbEntity")
             && string(8, "0") && string(100, "AcDbBlockEnd");
     };
+    const auto layerOverrideObjects = [&]() {
+        if (layerOverrideMask == 0u)
+            return true;
+        bool emitted = string(0, "DICTIONARY") && string(5, "B3")
+            && string(330, "640") && string(100, "AcDbDictionary")
+            && integer(280, 1) && integer(281, 1);
+        const auto entry = [&emitted, &string](std::uint8_t mask,
+                                               std::uint8_t bit,
+                                               const char* key,
+                                               const char* handle) {
+            if ((mask & bit) == 0u)
+                return true;
+            emitted = string(3, key) && string(360, handle) && emitted;
+            return emitted;
+        };
+        emitted = entry(layerOverrideMask, 0x01u,
+            "ADSK_XREC_LAYER_ALPHA_OVR", "751") && emitted;
+        emitted = entry(layerOverrideMask, 0x02u,
+            "ADSK_XREC_LAYER_COLOR_OVR", "752") && emitted;
+        emitted = entry(layerOverrideMask, 0x04u,
+            "ADSK_XREC_LAYER_LINETYPE_OVR", "753") && emitted;
+        emitted = entry(layerOverrideMask, 0x08u,
+            "ADSK_XREC_LAYER_LINEWT_OVR", "754") && emitted;
+        if ((layerOverrideMask & 0x01u) != 0u)
+            emitted = string(0, "XRECORD") && string(5, "751")
+                && string(102, "{ACAD_REACTORS")
+                && string(330, "B3") && string(102, "}")
+                && string(330, "B3") && string(100, "AcDbXrecord")
+                && integer(280, 1)
+                && string(102, "{ADSK_LYR_ALPHA_OVERRIDE")
+                && string(335, "700")
+                && writer->writeInt32(440, 33554661)
+                && string(102, "}") && emitted;
+        if ((layerOverrideMask & 0x02u) != 0u)
+            emitted = string(0, "XRECORD") && string(5, "752")
+                && string(102, "{ACAD_REACTORS") && string(330, "B3")
+                && string(102, "}") && string(330, "B3")
+                && string(100, "AcDbXrecord") && integer(280, 1)
+                && string(102, "{ADSK_LYR_COLOR_OVERRIDE")
+                && string(335, "700")
+                && writer->writeInt32(420, 16711680)
+                && string(102, "}") && emitted;
+        if ((layerOverrideMask & 0x04u) != 0u)
+            emitted = string(0, "XRECORD") && string(5, "753")
+                && string(102, "{ACAD_REACTORS") && string(330, "B3")
+                && string(102, "}") && string(330, "B3")
+                && string(100, "AcDbXrecord") && integer(280, 1)
+                && string(102, "{ADSK_LYR_LINETYPE_OVERRIDE")
+                && string(335, "700") && string(343, "642")
+                && string(102, "}") && emitted;
+        if ((layerOverrideMask & 0x08u) != 0u)
+            emitted = string(0, "XRECORD") && string(5, "754")
+                && string(102, "{ACAD_REACTORS") && string(330, "B3")
+                && string(102, "}") && string(330, "B3")
+                && string(100, "AcDbXrecord") && integer(280, 1)
+                && string(102, "{ADSK_LYR_LINEWT_OVERRIDE")
+                && string(335, "700") && writer->writeInt32(91, 13)
+                && string(102, "}") && emitted;
+        return emitted;
+    };
 
     bool written = string(0, "SECTION") && string(2, "HEADER")
         && string(9, "$ACADVER") && string(1, "AC1027")
@@ -1356,7 +1425,23 @@ bool writeLayoutGraphControl(const std::filesystem::path& path, bool binary,
         && blockRecord("601", "*Paper_Space", "200")
         && blockRecord("602", "*Model_Space", "202")
         && blockRecord("603", "*Paper_Space0", "201")
-        && string(0, "ENDTAB") && string(0, "TABLE")
+        && string(0, "ENDTAB")
+        && ((layerOverrideMask & 0x04u) == 0u
+            || (string(0, "TABLE") && string(2, "LTYPE")
+                && string(5, "3") && string(330, "0")
+                && string(100, "AcDbSymbolTable") && integer(70, 1)
+                && string(0, "LTYPE") && string(5, "642")
+                && string(330, "3")
+                && string(100, "AcDbSymbolTableRecord")
+                && string(100, "AcDbLinetypeTableRecord")
+                && string(2, "OVERRIDE_LTYPE") && integer(70, 0)
+                && string(3, "viewport override control")
+                && integer(72, 65) && integer(73, 2)
+                && writer->writeDouble(40, 1.0)
+                && writer->writeDouble(49, 0.5)
+                && writer->writeDouble(49, -0.5)
+                && string(0, "ENDTAB")))
+        && string(0, "TABLE")
         && string(2, "LAYER") && string(5, "2") && string(330, "0")
         && string(100, "AcDbSymbolTable") && integer(70, 2)
         && layer("641", "0") && layer("640", "FROZEN_TARGET")
@@ -1407,7 +1492,8 @@ bool writeLayoutGraphControl(const std::filesystem::path& path, bool binary,
                         && string(350, "510"))
                     : false))
         && layout("200", "Sheet A", "601", 1, "700", "701", "702",
-                  includeShadeTarget ? styleHandle : "703", 1,
+                  includeShadeTarget ? styleHandle
+                      : layerOverrideMask != 0u ? nullptr : "703", 1,
                   includeShadeTarget ? shadePlotMode : 0)
         && layout("201", "Sheet B", "603", 2, "704", nullptr, nullptr,
                   nullptr, 2)
@@ -1458,6 +1544,7 @@ bool writeLayoutGraphControl(const std::filesystem::path& path, bool binary,
                             && writer->writeDouble(40, 5.0)
                             && writer->writeDouble(40, 5.0))
                         : false)))
+        && layerOverrideObjects()
         && string(0, "ENDSEC") && string(0, "EOF");
     return written && !writer->hasWriteError() && output.good();
 }
@@ -4807,6 +4894,339 @@ void testBackgroundSunCallbackRetention(TestContext& t) {
                  binary
                      ? "binary same-adapter export retries after unsupported object carriers are removed"
                      : "ASCII same-adapter export retries after unsupported object carriers are removed");
+    }
+}
+
+void testLayerViewportOverrideXRecordTransport(TestContext& t) {
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-layer-vp-override-" + std::to_string(nonce));
+    std::error_code filesystemError;
+    std::filesystem::create_directories(directory, filesystemError);
+    if (filesystemError) {
+        t.expect(false, "generated layer override scratch directory is available");
+        return;
+    }
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+
+    struct Profile {
+        const char* key;
+        const char* application;
+        int valueCode;
+        int value;
+    };
+    const std::array<Profile, 4> profiles{{
+        {"ADSK_XREC_LAYER_ALPHA_OVR", "{ADSK_LYR_ALPHA_OVERRIDE", 440,
+         33554661},
+        {"ADSK_XREC_LAYER_COLOR_OVR", "{ADSK_LYR_COLOR_OVERRIDE", 420,
+         16711680},
+        {"ADSK_XREC_LAYER_LINETYPE_OVR", "{ADSK_LYR_LINETYPE_OVERRIDE",
+         343, 0},
+        {"ADSK_XREC_LAYER_LINEWT_OVR", "{ADSK_LYR_LINEWT_OVERRIDE", 91,
+         13}}};
+    const auto findEntity = [](const dx_data& data, std::uint32_t handle)
+            -> const DRW_Entity* {
+        const auto inBlock = [handle](const dx_ifaceBlock* block)
+                -> const DRW_Entity* {
+            if (block == nullptr)
+                return nullptr;
+            for (const DRW_Entity* entity : block->ent)
+                if (entity != nullptr && entity->handle == handle)
+                    return entity;
+            return nullptr;
+        };
+        if (const DRW_Entity* entity = inBlock(data.mBlock))
+            return entity;
+        for (const dx_ifaceBlock* block : data.blocks)
+            if (block != data.mBlock)
+                if (const DRW_Entity* entity = inBlock(block))
+                    return entity;
+        return nullptr;
+    };
+    const auto findNamedEntry = [](const DRW_Dictionary& dictionary,
+                                   const char* key)
+            -> const DRW_Dictionary::Entry* {
+        const auto found = std::find_if(dictionary.m_entries.begin(),
+            dictionary.m_entries.end(), [key](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == key;
+            });
+        return found == dictionary.m_entries.end() ? nullptr : &*found;
+    };
+    const auto recordHasExpectedPayload = [&profiles](
+            const DRW_XRecord& record, std::size_t profileIndex,
+            std::uint32_t viewportHandle, std::uint32_t linetypeHandle,
+            std::uint32_t dictionaryHandle) {
+        const Profile& profile = profiles[profileIndex];
+        const std::size_t expectedHandleCount = profile.valueCode == 343
+            ? 2u : 1u;
+        if (record.m_cloning != 1 || record.parentHandle != dictionaryHandle
+            || record.reactorHandles.size() != 1u
+            || record.reactorHandles.front() != dictionaryHandle
+            || record.m_dataEntries.size() != 4u
+            || record.m_handleValues.size() != expectedHandleCount)
+            return false;
+        const auto& marker = record.m_dataEntries[0];
+        const auto& viewport = record.m_dataEntries[1];
+        const auto& value = record.m_dataEntries[2];
+        const auto& close = record.m_dataEntries[3];
+        if (marker.code() != 102 || marker.type() != DRW_Variant::STRING
+            || marker.c_str() == nullptr
+            || std::string(marker.c_str()) != profile.application
+            || viewport.code() != 335
+            || viewport.type() != DRW_Variant::INTEGER64
+            || viewport.i64_val() != viewportHandle
+            || close.code() != 102 || close.type() != DRW_Variant::STRING
+            || close.c_str() == nullptr || std::string(close.c_str()) != "}")
+            return false;
+        if (profile.valueCode == 343) {
+            if (value.code() != 343
+                || value.type() != DRW_Variant::INTEGER64
+                || value.i64_val() != linetypeHandle
+                || record.m_handleValues[0]
+                    != std::make_pair(335, viewportHandle)
+                || record.m_handleValues[1]
+                    != std::make_pair(343, linetypeHandle))
+                return false;
+        } else if (value.code() != profile.valueCode
+                   || value.type() != DRW_Variant::INTEGER
+                   || value.i_val() != profile.value
+                   || record.m_handleValues[0]
+                       != std::make_pair(335, viewportHandle)) {
+            return false;
+        }
+        return record.m_rawData.empty() && !record.m_rawDataValid;
+    };
+    const auto graphMatches = [&](const dx_data& data,
+                                  std::uint8_t profileMask) {
+        std::size_t expectedRecords = 0u;
+        for (std::size_t index = 0; index < profiles.size(); ++index)
+            if ((profileMask & (1u << index)) != 0u)
+                ++expectedRecords;
+        const auto layer = std::find_if(data.layers.begin(), data.layers.end(),
+            [](const DRW_Layer& value) {
+                return value.name == "FROZEN_TARGET";
+            });
+        if (layer == data.layers.end() || layer->xDictHandle == 0u)
+            return false;
+        const auto dictionary = std::find_if(data.dictionaries.begin(),
+            data.dictionaries.end(), [&layer](const DRW_Dictionary& value) {
+                return value.handle == layer->xDictHandle;
+            });
+        const auto linetype = std::find_if(data.lineTypes.begin(),
+            data.lineTypes.end(), [](const DRW_LType& value) {
+                return value.name == "OVERRIDE_LTYPE";
+            });
+        if (dictionary == data.dictionaries.end()
+            || dictionary->parentHandle != layer->handle
+            || dictionary->hardOwner != 1
+            || dictionary->m_entries.size() != expectedRecords
+            || data.xRecords.size() != expectedRecords
+            || ((profileMask & 0x04u) != 0u
+                && linetype == data.lineTypes.end()))
+            return false;
+        std::uint32_t viewportHandle = 0u;
+        for (std::size_t index = 0; index < profiles.size(); ++index) {
+            if ((profileMask & (1u << index)) == 0u)
+                continue;
+            const DRW_Dictionary::Entry* entry =
+                findNamedEntry(*dictionary, profiles[index].key);
+            if (entry == nullptr)
+                return false;
+            const auto record = std::find_if(data.xRecords.begin(),
+                data.xRecords.end(), [entry](const DRW_XRecord& value) {
+                    return value.handle == entry->m_handle;
+                });
+            if (record == data.xRecords.end()
+                || record->m_handleValues.empty()
+                || record->m_handleValues.front().first != 335)
+                return false;
+            viewportHandle = record->m_handleValues.front().second;
+            break;
+        }
+        const DRW_Entity* viewportEntity = findEntity(data, viewportHandle);
+        if (expectedRecords != 0u
+            && (viewportEntity == nullptr
+                || dynamic_cast<const DRW_Viewport*>(viewportEntity) == nullptr))
+            return false;
+        for (std::size_t index = 0; index < profiles.size(); ++index) {
+            if ((profileMask & (1u << index)) == 0u)
+                continue;
+            const DRW_Dictionary::Entry* entry =
+                findNamedEntry(*dictionary, profiles[index].key);
+            if (entry == nullptr)
+                return false;
+            const auto record = std::find_if(data.xRecords.begin(),
+                data.xRecords.end(), [entry](const DRW_XRecord& value) {
+                    return value.handle == entry->m_handle;
+                });
+            if (record == data.xRecords.end()
+                || !recordHasExpectedPayload(*record, index,
+                    viewportHandle,
+                    linetype == data.lineTypes.end() ? 0u : linetype->handle,
+                    dictionary->handle))
+                return false;
+        }
+        return true;
+    };
+    class DiagnosticExporter final : public dx_iface {
+    public:
+        DRW_OperationDiagnostic lastWriteDiagnostic;
+        void writeObjects() override {
+            dx_iface::writeObjects();
+            if (dxfW != nullptr)
+                lastWriteDiagnostic = dxfW->getLastDiagnostic();
+        }
+    };
+
+    const auto readFile = [](const std::filesystem::path& path) {
+        std::ifstream input(path, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(input)),
+                           std::istreambuf_iterator<char>());
+    };
+    // Codes 420 and 440 appear in the open-source LayerOverrides schema, but
+    // Autodesk's XRECORD-specific envelope ends at 369. Preserve/read those
+    // inputs and refuse standard XRECORD output until a bounded source-backed
+    // compatibility profile exists.
+    for (const bool binary : {false, true}) {
+        const std::string cell = std::string("extended-")
+            + (binary ? "binary" : "ascii");
+        const auto expect = [&t, &cell](bool condition, const char* message) {
+            const std::string label = cell + ": " + message;
+            t.expect(condition, label.c_str());
+        };
+        const auto input = directory / ("input-" + cell + ".dxf");
+        const auto output = directory / ("output-" + cell + ".dxf");
+        const bool generated = writeLayoutGraphControl(input, binary,
+            false, "703", 4, false, true, 0x0Fu);
+        expect(generated,
+            "four-profile Layer/VIEWPORT/LTYPE override source is written");
+        if (!generated)
+            return;
+        dx_iface importer;
+        dx_data source;
+        const bool imported = importer.fileImport(input.string(), &source, false);
+        expect(imported && graphMatches(source, 0x0Fu),
+            "all four Layer override XRECORDs and dependencies parse in order");
+        if (!imported || !graphMatches(source, 0x0Fu))
+            return;
+        const std::string sentinel = "LAYER_VIEWPORT_OVERRIDE_DESTINATION";
+        {
+            std::ofstream prior(output, std::ios::binary | std::ios::trunc);
+            prior << sentinel;
+        }
+        DiagnosticExporter exporter;
+        const bool exported = exporter.fileExport(output.string(),
+            DRW::AC1027, binary, &source, false);
+        expect(!exported && readFile(output) == sentinel
+                   && exporter.lastWriteDiagnostic.code
+                       == "xrecord-application-code-domain",
+            "out-of-range XRECORD group 440 is rejected atomically");
+    }
+
+    for (const std::uint8_t profileMask : {0x01u, 0x02u}) {
+        for (const bool binary : {false, true}) {
+            const std::string cell = std::string(profileMask == 0x01u
+                ? "alpha" : "color") + (binary ? "-binary" : "-ascii");
+            const auto expect = [&t, &cell](bool condition, const char* message) {
+                const std::string label = cell + ": " + message;
+                t.expect(condition, label.c_str());
+            };
+            const auto input = directory / ("input-range-" + cell + ".dxf");
+            const auto output = directory / ("output-range-" + cell + ".dxf");
+            const bool generated = writeLayoutGraphControl(input, binary,
+                false, "703", 4, false, true, profileMask);
+            expect(generated,
+                "out-of-range override source is generated");
+            if (!generated)
+                return;
+            dx_iface importer;
+            dx_data source;
+            const bool imported = importer.fileImport(input.string(), &source, false);
+            expect(imported && graphMatches(source, profileMask),
+                "out-of-range override record parses and is retained");
+            if (!imported || !graphMatches(source, profileMask))
+                return;
+            const std::string sentinel = "LAYER_VIEWPORT_OVERRIDE_DESTINATION";
+            {
+                std::ofstream prior(output, std::ios::binary | std::ios::trunc);
+                prior << sentinel;
+            }
+            DiagnosticExporter exporter;
+            const bool exported = exporter.fileExport(output.string(),
+                DRW::AC1027, binary, &source, false);
+            expect(!exported && readFile(output) == sentinel
+                   && exporter.lastWriteDiagnostic.code
+                       == "xrecord-application-code-domain",
+                "application group outside the XRECORD envelope is refused atomically");
+        }
+    }
+
+    // The in-envelope group 91 lineweight and group 343 linetype references
+    // exercise the generic graph writer without widening its accepted domain.
+    for (const bool sourceBinary : {false, true}) {
+        for (const bool outputBinary : {false, true}) {
+            const std::string cell = std::string(sourceBinary ? "binary" : "ascii")
+                + "-to-" + (outputBinary ? "binary" : "ascii");
+            const auto expect = [&t, &cell](bool condition, const char* message) {
+                const std::string label = cell + ": " + message;
+                t.expect(condition, label.c_str());
+            };
+            const auto input = directory / ("input-standard-" + cell + ".dxf");
+            const auto output = directory / ("output-standard-" + cell + ".dxf");
+            const bool generated = writeLayoutGraphControl(input, sourceBinary,
+                false, "703", 4, false, true, 0x0Cu);
+            expect(generated,
+                "standard group 91/343 Layer override source is written");
+            if (!generated)
+                return;
+
+            dx_iface importer;
+            dx_data source;
+            const bool imported = importer.fileImport(input.string(), &source, false);
+            expect(imported && graphMatches(source, 0x0Cu),
+                "Layer extension dictionary, keys and standard fields parse");
+            if (!imported || !graphMatches(source, 0x0Cu))
+                return;
+
+            DiagnosticExporter exporter;
+            auto dictionary = std::find_if(source.dictionaries.begin(),
+                source.dictionaries.end(), [](const DRW_Dictionary& value) {
+                    return value.handle == 0xB3u;
+                });
+            if (dictionary == source.dictionaries.end()) {
+                expect(false, "layer override extension dictionary is retained");
+                return;
+            }
+            const std::uint32_t originalOwner = dictionary->parentHandle;
+            const std::string sentinel = "LAYER_VIEWPORT_OVERRIDE_DESTINATION";
+            {
+                std::ofstream prior(output, std::ios::binary | std::ios::trunc);
+                prior << sentinel;
+            }
+            dictionary->parentHandle = 0x641u;
+            const bool refused = !exporter.fileExport(output.string(),
+                DRW::AC1027, outputBinary, &source, false);
+            dictionary->parentHandle = originalOwner;
+            expect(refused && readFile(output) == sentinel,
+                "wrong dictionary owner refuses without replacing destination");
+
+            const bool exported = exporter.fileExport(output.string(),
+                DRW::AC1027, outputBinary, &source, false);
+            dx_iface verifier;
+            dx_data readback;
+            const bool reimported = exported
+                && verifier.fileImport(output.string(), &readback, false);
+            expect(reimported && graphMatches(readback, 0x0Cu),
+                "corrected same-exporter retry remaps and reads back group 91/343 references");
+            if (!reimported || !graphMatches(readback, 0x0Cu))
+                return;
+        }
     }
 }
 
@@ -59997,6 +60417,14 @@ int main(int argc, char** argv) {
         testLayoutGraphReadContract(context);
         testLayoutShadePlotClosure(context);
         std::cout << "DXF LAYOUT/NOD/UCS/shade graph contract: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--layer-viewport-overrides") {
+        TestContext context;
+        testLayerViewportOverrideXRecordTransport(context);
+        std::cout << "DXF Layer viewport override XRECORD transport: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
