@@ -56,6 +56,65 @@ void usage(){
     std::cout << "        -v2018 dxf version 2018 (AC1032)" << std::endl;
 }
 
+namespace {
+
+const char* cliVersionName(DRW::Version version) noexcept {
+    switch (version) {
+    case DRW::MC00: return "MC0.0";
+    case DRW::AC12: return "AC1.2";
+    case DRW::AC14: return "AC1.40";
+    case DRW::AC150: return "AC1.50";
+    case DRW::AC210: return "AC2.10";
+    case DRW::AC1002: return "AC1002";
+    case DRW::AC1003: return "AC1003";
+    case DRW::AC1004: return "AC1004";
+    case DRW::AC1006: return "AC1006";
+    case DRW::AC1009: return "AC1009";
+    case DRW::AC1012: return "AC1012";
+    case DRW::AC1014: return "AC1014";
+    case DRW::AC1015: return "AC1015";
+    case DRW::AC1018: return "AC1018";
+    case DRW::AC1021: return "AC1021";
+    case DRW::AC1024: return "AC1024";
+    case DRW::AC1027: return "AC1027";
+    case DRW::AC1032: return "AC1032";
+    default: return "unknown";
+    }
+}
+
+const char* cliSourceFormatName(dx_source_format format) noexcept {
+    switch (format) {
+    case dx_source_format::DXF: return "DXF";
+    case dx_source_format::DWG: return "DWG";
+    case dx_source_format::Unknown: return "unknown";
+    }
+    return "unknown";
+}
+
+void reportCliConversionProjection(const dx_data& data,
+                                   DRW::Version targetVersion,
+                                   bool sourceDefaultTarget,
+                                   bool binary,
+                                   bool allowPartialDwgRead) {
+    const char* readCompleteness = data.sourceFormat != dx_source_format::DWG
+        ? "not-applicable"
+        : allowPartialDwgRead ? "explicit-partial" : "strict";
+    const char* targetSelection = sourceDefaultTarget
+        ? targetVersion == DRW::UNKNOWNV
+            ? "source-default-unavailable" : "source-default"
+        : targetVersion == DRW::UNKNOWNV ? "unselected" : "explicit";
+    std::cerr << "CLI conversion projection: schema=1 sourceFormat="
+              << cliSourceFormatName(data.sourceFormat)
+              << " sourceVersion=" << cliVersionName(data.sourceVersion)
+              << " targetVersion=" << cliVersionName(targetVersion)
+              << " targetSelection=" << targetSelection
+              << " outputEncoding=" << (binary ? "Binary" : "ASCII")
+              << " readCompleteness=" << readCompleteness
+              << " stage=before-output-preflight\n";
+}
+
+} // namespace
+
 bool convertFile(std::string inName, std::string outName, DRW::Version ver,
                  bool binary, bool overwrite, bool debug,
                  bool nonInteractive = false,
@@ -127,14 +186,22 @@ bool convertFile(std::string inName, std::string outName, DRW::Version ver,
         return false;
     }
 
-    if (ver == DRW::UNKNOWNV && nonInteractive) {
+    const bool sourceDefaultTarget = ver == DRW::UNKNOWNV && nonInteractive;
+    if (sourceDefaultTarget) {
         ver = dwg2dxfCli::defaultOutputVersion(fData.sourceVersion);
         if (ver == DRW::UNKNOWNV) {
+            if (debug)
+                reportCliConversionProjection(fData, ver, sourceDefaultTarget,
+                                               binary, allowPartialDwgRead);
             std::cout << "Error: no supported default DXF version for source revision "
                       << static_cast<int>(fData.sourceVersion) << std::endl;
             return false;
         }
     }
+
+    if (debug)
+        reportCliConversionProjection(fData, ver, sourceDefaultTarget, binary,
+                                       allowPartialDwgRead);
 
     if (allowPartialDwgRead && fData.sourceFormat == dx_source_format::DWG) {
         std::cerr << "WARNING: explicit partial DWG read mode; output may omit "

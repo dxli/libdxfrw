@@ -4,7 +4,7 @@
   "date": "2026-11-02",
   "status": "FAST_VALIDATED",
   "supportClaimEffect": "none",
-  "scope": "Verify the FreeCAD-compatible -o route chooses its documented default DXF target from imported DXF source revisions and from locally authored DWG source profiles, and honors ASCII/Binary output selection.",
+  "scope": "Verify the FreeCAD-compatible -o route chooses its documented default DXF target from imported DXF source revisions and from locally authored DWG source profiles, honors ASCII/Binary output selection, and exposes the pre-output target projection in debug mode.",
   "profiles": [
     {
       "source": "AC1009",
@@ -55,24 +55,28 @@
       "Each DXF source default is emitted as ASCII and Binary DXF with the exact $ACADVER value.",
       "Binary DXF is checked with R12 one-byte group-code framing for AC1009 and two-byte framing for later revisions.",
       "Locally authored AC1015, AC1021, AC1024, AC1027 and AC1032 DWGs succeed through FreeCAD -o at the source revision in ASCII and Binary; binary outputs read back at the same revision.",
-      "AC1018 output is refused in ASCII/Binary at default AC1018 and explicit AC1024 because the completed read contains two opaque callbacks and strict output qualification is 0/2; a pre-existing destination sentinel and the source bytes remain unchanged."
+      "AC1018 output is refused in ASCII/Binary at default AC1018 and explicit AC1024 because the completed read contains two opaque callbacks and strict output qualification is 0/2; a pre-existing destination sentinel and the source bytes remain unchanged.",
+      "Debug mode reports a bounded pre-output projection of source format/revision, target revision, implicit-versus-explicit target selection, output encoding and input-appropriate read-completeness mode. Generated AC1012 DXF input verifies the AC1014 default and not-applicable DWG completeness field; generated AC1006 DXF input verifies fail-closed reporting when no default exists; generated AC1021 DWG success and AC1018 default/explicit refusal controls verify the projection before output preflight."
     ],
-    "controls": 37,
+    "controls": 38,
     "fixtureFilesAdded": 0
   },
   "validation": {
     "build": "PASS: cmake --build build-gcc --target dwg2dxf libdxfrw_dwg_local_roundtrip -j2",
-    "test": "PASS: ctest --test-dir build-gcc -R '^dwg2dxf_cli_contract$' --output-on-failure (1/1, 11.07 s); python3 -B tests/dwg2dxf_cli_contract_tests.py --converter build-gcc/dwg2dxf/dwg2dxf --options-only (96 controls)",
+    "test": "PASS: ctest --test-dir build-gcc -R '^dwg2dxf_cli_contract$' --output-on-failure (1/1, 9.25 s); python3 -B tests/dwg2dxf_cli_contract_tests.py --converter build-gcc/dwg2dxf/dwg2dxf --options-only (97 controls)",
     "diffCheck": "PASS: git diff --check",
     "sha256": {
-      "tests/dwg2dxf_cli_contract_tests.py": "3025741a8ec4d191471c83aa56198c7efcc051c7098b6538df306ae5f2c90048",
-      "build-gcc/dwg2dxf/dwg2dxf": "04a96d39d968708006679eb5861ffc3b2b488bb3dd9d8d76eca74b235c5cfaa0",
+      "tests/dwg2dxf_cli_contract_tests.py": "6a294e2fbc19a848c9f70d0a0612d2b1f437273624a3a51eea27159c10f40d6f",
+      "dwg2dxf/main.cpp": "81b8fc0141700c0885b4081bcd3e46f56acd443e2eea9f0fa598c8f1a8402185",
+      "build-gcc/dwg2dxf/dwg2dxf": "bf6449a4edaf53480769f83b8432c749c2b3d4f144b3250c3bc02853f019374f",
       "build-gcc/libdxfrw_dwg_local_roundtrip": "54a9da4255845f43bd40740c8cedd5da9b1021a37a9b43d586717ae3abeedf42",
       "tests/dwg_local_roundtrip_tests.cpp": "caa5535d5822d43934cdc72ce6b04ce83685bf6632c2e0ed56405999f9d032a1"
     }
   },
   "limits": [
-    "This receipt covers all supported source-DXF header defaults plus the six DWG writer versions. The AC1018 generated profile remains unqualified and refused; AC1012/AC1014 DWG source inputs, other routes, and native CAD acceptance remain separate.",
+    "This receipt covers all supported source-DXF header defaults plus the six DWG writer versions. The AC1018 generated profile remains unqualified and refused; other routes and native CAD acceptance remain separate.",
+    "An external AC1014 R14 sample from monozukuri-ai/ezdwg (test_dwg/line_R14.dwg; Git blob ac9747bad17bf4cd99df0a6dd80d3650b57d26c5; SHA-256 4ae12afb4052f1be913003b84021054c0e07b08e6aef5e430bf523c6f85c0903) was read as AC1014 and the debug projection selected AC1014 by source-default. Strict output was refused because the reader observed two object parse failures and an incomplete frame disposition; no output was published. The sample remained in temporary storage and is not a committed fixture. This observes default selection only, not AC1014 output/readback or support.",
+    "AC1012 DWG-source default output/readback remains uncovered. The AC1014 external diagnostic probe does not qualify output, whole-file semantics or native acceptance.",
     "This is CLI contract evidence, not a DWG/DXF semantic support claim."
   ],
   "dwgProfiles": [

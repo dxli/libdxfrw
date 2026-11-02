@@ -111,6 +111,9 @@ def check_default_output_versions(converter, root, invoke):
                 f"default-version-output-{source_revision.decode()}-"
                 f"{'binary' if binary else 'ascii'}.dxf")
             arguments = [source, "-o", output]
+            inspect_projection = source_revision == b"AC1012" and not binary
+            if inspect_projection:
+                arguments.append("-d")
             if binary:
                 arguments.append("-b")
             result = invoke(arguments)
@@ -123,7 +126,35 @@ def check_default_output_versions(converter, root, invoke):
                 raise AssertionError(
                     f"FreeCAD default output for {source_revision!r}/{binary} "
                     f"did not encode exactly {output_revision!r}")
+            if inspect_projection:
+                required_projection = (
+                    b"CLI conversion projection: schema=1 sourceFormat=DXF "
+                    b"sourceVersion=AC1012 targetVersion=AC1014 "
+                    b"targetSelection=source-default outputEncoding=ASCII "
+                    b"readCompleteness=not-applicable stage=before-output-preflight")
+                if required_projection not in result.stderr:
+                    raise AssertionError(
+                        "AC1012 DXF default target projection is incomplete: "
+                        f"{result.stderr[-2048:]!r}")
             checked += 1
+    unsupported_source = root / "unsupported default source.dxf"
+    unsupported_bytes = SOURCE.replace(b"AC1021", b"AC1006", 1)
+    unsupported_source.write_bytes(unsupported_bytes)
+    unsupported_output = root / "unsupported default result.dxf"
+    result = invoke([unsupported_source, "-o", unsupported_output, "-d"])
+    unsupported_projection = (
+        b"CLI conversion projection: schema=1 sourceFormat=DXF "
+        b"sourceVersion=AC1006 targetVersion=unknown "
+        b"targetSelection=source-default-unavailable outputEncoding=ASCII "
+        b"readCompleteness=not-applicable stage=before-output-preflight")
+    if (result.returncode != 1 or unsupported_source.read_bytes() != unsupported_bytes
+            or unsupported_output.exists()
+            or b"no supported default DXF version" not in result.stdout
+            or unsupported_projection not in result.stderr):
+        raise AssertionError(
+            "unsupported implicit target did not report its preflight projection "
+            f"and refuse publication: {result!r}")
+    checked += 1
     return checked
 
 
@@ -156,7 +187,7 @@ def check_default_dwg_output_versions(converter, root, writer,
                         f"{'binary' if binary else 'ascii'}.dxf")
                     output.write_bytes(SENTINEL)
                     arguments = [str(converter), str(source), "-o", str(output),
-                                 *target_args, "-y"]
+                                 *target_args, "-y", "-d"]
                     if binary:
                         arguments.append("-b")
                     result = run_bounded(
@@ -164,9 +195,21 @@ def check_default_dwg_output_versions(converter, root, writer,
                     required = (
                         b"strict-complete conversion requires output qualification "
                         b"for every opaque DWG callback (qualified=0/2)")
+                    projection_target = (b"AC1024" if target_args
+                                         else b"AC1018")
+                    projection_selection = (b"explicit" if target_args
+                                            else b"source-default")
+                    projection_encoding = b"Binary" if binary else b"ASCII"
+                    projection = (
+                        b"CLI conversion projection: schema=1 sourceFormat=DWG "
+                        b"sourceVersion=AC1018 targetVersion=" + projection_target
+                        + b" targetSelection=" + projection_selection
+                        + b" outputEncoding=" + projection_encoding
+                        + b" readCompleteness=strict stage=before-output-preflight")
                     if (result.returncode != 1 or output.read_bytes() != SENTINEL
                             or source.read_bytes() != original
-                            or required not in result.stderr):
+                            or required not in result.stderr
+                            or projection not in result.stderr):
                         raise AssertionError(
                             f"AC1018 unqualified output was not refused atomically "
                             f"for target {target_args!r}/{binary}: {result!r}")
@@ -178,6 +221,9 @@ def check_default_dwg_output_versions(converter, root, writer,
                 f"default-version-dwg-output-{revision.decode()}-"
                 f"{'binary' if binary else 'ascii'}.dxf")
             arguments = [str(converter), str(source), "-o", str(output)]
+            inspect_projection = revision == b"AC1021" and not binary
+            if inspect_projection:
+                arguments.append("-d")
             if binary:
                 arguments.append("-b")
             result = run_bounded(arguments, 10, 2 * 1024 * 1024, cwd=root)
@@ -187,6 +233,16 @@ def check_default_dwg_output_versions(converter, root, writer,
                 raise AssertionError(
                     f"DWG-derived default target failed for "
                     f"{revision.decode()}/{binary}: {result!r}")
+            if inspect_projection:
+                required_projection = (
+                    b"CLI conversion projection: schema=1 sourceFormat=DWG "
+                    b"sourceVersion=AC1021 targetVersion=AC1021 "
+                    b"targetSelection=source-default outputEncoding=ASCII "
+                    b"readCompleteness=strict stage=before-output-preflight")
+                if required_projection not in result.stderr:
+                    raise AssertionError(
+                        "successful default DWG conversion omitted its target "
+                        f"projection: {result.stderr[-2048:]!r}")
             checked += 1
 
             if binary:
