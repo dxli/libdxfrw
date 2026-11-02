@@ -71,6 +71,65 @@ def check_pre_r13_marker_failure(converter, root):
     return checked
 
 
+def check_default_output_versions(converter, root, invoke):
+    """Pin FreeCAD -o default-version selection and output encoding."""
+    profiles = (
+        (b"AC1009", b"AC1009"),
+        (b"AC1012", b"AC1014"),
+        (b"AC1014", b"AC1014"),
+        (b"AC1015", b"AC1015"),
+        (b"AC1018", b"AC1018"),
+        (b"AC1021", b"AC1021"),
+        (b"AC1024", b"AC1024"),
+        (b"AC1027", b"AC1027"),
+        (b"AC1032", b"AC1032"),
+    )
+    checked = 0
+    for source_revision, output_revision in profiles:
+        source = root / f"default-version-source-{source_revision.decode()}.dxf"
+        original = SOURCE.replace(b"AC1021", source_revision, 1)
+        source.write_bytes(original)
+        for binary in (False, True):
+            output = root / (
+                f"default-version-output-{source_revision.decode()}-"
+                f"{'binary' if binary else 'ascii'}.dxf")
+            arguments = [source, "-o", output]
+            if binary:
+                arguments.append("-b")
+            result = invoke(arguments)
+            if result.returncode != 0 or source.read_bytes() != original:
+                raise AssertionError(
+                    f"FreeCAD default output version failed for "
+                    f"{source_revision!r}/{binary}: {result!r}")
+            payload = output.read_bytes()
+            if payload.startswith(BINARY_PREFIX) != binary:
+                raise AssertionError(
+                    f"FreeCAD default output kind changed for "
+                    f"{source_revision!r}/{binary}")
+            if binary:
+                code_width = 1 if source_revision == b"AC1009" else 2
+                code_9 = b"\x09" if code_width == 1 else b"\x09\x00"
+                code_1 = b"\x01" if code_width == 1 else b"\x01\x00"
+                revision = (code_9 + b"$ACADVER\x00" + code_1
+                            + output_revision + b"\x00")
+                if payload.count(revision) != 1:
+                    raise AssertionError(
+                        f"binary FreeCAD default target for {source_revision!r} "
+                        f"did not encode exactly {output_revision!r}")
+            else:
+                lines = [line.strip() for line in payload.splitlines()]
+                version_records = sum(
+                    lines[index:index + 4]
+                    == [b"9", b"$ACADVER", b"1", output_revision]
+                    for index in range(max(0, len(lines) - 3)))
+                if version_records != 1:
+                    raise AssertionError(
+                        f"ASCII FreeCAD default target for {source_revision!r} "
+                        f"did not encode exactly {output_revision!r}")
+            checked += 1
+    return checked
+
+
 def check_options(converter, root):
     source = root / "source drawing.dxf"
     source.write_bytes(SOURCE)
@@ -252,6 +311,7 @@ def check_options(converter, root):
     if result.returncode != 1 or protected.read_bytes() != SENTINEL:
         raise AssertionError("partial-read option unexpectedly authorized overwrite")
     checked += 1
+    checked += check_default_output_versions(converter, root, invoke)
     if source.read_bytes() != SOURCE or dash_source.read_bytes() != SOURCE:
         raise AssertionError("CLI checks changed their locally generated input")
     return checked

@@ -1,0 +1,75 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-cli-freecad-default-target-version-matrix-2026-11-02",
+  "date": "2026-11-02",
+  "status": "FAST_VALIDATED",
+  "supportClaimEffect": "none",
+  "scope": "Verify the FreeCAD-compatible -o route chooses its documented default DXF target from an imported DXF source revision and honors ASCII/Binary output selection.",
+  "profiles": [
+    {
+      "source": "AC1009",
+      "target": "AC1009"
+    },
+    {
+      "source": "AC1012",
+      "target": "AC1014"
+    },
+    {
+      "source": "AC1014",
+      "target": "AC1014"
+    },
+    {
+      "source": "AC1015",
+      "target": "AC1015"
+    },
+    {
+      "source": "AC1018",
+      "target": "AC1018"
+    },
+    {
+      "source": "AC1021",
+      "target": "AC1021"
+    },
+    {
+      "source": "AC1024",
+      "target": "AC1024"
+    },
+    {
+      "source": "AC1027",
+      "target": "AC1027"
+    },
+    {
+      "source": "AC1032",
+      "target": "AC1032"
+    }
+  ],
+  "control": {
+    "file": "tests/dwg2dxf_cli_contract_tests.py",
+    "function": "check_default_output_versions",
+    "selector": "--options-only",
+    "existingCtest": "dwg2dxf_cli_contract",
+    "runtimeAuthoredInput": "The existing minimal SOURCE DXF is written in a temporary directory and only its $ACADVER value is varied.",
+    "route": "dwg2dxf <source.dxf> -o <output.dxf> [-b]",
+    "assertions": [
+      "All nine source revision headers select the expected default target, including the AC1012 compatibility mapping to AC1014.",
+      "Each target is emitted as ASCII and Binary DXF with the exact $ACADVER value.",
+      "Binary DXF is checked with the R12 one-byte group-code framing for AC1009 and two-byte framing for later revisions.",
+      "All inputs remain byte-identical and each invocation exits successfully."
+    ],
+    "controls": 18,
+    "fixtureFilesAdded": 0
+  },
+  "validation": {
+    "build": "PASS: cmake --build build-gcc --target dwg2dxf -j2",
+    "test": "PASS: python3 -B tests/dwg2dxf_cli_contract_tests.py --converter build-gcc/dwg2dxf/dwg2dxf --options-only (96 total controls)",
+    "diffCheck": "PASS: git diff --check",
+    "sha256": {
+      "tests/dwg2dxf_cli_contract_tests.py": "80f2e8feb30bdc764f89427ab24db83e62687cfb0c8d5dc9d5f91491717fbfe6",
+      "build-gcc/dwg2dxf/dwg2dxf": "04a96d39d968708006679eb5861ffc3b2b488bb3dd9d8d76eca74b235c5cfaa0"
+    }
+  },
+  "limits": [
+    "This receipt covers source DXF default-version selection through the FreeCAD -o route; DWG-derived defaults, explicit-version semantics outside existing controls, and native CAD acceptance remain separately scoped.",
+    "This is CLI contract evidence, not a DWG/DXF semantic support claim."
+  ]
+}
