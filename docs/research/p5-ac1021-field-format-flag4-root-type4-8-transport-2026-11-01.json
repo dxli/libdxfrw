@@ -29,7 +29,7 @@
       "A set first flag bit suppresses the type-specific payload; with that bit clear, type-specific fields follow.",
       "Type 4 is TV; type 8 is BL byte count followed by that many bytes."
     ],
-    "scopeLimit": "The specification does not assign semantic meaning to flag value 4. Preserve that integer as opaque metadata. A flags=4/type=8 root profile is admitted; type 4 remains refused because the local physical sample does not retain body alignment under the ODA TV interpretation, while LibreDWG's implementation uses a different R2007+ encoding."
+    "scopeLimit": "The specification does not assign semantic meaning to flag value 4. Preserve that integer as opaque metadata. A flags=4/type=8 root profile is admitted. ODA §20.4.99 and LibreDWG master both describe the type-4 payload as text; the unresolved disagreement is the later FIELD group-98 value_string_length field (ODA lists TV, LibreDWG's object schema uses BL), followed by a child-count framing failure in the local physical sample. Do not promote type 4 from the peer layout alone."
   },
   "currentFailure": {
     "code": "readCadValue rejected format flags 4 before the data-type BL; isWritableCadValue rejected flags outside 0x03.",
@@ -57,8 +57,32 @@
   },
   "diagnosticAttempt": {
     "trace": "/tmp/libdxfrw-ac1021-field-flag4.log",
-    "temporaryResult": "When flags=4/type=4 was provisionally parsed using the ODA TV layout, all four physical type-4 roots reached an out-of-range child-value count. This diagnostic path was narrowed and is not in the final implementation.",
+    "temporaryResult": "A temporary diagnostic admitted flags=4/type=4 only to trace the existing ODA TV text payload path. All four roots reached the later child-value-count field but decoded an out-of-range count. The temporary path was removed. This does not show a type-4 payload layout difference: LibreDWG master also uses FIELD_T for the kString payload.",
     "handles": ["0x2392", "0x2394", "0x2395", "0x2396"]
+  },
+  "followUpResearch": {
+    "authority": {
+      "fieldLayout": "ODA v5.4.1 §20.4.76 lists the value string as TV group 301 and value-string length as TV group 98; §20.4.99 defines kString/type 4 as TV.",
+      "peerImplementation": "LibreDWG master src/dwg_spec_shared.h TABLE_value_fields uses FIELD_T for kString/type 4. Its src/dwg.spec FIELD object uses FIELD_T(value_string, 301) followed by FIELD_BL(value_string_length, 98), with the source comment 'ODA bug TV'.",
+      "sources": [
+        "https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf",
+        "https://github.com/LibreDWG/libredwg/blob/master/src/dwg_spec_shared.h#L2835-L2881",
+        "https://github.com/LibreDWG/libredwg/blob/master/src/dwg.spec#L5863-L5871"
+      ],
+      "qualification": "The ODA specification remains authoritative for byte layout. LibreDWG is an implementation differential only; the shared type-4 payload does not settle group-98 encoding or the local child-count failure."
+    },
+    "physicalDiagnostic": {
+      "trace": "/tmp/libdxfrw-ac1021-field-type4-diagnostic2.log",
+      "profile": "The local AC1021 roots have flags=4/type=4. The temporary local reader reached the text value, then read the group-98 candidate as BL and reached the following child-count read.",
+      "rootObservations": [
+        {"handle": "0x2392", "valueStringLengthCandidate": 112, "parsedChildCount": -1878605819},
+        {"handle": "0x2394", "valueStringLengthCandidate": 16, "parsedChildCount": 1610903557},
+        {"handle": "0x2395", "valueStringLengthCandidate": 272695808, "parsedChildCount": 1344016740},
+        {"handle": "0x2396", "valueStringLengthCandidate": 4, "parsedChildCount": 1074221063}
+      ],
+      "peerComparison": "All four BL length candidates equal the corresponding LibreDWG 0.14 JSON values, including the anomalous 272695808 value. This is parser agreement, not semantic or normative proof.",
+      "interpretation": "The group-98 discrepancy is a candidate cause, not a proven explanation for the child-count failure. Do not change the decoder or admit type 4 until the physical bit spans for group 98 and group 93 are independently established against a conforming producer/parser."
+    }
   },
   "postChangeObservation": {
     "physicalTrace": "/tmp/libdxfrw-ac1021-field-flag4-final.log",
@@ -70,7 +94,7 @@
       },
       "type4": {
         "handles": ["0x2392", "0x2394", "0x2395", "0x2396"],
-        "result": "all remain incomplete under explicit refusal; the diagnostic ODA TV attempt misaligned the subsequent child-value count"
+        "result": "all remain incomplete under explicit refusal; the temporary text-payload trace reached group 98 and then an invalid child-value count"
       }
     },
     "otherResiduals": {
@@ -78,7 +102,7 @@
       "childValueCountFailures": 16,
       "strictOutputRefusal": "36 unpreserved proxy-graphics records"
     },
-    "decision": "Keep only flags=4/type=8 root transport. Preserve/refuse type 4 pending an authoritative resolution of its ODA-versus-LibreDWG layout difference."
+    "decision": "Keep only flags=4/type=8 root transport. Preserve/refuse type 4 pending authoritative resolution of the group-98 wire type and physical child-count span."
   },
   "validation": {
     "build": {
