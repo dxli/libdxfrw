@@ -5675,6 +5675,95 @@ void testFieldCadValueUnqualifiedFormatFlags(TestContext& t) {
         FieldFrame frame;
         const bool built = makeFieldFrame(
             false, false, frame, false, false, false, false, version,
+            false, false, false, 2, 64, 0, 0x04);
+        t.expect(built,
+                 "FIELD root flags=4/type=2 frame builds for "
+                     + std::to_string(static_cast<int>(version)));
+        if (!built)
+            continue;
+
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+        FieldCodecProbe parsed;
+        const bool read = parsed.parseDwg(version, &input,
+                                          frame.handleBits);
+        dwgBufferW body, strings, handles;
+        const bool encoded = parsed.encodeDwg(
+            version, &body, &strings, &handles);
+
+        if (version == DRW::AC1021) {
+            FieldCodecProbe expected;
+            expected.parentHandle = 0xA200u;
+            expected.setDwgCommonObjectState(0, 1, false);
+            expected.m_evaluatorId = "ACAD";
+            expected.m_fieldCode = "GENERATED_FIELD";
+            expected.m_evaluationStatusFlags = 2;
+            expected.m_value.m_formatFlags = 0x04;
+            expected.m_value.m_dataType = 2;
+            expected.m_value.m_value.addDouble(140, 42.5);
+            expected.m_value.m_unitType = 1;
+            expected.m_value.m_formatString = "0.0";
+            expected.m_value.m_valueString = "42.5";
+            expected.m_valueString = "42";
+            expected.m_valueStringLength = 2;
+            DRW_Field::ChildValue child;
+            child.m_key = "TYPED_CHILD";
+            child.m_value.m_dataType = 64;
+            child.m_value.m_handle = 0xA722u;
+            child.m_value.m_value.addInt(330, 0xA722);
+            child.m_value.m_unitType = 1;
+            child.m_value.m_formatString = "object";
+            child.m_value.m_valueString = "Handle A722";
+            expected.m_childValues.push_back(std::move(child));
+            dwgBufferW expectedBody, expectedStrings, expectedHandles;
+            const bool expectedEncoded = expected.encodeDwg(
+                version, &expectedBody, &expectedStrings, &expectedHandles);
+            const bool exactStreams = expectedEncoded
+                && body.bitCount() == expectedBody.bitCount()
+                && body.data() == expectedBody.data()
+                && strings.bitCount() == expectedStrings.bitCount()
+                && strings.data() == expectedStrings.data()
+                && handles.bitCount() == expectedHandles.bitCount()
+                && handles.data() == expectedHandles.data();
+            const bool typedValue =
+                parsed.m_value.m_value.type() == DRW_Variant::DOUBLE
+                && parsed.m_value.m_value.d_val() == 42.5
+                && parsed.m_childValues.size() == 1u
+                && parsed.m_childValues.front().m_key == "TYPED_CHILD"
+                && parsed.m_childValues.front().m_value.m_dataType == 64
+                && parsed.m_childValues.front().m_value.m_handle == 0xA722u;
+            t.expect(read && input.isGood()
+                         && parsed.hasCompleteDwgPayload()
+                         && parsed.isDwgPayloadValid(version) && encoded
+                         && exactStreams && typedValue
+                         && parsed.m_value.m_formatFlags == 0x04
+                         && parsed.m_value.m_dataType == 2
+                         && parsed.m_value.m_unitType == 1
+                         && parsed.m_value.m_formatString == "0.0"
+                         && parsed.m_value.m_valueString == "42.5"
+                         && parsed.m_valueString == "42"
+                         && parsed.m_valueStringLength == 2,
+                     "AC1021 FIELD root flags=4/type=2 preserves exact scalar and child-ID streams");
+        } else {
+            t.expect(read && input.isGood()
+                         && !parsed.hasCompleteDwgPayload()
+                         && !parsed.isDwgPayloadValid(version)
+                         && !encoded
+                         && parsed.m_value.m_formatFlags == 0x04
+                         && parsed.m_value.m_dataType == 0
+                         && parsed.m_childValues.empty()
+                         && body.bitCount() == 0u
+                         && strings.bitCount() == 0u
+                         && handles.bitCount() == 0u,
+                     "AC1024 FIELD root flags=4/type=2 remains an incomplete shell");
+        }
+    }
+
+    for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+        FieldFrame frame;
+        const bool built = makeFieldFrame(
+            false, false, frame, false, false, false, false, version,
             false, false, false, 4, 0, 0, 0x04);
         t.expect(built,
                  "FIELD root flags=4/type=4 control frame builds for "

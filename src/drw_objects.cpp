@@ -2454,7 +2454,8 @@ bool hasSupportedCadValueFormatFlags(
     if ((value.m_formatFlags & ~0x03) == 0)
         return true;
     return allowObservedRootProfile && value.m_formatFlags == 0x04
-        && value.m_dataType == 8;
+        && (value.m_dataType == 8
+            || (version == DRW::AC1021 && value.m_dataType == 2));
 }
 
 CadValueReadResult readCadValue(
@@ -2500,14 +2501,17 @@ CadValueReadResult readCadValue(
             return CadValueReadResult::Unsupported;
         }
 
-        // Probe without advancing the source cursor. This exact root profile
-        // is admitted only for the physically witnessed kDate type.
+        // Probe without advancing the source cursor. Preserve only the
+        // observed root profiles: the AC1021 kDouble profile and the existing
+        // AC1021+ kDate profile. Flag 0x04 remains opaque metadata.
         dwgBuffer typeProbe = buf->forkIndependent();
         std::int32_t candidateType = 0;
         if (!readBitLongWithinBody(&typeProbe, version, bodySize,
                                    candidateType))
             return CadValueReadResult::Error;
-        if (candidateType != 8) {
+        const bool supportedObservedType = candidateType == 8
+            || (version == DRW::AC1021 && candidateType == 2);
+        if (!supportedObservedType) {
             DRW_DBG("unsupported FIELD CadValue format flags: ");
             DRW_DBG(value.m_formatFlags); DRW_DBG("\n");
             return CadValueReadResult::Unsupported;

@@ -1,0 +1,81 @@
+{
+  "receipt": "p5-ac1021-field-flags4-type2-root-census-2026-11-01",
+  "recordedAt": "2026-11-01",
+  "phase": "P5",
+  "readiness": "bounded root-value transport implemented; nested ObjectPropertyId classification remains unresolved and no source support claim is made",
+  "sourceWitness": {
+    "path": "tests/samples/AC1021/blocks_and_tables_-_imperial.dwg",
+    "sha256": "3c95e8a82d5c8c251483fabc61efa8ca904f4e4bc8c2fce4786d74e812284d07",
+    "provenance": "Pre-existing untracked local input; not staged or committed.",
+    "libdxfrw": {
+      "selector": "--field-ac1021-physical-profile-census",
+      "typedFields": 128,
+      "formatFlags4DataType2Roots": 57,
+      "evaluators": {
+        "AcObjProp.16.2": 42,
+        "AcExpr": 15
+      },
+      "AcObjPropObjectPropertyIdProfiles": {
+        "dataType64": 42
+      },
+      "otherPeerFieldProfiles": "14 peer-reported roots remain outside the typed callback set: 13 flags=1/type=0 and one flags=0/type=4."
+    },
+    "peer": {
+      "name": "LibreDWG dwgread",
+      "version": "0.14",
+      "outputPath": "/private/tmp/peer-field-census-blocks_and_tables_-_imperial.json",
+      "outputSha256": "fd95543e97c01a003b61013b3e40dcb0d125c4d5c9662179ae150448f9c557e5",
+      "fieldRoots": 142,
+      "formatFlags4DataType2Roots": 57,
+      "evaluators": {
+        "AcObjProp.16.2": 42,
+        "AcExpr": 15
+      },
+      "AcObjPropObjectPropertyIdProfiles": {
+        "dataType64": 38,
+        "dataType2Double1UnitType2": 4
+      },
+      "mismatchedRootHandles": ["0x146B1", "0x146B7", "0x146BA", "0x1480A"],
+      "qualifier": "Implementation differential only; JSON interpretation is not normative or independent semantic evidence."
+    }
+  },
+  "authority": {
+    "document": "Open Design Specification for .dwg files v5.4.1",
+    "sections": ["20.4.76 FIELD", "20.4.99 Value"],
+    "source": "https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf",
+    "rules": [
+      "A FIELD child value is a TV key followed by a Value payload.",
+      "R2007+ Value begins with BL flags and then a BL data type.",
+      "Data type 2 carries a BD double payload.",
+      "Data type 64 is an Object Id carried as an H soft pointer in the handle stream."
+    ],
+    "scopeLimit": "The specification defines the wire forms but does not settle why LibreDWG reports four ObjectPropertyId children as type 2 while this reader reports type 64. Preserve both observations until the physical bit and handle spans are independently adjudicated."
+  },
+  "implementationBoundary": {
+    "admit": "The main/root FIELD profile flags=4/type=2 is admitted only for AC1021, retaining flag 4 as opaque metadata and decoding type 2 as a finite BD double. Generated coverage checks exact DWG stream roundtrip.",
+    "notQualified": [
+      "The physical AcObjProp.16.2 ObjectPropertyId child type and its handle role on the four mismatched roots",
+      "Strict output/readback of the whole physical FIELD graph",
+      "Native FIELD evaluation and any dynamic-block semantic claim"
+    ],
+    "preserveAndRefuse": [
+      "Unknown root format flags or child value profiles outside the bounded implementation",
+      "Whole-source output while unrelated unsupported FIELD profiles and proxy graphics remain"
+    ],
+    "compatibility": "No public API changes. The newly admitted physical roots remain outside support claims until nested reference roles and strict output/readback are proven."
+  },
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests libdxfrw_dwg2dxf_adapter_tests -j2",
+    "focusedTest": "ctest --test-dir build-gcc -R '^libdxfrw_field_unqualified_format_flags$' --output-on-failure",
+    "focusedTestResult": "Passed, 1/1.",
+    "physicalSelector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --field-ac1021-physical-profile-census tests/samples/AC1021/blocks_and_tables_-_imperial.dwg",
+    "physicalSelectorResult": "Passed. Typed roots: 57; evaluator split: 42 AcObjProp.16.2 and 15 AcExpr; local child ObjectPropertyId type profile: 42 type64.",
+    "scope": "Fast generated vector and direct local-source census only. No full suite, fixture file, or native consumer qualification."
+  },
+  "remaining": [
+    "Trace the four mismatched ObjectPropertyId child body and handle-stream spans against the ODA layout and an eligible independent source; do not assume either parser's semantic interpretation.",
+    "Prove the exact handle role and target association for the complete 42-root physical profile.",
+    "Add isolated ASCII/Binary DXF output and typed readback proof for the resolved profile, with unresolved edges refused.",
+    "Keep native FIELD evaluation and whole-source export qualification separate."
+  ]
+}

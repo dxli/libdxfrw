@@ -30129,6 +30129,69 @@ bool rejectUnserializableFieldCarriers() {
     return true;
 }
 
+bool physicalAc1021FieldFlag4Type2ProfileCensus(
+    const std::string& sourcePath) {
+    dx_data data;
+    dx_iface iface;
+    if (!iface.fileImport(sourcePath, &data, false))
+        return fail("could not import AC1021 FIELD profile source");
+    if (data.sourceFormat != dx_source_format::DWG
+        || data.sourceVersion != DRW::AC1021)
+        return fail("FIELD source is not AC1021 DWG");
+
+    std::size_t typedRoots = 0u;
+    std::size_t acExprRoots = 0u;
+    std::size_t acObjPropRoots = 0u;
+    std::map<int, std::size_t> objectIdTypes;
+    for (const DRW_Field& field : data.fields) {
+        if (field.m_value.m_formatFlags != 4
+            || field.m_value.m_dataType != 2)
+            continue;
+        ++typedRoots;
+        if (!field.hasCompleteDwgPayload()
+            || !field.isDwgPayloadValid(DRW::AC1021)
+            || field.m_value.m_value.type() != DRW_Variant::DOUBLE
+            || !std::isfinite(field.m_value.m_value.d_val()))
+            return fail("AC1021 flags=4/type=2 FIELD lost a complete finite double");
+
+        if (field.m_evaluatorId == "AcExpr") {
+            ++acExprRoots;
+            if (!field.m_childValues.empty())
+                return fail("AcExpr FIELD unexpectedly has child CadValues");
+            continue;
+        }
+        if (field.m_evaluatorId != "AcObjProp.16.2")
+            return fail("AC1021 flags=4/type=2 FIELD has an unexpected evaluator");
+        ++acObjPropRoots;
+        if (field.m_childValues.size() != 3u)
+            return fail("AcObjProp FIELD lost its three typed dependency values");
+
+        const DRW_Field::ChildValue& parameter = field.m_childValues[0];
+        const DRW_Field::ChildValue& objectId = field.m_childValues[1];
+        const DRW_Field::ChildValue& propertyName = field.m_childValues[2];
+        if (parameter.m_key != "ObjectPropertyParameterId"
+            || parameter.m_value.m_dataType != 1
+            || parameter.m_value.m_value.type() != DRW_Variant::INTEGER
+            || objectId.m_key != "ObjectPropertyId"
+            || propertyName.m_key != "ObjectPropertyName"
+            || propertyName.m_value.m_dataType != 4
+            || propertyName.m_value.m_value.type() != DRW_Variant::STRING)
+            return fail("AcObjProp FIELD child value roles or types changed");
+
+        ++objectIdTypes[objectId.m_value.m_dataType];
+    }
+
+    std::cerr << "AC1021 FIELD profile: total=" << data.fields.size()
+              << " typed=" << typedRoots << " AcExpr=" << acExprRoots
+              << " AcObjProp=" << acObjPropRoots;
+    for (const auto& entry : objectIdTypes)
+        std::cerr << " objectIdType" << entry.first << '=' << entry.second;
+    std::cerr << '\n';
+    if (typedRoots != 57u || acExprRoots != 15u || acObjPropRoots != 42u)
+        return fail("AC1021 FIELD root census differs from the frozen peer census");
+    return true;
+}
+
 bool fieldListMembershipOutput() {
     struct Cleanup {
         std::filesystem::path path;
@@ -61111,6 +61174,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--field-dxf-multichunk-value")
         return parseFieldDxfCallback() ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--field-ac1021-physical-profile-census")
+        return physicalAc1021FieldFlag4Type2ProfileCensus(argv[2]) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--modeldoc-view-style-callbacks")
         return retainModelDocViewStyleCallbacks() ? 0 : 1;
