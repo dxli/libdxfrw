@@ -18932,12 +18932,16 @@ bool dxfRW::processAttrib(DRW_Insert *insert) {
             if (dxfKeywordEquals(nextentity, "SEQEND")) {
                 if (!decoder.finish())
                     return setError(DRW::BAD_CODE_PARSED);
+                if (applyExt)
+                    att->applyExtrusion();
                 insert->attlist.push_back(att);
                 return true;  //found SEQEND, no more attribs, terminate
             }
             if (dxfKeywordEquals(nextentity, "ATTRIB")) {
                 if (!decoder.finish())
                     return setError(DRW::BAD_CODE_PARSED);
+                if (applyExt)
+                    att->applyExtrusion();
                 insert->attlist.push_back(att);
                 att = std::make_shared<DRW_Attrib>(); //another attrib
                 decoder.reset(*att);
@@ -19158,6 +19162,8 @@ bool dxfRW::processText() {
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!hasText || !hasInsertionX || !hasInsertionY || !hasHeight)
                 return setError(DRW::BAD_CODE_PARSED);
+            if (applyExt)
+                txt.applyExtrusion();
             iface->addText(txt);
             return true;  //found new entity or ENDSEC, terminate
         }

@@ -22062,6 +22062,155 @@ void testTextObliqueDxfWireDegrees(TestContext& t) {
     }
 }
 
+bool writeTextOcsExtrusionControl(const std::filesystem::path& path,
+                                 bool binary) {
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output)
+        return false;
+    if (binary)
+        output.write("AutoCAD Binary DXF\r\n\x1a\0", 22);
+    std::unique_ptr<dxfWriter> writer = binary
+        ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+        : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+    writer->setVersion("AC1027", true);
+    const auto string = [&writer](int code, const char* value) {
+        return writer->writeString(code, value);
+    };
+    const auto real = [&writer](int code, double value) {
+        return writer->writeDouble(code, value);
+    };
+    const auto shortValue = [&writer](int code, int value) {
+        return writer->writeInt16(code, value);
+    };
+    const auto writeOcsText = [&string, &real, &shortValue](
+            const char* type, const char* text, const char* tag,
+            double x, double y, double z,
+            double alignX, double alignY, double alignZ) {
+        return string(0, type) && string(100, "AcDbEntity")
+            && string(8, "0") && string(100, "AcDbText")
+            && real(10, x) && real(20, y) && real(30, z)
+            && real(40, 1.0) && string(1, text) && real(50, 30.0)
+            && real(41, 1.0) && real(51, 0.0) && string(7, "STANDARD")
+            && shortValue(71, 0) && shortValue(72, 1)
+            && real(11, alignX) && real(21, alignY) && real(31, alignZ)
+            && real(210, 1.0) && real(220, 0.0) && real(230, 0.0)
+            && string(100, "AcDbText")
+            && shortValue(73, 2)
+            && (tag == nullptr
+                || (string(100, "AcDbAttribute") && string(2, tag)
+                    && shortValue(70, 0)));
+    };
+
+    const bool written = string(0, "SECTION") && string(2, "HEADER")
+        && string(9, "$ACADVER") && string(1, "AC1027")
+        && string(0, "ENDSEC") && string(0, "SECTION")
+        && string(2, "ENTITIES")
+        && writeOcsText("TEXT", "OCS_TEXT", nullptr,
+                        2.0, 3.0, 4.0, 5.0, 6.0, 7.0)
+        && string(0, "INSERT") && string(100, "AcDbEntity")
+        && string(8, "0") && string(100, "AcDbBlockReference")
+        && string(2, "OCS_BLOCK") && real(10, 0.0) && real(20, 0.0)
+        && real(30, 0.0) && shortValue(66, 1)
+        && writeOcsText("ATTRIB", "OCS_ATTRIB", "OCS_TAG",
+                        8.0, 9.0, 10.0, 11.0, 12.0, 13.0)
+        && string(0, "SEQEND") && string(100, "AcDbEntity")
+        && string(8, "0") && string(0, "ENDSEC") && string(0, "EOF");
+    return written && !writer->hasWriteError() && output.good();
+}
+
+class DxfTextOcsExtrusionCapture final : public dx_iface {
+public:
+    void addHeader(const DRW_Header*) override {}
+    void addText(const DRW_Text& value) override {
+        ++textCallbacks;
+        textBase = value.basePoint;
+        textAlignment = value.secPoint;
+        textExtrusion = value.extPoint;
+        textAngle = value.angle;
+    }
+    void addInsert(const DRW_Insert& value) override {
+        ++insertCallbacks;
+        attributeCount = value.attlist.size();
+        if (attributeCount != 1u || !value.attlist.front())
+            return;
+        const DRW_Attrib& attribute = *value.attlist.front();
+        attributeBase = attribute.basePoint;
+        attributeAlignment = attribute.secPoint;
+        attributeExtrusion = attribute.extPoint;
+        attributeAngle = attribute.angle;
+    }
+
+    std::size_t textCallbacks{0};
+    std::size_t insertCallbacks{0};
+    std::size_t attributeCount{0};
+    DRW_Coord textBase;
+    DRW_Coord textAlignment;
+    DRW_Coord textExtrusion;
+    double textAngle{0.0};
+    DRW_Coord attributeBase;
+    DRW_Coord attributeAlignment;
+    DRW_Coord attributeExtrusion;
+    double attributeAngle{0.0};
+};
+
+void testTextOcsExtrusion(TestContext& t) {
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto equalPoint = [](const DRW_Coord& actual,
+                               double x, double y, double z) {
+        return actual.x == x && actual.y == y && actual.z == z;
+    };
+    for (const bool binary : {false, true}) {
+        const std::filesystem::path path =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-text-ocs-extrusion-" + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        std::error_code error;
+        std::filesystem::remove(path, error);
+        const bool generated = writeTextOcsExtrusionControl(path, binary);
+        t.expect(generated,
+                 binary ? "generated binary TEXT/ATTRIB OCS source is written"
+                        : "generated ASCII TEXT/ATTRIB OCS source is written");
+
+        for (const bool applyExtrusion : {false, true}) {
+            DxfTextOcsExtrusionCapture capture;
+            dxfRW reader(path.string().c_str());
+            const bool read = generated
+                && reader.read(&capture, applyExtrusion);
+            const bool transformed = applyExtrusion;
+            t.expect(read && capture.textCallbacks == 1u
+                         && capture.insertCallbacks == 1u
+                         && capture.attributeCount == 1u,
+                     "TEXT and its owned ATTRIB arrive at their callbacks");
+            t.expect(read
+                         && (transformed
+                             ? equalPoint(capture.textBase, 4.0, 2.0, 3.0)
+                                 && equalPoint(capture.textAlignment,
+                                               7.0, 5.0, 6.0)
+                                 && equalPoint(capture.attributeBase,
+                                               10.0, 8.0, 9.0)
+                                 && equalPoint(capture.attributeAlignment,
+                                               13.0, 11.0, 12.0)
+                             : equalPoint(capture.textBase, 2.0, 3.0, 4.0)
+                                 && equalPoint(capture.textAlignment,
+                                               5.0, 6.0, 7.0)
+                                 && equalPoint(capture.attributeBase,
+                                               8.0, 9.0, 10.0)
+                                 && equalPoint(capture.attributeAlignment,
+                                               11.0, 12.0, 13.0)),
+                     "applyExtrusion controls OCS insertion and alignment conversion");
+            t.expect(read
+                         && equalPoint(capture.textExtrusion, 1.0, 0.0, 0.0)
+                         && equalPoint(capture.attributeExtrusion,
+                                       1.0, 0.0, 0.0)
+                         && capture.textAngle == 30.0
+                         && capture.attributeAngle == 30.0,
+                     "conversion retains the OCS normal and local rotation");
+        }
+        std::filesystem::remove(path, error);
+    }
+}
+
 void testDxfBinaryGroupWidthGuard(TestContext& t) {
     struct WrongWidthControl {
         int code;
@@ -60649,6 +60798,13 @@ int main(int argc, char** argv) {
         TestContext context;
         testTextObliqueDxfWireDegrees(context);
         std::cout << "Generated TEXT DXF group-51 degree wire check: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--text-ocs-extrusion") {
+        TestContext context;
+        testTextOcsExtrusion(context);
+        std::cout << "DXF TEXT/ATTRIB OCS extrusion controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

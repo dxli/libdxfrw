@@ -2495,7 +2495,7 @@ public:
         alignV = VBaseLine;
     }
 
-    virtual void applyExtrusion() override {} //RLZ TODO
+    virtual void applyExtrusion() override;
 
 protected:
     void resetDwgState();
@@ -2507,7 +2507,7 @@ protected:
 public:
     double height = 0.0;       /*!< height text, code 40 */
     UTF8STRING text;           /*!< text string, code 1 */
-    double angle;              /*!< rotation angle in degrees (360), code 50 */
+    double angle;              /*!< rotation angle in degrees from the OCS X axis, code 50 */
     double widthscale;         /*!< width factor, code 41 */
     double oblique;            /*!< oblique angle in degrees, code 51 (DWG radians converted at the boundary) */
     UTF8STRING style;          /*!< style name, code 7 */

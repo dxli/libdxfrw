@@ -14110,6 +14110,18 @@ bool DRW_Text::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     return true;
 }
 
+void DRW_Text::applyExtrusion() {
+    if (!haveExtrusion)
+        return;
+
+    // TEXT insertion and alignment points use OCS coordinates. Convert both
+    // with the entity's arbitrary-axis basis; angle remains relative to the
+    // OCS X axis and extPoint remains the plane normal.
+    calculateAxis(extPoint);
+    extrudePoint(extPoint, &basePoint);
+    extrudePoint(extPoint, &secPoint);
+}
+
 void DRW_Text::resetDwgState() {
     DRW_Entity::reset();
     basePoint = DRW_Coord{0.0, 0.0, 0.0};
