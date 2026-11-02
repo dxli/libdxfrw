@@ -22201,93 +22201,6 @@ bool runDxfSurfaceRoundTrip(bool binary,
     nurbs->vvec2 = DRW_Coord(0.0, 2.0, 0.0);
     source.mBlock->ent.push_back(nurbs);
 
-    dx_iface exporter;
-    if (!exporter.fileExport(output.string(), DRW::AC1027, binary, &source,
-                             false)) {
-        std::cerr << "DXF surface export failed (" << encoding << ")\n";
-        if (!keepOutput)
-            std::filesystem::remove(output, ec);
-        return false;
-    }
-    dx_data imported;
-    dx_iface importer;
-    if (!importer.fileImport(output.string(), &imported, false)) {
-        std::cerr << "DXF surface import failed (" << encoding << ")\n";
-        if (!keepOutput)
-            std::filesystem::remove(output, ec);
-        return false;
-    }
-    std::array<bool, 6> seen{};
-    const auto sameCoord = [](const DRW_Coord& a, const DRW_Coord& b) {
-        return a.x == b.x && a.y == b.y && a.z == b.z;
-    };
-    const auto sameMatrix = [](const auto& a, const auto& b) {
-        return a == b;
-    };
-    bool fieldsMatch = true;
-    for (const DRW_Entity* entity : imported.mBlock->ent) {
-        if (entity == nullptr)
-            continue;
-        switch (entity->eType) {
-        case DRW::PLANESURFACE: {
-            seen[0] = true;
-            const auto* value = static_cast<const DRW_PlaneSurface*>(entity);
-            fieldsMatch = fieldsMatch
-                && value->modelerFormatVersion == plane->modelerFormatVersion
-                && value->uIsolines == plane->uIsolines
-                && value->vIsolines == plane->vIsolines;
-            break;
-        }
-        case DRW::EXTRUDEDSURFACE: {
-            seen[1] = true;
-            const auto* value = static_cast<const DRW_ExtrudedSurface*>(entity);
-            fieldsMatch = fieldsMatch
-                && value->modelerFormatVersion == extruded->modelerFormatVersion
-                && value->uIsolines == extruded->uIsolines
-                && value->vIsolines == extruded->vIsolines
-                && value->classId == extruded->classId
-                && value->dxfBinaryData == extruded->dxfBinaryData
-                && sameCoord(value->sweepVector, extruded->sweepVector)
-                && sameCoord(value->referenceVector, extruded->referenceVector)
-                && sameMatrix(value->extrudedTransform, extruded->extrudedTransform)
-                && sameMatrix(value->sweepEntityTransform, extruded->sweepEntityTransform)
-                && sameMatrix(value->pathEntityTransform, extruded->pathEntityTransform)
-                && value->draftAngle == extruded->draftAngle
-                && value->draftStartDistance == extruded->draftStartDistance
-                && value->draftEndDistance == extruded->draftEndDistance
-                && value->twistAngle == extruded->twistAngle
-                && value->scaleFactor == extruded->scaleFactor
-                && value->alignAngle == extruded->alignAngle
-                && value->solid == extruded->solid
-                && value->sweepAlignmentFlags == extruded->sweepAlignmentFlags
-                && value->pathFlags == extruded->pathFlags
-                && value->alignStart == extruded->alignStart
-                && value->bank == extruded->bank
-                && value->basePointSet == extruded->basePointSet
-                && value->sweepEntityTransformComputed
-                       == extruded->sweepEntityTransformComputed
-                && value->pathEntityTransformComputed
-                       == extruded->pathEntityTransformComputed;
-            break;
-        }
-        case DRW::REVOLVEDSURFACE: {
-            seen[2] = true;
-            const auto* value = static_cast<const DRW_RevolvedSurface*>(entity);
-            fieldsMatch = fieldsMatch
-                && value->modelerFormatVersion == revolved->modelerFormatVersion
-                && value->uIsolines == revolved->uIsolines
-                && value->vIsolines == revolved->vIsolines
-                && value->id == revolved->id
-                && value->dxfBinaryData == revolved->dxfBinaryData
-                && sameCoord(value->axisPoint, revolved->axisPoint)
-                && sameCoord(value->axisVector, revolved->axisVector)
-                && value->revolveAngle == revolved->revolveAngle
-                && value->startAngle == revolved->startAngle
-                && sameMatrix(value->transform, revolved->transform)
-                && value->draftAngle == revolved->draftAngle
-                && value->draftStartDistance == revolved->draftStartDistance
-                && value->draftEndDistance == revolved->draftEndDistance
-                && value->twistAngle == revolved->twistAngle
     // Exercise the BLOCK callback staging/replay path separately from the
     // top-level ENTITIES controls above. Preserve the exact derived subtype
     // and subtype-only sentinels across both paths.
@@ -22564,6 +22477,93 @@ bool runDxfSurfaceRejectsMalformed(const std::filesystem::path& directory) {
     if (!exporter.fileExport(sourcePath.string(), DRW::AC1027, false, &source,
                              false)) {
         std::filesystem::remove(sourcePath, ec);
+    bool fieldsMatch = true;
+    for (const DRW_Entity* entity : imported.mBlock->ent) {
+        if (entity == nullptr)
+            continue;
+        switch (entity->eType) {
+        case DRW::PLANESURFACE: {
+            seen[0] = true;
+            const auto* value = static_cast<const DRW_PlaneSurface*>(entity);
+            fieldsMatch = fieldsMatch
+                && value->modelerFormatVersion == plane->modelerFormatVersion
+                && value->uIsolines == plane->uIsolines
+                && value->vIsolines == plane->vIsolines;
+            break;
+        }
+        case DRW::EXTRUDEDSURFACE: {
+            seen[1] = true;
+            const auto* value = static_cast<const DRW_ExtrudedSurface*>(entity);
+            fieldsMatch = fieldsMatch
+                && value->modelerFormatVersion == extruded->modelerFormatVersion
+                && value->uIsolines == extruded->uIsolines
+                && value->vIsolines == extruded->vIsolines
+                && value->classId == extruded->classId
+                && value->dxfBinaryData == extruded->dxfBinaryData
+                && sameCoord(value->sweepVector, extruded->sweepVector)
+                && sameCoord(value->referenceVector, extruded->referenceVector)
+                && sameMatrix(value->extrudedTransform, extruded->extrudedTransform)
+                && sameMatrix(value->sweepEntityTransform, extruded->sweepEntityTransform)
+                && sameMatrix(value->pathEntityTransform, extruded->pathEntityTransform)
+                && value->draftAngle == extruded->draftAngle
+                && value->draftStartDistance == extruded->draftStartDistance
+                && value->draftEndDistance == extruded->draftEndDistance
+                && value->twistAngle == extruded->twistAngle
+                && value->scaleFactor == extruded->scaleFactor
+                && value->alignAngle == extruded->alignAngle
+                && value->solid == extruded->solid
+                && value->sweepAlignmentFlags == extruded->sweepAlignmentFlags
+                && value->pathFlags == extruded->pathFlags
+                && value->alignStart == extruded->alignStart
+                && value->bank == extruded->bank
+                && value->basePointSet == extruded->basePointSet
+                && value->sweepEntityTransformComputed
+                       == extruded->sweepEntityTransformComputed
+                && value->pathEntityTransformComputed
+                       == extruded->pathEntityTransformComputed;
+            break;
+        }
+        case DRW::REVOLVEDSURFACE: {
+            seen[2] = true;
+            const auto* value = static_cast<const DRW_RevolvedSurface*>(entity);
+            fieldsMatch = fieldsMatch
+                && value->modelerFormatVersion == revolved->modelerFormatVersion
+                && value->uIsolines == revolved->uIsolines
+                && value->vIsolines == revolved->vIsolines
+                && value->id == revolved->id
+                && value->dxfBinaryData == revolved->dxfBinaryData
+                && sameCoord(value->axisPoint, revolved->axisPoint)
+                && sameCoord(value->axisVector, revolved->axisVector)
+                && value->revolveAngle == revolved->revolveAngle
+                && value->startAngle == revolved->startAngle
+                && sameMatrix(value->transform, revolved->transform)
+                && value->draftAngle == revolved->draftAngle
+                && value->draftStartDistance == revolved->draftStartDistance
+                && value->draftEndDistance == revolved->draftEndDistance
+                && value->twistAngle == revolved->twistAngle
+                && value->solid == revolved->solid
+                && value->closeToAxis == revolved->closeToAxis;
+            break;
+        }
+        case DRW::SWEPTSURFACE: {
+            seen[3] = true;
+            const auto* value = static_cast<const DRW_SweptSurface*>(entity);
+            fieldsMatch = fieldsMatch
+                && value->modelerFormatVersion == swept->modelerFormatVersion
+                && value->uIsolines == swept->uIsolines
+                && value->vIsolines == swept->vIsolines
+                && value->sweepEntityId == swept->sweepEntityId
+                && value->sweepData == swept->sweepData
+                && value->pathEntityId == swept->pathEntityId
+                && value->pathData == swept->pathData
+                && sameCoord(value->referenceVector, swept->referenceVector)
+                && sameMatrix(value->sweepEntityTransform, swept->sweepEntityTransform)
+                && sameMatrix(value->pathEntityTransform, swept->pathEntityTransform)
+                && sameMatrix(value->sweepEntityTransformed, swept->sweepEntityTransformed)
+                && sameMatrix(value->pathEntityTransformed, swept->pathEntityTransformed)
+                && value->draftAngle == swept->draftAngle
+                && value->draftStartDistance == swept->draftStartDistance
+                && value->draftEndDistance == swept->draftEndDistance
         return false;
     }
     std::ifstream input(sourcePath, std::ios::binary);
