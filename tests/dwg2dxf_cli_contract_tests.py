@@ -1187,6 +1187,33 @@ def check_source_disposition_projection(converter, root, writer):
         raise AssertionError(
             f"strict output did not project and refuse skipped DWG records: {skipped!r}")
     checked += 1
+
+    multiple_source = root / "generated multiple skipped-record source.dwg"
+    multiple_generated = run_bounded(
+        [str(writer), "--generate-cli-skip-source-multiple", str(multiple_source)],
+        10, 131072, cwd=root)
+    if multiple_generated.returncode != 0 or not multiple_source.is_file():
+        raise AssertionError(
+            f"could not author multiple skipped-record DWG locally: "
+            f"{multiple_generated!r}")
+    multiple_bytes = multiple_source.read_bytes()
+    multiple_output = root / "multiple skipped-record destination.dxf"
+    multiple_output.write_bytes(SENTINEL)
+    multiple_skipped = run_bounded(
+        [str(converter), str(multiple_source), "-o", str(multiple_output),
+         "-v2013", "-y", "-d"], 10, 2 * 1024 * 1024, cwd=root)
+    projection = next((line for line in multiple_skipped.stderr.splitlines()
+                       if line.startswith(b"CLI source disposition projection:")), b"")
+    if (multiple_skipped.returncode != 1
+            or multiple_output.read_bytes() != SENTINEL
+            or multiple_source.read_bytes() != multiple_bytes
+            or b"sourceDwgSkippedCustomClassInstances=3" not in projection
+            or b"sourceDwgSkippedUnsupportedObjectInstances=3" not in projection
+            or b"strict-complete conversion requires" not in multiple_skipped.stderr):
+        raise AssertionError(
+            "three same-class skipped DWG objects were not aggregated/refused "
+            f"atomically: {multiple_skipped!r}")
+    checked += 1
     return checked
 
 

@@ -23601,7 +23601,9 @@ class ReadOutcomeControl final : public dx_iface {
 public:
     ReadOutcomeControl(dwgRW* writer, int kind, dwgRW* reader = nullptr)
         : writer_(writer), reader_(reader), kind_(kind),
-          opaque_(makeLocalRawReplayObject(DRW::AC1027, 500, 0x700u)) {
+          opaque_(makeLocalRawReplayObject(DRW::AC1027, 500, 0x700u)),
+          opaqueSecond_(makeLocalRawReplayObject(DRW::AC1027, 500, 0x702u)),
+          opaqueThird_(makeLocalRawReplayObject(DRW::AC1027, 500, 0x704u)) {
         cData = &owned_;
         currentBlock = owned_.mBlock;
     }
@@ -23615,10 +23617,22 @@ public:
     void writeDimstyles() override {}
     void writeAppId() override {}
     void writeDwgClasses() override {
-        if (kind_ == 2) wrote = writer_->registerRawDwgObjectClass(&opaque_) && wrote;
+        if (kind_ >= 2) {
+            wrote = writer_->registerRawDwgObjectClass(&opaque_) && wrote;
+            if (kind_ == 3) {
+                wrote = writer_->registerRawDwgObjectClass(&opaqueSecond_) && wrote;
+                wrote = writer_->registerRawDwgObjectClass(&opaqueThird_) && wrote;
+            }
+        }
     }
     void writeObjects() override {
-        if (kind_ == 2) wrote = writer_->writeRawDwgObject(&opaque_) && wrote;
+        if (kind_ >= 2) {
+            wrote = writer_->writeRawDwgObject(&opaque_) && wrote;
+            if (kind_ == 3) {
+                wrote = writer_->writeRawDwgObject(&opaqueSecond_) && wrote;
+                wrote = writer_->writeRawDwgObject(&opaqueThird_) && wrote;
+            }
+        }
     }
     void writeEntities() override {
         if (kind_ == 1) {
@@ -23654,6 +23668,8 @@ private:
     dwgRW* reader_;
     int kind_;
     DRW_UnsupportedObject opaque_;
+    DRW_UnsupportedObject opaqueSecond_;
+    DRW_UnsupportedObject opaqueThird_;
     dx_data owned_;
 };
 
@@ -34521,13 +34537,16 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (argc == 3
-        && std::string(argv[1]) == "--generate-cli-skip-source") {
+        && (std::string(argv[1]) == "--generate-cli-skip-source"
+            || std::string(argv[1]) == "--generate-cli-skip-source-multiple")) {
         if (std::filesystem::exists(argv[2])) {
             std::cerr << "Refusing to replace an existing CLI skip source\n";
             return 1;
         }
         dwgRW writer(argv[2]);
-        ReadOutcomeControl source(&writer, 2);
+        const int kind = std::string(argv[1])
+                == "--generate-cli-skip-source-multiple" ? 3 : 2;
+        ReadOutcomeControl source(&writer, kind);
         if (!writer.write(&source, DRW::AC1027, true) || !source.wrote) {
             const DRW_OperationDiagnostic diagnostic = writer.getLastDiagnostic();
             std::cerr << "Could not generate CLI skip DWG source: "
