@@ -2378,7 +2378,8 @@ void testDxfLineweightHeaderDomains(TestContext& t) {
 void testDxfOrientationAttributeHeaderDomains(TestContext& t) {
     const std::vector<DxfIntegerHeaderDomain> domains{
         {"$ANGDIR", 70, {0, 1}, {-1, 2}},
-        {"$ATTMODE", 70, {0, 1, 2}, {-1, 3}}
+        {"$ATTMODE", 70, {0, 1, 2}, {-1, 3}},
+        {"$MIRRTEXT", 70, {0, 1}, {-1, 2}}
     };
     testDxfIntegerHeaderDomains(t, domains);
 }

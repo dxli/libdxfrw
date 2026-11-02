@@ -901,6 +901,7 @@ void DRW_Header::write(const std::unique_ptr<dxfWriter>& writer, DRW::Version ve
         || !canWriteDxfXedit()
         || !canWriteDxfHeaderIntegerRange("$ANGDIR", 70, 0, 1)
         || !canWriteDxfHeaderIntegerRange("$ATTMODE", 70, 0, 2)
+        || !canWriteDxfHeaderIntegerRange("$MIRRTEXT", 70, 0, 1)
         || (ver < DRW::AC1012
             && (!canWriteDxfHeaderIntegerRange("$ATTDIA", 70, 0, 1)
                 || !canWriteDxfHeaderIntegerRange("$ATTREQ", 70, 0, 1)))) {
