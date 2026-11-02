@@ -64195,6 +64195,7 @@ bool dx_iface::finalizeDxfWrite() {
                 || !mlineStyleBodiesSourceLiveProof(*cData,
                     kMaxAdapterMLineDependencyProofWork,nullptr)))
         || !hasUnchangedDxfMLineStyles() || !hasUnchangedDxfMLineConsumers()
+        || !hasUnchangedDxfMLineLinetypes()
         || !hasUnchangedDwgMLeaderStyleOutputSources()
         || !hasUnchangedDwgMLineStyleOutputSources()
         || !hasUnchangedDwgLayoutOutputSources()

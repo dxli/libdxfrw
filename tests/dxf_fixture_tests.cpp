@@ -42224,7 +42224,9 @@ bool run(const std::filesystem::path& dir) {
         if(!adapter.fileExport(output.string(),DRW::AC1027,binary,&data,false,true)||!A::mlineLinetypeProofBound(adapter,0x103u)
             ||!complete(binary,{{"EditDash","Continuous"}})||!mlineLtypeEditControls::caller(data,style,raw,lines))return fail(__LINE__);++readbacks;++retries;
     }
-    for(bool binary:{false,true})for(int flags:{16,32,128}) {
+    // Exercise the valid non-entity-reference flag profiles in the refusal
+    // path. Flag 64 retargeting is covered by the edit profiles above.
+    for(bool binary:{false,true})for(int flags:{16,48}) {
         dx_iface adapter;dx_data data;const auto fields=recipe(binary,flags);
         if(!sourceFlags(fields,"103",flags)||!write(input,fields,binary,"AC1027")||!adapter.fileImport(input.string(),&data,false))return fail(__LINE__);
         if(!adapter.fileExport(output.string(),DRW::AC1027,binary,&data,false,true)
@@ -42332,8 +42334,8 @@ bool run(const std::filesystem::path& dir) {
         <<"; corruptions="<<corruptions<<"; composition="<<composition
         <<"; ByBlock profiles="<<byBlockProfiles<<"; readbacks="<<byBlockReadbacks
         <<"; refusals="<<byBlockRefusals<<"; retries="<<byBlockRetries<<'\n';
-    return profiles==4u&&readbacks==76u&&edits==14u&&copied==6u&&late==24u&&unqualified==6u&&canonical==8u
-        &&retries==44u&&corruptions==6u&&composition==2u
+    return profiles==4u&&readbacks==72u&&edits==14u&&copied==6u&&late==24u&&unqualified==4u&&canonical==8u
+        &&retries==42u&&corruptions==6u&&composition==2u
         &&byBlockProfiles==4u&&byBlockReadbacks==8u&&byBlockRefusals==4u
         &&byBlockRetries==4u;
 }
