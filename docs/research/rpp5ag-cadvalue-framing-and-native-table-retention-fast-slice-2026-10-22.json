@@ -12,12 +12,13 @@
   },
   "corrections": {
     "explicitDataType": "Always consume and emit the data-type BL. Do not infer 512 or omit the type from flags.",
-    "payloadPresence": "R2007+ payload is suppressed only by mask 0x01. Flag 0x02 retains a payload, including a CadValue object-ID handle slot.",
+    "payloadPresence": "Historical conclusion superseded by p5-table-cadvalue-oda-flags-and-ac1021-checksum-scope-2026-11-02.json: ordinary R2007+ TABLE values follow ODA §20.4.99 low-two-bit suppression. The AC1021 flags=2/type=2 value is retained only for the exact ACAD_ROUNDTRIP_2008_CELL_CHECKSUM custom-data key; flags=4/6 type=4 remains a separate source-bounded AC1021 native-string profile.",
     "nativeWriterAdmission": "Flags 0..3 only, known value kinds, empty values without populated payload/handle/raw state; opaque scalar carriers refused.",
     "dxfField": "Same version-aware payload-presence rule; reject populated empty values and scalar raw-data carriers before output. General type 512 remains refused without a defined DXF projection.",
     "r21StringCarrier": "Only the observed AC1021 flags-4/6 type-4 profile reads BL byte count plus exact body bytes. Even nonempty UTF-16LE is display-decoded. Empty/odd payloads remain binary. All profiles remain semantically incomplete and are refused by typed native writing.",
     "tableUnits": "All bounded unit BL values are retained without changing the following TV/TV grammar. Only ODA-listed 0/1/2/4/8 units can be semantically complete or typed-written. AC1024 still withholds incomplete inline content atomically.",
     "historicalEvidenceSuperseded": [
+      "The generic TABLE payload-presence rule recorded in this receipt; see p5-table-cadvalue-oda-flags-and-ac1021-checksum-scope-2026-11-02.json",
       "Generated profiles that omitted type 512 or used flag 1 for populated general values",
       "The prior TABLE unit-domain receipt's claim that an out-of-list unit must invalidate the complete TABLECONTENT frame"
     ]

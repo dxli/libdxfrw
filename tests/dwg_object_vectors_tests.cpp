@@ -7175,6 +7175,16 @@ struct TableContentStyleIds {
     std::int32_t row {0};
 };
 
+bool testTableCadValueHasPayload(DRW::Version version, std::int32_t flags,
+                                int dataType) {
+    // ODA §20.4.99 default, plus only the two AC1021 TABLE profiles that are
+    // bounded by physical source evidence: checksum doubles and native strings.
+    const bool observedAc1021NativeString = version == DRW::AC1021
+        && (flags == 0x04 || flags == 0x06) && dataType == 4;
+    return version <= DRW::AC1018 || observedAc1021NativeString
+        || (flags & 0x03) == 0;
+}
+
 bool makeR2007TableContentObjectFrame(R2007TableContentObjectFrame& frame,
                                      bool hasLinkedData = false,
                                      std::uint32_t cellAttributeCount = 0u,
@@ -7282,7 +7292,9 @@ bool makeR2007TableContentObjectFrame(R2007TableContentObjectFrame& frame,
     strings.putUCSText("TooltipA");
     if (customItems[1])
         putCustomStrings();
-    if (valueDataType == 4 && (valueFormatFlags & 0x01) == 0 && !nativeStringPayload)
+    if (valueDataType == 4
+        && testTableCadValueHasPayload(version, valueFormatFlags, valueDataType)
+        && !nativeStringPayload)
         strings.putUCSText("CAD Text");
     strings.putUCSText("0.0");
     strings.putUCSText(valueDataType == 0 ? "Unknown value"
@@ -7346,19 +7358,23 @@ bool makeR2007TableContentObjectFrame(R2007TableContentObjectFrame& frame,
         if (cellContentType == 1) {
             body.putBitLong(valueFormatFlags);
             body.putBitLong(valueDataType);
-            if ((valueFormatFlags & 0x01) == 0 && generalValue) {
+            if (testTableCadValueHasPayload(version, valueFormatFlags,
+                                            valueDataType) && generalValue) {
                 body.putBitLong(4); // general value byte count
                 body.putRawChar8(0xA1);
                 body.putRawChar8(0xB2);
                 body.putRawChar8(0xC3);
                 body.putRawChar8(0xD4);
-            } else if ((valueFormatFlags & 0x01) == 0
+            } else if (testTableCadValueHasPayload(
+                           version, valueFormatFlags, valueDataType)
                        && valueDataType == 2) {
                 body.putBitDouble(42.5);
-            } else if ((valueFormatFlags & 0x01) == 0
+            } else if (testTableCadValueHasPayload(
+                           version, valueFormatFlags, valueDataType)
                        && (valueDataType == 0 || valueDataType == 1)) {
                 body.putBitLong(valueDataType == 0 ? 2718 : 314159);
-            } else if ((valueFormatFlags & 0x01) == 0
+            } else if (testTableCadValueHasPayload(
+                           version, valueFormatFlags, valueDataType)
                        && valueDataType == 8) {
                 body.putBitLong(8);
                 for (std::uint8_t byte = 0; byte < 8u; ++byte)
@@ -7380,7 +7396,8 @@ bool makeR2007TableContentObjectFrame(R2007TableContentObjectFrame& frame,
                         body.putRawChar8(0u);
                     }
                 }
-            } else if ((valueFormatFlags & 0x01) == 0
+            } else if (testTableCadValueHasPayload(
+                           version, valueFormatFlags, valueDataType)
                        && (valueDataType == 16 || valueDataType == 32)) {
                 const int dimensions = valueDataType == 16 ? 2 : 3;
                 body.putBitLong(dimensions * 8 + 3);
@@ -7537,7 +7554,8 @@ bool makeR2007TableContentObjectFrame(R2007TableContentObjectFrame& frame,
             handles.putHandle(lineType);
         }
     }
-    if (valueDataType == 64 && (valueFormatFlags & 0x01) == 0) {
+    if (valueDataType == 64
+        && testTableCadValueHasPayload(version, valueFormatFlags, valueDataType)) {
         dwgHandle valueObjectId;
         valueObjectId.code = valueHandleRole;
         valueObjectId.size = 2;
@@ -8134,7 +8152,9 @@ bool makeR2010EmbeddedTableFrame(R2010EmbeddedTableFrame& frame,
             for (std::uint32_t column = 0; column < columnCount; ++column) {
                 putR2010TableText(strings, "Tooltip" + std::to_string(row)
                                   + "_" + std::to_string(column));
-                if (valueDataType == 4 && (valueFormatFlags & 0x01) == 0)
+                if (valueDataType == 4
+                    && testTableCadValueHasPayload(
+                        version, valueFormatFlags, valueDataType))
                     putR2010TableText(strings, typedString);
                 putR2010TableText(strings, "0.00");
                 putR2010TableText(strings, valueString);
@@ -8143,7 +8163,9 @@ bool makeR2010EmbeddedTableFrame(R2010EmbeddedTableFrame& frame,
     } else {
         putR2010TableText(strings, "Column2010");
         putR2010TableText(strings, "Tooltip2010");
-        if (valueDataType == 4 && (valueFormatFlags & 0x01) == 0)
+        if (valueDataType == 4
+            && testTableCadValueHasPayload(
+                version, valueFormatFlags, valueDataType))
             putR2010TableText(strings, typedString);
         putR2010TableText(strings, "0.00");
         putR2010TableText(strings, valueString);
@@ -8189,27 +8211,33 @@ bool makeR2010EmbeddedTableFrame(R2010EmbeddedTableFrame& frame,
                 if (cellContentType == 1) {
                     body.putBitLong(valueFormatFlags);
                     body.putBitLong(valueDataType);
-                    if ((valueFormatFlags & 0x01) == 0 && generalValue) {
+                    if (testTableCadValueHasPayload(
+                            version, valueFormatFlags, valueDataType)
+                        && generalValue) {
                         body.putBitLong(4); // general value byte count
                         body.putRawChar8(0xA1);
                         body.putRawChar8(0xB2);
                         body.putRawChar8(0xC3);
                         body.putRawChar8(0xD4);
-                    } else if ((valueFormatFlags & 0x01) == 0
+                    } else if (testTableCadValueHasPayload(
+                                   version, valueFormatFlags, valueDataType)
                                && valueDataType == 2) {
                         body.putBitDouble(42.5);
-                    } else if ((valueFormatFlags & 0x01) == 0
+                    } else if (testTableCadValueHasPayload(
+                                   version, valueFormatFlags, valueDataType)
                                && (valueDataType == 0
                                    || valueDataType == 1)) {
                         body.putBitLong(
                             valueDataType == 0 ? 2718 : 314159);
-                    } else if ((valueFormatFlags & 0x01) == 0
+                    } else if (testTableCadValueHasPayload(
+                                   version, valueFormatFlags, valueDataType)
                                && valueDataType == 8) {
                         body.putBitLong(8);
                         for (std::uint8_t byte = 0; byte < 8u; ++byte)
                             body.putRawChar8(
                                 static_cast<std::uint8_t>(0x10u + byte));
-                    } else if ((valueFormatFlags & 0x01) == 0
+                    } else if (testTableCadValueHasPayload(
+                                   version, valueFormatFlags, valueDataType)
                                && (valueDataType == 16
                                    || valueDataType == 32)) {
                         const int dimensions = valueDataType == 16 ? 2 : 3;
@@ -8264,7 +8292,8 @@ bool makeR2010EmbeddedTableFrame(R2010EmbeddedTableFrame& frame,
             body.putBitLong(0x55); // unknown linked-data value
         }
         if (cellContentType == 1 && valueDataType == 64
-            && (valueFormatFlags & 0x01) == 0) {
+            && testTableCadValueHasPayload(
+                version, valueFormatFlags, valueDataType)) {
             dwgHandle valueObjectId;
             valueObjectId.code = valueHandleRole;
             valueObjectId.size = 2;
@@ -8280,25 +8309,31 @@ bool makeR2010EmbeddedTableFrame(R2010EmbeddedTableFrame& frame,
             if (cellContentType == 1) {
                 body.putBitLong(valueFormatFlags);
                 body.putBitLong(valueDataType);
-                if ((valueFormatFlags & 0x01) == 0 && generalValue) {
+                if (testTableCadValueHasPayload(
+                        version, valueFormatFlags, valueDataType)
+                    && generalValue) {
                     body.putBitLong(4); // general value byte count
                     body.putRawChar8(0xA1);
                     body.putRawChar8(0xB2);
                     body.putRawChar8(0xC3);
                     body.putRawChar8(0xD4);
-                } else if ((valueFormatFlags & 0x01) == 0
+                } else if (testTableCadValueHasPayload(
+                               version, valueFormatFlags, valueDataType)
                            && valueDataType == 2) {
                     body.putBitDouble(42.5);
-                } else if ((valueFormatFlags & 0x01) == 0
+                } else if (testTableCadValueHasPayload(
+                               version, valueFormatFlags, valueDataType)
                            && (valueDataType == 0 || valueDataType == 1)) {
                     body.putBitLong(valueDataType == 0 ? 2718 : 314159);
-                } else if ((valueFormatFlags & 0x01) == 0
+                } else if (testTableCadValueHasPayload(
+                               version, valueFormatFlags, valueDataType)
                            && valueDataType == 8) {
                     body.putBitLong(8);
                     for (std::uint8_t byte = 0; byte < 8u; ++byte)
                         body.putRawChar8(
                             static_cast<std::uint8_t>(0x10u + byte));
-                } else if ((valueFormatFlags & 0x01) == 0
+                } else if (testTableCadValueHasPayload(
+                               version, valueFormatFlags, valueDataType)
                            && (valueDataType == 16
                                || valueDataType == 32)) {
                     const int dimensions = valueDataType == 16 ? 2 : 3;
@@ -9193,15 +9228,13 @@ void testTableCellValueUnitTypeDomain(TestContext& t) {
 }
 
 void testTableCellGeneralValueFormatFlag(TestContext& t) {
-    const std::vector<std::uint8_t> expectedRaw{0xA1u, 0xB2u, 0xC3u, 0xD4u};
-
     R2007TableContentObjectFrame ac1021Frame;
     const bool ac1021Built = makeR2007TableContentObjectFrame(
         ac1021Frame, false, 0u, 0xA710u, false, 0u, 0u,
         DRW::DwgHardOwnership, 0, DRW::DwgHardPointer, 512,
         DRW::DwgSoftPointer, false, false, 0, 1, 1, 0x02);
     t.expect(ac1021Built,
-             "AC1021 TABLECONTENT kGeneral value-flag vector builds");
+             "AC1021 TABLECONTENT suppressed kGeneral value vector builds");
     if (ac1021Built) {
         dwgBuffer input(ac1021Frame.bytes.data(), ac1021Frame.bytes.size());
         TableContentObjectCodecProbe parsed;
@@ -9219,13 +9252,13 @@ void testTableCellGeneralValueFormatFlag(TestContext& t) {
                      && parsed.m_semanticContentComplete && content != nullptr
                      && content->m_value.m_formatFlags == 0x02
                      && content->m_value.m_dataType == 512
-                     && content->m_value.m_dataSize == expectedRaw.size()
-                     && content->m_value.m_rawData == expectedRaw
-                     && content->m_value.m_value.type() == DRW_Variant::BINARY
+                     && content->m_value.m_dataSize == 0u
+                     && content->m_value.m_rawData.empty()
+                     && content->m_value.m_value.type() == DRW_Variant::INVALID
                      && content->m_value.m_unitType == 1
                      && content->m_value.m_formatString == "0.0"
                      && content->m_value.m_valueString == "42.5",
-                 "AC1021 TABLECONTENT retains explicit type 512 with its bounded raw payload");
+                 "AC1021 TABLECONTENT suppresses unsupported kGeneral payload under ODA flags");
     }
 
     R2010EmbeddedTableFrame ac1024Frame;
@@ -9253,14 +9286,14 @@ void testTableCellGeneralValueFormatFlag(TestContext& t) {
                      && parsed.m_semanticContentComplete && content != nullptr
                      && content->m_value.m_formatFlags == 0x02
                      && content->m_value.m_dataType == 512
-                     && content->m_value.m_dataSize == expectedRaw.size()
-                     && content->m_value.m_rawData == expectedRaw
-                     && content->m_value.m_value.type() == DRW_Variant::BINARY
+                     && content->m_value.m_dataSize == 0u
+                     && content->m_value.m_rawData.empty()
+                     && content->m_value.m_value.type() == DRW_Variant::INVALID
                      && content->m_value.m_unitType == 1
                      && content->m_value.m_formatString == "0.00"
                      && content->m_value.m_valueString == "42.50"
                      && cursorBit(input) == ac1024Frame.tableDataEndBit,
-                 "AC1024 TABLE retains explicit type 512 and the following table-tail boundary");
+                 "AC1024 TABLE suppresses the type-specific payload and preserves the following table-tail boundary");
     }
 }
 
@@ -9279,13 +9312,16 @@ void testCadValuePayloadPresence(TestContext& t) {
         if (type == 2)
             return value.m_value.type() == DRW_Variant::DOUBLE
                 && value.m_value.d_val() == 42.5;
+        if (type == 4)
+            return value.m_value.type() == DRW_Variant::STRING
+                && std::string(value.m_value.c_str()) == "CAD Text";
         if (type == 64)
             return value.m_handle == 0xA721u;
         return value.m_value.type() == DRW_Variant::BINARY
             && value.m_rawData == std::vector<std::uint8_t>{0xA1u, 0xB2u, 0xC3u, 0xD4u};
     };
     for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
-        for (const int type : {2, 64, 512}) {
+        for (const int type : {2, 4, 64, 512}) {
             for (std::int32_t flags = 0; flags <= 3; ++flags) {
                 FieldFrame fieldFrame;
                 const bool fieldBuilt = makeFieldFrame(
@@ -9304,7 +9340,8 @@ void testCadValuePayloadPresence(TestContext& t) {
                                  && matches(version, true, parsed.m_value,
                                             flags, type),
                              "FIELD always reads explicit type and suppresses payload for low flag bits");
-                    const bool expectedHandle = type == 64 && (flags & 3) == 0;
+                    const bool expectedHandle = type == 64
+                        && (flags & 3) == 0;
                     t.expect(DRW_Field::cadValueHasDwgObjectHandle(version, parsed.m_value)
                                  == expectedHandle,
                              "FIELD object-ID handle slot follows the payload-presence bit");
@@ -9354,7 +9391,10 @@ void testCadValuePayloadPresence(TestContext& t) {
                         version, false,
                         content.m_rows[0].m_cells[0].m_contents[0].m_value,
                         flags, type);
-                t.expect(valueMatches, "TABLE payload/handle presence follows its established flag rule");
+                t.expect(valueMatches,
+                         version == DRW::AC1021
+                             ? "AC1021 TABLE payload exceptions stay limited to source-backed profiles"
+                             : "R2010+ TABLE payload/handle presence follows ODA low-bit suppression");
             }
         }
     }

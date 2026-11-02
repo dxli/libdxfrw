@@ -3831,10 +3831,19 @@ struct DRW_CadValue {
   UTF8STRING m_valueString;
   std::uint32_t m_handle = 0;
   std::vector<std::uint8_t> m_rawData;
-  // Keep the established TABLE CadValue interpretation separate from FIELD:
-  // the AC1021 TABLE source profile carries a value when only bit 1 is set.
+  // ODA §20.4.99: for R2007+, either low flag bit suppresses the
+  // type-specific payload. Retain only the AC1021 flags=4/6 type-4 native
+  // string profile here; the separately observed flags=2/type=2 checksum is
+  // admitted only at its exact custom-data key while skipping that item.
+  // FIELD has its own profile in hasDwgFieldPayload().
   [[nodiscard]] bool hasDwgPayload(DRW::Version version) const noexcept {
-    return version <= DRW::AC1018 || (m_formatFlags & 0x01) == 0;
+    if (version <= DRW::AC1018)
+      return true;
+    if (version == DRW::AC1021
+        && (m_formatFlags == 0x04 || m_formatFlags == 0x06)
+        && m_dataType == 4)
+      return true;
+    return (m_formatFlags & 0x03) == 0;
   }
   // ODA §20.4.99 says bit 1 suppresses the type-specific FIELD payload, while
   // retaining the preceding data-type BL. LibreDWG applies both low bits.

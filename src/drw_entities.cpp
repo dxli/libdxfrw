@@ -2594,7 +2594,8 @@ bool hasDocumentedTableCadValueUnits(const DRW_CadValue& value) {
 
 bool readTableCadValue(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
                        dwgBuffer *hdlBuf, DRW_CadValue& value,
-                       const TableDwgBounds& bounds) {
+                       const TableDwgBounds& bounds,
+                       bool allowObservedChecksum = false) {
     if (version > DRW::AC1018) {
         if (!readBoundedBitLong(*buf, bounds.bodyEndBit, value.m_formatFlags))
             return false;
@@ -2606,7 +2607,10 @@ bool readTableCadValue(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
     DRW_DBG("TABLE CadValue flags/type/payloadBit="); DRW_DBG(value.m_formatFlags);
     DRW_DBG("/"); DRW_DBG(value.m_dataType); DRW_DBG("/");
     DRW_DBG(currentDwgBit(buf)); DRW_DBG("\n");
-    if (value.hasDwgPayload(version)) {
+    const bool hasPayload = value.hasDwgPayload(version)
+        || (allowObservedChecksum && version == DRW::AC1021
+            && value.m_formatFlags == 0x02 && value.m_dataType == 2);
+    if (hasPayload) {
         switch (value.m_dataType) {
         case 0:
         case 1: {
@@ -2759,8 +2763,10 @@ bool skipTableCustomData(DRW::Version version, dwgBuffer *buf,
         return false;
     }
     DRW_CadValue value;
+    const bool observedChecksum = version == DRW::AC1021
+        && key == "ACAD_ROUNDTRIP_2008_CELL_CHECKSUM";
     const bool good = readTableCadValue(version, buf, strBuf, hdlBuf, value,
-                                        bounds);
+                                        bounds, observedChecksum);
     if (!good) {
         DRW_DBG("TABLE custom data key failed: "); DRW_DBG(key.c_str()); DRW_DBG("\n");
     }
