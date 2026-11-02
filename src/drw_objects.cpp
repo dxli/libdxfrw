@@ -80,6 +80,118 @@ bool equalsAsciiCaseInsensitive(std::string_view left,
     return true;
 }
 
+bool spatialFilterBoundaryIsSimple(
+    const std::vector<DRW_Coord>& boundary) {
+    // Two points describe the special rectangular boundary, not a polygon.
+    if (boundary.size() <= 2u)
+        return true;
+
+    std::size_t pointCount = boundary.size();
+    const auto samePoint = [](const DRW_Coord& left, const DRW_Coord& right) {
+        return left.x == right.x && left.y == right.y;
+    };
+    // Accept the common explicitly closed-ring spelling while testing the
+    // same boundary that the implicit closing edge would represent.
+    if (pointCount > 3u && samePoint(boundary.front(), boundary.back()))
+        --pointCount;
+    if (pointCount < 3u)
+        return false;
+
+    const auto orientation = [](const DRW_Coord& a, const DRW_Coord& b,
+                                const DRW_Coord& c) {
+        const long double abx = static_cast<long double>(b.x) - a.x;
+        const long double aby = static_cast<long double>(b.y) - a.y;
+        const long double acx = static_cast<long double>(c.x) - a.x;
+        const long double acy = static_cast<long double>(c.y) - a.y;
+        const long double left = abx * acy;
+        const long double right = aby * acx;
+        const long double determinant = left - right;
+        if (!std::isfinite(left) || !std::isfinite(right)
+            || !std::isfinite(determinant))
+            return 2;
+        if (determinant == 0.0L)
+            return 0;
+        const long double errorBound =
+            8.0L * std::numeric_limits<long double>::epsilon()
+            * (std::abs(left) + std::abs(right));
+        if (std::abs(determinant) <= errorBound)
+            return 2;
+        return determinant < 0.0L ? -1 : 1;
+    };
+    const auto withinBounds = [](const DRW_Coord& point,
+                                 const DRW_Coord& start,
+                                 const DRW_Coord& end) {
+        return point.x >= std::min(start.x, end.x)
+            && point.x <= std::max(start.x, end.x)
+            && point.y >= std::min(start.y, end.y)
+            && point.y <= std::max(start.y, end.y);
+    };
+    const auto segmentsIntersect = [&](const DRW_Coord& a,
+                                       const DRW_Coord& b,
+                                       const DRW_Coord& c,
+                                       const DRW_Coord& d) {
+        const int abc = orientation(a, b, c);
+        const int abd = orientation(a, b, d);
+        const int cda = orientation(c, d, a);
+        const int cdb = orientation(c, d, b);
+        // Numerically ambiguous near-collinear pairs are refused
+        // conservatively; a writer must not export a possibly invalid polygon.
+        if (abc == 2 || abd == 2 || cda == 2 || cdb == 2)
+            return true;
+        if (abc == 0 && withinBounds(c, a, b))
+            return true;
+        if (abd == 0 && withinBounds(d, a, b))
+            return true;
+        if (cda == 0 && withinBounds(a, c, d))
+            return true;
+        if (cdb == 0 && withinBounds(b, c, d))
+            return true;
+        return ((abc < 0) != (abd < 0))
+            && ((cda < 0) != (cdb < 0));
+    };
+
+    for (std::size_t current = 0; current < pointCount; ++current) {
+        const std::size_t previous = (current + pointCount - 1u) % pointCount;
+        const std::size_t next = (current + 1u) % pointCount;
+        const DRW_Coord& a = boundary[previous];
+        const DRW_Coord& b = boundary[current];
+        const DRW_Coord& c = boundary[next];
+        if (samePoint(a, b) || samePoint(b, c))
+            return false;
+        const int turn = orientation(a, b, c);
+        if (turn == 2)
+            return false;
+        if (turn == 0
+            && ((a.x < b.x && c.x < b.x)
+                || (a.x > b.x && c.x > b.x)
+                || (a.y < b.y && c.y < b.y)
+                || (a.y > b.y && c.y > b.y)))
+            return false;
+    }
+
+    for (std::size_t first = 0; first < pointCount; ++first) {
+        const std::size_t firstNext = (first + 1u) % pointCount;
+        const DRW_Coord& a = boundary[first];
+        const DRW_Coord& b = boundary[firstNext];
+        for (std::size_t second = first + 1u;
+             second < pointCount; ++second) {
+            const std::size_t secondNext = (second + 1u) % pointCount;
+            if (second == firstNext || (first == 0u && secondNext == 0u))
+                continue;
+            const DRW_Coord& c = boundary[second];
+            const DRW_Coord& d = boundary[secondNext];
+            if (std::max(std::min(a.x, b.x), std::min(c.x, d.x))
+                    > std::min(std::max(a.x, b.x), std::max(c.x, d.x))
+                || std::max(std::min(a.y, b.y), std::min(c.y, d.y))
+                    > std::min(std::max(a.y, b.y), std::max(c.y, d.y)))
+                continue;
+            if (segmentsIntersect(a, b, c, d))
+                return false;
+        }
+    }
+    return true;
+}
+
 bool isPlainAssociativeGeometricalConstraint(std::string_view className) {
     static constexpr std::array<std::string_view, 17> names = {
         "ACCENTERPOINTCONSTRAINT",
@@ -24411,6 +24523,10 @@ bool DRW_SpatialFilter::hasValidDxfFields() const {
         if (!finiteCoord(point) || point.z != 0.0)
             return false;
     }
+
+    // Autodesk requires polygon clipping boundaries to be non-self-intersecting.
+    if (!spatialFilterBoundaryIsSimple(m_boundaryPoints))
+        return false;
     const auto finiteValues = [](const std::vector<double>& values) {
         return std::all_of(values.cbegin(), values.cend(),
                            [](double value) { return std::isfinite(value); });

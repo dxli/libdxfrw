@@ -527,14 +527,20 @@ void testImageAdjustmentCarrierDomains(TestContext& t) {
 
 std::string makeSpatialFilterDxfSource(bool clipFront, bool clipBack,
                                       std::size_t code40Count = 0u,
-                                      std::int32_t declaredPointCount = 2) {
+                                      std::int32_t declaredPointCount = 2,
+                                      const std::vector<DRW_Coord>& boundary = {}) {
     if (code40Count == 0u)
         code40Count = clipFront ? 25u : 24u;
     std::ostringstream records;
-    records << "70\n" << declaredPointCount << "\n"
-            << "10\n1.25\n20\n-2.5\n"
-            << "10\n4.75\n20\n6.5\n"
-            << "210\n0\n220\n0\n230\n1\n"
+    records << "70\n" << declaredPointCount << "\n";
+    if (boundary.empty()) {
+        records << "10\n1.25\n20\n-2.5\n"
+                << "10\n4.75\n20\n6.5\n";
+    } else {
+        for (const DRW_Coord& point : boundary)
+            records << "10\n" << point.x << "\n20\n" << point.y << "\n";
+    }
+    records << "210\n0\n220\n0\n230\n1\n"
             << "11\n3\n21\n4\n31\n5\n"
             << "71\n1\n72\n" << (clipFront ? 1 : 0) << "\n";
     if (clipFront)
@@ -646,6 +652,47 @@ void testSpatialFilterDxfValidation(TestContext& t) {
                  && !missingBackDistance.hasValidDxfSourceFields(),
              "SPATIAL_FILTER source-field validation requires paired back state");
 
+    const std::vector<DRW_Coord> concaveBoundary = {
+        {0.0, 0.0, 0.0}, {5.0, 0.0, 0.0}, {5.0, 5.0, 0.0},
+        {2.5, 2.0, 0.0}, {0.0, 5.0, 0.0}};
+    ExposedSpatialFilter parsedConcave;
+    t.expect(parseDxfRecords(parsedConcave,
+                             makeSpatialFilterDxfSource(
+                                 false, false, 24u, 5, concaveBoundary))
+                 && parsedConcave.hasValidDxfSourceFields(),
+             "SPATIAL_FILTER accepts a simple concave clipping polygon");
+
+    const std::vector<DRW_Coord> closedConcaveBoundary = {
+        {0.0, 0.0, 0.0}, {5.0, 0.0, 0.0}, {5.0, 5.0, 0.0},
+        {2.5, 2.0, 0.0}, {0.0, 5.0, 0.0}, {0.0, 0.0, 0.0}};
+    ExposedSpatialFilter parsedClosedConcave;
+    t.expect(parseDxfRecords(parsedClosedConcave,
+                             makeSpatialFilterDxfSource(
+                                 false, false, 24u, 6,
+                                 closedConcaveBoundary))
+                 && parsedClosedConcave.hasValidDxfSourceFields(),
+             "SPATIAL_FILTER accepts a simple explicitly closed polygon");
+
+    const std::vector<DRW_Coord> crossingBoundary = {
+        {0.0, 0.0, 0.0}, {5.0, 5.0, 0.0},
+        {0.0, 5.0, 0.0}, {5.0, 0.0, 0.0}};
+    ExposedSpatialFilter parsedCrossing;
+    t.expect(parseDxfRecords(parsedCrossing,
+                             makeSpatialFilterDxfSource(
+                                 false, false, 24u, 4, crossingBoundary))
+                 && !parsedCrossing.hasValidDxfSourceFields(),
+             "SPATIAL_FILTER source-field validation rejects a self-intersecting polygon");
+
+    const std::vector<DRW_Coord> overlappingAdjacentEdges = {
+        {0.0, 0.0, 0.0}, {4.0, 0.0, 0.0},
+        {2.0, 0.0, 0.0}, {2.0, 3.0, 0.0}};
+    DRW_SpatialFilter overlappingBoundary;
+    overlappingBoundary.m_boundaryPoints = overlappingAdjacentEdges;
+    overlappingBoundary.m_inverseInsertTransform.resize(12u);
+    overlappingBoundary.m_insertTransform.resize(12u);
+    t.expect(!overlappingBoundary.hasValidDxfFields(),
+             "SPATIAL_FILTER rejects adjacent polygon edges that retrace");
+
     DRW_SpatialFilter validTyped;
     validTyped.m_boundaryPoints = {{1.25, -2.5, 0.0}, {4.75, 6.5, 0.0}};
     validTyped.m_inverseInsertTransform.resize(12u);
@@ -656,6 +703,13 @@ void testSpatialFilterDxfValidation(TestContext& t) {
     }
     t.expect(validTyped.hasValidDxfFields(),
              "SPATIAL_FILTER typed writer admission accepts complete matrices");
+    validTyped.m_boundaryPoints = concaveBoundary;
+    t.expect(validTyped.hasValidDxfFields(),
+             "SPATIAL_FILTER typed writer admission accepts a simple concave polygon");
+    validTyped.m_boundaryPoints = crossingBoundary;
+    t.expect(!validTyped.hasValidDxfFields(),
+             "SPATIAL_FILTER typed writer admission rejects self-intersection");
+    validTyped.m_boundaryPoints = {{1.25, -2.5, 0.0}, {4.75, 6.5, 0.0}};
     validTyped.m_inverseInsertTransform.pop_back();
     t.expect(!validTyped.hasValidDxfFields(),
              "SPATIAL_FILTER typed writer admission rejects a short matrix");
@@ -741,6 +795,24 @@ void testSpatialFilterDxfValidation(TestContext& t) {
         invalid.m_boundaryPoints = {{0.0, 0.0, 0.0}, {1.0, 1.0, 0.0}};
         t.expect(!codec.writeSpatialFilter(&invalid) && rejected.str().empty(),
                  "SPATIAL_FILTER writer refuses incomplete matrices before emitting bytes");
+
+        std::ostringstream crossed(std::ios::out | std::ios::binary);
+        dxfRW crossedCodec(nullptr);
+        crossedCodec.version = DRW::AC1027;
+        crossedCodec.binFile = binary;
+        crossedCodec.writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&crossed))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&crossed));
+        crossedCodec.writer->setVersion("AC1027", true);
+        DRW_SpatialFilter crossedFilter;
+        crossedFilter.handle = 0x703u;
+        crossedFilter.parentHandle = 0x2u;
+        crossedFilter.m_boundaryPoints = crossingBoundary;
+        crossedFilter.m_inverseInsertTransform.resize(12u);
+        crossedFilter.m_insertTransform.resize(12u);
+        t.expect(!crossedCodec.writeSpatialFilter(&crossedFilter)
+                     && crossed.str().empty(),
+                 "SPATIAL_FILTER writer refuses a self-intersecting polygon atomically");
     }
 }
 

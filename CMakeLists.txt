@@ -1703,6 +1703,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_section_settings_color_code PROPERTIES
         LABELS "fast;dxf;reader;section-settings"
         TIMEOUT 10)
+    add_test(NAME libdxfrw_spatial_filter_simple_boundary
+        COMMAND libdxfrw_hardening_tests --spatial-filter-dxf-validation)
+    set_tests_properties(libdxfrw_spatial_filter_simple_boundary PROPERTIES
+        LABELS "fast;dxf;reader;writer;spatial-filter;generated"
+        TIMEOUT 10)
     add_test(NAME libdxfrw_dbcolor_book_name_owner_budget
         COMMAND libdxfrw_hardening_tests
             --dxf-dbcolor-book-name-owner-budget)
