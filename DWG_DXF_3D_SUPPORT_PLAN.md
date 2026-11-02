@@ -6757,12 +6757,20 @@ Steps:
    binds the current-source archive and safe dynamic_cast observer; no unsafe
    converter cast, DWG parser, ACIS kernel or native app was executed.
 
-   Follow7AG.3a in the parity plan: private type-preserving copies for all six
-   surface subtypes, exhaustive BLOCK-reachable callback coverage, typed/raw
-   order, owned-copy lifetime and unchanged ENDBLK publication boundaries.
-   Add both encodings/modes, subtype-field sentinels, corrected reuse and a
-   source-led replay-exception cleanup control. Keep2D no-op defaults and
-   legacy projection; no public clone virtual or consumer migration is needed.
+   Follow 7AG.3a in the parity plan: private type-preserving copies for all six
+   surface subtypes now pass generated named-BLOCK ASCII/Binary export and
+   readback in both raw and `applyExtrusion` modes, with subtype-only field
+   sentinels. The focused `libdxfrw_dwg_local_roundtrip` control passes 1/1;
+   see the [BLOCK surface staging receipt](docs/research/s8-1a-block-surface-staging-2026-11-02.json).
+   The existing `libdxfrw_block_owners` generated matrix also passes for its
+   selected BLOCK-reachable callback set across ASCII/Binary and both extended
+   modes. It checks typed/raw event order, copied payload lifetime after parser
+   and queue teardown, malformed-footer child suppression, balanced cleanup,
+   callback/cleanup exceptions, and corrected same-facade retry. Remaining:
+   complete the BLOCK-reachable callback inventory beyond these selected
+   profiles and bind any newly found omission to an exact source route. Keep 2D
+   no-op defaults and legacy projection; no public clone virtual or consumer
+   migration is needed.
    Run existing affected DXF/hardening/lc3 gates and one composed sanitizer/
    converter checkpoint, not another full suite or external witness search.
 

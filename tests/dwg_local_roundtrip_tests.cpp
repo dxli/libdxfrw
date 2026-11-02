@@ -22288,6 +22288,59 @@ bool runDxfSurfaceRoundTrip(bool binary,
                 && value->draftStartDistance == revolved->draftStartDistance
                 && value->draftEndDistance == revolved->draftEndDistance
                 && value->twistAngle == revolved->twistAngle
+    // Exercise the BLOCK callback staging/replay path separately from the
+    // top-level ENTITIES controls above. Preserve the exact derived subtype
+    // and subtype-only sentinels across both paths.
+    constexpr std::uint32_t surfaceBlockRecordHandle = 0xFA00u;
+    DRW_Block_Record surfaceBlockRecord;
+    surfaceBlockRecord.handle = surfaceBlockRecordHandle;
+    surfaceBlockRecord.name = "SURFACE_BLOCK";
+    source.blockRecords.push_back(surfaceBlockRecord);
+    auto* surfaceBlock = new dx_ifaceBlock();
+    surfaceBlock->handle = 0xFA01u;
+    surfaceBlock->parentHandle = surfaceBlockRecordHandle;
+    surfaceBlock->name = surfaceBlockRecord.name;
+    const std::array<const DRW_Surface*, 6> sourceSurfaces {{
+        plane, extruded, revolved, swept, lofted, nurbs
+    }};
+    for (std::size_t index = 0; index < sourceSurfaces.size(); ++index) {
+        const DRW_Surface* input = sourceSurfaces[index];
+        DRW_Surface* copy = nullptr;
+        switch (input->eType) {
+        case DRW::PLANESURFACE:
+            copy = new DRW_PlaneSurface(
+                *static_cast<const DRW_PlaneSurface*>(input));
+            break;
+        case DRW::EXTRUDEDSURFACE:
+            copy = new DRW_ExtrudedSurface(
+                *static_cast<const DRW_ExtrudedSurface*>(input));
+            break;
+        case DRW::REVOLVEDSURFACE:
+            copy = new DRW_RevolvedSurface(
+                *static_cast<const DRW_RevolvedSurface*>(input));
+            break;
+        case DRW::SWEPTSURFACE:
+            copy = new DRW_SweptSurface(
+                *static_cast<const DRW_SweptSurface*>(input));
+            break;
+        case DRW::LOFTEDSURFACE:
+            copy = new DRW_LoftedSurface(
+                *static_cast<const DRW_LoftedSurface*>(input));
+            break;
+        case DRW::NURBSURFACE:
+            copy = new DRW_NurbsSurface(
+                *static_cast<const DRW_NurbsSurface*>(input));
+            break;
+        default:
+            delete surfaceBlock;
+            return false;
+        }
+        copy->handle = 0xFC00u + static_cast<std::uint32_t>(index);
+        copy->parentHandle = surfaceBlockRecordHandle;
+        surfaceBlock->ent.push_back(copy);
+    }
+    source.blocks.push_back(surfaceBlock);
+
                 && value->solid == revolved->solid
                 && value->closeToAxis == revolved->closeToAxis;
             break;
@@ -22311,6 +22364,107 @@ bool runDxfSurfaceRoundTrip(bool binary,
                 && value->draftAngle == swept->draftAngle
                 && value->draftStartDistance == swept->draftStartDistance
                 && value->draftEndDistance == swept->draftEndDistance
+    const auto blockSurfaceTypesMatch = [&](const dx_data& data) {
+        const dx_ifaceBlock* target = nullptr;
+        for (const dx_ifaceBlock* block : data.blocks) {
+            if (block != nullptr && block->name == "SURFACE_BLOCK") {
+                if (target != nullptr)
+                    return false;
+                target = block;
+            }
+        }
+        if (target == nullptr || target->ent.size() != sourceSurfaces.size())
+            return false;
+        const std::array<DRW::ETYPE, 6> expectedTypes {{
+            DRW::PLANESURFACE, DRW::EXTRUDEDSURFACE,
+            DRW::REVOLVEDSURFACE, DRW::SWEPTSURFACE,
+            DRW::LOFTEDSURFACE, DRW::NURBSURFACE
+        }};
+        std::size_t index = 0u;
+        for (const DRW_Entity* entity : target->ent) {
+            if (entity == nullptr || entity->eType != expectedTypes[index]
+                || dynamic_cast<const DRW_Surface*>(entity) == nullptr)
+                return false;
+            const auto* surface = static_cast<const DRW_Surface*>(entity);
+            bool subtypeMatches = false;
+            switch (index) {
+            case 0:
+                subtypeMatches = dynamic_cast<const DRW_PlaneSurface*>(entity)
+                    != nullptr;
+                break;
+            case 1: {
+                const auto* value = dynamic_cast<const DRW_ExtrudedSurface*>(entity);
+                subtypeMatches = value != nullptr
+                    && value->classId == extruded->classId
+                    && value->dxfBinaryData == extruded->dxfBinaryData
+                    && sameCoord(value->sweepVector, extruded->sweepVector);
+                break;
+            }
+            case 2: {
+                const auto* value = dynamic_cast<const DRW_RevolvedSurface*>(entity);
+                subtypeMatches = value != nullptr
+                    && value->id == revolved->id
+                    && value->dxfBinaryData == revolved->dxfBinaryData
+                    && sameCoord(value->axisPoint, revolved->axisPoint);
+                break;
+            }
+            case 3: {
+                const auto* value = dynamic_cast<const DRW_SweptSurface*>(entity);
+                subtypeMatches = value != nullptr
+                    && value->sweepEntityId == swept->sweepEntityId
+                    && value->sweepData == swept->sweepData
+                    && value->pathEntityId == swept->pathEntityId
+                    && value->pathData == swept->pathData;
+                break;
+            }
+            case 4: {
+                const auto* value = dynamic_cast<const DRW_LoftedSurface*>(entity);
+                subtypeMatches = value != nullptr
+                    && value->pathCurveHandle == lofted->pathCurveHandle
+                    && value->dxfReferenceData.size()
+                        == lofted->dxfReferenceData.size();
+                break;
+            }
+            case 5: {
+                const auto* value = dynamic_cast<const DRW_NurbsSurface*>(entity);
+                subtypeMatches = value != nullptr
+                    && value->short170 == nurbs->short170
+                    && sameCoord(value->uvec1, nurbs->uvec1)
+                    && sameCoord(value->vvec2, nurbs->vvec2);
+                break;
+            }
+            default:
+                return false;
+            }
+            if (!subtypeMatches
+                || surface->modelerFormatVersion
+                    != sourceSurfaces[index]->modelerFormatVersion
+                || surface->uIsolines != sourceSurfaces[index]->uIsolines
+                || surface->vIsolines != sourceSurfaces[index]->vIsolines)
+                return false;
+            ++index;
+        }
+        return true;
+    };
+    const auto importBlockSurfaces = [&](bool applyExtrusion) {
+        dx_data blockImported;
+        dx_iface blockImporter;
+        blockImporter.cData = &blockImported;
+        blockImporter.currentBlock = blockImported.mBlock;
+        const std::string outputName = output.string();
+        dxfRW reader(outputName.c_str());
+        return reader.read(&blockImporter, applyExtrusion)
+            && !blockImported.typedEntityCaptureFailed
+            && blockSurfaceTypesMatch(blockImported);
+    };
+    if (!blockSurfaceTypesMatch(imported)
+        || !importBlockSurfaces(true)) {
+        std::cerr << "DXF BLOCK surface callback staging/replay mismatch ("
+                  << encoding << ")\n";
+        if (!keepOutput)
+            std::filesystem::remove(output, ec);
+        return false;
+    }
                 && value->twistAngle == swept->twistAngle
                 && value->scaleFactor == swept->scaleFactor
                 && value->alignAngle == swept->alignAngle
