@@ -15510,6 +15510,89 @@ void testProxyLinetypeSentinels(TestContext& t) {
     }
 }
 
+void testProxyResourceIndexResolution(TestContext& t) {
+    const auto makeResourceStream = [](std::uint32_t opcode,
+                                       std::uint32_t index) {
+        std::vector<std::uint8_t> stream(8u, 0u);
+        std::vector<std::uint8_t> payload;
+        appendU32(payload, index);
+        appendProxyChunk(stream, opcode, payload);
+        std::vector<std::uint8_t> circle;
+        appendDouble(circle, 0.0); appendDouble(circle, 0.0);
+        appendDouble(circle, 0.0); // center
+        appendDouble(circle, 1.0); // radius
+        appendDouble(circle, 0.0); appendDouble(circle, 0.0);
+        appendDouble(circle, 1.0); // normal
+        appendProxyChunk(stream, 2u, circle);
+        return std::string(reinterpret_cast<const char*>(stream.data()),
+                           stream.size());
+    };
+
+    DRW_Point parent;
+    parent.layer = "ADAPTER_LAYER_ORDER";
+    parent.lineType = "ADAPTER_LTYPE_ORDER";
+    const std::vector<std::string> sourceLayers = {"SOURCE_LAYER_0",
+                                                  "SOURCE_LAYER_1"};
+    const std::vector<std::string> sourceLinetypes = {"SOURCE_LTYPE_0",
+                                                      "SOURCE_LTYPE_1"};
+
+    ProxyGraphicCapture mappedLayerCapture;
+    const DRW_ProxyGraphicDecodeResult mappedLayer =
+        DRW_ProxyGraphicDecoder::decode(
+            makeResourceStream(16u, 1u), DRW::AC1021, mappedLayerCapture,
+            parent, sourceLayers);
+    t.expect(mappedLayer.completed() && mappedLayerCapture.circles.size() == 1u
+                 && mappedLayerCapture.circles.front().layer == "SOURCE_LAYER_1"
+                 && mappedLayerCapture.circles.front().lineType
+                        == "ADAPTER_LTYPE_ORDER",
+             "proxy layer index resolves by source order while omitted linetype map inherits");
+
+    ProxyGraphicCapture mappedLinetypeCapture;
+    const DRW_ProxyGraphicDecodeResult mappedLinetype =
+        DRW_ProxyGraphicDecoder::decode(
+            makeResourceStream(18u, 1u), DRW::AC1021,
+            mappedLinetypeCapture, parent, sourceLayers, sourceLinetypes);
+    t.expect(mappedLinetype.completed()
+                 && mappedLinetypeCapture.circles.size() == 1u
+                 && mappedLinetypeCapture.circles.front().layer
+                        == "ADAPTER_LAYER_ORDER"
+                 && mappedLinetypeCapture.circles.front().lineType
+                        == "SOURCE_LTYPE_1",
+             "proxy linetype index resolves by source order without using adapter table order");
+
+    ProxyGraphicCapture inheritedCapture;
+    const DRW_ProxyGraphicDecodeResult inherited =
+        DRW_ProxyGraphicDecoder::decode(
+            makeResourceStream(18u, 99u), DRW::AC1021, inheritedCapture,
+            parent);
+    t.expect(inherited.completed() && inheritedCapture.circles.size() == 1u
+                 && inheritedCapture.circles.front().lineType
+                        == "ADAPTER_LTYPE_ORDER",
+             "proxy attribute inherits parent when its source lookup table is omitted");
+
+    const std::vector<std::string> incompleteLinetypes = {"SOURCE_LTYPE_0"};
+    ProxyGraphicCapture rejectedLinetypeCapture;
+    const DRW_ProxyGraphicDecodeResult rejectedLinetype =
+        DRW_ProxyGraphicDecoder::decode(
+            makeResourceStream(18u, 1u), DRW::AC1021,
+            rejectedLinetypeCapture, parent, {}, incompleteLinetypes);
+    t.expect(rejectedLinetype.stopReason
+                     == DRW_ProxyGraphicStopReason::InvalidResourceReference
+                 && rejectedLinetypeCapture.circles.empty(),
+             "proxy linetype index with an incomplete source table is refused");
+
+    const std::vector<std::string> incompleteLayers = {"SOURCE_LAYER_0", ""};
+    ProxyGraphicCapture rejectedLayerCapture;
+    const DRW_ProxyGraphicDecodeResult rejectedLayer =
+        DRW_ProxyGraphicDecoder::decode(
+            makeResourceStream(16u, 1u), DRW::AC1021,
+            rejectedLayerCapture, parent, incompleteLayers);
+    t.expect(rejectedLayer.stopReason
+                     == DRW_ProxyGraphicStopReason::InvalidResourceReference
+                 && rejectedLayerCapture.circles.empty(),
+             "proxy layer index pointing to a missing source record is refused");
+}
+
 void testProxyShellMultiFaceFraming(TestContext& t) {
     // A proxy stream has an eight-byte header followed by independently sized
     // chunks. The shell face-entry count is a count of longs, not faces.
@@ -15610,6 +15693,7 @@ int main() {
     testModelerLazyDecode(context);
     testProxyBounds(context);
     testProxyLinetypeSentinels(context);
+    testProxyResourceIndexResolution(context);
     testProxyShellMultiFaceFraming(context);
     testDataStorageCapabilities(context);
     if (context.failures != 0) {

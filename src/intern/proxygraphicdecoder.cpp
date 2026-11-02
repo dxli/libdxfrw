@@ -800,8 +800,15 @@ DRW_ProxyGraphicDecodeResult DRW_ProxyGraphicDecoder::decode(
             if (payloadLength >= 4) {
                 std::uint32_t layer = 0;
                 std::memcpy(&layer, payload, sizeof(layer));
-                if (layer < layerNames.size() && !layerNames[layer].empty())
+                if (layerNames.empty()) {
+                    state.layer.clear();
+                } else if (layer < layerNames.size()
+                           && !layerNames[layer].empty()) {
                     state.layer = layerNames[layer];
+                } else {
+                    context.fail(
+                        DRW_ProxyGraphicStopReason::InvalidResourceReference);
+                }
             }
             break;
         case OP_ATTRIBUTE_LINETYPE:
@@ -815,9 +822,15 @@ DRW_ProxyGraphicDecodeResult DRW_ProxyGraphicDecoder::decode(
                     state.lineType = "BYBLOCK";
                 else if (lineType == 0xFFFFFFFFu || lineType == 32767u)
                     state.lineType = "BYLAYER";
-                else if (lineType < ltypeNames.size() && !ltypeNames[lineType].empty())
+                else if (ltypeNames.empty())
+                    state.lineType.clear();
+                else if (lineType < ltypeNames.size()
+                         && !ltypeNames[lineType].empty()) {
                     state.lineType = ltypeNames[lineType];
-                else state.lineType = "BYLAYER";
+                } else {
+                    context.fail(
+                        DRW_ProxyGraphicStopReason::InvalidResourceReference);
+                }
             }
             break;
         case OP_PUSH_MATRIX:
