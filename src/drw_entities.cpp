@@ -17260,6 +17260,27 @@ bool DRW_Polyline::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
     return true;
 }
 
+void DRW_Polyline::applyExtrusion() {
+    // 3D polylines, polygon meshes, and polyface meshes use WCS vertices.
+    // Only the ordinary 2D POLYLINE family stores vertices in OCS.
+    if (!haveExtrusion || (flags & (8 | 16 | 64)) != 0)
+        return;
+
+    const double elevation = basePoint.z;
+    calculateAxis(extPoint);
+    for (const auto& vertex : vertlist) {
+        if (vertex == nullptr)
+            continue;
+        // A 2D VERTEX's Z is not the plane elevation; the owning POLYLINE's
+        // elevation supplies OCS Z (AcDb2dVertex::Position contract).
+        DRW_Coord point(vertex->basePoint.x, vertex->basePoint.y, elevation);
+        extrudePoint(extPoint, &point);
+        vertex->basePoint = point;
+    }
+    // The POLYLINE header's point is the OCS elevation anchor as well.
+    extrudePoint(extPoint, &basePoint);
+}
+
 //0x0F polyline 2D bit 4(8) & 5(16) NOT set
 //0x10 polyline 3D bit 4(8) set
 //0x1D PFACE bit 5(16) set

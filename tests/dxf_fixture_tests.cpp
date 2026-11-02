@@ -22211,6 +22211,172 @@ void testTextOcsExtrusion(TestContext& t) {
     }
 }
 
+bool writePolylineOcsExtrusionControl(const std::filesystem::path& path,
+                                     bool binary) {
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output)
+        return false;
+    if (binary)
+        output.write("AutoCAD Binary DXF\r\n\x1a\0", 22);
+    std::unique_ptr<dxfWriter> writer = binary
+        ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+        : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+    writer->setVersion("AC1027", true);
+    const auto string = [&writer](int code, const char* value) {
+        return writer->writeString(code, value);
+    };
+    const auto real = [&writer](int code, double value) {
+        return writer->writeDouble(code, value);
+    };
+    const auto shortValue = [&writer](int code, int value) {
+        return writer->writeInt16(code, value);
+    };
+    const auto vertex = [&string, &real, &shortValue](
+            const char* subclass, int flags,
+            double x, double y, double z) {
+        return string(0, "VERTEX") && string(100, "AcDbEntity")
+            && string(8, "0") && string(100, "AcDbVertex")
+            && string(100, subclass) && real(10, x) && real(20, y)
+            && real(30, z) && shortValue(70, flags);
+    };
+    const auto polyline = [&string, &real, &shortValue, &vertex](
+            const char* subclass, int flags, double elevation,
+            const char* vertexSubclass, int vertexFlags,
+            const std::array<DRW_Coord, 2>& points) {
+        return string(0, "POLYLINE") && string(100, "AcDbEntity")
+            && string(8, "0") && string(100, subclass)
+            && real(10, 0.0) && real(20, 0.0) && real(30, elevation)
+            && shortValue(70, flags)
+            && real(210, 1.0) && real(220, 0.0) && real(230, 0.0)
+            && vertex(vertexSubclass, vertexFlags,
+                      points[0].x, points[0].y, points[0].z)
+            && vertex(vertexSubclass, vertexFlags,
+                      points[1].x, points[1].y, points[1].z)
+            && string(0, "SEQEND") && string(100, "AcDbEntity")
+            && string(8, "0");
+    };
+
+    const std::array<DRW_Coord, 2> points2d{{
+        {2.0, 3.0, 0.0}, {5.0, 6.0, 0.0}}};
+    const std::array<DRW_Coord, 2> points3d{{
+        {2.0, 3.0, 4.0}, {5.0, 6.0, 7.0}}};
+    const bool written = string(0, "SECTION") && string(2, "HEADER")
+        && string(9, "$ACADVER") && string(1, "AC1027")
+        && string(0, "ENDSEC") && string(0, "SECTION")
+        && string(2, "ENTITIES")
+        && polyline("AcDb2dPolyline", 0, 4.0,
+                    "AcDb2dVertex", 0, points2d)
+        && polyline("AcDb3dPolyline", 8, 4.0,
+                    "AcDb3dPolylineVertex", 32, points3d)
+        && string(0, "LINE") && string(100, "AcDbEntity")
+        && string(8, "0") && real(10, 20.0) && real(20, 21.0)
+        && real(30, 22.0) && real(11, 23.0) && real(21, 24.0)
+        && real(31, 25.0) && string(0, "ENDSEC") && string(0, "EOF");
+    return written && !writer->hasWriteError() && output.good();
+}
+
+class DxfPolylineOcsExtrusionCapture final : public dx_iface {
+public:
+    struct PolylineState {
+        int flags{0};
+        DRW_Coord basePoint;
+        DRW_Coord extrusion;
+        std::vector<DRW_Coord> vertices;
+    };
+
+    void addHeader(const DRW_Header*) override {}
+    void addPolyline(const DRW_Polyline& value) override {
+        PolylineState state;
+        state.flags = value.flags;
+        state.basePoint = value.basePoint;
+        state.extrusion = value.extPoint;
+        for (const auto& vertex : value.vertlist) {
+            if (vertex != nullptr)
+                state.vertices.push_back(vertex->basePoint);
+        }
+        polylines.push_back(std::move(state));
+    }
+    void addLine(const DRW_Line& value) override {
+        ++lineCallbacks;
+        lineStart = value.basePoint;
+        lineEnd = value.secPoint;
+    }
+
+    std::vector<PolylineState> polylines;
+    std::size_t lineCallbacks{0};
+    DRW_Coord lineStart;
+    DRW_Coord lineEnd;
+};
+
+void testPolylineOcsExtrusion(TestContext& t) {
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto equalPoint = [](const DRW_Coord& actual,
+                               double x, double y, double z) {
+        return actual.x == x && actual.y == y && actual.z == z;
+    };
+    for (const bool binary : {false, true}) {
+        const std::filesystem::path path =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-polyline-ocs-extrusion-" + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        std::error_code error;
+        std::filesystem::remove(path, error);
+        const bool generated = writePolylineOcsExtrusionControl(path, binary);
+        t.expect(generated,
+                 binary ? "generated binary 2D/3D POLYLINE source is written"
+                        : "generated ASCII 2D/3D POLYLINE source is written");
+
+        for (const bool applyExtrusion : {false, true}) {
+            DxfPolylineOcsExtrusionCapture capture;
+            dxfRW reader(path.string().c_str());
+            const bool read = generated
+                && reader.read(&capture, applyExtrusion);
+            t.expect(read && capture.polylines.size() == 2u
+                         && capture.lineCallbacks == 1u,
+                     "owned VERTEX/SEQEND chains preserve following LINE framing");
+            if (!read || capture.polylines.size() != 2u)
+                continue;
+
+            const auto& polyline2d = capture.polylines[0];
+            const auto& polyline3d = capture.polylines[1];
+            t.expect(polyline2d.flags == 0 && polyline2d.vertices.size() == 2u
+                         && polyline3d.flags == 8
+                         && polyline3d.vertices.size() == 2u
+                         && equalPoint(polyline2d.extrusion,
+                                       1.0, 0.0, 0.0),
+                     "2D and 3D polyline classes retain their flags and vertices");
+            t.expect(equalPoint(capture.lineStart, 20.0, 21.0, 22.0)
+                         && equalPoint(capture.lineEnd, 23.0, 24.0, 25.0),
+                     "polyline extrusion handling leaves the next WCS entity intact");
+            if (applyExtrusion) {
+                t.expect(equalPoint(polyline2d.basePoint, 4.0, 0.0, 0.0)
+                             && equalPoint(polyline2d.vertices[0],
+                                           4.0, 2.0, 3.0)
+                             && equalPoint(polyline2d.vertices[1],
+                                           4.0, 5.0, 6.0),
+                         "2D vertices use parent elevation and convert fully to WCS");
+            } else {
+                t.expect(equalPoint(polyline2d.basePoint, 0.0, 0.0, 4.0)
+                             && equalPoint(polyline2d.vertices[0],
+                                           2.0, 3.0, 0.0)
+                             && equalPoint(polyline2d.vertices[1],
+                                           5.0, 6.0, 0.0),
+                         "disabled extrusion preserves the 2D polyline OCS model");
+            }
+            t.expect(equalPoint(polyline3d.basePoint, 0.0, 0.0, 4.0)
+                         && equalPoint(polyline3d.vertices[0],
+                                       2.0, 3.0, 4.0)
+                         && equalPoint(polyline3d.vertices[1],
+                                       5.0, 6.0, 7.0)
+                         && equalPoint(polyline3d.extrusion,
+                                       1.0, 0.0, 0.0),
+                     "3D polyline WCS points are not transformed as OCS points");
+        }
+        std::filesystem::remove(path, error);
+    }
+}
+
 void testDxfBinaryGroupWidthGuard(TestContext& t) {
     struct WrongWidthControl {
         int code;
@@ -60805,6 +60971,13 @@ int main(int argc, char** argv) {
         TestContext context;
         testTextOcsExtrusion(context);
         std::cout << "DXF TEXT/ATTRIB OCS extrusion controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--polyline-ocs-extrusion") {
+        TestContext context;
+        testPolylineOcsExtrusion(context);
+        std::cout << "DXF classic POLYLINE OCS extrusion controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

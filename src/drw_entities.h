@@ -3071,6 +3071,7 @@ public:
     }
     DRW_Polyline(DRW_Polyline&&) noexcept = default;
     DRW_Polyline& operator=(DRW_Polyline&&) noexcept = default;
+    void applyExtrusion() override;
     void addVertex (DRW_Vertex v) {
         auto vert = std::make_shared<DRW_Vertex>(v);
         // Replace the copied shared metadata with independent XDATA values.

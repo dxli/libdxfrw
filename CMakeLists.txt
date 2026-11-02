@@ -1963,6 +1963,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dxf_fixture_tests --text-ocs-extrusion)
     set_tests_properties(libdxfrw_dxf_text_ocs_extrusion PROPERTIES
         LABELS "fast;dxf;reader;generated;geometry" TIMEOUT 30)
+    add_test(NAME libdxfrw_dxf_polyline_ocs_extrusion
+        COMMAND libdxfrw_dxf_fixture_tests --polyline-ocs-extrusion)
+    set_tests_properties(libdxfrw_dxf_polyline_ocs_extrusion PROPERTIES
+        LABELS "fast;dxf;reader;generated;geometry" TIMEOUT 30)
     add_test(NAME libdxfrw_mtext_legacy_truecolor_compatibility
         COMMAND libdxfrw_dxf_fixture_tests
             --mtext-legacy-truecolor-compatibility)

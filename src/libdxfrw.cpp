@@ -19069,6 +19069,8 @@ bool dxfRW::processPolyline() {
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!decoder.finish())
                 return setError(DRW::BAD_CODE_PARSED);
+            if (applyExt)
+                pl.applyExtrusion();
             iface->addPolyline(pl);
             return true;
         }
