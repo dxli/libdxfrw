@@ -195,6 +195,16 @@ public:
     using DRW_Mesh::parseCode;
 };
 
+class ExposedHatch : public DRW_Hatch {
+public:
+    using DRW_Hatch::parseCode;
+};
+
+class ExposedMPolygon : public DRW_MPolygon {
+public:
+    using DRW_MPolygon::parseCode;
+};
+
 class ExposedNavisworksModel : public DRW_NavisworksModel {
 public:
     using DRW_NavisworksModel::parseCode;
@@ -814,6 +824,52 @@ void testSpatialFilterDxfValidation(TestContext& t) {
                      && crossed.str().empty(),
                  "SPATIAL_FILTER writer refuses a self-intersecting polygon atomically");
     }
+}
+
+void testHatchBooleanDxfDomain(TestContext& t) {
+    const auto parseFlag = [](ExposedHatch& hatch, int code, int value,
+                              bool binary) {
+        std::ostringstream encoded(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&encoded))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&encoded));
+        if (!writer->writeInt16(code, value) || writer->hasWriteError())
+            return false;
+        writer.reset();
+        std::istringstream input(encoded.str(),
+                                 std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        int parsedCode = 0;
+        return reader->readRec(&parsedCode) && parsedCode == code
+            && hatch.parseCode(parsedCode, reader);
+    };
+
+    for (const bool binary : {false, true}) {
+        for (const int code : {70, 71}) {
+            for (const int value : {0, 1}) {
+                ExposedHatch hatch;
+                t.expect(parseFlag(hatch, code, value, binary)
+                             && (code == 70 ? hatch.solid : hatch.associative)
+                                 == value,
+                         "HATCH accepts documented Boolean group values in ASCII/Binary DXF");
+            }
+            for (const int value : {-1, 2}) {
+                ExposedHatch hatch;
+                const int prior = code == 70 ? hatch.solid : hatch.associative;
+                t.expect(!parseFlag(hatch, code, value, binary)
+                             && (code == 70 ? hatch.solid : hatch.associative)
+                                 == prior,
+                         "HATCH rejects invalid Boolean groups without changing the typed value");
+            }
+        }
+    }
+
+    ExposedMPolygon mpolygon;
+    t.expect(parseDxfRecords(mpolygon, "70\n2\n71\n1\n")
+                 && mpolygon.dxfVersion == 2 && mpolygon.solid == 1,
+             "MPOLYGON retains its distinct group-70 version and group-71 fill meanings");
 }
 
 void testLeaderAdvisoryCountState(TestContext& t) {
@@ -23550,6 +23606,18 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::cout << "SPATIAL_FILTER DXF validation: PASS\n";
+        return 0;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--hatch-boolean-dxf-domain") {
+        TestContext focused;
+        testHatchBooleanDxfDomain(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " HATCH Boolean-domain assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "HATCH Boolean DXF domain: PASS\n";
         return 0;
     }
     if (argc == 2

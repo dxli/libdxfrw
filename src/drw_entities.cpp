@@ -17868,10 +17868,20 @@ bool DRW_Hatch::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             return false;
         break;
     case 70:
-        solid = reader->getInt32();
+        {
+            const int value = reader->getInt32();
+            if (value != 0 && value != 1)
+                return false;
+            solid = value;
+        }
         break;
     case 71:
-        associative = reader->getInt32();
+        {
+            const int value = reader->getInt32();
+            if (value != 0 && value != 1)
+                return false;
+            associative = value;
+        }
         break;
     case 72: {      /*edge type*/
         if (ispol){ // polyline path: 72 is the has-bulge flag. Do NOT fold it

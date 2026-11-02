@@ -1708,6 +1708,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_spatial_filter_simple_boundary PROPERTIES
         LABELS "fast;dxf;reader;writer;spatial-filter;generated"
         TIMEOUT 10)
+    add_test(NAME libdxfrw_hatch_boolean_dxf_domain
+        COMMAND libdxfrw_hardening_tests --hatch-boolean-dxf-domain)
+    set_tests_properties(libdxfrw_hatch_boolean_dxf_domain PROPERTIES
+        LABELS "fast;dxf;reader;hatch;generated"
+        TIMEOUT 10)
     add_test(NAME libdxfrw_dbcolor_book_name_owner_budget
         COMMAND libdxfrw_hardening_tests
             --dxf-dbcolor-book-name-owner-budget)
