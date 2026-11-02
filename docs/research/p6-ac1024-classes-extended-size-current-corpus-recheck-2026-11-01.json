@@ -23,6 +23,118 @@
       "tests/dwg_reader_matrix_tests.cpp": "9a69867ab3c9907a74f089df889d3087db1f4c4dbfa11037e2cf93eaae262540"
     }
   },
+  "latestRecheck": {
+    "codeRevision": "0e295b1abd5d147dc2e905bdb8b84eb9e41a9024",
+    "executableSha256": "83111f6a1a28f397d70a462b6b261331415782e6ccd7d15ef2666e8ca9770e98",
+    "sourceSha256": {
+      "src/intern/dwgreader18.cpp": "232741fdc78628aec0c77d34e5d1e22d65c027ffec30cd85b9512d8c449f7b80",
+      "src/intern/dwgreader.cpp": "bfce3c92f7e5aaf9f74615af41cec5e8837c47d6733b408641d048f1bad5f44e",
+      "tests/dwg_reader_matrix_tests.cpp": "a24190dd5d3ca46f27c7c86f70baec2f9391ac2914a935e0a55b252eacd12eb7"
+    },
+    "invocation": "build-gcc/dwg2dxf/dwg2dxf <source> -y -d -v2010 <scratch-output>",
+    "scratchTracePathTemplate": "/private/tmp/p6-ac1024-classes-current-<index>.log",
+    "summary": {
+      "samples": 9,
+      "classReaderEndMarkers": 9,
+      "fullDwgReadSuccesses": 9,
+      "maintenanceVersion2": 5,
+      "maintenanceVersion2ReadSuccesses": 5,
+      "maintenanceVersion25": 4,
+      "maintenanceVersion25ReadSuccesses": 4,
+      "cliExitZero": 1,
+      "cliExitOneAfterSuccessfulRead": 8
+    },
+    "samples": [
+      {
+        "name": "architectural_example-imperial.dwg",
+        "sha256": "52d14a7bdb946099d3cf16fd276d19bd8924348fd02b2ddd0003cd4f6b34cce7",
+        "maintenanceVersion": "0x02",
+        "classReaderEndMarker": true,
+        "fullDwgReadSucceeded": true,
+        "cliExit": 1,
+        "scratchTraceSha256": "47ddb04d2c663cc5ebea110560f08505ca81e4b6b040c41cbb8b1a0497c8d74f"
+      },
+      {
+        "name": "civil_example-imperial.dwg",
+        "sha256": "45b419d0c7382eb271079b80c3237a52183f4fa09e7b495c3d7a65c6baa927dc",
+        "maintenanceVersion": "0x02",
+        "classReaderEndMarker": true,
+        "fullDwgReadSucceeded": true,
+        "cliExit": 1,
+        "scratchTraceSha256": "034bfdb831e2ca843db0ae3a1291b8f5f946b8d39141e2644c4ef5db7945649c"
+      },
+      {
+        "name": "mechanical_example-imperial.dwg",
+        "sha256": "854c8ebed8726add72ba4a9a2a19ba0d010372f5cadefb40e648cdf881cad858",
+        "maintenanceVersion": "0x02",
+        "classReaderEndMarker": true,
+        "fullDwgReadSucceeded": true,
+        "cliExit": 0,
+        "scratchTraceSha256": "817434c11ae7f555f1fd5eae713246565b1b343fd73b256613fd603f5bf338bc"
+      },
+      {
+        "name": "title_block-arch.dwg",
+        "sha256": "59876d9e1fa9f4d64304d6e7e35cbfafa127e0b5363b3afbe6ed48ef3d2e867d",
+        "maintenanceVersion": "0x02",
+        "classReaderEndMarker": true,
+        "fullDwgReadSucceeded": true,
+        "cliExit": 1,
+        "scratchTraceSha256": "1f08562c816489b632bd8d587e3f17e69dff55dc927030812b85f2a086438b3d"
+      },
+      {
+        "name": "title_block-iso.dwg",
+        "sha256": "b874d82c5ee04f8a4fa6e907408c4ed770ee8208740fe4e1eb0f96fb2f793bc2",
+        "maintenanceVersion": "0x02",
+        "classReaderEndMarker": true,
+        "fullDwgReadSucceeded": true,
+        "cliExit": 1,
+        "scratchTraceSha256": "3a86be1c7e8465fecc70b125d9fdfeb643169dc0fc0930307acbedd735df0138"
+      },
+      {
+        "name": "visualization_-_aerial.dwg",
+        "sha256": "edf22e187337e37d2083b26d6d00ce30ed78d2fd31d6bf0e9869902325ad3ab1",
+        "maintenanceVersion": "0x25",
+        "classReaderEndMarker": true,
+        "fullDwgReadSucceeded": true,
+        "cliExit": 1,
+        "scratchTraceSha256": "b47442a262200a6bf15b869132411f584fc9cc7207af1df2328a348d90d010a5"
+      },
+      {
+        "name": "visualization_-_condominium_with_skylight.dwg",
+        "sha256": "1a94d2412b7aac3c1c3ab6fdb2b62c4e8b031e5868ad45d2169f571bfc7cf8d4",
+        "maintenanceVersion": "0x25",
+        "classReaderEndMarker": true,
+        "fullDwgReadSucceeded": true,
+        "cliExit": 1,
+        "scratchTraceSha256": "ad665852b442b53cd99686add8af12af12e2a1c6504478303f075c69aa931420"
+      },
+      {
+        "name": "visualization_-_conference_room.dwg",
+        "sha256": "0579e4b5746593ff41d9326e488b1faddc0f7cc10e7db5317fc1d5b86f0132c4",
+        "maintenanceVersion": "0x25",
+        "classReaderEndMarker": true,
+        "fullDwgReadSucceeded": true,
+        "cliExit": 1,
+        "scratchTraceSha256": "8d8db0a45163077995aae66f1f312c65ec300b265cc55739e394c5bfd000eb8b"
+      },
+      {
+        "name": "visualization_-_sun_and_sky_demo.dwg",
+        "sha256": "fad5a9f95ac72c1ef572b2b69f831ee08492135acd5da5ff76af01b2ec506881",
+        "maintenanceVersion": "0x25",
+        "classReaderEndMarker": true,
+        "fullDwgReadSucceeded": true,
+        "cliExit": 1,
+        "scratchTraceSha256": "54ccc0c09540fcf0e6631565b91d0658a7555a47c224cc825fa467a90602f449"
+      }
+    ],
+    "syntheticFooterSelector": {
+      "buildCommand": "cmake --build build-gcc --target libdxfrw_dwg_reader_matrix_tests -j4",
+      "command": "ctest --test-dir build-gcc --output-on-failure -R '^libdxfrw_dwg_r2007_class_string_footer$'",
+      "testExecutableSha256": "9d422e3e7b35ea8a7363517b7e312c321c3e7deaad9347e642e39da95bd09f87",
+      "result": "PASS, 1/1 in 0.48 seconds"
+    },
+    "scopeLimit": "This current-code run does not promote support or make the eight strict DXF output failures successful conversions. The source drawings remain local and uncommitted."
+  },
   "corpus": {
     "sourceRoot": "/Users/dli/doc/dwg",
     "ac1024SampleCount": 9,
