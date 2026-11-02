@@ -585,6 +585,15 @@ bool isSafeDxfRecordText(std::string_view text) {
         && text.find('\n') == std::string_view::npos;
 }
 
+bool hasHatchGradientDxfPayload(const DRW_Hatch& hatch) {
+    // Preserve meaningful inactive companions with the complete DXF group
+    // set, which permits a zero stop count when the fill flag is clear.
+    return hatch.isGradient != 0 || hatch.gradReserved != 0
+        || hatch.gradAngle != 0.0 || hatch.gradShift != 0.0
+        || hatch.singleColor != 0 || hatch.gradTint != 0.0
+        || !hatch.gradName.empty() || !hatch.gradColors.empty();
+}
+
 bool isSafeDxfMTextContent(const std::string& text) {
     if (text.find('\0') != std::string::npos)
         return false;
@@ -5058,13 +5067,18 @@ bool dxfRW::validateHatchPayload(const DRW_Hatch *ent) const {
         return value <= static_cast<std::size_t>(
             std::numeric_limits<std::uint16_t>::max());
     };
+    const bool hasGradientPayload = ent != nullptr
+        && hasHatchGradientDxfPayload(*ent);
     // Gradient group codes are documented in Autodesk's R2004-era DXF
     // reference. Keep older target profiles lossless by refusing to emit them.
     if (ent == nullptr || !ent->validateDxf()
         || !isSafeDxfRecordText(ent->name)
         || ent->isGradient < 0 || ent->isGradient > 1
-        || (ent->isGradient != 0 && version < DRW::AC1018)
-        || (ent->isGradient != 0 && !isSafeDxfRecordText(ent->gradName))
+        || (hasGradientPayload && version < DRW::AC1018)
+        || (hasGradientPayload && !isSafeDxfRecordText(ent->gradName))
+        || (hasGradientPayload && (!std::isfinite(ent->gradAngle)
+            || !std::isfinite(ent->gradShift)
+            || !std::isfinite(ent->gradTint)))
         || !isFiniteDxfCoord(ent->basePoint)
         || !isFiniteDxfCoord(ent->extPoint)
         || ent->solid < 0 || ent->solid > 1
@@ -8580,7 +8594,7 @@ bool dxfRW::writeHatch(DRW_Hatch *ent){
             writer->writeDouble(20, pt.y);
         }
         // Gradient block (R2004+ DXF; codes 450-470 + 463/421/63 per stop).
-        if (ent->isGradient) {
+        if (hasHatchGradientDxfPayload(*ent)) {
             writer->writeInt32(450, ent->isGradient);
             writer->writeInt32(451, ent->gradReserved);
             writer->writeDouble(460, ent->gradAngle);
@@ -8793,7 +8807,7 @@ bool dxfRW::writeMPolygon(DRW_MPolygon *ent){
         writer->writeDouble(11, ent->xDirX);
         writer->writeDouble(21, ent->xDirY);
         writer->writeInt32(99, ent->degenerateLoops);
-        if (ent->isGradient) {
+        if (hasHatchGradientDxfPayload(*ent)) {
             writer->writeInt32(450, ent->isGradient);
             writer->writeInt32(451, ent->gradReserved);
             writer->writeDouble(460, ent->gradAngle);

@@ -548,102 +548,162 @@ void testUtf8FilesystemPaths(TestContext& t) {
         std::cout << "UTF-8 filesystem paths: PASS\n";
 }
 
-void testInactiveHatchGradientStopsFailClosed(TestContext& t) {
-    for (const bool binary : {false, true}) {
-        dx_data data;
-        auto* hatch = new DRW_Hatch();
-        hatch->solid = 1;
-        hatch->isGradient = 0;
-        hatch->name = "SOLID";
-        auto loop = std::make_shared<DRW_HatchLoop>(2);
-        auto polyline = std::make_shared<DRW_LWPolyline>();
-        polyline->flags = 1;
-        polyline->addVertex(DRW_Vertex2D(0.0, 0.0, 0.0));
-        polyline->addVertex(DRW_Vertex2D(2.0, 0.0, 0.0));
-        polyline->addVertex(DRW_Vertex2D(1.0, 2.0, 0.0));
-        loop->objlist.push_back(polyline);
-        loop->update();
-        hatch->appendLoop(loop);
-        data.mBlock->ent.push_back(hatch);
+void testInactiveHatchMPolygonGradientStopsFailClosed(TestContext& t) {
+    for (const bool mpolygon : {false, true}) {
+        for (const bool binary : {false, true}) {
+            dx_data data;
+            auto* hatch = mpolygon
+                ? static_cast<DRW_Hatch*>(new DRW_MPolygon())
+                : new DRW_Hatch();
+            hatch->solid = 1;
+            hatch->isGradient = 0;
+            hatch->name = "SOLID";
+            auto loop = std::make_shared<DRW_HatchLoop>(2);
+            auto polyline = std::make_shared<DRW_LWPolyline>();
+            polyline->flags = 1;
+            polyline->addVertex(DRW_Vertex2D(0.0, 0.0, 0.0));
+            polyline->addVertex(DRW_Vertex2D(2.0, 0.0, 0.0));
+            polyline->addVertex(DRW_Vertex2D(1.0, 2.0, 0.0));
+            loop->objlist.push_back(polyline);
+            loop->update();
+            hatch->appendLoop(loop);
+            data.mBlock->ent.push_back(hatch);
 
-        const std::filesystem::path baseline = temporaryDxfPath(
-            binary ? "hatch-inactive-gradient-baseline-binary"
-                   : "hatch-inactive-gradient-baseline-ascii");
-        FixtureInterface writer;
-        const bool baselineExported = writer.fileExport(
-            baseline.string(), DRW::AC1027, binary, &data, false);
-        t.expect(baselineExported,
-                 binary
-                     ? "ordinary binary HATCH exports before the loss control"
-                     : "ordinary ASCII HATCH exports before the loss control");
-        if (!baselineExported)
-            continue;
+            const std::filesystem::path baseline = temporaryDxfPath(
+                mpolygon
+                    ? (binary ? "mpolygon-inactive-gradient-baseline-binary"
+                              : "mpolygon-inactive-gradient-baseline-ascii")
+                    : (binary ? "hatch-inactive-gradient-baseline-binary"
+                              : "hatch-inactive-gradient-baseline-ascii"));
+            FixtureInterface writer;
+            const bool baselineExported = writer.fileExport(
+                baseline.string(), DRW::AC1027, binary, &data, false);
+            t.expect(baselineExported,
+                     mpolygon
+                         ? (binary
+                                ? "ordinary binary MPOLYGON exports before the loss control"
+                                : "ordinary ASCII MPOLYGON exports before the loss control")
+                         : (binary
+                                ? "ordinary binary HATCH exports before the loss control"
+                                : "ordinary ASCII HATCH exports before the loss control"));
+            if (!baselineExported)
+                continue;
 
-        FixtureInterface baselineReader;
-        dx_data baselineData;
-        const bool baselineRead = baselineReader.fileImport(
-            baseline.string(), &baselineData, false);
-        std::size_t baselineHatchCount = 0u;
-        if (baselineRead && baselineData.mBlock != nullptr) {
-            for (const DRW_Entity* entity : baselineData.mBlock->ent)
-                if (dynamic_cast<const DRW_Hatch*>(entity) != nullptr)
-                    ++baselineHatchCount;
+            FixtureInterface baselineReader;
+            dx_data baselineData;
+            const bool baselineRead = baselineReader.fileImport(
+                baseline.string(), &baselineData, false);
+            std::size_t baselineEntityCount = 0u;
+            if (baselineRead && baselineData.mBlock != nullptr) {
+                for (const DRW_Entity* entity : baselineData.mBlock->ent) {
+                    if (mpolygon) {
+                        if (dynamic_cast<const DRW_MPolygon*>(entity) != nullptr)
+                            ++baselineEntityCount;
+                    } else if (dynamic_cast<const DRW_Hatch*>(entity) != nullptr
+                               && dynamic_cast<const DRW_MPolygon*>(entity) == nullptr) {
+                        ++baselineEntityCount;
+                    }
+                }
+            }
+            t.expect(baselineRead && baselineEntityCount == 1u,
+                     mpolygon
+                         ? (binary
+                                ? "ordinary binary MPOLYGON baseline has typed readback"
+                                : "ordinary ASCII MPOLYGON baseline has typed readback")
+                         : (binary
+                                ? "ordinary binary HATCH baseline has typed readback"
+                                : "ordinary ASCII HATCH baseline has typed readback"));
+
+            hatch->gradAngle = 0.0;
+            hatch->gradShift = 0.0;
+            hatch->singleColor = 1;
+            hatch->gradTint = 1.0;
+            hatch->gradName = "LINEAR";
+            hatch->gradColors.emplace_back(0.0, 0x0000FF, 0, 0xC2u);
+            hatch->gradColors.emplace_back(1.0, 0xFFFFFF, 0, 0xC2u);
+            const std::filesystem::path rejected = temporaryDxfPath(
+                mpolygon
+                    ? (binary ? "mpolygon-inactive-gradient-rejected-binary"
+                              : "mpolygon-inactive-gradient-rejected-ascii")
+                    : (binary ? "hatch-inactive-gradient-rejected-binary"
+                              : "hatch-inactive-gradient-rejected-ascii"));
+            const std::string sentinel = "inactive gradient stops must be retained\n";
+            {
+                std::ofstream output(rejected, std::ios::binary);
+                t.expect(static_cast<bool>(output),
+                         "create HATCH loss-guard destination sentinel");
+                output << sentinel;
+            }
+            const bool rejectedLossyProjection = !writer.fileExport(
+                rejected.string(), DRW::AC1027, binary, &data, false);
+            std::ifstream rejectedInput(rejected, std::ios::binary);
+            const std::string rejectedContents{
+                std::istreambuf_iterator<char>{rejectedInput},
+                std::istreambuf_iterator<char>{}};
+            t.expect(rejectedLossyProjection && rejectedContents == sentinel,
+                     mpolygon
+                         ? (binary
+                                ? "binary MPOLYGON refuses inactive stops atomically"
+                                : "ASCII MPOLYGON refuses inactive stops atomically")
+                         : (binary
+                                ? "binary HATCH refuses inactive stops atomically"
+                                : "ASCII HATCH refuses inactive stops atomically"));
+
+            // A caller that explicitly resolves the retained, unrepresentable
+            // source values can reuse the same adapter after the failed export.
+            hatch->gradColors.clear();
+            const std::filesystem::path retry = temporaryDxfPath(
+                mpolygon
+                    ? (binary ? "mpolygon-inactive-gradient-retry-binary"
+                              : "mpolygon-inactive-gradient-retry-ascii")
+                    : (binary ? "hatch-inactive-gradient-retry-binary"
+                              : "hatch-inactive-gradient-retry-ascii"));
+            const bool retried = writer.fileExport(
+                retry.string(), DRW::AC1027, binary, &data, false);
+            FixtureInterface retryReader;
+            dx_data retryData;
+            const bool retryRead = retried && retryReader.fileImport(
+                retry.string(), &retryData, false);
+            const DRW_Hatch* retryHatch = nullptr;
+            std::size_t retryEntityCount = 0u;
+            if (retryRead && retryData.mBlock != nullptr) {
+                for (const DRW_Entity* entity : retryData.mBlock->ent) {
+                    const auto* candidate =
+                        dynamic_cast<const DRW_Hatch*>(entity);
+                    const bool candidateKind = mpolygon
+                        ? dynamic_cast<const DRW_MPolygon*>(entity) != nullptr
+                        : candidate != nullptr
+                            && dynamic_cast<const DRW_MPolygon*>(entity) == nullptr;
+                    if (candidate != nullptr && candidateKind) {
+                        retryHatch = candidate;
+                        ++retryEntityCount;
+                    }
+                }
+            }
+            const bool retryMetadataMatches = retryHatch != nullptr
+                && retryHatch->isGradient == 0
+                && retryHatch->gradReserved == 0
+                && retryHatch->gradAngle == 0.0
+                && retryHatch->gradShift == 0.0
+                && retryHatch->singleColor == 1
+                && retryHatch->gradTint == 1.0
+                && retryHatch->gradName == "LINEAR"
+                && retryHatch->gradColors.empty();
+            t.expect(retried && retryRead && retryEntityCount == 1u
+                         && retryMetadataMatches,
+                     mpolygon
+                         ? (binary
+                                ? "binary MPOLYGON retry preserves inactive gradient companions"
+                                : "ASCII MPOLYGON retry preserves inactive gradient companions")
+                         : (binary
+                                ? "binary HATCH retry preserves inactive gradient companions"
+                                : "ASCII HATCH retry preserves inactive gradient companions"));
+
+            std::error_code ec;
+            std::filesystem::remove(baseline, ec);
+            std::filesystem::remove(rejected, ec);
+            std::filesystem::remove(retry, ec);
         }
-        t.expect(baselineRead && baselineHatchCount == 1u,
-                 binary
-                     ? "ordinary binary HATCH baseline has typed readback"
-                     : "ordinary ASCII HATCH baseline has typed readback");
-
-        hatch->gradColors.emplace_back(0.0, 0x0000FF, 0, 0xC2u);
-        hatch->gradColors.emplace_back(1.0, 0xFFFFFF, 0, 0xC2u);
-        const std::filesystem::path rejected = temporaryDxfPath(
-            binary ? "hatch-inactive-gradient-rejected-binary"
-                   : "hatch-inactive-gradient-rejected-ascii");
-        const std::string sentinel = "inactive gradient stops must be retained\n";
-        {
-            std::ofstream output(rejected, std::ios::binary);
-            t.expect(static_cast<bool>(output),
-                     "create HATCH loss-guard destination sentinel");
-            output << sentinel;
-        }
-        const bool rejectedLossyProjection = !writer.fileExport(
-            rejected.string(), DRW::AC1027, binary, &data, false);
-        std::ifstream rejectedInput(rejected, std::ios::binary);
-        const std::string rejectedContents{
-            std::istreambuf_iterator<char>{rejectedInput},
-            std::istreambuf_iterator<char>{}};
-        t.expect(rejectedLossyProjection && rejectedContents == sentinel,
-                 binary
-                     ? "binary HATCH refuses inactive stops atomically"
-                     : "ASCII HATCH refuses inactive stops atomically");
-
-        // A caller that explicitly resolves the retained, unrepresentable
-        // source values can reuse the same adapter after the failed export.
-        hatch->gradColors.clear();
-        const std::filesystem::path retry = temporaryDxfPath(
-            binary ? "hatch-inactive-gradient-retry-binary"
-                   : "hatch-inactive-gradient-retry-ascii");
-        const bool retried = writer.fileExport(
-            retry.string(), DRW::AC1027, binary, &data, false);
-        FixtureInterface retryReader;
-        dx_data retryData;
-        const bool retryRead = retried && retryReader.fileImport(
-            retry.string(), &retryData, false);
-        std::size_t retryHatchCount = 0u;
-        if (retryRead && retryData.mBlock != nullptr) {
-            for (const DRW_Entity* entity : retryData.mBlock->ent)
-                if (dynamic_cast<const DRW_Hatch*>(entity) != nullptr)
-                    ++retryHatchCount;
-        }
-        t.expect(retried && retryRead && retryHatchCount == 1u,
-                 binary
-                     ? "binary HATCH succeeds on corrected same-adapter retry"
-                     : "ASCII HATCH succeeds on corrected same-adapter retry");
-
-        std::error_code ec;
-        std::filesystem::remove(baseline, ec);
-        std::filesystem::remove(rejected, ec);
-        std::filesystem::remove(retry, ec);
     }
 }
 
@@ -674,6 +734,12 @@ int testPhysicalInactiveGradientHatch(const char* sourcePath) {
         && sourceHatch->gradColors[1].value == 1.0
         && sourceHatch->gradColors[1].colorMethod == 0xC2u
         && sourceHatch->gradColors[1].rgb == 0xFFFFFF
+        && sourceHatch->gradReserved == 0
+        && sourceHatch->gradAngle == 0.0
+        && sourceHatch->gradShift == 0.0
+        && sourceHatch->singleColor == 1
+        && sourceHatch->gradTint == 1.0
+        && sourceHatch->gradName == "LINEAR"
         && sourceHatch->looplist.size() == 2u;
     if (!sourceProfileMatches) {
         std::cerr << "FAIL: physical HATCH 0x173 inactive-gradient fields\n";
@@ -704,12 +770,12 @@ int testPhysicalInactiveGradientHatch(const char* sourcePath) {
 
 int main(int argc, char** argv) {
     if (argc == 2
-        && std::string(argv[1]) == "--hatch-inactive-gradient-guard") {
+        && std::string(argv[1]) == "--hatch-mpolygon-inactive-gradient-guard") {
         TestContext context;
-        testInactiveHatchGradientStopsFailClosed(context);
+        testInactiveHatchMPolygonGradientStopsFailClosed(context);
         if (context.failures != 0)
             return 1;
-        std::cout << "Inactive HATCH gradient-stop refusal: PASS\n";
+        std::cout << "Inactive HATCH/MPOLYGON gradient-stop controls: PASS\n";
         return 0;
     }
     if (argc == 3

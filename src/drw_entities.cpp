@@ -18413,11 +18413,10 @@ bool DRW_Hatch::validateDxf() const {
     if (!validateCurrentBoundaryPathDxf()
         || !validateCurrentPatternLineDxf())
         return false;
-    // DWG stores the gradient companion fields even when the fill flag is
-    // clear. The DXF writer emits those fields only for an active gradient,
-    // so nonempty stops on a non-gradient entity would otherwise disappear
-    // during DWG-to-DXF conversion. Keep the retained data and refuse this
-    // lossy projection; callers can retry after explicitly resolving it.
+    // DWG stores gradient companions even when the fill flag is clear. DXF
+    // permits those companion groups with a zero stop count, but cannot carry
+    // color stops under a disabled gradient. Refuse rather than silently drop
+    // those stops; callers can retry after explicitly resolving them.
     if (isGradient == 0 && !gradColors.empty())
         return false;
     if (m_dxfLoopCountExpected >= 0
