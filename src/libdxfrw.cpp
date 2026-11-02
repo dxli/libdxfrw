@@ -8428,10 +8428,18 @@ bool dxfRW::writeHelix(DRW_Helix *ent){
 
 bool dxfRW::writeHatch(DRW_Hatch *ent){
     if (version > DRW::AC1009) {
-        if (!preflightEntity(ent) || !validateHatchPayload(ent)) {
+        if (!preflightDxfWrite())
+            return false;
+        if (ent == nullptr || writer == nullptr) {
             m_writeError = true;
             return false;
         }
+        // Keep payload representability refusals retryable. The common entity
+        // preflight latches failures for the whole output operation.
+        if (!validateHatchPayload(ent))
+            return false;
+        if (!preflightEntity(ent))
+            return false;
         const auto writeBoundaryHandles = [this](const DRW_HatchLoop& loop) {
             if (!writer->writeInt32(97, static_cast<int>(loop.m_boundaryHandles.size())))
                 return failDxfWrite();
@@ -8649,11 +8657,18 @@ bool dxfRW::writeMPolygon(DRW_MPolygon *ent){
     if (ent != nullptr && ent->dxfVersion != 1)
         return rejectUnsupportedDxfWrite();
     if (version > DRW::AC1009) {
-        if (!preflightEntity(ent) || !ent->validateDxf()
-            || !validateHatchPayload(ent)) {
+        if (!preflightDxfWrite())
+            return false;
+        if (ent == nullptr || writer == nullptr) {
             m_writeError = true;
             return false;
         }
+        // Match HATCH: reject unrepresentable gradient companions before the
+        // common preflight makes the refusal sticky.
+        if (!validateHatchPayload(ent))
+            return false;
+        if (!preflightEntity(ent))
+            return false;
         EntityRecordScope scope(*this, ent);
         const auto writeBoundaryHandles = [this](const DRW_HatchLoop& loop) {
             if (!writer->writeInt32(97,

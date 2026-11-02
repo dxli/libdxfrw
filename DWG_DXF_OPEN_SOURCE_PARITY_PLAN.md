@@ -378,6 +378,16 @@ malformed references. The local AC1032 Cover read still refuses strict output
 because of its unresolved HEADER suffix; this establishes structural profile
 recognition only. See the [profile recheck receipt](docs/research/p6-ac1027-cover-ac1032-datastorage-role-profile-2026-11-02.json).
 
+**Disabled HATCH/MPOLYGON gradient-stop refusal and retry:** Autodesk's HATCH
+DXF table defines group 450 value 0 as solid fill and group 453 value 0 as
+zero colors. A nonempty color-stop list therefore has no valid carrier while
+gradient fill is disabled. `writeHatch` and `writeMPolygon` now reject that
+payload before common preflight makes the refusal sticky. Generated ASCII and
+Binary controls verify atomic refusal and same-writer retry after clearing the
+stops. This closes only the writer retry path; physical producer prevalence,
+fill semantics and native rendering remain open. See the [retry guard receipt](docs/research/p6-hatch-inactive-gradient-stop-writer-retry-2026-11-02.json)
+and [Autodesk's HATCH DXF table](https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-DXF/files/GUID-C6C71CED-CE0F-4184-82A5-07AD6241F15B.htm).
+
 ## P7 — ACIS/ACDS and independent 3D meaning
 
 - Complete the original DWG entity → owner/key → AcDs segment → SAT/SAB join,

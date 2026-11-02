@@ -880,6 +880,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_dxf_code_type_boundaries PROPERTIES
         LABELS "fast;dxf;hardening"
         TIMEOUT 10)
+    add_test(NAME libdxfrw_hatch_inactive_gradient_guard
+        COMMAND libdxfrw_wave1_tests --hatch-gradient-dxf-grammar)
+    set_tests_properties(libdxfrw_hatch_inactive_gradient_guard PROPERTIES
+        LABELS "fast;dxf;hatch;gradient;generated"
+        TIMEOUT 15)
 
     add_executable(libdxfrw_gbk_codepage_tests
         tests/gbk_codepage_tests.cpp

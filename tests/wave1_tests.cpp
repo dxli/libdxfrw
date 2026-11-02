@@ -13950,19 +13950,67 @@ void testRawCapture(TestContext& t) {
     }
 }
 
-void testHatchValidationIgnoresInactiveGradient(TestContext& t) {
+void testHatchValidationGuardsInactiveGradientStops(TestContext& t) {
     dxfRW owner("");
     owner.version = DRW::AC1027;
     DRW_Hatch hatch;
     hatch.name = "SOLID";
     hatch.gradName = "\x01stale-gradient";
-    DRW_Hatch::GradientStop stale;
-    stale.rgb = -1039906145;
-    stale.colorMethod = 7;
-    stale.colorName = "\x02stale";
-    hatch.gradColors.push_back(stale);
+    DRW_Hatch::GradientStop inactiveStop;
+    inactiveStop.value = 0.5;
+    inactiveStop.rgb = 0x112233;
+    inactiveStop.colorMethod = 0xC2u;
+    hatch.gradColors.push_back(inactiveStop);
+    const DRW_Hatch hatchWithInactiveStops = hatch;
+    t.expect(!owner.validateHatchPayload(&hatch),
+             "solid HATCH refuses inactive color stops with no DXF representation");
+    hatch.gradColors.clear();
     t.expect(owner.validateHatchPayload(&hatch),
-             "solid hatch ignores stale inactive gradient carriers");
+             "solid HATCH admits representable inactive companion metadata");
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW writer("");
+        writer.version = DRW::AC1027;
+        writer.binFile = binary;
+        if (binary)
+            writer.writer = std::make_unique<dxfWriterBinary>(&output);
+        else
+            writer.writer = std::make_unique<dxfWriterAscii>(&output);
+        DRW_Hatch attempt = hatchWithInactiveStops;
+        t.expect(!writer.writeHatch(&attempt) && output.str().empty(),
+                 "ASCII/Binary HATCH refuses solid fill with color stops atomically");
+        attempt.gradColors.clear();
+        const bool retried = writer.writeHatch(&attempt)
+            && writer.writer->writeString(0, "WIRE_END");
+        bool ended = false;
+        (void)numericWireProjection(output.str(), binary, ended);
+        t.expect(retried && ended,
+                 "ASCII/Binary HATCH retries after clearing unrepresentable stops");
+
+        DRW_MPolygon invalidPolygon;
+        invalidPolygon.gradColors.push_back(inactiveStop);
+        std::ostringstream polygonOutput;
+        dxfRW polygonWriter("");
+        polygonWriter.version = DRW::AC1027;
+        polygonWriter.binFile = binary;
+        if (binary)
+            polygonWriter.writer = std::make_unique<dxfWriterBinary>(
+                &polygonOutput);
+        else
+            polygonWriter.writer = std::make_unique<dxfWriterAscii>(
+                &polygonOutput);
+        t.expect(!polygonWriter.writeMPolygon(&invalidPolygon)
+                     && polygonOutput.str().empty(),
+                 "ASCII/Binary MPOLYGON refuses solid fill with color stops atomically");
+        invalidPolygon.gradColors.clear();
+        const bool polygonRetried = polygonWriter.writeMPolygon(&invalidPolygon)
+            && polygonWriter.writer->writeString(0, "WIRE_END");
+        bool polygonEnded = false;
+        (void)numericWireProjection(polygonOutput.str(), binary, polygonEnded);
+        t.expect(polygonRetried && polygonEnded,
+                 "ASCII/Binary MPOLYGON retries after clearing unrepresentable stops");
+    }
 
     hatch.isGradient = 1;
     t.expect(!owner.validateHatchPayload(&hatch),
@@ -15788,8 +15836,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--hatch-gradient-dxf-grammar") {
         TestContext focused;
+        testHatchValidationGuardsInactiveGradientStops(focused);
         testHatchGradientDxfGrammar(focused);
-        std::cout << "HATCH gradient DXF grammar: "
+        std::cout << "HATCH inactive-gradient refusal and DXF grammar: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
@@ -15993,7 +16042,7 @@ int main(int argc, char** argv) {
     testDxfRawSectionApplicationGroupReferenceMatrix(context);
     testDxfArbitraryHandlePayloads(context);
     testRawCapture(context);
-    testHatchValidationIgnoresInactiveGradient(context);
+    testHatchValidationGuardsInactiveGradientStops(context);
     testHatchGradientDxfGrammar(context);
     testFixedSpaceBlockClassification(context);
     testR2007StringFooterBounds(context);
