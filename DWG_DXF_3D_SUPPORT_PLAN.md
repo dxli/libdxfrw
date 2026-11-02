@@ -6566,7 +6566,13 @@ callback publication or output commit.
 ### S6 — Surface/NURBS version qualification and spline layout verification
 
 State: the bounded DXF field and negative-test slice is implemented in S6.1;
-DWG spline edits are `BLOCKED_ON_AUTHENTIC_PER_VERSION_SPLINE_WITNESS`;
+S6.2's hand-encoded AC1027 and AC1024 spline-body boundary vectors now have a
+dedicated fast CTest; see the [boundary-test receipt](docs/research/p6-spline-r2013-bitlong-boundary-fast-test-2026-11-02.json).
+The read-only local reference-corpus scan adds AC1021/AC1024 parser-smoke
+observations only; its provenance and whole-output limits are recorded in the
+[local corpus receipt](docs/research/p6-spline-local-reference-corpus-scan-2026-11-02.json).
+DWG spline edits are
+`BLOCKED_ON_AUTHENTIC_PER_VERSION_SPLINE_WITNESS`;
 modern surface DWG layout claims are `BLOCKED_ON_PRIMARY_LAYOUT_EVIDENCE`.
 
 DXF evidence boundary: the S6.1 slice below verifies the implemented DXF

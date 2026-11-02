@@ -2846,6 +2846,16 @@ set_tests_properties(dwg_hatch_gradient_cmc PROPERTIES
 )
 
 add_test(
+    NAME dwg_spline_bitlong_boundary
+    COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip>
+            --spline-bitlong-boundary
+)
+set_tests_properties(dwg_spline_bitlong_boundary PROPERTIES
+    LABELS "fast;dwg;reader;spline"
+    TIMEOUT 30
+)
+
+add_test(
     NAME dwg_layout_compound_insert_owner_roundtrip
     COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip>
             --layout-plot-dpi-read-controls

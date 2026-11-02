@@ -34925,6 +34925,18 @@ bool runBlockRecordXrefMetadataRoundTrip(
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2 && std::string(argv[1]) == "--spline-bitlong-boundary") {
+        int failures = 0;
+        expect(runR2013SplineBitLongBoundaryTest(),
+               "synthetic AC1027 SPLINE BL fields preserve body-boundary alignment",
+               failures);
+        expect(runAc1024SplineVersionBoundaryTest(),
+               "synthetic AC1024 SPLINE excludes R2013+ fields and preserves alignment",
+               failures);
+        std::cout << "SPLINE versioned BL field boundaries: "
+                  << (failures == 0 ? "PASS" : "FAIL") << '\n';
+        return failures == 0 ? 0 : 1;
+    }
     if ((argc == 3 || argc == 4)
         && std::string(argv[1]) == "--generate-plotsettings-nod-graph") {
         DRW::Version version = DRW::AC1015;
