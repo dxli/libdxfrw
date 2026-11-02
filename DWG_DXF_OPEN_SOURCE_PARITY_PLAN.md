@@ -203,6 +203,8 @@ receipt and code path already agree.
 | Safety and caller state | Residual copy/assembly/work/allocator bounds, diagnostics, rollback after published prefixes, source lifetime, platform numeric/string policy and scoped concurrency. |
 | CLI and oracle contracts | Exact option/overwrite admission, bounded batch results, output kinds, namespace/collision checks, partial-read diagnostics, pre-setup projections and implicit default/repair/skip/mask reporting. |
 
+**SPLINE profile recheck:** Two fit-only AC1024 SPLINEs in the local conference-room drawing match LibreDWG 0.14 by handle, scenario, degree, fit-point count and ordered coordinates (the libdxfrw trace rounds coordinates to six decimal places). ODA v5.4.1 §20.4.40 specifies the additional `splFlag1` and knot-parameter fields as bit-longs for R2013+; the current parser reads them only when `version > AC1024`. No SPLINE entity is present in the six distinct tracked AC1027/AC1032 drawings scanned from libdxfrw and LibreCAD. Keep curve evaluation and R2013+ physical-profile qualification open; do not change this wire path without a newer-version SPLINE witness. See the [SPLINE field differential receipt](docs/research/p6-ac1024-spline-field-differential-2026-11-01.json). The local drawing remains uncommitted, and this parser-field comparison does not promote a geometry or support claim.
+
 Use the ODA v5.4.1 PDF in `~/doc/dwg/` before DWG layout changes; discover type
 codes from real traces. Preserve tolerant record-level reading and the first
 failing-stage diagnostic.
