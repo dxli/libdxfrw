@@ -8331,9 +8331,9 @@ void DRW_Mesh::resetDwgState() {
     m_dxfOverridePropertyCount = -1;
 }
 
-// DRW_Mesh::parseDwg — AcDbSubDMesh, field order shared by ACadSharp and
-// dwgTs. DWG group 91 is the subdivision level, not a refined-vertex count;
-// the following BL is the level-0 vertex count.
+// DRW_Mesh::parseDwg — AcDbSubDMesh. The field order through the crease
+// vector matches ACadSharp and dwgTs. The trailing span remains ambiguous;
+// only the observed cross-reader 10 bit pattern is admitted below.
 bool DRW_Mesh::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t bs){
     resetDwgState();
     dwgBuffer *sourceBuf = buf;
@@ -8404,13 +8404,23 @@ bool DRW_Mesh::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t bs){
     // count — group on the fly.
     std::uint32_t faceItems = 0;                      // BL face-list size (93)
     if (!readCount(2, faceItems)) return fail();
+    // Every face consumes at least its count word from the stream, so the
+    // bounded stream length is also an upper bound for the number of parsed
+    // face records. Reserve that bound before publishing any local faces;
+    // otherwise parsedFaces.push_back() could throw outside the guarded
+    // reserve paths while this DWG record is being decoded.
+    if (!DRW::reserve(parsedFaces, static_cast<int>(faceItems)))
+        return fail();
     std::int32_t remaining = static_cast<std::int32_t>(faceItems);
     while (remaining > 0 && buf->isGood()) {
         std::int32_t cnt = 0;
         if (!readBoundedBitLong(*buf, bodyEndBit, cnt))
             return fail();
         --remaining;
-        if (cnt < 0 || cnt > remaining)
+        // A SubDMesh face must contain at least three vertex indices. Keep
+        // DWG admission aligned with the typed model invariant and the DXF
+        // reader before constructing or publishing the face record.
+        if (cnt < 3 || cnt > remaining)
             return fail();
         std::vector<std::int32_t> face;
         if (!DRW::reserve(face, cnt))
@@ -8465,9 +8475,18 @@ bool DRW_Mesh::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t bs){
                         [](double value) { return std::isfinite(value); }))
         return fail();
 
-    std::int32_t parsedUnknown = 0;
-    if (!readBoundedBitLong(*buf, bodyEndBit, parsedUnknown))
-        return fail(); // trailing unknown (BL)
+    bool parsedUnknownB1 = false;
+    bool parsedUnknownB2 = false;
+    if (!readBoundedBit(*buf, bodyEndBit, parsedUnknownB1)
+        || !readBoundedBit(*buf, bodyEndBit, parsedUnknownB2))
+        return fail(); // trailing undocumented one-bit fields
+    // The only physically witnessed tail is 10. It is also the BitLong-zero
+    // encoding consumed by ACadSharp/dwgTs, so this profile is unambiguous
+    // across the competing body schemas. Other bit pairs may be alternate
+    // flags or the prefix of a nonzero BitLong; do not publish a typed record
+    // until a producer trace resolves that distinction.
+    if (!parsedUnknownB1 || parsedUnknownB2)
+        return fail();
 
     std::uint64_t handleEndBit = 0;
     if (!dwgHandleStreamEndBit(*sourceBuf, v, objSize, bs, handleEndBit))
@@ -8483,7 +8502,7 @@ bool DRW_Mesh::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t bs){
     version = parsedVersion;
     blendCrease = parsedBlendCrease;
     subdivisionLevel = parsedSubdivisionLevel;
-    unknown = parsedUnknown;
+    unknown = (parsedUnknownB1 ? 1 : 0) | (parsedUnknownB2 ? 2 : 0);
     *sourceBuf = handleProbe;
     return true;
 }
@@ -8710,7 +8729,7 @@ bool DRW_Mesh::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
 }
 
 bool DRW_Mesh::validateGeometry() const {
-    if (subdivisionLevel < 0
+    if (!subdivVertices.empty() || subdivisionLevel < 0
         || vertices.size() > static_cast<std::size_t>(kMaxMeshItems)
         || edges.size() > static_cast<std::size_t>(kMaxMeshItems)
         || faces.size() > static_cast<std::size_t>(kMaxMeshItems)
@@ -8777,7 +8796,9 @@ bool DRW_Mesh::validateDxf() const {
 
 bool DRW_Mesh::validateDxfOutput() const {
     if (version > static_cast<std::uint16_t>(std::numeric_limits<std::int16_t>::max())
-        || propertyOverrides.size() > static_cast<std::size_t>(kMaxMeshItems))
+        || propertyOverrides.size() > static_cast<std::size_t>(kMaxMeshItems)
+        // The trailing DWG-only flags have no DXF group-code mapping.
+        || unknown != 0)
         return false;
     for (const auto& overrideData : propertyOverrides) {
         if (overrideData.subEntityMarker < 0
@@ -8796,7 +8817,13 @@ bool DRW_Mesh::encodeDwg(DRW::Version dwgVersion, dwgBufferW *buf, std::uint32_t
     // The current DWG MESH encoder covers the base cage only. DXF's
     // propertyOverrides stream has no verified DWG mapping here; refusing it
     // prevents a successful write from silently dropping caller data.
-    if (!propertyOverrides.empty() || !validateGeometry())
+    // The observed cross-reader profile is the bit sequence 10: LibreDWG
+    // describes it as flags (1,0), while ACadSharp/dwgTs decode it as
+    // BitLong zero. Emit that canonical sequence for the model's default
+    // value and for a record read from this profile. Other values have no
+    // discriminating producer evidence and are refused.
+    if (!propertyOverrides.empty() || (unknown != 0 && unknown != 1)
+        || !validateGeometry())
         return false;
 
     std::int32_t faceStreamCount = 0;
@@ -8832,7 +8859,8 @@ bool DRW_Mesh::encodeDwg(DRW::Version dwgVersion, dwgBufferW *buf, std::uint32_t
     for (double crease : creases)
         buf->putBitDouble(crease);
 
-    buf->putBitLong(unknown);
+    buf->putBit(1u);
+    buf->putBit(0u);
 
     return encodeDwgEntHandle(dwgVersion, buf, handleBuf);
 }

@@ -2680,6 +2680,67 @@ void testDxfMeshCreaseValueDomains(TestContext& t) {
                  "MESH writer accepts -1, zero, and positive crease values");
     }
 
+    for (const bool binary : {false, true}) {
+        std::ostringstream output(std::ios::out | std::ios::binary);
+        dxfRW codec(nullptr);
+        codec.version = DRW::AC1027;
+        codec.binFile = binary;
+        codec.writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+        codec.writer->setVersion("AC1027", true);
+        ExposedMesh unrepresentable = valid;
+        unrepresentable.unknown = 1;
+        const bool refused = !codec.writeMesh(&unrepresentable)
+            && output.str().empty();
+        t.expect(refused,
+                 "MESH ASCII/Binary writers refuse DWG-only tail flags without DXF fields");
+
+        // Direct dxfRW record writes keep their error sticky by contract. A
+        // corrected model is therefore retried with a fresh writer instance.
+        unrepresentable.unknown = 0;
+        std::ostringstream retryOutput(std::ios::out | std::ios::binary);
+        dxfRW retryCodec(nullptr);
+        retryCodec.version = DRW::AC1027;
+        retryCodec.binFile = binary;
+        retryCodec.writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&retryOutput))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&retryOutput));
+        retryCodec.writer->setVersion("AC1027", true);
+        const bool retried = retryCodec.writeMesh(&unrepresentable)
+            && !retryOutput.str().empty();
+        t.expect(retried,
+                 "MESH corrected model writes with a fresh ASCII/Binary writer");
+
+        ExposedMesh unrepresentedSubdivVertices = valid;
+        unrepresentedSubdivVertices.subdivVertices = {
+            DRW_Coord{2.0, 3.0, 4.0}};
+        std::ostringstream subdivOutput(std::ios::out | std::ios::binary);
+        dxfRW subdivCodec(nullptr);
+        subdivCodec.version = DRW::AC1027;
+        subdivCodec.binFile = binary;
+        subdivCodec.writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&subdivOutput))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&subdivOutput));
+        subdivCodec.writer->setVersion("AC1027", true);
+        t.expect(!subdivCodec.writeMesh(&unrepresentedSubdivVertices)
+                     && subdivOutput.str().empty(),
+                 "MESH ASCII/Binary writers refuse unmapped subdivVertices atomically");
+
+        unrepresentedSubdivVertices.subdivVertices.clear();
+        std::ostringstream subdivRetryOutput(std::ios::out | std::ios::binary);
+        dxfRW subdivRetryCodec(nullptr);
+        subdivRetryCodec.version = DRW::AC1027;
+        subdivRetryCodec.binFile = binary;
+        subdivRetryCodec.writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&subdivRetryOutput))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&subdivRetryOutput));
+        subdivRetryCodec.writer->setVersion("AC1027", true);
+        t.expect(subdivRetryCodec.writeMesh(&unrepresentedSubdivVertices)
+                     && !subdivRetryOutput.str().empty(),
+                 "MESH corrected subdivVertices model writes with a fresh DXF writer");
+    }
+
     const auto makeRecords = [](const std::vector<double>& creases) {
         std::ostringstream records;
         records << "100\nAcDbSubDMesh\n71\n2\n72\n0\n91\n2\n"
@@ -2784,8 +2845,61 @@ void testDxfMeshCreaseValueDomains(TestContext& t) {
                      && excessHandles.bitCount() == 0u
                      && excessStrings.bitCount() == 0u,
                  "DWG MESH writer refuses excess edge creases before emission");
+
+        for (std::int32_t flags = 0; flags <= 3; ++flags) {
+            ExposedMesh flagged = valid;
+            flagged.unknown = flags;
+            dwgBufferW tailData, tailHandles, tailStrings;
+            const bool encoded = flagged.encodeDwg(
+                version, &tailData, 0, &tailStrings, &tailHandles);
+            const auto readBit = [&tailData](std::uint64_t offset) {
+                const std::size_t byte = static_cast<std::size_t>(offset / 8u);
+                const unsigned bit = 7u - static_cast<unsigned>(offset & 7u);
+                return static_cast<std::uint8_t>(
+                    (tailData.data()[byte] >> bit) & 1u);
+            };
+            const bool supportedProfile = flags <= 1;
+            t.expect(supportedProfile
+                         ? encoded && tailData.bitCount() >= 2u
+                             && readBit(tailData.bitCount() - 2u) == 1u
+                             && readBit(tailData.bitCount() - 1u) == 0u
+                         : !encoded && tailData.bitCount() == 0u
+                             && tailHandles.bitCount() == 0u
+                             && tailStrings.bitCount() == 0u,
+                     supportedProfile
+                         ? "DWG MESH writer emits the canonical cross-reader 10 tail"
+                         : "DWG MESH writer refuses unqualified trailing-bit patterns atomically");
+        }
+        ExposedMesh invalidFlags = valid;
+        invalidFlags.unknown = 4;
+        dwgBufferW invalidData, invalidHandles, invalidStrings;
+        t.expect(!invalidFlags.encodeDwg(version, &invalidData, 0,
+                                         &invalidStrings, &invalidHandles)
+                     && invalidData.bitCount() == 0u
+                     && invalidHandles.bitCount() == 0u
+                     && invalidStrings.bitCount() == 0u,
+                 "DWG MESH writer rejects bits outside the two-field mask");
+
+        ExposedMesh unrepresentedSubdivVertices = valid;
+        unrepresentedSubdivVertices.subdivVertices = {
+            DRW_Coord{2.0, 3.0, 4.0}};
+        dwgBufferW subdivData, subdivHandles, subdivStrings;
+        t.expect(!unrepresentedSubdivVertices.encodeDwg(
+                         version, &subdivData, 0, &subdivStrings,
+                         &subdivHandles)
+                     && subdivData.bitCount() == 0u
+                     && subdivHandles.bitCount() == 0u
+                     && subdivStrings.bitCount() == 0u,
+                 "DWG MESH writer refuses unmapped subdivVertices atomically");
+        unrepresentedSubdivVertices.subdivVertices.clear();
+        t.expect(unrepresentedSubdivVertices.encodeDwg(
+                         version, &subdivData, 0, &subdivStrings,
+                         &subdivHandles)
+                     && subdivData.bitCount() > 0u,
+                 "DWG MESH corrected subdivVertices model retries on the same streams");
     }
 }
+
 
 void testLeaderAdvisoryCountState(TestContext& t) {
     ExposedLeader source;

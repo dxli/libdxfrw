@@ -359,6 +359,8 @@ failing-stage diagnostic.
 
 **MPOLYGON degenerate-loop count domain:** DXF group 99 now rejects negative and over-budget counts before model mutation; typed validation applies the same 0..10,000 bound, and writer refusal preserves the destination before corrected retry/readback. The focused count/CMC/metadata cohort passes 4/4 in 0.43 seconds. No relation between group 99 and boundary group 91 is assumed. See [the group-99 receipt](docs/research/p6-mpolygon-degenerate-count-domain-2026-11-02.json).
 
+**MESH DWG bounded face/tail profile:** The AC1024 parser now reserves the face-record bound, rejects faces below three vertices, aligns crease counts with existing level-0 edges, and admits only the physically observed `10` tail while keeping alternate patterns refused. The DWG writer emits that canonical observed bit pair and refuses other masks; DXF output refuses unrepresented tail/subdivision-vector data. Three focused MESH CTests pass 3/3 in 0.41 seconds. The field layout/meaning remains disputed, no `AcDbSubDMesh` body layout appears in ODA v5.4.1, and no 3D semantic support claim follows. See the [face-count](docs/research/p6-mesh-dwg-face-count-domain-2026-11-02.json), [face-allocation](docs/research/p6-mesh-dwg-face-record-reserve-guard-2026-11-02.json), [tail-profile](docs/research/p6-mesh-tail-canonical-profile-guard-2026-11-02.json), [peer-span](docs/research/p6-mesh-tail-peer-span-ambiguity-2026-11-02.json), and [subdivision-vector census](docs/research/p6-mesh-subdivvertices-corpus-census-2026-11-02.json) receipts.
+
 ## P7 — ACIS/ACDS and independent 3D meaning
 
 - Complete the original DWG entity → owner/key → AcDs segment → SAT/SAB join,

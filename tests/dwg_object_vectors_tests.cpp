@@ -66,6 +66,20 @@ public:
     using DRW_DictionaryWithDefault::parseDwg;
 };
 
+class MeshCodecProbe final : public DRW_Mesh {
+public:
+    using DRW_Mesh::parseDwg;
+    using DRW_Mesh::resetDwgState;
+    using DRW_Entity::encodeDwgCommon;
+    using DRW_Entity::encodeDwgEntHandle;
+
+    bool encodeCommonPrefix(DRW::Version version, dwgBufferW *body,
+                            dwgBufferW *strings) {
+        oType = DRW_Mesh::kDwgClassNum;
+        return encodeDwgCommon(version, body, strings);
+    }
+};
+
 using XRecordEncodeProbe = xrecord_test::CodecProbe;
 
 class FieldCodecProbe final : public DRW_Field {
@@ -285,6 +299,81 @@ struct AcShHistoryFrame {
     std::vector<std::uint8_t> bytes;
     std::uint32_t handleBits {0};
 };
+
+struct MeshDwgFrame {
+    std::vector<std::uint8_t> bytes;
+    std::uint32_t handleBits {0};
+};
+
+bool makeMeshDwgFrame(std::uint32_t creaseCount, MeshDwgFrame& frame,
+                      bool includeFace = false,
+                      std::int32_t faceVertexCount = 3,
+                      std::uint8_t trailingFlags = 1u) {
+    if (trailingFlags > 3u)
+        return false;
+    constexpr DRW::Version version = DRW::AC1024;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    dwgBufferW body(&codec), strings(&codec), full(&codec), handles(&codec);
+
+    MeshCodecProbe source;
+    source.handle = 0xA300u;
+    if (!source.encodeCommonPrefix(version, &body, &strings))
+        return false;
+
+    // Generated, bounded AC1024 SubDMesh body: two vertices, no faces, and
+    // one level-0 edge by default. The malformed control deliberately declares
+    // two crease values for that one edge. An optional face exercises the
+    // bounded face-record vector path; its count can be reduced to construct
+    // a malformed face-count control.
+    body.putBitShort(2u); // mesh version
+    body.putBit(0u); // blend crease
+    body.putBitLong(0); // subdivision level
+    body.putBitLong(includeFace ? 3 : 2); // level-0 vertex count
+    body.put3BitDouble(DRW_Coord{0.0, 0.0, 0.0});
+    body.put3BitDouble(DRW_Coord{1.0, 0.0, 0.0});
+    if (includeFace)
+        body.put3BitDouble(DRW_Coord{0.0, 1.0, 0.0});
+    body.putBitLong(includeFace ? faceVertexCount + 1 : 0); // face stream item count
+    if (includeFace) {
+        body.putBitLong(faceVertexCount);
+        for (std::int32_t index = 0; index < faceVertexCount; ++index)
+            body.putBitLong(index % 3);
+    }
+    body.putBitLong(1); // level-0 edge count
+    body.putBitLong(0);
+    body.putBitLong(1);
+    body.putBitLong(static_cast<std::int32_t>(creaseCount));
+    for (std::uint32_t index = 0; index < creaseCount; ++index)
+        body.putBitDouble(index == 0u ? 0.25 : 0.75);
+    body.putBit(trailingFlags & 1u); // unknown_b1
+    body.putBit((trailingFlags >> 1u) & 1u); // unknown_b2
+
+    if (!source.encodeDwgEntHandle(version, &body, &handles)
+        || !body.isGood())
+        return false;
+    body.alignToByte();
+    full.putBytes(body.data().data(), body.size());
+
+    // Empty R2007+ string stream: seven framing bits, a size of seven bits,
+    // and a present flag. This locates the object-body end before the footer.
+    for (int bit = 0; bit < 7; ++bit)
+        full.putBit(0u);
+    full.putRawShort16(7u);
+    full.putBit(1u);
+    full.alignToByte();
+
+    handles.alignToByte();
+    if (!full.isGood() || !handles.isGood()
+        || handles.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+    full.putBytes(handles.data().data(), handles.size());
+    if (!full.isGood())
+        return false;
+    frame.bytes = full.data();
+    return true;
+}
 
 bool makeAcShBoxFrame(DRW::Version version, std::uint8_t colorMethod,
                       std::uint16_t colorIndex, std::int32_t rgb,
@@ -1377,6 +1466,165 @@ bool setBitPosition(dwgBuffer& buffer, std::uint64_t bitOffset) {
     return buffer.setPosition(bitOffset >> 3)
         && (buffer.setBitPos(static_cast<std::uint8_t>(bitOffset & 7u)),
             buffer.isGood());
+}
+
+void testMeshDwgCreaseCountGuard(TestContext& t) {
+    MeshDwgFrame validFrame;
+    const bool validBuilt = makeMeshDwgFrame(1u, validFrame);
+    t.expect(validBuilt,
+             "AC1024 MESH one-edge/one-crease DWG frame builds");
+    if (!validBuilt)
+        return;
+
+    DRW_TextCodec codec;
+    codec.setVersion(DRW::AC1024, false);
+    dwgBuffer input(validFrame.bytes.data(), validFrame.bytes.size(), &codec);
+    MeshCodecProbe parsed;
+    const bool validRead = parsed.parseDwg(
+        DRW::AC1024, &input, validFrame.handleBits);
+    t.expect(validRead && input.isGood()
+                 && parsed.handle == 0xA300u
+                 && parsed.vertices.size() == 2u
+                 && parsed.vertices[0].x == 0.0
+                 && parsed.vertices[0].y == 0.0
+                 && parsed.vertices[0].z == 0.0
+                 && parsed.vertices[1].x == 1.0
+                 && parsed.vertices[1].y == 0.0
+                 && parsed.vertices[1].z == 0.0
+                 && parsed.faces.empty()
+                 && parsed.edges
+                     == std::vector<std::pair<std::int32_t, std::int32_t>>{
+                         {0, 1}}
+                 && parsed.creases == std::vector<double>{0.25}
+                 && parsed.unknown == 1,
+             "AC1024 MESH reader retains the valid edge and crease value");
+
+    for (std::uint8_t trailingFlags = 0u; trailingFlags <= 3u;
+         ++trailingFlags) {
+        MeshDwgFrame flagsFrame;
+        const bool flagsBuilt = makeMeshDwgFrame(
+            1u, flagsFrame, false, 3, trailingFlags);
+        t.expect(flagsBuilt, "AC1024 MESH trailing-flag vector builds");
+        if (!flagsBuilt)
+            continue;
+        DRW_TextCodec flagsCodec;
+        flagsCodec.setVersion(DRW::AC1024, false);
+        dwgBuffer flagsInput(flagsFrame.bytes.data(), flagsFrame.bytes.size(),
+                             &flagsCodec);
+        MeshCodecProbe flagsParsed;
+        const bool flagsRead = flagsParsed.parseDwg(
+            DRW::AC1024, &flagsInput, flagsFrame.handleBits);
+        const bool observedProfile = trailingFlags == 1u;
+        t.expect(observedProfile
+                     ? flagsRead && flagsInput.isGood()
+                         && flagsParsed.unknown == 1
+                         && flagsParsed.handle == 0xA300u
+                     : !flagsRead && !flagsInput.isGood()
+                         && flagsParsed.handle == DRW::NoHandle
+                         && flagsParsed.vertices.empty()
+                         && flagsParsed.faces.empty(),
+                 observedProfile
+                     ? "DWG MESH accepts the cross-reader 10 tail and handle alignment"
+                     : "DWG MESH refuses an unqualified trailing-bit pattern atomically");
+    }
+
+    MeshDwgFrame faceFrame;
+    const bool faceBuilt = makeMeshDwgFrame(0u, faceFrame, true);
+    t.expect(faceBuilt,
+             "AC1024 MESH one-triangle DWG face vector builds");
+    if (faceBuilt) {
+        DRW_TextCodec faceCodec;
+        faceCodec.setVersion(DRW::AC1024, false);
+        dwgBuffer faceInput(faceFrame.bytes.data(), faceFrame.bytes.size(),
+                            &faceCodec);
+        MeshCodecProbe faceParsed;
+        const bool faceRead = faceParsed.parseDwg(
+            DRW::AC1024, &faceInput, faceFrame.handleBits);
+        t.expect(faceRead && faceInput.isGood()
+                     && faceParsed.vertices.size() == 3u
+                     && faceParsed.faces
+                         == std::vector<std::vector<std::int32_t>>{{0, 1, 2}}
+                     && faceParsed.edges
+                         == std::vector<std::pair<std::int32_t, std::int32_t>>{
+                             {0, 1}}
+                     && faceParsed.creases.empty(),
+                 "AC1024 MESH face stream decodes after bounded outer-vector reserve");
+
+        MeshDwgFrame shortFaceFrame;
+        const bool shortFaceBuilt = makeMeshDwgFrame(
+            0u, shortFaceFrame, true, 2);
+        t.expect(shortFaceBuilt,
+                 "AC1024 MESH two-vertex malformed face vector builds");
+        if (shortFaceBuilt) {
+            faceParsed.vertices = {DRW_Coord{9.0, 8.0, 7.0}};
+            faceParsed.faces = {{0}};
+            DRW_TextCodec shortFaceCodec;
+            shortFaceCodec.setVersion(DRW::AC1024, false);
+            dwgBuffer shortFaceInput(shortFaceFrame.bytes.data(),
+                                     shortFaceFrame.bytes.size(),
+                                     &shortFaceCodec);
+            const bool shortFaceRead = faceParsed.parseDwg(
+                DRW::AC1024, &shortFaceInput, shortFaceFrame.handleBits);
+            t.expect(!shortFaceRead && !shortFaceInput.isGood()
+                         && faceParsed.handle == DRW::NoHandle
+                         && faceParsed.vertices.empty()
+                         && faceParsed.faces.empty(),
+                     "DWG MESH rejects sub-triangle faces and clears partial state");
+
+            DRW_TextCodec faceRetryCodec;
+            faceRetryCodec.setVersion(DRW::AC1024, false);
+            dwgBuffer faceRetryInput(faceFrame.bytes.data(),
+                                     faceFrame.bytes.size(), &faceRetryCodec);
+            const bool faceRetry = faceParsed.parseDwg(
+                DRW::AC1024, &faceRetryInput, faceFrame.handleBits);
+            t.expect(faceRetry && faceRetryInput.isGood()
+                         && faceParsed.faces
+                             == std::vector<std::vector<std::int32_t>>{{0, 1, 2}},
+                     "valid DWG MESH triangle retries after malformed face refusal");
+        }
+    }
+
+    MeshDwgFrame malformedFrame;
+    const bool malformedBuilt = makeMeshDwgFrame(2u, malformedFrame);
+    t.expect(malformedBuilt,
+             "AC1024 MESH one-edge/two-crease malformed frame builds");
+    if (!malformedBuilt)
+        return;
+
+    // Seed visible prior state so refusal proves both stale and partially
+    // decoded geometry are cleared before a later valid retry.
+    parsed.handle = 0xBEEFu;
+    parsed.vertices = {DRW_Coord{9.0, 8.0, 7.0}};
+    parsed.faces = {{0}};
+    parsed.edges = {{0, 0}};
+    parsed.creases = {3.0};
+    parsed.unknown = 99;
+    DRW_TextCodec malformedCodec;
+    malformedCodec.setVersion(DRW::AC1024, false);
+    dwgBuffer malformedInput(malformedFrame.bytes.data(),
+                             malformedFrame.bytes.size(), &malformedCodec);
+    const bool malformedRead = parsed.parseDwg(
+        DRW::AC1024, &malformedInput, malformedFrame.handleBits);
+    t.expect(!malformedRead && !malformedInput.isGood()
+                 && parsed.handle == DRW::NoHandle
+                 && parsed.vertices.empty() && parsed.faces.empty()
+                 && parsed.edges.empty() && parsed.creases.empty()
+                 && parsed.unknown == 0,
+             "crease count beyond level-0 edge count refuses and clears state");
+
+    DRW_TextCodec retryCodec;
+    retryCodec.setVersion(DRW::AC1024, false);
+    dwgBuffer retryInput(validFrame.bytes.data(), validFrame.bytes.size(),
+                         &retryCodec);
+    const bool retryRead = parsed.parseDwg(
+        DRW::AC1024, &retryInput, validFrame.handleBits);
+    t.expect(retryRead && retryInput.isGood()
+                 && parsed.handle == 0xA300u
+                 && parsed.edges
+                     == std::vector<std::pair<std::int32_t, std::int32_t>>{
+                         {0, 1}}
+                 && parsed.creases == std::vector<double>{0.25},
+             "valid MESH readback retries on the same object after refusal");
 }
 
 void testObjectContextBaseBits(TestContext& t) {
@@ -19068,6 +19316,14 @@ void testScaleDwgPositiveUnitDomain(TestContext& t) {
 
 int main(int argc, char** argv) {
     if (argc == 2
+        && std::string(argv[1]) == "--mesh-dwg-crease-count-guard") {
+        TestContext context;
+        testMeshDwgCreaseCountGuard(context);
+        std::cout << "AC1024 MESH DWG face/tail/crease controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--dictionary-default-handle-role") {
         TestContext context;
         testDictionaryWithDefaultHandleRole(context);
@@ -19078,7 +19334,8 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--scale-dwg-unit-domains") {
         TestContext context;
-        testScaleDwgPositiveUnitDomain(context);
+        testMeshDwgCreaseCountGuard(context);
+    testScaleDwgPositiveUnitDomain(context);
         std::cout << "DWG SCALE unit domains: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;

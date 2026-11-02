@@ -5953,7 +5953,7 @@ public:
             && data.edges.front() == std::make_pair<std::int32_t, std::int32_t>(0, 1)
             && data.creases.size() == 1
             && data.creases.front() == 0.5
-            && data.unknown == 0;
+            && data.unknown == 1;
     }
     void addWipeout(const DRW_Wipeout* data) override {
         if (data == nullptr || data->handle != 0xF800u)
