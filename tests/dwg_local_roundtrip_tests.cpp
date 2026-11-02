@@ -19150,6 +19150,45 @@ bool runDxfMalformedModelerCarrier(const char* chunk) {
     return !importOk && imported.mBlock->ent.empty();
 }
 
+bool runDxfViewportGroup46Isolation() {
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const std::filesystem::path input =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-viewport-group46-" + std::to_string(nonce) + ".dxf");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove(path, ignored);
+        }
+    } cleanup{input};
+    {
+        std::ofstream stream(input, std::ios::binary | std::ios::trunc);
+        stream << "0\nSECTION\n2\nENTITIES\n"
+                  "0\nVIEWPORT\n5\n4A\n330\n1F\n"
+                  "100\nAcDbEntity\n8\n0\n"
+                  "100\nAcDbViewport\n"
+                  "10\n0.0\n20\n0.0\n40\n20.0\n41\n10.0\n"
+                  "68\n1\n69\n1\n72\n725\n46\n2500\n"
+                  "0\nENDSEC\n0\nEOF\n";
+        if (!stream)
+            return false;
+    }
+
+    dx_data imported;
+    dx_iface reader;
+    if (!reader.fileImport(input.string(), &imported, false)
+        || imported.mBlock == nullptr
+        || imported.mBlock->ent.size() != 1u)
+        return false;
+    const auto* viewport = dynamic_cast<const DRW_Viewport*>(
+        imported.mBlock->ent.front());
+    // Group 72 is the documented circle-zoom field. Group 46 is not part of
+    // VIEWPORT and must not overwrite it during tolerant input.
+    return viewport != nullptr && viewport->circleZoom == 725.0;
+}
+
 bool runDxfModelerRejectsUnassociatedSab(
     const std::vector<std::uint8_t>& payload) {
     const std::filesystem::path output = std::filesystem::temp_directory_path()
@@ -35303,6 +35342,12 @@ int main(int argc, char** argv) {
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 2
+        && std::string(argv[1]) == "--viewport-group46-isolation") {
+        const bool passed = runDxfViewportGroup46Isolation();
+        std::cout << "VIEWPORT undocumented group-46 isolation: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    } else if (argc == 2
         && std::string(argv[1]) == "--polyface-completed-pool") {
         const bool ascii = runDxfPolyfaceCompletedPool(false, directory, false);
         const bool binary = runDxfPolyfaceCompletedPool(true, directory, false);
@@ -35544,6 +35589,7 @@ int main(int argc, char** argv) {
                      " [--verify-hatch-references DXF]"
                      " [--hatch-pattern-preservation]"
                      " [--polyface-completed-pool]"
+                     " [--viewport-group46-isolation]"
                      " [--generate-hatch-pattern[-binary] DXF]"
                      " [--verify-hatch-pattern DXF]"
                      " [--verify-acsh-prefix-sample DWG]"

@@ -2770,6 +2770,16 @@ set_tests_properties(dxf_mpolygon_metadata_boundary_roundtrip PROPERTIES
     TIMEOUT 30
 )
 
+add_test(
+    NAME dxf_viewport_undocumented_group46_isolation
+    COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip>
+            --viewport-group46-isolation
+)
+set_tests_properties(dxf_viewport_undocumented_group46_isolation PROPERTIES
+    LABELS "fast;dxf;viewport;field-mapping"
+    TIMEOUT 30
+)
+
 # Typed ACSH BOX export may only project the indexed CMC forms established by
 # its DXF mapping; unsupported method/flag/reserved-index metadata must refuse
 # atomically before replacing an existing destination.

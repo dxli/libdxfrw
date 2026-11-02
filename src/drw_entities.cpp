@@ -27962,8 +27962,10 @@ bool DRW_Viewport::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         twistAngle = reader->getDouble();
         break;
     case 46:
-        circleZoom = reader->getInt32();
-        break;
+        // VIEWPORT circle zoom is group 72. Group 46 is not part of the
+        // Autodesk VIEWPORT schema; tolerate it as an unknown entity value
+        // rather than aliasing it to a documented setting.
+        return DRW_Point::parseCode(code, reader);
     case 61:
         majorGridLines = reader->getInt32();
         break;

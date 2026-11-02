@@ -187,6 +187,14 @@ this absence; obtain an eligible source with the physical references, target
 roles, coupled layer/dictionary records and native behavior. See the [local
 census receipt](docs/research/p5-viewport-layer-override-local-corpus-census-2026-11-01.json).
 
+**VIEWPORT group-46 field isolation:** Autodesk documents group 72 as the
+circle-zoom field and does not list group 46 for VIEWPORT. The parser now leaves
+group 46 on the tolerant unknown-code path, so it cannot overwrite `circleZoom`;
+a generated ASCII control verifies that group 72 value 725 survives a following
+group 46 value 2500. This is field-isolation evidence only, not physical producer
+or native-rendering qualification. See the [field-isolation receipt](docs/research/p5-viewport-undocumented-group46-isolation-2026-11-02.json)
+and [Autodesk's VIEWPORT DXF table](https://help.autodesk.com/cloudhelp/2025/ENU/AutoCAD-DXF/files/GUID-2602B0FB-02E4-4B9A-B03C-B1D904753D34.htm).
+
 **TABLE:**
 
 1. **Nested FIELD graphs:** qualify physical producer/version profiles and
