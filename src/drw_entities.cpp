@@ -2793,12 +2793,12 @@ bool readTableCmColor(DRW::Version version, dwgBuffer *buf,
     return textBuf->isGood();
 }
 
-bool skipR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
-                                 dwgBuffer *strBuf, dwgBuffer *hdlBuf,
-                                 DRW_TableCell& cell,
-                                 bool& semanticComplete,
-                                 std::vector<DRW_DwgSubrecordRange> *ranges,
-                                 const TableDwgBounds& bounds) {
+bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
+                                  dwgBuffer *strBuf, dwgBuffer *hdlBuf,
+                                  DRW_TableCell& cell,
+                                  bool& semanticComplete,
+                                  std::vector<DRW_DwgSubrecordRange> *ranges,
+                                  const TableDwgBounds& bounds) {
     const std::uint64_t startBit = currentDwgBit(buf);
     std::int32_t overrideFlags = 0;
     std::uint8_t virtualEdgeFlags = 0;
@@ -2812,10 +2812,13 @@ bool skipR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
         DRW_DBGH(cell.m_overrideFlags); DRW_DBG("\n");
         return false;
     }
-    // The current typed TABLE projection does not retain the individual cell
-    // override values. Keep the structural parse, but prevent the adapter
-    // from treating the resulting partial snapshot as semantically complete.
-    if (cell.m_overrideFlags != 0u)
+    // ODA §20.4.96.1 specifies this legacy AC1018 text-cell profile and its
+    // exact field order. Other cell override combinations remain structurally
+    // readable but incomplete until their values and edge relationships are
+    // represented by the typed model.
+    const bool legacyTopBorderProfile = version == DRW::AC1018
+        && cell.m_type == 1 && cell.m_overrideFlags == 0x00004460u;
+    if (cell.m_overrideFlags != 0u && !legacyTopBorderProfile)
         semanticComplete = false;
 
     if (cell.m_overrideFlags & 0x00001
@@ -2832,18 +2835,74 @@ bool skipR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
         return false;
     if (cell.m_overrideFlags & 0x00010)
         cell.m_textStyleOverrideHandle = readTableHandle(hdlBuf, bounds.handleEndBit);
-    if (cell.m_overrideFlags & 0x00020
-        && !skipTableBitDouble(*buf, bounds.bodyEndBit))
-        return false;
-    if ((cell.m_overrideFlags & 0x00040)
-        && !readTableCmColor(version, buf, strBuf, bounds))
-        return false;
-    if (cell.m_overrideFlags & 0x00400
-        && !skipTableBitShort(*buf, bounds.bodyEndBit))
-        return false;
-    if (cell.m_overrideFlags & 0x04000
-        && !skipTableBitShort(*buf, bounds.bodyEndBit))
-        return false;
+    if (cell.m_overrideFlags & 0x00020) {
+        double textHeight = 0.0;
+        if (!readBoundedBitDouble(*buf, bounds.bodyEndBit, textHeight))
+            return false;
+        if (legacyTopBorderProfile) {
+            cell.m_textHeight = textHeight;
+            if (!std::isfinite(textHeight) || textHeight <= 0.0)
+                semanticComplete = false;
+        }
+    }
+    if (cell.m_overrideFlags & 0x00040) {
+        if (legacyTopBorderProfile) {
+            std::uint32_t color = 0;
+            std::int32_t rgb24 = -1;
+            bool hasRgbColor = false;
+            std::uint8_t method = 0;
+            std::uint8_t colorFlags = 0;
+            std::uint16_t colorIndex = 0;
+            UTF8STRING colorName;
+            UTF8STRING colorBookName;
+            if (!readBoundedCmColor(*buf, strBuf, bounds.bodyEndBit,
+                                    version, color, &rgb24, &hasRgbColor,
+                                    &colorName, &colorBookName,
+                                    bounds.stringEndBit, &method,
+                                    &colorFlags, &colorIndex))
+                return false;
+            const bool indexedColor = colorFlags == 0u && colorIndex == 0u
+                && rgb24 == -1 && !hasRgbColor && colorName.empty()
+                && colorBookName.empty()
+                && ((method == dwgColor::BYLAYER && color == 256u)
+                    || (method == dwgColor::BYBLOCK && color == 0u)
+                    || (method == dwgColor::ACI && color >= 1u
+                        && color <= 255u));
+            if (indexedColor) {
+                cell.m_borders[0].m_colorRgb = static_cast<int>(color);
+                // The legacy DXF TABLE group stores the indexed fallback;
+                // retain no separate true-color/DWG-method side channel.
+                cell.m_borders[0].m_colorMethod = 0u;
+            } else {
+                semanticComplete = false;
+            }
+        } else if (!readTableCmColor(version, buf, strBuf, bounds)) {
+            return false;
+        }
+    }
+    if (cell.m_overrideFlags & 0x00400) {
+        std::uint16_t lineWeight = 0;
+        if (!readBoundedBitShort(*buf, bounds.bodyEndBit, lineWeight))
+            return false;
+        if (legacyTopBorderProfile) {
+            cell.m_borders[0].m_lineWeight = static_cast<int>(lineWeight);
+            if (lineWeight > 32767u)
+                semanticComplete = false;
+        }
+    }
+    if (cell.m_overrideFlags & 0x04000) {
+        std::uint16_t visibility = 0;
+        if (!readBoundedBitShort(*buf, bounds.bodyEndBit, visibility))
+            return false;
+        if (legacyTopBorderProfile) {
+            if (visibility <= 1u) {
+                cell.m_borders[0].m_visible = visibility == 1u;
+                cell.m_borders[0].m_hasDxfVisibility = true;
+            } else {
+                semanticComplete = false;
+            }
+        }
+    }
     if ((cell.m_overrideFlags & 0x00080)
         && !readTableCmColor(version, buf, strBuf, bounds))
         return false;
@@ -2871,6 +2930,10 @@ bool skipR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
     if (cell.m_overrideFlags & 0x20000
         && !skipTableBitShort(*buf, bounds.bodyEndBit))
         return false;
+
+    if (legacyTopBorderProfile
+        && (cell.m_edgeFlags != 0x01 || cell.m_virtualEdgeFlags != 0))
+        semanticComplete = false;
 
     const bool good = buf->isGood() && (!strBuf || strBuf->isGood()) && (!hdlBuf || hdlBuf->isGood());
     if (ranges != nullptr) {
@@ -2967,8 +3030,8 @@ bool parseR2007TableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf
     if (!readBoundedBit(*buf, bounds.bodyEndBit, hasOverrides))
         return false;
     if (hasOverrides
-        && !skipR2007TableCellOverrides(version, buf, strBuf, hdlBuf, cell,
-                                        semanticComplete, ranges, bounds))
+        && !parseR2007TableCellOverrides(version, buf, strBuf, hdlBuf, cell,
+                                         semanticComplete, ranges, bounds))
         return false;
 
     if (version > DRW::AC1018) {

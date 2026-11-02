@@ -6917,9 +6917,15 @@ bool putTablePlacement(dwgBufferW& body, const TablePlacement& placement) {
 bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
                          const TablePlacement& placement = TablePlacement{},
                          std::uint32_t cellOverrideFlags = 0u,
-                         std::uint32_t tableOverrideFlags = 0u) {
-    constexpr DRW::Version version = DRW::AC1021;
-    if ((cellOverrideFlags & ~0x00000004u) != 0u
+                         std::uint32_t tableOverrideFlags = 0u,
+                         DRW::Version version = DRW::AC1021,
+                         std::uint8_t cellEdgeFlags = 0u,
+                         std::uint8_t virtualEdgeFlags = 0u,
+                         std::uint16_t topVisibility = 1u) {
+    const bool knownCellOverrideProfile = cellOverrideFlags == 0u
+        || (version == DRW::AC1018 && cellOverrideFlags == 0x00004460u)
+        || (version == DRW::AC1021 && cellOverrideFlags == 0x00000004u);
+    if (!knownCellOverrideProfile
         || (tableOverrideFlags & ~0x00000020u) != 0u)
         return false;
     TableDwgCodecProbe source;
@@ -6949,12 +6955,12 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
 
     // The R2000+ TABLE common block-reference and TABLESTYLE references
     // precede the per-cell value handle in the handle stream.
-    handles.putHandle(handle(0xA600u));
-    handles.putHandle(handle(0xA700u));
+    handles.putHandle(handle(0xA600u)); // block record
+    handles.putHandle(handle(0xA700u)); // table style
     handles.putHandle(handle(cellType == 2 ? 0xA800u : 0u));
 
     body.putBitShort(cellType);
-    body.putRawChar8(0);
+    body.putRawChar8(cellEdgeFlags);
     body.putBit(0);
     body.putBit(0);
     body.putBitLong(1);
@@ -6966,26 +6972,42 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
         if (cellType == 2) {
             body.putBitDouble(1.0);
             body.putBit(0); // no block attributes
+        } else if (version <= DRW::AC1018) {
+            body.putVariableText(version, "generated AC1018 cell");
         }
         body.putBit(cellOverrideFlags != 0u);
         if (cellOverrideFlags != 0u) {
             body.putBitLong(static_cast<std::int32_t>(cellOverrideFlags));
-            body.putRawChar8(0); // no virtual edges
-            // ODA v5.4.1 §20.4.96.1: bit 0x04 selects Background color
-            // CMC. Use a literal ByLayer CMC so this test does not rely on
-            // the production CMC writer to construct its own input.
-            body.putBitShort(0);
-            body.putBitLong(static_cast<std::int32_t>(
-                (0xC0u << 24u) | 0u));
-            body.putRawChar8(0);
+            body.putRawChar8(virtualEdgeFlags);
+            if (cellOverrideFlags == 0x00000004u) {
+                // ODA v5.4.1 §20.4.96.1: bit 0x04 selects Background color
+                // CMC. Use a literal ByLayer CMC so this test does not rely
+                // on the production CMC writer to construct its own input.
+                body.putBitShort(0);
+                body.putBitLong(static_cast<std::int32_t>(
+                    (0xC0u << 24u) | 0u));
+                body.putRawChar8(0);
+            } else {
+                // AC1018 0x4460: text height BD, top-border CMC, lineweight
+                // BS, and visibility BS, in ODA §20.4.96.1 order.
+                body.putBitDouble(4.0);
+                body.putBitShort(0);
+                body.putBitLong(static_cast<std::int32_t>(
+                    (0xC3u << 24u) | 63u));
+                body.putRawChar8(0);
+                body.putBitShort(40);
+                body.putBitShort(topVisibility);
+            }
         }
-        body.putBitLong(0);   // reserved R2007+ value field
-        body.putBitLong(0);   // CadValue format flags
-        body.putBitLong(1);   // integer CadValue
-        body.putBitLong(42);
-        body.putBitLong(0);   // unit type
-        strings.putBitShort(0); // empty format string
-        strings.putBitShort(0); // empty display string
+        if (version > DRW::AC1018) {
+            body.putBitLong(0);   // reserved R2007+ value field
+            body.putBitLong(0);   // CadValue format flags
+            body.putBitLong(1);   // integer CadValue
+            body.putBitLong(42);
+            body.putBitLong(0);   // unit type
+            strings.putBitShort(0); // empty format string
+            strings.putBitShort(0); // empty display string
+        }
         body.putBit(tableOverrideFlags != 0u);
         if (tableOverrideFlags != 0u) {
             body.putBitLong(static_cast<std::int32_t>(tableOverrideFlags));
@@ -7006,12 +7028,14 @@ bool makeR2007TableFrame(std::uint16_t cellType, R2007TableFrame& frame,
     frame.tableDataEndBit = body.bitCount();
     body.putBitLong(kTablePlacementTailSentinel);
 
-    appendBits(body, strings);
-    const std::uint64_t encodedStringBits = strings.bitCount() + 7u;
-    for (int i = 0; i < 7; ++i)
-        body.putBit(0);
-    body.putRawShort16(static_cast<std::uint16_t>(encodedStringBits));
-    body.putBit(1);
+    if (version > DRW::AC1018) {
+        appendBits(body, strings);
+        const std::uint64_t encodedStringBits = strings.bitCount() + 7u;
+        for (int i = 0; i < 7; ++i)
+            body.putBit(0);
+        body.putRawShort16(static_cast<std::uint16_t>(encodedStringBits));
+        body.putBit(1);
+    }
     body.patchRawLong32AtBit(objectSizeBit, body.bitCount());
     appendBits(body, handles);
     if (!body.isGood() || !handles.isGood() || !strings.isGood())
@@ -7054,6 +7078,129 @@ void testR2007TableCellTypeReaderVectors(TestContext& t) {
                  && unknownRange->m_count == 16u
                  && cursorBit(unknownInput) == unknownFrame.cellPrefixEndBit,
              "unknown AC1021 TABLE cell stops at its bounded common prefix and keeps fallback semantics partial");
+
+    R2007TableFrame ac1018InvalidVisibilityFrame;
+    const bool ac1018InvalidVisibilityBuilt = makeR2007TableFrame(
+        1, ac1018InvalidVisibilityFrame, TablePlacement{}, 0x00004460u,
+        0u, DRW::AC1018, 0x01u, 0u, 2u);
+    t.expect(ac1018InvalidVisibilityBuilt,
+             "AC1018 TABLE top-border invalid-visibility vector builds from scratch");
+    if (!ac1018InvalidVisibilityBuilt)
+        return;
+    dwgBuffer ac1018InvalidVisibilityInput(
+        ac1018InvalidVisibilityFrame.bytes.data(),
+        ac1018InvalidVisibilityFrame.bytes.size());
+    const bool ac1018InvalidVisibilityRead = table.parseDwg(
+        DRW::AC1018, &ac1018InvalidVisibilityInput);
+    const DRW_TableCell* ac1018InvalidVisibilityCell =
+        table.m_content.m_rows.size() == 1u
+            && table.m_content.m_rows.front().m_cells.size() == 1u
+        ? &table.m_content.m_rows.front().m_cells.front() : nullptr;
+    t.expect(ac1018InvalidVisibilityRead
+                 && ac1018InvalidVisibilityInput.isGood()
+                 && table.m_hasSemanticContent
+                 && !table.m_semanticContentComplete
+                 && ac1018InvalidVisibilityCell != nullptr
+                 && ac1018InvalidVisibilityCell->m_overrideFlags == 0x4460u
+                 && ac1018InvalidVisibilityCell->m_textHeight == 4.0
+                 && ac1018InvalidVisibilityCell->m_borders[0].m_colorRgb == 63
+                 && ac1018InvalidVisibilityCell->m_borders[0].m_lineWeight == 40
+                 && !ac1018InvalidVisibilityCell->m_borders[0].m_hasDxfVisibility
+                 && cursorBit(ac1018InvalidVisibilityInput)
+                     == ac1018InvalidVisibilityFrame.tableDataEndBit,
+             "AC1018 TABLE retains bounded 0x4460 fields but withholds invalid visibility semantics");
+
+    R2007TableFrame ac1018TopBorderFrame;
+    const bool ac1018TopBorderBuilt = makeR2007TableFrame(
+        1, ac1018TopBorderFrame, TablePlacement{}, 0x00004460u,
+        0u, DRW::AC1018, 0x01u, 0u, 0u);
+    t.expect(ac1018TopBorderBuilt,
+             "AC1018 TABLE selected top-border vector builds from scratch");
+    if (!ac1018TopBorderBuilt)
+        return;
+    dwgBuffer ac1018TopBorderInput(ac1018TopBorderFrame.bytes.data(),
+                                   ac1018TopBorderFrame.bytes.size());
+    const bool ac1018TopBorderRead = table.parseDwg(
+        DRW::AC1018, &ac1018TopBorderInput);
+    const DRW_TableCell* ac1018TopBorderCell =
+        table.m_content.m_rows.size() == 1u
+            && table.m_content.m_rows.front().m_cells.size() == 1u
+        ? &table.m_content.m_rows.front().m_cells.front() : nullptr;
+    t.expect(ac1018TopBorderRead && ac1018TopBorderInput.isGood()
+                 && table.m_semanticContentComplete
+                 && ac1018TopBorderCell != nullptr
+                 && ac1018TopBorderCell->m_type == 1
+                 && ac1018TopBorderCell->m_valueHandle == 0u
+                 && ac1018TopBorderCell->m_edgeFlags == 0x01
+                 && ac1018TopBorderCell->m_overrideFlags == 0x4460u
+                 && ac1018TopBorderCell->m_contents.size() == 1u
+                 && ac1018TopBorderCell->m_contents.front().m_text
+                     == "generated AC1018 cell"
+                 && ac1018TopBorderCell->m_textHeight == 4.0
+                 && ac1018TopBorderCell->m_borders[0].m_colorRgb == 63
+                 && ac1018TopBorderCell->m_borders[0].m_lineWeight == 40
+                 && !ac1018TopBorderCell->m_borders[0].m_visible
+                 && ac1018TopBorderCell->m_borders[0].m_hasDxfVisibility
+                 && table.m_tableStyleHandle == 0xA700u
+                 && cursorBit(ac1018TopBorderInput)
+                     == ac1018TopBorderFrame.tableDataEndBit,
+             "AC1018 TABLE maps the ODA 0x4460 top-border fields and preserves explicit invisible state after incomplete parse");
+    if (ac1018TopBorderRead) {
+        const std::int32_t sentinel = ac1018TopBorderInput.getBitLong();
+        t.expect(ac1018TopBorderInput.isGood()
+                     && sentinel == kTablePlacementTailSentinel,
+                 "AC1018 TABLE top-border reader leaves the next body field aligned");
+    }
+
+    R2007TableFrame ac1018VisibleTopBorderFrame;
+    const bool ac1018VisibleTopBorderBuilt = makeR2007TableFrame(
+        1, ac1018VisibleTopBorderFrame, TablePlacement{}, 0x00004460u,
+        0u, DRW::AC1018, 0x01u, 0u, 1u);
+    t.expect(ac1018VisibleTopBorderBuilt,
+             "AC1018 TABLE explicitly visible top-border vector builds from scratch");
+    if (!ac1018VisibleTopBorderBuilt)
+        return;
+    dwgBuffer ac1018VisibleTopBorderInput(
+        ac1018VisibleTopBorderFrame.bytes.data(),
+        ac1018VisibleTopBorderFrame.bytes.size());
+    const bool ac1018VisibleTopBorderRead = table.parseDwg(
+        DRW::AC1018, &ac1018VisibleTopBorderInput);
+    const DRW_TableCell* ac1018VisibleTopBorderCell =
+        table.m_content.m_rows.size() == 1u
+            && table.m_content.m_rows.front().m_cells.size() == 1u
+        ? &table.m_content.m_rows.front().m_cells.front() : nullptr;
+    t.expect(ac1018VisibleTopBorderRead
+                 && table.m_semanticContentComplete
+                 && ac1018VisibleTopBorderCell != nullptr
+                 && ac1018VisibleTopBorderCell->m_borders[0].m_visible
+                 && ac1018VisibleTopBorderCell->m_borders[0].m_hasDxfVisibility,
+             "AC1018 TABLE preserves explicit visible state separately from the default");
+
+    R2007TableFrame ac1018VirtualTopBorderFrame;
+    const bool ac1018VirtualTopBorderBuilt = makeR2007TableFrame(
+        1, ac1018VirtualTopBorderFrame, TablePlacement{}, 0x00004460u,
+        0u, DRW::AC1018, 0x01u, 0x01u, 1u);
+    t.expect(ac1018VirtualTopBorderBuilt,
+             "AC1018 TABLE virtual-edge top-border vector builds from scratch");
+    if (!ac1018VirtualTopBorderBuilt)
+        return;
+    dwgBuffer ac1018VirtualTopBorderInput(
+        ac1018VirtualTopBorderFrame.bytes.data(),
+        ac1018VirtualTopBorderFrame.bytes.size());
+    const bool ac1018VirtualTopBorderRead = table.parseDwg(
+        DRW::AC1018, &ac1018VirtualTopBorderInput);
+    const DRW_TableCell* ac1018VirtualTopBorderCell =
+        table.m_content.m_rows.size() == 1u
+            && table.m_content.m_rows.front().m_cells.size() == 1u
+        ? &table.m_content.m_rows.front().m_cells.front() : nullptr;
+    t.expect(ac1018VirtualTopBorderRead
+                 && ac1018VirtualTopBorderInput.isGood()
+                 && !table.m_semanticContentComplete
+                 && ac1018VirtualTopBorderCell != nullptr
+                 && ac1018VirtualTopBorderCell->m_virtualEdgeFlags == 0x01
+                 && cursorBit(ac1018VirtualTopBorderInput)
+                     == ac1018VirtualTopBorderFrame.tableDataEndBit,
+             "AC1018 TABLE virtual top edge remains readable but incomplete");
 
     R2007TableFrame textFrame;
     const bool textBuilt = makeR2007TableFrame(1, textFrame);
