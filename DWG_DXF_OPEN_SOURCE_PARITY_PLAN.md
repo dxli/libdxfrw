@@ -492,6 +492,12 @@ eligible reader. The exact package and environment result are in the
   values; see the [HATCH/MPOLYGON dispatch receipt](docs/research/p8-hatch-mpolygon-runtime-dispatch-2026-11-02.json).
   This is adapter integrity/transport evidence only and does not qualify native
   fill, boundary or rendering semantics.
+  The BLOCK callback also refuses a non-VIEWPORT runtime entity tagged as
+  VIEWPORT before reaching the DXF writer's static cast. Generated ASCII/Binary
+  controls verify atomic refusal, destination preservation, corrected retry,
+  and POINT readback; see the [VIEWPORT dispatch receipt](docs/research/p8-viewport-runtime-dispatch-2026-11-02.json).
+  This closes one adapter type-safety hole only; remaining entity tags still
+  require source-stable inventory and any applicable subtype guards.
   The limited macOS ARM64
   2D open/insert profile is recorded in
   [the FreeCAD route receipt](docs/research/p8-macos-freecad-dwg2dxf-open-insert-qualification-2026-11-01.json);

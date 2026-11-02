@@ -71358,7 +71358,14 @@ void dx_iface::writeEntity(DRW_Entity* e){
             dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::VIEWPORT: {
-        auto* viewport = static_cast<DRW_Viewport*>(e);
+        auto* viewport = dynamic_cast<DRW_Viewport*>(e);
+        if (viewport == nullptr) {
+            // eType is public and may have been mutated independently of the
+            // runtime object. Refuse rather than reinterpret a different
+            // entity through the viewport writer.
+            dxfW->writeRawDxfEntity(nullptr);
+            break;
+        }
         const auto projection = m_dwgViewportProjections.find(viewport);
         if (projection != m_dwgViewportProjections.end()) {
             DRW_Viewport projected(*viewport);

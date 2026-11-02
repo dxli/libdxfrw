@@ -19963,6 +19963,73 @@ bool hatchMPolygonRuntimeDispatchGuard() {
     return true;
 }
 
+bool viewportRuntimeDispatchGuard() {
+    for (const bool binary : {false, true}) {
+        dx_data data;
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        DRW_Point source;
+        source.basePoint.x = 12.5;
+        source.basePoint.y = -7.25;
+        adapter.addPoint(source);
+        if (data.mBlock == nullptr || data.mBlock->ent.size() != 1u
+            || data.mBlock->ent.front() == nullptr
+            || data.typedEntityCaptureFailed)
+            return fail("POINT callback did not retain its source entity");
+
+        DRW_Entity* const retained = data.mBlock->ent.front();
+        retained->eType = DRW::VIEWPORT;
+        const auto path = std::filesystem::temp_directory_path()
+            / ("libdxfrw-viewport-runtime-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        if (std::filesystem::exists(path))
+            return fail("VIEWPORT runtime output path unexpectedly exists");
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{path};
+        const std::string sentinel = "VIEWPORT_DISPATCH_DESTINATION\n";
+        {
+            std::ofstream existing(path, std::ios::binary);
+            existing << sentinel;
+            if (!existing)
+                return fail("could not create VIEWPORT destination sentinel");
+        }
+        if (adapter.fileExport(path.string(), DRW::AC1027, binary,
+                               &data, false, true))
+            return fail("mismatched VIEWPORT runtime subtype was emitted");
+        {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail("mismatched VIEWPORT subtype changed the destination");
+        }
+
+        retained->eType = DRW::POINT;
+        if (!adapter.fileExport(path.string(), DRW::AC1027, binary,
+                                &data, false, true))
+            return fail("corrected VIEWPORT mismatch did not retry successfully");
+        dx_data readback;
+        dx_iface reader;
+        if (!reader.fileImport(path.string(), &readback, false)
+            || readback.mBlock == nullptr
+            || readback.mBlock->ent.size() != 1u)
+            return fail("corrected VIEWPORT mismatch did not read back");
+        const auto* actual = dynamic_cast<const DRW_Point*>(
+            readback.mBlock->ent.front());
+        if (actual == nullptr || actual->eType != DRW::POINT
+            || actual->basePoint.x != 12.5 || actual->basePoint.y != -7.25)
+            return fail("corrected VIEWPORT mismatch changed POINT data");
+    }
+    return true;
+}
+
 bool evaluationGraphCaptureLimitsFailClosed(bool binary) {
     dx_data data;
     dx_iface iface;
@@ -62567,6 +62634,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--hatch-mpolygon-runtime-dispatch")
         return hatchMPolygonRuntimeDispatchGuard() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--viewport-runtime-dispatch")
+        return viewportRuntimeDispatchGuard() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--evaluation-graph-capture-limits")
         return evaluationGraphCaptureLimitsFailClosed(false)
