@@ -476,14 +476,14 @@ eligible reader. The exact package and environment result are in the
   These checks cover API shape and generated record delivery only, not native
   application behavior. Qualify intended 3D consumers and remaining FreeCAD
   `dwg2dxf` profiles without dropping required geometry. The concrete BLOCK
-  serializer now runtime-checks `DRW_ModelerGeometry` before dispatching public
-  `eType` tags `3DSOLID`, `REGION`, and `BODY`; a mismatched
-  object fails atomically instead of being reinterpreted through an invalid
-  cast. Generated ASCII/Binary controls cover all three tags, existing-file
-  preservation, same-adapter correction/retry, and line-geometry readback; see
-  the [modeler dispatch receipt](docs/research/p8-modeler-runtime-type-dispatch-2026-11-02.json).
-  This protects callback integrity only; it does not qualify modeler payload
-  syntax, kernel meaning, native consumers, or whole BLOCK inventory.
+  serializer now runtime-checks `DRW_ModelerGeometry`, `DRW_Mesh`, `DRW_Helix`,
+  and `DRW_Spline` before dispatching public `eType` tags `3DSOLID`, `REGION`,
+  `BODY`, `MESH`, `HELIX`, and `SPLINE`; a mismatched object fails atomically
+  instead of being reinterpreted through an invalid cast. Generated ASCII/Binary controls
+  cover all six tags, existing-file preservation, same-adapter correction/
+  retry, and line-geometry readback; see the [3D dispatch receipt](docs/research/p8-3d-entity-runtime-type-dispatch-2026-11-02.json).
+  This protects callback integrity only; it does not qualify 3D payload syntax,
+  topology/kernel meaning, native consumers, or whole BLOCK inventory.
   The limited macOS ARM64
   2D open/insert profile is recorded in
   [the FreeCAD route receipt](docs/research/p8-macos-freecad-dwg2dxf-open-insert-qualification-2026-11-01.json);

@@ -71213,13 +71213,22 @@ void dx_iface::writeEntity(DRW_Entity* e){
         break;
     }
     case DRW::MESH:
-        written = dxfW->writeMesh(static_cast<DRW_Mesh*>(e));
+        if (auto* mesh = dynamic_cast<DRW_Mesh*>(e))
+            written = dxfW->writeMesh(mesh);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::HELIX:
-        written = dxfW->writeHelix(static_cast<DRW_Helix*>(e));
+        if (auto* helix = dynamic_cast<DRW_Helix*>(e))
+            written = dxfW->writeHelix(helix);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::SPLINE:
-        written = dxfW->writeSpline(static_cast<DRW_Spline*>(e));
+        if (auto* spline = dynamic_cast<DRW_Spline*>(e))
+            written = dxfW->writeSpline(spline);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
         break;
 //    case RS2::EntitySplinePoints:
 //        writeSplinePoints(static_cast<DRW_Point*>(e));

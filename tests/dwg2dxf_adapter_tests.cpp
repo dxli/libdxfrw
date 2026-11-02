@@ -19309,10 +19309,11 @@ bool typedEntityCallbackCaptureLimitsFailClosed() {
         return fail("surface writer dispatch accepted a non-surface runtime type");
     }
 
-    const std::array<DRW::ETYPE, 3> modelerDispatchTags{{
-        DRW::E3DSOLID, DRW::REGION, DRW::BODY}};
-    unsigned modelerDispatchCases = 0u;
-    for (const DRW::ETYPE modelerTag : modelerDispatchTags) {
+    const std::array<DRW::ETYPE, 6> threeDDispatchTags{{
+        DRW::E3DSOLID, DRW::REGION, DRW::BODY, DRW::MESH, DRW::HELIX,
+        DRW::SPLINE}};
+    unsigned threeDDispatchCases = 0u;
+    for (const DRW::ETYPE threeDTag : threeDDispatchTags) {
         for (const bool binary : {false, true}) {
             dx_data modelerDispatchData;
             dx_iface modelerDispatchIface;
@@ -19320,7 +19321,7 @@ bool typedEntityCallbackCaptureLimitsFailClosed() {
             modelerDispatchIface.currentBlock = modelerDispatchData.mBlock;
             DRW_Line modelerDispatchSource;
             modelerDispatchSource.handle =
-                0xA5000u + modelerDispatchCases;
+                0xA5000u + threeDDispatchCases;
             modelerDispatchSource.basePoint = DRW_Coord(1.0, 2.0, 3.0);
             modelerDispatchSource.secPoint = DRW_Coord(4.0, 5.0, 6.0);
             modelerDispatchIface.addLine(modelerDispatchSource);
@@ -19328,18 +19329,18 @@ bool typedEntityCallbackCaptureLimitsFailClosed() {
                 || modelerDispatchData.mBlock->ent.size() != 1u
                 || modelerDispatchData.mBlock->ent.front() == nullptr
                 || modelerDispatchData.typedEntityCaptureFailed)
-                return fail("modeler-dispatch mutation control did not capture its source line");
+                return fail("3D-dispatch mutation control did not capture its source line");
 
             DRW_Entity* const captured =
                 modelerDispatchData.mBlock->ent.front();
-            captured->eType = modelerTag;
+            captured->eType = threeDTag;
             const auto output = std::filesystem::temp_directory_path()
-                / ("libdxfrw-mutated-modeler-runtime-type-"
+                / ("libdxfrw-mutated-3d-runtime-type-"
                    + std::to_string(std::chrono::steady_clock::now()
                                         .time_since_epoch().count())
                    + ".dxf");
             if (std::filesystem::exists(output))
-                return fail("mutated-modeler output path unexpectedly exists");
+                return fail("mutated-3D output path unexpectedly exists");
             struct ModelerDispatchCleanup {
                 std::filesystem::path path;
                 ~ModelerDispatchCleanup() {
@@ -19354,25 +19355,25 @@ bool typedEntityCallbackCaptureLimitsFailClosed() {
             if (modelerDispatchIface.fileExport(
                     output.string(), DRW::AC1027, binary,
                     &modelerDispatchData, false, true))
-                return fail("modeler dispatch accepted a mismatched runtime entity");
+                return fail("3D dispatch accepted a mismatched runtime entity");
             std::ifstream refusedOutput(output, std::ios::binary);
             const std::string retained(
                 (std::istreambuf_iterator<char>(refusedOutput)), {});
             if (retained != sentinel)
-                return fail("mismatched modeler dispatch changed the prior destination");
+                return fail("mismatched 3D dispatch changed the prior destination");
 
             captured->eType = DRW::LINE;
             if (!modelerDispatchIface.fileExport(
                     output.string(), DRW::AC1027, binary,
                     &modelerDispatchData, false, true))
-                return fail("corrected modeler-dispatch type did not retry successfully");
+                return fail("corrected 3D-dispatch type did not retry successfully");
             dx_data modelerReadback;
             dx_iface modelerReader;
             if (!modelerReader.fileImport(
                     output.string(), &modelerReadback, false)
                 || modelerReadback.mBlock == nullptr
                 || modelerReadback.mBlock->ent.size() != 1u) {
-                return fail("corrected modeler-dispatch retry did not read back");
+                return fail("corrected 3D-dispatch retry did not read back");
             }
             const auto* line = dynamic_cast<const DRW_Line*>(
                 modelerReadback.mBlock->ent.front());
@@ -19380,8 +19381,8 @@ bool typedEntityCallbackCaptureLimitsFailClosed() {
                 || line->basePoint.y != 2.0
                 || line->basePoint.z != 3.0 || line->secPoint.x != 4.0
                 || line->secPoint.y != 5.0 || line->secPoint.z != 6.0)
-                return fail("corrected modeler-dispatch retry changed the source line");
-            ++modelerDispatchCases;
+                return fail("corrected 3D-dispatch retry changed the source line");
+            ++threeDDispatchCases;
         }
     }
 
