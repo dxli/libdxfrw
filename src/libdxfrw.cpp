@@ -23488,7 +23488,11 @@ bool dxfRW::processDynamicBlockObject() {
                         data.m_nodeId = static_cast<std::uint32_t>(nodeId);
                         data.m_major = static_cast<std::uint32_t>(evalMajor);
                         data.m_minor = static_cast<std::uint32_t>(evalMinor);
-                        data.m_parentId = DRW::NoHandle;
+                        // EvalExpr.parentId has no DXF group in this admitted
+                        // profile. Match LibreDWG's DXF-import default (-1)
+                        // instead of the unrelated null-handle value (0).
+                        data.m_parentId =
+                            std::numeric_limits<std::uint32_t>::max();
                         data.m_valueCode = -9999;
                         data.m_evalExprParsed = true;
                         data.m_elementName = name;
@@ -23867,7 +23871,11 @@ bool dxfRW::processDynamicBlockObject() {
                         data.m_nodeId = static_cast<std::uint32_t>(nodeId);
                         data.m_major = static_cast<std::uint32_t>(evalMajor);
                         data.m_minor = static_cast<std::uint32_t>(evalMinor);
-                        data.m_parentId = DRW::NoHandle;
+                        // EvalExpr.parentId has no DXF group in this admitted
+                        // profile. Match LibreDWG's DXF-import default (-1)
+                        // instead of the unrelated null-handle value (0).
+                        data.m_parentId =
+                            std::numeric_limits<std::uint32_t>::max();
                         data.m_valueCode = -9999;
                         data.m_evalExprParsed = true;
                         data.m_elementName = std::move(elementName);

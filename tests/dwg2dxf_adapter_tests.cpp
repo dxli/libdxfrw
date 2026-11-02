@@ -9414,6 +9414,8 @@ bool dynamicBlockOrientedGripRecordOutputProfiles(
             && result.handle == source.handle
             && result.parentHandle == source.parentHandle
             && result.m_bodyFullyDecoded && result.m_evalExprParsed
+            && result.m_parentId
+                == std::numeric_limits<std::uint32_t>::max()
             && result.m_nodeId == source.m_nodeId
             && result.m_major == 33u && result.m_minor == 29u
             && result.m_valueCode == -9999 && !result.m_hasValueDouble
@@ -10010,7 +10012,7 @@ bool dynamicBlockVisibilityParameterRecordOutputProfile() {
             DRW_DynamicBlockObject::Kind::VisibilityParameter;
         author.object.m_bodyFullyDecoded = true;
         author.object.m_evalExprParsed = true;
-        author.object.m_parentId = DRW::NoHandle;
+        author.object.m_parentId = std::numeric_limits<std::uint32_t>::max();
         author.object.m_major = 29u;
         author.object.m_minor = 2u;
         author.object.m_valueCode = -9999;
@@ -10201,6 +10203,8 @@ bool dynamicBlockVisibilityParameterRecordOutputProfile() {
                 != DRW_DynamicBlockObject::Kind::VisibilityParameter
             || result.handle != 0xE818u || result.parentHandle != 0xE817u
             || !result.m_bodyFullyDecoded || !result.m_evalExprParsed
+            || result.m_parentId
+                != std::numeric_limits<std::uint32_t>::max()
             || result.m_nodeId != 16u || result.m_major != 33u
             || result.m_minor != 29u || result.m_valueCode != -9999
             || !result.m_elementParsed
@@ -10535,7 +10539,8 @@ bool dynamicBlockVisibilityParameterDoorProfile() {
         if (!result.m_bodyFullyDecoded || result.handle != 0xE828u
             || result.parentHandle != 0x110Fu || result.m_nodeId != 46u
             || result.m_major != 33u || result.m_minor != 29u
-            || result.m_parentId != DRW::NoHandle
+            || result.m_parentId
+                != std::numeric_limits<std::uint32_t>::max()
             || result.m_elementName != "Visibility State"
             || result.m_defPoint.x != -5.0 || result.m_defPoint.y != 15.0
             || result.m_defPoint.z != 0.0
