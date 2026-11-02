@@ -14941,6 +14941,16 @@ DRW_Insert& DRW_Insert::operator=(const DRW_Insert& o) {
 DRW_Insert::DRW_Insert(DRW_Insert&&) noexcept = default;
 DRW_Insert& DRW_Insert::operator=(DRW_Insert&&) noexcept = default;
 
+void DRW_Insert::applyExtrusion() {
+    if (!haveExtrusion)
+        return;
+
+    // INSERT group 10 is a point in OCS. Keep its local angle and extrusion
+    // normal so consumers can still construct the block's oriented frame.
+    calculateAxis(extPoint);
+    extrudePoint(extPoint, &basePoint);
+}
+
 DRW_HatchLoop::DRW_HatchLoop(const DRW_HatchLoop& rhs)
     : type(rhs.type), numedges(rhs.numedges),
       objlist(cloneHatchBoundaryEntities(rhs.objlist)),

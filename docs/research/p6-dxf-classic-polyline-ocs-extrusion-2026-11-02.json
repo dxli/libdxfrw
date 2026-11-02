@@ -87,7 +87,7 @@
     "fixtureDisposition": "Generated in a temporary directory by the test and deleted; no DWG/DXF fixture committed."
   },
   "validation": {
-    "toolchain": "CMake 4.4.4, Apple clang 21.0.3",
+    "toolchain": "CMake 4.4.4, Apple clang 21.0.0 (arm64-apple-darwin27.0.0)",
     "build": {
       "command": "cmake --build build-gcc --target libdxfrw_dxf_fixture_tests -j2",
       "result": "PASS"

@@ -22109,8 +22109,10 @@ bool writeTextOcsExtrusionControl(const std::filesystem::path& path,
                         2.0, 3.0, 4.0, 5.0, 6.0, 7.0)
         && string(0, "INSERT") && string(100, "AcDbEntity")
         && string(8, "0") && string(100, "AcDbBlockReference")
-        && string(2, "OCS_BLOCK") && real(10, 0.0) && real(20, 0.0)
-        && real(30, 0.0) && shortValue(66, 1)
+        && string(2, "OCS_BLOCK") && real(10, 2.0) && real(20, 3.0)
+        && real(30, 4.0) && shortValue(66, 1)
+        && real(50, 30.0)
+        && real(210, 1.0) && real(220, 0.0) && real(230, 0.0)
         && writeOcsText("ATTRIB", "OCS_ATTRIB", "OCS_TAG",
                         8.0, 9.0, 10.0, 11.0, 12.0, 13.0)
         && string(0, "SEQEND") && string(100, "AcDbEntity")
@@ -22130,6 +22132,9 @@ public:
     }
     void addInsert(const DRW_Insert& value) override {
         ++insertCallbacks;
+        insertBase = value.basePoint;
+        insertExtrusion = value.extPoint;
+        insertAngle = value.angle;
         attributeCount = value.attlist.size();
         if (attributeCount != 1u || !value.attlist.front())
             return;
@@ -22151,6 +22156,9 @@ public:
     DRW_Coord attributeAlignment;
     DRW_Coord attributeExtrusion;
     double attributeAngle{0.0};
+    DRW_Coord insertBase;
+    DRW_Coord insertExtrusion;
+    double insertAngle{0.0};
 };
 
 void testTextOcsExtrusion(TestContext& t) {
@@ -22181,7 +22189,7 @@ void testTextOcsExtrusion(TestContext& t) {
             t.expect(read && capture.textCallbacks == 1u
                          && capture.insertCallbacks == 1u
                          && capture.attributeCount == 1u,
-                     "TEXT and its owned ATTRIB arrive at their callbacks");
+                     "TEXT and its owned INSERT/ATTRIB arrive at their callbacks");
             t.expect(read
                          && (transformed
                              ? equalPoint(capture.textBase, 4.0, 2.0, 3.0)
@@ -22203,9 +22211,18 @@ void testTextOcsExtrusion(TestContext& t) {
                          && equalPoint(capture.textExtrusion, 1.0, 0.0, 0.0)
                          && equalPoint(capture.attributeExtrusion,
                                        1.0, 0.0, 0.0)
+                         && equalPoint(capture.insertExtrusion,
+                                       1.0, 0.0, 0.0)
                          && capture.textAngle == 30.0
                          && capture.attributeAngle == 30.0,
-                     "conversion retains the OCS normal and local rotation");
+                     "conversion retains normals and local text rotation");
+            t.expect(read
+                         && (transformed
+                             ? equalPoint(capture.insertBase, 4.0, 2.0, 3.0)
+                             : equalPoint(capture.insertBase, 2.0, 3.0, 4.0))
+                         && std::abs(capture.insertAngle - 30.0 / ARAD)
+                             < 1e-12,
+                     "applyExtrusion controls INSERT OCS insertion conversion");
         }
         std::filesystem::remove(path, error);
     }
@@ -60970,7 +60987,7 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--text-ocs-extrusion") {
         TestContext context;
         testTextOcsExtrusion(context);
-        std::cout << "DXF TEXT/ATTRIB OCS extrusion controls: "
+        std::cout << "DXF TEXT/INSERT/ATTRIB OCS extrusion controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

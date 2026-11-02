@@ -18840,6 +18840,8 @@ bool dxfRW::processInsert() {
             } else if (!acceptEntityCallbackBoundary()) {
                 return setError(DRW::BAD_READ_ENTITIES);
             }
+            if (applyExt)
+                insert.applyExtrusion();
             iface->addInsert(insert);
             return true;
         }

@@ -1773,6 +1773,7 @@ public:
     DRW_Insert& operator=(const DRW_Insert&);
     DRW_Insert(DRW_Insert&&) noexcept;
     DRW_Insert& operator=(DRW_Insert&&) noexcept;
+    void applyExtrusion() override;
 
 protected:
     void resetDwgState();
