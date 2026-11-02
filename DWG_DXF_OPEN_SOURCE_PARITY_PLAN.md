@@ -347,6 +347,8 @@ failing-stage diagnostic.
 
 **HATCH DXF parser retry safety:** The parser keeps loop/edge construction, count declarations, point cursors, gradient-stop state, and spline boundary arrays retryable after allocation failure or invalid counts. Generated allocation-failure controls cover same-group retry; ASCII/Binary point-order readback is separately registered. The focused parser/adjacent regression cohort passes 11/11 in 0.75 seconds. This is parser-safety evidence only; it does not qualify DWG HATCH support or native rendering. See [HATCH allocation receipt](docs/research/p6-hatch-dxf-allocation-retry-2026-11-02.json) and [HATCH spline allocation receipt](docs/research/p6-hatch-spline-dxf-allocation-retry-2026-11-02.json).
 
+**MESH DXF face-allocation retry safety:** Bounded vertex/face reservations and per-face index reservation now leave group counts, cursor state, and face lists retryable on injected allocation failure. The focused `libdxfrw_mesh_dxf_allocation_failure` CTest passes 1/1 in 0.04 seconds. No fixture or support claim was added. Physical MESH producer profiles and native geometry semantics remain open. See [MESH DXF allocation receipt](docs/research/p6-mesh-dxf-face-allocation-rollback-2026-11-02.json).
+
 ## P7 — ACIS/ACDS and independent 3D meaning
 
 - Complete the original DWG entity → owner/key → AcDs segment → SAT/SAB join,

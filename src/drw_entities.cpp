@@ -8598,6 +8598,13 @@ bool DRW_Mesh::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         const std::int32_t count = reader->getInt32();
         if (!isValidCount(count, DRW_Mesh::kMaxMeshItems))
             return false;
+        const std::size_t additionalFaces =
+            static_cast<std::size_t>(count) / 4u;
+        if (faces.size() > static_cast<std::size_t>(DRW_Mesh::kMaxMeshItems)
+            || additionalFaces > static_cast<std::size_t>(DRW_Mesh::kMaxMeshItems)
+                - faces.size()
+            || !DRW::reserve(faces, static_cast<int>(faces.size() + additionalFaces)))
+            return false;
         m_dxfState = 93;
         m_dxfPhaseCounts = {{count, -1, -1}};
         m_dxfPending = 0;
@@ -8641,6 +8648,10 @@ bool DRW_Mesh::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
                 if (val < 3 || val > m_dxfPhaseCounts[0] - 1)
                     return false;
                 faces.emplace_back();
+                if (!DRW::reserve(faces.back(), val)) {
+                    faces.pop_back();
+                    return false;
+                }
                 m_dxfPending = val;
                 --m_dxfPhaseCounts[0];
             } else {

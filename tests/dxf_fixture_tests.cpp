@@ -13620,6 +13620,69 @@ void testHatchDxfAllocationFailure(TestContext& t) {
     }
 }
 
+void testMeshDxfAllocationFailure(TestContext& t) {
+    struct MeshParseProbe final : DRW_Mesh {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+    };
+    const auto parseRecord = [](MeshParseProbe& mesh, int expectedCode,
+                                std::string_view value,
+                                long allocationFailure = -1) {
+        const std::string record = std::to_string(expectedCode) + "\n"
+            + std::string(value) + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int code = 0;
+        if (!reader->readRec(&code) || code != expectedCode)
+            return false;
+        MaterialAllocationFailure failure(allocationFailure);
+        return mesh.parse(code, reader);
+    };
+
+    MeshParseProbe mesh;
+    const bool subclass = parseRecord(mesh, 100, "AcDbSubDMesh");
+    const std::size_t vertexFailuresBefore = materialFailedAllocations;
+    const bool vertexRejected = !parseRecord(mesh, 92, "3", 0);
+    const bool vertexFailedOnce = materialFailedAllocations
+        == vertexFailuresBefore + 1u;
+    const bool vertexUnchanged = mesh.vertices.empty();
+    bool vertexRetry = parseRecord(mesh, 92, "3");
+    const std::array<std::array<const char*, 3>, 3> points{{
+        {{"0", "0", "0"}}, {{"1", "0", "0"}}, {{"0", "1", "0"}}
+    }};
+    for (const auto& point : points) {
+        vertexRetry = vertexRetry && parseRecord(mesh, 10, point[0])
+            && parseRecord(mesh, 20, point[1])
+            && parseRecord(mesh, 30, point[2]);
+    }
+
+    const std::size_t faceCountFailuresBefore = materialFailedAllocations;
+    const bool faceCountRejected = !parseRecord(mesh, 93, "4", 0);
+    const bool faceCountFailedOnce = materialFailedAllocations
+        == faceCountFailuresBefore + 1u;
+    const bool faceCountUnchanged = mesh.faces.empty();
+    const bool faceCountRetry = parseRecord(mesh, 93, "4");
+
+    const std::size_t faceFailuresBefore = materialFailedAllocations;
+    const bool faceRejected = !parseRecord(mesh, 90, "3", 0);
+    const bool faceFailedOnce = materialFailedAllocations
+        == faceFailuresBefore + 1u;
+    const bool faceRolledBack = mesh.faces.empty();
+    const bool faceRetry = parseRecord(mesh, 90, "3")
+        && parseRecord(mesh, 90, "0")
+        && parseRecord(mesh, 90, "1")
+        && parseRecord(mesh, 90, "2");
+    const bool faceReadback = mesh.faces.size() == 1u
+        && mesh.faces.front() == std::vector<std::int32_t>{0, 1, 2};
+
+    t.expect(subclass && vertexRejected && vertexFailedOnce && vertexUnchanged
+                 && vertexRetry && faceCountRejected && faceCountFailedOnce
+                 && faceCountUnchanged && faceCountRetry && faceRejected
+                 && faceFailedOnce && faceRolledBack && faceRetry && faceReadback,
+             "MESH face-list reservations and face construction roll back and retry after allocation failure");
+}
+
 void testHatchSplinePointComponentOrder(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
@@ -61723,6 +61786,7 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--mesh-raw-field-tags") {
         TestContext context;
         testMeshRawFieldTags(context);
+    testMeshDxfAllocationFailure(context);
         std::cout << "MESH raw-field and coordinate-triplet controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
@@ -61764,6 +61828,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testHatchDxfAllocationFailure(context);
         std::cout << "HATCH DXF allocation-failure and retry controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--mesh-dxf-allocation-failure") {
+        TestContext context;
+        testMeshDxfAllocationFailure(context);
+        std::cout << "MESH DXF allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

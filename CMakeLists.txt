@@ -2301,6 +2301,10 @@ if(LIBDXFRW_BUILD_TESTS)
             --hatch-dxf-allocation-failure)
     set_tests_properties(libdxfrw_hatch_dxf_allocation_failure PROPERTIES
         LABELS "fast;dxf;reader;hatch;allocation;retry" TIMEOUT 30)
+    add_test(NAME libdxfrw_mesh_dxf_allocation_failure
+        COMMAND libdxfrw_dxf_fixture_tests --mesh-dxf-allocation-failure)
+    set_tests_properties(libdxfrw_mesh_dxf_allocation_failure PROPERTIES
+        LABELS "fast;dxf;reader;mesh;allocation;retry" TIMEOUT 30)
     add_test(NAME libdxfrw_hatch_spline_point_component_order
         COMMAND libdxfrw_dxf_fixture_tests
             --hatch-spline-point-component-order)
