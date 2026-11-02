@@ -4453,6 +4453,7 @@ bool dxfRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
         || !header.canWriteDxfLinetypeScale()
         || !header.canWriteDxfPsltscale()
         || !header.canWriteDxfMsltscale(version)
+        || !header.canWriteDxfMeasurement()
         || !header.canWriteDxfDimensionVariables(version)
         || !header.canWriteDxfVisualStyleReferences(version)
         || !header.canWriteDxfCustomProperties(version)

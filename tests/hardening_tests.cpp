@@ -1778,6 +1778,148 @@ void testDxfLinetypeDisplayScaleDomains(TestContext& t) {
     }
 }
 
+void testDxfMeasurementHeaderDomain(TestContext& t) {
+    const auto makeWriter = [](bool binary, std::ostream* output) {
+        std::unique_ptr<dxfWriter> writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(output))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(output));
+        writer->setVersion("AC1027", true);
+        return writer;
+    };
+    const auto emitHeader = [](const std::unique_ptr<dxfWriter>& writer,
+                               DRW_Header& header) {
+        DxfWriterRecordScope record(*writer);
+        header.write(writer, DRW::AC1027);
+        return !writer->hasWriteError() && record.commit();
+    };
+    const auto readMeasurement = [](const std::string& bytes, bool binary,
+                                     bool& found, int& value) {
+        found = false;
+        std::istringstream input(bytes, std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        bool expectingValue = false;
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (expectingValue) {
+                if (code != 70)
+                    return false;
+                value = reader->getInt32();
+                found = true;
+                return true;
+            }
+            if (code == 9)
+                expectingValue = reader->getString() == "$MEASUREMENT";
+        }
+        return true;
+    };
+
+    for (const bool binary : {false, true}) {
+        for (const int validValue : {0, 1}) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
+            DRW_Header header;
+            header.addInt("$MEASUREMENT", validValue, 70);
+            bool found = false;
+            int parsedValue = -1;
+            t.expect(emitHeader(writer, header)
+                         && readMeasurement(output.str(), binary, found,
+                                            parsedValue)
+                         && found && parsedValue == validValue,
+                     "MEASUREMENT imperial/metric values round-trip in ASCII/Binary DXF");
+        }
+
+        std::ostringstream absentOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> absentWriter = makeWriter(
+            binary, &absentOutput);
+        DRW_Header absent;
+        bool absentFound = true;
+        int absentValue = -1;
+        t.expect(emitHeader(absentWriter, absent)
+                     && readMeasurement(absentOutput.str(), binary,
+                                        absentFound, absentValue)
+                     && !absentFound,
+                 "absent MEASUREMENT remains absent and is not inferred from INSUNITS");
+
+        for (const int invalidValue : {-1, 2, 4,
+                                       (std::numeric_limits<int>::max)()}) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
+            DRW_Header header;
+            header.addInt("$MEASUREMENT", invalidValue, 70);
+            t.expect(!emitHeader(writer, header) && output.str().empty(),
+                     "out-of-domain MEASUREMENT value is atomically refused");
+        }
+
+        const auto refuses = [&](DRW_Header& header) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> writer = makeWriter(binary, &output);
+            return !emitHeader(writer, header) && output.str().empty();
+        };
+        DRW_Header wrongType;
+        wrongType.addStr("$MEASUREMENT", "1", 1);
+        t.expect(refuses(wrongType),
+                 "MEASUREMENT wrong variant type is refused");
+        DRW_Header wrongGroup;
+        wrongGroup.addInt("$MEASUREMENT", 1, 90);
+        t.expect(refuses(wrongGroup),
+                 "MEASUREMENT wrong group code is refused");
+        DRW_Header duplicateAliases;
+        duplicateAliases.addInt("$MEASUREMENT", 0, 70);
+        duplicateAliases.addInt("MEASUREMENT", 1, 70);
+        t.expect(refuses(duplicateAliases),
+                 "MEASUREMENT dollar/bare aliases are refused together");
+        DRW_Header lowercaseAlias;
+        lowercaseAlias.addInt("$measurement", 1, 70);
+        t.expect(refuses(lowercaseAlias),
+                 "case-folded MEASUREMENT alias cannot duplicate the canonical field");
+
+        std::ostringstream source(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> sourceWriter = makeWriter(binary, &source);
+        t.expect(sourceWriter->writeString(9, "$MEASUREMENT")
+                     && sourceWriter->writeInt16(70, 4),
+                 "out-of-domain MEASUREMENT source is encoded");
+        std::istringstream sourceInput(source.str(),
+                                       std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> sourceReader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&sourceInput))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&sourceInput));
+        sourceReader->setVersion("AC1027", true);
+        ExposedHeader parsedHeader;
+        int code = 0;
+        bool parsedOk = true;
+        while (sourceReader->readRec(&code))
+            parsedOk = parsedHeader.parseCode(code, sourceReader) && parsedOk;
+        const auto parsedValue = parsedHeader.vars.find("$MEASUREMENT");
+        t.expect(parsedOk && parsedValue != parsedHeader.vars.end()
+                     && parsedValue->second != nullptr
+                     && parsedValue->second->type() == DRW_Variant::INTEGER
+                     && parsedValue->second->content.i == 4,
+                 "DXF input preserves unsupported MEASUREMENT for diagnosis");
+
+        std::ostringstream retryOutput(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> retryWriter = makeWriter(
+            binary, &retryOutput);
+        DRW_Header invalidRetry;
+        invalidRetry.addInt("$MEASUREMENT", 2, 70);
+        t.expect(!emitHeader(retryWriter, invalidRetry)
+                     && retryOutput.str().empty()
+                     && !retryWriter->hasWriteError(),
+                 "invalid MEASUREMENT rolls back the HEADER writer transaction");
+        DRW_Header correctedRetry;
+        correctedRetry.addInt("$MEASUREMENT", 1, 70);
+        bool retryFound = false;
+        int retryValue = -1;
+        t.expect(emitHeader(retryWriter, correctedRetry)
+                     && readMeasurement(retryOutput.str(), binary,
+                                        retryFound, retryValue)
+                     && retryFound && retryValue == 1,
+                 "same writer accepts corrected MEASUREMENT after rollback");
+    }
+}
+
 void testLeaderAdvisoryCountState(TestContext& t) {
     ExposedLeader source;
     t.expect(parseDxfRecords(source, "76\n99\n10\n1\n20\n2\n30\n3\n10\n4\n20\n6\n30\n0\n")
@@ -24817,6 +24959,18 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--dxf-measurement-header-domain") {
+        TestContext focused;
+        testDxfMeasurementHeaderDomain(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " MEASUREMENT HEADER assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "MEASUREMENT HEADER domain: PASS\n";
+        return 0;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--dxf-geodata-modern-text-preflight") {
         TestContext focused;
         testDxfGeoDataModernTextPreflightView(focused);
@@ -26066,6 +26220,7 @@ int main(int argc, char** argv) {
     testSpatialFilterDxfValidation(context);
     testDxfOperationAdmission(context);
     testDxfLinetypeDisplayScaleDomains(context);
+    testDxfMeasurementHeaderDomain(context);
     testLeaderAdvisoryCountState(context);
     testPublicOwnershipContracts(context);
     testEmbeddedAttributeTextRouting(context);

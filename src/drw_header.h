@@ -217,6 +217,9 @@ public:
     /// MSLTSCALE remains absent.
     bool canWriteDxfPsltscale() const noexcept;
     bool canWriteDxfMsltscale(DRW::Version target) const noexcept;
+    /// Preserve explicit measurement selection only for the documented
+    /// imperial/metric values; absence remains distinct from either value.
+    bool canWriteDxfMeasurement() const noexcept;
     /// Return whether the dimension-variable family can be represented in the
     /// requested DXF revision without dropping modern split-variable values.
     bool canWriteDxfDimensionVariables(DRW::Version target) const;
@@ -565,7 +568,7 @@ public:
     std::map<std::string, DRW_Variant*> customVars; /*!< custom/unknown header variables */
     std::vector<std::pair<std::string, std::string>> customProperties;
 private:
-    bool canWriteDxfBooleanHeaderVariable(
+    bool canWriteDxfZeroOrOneIntegerHeaderVariable(
         const char* dollarName, bool* present = nullptr) const noexcept;
     std::string comments;
     std::string name;
