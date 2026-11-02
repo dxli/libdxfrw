@@ -67898,11 +67898,6 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             return false;
         }
     }
-    if (hasMLeaderEntity) {
-        reportPreflightFailure(
-            "MLEADER entity output has no qualified adapter serializer");
-        return false;
-    }
     if (hasMLineEntity) {
         try {
             std::unordered_map<std::uint32_t, const DRW_MLineStyle*> styles;
@@ -70759,6 +70754,9 @@ void dx_iface::writeEntity(DRW_Entity* e){
         break;
     case DRW::LEADER:
         written = dxfW->writeLeader(static_cast<DRW_Leader*>(e));
+        break;
+    case DRW::MLEADER:
+        written = dxfW->writeMultiLeader(static_cast<DRW_MLeader*>(e));
         break;
     case DRW::HATCH:
         written = dxfW->writeHatch(static_cast<DRW_Hatch*>(e));

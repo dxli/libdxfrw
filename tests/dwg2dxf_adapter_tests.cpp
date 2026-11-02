@@ -25293,7 +25293,7 @@ bool retainModelDocViewStyleCallbacks() {
     return true;
 }
 
-bool rejectMLeaderWithoutSerializer() {
+bool qualifyMLeaderAdapterSerializer() {
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch()
                            .count();
@@ -25501,13 +25501,124 @@ bool rejectMLeaderWithoutSerializer() {
         const std::string preserved(
             (std::istreambuf_iterator<char>(preservedInput)),
             std::istreambuf_iterator<char>());
-        if (exported
-            || supportedDiagnostic.str().find(
-                "MLEADER entity output has no qualified adapter serializer")
+        if (!exported)
+            return fail("rooted MLEADER adapter export failed: "
+                        + supportedDiagnostic.str());
+        if (preserved == sentinel
+            || preserved.find("MULTILEADER") == std::string::npos)
+            return fail("rooted MLEADER output was not published");
+
+        dx_data roundtrip;
+        dx_iface roundtripReader;
+        if (!roundtripReader.fileImport(emittedOutput.string(), &roundtrip,
+                                        false))
+            return fail("rooted MLEADER ASCII/Binary output did not read back");
+        DRW_MLeader* roundtripMLeader = findMLeader(roundtrip);
+        const auto hasUniqueHandle = [](const auto& records,
+                                        std::uint32_t handle) {
+            return std::count_if(records.begin(), records.end(),
+                [handle](const auto& record) {
+                    return record.handle == handle;
+                }) == 1;
+        };
+        if (roundtripMLeader == nullptr
+            || roundtrip.mLeaderStyles.size() != 1u
+            || roundtripMLeader->styleHandle.ref
+                != roundtrip.mLeaderStyles.front().handle
+            || !hasUniqueHandle(roundtrip.lineTypes,
+                                roundtripMLeader->leaderLineTypeHandle.ref)
+            || !hasUniqueHandle(roundtrip.blockRecords,
+                                roundtripMLeader->arrowHeadHandle.ref)
+            || !hasUniqueHandle(roundtrip.textStyles,
+                                roundtripMLeader->styleTextStyleHandle.ref)
+            || roundtripMLeader->context.textStyleHandle.ref == 0u
+            || !hasUniqueHandle(roundtrip.textStyles,
+                                roundtripMLeader->context.textStyleHandle.ref)
+            || roundtripMLeader->context.roots.size() != 1u
+            || roundtripMLeader->context.roots.front().leaderLines.size() != 1u
+            || !hasUniqueHandle(roundtrip.lineTypes,
+                roundtripMLeader->context.roots.front().leaderLines.front()
+                    .lineTypeHandle.ref)
+            || !hasUniqueHandle(roundtrip.blockRecords,
+                roundtripMLeader->context.roots.front().leaderLines.front()
+                    .arrowHandle.ref)
+            || roundtripMLeader->parentHandle
+                != DRW::DxfModelSpaceBlockRecordHandle
+            || roundtripMLeader->context.textLabel != "generated MLEADER text"
+            || roundtripMLeader->context.textLocation.x != 1.0
+            || roundtripMLeader->context.textLocation.y != 2.0
+            || roundtripMLeader->context.roots.front().connectionPoint.x != 3.0
+            || roundtripMLeader->context.roots.front().connectionPoint.y != 4.0
+            || roundtripMLeader->context.roots.front().leaderLines.front()
+                   .points.size() != 1u
+            || roundtripMLeader->context.roots.front().leaderLines.front()
+                   .points.front().x != 2.0
+            || roundtripMLeader->context.roots.front().leaderLines.front()
+                   .points.front().y != 3.0)
+            return fail("rooted MLEADER fields or style reference changed on readback");
+        if (validMLeader->handle != 0x40u
+            || validMLeader->parentHandle != 0x1Fu
+            || validMLeader->styleHandle.ref != 0x1Cu
+            || validMLeader->leaderLineTypeHandle.ref != 0x30u
+            || validMLeader->arrowHeadHandle.ref != 0x1Fu
+            || validMLeader->styleTextStyleHandle.ref != 0x31u
+            || validMLeader->styleBlockHandle.ref != 0x1Eu
+            || validMLeader->context.textStyleHandle.ref != 0x31u
+            || validMLeader->context.roots.front().leaderLines.front()
+                   .lineTypeHandle.ref != 0x30u
+            || validMLeader->context.roots.front().leaderLines.front()
+                   .arrowHandle.ref != 0x1Fu
+            || validMLeader->context.textColorRgb != -1)
+            return fail("successful MLEADER export changed the caller's model");
+
+        // An unsupported DWG CMC extension must roll back the staged output.
+        // Correcting the borrowed model and retrying the same adapter proves
+        // that neither destination publication nor writer state leaked.
+        {
+            std::ofstream previous(emittedOutput, std::ios::binary);
+            if (!previous)
+                return fail("could not seed MLEADER failure sentinel");
+            previous << sentinel;
+        }
+        validMLeader->context.textColorRgb = 0x123456;
+        std::ostringstream unsupportedDiagnostic;
+        std::streambuf* failurePreviousError = std::cerr.rdbuf(
+            unsupportedDiagnostic.rdbuf());
+        const bool unsupportedExported = validWriter.fileExport(
+            emittedOutput.string(), DRW::AC1027, binary, &validGraph, true);
+        std::cerr.rdbuf(failurePreviousError);
+        std::ifstream failureInput(emittedOutput, std::ios::binary);
+        const std::string failureBytes(
+            (std::istreambuf_iterator<char>(failureInput)),
+            std::istreambuf_iterator<char>());
+        if (unsupportedExported || failureBytes != sentinel
+            || unsupportedDiagnostic.str().find(
+                "unrepresentable-mleader-dxf-cmc-color")
                 == std::string::npos)
-            return fail("valid rooted MLEADER bypassed its unsupported-output gate");
-        if (preserved != sentinel)
-            return fail("valid rooted MLEADER refusal replaced destination");
+            return fail("unrepresentable MLEADER CMC did not fail atomically");
+        validMLeader->context.textColorRgb = -1;
+        if (!validWriter.fileExport(emittedOutput.string(), DRW::AC1027,
+                                    binary, &validGraph, true))
+            return fail("corrected MLEADER failed same-adapter retry");
+        if (validMLeader->handle != 0x40u
+            || validMLeader->parentHandle != 0x1Fu
+            || validMLeader->styleHandle.ref != 0x1Cu
+            || validMLeader->leaderLineTypeHandle.ref != 0x30u
+            || validMLeader->arrowHeadHandle.ref != 0x1Fu
+            || validMLeader->styleTextStyleHandle.ref != 0x31u
+            || validMLeader->styleBlockHandle.ref != 0x1Eu
+            || validMLeader->context.textStyleHandle.ref != 0x31u
+            || validMLeader->context.roots.front().leaderLines.front()
+                   .lineTypeHandle.ref != 0x30u
+            || validMLeader->context.roots.front().leaderLines.front()
+                   .arrowHandle.ref != 0x1Fu
+            || validMLeader->context.textColorRgb != -1)
+            return fail("MLEADER retry changed the caller's model");
+        dx_data retried;
+        dx_iface retryReader;
+        if (!retryReader.fileImport(emittedOutput.string(), &retried, false)
+            || findMLeader(retried) == nullptr)
+            return fail("corrected MLEADER retry did not read back");
 
         for (const MLeaderMutator& invalid : invalidReferences) {
             dx_data invalidGraph;
@@ -61215,8 +61326,8 @@ int main(int argc, char** argv) {
             ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--file-extension-case")
         return fileExtensionAsciiCaseAndNonAsciiSafety() ? 0 : 1;
-    if (argc == 2 && std::string(argv[1]) == "--reject-mleader-without-serializer")
-        return rejectMLeaderWithoutSerializer()
+    if (argc == 2 && std::string(argv[1]) == "--mleader-adapter-writer")
+        return qualifyMLeaderAdapterSerializer()
                 && objectContextDataLossRefusesExport() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--retain-named-object-callbacks")
         return retainNamedObjectCallbacks() ? 0 : 1;

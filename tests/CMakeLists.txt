@@ -1524,10 +1524,10 @@ set_tests_properties(dwg2dxf_file_extension_case PROPERTIES
 )
 
 add_test(
-    NAME dwg2dxf_mleader_fail_closed
-    COMMAND libdxfrw_dwg2dxf_adapter_tests --reject-mleader-without-serializer
+    NAME dwg2dxf_mleader_adapter_writer
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --mleader-adapter-writer
 )
-set_tests_properties(dwg2dxf_mleader_fail_closed PROPERTIES
+set_tests_properties(dwg2dxf_mleader_adapter_writer PROPERTIES
     LABELS "fast;dxf;adapter;mleader"
     TIMEOUT 10
 )
