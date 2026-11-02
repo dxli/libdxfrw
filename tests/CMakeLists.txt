@@ -3040,6 +3040,12 @@ set_tests_properties(libdxfrw_tablecontent_multicell_block_reference PROPERTIES
     LABELS "fast;dxf;adapter;table;block;generated;transaction"
     TIMEOUT 30)
 
+# Shared tracked sample for the optional FreeCAD desktop and native-platform
+# open/insert controls. Keep this bound to the repository fixture so neither
+# gate depends on a local investigation drawing.
+set(_freecad_cli_sample
+    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dwg/ordinary_enc_AC1027.dwg")
+
 # Optional test of the installed converter from FreeCAD's actual desktop
 # process. It uses only a tracked ordinary DWG and is deliberately disabled
 # by default; the normal inner loop remains the fast, FreeCAD-independent CLI

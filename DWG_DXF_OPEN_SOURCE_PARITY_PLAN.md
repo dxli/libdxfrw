@@ -383,6 +383,10 @@ eligible reader. The exact package and environment result are in the
   receipt](docs/research/p8-underlay-definition-graph-adapter-2026-11-02.json).
   This proves transport only, not native consumer semantics or remaining BLOCK
   callback coverage.
+- The optional desktop and native Linux/Windows FreeCAD CMake gates now bind to
+  the existing tracked `ordinary_enc_AC1027.dwg`; a registration-only configure
+  lists the desktop, open, and insert controls. Native execution is still open;
+  see the [tracked-sample binding receipt](docs/research/p8-freecad-tracked-sample-binding-2026-11-02.json).
 - Complete native Linux/Windows FreeCAD qualification and bind the actual loaded
   library/converter child. Verify Windows UTF-8/Qt paths, filesystem collisions,
   MSVC/DLL/shared/static/relocated consumers and package/toolchain contracts.
