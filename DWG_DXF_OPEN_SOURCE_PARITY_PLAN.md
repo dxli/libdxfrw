@@ -255,14 +255,26 @@ census receipt](docs/research/p5-viewport-layer-override-local-corpus-census-202
 7. **AC1027 source TABLECONTENT span discrepancy:** on the public
    `example_2013.dwg` source, object `0xC94` (type 529) parses its 9 columns and
    20 rows, then fails at row 0/cell 0's first ATTDEF reference. ODA §20.4.97
-   specifies that reference as a soft pointer; the bounded diagnostic observes
-   the next handle-stream item as code `0x05`, reference `0x11`. Treat this as
-   unresolved stream alignment, not proof that the producer violates ODA. Keep
+   specifies that reference as a soft pointer. The bounded probe reads
+   attribute count 208 at body bit 990/string bit 18176; the first handle starts
+   at handle bit 115929 and decodes as hard-pointer code `0x05`, reference
+   `0x11` (end bit 115945), where soft-pointer code `0x04` is expected.
+   The preceding custom key is `ACAD_ROUNDTRIP_2008_CELL_CHECKSUM` (string
+   bits 17556–18094); its flags=2/type=2 value spans body bits 840–928, followed
+   by a flags=6/type=4 cell value at body bits 950–980/string bits 18098–18176.
+   LibreDWG 0.14's paired DXF independently identifies handle `0x11` as a
+   `STYLE`, not an `ATTDEF`; this confirms the current cursor is on the wrong
+   record and does not identify the intended target. Treat this as unresolved
+   stream alignment, not proof that the producer violates ODA. Keep
    the TABLECONTENT frame incomplete and strict output refused until the prior
    body/string/handle spans and the target role are reconciled against an
    independent decoder that implements this class. LibreDWG 0.14 reports the
-   object as `UNKNOWN_OBJ`, so it does not adjudicate the schema. The source and
-   all traces remain external to the repository; see the [source-bound span
+   object as `UNKNOWN_OBJ`, so it does not adjudicate the schema. A pinned
+   ACadSharp reader independently opens the same file and reads the 20×9
+   `TABLE` entity, but handle `0xC94` is absent from its document; its
+   `readTableContent` path is called only for embedded `TABLE` entity data, not
+   this standalone type-529 object. It cannot adjudicate this span. The source
+   and all traces remain external to the repository; see the [source-bound span
    mismatch receipt](docs/research/p5-ac1027-tablecontent-attdef-handle-span-mismatch-2026-11-02.json).
 
 **TABLE CadValue flag scope:** ODA §20.4.99 uses one-based bit names: bit 1

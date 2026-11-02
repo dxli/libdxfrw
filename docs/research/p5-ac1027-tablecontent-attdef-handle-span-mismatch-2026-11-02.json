@@ -28,12 +28,22 @@
     "observedNextReference": {
       "handleCode": "0x05",
       "reference": "0x11",
-      "encodedSizeBytes": 1
+      "encodedSizeBytes": 1,
+      "targetRecord": "STYLE",
+      "targetRoleEvidence": "The LibreDWG 0.14 paired DXF contains group 0 STYLE with group 5 handle 11 and no ATTDEF record with handle 11."
     },
     "sourceSpanStatus": "unresolved; the observation may indicate prior body/string/handle offset drift and does not establish a producer deviation from ODA",
     "currentMask01Recheck": {
+      "cadValueContext": "cell custom data item",
       "cadValue": {"formatFlags": 2, "dataType": 2, "payloadPresent": true},
-      "followingState": "The parser reads the linked-data state and an attribute count of 1, then fails while reading the first ATTDEF handle.",
+      "followingState": "The parser reads the cell custom-item count of 1 and linked-data state, then a cell-content CadValue with flags=6/type=4; the later attribute count is 208 and the first ATTDEF handle then fails its role check.",
+      "customItemKey": "ACAD_ROUNDTRIP_2008_CELL_CHECKSUM",
+      "customItemKeyStringBits": [17556, 18094],
+      "customValueBodyBits": [840, 928],
+      "customValueStringBits": [18094, 18098],
+      "cellValue": {"formatFlags": 6, "dataType": 4, "bodyBits": [950, 980], "stringBits": [18098, 18176]},
+      "attributeCount": 208,
+      "attributeCountBodyEndBit": 990,
       "tracePath": "/private/tmp/dwg-example-2013-cadvalue-final-trace.log",
       "traceSha256": "22f37655e8eb36b925928bc2e2d52862ccf540791bd2055a5cc3c05b5b3d8d3"
     }
@@ -52,12 +62,31 @@
       "path": "/private/tmp/dwg-example-2013-cadvalue-final-trace.log",
       "sha256": "22f37655e8eb36b925928bc2e2d52862ccf540791bd2055a5cc3c05b5b3d8d3",
       "observations": [
-        "The corrected ODA mask-0x01 rule consumes the source flags=2/type=2 payload.",
-        "The first cell's custom data and linked-data state parse; the parser records one attribute and then the cell parse is incomplete at row 0/cell 0.",
+        "The corrected ODA mask-0x01 rule consumes the cell custom-data flags=2/type=2 payload.",
+        "The first cell's one custom item and linked-data state parse; its cell-content CadValue is flags=6/type=4, after which the cell parse is incomplete at row 0/cell 0.",
         "The previous bounded handle-role probe for this same source path observed code 0x05/reference 0x11 at the first ATTDEF slot."
       ],
       "conversionExit": 1,
       "dxfOutputCreated": false
+    },
+    "boundedHandleSpanProbe": {
+      "path": "/private/tmp/dwg-example-2013-handle-probe.log",
+      "sha256": "eba57576669a5417007f59f82bfb7a0c97009dd32602b09f09c8813b23209e19",
+      "observations": [
+        "At row 0/cell 0/content 0, the parser reads attribute count 208 at body bit 990 and string bit 18176.",
+        "The first ATTDEF handle begins at handle bit 115929; it decodes as hard-pointer code 0x05/reference 0x11 and ends at bit 115945, while ODA §20.4.97 requires soft-pointer code 0x04."
+      ],
+      "instrumentation": "Temporary diagnostic statements were reverted; behavior was unchanged."
+    },
+    "bodyStringHandleSpanProbe": {
+      "path": "/private/tmp/dwg-example-2013-spans.log",
+      "sha256": "5147749c68107cc36428c4a99abe4c424064047c4f4c01efd37ea4cf7c9a48a1",
+      "observations": [
+        "The source key ACAD_ROUNDTRIP_2008_CELL_CHECKSUM occupies string bits 17556..18094; its flags=2/type=2 custom value occupies body bits 840..928 and string bits 18094..18098.",
+        "The cell-content flags=6/type=4 CadValue occupies body bits 950..980 and string bits 18098..18176.",
+        "The immediately following attribute count ends at body bit 990 and is 208; the handle cursor is still bit 115929 before the first attribute reference."
+      ],
+      "instrumentation": "Temporary cursor/key DRW_DBG statements only; no parser behavior changed and all source edits were removed after capture."
     },
     "libreDwgPeer": {
       "version": "LibreDWG 0.14",
@@ -65,13 +94,27 @@
       "readTraceSha256": "b15473afb2663aa21f2ca35d0c0a4b3e1b2255b70a20a8eeb7bee3fe5b2d5fb0",
       "dxfPath": "/private/tmp/libredwg_example_2013.dxf",
       "dxfSha256": "a0638bb87134f2fd167be0cab197b38090e8764cb6110ed587a94344f9904b79",
-      "finding": "The peer reports TABLECONTENT type 529 as an unknown class object and retains it as UNKNOWN_OBJ. Its result does not independently decode or adjudicate this object's ATTDEF span or handle role."
+      "finding": "The peer reports TABLECONTENT type 529 as an unknown class object and retains it as UNKNOWN_OBJ. Its DXF identifies handle 0x11 as STYLE, not ATTDEF, which confirms the current cursor points at an unrelated record; it does not independently decode this object's body span or identify the intended ATTDEF target.",
+      "handle11TargetCheck": {"styleRecordFound": true, "attdefRecordFound": false, "evidence": "Scanned entity/object DXF group-code pairs; record with group 0 STYLE has group 5 value 11, and no ATTDEF has group 5 value 11."}
+    },
+    "acadsSharp": {
+      "repository": "https://github.com/DomCR/ACadSharp",
+      "commit": "3a52a52047e84670759c1f9ad3916ec3ce85ff56",
+      "library": "/Users/dli/dev/ACadSharp/src/ACadSharp/bin/Release/net9.0/ACadSharp.dll",
+      "librarySha256": "99f24d71403ecdbda2272473ebd995d5d2e773b4a6e887bcdb404293cbf18b77",
+      "probe": "/private/tmp/ACadSharpProbe/bin/Release/net10.0/ACadSharpProbe.dll",
+      "probeSha256": "acc619cf12485d6214b158853c8e500109bba15c62650ab950a39635df4d950f",
+      "command": "dotnet run --project /private/tmp/ACadSharpProbe/ACadSharpProbe.csproj --configuration Release --no-restore -- /private/tmp/dwg-example-2013.dwg",
+      "exit": 0,
+      "result": "DwgReader.Read() completes and exposes one TABLE entity at handle 0x4F2 with 20 rows and 9 columns; document.GetCadObject(0xC94) returns null.",
+      "sourceRoute": "DwgObjectReader.Entities.cs readTableContent is called by readTableEntity for embedded table data (lines 568, 744); no separate TABLECONTENT object dispatch was found.",
+      "evidenceCeiling": "This is not an independent decode of standalone object 0xC94 and does not adjudicate its body span or ATTDEF handle role."
     }
   },
   "implementationBoundary": {
     "currentBehavior": "Keep the TABLECONTENT parse failed and the source frame incomplete; strict complete conversion remains refused.",
     "prohibitedInference": "Do not accept the observed hard-pointer role or reference 0x11 as an ATTDEF target, and do not adjust the expected role until preceding body/string/handle spans are reconciled.",
-    "nextWork": "Trace the complete handle ledger and corresponding body/string positions through the first cell content, attribute count, ATTDEF reference, text/index, and following fields. Adjudicate against ODA and an independent decoder that implements TABLECONTENT; add a generated regression only after the exact wire profile is established."
+    "nextWork": "Reconcile the known custom-key/value, cell-value, attribute-count and handle spans against ODA for this exact source object; the first observed target is a STYLE, not ATTDEF. Obtain an independent decoder route for standalone type 529 before changing acceptance. Add a generated regression only after the exact wire profile is established."
   },
   "doesNotEstablish": [
     "a producer violation of ODA §20.4.97",
