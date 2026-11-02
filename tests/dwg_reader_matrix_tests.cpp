@@ -16128,7 +16128,9 @@ void testTemplateFields(TestContext& t) {
                                       noncanonicalModern.size(), 5)
                  && header.vars.empty()
                  && modern.diagnostics().back().kind
-                     == DwgIntegrityCheckKind::TemplateDescriptionUnsupported,
+                     == DwgIntegrityCheckKind::TemplateDescriptionUnsupported
+                 && modern.diagnostics().back().severity
+                     == DwgIntegritySeverity::Warning,
              "noncanonical modern description remains explicit, not guessed");
 }
 
@@ -17166,6 +17168,13 @@ int main(int argc, char** argv) {
         TestContext focused;
         testHeaderVersionEnvelopes(focused);
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--template-fields") {
+        TestContext focused;
+        testTemplateFields(focused);
+        std::cout << "DWG Template field controls: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
     if (argc == 2 && std::string(argv[1]) == "--polyline-staging-growth") {

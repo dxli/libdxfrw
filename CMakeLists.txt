@@ -1190,6 +1190,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_dwg_header_version_envelopes PROPERTIES
         LABELS "fast;dwg;header;generated;AC1027"
         TIMEOUT 30)
+    add_test(NAME libdxfrw_dwg_template_fields
+        COMMAND libdxfrw_dwg_reader_matrix_tests --template-fields)
+    set_tests_properties(libdxfrw_dwg_template_fields PROPERTIES
+        LABELS "fast;dwg;header;generated"
+        TIMEOUT 30)
     add_test(NAME libdxfrw_dwg_tablestyle_malformed_count_dispatch
         COMMAND libdxfrw_dwg_reader_matrix_tests
             --tablestyle-malformed-count-dispatch)

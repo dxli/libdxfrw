@@ -4489,7 +4489,9 @@ bool strictDwgReadOutcomeIsComplete(const dx_data& data) noexcept {
             observations.integrity.rows[index];
         if (diagnostic.severity == DwgIntegritySeverity::Error
             || diagnostic.kind
-                == DwgIntegrityCheckKind::HeaderSectionUnclaimedData)
+                == DwgIntegrityCheckKind::HeaderSectionUnclaimedData
+            || diagnostic.kind
+                == DwgIntegrityCheckKind::TemplateDescriptionUnsupported)
             return false;
     }
     return true;

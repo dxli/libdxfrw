@@ -18258,6 +18258,47 @@ bool opaqueDwgSourceCaptureAndStrictOutputGate() {
         || strict.hasCompleteOpaqueDwgOutputQualification())
         return fail("non-strict output retry did not recover after strict rollback");
 
+    dx_data unsupportedTemplate;
+    dx_iface templateExporter;
+    templateExporter.cData = &unsupportedTemplate;
+    configure(unsupportedTemplate, 10u);
+    auto& templateIntegrity =
+        unsupportedTemplate.dwgReadOutcome.observations.integrity;
+    templateIntegrity.rows[0].severity = DwgIntegritySeverity::Warning;
+    templateIntegrity.rows[0].kind =
+        DwgIntegrityCheckKind::TemplateDescriptionUnsupported;
+    templateIntegrity.retained = 1u;
+    templateIntegrity.sourceRecorded = 1u;
+    const std::string templateSentinel =
+        "unsupported Template description preserves prior destination\n";
+    {
+        std::ofstream prior(output, std::ios::binary);
+        if (!prior)
+            return fail("could not create Template strict-gate destination");
+        prior << templateSentinel;
+    }
+    std::ostringstream templateDiagnostics;
+    std::streambuf* const templateOldError =
+        std::cerr.rdbuf(templateDiagnostics.rdbuf());
+    const bool templateWrote = templateExporter.fileExport(
+        output.string(), DRW::AC1024, false, &unsupportedTemplate, false,
+        true, dx_dxfSourceTextPolicy::Compatible,
+        DRW::DxfTextWritePolicy::Compatible,
+        dx_dxfProxyGraphicsPolicy::Compatible,
+        dx_dwgReadCompletenessPolicy::RequireComplete);
+    std::cerr.rdbuf(templateOldError);
+    std::ifstream templateRetainedOutput(output, std::ios::binary);
+    const std::string templateRetainedBytes{
+        std::istreambuf_iterator<char>{templateRetainedOutput},
+        std::istreambuf_iterator<char>{}};
+    std::filesystem::remove(output, outputRemovalError);
+    if (templateWrote || outputRemovalError
+        || templateRetainedBytes != templateSentinel
+        || templateDiagnostics.str().find(
+               "strict-complete conversion requires successful, complete DWG read disposition")
+               == std::string::npos)
+        return fail("unsupported Template description passed strict-complete output or replaced the destination");
+
     dx_data rejected;
     dx_iface retry;
     retry.cData = &rejected;
