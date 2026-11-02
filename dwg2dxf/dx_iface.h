@@ -939,34 +939,66 @@ public:
     }
 
     virtual void addSurface(const DRW_Surface *data) override{
-        if (data == nullptr)
+        if (data == nullptr) {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
             return;
+        }
+        const auto rejectMismatchedSurface = [this]() {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
+        };
         switch (data->eType) {
-        case DRW::PLANESURFACE:
-            retainTypedEntity<DRW_PlaneSurface>(
-                *static_cast<const DRW_PlaneSurface*>(data));
+        case DRW::PLANESURFACE: {
+            const auto* typed = dynamic_cast<const DRW_PlaneSurface*>(data);
+            if (typed != nullptr)
+                retainTypedEntity<DRW_PlaneSurface>(*typed);
+            else
+                rejectMismatchedSurface();
             break;
-        case DRW::EXTRUDEDSURFACE:
-            retainTypedEntity<DRW_ExtrudedSurface>(
-                *static_cast<const DRW_ExtrudedSurface*>(data));
+        }
+        case DRW::EXTRUDEDSURFACE: {
+            const auto* typed = dynamic_cast<const DRW_ExtrudedSurface*>(data);
+            if (typed != nullptr)
+                retainTypedEntity<DRW_ExtrudedSurface>(*typed);
+            else
+                rejectMismatchedSurface();
             break;
-        case DRW::REVOLVEDSURFACE:
-            retainTypedEntity<DRW_RevolvedSurface>(
-                *static_cast<const DRW_RevolvedSurface*>(data));
+        }
+        case DRW::REVOLVEDSURFACE: {
+            const auto* typed = dynamic_cast<const DRW_RevolvedSurface*>(data);
+            if (typed != nullptr)
+                retainTypedEntity<DRW_RevolvedSurface>(*typed);
+            else
+                rejectMismatchedSurface();
             break;
-        case DRW::SWEPTSURFACE:
-            retainTypedEntity<DRW_SweptSurface>(
-                *static_cast<const DRW_SweptSurface*>(data));
+        }
+        case DRW::SWEPTSURFACE: {
+            const auto* typed = dynamic_cast<const DRW_SweptSurface*>(data);
+            if (typed != nullptr)
+                retainTypedEntity<DRW_SweptSurface>(*typed);
+            else
+                rejectMismatchedSurface();
             break;
-        case DRW::LOFTEDSURFACE:
-            retainTypedEntity<DRW_LoftedSurface>(
-                *static_cast<const DRW_LoftedSurface*>(data));
+        }
+        case DRW::LOFTEDSURFACE: {
+            const auto* typed = dynamic_cast<const DRW_LoftedSurface*>(data);
+            if (typed != nullptr)
+                retainTypedEntity<DRW_LoftedSurface>(*typed);
+            else
+                rejectMismatchedSurface();
             break;
-        case DRW::NURBSURFACE:
-            retainTypedEntity<DRW_NurbsSurface>(
-                *static_cast<const DRW_NurbsSurface*>(data));
+        }
+        case DRW::NURBSURFACE: {
+            const auto* typed = dynamic_cast<const DRW_NurbsSurface*>(data);
+            if (typed != nullptr)
+                retainTypedEntity<DRW_NurbsSurface>(*typed);
+            else
+                rejectMismatchedSurface();
             break;
+        }
         default:
+            rejectMismatchedSurface();
             break;
         }
     }

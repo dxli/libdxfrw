@@ -5421,10 +5421,36 @@ public:
                 registerSurfaceForWrite(invalidSurface)
                 && !writer_->writeSurface(&invalidSurface)
                 && invalidSurface.handle == 0xFB06u;
+            DRW_RevolvedSurface mismatchedSurface;
+            mismatchedSurface.handle = 0xFB07u;
+            mismatchedSurface.eType = DRW::PLANESURFACE;
+            const bool rejectedMismatchedSurface =
+                registerSurfaceForWrite(mismatchedSurface)
+                && !writer_->writeSurface(&mismatchedSurface)
+                && mismatchedSurface.handle == 0xFB07u;
+            mismatchedSurface.eType = DRW::REVOLVEDSURFACE;
+            const bool retriedMismatchedSurface =
+                registerSurfaceForWrite(mismatchedSurface)
+                && writer_->writeSurface(&mismatchedSurface)
+                && mismatchedSurface.handle == 0xFB07u;
+            DRW_Surface baseSurface;
+            baseSurface.handle = 0xFB08u;
+            baseSurface.eType = DRW::REVOLVEDSURFACE;
+            const bool rejectedBaseSurface =
+                writer_->registerSurfaceEntityClass(&baseSurface)
+                && !writer_->writeSurface(&baseSurface)
+                && baseSurface.handle == 0xFB08u;
+            baseSurface.eType = DRW::PLANESURFACE;
+            const bool retriedBaseSurfaceAsPlane =
+                writer_->registerSurfaceEntityClass(&baseSurface)
+                && writer_->writeSurface(&baseSurface)
+                && baseSurface.handle == 0xFB08u;
             wroteSurfaceSet_ = wrotePlaneSurface_ && wroteExtrudedSurface_
                 && wroteRevolvedSurface_ && wroteSweptSurface_
-                && wroteLoftedSurface_ && wroteNurbsSurface_;
-            rejectedMalformedSurface_ = rejectedInvalidSurface;
+                && wroteLoftedSurface_ && wroteNurbsSurface_
+                && retriedMismatchedSurface && retriedBaseSurfaceAsPlane;
+            rejectedMalformedSurface_ = rejectedInvalidSurface
+                && rejectedMismatchedSurface && rejectedBaseSurface;
         }
 
         DRW_Hatch hatch;
@@ -35682,6 +35708,13 @@ int main(int argc, char** argv) {
         std::filesystem::remove(output, ec);
 
         dwgRW writer(output.string().c_str());
+        bool reservedSurfaceRetryHandles = true;
+        for (std::uint32_t handle = 0xFB00u; handle <= 0xFB08u; ++handle)
+            reservedSurfaceRetryHandles = writer.reserveHandle(handle)
+                && reservedSurfaceRetryHandles;
+        expect(reservedSurfaceRetryHandles,
+               ("local DWG reserves the complete surface retry handle range"
+                + suffix).c_str(), failures);
         LocalDwgInterface writeIface(&writer, version);
         const bool writeOk = writer.write(&writeIface, version, true);
         if (!writeOk) {

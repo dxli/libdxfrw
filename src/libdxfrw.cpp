@@ -31,6 +31,7 @@
 #include <chrono>
 #include <string_view>
 #include <type_traits>
+#include <typeinfo>
 #include <unordered_set>
 #include "handle_allocator.h"
 #include "intern/drw_textcodec.h"
@@ -13574,10 +13575,30 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
         || ent->vIsolines < 0
         || ent->vIsolines > std::numeric_limits<std::int16_t>::max())
         return false;
-    const auto fail = [this]() {
-        m_writeError = true;
-        return false;
-    };
+    const bool runtimeTypeMatches = [&]() {
+        switch (ent->eType) {
+        case DRW::PLANESURFACE:
+            // Keep the historical base-class representation for a plane,
+            // while rejecting another derived subtype whose public eType was
+            // mutated to PLANESURFACE.
+            return dynamic_cast<const DRW_PlaneSurface*>(ent) != nullptr
+                || typeid(*ent) == typeid(DRW_Surface);
+        case DRW::EXTRUDEDSURFACE:
+            return dynamic_cast<const DRW_ExtrudedSurface*>(ent) != nullptr;
+        case DRW::REVOLVEDSURFACE:
+            return dynamic_cast<const DRW_RevolvedSurface*>(ent) != nullptr;
+        case DRW::SWEPTSURFACE:
+            return dynamic_cast<const DRW_SweptSurface*>(ent) != nullptr;
+        case DRW::LOFTEDSURFACE:
+            return dynamic_cast<const DRW_LoftedSurface*>(ent) != nullptr;
+        case DRW::NURBSURFACE:
+            return dynamic_cast<const DRW_NurbsSurface*>(ent) != nullptr;
+        default:
+            return false;
+        }
+    }();
+    if (!runtimeTypeMatches)
+        return fail();
     if (ent->hasRawDwgBody || ent->rawDwgBodyBitSize != 0
         || ent->dwgPayloadDecoded || ent->dwgClassNum != 0
         || ent->hasDataStorageBinaryData() || ent->hasDataStorageRecord

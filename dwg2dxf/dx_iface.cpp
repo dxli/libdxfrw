@@ -71352,7 +71352,14 @@ void dx_iface::writeEntity(DRW_Entity* e){
     case DRW::SWEPTSURFACE:
     case DRW::LOFTEDSURFACE:
     case DRW::NURBSURFACE:
-        written = dxfW->writeSurface(static_cast<DRW_Surface*>(e));
+        if (auto* surface = dynamic_cast<DRW_Surface*>(e)) {
+            written = dxfW->writeSurface(surface);
+        } else {
+            // The public eType may have been mutated independently from the
+            // object's runtime type. Reject the export instead of silently
+            // omitting this entity and publishing a partial drawing.
+            dxfW->writeRawDxfEntity(nullptr);
+        }
         break;
     case DRW::E3DSOLID:
     case DRW::REGION:

@@ -23,6 +23,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string_view>
+#include <typeinfo>
 #include <vector>
 #include "drw_entities.h"
 #include "intern/dxfreader.h"
@@ -24296,6 +24297,43 @@ bool DRW_Surface::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t
                              dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
     if (buf == nullptr || version < DRW::AC1021 || dwgClassNum == 0)
+        return false;
+
+    // The public discriminator selects the subtype-specific fields below.
+    // Check it against the runtime object before any static_cast or common
+    // body write, so a rejected callback can safely be corrected and retried
+    // with the same handle. The historical base DRW_Surface plane profile is
+    // still valid, alongside the concrete DRW_PlaneSurface subtype.
+    bool runtimeTypeMatches = false;
+    switch (eType) {
+    case DRW::PLANESURFACE:
+        runtimeTypeMatches = typeid(*this) == typeid(DRW_Surface)
+            || dynamic_cast<const DRW_PlaneSurface *>(this) != nullptr;
+        break;
+    case DRW::EXTRUDEDSURFACE:
+        runtimeTypeMatches = dynamic_cast<const DRW_ExtrudedSurface *>(this)
+            != nullptr;
+        break;
+    case DRW::REVOLVEDSURFACE:
+        runtimeTypeMatches = dynamic_cast<const DRW_RevolvedSurface *>(this)
+            != nullptr;
+        break;
+    case DRW::SWEPTSURFACE:
+        runtimeTypeMatches = dynamic_cast<const DRW_SweptSurface *>(this)
+            != nullptr;
+        break;
+    case DRW::LOFTEDSURFACE:
+        runtimeTypeMatches = dynamic_cast<const DRW_LoftedSurface *>(this)
+            != nullptr;
+        break;
+    case DRW::NURBSURFACE:
+        runtimeTypeMatches = dynamic_cast<const DRW_NurbsSurface *>(this)
+            != nullptr;
+        break;
+    default:
+        return false;
+    }
+    if (!runtimeTypeMatches)
         return false;
 
     const auto validBitShort = [](int value) {

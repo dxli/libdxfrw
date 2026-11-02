@@ -19171,6 +19171,103 @@ bool typedEntityCallbackCaptureLimitsFailClosed() {
                 + surface.dxfBinaryData.size())
         return fail("ACIS surface carrier copies were not byte-accounted");
 
+    dx_data surfaceTypes;
+    dx_iface surfaceTypesIface;
+    dx_ifaceBlock surfaceTypesBlock;
+    surfaceTypesIface.cData = &surfaceTypes;
+    surfaceTypesIface.currentBlock = &surfaceTypesBlock;
+    DRW_PlaneSurface planeSurface;
+    DRW_ExtrudedSurface extrudedSurface;
+    DRW_RevolvedSurface revolvedSurface;
+    DRW_SweptSurface sweptSurface;
+    DRW_LoftedSurface loftedSurface;
+    DRW_NurbsSurface nurbsSurface;
+    const std::array<const DRW_Surface*, 6> sourceSurfaces{{
+        &planeSurface, &extrudedSurface, &revolvedSurface, &sweptSurface,
+        &loftedSurface, &nurbsSurface}};
+    const std::array<DRW::ETYPE, 6> surfaceTypesExpected{{
+        DRW::PLANESURFACE, DRW::EXTRUDEDSURFACE, DRW::REVOLVEDSURFACE,
+        DRW::SWEPTSURFACE, DRW::LOFTEDSURFACE, DRW::NURBSURFACE}};
+    for (const DRW_Surface* sourceSurface : sourceSurfaces)
+        surfaceTypesIface.addSurface(sourceSurface);
+    const auto hasExpectedSurfaceRuntimeType =
+        [](const DRW_Entity* entity, std::size_t index) {
+            switch (index) {
+            case 0: return dynamic_cast<const DRW_PlaneSurface*>(entity) != nullptr;
+            case 1: return dynamic_cast<const DRW_ExtrudedSurface*>(entity) != nullptr;
+            case 2: return dynamic_cast<const DRW_RevolvedSurface*>(entity) != nullptr;
+            case 3: return dynamic_cast<const DRW_SweptSurface*>(entity) != nullptr;
+            case 4: return dynamic_cast<const DRW_LoftedSurface*>(entity) != nullptr;
+            case 5: return dynamic_cast<const DRW_NurbsSurface*>(entity) != nullptr;
+            default: return false;
+            }
+        };
+    if (surfaceTypes.typedEntityCaptureFailed
+        || surfaceTypes.typedEntityRetainedRecords != sourceSurfaces.size()
+        || surfaceTypesBlock.ent.size() != sourceSurfaces.size())
+        return fail("typed surface callbacks did not retain all six subtypes");
+    std::size_t retainedSurfaceIndex = 0u;
+    for (const DRW_Entity* retainedSurface : surfaceTypesBlock.ent) {
+        if (retainedSurface == nullptr
+            || retainedSurface->eType
+                != surfaceTypesExpected[retainedSurfaceIndex]
+            || !hasExpectedSurfaceRuntimeType(
+                retainedSurface, retainedSurfaceIndex))
+            return fail("typed surface callback sliced or misidentified a subtype");
+        ++retainedSurfaceIndex;
+    }
+
+    const auto rejectsInvalidSurface = [](const DRW_Surface* invalid) {
+        dx_data rejectedData;
+        dx_iface rejectedIface;
+        dx_ifaceBlock rejectedBlock;
+        rejectedIface.cData = &rejectedData;
+        rejectedIface.currentBlock = &rejectedBlock;
+        rejectedIface.addSurface(invalid);
+        return rejectedData.typedEntityCaptureFailed
+            && rejectedData.typedEntityRetainedRecords == 0u
+            && rejectedBlock.ent.empty();
+    };
+    DRW_Surface baseSurfaceWithSubtypeTag;
+    baseSurfaceWithSubtypeTag.eType = DRW::REVOLVEDSURFACE;
+    DRW_PlaneSurface subtypeWithWrongTag;
+    subtypeWithWrongTag.eType = DRW::REVOLVEDSURFACE;
+    DRW_Surface unsupportedSurface;
+    unsupportedSurface.eType = DRW::UNKNOWN;
+    if (!rejectsInvalidSurface(&baseSurfaceWithSubtypeTag)
+        || !rejectsInvalidSurface(&subtypeWithWrongTag)
+        || !rejectsInvalidSurface(&unsupportedSurface)
+        || !rejectsInvalidSurface(nullptr))
+        return fail("surface capture admitted a mismatched runtime subtype");
+
+    dx_data mutatedEntityType;
+    dx_iface mutatedEntityTypeIface;
+    mutatedEntityTypeIface.cData = &mutatedEntityType;
+    mutatedEntityTypeIface.currentBlock = mutatedEntityType.mBlock;
+    DRW_Line capturedLine;
+    mutatedEntityTypeIface.addLine(capturedLine);
+    if (mutatedEntityType.mBlock == nullptr
+        || mutatedEntityType.mBlock->ent.size() != 1u
+        || mutatedEntityType.mBlock->ent.front() == nullptr
+        || mutatedEntityType.typedEntityCaptureFailed)
+        return fail("surface-dispatch mutation control did not capture its source line");
+    mutatedEntityType.mBlock->ent.front()->eType = DRW::PLANESURFACE;
+    const auto mutatedSurfaceOutput = std::filesystem::temp_directory_path()
+        / ("libdxfrw-mutated-surface-runtime-type-"
+           + std::to_string(std::chrono::steady_clock::now()
+                                .time_since_epoch().count())
+           + ".dxf");
+    if (std::filesystem::exists(mutatedSurfaceOutput))
+        return fail("mutated-surface output path unexpectedly exists");
+    if (mutatedEntityTypeIface.fileExport(
+            mutatedSurfaceOutput.string(), DRW::AC1027, false,
+            &mutatedEntityType, true)
+        || std::filesystem::exists(mutatedSurfaceOutput)) {
+        std::error_code ignored;
+        std::filesystem::remove(mutatedSurfaceOutput, ignored);
+        return fail("surface writer dispatch accepted a non-surface runtime type");
+    }
+
     const std::size_t afterSurfaceBytes =
         modelerBytes.typedEntityRetainedBytes;
     DRW_Mesh mesh;

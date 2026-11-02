@@ -6765,7 +6765,7 @@ Steps:
    The `dx_iface` adapter now also retains CAMERA callbacks and routes the
    entity through the existing `dxfRW::writeCamera` serializer. The generated
    named-BLOCK check covers ASCII/Binary output and readback with the optional
-   VIEW reference absent; it does not qualify code 340 reference resolution.
+   VIEW reference absent; it does not qualify code 340 reference resolution. A generated subtype guard now checks runtime types before surface callback copying, DXF serialization, or DWG field encoding; it preserves the base-class plane profile and rejects mismatches before publication. See the [runtime-type guard receipt](docs/research/s8-1a-direct-surface-runtime-type-guard-2026-11-02.json). This does not qualify native surface semantics or B-rep validity.
    The existing `libdxfrw_block_owners` generated matrix also passes for its
    selected BLOCK-reachable callback set across ASCII/Binary and both extended
    modes. It checks typed/raw event order, copied payload lifetime after parser
