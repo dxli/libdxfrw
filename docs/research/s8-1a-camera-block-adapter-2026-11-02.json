@@ -2,7 +2,7 @@
   "schema": "libdxfrw-implementation-slice-v1",
   "id": "s8-1a-camera-block-adapter-2026-11-02",
   "date": "2026-11-02",
-  "status": "IMPLEMENTED_UNCOMMITTED",
+  "status": "COMMITTED_IMPLEMENTATION",
   "repositoryHead": "de016bce2d0751e25d915b94968a32860940c21a",
   "scope": {
     "plan": "DWG_DXF_3D_SUPPORT_PLAN.md S8.1a / PAR-118",
@@ -62,7 +62,8 @@
     "No new virtual callback, public data layout, persistent fixture, or support claim was added."
   ],
   "repositoryState": {
-    "commitStatus": "UNCOMMITTED",
-    "reason": "The shared worktree contains broader implementation changes; this slice has not yet been isolated into a commit."
+    "commitStatus": "COMMITTED",
+    "implementationCommit": "140b58fdaa5e48389b99395d8e6c7a7fab5765c0",
+    "reason": "The verified CAMERA capture/write path, corrected complete surface round-trip control, scoped plan update, and receipt were committed; unrelated worktree changes remain unstaged."
   }
 }
