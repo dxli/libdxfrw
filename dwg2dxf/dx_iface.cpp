@@ -4491,7 +4491,8 @@ bool strictDwgReadOutcomeIsComplete(const dx_data& data) noexcept {
             || diagnostic.kind
                 == DwgIntegrityCheckKind::HeaderSectionUnclaimedData
             || diagnostic.kind
-                == DwgIntegrityCheckKind::TemplateDescriptionUnsupported)
+                == DwgIntegrityCheckKind::TemplateDescriptionUnsupported
+            || diagnostic.kind == DwgIntegrityCheckKind::TemplateMissing)
             return false;
     }
     return true;

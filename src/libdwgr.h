@@ -53,6 +53,7 @@ class dwgWriter15;
 class DwgCompoundWriteTestAccess;
 class DwgWriteFailureTestAccess;
 class DwgReadObservationTestAccess;
+class DwgTemplateTestAccess;
 
 /// Closed identity for a typed OBJECTS writer that can carry the AC1027+
 /// DataStorage presence bit.  The identity is deliberately separate from a
@@ -880,6 +881,7 @@ private:
     friend class DwgWriteFailureTestAccess;
     friend class DwgReadObservationTestAccess;
     friend class DwgCodePageTestAccess;
+    friend class DwgTemplateTestAccess;
 
     enum class DwgWriteFailurePoint : std::uint8_t {
         AfterFirstDeferredTableRecord = 1,

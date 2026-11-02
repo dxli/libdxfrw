@@ -52,21 +52,76 @@ bool dwgReader::missingDwgTemplate() {
 bool dwgReader::decodeDwgTemplate(DRW_Header& hdr, const std::uint8_t* data,
                                   std::size_t size, std::int32_t sectionId) {
     std::uint16_t measurement = 0;
-    const auto result = dwgTemplate::decode(data, size, version, measurement);
-    if (result != dwgTemplate::DecodeResult::Valid) {
-        const bool unsupported =
-            result == dwgTemplate::DecodeResult::UnsupportedDescription;
+    std::string rawDescription;
+    const bool captureDescription = parent != nullptr && parent->iface != nullptr;
+    dwgTemplate::DecodeResult result = dwgTemplate::DecodeResult::Malformed;
+    try {
+        result = dwgTemplate::decode(
+            data, size, version, measurement,
+            captureDescription ? &rawDescription : nullptr);
+    } catch (...) {
+        // The frame and MEASUREMENT are validated before the bounded byte
+        // string is copied. If retaining the optional description runs out of
+        // memory, keep the tolerant read and publish only MEASUREMENT; the
+        // warning also keeps strict-complete DXF output closed.
         recordIntegrityDiagnostic(
-            unsupported ? DwgIntegritySeverity::Warning
-                        : DwgIntegritySeverity::Error,
+            DwgIntegritySeverity::Warning,
             DwgIntegrityAddressSpace::DecodedBuffer,
             DwgIntegrityPhase::SectionParser,
-            unsupported ? DwgIntegrityCheckKind::TemplateDescriptionUnsupported
-                        : DwgIntegrityCheckKind::TemplateMalformed,
+            DwgIntegrityCheckKind::TemplateDescriptionUnsupported,
             secEnum::TEMPLATE, sectionId, "AcDb:Template");
-        // No guessed value is published for an unsupported modern description.
-        return unsupported;
+        hdr.addInt("MEASUREMENT", measurement, 70);
+        return true;
     }
+    if (result == dwgTemplate::DecodeResult::Malformed) {
+        recordIntegrityDiagnostic(
+            DwgIntegritySeverity::Error,
+            DwgIntegrityAddressSpace::DecodedBuffer,
+            DwgIntegrityPhase::SectionParser,
+            DwgIntegrityCheckKind::TemplateMalformed,
+            secEnum::TEMPLATE, sectionId, "AcDb:Template");
+        return false;
+    }
+    if (result == dwgTemplate::DecodeResult::UnsupportedDescription) {
+        recordIntegrityDiagnostic(
+            DwgIntegritySeverity::Warning,
+            DwgIntegrityAddressSpace::DecodedBuffer,
+            DwgIntegrityPhase::SectionParser,
+            DwgIntegrityCheckKind::TemplateDescriptionUnsupported,
+            secEnum::TEMPLATE, sectionId, "AcDb:Template");
+        // LibreDWG's R2007+ TU16 profile can move the trailing measurement
+        // beyond the ODA byte-count offset. Keep the read tolerant, but do not
+        // guess which bytes encode MEASUREMENT until a producer sample resolves
+        // the conflict.
+        return true;
+    }
+    if (result == dwgTemplate::DecodeResult::DescriptionPresent) {
+        recordIntegrityDiagnostic(
+            DwgIntegritySeverity::Warning,
+            DwgIntegrityAddressSpace::DecodedBuffer,
+            DwgIntegrityPhase::SectionParser,
+            DwgIntegrityCheckKind::TemplateDescriptionUnsupported,
+            secEnum::TEMPLATE, sectionId, "AcDb:Template");
+        const bool asciiDescription = std::all_of(
+            rawDescription.begin(), rawDescription.end(), [](unsigned char byte) {
+                return byte < 0x80u;
+            });
+        if (parent != nullptr && parent->iface != nullptr
+            && (hasSourceCodePage() || asciiDescription)) {
+            try {
+                if (!rawDescription.empty() && rawDescription.back() == '\0')
+                    rawDescription.pop_back();
+                std::string description = decoder.toUtf8CP8(rawDescription);
+                if (DRW_TextCodec::isUtf8ScalarText(description))
+                    parent->iface->addDwgTemplateDescription(description);
+            } catch (...) {
+                return false;
+            }
+        }
+    }
+    // The description has no DXF HEADER equivalent. Publish the independently
+    // framed MEASUREMENT value for tolerant consumers, while the warning keeps
+    // strict-complete conversion from silently dropping the description.
     hdr.addInt("MEASUREMENT", measurement, 70);
     return true;
 }

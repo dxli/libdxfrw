@@ -18299,6 +18299,47 @@ bool opaqueDwgSourceCaptureAndStrictOutputGate() {
                == std::string::npos)
         return fail("unsupported Template description passed strict-complete output or replaced the destination");
 
+    dx_data missingTemplate;
+    dx_iface missingTemplateExporter;
+    missingTemplateExporter.cData = &missingTemplate;
+    configure(missingTemplate, 10u);
+    auto& missingTemplateIntegrity =
+        missingTemplate.dwgReadOutcome.observations.integrity;
+    missingTemplateIntegrity.rows[0].severity = DwgIntegritySeverity::Warning;
+    missingTemplateIntegrity.rows[0].kind =
+        DwgIntegrityCheckKind::TemplateMissing;
+    missingTemplateIntegrity.retained = 1u;
+    missingTemplateIntegrity.sourceRecorded = 1u;
+    const std::string missingTemplateSentinel =
+        "missing mandatory Template preserves prior destination\n";
+    {
+        std::ofstream prior(output, std::ios::binary);
+        if (!prior)
+            return fail("could not create missing Template strict-gate destination");
+        prior << missingTemplateSentinel;
+    }
+    std::ostringstream missingTemplateDiagnostics;
+    std::streambuf* const missingTemplateOldError =
+        std::cerr.rdbuf(missingTemplateDiagnostics.rdbuf());
+    const bool missingTemplateWrote = missingTemplateExporter.fileExport(
+        output.string(), DRW::AC1024, false, &missingTemplate, false, true,
+        dx_dxfSourceTextPolicy::Compatible,
+        DRW::DxfTextWritePolicy::Compatible,
+        dx_dxfProxyGraphicsPolicy::Compatible,
+        dx_dwgReadCompletenessPolicy::RequireComplete);
+    std::cerr.rdbuf(missingTemplateOldError);
+    std::ifstream missingTemplateRetainedOutput(output, std::ios::binary);
+    const std::string missingTemplateRetainedBytes{
+        std::istreambuf_iterator<char>{missingTemplateRetainedOutput},
+        std::istreambuf_iterator<char>{}};
+    std::filesystem::remove(output, outputRemovalError);
+    if (missingTemplateWrote || outputRemovalError
+        || missingTemplateRetainedBytes != missingTemplateSentinel
+        || missingTemplateDiagnostics.str().find(
+               "strict-complete conversion requires successful, complete DWG read disposition")
+               == std::string::npos)
+        return fail("missing mandatory Template section passed strict-complete output or replaced the destination");
+
     dx_data rejected;
     dx_iface retry;
     retry.cData = &rejected;

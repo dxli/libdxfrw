@@ -10,6 +10,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include "../drw_header.h"
 
 namespace dwgTemplate {
@@ -45,16 +46,26 @@ inline std::array<std::uint8_t, 4> emptyDescription(std::uint16_t measurement) {
     return {{0, 0, static_cast<std::uint8_t>(measurement), 0}};
 }
 
-enum class DecodeResult { Valid, Malformed, UnsupportedDescription };
+enum class DecodeResult {
+    Valid,
+    Malformed,
+    DescriptionPresent,
+    UnsupportedDescription
+};
 constexpr std::size_t MaxSectionSize = 65538;
 
 // The logical section boundary, not decompressed page capacity, owns every
 // field. ODA section 22 describes a signed byte count followed by a UInt16.
-// ODA does not change this byte-count primitive in modern versions. Retain
-// the exact six-byte, one-unit UTF-16 NUL form previously emitted by this
-// library as a narrow compatibility exception, not a general TU16 grammar.
+// Retain the exact six-byte, one-unit UTF-16 NUL form previously emitted by
+// this library as a narrow compatibility exception. LibreDWG's R2007+ T16
+// path uses TU16, which conflicts with ODA's byte-count description; non-empty
+// TU16-shaped data stays warning-only until producer evidence resolves the
+// version-specific layout.
 inline DecodeResult decode(const std::uint8_t* data, std::size_t size,
-                           DRW::Version version, std::uint16_t& measurement) {
+                           DRW::Version version, std::uint16_t& measurement,
+                           std::string* description = nullptr) {
+    if (description != nullptr)
+        description->clear();
     if (data == nullptr || size < 4 || size > MaxSectionSize)
         return DecodeResult::Malformed;
     const std::uint16_t length = static_cast<std::uint16_t>(data[0])
@@ -78,6 +89,15 @@ inline DecodeResult decode(const std::uint8_t* data, std::size_t size,
     if (value > 1)
         return DecodeResult::Malformed;
     measurement = value;
+    bool hasDescription = false;
+    for (std::size_t i = 0; i < length; ++i) {
+        hasDescription = hasDescription || data[2 + i] != 0;
+    }
+    if (hasDescription) {
+        if (description != nullptr)
+            description->assign(reinterpret_cast<const char*>(data + 2), length);
+        return DecodeResult::DescriptionPresent;
+    }
     return DecodeResult::Valid;
 }
 

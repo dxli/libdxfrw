@@ -81,6 +81,13 @@ public:
     }
 };
 
+class DwgTemplateTestAccess {
+public:
+    static void setInterface(dwgRW& reader, DRW_Interface* interface_) {
+        reader.iface = interface_;
+    }
+};
+
 std::vector<std::uint8_t> makeGeneratedR2000XrefBlockRecord(
     DRW::Version version, std::uint16_t xrefIndexPlusOne, bool overlaid,
     bool xrefUnloaded = false) {
@@ -16079,8 +16086,12 @@ void testAcDbPlaceholderClassDispatch(TestContext& t) {
 
 class TemplateProbe final : public dwgReader15 {
 public:
-    explicit TemplateProbe(DRW::Version target)
-        : dwgReader15(nullptr, nullptr) { version = target; }
+    explicit TemplateProbe(DRW::Version target, dwgRW* parent = nullptr)
+        : dwgReader15(nullptr, parent) { version = target; }
+    void setTemplateByteCodePage(const std::string& codePage) {
+        decoder.setByteCodePage(codePage);
+        m_sourceCodePage.recognized = true;
+    }
     using dwgReader::decodeDwgTemplate;
     using dwgReader::missingDwgTemplate;
     const std::vector<DwgIntegrityDiagnostic>& diagnostics() const {
@@ -16135,9 +16146,9 @@ void testTemplateFields(TestContext& t) {
         t.expect(dwgTemplate::decode(maximumDescription.data(),
                                      maximumDescription.size(), version,
                                      maximumMeasurement)
-                     == dwgTemplate::DecodeResult::Valid
+                     == dwgTemplate::DecodeResult::DescriptionPresent
                      && maximumMeasurement == 1,
-                 "Template accepts the largest signed byte-count description");
+                 "Template accepts and bounds the largest signed byte-count description");
     }
     for (const std::vector<std::uint8_t>& bytes : {
              std::vector<std::uint8_t>{}, {0, 0}, {0, 0, 1}, {0, 0, 2, 0},
@@ -16158,20 +16169,35 @@ void testTemplateFields(TestContext& t) {
         measurement = 99;
         t.expect(dwgTemplate::decode(legacyDescription.data(), legacyDescription.size(),
                                      version, measurement)
-                     == dwgTemplate::DecodeResult::Valid && measurement == 1,
-                 "all versions use the specified Template description byte count");
+                     == dwgTemplate::DecodeResult::DescriptionPresent
+                     && measurement == 1,
+                 "all versions use the specified Template description byte count and retain measurement");
     }
     TemplateProbe modern(DRW::AC1024);
     DRW_Header header;
-    const std::array<std::uint8_t, 8> noncanonicalModern{{2, 0, 'A', 0, 'B', 0, 1, 0}};
-    t.expect(modern.decodeDwgTemplate(header, noncanonicalModern.data(),
-                                      noncanonicalModern.size(), 5)
-                 && header.vars.empty()
+    const std::array<std::uint8_t, 6> describedModern{{2, 0, 'A', 'B', 1, 0}};
+    t.expect(modern.decodeDwgTemplate(header, describedModern.data(),
+                                      describedModern.size(), 5)
+                 && header.vars.count("MEASUREMENT") == 1
+                 && header.vars.at("MEASUREMENT")->i_val() == 1
                  && modern.diagnostics().back().kind
                      == DwgIntegrityCheckKind::TemplateDescriptionUnsupported
                  && modern.diagnostics().back().severity
                      == DwgIntegritySeverity::Warning,
-             "noncanonical modern description remains explicit, not guessed");
+             "well-framed modern description warns while independently publishing measurement");
+    TemplateProbe modernTu16(DRW::AC1024);
+    DRW_Header unknownDescriptionHeader;
+    const std::array<std::uint8_t, 8> modernTu16Description{{
+        2, 0, 'A', 0, 'B', 0, 1, 0}};
+    t.expect(modernTu16.decodeDwgTemplate(
+                 unknownDescriptionHeader, modernTu16Description.data(),
+                 modernTu16Description.size(), 5)
+                 && unknownDescriptionHeader.vars.empty()
+                 && modernTu16.diagnostics().back().kind
+                     == DwgIntegrityCheckKind::TemplateDescriptionUnsupported
+                 && modernTu16.diagnostics().back().severity
+                     == DwgIntegritySeverity::Warning,
+             "modern TU16-shaped description stays tolerant without guessing measurement");
 }
 
 class TemplateSink final : public dx_iface {
@@ -16187,9 +16213,44 @@ public:
     void addLine(const DRW_Line& line) override {
         if (line.basePoint.x == 11 && line.secPoint.z == 29) ++lines;
     }
+    void addDwgTemplateDescription(const std::string& description) override {
+        ++templateDescriptionCount;
+        templateDescription = description;
+    }
     dx_data data;
     int headers = 0, measurement = -9, units = -9, lines = 0;
+    int templateDescriptionCount = 0;
+    std::string templateDescription;
 };
+
+void testTemplateDescriptionCallback(TestContext& t) {
+    dwgRW parent("template-description-callback.dwg");
+    TemplateSink sink;
+    DwgTemplateTestAccess::setInterface(parent, &sink);
+    TemplateProbe reader(DRW::AC1018, &parent);
+    reader.setTemplateByteCodePage("ANSI_1252");
+    const std::array<std::uint8_t, 9> description{{
+        5, 0, 'c', 'a', 'f', 0xe9, 0, 1, 0}};
+    DRW_Header header;
+    t.expect(reader.decodeDwgTemplate(header, description.data(),
+                                      description.size(), 5)
+                 && header.vars.count("MEASUREMENT") == 1
+                 && header.vars.at("MEASUREMENT")->i_val() == 1
+                 && sink.templateDescriptionCount == 1
+                 && sink.templateDescription == "caf\xc3\xa9"
+                 && reader.diagnostics().size() == 1
+                 && reader.diagnostics().back().kind
+                     == DwgIntegrityCheckKind::TemplateDescriptionUnsupported,
+             "ODA byte-count Template description decodes by source codepage and reaches the optional DWG callback");
+    TemplateProbe unknownCodePage(DRW::AC1018, &parent);
+    DRW_Header unknownCodePageHeader;
+    t.expect(unknownCodePage.decodeDwgTemplate(
+                 unknownCodePageHeader, description.data(),
+                 description.size(), 5)
+                 && unknownCodePageHeader.vars.count("MEASUREMENT") == 1
+                 && sink.templateDescriptionCount == 1,
+             "non-ASCII Template bytes with an unrecognized source codepage remain readable without publishing mojibake");
+}
 
 template<class Writer>
 void testTemplatePublication(TestContext& t, dwgRW& reader, int measurement) {
@@ -17213,6 +17274,7 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--template-fields") {
         TestContext focused;
         testTemplateFields(focused);
+        testTemplateDescriptionCallback(focused);
         std::cout << "DWG Template field controls: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
@@ -17427,6 +17489,7 @@ int main(int argc, char** argv) {
     testSectionNameUtf16Framing(context);
     testR2007ClassStringFooter(context);
     testTemplateFields(context);
+    testTemplateDescriptionCallback(context);
     testTemplatePublicMatrix(context);
     testTemplateFilePublication(context);
     if (context.failures != 0) {

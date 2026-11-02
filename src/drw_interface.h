@@ -26,6 +26,7 @@
 
 #include <cstring>
 #include <limits>
+#include <string>
 
 #include "drw_datastorage.h"
 #include "drw_entities.h"
@@ -697,6 +698,14 @@ public:
    *  default forwards there so implementations need not change. */
   virtual void addUnsupportedObject(DRW_UnsupportedObject &&data) {
     addUnsupportedObject(static_cast<const DRW_UnsupportedObject &>(data));
+  }
+
+  /** Called for a non-empty AcDb:Template description decoded from a DWG
+   *  byte-count profile. DXF has no corresponding HEADER field. The default
+   *  keeps existing consumers source-compatible; strict conversion still
+   *  reports the unrepresentable description through DWG read diagnostics. */
+  virtual void addDwgTemplateDescription(const std::string &description) {
+    (void)description;
   }
 
 };
