@@ -31,12 +31,12 @@
   },
   "validation": {
     "build": "PASS: CLI executable and local DWG source generator built for the parent CLI slice",
-    "test": "PASS: python3 -B tests/dwg2dxf_cli_contract_tests.py --converter build-gcc/dwg2dxf/dwg2dxf --writer build-gcc/libdxfrw_dwg_local_roundtrip --batch-only (47 bounded controls); ctest --test-dir build-gcc -R '^dwg2dxf_cli_contract$' --output-on-failure (1/1, 9.63 s)",
+    "test": "PASS: python3 -B tests/dwg2dxf_cli_contract_tests.py --converter build-gcc/dwg2dxf/dwg2dxf --writer build-gcc/libdxfrw_dwg_local_roundtrip --batch-only (47 bounded controls); ctest --test-dir build-gcc -R '^dwg2dxf_cli_contract$' --output-on-failure (1/1, 9.97 s)",
     "diffCheck": "PASS: git diff --check",
     "sha256": {
-      "tests/dwg2dxf_cli_contract_tests.py": "d5815ba29ecc101287d6056c103c13c60b80ee347c46ef7fb4136b9ad1019e51",
+      "tests/dwg2dxf_cli_contract_tests.py": "06fd14a80dcea44b21190e217ec7366e75238b6adbe47a301155589f87599b97",
       "build-gcc/dwg2dxf/dwg2dxf": "bf6449a4edaf53480769f83b8432c749c2b3d4f144b3250c3bc02853f019374f",
-      "build-gcc/libdxfrw_dwg_local_roundtrip": "54a9da4255845f43bd40740c8cedd5da9b1021a37a9b43d586717ae3abeedf42"
+      "build-gcc/libdxfrw_dwg_local_roundtrip": "052ef40d6fcb146fdbf2b9f2cea429c957049b229198a972312b66c6e07e7fb9"
     }
   },
   "limits": [

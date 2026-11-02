@@ -1,0 +1,45 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-cli-partial-dwg-read-policy-2026-11-02",
+  "date": "2026-11-02",
+  "status": "FAST_VALIDATED",
+  "supportClaimEffect": "none",
+  "scope": "Verify the CLI's strict default and explicit partial-read behavior on a locally authored DWG with one rejected entity frame followed by one valid entity.",
+  "control": {
+    "sourceGenerator": "tests/dwg_local_roundtrip_tests.cpp --generate-cli-partial-read-source",
+    "sourceProfile": "AC1027; generated from scratch by ReadOutcomeControl(kind=1), which writes a non-finite LINE followed by a valid LINE",
+    "file": "tests/dwg2dxf_cli_contract_tests.py",
+    "function": "check_partial_dwg_read_cli",
+    "selector": "--partial-read-only; included in --fast-only",
+    "cases": [
+      {
+        "policy": "strict default",
+        "expect": "the DWG operation returns success with entityParseFailures=1 and failed=1; strict export exits 1 and preserves a destination sentinel"
+      },
+      {
+        "policy": "--allow-partial-dwg-read",
+        "expect": "warning states possible omissions and strict owner/reference checks; conversion exits 0 and publishes AC1027 ASCII DXF containing the one valid LINE"
+      },
+      {
+        "policy": "readback",
+        "expect": "published DXF reopens through dwg2dxf with exactly one LINE; source and first output remain unchanged"
+      }
+    ],
+    "controls": 3,
+    "fixtureFilesAdded": 0
+  },
+  "validation": {
+    "build": "PASS: cmake --build build-gcc --target dwg2dxf libdxfrw_dwg_local_roundtrip -j2",
+    "test": "PASS: python3 -B tests/dwg2dxf_cli_contract_tests.py --converter build-gcc/dwg2dxf/dwg2dxf --writer build-gcc/libdxfrw_dwg_local_roundtrip --partial-read-only (3 controls); ctest --test-dir build-gcc -R '^dwg2dxf_cli_contract$' --output-on-failure (1/1, 9.97 s)",
+    "diffCheck": "PASS: git diff --check",
+    "sha256": {
+      "tests/dwg2dxf_cli_contract_tests.py": "06fd14a80dcea44b21190e217ec7366e75238b6adbe47a301155589f87599b97",
+      "tests/dwg_local_roundtrip_tests.cpp": "24bdd2cfa79fa1b9f31040615209f92612d1f640ef7f99cf7f0722f82899573a",
+      "build-gcc/dwg2dxf/dwg2dxf": "bf6449a4edaf53480769f83b8432c749c2b3d4f144b3250c3bc02853f019374f",
+      "build-gcc/libdxfrw_dwg_local_roundtrip": "052ef40d6fcb146fdbf2b9f2cea429c957049b229198a972312b66c6e07e7fb9"
+    }
+  },
+  "limits": [
+    "This tests one generated AC1027 entity parse failure, the strict/partial switch, and returned LINE readback. It does not qualify other source versions, multiple failure patterns, repair/skip projections, or owner/reference failures as partial-output eligible."
+  ]
+}

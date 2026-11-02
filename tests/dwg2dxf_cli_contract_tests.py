@@ -895,6 +895,74 @@ def check_read_observations(converter, root):
     return checked
 
 
+def check_partial_dwg_read_cli(converter, root, writer):
+    """Exercise strict refusal and the explicit partial CLI route locally."""
+    if writer is None:
+        raise AssertionError("partial-read CLI control requires the local DWG writer")
+    source = root / "generated partial-read source.dwg"
+    generated = run_bounded(
+        [str(writer), "--generate-cli-partial-read-source", str(source)],
+        10, 131072, cwd=root)
+    if generated.returncode != 0 or not source.is_file():
+        raise AssertionError(f"could not author partial-read DWG locally: {generated!r}")
+    original = source.read_bytes()
+    if original[:6] != b"AC1027":
+        raise AssertionError("partial-read DWG generator emitted the wrong version")
+
+    strict_output = root / "partial-read strict result.dxf"
+    strict_output.write_bytes(SENTINEL)
+    strict = run_bounded(
+        [str(converter), str(source), "-o", str(strict_output), "-y", "-d"],
+        10, 2 * 1024 * 1024, cwd=root)
+    strict_required = (
+        b"DWG read observations: schema=1 operationSucceeded=true sourceVersion=AC1027",
+        b"entityParseFailures=1",
+        b"failed=1",
+        b"strict-complete conversion requires successful, complete DWG read disposition",
+    )
+    if (strict.returncode != 1 or strict_output.read_bytes() != SENTINEL
+            or source.read_bytes() != original
+            or any(item not in strict.stderr for item in strict_required)
+            or b"WARNING: explicit partial DWG read mode" in strict.stderr):
+        raise AssertionError(
+            f"strict partial-read refusal was not diagnosed atomically: {strict!r}")
+
+    partial_output = root / "partial-read admitted result.dxf"
+    partial = run_bounded(
+        [str(converter), str(source), "-o", str(partial_output),
+         "--allow-partial-dwg-read", "-d"],
+        10, 2 * 1024 * 1024, cwd=root)
+    partial_required = (
+        b"WARNING: explicit partial DWG read mode",
+        b"Owner/reference checks remain strict.",
+        b"entityParseFailures=1",
+        b"failed=1",
+    )
+    payload = partial_output.read_bytes() if partial_output.is_file() else b""
+    line_count = sum(1 for line in payload.splitlines() if line.strip() == b"LINE")
+    if (partial.returncode != 0 or b"Success:" not in partial.stdout
+            or any(item not in partial.stderr for item in partial_required)
+            or not output_has_revision(payload, b"AC1027", False)
+            or line_count != 1 or source.read_bytes() != original):
+        raise AssertionError(
+            f"explicit partial-read route did not warn and publish only retained data: "
+            f"{partial!r}")
+
+    readback = root / "partial-read readback.dxf"
+    reopened = run_bounded(
+        [str(converter), str(partial_output), "-o", str(readback)],
+        10, 131072, cwd=root)
+    readback_payload = readback.read_bytes() if readback.is_file() else b""
+    if (reopened.returncode != 0 or not output_has_revision(
+            readback_payload, b"AC1027", False)
+            or sum(1 for line in readback_payload.splitlines()
+                   if line.strip() == b"LINE") != 1
+            or partial_output.read_bytes() != payload or source.read_bytes() != original):
+        raise AssertionError(
+            f"partial output did not reopen with the retained LINE only: {reopened!r}")
+    return 3
+
+
 def check_unsupported_dwg_codepage(converter, root):
     """Mutate only the envelope codepage of an admitted local sample."""
     fixture = (Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "dwg"
@@ -1484,6 +1552,8 @@ def main():
                         help="run only generated AC1006/AC1009 marker publication refusals")
     parser.add_argument("--unsupported-dwg-codepage-only", action="store_true",
                         help="run only the unsupported DWG envelope-codepage diagnostic control")
+    parser.add_argument("--partial-read-only", action="store_true",
+                        help="run only the strict/explicit-partial DWG CLI controls")
     args = parser.parse_args()
     converter = args.converter.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="libdxfrw-cli-contract-") as directory:
@@ -1532,17 +1602,26 @@ def main():
             checked = check_unsupported_dwg_codepage(converter, root)
             print(f"CLI unsupported DWG codepage: PASS ({checked} diagnostic control)")
             return
+        if args.partial_read_only:
+            checked = check_partial_dwg_read_cli(converter, root, args.writer)
+            print(f"CLI partial DWG read: PASS ({checked} strict/partial/readback controls)")
+            return
         if args.fast_only:
             checked = check_options(converter, root)
             batch_checked = check_batch(converter, root, args.writer)
             observation_checked = check_read_observations(converter, root)
+            partial_read_checked = check_partial_dwg_read_cli(
+                converter, root, args.writer)
             print(f"CLI fast contract: PASS ({checked} option controls, "
                   f"{batch_checked} batch controls, {observation_checked} "
-                  "read-observation controls)")
+                  f"read-observation controls, {partial_read_checked} "
+                  "partial-read controls)")
             return
         checked = check_options(converter, root)
         batch_checked = check_batch(converter, root, args.writer)
         observation_checked = check_read_observations(converter, root)
+        partial_read_checked = check_partial_dwg_read_cli(
+            converter, root, args.writer)
         source_checked = check_source_text_admission(converter, root)
         target = check_target_text_transport(converter, root)
         embedded_mtext = check_embedded_mtext_downlevel(converter, root)
@@ -1551,6 +1630,7 @@ def main():
         policy = check_exact_input_policy(converter, root)
     print(f"CLI contract: PASS ({checked} option/filename and "
           f"{batch_checked} batch controls, {observation_checked} read-observation controls; "
+          f"{partial_read_checked} partial-read controls; "
           f"source text {source_checked[0]} refusals/{source_checked[1]} retries/"
           f"{source_checked[2]} positives/{source_checked[3]} mixed batch; target text "
           f"{target[0]} refusals/{target[1]} retries/{target[2]} modern/{target[3]} two-pass routes; "
