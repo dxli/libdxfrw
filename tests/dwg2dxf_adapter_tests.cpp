@@ -43937,6 +43937,49 @@ bool physicalAc1018DictionaryVarOutputReadback(
             return fail("physical AC1018 DICTIONARYVAR owner keys are missing or duplicated");
         sourceHandles.push_back(value.handle);
     }
+    struct InactiveHatchStops {
+        DRW_Hatch* hatch{nullptr};
+        std::string ownerBlock;
+        std::string pattern;
+        std::vector<double> values;
+    };
+    std::vector<InactiveHatchStops> expectedInactiveHatches;
+    const auto collectInactiveHatches = [&expectedInactiveHatches](
+            dx_ifaceBlock* block) {
+        if (block == nullptr)
+            return;
+        for (DRW_Entity* entity : block->ent) {
+            auto* hatch = dynamic_cast<DRW_Hatch*>(entity);
+            if (hatch == nullptr || hatch->isGradient != 0
+                || hatch->gradColors.empty())
+                continue;
+            InactiveHatchStops profile;
+            profile.hatch = hatch;
+            profile.ownerBlock = block->name;
+            profile.pattern = hatch->name;
+            for (const DRW_Hatch::GradientStop& stop : hatch->gradColors)
+                profile.values.push_back(stop.value);
+            expectedInactiveHatches.push_back(std::move(profile));
+        }
+    };
+    collectInactiveHatches(source.mBlock);
+    for (dx_ifaceBlock* block : source.blocks)
+        collectInactiveHatches(block);
+    if (expectedInactiveHatches.empty())
+        return fail("physical AC1018 source no longer contains inactive HATCH stops to resolve for the DICTIONARYVAR-only output profile");
+    if (std::any_of(expectedInactiveHatches.begin(),
+            expectedInactiveHatches.end(), [](const InactiveHatchStops& profile) {
+                return profile.values.size() != 2u
+                    || std::abs(profile.values[0]) > 1e-12
+                    || std::abs(profile.values[1] - 1.0) > 1e-12;
+            }))
+        return fail("physical AC1018 inactive HATCH stop values differ from the bounded two-stop profile");
+    if (std::none_of(expectedInactiveHatches.begin(),
+            expectedInactiveHatches.end(), [](const InactiveHatchStops& profile) {
+                return profile.ownerBlock == "ET Border block"
+                    && profile.hatch->handle == 0x2BAu;
+            }))
+        return fail("physical AC1018 ET Border block HATCH handle 0x2BA profile is missing");
 
     const auto stamp = std::chrono::steady_clock::now()
         .time_since_epoch().count();
@@ -43990,6 +44033,36 @@ bool physicalAc1018DictionaryVarOutputReadback(
             return fail("strict AC1018 refusal replaced the existing destination");
 
         const auto output = directory / ("qualified-" + encoding + ".dxf");
+        const std::string unrepresentableHatchSentinel =
+            "inactive HATCH stops must preserve the destination\n";
+        { std::ofstream existing(output, std::ios::binary);
+          if (!existing || !(existing << unrepresentableHatchSentinel))
+              return fail("could not seed AC1018 inactive-HATCH stop refusal sentinel"); }
+        if (writer.fileExport(output.string(), DRW::AC1024, binary,
+                &source, false, false))
+            return fail("AC1018 HATCH with inactive retained stops was accepted by the DICTIONARYVAR output selector");
+        std::ifstream inactiveHatchRefused(output, std::ios::binary);
+        if (std::string(std::istreambuf_iterator<char>(inactiveHatchRefused), {})
+                != unrepresentableHatchSentinel)
+            return fail("inactive HATCH stop refusal replaced the existing destination");
+
+        std::vector<std::pair<DRW_Hatch*,
+            std::vector<DRW_Hatch::GradientStop>>> resolvedHatchStops;
+        resolvedHatchStops.reserve(expectedInactiveHatches.size());
+        for (const InactiveHatchStops& profile : expectedInactiveHatches)
+            resolvedHatchStops.emplace_back(profile.hatch,
+                                             profile.hatch->gradColors);
+        struct RestoreInactiveHatchStops {
+            std::vector<std::pair<DRW_Hatch*,
+                std::vector<DRW_Hatch::GradientStop>>>& snapshots;
+            ~RestoreInactiveHatchStops() {
+                for (auto& snapshot : snapshots)
+                    snapshot.first->gradColors.swap(snapshot.second);
+            }
+        } restoreInactiveHatchStops{resolvedHatchStops};
+        for (auto& snapshot : resolvedHatchStops)
+            snapshot.first->gradColors.clear();
+
         if (!writer.fileExport(output.string(), DRW::AC1024, binary,
                 &source, false, false))
             return fail("corrected AC1018 DICTIONARYVAR profile could not retry through the same adapter: "
@@ -44017,6 +44090,10 @@ bool physicalAc1018DictionaryVarOutputReadback(
             std::int32_t schema{-1};
             std::string value;
             std::map<std::string, std::uint32_t> entries;
+            std::string hatchPattern;
+            int hatchGradientFlag{-1};
+            int hatchGradientColorCount{-1};
+            std::vector<double> hatchGradientStops;
         };
         std::ifstream wire(output, std::ios::binary);
         if (!wire)
@@ -44065,6 +44142,12 @@ bool physicalAc1018DictionaryVarOutputReadback(
             case 3:
                 pendingKey = dxf->getUtf8String();
                 break;
+            case 2:
+                if (current->name == "HATCH")
+                    current->hatchPattern = dxf->getUtf8String();
+                else
+                    (void)dxf->getUtf8String();
+                break;
             case 350:
             case 360: {
                 const std::uint32_t target = dxf->getHandleString();
@@ -44086,6 +44169,24 @@ bool physicalAc1018DictionaryVarOutputReadback(
                 else
                     (void)dxf->getUtf8String();
                 break;
+            case 450:
+                if (current->name == "HATCH")
+                    current->hatchGradientFlag = dxf->getInt32();
+                else
+                    (void)dxf->getInt32();
+                break;
+            case 453:
+                if (current->name == "HATCH")
+                    current->hatchGradientColorCount = dxf->getInt32();
+                else
+                    (void)dxf->getInt32();
+                break;
+            case 463:
+                if (current->name == "HATCH")
+                    current->hatchGradientStops.push_back(dxf->getDouble());
+                else
+                    (void)dxf->getDouble();
+                break;
             default:
                 (void)dxf->getString();
                 break;
@@ -44093,6 +44194,52 @@ bool physicalAc1018DictionaryVarOutputReadback(
         }
         if (wire.bad())
             return fail("AC1024 output wire scan encountered an I/O error");
+        std::set<const ObjectRow*> matchedInactiveHatches;
+        for (const InactiveHatchStops& expected : expectedInactiveHatches) {
+            const auto emitted = std::find_if(objects.begin(), objects.end(),
+                [&expected, &matchedInactiveHatches](const ObjectRow& object) {
+                    if (object.name != "HATCH"
+                        || object.hatchPattern != expected.pattern
+                        || object.hatchGradientFlag != 0
+                        || object.hatchGradientColorCount != 0
+                        || !object.hatchGradientStops.empty())
+                        return false;
+                    return matchedInactiveHatches.count(&object) == 0u;
+                });
+            if (emitted == objects.end())
+                return fail("AC1024 wire output did not emit the explicitly resolved zero-stop HATCH companion profile");
+            matchedInactiveHatches.insert(&*emitted);
+        }
+
+        dx_iface outputReader;
+        dx_data outputData;
+        if (!outputReader.fileImport(output.string(), &outputData, false))
+            return fail("AC1024 output with inactive HATCH gradient companions did not re-import");
+        std::vector<const DRW_Hatch*> outputHatches;
+        const auto collectOutputHatches = [&outputHatches](
+                const dx_ifaceBlock* block) {
+            if (block == nullptr)
+                return;
+            for (const DRW_Entity* entity : block->ent)
+                if (const auto* hatch = dynamic_cast<const DRW_Hatch*>(entity))
+                    outputHatches.push_back(hatch);
+        };
+        collectOutputHatches(outputData.mBlock);
+        for (const dx_ifaceBlock* block : outputData.blocks)
+            collectOutputHatches(block);
+        for (const InactiveHatchStops& expected : expectedInactiveHatches) {
+            const auto emitted = std::find_if(outputHatches.begin(),
+                outputHatches.end(), [&expected](const DRW_Hatch* hatch) {
+                    if (hatch->name != expected.pattern
+                        || hatch->isGradient != 0
+                        || !hatch->gradColors.empty())
+                        return false;
+                    return true;
+                });
+            if (emitted == outputHatches.end())
+                return fail("AC1024 typed readback did not preserve the explicitly resolved zero-stop HATCH profile");
+            outputHatches.erase(emitted);
+        }
         const ObjectRow* nod = nullptr;
         const ObjectRow* emittedOwner = nullptr;
         for (const ObjectRow& object : objects) {
@@ -44142,11 +44289,21 @@ bool physicalAc1018DictionaryVarOutputReadback(
             || wireValues != expectedValues)
             return fail("AC1024 DICTIONARYVAR physical wire values or owner keys differ from the AC1018 source");
     }
+    for (const InactiveHatchStops& profile : expectedInactiveHatches) {
+        if (profile.hatch->isGradient != 0
+            || profile.hatch->gradColors.size() != profile.values.size())
+            return fail("test-only HATCH stop resolution was not restored after output");
+        for (std::size_t i = 0; i < profile.values.size(); ++i)
+            if (std::abs(profile.hatch->gradColors[i].value
+                         - profile.values[i]) > 1e-12)
+                return fail("test-only HATCH stop resolution changed source stop values");
+    }
 
     std::cerr << "Physical AC1018 DICTIONARYVAR to AC1024 ASCII/Binary output profile passed: "
                  "three values and their rooted owner were matched to emitted bytes; "
-                 "strict whole-source refusal, rollback, same-adapter retry and "
-                 "targeted output wire scan passed.\n";
+                 "strict whole-source refusal, retained-HATCH-stop refusal, "
+                 "explicit stop-resolution retry, rollback and typed output "
+                 "readback passed. HATCH stops remain unqualified.\n";
     return true;
 }
 

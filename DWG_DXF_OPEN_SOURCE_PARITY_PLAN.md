@@ -138,6 +138,15 @@ breadth, native plotting, or whole-document closure. See the [codec round-trip
 receipt](docs/research/p4-plotsettings-r2007plus-dwg-codec-decode-roundtrip-2026-11-02.json)
 and [current strict readback receipt](docs/research/p4-plotsettings-ac1015-current-strict-readback-2026-11-02.json).
 
+**AC1018 DICTIONARYVAR isolation boundary:** the current physical selector first
+refuses the unrelated `ET Border block` HATCH (handle `0x2BA`) because it has
+`isGradient=0` with two retained stops. It verifies destination preservation,
+clears only those stops in the local imported model, retries through the same
+adapter, and verifies the zero-stop HATCH plus the DICTIONARYVAR graph in ASCII
+and Binary output/readback. This qualifies the bounded DICTIONARYVAR graph only;
+the HATCH stop profile remains refused under P6. See the [current selector
+recheck receipt](docs/research/p4-ac1018-dictionaryvar-hatch-resolution-recheck-2026-11-02.json).
+
 After actual prerequisites close, run one composed strict CLI checkpoint. A
 successful process exit or record count alone is not closure. For AC1018 opt-in
 capture, keep default legacy consumers opted out until codec, source, dependency and
