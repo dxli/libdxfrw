@@ -45,6 +45,23 @@
     "nonzeroFinalFieldValues": 0,
     "qualificationNote": "The census extends beyond the previously targeted nine-file sample set. It establishes no nonzero candidate among the decoded local TABLEGEOMETRY records. The five failed JSON/tool decodes are not evidence that their inputs lack TABLEGEOMETRY."
   },
+  "generatedParserControl": {
+    "test": "libdxfrw_tablegeometry_nonzero_bl_tail",
+    "selector": "--tablegeometry-nonzero-bl-tail",
+    "input": "In-memory AC1021 TABLEGEOMETRY object frame authored in the test; no DWG fixture file is added.",
+    "candidateFinalFieldValue": 74565,
+    "checks": [
+      "Nonzero final shared BL value is retained exactly as 0x12345.",
+      "Six preceding geometry coordinates and four scalar geometry values remain aligned.",
+      "Cell counts/flags remain aligned, and the following content hard pointer resolves exactly to handle 0xA720."
+    ],
+    "validation": {
+      "build": "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j2",
+      "focusedTest": "ctest --test-dir build-gcc -R '^libdxfrw_tablegeometry_nonzero_bl_tail$' --output-on-failure",
+      "result": "PASS (1/1)"
+    },
+    "qualificationLimit": "Synthetic bytes encode the BL candidate by construction; this regression protects implementation behavior but does not provide an independent producer/source-span witness for the standalone TABLEGEOMETRY field. No support claim is promoted."
+  },
   "implementationDecision": {
     "currentLibdxfrwBehavior": "DRW_TableGeometry::parseDwg reads the final field as a bounded BL into the int32 DXF group-95 model.",
     "decision": "Do not change the parser based on the unresolved standalone-section conflict. The existing BL path agrees with ODA §20.4.98 and both independent implementation sources for the shared cell-content-geometry payload; all decoded local standalone witnesses remain zero and therefore do not discriminate BD from BL.",

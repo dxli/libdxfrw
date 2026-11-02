@@ -6666,6 +6666,11 @@ public:
     using DRW_TableContentObject::encodeDwg;
 };
 
+class TableGeometryCodecProbe final : public DRW_TableGeometry {
+public:
+    using DRW_TableGeometry::parseDwg;
+};
+
 class CommonEntityHandleCodecProbe final : public DRW_Line {
 public:
     bool parseCommonHandles(DRW::Version version, dwgBuffer& input,
@@ -8177,6 +8182,118 @@ void testTableContentCellStyleBorderAlignment(TestContext& t) {
                      && parsed.m_content.m_rows[0].m_cells[0].m_styleId == 2
                      && parsed.m_content.m_tableStyleHandle == 0xA700u,
                  "TABLECONTENT fields and final style handle remain aligned after BL lineweights");
+    }
+}
+
+struct TableGeometryFrame {
+    std::vector<std::uint8_t> bytes;
+    std::uint32_t handleBits {0};
+};
+
+bool makeTableGeometryNonzeroFlagsFrame(TableGeometryFrame& frame,
+                                        std::int32_t flags) {
+    constexpr DRW::Version version = DRW::AC1021;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    dwgBufferW object(&codec), body(&codec), strings(&codec), handles(&codec);
+
+    body.putBitLong(1); // rows
+    body.putBitLong(1); // columns
+    body.putBitLong(1); // cells
+    body.putBitLong(0x21); // cell flags
+    body.putBitDouble(12.5); // cell width with gap
+    body.putBitDouble(7.25); // cell height with gap
+    body.putBitLong(1); // one content geometry record
+    body.put3BitDouble(DRW_Coord{1.25, 2.5, 3.75}); // top-left
+    body.put3BitDouble(DRW_Coord{4.5, 5.25, 6.125}); // center
+    body.putBitDouble(8.5); // content width
+    body.putBitDouble(9.25); // content height
+    body.putBitDouble(10.5); // width
+    body.putBitDouble(11.75); // height
+    body.putBitLong(flags); // shared content-geometry tail, ODA §20.4.98 BL
+
+    object.putObjType(version, 0u); // direct parser vector; dispatch is not under test
+    const std::size_t objectSizeBit = object.bitCount();
+    object.putRawLong32(0u);
+    dwgHandle ownHandle;
+    ownHandle.ref = 0xA500u;
+    ownHandle.ref64 = ownHandle.ref;
+    object.putHandle(ownHandle);
+    object.putBitShort(0u); // no EED
+    object.putBitLong(0); // no reactors
+    object.putBit(1u); // no extension dictionary
+    appendBits(object, body);
+    object.alignToByte();
+
+    strings.alignToByte();
+    for (int bit = 0; bit < 7; ++bit)
+        object.putBit(0u);
+    const std::uint64_t stringBitSize = strings.size() * 8u + 7u;
+    if (stringBitSize > std::numeric_limits<std::uint16_t>::max())
+        return false;
+    object.putRawShort16(static_cast<std::uint16_t>(stringBitSize));
+    object.putBit(1u); // bounded R2007+ string stream
+    object.alignToByte();
+    if (object.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    object.patchRawLong32AtBit(objectSizeBit,
+                               static_cast<std::uint32_t>(object.bitCount()));
+
+    dwgHandle parentHandle;
+    parentHandle.code = DRW::DwgNullReference;
+    handles.putHandle(parentHandle);
+    dwgHandle contentHandle;
+    contentHandle.code = DRW::DwgHardPointer;
+    contentHandle.size = 2u;
+    contentHandle.ref = 0xA720u;
+    contentHandle.ref64 = contentHandle.ref;
+    handles.putHandle(contentHandle);
+    if (!object.isGood() || !handles.isGood()
+        || handles.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+    object.putBytes(handles.data().data(), handles.size());
+    if (!object.isGood())
+        return false;
+    frame.bytes = object.data();
+    return true;
+}
+
+void testTableGeometryNonzeroFlags(TestContext& t) {
+    constexpr std::int32_t flags = 0x12345;
+    TableGeometryFrame frame;
+    const bool built = makeTableGeometryNonzeroFlagsFrame(frame, flags);
+    t.expect(built, "TABLEGEOMETRY nonzero shared BL frame builds from scratch");
+    if (!built)
+        return;
+
+    dwgBuffer input(frame.bytes.data(), frame.bytes.size());
+    TableGeometryCodecProbe parsed;
+    const bool read = parsed.parseDwg(DRW::AC1021, &input, frame.handleBits);
+    t.expect(read && input.isGood(),
+             "TABLEGEOMETRY nonzero shared BL field parses with aligned handles");
+    t.expect(parsed.m_rowCount == 1 && parsed.m_columnCount == 1
+                 && parsed.m_cellCount == 1 && parsed.m_cells.size() == 1u
+                 && parsed.m_cells[0].m_flags == 0x21
+                 && parsed.m_cells[0].m_unknownHandle == 0xA720u
+                 && parsed.m_cells[0].m_contents.size() == 1u,
+             "TABLEGEOMETRY counts and cell framing remain aligned after BL field");
+    if (parsed.m_cells.size() == 1u
+        && parsed.m_cells[0].m_contents.size() == 1u) {
+        const DRW_TableGeometryContent& content =
+            parsed.m_cells[0].m_contents[0];
+        t.expect(content.m_unknown == flags
+                     && content.m_topLeft.x == 1.25
+                     && content.m_topLeft.y == 2.5
+                     && content.m_topLeft.z == 3.75
+                     && content.m_center.x == 4.5
+                     && content.m_center.y == 5.25
+                     && content.m_center.z == 6.125
+                     && content.m_contentWidth == 8.5
+                     && content.m_contentHeight == 9.25
+                     && content.m_width == 10.5
+                     && content.m_height == 11.75,
+                 "TABLEGEOMETRY preserves nonzero BL value and preceding geometry fields");
     }
 }
 
@@ -19048,6 +19165,14 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--tablegeometry-nonzero-bl-tail") {
+        TestContext context;
+        testTableGeometryNonzeroFlags(context);
+        std::cout << "TABLEGEOMETRY nonzero shared BL tail: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--table-content-override-style-types") {
         TestContext context;
         testTableContentOverrideStyleTypes(context);
@@ -19345,6 +19470,7 @@ int main(int argc, char** argv) {
     testTableContentDwgPayloadEncoder(context);
     testTableContentSkippedDataCompleteness(context);
     testTableContentCellStyleBorderAlignment(context);
+    testTableGeometryNonzeroFlags(context);
     testTableContentOverrideStyleTypes(context);
     testR2010EmbeddedTableContentVector(context);
     testR2010TableBreakDataFlagDomain(context);
