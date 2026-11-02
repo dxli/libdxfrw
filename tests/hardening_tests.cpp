@@ -2347,15 +2347,11 @@ void testDxfLineweightHeaderDomains(TestContext& t) {
         }
     }
 
-    for (const Domain& domain : {domains[0], domains[1], domains[2]}) {
-        const int invalidValue = domain.name == std::string("$CELWEIGHT") ? 6
-            : domain.name == std::string("$ENDCAPS") ? 4 : -1;
+    for (const Domain& domain : domains) {
+        const int invalidValue = domain.invalidValues.front();
         std::ostringstream source(std::ios::out | std::ios::binary);
-        dxfWriterAscii sourceWriter(&source);
-        sourceWriter.setVersion("AC1027", true);
-        t.expect(sourceWriter.writeString(9, domain.name)
-                     && sourceWriter.writeInt16(domain.groupCode, invalidValue),
-                 "unsupported lineweight-default input control is encoded");
+        source << "9\n" << domain.name << '\n'
+               << domain.groupCode << '\n' << invalidValue << '\n';
         std::istringstream input(source.str(), std::ios::in | std::ios::binary);
         std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
         reader->setVersion("AC1027", true);

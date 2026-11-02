@@ -43,7 +43,7 @@
       "ASCII/Binary output and typed readback for every enumerated CELWEIGHT value and all ENDCAPS, JOINSTYLE, LWDISPLAY, and XEDIT values.",
       "Out-of-domain values, wrong group codes, wrong variant types, and duplicate dollar/bare aliases are refused atomically.",
       "A failed write is followed by a corrected value through the same writer for each field and both encodings.",
-      "Tolerant ASCII input preserves unsupported integer values for CELWEIGHT, ENDCAPS, and JOINSTYLE."
+      "Tolerant ASCII input preserves an unsupported integer value for each of CELWEIGHT, ENDCAPS, JOINSTYLE, LWDISPLAY, and XEDIT."
     ]
   },
   "sources": [
