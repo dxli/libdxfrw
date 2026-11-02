@@ -2622,6 +2622,39 @@ public:
     UTF8STRING prompt;         /*!< prompt string, code 3 */
 };
 
+//! Typed view of the legacy linked-MTEXT column XDATA stored under APPID ACAD.
+/*! The view is computed from DRW_MText::extData and does not consume, reorder,
+ * rewrite, or join the raw XDATA or the separately represented MTEXT entities.
+ * The three declared counts are kept distinct because the producer format can
+ * carry different metadata, height-list, and linked-entity counts. */
+struct DRW_MTextLegacyColumnXData {
+    bool columnInfoPresent = false;
+    std::uint16_t columnType = 0;
+    std::int32_t declaredColumnCount = 0;
+    bool autoHeight = false;
+    bool flowReversed = false;
+    double columnWidth = 0.0;
+    double columnGutter = 0.0;
+    bool heightListPresent = false;
+    std::int32_t declaredHeightCount = 0;
+    std::vector<double> columnHeights;
+    bool linkedColumnsPresent = false;
+    std::int32_t declaredLinkedColumnCount = 0;
+    std::vector<std::uint32_t> linkedColumnHandles;
+    bool definedHeightPresent = false;
+    double definedHeight = 0.0;
+};
+
+//! Result of reading the typed legacy-column view from an MTEXT's ACAD XDATA.
+/*! Valid means the recognized bracket profile was structurally parsed. It
+ * does not establish producer conformance, native rendering semantics, or
+ * support for linked-column aggregation. */
+enum class DRW_MTextLegacyColumnXDataStatus : std::uint8_t {
+    NotPresent,
+    Valid,
+    Malformed
+};
+
 //! Class to handle insert entries
 /*!
 *  Class to handle insert entries
@@ -2655,6 +2688,14 @@ public:
         textgen = 1;
         hasXAxisVec = false; // if true need to calculate angle from secPoint vector
     }
+
+    //! Read recognized ACAD legacy-column brackets without changing extData.
+    //! Valid reports structural parsing of this profile only, not native
+    //! semantics or producer-wide compatibility.
+    //! Linked MTEXT records remain independent entities; this does not merge
+    //! them or establish rendering semantics.
+    [[nodiscard]] DRW_MTextLegacyColumnXDataStatus getLegacyColumnXData(
+        DRW_MTextLegacyColumnXData& data) const;
 
 protected:
     void resetDwgState();

@@ -11493,8 +11493,74 @@ void testLegacyMTextColumnXdataPreservation(TestContext& t) {
             && stringAt(28, 1000, "ACAD_MTEXT_DEFINED_HEIGHT_BEGIN")
             && integerAt(29, 46) && realAt(30, 80.0)
             && stringAt(31, 1000, "ACAD_MTEXT_DEFINED_HEIGHT_END");
-        return exact;
+        DRW_MTextLegacyColumnXData columns;
+        const bool typed = head->getLegacyColumnXData(columns)
+                == DRW_MTextLegacyColumnXDataStatus::Valid
+            && columns.columnInfoPresent && columns.columnType == 2
+            && columns.declaredColumnCount == 9 && !columns.autoHeight
+            && columns.flowReversed && columns.columnWidth == 40.0
+            && columns.columnGutter == 5.0 && columns.heightListPresent
+            && columns.declaredHeightCount == 3
+            && columns.columnHeights == std::vector<double>({11.0, 12.0, 0.0})
+            && columns.linkedColumnsPresent
+            && columns.declaredLinkedColumnCount == 3
+            && columns.linkedColumnHandles
+                == std::vector<std::uint32_t>({second->handle, third->handle})
+            && columns.definedHeightPresent && columns.definedHeight == 80.0;
+        DRW_MTextLegacyColumnXData absent;
+        const bool separateEntities = second->getLegacyColumnXData(absent)
+                == DRW_MTextLegacyColumnXDataStatus::NotPresent
+            && third->getLegacyColumnXData(absent)
+                == DRW_MTextLegacyColumnXDataStatus::NotPresent;
+        return exact && typed && separateEntities;
     };
+
+    const auto checkColumnInfoMode = [](int type, int autoHeight,
+                                        int columnCount,
+                                        const std::vector<double>& heights) {
+        DRW_MText text;
+        const auto addString = [&text](int code, const char* value) {
+            text.extData.push_back(std::make_shared<DRW_Variant>(code, value));
+        };
+        const auto addInteger = [&text](int value) {
+            text.extData.push_back(
+                std::make_shared<DRW_Variant>(1070, value));
+        };
+        const auto addReal = [&text](double value) {
+            text.extData.push_back(
+                std::make_shared<DRW_Variant>(1040, value));
+        };
+        addString(1001, "ACAD");
+        addString(1000, "ACAD_MTEXT_COLUMN_INFO_BEGIN");
+        addInteger(75); addInteger(type);
+        addInteger(79); addInteger(autoHeight);
+        addInteger(76); addInteger(columnCount);
+        addInteger(78); addInteger(0);
+        addInteger(48); addReal(40.0);
+        addInteger(49); addReal(5.0);
+        if (!heights.empty()) {
+            addInteger(50);
+            addInteger(static_cast<int>(heights.size()));
+            for (const double height : heights)
+                addReal(height);
+        }
+        addString(1000, "ACAD_MTEXT_COLUMN_INFO_END");
+        DRW_MTextLegacyColumnXData columns;
+        if (text.getLegacyColumnXData(columns)
+                != DRW_MTextLegacyColumnXDataStatus::Valid
+            || !columns.columnInfoPresent || columns.columnType != type
+            || columns.autoHeight != (autoHeight != 0)
+            || columns.declaredColumnCount != columnCount
+            || columns.columnHeights != heights
+            || columns.heightListPresent != !heights.empty())
+            return false;
+        return true;
+    };
+    const bool modeProfiles = checkColumnInfoMode(1, 0, 3, {})
+        && checkColumnInfoMode(2, 1, 0, {})
+        && checkColumnInfoMode(2, 0, 3, {11.0, 12.0, 0.0});
+    t.expect(modeProfiles,
+             "typed legacy MTEXT XDATA distinguishes static, dynamic-auto and dynamic-manual modes");
 
     class LinkedMTextWriter final : public dx_iface {
     public:
@@ -11676,6 +11742,9 @@ void testLegacyMTextColumnXdataPreservation(TestContext& t) {
         const auto originalKey = head->extData[19];
         const auto invalidKey = std::make_shared<DRW_Variant>(1070, std::string("not-an-integer"));
         head->extData[19] = invalidKey;
+        DRW_MTextLegacyColumnXData malformedColumns;
+        const bool malformedView = head->getLegacyColumnXData(malformedColumns)
+            == DRW_MTextLegacyColumnXDataStatus::Malformed;
         const bool absentAccepted = sourceWriter.fileExport(
             sourcePath.string(), DRW::AC1015, binary, &source, false);
         const bool absentPublished = std::filesystem::exists(sourcePath);
@@ -11691,7 +11760,8 @@ void testLegacyMTextColumnXdataPreservation(TestContext& t) {
             && head->handle == 0x31u && interleaved->handle == 0u
             && second->handle == 0x32u && third->handle == 0x33u;
         head->extData[19] = originalKey;
-        const bool refused = !absentAccepted && !absentPublished && !existingAccepted
+        const bool refused = malformedView && !absentAccepted
+            && !absentPublished && !existingAccepted
             && readWholeFile(sourcePath) == sentinel && invalidSourceUnchanged && matchesProfile(source);
         t.expect(refused, "legacy MTEXT invalid XDATA refuses absent/existing outputs atomically without source identity changes");
         if (refused) refusedTransactions += 2u;

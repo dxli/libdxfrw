@@ -16869,6 +16869,294 @@ bool DRW_MText::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     return true;
 }
 
+DRW_MTextLegacyColumnXDataStatus DRW_MText::getLegacyColumnXData(
+    DRW_MTextLegacyColumnXData& data) const {
+    data = DRW_MTextLegacyColumnXData{};
+    DRW_MTextLegacyColumnXData parsed;
+    bool recognized = false;
+    bool malformed = false;
+
+    struct Bracket {
+        bool present = false;
+        std::size_t begin = 0;
+        std::size_t end = 0;
+    };
+    const auto stringIs = [](const DRW_Variant* value, int code,
+                             std::string_view text) {
+        return value != nullptr && value->code() == code
+            && value->type() == DRW_Variant::STRING
+            && value->content.s != nullptr
+            && std::string_view(*value->content.s) == text;
+    };
+    const auto integerIs = [](const DRW_Variant* value, int& result) {
+        if (value == nullptr || value->code() != 1070
+            || value->type() != DRW_Variant::INTEGER)
+            return false;
+        result = value->i_val();
+        return result >= std::numeric_limits<std::int16_t>::min()
+            && result <= std::numeric_limits<std::int16_t>::max();
+    };
+    const auto doubleIs = [](const DRW_Variant* value, double& result) {
+        if (value == nullptr || value->code() != 1040
+            || value->type() != DRW_Variant::DOUBLE)
+            return false;
+        result = value->d_val();
+        return std::isfinite(result);
+    };
+    const auto findBracket = [this, &stringIs](
+            std::size_t appBegin, std::size_t appEnd,
+            std::string_view beginName, std::string_view endName,
+            Bracket& bracket) {
+        std::size_t beginCount = 0;
+        std::size_t endCount = 0;
+        for (std::size_t index = appBegin; index < appEnd; ++index) {
+            const DRW_Variant* value = extData[index].get();
+            if (stringIs(value, 1000, beginName)) {
+                ++beginCount;
+                bracket.begin = index;
+            }
+            if (stringIs(value, 1000, endName)) {
+                ++endCount;
+                bracket.end = index;
+            }
+        }
+        if (beginCount == 0 && endCount == 0)
+            return true;
+        if (beginCount != 1 || endCount != 1
+            || bracket.begin >= bracket.end)
+            return false;
+        bracket.present = true;
+        return true;
+    };
+    const auto parseHexHandle = [](const char* text, std::uint32_t& handle) {
+        if (text == nullptr || *text == '\0')
+            return false;
+        std::uint32_t value = 0;
+        for (const unsigned char character : std::string_view(text)) {
+            unsigned int digit = 0;
+            if (character >= '0' && character <= '9')
+                digit = character - '0';
+            else if (character >= 'A' && character <= 'F')
+                digit = character - 'A' + 10u;
+            else if (character >= 'a' && character <= 'f')
+                digit = character - 'a' + 10u;
+            else
+                return false;
+            if (value > (std::numeric_limits<std::uint32_t>::max() - digit)
+                            / 16u)
+                return false;
+            value = value * 16u + digit;
+        }
+        handle = value;
+        return true;
+    };
+
+    const auto parseColumnInfo = [this, &parsed, &integerIs, &doubleIs](
+            const Bracket& bracket) {
+        if (parsed.columnInfoPresent)
+            return false;
+        bool typeSeen = false;
+        bool autoHeightSeen = false;
+        bool countSeen = false;
+        bool flowReversedSeen = false;
+        bool widthSeen = false;
+        bool gutterSeen = false;
+        std::size_t index = bracket.begin + 1u;
+        while (index < bracket.end) {
+            int key = 0;
+            if (!integerIs(extData[index].get(), key)
+                || index + 1u >= bracket.end)
+                return false;
+            ++index;
+            int integer = 0;
+            double real = 0.0;
+            switch (key) {
+            case 75:
+                if (typeSeen || !integerIs(extData[index].get(), integer)
+                    || integer < 0 || integer > 2)
+                    return false;
+                parsed.columnType = static_cast<std::uint16_t>(integer);
+                typeSeen = true;
+                ++index;
+                break;
+            case 79:
+                if (autoHeightSeen
+                    || !integerIs(extData[index].get(), integer)
+                    || (integer != 0 && integer != 1))
+                    return false;
+                parsed.autoHeight = integer != 0;
+                autoHeightSeen = true;
+                ++index;
+                break;
+            case 76:
+                if (countSeen || !integerIs(extData[index].get(), integer)
+                    || integer < 0 || integer > 4096)
+                    return false;
+                parsed.declaredColumnCount = integer;
+                countSeen = true;
+                ++index;
+                break;
+            case 78:
+                if (flowReversedSeen
+                    || !integerIs(extData[index].get(), integer)
+                    || (integer != 0 && integer != 1))
+                    return false;
+                parsed.flowReversed = integer != 0;
+                flowReversedSeen = true;
+                ++index;
+                break;
+            case 48:
+                if (widthSeen || !doubleIs(extData[index].get(), real))
+                    return false;
+                parsed.columnWidth = real;
+                widthSeen = true;
+                ++index;
+                break;
+            case 49:
+                if (gutterSeen || !doubleIs(extData[index].get(), real))
+                    return false;
+                parsed.columnGutter = real;
+                gutterSeen = true;
+                ++index;
+                break;
+            case 50: {
+                if (parsed.heightListPresent
+                    || !integerIs(extData[index].get(), integer)
+                    || integer < 0 || integer > 4096
+                    || static_cast<std::size_t>(integer)
+                        > bracket.end - index - 1u)
+                    return false;
+                parsed.heightListPresent = true;
+                parsed.declaredHeightCount = integer;
+                ++index;
+                for (int heightIndex = 0; heightIndex < integer;
+                     ++heightIndex, ++index) {
+                    if (!doubleIs(extData[index].get(), real))
+                        return false;
+                    parsed.columnHeights.push_back(real);
+                }
+                break;
+            }
+            default:
+                // Unknown keyed values remain in extData in their original
+                // order. This view skips one typed value without interpreting
+                // or normalizing its payload.
+                ++index;
+                break;
+            }
+        }
+        if (!typeSeen || !autoHeightSeen || !countSeen
+            || !flowReversedSeen || !widthSeen || !gutterSeen)
+            return false;
+        if ((parsed.columnType == 0
+                && (parsed.autoHeight || parsed.heightListPresent))
+            || (parsed.columnType == 1
+                && (parsed.declaredColumnCount == 0 || parsed.autoHeight
+                    || parsed.heightListPresent))
+            || (parsed.columnType == 2 && parsed.autoHeight
+                && parsed.heightListPresent)
+            || (parsed.columnType == 2 && !parsed.autoHeight
+                && (!parsed.heightListPresent
+                    || parsed.declaredHeightCount == 0)))
+            return false;
+        parsed.columnInfoPresent = true;
+        return true;
+    };
+    const auto parseLinks = [this, &parsed, &integerIs, &parseHexHandle](
+            const Bracket& bracket) {
+        if (parsed.linkedColumnsPresent
+            || bracket.begin + 2u >= bracket.end)
+            return false;
+        int key = 0;
+        int count = 0;
+        if (!integerIs(extData[bracket.begin + 1u].get(), key)
+            || key != 47
+            || !integerIs(extData[bracket.begin + 2u].get(), count)
+            || count < 0 || count > 4096)
+            return false;
+        for (std::size_t index = bracket.begin + 3u;
+             index < bracket.end; ++index) {
+            if (parsed.linkedColumnHandles.size() >= 4096u)
+                return false;
+            const DRW_Variant* value = extData[index].get();
+            if (value == nullptr || value->code() != 1005
+                || value->type() != DRW_Variant::STRING
+                || value->content.s == nullptr)
+                return false;
+            std::uint32_t handle = 0;
+            if (!parseHexHandle(value->content.s->c_str(), handle))
+                return false;
+            parsed.linkedColumnHandles.push_back(handle);
+        }
+        parsed.declaredLinkedColumnCount = count;
+        parsed.linkedColumnsPresent = true;
+        return true;
+    };
+    const auto parseDefinedHeight = [this, &parsed, &integerIs, &doubleIs](
+            const Bracket& bracket) {
+        if (parsed.definedHeightPresent
+            || bracket.begin + 3u != bracket.end)
+            return false;
+        int key = 0;
+        double height = 0.0;
+        if (!integerIs(extData[bracket.begin + 1u].get(), key)
+            || key != 46
+            || !doubleIs(extData[bracket.begin + 2u].get(), height))
+            return false;
+        parsed.definedHeight = height;
+        parsed.definedHeightPresent = true;
+        return true;
+    };
+
+    for (std::size_t index = 0; index < extData.size();) {
+        const DRW_Variant* appId = extData[index].get();
+        if (appId == nullptr || appId->code() != 1001) {
+            ++index;
+            continue;
+        }
+        if (appId->type() != DRW_Variant::STRING
+            || appId->content.s == nullptr)
+            return DRW_MTextLegacyColumnXDataStatus::Malformed;
+        std::size_t appEnd = index + 1u;
+        while (appEnd < extData.size()
+               && (extData[appEnd] == nullptr
+                   || extData[appEnd]->code() != 1001))
+            ++appEnd;
+        if (std::string_view(*appId->content.s) == "ACAD") {
+            Bracket columnInfo;
+            Bracket linkedColumns;
+            Bracket definedHeight;
+            const std::size_t valuesBegin = index + 1u;
+            if (!findBracket(valuesBegin, appEnd,
+                    "ACAD_MTEXT_COLUMN_INFO_BEGIN",
+                    "ACAD_MTEXT_COLUMN_INFO_END", columnInfo)
+                || !findBracket(valuesBegin, appEnd,
+                    "ACAD_MTEXT_COLUMNS_BEGIN",
+                    "ACAD_MTEXT_COLUMNS_END", linkedColumns)
+                || !findBracket(valuesBegin, appEnd,
+                    "ACAD_MTEXT_DEFINED_HEIGHT_BEGIN",
+                    "ACAD_MTEXT_DEFINED_HEIGHT_END", definedHeight))
+                return DRW_MTextLegacyColumnXDataStatus::Malformed;
+            if (columnInfo.present || linkedColumns.present
+                || definedHeight.present)
+                recognized = true;
+            if ((columnInfo.present && !parseColumnInfo(columnInfo))
+                || (linkedColumns.present && !parseLinks(linkedColumns))
+                || (definedHeight.present
+                    && !parseDefinedHeight(definedHeight)))
+                malformed = true;
+        }
+        index = appEnd;
+    }
+
+    if (malformed)
+        return DRW_MTextLegacyColumnXDataStatus::Malformed;
+    if (!recognized)
+        return DRW_MTextLegacyColumnXDataStatus::NotPresent;
+    data = std::move(parsed);
+    return DRW_MTextLegacyColumnXDataStatus::Valid;
+}
+
 bool DRW_MText::finalizeDxfColumnObject() const noexcept {
     if (!m_r2018DxfColumnContextPresent)
         return true;
