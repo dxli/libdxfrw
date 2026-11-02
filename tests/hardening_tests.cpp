@@ -1,5 +1,6 @@
 #include <array>
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <chrono>
 #include <filesystem>
@@ -1552,6 +1553,228 @@ void testDxfLinetypeScaleHeaderDomain(TestContext& t) {
                                           parsedScale)
                      && parsedScale == 1.25,
                  "same writer accepts corrected LTSCALE after atomic rollback");
+    }
+}
+
+void testDxfLinetypeDisplayScaleDomains(TestContext& t) {
+    const auto makeWriter = [](bool binary, std::ostream* output,
+                               const char* version = "AC1027") {
+        std::unique_ptr<dxfWriter> writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(output))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(output));
+        writer->setVersion(version, true);
+        return writer;
+    };
+    const auto emitHeader = [](const std::unique_ptr<dxfWriter>& writer,
+                               DRW_Header& header,
+                               DRW::Version target = DRW::AC1027) {
+        DxfWriterRecordScope record(*writer);
+        header.write(writer, target);
+        return !writer->hasWriteError() && record.commit();
+    };
+    const auto findHeaderInteger = [](const std::string& bytes, bool binary,
+                                      const std::string& variable,
+                                      bool& found, int& value) {
+        found = false;
+        std::istringstream input(bytes, std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        bool expectingValue = false;
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (expectingValue) {
+                if (code != 70)
+                    return false;
+                value = reader->getInt32();
+                found = true;
+                return true;
+            }
+            if (code == 9)
+                expectingValue = reader->getString() == variable;
+        }
+        return true;
+    };
+
+    const std::array<const char*, 2> variables{{
+        "$PSLTSCALE", "$MSLTSCALE"}};
+    for (const bool binary : {false, true}) {
+        for (const char* variable : variables) {
+            const bool isPaperScale = std::string(variable) == "$PSLTSCALE";
+            for (const int validValue : {0, 1}) {
+                std::ostringstream output(std::ios::out | std::ios::binary);
+                std::unique_ptr<dxfWriter> writer = makeWriter(
+                    binary, &output);
+                DRW_Header header;
+                header.addInt(variable, validValue, 70);
+                const bool written = emitHeader(writer, header);
+                bool found = false;
+                int parsedValue = -1;
+                t.expect(written
+                             && findHeaderInteger(output.str(), binary,
+                                                  variable, found,
+                                                  parsedValue)
+                             && found && parsedValue == validValue,
+                         "PSLTSCALE/MSLTSCALE documented 0/1 values round-trip in ASCII/Binary DXF");
+            }
+
+            for (const int invalidValue : {-1, 2}) {
+                std::ostringstream output(std::ios::out | std::ios::binary);
+                std::unique_ptr<dxfWriter> writer = makeWriter(
+                    binary, &output);
+                DRW_Header header;
+                header.addInt(variable, invalidValue, 70);
+                t.expect(!emitHeader(writer, header) && output.str().empty(),
+                         "PSLTSCALE/MSLTSCALE values outside 0/1 fail before HEADER publication");
+            }
+
+            if (isPaperScale) {
+                std::ostringstream absentOutput(std::ios::out | std::ios::binary);
+                std::unique_ptr<dxfWriter> absentWriter = makeWriter(
+                    binary, &absentOutput);
+                DRW_Header absent;
+                const bool written = emitHeader(absentWriter, absent);
+                bool found = false;
+                int value = -1;
+                t.expect(written
+                             && findHeaderInteger(absentOutput.str(), binary,
+                                                  variable, found, value)
+                             && found && value == 1,
+                         "absent PSLTSCALE preserves the canonical default value 1");
+            } else {
+                std::ostringstream absentOutput(std::ios::out | std::ios::binary);
+                std::unique_ptr<dxfWriter> absentWriter = makeWriter(
+                    binary, &absentOutput);
+                DRW_Header absent;
+                const bool written = emitHeader(absentWriter, absent);
+                bool found = true;
+                int value = -1;
+                t.expect(written
+                             && findHeaderInteger(absentOutput.str(), binary,
+                                                  variable, found, value)
+                             && !found,
+                         "absent MSLTSCALE remains absent rather than being synthesized");
+            }
+
+            std::ostringstream wrongTypeOutput(
+                std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> wrongTypeWriter = makeWriter(
+                binary, &wrongTypeOutput);
+            DRW_Header wrongType;
+            wrongType.addDouble(variable, 1.0, 40);
+            t.expect(!emitHeader(wrongTypeWriter, wrongType)
+                         && wrongTypeOutput.str().empty(),
+                     "PSLTSCALE/MSLTSCALE wrong variant type is atomically refused");
+
+            std::ostringstream wrongGroupOutput(
+                std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> wrongGroupWriter = makeWriter(
+                binary, &wrongGroupOutput);
+            DRW_Header wrongGroup;
+            wrongGroup.addInt(variable, 1, 90);
+            t.expect(!emitHeader(wrongGroupWriter, wrongGroup)
+                         && wrongGroupOutput.str().empty(),
+                     "PSLTSCALE/MSLTSCALE wrong group code is atomically refused");
+
+            std::ostringstream aliasOutput(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> aliasWriter = makeWriter(
+                binary, &aliasOutput);
+            DRW_Header aliases;
+            aliases.addInt(variable, 0, 70);
+            const std::string bareName = std::string(variable).substr(1u);
+            aliases.addInt(bareName, 1, 70);
+            t.expect(!emitHeader(aliasWriter, aliases)
+                         && aliasOutput.str().empty(),
+                     "PSLTSCALE/MSLTSCALE conflicting key aliases are refused");
+
+            std::ostringstream lowercaseOutput(
+                std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> lowercaseWriter = makeWriter(
+                binary, &lowercaseOutput);
+            DRW_Header lowercase;
+            std::string lowercaseName(variable);
+            std::transform(lowercaseName.begin(), lowercaseName.end(),
+                           lowercaseName.begin(), [](unsigned char value) {
+                               return static_cast<char>(std::tolower(value));
+                           });
+            lowercase.addInt(lowercaseName, 1, 70);
+            t.expect(!emitHeader(lowercaseWriter, lowercase)
+                         && lowercaseOutput.str().empty(),
+                     "case-folded linetype scale aliases cannot create duplicate HEADER variables");
+
+            std::ostringstream source(std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> sourceWriter = makeWriter(
+                binary, &source);
+            t.expect(sourceWriter->writeString(9, variable)
+                         && sourceWriter->writeInt16(70, 2),
+                     "out-of-domain linetype display scale source is encoded");
+            std::istringstream sourceInput(source.str(),
+                                           std::ios::in | std::ios::binary);
+            std::unique_ptr<dxfReader> sourceReader = binary
+                ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&sourceInput))
+                : std::unique_ptr<dxfReader>(new dxfReaderAscii(&sourceInput));
+            sourceReader->setVersion("AC1027", true);
+            ExposedHeader parsedHeader;
+            int code = 0;
+            bool parsed = true;
+            while (sourceReader->readRec(&code))
+                parsed = parsedHeader.parseCode(code, sourceReader) && parsed;
+            const auto value = parsedHeader.vars.find(variable);
+            t.expect(parsed && value != parsedHeader.vars.end()
+                         && value->second != nullptr
+                         && value->second->type() == DRW_Variant::INTEGER
+                         && value->second->content.i == 2,
+                     "PSLTSCALE/MSLTSCALE parser preserves unsupported values for tolerant reading");
+
+            std::ostringstream retryOutput(
+                std::ios::out | std::ios::binary);
+            std::unique_ptr<dxfWriter> retryWriter = makeWriter(
+                binary, &retryOutput);
+            DRW_Header invalidRetry;
+            invalidRetry.addInt(variable, 2, 70);
+            t.expect(!emitHeader(retryWriter, invalidRetry)
+                         && retryOutput.str().empty()
+                         && !retryWriter->hasWriteError(),
+                     "invalid linetype display scale rolls back the HEADER writer transaction");
+            DRW_Header correctedRetry;
+            correctedRetry.addInt(variable, 1, 70);
+            bool retryFound = false;
+            int retryValue = -1;
+            t.expect(emitHeader(retryWriter, correctedRetry)
+                         && findHeaderInteger(retryOutput.str(), binary,
+                                              variable, retryFound,
+                                              retryValue)
+                         && retryFound && retryValue == 1,
+                     "same writer accepts corrected PSLTSCALE/MSLTSCALE after rollback");
+        }
+
+        std::ostringstream oldVersionOutput(
+            std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> oldVersionWriter = makeWriter(
+            binary, &oldVersionOutput, "AC1018");
+        DRW_Header oldVersionHeader;
+        oldVersionHeader.addInt("$MSLTSCALE", 1, 70);
+        t.expect(!emitHeader(oldVersionWriter, oldVersionHeader,
+                             DRW::AC1018)
+                     && oldVersionOutput.str().empty(),
+                 "MSLTSCALE is refused for targets older than its AutoCAD 2008 introduction");
+
+        std::ostringstream earliestVersionOutput(
+            std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> earliestVersionWriter = makeWriter(
+            binary, &earliestVersionOutput, "AC1021");
+        DRW_Header earliestVersionHeader;
+        earliestVersionHeader.addInt("$MSLTSCALE", 1, 70);
+        bool earliestFound = false;
+        int earliestValue = -1;
+        t.expect(emitHeader(earliestVersionWriter, earliestVersionHeader,
+                            DRW::AC1021)
+                     && findHeaderInteger(earliestVersionOutput.str(), binary,
+                                          "$MSLTSCALE", earliestFound,
+                                          earliestValue)
+                     && earliestFound && earliestValue == 1,
+                 "MSLTSCALE is writable at the earliest DXF target revision that can carry it");
     }
 }
 
@@ -24582,6 +24805,18 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--linetype-display-scale-domains") {
+        TestContext focused;
+        testDxfLinetypeDisplayScaleDomains(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " linetype display-scale assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "Linetype display-scale domains: PASS\n";
+        return 0;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--dxf-geodata-modern-text-preflight") {
         TestContext focused;
         testDxfGeoDataModernTextPreflightView(focused);
@@ -25830,6 +26065,7 @@ int main(int argc, char** argv) {
     testAssociativePersistentSubentityHandleLimit(context);
     testSpatialFilterDxfValidation(context);
     testDxfOperationAdmission(context);
+    testDxfLinetypeDisplayScaleDomains(context);
     testLeaderAdvisoryCountState(context);
     testPublicOwnershipContracts(context);
     testEmbeddedAttributeTextRouting(context);

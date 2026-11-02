@@ -212,6 +212,11 @@ public:
     /// Preserve a valid, nonzero global linetype scale; input parsing remains
     /// tolerant so callers can diagnose or repair an invalid source value.
     bool canWriteDxfLinetypeScale() const noexcept;
+    /// Validate the documented 0/1 values for paper-space and model-space
+    /// linetype scaling. Missing PSLTSCALE keeps its canonical default; missing
+    /// MSLTSCALE remains absent.
+    bool canWriteDxfPsltscale() const noexcept;
+    bool canWriteDxfMsltscale(DRW::Version target) const noexcept;
     /// Return whether the dimension-variable family can be represented in the
     /// requested DXF revision without dropping modern split-variable values.
     bool canWriteDxfDimensionVariables(DRW::Version target) const;
@@ -560,6 +565,8 @@ public:
     std::map<std::string, DRW_Variant*> customVars; /*!< custom/unknown header variables */
     std::vector<std::pair<std::string, std::string>> customProperties;
 private:
+    bool canWriteDxfBooleanHeaderVariable(
+        const char* dollarName, bool* present = nullptr) const noexcept;
     std::string comments;
     std::string name;
     DRW_Variant* curr {nullptr};

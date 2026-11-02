@@ -888,7 +888,9 @@ void DRW_Header::write(const std::unique_ptr<dxfWriter>& writer, DRW::Version ve
 /*RLZ: TODO complete all vars to AC1024*/
     if (!canWriteDxfHeaderStructure()
         || !canWriteDxfUnknownHeaderVariables()
-        || !canWriteDxfLinetypeScale()) {
+        || !canWriteDxfLinetypeScale()
+        || !canWriteDxfPsltscale()
+        || !canWriteDxfMsltscale(ver)) {
         writer->markWriteError();
         return;
     }
@@ -2698,6 +2700,56 @@ bool DRW_Header::canWriteDxfLinetypeScale() const noexcept {
         || (value != nullptr && value->type() == DRW_Variant::DOUBLE
             && value->code() == 40 && std::isfinite(value->content.d)
             && value->content.d != 0.0);
+}
+
+bool DRW_Header::canWriteDxfBooleanHeaderVariable(
+        const char* dollarName, bool* foundValue) const noexcept {
+    if (dollarName == nullptr || dollarName[0] != '$')
+        return false;
+    const std::string_view dollarKey(dollarName);
+    const std::string_view bareKey = dollarKey.substr(1u);
+    const DRW_Variant* value = nullptr;
+    bool present = false;
+    const auto accept = [&](std::string_view key,
+                            const DRW_Variant* candidate) {
+        if (!headerNamesEqualIgnoringAsciiCase(key, dollarKey)
+            && !headerNamesEqualIgnoringAsciiCase(key, bareKey))
+            return true;
+        if ((key != dollarKey && key != bareKey) || present)
+            return false;
+        present = true;
+        value = candidate;
+        return true;
+    };
+    for (const auto& item : vars) {
+        if (!accept(item.first, item.second))
+            return false;
+    }
+    for (const auto& item : customVars) {
+        if (!accept(item.first, item.second))
+            return false;
+    }
+    if (foundValue != nullptr)
+        *foundValue = present;
+    if (!present)
+        return true;
+    return value != nullptr && value->type() == DRW_Variant::INTEGER
+        && value->code() == 70
+        && (value->content.i == 0 || value->content.i == 1);
+}
+
+bool DRW_Header::canWriteDxfPsltscale() const noexcept {
+    return canWriteDxfBooleanHeaderVariable("$PSLTSCALE");
+}
+
+bool DRW_Header::canWriteDxfMsltscale(DRW::Version target) const noexcept {
+    bool present = false;
+    if (!canWriteDxfBooleanHeaderVariable("$MSLTSCALE", &present))
+        return false;
+    // MSLTSCALE was introduced in AutoCAD 2008. AC1021 spans multiple product
+    // releases, so it is the earliest target format that can carry it; the
+    // DXF version enum cannot distinguish AutoCAD 2007 from 2008/2009.
+    return !present || target >= DRW::AC1021;
 }
 
 bool DRW_Header::canWriteDxfVisualStyleReferences(DRW::Version target) const {
