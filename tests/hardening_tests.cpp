@@ -76,6 +76,7 @@ public:
 class ExposedLType : public DRW_LType {
 public:
     using DRW_LType::parseCode;
+    using DRW_LType::validateDxf;
 };
 
 class ExposedMLineStyle : public DRW_MLineStyle {
@@ -940,6 +941,75 @@ void testHatchPatternDxfDomains(TestContext& t) {
                  "HATCH writer refuses an out-of-domain pattern type before emitting a record");
         t.expect(writerAccepts(77),
                  "HATCH writer refuses an out-of-domain double flag before emitting a record");
+    }
+}
+
+void testLTypeAlignmentDxfDomain(TestContext& t) {
+    const auto parseAlignment = [](ExposedLType& lineType, int value,
+                                   bool binary) {
+        std::ostringstream encoded(std::ios::out | std::ios::binary);
+        std::unique_ptr<dxfWriter> writer = binary
+            ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&encoded))
+            : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&encoded));
+        writer->setVersion("AC1027", true);
+        if (!writer->writeInt16(72, value) || writer->hasWriteError())
+            return false;
+        writer.reset();
+        std::istringstream input(encoded.str(),
+                                 std::ios::in | std::ios::binary);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        int code = 0;
+        return reader->readRec(&code) && code == 72
+            && lineType.parseCode(code, reader);
+    };
+
+    for (const bool binary : {false, true}) {
+        ExposedLType valid;
+        valid.alignment = 64;
+        t.expect(parseAlignment(valid, 'A', binary)
+                     && valid.alignment == 'A' && valid.validateDxf(),
+                 "LTYPE accepts the documented fixed-A alignment in ASCII/Binary DXF");
+
+        for (const int value : {0, 64, 66, 32767}) {
+            ExposedLType invalid;
+            invalid.alignment = 67;
+            t.expect(!parseAlignment(invalid, value, binary)
+                         && invalid.alignment == 67,
+                     "LTYPE rejects non-A alignment without mutating the typed value");
+        }
+
+        const auto writerAccepts = [binary](int alignment) {
+            std::ostringstream output(std::ios::out | std::ios::binary);
+            dxfRW codec(nullptr);
+            codec.version = DRW::AC1027;
+            codec.binFile = binary;
+            codec.writer = binary
+                ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
+                : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
+            codec.writer->setVersion("AC1027", true);
+
+            DRW_LType lineType;
+            lineType.name = "ALIGNMENT_TEST";
+            lineType.alignment = alignment;
+            lineType.size = 1;
+            lineType.length = 1.0;
+            lineType.path.push_back(1.0);
+            DRW_LTypeSegment segment;
+            segment.length = 1.0;
+            lineType.segments.push_back(segment);
+            const bool written = codec.writeLineType(&lineType);
+            return std::make_pair(written, output.str());
+        };
+
+        const auto validWrite = writerAccepts('A');
+        t.expect(validWrite.first && !validWrite.second.empty(),
+                 "LTYPE writer emits a fixed-A alignment record");
+        const auto invalidWrite = writerAccepts(64);
+        t.expect(!invalidWrite.first && invalidWrite.second.empty(),
+                 "LTYPE writer refuses non-A alignment before emitting bytes");
     }
 }
 
@@ -23701,6 +23771,18 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::cout << "HATCH pattern DXF domains: PASS\n";
+        return 0;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--ltype-alignment-dxf-domain") {
+        TestContext focused;
+        testLTypeAlignmentDxfDomain(focused);
+        if (focused.failures != 0) {
+            std::cerr << focused.failures
+                      << " LTYPE alignment-domain assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "LTYPE alignment DXF domain: PASS\n";
         return 0;
     }
     if (argc == 2

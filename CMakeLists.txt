@@ -1718,6 +1718,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_hatch_pattern_dxf_domains PROPERTIES
         LABELS "fast;dxf;reader;writer;hatch;generated"
         TIMEOUT 10)
+    add_test(NAME libdxfrw_ltype_alignment_dxf_domain
+        COMMAND libdxfrw_hardening_tests --ltype-alignment-dxf-domain)
+    set_tests_properties(libdxfrw_ltype_alignment_dxf_domain PROPERTIES
+        LABELS "fast;dxf;reader;writer;ltype;generated"
+        TIMEOUT 10)
     add_test(NAME libdxfrw_dbcolor_book_name_owner_budget
         COMMAND libdxfrw_hardening_tests
             --dxf-dbcolor-book-name-owner-budget)

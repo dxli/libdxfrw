@@ -4578,7 +4578,15 @@ bool DRW_LType::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             return false;
         break;
     case 72:
-        alignment = reader->getInt32();
+        {
+            const int parsedAlignment = reader->getInt32();
+            // Autodesk's LTYPE table defines the alignment code as ASCII A.
+            // Validate before assignment so malformed records do not change
+            // the typed entry on a failed parse.
+            if (parsedAlignment != 'A')
+                return false;
+            alignment = parsedAlignment;
+        }
         break;
     case 73:
         size = reader->getInt32();
@@ -8176,7 +8184,7 @@ bool DRW_LType::validateDxf() const {
         && (declaredSize < 0 || declaredSize == size)
         && (segments.empty()
             || segments.size() == static_cast<std::size_t>(size))
-        && alignment >= 0 && alignment <= std::numeric_limits<std::int16_t>::max()
+        && alignment == 'A'
         && std::isfinite(length)
         && std::all_of(path.cbegin(), path.cend(),
                        [](double value) { return std::isfinite(value); })
