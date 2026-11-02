@@ -19117,9 +19117,13 @@ bool DRW_MPolygon::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         fillColorDwgIndex = 0u;
         fillColorDwgMetadataPresent = false;
         return true;
-    case 99:
-        degenerateLoops = reader->getInt32();
+    case 99: {
+        const int count = reader->getInt32();
+        if (!isValidCount(count, kMaxHatchItems))
+            return false;
+        degenerateLoops = count;
         return true;
+    }
     default:
         break;
     }
@@ -19164,6 +19168,7 @@ bool DRW_MPolygon::validateDxf() const {
         && (solid == 0 || solid == 1)
         && (annotatedBoundary == 0 || annotatedBoundary == 1)
         && fillColorAci >= 0 && fillColorAci <= 256
+        && isValidCount(degenerateLoops, kMaxHatchItems)
         && std::isfinite(xDirX) && std::isfinite(xDirY);
 }
 

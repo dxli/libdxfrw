@@ -13882,6 +13882,109 @@ void testMPolygonAciDomain(TestContext& t) {
     }
 }
 
+void testMPolygonDegenerateCountDomain(TestContext& t) {
+    struct MPolygonParseProbe final : DRW_MPolygon {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+        bool valid() const { return validateDxf(); }
+    };
+    const auto parseRecord = [](MPolygonParseProbe& polygon, int code,
+                                const char* value) {
+        const std::string record = std::to_string(code) + "\n" + value + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int parsedCode = 0;
+        return reader->readRec(&parsedCode) && parsedCode == code
+            && polygon.parse(parsedCode, reader);
+    };
+
+    for (const char* invalidValue : {"-1", "10001"}) {
+        MPolygonParseProbe polygon;
+        const bool rejected = !parseRecord(polygon, 99, invalidValue);
+        const bool unchanged = polygon.degenerateLoops == 0
+            && polygon.valid();
+        const bool retried = parseRecord(polygon, 99, "3")
+            && polygon.degenerateLoops == 3 && polygon.valid();
+        t.expect(rejected && unchanged && retried,
+                 "MPOLYGON group-99 invalid count preserves model state for corrected retry");
+    }
+
+    MPolygonParseProbe maximum;
+    const bool maximumAccepted = parseRecord(
+        maximum, 99, "10000") && maximum.degenerateLoops == 10000
+        && maximum.valid();
+    t.expect(maximumAccepted,
+             "MPOLYGON group-99 accepts the bounded count ceiling");
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto path = std::filesystem::temp_directory_path()
+        / ("libdxfrw-mpolygon-degenerate-count-"
+           + std::to_string(nonce) + ".dxf");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code error;
+            std::filesystem::remove(path, error);
+        }
+    } cleanup{path};
+    struct MPolygonWriterAdapter final : dx_iface {
+        DRW_MPolygon polygon;
+        bool rejectedByEntityWriter{false};
+        void writeEntities() override {
+            if (dxfW == nullptr || !dxfW->writeMPolygon(&polygon))
+                rejectedByEntityWriter = true;
+        }
+    };
+
+    const std::string previous = "previous destination bytes\n";
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output << previous;
+    }
+    dxfRW codec(path.string().c_str());
+    dx_data data;
+    MPolygonWriterAdapter writer;
+    writer.cData = &data;
+    writer.currentBlock = data.mBlock;
+    writer.dxfW = &codec;
+    const auto destinationIsPrevious = [&path, &previous]() {
+        std::ifstream input(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input),
+                           std::istreambuf_iterator<char>()) == previous;
+    };
+
+    writer.polygon.degenerateLoops = -1;
+    writer.rejectedByEntityWriter = false;
+    const bool negativeRejected = !codec.write(&writer, DRW::AC1027, false)
+        && writer.rejectedByEntityWriter && destinationIsPrevious();
+    writer.polygon.degenerateLoops = 10001;
+    writer.rejectedByEntityWriter = false;
+    const bool overBudgetRejected = !codec.write(&writer, DRW::AC1027, false)
+        && writer.rejectedByEntityWriter && destinationIsPrevious();
+
+    writer.polygon.degenerateLoops = 3;
+    writer.rejectedByEntityWriter = false;
+    const bool retryWritten = codec.write(&writer, DRW::AC1027, false)
+        && !writer.rejectedByEntityWriter;
+    dx_data decoded;
+    dx_iface importer;
+    const bool imported = retryWritten
+        && importer.fileImport(path.string(), &decoded, false);
+    const DRW_MPolygon* decodedMPolygon = nullptr;
+    if (imported && decoded.mBlock != nullptr) {
+        for (const DRW_Entity* entity : decoded.mBlock->ent) {
+            if (const auto* polygon = dynamic_cast<const DRW_MPolygon*>(entity))
+                decodedMPolygon = polygon;
+        }
+    }
+    t.expect(negativeRejected && overBudgetRejected && retryWritten
+                 && imported && decodedMPolygon != nullptr
+                 && decodedMPolygon->degenerateLoops == 3,
+             "MPOLYGON typed writer rejects invalid group 99 atomically and retries with exact readback");
+}
+
 void testHatchSplinePointComponentOrder(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
@@ -62051,6 +62154,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testMPolygonAciDomain(context);
         std::cout << "MPOLYGON group-63 ACI-domain controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--mpolygon-degenerate-count-domain") {
+        TestContext context;
+        testMPolygonDegenerateCountDomain(context);
+        std::cout << "MPOLYGON group-99 count-domain controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

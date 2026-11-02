@@ -353,6 +353,8 @@ failing-stage diagnostic.
 
 **MPOLYGON ACI scalar admission:** Group 63 now accepts the documented 0..256 ACI domain at DXF parse, typed validation, and writer admission, preserving same-group correction/retry and ASCII/Binary destination safety. Its dedicated fast selector passes 1/1 in 0.09 seconds. This does not qualify fill rendering or native semantics. See [the MPOLYGON ACI receipt](docs/research/p6-mpolygon-aci-dxf-domain-2026-11-02.json).
 
+**MPOLYGON degenerate-loop count domain:** DXF group 99 now rejects negative and over-budget counts before model mutation; typed validation applies the same 0..10,000 bound, and writer refusal preserves the destination before corrected retry/readback. The focused count/CMC/metadata cohort passes 4/4 in 0.43 seconds. No relation between group 99 and boundary group 91 is assumed. See [the group-99 receipt](docs/research/p6-mpolygon-degenerate-count-domain-2026-11-02.json).
+
 ## P7 — ACIS/ACDS and independent 3D meaning
 
 - Complete the original DWG entity → owner/key → AcDs segment → SAT/SAB join,
