@@ -20030,6 +20030,161 @@ bool viewportRuntimeDispatchGuard() {
     return true;
 }
 
+bool pointCloudAndNavisworksAdapterTransport() {
+    for (const bool binary : {false, true}) {
+        dx_data data;
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+
+        DRW_PointCloud cloud;
+        cloud.classVersion = 2u;
+        cloud.origin = DRW_Coord{1.0, 2.0, 3.0};
+        cloud.savedFilename = "local-point-cloud.rcs";
+        cloud.sourceFileCount = 1;
+        cloud.sourceFiles.emplace_back("local-point-cloud.rcs");
+        cloud.extentsMin = DRW_Coord{-1.0, -2.0, -3.0};
+        cloud.extentsMax = DRW_Coord{4.0, 5.0, 6.0};
+        cloud.pointCount = 7u;
+        cloud.ucsName = "LOCAL_UCS";
+        cloud.ucsOrigin = DRW_Coord{0.5, 1.5, 2.5};
+        adapter.addPointCloud(&cloud);
+
+        DRW_PointCloudEx cloudEx;
+        cloudEx.classVersion = 3u;
+        cloudEx.extentsMin = DRW_Coord{-10.0, -20.0, -30.0};
+        cloudEx.extentsMax = DRW_Coord{40.0, 50.0, 60.0};
+        cloudEx.ucsOrigin = DRW_Coord{2.0, 3.0, 4.0};
+        cloudEx.isLocked = true;
+        cloudEx.name = "LOCAL_POINTCLOUDEX";
+        cloudEx.stylizationType = 1;
+        cloudEx.intensityColorScheme = "LOCAL_INTENSITY";
+        cloudEx.currentColorScheme = "LOCAL_CURRENT";
+        cloudEx.classificationColorScheme = "LOCAL_CLASSIFICATION";
+        cloudEx.elevationMin = -2.0;
+        cloudEx.elevationMax = 8.0;
+        cloudEx.intensityMin = 3.0;
+        cloudEx.intensityMax = 9.0;
+        cloudEx.intensityOutOfRangeBehavior = 2;
+        cloudEx.elevationOutOfRangeBehavior = 3;
+        cloudEx.croppingCount = 1;
+        DRW_PointCloudExCropping cropping;
+        cropping.type = 2;
+        cropping.isInside = true;
+        cropping.cropPlane = DRW_Coord{0.0, 0.0, 1.0};
+        cropping.cropXDirection = DRW_Coord{1.0, 0.0, 0.0};
+        cropping.cropYDirection = DRW_Coord{0.0, 1.0, 0.0};
+        cropping.pointCount = 3;
+        cropping.points = {DRW_Coord{0.0, 0.0, 0.0},
+                           DRW_Coord{2.0, 0.0, 0.0},
+                           DRW_Coord{0.0, 2.0, 0.0}};
+        cloudEx.croppings.push_back(cropping);
+        adapter.addPointCloudEx(&cloudEx);
+
+        DRW_NavisworksModel model;
+        model.flags = 5u;
+        model.transform[3] = 2.0;
+        model.transform[7] = 3.0;
+        model.transform[11] = 4.0;
+        model.unitFactor = 2.5;
+        adapter.addNavisworksModel(&model);
+
+        if (data.mBlock == nullptr || data.mBlock->ent.size() != 3u
+            || data.typedEntityCaptureFailed)
+            return fail("point-cloud/NAVISWORKS callbacks were not retained");
+
+        const auto path = std::filesystem::temp_directory_path()
+            / ("libdxfrw-cloud-adapter-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        if (std::filesystem::exists(path))
+            return fail("point-cloud adapter output path unexpectedly exists");
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{path};
+        const std::string sentinel = "POINTCLOUD_ADAPTER_DESTINATION\n";
+        {
+            std::ofstream existing(path, std::ios::binary);
+            existing << sentinel;
+            if (!existing)
+                return fail("could not create point-cloud destination sentinel");
+        }
+        if (adapter.fileExport(path.string(), DRW::AC1024, binary,
+                               &data, false, true))
+            return fail("POINTCLOUDEX was emitted below its writer target floor");
+        {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail("unsupported point-cloud target changed the destination");
+        }
+        if (!adapter.fileExport(path.string(), DRW::AC1027, binary,
+                                &data, false, true))
+            return fail("point-cloud/NAVISWORKS corrected target retry failed");
+
+        dx_data readback;
+        dx_iface reader;
+        if (!reader.fileImport(path.string(), &readback, false)
+            || readback.mBlock == nullptr
+            || readback.mBlock->ent.size() != 3u)
+            return fail("point-cloud/NAVISWORKS output did not read back");
+        const DRW_PointCloud* actualCloud = nullptr;
+        const DRW_PointCloudEx* actualCloudEx = nullptr;
+        const DRW_NavisworksModel* actualModel = nullptr;
+        for (const DRW_Entity* entity : readback.mBlock->ent) {
+            if (const auto* value = dynamic_cast<const DRW_PointCloud*>(entity))
+                actualCloud = value;
+            else if (const auto* value =
+                         dynamic_cast<const DRW_PointCloudEx*>(entity))
+                actualCloudEx = value;
+            else if (const auto* value =
+                         dynamic_cast<const DRW_NavisworksModel*>(entity))
+                actualModel = value;
+        }
+        if (actualCloud == nullptr || actualCloud->classVersion != 2u
+            || actualCloud->origin.x != 1.0
+            || actualCloud->origin.z != 3.0
+            || actualCloud->savedFilename != "local-point-cloud.rcs"
+            || actualCloud->sourceFileCount != 1
+            || actualCloud->sourceFiles.size() != 1u
+            || actualCloud->pointCount != 7u
+            || actualCloud->extentsMax.z != 6.0
+            || actualCloud->ucsName != "LOCAL_UCS")
+            return fail("POINTCLOUD modeled fields changed on readback");
+        if (actualCloudEx == nullptr || actualCloudEx->classVersion != 3u
+            || actualCloudEx->name != "LOCAL_POINTCLOUDEX"
+            || !actualCloudEx->isLocked
+            || actualCloudEx->stylizationType != 1
+            || actualCloudEx->intensityColorScheme != "LOCAL_INTENSITY"
+            || actualCloudEx->currentColorScheme != "LOCAL_CURRENT"
+            || actualCloudEx->classificationColorScheme != "LOCAL_CLASSIFICATION"
+            || actualCloudEx->elevationMin != -2.0
+            || actualCloudEx->elevationMax != 8.0
+            || actualCloudEx->intensityMin != 3.0
+            || actualCloudEx->intensityMax != 9.0
+            || actualCloudEx->croppingCount != 1
+            || actualCloudEx->croppings.size() != 1u
+            || actualCloudEx->croppings.front().type != 2
+            || !actualCloudEx->croppings.front().isInside
+            || actualCloudEx->croppings.front().pointCount != 3
+            || actualCloudEx->croppings.front().points.size() != 3u
+            || actualCloudEx->croppings.front().points[1].x != 2.0)
+            return fail("POINTCLOUDEX modeled fields changed on readback");
+        if (actualModel == nullptr || actualModel->flags != 5u
+            || actualModel->transform[3] != 2.0
+            || actualModel->transform[7] != 3.0
+            || actualModel->transform[11] != 4.0
+            || actualModel->unitFactor != 2.5)
+            return fail("NAVISWORKSMODEL modeled fields changed on readback");
+    }
+    return true;
+}
+
 bool evaluationGraphCaptureLimitsFailClosed(bool binary) {
     dx_data data;
     dx_iface iface;
@@ -62637,6 +62792,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--viewport-runtime-dispatch")
         return viewportRuntimeDispatchGuard() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--point-cloud-adapter-transport")
+        return pointCloudAndNavisworksAdapterTransport() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--evaluation-graph-capture-limits")
         return evaluationGraphCaptureLimitsFailClosed(false)

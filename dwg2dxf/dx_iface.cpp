@@ -71420,6 +71420,36 @@ void dx_iface::writeEntity(DRW_Entity* e){
     case DRW::WIPEOUT:
         written = dxfW->writeWipeout(static_cast<DRW_Wipeout*>(e));
         break;
+    case DRW::POINTCLOUD:
+        if (auto* cloud = dynamic_cast<DRW_PointCloud*>(e)) {
+            if (typeid(*e) == typeid(DRW_PointCloud))
+                written = dxfW->writePointCloud(cloud);
+            else
+                dxfW->writeRawDxfEntity(nullptr);
+        } else {
+            dxfW->writeRawDxfEntity(nullptr);
+        }
+        break;
+    case DRW::POINTCLOUDEX:
+        if (auto* cloud = dynamic_cast<DRW_PointCloudEx*>(e)) {
+            if (typeid(*e) == typeid(DRW_PointCloudEx))
+                written = dxfW->writePointCloudEx(cloud);
+            else
+                dxfW->writeRawDxfEntity(nullptr);
+        } else {
+            dxfW->writeRawDxfEntity(nullptr);
+        }
+        break;
+    case DRW::NAVISWORKSMODEL:
+        if (auto* model = dynamic_cast<DRW_NavisworksModel*>(e)) {
+            if (typeid(*e) == typeid(DRW_NavisworksModel))
+                written = dxfW->writeNavisworksModel(model);
+            else
+                dxfW->writeRawDxfEntity(nullptr);
+        } else {
+            dxfW->writeRawDxfEntity(nullptr);
+        }
+        break;
     case DRW::PLANESURFACE:
     case DRW::EXTRUDEDSURFACE:
     case DRW::REVOLVEDSURFACE:

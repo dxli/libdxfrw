@@ -498,6 +498,13 @@ eligible reader. The exact package and environment result are in the
   and POINT readback; see the [VIEWPORT dispatch receipt](docs/research/p8-viewport-runtime-dispatch-2026-11-02.json).
   This closes one adapter type-safety hole only; remaining entity tags still
   require source-stable inventory and any applicable subtype guards.
+  `dx_iface` now retains and dispatches POINTCLOUD, POINTCLOUDEX, and
+  NAVISWORKSMODEL through existing bounded typed capture and DXF writer paths.
+  Generated ASCII/Binary controls check AC1024 refusal for the AC1027-only
+  POINTCLOUDEX writer profile, destination preservation, corrected retry, and
+  typed field readback; see the [point-cloud adapter receipt](docs/research/p8-point-cloud-adapter-transport-2026-11-02.json).
+  This does not close external-definition graph, asset loading, native 3D
+  consumer, or broader BLOCK callback qualification.
   The limited macOS ARM64
   2D open/insert profile is recorded in
   [the FreeCAD route receipt](docs/research/p8-macos-freecad-dwg2dxf-open-insert-qualification-2026-11-01.json);

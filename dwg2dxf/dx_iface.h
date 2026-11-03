@@ -938,6 +938,42 @@ public:
         retainTypedEntity<DRW_Wipeout>(*data);
     }
 
+    void addPointCloud(const DRW_PointCloud *data) override {
+        if (data == nullptr)
+            return;
+        if (data->eType != DRW::POINTCLOUD
+            || typeid(*data) != typeid(DRW_PointCloud)) {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
+            return;
+        }
+        retainTypedEntity<DRW_PointCloud>(*data);
+    }
+
+    void addPointCloudEx(const DRW_PointCloudEx *data) override {
+        if (data == nullptr)
+            return;
+        if (data->eType != DRW::POINTCLOUDEX
+            || typeid(*data) != typeid(DRW_PointCloudEx)) {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
+            return;
+        }
+        retainTypedEntity<DRW_PointCloudEx>(*data);
+    }
+
+    void addNavisworksModel(const DRW_NavisworksModel *data) override {
+        if (data == nullptr)
+            return;
+        if (data->eType != DRW::NAVISWORKSMODEL
+            || typeid(*data) != typeid(DRW_NavisworksModel)) {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
+            return;
+        }
+        retainTypedEntity<DRW_NavisworksModel>(*data);
+    }
+
     virtual void addSurface(const DRW_Surface *data) override{
         if (data == nullptr) {
             if (cData != nullptr)
