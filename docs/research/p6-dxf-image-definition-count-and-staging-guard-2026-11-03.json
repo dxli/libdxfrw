@@ -40,5 +40,7 @@
     "The oversized plan-setter branch is not separately exercised with a 100,001-entry DRW_ImageDef plan; the output inventory guard is exercised without allocating image records.",
     "Other writeObjects maps/vectors and unrelated copy/work bounds remain to audit."
   ],
-  "next": "Continue the P6 safety audit on the next bounded output assembly path. Keep allocation-failure injection and the separate rooted IMAGEDEF TABLES/FIELDLIST failure visible as open work."
+  "followUpReceipt": "docs/research/p6-dxf-image-definition-plan-nested-setter-bounds-2026-11-03.json",
+  "followUpScope": "The successor receipt covers aggregate nested retained payload/work estimates and injected const/rvalue allocation failure. The specific 100,001-record plan-setter branch and other writeObjects assemblies remain open.",
+  "next": "Continue auditing other writeObjects maps/vectors and setup/assembly bounds. Keep whole-object rollback, source lifetime, platform numeric/string policies, scoped concurrency, and the separate rooted IMAGEDEF TABLES/FIELDLIST failure visible as open work."
 }

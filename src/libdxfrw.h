@@ -758,9 +758,13 @@ public:
         std::uint64_t imageImportGeneration,
         std::size_t maxRetainedBytes = 64u * 1024u * 1024u);
     /// Install the source IMAGEDEFs referenced by this export. Definitions
-    /// are copied, keyed by import generation and source handle, then assigned
-    /// fresh output handles before entity emission. An empty plan preserves
-    /// the legacy filename-only writeImage API.
+    /// are keyed by import generation and source handle, then assigned fresh
+    /// output handles before entity emission. Staging is bounded to 100,000
+    /// records, 1,000,000 accounted nested items and 64 MiB of estimated
+    /// retained payload; these are resource limits, not format maxima. The
+    /// rvalue overload allocates every plan node before consuming caller data.
+    /// Failure leaves the previously accepted plan intact. An empty plan
+    /// preserves the legacy filename-only writeImage API.
     bool setImageDefinitionPlan(
         const std::vector<ImageDefinitionPlanEntry>& definitions);
     bool setImageDefinitionPlan(
@@ -1692,6 +1696,10 @@ public:
     static bool estimateGroupsRetainedBytes(
         const std::list<DRW_Group>& groups, std::size_t byteLimit,
         std::size_t& estimate, std::size_t& itemCount) noexcept;
+    static bool estimateImageDefinitionPlanRetainedBytes(
+        const std::vector<ImageDefinitionPlanEntry>& definitions,
+        std::size_t byteLimit, std::size_t& estimate,
+        std::size_t& itemCount) noexcept;
     bool preflightRawDxfSections() noexcept;
     bool preflightDxfSetup() noexcept {
         if (!m_dxfWriteFinalizing && !m_dxfWriteInspecting)

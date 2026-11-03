@@ -85,6 +85,20 @@ public:
         return dxfRW::estimateGroupsRetainedBytes(
             groups, byteLimit, bytes, items);
     }
+    static std::size_t imageDefinitionPlanCount(const dxfRW& owner) {
+        return owner.m_sourceImageDefinitionPlan.size();
+    }
+    static bool hasImageDefinitionPlan(const dxfRW& owner,
+                                      dxfRW::ImageDefinitionKey key) {
+        return owner.m_sourceImageDefinitionPlan.count(key) != 0u;
+    }
+    static bool estimateImageDefinitionPlan(
+            const std::vector<dxfRW::ImageDefinitionPlanEntry>& definitions,
+            std::size_t byteLimit, std::size_t& bytes,
+            std::size_t& items) {
+        return dxfRW::estimateImageDefinitionPlanRetainedBytes(
+            definitions, byteLimit, bytes, items);
+    }
     static bool rootEntriesRejected(const dxfRW& owner) {
         return owner.m_dxfRootDictEntriesInputRejected;
     }
@@ -16338,6 +16352,158 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
                  "retry publishes one closed planned IMAGEDEF/reactor graph");
         adapter.dxfW = nullptr;
     }
+}
+
+void testImageDefinitionPlanResourceBounds(TestContext& t) {
+    const auto makePlan = [](std::uint32_t handle,
+                             const std::string& name) {
+        dxfRW::ImageDefinitionPlanEntry entry;
+        entry.importGeneration = 7u;
+        entry.sourceHandle = handle;
+        entry.definition.handle = handle;
+        entry.definition.name = name;
+        entry.definition.imgVersion = 2;
+        entry.definition.loaded = 1;
+        entry.definition.resolution = 5;
+        entry.definition.reactorHandles.push_back(handle + 1u);
+        entry.definition.reactors.emplace(
+            "A" + std::to_string(handle + 1u),
+            "A" + std::to_string(handle));
+        DRW_ImageDefinitionReactor reactor;
+        reactor.handle = handle + 2u;
+        reactor.parentHandle = handle;
+        reactor.name = "IMAGE_REACTOR_META";
+        reactor.m_classVersion = 2;
+        entry.selectedReactors.push_back(std::move(reactor));
+        return entry;
+    };
+    const std::vector<dxfRW::ImageDefinitionPlanEntry> smallPlan{
+        makePlan(0xA100u, "image-plan-small.png")};
+    std::size_t smallBytes = 0u;
+    std::size_t smallItems = 0u;
+    const bool smallMeasured =
+        DxfGroupSetterTestAccess::estimateImageDefinitionPlan(
+            smallPlan, DRW::kMaxDxfTypedTableRetainedBytes,
+            smallBytes, smallItems);
+    std::size_t exactSmallBytes = 0u;
+    std::size_t exactSmallItems = 0u;
+    const bool exactSmallAccepted = smallMeasured
+        && DxfGroupSetterTestAccess::estimateImageDefinitionPlan(
+            smallPlan, smallBytes, exactSmallBytes, exactSmallItems)
+        && exactSmallBytes == smallBytes && exactSmallItems == smallItems;
+    std::size_t belowSmallBytes = 0u;
+    std::size_t belowSmallItems = 0u;
+    const bool belowSmallRejected = smallMeasured && smallBytes > 0u
+        && !DxfGroupSetterTestAccess::estimateImageDefinitionPlan(
+            smallPlan, smallBytes - 1u,
+            belowSmallBytes, belowSmallItems);
+
+    auto exactBytePlan = makePlan(0xA200u, "image-plan-bound.png");
+    std::vector<dxfRW::ImageDefinitionPlanEntry> exactBytePlans;
+    exactBytePlans.push_back(std::move(exactBytePlan));
+    std::size_t initialPlanBytes = 0u;
+    std::size_t initialPlanItems = 0u;
+    const bool initialPlanMeasured =
+        DxfGroupSetterTestAccess::estimateImageDefinitionPlan(
+            exactBytePlans, DRW::kMaxDxfTypedTableRetainedBytes,
+            initialPlanBytes, initialPlanItems);
+    bool exactBytePlanAccepted = false;
+    bool overBytePlanRejected = false;
+    bool overByteSetterPreservedPrior = false;
+    if (initialPlanMeasured
+        && initialPlanBytes < DRW::kMaxDxfTypedTableRetainedBytes) {
+        const std::size_t additionalBytes =
+            DRW::kMaxDxfTypedTableRetainedBytes - initialPlanBytes;
+        exactBytePlans.front().definition.name.assign(
+            exactBytePlans.front().definition.name.size() + additionalBytes,
+            'i');
+        std::size_t exactPlanBytes = 0u;
+        std::size_t exactPlanItems = 0u;
+        exactBytePlanAccepted =
+            DxfGroupSetterTestAccess::estimateImageDefinitionPlan(
+                exactBytePlans,
+                DRW::kMaxDxfTypedTableRetainedBytes,
+                exactPlanBytes, exactPlanItems)
+            && exactPlanBytes == DRW::kMaxDxfTypedTableRetainedBytes;
+        exactBytePlans.front().definition.name.push_back('i');
+        std::size_t overPlanBytes = 0u;
+        std::size_t overPlanItems = 0u;
+        overBytePlanRejected =
+            !DxfGroupSetterTestAccess::estimateImageDefinitionPlan(
+                exactBytePlans,
+                DRW::kMaxDxfTypedTableRetainedBytes,
+                overPlanBytes, overPlanItems);
+        dxfRW byteBoundCodec("");
+        const bool priorInstalled =
+            byteBoundCodec.setImageDefinitionPlan(smallPlan);
+        const bool overRejected =
+            !byteBoundCodec.setImageDefinitionPlan(exactBytePlans);
+        overByteSetterPreservedPrior = priorInstalled && overRejected
+            && DxfGroupSetterTestAccess::imageDefinitionPlanCount(
+                   byteBoundCodec) == 1u
+            && DxfGroupSetterTestAccess::hasImageDefinitionPlan(
+                   byteBoundCodec, {7u, 0xA100u});
+    }
+    t.expect(exactSmallAccepted && belowSmallRejected
+                 && exactBytePlanAccepted && overBytePlanRejected
+                 && overByteSetterPreservedPrior,
+             "IMAGEDEF plan estimator accepts exact byte budget and rejects one byte over before changing the active plan");
+
+    dxfRW codec("");
+    const bool priorInstalled = codec.setImageDefinitionPlan(smallPlan);
+    std::vector<dxfRW::ImageDefinitionPlanEntry> constCandidate{
+        makePlan(0xA300u, "image-plan-const-retry.png")};
+    constCandidate.front().definition.reactorHandles.clear();
+    constCandidate.front().definition.reactors.clear();
+    constCandidate.front().selectedReactors.clear();
+    const std::size_t constFailuresBefore = materialFailedAllocations;
+    bool constAllocationFailed = false;
+    {
+        MaterialAllocationFailure failMapNode(0);
+        constAllocationFailed =
+            !codec.setImageDefinitionPlan(constCandidate);
+    }
+    const bool constFailurePreservedPrior = constAllocationFailed
+        && materialFailedAllocations > constFailuresBefore
+        && DxfGroupSetterTestAccess::imageDefinitionPlanCount(codec) == 1u
+        && DxfGroupSetterTestAccess::hasImageDefinitionPlan(
+            codec, {7u, 0xA100u});
+
+    std::vector<dxfRW::ImageDefinitionPlanEntry> moveCandidate{
+        makePlan(0xA400u, "image-plan-move-first.png"),
+        makePlan(0xA500u, "image-plan-move-second.png")};
+    for (dxfRW::ImageDefinitionPlanEntry& entry : moveCandidate) {
+        entry.definition.reactorHandles.clear();
+        entry.definition.reactors.clear();
+        entry.selectedReactors.clear();
+    }
+    const std::size_t moveFailuresBefore = materialFailedAllocations;
+    bool moveAllocationFailed = false;
+    {
+        MaterialAllocationFailure failSecondNode(1);
+        moveAllocationFailed =
+            !codec.setImageDefinitionPlan(std::move(moveCandidate));
+    }
+    const bool moveFailurePreservedInput = moveAllocationFailed
+        && materialFailedAllocations > moveFailuresBefore
+        && moveCandidate.size() == 2u
+        && moveCandidate[0].sourceHandle == 0xA400u
+        && moveCandidate[0].definition.name == "image-plan-move-first.png"
+        && moveCandidate[1].sourceHandle == 0xA500u
+        && moveCandidate[1].definition.name == "image-plan-move-second.png"
+        && DxfGroupSetterTestAccess::imageDefinitionPlanCount(codec) == 1u
+        && DxfGroupSetterTestAccess::hasImageDefinitionPlan(
+            codec, {7u, 0xA100u});
+    const bool moveRetry = codec.setImageDefinitionPlan(
+            std::move(moveCandidate))
+        && DxfGroupSetterTestAccess::imageDefinitionPlanCount(codec) == 2u
+        && DxfGroupSetterTestAccess::hasImageDefinitionPlan(
+            codec, {7u, 0xA400u})
+        && DxfGroupSetterTestAccess::hasImageDefinitionPlan(
+            codec, {7u, 0xA500u});
+    t.expect(priorInstalled && constFailurePreservedPrior
+                 && moveFailurePreservedInput && moveRetry,
+             "IMAGEDEF plan const/move allocation failure preserves prior state and caller values until a complete allocation retry");
 }
 
 void testImageAdjustmentAdmission(TestContext& t,
@@ -64279,6 +64445,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testImageDefinitionPlanFailureRetry(context);
         std::cout << "IMAGEDEF plan failure/retry: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--image-definition-plan-resource-bounds") {
+        TestContext context;
+        testImageDefinitionPlanResourceBounds(context);
+        std::cout << "IMAGEDEF plan resource bounds: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

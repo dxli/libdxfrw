@@ -2788,8 +2788,13 @@ bool validImageDefinitionPlanEntry(
 
 bool dxfRW::setImageDefinitionPlan(
         const std::vector<ImageDefinitionPlanEntry>& definitions) {
-    if (!preflightDxfSetup() || writer != nullptr
-        || definitions.size() > DRW_Dictionary::kMaxEntries)
+    if (!preflightDxfSetup() || writer != nullptr)
+        return false;
+    std::size_t estimate = 0u;
+    std::size_t itemCount = 0u;
+    if (!estimateImageDefinitionPlanRetainedBytes(
+            definitions, DRW::kMaxDxfTypedTableRetainedBytes,
+            estimate, itemCount))
         return false;
     std::map<ImageDefinitionKey, ImageDefinitionPlanEntry> planned;
     try {
@@ -2810,18 +2815,34 @@ bool dxfRW::setImageDefinitionPlan(
 
 bool dxfRW::setImageDefinitionPlan(
         std::vector<ImageDefinitionPlanEntry>&& definitions) {
-    if (!preflightDxfSetup() || writer != nullptr
-        || definitions.size() > DRW_Dictionary::kMaxEntries)
+    if (!preflightDxfSetup() || writer != nullptr)
+        return false;
+    std::size_t estimate = 0u;
+    std::size_t itemCount = 0u;
+    if (!estimateImageDefinitionPlanRetainedBytes(
+            definitions, DRW::kMaxDxfTypedTableRetainedBytes,
+            estimate, itemCount))
         return false;
     std::map<ImageDefinitionKey, ImageDefinitionPlanEntry> planned;
     try {
-        for (ImageDefinitionPlanEntry& entry : definitions) {
+        for (const ImageDefinitionPlanEntry& entry : definitions) {
             if (!validImageDefinitionPlanEntry(entry))
                 return false;
             const ImageDefinitionKey key{entry.importGeneration,
                                          entry.sourceHandle};
-            if (!planned.emplace(key, std::move(entry)).second)
+            if (!planned.emplace(key, ImageDefinitionPlanEntry{}).second)
                 return false;
+        }
+        static_assert(std::is_nothrow_move_assignable<
+                          ImageDefinitionPlanEntry>::value,
+                      "IMAGEDEF plan transfer must be nothrow after allocation");
+        for (ImageDefinitionPlanEntry& entry : definitions) {
+            const ImageDefinitionKey key{entry.importGeneration,
+                                         entry.sourceHandle};
+            const auto destination = planned.find(key);
+            if (destination == planned.end())
+                return false;
+            destination->second = std::move(entry);
         }
         m_sourceImageDefinitionPlan.swap(planned);
     } catch (...) {
@@ -3430,6 +3451,36 @@ bool estimateOneGroup(const DRW_Group& group, std::size_t& bytes,
                             sizeof(std::uint32_t), bytes, items);
 }
 
+bool estimateOneImageDefinitionPlanEntry(
+        const dxfRW::ImageDefinitionPlanEntry& entry,
+        std::size_t& bytes, std::size_t& items) noexcept {
+    const DRW_ImageDef& definition = entry.definition;
+    if (entry.selectedReactors.size() > dwgSafety::MaxReactorCount
+        || definition.reactorHandles.size() > dwgSafety::MaxReactorCount
+        || definition.reactors.size() > dwgSafety::MaxReactorCount
+        || !addDxfSetupTableEntryPayload(definition, bytes, items)
+        || !addDxfSetupText(definition.name, bytes, items)
+        || !addDxfSetupSlots(
+               definition.reactors.size(),
+               sizeof(std::pair<const std::string, std::string>)
+                   + 3u * sizeof(void*),
+               bytes, items))
+        return false;
+    for (const auto& reactor : definition.reactors) {
+        if (!addDxfSetupText(reactor.first, bytes, items)
+            || !addDxfSetupText(reactor.second, bytes, items))
+            return false;
+    }
+    if (!addDxfSetupSlots(entry.selectedReactors.size(),
+                          sizeof(DRW_ImageDefinitionReactor), bytes, items))
+        return false;
+    for (const DRW_ImageDefinitionReactor& reactor : entry.selectedReactors) {
+        if (!addDxfSetupTableEntryPayload(reactor, bytes, items))
+            return false;
+    }
+    return true;
+}
+
 } // namespace
 
 bool dxfRW::estimateSourceBlockRecordsRetainedBytes(
@@ -3496,6 +3547,28 @@ bool dxfRW::estimateGroupsRetainedBytes(
         && estimateDxfSetupRecords(groups, estimate, itemCount,
                                    estimateOneGroup)
         && estimate <= byteLimit;
+}
+
+bool dxfRW::estimateImageDefinitionPlanRetainedBytes(
+        const std::vector<ImageDefinitionPlanEntry>& definitions,
+        std::size_t byteLimit, std::size_t& estimate,
+        std::size_t& itemCount) noexcept {
+    estimate = 0u;
+    itemCount = 0u;
+    using ImagePlanMapEntry =
+        std::pair<const ImageDefinitionKey, ImageDefinitionPlanEntry>;
+    if (byteLimit > DRW::kMaxDxfTypedTableRetainedBytes
+        || definitions.size() > DRW::kMaxDxfTypedTableRecords)
+        return false;
+    for (const ImageDefinitionPlanEntry& definition : definitions) {
+        if (!addDxfSetupItems(1u, itemCount)
+            || !addDxfSetupRetainedBytes(
+                   sizeof(ImagePlanMapEntry) + 3u * sizeof(void*), estimate)
+            || !estimateOneImageDefinitionPlanEntry(
+                   definition, estimate, itemCount))
+            return false;
+    }
+    return estimate <= byteLimit;
 }
 
 void dxfRW::rejectDxfRootDictEntriesInput() noexcept {

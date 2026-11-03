@@ -3127,6 +3127,15 @@ set_tests_properties(libdxfrw_image_definition_plan_failure_retry PROPERTIES
     TIMEOUT 20
 )
 
+add_test(
+    NAME libdxfrw_image_definition_plan_resource_bounds
+    COMMAND libdxfrw_dxf_fixture_tests --image-definition-plan-resource-bounds
+)
+set_tests_properties(libdxfrw_image_definition_plan_resource_bounds PROPERTIES
+    LABELS "fast;dxf;image;resource"
+    TIMEOUT 30
+)
+
 add_test(NAME libdxfrw_table_attribute_count_bound
     COMMAND libdxfrw_dxf_fixture_tests --table-attribute-count-bound)
 set_tests_properties(libdxfrw_table_attribute_count_bound PROPERTIES
