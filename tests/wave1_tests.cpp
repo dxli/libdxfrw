@@ -2126,6 +2126,106 @@ void testIntegerValuedBooleanWireKinds(TestContext& t) {
     }
 }
 
+void testPointCloudReferenceRemapping(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap({
+                {0x201u, 0xA21u}, {0x202u, 0xA22u},
+                {0x301u, 0xA31u}, {0x302u, 0xA32u}});
+            if (useResolver) {
+                owner.setReferenceResolver([](std::uint32_t source) {
+                    switch (source) {
+                    case 0x201u: return std::uint32_t{0xB21u};
+                    case 0x202u: return std::uint32_t{0xB22u};
+                    case 0x301u: return std::uint32_t{0xB31u};
+                    case 0x302u: return std::uint32_t{0xB32u};
+                    default: return source;
+                    }
+                });
+            }
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_PointCloud cloud;
+            cloud.classVersion = 2u;
+            cloud.definitionHandle = 0x201u;
+            cloud.reactorHandle = 0x202u;
+            DRW_PointCloudEx cloudEx;
+            cloudEx.classVersion = 3u;
+            cloudEx.definitionHandle = 0x301u;
+            cloudEx.reactorHandle = 0x302u;
+            const bool wrote = owner.writePointCloud(&cloud)
+                && owner.writePointCloudEx(&cloudEx)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote,
+                     "POINTCLOUD references serialize with remapping enabled");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            struct References {
+                std::uint32_t definition {0u};
+                std::uint32_t reactor {0u};
+            } pointCloud, pointCloudEx;
+            std::string recordName;
+            bool inPointCloudBody = false;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                    inPointCloudBody = false;
+                } else if (code == 100) {
+                    inPointCloudBody =
+                        reader->getString() == "AcDbPointCloud";
+                } else if (inPointCloudBody
+                           && (recordName == "POINTCLOUD"
+                               || recordName == "POINTCLOUDEX")) {
+                    References& refs = recordName == "POINTCLOUD"
+                        ? pointCloud : pointCloudEx;
+                    if (code == 330)
+                        refs.definition = reader->getHandleString();
+                    else if (code == 360)
+                        refs.reactor = reader->getHandleString();
+                }
+            }
+            const References expectedPointCloud = useResolver
+                ? References{0xB21u, 0xB22u}
+                : References{0xA21u, 0xA22u};
+            const References expectedPointCloudEx = useResolver
+                ? References{0xB31u, 0xB32u}
+                : References{0xA31u, 0xA32u};
+            t.expect(ended
+                         && pointCloud.definition
+                             == expectedPointCloud.definition
+                         && pointCloud.reactor == expectedPointCloud.reactor
+                         && pointCloudEx.definition
+                             == expectedPointCloudEx.definition
+                         && pointCloudEx.reactor
+                             == expectedPointCloudEx.reactor,
+                     useResolver
+                         ? "POINTCLOUD references use final resolver handles"
+                         : "POINTCLOUD references use source-handle remaps");
+        }
+    }
+}
+
 void testDimensionAssociationGraphClosure(TestContext& t) {
     const auto readAssociationTargets = [&t](const std::string& bytes,
                                               bool binary,
@@ -15777,6 +15877,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testDxfWriterEmittedHandleInventory(focused);
         std::cout << "DXF writer emitted-handle inventory: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--pointcloud-reference-remapping") {
+        TestContext focused;
+        testPointCloudReferenceRemapping(focused);
+        std::cout << "POINTCLOUD reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

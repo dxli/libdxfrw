@@ -13470,6 +13470,18 @@ bool dxfRW::writePointCloud(DRW_PointCloud *ent){
         m_writeError = true;
         return false;
     }
+    const auto emittedReference = [this](std::uint32_t source) {
+        if (source == 0u)
+            return 0u;
+        return m_referenceResolver ? resolveReference(source)
+                                   : remapObjectHandle(source);
+    };
+    std::uint32_t definitionHandle = 0u;
+    std::uint32_t reactorHandle = 0u;
+    if (version > DRW::AC1024) {
+        definitionHandle = emittedReference(ent->definitionHandle);
+        reactorHandle = emittedReference(ent->reactorHandle);
+    }
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "POINTCLOUD");
     if (!writeEntity(ent))
@@ -13508,8 +13520,8 @@ bool dxfRW::writePointCloud(DRW_PointCloud *ent){
     writer->writeDouble(222, ent->ucsZDirection.y);
     writer->writeDouble(232, ent->ucsZDirection.z);
     if (version > DRW::AC1024) {
-        writer->writeString(330, toHexStr(ent->definitionHandle));
-        writer->writeString(360, toHexStr(ent->reactorHandle));
+        writer->writeString(330, toHexStr(definitionHandle));
+        writer->writeString(360, toHexStr(reactorHandle));
         writer->writeInt16(71, ent->intensityScheme);
         writer->writeDouble(40, ent->intensityStyle.minIntensity);
         writer->writeDouble(41, ent->intensityStyle.maxIntensity);
@@ -13576,6 +13588,15 @@ bool dxfRW::writePointCloudEx(DRW_PointCloudEx *ent){
             }
         }
     }
+    const auto emittedReference = [this](std::uint32_t source) {
+        if (source == 0u)
+            return 0u;
+        return m_referenceResolver ? resolveReference(source)
+                                   : remapObjectHandle(source);
+    };
+    const std::uint32_t definitionHandle =
+        emittedReference(ent->definitionHandle);
+    const std::uint32_t reactorHandle = emittedReference(ent->reactorHandle);
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "POINTCLOUDEX");
     if (!writeEntity(ent))
@@ -13602,8 +13623,8 @@ bool dxfRW::writePointCloudEx(DRW_PointCloudEx *ent){
     writer->writeDouble(222, ent->ucsZDirection.y);
     writer->writeDouble(232, ent->ucsZDirection.z);
     writer->writeBool(290, ent->isLocked);
-    writer->writeString(330, toHexStr(ent->definitionHandle));
-    writer->writeString(360, toHexStr(ent->reactorHandle));
+    writer->writeString(330, toHexStr(definitionHandle));
+    writer->writeString(360, toHexStr(reactorHandle));
     writer->writeUtf8String(1, ent->name);
     writer->writeBool(291, ent->showIntensity);
     writer->writeInt16(71, ent->stylizationType);

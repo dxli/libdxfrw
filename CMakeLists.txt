@@ -734,6 +734,11 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_wave1_tests --dxf-writer-emitted-handle-inventory)
     set_tests_properties(libdxfrw_dxf_writer_emitted_handle_inventory PROPERTIES
         LABELS "fast;dxf;writer;inventory;generated;transaction" TIMEOUT 30)
+    add_test(NAME libdxfrw_pointcloud_reference_remapping
+        COMMAND libdxfrw_wave1_tests --pointcloud-reference-remapping)
+    set_tests_properties(libdxfrw_pointcloud_reference_remapping PROPERTIES
+        LABELS "fast;dxf;writer;pointcloud;references;generated"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_dxf_standard_object_identities
         COMMAND libdxfrw_wave1_tests --dxf-standard-object-identities)
     set_tests_properties(libdxfrw_dxf_standard_object_identities PROPERTIES
