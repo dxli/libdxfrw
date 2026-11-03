@@ -16993,7 +16993,7 @@ bool pointCloudDefinitionModelEqual(const DRW_PointCloudDef& left,
         && sameCoord(left.m_extentsMax, right.m_extentsMax);
 }
 
-bool pointCloudDefinitionRawMatchesPhysical(
+bool pointCloudRawDxfObjectMatchesPhysical(
         const DRW_RawDxfObject& raw,
         const DRW_DxfObjectPhysicalSource& physical) noexcept {
     if (physical.status != DRW_DxfObjectPhysicalSource::Status::Complete
@@ -17039,30 +17039,46 @@ bool pointCloudDefinitionRawProjectsToModel(
             > DRW_PointCloudDef::kMaxClassVersion)
         return false;
 
-    const char* subclassName = nullptr;
-    if (definition.m_kind == DRW_PointCloudDef::DefinitionEx
+    const bool classicDefinition =
+        definition.m_kind == DRW_PointCloudDef::Definition
+        && (dx_block_membership::equal(raw.name, "POINTCLOUDDEFINITION")
+            || dx_block_membership::equal(raw.name,
+                                           "ACDBPOINTCLOUDDEFINITION"));
+    const bool extendedDefinition =
+        definition.m_kind == DRW_PointCloudDef::DefinitionEx
         && (dx_block_membership::equal(
                 raw.name, "POINTCLOUDDEFINITIONEX")
             || dx_block_membership::equal(raw.name,
-                                           "ACDBPOINTCLOUDDEFEX"))) {
-        subclassName = "AcDbPointCloudDefEx";
-        if (definition.m_pointCount > DRW_PointCloudDef::kMaxPointCount
+                                           "ACDBPOINTCLOUDDEFEX"));
+    const bool classicReactor =
+        definition.m_kind == DRW_PointCloudDef::Reactor
+        && (dx_block_membership::equal(raw.name, "POINTCLOUDDEFREACTOR")
+            || dx_block_membership::equal(
+                raw.name, "ACDBPOINTCLOUDDEFREACTOR"));
+    const bool extendedReactor =
+        definition.m_kind == DRW_PointCloudDef::ReactorEx
+        && (dx_block_membership::equal(raw.name,
+                                       "POINTCLOUDDEFREACTOREX")
+            || dx_block_membership::equal(
+                raw.name, "ACDBPOINTCLOUDDEFREACTOREX"));
+    const bool isDefinition = classicDefinition || extendedDefinition;
+    const char* subclassName = isDefinition
+        ? (classicDefinition ? "AcDbPointCloudDef" : "AcDbPointCloudDefEx")
+        : classicReactor ? "AcDbPointCloudDefReactor"
+        : extendedReactor ? "AcDbPointCloudDefReactorEx" : nullptr;
+    if (subclassName == nullptr) {
+        return false;
+    }
+    if (isDefinition
+        && (definition.m_sourceFilename.empty()
+            || definition.m_pointCount > DRW_PointCloudDef::kMaxPointCount
             || !std::isfinite(definition.m_extentsMin.x)
             || !std::isfinite(definition.m_extentsMin.y)
             || !std::isfinite(definition.m_extentsMin.z)
             || !std::isfinite(definition.m_extentsMax.x)
             || !std::isfinite(definition.m_extentsMax.y)
-            || !std::isfinite(definition.m_extentsMax.z))
-            return false;
-    } else if (definition.m_kind == DRW_PointCloudDef::ReactorEx
-        && (dx_block_membership::equal(raw.name,
-                                       "POINTCLOUDDEFREACTOREX")
-            || dx_block_membership::equal(
-                raw.name, "ACDBPOINTCLOUDDEFREACTOREX"))) {
-        subclassName = "AcDbPointCloudDefReactorEx";
-    } else {
+            || !std::isfinite(definition.m_extentsMax.z)))
         return false;
-    }
     const auto isText = [](const DRW_Variant& field) {
         return field.type() == DRW_Variant::STRING
             && field.content.s != nullptr;
@@ -17099,7 +17115,7 @@ bool pointCloudDefinitionRawProjectsToModel(
     if (at(index, 102)) {
         if (!isText(raw.groups[index])
             || *raw.groups[index].content.s != "{ACAD_REACTORS"
-            || definition.m_kind != DRW_PointCloudDef::DefinitionEx
+            || !isDefinition
             || definition.reactorHandles.empty()
             || definition.reactorCount()
                 != static_cast<std::int32_t>(definition.reactorHandles.size()))
@@ -17133,7 +17149,7 @@ bool pointCloudDefinitionRawProjectsToModel(
         return false;
     ++index;
 
-    if (definition.m_kind == DRW_PointCloudDef::DefinitionEx) {
+    if (isDefinition) {
         if (!at(index, 1) || !isText(raw.groups[index])
             || *raw.groups[index].content.s != definition.m_sourceFilename)
             return false;
@@ -17352,10 +17368,16 @@ bool pointCloudModelEqual(const DRW_PointCloud& left,
 bool pointCloudSourceFieldProfileComplete(
         const DRW_DxfPhysicalEntitySource& record,
         const DRW_PointCloud& cloud, DRW::Version version,
-        bool binary) noexcept {
+        bool binary, bool allowDefinitionReferences = false) noexcept {
     if (!pointCloudPhysicalRecordValid(record, "POINTCLOUD", version, binary)
-        || version < DRW::AC1027 || cloud.definitionHandle != 0u
-        || cloud.reactorHandle != 0u || cloud.showIntensity
+        || version < DRW::AC1027
+        || (allowDefinitionReferences
+            ? (cloud.definitionHandle == 0u
+                || cloud.definitionHandle == DRW::NoHandle
+                || cloud.reactorHandle == 0u
+                || cloud.reactorHandle == DRW::NoHandle)
+            : (cloud.definitionHandle != 0u || cloud.reactorHandle != 0u))
+        || cloud.showIntensity
         || cloud.showClipping || cloud.clippingCount != 0
         || !cloud.clippings.empty()
         || cloud.space != DRW::ModelSpace
@@ -17394,6 +17416,8 @@ bool pointCloudSourceFieldProfileComplete(
     std::size_t classVersionCount = 0u;
     std::size_t sourceCountCount = 0u;
     std::size_t pointCountCount = 0u;
+    std::size_t definitionReferenceCount = 0u;
+    std::size_t reactorReferenceCount = 0u;
     std::array<std::size_t, 1072u> commonCounts{};
     std::array<std::size_t, 1072u> bodyCounts{};
     const auto isText = [](const DRW_Variant& field) {
@@ -17612,12 +17636,16 @@ bool pointCloudSourceFieldProfileComplete(
                 return false;
             break;
         case 330:
-            if (!handleMatches(field, cloud.definitionHandle, false))
+            if (!handleMatches(field, cloud.definitionHandle,
+                               allowDefinitionReferences))
                 return false;
+            ++definitionReferenceCount;
             break;
         case 360:
-            if (!handleMatches(field, cloud.reactorHandle, false))
+            if (!handleMatches(field, cloud.reactorHandle,
+                               allowDefinitionReferences))
                 return false;
+            ++reactorReferenceCount;
             break;
         case 71:
             if (!isInt(field) || field.i_val() != cloud.intensityScheme)
@@ -17643,6 +17671,9 @@ bool pointCloudSourceFieldProfileComplete(
         || !entityHandleMatched || !entityOwnerMatched
         || classVersionCount != 1u || sourceCountCount != 1u
         || pointCountCount != 1u
+        || (allowDefinitionReferences
+            && (definitionReferenceCount != 1u
+                || reactorReferenceCount != 1u))
         || sourceFileIndex != cloud.sourceFiles.size())
         return false;
     for (std::size_t code = 0u; code < commonCounts.size(); ++code) {
@@ -56128,7 +56159,7 @@ void dx_iface::addDxfPointCloudDefinitionSource(
         // callback runs while OBJECTS records are parsed. Bind the raw
         // carrier to its physical spans here and compare revisions with the
         // completed import during output preflight.
-        && pointCloudDefinitionRawMatchesPhysical(raw, *physical);
+        && pointCloudRawDxfObjectMatchesPhysical(raw, *physical);
 
     std::size_t typedBytes = 0u, typedItems = 0u, rawBytes = 0u;
     std::size_t sourceBytes =
@@ -69433,7 +69464,7 @@ bool dx_iface::validateImportedDxfPointCloudExSourceBindings(
 }
 bool dx_iface::validateImportedDxfPointCloudSourceBindings(
         dx_data& data, std::size_t& boundCount,
-        const char*& failure) noexcept {
+        const char*& failure, bool allowDefinitionReferences) noexcept {
     using Physical = DRW_DxfPhysicalEntitySource;
     using Callback = DRW_DxfEntitiesCallback;
     boundCount = 0u;
@@ -69592,8 +69623,11 @@ bool dx_iface::validateImportedDxfPointCloudSourceBindings(
                 }
                 if (!pointCloudSourceFieldProfileComplete(
                         *record, *cloud, scope.physical->version,
-                        scope.physical->binary)) {
-                    failure = "DXF ENTITIES POINTCLOUD fields are outside the reference-free field profile";
+                        scope.physical->binary,
+                        allowDefinitionReferences)) {
+                    failure = allowDefinitionReferences
+                        ? "DXF ENTITIES POINTCLOUD fields or definition/reactor references are outside the classic graph profile"
+                        : "DXF ENTITIES POINTCLOUD fields are outside the reference-free field profile";
                     return false;
                 }
                 if (!bind(*cloud, scope.physical->version)) {
@@ -69720,10 +69754,16 @@ bool dx_iface::preparePointCloudClassicOutputGraph(
                       << reason << '\n';
         return false;
     };
-    if (data.sourceFormat != dx_source_format::Unknown)
-        return fail("classic nonzero-reference graphs are authored-only pending source binding");
+    const bool importedDxf = data.sourceFormat == dx_source_format::DXF;
+    if (data.sourceFormat != dx_source_format::Unknown && !importedDxf)
+        return fail("imported DWG classic point-cloud source binding is not installed");
     if (targetVersion < DRW::AC1027 || targetVersion > DRW::AC1032)
         return fail("classic point-cloud definition references require AC1027 or later");
+    if (importedDxf
+        && (data.sourceVersion < DRW::AC1027
+            || data.sourceVersion > DRW::AC1032
+            || targetVersion != data.sourceVersion))
+        return fail("imported classic point-cloud output requires its exact AC1027+ source revision");
     if (data.pointCloudObjectCaptureFailed)
         return fail("typed object callback capture is incomplete");
     const std::size_t retainedTypedCount =
@@ -69735,6 +69775,65 @@ bool dx_iface::preparePointCloudClassicOutputGraph(
     if (!data.navisworksModelDefinitions.empty()
         || !data.pointCloudColorMaps.empty())
         return fail("NAVISWORKSMODELDEF and POINTCLOUDCOLORMAP are outside this graph profile");
+    if (importedDxf) {
+        auto& source = data.m_tableDxfSource;
+        if (source.generation != data.importGeneration
+            || source.version != data.sourceVersion
+            || !source.closed || !source.successful || source.failed
+            || source.contextFailed || source.reader != nullptr
+            || source.resourceCaptureFailed
+            || source.resourceProofCaptureFailed
+            || source.structuralCaptureFailed
+            || source.identityCaptureFailed
+            || data.dictionaryCaptureFailed
+            || !source.structuralPending.empty()
+            || source.structuralInputs.size() != source.structuralAudits.size())
+            return fail("same-generation POINTCLOUD dictionary source evidence is incomplete");
+        if (data.pointCloudDefinitions.size() != 2u
+            || data.m_pointCloudDefinitionSourceCaptureFailed
+            || data.m_pointCloudDefinitionSources.size()
+                != data.pointCloudDefinitions.size())
+            return fail("imported classic graph requires one source-bound definition/reactor pair");
+        auto typed = data.pointCloudDefinitions.begin();
+        for (const dx_data::PointCloudDefinitionSourceInput& input :
+             data.m_pointCloudDefinitionSources) {
+            if (typed == data.pointCloudDefinitions.end()
+                || input.container != &data
+                || input.generation != data.importGeneration
+                || input.containerId
+                    != data.m_entitiesContainerIdentity.value
+                || input.physical == nullptr
+                || input.physicalOwner.get() != input.physical.get()
+                || input.physicalOwner.owner_before(input.physical)
+                || input.physical.owner_before(input.physicalOwner)
+                || input.physicalStatus
+                    != DRW_DxfObjectPhysicalSource::Status::Complete
+                || input.physical->status
+                    != DRW_DxfObjectPhysicalSource::Status::Complete
+                || input.physical->version != data.sourceVersion
+                || input.physical->name != input.raw.name
+                || input.raw.m_version != data.sourceVersion
+                || !input.physicalCarrierMatched
+                || !input.typedCallbackMatched
+                || !pointCloudRawDxfObjectMatchesPhysical(
+                    input.raw, *input.physical)
+                || !pointCloudDefinitionRawProjectsToModel(
+                    input.raw, input.typed, data.sourceVersion)
+                || !pointCloudDefinitionModelEqual(
+                    *typed, input.typed, data.sourceVersion))
+                return fail("classic definition/reactor callbacks do not bind to complete unchanged physical source records");
+            ++typed;
+        }
+        if (typed != data.pointCloudDefinitions.end())
+            return fail("classic definition/reactor source rows are incomplete");
+        std::size_t boundCount = 0u;
+        const char* bindingFailure = nullptr;
+        if (!validateImportedDxfPointCloudSourceBindings(
+                data, boundCount, bindingFailure, true)
+            || boundCount != 1u)
+            return fail(bindingFailure != nullptr ? bindingFailure
+                : "imported classic graph requires one source-bound modelspace POINTCLOUD");
+    }
     if (!data.hasNamedObjectDictionary
         || data.namedObjectDictionary.handle == 0u
         || data.namedObjectDictionary.handle == DRW::NoHandle
@@ -69769,6 +69868,93 @@ bool dx_iface::preparePointCloudClassicOutputGraph(
         return std::isfinite(value.x) && std::isfinite(value.y)
             && std::isfinite(value.z);
     };
+    const auto sourceDictionaryMatches = [&data, importedDxf](
+            std::uint32_t handle,
+            dxfRW::DxfStructuralSourceView::Kind expectedKind,
+            const DRW_Dictionary& live) {
+        if (!importedDxf)
+            return true;
+        const auto& source = data.m_tableDxfSource;
+        const auto resource = source.resources.find(handle);
+        const auto structural = source.structuralInputs.find(handle);
+        const auto audit = source.structuralAudits.find(handle);
+        const auto same = [](const auto& left, const auto& right) {
+            return left.get() == right.get()
+                && !left.owner_before(right) && !right.owner_before(left);
+        };
+        if (resource == source.resources.end()
+            || structural == source.structuralInputs.end()
+            || audit == source.structuralAudits.end()
+            || !structural->second || !audit->second
+            || resource->second.family != dx_tableResourceFamily::Dictionary
+            || !resource->second.rawTypedMatched
+            || resource->second.rawTypedMismatch
+            || !resource->second.raw || !resource->second.model
+            || !structural->second->paired
+            || structural->second->kind != expectedKind
+            || structural->second->container != &data
+            || structural->second->generation != data.importGeneration
+            || structural->second->containerId
+                != data.m_entitiesContainerIdentity.value
+            || !structural->second->model || !structural->second->raw
+            || !structural->second->physical
+            || !same(structural->second->physical,
+                     structural->second->physicalOwner)
+            || structural->second->physicalStatus
+                != DRW_DxfObjectPhysicalSource::Status::Complete
+            || structural->second->physical->status
+                != DRW_DxfObjectPhysicalSource::Status::Complete
+            || structural->second->physical->version != data.sourceVersion
+            || structural->second->physical->binary
+                == structural->second->raw->hasRawValues
+            || structural->second->physical->name
+                != structural->second->raw->name
+            || structural->second->raw->handle != handle
+            || structural->second->model->handle != handle
+            || structural->second->raw->m_version != data.sourceVersion
+            || !asciiIdentifierEquals(
+                structural->second->raw->name, "DICTIONARY")
+            || !pointCloudRawDxfObjectMatchesPhysical(
+                *structural->second->raw,
+                *structural->second->physical)
+            || !structural->second->context
+            || !structural->second->context->captured
+            || structural->second->context->sourceVersion
+                != data.sourceVersion
+            || structural->second->context->binary
+                != structural->second->physical->binary
+            || structural->second->index
+                >= source.structuralInputOwners.size()
+            || !same(structural->second,
+                     source.structuralInputOwners[
+                         structural->second->index])
+            || !same(structural->second->raw, resource->second.raw)
+            || !same(structural->second->model, resource->second.model)
+            || !same(audit->second->input, structural->second)
+            || !same(audit->second->identities, source.identityAudit)
+            || !audit->second->bodyMatched
+            || !audit->second->stateComplete
+            || !audit->second->originBound
+            || audit->second->physical == DRW_DxfIdentitySource::None
+            || audit->second->index >= source.structuralAuditOwners.size()
+            || !same(audit->second,
+                     source.structuralAuditOwners[audit->second->index]))
+            return false;
+        const auto* retained = dynamic_cast<const DRW_Dictionary*>(
+            structural->second->model.get());
+        return retained != nullptr
+            && retained->handle == handle
+            && retained->hasCompleteDxfEntries()
+            && live.hasCompleteDxfEntries()
+            && standardDwgModelsEqual(
+                live, *retained, data.sourceVersion,
+                dwgObjType::DICTIONARY);
+    };
+    if (!sourceDictionaryMatches(
+            data.namedObjectDictionary.handle,
+            dxfRW::DxfStructuralSourceView::Kind::RootDictionary,
+            data.namedObjectDictionary))
+        return fail("imported NOD key/entries lack same-generation physical source binding");
     try {
         definitions.reserve(data.pointCloudDefinitions.size());
         reactors.reserve(data.pointCloudDefinitions.size());
@@ -69867,6 +70053,11 @@ bool dx_iface::preparePointCloudClassicOutputGraph(
             || !definitionDictionary->hasCompleteDxfEntries()
             || !definitionDictionary->hasCompleteDwgEntries())
             return fail("classic definitions require one directly NOD-owned dictionary with complete entries");
+        if (!sourceDictionaryMatches(
+                dictionaryHandle,
+                dxfRW::DxfStructuralSourceView::Kind::Dictionary,
+                *definitionDictionary))
+            return fail("imported classic definition dictionary lacks same-generation physical source binding");
 
         const int expectedEntryCode = definitionDictionary->hardOwner == 1
             ? 360 : 350;
@@ -70075,7 +70266,7 @@ bool dx_iface::preparePointCloudExOutputGraph(
                 || !input.typedCallbackMatched
                 || input.raw.m_version != data.sourceVersion
                 || input.physical->version != data.sourceVersion
-                || !pointCloudDefinitionRawMatchesPhysical(
+                || !pointCloudRawDxfObjectMatchesPhysical(
                     input.raw, *input.physical)
                 || !pointCloudDefinitionRawProjectsToModel(
                     input.raw, input.typed, input.physical->version)
@@ -70108,7 +70299,6 @@ bool dx_iface::preparePointCloudExOutputGraph(
         || !data.namedObjectDictionary.hasCompleteDxfEntries()
         || !data.namedObjectDictionary.hasCompleteDwgEntries())
         return fail("a complete named-object dictionary root is required");
-
     std::size_t rootMatches = 0u;
     std::uint32_t dictionaryHandle = 0u;
     for (const DRW_Dictionary::Entry& entry :

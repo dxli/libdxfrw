@@ -1054,29 +1054,28 @@ eligible reader. The exact package and environment result are in the
   existence or close the MLINESTYLE dependency graph.
   The concrete adapter admits authored classic Definition/Reactor and authored
   and imported same-revision AC1027+ DefinitionEx/ReactorEx DXF graphs within
-  their bounded profiles above. Imported classic POINTCLOUD graphs with
-  nonzero references and DWG point-cloud source graphs remain fail-closed until
-  their source fields, CLASS/frame roles, identities and output bindings
-  qualify. This does not close external-definition source coverage, canonical
-  classic-root qualification, asset loading, native 3D consumer, or broader
-  BLOCK callback qualification. Imported classic POINTCLOUD now also has source binding for
-  the generated same-revision AC1027 modelspace reference-free profile: each
-  physical ENTITIES record is joined to its dispatch, typed callback and output
-  entity, with exact subclass order, common identity/owner, modeled fields and
-  field cardinality checked. ASCII/Binary controls cover changed-model refusal,
-  corrected same-adapter retry and fresh typed readback; an ASCII duplicate
-  class-version field is refused atomically. Named-BLOCK and paper-space
-  records, nonzero definition/reactor references, DWG source records, physical
-  producer breadth, external asset loading and native semantics remain
-  unqualified. See the [classic POINTCLOUD source-binding receipt](docs/research/p8-pointcloud-classic-dxf-source-binding-2026-11-03.json).
+  their bounded profiles above. Imported classic POINTCLOUD graph output now
+  admits one AC1027–AC1032 modelspace entity with one classic definition and
+  reactor, same-generation physical entity/object spans, origin-bound NOD and
+  child DICTIONARY records, unchanged source-projected fields, and reciprocal
+  owner/reference closure. It preserves the source-observed NOD key and requires
+  exact source-revision output. Generated ASCII/Binary AC1027 controls cover
+  changed definition/reactor references and dictionary keys, wrong-revision
+  and malformed-graph destination preservation, and same-adapter retry; the
+  AC1027 and AC1032 profiles both have fresh typed graph readback. See the
+  [classic imported graph receipt](docs/research/p8-pointcloud-classic-imported-graph-transport-2026-11-03.json).
+  This is generated transport evidence only. Named-BLOCK and paper-space
+  records, DWG source graphs, physical producer breadth, canonical classic-root
+  qualification, external asset loading, native 3D semantics, and broader
+  BLOCK callback qualification remain open.
   Imported DXF DefinitionEx/ReactorEx output now also requires the ordered raw
   OBJECTS values and exact field cardinalities to project into their source
   typed models, including identity, owner, reactor roles, class version and
   DefinitionEx payload. A locally authored duplicate class-version field is
   refused atomically; the generated imported graph still retries and reads
   back in ASCII and Binary. This is generated source-field transport only;
-  physical producer breadth, classic definition graphs, DWG source binding,
-  assets and native semantics remain open. See the [definition field-binding
+  physical producer breadth, DWG source binding, assets and native semantics
+  remain open. See the [definition field-binding
   receipt](docs/research/p8-pointcloud-definition-field-binding-2026-11-03.json).
   The local adapter now retains LIGHT callbacks through modelspace and named-
   BLOCK delivery, with bounded DXF read/write support for the documented core

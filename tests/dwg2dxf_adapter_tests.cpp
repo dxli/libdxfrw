@@ -21309,6 +21309,345 @@ bool pointCloudAndNavisworksAdapterTransport() {
             return fail("classic point-cloud output handles, fields, or reciprocal ownership changed on readback");
         }
 
+        {
+            const auto importedClassicPath =
+                std::filesystem::temp_directory_path() /
+                ("libdxfrw-imported-classic-cloud-graph-" +
+                 std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch()
+                                    .count()) +
+                 (binary ? "-binary.dxf" : "-ascii.dxf"));
+            struct ImportedClassicCleanup {
+                std::filesystem::path path;
+                ~ImportedClassicCleanup() {
+                    std::error_code ignored;
+                    std::filesystem::remove(path, ignored);
+                }
+            } importedClassicCleanup{importedClassicPath};
+            if (classicGraphReadback.sourceFormat != dx_source_format::DXF ||
+                classicGraphReadback.sourceVersion != DRW::AC1027 ||
+                importedClassicPath == classicGraphPath)
+                return fail("classic graph source did not retain its exact DXF "
+                            "revision");
+            const std::string importedClassicSentinel =
+                "IMPORTED_CLASSIC_POINTCLOUD_DESTINATION\n";
+            {
+                std::ofstream existing(importedClassicPath, std::ios::binary);
+                existing << importedClassicSentinel;
+                if (!existing)
+                    return fail(
+                        "could not create imported classic graph destination "
+                        "sentinel");
+            }
+            dx_iface importedClassicWriter;
+            if (importedClassicWriter.fileExport(
+                    importedClassicPath.string(), DRW::AC1032, binary,
+                    &classicGraphReadback, false, true))
+                return fail(
+                    "cross-revision imported classic point-cloud graph was "
+                    "emitted");
+            {
+                std::ifstream previous(importedClassicPath, std::ios::binary);
+                const std::string bytes{
+                    std::istreambuf_iterator<char>(previous), {}};
+                if (bytes != importedClassicSentinel)
+                    return fail(
+                        "cross-revision classic graph refusal changed the "
+                        "destination");
+            }
+            auto *mutableClassicCloud = dynamic_cast<DRW_PointCloud *>(
+                classicGraphReadback.mBlock->ent.front());
+            if (mutableClassicCloud == nullptr)
+                return fail(
+                    "imported classic POINTCLOUD callback is not mutable "
+                    "typed data");
+            const std::uint32_t sourceDefinitionHandle =
+                mutableClassicCloud->definitionHandle;
+            mutableClassicCloud->definitionHandle =
+                actualClassicReactor->handle;
+            if (importedClassicWriter.fileExport(
+                    importedClassicPath.string(), DRW::AC1027, binary,
+                    &classicGraphReadback, false, true) ||
+                !classicGraphReadback.pointCloudSourceBindingAttempted ||
+                classicGraphReadback.pointCloudSourceBindingComplete ||
+                classicGraphReadback.pointCloudSourceFieldProfileComplete ||
+                classicGraphReadback.pointCloudSourceBoundEntities != 0u)
+                return fail(
+                    "changed classic definition reference passed physical "
+                    "source binding");
+            {
+                std::ifstream previous(importedClassicPath, std::ios::binary);
+                const std::string bytes{
+                    std::istreambuf_iterator<char>(previous), {}};
+                if (bytes != importedClassicSentinel)
+                    return fail(
+                        "changed classic definition reference changed the "
+                        "destination");
+            }
+            const std::uint32_t sourceReactorHandle =
+                mutableClassicCloud->reactorHandle;
+            mutableClassicCloud->reactorHandle =
+                actualClassicDefinition->handle;
+            if (importedClassicWriter.fileExport(
+                    importedClassicPath.string(), DRW::AC1027, binary,
+                    &classicGraphReadback, false, true))
+                return fail("changed classic reactor reference passed physical "
+                            "source binding");
+            {
+                std::ifstream previous(importedClassicPath, std::ios::binary);
+                const std::string bytes{
+                    std::istreambuf_iterator<char>(previous), {}};
+                if (bytes != importedClassicSentinel)
+                    return fail("changed classic reactor reference changed the "
+                                "destination");
+            }
+            mutableClassicCloud->reactorHandle = sourceReactorHandle;
+            auto rootEntry = std::find_if(
+                classicGraphReadback.namedObjectDictionary.m_entries.begin(),
+                classicGraphReadback.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry &entry) {
+                    return entry.m_name == "LOCAL_CLASSIC_POINTCLOUD_ROOT";
+                });
+            if (rootEntry ==
+                classicGraphReadback.namedObjectDictionary.m_entries.end())
+                return fail(
+                    "imported classic source root key is unavailable for "
+                    "mutation control");
+            const std::string sourceRootKey = rootEntry->m_name;
+            rootEntry->m_name = "MUTATED_CLASSIC_POINTCLOUD_ROOT";
+            if (importedClassicWriter.fileExport(
+                    importedClassicPath.string(), DRW::AC1027, binary,
+                    &classicGraphReadback, false, true))
+                return fail("changed classic source root key passed physical "
+                            "source binding");
+            {
+                std::ifstream previous(importedClassicPath, std::ios::binary);
+                const std::string bytes{
+                    std::istreambuf_iterator<char>(previous), {}};
+                if (bytes != importedClassicSentinel)
+                    return fail("changed classic source root key changed the "
+                                "destination");
+            }
+            rootEntry->m_name = sourceRootKey;
+            auto sourceDefinitionDictionary = std::find_if(
+                classicGraphReadback.dictionaries.begin(),
+                classicGraphReadback.dictionaries.end(),
+                [actualClassicDefinition](const DRW_Dictionary &dictionary) {
+                    return dictionary.handle ==
+                           actualClassicDefinition->parentHandle;
+                });
+            if (sourceDefinitionDictionary ==
+                    classicGraphReadback.dictionaries.end() ||
+                sourceDefinitionDictionary->m_entries.size() != 1u)
+                return fail("imported classic source definition dictionary is "
+                            "unavailable for mutation control");
+            const std::string sourceDefinitionEntryName =
+                sourceDefinitionDictionary->m_entries.front().m_name;
+            sourceDefinitionDictionary->m_entries.front().m_name =
+                "MUTATED_CLASSIC_POINTCLOUD_DEFINITION";
+            if (importedClassicWriter.fileExport(
+                    importedClassicPath.string(), DRW::AC1027, binary,
+                    &classicGraphReadback, false, true))
+                return fail(
+                    "changed classic source definition dictionary passed "
+                    "physical source binding");
+            {
+                std::ifstream previous(importedClassicPath, std::ios::binary);
+                const std::string bytes{
+                    std::istreambuf_iterator<char>(previous), {}};
+                if (bytes != importedClassicSentinel)
+                    return fail("changed classic source definition dictionary "
+                                "changed the destination");
+            }
+            sourceDefinitionDictionary->m_entries.front().m_name =
+                sourceDefinitionEntryName;
+            mutableClassicCloud->definitionHandle = sourceDefinitionHandle;
+            if (!importedClassicWriter.fileExport(
+                    importedClassicPath.string(), DRW::AC1027, binary,
+                    &classicGraphReadback, false, true) ||
+                !classicGraphReadback.pointCloudSourceBindingAttempted ||
+                !classicGraphReadback.pointCloudSourceBindingComplete ||
+                !classicGraphReadback.pointCloudSourceFieldProfileComplete ||
+                classicGraphReadback.pointCloudSourceBoundEntities != 1u)
+                return fail(
+                    "corrected imported classic point-cloud graph retry "
+                    "failed source binding");
+            dx_data importedClassicRoundTrip;
+            dx_iface importedClassicReader;
+            if (!importedClassicReader.fileImport(importedClassicPath.string(),
+                                                  &importedClassicRoundTrip,
+                                                  false) ||
+                importedClassicRoundTrip.sourceVersion != DRW::AC1027 ||
+                importedClassicRoundTrip.pointCloudDefinitions.size() != 2u ||
+                !importedClassicRoundTrip.hasNamedObjectDictionary ||
+                importedClassicRoundTrip.mBlock == nullptr ||
+                importedClassicRoundTrip.mBlock->ent.size() != 1u)
+                return fail("imported classic point-cloud output failed fresh "
+                            "typed readback");
+            const DRW_PointCloudDef *importedDefinition = nullptr;
+            const DRW_PointCloudDef *importedReactor = nullptr;
+            for (const DRW_PointCloudDef &object :
+                 importedClassicRoundTrip.pointCloudDefinitions) {
+                if (object.m_kind == DRW_PointCloudDef::Definition)
+                    importedDefinition = &object;
+                else if (object.m_kind == DRW_PointCloudDef::Reactor)
+                    importedReactor = &object;
+            }
+            const auto *importedCloud = dynamic_cast<const DRW_PointCloud *>(
+                importedClassicRoundTrip.mBlock->ent.front());
+            const DRW_Dictionary *importedDefinitionDictionary = nullptr;
+            for (const DRW_Dictionary &dictionary :
+                 importedClassicRoundTrip.dictionaries) {
+                if (importedDefinition != nullptr &&
+                    dictionary.handle == importedDefinition->parentHandle)
+                    importedDefinitionDictionary = &dictionary;
+            }
+            const auto importedRoot = std::count_if(
+                importedClassicRoundTrip.namedObjectDictionary.m_entries
+                    .begin(),
+                importedClassicRoundTrip.namedObjectDictionary.m_entries.end(),
+                [importedDefinitionDictionary](
+                    const DRW_Dictionary::Entry &entry) {
+                    return entry.m_name == "LOCAL_CLASSIC_POINTCLOUD_ROOT" &&
+                           importedDefinitionDictionary != nullptr &&
+                           entry.m_handle ==
+                               importedDefinitionDictionary->handle;
+                });
+            if (importedDefinition == nullptr || importedReactor == nullptr ||
+                importedCloud == nullptr || importedRoot != 1 ||
+                importedDefinitionDictionary == nullptr ||
+                importedDefinitionDictionary->parentHandle !=
+                    importedClassicRoundTrip.namedObjectDictionary.handle ||
+                importedDefinitionDictionary->m_entries.size() != 1u ||
+                importedDefinitionDictionary->m_entries.front().m_name !=
+                    "LOCAL_CLASSIC_POINTCLOUD_DEF" ||
+                importedDefinitionDictionary->m_entries.front().m_handle !=
+                    importedDefinition->handle ||
+                importedDefinition->m_sourceFilename !=
+                    "local-classic-cloud.rcs" ||
+                importedDefinition->m_pointCount != 21u ||
+                importedDefinition->reactorHandles !=
+                    std::vector<std::uint32_t>{importedReactor->handle} ||
+                importedReactor->parentHandle != importedCloud->handle ||
+                importedCloud->definitionHandle != importedDefinition->handle ||
+                importedCloud->reactorHandle != importedReactor->handle)
+                return fail("imported classic graph lost its source root key, "
+                            "fields, or reciprocal handles");
+
+            const auto ac1032SourcePath =
+                std::filesystem::temp_directory_path() /
+                ("libdxfrw-classic-cloud-ac1032-source-" +
+                 std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch()
+                                    .count()) +
+                 (binary ? "-binary.dxf" : "-ascii.dxf"));
+            const auto ac1032OutputPath =
+                std::filesystem::temp_directory_path() /
+                ("libdxfrw-classic-cloud-ac1032-output-" +
+                 std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch()
+                                    .count()) +
+                 (binary ? "-binary.dxf" : "-ascii.dxf"));
+            struct Ac1032ClassicCleanup {
+                std::filesystem::path source;
+                std::filesystem::path output;
+                ~Ac1032ClassicCleanup() {
+                    std::error_code ignored;
+                    std::filesystem::remove(source, ignored);
+                    std::filesystem::remove(output, ignored);
+                }
+            } ac1032ClassicCleanup{ac1032SourcePath, ac1032OutputPath};
+            dx_data ac1032AuthoredData;
+            ac1032AuthoredData.hasNamedObjectDictionary = true;
+            ac1032AuthoredData.namedObjectDictionary =
+                classicGraphReadback.namedObjectDictionary;
+            ac1032AuthoredData.dictionaries = classicGraphReadback.dictionaries;
+            dx_iface ac1032Author;
+            ac1032Author.cData = &ac1032AuthoredData;
+            ac1032Author.currentBlock = ac1032AuthoredData.mBlock;
+            for (const DRW_PointCloudDef &object :
+                 classicGraphReadback.pointCloudDefinitions)
+                ac1032Author.addPointCloudDef(object);
+            DRW_PointCloud ac1032AuthoredCloud(*actualClassicCloud);
+            ac1032AuthoredCloud.parentHandle = 0u;
+            ac1032Author.addPointCloud(&ac1032AuthoredCloud);
+            if (ac1032AuthoredData.pointCloudObjectCaptureFailed ||
+                ac1032AuthoredData.typedEntityCaptureFailed ||
+                !ac1032Author.fileExport(ac1032SourcePath.string(), DRW::AC1032,
+                                         binary, &ac1032AuthoredData, false,
+                                         true))
+                return fail("could not author the AC1032 classic graph source");
+            dx_data ac1032Imported;
+            dx_iface ac1032Reader;
+            if (!ac1032Reader.fileImport(ac1032SourcePath.string(),
+                                         &ac1032Imported, false) ||
+                ac1032Imported.sourceVersion != DRW::AC1032 ||
+                ac1032Imported.pointCloudDefinitions.size() != 2u)
+                return fail("AC1032 classic graph source did not import");
+            dx_iface ac1032StrictWriter;
+            if (!ac1032StrictWriter.fileExport(ac1032OutputPath.string(),
+                                               DRW::AC1032, binary,
+                                               &ac1032Imported, false, true))
+                return fail(
+                    "same-revision imported AC1032 classic graph was refused");
+            dx_data ac1032Readback;
+            dx_iface ac1032OutputReader;
+            if (!ac1032OutputReader.fileImport(ac1032OutputPath.string(),
+                                               &ac1032Readback, false) ||
+                ac1032Readback.sourceVersion != DRW::AC1032 ||
+                ac1032Readback.pointCloudDefinitions.size() != 2u ||
+                ac1032Readback.mBlock == nullptr ||
+                ac1032Readback.mBlock->ent.size() != 1u)
+                return fail(
+                    "imported AC1032 classic graph failed fresh readback");
+            const DRW_PointCloudDef *ac1032Definition = nullptr;
+            const DRW_PointCloudDef *ac1032Reactor = nullptr;
+            for (const DRW_PointCloudDef &object :
+                 ac1032Readback.pointCloudDefinitions) {
+                if (object.m_kind == DRW_PointCloudDef::Definition)
+                    ac1032Definition = &object;
+                else if (object.m_kind == DRW_PointCloudDef::Reactor)
+                    ac1032Reactor = &object;
+            }
+            const auto *ac1032Cloud = dynamic_cast<const DRW_PointCloud *>(
+                ac1032Readback.mBlock->ent.front());
+            const DRW_Dictionary *ac1032DefinitionDictionary = nullptr;
+            for (const DRW_Dictionary &dictionary :
+                 ac1032Readback.dictionaries) {
+                if (ac1032Definition != nullptr &&
+                    dictionary.handle == ac1032Definition->parentHandle)
+                    ac1032DefinitionDictionary = &dictionary;
+            }
+            const auto ac1032RootLinks = std::count_if(
+                ac1032Readback.namedObjectDictionary.m_entries.begin(),
+                ac1032Readback.namedObjectDictionary.m_entries.end(),
+                [ac1032DefinitionDictionary](
+                    const DRW_Dictionary::Entry &entry) {
+                    return entry.m_name == "LOCAL_CLASSIC_POINTCLOUD_ROOT" &&
+                           ac1032DefinitionDictionary != nullptr &&
+                           entry.m_handle == ac1032DefinitionDictionary->handle;
+                });
+            if (ac1032Definition == nullptr || ac1032Reactor == nullptr ||
+                ac1032Cloud == nullptr || ac1032RootLinks != 1 ||
+                ac1032DefinitionDictionary == nullptr ||
+                ac1032DefinitionDictionary->parentHandle !=
+                    ac1032Readback.namedObjectDictionary.handle ||
+                ac1032DefinitionDictionary->m_entries.size() != 1u ||
+                ac1032DefinitionDictionary->m_entries.front().m_name !=
+                    "LOCAL_CLASSIC_POINTCLOUD_DEF" ||
+                ac1032DefinitionDictionary->m_entries.front().m_handle !=
+                    ac1032Definition->handle ||
+                ac1032Definition->m_sourceFilename !=
+                    "local-classic-cloud.rcs" ||
+                ac1032Definition->reactorHandles !=
+                    std::vector<std::uint32_t>{ac1032Reactor->handle} ||
+                ac1032Reactor->parentHandle != ac1032Cloud->handle ||
+                ac1032Cloud->definitionHandle != ac1032Definition->handle ||
+                ac1032Cloud->reactorHandle != ac1032Reactor->handle)
+                return fail("imported AC1032 classic graph lost its root key "
+                            "or reciprocal references");
+        }
+
         if (!binary) {
             const auto duplicateDefinitionSourcePath =
                 std::filesystem::temp_directory_path()

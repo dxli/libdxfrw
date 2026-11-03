@@ -3082,7 +3082,8 @@ private:
                                       bool debug);
     bool validateImportedDxfPointCloudSourceBindings(
         dx_data& data, std::size_t& boundCount,
-        const char*& failure) noexcept;
+        const char*& failure,
+        bool allowDefinitionReferences = false) noexcept;
     bool validateImportedDxfPointCloudExSourceBindings(
         dx_data& data, std::size_t& boundCount,
         const char*& failure) noexcept;
