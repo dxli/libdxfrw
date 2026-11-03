@@ -11806,6 +11806,11 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
       case dwgType::TOLERANCE: {
         DRW_Tolerance e;
         if (entryParse(e, buff, bs, ret)) {
+          // DWG stores a hard pointer to DIMSTYLE; DXF TOLERANCE stores its
+          // name in group 3. Resolve while the source table map is live so a
+          // custom style is not silently replaced by DRW_Tolerance's STANDARD
+          // constructor default.
+          e.dimStyleName = findTableName(DRW::DIMSTYLE, e.dimStyleH.ref);
           output.appendValue(e, &DRW_Interface::addTolerance);
         }
         break;

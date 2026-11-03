@@ -264,12 +264,14 @@ engines.
    This remains ID translation evidence only; target kind/existence, ownership,
    physical profile breadth, recursive closure, and native annotation semantics
    remain open.
-   Continue the remaining reference-ID audit from the current field receipts,
-   prioritizing typed owner/dependency pointers on supported 3D records. Confirm
-   each field against its parser contract and applicable format mapping before
-   editing; add focused ASCII/Binary controls for resolver precedence and remap
-   fallback. Correct output IDs alone do not establish target kind, ownership,
-   recursive closure, physical producer breadth, or native-consumer semantics.
+   Remaining reference-ID implementation is limited to supported 3D records:
+   compare each modeled pointer field with its parser role and DXF writer path,
+   then change only fields that still bypass resolver/remap or fail to validate
+   a required target. Confirm the mapping before editing and add focused
+   ASCII/Binary exact-ID, unresolved-target refusal, retry, and typed-readback
+   controls. Do not repeat fields already covered by current receipts. Correct
+   output IDs alone do not establish target kind, ownership, recursive closure,
+   physical producer breadth, or native-consumer semantics.
    **BLOCK_RECORD BLKREFS residual:** `dx_iface::writeBlockRecords()` now passes
    the retained list to the low-level writer. Adapter preflight requires each
    handle to identify exactly one typed INSERT, match the target BLOCK_RECORD

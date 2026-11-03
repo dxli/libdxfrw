@@ -65965,6 +65965,192 @@ bool underlayDefinitionGraphRoundTrip() {
     return true;
 }
 
+bool toleranceDimstyleReferenceBinding() {
+    const auto nonce = static_cast<std::uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-tolerance-dimstyle-" + std::to_string(nonce));
+    std::error_code filesystemError;
+    std::filesystem::create_directories(directory, filesystemError);
+    if (filesystemError)
+        return fail("could not create the TOLERANCE DIMSTYLE scratch directory");
+    struct Cleanup final {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+
+    class Author final : public dx_iface {
+    public:
+        Author(dwgRW& output, bool missingTarget) : output(output) {
+            cData = &storage;
+            currentBlock = storage.mBlock;
+            style.name = "ANSI-25";
+            storage.dimStyles.push_back(style);
+            tolerance.handle = 0xA220u;
+            tolerance.dimStyleName = style.name;
+            tolerance.text = "%%c20 H7";
+            tolerance.insertionPoint = DRW_Coord(12.0, 34.0, 0.0);
+            tolerance.xAxisDirectionVector = DRW_Coord(1.0, 0.0, 0.0);
+            wrongTarget = missingTarget;
+        }
+
+        void writeHeader(DRW_Header& header) override { header.vars.clear(); }
+        void writeLayers() override {
+            DRW_Layer layer;
+            layer.name = "0";
+            layersWritten = output.addLayer(&layer) && layersWritten;
+        }
+        void writeDimstyles() override {
+            for (DRW_Dimstyle& dimstyle : storage.dimStyles)
+                stylesWritten = output.addDimstyle(&dimstyle) && stylesWritten;
+        }
+        void writeEntities() override {
+            if (storage.dimStyles.size() != 1u)
+                return;
+            const std::uint32_t styleHandle = storage.dimStyles.front().handle;
+            tolerance.dimStyleH.ref = wrongTarget
+                ? styleHandle + 0x100u : styleHandle;
+            toleranceWritten = output.writeTolerance(&tolerance);
+        }
+        bool finalizeDwgWrite() override {
+            return layersWritten && stylesWritten && toleranceWritten;
+        }
+
+        dwgRW& output;
+        dx_data storage;
+        DRW_Dimstyle style;
+        DRW_Tolerance tolerance;
+        bool wrongTarget{false};
+        bool layersWritten{true};
+        bool stylesWritten{true};
+        bool toleranceWritten{false};
+    };
+
+    const auto sourcePath = directory / "tolerance-source.dwg";
+    dwgRW sourceWriter(sourcePath.string().c_str());
+    Author sourceAuthor(sourceWriter, false);
+    if (!sourceWriter.write(&sourceAuthor, DRW::AC1024, true))
+        return fail("could not author the custom-DIMSTYLE TOLERANCE DWG control");
+
+    dx_data imported;
+    dx_iface importer;
+    if (!importer.fileImport(sourcePath.string(), &imported, false))
+        return fail("could not read the generated TOLERANCE DWG control");
+    const auto toleranceIn = [](dx_data& data) -> DRW_Tolerance* {
+        if (data.mBlock == nullptr)
+            return nullptr;
+        for (DRW_Entity* entity : data.mBlock->ent)
+            if (auto* tolerance = dynamic_cast<DRW_Tolerance*>(entity))
+                return tolerance;
+        return nullptr;
+    };
+    DRW_Tolerance* tolerance = toleranceIn(imported);
+    const auto style = std::find_if(imported.dimStyles.begin(),
+        imported.dimStyles.end(), [](const DRW_Dimstyle& value) {
+            return value.name == "ANSI-25";
+        });
+    if (tolerance == nullptr || style == imported.dimStyles.end()
+        || tolerance->dimStyleH.ref != style->handle
+        || tolerance->dimStyleName != style->name)
+        return fail("DWG TOLERANCE DIMSTYLE handle was not resolved to its exact table name");
+
+    dx_iface exporter;
+    unsigned outputReadbacks = 0u;
+    for (const bool binary : {false, true}) {
+        const auto outputPath = directory
+            / (binary ? "tolerance-boundary.dxf" : "tolerance-boundary-ascii.dxf");
+        if (!exporter.fileExport(outputPath.string(), DRW::AC1024, binary,
+                                 &imported, false, true))
+            return fail("resolved custom TOLERANCE DIMSTYLE did not export");
+        dx_data readback;
+        dx_iface dxfReader;
+        if (!dxfReader.fileImport(outputPath.string(), &readback, false))
+            return fail("custom-style TOLERANCE DXF readback failed");
+        DRW_Tolerance* actual = toleranceIn(readback);
+        const auto actualStyle = std::find_if(readback.dimStyles.begin(),
+            readback.dimStyles.end(), [](const DRW_Dimstyle& value) {
+                return value.name == "ANSI-25";
+            });
+        if (actual == nullptr || actual->dimStyleName != "ANSI-25"
+            || actual->text != tolerance->text
+            || actualStyle == readback.dimStyles.end())
+            return fail("DXF TOLERANCE group-3 name or DIMSTYLE target changed on readback");
+        ++outputReadbacks;
+    }
+
+    const auto missingSourcePath = directory / "tolerance-missing-target.dwg";
+    dwgRW missingWriter(missingSourcePath.string().c_str());
+    Author missingAuthor(missingWriter, true);
+    if (!missingWriter.write(&missingAuthor, DRW::AC1024, true))
+        return fail("could not author the missing-DIMSTYLE-target DWG control");
+    dx_data missingData;
+    dx_iface missingReader;
+    if (!missingReader.fileImport(missingSourcePath.string(), &missingData, false))
+        return fail("could not read the missing-DIMSTYLE-target DWG control");
+    DRW_Tolerance* missingTolerance = toleranceIn(missingData);
+    const auto missingStyle = std::find_if(missingData.dimStyles.begin(),
+        missingData.dimStyles.end(), [](const DRW_Dimstyle& value) {
+            return value.name == "ANSI-25";
+        });
+    if (missingTolerance == nullptr || missingStyle == missingData.dimStyles.end()
+        || missingTolerance->dimStyleH.ref == missingStyle->handle
+        || !missingTolerance->dimStyleName.empty())
+        return fail("missing TOLERANCE DIMSTYLE target was not preserved as unresolved");
+
+    dx_iface retryExporter;
+    unsigned refusals = 0u;
+    unsigned retries = 0u;
+    for (const bool binary : {false, true}) {
+        const auto outputPath = directory
+            / (binary ? "tolerance-missing-target.dxf" : "tolerance-missing-target-ascii.dxf");
+        const std::string sentinel = "TOLERANCE_DIMSTYLE_DESTINATION";
+        {
+            std::ofstream prior(outputPath, std::ios::binary);
+            prior << sentinel;
+        }
+        if (retryExporter.fileExport(outputPath.string(), DRW::AC1024, binary,
+                                     &missingData, false, true))
+            return fail("unresolved TOLERANCE DIMSTYLE target was written");
+        std::ifstream preserved(outputPath, std::ios::binary);
+        const std::string actual((std::istreambuf_iterator<char>(preserved)),
+                                 std::istreambuf_iterator<char>());
+        if (actual != sentinel)
+            return fail("unresolved TOLERANCE failure modified the destination");
+        ++refusals;
+
+        missingTolerance->dimStyleH.ref = missingStyle->handle;
+        missingTolerance->dimStyleName = missingStyle->name;
+        if (!retryExporter.fileExport(outputPath.string(), DRW::AC1024, binary,
+                                     &missingData, false, true))
+            return fail("corrected TOLERANCE DIMSTYLE did not retry on the same adapter");
+        dx_data readback;
+        dx_iface dxfReader;
+        if (!dxfReader.fileImport(outputPath.string(), &readback, false))
+            return fail("corrected TOLERANCE retry produced unreadable DXF");
+        DRW_Tolerance* actualTolerance = toleranceIn(readback);
+        const auto actualStyle = std::find_if(readback.dimStyles.begin(),
+            readback.dimStyles.end(), [](const DRW_Dimstyle& value) {
+                return value.name == "ANSI-25";
+            });
+        if (actualTolerance == nullptr
+            || actualTolerance->dimStyleName != "ANSI-25"
+            || actualStyle == readback.dimStyles.end())
+            return fail("corrected TOLERANCE retry lost its group-3 name or DIMSTYLE target");
+        ++retries;
+        missingTolerance->dimStyleH.ref = missingStyle->handle + 0x100u;
+        missingTolerance->dimStyleName.clear();
+    }
+
+    std::cout << "TOLERANCE DIMSTYLE handle/name binding: exact custom mapping, "
+              << outputReadbacks << " ASCII/Binary readbacks, " << refusals
+              << " atomic unresolved-target refusals, " << retries
+              << " same-adapter retries; generated drawing only\n";
+    return outputReadbacks == 2u && refusals == 2u && retries == 2u;
+}
+
 bool geodataDwgAdapterTransport() {
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch()
@@ -66793,6 +66979,9 @@ static bool dbColorExternalEvidenceGate() {
 }
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--tolerance-dimstyle-reference-binding")
+        return toleranceDimstyleReferenceBinding() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--dbcolor-late-callback-binding")
         return dbColorLateCallbackBinding() ? 0 : 1;

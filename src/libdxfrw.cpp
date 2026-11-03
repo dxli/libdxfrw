@@ -13188,6 +13188,17 @@ bool dxfRW::writeArcAlignedText(DRW_ArcAlignedText *ent) {
 bool dxfRW::writeTolerance(DRW_Tolerance *ent){
     if (!preflightEntity(ent))
         return false;
+    if (ent->dimStyleName.empty()) {
+        recordOperationDiagnostic(
+            writingBlock ? DRW::OperationPhase::Blocks
+                         : DRW::OperationPhase::Entities,
+            DRW::OperationCause::ValidationFailure,
+            "unresolved-tolerance-dimstyle",
+            "TOLERANCE has no resolved DIMSTYLE name for DXF group 3",
+            0, false, ent->handle, ent->handle != DRW::NoHandle);
+        return rejectDxfWriteWithReason(
+            "TOLERANCE", "dimension style name is unresolved");
+    }
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "TOLERANCE");
     if (!writeEntity(ent))
