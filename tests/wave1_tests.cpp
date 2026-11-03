@@ -4577,6 +4577,31 @@ void testMLineStyleReferenceHandleRemapping(TestContext& t) {
         t.expect(!rejectingWriter.writeMLine(&invalid)
                      && rejectedOutput.str().empty(),
                  "MLINE sentinel style handle refuses before record publication");
+
+        std::ostringstream resolvedOutput;
+        dxfRW resolvedWriter("");
+        resolvedWriter.version = DRW::AC1032;
+        resolvedWriter.binFile = binary;
+        resolvedWriter.setHandleRemap({{0x500u, 0xA500u}});
+        resolvedWriter.setReferenceResolver([](std::uint32_t source) {
+            return source == 0x500u ? 0xB500u : source;
+        });
+        resolvedWriter.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&resolvedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&resolvedOutput));
+        const bool resolved = resolvedWriter.writeMLine(&mline)
+            && resolvedWriter.writer->writeString(0, "WIRE_END");
+        bool resolvedEnded = false;
+        const auto resolvedTags = numericWireProjection(
+            resolvedOutput.str(), binary, resolvedEnded);
+        t.expect(resolved && resolvedEnded
+                     && std::count(resolvedTags.begin(), resolvedTags.end(),
+                                   "340:B500") == 1
+                     && std::count(resolvedTags.begin(), resolvedTags.end(),
+                                   "340:A500") == 0,
+                 "MLINE code 340 uses the final resolver identity");
     }
 
     for (const bool binary : {false, true}) {

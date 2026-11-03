@@ -12008,8 +12008,12 @@ bool dxfRW::writeMLine(DRW_MLine *ent) {
         m_writeError = true;
         return false;
     }
-    const std::uint32_t emittedStyleHandle = ent->styleHandle == 0
-        ? 0 : remapObjectHandle(ent->styleHandle);
+    std::uint32_t emittedStyleHandle = 0u;
+    if (ent->styleHandle != 0u) {
+        emittedStyleHandle = m_referenceResolver
+            ? resolveReference(ent->styleHandle)
+            : remapObjectHandle(ent->styleHandle);
+    }
     if (ent->styleHandle == DRW::NoHandle
         || emittedStyleHandle == DRW::NoHandle)
         return failDxfWrite();
