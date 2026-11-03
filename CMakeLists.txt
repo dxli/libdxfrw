@@ -751,6 +751,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_underlay_definition_reference_remapping
         PROPERTIES LABELS "fast;dxf;writer;underlay;references;generated"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_wipeout_reference_remapping
+        COMMAND libdxfrw_wave1_tests --wipeout-reference-remapping)
+    set_tests_properties(libdxfrw_wipeout_reference_remapping
+        PROPERTIES LABELS "fast;dxf;writer;wipeout;references;generated"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_dxf_standard_object_identities
         COMMAND libdxfrw_wave1_tests --dxf-standard-object-identities)
     set_tests_properties(libdxfrw_dxf_standard_object_identities PROPERTIES

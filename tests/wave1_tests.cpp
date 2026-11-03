@@ -2353,6 +2353,82 @@ void testUnderlayDefinitionReferenceRemapping(TestContext& t) {
     }
 }
 
+void testWipeoutReferenceRemapping(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap({{0x601u, 0xA61u}, {0x602u, 0xA62u}});
+            if (useResolver) {
+                owner.setReferenceResolver([](std::uint32_t source) {
+                    switch (source) {
+                    case 0x601u: return std::uint32_t{0xB61u};
+                    case 0x602u: return std::uint32_t{0xB62u};
+                    default: return source;
+                    }
+                });
+            }
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_Wipeout wipeout;
+            wipeout.m_clipBoundaryType = 2;
+            wipeout.clipPath = {{0.0, 0.0, 0.0}, {2.0, 0.0, 0.0},
+                                {0.0, 2.0, 0.0}};
+            wipeout.ref = 0x601u;
+            wipeout.m_imageDefReactorHandle = 0x602u;
+            const bool wrote = owner.writeWipeout(&wipeout)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote, "WIPEOUT raster references serialize");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::uint32_t definitionHandle = 0u;
+            std::uint32_t reactorHandle = 0u;
+            std::string recordName;
+            bool inWipeoutBody = false;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                    inWipeoutBody = false;
+                } else if (code == 100) {
+                    inWipeoutBody = reader->getString() == "AcDbWipeout";
+                } else if (inWipeoutBody && code == 340) {
+                    definitionHandle = reader->getHandleString();
+                } else if (inWipeoutBody && code == 360) {
+                    reactorHandle = reader->getHandleString();
+                }
+            }
+            const std::uint32_t expectedDefinition = useResolver
+                ? 0xB61u : 0xA61u;
+            const std::uint32_t expectedReactor = useResolver
+                ? 0xB62u : 0xA62u;
+            t.expect(ended && definitionHandle == expectedDefinition
+                         && reactorHandle == expectedReactor,
+                     useResolver
+                         ? "WIPEOUT uses final resolver identities"
+                         : "WIPEOUT uses source-handle remaps");
+        }
+    }
+}
+
 void testDimensionAssociationGraphClosure(TestContext& t) {
     const auto readAssociationTargets = [&t](const std::string& bytes,
                                               bool binary,
@@ -16029,6 +16105,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testUnderlayDefinitionReferenceRemapping(focused);
         std::cout << "UNDERLAY definition reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--wipeout-reference-remapping") {
+        TestContext focused;
+        testWipeoutReferenceRemapping(focused);
+        std::cout << "WIPEOUT reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

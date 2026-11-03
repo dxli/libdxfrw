@@ -627,6 +627,9 @@ eligible reader. The exact package and environment result are in the
   The NAVISWORKSMODEL low-level writer now applies the same resolver/remap
   policy to its optional definition reference; its ASCII/Binary control is
   recorded in the [NAVISWORKS reference receipt](docs/research/p8-navisworks-dxf-reference-remapping-2026-11-03.json).
+  The low-level WIPEOUT writer now translates both IMAGEDEF and IMAGEDEF_REACTOR
+  references through the configured resolver or remap fallback; see the
+  [WIPEOUT reference receipt](docs/research/p8-wipeout-dxf-reference-remapping-2026-11-03.json).
   The concrete adapter still atomically refuses nonzero definition/reactor
   handles until P4's source-bound object graph providers and output bindings
   qualify them.

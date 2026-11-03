@@ -13399,6 +13399,15 @@ bool dxfRW::writeWipeout(DRW_Wipeout *ent) {
     // rather than silently change the masking area: an output-support policy.
     if (ent->clipMode && version <= DRW::AC1021)
         return rejectUnsupportedDxfWrite("WIPEOUT");
+    const auto emittedReference = [this](std::uint32_t source) {
+        if (source == 0u)
+            return 0u;
+        return m_referenceResolver ? resolveReference(source)
+                                   : remapObjectHandle(source);
+    };
+    const std::uint32_t definitionHandle = emittedReference(ent->ref);
+    const std::uint32_t reactorHandle =
+        emittedReference(ent->m_imageDefReactorHandle);
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "WIPEOUT");
     if (!writeEntity(ent))
@@ -13416,13 +13425,13 @@ bool dxfRW::writeWipeout(DRW_Wipeout *ent) {
     writer->writeDouble(32, ent->vVector.z);
     writer->writeDouble(13, ent->sizeu);
     writer->writeDouble(23, ent->sizev);
-    writer->writeString(340, toHexStr(ent->ref));
+    writer->writeString(340, toHexStr(definitionHandle));
     writer->writeInt16(70, ent->m_displayProps);
     writer->writeInt16(280, ent->clip);    // 1 = clipping enabled
     writer->writeInt16(281, ent->brightness);
     writer->writeInt16(282, ent->contrast);
     writer->writeInt16(283, ent->fade);
-    writer->writeString(360, toHexStr(ent->m_imageDefReactorHandle));
+    writer->writeString(360, toHexStr(reactorHandle));
     writer->writeInt16(71, ent->m_clipBoundaryType);
     writer->writeInt32(91, static_cast<std::int32_t>(ent->clipPath.size()));
     for (const DRW_Coord& v : ent->clipPath) {
