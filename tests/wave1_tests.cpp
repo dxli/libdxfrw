@@ -8600,6 +8600,10 @@ void testGeoDataVersionedWriter(TestContext& t) {
             owner.writer = std::make_unique<dxfWriterBinary>(&output);
         else
             owner.writer = std::make_unique<dxfWriterAscii>(&output);
+        // ODA §20.4.78 defines this as a soft pointer to the host block.
+        // Its emitted group-330 value must follow the same source-handle
+        // remap as the object's owner and other serialized references.
+        owner.setHandleRemap({{0x3u, 0xA3u}});
         // Group 999 is intentionally absent from binary DXF; use a normal
         // string group to assert that failed preflight preserves prior bytes.
         t.expect(owner.writer->writeString(1, "PRESERVED_PREFIX"),
@@ -8620,7 +8624,8 @@ void testGeoDataVersionedWriter(TestContext& t) {
         invalid.m_legacy.m_controlFlags = 2;
         const bool wrote = owner.writeGeoData(&invalid)
             && owner.writer->writeString(0, "WIRE_END");
-        t.expect(rejected && wrote && invalid.handle == invalidHandle,
+        t.expect(rejected && wrote && invalid.handle == invalidHandle
+                     && invalid.m_hostBlockHandle == 0x3u,
                  "unrepresentable v1 flags reject atomically and same-object retry succeeds");
         bool ended = false;
         const std::vector<std::string> projection = numericWireProjection(
@@ -8669,7 +8674,7 @@ void testGeoDataVersionedWriter(TestContext& t) {
         t.expect(parsed && decoded.m_version == 1
                      && decoded.handle == 0x700u
                      && decoded.parentHandle == 0x2u
-                     && decoded.m_hostBlockHandle == 0x3u
+                     && decoded.m_hostBlockHandle == 0xA3u
                      && decoded.m_coordinatesType == 0
                      && decoded.m_legacy.m_controlFlags == 2
                      && decoded.m_designPoint.x == 10.125
@@ -8728,6 +8733,30 @@ void testGeoDataVersionedWriter(TestContext& t) {
                      && decoded.m_legacy.m_civil.m_coordinateProjectionRadius == 143.125
                      && decoded.m_legacy.m_coordinateSystemDatum == "legacy-datum",
                  "v1 writer output returns through the typed v1 reader map");
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW owner("");
+        owner.version = DRW::AC1021;
+        owner.binFile = binary;
+        if (binary)
+            owner.writer = std::make_unique<dxfWriterBinary>(&output);
+        else
+            owner.writer = std::make_unique<dxfWriterAscii>(&output);
+        owner.setHandleRemap({{0x3u, 0u}});
+        t.expect(owner.writer->writeString(1, "PRESERVED_PREFIX"),
+                 "GEODATA host-reference failure setup writes prefix");
+        const std::string beforeReject = output.str();
+        DRW_GeoData geo = makeLegacy();
+        const bool rejected = !owner.writeGeoData(&geo)
+            && output.str() == beforeReject
+            && geo.handle == 0x700u && geo.m_hostBlockHandle == 0x3u
+            && !owner.m_writeError && !owner.writer->hasWriteError();
+        owner.setHandleRemap({{0x3u, 0xA3u}});
+        const bool retried = owner.writeGeoData(&geo);
+        t.expect(rejected && retried && geo.m_hostBlockHandle == 0x3u,
+                 "unresolved GEODATA host pointer refuses atomically and retries after remapping");
     }
 
     const std::vector<std::pair<const char*, std::function<void(DRW_GeoData&)>>>

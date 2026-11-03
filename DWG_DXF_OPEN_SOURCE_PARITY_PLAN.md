@@ -487,6 +487,16 @@ focused HATCH/MPOLYGON round-trip, CMC and boundary graph tests pass; see the
 This is validation and transaction evidence only, not native fill/rendering or
 broader HATCH/MPOLYGON qualification.
 
+**GEODATA adapter follow-up:** The low-level DXF writer now remaps the ODA
+§20.4.78 host-block soft pointer and rejects a null resolved handle atomically;
+generated ASCII/Binary checks cover readback and corrected retry. The
+`dwg2dxf` adapter still drops the typed `addGeoData` callback and has no bounded
+DWG-to-DXF output path. Add typed retention, source CLASS and owner/host-block
+closure, and fresh ASCII/Binary output/readback before admitting the profile;
+then qualify native unit/projection behavior. The aggregate Wave 1 run executed
+the new assertions without GEODATA failures but remains red on unrelated
+existing assertions. See the [host-block remap receipt](docs/research/p6-geodata-host-block-reference-remap-2026-11-02.json).
+
 ## P7 — ACIS/ACDS and independent 3D meaning
 
 - Complete the original DWG entity → owner/key → AcDs segment → SAT/SAB join,

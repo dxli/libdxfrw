@@ -32085,6 +32085,15 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
             return false;
     }
 
+    std::uint32_t hostBlockHandle = 0u;
+    if (ent->m_hostBlockHandle != 0u) {
+        if (ent->m_hostBlockHandle == DRW::NoHandle)
+            return false;
+        hostBlockHandle = remapObjectHandle(ent->m_hostBlockHandle);
+        if (hostBlockHandle == 0u || hostBlockHandle == DRW::NoHandle)
+            return false;
+    }
+
     if (!preflightTableEntry(ent))
         return false;
 
@@ -32096,8 +32105,8 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
     writer->writeString(100, "AcDbGeoData");
     writer->writeInt32(90, objectVersion);
-    if (ent->m_hostBlockHandle != 0)
-        writer->writeString(330, toHexStr(ent->m_hostBlockHandle));
+    if (hostBlockHandle != 0u)
+        writer->writeString(330, toHexStr(hostBlockHandle));
 
     if (objectVersion == 1) {
         const DRW_GeoDataLegacy& legacy = ent->m_legacy;
