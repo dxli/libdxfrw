@@ -125,11 +125,22 @@ engines.
 
 **Proxy object-ID writer boundary:** the low-level DXF writer now preflights a
 bounded ordered list of typed proxy references, shares the parser's DWG-handle
-to-DXF-group role mapping, and requires a caller-supplied resolver to return a
+to-DXF-group role mapping, and has a per-proxy resolver overload requiring a
 nonzero final handle for every edge. Generated ASCII/Binary controls cover
 groups 330/340/350/360, target refusal, wrong-role refusal, destination
 preservation, corrected retry, and typed readback
 ([object-ID transport receipt](docs/research/p4-dwg-proxy-entity-object-id-dxf-transport-2026-11-02.json)).
+The explicit resolver overload is scoped to proxy object IDs; the generic
+resolver also serves reactors, XDATA, and other records, so it must not be used
+as an adapter shortcut for this graph. Next, preplan source targets from the
+complete block/entity inventory during `writeBlockRecords`, require unique
+typed targets and preallocate their output handles before any proxy is emitted,
+then prove each target was actually written during finalization. Start with
+soft-/hard-pointer edges to typed entity targets (330/340); keep owner-role
+edges (350/360), raw targets, and OBJECTS targets refused until their target
+kind and output-binding routes are proven. Missing, colliding, ambiguous, or
+omitted targets must yield zero from the proxy-scoped resolver and preserve
+the whole destination atomically.
 This callback establishes only a final output identity; it does not prove target
 existence, type, owner, recursive dependency closure, or emission. The
 `dwg2dxf` adapter deliberately does not install it and continues to refuse

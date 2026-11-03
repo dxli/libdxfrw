@@ -7773,6 +7773,12 @@ bool dxfRW::writePoint(DRW_Point *ent) {
 
 bool dxfRW::writeProxyEntity(DRW_ProxyEntity *ent,
                              std::uint32_t outputClassId) {
+    return writeProxyEntity(ent, outputClassId, m_referenceResolver);
+}
+
+bool dxfRW::writeProxyEntity(
+    DRW_ProxyEntity *ent, std::uint32_t outputClassId,
+    const std::function<std::uint32_t(std::uint32_t)>& resolver) {
     if (!preflightEntity(ent))
         return false;
     if (typeid(*ent) != typeid(DRW_ProxyEntity))
@@ -7838,7 +7844,7 @@ bool dxfRW::writeProxyEntity(DRW_ProxyEntity *ent,
             m_writeError = true;
             return false;
         };
-        if (!m_referenceResolver
+        if (!resolver
             || ent->m_objectIdRefs.size() > DRW::kMaxDxfRawRecordGroups
             || ent->m_objectIdRefs.size()
                 > static_cast<std::size_t>(std::numeric_limits<int>::max())
@@ -7860,7 +7866,7 @@ bool dxfRW::writeProxyEntity(DRW_ProxyEntity *ent,
                         > std::numeric_limits<std::uint32_t>::max())
                     return failObjectIds();
 
-                const std::uint32_t emitted = resolveReference(
+                const std::uint32_t emitted = resolver(
                     static_cast<std::uint32_t>(source.m_handle));
                 if (m_writeError || emitted == 0u
                     || emitted == DRW::NoHandle)

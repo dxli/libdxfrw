@@ -448,6 +448,13 @@ public:
     // payload slots remain fail-closed until their graph mappings are proved.
     bool writeProxyEntity(DRW_ProxyEntity *ent,
                           std::uint32_t outputClassId);
+    //! Write a proxy with a resolver scoped to its additional object-ID list.
+    //! Each nonzero source handle must resolve to a nonzero final output
+    //! identity; zero is a hard failure. This resolver does not affect common
+    //! entity references or other records written by the same codec.
+    bool writeProxyEntity(
+        DRW_ProxyEntity *ent, std::uint32_t outputClassId,
+        const std::function<std::uint32_t(std::uint32_t)>& resolver);
     bool writeLine(DRW_Line *ent);
     bool write3DLine(DRW_3DLine *ent);
     bool writeRay(DRW_Ray *ent);

@@ -18,6 +18,7 @@
       "The writer preflights the complete ordered object-ID list before emitting the proxy record, requires an installed resolver, bounds the list, rejects unsupported DWG handle codes and mismatched stored DXF group codes, and refuses zero, sentinel, or wider-than-32-bit source/output handles.",
       "The DWG parser and DXF writer now share one handle-code-to-group mapping. Tolerant parsing retains the prior group-330 fallback for unknown codes, while strict output refuses them.",
       "Resolved references are emitted in source order before group 94. Mappings exercised include DWG codes 4→DXF 330, 5→340, 2→350, 3→360, and 6/8/10/12→330; the DXF representation preserves the pointer/owner group role but canonicalizes those DWG soft-pointer encoding codes to group 330.",
+      "The explicit resolver overload is scoped to proxy object-ID edges; an independently configured global resolver remains unchanged and does not rewrite these groups. It provides an adapter integration point for a bounded source-graph mapping without changing common-reference behavior for other records.",
       "Resolver output is treated as a final emitted handle and is not remapped again. The resolver is caller-supplied; this does not prove that its targets exist or have the required graph roles.",
       "The dwg2dxf adapter still has no complete proxy-reference graph resolver and remains fail-closed for nonempty proxy object-ID lists."
     ]
@@ -30,6 +31,7 @@
     ],
     "assertions": [
       "Typed readback preserves the ordered 330/340/350/360/330 groups and their final mapped handles.",
+      "A conflicting global resolver does not alter the explicit per-proxy mapping.",
       "A missing resolver target, mismatched handle-role/group-code pair, unsupported DWG handle code, and wider-than-32-bit source handle each refuse atomically and preserve an existing destination.",
       "Correcting the mapping and then the role succeeds through the same writer and adapter; caller-side source handles and the original ordered reference list remain unchanged.",
       "The existing adapter-level no-resolver refusal and corrected no-reference retry continue to pass."
@@ -39,9 +41,9 @@
     "buildCommand": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests --parallel 4",
     "buildResult": "PASS",
     "focusedTestCommand": "ctest --test-dir build-gcc -R '^dwg2dxf_proxy_entity_output_gate$' --output-on-failure",
-    "focusedTestResult": "PASS: 1/1 in 0.56 seconds.",
+    "focusedTestResult": "PASS: 1/1 in 0.68 seconds.",
     "asanCommand": "ASAN_OPTIONS=abort_on_error=1:detect_leaks=0 ctest --test-dir build-asan-custom -R '^dwg2dxf_proxy_entity_output_gate$' --output-on-failure",
-    "asanResult": "PASS: 1/1 in 1.07 seconds.",
+    "asanResult": "PASS: 1/1 in 1.06 seconds.",
     "diffCheck": "PASS",
     "fixturePolicy": "No DWG/DXF fixture files were added or committed."
   },

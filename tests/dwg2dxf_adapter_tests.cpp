@@ -20561,9 +20561,10 @@ bool dwgProxyEntityOutputGate() {
     class DirectProxyWriter final : public dx_iface {
     public:
         void writeEntities() override {
-            written = dxfW->writeProxyEntity(&proxy, 500u);
+            written = dxfW->writeProxyEntity(&proxy, 500u, resolver);
         }
         DRW_ProxyEntity proxy;
+        std::function<std::uint32_t(std::uint32_t)> resolver;
         bool written {false};
     };
     struct ProxyReferenceCase {
@@ -20631,10 +20632,12 @@ bool dwgProxyEntityOutputGate() {
         dxfRW writer(path.string().c_str());
         adapter.dxfW = &writer;
         writer.setDxfClasses(std::vector<DRW_Class>{proxyClass});
+        writer.setReferenceResolver(
+            [](std::uint32_t) { return 0xE100u; });
         std::map<std::uint32_t, std::size_t> resolverCalls;
         bool omitOneTarget = true;
         const auto installResolver = [&]() {
-            writer.setReferenceResolver(
+            adapter.resolver =
                 [&resolverCalls, &omitOneTarget, &referenceCases](
                     std::uint32_t source) {
                     ++resolverCalls[source];
@@ -20646,7 +20649,7 @@ bool dwgProxyEntityOutputGate() {
                         return selected.outputHandle;
                     }
                     return 0u;
-                });
+                };
         };
         installResolver();
         if (writer.write(&adapter, DRW::AC1024, binary) || adapter.written)
