@@ -20835,6 +20835,77 @@ bool pointCloudAndNavisworksAdapterTransport() {
             if (!existing)
                 return fail("could not create point-cloud destination sentinel");
         }
+        dx_data objectData;
+        dx_iface objectAdapter;
+        objectAdapter.cData = &objectData;
+        DRW_PointCloudDef pointCloudDefinition;
+        pointCloudDefinition.m_kind = DRW_PointCloudDef::DefinitionEx;
+        pointCloudDefinition.m_classVersion = 7;
+        pointCloudDefinition.name = "LOCAL_POINTCLOUD_DEF";
+        pointCloudDefinition.m_sourceFilename = "local-point-cloud.rcs";
+        pointCloudDefinition.reactorHandles.push_back(0xA601u);
+        objectAdapter.addPointCloudDef(pointCloudDefinition);
+
+        DRW_NavisworksModelDef navisworksDefinition;
+        navisworksDefinition.m_flags = 5;
+        navisworksDefinition.m_path = "local-model.nwd";
+        navisworksDefinition.name = "LOCAL_NAVISWORKS_DEF";
+        objectAdapter.addNavisworksModelDef(navisworksDefinition);
+
+        DRW_PointCloudColorMap colorMap;
+        colorMap.m_classVersion = 3;
+        colorMap.m_defaultIntensityColorScheme = "INTENSITY_DEFAULT";
+        DRW_PointCloudColorMapRamp colorRamp;
+        colorRamp.m_classVersion = 2;
+        colorRamp.m_rampCount = 2u;
+        colorRamp.m_colorSchemes = {"RAMP_LOW", "RAMP_HIGH"};
+        colorMap.m_colorRampCount = 1u;
+        colorMap.m_colorRamps.push_back(colorRamp);
+        objectAdapter.addPointCloudColorMap(colorMap);
+
+        if (objectData.pointCloudObjectCaptureFailed
+            || objectData.pointCloudObjectRetainedRecords != 3u
+            || objectData.pointCloudDefinitions.size() != 1u
+            || objectData.navisworksModelDefinitions.size() != 1u
+            || objectData.pointCloudColorMaps.size() != 1u
+            || objectData.pointCloudDefinitions.front().m_kind
+                   != DRW_PointCloudDef::DefinitionEx
+            || objectData.pointCloudDefinitions.front().m_sourceFilename
+                   != "local-point-cloud.rcs"
+            || objectData.pointCloudDefinitions.front().reactorHandles
+                   != std::vector<std::uint32_t>{0xA601u}
+            || objectData.navisworksModelDefinitions.front().m_path
+                   != "local-model.nwd"
+            || objectData.pointCloudColorMaps.front().m_colorRamps.size()
+                   != 1u
+            || objectData.pointCloudColorMaps.front()
+                   .m_colorRamps.front().m_colorSchemes.size() != 2u
+            || objectData.pointCloudObjectRetainedBytes == 0u
+            || objectData.pointCloudObjectRetainedItems < 4u)
+            return fail("typed point-cloud object snapshots were not retained");
+
+        dx_data rejectedObjectData;
+        dx_iface rejectedObjectAdapter;
+        rejectedObjectAdapter.cData = &rejectedObjectData;
+        DRW_PointCloudColorMap malformedColorMap;
+        malformedColorMap.m_colorRampCount = 1u;
+        rejectedObjectAdapter.addPointCloudColorMap(malformedColorMap);
+        if (!rejectedObjectData.pointCloudObjectCaptureFailed
+            || rejectedObjectData.pointCloudObjectRetainedRecords != 0u
+            || !rejectedObjectData.pointCloudColorMaps.empty())
+            return fail("invalid point-cloud object capture was not atomic");
+
+        if (objectAdapter.fileExport(path.string(), DRW::AC1027, binary,
+                                     &objectData, false, true))
+            return fail("unqualified point-cloud object graph was emitted");
+        {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail("unqualified point-cloud object graph changed the destination");
+        }
+
         if (adapter.fileExport(path.string(), DRW::AC1024, binary,
                                &data, false, true))
             return fail("POINTCLOUDEX was emitted below its writer target floor");

@@ -570,6 +570,11 @@ public:
     void addNamedObjectDictionary(const DRW_Dictionary& data) override;
     void addXRecord(const DRW_XRecord& data) override;
     void addDataLink(const DRW_DataLink& data) override;
+    void addPointCloudDef(const DRW_PointCloudDef& data) override;
+    void addNavisworksModelDef(
+        const DRW_NavisworksModelDef& data) override;
+    void addPointCloudColorMap(
+        const DRW_PointCloudColorMap& data) override;
     void addMaterial(const DRW_Material& data) override;
     void addDbColor(const DRW_DbColor& data) override;
     void addGeoData(const DRW_GeoData& data) override;

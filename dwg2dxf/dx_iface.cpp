@@ -14745,6 +14745,10 @@ constexpr std::size_t kMaxAdapterDataLinkRecords = 100000u;
 constexpr std::size_t kMaxAdapterDataLinkItems = 1000000u;
 constexpr std::size_t kMaxAdapterDataLinkRetainedBytes =
     DRW::kMaxDxfBinaryPayloadBytes;
+constexpr std::size_t kMaxAdapterPointCloudObjectRecords = 100000u;
+constexpr std::size_t kMaxAdapterPointCloudObjectItems = 1000000u;
+constexpr std::size_t kMaxAdapterPointCloudObjectRetainedBytes =
+    DRW::kMaxDxfBinaryPayloadBytes;
 constexpr std::size_t kMaxAdapterTableContentRecords = 100000u;
 constexpr std::size_t kMaxAdapterTableContentRetainedBytes =
     DRW::kMaxDxfBinaryPayloadBytes;
@@ -16825,6 +16829,176 @@ bool estimateDataLinkTypedBytes(
             return false;
     }
     return estimate <= kMaxAdapterDataLinkRetainedBytes;
+}
+
+bool estimatePointCloudDefinitionBytes(
+        const DRW_PointCloudDef& value, std::size_t& estimate,
+        std::size_t& itemCount) noexcept {
+    const int kind = static_cast<int>(value.m_kind);
+    estimate = sizeof(DRW_PointCloudDef);
+    itemCount = value.reactorHandles.size();
+    if (kind < static_cast<int>(DRW_PointCloudDef::Definition)
+        || kind > static_cast<int>(DRW_PointCloudDef::ReactorEx)
+        || value.tType != DRW::POINTCLOUDDEF
+        || value.m_classVersion < 0
+        || value.m_classVersion > DRW_PointCloudDef::kMaxClassVersion
+        || itemCount > kMaxAdapterPointCloudObjectItems
+        || !addTableEntryRetainedBytes(value, estimate))
+        return false;
+    const auto addItems = [&itemCount](std::size_t count) noexcept {
+        if (itemCount > kMaxAdapterPointCloudObjectItems
+            || count > kMaxAdapterPointCloudObjectItems - itemCount)
+            return false;
+        itemCount += count;
+        return true;
+    };
+    if (!addItems(value.extData.size()) || !addItems(value.appData.size()))
+        return false;
+    for (const auto& group : value.appData) {
+        if (!addItems(group.size()))
+            return false;
+    }
+    if (!addStringPayloadBytes(value.m_sourceFilename, estimate))
+        return false;
+    return estimate <= kMaxAdapterPointCloudObjectRetainedBytes;
+}
+
+bool estimateNavisworksDefinitionBytes(
+        const DRW_NavisworksModelDef& value, std::size_t& estimate,
+        std::size_t& itemCount) noexcept {
+    estimate = sizeof(DRW_NavisworksModelDef);
+    itemCount = value.reactorHandles.size();
+    if (value.tType != DRW::NAVISWORKSMODELDEF
+        || value.m_flags < 0
+        || value.m_flags > DRW_NavisworksModelDef::kMaxFlags
+        || value.m_path.size() > DRW_NavisworksModelDef::kMaxPathLength
+        || itemCount > kMaxAdapterPointCloudObjectItems
+        || !addTableEntryRetainedBytes(value, estimate))
+        return false;
+    const auto addItems = [&itemCount](std::size_t count) noexcept {
+        if (itemCount > kMaxAdapterPointCloudObjectItems
+            || count > kMaxAdapterPointCloudObjectItems - itemCount)
+            return false;
+        itemCount += count;
+        return true;
+    };
+    if (!addItems(value.extData.size()) || !addItems(value.appData.size()))
+        return false;
+    for (const auto& group : value.appData) {
+        if (!addItems(group.size()))
+            return false;
+    }
+    if (!addStringPayloadBytes(value.m_path, estimate))
+        return false;
+    return estimate <= kMaxAdapterPointCloudObjectRetainedBytes;
+}
+
+bool estimatePointCloudColorMapBytes(
+        const DRW_PointCloudColorMap& value, std::size_t& estimate,
+        std::size_t& itemCount) noexcept {
+    estimate = sizeof(DRW_PointCloudColorMap);
+    itemCount = value.reactorHandles.size();
+    const auto addItems = [&itemCount](std::size_t count) noexcept {
+        if (itemCount > kMaxAdapterPointCloudObjectItems
+            || count > kMaxAdapterPointCloudObjectItems - itemCount)
+            return false;
+        itemCount += count;
+        return true;
+    };
+    const auto addRamps = [&estimate, &addItems](
+            const std::vector<DRW_PointCloudColorMapRamp>& ramps) noexcept {
+        if (!addVectorPayloadBytes(ramps, estimate)
+            || !addItems(ramps.size()))
+            return false;
+        for (const DRW_PointCloudColorMapRamp& ramp : ramps) {
+            if (ramp.m_classVersion < 0
+                || ramp.m_classVersion
+                    > DRW_PointCloudColorMap::kMaxClassVersion
+                || ramp.m_rampCount
+                    > DRW_PointCloudColorMap::kMaxColorsPerRamp
+                || ramp.m_colorSchemes.size() > ramp.m_rampCount
+                || !addVectorPayloadBytes(ramp.m_colorSchemes, estimate)
+                || !addItems(ramp.m_colorSchemes.size()))
+                return false;
+            for (const UTF8STRING& scheme : ramp.m_colorSchemes) {
+                if (scheme.size()
+                        > DRW_PointCloudColorMap::kMaxColorSchemeLength
+                    || !addStringPayloadBytes(scheme, estimate))
+                    return false;
+            }
+        }
+        return true;
+    };
+    if (value.tType != DRW::POINTCLOUDCOLORMAP
+        || value.m_classVersion < 0
+        || value.m_classVersion > DRW_PointCloudColorMap::kMaxClassVersion
+        || value.m_colorRampCount > DRW_PointCloudColorMap::kMaxRamps
+        || value.m_classificationColorRampCount
+               > DRW_PointCloudColorMap::kMaxRamps
+        || value.m_colorRampCount != value.m_colorRamps.size()
+        || value.m_classificationColorRampCount
+               != value.m_classificationColorRamps.size()
+        || itemCount > kMaxAdapterPointCloudObjectItems
+        || !addTableEntryRetainedBytes(value, estimate)
+        || !addStringPayloadBytes(value.m_defaultIntensityColorScheme,
+                                  estimate)
+        || !addStringPayloadBytes(value.m_defaultElevationColorScheme,
+                                  estimate)
+        || !addStringPayloadBytes(
+            value.m_defaultClassificationColorScheme, estimate)
+        || value.m_defaultIntensityColorScheme.size()
+               > DRW_PointCloudColorMap::kMaxColorSchemeLength
+        || value.m_defaultElevationColorScheme.size()
+               > DRW_PointCloudColorMap::kMaxColorSchemeLength
+        || value.m_defaultClassificationColorScheme.size()
+               > DRW_PointCloudColorMap::kMaxColorSchemeLength
+        || !addRamps(value.m_colorRamps)
+        || !addRamps(value.m_classificationColorRamps))
+        return false;
+    if (!addItems(value.extData.size()) || !addItems(value.appData.size()))
+        return false;
+    for (const auto& group : value.appData) {
+        if (!addItems(group.size()))
+            return false;
+    }
+    return estimate <= kMaxAdapterPointCloudObjectRetainedBytes;
+}
+
+template <typename T, typename Estimate>
+void retainPointCloudObjectTyped(
+        dx_data* data, std::list<T>& records, const T& value,
+        Estimate estimate) noexcept {
+    if (data == nullptr || data->pointCloudObjectCaptureFailed)
+        return;
+    if (data->pointCloudObjectRetainedRecords
+        >= kMaxAdapterPointCloudObjectRecords) {
+        data->pointCloudObjectCaptureFailed = true;
+        return;
+    }
+
+    std::size_t estimatedBytes = 0u;
+    std::size_t itemCount = 0u;
+    if (!estimate(value, estimatedBytes, itemCount)
+        || data->pointCloudObjectRetainedItems
+            > kMaxAdapterPointCloudObjectItems
+        || itemCount > kMaxAdapterPointCloudObjectItems
+                            - data->pointCloudObjectRetainedItems
+        || data->pointCloudObjectRetainedBytes
+            > kMaxAdapterPointCloudObjectRetainedBytes
+        || estimatedBytes > kMaxAdapterPointCloudObjectRetainedBytes
+                                - data->pointCloudObjectRetainedBytes) {
+        data->pointCloudObjectCaptureFailed = true;
+        return;
+    }
+
+    try {
+        records.push_back(value);
+        ++data->pointCloudObjectRetainedRecords;
+        data->pointCloudObjectRetainedItems += itemCount;
+        data->pointCloudObjectRetainedBytes += estimatedBytes;
+    } catch (...) {
+        data->pointCloudObjectCaptureFailed = true;
+    }
 }
 
 bool estimateDictionaryWithDefaultTypedBytes(
@@ -54521,6 +54695,32 @@ void dx_iface::addDataLink(const DRW_DataLink& data) {
     }
 }
 
+void dx_iface::addPointCloudDef(const DRW_PointCloudDef& data) {
+    observeResourceOrigin(&data, nullptr);
+    if (cData == nullptr)
+        return;
+    retainPointCloudObjectTyped(cData, cData->pointCloudDefinitions, data,
+                                estimatePointCloudDefinitionBytes);
+}
+
+void dx_iface::addNavisworksModelDef(
+        const DRW_NavisworksModelDef& data) {
+    observeResourceOrigin(&data, nullptr);
+    if (cData == nullptr)
+        return;
+    retainPointCloudObjectTyped(cData, cData->navisworksModelDefinitions,
+                                data, estimateNavisworksDefinitionBytes);
+}
+
+void dx_iface::addPointCloudColorMap(
+        const DRW_PointCloudColorMap& data) {
+    observeResourceOrigin(&data, nullptr);
+    if (cData == nullptr)
+        return;
+    retainPointCloudObjectTyped(cData, cData->pointCloudColorMaps, data,
+                                estimatePointCloudColorMapBytes);
+}
+
 void dx_iface::addDictionary(const DRW_Dictionary& data) {
     retainTableResource(dx_tableResourceFamily::Dictionary,data);
     observeStructuralSource(data,false);
@@ -68302,6 +68502,16 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     if (cData->dataLinkCaptureFailed) {
         reportPreflightFailure(
             "DATALINK callback capture incomplete or over budget");
+        return false;
+    }
+    if (cData->pointCloudObjectCaptureFailed) {
+        reportPreflightFailure(
+            "point-cloud definition/object capture incomplete or over budget");
+        return false;
+    }
+    if (cData->pointCloudObjectRetainedRecords != 0u) {
+        reportPreflightFailure(
+            "point-cloud definition/reactor/color-map graph has no qualified output route");
         return false;
     }
     if (cData->groupCaptureFailed || cData->groupNameResolutionFailed) {

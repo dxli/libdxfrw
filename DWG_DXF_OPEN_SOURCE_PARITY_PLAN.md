@@ -946,6 +946,15 @@ eligible reader. The exact package and environment result are in the
   Generated ASCII/Binary controls check AC1024 refusal for the AC1027-only
   POINTCLOUDEX writer profile, destination preservation, corrected retry, and
   typed field readback; see the [point-cloud adapter receipt](docs/research/p8-point-cloud-adapter-transport-2026-11-02.json).
+  The adapter also retains POINTCLOUDDEFINITION/EX, their reactor variants,
+  NAVISWORKSMODELDEF and POINTCLOUDCOLORMAP callbacks under shared record,
+  item and byte budgets. Generated ASCII/Binary controls verify bounded typed
+  retention, malformed color-map refusal, and atomic output refusal while this
+  definition/reactor/color-map graph has no qualified adapter writer
+  ([callback-retention receipt](docs/research/p8-pointcloud-object-callback-retention-2026-11-03.json)).
+  This closes callback retention only; P4 source identity/owner/dependency
+  closure, output binding, physical producer coverage, asset loading and native
+  consumer semantics remain open.
   The low-level POINTCLOUD and POINTCLOUDEX serializers now resolve their
   definition/reactor references through the configured resolver (final output
   IDs) or source-handle remap fallback. Generated ASCII/Binary controls verify

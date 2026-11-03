@@ -753,6 +753,16 @@ public:
     std::size_t dataLinkRetainedItems{0};
     std::size_t dataLinkRetainedBytes{0};
     bool dataLinkCaptureFailed{false};
+    // Point-cloud definitions/reactors and the shared color map are required
+    // to interpret their 3D entity callbacks. Retain their typed callbacks
+    // under one bounded budget; output remains gated on a closed object graph.
+    std::list<DRW_PointCloudDef> pointCloudDefinitions;
+    std::list<DRW_NavisworksModelDef> navisworksModelDefinitions;
+    std::list<DRW_PointCloudColorMap> pointCloudColorMaps;
+    std::size_t pointCloudObjectRetainedRecords{0};
+    std::size_t pointCloudObjectRetainedItems{0};
+    std::size_t pointCloudObjectRetainedBytes{0};
+    bool pointCloudObjectCaptureFailed{false};
     // Typed FIELD/FIELDLIST callbacks are retained for a later graph-aware
     // writer gate; raw DXF companions remain separate and are not emitted yet.
     std::list<DRW_Field>fields;
