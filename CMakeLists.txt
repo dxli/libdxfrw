@@ -1002,6 +1002,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_field_dxf_versioned_wire_profiles PROPERTIES
         LABELS "fast;dxf;writer;field;generated"
         TIMEOUT 10)
+    add_test(NAME libdxfrw_field_reference_output_id_guard
+        COMMAND libdxfrw_wave1_tests --field-reference-output-id-guard)
+    set_tests_properties(libdxfrw_field_reference_output_id_guard PROPERTIES
+        LABELS "fast;dxf;writer;field;references;generated;transaction"
+        TIMEOUT 10)
     add_test(NAME libdxfrw_solid_nondefault_ocs
         COMMAND libdxfrw_wave1_tests --solid-nondefault-ocs)
     set_tests_properties(libdxfrw_solid_nondefault_ocs PROPERTIES

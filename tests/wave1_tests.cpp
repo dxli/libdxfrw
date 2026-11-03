@@ -10789,6 +10789,106 @@ void testFieldAndFieldListHandleRemapping(TestContext& t) {
             t.expect(tags == asciiProjection,
                      "FIELDLIST ASCII and binary remapped values agree");
     }
+
+    struct InvalidReferenceCase {
+        const char* label;
+        std::function<void(DRW_Field&, std::uint32_t)> set;
+    };
+    const std::vector<InvalidReferenceCase> invalidReferences{
+        {"hard child", [](DRW_Field& field, std::uint32_t handle) {
+             field.m_childHandles = {handle};
+         }},
+        {"soft object", [](DRW_Field& field, std::uint32_t handle) {
+             field.m_objectHandles = {handle};
+         }},
+        {"root CadValue", [](DRW_Field& field, std::uint32_t handle) {
+             field.m_value.m_dataType = 64;
+             field.m_value.m_handle = handle;
+             field.m_value.m_value.addInt(330,
+                 static_cast<std::int32_t>(handle));
+         }},
+        {"child CadValue", [](DRW_Field& field, std::uint32_t handle) {
+             DRW_Field::ChildValue child;
+             child.m_key = "OBJECT_ID";
+             child.m_value.m_dataType = 64;
+             child.m_value.m_handle = handle;
+             child.m_value.m_value.addInt(330,
+                 static_cast<std::int32_t>(handle));
+             field.m_childValues.push_back(child);
+         }}};
+    for (const bool binary : {false, true}) {
+        for (const InvalidReferenceCase& invalid : invalidReferences) {
+            for (const std::uint32_t mapped : {
+                     0u, static_cast<std::uint32_t>(DRW::NoHandle)}) {
+                DRW_Field field;
+                field.handle = 0x501u;
+                const std::uint32_t source = 0x530u;
+                invalid.set(field, source);
+                std::ostringstream output;
+                dxfRW writer("");
+                writer.version = DRW::AC1032;
+                writer.binFile = binary;
+                writer.setHandleRemap({{source, mapped}});
+                if (binary)
+                    writer.writer = std::make_unique<dxfWriterBinary>(&output);
+                else
+                    writer.writer = std::make_unique<dxfWriterAscii>(&output);
+                t.expect(!writer.writeField(&field) && output.str().empty(),
+                    (std::string("FIELD ") + invalid.label
+                        + " refuses null/NoHandle remap before output").c_str());
+            }
+            DRW_Field field;
+            field.handle = 0x501u;
+            invalid.set(field, DRW::NoHandle);
+            std::ostringstream output;
+            dxfRW writer("");
+            writer.version = DRW::AC1032;
+            writer.binFile = binary;
+            if (binary)
+                writer.writer = std::make_unique<dxfWriterBinary>(&output);
+            else
+                writer.writer = std::make_unique<dxfWriterAscii>(&output);
+            t.expect(!writer.writeField(&field) && output.str().empty(),
+                (std::string("FIELD ") + invalid.label
+                    + " refuses NoHandle source before output").c_str());
+        }
+        for (const std::uint32_t mapped : {
+                 0u, static_cast<std::uint32_t>(DRW::NoHandle)}) {
+            DRW_FieldList fieldList;
+            fieldList.handle = 0x520u;
+            fieldList.parentHandle = 0x521u;
+            const std::uint32_t source = 0x530u;
+            fieldList.m_fieldHandles = {source};
+            std::ostringstream output;
+            dxfRW writer("");
+            writer.version = DRW::AC1032;
+            writer.binFile = binary;
+            writer.setHandleRemap({{source, mapped}});
+            if (binary)
+                writer.writer = std::make_unique<dxfWriterBinary>(&output);
+            else
+                writer.writer = std::make_unique<dxfWriterAscii>(&output);
+            t.expect(!writer.writeFieldList(&fieldList) && output.str().empty(),
+                "FIELDLIST refuses null/NoHandle member remap before output");
+        }
+        DRW_FieldList invalidFieldList;
+        invalidFieldList.handle = 0x520u;
+        invalidFieldList.parentHandle = 0x521u;
+        invalidFieldList.m_fieldHandles = {DRW::NoHandle};
+        std::ostringstream invalidFieldListOutput;
+        dxfRW invalidFieldListWriter("");
+        invalidFieldListWriter.version = DRW::AC1032;
+        invalidFieldListWriter.binFile = binary;
+        if (binary)
+            invalidFieldListWriter.writer =
+                std::make_unique<dxfWriterBinary>(&invalidFieldListOutput);
+        else
+            invalidFieldListWriter.writer =
+                std::make_unique<dxfWriterAscii>(&invalidFieldListOutput);
+        t.expect(!invalidFieldListWriter.writeFieldList(&invalidFieldList)
+                     && invalidFieldListOutput.str().empty(),
+                 "FIELDLIST refuses NoHandle source member before output");
+    }
 }
 
 void testAcadFieldExtensionDictionaryWireCandidate(TestContext& t) {
@@ -20706,6 +20806,14 @@ int main(int argc, char** argv) {
         testFieldDxfVersionedWireProfiles(focused);
         testFieldCadValueEmissionPreflight(focused);
         std::cout << "FIELD versioned DXF wire profiles: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--field-reference-output-id-guard") {
+        TestContext focused;
+        testFieldAndFieldListHandleRemapping(focused);
+        std::cout << "FIELD reference output-ID guard: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

@@ -91,5 +91,14 @@
     "signatureCheckResult": "FAIL: invalid signature (code or signature have been modified), arm64.",
     "converterInvocation": "Not run because strict signature verification failed.",
     "qualificationEffect": "No conversion attempted; the prior GUI result remains unchanged and the AC1027 suffix remains unresolved."
+  },
+  "userUnlockRetry": {
+    "date": "2026-11-03",
+    "time": "2026-11-03 08:00:37 UTC",
+    "userStateUpdate": "User reported unlocking the Mac session; strict signature verification was repeated.",
+    "signatureCheckCommand": "codesign --verify --strict --verbose=2 /Applications/ODAFileConverter.app",
+    "signatureCheckResult": "FAIL: invalid signature (code or signature have been modified), arm64.",
+    "converterInvocation": "Not run because strict signature verification failed.",
+    "qualificationEffect": "No conversion attempted; no support claim changed. The AC1027 suffix remains unresolved."
   }
 }

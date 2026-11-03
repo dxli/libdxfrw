@@ -1408,12 +1408,16 @@ bool canWriteDxfFieldValue(
             && (value.m_dataSize == 0 || value.m_dataSize == expectedSize);
     }
     case 64:
-        if (dxfFieldValuePayloadIsSuppressed(version, value)
-            || value.m_value.type() == DRW_Variant::INVALID)
+        if (dxfFieldValuePayloadIsSuppressed(version, value))
             return true;
-        return value.m_value.type() == DRW_Variant::INTEGER
-            && (value.m_handle == 0 || value.m_handle
-                == static_cast<std::uint32_t>(value.m_value.i_val()));
+        if (value.m_handle == 0u)
+            return value.m_value.type() == DRW_Variant::INTEGER
+                && value.m_value.i_val() > 0;
+        return value.m_handle != DRW::NoHandle
+            && value.m_value.type() == DRW_Variant::INTEGER
+            && value.m_value.i_val() > 0
+            && value.m_handle
+                == static_cast<std::uint32_t>(value.m_value.i_val());
     default:
         return false;
     }
@@ -1470,8 +1474,13 @@ bool writeDxfFieldValue(dxfWriter* writer, DRW::Version version,
                 : static_cast<std::uint32_t>(value.m_value.type()
                                                == DRW_Variant::INTEGER
                     ? value.m_value.i_val() : 0);
+            if (handle == 0u || handle == DRW::NoHandle)
+                return false;
+            const std::uint32_t emittedHandle = remapHandle(handle);
+            if (emittedHandle == 0u || emittedHandle == DRW::NoHandle)
+                return false;
             written = written && writer->writeString(
-                330, dxfFieldHandleText(remapHandle(handle)));
+                330, dxfFieldHandleText(emittedHandle));
             break;
         }
         default:
@@ -1523,9 +1532,13 @@ bool canWriteDxfField(DRW::Version version, const DRW_Field& field) {
         value.m_formatString = field.m_formatString;
     const bool hasMainValue = dxfFieldValueHasData(value);
     return std::all_of(field.m_childHandles.begin(), field.m_childHandles.end(),
-                       [](std::uint32_t handle) { return handle != 0; })
+                       [](std::uint32_t handle) {
+                           return handle != 0u && handle != DRW::NoHandle;
+                       })
         && std::all_of(field.m_objectHandles.begin(), field.m_objectHandles.end(),
-                       [](std::uint32_t handle) { return handle != 0; })
+                       [](std::uint32_t handle) {
+                           return handle != 0u && handle != DRW::NoHandle;
+                       })
         && (!hasMainValue || canWriteValue(value))
         && std::all_of(field.m_childValues.begin(), field.m_childValues.end(),
                        [version](const DRW_Field::ChildValue& child) {
@@ -1538,7 +1551,11 @@ bool canWriteDxfField(DRW::Version version, const DRW_Field& field) {
 }
 
 bool canWriteDxfFieldList(const DRW_FieldList& list) {
-    return list.m_fieldHandles.size() <= DRW_Field::kMaxItems;
+    return list.m_fieldHandles.size() <= DRW_Field::kMaxItems
+        && std::all_of(list.m_fieldHandles.begin(), list.m_fieldHandles.end(),
+                       [](std::uint32_t handle) {
+                           return handle != 0u && handle != DRW::NoHandle;
+                       });
 }
 
 void writeDxfSplineBody(dxfWriter *writer, DRW_Spline *ent) {
@@ -32911,6 +32928,37 @@ bool dxfRW::writeField(DRW_Field *ent) {
     DRW_CadValue fieldValue = ent->m_value;
     if (version > DRW::AC1018 && fieldValue.m_formatString.empty())
         fieldValue.m_formatString = ent->m_formatString;
+    const auto hasValidOutputReference = [this](std::uint32_t source) {
+        if (source == 0u || source == DRW::NoHandle)
+            return false;
+        const std::uint32_t emitted = remapObjectHandle(source);
+        return emitted != 0u && emitted != DRW::NoHandle;
+    };
+    const auto hasValidFieldValueReference =
+        [&hasValidOutputReference, this](const DRW_CadValue& value) {
+            if (value.m_dataType != 64
+                || dxfFieldValuePayloadIsSuppressed(this->version, value))
+                return true;
+            const std::uint32_t source = value.m_handle != 0u
+                ? value.m_handle
+                : (value.m_value.type() == DRW_Variant::INTEGER
+                    && value.m_value.i_val() > 0
+                    ? static_cast<std::uint32_t>(value.m_value.i_val())
+                    : 0u);
+            return hasValidOutputReference(source);
+        };
+    if (!std::all_of(ent->m_childHandles.begin(), ent->m_childHandles.end(),
+                     hasValidOutputReference)
+        || !std::all_of(ent->m_objectHandles.begin(),
+                        ent->m_objectHandles.end(),
+                        hasValidOutputReference)
+        || !hasValidFieldValueReference(fieldValue)
+        || !std::all_of(ent->m_childValues.begin(), ent->m_childValues.end(),
+                        [&hasValidFieldValueReference](
+                            const DRW_Field::ChildValue& child) {
+                            return hasValidFieldValueReference(child.m_value);
+                        }))
+        return false;
     bool written = writeString(0, "FIELD")
         && writeString(5, toHexStr(emittedHandle));
     if (version > DRW::AC1014) {
@@ -32987,6 +33035,15 @@ bool dxfRW::writeFieldList(DRW_FieldList *ent) {
         m_writeError = true;
         return false;
     }
+    const auto hasValidOutputReference = [this](std::uint32_t source) {
+        if (source == 0u || source == DRW::NoHandle)
+            return false;
+        const std::uint32_t emitted = remapObjectHandle(source);
+        return emitted != 0u && emitted != DRW::NoHandle;
+    };
+    if (!std::all_of(ent->m_fieldHandles.begin(), ent->m_fieldHandles.end(),
+                     hasValidOutputReference))
+        return failDxfWrite();
 
     auto writeString = [this](int code, const std::string& value) {
         return writer->writeString(code, value);
