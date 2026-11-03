@@ -20705,6 +20705,60 @@ bool dwgProxyEntityOutputGate() {
         if (!omitAdapter.fileExport(omitPath.string(), DRW::AC1024, binary,
                                     &data, false, true))
             return fail("corrected proxy target omission failed adapter retry");
+
+        class MutateProxyReferenceAdapter final : public dx_iface {
+        public:
+            void writeEntities() override {
+                if (mutateReference) {
+                    for (DRW_Entity* entity : cData->mBlock->ent) {
+                        if (entity == nullptr
+                            || entity->eType != DRW::PROXYENTITY)
+                            continue;
+                        auto* proxy = dynamic_cast<DRW_ProxyEntity*>(entity);
+                        if (proxy != nullptr
+                            && !proxy->m_objectIdRefs.empty())
+                            proxy->m_objectIdRefs.front().m_handle = 0x999u;
+                        break;
+                    }
+                }
+                dx_iface::writeEntities();
+            }
+            bool mutateReference{true};
+        } mutationAdapter;
+        mutationAdapter.cData = &data;
+        mutationAdapter.currentBlock = data.mBlock;
+        const auto mutationPath = std::filesystem::temp_directory_path()
+            / ("libdxfrw-dwg-proxy-mutated-reference-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct MutationCleanup {
+            std::filesystem::path path;
+            ~MutationCleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } mutationCleanup{mutationPath};
+        {
+            std::ofstream existing(mutationPath, std::ios::binary);
+            existing << graphSentinel;
+            if (!existing)
+                return fail("could not create late-mutation destination sentinel");
+        }
+        if (mutationAdapter.fileExport(mutationPath.string(), DRW::AC1024,
+                                       binary, &data, false, true))
+            return fail("proxy writer accepted a reference changed after planning");
+        {
+            std::ifstream previous(mutationPath, std::ios::binary);
+            if (std::string{std::istreambuf_iterator<char>(previous), {}}
+                != graphSentinel)
+                return fail("late proxy-reference mutation changed the destination");
+        }
+        retained->m_objectIdRefs = {softPointer, hardPointer};
+        mutationAdapter.mutateReference = false;
+        if (!mutationAdapter.fileExport(mutationPath.string(), DRW::AC1024,
+                                        binary, &data, false, true))
+            return fail("restored proxy reference failed same-adapter retry");
     }
 
     // The low-level DXF writer can serialize typed proxy object-ID edges only

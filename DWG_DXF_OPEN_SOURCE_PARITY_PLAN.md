@@ -140,8 +140,8 @@ the proxy-scoped resolver. Finalization proves that every planned target and
 proxy was written once with the expected type, section, owner and handle.
 Generated ASCII/Binary coverage exercises missing targets, duplicate typed
 handles, raw/object namespace collisions, unsupported owner-role edges,
-preallocated targets omitted at emission, atomic destination preservation,
-same-adapter retry and typed readback
+preallocated targets omitted at emission, post-plan proxy-reference mutation,
+atomic destination preservation, same-adapter retry and typed readback
 ([adapter graph receipt](docs/research/p4-dwg-proxy-entity-object-id-adapter-graph-closure-2026-11-02.json)).
 The admitted adapter profile is deliberately limited to codes 4/5 and
 top-level typed entity targets. Owner-role edges (350/360), other handle-code

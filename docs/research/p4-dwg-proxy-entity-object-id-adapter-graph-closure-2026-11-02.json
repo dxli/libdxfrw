@@ -37,6 +37,7 @@
       "Missing target, duplicate typed target, raw entity collision, TABLES collision, and unsupported owner-role code 2/group 350 each refuse atomically and preserve an existing destination.",
       "Soft pointer code 4/group 330 and hard pointer code 5/group 340 both resolve to preallocated output handles and match the corresponding typed LINE handles after a fresh ASCII/Binary readback.",
       "A target that is present during planning but deliberately omitted by an adapter override fails during finalization, preserves the destination, and succeeds on corrected same-adapter retry.",
+      "A proxy reference changed after graph planning is rejected before output publication; restoring the planned references allows the same adapter to retry successfully.",
       "A no-reference proxy profile still passes the existing class-ordinal/payload readback and corrected retry assertions."
     ]
   },
@@ -44,11 +45,11 @@
     "buildCommand": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests --parallel 4",
     "buildResult": "PASS",
     "focusedTestCommand": "ctest --test-dir build-gcc -R '^dwg2dxf_proxy_entity_output_gate$' --output-on-failure",
-    "focusedTestResult": "PASS: 1/1 in 0.53 seconds.",
+    "focusedTestResult": "PASS: 1/1 in 0.57 seconds.",
     "asanBuildCommand": "cmake --build build-asan-custom --target libdxfrw_dwg2dxf_adapter_tests --parallel 4",
     "asanBuildResult": "PASS",
     "asanCommand": "ASAN_OPTIONS=abort_on_error=1:detect_leaks=0 ctest --test-dir build-asan-custom -R '^dwg2dxf_proxy_entity_output_gate$' --output-on-failure",
-    "asanResult": "PASS: 1/1 in 1.05 seconds.",
+    "asanResult": "PASS: 1/1 in 1.09 seconds.",
     "diffCheck": "PASS",
     "fixturePolicy": "No DWG/DXF fixture files were added or committed."
   },
