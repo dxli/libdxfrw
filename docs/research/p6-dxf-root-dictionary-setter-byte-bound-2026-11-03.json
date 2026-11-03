@@ -66,5 +66,5 @@
     "This internal resource ceiling is not a DXF format maximum or support claim.",
     "The root setter's out-of-line implementation requires downstream consumers to rebuild/relink; ABI and packaging qualification remain open under P8."
   ],
-  "next": "Continue the P6 safety audit on named-dictionary object staging and other remaining assembly/work paths."
+  "next": "Continue the P6 safety audit on other unbounded setup/assembly paths, rollback after earlier staged records, source lifetime, platform numeric/string policies and scoped concurrency."
 }

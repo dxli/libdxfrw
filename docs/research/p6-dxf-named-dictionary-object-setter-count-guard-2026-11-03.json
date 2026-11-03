@@ -39,5 +39,5 @@
     "The selector proves setter admission and failure/retry state; it does not qualify named dictionary serialization semantics, aggregate nested-entry work, or native consumer behavior.",
     "Other staging/assembly paths, allocation-failure injection, rollback after earlier staged records, source lifetime and platform policy remain open."
   ],
-  "next": "Continue the safety and caller-state audit on remaining nested staging, assembly and rollback paths."
+  "next": "Continue the safety and caller-state audit on other unbounded setup/assembly paths, rollback after earlier staged records, source lifetime, platform numeric/string policies and scoped concurrency."
 }

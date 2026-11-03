@@ -708,41 +708,8 @@ public:
      * referenced from the root C dict (via setRootDictEntries) actually exist
      * as reachable objects with a valid owner — clearing the INVALID_OWNER_HANDLE
      * fixes ezdxf applies for the dangling 350 references. Empty by default. */
-    void setNamedDictObjects(const std::vector<DRW_Dictionary> &dicts) {
-        if (!preflightDxfSetup())
-            return;
-        if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen && !m_groups.empty()) {
-            m_writeError = true;
-            return;
-        }
-        if (dicts.size() > DRW_Dictionary::kMaxEntries) {
-            m_dxfNamedDictObjectsInputRejected = true;
-            return;
-        }
-        std::vector<DRW_Dictionary> copied;
-        try {
-            copied = dicts;
-        } catch (...) {
-            m_dxfNamedDictObjectsInputRejected = true;
-            return;
-        }
-        m_namedDictObjects.swap(copied);
-        m_dxfNamedDictObjectsInputRejected = false;
-    }
-    void setNamedDictObjects(std::vector<DRW_Dictionary>&& dicts) {
-        if (!preflightDxfSetup())
-            return;
-        if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen && !m_groups.empty()) {
-            m_writeError = true;
-            return;
-        }
-        if (dicts.size() > DRW_Dictionary::kMaxEntries) {
-            m_dxfNamedDictObjectsInputRejected = true;
-            return;
-        }
-        m_namedDictObjects = std::move(dicts);
-        m_dxfNamedDictObjectsInputRejected = false;
-    }
+    void setNamedDictObjects(const std::vector<DRW_Dictionary>& dicts);
+    void setNamedDictObjects(std::vector<DRW_Dictionary>&& dicts);
     /// Declare source identities for the generated NOD (C) and ACAD_GROUP
     /// dictionary (D). Zero leaves an identity unbound; a group dictionary
     /// requires a NOD and cannot share its source handle. Caller remaps must
@@ -1443,6 +1410,7 @@ private:
     }
     void rejectDxfClassesInput() noexcept;
     void rejectDxfRootDictEntriesInput() noexcept;
+    void rejectDxfNamedDictObjectsInput() noexcept;
     // Executable-local allocation instrumentation; no runtime/public test API.
     friend class DxIfaceStandardDwgCaptureTestAccess;
     friend class DxfGroupSetterTestAccess;
@@ -1764,6 +1732,10 @@ public:
     static bool estimateRootDictEntriesRetainedBytes(
         const std::vector<std::pair<std::string, std::string>>& entries,
         std::size_t byteLimit, std::size_t& estimate) noexcept;
+    static bool estimateNamedDictObjectsRetainedBytes(
+        const std::vector<DRW_Dictionary>& dicts,
+        std::size_t byteLimit, std::size_t& estimate,
+        std::size_t& itemCount) noexcept;
     bool preflightRawDxfSections() noexcept;
     bool preflightDxfSetup() noexcept {
         if (!m_dxfWriteFinalizing && !m_dxfWriteInspecting)

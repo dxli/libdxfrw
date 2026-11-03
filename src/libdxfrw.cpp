@@ -3405,6 +3405,21 @@ bool estimateOneCanonicalLineType(const DRW_LType& lineType,
     return true;
 }
 
+bool estimateOneNamedDictionary(const DRW_Dictionary& dictionary,
+                                std::size_t& bytes,
+                                std::size_t& items) noexcept {
+    if (dictionary.m_entries.size() > DRW_Dictionary::kMaxEntries
+        || !addDxfSetupTableEntryPayload(dictionary, bytes, items)
+        || !addDxfSetupSlots(dictionary.m_entries.size(),
+                             sizeof(DRW_Dictionary::Entry), bytes, items))
+        return false;
+    for (const DRW_Dictionary::Entry& entry : dictionary.m_entries) {
+        if (!addDxfSetupText(entry.m_name, bytes, items))
+            return false;
+    }
+    return true;
+}
+
 } // namespace
 
 bool dxfRW::estimateSourceBlockRecordsRetainedBytes(
@@ -3445,9 +3460,26 @@ bool dxfRW::estimateRootDictEntriesRetainedBytes(
     return true;
 }
 
+bool dxfRW::estimateNamedDictObjectsRetainedBytes(
+        const std::vector<DRW_Dictionary>& dicts,
+        std::size_t byteLimit, std::size_t& estimate,
+        std::size_t& itemCount) noexcept {
+    return byteLimit <= DRW::kMaxDxfTypedTableRetainedBytes
+        && estimateDxfSetupRecords(dicts, estimate, itemCount,
+                                   estimateOneNamedDictionary)
+        && estimate <= byteLimit;
+}
+
 void dxfRW::rejectDxfRootDictEntriesInput() noexcept {
     std::vector<std::pair<std::string, std::string>>().swap(m_rootDictEntries);
     m_dxfRootDictEntriesInputRejected = true;
+    if (m_dxfWriteAttemptActive)
+        m_writeError = true;
+}
+
+void dxfRW::rejectDxfNamedDictObjectsInput() noexcept {
+    std::vector<DRW_Dictionary>().swap(m_namedDictObjects);
+    m_dxfNamedDictObjectsInputRejected = true;
     if (m_dxfWriteAttemptActive)
         m_writeError = true;
 }
@@ -3494,6 +3526,53 @@ void dxfRW::setRootDictEntries(
     }
     m_rootDictEntries = std::move(entries);
     m_dxfRootDictEntriesInputRejected = false;
+}
+
+void dxfRW::setNamedDictObjects(
+        const std::vector<DRW_Dictionary>& dicts) {
+    if (!preflightDxfSetup())
+        return;
+    if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen
+        && !m_groups.empty()) {
+        m_writeError = true;
+        return;
+    }
+    std::size_t estimate = 0u;
+    std::size_t itemCount = 0u;
+    if (!estimateNamedDictObjectsRetainedBytes(
+            dicts, DRW::kMaxDxfTypedTableRetainedBytes,
+            estimate, itemCount)) {
+        rejectDxfNamedDictObjectsInput();
+        return;
+    }
+    try {
+        std::vector<DRW_Dictionary> copied = dicts;
+        m_namedDictObjects.swap(copied);
+    } catch (...) {
+        rejectDxfNamedDictObjectsInput();
+        return;
+    }
+    m_dxfNamedDictObjectsInputRejected = false;
+}
+
+void dxfRW::setNamedDictObjects(std::vector<DRW_Dictionary>&& dicts) {
+    if (!preflightDxfSetup())
+        return;
+    if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen
+        && !m_groups.empty()) {
+        m_writeError = true;
+        return;
+    }
+    std::size_t estimate = 0u;
+    std::size_t itemCount = 0u;
+    if (!estimateNamedDictObjectsRetainedBytes(
+            dicts, DRW::kMaxDxfTypedTableRetainedBytes,
+            estimate, itemCount)) {
+        rejectDxfNamedDictObjectsInput();
+        return;
+    }
+    m_namedDictObjects = std::move(dicts);
+    m_dxfNamedDictObjectsInputRejected = false;
 }
 
 void dxfRW::setSourceBlockRecords(
@@ -4921,6 +5000,14 @@ bool dxfRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
             DRW::OperationCause::ResourceLimit,
             "dxf-root-dictionary-entry-budget",
             "root dictionary entries exceeded the bounded setter limits");
+        return setError(DRW::BAD_OPEN);
+    }
+    if (m_dxfNamedDictObjectsInputRejected) {
+        recordOperationDiagnostic(
+            DRW::OperationPhase::Validation,
+            DRW::OperationCause::ResourceLimit,
+            "dxf-named-dictionary-object-budget",
+            "named dictionary objects exceeded the bounded setter limits");
         return setError(DRW::BAD_OPEN);
     }
     if (m_dxfRawDxfSectionsInputRejected) {

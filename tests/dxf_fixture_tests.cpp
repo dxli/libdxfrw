@@ -86,6 +86,13 @@ public:
     static std::size_t namedDictObjectsCount(const dxfRW& owner) {
         return owner.m_namedDictObjects.size();
     }
+    static bool estimateNamedDictObjects(
+            const std::vector<DRW_Dictionary>& dicts,
+            std::size_t byteLimit, std::size_t& bytes,
+            std::size_t& items) {
+        return dxfRW::estimateNamedDictObjectsRetainedBytes(
+            dicts, byteLimit, bytes, items);
+    }
     static bool classesRejected(const dxfRW& owner) {
         return owner.m_dxfClassesInputRejected;
     }
@@ -59664,6 +59671,57 @@ void testRootDictEntryCountBound(TestContext& t) {
 
 void testNamedDictObjectCountBound(TestContext& t) {
     const std::size_t overLimitCount = DRW_Dictionary::kMaxEntries + 1u;
+    const std::vector<DRW_Dictionary> smallDictionaries(1u);
+    std::size_t exactBytes = 0u;
+    std::size_t exactItems = 0u;
+    const bool exactMeasured =
+        DxfGroupSetterTestAccess::estimateNamedDictObjects(
+            smallDictionaries, DRW::kMaxDxfTypedTableRetainedBytes,
+            exactBytes, exactItems);
+    std::size_t exactByteResult = 0u;
+    std::size_t exactItemResult = 0u;
+    const bool exactAccepted = exactMeasured
+        && DxfGroupSetterTestAccess::estimateNamedDictObjects(
+            smallDictionaries, exactBytes,
+            exactByteResult, exactItemResult)
+        && exactByteResult == exactBytes && exactItemResult == exactItems;
+    std::size_t belowByteResult = 0u;
+    std::size_t belowItemResult = 0u;
+    const bool belowByteRejected = exactMeasured && exactBytes > 0u
+        && !DxfGroupSetterTestAccess::estimateNamedDictObjects(
+            smallDictionaries, exactBytes - 1u,
+            belowByteResult, belowItemResult);
+
+    const std::size_t maxItems = DRW::kMaxDxfTypedTableItems;
+    const auto makeDictionaryRows = [](std::size_t totalEntries) {
+        std::vector<DRW_Dictionary> result(5u);
+        for (DRW_Dictionary& dictionary : result) {
+            const std::size_t count = std::min(
+                totalEntries, DRW_Dictionary::kMaxEntries);
+            dictionary.m_entries.resize(count);
+            totalEntries -= count;
+        }
+        return result;
+    };
+    auto exactNested = makeDictionaryRows((maxItems - 10u) / 2u);
+    std::size_t exactNestedBytes = 0u;
+    std::size_t exactNestedItems = 0u;
+    const bool exactNestedMeasured =
+        DxfGroupSetterTestAccess::estimateNamedDictObjects(
+            exactNested, DRW::kMaxDxfTypedTableRetainedBytes,
+            exactNestedBytes, exactNestedItems)
+        && exactNestedItems == maxItems;
+    auto overNested = makeDictionaryRows((maxItems - 10u) / 2u + 1u);
+    std::size_t overNestedBytes = 0u;
+    std::size_t overNestedItems = 0u;
+    const bool overNestedMeasured =
+        !DxfGroupSetterTestAccess::estimateNamedDictObjects(
+            overNested, DRW::kMaxDxfTypedTableRetainedBytes,
+            overNestedBytes, overNestedItems);
+    t.expect(exactAccepted && belowByteRejected
+                 && exactNestedMeasured && overNestedMeasured,
+             "named dictionary estimator accepts exact byte/item boundaries and rejects one byte or one entry beyond them");
+
     for (const bool binary : {false, true}) {
         std::ostringstream output;
         dxfRW codec("");
@@ -59687,11 +59745,28 @@ void testNamedDictObjectCountBound(TestContext& t) {
                      && output.str() == sentinel,
                  "corrected named dictionary setter input clears rejection on the same codec");
 
+        auto exactInput = makeDictionaryRows((maxItems - 10u) / 2u);
+        codec.setNamedDictObjects(std::move(exactInput));
+        const bool exactNestedAccepted =
+            !DxfGroupSetterTestAccess::namedDictObjectsRejected(codec)
+            && DxfGroupSetterTestAccess::namedDictObjectsCount(codec) == 5u;
+        t.expect(exactNestedAccepted,
+                 "named dictionary setter accepts exact aggregate entry-work ceiling");
+
+        auto overNestedInput = makeDictionaryRows((maxItems - 10u) / 2u + 1u);
+        codec.setNamedDictObjects(overNestedInput);
+        const bool nestedRejectedBeforeCopy =
+            DxfGroupSetterTestAccess::namedDictObjectsRejected(codec)
+            && DxfGroupSetterTestAccess::namedDictObjectsCount(codec) == 0u
+            && overNestedInput.size() == 5u;
+        t.expect(nestedRejectedBeforeCopy,
+                 "aggregate nested-entry overflow is rejected before copying and clears stale objects");
+
         std::vector<DRW_Dictionary> oversizedMove(overLimitCount);
         codec.setNamedDictObjects(std::move(oversizedMove));
         const bool rejectedMoveBeforeConsume =
             DxfGroupSetterTestAccess::namedDictObjectsRejected(codec)
-            && DxfGroupSetterTestAccess::namedDictObjectsCount(codec) == 1u
+            && DxfGroupSetterTestAccess::namedDictObjectsCount(codec) == 0u
             && oversizedMove.size() == overLimitCount;
         const bool refusedMove = !DxfGroupSetterTestAccess::writeObjects(codec);
         t.expect(rejectedMoveBeforeConsume && refusedMove
@@ -59704,6 +59779,60 @@ void testNamedDictObjectCountBound(TestContext& t) {
                      && DxfGroupSetterTestAccess::namedDictObjectsCount(codec) == 1u
                      && output.str() == sentinel,
                  "corrected named dictionary input recovers after move-setter refusal");
+    }
+
+    dxfRW allocationCodec("");
+    const std::size_t failuresBefore = materialFailedAllocations;
+    {
+        MaterialAllocationFailure failCopy(0);
+        allocationCodec.setNamedDictObjects(smallDictionaries);
+    }
+    const bool allocationFailureRejected =
+        materialFailedAllocations > failuresBefore
+        && DxfGroupSetterTestAccess::namedDictObjectsRejected(allocationCodec)
+        && DxfGroupSetterTestAccess::namedDictObjectsCount(allocationCodec) == 0u;
+    allocationCodec.setNamedDictObjects(
+        std::vector<DRW_Dictionary>(smallDictionaries));
+    const bool allocationFailureRetry =
+        !DxfGroupSetterTestAccess::namedDictObjectsRejected(allocationCodec)
+        && DxfGroupSetterTestAccess::namedDictObjectsCount(allocationCodec) == 1u;
+    t.expect(allocationFailureRejected && allocationFailureRetry,
+             "const named dictionary copy catches allocation failure and accepts corrected retry");
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    for (const bool binary : {false, true}) {
+        const auto outputPath = std::filesystem::temp_directory_path()
+            / ("libdxfrw-named-dict-setter-bound-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        const std::string sentinel = "NAMED_DICT_WRITE_SENTINEL\n";
+        {
+            std::ofstream seed(outputPath,
+                               std::ios::binary | std::ios::trunc);
+            seed << sentinel;
+        }
+        dx_data data;
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        dxfRW writer(outputPath.string().c_str());
+        adapter.dxfW = &writer;
+        writer.setNamedDictObjects(std::move(overNested));
+        const bool refused = !writer.write(&adapter, DRW::AC1027, binary);
+        std::ifstream preservedInput(outputPath, std::ios::binary);
+        const std::string preserved(
+            (std::istreambuf_iterator<char>(preservedInput)),
+            std::istreambuf_iterator<char>());
+        writer.setNamedDictObjects(std::vector<DRW_Dictionary>{});
+        const bool retried = writer.write(&adapter, DRW::AC1027, binary);
+        t.expect(refused && preserved == sentinel && retried,
+                 binary
+                     ? "binary nested dictionary overflow preserves destination and succeeds after corrected retry"
+                     : "ASCII nested dictionary overflow preserves destination and succeeds after corrected retry");
+        adapter.dxfW = nullptr;
+        std::error_code removeError;
+        std::filesystem::remove(outputPath, removeError);
     }
 }
 
