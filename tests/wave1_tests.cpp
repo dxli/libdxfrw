@@ -10848,6 +10848,7 @@ void testMLeaderWriterReferenceHandleRemapping(TestContext& t) {
     textLine.breaks.emplace_back(DRW_Coord{-404.25, 505.5, -606.75},
                                  DRW_Coord{707.25, -808.5, 909.75});
     textLine.lineTypeHandle.ref = 0xA108u;
+    textLine.arrowHandle.ref = 0xA104u;
     textRoot.leaderLines.push_back(textLine);
     text.context.roots.push_back(textRoot);
 
@@ -10997,6 +10998,121 @@ void testMLeaderWriterReferenceHandleRemapping(TestContext& t) {
             const std::string message =
                 std::string("MLEADER remapped block reference missing ") + expected;
             t.expect(std::find(tags.begin(), tags.end(), expected) != tags.end(),
+                     message.c_str());
+        }
+    }
+
+    const std::vector<std::string> expectedResolverTextReferences{
+        "340:D102", "341:D103", "342:D104", "343:D105",
+        "344:D106", "340:D107", "340:D108", "341:D104"};
+    std::vector<std::string> asciiResolverProjection;
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW writer("");
+        writer.version = DRW::AC1021;
+        writer.binFile = binary;
+        writer.setHandleRemap(textRemap);
+        std::map<std::uint32_t, std::size_t> resolverCalls;
+        writer.setReferenceResolver([&resolverCalls](std::uint32_t source) {
+            ++resolverCalls[source];
+            return source + 0x3000u;
+        });
+        writer.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        DRW_MLeader entity(text);
+        const bool written = writer.writeMultiLeader(&entity)
+            && writer.writer->writeString(0, "WIRE_END");
+        bool ended = false;
+        const auto tags = numericWireProjection(
+            output.str(), binary, ended,
+            DxfClassifierProfile::StandaloneSafe);
+        const bool callsOnce = resolverCalls.size() == 7u
+            && std::all_of(resolverCalls.begin(), resolverCalls.end(),
+                [](const auto& call) { return call.second == 1u; });
+        t.expect(written && ended && callsOnce,
+                 "MLEADER resolves each distinct direct reference exactly once");
+        for (const std::string& expected : expectedResolverTextReferences) {
+            const std::string message =
+                "MLEADER direct resolver output contains " + expected;
+            t.expect(std::find(tags.begin(), tags.end(), expected)
+                         != tags.end(),
+                     message.c_str());
+        }
+        t.expect(std::none_of(tags.begin(), tags.end(),
+                    [](const std::string& tag) {
+                        return tag.rfind("340:B", 0) == 0
+                            || tag.rfind("341:B", 0) == 0
+                            || tag.rfind("342:B", 0) == 0
+                            || tag.rfind("343:B", 0) == 0
+                            || tag.rfind("344:B", 0) == 0;
+                    }),
+                 "MLEADER resolver results take precedence over handle remaps");
+        if (!binary)
+            asciiResolverProjection = tags;
+        else
+            t.expect(tags == asciiResolverProjection,
+                     "MLEADER resolver ASCII/Binary references agree");
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW writer("");
+        writer.version = DRW::AC1021;
+        writer.binFile = binary;
+        writer.setHandleRemap(textRemap);
+        writer.setReferenceResolver([](std::uint32_t source) {
+            return source == 0xA103u ? 0u : source + 0x3000u;
+        });
+        writer.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        writer.writer->writeString(1, "PRESERVED_PREFIX");
+        const std::string before = output.str();
+        DRW_MLeader entity(text);
+        t.expect(!writer.writeMultiLeader(&entity) && output.str() == before,
+                 "unresolved MLEADER direct reference preserves destination");
+    }
+
+    const std::vector<std::string> expectedResolverBlockReferences{
+        "344:D202", "341:D203", "341:D204", "345:D205", "330:D204"};
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW writer("");
+        writer.version = DRW::AC1021;
+        writer.binFile = binary;
+        writer.setHandleRemap(blockRemap);
+        std::map<std::uint32_t, std::size_t> resolverCalls;
+        writer.setReferenceResolver([&resolverCalls](std::uint32_t source) {
+            ++resolverCalls[source];
+            return source + 0x3000u;
+        });
+        writer.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        DRW_MLeader entity(block);
+        const bool written = writer.writeMultiLeader(&entity)
+            && writer.writer->writeString(0, "WIRE_END");
+        bool ended = false;
+        const auto tags = numericWireProjection(
+            output.str(), binary, ended,
+            DxfClassifierProfile::StandaloneSafe);
+        const bool callsOnce = resolverCalls.size() == 4u
+            && std::all_of(resolverCalls.begin(), resolverCalls.end(),
+                [](const auto& call) { return call.second == 1u; });
+        t.expect(written && ended && callsOnce,
+                 "MLEADER block and legacy references resolve once per source handle");
+        for (const std::string& expected : expectedResolverBlockReferences) {
+            const std::string message =
+                "MLEADER direct block resolver output contains " + expected;
+            t.expect(std::find(tags.begin(), tags.end(), expected)
+                         != tags.end(),
                      message.c_str());
         }
     }

@@ -241,6 +241,17 @@ engines.
    ([receipt](docs/research/p4-leader-annotation-reference-remapping-2026-11-03.json)).
    This closes low-level identity translation only; target kind/existence,
    ownership, recursive closure, and native annotation semantics remain open.
+   Direct `MULTILEADER` records now use the configured final-ID resolver for
+   nested style, linetype, arrowhead, text-style, block, and legacy-reference
+   handles when no whole-file write is active. Whole-file output retains its
+   existing planned/remapped identities. Resolved IDs are cached once per
+   source handle, and zero/NoHandle results refuse atomically. Generated
+   ASCII/Binary checks cover resolver precedence across all nested reference
+   families, duplicate-handle single resolution, and failure preservation
+   ([receipt](docs/research/p4-mleader-direct-reference-resolver-2026-11-03.json)).
+   This remains ID translation evidence only; target kind/existence, ownership,
+   physical profile breadth, recursive closure, and native annotation semantics
+   remain open.
    Continue the remaining reference-ID audit from the current field receipts,
    prioritizing typed owner/dependency pointers on supported 3D records. Confirm
    each field against its parser contract and applicable format mapping before

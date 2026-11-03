@@ -14419,13 +14419,32 @@ bool dxfRW::writeMultiLeader(DRW_MLeader *ent){
         m_writeError = true;
         return false;
     }
-    const auto remappedReference = [this](const dwgHandle& reference) {
-        return reference.ref == 0
-            ? std::uint32_t{0} : remapObjectHandle(reference.ref);
+    std::map<std::uint32_t, std::uint32_t> emittedReferences;
+    const auto remappedReference = [this, &emittedReferences](
+            const dwgHandle& reference) {
+        if (reference.ref == 0)
+            return std::uint32_t{0};
+        const auto cached = emittedReferences.find(reference.ref);
+        if (cached != emittedReferences.end())
+            return cached->second;
+        const std::uint32_t emitted = !m_dxfWriteAttemptActive
+                && m_referenceResolver
+            ? resolveReference(reference.ref)
+            : remapObjectHandle(reference.ref);
+        try {
+            emittedReferences.emplace(reference.ref, emitted);
+        } catch (const std::bad_alloc&) {
+            m_writeError = true;
+            return std::uint32_t{0};
+        }
+        return emitted;
     };
     const auto referenceCanBeWritten = [&remappedReference](
             const dwgHandle& reference) {
-        return reference.ref == 0 || remappedReference(reference) != 0;
+        if (reference.ref == 0)
+            return true;
+        const std::uint32_t emitted = remappedReference(reference);
+        return emitted != 0 && emitted != DRW::NoHandle;
     };
     if (!referenceCanBeWritten(ent->styleHandle)
         || !referenceCanBeWritten(ent->leaderLineTypeHandle)
