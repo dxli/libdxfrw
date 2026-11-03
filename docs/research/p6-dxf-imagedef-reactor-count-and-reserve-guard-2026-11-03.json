@@ -39,7 +39,7 @@
       {
         "command": "ctest --test-dir build-gcc -R '^dwg2dxf_rooted_image_dictionary_closure$' --output-on-failure",
         "result": "FAIL",
-        "coverage": "The broader selector fails during TABLES emission with an unclosed FIELDLIST profile, before writeObjects emits IMAGEDEF/IMAGEDEF_REACTOR records; this slice does not resolve that profile."
+        "coverage": "The broader selector fails in the mode-1 AC1015-to-AC1015 ASCII projection during TABLES emission, before IMAGEDEF/IMAGEDEF_REACTOR output. Its adjacent FIELDLIST warning is not established as causal: the failing imported source had zero typed/raw FIELDLIST records and no NOD ACAD_FIELDLIST entry. The exact TABLES callback remains unidentified."
       }
     ],
     "repositoryFixturesAdded": 0,
@@ -48,7 +48,7 @@
   "limitations": [
     "The 1,000,000 limit is the existing internal reactor resource ceiling, not an Autodesk format maximum or support claim.",
     "Allocation-failure injection, unrelated OBJECTS assembly collections, and other copy/work bounds remain open.",
-    "The rooted IMAGEDEF graph cohort remains failing at an earlier TABLES/FIELDLIST gate and requires separate diagnosis."
+    "The rooted IMAGEDEF graph cohort remains failing during TABLES emission. The emitted FIELDLIST warning is informational in the observed failure profile; identify the exact failing table callback before attributing cause or changing admission."
   ],
-  "next": "Continue the bounded safety audit on remaining output staging paths; keep the rooted IMAGEDEF graph failure separate until its TABLES/FIELDLIST blocker is diagnosed."
+  "next": "Continue the bounded safety audit on remaining output staging paths. Separately instrument the failing TABLES callback for the rooted IMAGEDEF source profile before changing FIELDLIST or raster admission."
 }
