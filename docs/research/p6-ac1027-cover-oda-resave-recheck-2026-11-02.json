@@ -82,5 +82,14 @@
     "signatureCheckResult": "FAIL: invalid signature (code or signature have been modified), arm64.",
     "converterInvocation": "Not run because the strict signature gate failed.",
     "qualificationEffect": "The unlocked session does not alter the installed bundle integrity result. No conversion was attempted and no support claim changed."
+  },
+  "latestIntegrityCheck": {
+    "date": "2026-11-03",
+    "time": "2026-11-03 05:21:16 UTC",
+    "userStateUpdate": "User reported unlocking the Mac session again.",
+    "signatureCheckCommand": "codesign --verify --strict --verbose=2 /Applications/ODAFileConverter.app",
+    "signatureCheckResult": "FAIL: invalid signature (code or signature have been modified), arm64.",
+    "converterInvocation": "Not run because strict signature verification failed.",
+    "qualificationEffect": "No conversion attempted; the prior GUI result remains unchanged and the AC1027 suffix remains unresolved."
   }
 }
