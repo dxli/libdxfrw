@@ -12848,6 +12848,13 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     ++matches;
                     targetOwner = renderSetting->second->parentHandle;
                 }
+                const auto rasterVariablesTarget =
+                    rasterVariables.find(entry.m_handle);
+                if (rasterVariablesTarget != rasterVariables.end()) {
+                    ++matches;
+                    targetOwner =
+                        rasterVariablesTarget->second->parentHandle;
+                }
                 if (matches != 1u)
                     return reject(ExtensionGraphFailure::InvalidGraph,
                         "NOD dictionary entry target is missing or ambiguous");
@@ -70987,10 +70994,11 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                  && current->first.first == generation;
              ++current) {
             const DRW_RasterVariables& variables = current->second;
+            // Autodesk documents RASTERVARIABLES group 90 as fixed 0.
             if (current->first.second == 0u
                 || current->first.second == DRW::NoHandle
                 || variables.handle != current->first.second
-                || variables.m_classVersion != 1
+                || variables.m_classVersion != 0
                 || variables.m_imageFrame
                     < std::numeric_limits<std::int16_t>::min()
                 || variables.m_imageFrame
@@ -71045,12 +71053,6 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                 owner = &dictionary;
                 ++ownerCount;
             }
-            if (ownerCount != 1u || owner == nullptr
-                || owner->parentHandle
-                    != cData->namedObjectDictionary.handle
-                || !owner->hasCompleteDwgEntries())
-                return fail("parent is not one complete NOD-owned DICTIONARY");
-
             const auto countEntry = [](std::uint32_t target,
                                        const auto& entries) {
                 return std::count_if(entries.begin(), entries.end(),
@@ -71058,20 +71060,51 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                         return entry.m_handle == target;
                     });
             };
-            if (countEntry(variables.handle, owner->m_entries) != 1
-                || countEntry(owner->handle,
-                    cData->namedObjectDictionary.m_entries) != 1)
-                return fail("owner dictionary and NOD do not bind the object path exactly once");
+            const bool dictionaryOwner = ownerCount == 1u && owner != nullptr
+                && owner->parentHandle
+                    == cData->namedObjectDictionary.handle
+                && owner->hasCompleteDwgEntries()
+                && countEntry(variables.handle, owner->m_entries) == 1
+                && countEntry(owner->handle,
+                    cData->namedObjectDictionary.m_entries) == 1;
+            const auto isDirectRasterVariablesRootEntry =
+                [&variables](const DRW_Dictionary::Entry& entry) {
+                    return sameAsciiName(entry.m_name, "ACAD_IMAGE_VARS")
+                        && entry.m_handle == variables.handle;
+                };
+            const std::size_t directRootEntryCount = static_cast<std::size_t>(
+                std::count_if(
+                    cData->namedObjectDictionary.m_entries.begin(),
+                    cData->namedObjectDictionary.m_entries.end(),
+                    isDirectRasterVariablesRootEntry));
+            const bool directRootOwner = ownerCount == 0u && owner == nullptr
+                && variables.parentHandle
+                    == cData->namedObjectDictionary.handle
+                && directRootEntryCount == 1u
+                && countEntry(variables.handle,
+                    cData->namedObjectDictionary.m_entries) == 1;
+            if (!dictionaryOwner && !directRootOwner) {
+                return fail(
+                    "parent is neither one complete NOD-owned DICTIONARY "
+                    "nor the uniquely keyed ACAD_IMAGE_VARS NOD entry");
+            }
 
-            const std::size_t stagedDictionaryCount = static_cast<std::size_t>(
-                std::count(m_extensionDictionaryHandles.begin(),
-                           m_extensionDictionaryHandles.end(), owner->handle));
+            const std::size_t stagedDictionaryCount = dictionaryOwner
+                ? static_cast<std::size_t>(std::count(
+                    m_extensionDictionaryHandles.begin(),
+                    m_extensionDictionaryHandles.end(), owner->handle))
+                : 0u;
             const std::size_t stagedObjectCount = static_cast<std::size_t>(
                 std::count(m_extensionRasterVariablesHandles.begin(),
                            m_extensionRasterVariablesHandles.end(),
                            variables.handle));
-            if (stagedDictionaryCount != 1u || stagedObjectCount != 1u)
-                return fail("owner dictionary and typed object are not staged exactly once by the graph");
+            if ((dictionaryOwner && stagedDictionaryCount != 1u)
+                || (!dictionaryOwner && stagedDictionaryCount != 0u)
+                || stagedObjectCount != 1u) {
+                return fail(
+                    "RasterVariables owner and typed object are not staged "
+                    "exactly once by the graph");
+            }
         }
     } catch (...) {
         return fail("allocation failure while preparing output bindings");
@@ -76306,6 +76339,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             const DRW_Scale* targetScale = nullptr;
             const DRW_MLeaderStyle* targetMLeaderStyle = nullptr;
             const DRW_FieldList* targetFieldList = nullptr;
+            const DRW_RasterVariables* targetRasterVariables = nullptr;
             std::size_t targetMatches = 0;
             for (const DRW_Dictionary& dictionary : cData->dictionaries) {
                 if (dictionary.handle == sourceEntry.m_handle) {
@@ -76350,6 +76384,20 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                     ++targetMatches;
                 }
             }
+            if (cData->sourceFormat == dx_source_format::DWG) {
+                const auto firstRasterVariables =
+                    cData->dwgRasterVariables.lower_bound(
+                        {cData->importGeneration, 0u});
+                for (auto current = firstRasterVariables;
+                     current != cData->dwgRasterVariables.end()
+                         && current->first.first == cData->importGeneration;
+                     ++current) {
+                    if (current->second.handle != sourceEntry.m_handle)
+                        continue;
+                    targetRasterVariables = &current->second;
+                    ++targetMatches;
+                }
+            }
             const bool dictionaryQueued = std::find(
                 m_extensionDictionaryHandles.begin(),
                 m_extensionDictionaryHandles.end(), sourceEntry.m_handle)
@@ -76376,6 +76424,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 m_extensionDictionaryVarHandles.begin(),
                 m_extensionDictionaryVarHandles.end(), sourceEntry.m_handle)
                     != m_extensionDictionaryVarHandles.end();
+            const bool rasterVariablesQueued = std::find(
+                m_extensionRasterVariablesHandles.begin(),
+                m_extensionRasterVariablesHandles.end(),
+                sourceEntry.m_handle)
+                    != m_extensionRasterVariablesHandles.end();
             const bool scaleQueued = std::find(
                 m_extensionScaleHandles.begin(),
                 m_extensionScaleHandles.end(), sourceEntry.m_handle)
@@ -76422,11 +76475,20 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 && targetFieldList->parentHandle
                     == cData->namedObjectDictionary.handle
                 && fieldListEmissionReady;
+            const bool closedRasterVariables =
+                targetRasterVariables != nullptr
+                && cData->sourceFormat == dx_source_format::DWG
+                && cData->sourceVersion == DRW::AC1027
+                && key == "ACAD_IMAGE_VARS"
+                && targetRasterVariables->parentHandle
+                    == cData->namedObjectDictionary.handle
+                && rasterVariablesQueued;
             if (targetMatches != 1u
                 || (!closedDictionary && !closedDictionaryWithDefault
                     && !closedXRecord
                     && !closedDictionaryVar && !closedScale
-                    && !closedMLeaderStyle && !closedFieldList)) {
+                    && !closedMLeaderStyle && !closedFieldList
+                    && !closedRasterVariables)) {
                 if (requireResolvedOwners) {
                     delete dxfW;
                     dxfW = nullptr;

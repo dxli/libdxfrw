@@ -2170,6 +2170,20 @@ set_tests_properties(dwg2dxf_rastervariables_dwg_adapter_transport PROPERTIES
     TIMEOUT 30
 )
 
+# The direct NOD -> ACAD_IMAGE_VARS -> RASTERVARIABLES profile is authored
+# locally from the observed physical AC1027 ownership shape. It proves only
+# adapter transport and typed DXF readback, not producer interoperability.
+add_test(
+    NAME dwg2dxf_rastervariables_direct_nod_adapter_transport
+    COMMAND libdxfrw_dwg2dxf_adapter_tests
+        --rastervariables-dwg-adapter-transport-direct-nod
+)
+set_tests_properties(dwg2dxf_rastervariables_direct_nod_adapter_transport
+    PROPERTIES
+    LABELS "fast;dwg;dxf;raster;adapter;generated;transaction"
+    TIMEOUT 30
+)
+
 add_test(
     NAME dwg2dxf_wipeoutvariables_dwg_adapter_transport
     COMMAND libdxfrw_dwg2dxf_adapter_tests --wipeoutvariables-dwg-adapter-transport
