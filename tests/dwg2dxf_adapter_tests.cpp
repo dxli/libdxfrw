@@ -35,6 +35,7 @@
 #include <iterator>
 #include <sstream>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -20625,8 +20626,23 @@ bool dwgProxyEntityOutputGate() {
         secondTarget.handle = 0x457u;
         secondTarget.basePoint = DRW_Coord(7.0, 8.0, 9.0);
         secondTarget.secPoint = DRW_Coord(10.0, 11.0, 12.0);
+        DRW_Line nextHandleTarget;
+        nextHandleTarget.handle = proxy.handle + 1u;
+        nextHandleTarget.basePoint = DRW_Coord(13.0, 14.0, 15.0);
+        nextHandleTarget.secPoint = DRW_Coord(16.0, 17.0, 18.0);
+        DRW_Line previousHandleTarget;
+        previousHandleTarget.handle = proxy.handle - 1u;
+        previousHandleTarget.basePoint = DRW_Coord(19.0, 20.0, 21.0);
+        previousHandleTarget.secPoint = DRW_Coord(22.0, 23.0, 24.0);
+        DRW_Line lowerHandleTarget;
+        lowerHandleTarget.handle = 0x100u;
+        lowerHandleTarget.basePoint = DRW_Coord(25.0, 26.0, 27.0);
+        lowerHandleTarget.secPoint = DRW_Coord(28.0, 29.0, 30.0);
         adapter.addLine(firstTarget);
         adapter.addLine(secondTarget);
+        adapter.addLine(nextHandleTarget);
+        adapter.addLine(previousHandleTarget);
+        adapter.addLine(lowerHandleTarget);
         DRW_ProxyObjectIdRef softPointer;
         softPointer.m_handleCode = 4u;
         softPointer.m_dxfCode = 330;
@@ -20639,17 +20655,41 @@ bool dwgProxyEntityOutputGate() {
         hardPointer.m_rawHandle = secondTarget.handle;
         std::vector<DRW_ProxyObjectIdRef> proxyReferences{
             softPointer, hardPointer};
-        const std::array<std::pair<std::uint8_t, std::uint32_t>, 4>
-            offsetPointerAliases{{{6u, firstTarget.handle},
-                                  {8u, secondTarget.handle},
-                                  {10u, firstTarget.handle},
-                                  {12u, secondTarget.handle}}};
+        const std::array<std::tuple<std::uint8_t, std::uint32_t,
+                                    std::uint64_t>, 4>
+            offsetPointerAliases{{{6u, nextHandleTarget.handle, 0u},
+                                  {8u, previousHandleTarget.handle, 0u},
+                                  {10u, firstTarget.handle,
+                                   firstTarget.handle - proxy.handle},
+                                  {12u, lowerHandleTarget.handle,
+                                   proxy.handle - lowerHandleTarget.handle}}};
         for (const auto& alias : offsetPointerAliases) {
+            dwgHandle encodedReference;
+            encodedReference.code = std::get<0>(alias);
+            encodedReference.ref = static_cast<std::uint32_t>(
+                std::get<2>(alias));
+            dwgBufferW encodedHandle;
+            encodedHandle.putHandle(encodedReference);
+            const std::vector<std::uint8_t> handleBytes =
+                encodedHandle.data();
+            dwgBuffer rawHandleBuffer(handleBytes.data(), handleBytes.size());
+            const dwgHandle rawHandle = rawHandleBuffer.getHandle();
+            dwgBuffer resolvedHandleBuffer(handleBytes.data(),
+                                           handleBytes.size());
+            const dwgHandle resolvedHandle =
+                resolvedHandleBuffer.getOffsetHandle(proxy.handle);
+            if (!rawHandleBuffer.isGood()
+                || !resolvedHandleBuffer.isGood()
+                || rawHandle.code != std::get<0>(alias)
+                || rawHandle.ref64 != std::get<2>(alias)
+                || resolvedHandle.ref64 != std::get<1>(alias))
+                return fail("proxy offset-pointer fixture did not encode its ODA handle relation");
+
             DRW_ProxyObjectIdRef reference;
-            reference.m_handleCode = alias.first;
+            reference.m_handleCode = std::get<0>(alias);
             reference.m_dxfCode = 330;
-            reference.m_handle = alias.second;
-            reference.m_rawHandle = alias.second;
+            reference.m_handle = std::get<1>(alias);
+            reference.m_rawHandle = std::get<2>(alias);
             proxyReferences.push_back(reference);
         }
         retained->m_objectIdRefs = proxyReferences;
@@ -20730,11 +20770,16 @@ bool dwgProxyEntityOutputGate() {
         ProxyReadback graphReadback;
         if (!graphReadback.fileImport(path.string(), &graphReadData, false)
             || graphReadback.proxies.size() != 1u
-            || graphReadback.lines.size() != 2u)
+            || graphReadback.lines.size() != 5u)
             return fail("proxy graph output failed typed ASCII/Binary readback");
         const auto readLineHandle = [&graphReadback](std::uint32_t source) {
+            const double expectedX = source == 0x456u ? 1.0
+                : source == 0x457u ? 7.0
+                : source == 0x124u ? 13.0
+                : source == 0x122u ? 19.0
+                : source == 0x100u ? 25.0 : -1.0;
             for (const DRW_Line& line : graphReadback.lines) {
-                if (line.basePoint.x == (source == 0x456u ? 1.0 : 7.0))
+                if (line.basePoint.x == expectedX)
                     return line.handle;
             }
             return 0u;
@@ -20754,6 +20799,10 @@ bool dwgProxyEntityOutputGate() {
              index < graphProxy.m_objectIdRefs.size(); ++index) {
             const std::uint32_t source = proxyReferences[index].m_handle;
             if (proxyReferences[index].m_dxfCode != 330
+                || proxyReferences[index].m_handleCode
+                    != std::get<0>(offsetPointerAliases[index - 2u])
+                || proxyReferences[index].m_rawHandle
+                    != std::get<2>(offsetPointerAliases[index - 2u])
                 || graphProxy.m_objectIdRefs[index].m_dxfCode != 330
                 || graphProxy.m_objectIdRefs[index].m_handle
                     != readLineHandle(source))
