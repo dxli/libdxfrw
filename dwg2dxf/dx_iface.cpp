@@ -71422,7 +71422,9 @@ void dx_iface::writeEntity(DRW_Entity* e){
         break;
     case DRW::POINTCLOUD:
         if (auto* cloud = dynamic_cast<DRW_PointCloud*>(e)) {
-            if (typeid(*e) == typeid(DRW_PointCloud))
+            if (typeid(*e) == typeid(DRW_PointCloud)
+                && cloud->definitionHandle == 0u
+                && cloud->reactorHandle == 0u)
                 written = dxfW->writePointCloud(cloud);
             else
                 dxfW->writeRawDxfEntity(nullptr);
@@ -71432,7 +71434,9 @@ void dx_iface::writeEntity(DRW_Entity* e){
         break;
     case DRW::POINTCLOUDEX:
         if (auto* cloud = dynamic_cast<DRW_PointCloudEx*>(e)) {
-            if (typeid(*e) == typeid(DRW_PointCloudEx))
+            if (typeid(*e) == typeid(DRW_PointCloudEx)
+                && cloud->definitionHandle == 0u
+                && cloud->reactorHandle == 0u)
                 written = dxfW->writePointCloudEx(cloud);
             else
                 dxfW->writeRawDxfEntity(nullptr);
@@ -71442,7 +71446,8 @@ void dx_iface::writeEntity(DRW_Entity* e){
         break;
     case DRW::NAVISWORKSMODEL:
         if (auto* model = dynamic_cast<DRW_NavisworksModel*>(e)) {
-            if (typeid(*e) == typeid(DRW_NavisworksModel))
+            if (typeid(*e) == typeid(DRW_NavisworksModel)
+                && model->definitionHandle == 0u)
                 written = dxfW->writeNavisworksModel(model);
             else
                 dxfW->writeRawDxfEntity(nullptr);

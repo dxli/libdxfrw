@@ -503,6 +503,8 @@ eligible reader. The exact package and environment result are in the
   Generated ASCII/Binary controls check AC1024 refusal for the AC1027-only
   POINTCLOUDEX writer profile, destination preservation, corrected retry, and
   typed field readback; see the [point-cloud adapter receipt](docs/research/p8-point-cloud-adapter-transport-2026-11-02.json).
+  Nonzero definition/reactor handles remain atomically refused until P4's
+  source-bound object graph providers and output bindings qualify them.
   This does not close external-definition graph, asset loading, native 3D
   consumer, or broader BLOCK callback qualification.
   The limited macOS ARM64

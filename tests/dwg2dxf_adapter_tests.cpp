@@ -20092,6 +20092,15 @@ bool pointCloudAndNavisworksAdapterTransport() {
         if (data.mBlock == nullptr || data.mBlock->ent.size() != 3u
             || data.typedEntityCaptureFailed)
             return fail("point-cloud/NAVISWORKS callbacks were not retained");
+        auto* retainedCloud = dynamic_cast<DRW_PointCloud*>(
+            data.mBlock->ent.front());
+        auto* retainedCloudEx = dynamic_cast<DRW_PointCloudEx*>(
+            *std::next(data.mBlock->ent.begin()));
+        auto* retainedModel = dynamic_cast<DRW_NavisworksModel*>(
+            *std::next(data.mBlock->ent.begin(), 2));
+        if (retainedCloud == nullptr || retainedCloudEx == nullptr
+            || retainedModel == nullptr)
+            return fail("typed point-cloud callback snapshots have wrong runtime types");
 
         const auto path = std::filesystem::temp_directory_path()
             / ("libdxfrw-cloud-adapter-"
@@ -20123,6 +20132,39 @@ bool pointCloudAndNavisworksAdapterTransport() {
             if (bytes != sentinel)
                 return fail("unsupported point-cloud target changed the destination");
         }
+        const auto refuseUnqualifiedReference = [&](const char* label) {
+            if (adapter.fileExport(path.string(), DRW::AC1027, binary,
+                                   &data, false, true))
+                return fail(std::string("unqualified ") + label
+                            + " reference was emitted");
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail(std::string("unqualified ") + label
+                            + " reference changed the destination");
+            return true;
+        };
+        retainedCloud->definitionHandle = 0xA501u;
+        if (!refuseUnqualifiedReference("POINTCLOUD definition"))
+            return false;
+        retainedCloud->definitionHandle = 0u;
+        retainedCloud->reactorHandle = 0xA502u;
+        if (!refuseUnqualifiedReference("POINTCLOUD reactor"))
+            return false;
+        retainedCloud->reactorHandle = 0u;
+        retainedCloudEx->definitionHandle = 0xA503u;
+        if (!refuseUnqualifiedReference("POINTCLOUDEX definition"))
+            return false;
+        retainedCloudEx->definitionHandle = 0u;
+        retainedCloudEx->reactorHandle = 0xA504u;
+        if (!refuseUnqualifiedReference("POINTCLOUDEX reactor"))
+            return false;
+        retainedCloudEx->reactorHandle = 0u;
+        retainedModel->definitionHandle = 0xA505u;
+        if (!refuseUnqualifiedReference("NAVISWORKSMODEL definition"))
+            return false;
+        retainedModel->definitionHandle = 0u;
         if (!adapter.fileExport(path.string(), DRW::AC1027, binary,
                                 &data, false, true))
             return fail("point-cloud/NAVISWORKS corrected target retry failed");
@@ -20153,6 +20195,8 @@ bool pointCloudAndNavisworksAdapterTransport() {
             || actualCloud->sourceFileCount != 1
             || actualCloud->sourceFiles.size() != 1u
             || actualCloud->pointCount != 7u
+            || actualCloud->definitionHandle != 0u
+            || actualCloud->reactorHandle != 0u
             || actualCloud->extentsMax.z != 6.0
             || actualCloud->ucsName != "LOCAL_UCS")
             return fail("POINTCLOUD modeled fields changed on readback");
@@ -20167,6 +20211,8 @@ bool pointCloudAndNavisworksAdapterTransport() {
             || actualCloudEx->elevationMax != 8.0
             || actualCloudEx->intensityMin != 3.0
             || actualCloudEx->intensityMax != 9.0
+            || actualCloudEx->definitionHandle != 0u
+            || actualCloudEx->reactorHandle != 0u
             || actualCloudEx->croppingCount != 1
             || actualCloudEx->croppings.size() != 1u
             || actualCloudEx->croppings.front().type != 2
@@ -20176,6 +20222,7 @@ bool pointCloudAndNavisworksAdapterTransport() {
             || actualCloudEx->croppings.front().points[1].x != 2.0)
             return fail("POINTCLOUDEX modeled fields changed on readback");
         if (actualModel == nullptr || actualModel->flags != 5u
+            || actualModel->definitionHandle != 0u
             || actualModel->transform[3] != 2.0
             || actualModel->transform[7] != 3.0
             || actualModel->transform[11] != 4.0
