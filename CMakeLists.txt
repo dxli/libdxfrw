@@ -745,6 +745,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_pointcloud_definition_identity_remapping
         PROPERTIES LABELS "fast;dxf;writer;pointcloud;identity;generated;transaction"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_external_definition_identity_remapping
+        COMMAND libdxfrw_wave1_tests
+            --external-definition-identity-remapping)
+    set_tests_properties(libdxfrw_external_definition_identity_remapping
+        PROPERTIES LABELS "fast;dxf;writer;objects;identity;generated;transaction"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_blockrecord_insert_reference_remapping
         COMMAND libdxfrw_wave1_tests
             --blockrecord-insert-reference-remapping)

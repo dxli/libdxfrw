@@ -2440,6 +2440,290 @@ void testPointCloudDefinitionIdentityRemapping(TestContext& t) {
     }
 }
 
+void testExternalDefinitionIdentityRemapping(TestContext& t) {
+    constexpr std::uint32_t navisworksSource = 0xA61u;
+    constexpr std::uint32_t navisworksOutput = 0xB61u;
+    constexpr std::uint32_t colorMapSource = 0xA62u;
+    constexpr std::uint32_t colorMapOutput = 0xB62u;
+
+    class ExternalDefinitionProbe final : public dx_iface {
+    public:
+        void addNavisworksModelDef(
+            const DRW_NavisworksModelDef& value) override {
+            navisworks = value;
+            navisworksFound = true;
+        }
+        void addPointCloudColorMap(
+            const DRW_PointCloudColorMap& value) override {
+            colorMap = value;
+            colorMapFound = true;
+        }
+
+        DRW_NavisworksModelDef navisworks;
+        DRW_PointCloudColorMap colorMap;
+        bool navisworksFound {false};
+        bool colorMapFound {false};
+    };
+
+    const auto readNavisworks = [](const std::string& bytes, bool binary,
+                                   DRW_NavisworksModelDef& value) {
+        std::istringstream input(bytes);
+        ExternalDefinitionProbe probe;
+        dxfRW readerOwner("");
+        readerOwner.binFile = binary;
+        readerOwner.iface = &probe;
+        readerOwner.reader = binary
+            ? std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderBinary>(&input))
+            : std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderAscii>(&input));
+        int code = 0;
+        while (readerOwner.reader->readRec(&code)) {
+            if (code != 0)
+                continue;
+            readerOwner.nextentity = readerOwner.reader->getString();
+            if (readerOwner.nextentity == "NAVISWORKSMODELDEF") {
+                const bool processed = readerOwner.processNavisworksModelDef();
+                if (processed && probe.navisworksFound)
+                    value = probe.navisworks;
+                return processed && probe.navisworksFound;
+            }
+        }
+        return false;
+    };
+
+    const auto readColorMap = [](const std::string& bytes, bool binary,
+                                 DRW_PointCloudColorMap& value) {
+        std::istringstream input(bytes);
+        ExternalDefinitionProbe probe;
+        dxfRW readerOwner("");
+        readerOwner.binFile = binary;
+        readerOwner.iface = &probe;
+        readerOwner.reader = binary
+            ? std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderBinary>(&input))
+            : std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderAscii>(&input));
+        int code = 0;
+        while (readerOwner.reader->readRec(&code)) {
+            if (code != 0)
+                continue;
+            readerOwner.nextentity = readerOwner.reader->getString();
+            if (readerOwner.nextentity == "POINTCLOUDCOLORMAP") {
+                const bool processed = readerOwner.processPointCloudColorMap();
+                if (processed && probe.colorMapFound)
+                    value = probe.colorMap;
+                return processed && probe.colorMapFound;
+            }
+        }
+        return false;
+    };
+
+    const auto prepareNavisworks = [](DRW_NavisworksModelDef& value) {
+        value.parentHandle = 0xCu;
+        value.m_flags = 3;
+        value.m_path = "models/site.nwd";
+        value.m_status = true;
+        value.m_minExtent = DRW_Coord{-1.5, -2.5, -3.5};
+        value.m_maxExtent = DRW_Coord{4.5, 5.5, 6.5};
+        value.m_hostDrawingVisibility = true;
+    };
+    const auto prepareColorMap = [](DRW_PointCloudColorMap& value) {
+        value.parentHandle = 0xCu;
+        value.m_classVersion = 4;
+        value.m_defaultIntensityColorScheme = "intensity";
+        value.m_defaultElevationColorScheme = "elevation";
+        value.m_defaultClassificationColorScheme = "classification";
+        value.m_colorRampCount = 1u;
+        value.m_colorRamps = {{2, 2u, {"ground", "canopy"}}};
+        value.m_classificationColorRampCount = 1u;
+        value.m_classificationColorRamps = {{3, 1u, {"road"}}};
+    };
+    const auto navisworksPayloadMatches = [](const DRW_NavisworksModelDef& value) {
+        return value.m_flags == 3 && value.m_path == "models/site.nwd"
+            && value.m_status && value.m_hostDrawingVisibility
+            && value.m_minExtent.x == -1.5 && value.m_maxExtent.z == 6.5;
+    };
+    const auto colorMapPayloadMatches = [](const DRW_PointCloudColorMap& value) {
+        return value.m_classVersion == 4
+            && value.m_defaultIntensityColorScheme == "intensity"
+            && value.m_defaultElevationColorScheme == "elevation"
+            && value.m_defaultClassificationColorScheme == "classification"
+            && value.m_colorRampCount == 1u && value.m_colorRamps.size() == 1u
+            && value.m_colorRamps.front().m_classVersion == 2
+            && value.m_colorRamps.front().m_colorSchemes
+                   == std::vector<UTF8STRING>{"ground", "canopy"}
+            && value.m_classificationColorRampCount == 1u
+            && value.m_classificationColorRamps.size() == 1u
+            && value.m_classificationColorRamps.front().m_colorSchemes
+                   == std::vector<UTF8STRING>{"road"};
+    };
+
+    const auto exercise = [&](const char* recordName, std::uint32_t source,
+                              std::uint32_t emitted, auto makeObject,
+                              auto prepare, auto writeObject, auto readObject,
+                              auto payloadMatches) {
+        using Object = decltype(makeObject());
+        for (const bool binary : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap({{source, emitted}});
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+            owner.writer->setRecordInventoryEnabled(true, 16u);
+            Object value = makeObject();
+            value.handle = source;
+            prepare(value);
+            const bool wrote = owner.writer->writeString(0, "SECTION")
+                && owner.writer->writeString(2, "OBJECTS")
+                && writeObject(owner, value)
+                && owner.writer->writeString(0, "WIRE_END");
+            const auto binding = owner.m_writingContext
+                .sourceHandleToWrittenObjectMap.find(source);
+            const std::string label = std::string(recordName)
+                + " remaps and binds its own identity";
+            t.expect(wrote
+                         && owner.writer->recordHandleCount(emitted) == 1u
+                         && owner.writer->recordHandleHasIdentity(
+                             emitted, recordName, "OBJECTS")
+                         && binding != owner.m_writingContext
+                                            .sourceHandleToWrittenObjectMap.end()
+                         && binding->second == emitted,
+                     label.c_str());
+            if (!wrote)
+                continue;
+
+            Object readback = makeObject();
+            const bool read = readObject(output.str(), binary, readback);
+            const std::string readLabel = std::string(recordName)
+                + " has typed ASCII/Binary readback";
+            t.expect(read && readback.handle == emitted
+                         && payloadMatches(readback),
+                     readLabel.c_str());
+
+            std::ostringstream allocatedOutput;
+            dxfRW allocatedOwner("");
+            allocatedOwner.version = DRW::AC1032;
+            allocatedOwner.binFile = binary;
+            allocatedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&allocatedOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&allocatedOutput));
+            allocatedOwner.writer->setRecordInventoryEnabled(true, 16u);
+            Object generated = makeObject();
+            prepare(generated);
+            const bool generatedWrite =
+                allocatedOwner.writer->writeString(0, "SECTION")
+                && allocatedOwner.writer->writeString(2, "OBJECTS")
+                && writeObject(allocatedOwner, generated)
+                && allocatedOwner.writer->writeString(0, "WIRE_END");
+            Object generatedReadback = makeObject();
+            const bool generatedRead = generatedWrite
+                && readObject(allocatedOutput.str(), binary, generatedReadback);
+            const std::string allocationLabel = std::string(recordName)
+                + " allocates and reads back a missing identity";
+            t.expect(generatedRead && generatedReadback.handle != 0u
+                         && generatedReadback.handle != DRW::NoHandle
+                         && allocatedOwner.writer->recordHandleCount(
+                                generatedReadback.handle) == 1u,
+                     allocationLabel.c_str());
+
+            std::ostringstream invalidOutput;
+            dxfRW invalidOwner("");
+            invalidOwner.version = DRW::AC1032;
+            invalidOwner.binFile = binary;
+            invalidOwner.setHandleRemap({{source, 0xCu}});
+            invalidOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&invalidOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&invalidOutput));
+            Object invalid = makeObject();
+            invalid.handle = source;
+            prepare(invalid);
+            const std::string invalidLabel = std::string(recordName)
+                + " rejects a fixed identity remap atomically";
+            t.expect(!writeObject(invalidOwner, invalid)
+                         && invalidOutput.str().empty(),
+                     invalidLabel.c_str());
+
+            std::ostringstream failedOutput;
+            dxfRW failedOwner("");
+            failedOwner.version = DRW::AC1032;
+            failedOwner.binFile = binary;
+            failedOwner.setHandleRemap({{source, emitted}});
+            failedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&failedOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&failedOutput));
+            failedOwner.writer->setRecordInventoryEnabled(true, 16u);
+            const bool section = failedOwner.writer->writeString(0, "SECTION")
+                && failedOwner.writer->writeString(2, "OBJECTS");
+            const std::string beforeFailure = failedOutput.str();
+            Object malformed = makeObject();
+            malformed.handle = source;
+            prepare(malformed);
+            malformed.extData.push_back(new DRW_Variant(
+                1009, std::string("unsupported-xdata-code")));
+            const bool rejected = section
+                && !writeObject(failedOwner, malformed);
+            const std::string rollbackLabel = std::string(recordName)
+                + " rolls back bytes, inventory, and source identity on XDATA failure";
+            t.expect(rejected && failedOutput.str() == beforeFailure
+                         && failedOwner.m_writingContext
+                                    .sourceHandleToWrittenObjectMap.count(source)
+                                == 0u
+                         && failedOwner.writer->recordHandleCount(emitted) == 0u,
+                     rollbackLabel.c_str());
+
+            std::ostringstream retryOutput;
+            dxfRW retryOwner("");
+            retryOwner.version = DRW::AC1032;
+            retryOwner.binFile = binary;
+            retryOwner.setHandleRemap({{source, emitted}});
+            retryOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&retryOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&retryOutput));
+            retryOwner.writer->setRecordInventoryEnabled(true, 16u);
+            Object corrected = makeObject();
+            corrected.handle = source;
+            prepare(corrected);
+            const bool retried = retryOwner.writer->writeString(0, "SECTION")
+                && retryOwner.writer->writeString(2, "OBJECTS")
+                && writeObject(retryOwner, corrected)
+                && retryOwner.writer->writeString(0, "WIRE_END");
+            Object retryReadback = makeObject();
+            const bool retryRead = retried
+                && readObject(retryOutput.str(), binary, retryReadback);
+            const std::string retryLabel = std::string(recordName)
+                + " corrected fresh-writer retry has typed readback";
+            t.expect(rejected && retryRead && retryReadback.handle == emitted
+                         && payloadMatches(retryReadback),
+                     retryLabel.c_str());
+        }
+    };
+
+    exercise("NAVISWORKSMODELDEF", navisworksSource, navisworksOutput,
+        [] { return DRW_NavisworksModelDef{}; }, prepareNavisworks,
+        [](dxfRW& owner, DRW_NavisworksModelDef& value) {
+            return owner.writeNavisworksModelDef(&value);
+        }, readNavisworks, navisworksPayloadMatches);
+    exercise("POINTCLOUDCOLORMAP", colorMapSource, colorMapOutput,
+        [] { return DRW_PointCloudColorMap{}; }, prepareColorMap,
+        [](dxfRW& owner, DRW_PointCloudColorMap& value) {
+            return owner.writePointCloudColorMap(&value);
+        }, readColorMap, colorMapPayloadMatches);
+}
+
 void testBlockRecordInsertReferenceRemapping(TestContext& t) {
     for (const bool binary : {false, true}) {
         for (const bool useResolver : {false, true}) {
@@ -19218,6 +19502,15 @@ int main(int argc, char** argv) {
         TestContext focused;
         testPointCloudDefinitionIdentityRemapping(focused);
         std::cout << "POINTCLOUD definition identity remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--external-definition-identity-remapping") {
+        TestContext focused;
+        testExternalDefinitionIdentityRemapping(focused);
+        std::cout << "External definition identity remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

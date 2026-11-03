@@ -13986,9 +13986,23 @@ bool dxfRW::writeNavisworksModelDef(DRW_NavisworksModelDef *ent) {
         m_writeError = true;
         return false;
     }
-    EntityRecordScope scope(*this, ent);
+    const std::uint32_t sourceHandle = ent->handle;
+    std::uint32_t emittedHandle = sourceHandle == 0u
+        ? 0u : remapObjectHandle(sourceHandle);
+    if (sourceHandle != 0u
+        && (emittedHandle == 0u || emittedHandle == DRW::NoHandle
+            || isDxfFixedOutputHandle(emittedHandle)))
+        return failDxfWrite();
+    RecordStateScope state(*this, ent);
+    if (sourceHandle == 0u) {
+        if (!allocateDxfHandle(emittedHandle))
+            return false;
+    } else if (!reserveHandle(emittedHandle)) {
+        return failDxfWrite();
+    }
+    DxfWriterRecordScope record(*writer);
     writer->writeString(0, "NAVISWORKSMODELDEF");
-    writer->writeString(5, toHexStr(ent->handle));
+    writer->writeString(5, toHexStr(emittedHandle));
     if (!writeTableEntryAppData(*ent))
         return false;
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
@@ -14005,7 +14019,13 @@ bool dxfRW::writeNavisworksModelDef(DRW_NavisworksModelDef *ent) {
     writer->writeBool(291, ent->m_hostDrawingVisibility);
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    if (writer->hasWriteError() || !preflightDxfWrite()
+        || (sourceHandle != 0u
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit())
+        return failDxfWrite();
+    state.commit();
+    return true;
 }
 
 bool dxfRW::writePointCloudColorMap(DRW_PointCloudColorMap *ent) {
@@ -14034,9 +14054,23 @@ bool dxfRW::writePointCloudColorMap(DRW_PointCloudColorMap *ent) {
         return false;
     }
 
-    EntityRecordScope scope(*this, ent);
+    const std::uint32_t sourceHandle = ent->handle;
+    std::uint32_t emittedHandle = sourceHandle == 0u
+        ? 0u : remapObjectHandle(sourceHandle);
+    if (sourceHandle != 0u
+        && (emittedHandle == 0u || emittedHandle == DRW::NoHandle
+            || isDxfFixedOutputHandle(emittedHandle)))
+        return failDxfWrite();
+    RecordStateScope state(*this, ent);
+    if (sourceHandle == 0u) {
+        if (!allocateDxfHandle(emittedHandle))
+            return false;
+    } else if (!reserveHandle(emittedHandle)) {
+        return failDxfWrite();
+    }
+    DxfWriterRecordScope record(*writer);
     writer->writeString(0, "POINTCLOUDCOLORMAP");
-    writer->writeString(5, toHexStr(ent->handle));
+    writer->writeString(5, toHexStr(emittedHandle));
     if (!writeTableEntryAppData(*ent))
         return false;
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
@@ -14076,7 +14110,13 @@ bool dxfRW::writePointCloudColorMap(DRW_PointCloudColorMap *ent) {
     }
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    if (writer->hasWriteError() || !preflightDxfWrite()
+        || (sourceHandle != 0u
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit())
+        return failDxfWrite();
+    state.commit();
+    return true;
 }
 
 bool dxfRW::writeNavisworksModel(DRW_NavisworksModel *ent) {

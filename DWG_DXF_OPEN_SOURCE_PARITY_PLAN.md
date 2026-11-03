@@ -795,6 +795,14 @@ eligible reader. The exact package and environment result are in the
   The NAVISWORKSMODEL low-level writer now applies the same resolver/remap
   policy to its optional definition reference; its ASCII/Binary control is
   recorded in the [NAVISWORKS reference receipt](docs/research/p8-navisworks-dxf-reference-remapping-2026-11-03.json).
+  The `NAVISWORKSMODELDEF` and `POINTCLOUDCOLORMAP` low-level writers also
+  remap or allocate their own group-5 identities and bind source identities
+  after staged record commit. Focused ASCII/Binary controls cover typed payload
+  readback, fixed-handle refusal, byte/inventory/identity-map rollback after
+  late XDATA failure, and corrected fresh-writer retry ([identity receipt](docs/research/p8-external-definition-identity-remapping-2026-11-03.json)).
+  This closes only these records' identity transport; source producer coverage,
+  definition/owner graph closure, asset loading, and native consumer semantics
+  remain open.
   The low-level WIPEOUT writer now translates both IMAGEDEF and IMAGEDEF_REACTOR
   references through the configured resolver or remap fallback; see the
   [WIPEOUT reference receipt](docs/research/p8-wipeout-dxf-reference-remapping-2026-11-03.json).
