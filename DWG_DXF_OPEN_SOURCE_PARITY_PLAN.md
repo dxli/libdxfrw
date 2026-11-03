@@ -149,6 +149,14 @@ engines.
    `dxfRW` writes retain their sticky error state ([receipt](docs/research/p4-solid-history-reference-remapping-2026-11-03.json)).
    This does not establish history-target existence/role, source association,
    recursive graph closure, or ACIS semantics.
+   The BLOCK and ENDBLK entity records now apply the same resolver-first,
+   remap-fallback policy to their modeled material (347), visual-style (348),
+   and plot-style (390) references. Focused generated ASCII/Binary controls
+   verify exact emitted IDs and atomic refusal of unresolved nonzero targets
+   ([receipt](docs/research/p4-block-reference-remapping-2026-11-03.json)).
+   This closes low-level identity translation only; target kinds, existence,
+   ownership, recursive closure, physical source profiles, and native behavior
+   remain open.
    Continue the remaining reference-ID audit from the current field receipts,
    prioritizing typed owner/dependency pointers on supported 3D records. Confirm
    each field against its parser contract and applicable format mapping before

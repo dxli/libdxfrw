@@ -3028,6 +3028,220 @@ void testObjectOwnerReferenceRemapping(TestContext& t) {
     }
 }
 
+void testBlockReferenceRemapping(TestContext& t) {
+    const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
+        {0x801u, 0xA81u}, {0x802u, 0xA82u}, {0x803u, 0xA83u}};
+    const auto resolverValue = [](std::uint32_t source) {
+        switch (source) {
+        case 0x801u: return std::uint32_t{0xB81u};
+        case 0x802u: return std::uint32_t{0xB82u};
+        case 0x803u: return std::uint32_t{0xB83u};
+        default: return source;
+        }
+    };
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream beginOutput;
+            dxfRW beginOwner("");
+            beginOwner.version = DRW::AC1032;
+            beginOwner.binFile = binary;
+            beginOwner.blockMap["REFERENCE_BLOCK"] = 0x900u;
+            beginOwner.setHandleRemap(sourceToRemapped);
+            if (useResolver)
+                beginOwner.setReferenceResolver(resolverValue);
+            beginOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&beginOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&beginOutput));
+            beginOwner.writer->setVersion("AC1032", true);
+            beginOwner.writer->setCodePage("ANSI_1252");
+            DRW_Block block;
+            block.name = "REFERENCE_BLOCK";
+            block.material = 0x801u;
+            block.fullVisualStyleHandle = 0x802u;
+            const bool wroteBlock = beginOwner.writeBlock(&block)
+                && beginOwner.writer->writeString(0, "WIRE_END");
+            t.expect(wroteBlock, "BLOCK begin references serialize");
+            if (wroteBlock) {
+                std::istringstream input(beginOutput.str());
+                std::unique_ptr<dxfReader> reader = binary
+                    ? std::unique_ptr<dxfReader>(
+                        std::make_unique<dxfReaderBinary>(&input))
+                    : std::unique_ptr<dxfReader>(
+                        std::make_unique<dxfReaderAscii>(&input));
+                std::vector<std::pair<int, std::uint32_t>> observed;
+                std::string recordName;
+                bool ended = false;
+                int code = 0;
+                while (reader->readRec(&code)) {
+                    if (code == 0) {
+                        recordName = reader->getString();
+                        if (recordName == "WIRE_END") {
+                            ended = true;
+                            break;
+                        }
+                    } else if (recordName == "BLOCK"
+                               && (code == 347 || code == 348)) {
+                        observed.emplace_back(code,
+                                              reader->getHandleString());
+                    }
+                }
+                const std::vector<std::pair<int, std::uint32_t>> expected =
+                    useResolver
+                        ? std::vector<std::pair<int, std::uint32_t>>{
+                              {347, 0xB81u}, {348, 0xB82u}}
+                        : std::vector<std::pair<int, std::uint32_t>>{
+                              {347, 0xA81u}, {348, 0xA82u}};
+                t.expect(ended && observed == expected,
+                         useResolver
+                             ? "BLOCK begin emits final resolver identities"
+                             : "BLOCK begin emits source-handle remaps");
+            }
+
+            std::ostringstream endOutput;
+            dxfRW endOwner("");
+            endOwner.version = DRW::AC1032;
+            endOwner.binFile = binary;
+            endOwner.setHandleRemap(sourceToRemapped);
+            if (useResolver)
+                endOwner.setReferenceResolver(resolverValue);
+            endOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&endOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&endOutput));
+            endOwner.writer->setVersion("AC1032", true);
+            endOwner.writer->setCodePage("ANSI_1252");
+            DRW_Block footer;
+            footer.setIsEnd(true);
+            footer.material = 0x801u;
+            footer.fullVisualStyleHandle = 0x802u;
+            footer.plotStyle = 0x803;
+            const bool wroteEndFields =
+                endOwner.writeBlockEndCommonFields(footer)
+                && endOwner.writer->writeString(0, "WIRE_END");
+            t.expect(wroteEndFields, "ENDBLK common references serialize");
+            if (!wroteEndFields)
+                continue;
+
+            std::istringstream endInput(endOutput.str());
+            std::unique_ptr<dxfReader> endReader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&endInput))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&endInput));
+            std::vector<std::pair<int, std::uint32_t>> endObserved;
+            std::string endRecord;
+            bool end = false;
+            int endCode = 0;
+            while (endReader->readRec(&endCode)) {
+                if (endCode == 0) {
+                    endRecord = endReader->getString();
+                    if (endRecord == "WIRE_END") {
+                        end = true;
+                        break;
+                    }
+                } else if (endCode == 347 || endCode == 348 || endCode == 390) {
+                    endObserved.emplace_back(endCode,
+                                             endReader->getHandleString());
+                }
+            }
+            const std::vector<std::pair<int, std::uint32_t>> expectedEnd =
+                useResolver
+                    ? std::vector<std::pair<int, std::uint32_t>>{
+                          {347, 0xB81u}, {348, 0xB82u}, {390, 0xB83u}}
+                    : std::vector<std::pair<int, std::uint32_t>>{
+                          {347, 0xA81u}, {348, 0xA82u}, {390, 0xA83u}};
+            t.expect(end && endObserved == expectedEnd,
+                     useResolver
+                         ? "ENDBLK emits final resolver identities"
+                         : "ENDBLK emits source-handle remaps");
+        }
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream failedOutput;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1032;
+        failedOwner.binFile = binary;
+        failedOwner.setReferenceResolver([](std::uint32_t source) {
+            return source == 0x801u ? std::uint32_t{0u} : source;
+        });
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterBinary>(&failedOutput))
+            : std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterAscii>(&failedOutput));
+        DRW_Block footer;
+        footer.setIsEnd(true);
+        footer.material = 0x801u;
+        t.expect(!failedOwner.writeBlockEndCommonFields(footer)
+                     && failedOutput.str().empty(),
+                 "unresolved ENDBLK material preserves destination");
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1032;
+        retryOwner.binFile = binary;
+        retryOwner.setReferenceResolver(resolverValue);
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterAscii>(&retryOutput));
+        retryOwner.writer->setVersion("AC1032", true);
+        retryOwner.writer->setCodePage("ANSI_1252");
+        t.expect(retryOwner.writeBlockEndCommonFields(footer),
+                 "ENDBLK common fields accept corrected fresh-writer retry");
+    }
+
+    for (const bool binary : {false, true}) {
+        for (const std::uint32_t unresolved : {0x801u, 0x802u}) {
+            std::ostringstream failedOutput;
+            dxfRW failedOwner("");
+            failedOwner.version = DRW::AC1032;
+            failedOwner.binFile = binary;
+            failedOwner.blockMap["REFERENCE_BLOCK"] = 0x900u;
+            failedOwner.setReferenceResolver([unresolved](std::uint32_t source) {
+                return source == unresolved ? std::uint32_t{0u} : source;
+            });
+            failedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&failedOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&failedOutput));
+            DRW_Block block;
+            block.name = "REFERENCE_BLOCK";
+            block.material = 0x801u;
+            block.fullVisualStyleHandle = 0x802u;
+            t.expect(!failedOwner.writeBlock(&block)
+                         && failedOutput.str().empty(),
+                     "unresolved BLOCK material/visual style preserves destination");
+
+            std::ostringstream retryOutput;
+            dxfRW retryOwner("");
+            retryOwner.version = DRW::AC1032;
+            retryOwner.binFile = binary;
+            retryOwner.blockMap["REFERENCE_BLOCK"] = 0x900u;
+            retryOwner.setReferenceResolver(resolverValue);
+            retryOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&retryOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&retryOutput));
+            retryOwner.writer->setVersion("AC1032", true);
+            retryOwner.writer->setCodePage("ANSI_1252");
+            DRW_Block correctedBlock;
+            correctedBlock.name = "REFERENCE_BLOCK";
+            correctedBlock.material = 0x801u;
+            correctedBlock.fullVisualStyleHandle = 0x802u;
+            t.expect(retryOwner.writeBlock(&correctedBlock),
+                     "BLOCK accepts corrected fresh-writer retry");
+        }
+    }
+}
+
 void testViewportReferenceRemapping(TestContext& t) {
     const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
         {0x901u, 0xA91u}, {0x902u, 0xA92u}, {0x903u, 0xA93u},
@@ -17232,6 +17446,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testObjectOwnerReferenceRemapping(focused);
         std::cout << "OBJECTS owner reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--block-reference-remapping") {
+        TestContext focused;
+        testBlockReferenceRemapping(focused);
+        std::cout << "BLOCK/ENDBLK reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

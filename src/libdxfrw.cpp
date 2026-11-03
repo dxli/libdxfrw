@@ -14701,6 +14701,27 @@ bool dxfRW::writeBlockEnd(const DRW_Block *footer) {
 }
 
 bool dxfRW::writeBlockEndCommonFields(const DRW_Block& end) {
+    const auto resolveReference = [this](std::uint32_t source,
+                                         std::uint32_t& emitted) {
+        emitted = m_referenceResolver
+            ? this->resolveReference(source) : remapObjectHandle(source);
+        return emitted != 0u && emitted != DRW::NoHandle;
+    };
+    std::uint32_t emittedMaterial = 0u;
+    std::uint32_t emittedVisualStyle = 0u;
+    std::uint32_t emittedPlotStyle = 0u;
+    if (version > DRW::AC1018
+        && end.material != DRW::MaterialByLayer
+        && !resolveReference(end.material, emittedMaterial))
+        return false;
+    if (version > DRW::AC1018 && end.fullVisualStyleHandle != 0u
+        && !resolveReference(end.fullVisualStyleHandle, emittedVisualStyle))
+        return false;
+    if (version > DRW::AC1018 && end.plotStyle != DRW::DefaultPlotStyle
+        && !resolveReference(static_cast<std::uint32_t>(end.plotStyle),
+                             emittedPlotStyle))
+        return false;
+
     if (version > DRW::AC1009) {
         if (!writeEntityReferenceGroups(&end))
             return false;
@@ -14732,19 +14753,15 @@ bool dxfRW::writeBlockEndCommonFields(const DRW_Block& end) {
         writer->writeInt16(284, static_cast<int>(end.shadow));
     }
     if (version > DRW::AC1018 && end.material != DRW::MaterialByLayer) {
-        writer->writeUtf8String(347,
-                                toHexStr(remapObjectHandle(end.material)));
+        writer->writeUtf8String(347, toHexStr(emittedMaterial));
     }
     if (version > DRW::AC1018 && end.fullVisualStyleHandle != 0) {
-        writer->writeUtf8String(
-            348, toHexStr(remapObjectHandle(end.fullVisualStyleHandle)));
+        writer->writeUtf8String(348, toHexStr(emittedVisualStyle));
     }
     if (version > DRW::AC1014)
         writer->writeInt16(370, DRW_LW_Conv::lineWidth2dxfInt(end.lWeight));
     if (version > DRW::AC1018 && end.plotStyle != DRW::DefaultPlotStyle) {
-        writer->writeUtf8String(
-            390, toHexStr(remapObjectHandle(
-                     static_cast<std::uint32_t>(end.plotStyle))));
+        writer->writeUtf8String(390, toHexStr(emittedPlotStyle));
     }
     if (version > DRW::AC1015 && end.transparency != DRW::Opaque)
         writer->writeInt32(440, end.transparency);
@@ -14822,6 +14839,25 @@ bool dxfRW::writeBlock(DRW_Block *bk){
         return false;
     }
 
+    const auto emittedBlockReference = [this](std::uint32_t source) {
+        return m_referenceResolver ? resolveReference(source)
+                                   : remapObjectHandle(source);
+    };
+    std::uint32_t emittedMaterial = 0u;
+    std::uint32_t emittedVisualStyle = 0u;
+    if (version > DRW::AC1018 && bk->material != DRW::MaterialByLayer) {
+        emittedMaterial = emittedBlockReference(bk->material);
+        if (emittedMaterial == 0u || emittedMaterial == DRW::NoHandle)
+            return failDxfWrite();
+    }
+    if (version > DRW::AC1018 && bk->fullVisualStyleHandle != 0u) {
+        emittedVisualStyle = emittedBlockReference(
+            bk->fullVisualStyleHandle);
+        if (emittedVisualStyle == 0u
+            || emittedVisualStyle == DRW::NoHandle)
+            return failDxfWrite();
+    }
+
     if (writingBlock && !writeBlockEnd(nullptr))
         return false;
     const bool wasWritingBlock = writingBlock;
@@ -14890,10 +14926,9 @@ bool dxfRW::writeBlock(DRW_Block *bk){
         writer->writeInt16(284, static_cast<int>(bk->shadow));
     }
     if (version > DRW::AC1018 && bk->material != DRW::MaterialByLayer)
-        writer->writeUtf8String(347, toHexStr(remapObjectHandle(bk->material)));
+        writer->writeUtf8String(347, toHexStr(emittedMaterial));
     if (version > DRW::AC1018 && bk->fullVisualStyleHandle != 0)
-        writer->writeUtf8String(348,
-            toHexStr(remapObjectHandle(bk->fullVisualStyleHandle)));
+        writer->writeUtf8String(348, toHexStr(emittedVisualStyle));
     if (version > DRW::AC1014)
         writer->writeInt16(370,
                            DRW_LW_Conv::lineWidth2dxfInt(bk->lWeight));
