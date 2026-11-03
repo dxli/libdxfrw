@@ -4832,6 +4832,14 @@ bool dxfRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
     version = ver;
     binFile = bin;
     iface = interface_;
+    if (m_dxfClassesInputRejected) {
+        recordOperationDiagnostic(
+            DRW::OperationPhase::Validation,
+            DRW::OperationCause::ResourceLimit,
+            "dxf-class-metadata-budget",
+            "DXF CLASS metadata exceeded the bounded setter limits");
+        return setError(DRW::BAD_OPEN);
+    }
     if (m_dxfRawDxfSectionsInputRejected) {
         recordOperationDiagnostic(
             DRW::OperationPhase::Validation,
@@ -5456,6 +5464,83 @@ bool dxfRW::writeEntityReferenceGroups(const DRW_Entity *ent) {
     return !writer->hasWriteError();
 }
 
+void dxfRW::rejectDxfClassesInput() noexcept {
+    std::vector<DRW_Class>().swap(m_dxfClasses);
+    m_dxfClassesFrozen = false;
+    m_dxfClassesInputRejected = true;
+    if (m_dxfWriteAttemptActive)
+        m_writeError = true;
+}
+
+bool dxfRW::estimateDxfClassMetadataRetainedBytes(
+        const std::vector<DRW_Class>& classes, std::size_t byteLimit,
+        std::size_t& estimate) noexcept {
+    estimate = 0u;
+    if (classes.size() > kMaxDxfClassEntries
+        || classes.size() > byteLimit / sizeof(DRW_Class))
+        return false;
+    estimate = classes.size() * sizeof(DRW_Class);
+    const auto addText = [byteLimit, &estimate](
+            const std::string& value) noexcept {
+        if (estimate > byteLimit || value.size() >= byteLimit
+            || value.size() + 1u > byteLimit - estimate)
+            return false;
+        estimate += value.size() + 1u;
+        return true;
+    };
+    for (const DRW_Class& cls : classes) {
+        if (!addText(cls.recName) || !addText(cls.className)
+            || !addText(cls.appName))
+            return false;
+    }
+    return true;
+}
+
+void dxfRW::setDxfClasses(const std::vector<DRW_Class>& classes) {
+    if (!preflightDxfSetup())
+        return;
+    // Class metadata is immutable once a write has reached its CLASSES
+    // section. The writer is reset after each attempt, so callers can replace
+    // the persistent input before the next write.
+    if (writer != nullptr && m_dxfClassesFrozen) {
+        m_writeError = true;
+        return;
+    }
+    std::size_t estimate = 0u;
+    if (!estimateDxfClassMetadataRetainedBytes(
+            classes, DRW::kMaxDxfBinaryPayloadBytes, estimate)) {
+        rejectDxfClassesInput();
+        return;
+    }
+    try {
+        std::vector<DRW_Class> copied = classes;
+        m_dxfClasses.swap(copied);
+    } catch (...) {
+        rejectDxfClassesInput();
+        return;
+    }
+    m_dxfClassesInputRejected = false;
+    m_dxfClassesFrozen = false;
+}
+
+void dxfRW::setDxfClasses(std::vector<DRW_Class>&& classes) {
+    if (!preflightDxfSetup())
+        return;
+    if (writer != nullptr && m_dxfClassesFrozen) {
+        m_writeError = true;
+        return;
+    }
+    std::size_t estimate = 0u;
+    if (!estimateDxfClassMetadataRetainedBytes(
+            classes, DRW::kMaxDxfBinaryPayloadBytes, estimate)) {
+        rejectDxfClassesInput();
+        return;
+    }
+    m_dxfClasses = std::move(classes);
+    m_dxfClassesInputRejected = false;
+    m_dxfClassesFrozen = false;
+}
+
 bool dxfRW::preflightDxfClasses() {
     // R12 has no CLASSES section; retain the supplied metadata for a later
     // version rather than rejecting an otherwise valid legacy export.
@@ -5465,8 +5550,10 @@ bool dxfRW::preflightDxfClasses() {
     }
     static_assert(kMaxDxfClassEntries == DRW::kMaxDxfClasses,
                   "DXF CLASS setter and parser limits must agree");
+    std::size_t estimate = 0u;
     if (m_dxfClassesInputRejected
-        || m_dxfClasses.size() > kMaxDxfClassEntries) {
+        || !estimateDxfClassMetadataRetainedBytes(
+            m_dxfClasses, DRW::kMaxDxfBinaryPayloadBytes, estimate)) {
         m_writeError = true;
         return false;
     }

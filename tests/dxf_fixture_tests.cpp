@@ -92,6 +92,12 @@ public:
     static bool preflightClasses(dxfRW& owner) {
         return owner.preflightDxfClasses();
     }
+    static bool estimateClasses(const std::vector<DRW_Class>& classes,
+                                std::size_t byteLimit,
+                                std::size_t& estimate) {
+        return dxfRW::estimateDxfClassMetadataRetainedBytes(
+            classes, byteLimit, estimate);
+    }
     static bool rawSectionsRejected(const dxfRW& owner) {
         return owner.m_dxfRawDxfSectionsInputRejected;
     }
@@ -59622,6 +59628,20 @@ void testDxfClassCountBound(TestContext& t) {
     classValue.className = "BoundClassObject";
     classValue.appName = "libdxfrw tests";
     const std::vector<DRW_Class> corrected{classValue};
+    std::size_t exactBytes = 0u;
+    const bool exactMeasured = DxfGroupSetterTestAccess::estimateClasses(
+        corrected, DRW::kMaxDxfBinaryPayloadBytes, exactBytes);
+    std::size_t exactResult = 0u;
+    const bool exactAccepted = exactMeasured
+        && DxfGroupSetterTestAccess::estimateClasses(
+            corrected, exactBytes, exactResult)
+        && exactResult == exactBytes;
+    std::size_t belowResult = 0u;
+    const bool belowRejected = exactMeasured && exactBytes > 0u
+        && !DxfGroupSetterTestAccess::estimateClasses(
+            corrected, exactBytes - 1u, belowResult);
+    t.expect(exactAccepted && belowRejected,
+             "DXF CLASS metadata estimator accepts exact byte budget and rejects one byte below it");
 
     for (const bool binary : {false, true}) {
         std::ostringstream output;
@@ -59653,7 +59673,7 @@ void testDxfClassCountBound(TestContext& t) {
         codec.setDxfClasses(std::move(oversizedMove));
         const bool rejectedMoveBeforeConsume =
             DxfGroupSetterTestAccess::classesRejected(codec)
-            && DxfGroupSetterTestAccess::classesCount(codec) == 1u
+            && DxfGroupSetterTestAccess::classesCount(codec) == 0u
             && oversizedMove.size() == overLimitCount;
         const bool refusedMove =
             !DxfGroupSetterTestAccess::preflightClasses(codec);
@@ -59668,6 +59688,59 @@ void testDxfClassCountBound(TestContext& t) {
             && DxfGroupSetterTestAccess::preflightClasses(codec);
         t.expect(retry && output.str() == sentinel,
                  "corrected DXF CLASS input recovers after move-setter refusal");
+    }
+
+    dxfRW allocationCodec("");
+    const std::size_t failuresBefore = materialFailedAllocations;
+    {
+        MaterialAllocationFailure failCopy(0);
+        allocationCodec.setDxfClasses(corrected);
+    }
+    const bool allocationFailureRejected = materialFailedAllocations > failuresBefore
+        && DxfGroupSetterTestAccess::classesRejected(allocationCodec)
+        && DxfGroupSetterTestAccess::classesCount(allocationCodec) == 0u;
+    allocationCodec.setDxfClasses(std::move(
+        std::vector<DRW_Class>{classValue}));
+    const bool allocationFailureRetry =
+        !DxfGroupSetterTestAccess::classesRejected(allocationCodec)
+        && DxfGroupSetterTestAccess::classesCount(allocationCodec) == 1u;
+    t.expect(allocationFailureRejected && allocationFailureRetry,
+             "const DXF CLASS copy catches allocation failure and accepts corrected retry");
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    for (const bool binary : {false, true}) {
+        const auto output = std::filesystem::temp_directory_path()
+            / ("libdxfrw-dxf-class-setter-bound-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        const std::string sentinel = "DXF_CLASS_WRITE_SENTINEL\n";
+        {
+            std::ofstream seed(output, std::ios::binary | std::ios::trunc);
+            seed << sentinel;
+        }
+        dx_data data;
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        dxfRW writer(output.string().c_str());
+        adapter.dxfW = &writer;
+        std::vector<DRW_Class> oversized(overLimitCount);
+        writer.setDxfClasses(std::move(oversized));
+        const bool refused = !writer.write(&adapter, DRW::AC1027, binary);
+        std::ifstream preservedInput(output, std::ios::binary);
+        const std::string preserved(
+            (std::istreambuf_iterator<char>(preservedInput)),
+            std::istreambuf_iterator<char>());
+        writer.setDxfClasses(corrected);
+        const bool retried = writer.write(&adapter, DRW::AC1027, binary);
+        t.expect(refused && preserved == sentinel && retried,
+                 binary
+                     ? "binary oversized CLASS setup preserves destination and succeeds after corrected retry"
+                     : "ASCII oversized CLASS setup preserves destination and succeeds after corrected retry");
+        adapter.dxfW = nullptr;
+        std::error_code removeError;
+        std::filesystem::remove(output, removeError);
     }
 }
 

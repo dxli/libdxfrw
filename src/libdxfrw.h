@@ -651,46 +651,8 @@ public:
     /*!< Register the CLASS records to emit in the DXF CLASSES section. The
      * filter supplies source definitions and recomputes instance counts from
      * raw and typed records selected for output. */
-    void setDxfClasses(const std::vector<DRW_Class> &classes) {
-        if (!preflightDxfSetup())
-            return;
-        // Class metadata is immutable once a write has reached its CLASSES
-        // section. The writer is reset after each attempt, so callers can
-        // replace the persistent input before the next write.
-        if (writer != nullptr && m_dxfClassesFrozen) {
-            m_writeError = true;
-            return;
-        }
-        if (classes.size() > kMaxDxfClassEntries) {
-            m_dxfClassesInputRejected = true;
-            return;
-        }
-        std::vector<DRW_Class> copied;
-        try {
-            copied = classes;
-        } catch (...) {
-            m_dxfClassesInputRejected = true;
-            return;
-        }
-        m_dxfClasses.swap(copied);
-        m_dxfClassesInputRejected = false;
-        m_dxfClassesFrozen = false;
-    }
-    void setDxfClasses(std::vector<DRW_Class>&& classes) {
-        if (!preflightDxfSetup())
-            return;
-        if (writer != nullptr && m_dxfClassesFrozen) {
-            m_writeError = true;
-            return;
-        }
-        if (classes.size() > kMaxDxfClassEntries) {
-            m_dxfClassesInputRejected = true;
-            return;
-        }
-        m_dxfClasses = std::move(classes);
-        m_dxfClassesInputRejected = false;
-        m_dxfClassesFrozen = false;
-    }
+    void setDxfClasses(const std::vector<DRW_Class> &classes);
+    void setDxfClasses(std::vector<DRW_Class>&& classes);
     /** Default-off per-write admission. When enabled before a write, the
      * codec refuses if any raw section is present at its replay boundary or
      * after the finalization callback. This concerns only raw-section replay,
@@ -1511,6 +1473,7 @@ private:
         if (m_dxfWriteAttemptActive)
             m_writeError = true;
     }
+    void rejectDxfClassesInput() noexcept;
     // Executable-local allocation instrumentation; no runtime/public test API.
     friend class DxIfaceStandardDwgCaptureTestAccess;
     friend class DxfGroupSetterTestAccess;
@@ -1848,6 +1811,9 @@ public:
     bool resolveSortEntsEntityHandle(std::uint32_t source,
                                      std::uint32_t& resolved) const;
     bool preflightDxfClasses();
+    static bool estimateDxfClassMetadataRetainedBytes(
+        const std::vector<DRW_Class>& classes, std::size_t byteLimit,
+        std::size_t& estimate) noexcept;
     LIBDXFRW_TEST_SEAM_NOINLINE bool validateHatchPayload(const DRW_Hatch *ent) const;
     bool writeEntity(DRW_Entity *ent, bool captureSourceHandle = true,
                      std::uint32_t ownerOverride = DRW::NoHandle);
