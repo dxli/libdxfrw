@@ -10,8 +10,8 @@
     "files": {
       "src/libdxfrw.cpp": "5751845b6b6ca893c3102694957d3320ea112cffaeb811e42ff7e8c767e9776c",
       "src/libdxfrw.h": "54af5f45476a14c6046ddaed33ef290c0779eaa02c2eb2ac6141d5f6101a36d3",
-      "tests/dxf_fixture_tests.cpp": "dd446d5c591f5388387c323539aa247ca423cfe3b0014de83b7d15cdadd209e0",
-      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "dbf467eb17ec5ee5bc8ca2a15f9709d79238266a72a57837bf1e6d05c34e3c13"
+      "tests/dxf_fixture_tests.cpp": "ee29ac718966874467cc1cd8a345f7409a39ed892861025fdbc9ebeaf2faed2a",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "91c45dc614e415a62b56b7325701263a8d3af53c5fc41212e8e17189140bf43f"
     }
   },
   "implementation": {

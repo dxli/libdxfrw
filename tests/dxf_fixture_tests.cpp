@@ -128,6 +128,12 @@ public:
     static std::size_t namedDictObjectsCount(const dxfRW& owner) {
         return owner.m_namedDictObjects.size();
     }
+    static std::uint32_t generatedNodSourceHandle(const dxfRW& owner) {
+        return owner.m_generatedNodSourceHandle;
+    }
+    static const DRW_Dictionary* generatedNodSource(const dxfRW& owner) {
+        return owner.m_generatedNodSource.get();
+    }
     static bool estimateNamedDictObjects(
             const std::vector<DRW_Dictionary>& dicts,
             std::size_t byteLimit, std::size_t& bytes,
@@ -60046,6 +60052,50 @@ void testGroupSetterBounds(TestContext& t) {
     }
 }
 
+void testGeneratedDictionarySourceAllocationFailure(TestContext& t) {
+    using Edge = DRW_Dictionary::Entry::DxfHandleCode;
+    const auto makeRoot = [](std::uint32_t handle, const std::string& name,
+                             std::uint32_t child) {
+        auto root = std::make_unique<DRW_Dictionary>();
+        root->handle = handle;
+        root->m_entries.push_back({name, child, Edge::SoftOwner});
+        return root;
+    };
+    dxfRW codec("");
+    const bool previousInstalled = codec.setGeneratedDictionarySourceRecords(
+        makeRoot(0xA540u, "PRIOR", 0xA541u), nullptr);
+    auto candidate = makeRoot(0xA550u, "REPLACEMENT", 0xA551u);
+    const std::size_t failuresBefore = materialFailedAllocations;
+    bool allocationRejected = false;
+    {
+        MaterialAllocationFailure failAdmissionMap(0);
+        allocationRejected = !codec.setGeneratedDictionarySourceRecords(
+            std::move(candidate), nullptr);
+    }
+    const DRW_Dictionary* retained =
+        DxfGroupSetterTestAccess::generatedNodSource(codec);
+    const bool priorPreserved = allocationRejected
+        && materialFailedAllocations == failuresBefore + 1u
+        && candidate == nullptr
+        && DxfGroupSetterTestAccess::generatedNodSourceHandle(codec)
+            == 0xA540u
+        && retained != nullptr && retained->m_entries.size() == 1u
+        && retained->m_entries.front().m_name == "PRIOR"
+        && retained->m_entries.front().m_handle == 0xA541u;
+    const bool retried = codec.setGeneratedDictionarySourceRecords(
+        makeRoot(0xA550u, "REPLACEMENT", 0xA551u), nullptr);
+    const DRW_Dictionary* replacement =
+        DxfGroupSetterTestAccess::generatedNodSource(codec);
+    t.expect(previousInstalled && priorPreserved && retried
+                 && DxfGroupSetterTestAccess::generatedNodSourceHandle(codec)
+                     == 0xA550u
+                 && replacement != nullptr
+                 && replacement->m_entries.size() == 1u
+                 && replacement->m_entries.front().m_name == "REPLACEMENT"
+                 && replacement->m_entries.front().m_handle == 0xA551u,
+             "generated dictionary source admission catches allocation failure, preserves prior owned state, consumes the rejected candidate, and accepts retry");
+}
+
 void testRootDictEntryCountBound(TestContext& t) {
     const std::size_t overLimitCount = DRW_Dictionary::kMaxEntries + 1u;
     const std::vector<std::pair<std::string, std::string>> smallEntries{
@@ -64306,6 +64356,15 @@ int main(int argc, char** argv) {
         TestContext context;
         testGroupSetterBounds(context);
         std::cout << "GROUP setter resource bounds: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--generated-dictionary-source-allocation-failure") {
+        TestContext context;
+        testGeneratedDictionarySourceAllocationFailure(context);
+        std::cout << "Generated dictionary source allocation recovery: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

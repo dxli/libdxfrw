@@ -3148,6 +3148,13 @@ set_tests_properties(libdxfrw_group_setter_bounds PROPERTIES
     LABELS "fast;dxf;group;adapter;resource"
     TIMEOUT 30)
 
+add_test(NAME libdxfrw_generated_dictionary_source_allocation_failure
+    COMMAND libdxfrw_dxf_fixture_tests
+        --generated-dictionary-source-allocation-failure)
+set_tests_properties(libdxfrw_generated_dictionary_source_allocation_failure
+    PROPERTIES LABELS "fast;dxf;writer;objects;dictionary;allocation;transaction"
+    TIMEOUT 30)
+
 add_test(NAME libdxfrw_root_dict_entry_count_bound
     COMMAND libdxfrw_dxf_fixture_tests --root-dict-entry-count-bound)
 set_tests_properties(libdxfrw_root_dict_entry_count_bound PROPERTIES
