@@ -21079,6 +21079,94 @@ bool pointCloudAndNavisworksAdapterTransport() {
             return fail("point-cloud output handles or reciprocal ownership changed on readback");
         }
 
+        if (!binary) {
+            const auto duplicateDefinitionSourcePath =
+                std::filesystem::temp_directory_path()
+                / ("libdxfrw-cloud-duplicate-class-version-source-"
+                   + std::to_string(std::chrono::steady_clock::now()
+                                        .time_since_epoch().count())
+                   + ".dxf");
+            const auto duplicateDefinitionOutputPath =
+                std::filesystem::temp_directory_path()
+                / ("libdxfrw-cloud-duplicate-class-version-output-"
+                   + std::to_string(std::chrono::steady_clock::now()
+                                        .time_since_epoch().count())
+                   + ".dxf");
+            struct DuplicateDefinitionCleanup {
+                std::filesystem::path source;
+                std::filesystem::path output;
+                ~DuplicateDefinitionCleanup() {
+                    std::error_code ignored;
+                    std::filesystem::remove(source, ignored);
+                    std::filesystem::remove(output, ignored);
+                }
+            } duplicateDefinitionCleanup{duplicateDefinitionSourcePath,
+                                         duplicateDefinitionOutputPath};
+            if (std::filesystem::exists(duplicateDefinitionSourcePath)
+                || std::filesystem::exists(duplicateDefinitionOutputPath))
+                return fail("duplicate-definition POINTCLOUD paths unexpectedly exist");
+            std::ifstream authoredGraph(graphPath, std::ios::binary);
+            if (!authoredGraph)
+                return fail("could not open generated point-cloud graph for field mutation");
+            std::string duplicateDefinitionBytes{
+                std::istreambuf_iterator<char>(authoredGraph), {}};
+            if (authoredGraph.bad())
+                return fail("could not read generated point-cloud graph for field mutation");
+            const std::string lfMarker = "AcDbPointCloudDefEx\n";
+            const std::string crlfMarker = "AcDbPointCloudDefEx\r\n";
+            const std::string lineEnding =
+                duplicateDefinitionBytes.find(crlfMarker)
+                        == std::string::npos
+                    ? "\n" : "\r\n";
+            const std::string& marker = lineEnding == "\n"
+                ? lfMarker : crlfMarker;
+            const std::size_t markerOffset =
+                duplicateDefinitionBytes.rfind(marker);
+            if (markerOffset == std::string::npos)
+                return fail("generated point-cloud graph lacked its DefinitionEx class-version field");
+            duplicateDefinitionBytes.insert(
+                markerOffset + marker.size(),
+                "90" + lineEnding + "7" + lineEnding);
+            {
+                std::ofstream duplicateSource(duplicateDefinitionSourcePath,
+                                              std::ios::binary);
+                duplicateSource.write(
+                    duplicateDefinitionBytes.data(),
+                    static_cast<std::streamsize>(
+                        duplicateDefinitionBytes.size()));
+                if (!duplicateSource)
+                    return fail("could not write duplicate-definition source");
+            }
+            dx_data duplicateDefinitionData;
+            dx_iface duplicateDefinitionReader;
+            if (!duplicateDefinitionReader.fileImport(
+                    duplicateDefinitionSourcePath.string(),
+                    &duplicateDefinitionData, false)
+                || duplicateDefinitionData.sourceVersion != DRW::AC1027
+                || duplicateDefinitionData.pointCloudDefinitions.size() != 2u)
+                return fail("duplicate-definition source did not import for strict graph refusal");
+            const std::string duplicateDefinitionSentinel =
+                "DUPLICATE_POINTCLOUD_DEFINITION_DESTINATION\n";
+            {
+                std::ofstream existing(duplicateDefinitionOutputPath,
+                                       std::ios::binary);
+                existing << duplicateDefinitionSentinel;
+                if (!existing)
+                    return fail("could not create duplicate-definition output sentinel");
+            }
+            dx_iface duplicateDefinitionWriter;
+            if (duplicateDefinitionWriter.fileExport(
+                    duplicateDefinitionOutputPath.string(), DRW::AC1027,
+                    false, &duplicateDefinitionData, false, true))
+                return fail("duplicate physical DefinitionEx class-version field passed strict graph output");
+            std::ifstream duplicatePrevious(duplicateDefinitionOutputPath,
+                                            std::ios::binary);
+            const std::string duplicatePreviousBytes{
+                std::istreambuf_iterator<char>(duplicatePrevious), {}};
+            if (duplicatePreviousBytes != duplicateDefinitionSentinel)
+                return fail("duplicate DefinitionEx field changed the destination");
+        }
+
         const auto importedAttemptPath = std::filesystem::temp_directory_path()
             / ("libdxfrw-imported-pointcloud-binding-"
                + std::to_string(std::chrono::steady_clock::now()

@@ -1061,6 +1061,15 @@ eligible reader. The exact package and environment result are in the
   records, nonzero definition/reactor references, DWG source records, physical
   producer breadth, external asset loading and native semantics remain
   unqualified. See the [classic POINTCLOUD source-binding receipt](docs/research/p8-pointcloud-classic-dxf-source-binding-2026-11-03.json).
+  Imported DXF DefinitionEx/ReactorEx output now also requires the ordered raw
+  OBJECTS values and exact field cardinalities to project into their source
+  typed models, including identity, owner, reactor roles, class version and
+  DefinitionEx payload. A locally authored duplicate class-version field is
+  refused atomically; the generated imported graph still retries and reads
+  back in ASCII and Binary. This is generated source-field transport only;
+  physical producer breadth, classic definition graphs, DWG source binding,
+  assets and native semantics remain open. See the [definition field-binding
+  receipt](docs/research/p8-pointcloud-definition-field-binding-2026-11-03.json).
   The local adapter now retains LIGHT callbacks through modelspace and named-
   BLOCK delivery, with bounded DXF read/write support for the documented core
   fields. Both callback-delivery wrappers forward LIGHT instead of dropping

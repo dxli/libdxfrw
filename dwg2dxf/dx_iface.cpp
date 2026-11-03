@@ -17008,6 +17008,154 @@ bool pointCloudDefinitionRawMatchesPhysical(
         && physical.endMarker.beginOffset >= previousOffset;
 }
 
+bool pointCloudDefinitionRawProjectsToModel(
+        const DRW_RawDxfObject& raw, const DRW_PointCloudDef& definition,
+        DRW::Version version) noexcept {
+    if (version < DRW::AC1027 || version > DRW::AC1032
+        || raw.m_version != version
+        || raw.groups.size() != raw.rawValues.size()
+        || definition.handle == 0u || definition.handle == DRW::NoHandle
+        || definition.parentHandle == 0u
+        || definition.parentHandle == DRW::NoHandle
+        || definition.m_classVersion < 0
+        || definition.m_classVersion
+            > DRW_PointCloudDef::kMaxClassVersion)
+        return false;
+
+    const char* subclassName = nullptr;
+    if (definition.m_kind == DRW_PointCloudDef::DefinitionEx
+        && (dx_block_membership::equal(
+                raw.name, "POINTCLOUDDEFINITIONEX")
+            || dx_block_membership::equal(raw.name,
+                                           "ACDBPOINTCLOUDDEFEX"))) {
+        subclassName = "AcDbPointCloudDefEx";
+        if (definition.m_pointCount > DRW_PointCloudDef::kMaxPointCount
+            || !std::isfinite(definition.m_extentsMin.x)
+            || !std::isfinite(definition.m_extentsMin.y)
+            || !std::isfinite(definition.m_extentsMin.z)
+            || !std::isfinite(definition.m_extentsMax.x)
+            || !std::isfinite(definition.m_extentsMax.y)
+            || !std::isfinite(definition.m_extentsMax.z))
+            return false;
+    } else if (definition.m_kind == DRW_PointCloudDef::ReactorEx
+        && (dx_block_membership::equal(raw.name,
+                                       "POINTCLOUDDEFREACTOREX")
+            || dx_block_membership::equal(
+                raw.name, "ACDBPOINTCLOUDDEFREACTOREX"))) {
+        subclassName = "AcDbPointCloudDefReactorEx";
+    } else {
+        return false;
+    }
+    const auto isText = [](const DRW_Variant& field) {
+        return field.type() == DRW_Variant::STRING
+            && field.content.s != nullptr;
+    };
+    const auto parseHandle = [](const DRW_Variant& field,
+                                std::uint32_t expected) {
+        if (field.type() != DRW_Variant::STRING
+            || field.content.s == nullptr || field.content.s->empty()
+            || expected == 0u || expected == DRW::NoHandle)
+            return false;
+        const std::string& text = *field.content.s;
+        std::uint64_t actual = 0u;
+        const auto parsed = std::from_chars(
+            text.data(), text.data() + text.size(), actual, 16);
+        return parsed.ec == std::errc{}
+            && parsed.ptr == text.data() + text.size()
+            && actual == expected;
+    };
+    const auto sameReal = [](double left, double right) {
+        return std::memcmp(&left, &right, sizeof(left)) == 0;
+    };
+    const auto at = [&raw](std::size_t index, int code) {
+        return index < raw.groups.size()
+            && raw.groups[index].code() == code;
+    };
+
+    std::size_t index = 0u;
+    if (!at(index, 5)
+        || !parseHandle(raw.groups[index], definition.handle))
+        return false;
+    ++index;
+
+    std::size_t reactorCount = 0u;
+    if (at(index, 102)) {
+        if (!isText(raw.groups[index])
+            || *raw.groups[index].content.s != "{ACAD_REACTORS"
+            || definition.m_kind != DRW_PointCloudDef::DefinitionEx
+            || definition.reactorHandles.empty()
+            || definition.reactorCount()
+                != static_cast<std::int32_t>(definition.reactorHandles.size()))
+            return false;
+        ++index;
+        while (at(index, 330)) {
+            if (reactorCount >= definition.reactorHandles.size()
+                || !parseHandle(raw.groups[index],
+                                definition.reactorHandles[reactorCount]))
+                return false;
+            ++reactorCount;
+            ++index;
+        }
+        if (!at(index, 102) || !isText(raw.groups[index])
+            || *raw.groups[index].content.s != "}")
+            return false;
+        ++index;
+    }
+    if (reactorCount != definition.reactorHandles.size()
+        || !at(index, 330)
+        || !parseHandle(raw.groups[index], definition.parentHandle))
+        return false;
+    ++index;
+    if (!at(index, 100) || !isText(raw.groups[index])
+        || *raw.groups[index].content.s != subclassName)
+        return false;
+    ++index;
+    if (!at(index, 90)
+        || raw.groups[index].type() != DRW_Variant::INTEGER
+        || raw.groups[index].i_val() != definition.m_classVersion)
+        return false;
+    ++index;
+
+    if (definition.m_kind == DRW_PointCloudDef::DefinitionEx) {
+        if (!at(index, 1) || !isText(raw.groups[index])
+            || *raw.groups[index].content.s != definition.m_sourceFilename)
+            return false;
+        ++index;
+        if (!at(index, 280)
+            || raw.groups[index].type() != DRW_Variant::INTEGER
+            || (raw.groups[index].i_val() != 0
+                && raw.groups[index].i_val() != 1)
+            || definition.m_isLoaded
+                != (raw.groups[index].i_val() != 0))
+            return false;
+        ++index;
+        if (!at(index, 160)
+            || raw.groups[index].type() != DRW_Variant::INTEGER64
+            || raw.groups[index].i64_val() < 0
+            || static_cast<std::uint64_t>(raw.groups[index].i64_val())
+                != definition.m_pointCount)
+            return false;
+        ++index;
+        const std::array<std::pair<int, double>, 6u> coordinates{{
+            {10, definition.m_extentsMin.x},
+            {20, definition.m_extentsMin.y},
+            {30, definition.m_extentsMin.z},
+            {11, definition.m_extentsMax.x},
+            {21, definition.m_extentsMax.y},
+            {31, definition.m_extentsMax.z}}};
+        for (const auto& coordinate : coordinates) {
+            if (!at(index, coordinate.first)
+                || raw.groups[index].type() != DRW_Variant::DOUBLE
+                || !std::isfinite(raw.groups[index].content.d)
+                || !sameReal(raw.groups[index].content.d,
+                             coordinate.second))
+                return false;
+            ++index;
+        }
+    }
+    return index == raw.groups.size();
+}
+
 bool pointCloudExModelEqual(const DRW_PointCloudEx& left,
                             const DRW_PointCloudEx& right,
                             DRW::Version version) noexcept {
@@ -69610,9 +69758,11 @@ bool dx_iface::preparePointCloudExOutputGraph(
                 || input.physical->version != data.sourceVersion
                 || !pointCloudDefinitionRawMatchesPhysical(
                     input.raw, *input.physical)
+                || !pointCloudDefinitionRawProjectsToModel(
+                    input.raw, input.typed, input.physical->version)
                 || !pointCloudDefinitionModelEqual(
                     *typed, input.typed, input.physical->version)) {
-                return fail("DXF definition raw carrier/source spans do not bind to the retained typed callback");
+                return fail("DXF definition physical fields, raw carrier, and typed callback do not bind");
             }
             ++typed;
         }
