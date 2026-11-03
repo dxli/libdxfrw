@@ -14429,6 +14429,27 @@ void testImageObjectNumericWireKinds(TestContext& t) {
     }
 }
 
+void testImageDefinitionReactorCountBound(TestContext& t) {
+    constexpr std::size_t kOverLimitReactorCount = 1000001u;
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW writer("");
+        writer.version = DRW::AC1032;
+        writer.binFile = binary;
+        if (binary)
+            writer.writer = std::make_unique<dxfWriterBinary>(&output);
+        else
+            writer.writer = std::make_unique<dxfWriterAscii>(&output);
+        auto definition = std::make_unique<DRW_ImageDef>();
+        definition->handle = 0x300u;
+        definition->name = "reactor-count-control.png";
+        definition->reactorHandles.assign(kOverLimitReactorCount, 0x301u);
+        writer.imageDef.push_back(definition.release());
+        t.expect(!writer.writeObjects() && output.str().empty(),
+                 "IMAGEDEF reactor vectors above the bounded count refuse without publishing");
+    }
+}
+
 void testSectionObjectIndicatorColorWire(TestContext& t) {
     const auto expectCmcLossRejected = [&t](
             const std::function<bool(dxfRW&)>& emit) {
@@ -21265,6 +21286,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testCommonReactorCountBound(focused);
         std::cout << "Common reactor count bound: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--image-definition-reactor-count-bound") {
+        TestContext focused;
+        testImageDefinitionReactorCountBound(focused);
+        std::cout << "IMAGEDEF reactor count bound: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

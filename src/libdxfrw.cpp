@@ -2756,6 +2756,10 @@ namespace {
 bool validImageDefinitionPlanEntry(
         const dxfRW::ImageDefinitionPlanEntry& entry) {
     const DRW_ImageDef& definition = entry.definition;
+    if (entry.selectedReactors.size() > dwgSafety::MaxReactorCount
+        || definition.reactorHandles.size() > dwgSafety::MaxReactorCount
+        || definition.reactors.size() > dwgSafety::MaxReactorCount)
+        return false;
     std::set<std::uint32_t> reactors;
     for (const auto& reactor : entry.selectedReactors) {
         if (reactor.handle == 0u || reactor.handle == DRW::NoHandle
@@ -13243,6 +13247,11 @@ DRW_ImageDef* dxfRW::writeImageRecord(
         if (!allocateDxfHandle(id->handle))
             return nullptr;
     }
+    if (id->reactorHandles.size() > dwgSafety::MaxReactorCount
+        || id->reactors.size() >= dwgSafety::MaxReactorCount) {
+        failDxfWrite();
+        return nullptr;
+    }
     if (plannedDefinition == nullptr)
         id->name = name;
     std::uint32_t reactorHandle = 0;
@@ -16272,6 +16281,12 @@ bool dxfRW::writeObjects() {
         m_writeError = true;
         return false;
     }
+    for (const DRW_ImageDef* definition : imageDef) {
+        if (definition == nullptr
+            || definition->reactorHandles.size() > dwgSafety::MaxReactorCount
+            || definition->reactors.size() > dwgSafety::MaxReactorCount)
+            return failDxfWrite();
+    }
     RecordStateScope state(*this);
     DxfWriterRecordScope record(*writer);
     std::string imgDictH;
@@ -16480,11 +16495,18 @@ bool dxfRW::writeObjects() {
         std::map<std::string, const DRW_ImageDefinitionReactor*> selected;
         const auto plan = m_imagePlanSources.find(id);
         const auto replacements = m_regeneratedImageSourceReactors.find(id);
-        if (plan != m_imagePlanSources.end() && replacements != m_regeneratedImageSourceReactors.end())
-            for (const auto& candidate : plan->second->selectedReactors) {
-                const auto replacement = replacements->second.find(candidate.handle);
-                if (replacement != replacements->second.end()) selected.emplace(toHexStr(replacement->second), &candidate);
+        try {
+            if (plan != m_imagePlanSources.end()
+                && replacements != m_regeneratedImageSourceReactors.end()) {
+                for (const auto& candidate : plan->second->selectedReactors) {
+                    const auto replacement = replacements->second.find(candidate.handle);
+                    if (replacement != replacements->second.end())
+                        selected.emplace(toHexStr(replacement->second), &candidate);
+                }
             }
+        } catch (...) {
+            return failDxfWrite();
+        }
         for (auto it=id->reactors.begin() ; it != id->reactors.end(); ++it ) {
             const auto found = selected.find(it->first);
             const DRW_ImageDefinitionReactor* source = found == selected.end() ? nullptr : found->second;
@@ -16530,16 +16552,28 @@ bool dxfRW::writeObjects() {
         }
         if (!writeTableEntryAppData(*id, false))
             return false;
+        const std::size_t reactorCapacity = std::min<std::size_t>(
+            dwgSafety::MaxReactorCount,
+            id->reactorHandles.size() + id->reactors.size());
         std::vector<std::uint32_t> emittedReactors;
+        if (!DRW::reserve(emittedReactors,
+                          static_cast<int>(reactorCapacity)))
+            return failDxfWrite();
+        const auto appendReactor = [&emittedReactors](std::uint32_t handle) {
+            if (handle == 0u
+                || emittedReactors.size() >= dwgSafety::MaxReactorCount)
+                return false;
+            emittedReactors.push_back(handle);
+            return true;
+        };
         const auto replacements = m_regeneratedImageSourceReactors.find(id);
         for (const auto source : id->reactorHandles) {
             if (replacements != m_regeneratedImageSourceReactors.end()
                 && replacements->second.count(source) != 0u) continue;
             const auto emitted = m_referenceResolver ? resolveReference(source) : remapObjectHandle(source);
             if (source != 0u && m_referenceResolver && emitted == 0u) continue;
-            if (source == 0u || emitted == 0u)
+            if (!appendReactor(emitted))
                 return failDxfWrite();
-            emittedReactors.push_back(emitted);
         }
         if (version < DRW::AC1014 && !emittedReactors.empty()) return failDxfWrite();
         // Minted reactor identities are final output IDs: never source-remap
@@ -16549,12 +16583,15 @@ bool dxfRW::writeObjects() {
             const auto parsed = std::from_chars(reactor.first.data(),
                 reactor.first.data() + reactor.first.size(), emitted, 16);
             if (parsed.ec != std::errc{} || parsed.ptr != reactor.first.data() + reactor.first.size()
-                || emitted == 0u) return failDxfWrite();
-            emittedReactors.push_back(emitted);
+                || !appendReactor(emitted)) return failDxfWrite();
         }
         // Check collisions without reordering the retained source links or
         // charging a tree node for every reactor in a large valid record.
-        auto uniqueReactors = emittedReactors;
+        std::vector<std::uint32_t> uniqueReactors;
+        if (!DRW::reserve(uniqueReactors,
+                          static_cast<int>(emittedReactors.size())))
+            return failDxfWrite();
+        uniqueReactors.assign(emittedReactors.begin(), emittedReactors.end());
         std::sort(uniqueReactors.begin(), uniqueReactors.end());
         if (std::adjacent_find(uniqueReactors.begin(), uniqueReactors.end()) != uniqueReactors.end())
             return failDxfWrite();

@@ -1,0 +1,54 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-dxf-imagedef-reactor-count-and-reserve-guard-2026-11-03",
+  "date": "2026-11-03",
+  "status": "COMPLETED_LOCAL_RESOURCE_GUARD",
+  "supportClaimEffect": "none",
+  "scope": "Staging, admission, and output bounds for specialized IMAGEDEF and IMAGEDEF_REACTOR DXF output.",
+  "implementation": {
+    "files": [
+      "src/libdxfrw.cpp",
+      "tests/wave1_tests.cpp",
+      "CMakeLists.txt",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md"
+    ],
+    "behavior": [
+      "IMAGEDEF plans refuse selected-reactor, common-reactor, or preserved-reactor collections above dwgSafety::MaxReactorCount (1,000,000).",
+      "writeObjects validates caller-owned IMAGEDEF collections before opening its OBJECTS output transaction.",
+      "The regenerated IMAGEDEF reactor list uses DRW::reserve, enforces the aggregate emitted-reference limit, and uses a second exception-catching reservation for duplicate detection while retaining source order for output.",
+      "The selected source-reactor lookup catches allocation exceptions and fails through the existing output rollback path.",
+      "writeImageRecord refuses another generated IMAGEDEF_REACTOR once the preserved-reactor bound is reached."
+    ]
+  },
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_wave1_tests libdxfrw_dxf_fixture_tests libdxfrw_dwg2dxf_adapter_tests -j4",
+    "focused": [
+      {
+        "command": "ctest --test-dir build-gcc -R '^libdxfrw_image_definition_reactor_count_bound$' --output-on-failure",
+        "result": "PASS",
+        "coverage": "ASCII/Binary IMAGEDEF records with 1,000,001 common reactor references refuse without publishing output."
+      },
+      {
+        "command": "ctest --test-dir build-gcc -R '^libdxfrw_image_definition_plan_failure_retry$' --output-on-failure",
+        "result": "PASS"
+      },
+      {
+        "command": "ctest --test-dir build-gcc -R '^dwg2dxf_generated_image_dictionary_source_identity$' --output-on-failure",
+        "result": "PASS"
+      },
+      {
+        "command": "ctest --test-dir build-gcc -R '^dwg2dxf_rooted_image_dictionary_closure$' --output-on-failure",
+        "result": "FAIL",
+        "coverage": "The broader selector fails during TABLES emission with an unclosed FIELDLIST profile, before writeObjects emits IMAGEDEF/IMAGEDEF_REACTOR records; this slice does not resolve that profile."
+      }
+    ],
+    "repositoryFixturesAdded": 0,
+    "allocationFailureInjected": false
+  },
+  "limitations": [
+    "The 1,000,000 limit is the existing internal reactor resource ceiling, not an Autodesk format maximum or support claim.",
+    "Allocation-failure injection, unrelated OBJECTS assembly collections, and other copy/work bounds remain open.",
+    "The rooted IMAGEDEF graph cohort remains failing at an earlier TABLES/FIELDLIST gate and requires separate diagnosis."
+  ],
+  "next": "Continue the bounded safety audit on remaining output staging paths; keep the rooted IMAGEDEF graph failure separate until its TABLES/FIELDLIST blocker is diagnosed."
+}
