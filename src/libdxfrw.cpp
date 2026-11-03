@@ -33685,6 +33685,22 @@ bool dxfRW::writeSection(DRW_Section *ent, const char *recordName) {
     if (recordName == nullptr || *recordName == '\0')
         return failDxfWrite();
     std::vector<std::uint32_t> emittedSectionHandles;
+    std::vector<std::vector<std::uint32_t>> emittedSourceHandles;
+    std::vector<std::uint32_t> emittedDestinationBlockHandles;
+    std::uint32_t emittedFlatDestinationBlockHandle = 0u;
+    const auto resolveSectionPointer = [this](std::uint32_t sourceHandle,
+                                               std::uint32_t& emittedHandle) {
+        if (sourceHandle == 0u) {
+            emittedHandle = 0u;
+            return true;
+        }
+        if (sourceHandle == DRW::NoHandle)
+            return false;
+        emittedHandle = m_referenceResolver
+            ? resolveReference(sourceHandle)
+            : remapObjectHandle(sourceHandle);
+        return emittedHandle != 0u && emittedHandle != DRW::NoHandle;
+    };
     if (ent->m_kind == DRW_Section::Manager) {
         if (ent->m_sectionCount < 0
             || ent->m_sectionCount > DRW_Section::kMaxSectionCount
@@ -33694,14 +33710,46 @@ bool dxfRW::writeSection(DRW_Section *ent, const char *recordName) {
         try {
             emittedSectionHandles.reserve(ent->m_sectionHandles.size());
             for (const std::uint32_t sourceHandle : ent->m_sectionHandles) {
-                if (sourceHandle == 0u || sourceHandle == DRW::NoHandle)
-                    return failDxfWrite();
-                const std::uint32_t emittedHandle = m_referenceResolver
-                    ? resolveReference(sourceHandle)
-                    : remapObjectHandle(sourceHandle);
-                if (emittedHandle == 0u || emittedHandle == DRW::NoHandle)
+                std::uint32_t emittedHandle = 0u;
+                if (!resolveSectionPointer(sourceHandle, emittedHandle)
+                    || emittedHandle == 0u)
                     return failDxfWrite();
                 emittedSectionHandles.push_back(emittedHandle);
+            }
+        } catch (...) {
+            return failDxfWrite();
+        }
+    } else if (ent->m_kind == DRW_Section::Settings) {
+        try {
+            if (ent->m_types.empty()) {
+                if (!resolveSectionPointer(ent->m_destinationBlockHandle,
+                                           emittedFlatDestinationBlockHandle))
+                    return failDxfWrite();
+            } else {
+                emittedSourceHandles.reserve(ent->m_types.size());
+                emittedDestinationBlockHandles.reserve(ent->m_types.size());
+                for (const DRW_SectionTypeSettings& type : ent->m_types) {
+                    if (type.m_sourceHandles.size()
+                        > static_cast<std::size_t>(
+                              DRW_Section::kMaxSectionSourceCount))
+                        return failDxfWrite();
+                    std::vector<std::uint32_t> resolvedSources;
+                    resolvedSources.reserve(type.m_sourceHandles.size());
+                    for (const std::uint32_t sourceHandle :
+                         type.m_sourceHandles) {
+                        std::uint32_t emittedHandle = 0u;
+                        if (!resolveSectionPointer(sourceHandle, emittedHandle))
+                            return failDxfWrite();
+                        resolvedSources.push_back(emittedHandle);
+                    }
+                    std::uint32_t emittedDestination = 0u;
+                    if (!resolveSectionPointer(type.m_destinationBlockHandle,
+                                               emittedDestination))
+                        return failDxfWrite();
+                    emittedSourceHandles.push_back(std::move(resolvedSources));
+                    emittedDestinationBlockHandles.push_back(
+                        emittedDestination);
+                }
             }
         } catch (...) {
             return failDxfWrite();
@@ -33763,27 +33811,29 @@ bool dxfRW::writeSection(DRW_Section *ent, const char *recordName) {
             writer->writeInt32(90, ent->m_classVersion);
             writer->writeInt32(91, ent->m_sectionType);
             writer->writeInt32(91, ent->m_generationOptions);
-            if (ent->m_destinationBlockHandle != 0)
+            if (emittedFlatDestinationBlockHandle != 0u)
                 writer->writeString(331, toHexStr(
-                    static_cast<int>(ent->m_destinationBlockHandle)));
+                    emittedFlatDestinationBlockHandle));
         } else {
             writer->writeInt32(90, ent->m_currentType);
             writer->writeInt32(91, static_cast<int>(ent->m_types.size()));
-            for (const DRW_SectionTypeSettings& type : ent->m_types) {
+            for (std::size_t typeIndex = 0;
+                 typeIndex < ent->m_types.size(); ++typeIndex) {
+                const DRW_SectionTypeSettings& type = ent->m_types[typeIndex];
                 writer->writeUtf8String(1, "SectionTypeSettings");
                 writer->writeInt32(90, type.m_type);
                 writer->writeInt32(91, type.m_generation);
-                const std::size_t sourceCount = std::min(
-                    type.m_sourceHandles.size(),
-                    static_cast<std::size_t>(DRW_Section::kMaxSectionSourceCount));
+                const std::size_t sourceCount =
+                    emittedSourceHandles[typeIndex].size();
                 writer->writeInt32(92, static_cast<int>(sourceCount));
-                for (std::size_t i = 0; i < sourceCount; ++i) {
-                    writer->writeString(330, toHexStr(
-                        static_cast<int>(type.m_sourceHandles[i])));
-                }
-                if (type.m_destinationBlockHandle != 0)
+                for (const std::uint32_t handle :
+                     emittedSourceHandles[typeIndex])
+                    writer->writeString(330, toHexStr(handle));
+                const std::uint32_t destinationHandle =
+                    emittedDestinationBlockHandles[typeIndex];
+                if (destinationHandle != 0u)
                     writer->writeString(331, toHexStr(
-                        static_cast<int>(type.m_destinationBlockHandle)));
+                        destinationHandle));
                 writer->writeUtf8String(1, type.m_destinationFile);
                 const std::size_t geometryCount = std::min(
                     type.m_geometry.size(),

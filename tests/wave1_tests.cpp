@@ -2454,6 +2454,230 @@ void testSectionManagerReferenceRemapping(TestContext& t) {
     }
 }
 
+void testSectionSettingsReferenceRemapping(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW writer("");
+            writer.version = DRW::AC1032;
+            writer.binFile = binary;
+            writer.setHandleRemap({{0x800u, 0xB800u},
+                                   {0x810u, 0xB810u},
+                                   {0x820u, 0xB820u}});
+            if (useResolver) {
+                writer.setReferenceResolver([](std::uint32_t source) {
+                    if (source == 0x800u)
+                        return 0xC800u;
+                    if (source == 0x810u)
+                        return 0xC810u;
+                    if (source == 0x820u)
+                        return 0xC820u;
+                    return source;
+                });
+            }
+            writer.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_Section settings;
+            settings.handle = 0x900u;
+            settings.parentHandle = 0x600u;
+            settings.m_kind = DRW_Section::Settings;
+            settings.m_currentType = 1;
+            settings.m_typeCount = 1;
+            DRW_SectionTypeSettings type;
+            type.m_type = 2;
+            type.m_generation = 3;
+            type.m_numSources = 2;
+            type.m_sourceHandles = {0x800u, 0x810u};
+            type.m_destinationBlockHandle = 0x820u;
+            type.m_destinationFile = "section-output.dwg";
+            settings.m_types.push_back(type);
+            const bool written = writer.writeSection(
+                    &settings, "SECTIONSETTINGS")
+                && writer.writer->writeString(0, "WIRE_END");
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderAscii>(&input));
+            std::string recordName;
+            bool inSectionType = false;
+            bool ended = false;
+            std::int32_t sourceCount = -1;
+            std::vector<std::uint32_t> sourceHandles;
+            std::vector<std::uint32_t> destinationHandles;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    inSectionType = false;
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (recordName == "SECTIONSETTINGS" && code == 1) {
+                    inSectionType = reader->getString()
+                        == "SectionTypeSettings";
+                } else if (recordName == "SECTIONSETTINGS"
+                           && inSectionType && code == 92) {
+                    sourceCount = reader->getInt32();
+                } else if (recordName == "SECTIONSETTINGS"
+                           && inSectionType && code == 330) {
+                    sourceHandles.push_back(reader->getHandleString());
+                } else if (recordName == "SECTIONSETTINGS"
+                           && inSectionType && code == 331) {
+                    destinationHandles.push_back(reader->getHandleString());
+                }
+            }
+            const std::vector<std::uint32_t> expectedSources = useResolver
+                ? std::vector<std::uint32_t>{0xC800u, 0xC810u}
+                : std::vector<std::uint32_t>{0xB800u, 0xB810u};
+            const std::vector<std::uint32_t> expectedDestination = {
+                useResolver ? 0xC820u : 0xB820u};
+            t.expect(written && ended && sourceCount == 2
+                         && sourceHandles == expectedSources
+                         && destinationHandles == expectedDestination,
+                     useResolver
+                         ? "SECTIONSETTINGS source and destination links use resolver identities"
+                         : "SECTIONSETTINGS source and destination links use source remaps");
+        }
+
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream flatOutput;
+            dxfRW flatWriter("");
+            flatWriter.version = DRW::AC1032;
+            flatWriter.binFile = binary;
+            flatWriter.setHandleRemap({{0x820u, 0xB820u}});
+            if (useResolver) {
+                flatWriter.setReferenceResolver([](std::uint32_t source) {
+                    return source == 0x820u ? 0xC820u : source;
+                });
+            }
+            flatWriter.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&flatOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&flatOutput));
+            DRW_Section flatSettings;
+            flatSettings.m_kind = DRW_Section::Settings;
+            flatSettings.m_destinationBlockHandle = 0x820u;
+            const bool flatWritten = flatWriter.writeSection(
+                &flatSettings, "SECTIONSETTINGS");
+            std::istringstream flatInput(flatOutput.str());
+            std::unique_ptr<dxfReader> flatReader = binary
+                ? std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderBinary>(&flatInput))
+                : std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderAscii>(&flatInput));
+            std::string flatRecordName;
+            bool inSettingsSubclass = false;
+            std::uint32_t flatDestinationHandle = 0u;
+            int flatCode = 0;
+            while (flatReader->readRec(&flatCode)) {
+                if (flatCode == 0) {
+                    flatRecordName = flatReader->getString();
+                    inSettingsSubclass = false;
+                } else if (flatRecordName == "SECTIONSETTINGS"
+                           && flatCode == 100) {
+                    inSettingsSubclass = flatReader->getString()
+                        == "AcDbSectionSettings";
+                } else if (flatRecordName == "SECTIONSETTINGS"
+                           && inSettingsSubclass && flatCode == 331) {
+                    flatDestinationHandle = flatReader->getHandleString();
+                }
+            }
+            t.expect(flatWritten
+                         && flatDestinationHandle
+                             == (useResolver ? 0xC820u : 0xB820u),
+                     useResolver
+                         ? "legacy flat SECTIONSETTINGS destination uses resolver identity"
+                         : "legacy flat SECTIONSETTINGS destination uses source remap");
+        }
+
+        for (const std::uint32_t unresolved : {
+                 0u, static_cast<std::uint32_t>(DRW::NoHandle)}) {
+            for (const bool failDestination : {false, true}) {
+                std::ostringstream rejectedOutput;
+                dxfRW rejectedWriter("");
+                rejectedWriter.version = DRW::AC1032;
+                rejectedWriter.binFile = binary;
+                rejectedWriter.setReferenceResolver(
+                    [unresolved, failDestination](std::uint32_t source) {
+                        return source == (failDestination ? 0x820u : 0x810u)
+                            ? unresolved : source;
+                    });
+                rejectedWriter.writer = binary
+                    ? std::unique_ptr<dxfWriter>(
+                          std::make_unique<dxfWriterBinary>(&rejectedOutput))
+                    : std::unique_ptr<dxfWriter>(
+                          std::make_unique<dxfWriterAscii>(&rejectedOutput));
+                rejectedWriter.writer->writeString(1, "PRESERVED_PREFIX");
+                const std::string before = rejectedOutput.str();
+                DRW_Section invalid;
+                invalid.m_kind = DRW_Section::Settings;
+                invalid.m_currentType = 1;
+                DRW_SectionTypeSettings invalidType;
+                invalidType.m_sourceHandles = {0x800u, 0x810u};
+                invalidType.m_destinationBlockHandle = 0x820u;
+                invalid.m_types.push_back(invalidType);
+                t.expect(!rejectedWriter.writeSection(
+                             &invalid, "SECTIONSETTINGS")
+                             && rejectedOutput.str() == before,
+                         "SECTIONSETTINGS refuses unresolved source/destination links atomically");
+            }
+        }
+
+        std::ostringstream oversizedOutput;
+        dxfRW oversizedWriter("");
+        oversizedWriter.version = DRW::AC1032;
+        oversizedWriter.binFile = binary;
+        oversizedWriter.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&oversizedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&oversizedOutput));
+        DRW_Section oversized;
+        oversized.m_kind = DRW_Section::Settings;
+        DRW_SectionTypeSettings oversizedType;
+        oversizedType.m_sourceHandles.resize(
+            static_cast<std::size_t>(DRW_Section::kMaxSectionSourceCount) + 1u,
+            0x800u);
+        oversized.m_types.push_back(std::move(oversizedType));
+        t.expect(!oversizedWriter.writeSection(
+                     &oversized, "SECTIONSETTINGS")
+                     && oversizedOutput.str().empty(),
+                 "SECTIONSETTINGS oversized source list refuses before publication");
+
+        std::ostringstream retryOutput;
+        dxfRW retryWriter("");
+        retryWriter.version = DRW::AC1032;
+        retryWriter.binFile = binary;
+        retryWriter.setReferenceResolver([](std::uint32_t source) {
+            return source == 0x810u ? 0xC810u
+                : source == 0x820u ? 0xC820u : source;
+        });
+        retryWriter.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        DRW_Section retry;
+        retry.m_kind = DRW_Section::Settings;
+        retry.m_currentType = 1;
+        DRW_SectionTypeSettings retryType;
+        retryType.m_sourceHandles = {0x800u, 0x810u};
+        retryType.m_destinationBlockHandle = 0x820u;
+        retry.m_types.push_back(retryType);
+        t.expect(retryWriter.writeSection(&retry, "SECTIONSETTINGS"),
+                 "SECTIONSETTINGS corrected fresh-writer retry succeeds");
+    }
+}
+
 void testNavisworksDefinitionReferenceRemapping(TestContext& t) {
     for (const bool binary : {false, true}) {
         for (const bool useResolver : {false, true}) {
@@ -18019,6 +18243,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testSectionManagerReferenceRemapping(focused);
         std::cout << "SECTIONMANAGER reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--section-settings-reference-remapping") {
+        TestContext focused;
+        testSectionSettingsReferenceRemapping(focused);
+        std::cout << "SECTIONSETTINGS reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

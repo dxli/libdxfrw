@@ -172,6 +172,16 @@ engines.
    Autodesk documents these list entries as pointers to section entities, but
    source binding, target existence/owner, and complete graph closure remain
    unqualified.
+   SECTIONSETTINGS nested source-object group-330 lists and destination-block
+   group-331 links now emit resolver/remap identities; the legacy flat
+   destination-block field follows the same rule. The writer rejects oversized
+   source lists and invalid non-null results before record output. Focused
+   generated ASCII/Binary checks cover nested and flat projections, resolver
+   precedence, refusal, and fresh-writer retry
+   ([receipt](docs/research/p4-sectionsettings-reference-remapping-2026-11-03.json)).
+   The DXF schema establishes the pointer roles, but not source target
+   existence, owner validity, complete SECTIONOBJECT/SECTIONSETTINGS graph
+   closure, or native section-generation semantics.
    SUNSTUDY, MOTIONPATH, and ACDBCURVEPATH modeled links now also refuse
    unresolved nonzero output IDs before publishing records. Their low-level
    record scopes cover common-owner and write failures; generated ASCII/Binary
