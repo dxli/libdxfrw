@@ -1,7 +1,9 @@
 #include <atomic>
+#include <array>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
@@ -214,6 +216,96 @@ void concurrentState(Checks& checks) {
     DRW::setCustomDebugPrinter(nullptr);
 }
 
+class ConcurrentDxfWriter final : public dx_iface {
+public:
+    void writeEntities() override {
+        written = dxfW != nullptr && dxfW->writeLine(&line);
+    }
+
+    DRW_Line line;
+    bool written{false};
+};
+
+void scopedCodecConcurrency(Checks& checks) {
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-scoped-codec-concurrency-" + std::to_string(nonce));
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    checks.expect(!error, "scoped codec concurrency scratch directory created");
+    if (error)
+        return;
+
+    struct Result {
+        bool wrote{false};
+        bool read{false};
+        bool fieldsMatch{false};
+    };
+    constexpr std::size_t workerCount = 4u;
+    std::array<Result, workerCount> results{};
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+    for (std::size_t worker = 0; worker < workerCount; ++worker) {
+        workers.emplace_back([&, worker] {
+            try {
+                const auto path = directory
+                    / ("worker-" + std::to_string(worker) + ".dxf");
+                const std::string filename = path.string();
+                dx_data data;
+                ConcurrentDxfWriter adapter;
+                adapter.cData = &data;
+                adapter.currentBlock = data.mBlock;
+                adapter.line.handle = static_cast<std::uint32_t>(0xD100u + worker);
+                adapter.line.basePoint = {static_cast<double>(worker),
+                                          2.0, 3.0};
+                adapter.line.secPoint = {4.0,
+                                         static_cast<double>(worker + 5u),
+                                         6.0};
+                dxfRW writer(filename.c_str());
+                adapter.dxfW = &writer;
+                const bool written = writer.write(
+                    &adapter, DRW::AC1027, worker % 2u != 0u);
+                adapter.dxfW = nullptr;
+
+                dx_data decoded;
+                dx_iface reader;
+                const bool read = written
+                    && reader.fileImport(filename, &decoded, false)
+                    && decoded.mBlock != nullptr
+                    && decoded.mBlock->ent.size() == 1u;
+                const auto* line = read
+                    ? dynamic_cast<const DRW_Line*>(decoded.mBlock->ent.front())
+                    : nullptr;
+                results[worker] = {
+                    written && adapter.written,
+                    read,
+                    line != nullptr
+                        && line->basePoint.x == static_cast<double>(worker)
+                        && line->basePoint.y == 2.0
+                        && line->basePoint.z == 3.0
+                        && line->secPoint.x == 4.0
+                        && line->secPoint.y
+                            == static_cast<double>(worker + 5u)
+                        && line->secPoint.z == 6.0};
+            } catch (...) {
+                results[worker] = {};
+            }
+        });
+    }
+    for (auto& worker : workers)
+        worker.join();
+
+    bool allPassed = true;
+    for (const auto& result : results)
+        allPassed = allPassed && result.wrote && result.read
+            && result.fieldsMatch;
+    checks.expect(allPassed,
+        "independent concurrent DXF codec instances write ASCII/Binary files and read back isolated geometry");
+    std::filesystem::remove_all(directory, error);
+    checks.expect(!error, "scoped codec concurrency scratch files removed");
+}
+
 class Transcript final : public dx_iface {
 public:
     Transcript() { cData = &data_; currentBlock = data_.mBlock; }
@@ -280,12 +372,16 @@ int main(int argc, char** argv) {
         concurrentState(checks);
     } else if (argc == 2 && std::string(argv[1]) == "--format-only") {
         builtInFormatting(checks);
+    } else if (argc == 2
+               && std::string(argv[1]) == "--scoped-codecs-only") {
+        scopedCodecConcurrency(checks);
     } else {
         sequentialAndEager(checks);
         replacementAndOverlap(checks);
         reentryAndExceptions(checks);
         builtInFormatting(checks);
         concurrentState(checks);
+        scopedCodecConcurrency(checks);
         dwgTranscript(checks);
     }
     return checks.failures ? 1 : 0;

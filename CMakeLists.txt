@@ -2221,6 +2221,10 @@ if(LIBDXFRW_BUILD_TESTS)
     add_test(NAME libdxfrw_debug_state COMMAND libdxfrw_debug_state_tests)
     set_tests_properties(libdxfrw_debug_state PROPERTIES
         LABELS "fast;hardening;debug" TIMEOUT 30)
+    add_test(NAME libdxfrw_scoped_codec_concurrency
+        COMMAND libdxfrw_debug_state_tests --scoped-codecs-only)
+    set_tests_properties(libdxfrw_scoped_codec_concurrency PROPERTIES
+        LABELS "fast;dxf;reader;writer;concurrency" TIMEOUT 30)
 
     if(LIBDXFRW_BUILD_LONG_FUZZ)
         add_executable(libdxfrw_long_fuzz_tests
