@@ -8880,6 +8880,44 @@ void testCommonObjectReferenceOutputIdGuard(TestContext& t) {
     }
 }
 
+void testCommonReactorCountBound(TestContext& t) {
+    constexpr std::size_t kOverLimitReactorCount = 1000001u;
+    for (const bool binary : {false, true}) {
+        {
+            std::ostringstream output;
+            dxfRW writer("");
+            writer.version = DRW::AC1032;
+            writer.binFile = binary;
+            writer.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+            DRW_Line entity;
+            entity.reactorHandles.assign(kOverLimitReactorCount, 0x1110u);
+            t.expect(!writer.writeLine(&entity) && output.str().empty(),
+                     "entity reactors above the bounded count refuse atomically");
+        }
+        {
+            std::ostringstream output;
+            dxfRW writer("");
+            writer.version = DRW::AC1032;
+            writer.binFile = binary;
+            writer.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+            DRW_Dictionary object;
+            object.handle = 0x500u;
+            object.parentHandle = 0x600u;
+            object.reactorHandles.assign(kOverLimitReactorCount, 0x1110u);
+            t.expect(!writer.writeDictionary(&object) && output.str().empty(),
+                     "table-entry reactors above the bounded count refuse atomically");
+        }
+    }
+}
+
 void testMlineStyleColorAdmission(TestContext& t) {
     for (const bool binary : {false, true}) {
         const auto rejectsWithoutPublication = [&](const char* label,
@@ -21219,6 +21257,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testCommonObjectReferenceOutputIdGuard(focused);
         std::cout << "Common object reference output-ID guard: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--common-reactor-count-bound") {
+        TestContext focused;
+        testCommonReactorCountBound(focused);
+        std::cout << "Common reactor count bound: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

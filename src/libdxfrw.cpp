@@ -804,7 +804,8 @@ bool isValidDxfEntityFields(const DRW_Entity& entity) {
         || entity.color < -255 || entity.color > DRW::ColorByLayer
         || (entity.color24 < -1 || entity.color24 > 0xFFFFFF)
         || !isValidDxfLineWeight(entity.lWeight)
-        || entity.numProxyGraph < 0)
+        || entity.numProxyGraph < 0
+        || entity.reactorHandles.size() > dwgSafety::MaxReactorCount)
         return false;
     if (std::any_of(entity.reactorHandles.cbegin(),
                     entity.reactorHandles.cend(),
@@ -4947,7 +4948,11 @@ bool dxfRW::writeEntityReferenceGroups(const DRW_Entity *ent) {
 
     std::vector<std::uint32_t> reactors;
     if (!ent->reactorHandles.empty() && !hasReactorsAppGroup) {
-        reactors.reserve(ent->reactorHandles.size());
+        if (!DRW::reserve(reactors,
+                          static_cast<int>(ent->reactorHandles.size()))) {
+            m_writeError = true;
+            return false;
+        }
         for (const std::uint32_t source : ent->reactorHandles) {
             if (source == 0u) {
                 m_writeError = true;
@@ -5335,6 +5340,10 @@ bool dxfRW::validateHatchPayload(const DRW_Hatch *ent) const {
 
 bool dxfRW::preflightTableEntry(const DRW_TableEntry *ent) {
     if (!preflightDxfWrite() || ent == nullptr) {
+        m_writeError = true;
+        return false;
+    }
+    if (ent->reactorHandles.size() > dwgSafety::MaxReactorCount) {
         m_writeError = true;
         return false;
     }
@@ -6137,7 +6146,11 @@ bool dxfRW::writeTableEntryAppData(const DRW_TableEntry& entry, bool emitReactor
     std::vector<std::uint32_t> reactors;
     if (emitReactors && !entry.reactorHandles.empty()
         && !hasAppGroup("ACAD_REACTORS")) {
-        reactors.reserve(entry.reactorHandles.size());
+        if (!DRW::reserve(reactors,
+                          static_cast<int>(entry.reactorHandles.size()))) {
+            m_writeError = true;
+            return false;
+        }
         for (const std::uint32_t reactor : entry.reactorHandles) {
             if (reactor == 0u) {
                 m_writeError = true;
