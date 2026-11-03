@@ -6066,43 +6066,66 @@ bool dxfRW::writeTableEntryAppData(const DRW_TableEntry& entry, bool emitReactor
         return false;
     };
 
-    if (emitReactors && !entry.reactorHandles.empty() && !hasAppGroup("ACAD_REACTORS")) {
-        std::vector<std::uint32_t> reactors;
+    std::vector<std::uint32_t> reactors;
+    if (emitReactors && !entry.reactorHandles.empty()
+        && !hasAppGroup("ACAD_REACTORS")) {
         reactors.reserve(entry.reactorHandles.size());
         for (const std::uint32_t reactor : entry.reactorHandles) {
+            if (reactor == 0u || reactor == DRW::NoHandle) {
+                m_writeError = true;
+                return false;
+            }
             const std::uint32_t emitted = m_referenceResolver
                 ? resolveReference(reactor) : remapObjectHandle(reactor);
-            if (!m_referenceResolver || emitted != 0)
+            if (emitted == DRW::NoHandle
+                || (!m_referenceResolver && emitted == 0u)) {
+                m_writeError = true;
+                return false;
+            }
+            if (emitted != 0u)
                 reactors.push_back(emitted);
         }
-        if (!reactors.empty()) {
-            if (!writer->writeString(102, "{ACAD_REACTORS")) {
-                m_writeError = true;
-                return false;
-            }
-            for (const std::uint32_t reactor : reactors) {
-                if (!writer->writeString(330, toHexStr(reactor))) {
-                    m_writeError = true;
-                    return false;
-                }
-            }
-            if (!writer->writeString(102, "}")) {
+    }
+    const bool writeXDictionary = entry.xDictHandle != 0u
+        && !hasAppGroup("ACAD_XDICTIONARY");
+    std::uint32_t emittedXDictionary = 0u;
+    if (writeXDictionary) {
+        if (entry.xDictHandle == DRW::NoHandle) {
+            m_writeError = true;
+            return false;
+        }
+        emittedXDictionary = m_referenceResolver
+            ? resolveReference(entry.xDictHandle)
+            : remapObjectHandle(entry.xDictHandle);
+        if (emittedXDictionary == DRW::NoHandle
+            || (!m_referenceResolver && emittedXDictionary == 0u)) {
+            m_writeError = true;
+            return false;
+        }
+    }
+
+    if (!reactors.empty()) {
+        if (!writer->writeString(102, "{ACAD_REACTORS")) {
+            m_writeError = true;
+            return false;
+        }
+        for (const std::uint32_t reactor : reactors) {
+            if (!writer->writeString(330, toHexStr(reactor))) {
                 m_writeError = true;
                 return false;
             }
         }
+        if (!writer->writeString(102, "}")) {
+            m_writeError = true;
+            return false;
+        }
     }
-    if (entry.xDictHandle != 0 && !hasAppGroup("ACAD_XDICTIONARY")) {
-        const std::uint32_t emitted = m_referenceResolver
-            ? resolveReference(entry.xDictHandle)
-            : remapObjectHandle(entry.xDictHandle);
-        if (!m_referenceResolver || emitted != 0) {
-            if (!writer->writeString(102, "{ACAD_XDICTIONARY")
-                || !writer->writeString(360, toHexStr(emitted))
-                || !writer->writeString(102, "}")) {
-                m_writeError = true;
-                return false;
-            }
+    if (writeXDictionary && emittedXDictionary != 0u) {
+        if (!writer->writeString(102, "{ACAD_XDICTIONARY")
+            || !writer->writeString(360, toHexStr(emittedXDictionary))
+            || !writer->writeString(102, "}")) {
+            m_writeError = true;
+            return false;
         }
     }
     if (!writeAppData(entry.appData)) {

@@ -8622,6 +8622,81 @@ void testTypedObjectCommonMetadata(TestContext& t) {
     exercise("EVALUATIONGRAPH", DRW_EvaluationGraph{}, [](auto& w, auto& e) { return w.writeEvaluationGraph(&e, "ACAD_EVALUATION_GRAPH"); });
 }
 
+void testCommonObjectReferenceOutputIdGuard(TestContext& t) {
+    enum class Edge { Reactor, ExtensionDictionary };
+    const auto writeDictionary = [](dxfRW& writer, Edge edge,
+                                    std::uint32_t source) {
+        DRW_Dictionary object;
+        object.handle = 0x500u;
+        object.parentHandle = 0x600u;
+        if (edge == Edge::Reactor)
+            object.reactorHandles = {source};
+        else
+            object.xDictHandle = source;
+        return writer.writeDictionary(&object);
+    };
+
+    for (const bool binary : {false, true}) {
+        for (const Edge edge : {Edge::Reactor, Edge::ExtensionDictionary}) {
+            const std::uint32_t invalidSources[] = {
+                static_cast<std::uint32_t>(DRW::NoHandle), 0u};
+            for (const std::uint32_t source : invalidSources) {
+                if (edge == Edge::ExtensionDictionary && source == 0u)
+                    continue; // zero means the optional edge is absent.
+                std::ostringstream output;
+                dxfRW writer("");
+                writer.version = DRW::AC1032;
+                writer.binFile = binary;
+                if (binary)
+                    writer.writer = std::make_unique<dxfWriterBinary>(&output);
+                else
+                    writer.writer = std::make_unique<dxfWriterAscii>(&output);
+                t.expect(!writeDictionary(writer, edge, source)
+                             && output.str().empty(),
+                         "common reactor/XDICTIONARY rejects invalid source IDs before output");
+            }
+
+            for (const std::uint32_t mapped : {
+                     0u, static_cast<std::uint32_t>(DRW::NoHandle)}) {
+                const std::uint32_t source = 0x1110u;
+                std::ostringstream output;
+                dxfRW writer("");
+                writer.version = DRW::AC1032;
+                writer.binFile = binary;
+                writer.setHandleRemap({{source, mapped}});
+                if (binary)
+                    writer.writer = std::make_unique<dxfWriterBinary>(&output);
+                else
+                    writer.writer = std::make_unique<dxfWriterAscii>(&output);
+                t.expect(!writeDictionary(writer, edge, source)
+                             && output.str().empty(),
+                         "common reactor/XDICTIONARY rejects invalid remap IDs before output");
+            }
+
+            const std::uint32_t source = 0x1110u;
+            std::ostringstream resolverOutput;
+            dxfRW resolverWriter("");
+            resolverWriter.version = DRW::AC1032;
+            resolverWriter.binFile = binary;
+            resolverWriter.setReferenceResolver(
+                [source](std::uint32_t candidate) {
+                    return candidate == source
+                        ? static_cast<std::uint32_t>(DRW::NoHandle)
+                        : candidate;
+                });
+            if (binary)
+                resolverWriter.writer =
+                    std::make_unique<dxfWriterBinary>(&resolverOutput);
+            else
+                resolverWriter.writer =
+                    std::make_unique<dxfWriterAscii>(&resolverOutput);
+            t.expect(!writeDictionary(resolverWriter, edge, source)
+                         && resolverOutput.str().empty(),
+                     "common reactor/XDICTIONARY rejects NoHandle resolver result before output");
+        }
+    }
+}
+
 void testMlineStyleColorAdmission(TestContext& t) {
     for (const bool binary : {false, true}) {
         const auto rejectsWithoutPublication = [&](const char* label,
@@ -20953,6 +21028,14 @@ int main(int argc, char** argv) {
         testCommonAppDataBaseScope(focused);
         testTypedObjectCommonMetadata(focused);
         std::cout << "Common application-data base scope: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--common-reference-output-id-guard") {
+        TestContext focused;
+        testCommonObjectReferenceOutputIdGuard(focused);
+        std::cout << "Common object reference output-ID guard: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

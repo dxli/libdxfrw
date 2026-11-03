@@ -114,6 +114,13 @@ engines.
    boundary record ([receipt](docs/research/p4-hatch-mpolygon-boundary-output-id-guard-2026-11-03.json)).
    This validates ID representation only; target existence, target kind,
    boundary association and native fill semantics remain open.
+   The shared typed common-metadata writer now validates reactor and
+   extension-dictionary source IDs and rejects invalid remap/resolver sentinel
+   outputs before emitting those groups ([receipt](docs/research/p4-common-object-reference-output-id-guard-2026-11-03.json)).
+   This does not prove target existence or graph closure. A callback resolver's
+   existing zero-result behavior still omits that optional typed edge, and
+   explicitly retained ACAD_REACTORS/ACAD_XDICTIONARY app-data groups remain a
+   separate unresolved route.
    For `PARTIALVIEWINGINDEX`, the generated low-level writer now remaps and
    reserves or allocates group-5 identity, binding the source identity only
    after successful staged emission; group-340 targets must resolve to one
