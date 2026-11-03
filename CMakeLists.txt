@@ -739,6 +739,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_pointcloud_reference_remapping PROPERTIES
         LABELS "fast;dxf;writer;pointcloud;references;generated"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_blockrecord_insert_reference_remapping
+        COMMAND libdxfrw_wave1_tests
+            --blockrecord-insert-reference-remapping)
+    set_tests_properties(libdxfrw_blockrecord_insert_reference_remapping PROPERTIES
+        LABELS "fast;dxf;writer;block-record;references;generated;transaction"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_layer_material_reference_remapping
         COMMAND libdxfrw_wave1_tests --layer-material-reference-remapping)
     set_tests_properties(libdxfrw_layer_material_reference_remapping PROPERTIES

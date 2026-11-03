@@ -1598,6 +1598,8 @@ public:
         std::string name;
         int insUnits {0};
         std::vector<std::uint8_t> previewData;
+        // Final output identities planned from the source BLOCK_RECORD's
+        // BLKREFS INSERT-handle list.
         std::vector<std::uint32_t> insertHandles;
         std::vector<std::shared_ptr<DRW_Variant>> extData;
     };

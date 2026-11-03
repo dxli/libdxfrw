@@ -4060,6 +4060,14 @@ std::uint32_t dxfRW::preallocateEntityHandle(std::uint32_t sourceHandle) {
         m_writeError = true;
         return 0;
     }
+    if (m_writingContext.sourceHandleToWrittenObjectMap.count(sourceHandle)
+            != 0
+        || m_plannedImageSourceHandles.count(sourceHandle) != 0
+        || m_sourceBlockRecordHandles.count(sourceHandle) != 0
+        || m_sourceBlockRecordNamesByHandle.count(sourceHandle) != 0) {
+        m_writeError = true;
+        return 0;
+    }
     if (m_plannedDxfGroupSourceHandles.count(sourceHandle) != 0) {
         m_writeError = true;
         return 0;
@@ -4069,8 +4077,51 @@ std::uint32_t dxfRW::preallocateEntityHandle(std::uint32_t sourceHandle) {
     if (existing != m_writingContext.sourceHandleToMintedMap.end())
         return existing->second;
     std::uint32_t emittedHandle = 0;
-    if (!allocateDxfHandle(emittedHandle))
+    try {
+        if (m_referenceResolver) {
+            emittedHandle = resolveReference(sourceHandle);
+        } else {
+            const auto explicitRemap = m_handleRemap.find(sourceHandle);
+            const auto derivedRemap = m_dxfWriteHandleRemap.find(sourceHandle);
+            if (explicitRemap != m_handleRemap.end())
+                emittedHandle = explicitRemap->second;
+            else if (derivedRemap != m_dxfWriteHandleRemap.end())
+                emittedHandle = derivedRemap->second;
+            else if (!allocateDxfHandle(emittedHandle))
+                return 0;
+        }
+        if (emittedHandle == 0 || emittedHandle == DRW::NoHandle
+            || isDxfFixedOutputHandle(emittedHandle)) {
+            m_writeError = true;
+            return 0;
+        }
+        for (const auto& binding :
+             m_writingContext.sourceHandleToMintedMap) {
+            if (binding.first != sourceHandle
+                && binding.second == emittedHandle) {
+                m_writeError = true;
+                return 0;
+            }
+        }
+        for (const auto& binding :
+             m_writingContext.sourceHandleToWrittenTableMap) {
+            if (binding.second == emittedHandle) {
+                m_writeError = true;
+                return 0;
+            }
+        }
+        for (const auto& binding :
+             m_writingContext.sourceHandleToWrittenObjectMap) {
+            if (binding.second == emittedHandle) {
+                m_writeError = true;
+                return 0;
+            }
+        }
+        m_handleAllocator->reserveForWrite(emittedHandle);
+    } catch (...) {
+        m_writeError = true;
         return 0;
+    }
     const std::size_t mutationCheckpoint = m_dxfWriteMutations.size();
     if (m_recordStateScopeDepth != 0) {
         m_dxfWriteMutations.push_back({
@@ -14604,7 +14655,41 @@ bool dxfRW::writeBlockRecord(
             m_writeError = true;
             return false;
         }
+        RecordStateScope state(*this);
         PendingDxfBlockRecord record;
+        record.name = std::move(name);
+        record.insUnits = insUnits;
+        record.previewData = previewData;
+        try {
+            if (!DRW::reserve(record.insertHandles,
+                              static_cast<int>(insertHandles.size())))
+                return failDxfWrite();
+            for (const std::uint32_t sourceHandle : insertHandles) {
+                if (sourceHandle == 0u) {
+                    record.insertHandles.push_back(0u);
+                    continue;
+                }
+                const std::uint32_t emittedHandle =
+                    preallocateEntityHandle(sourceHandle);
+                if (emittedHandle == 0u
+                    || emittedHandle == DRW::NoHandle
+                    || isDxfFixedOutputHandle(emittedHandle))
+                    return failDxfWrite();
+                record.insertHandles.push_back(emittedHandle);
+            }
+            record.extData.reserve(extData.size());
+            for (const DRW_Variant* value : extData) {
+                if (value == nullptr) {
+                    m_writeError = true;
+                    return false;
+                }
+                record.extData.push_back(
+                    std::make_shared<DRW_Variant>(*value));
+            }
+        } catch (...) {
+            m_writeError = true;
+            return false;
+        }
         try {
             if (!allocateDxfHandle(record.handle))
                 return false;
@@ -14617,24 +14702,6 @@ bool dxfRW::writeBlockRecord(
             }
             m_handleAllocator->reserve(blockHandle);  // BLOCK
             m_handleAllocator->reserve(endBlockHandle);  // ENDBLK
-        } catch (...) {
-            m_writeError = true;
-            return false;
-        }
-        record.name = std::move(name);
-        record.insUnits = insUnits;
-        record.previewData = previewData;
-        record.insertHandles = insertHandles;
-        try {
-            record.extData.reserve(extData.size());
-            for (const DRW_Variant* value : extData) {
-                if (value == nullptr) {
-                    m_writeError = true;
-                    return false;
-                }
-                record.extData.push_back(
-                    std::make_shared<DRW_Variant>(*value));
-            }
         } catch (...) {
             m_writeError = true;
             return false;
@@ -14665,9 +14732,9 @@ bool dxfRW::writeBlockRecord(
                 m_writeError = true;
                 return false;
             }
+            state.commit();
             return true;
         }
-        RecordStateScope state(*this);
         DxfWriterRecordScope bytes(*writer);
         const std::size_t mutationCheckpoint = m_dxfWriteMutations.size();
         try {

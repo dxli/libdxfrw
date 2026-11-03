@@ -2226,6 +2226,94 @@ void testPointCloudReferenceRemapping(TestContext& t) {
     }
 }
 
+void testBlockRecordInsertReferenceRemapping(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1027;
+            owner.binFile = binary;
+            owner.setHandleRemap({{0xA50u, 0xB50u}});
+            if (useResolver) {
+                owner.setReferenceResolver([](std::uint32_t source) {
+                    return source == 0xA50u ? 0xC50u : source;
+                });
+            }
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+
+            const bool blockWritten = owner.writeBlockRecord(
+                "BLKREFS_TEST", 0, {}, {0xA50u});
+            DRW_Insert insert;
+            insert.handle = 0xA50u;
+            insert.name = "BLKREFS_TEST";
+            const bool insertWritten = blockWritten
+                && owner.writeInsert(&insert)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(insertWritten,
+                     "BLOCK_RECORD plans its BLKREFS INSERT identity before emission");
+            if (!insertWritten)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderAscii>(&input));
+            std::uint32_t blockInsert = 0u;
+            std::uint32_t insertIdentity = 0u;
+            std::string recordName;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (recordName == "BLOCK_RECORD" && code == 331) {
+                    blockInsert = reader->getHandleString();
+                } else if (recordName == "INSERT" && code == 5) {
+                    insertIdentity = reader->getHandleString();
+                }
+            }
+            const std::uint32_t expected = useResolver ? 0xC50u : 0xB50u;
+            t.expect(ended && blockInsert == expected
+                         && insertIdentity == expected
+                         && owner.remapEntityHandle(0xA50u) == expected,
+                     useResolver
+                         ? "BLOCK_RECORD BLKREFS uses resolver identity and shares it with INSERT"
+                         : "BLOCK_RECORD BLKREFS uses source remap and shares it with INSERT");
+        }
+
+        std::ostringstream rejectedOutput;
+        rejectedOutput << "PRESERVED_PREFIX";
+        dxfRW rejectedOwner("");
+        rejectedOwner.version = DRW::AC1027;
+        rejectedOwner.binFile = binary;
+        rejectedOwner.setReferenceResolver([](std::uint32_t source) {
+            return source == 0xA50u ? 0u : source;
+        });
+        rejectedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&rejectedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&rejectedOutput));
+        rejectedOwner.writer->writeString(1, "PRESERVED_PREFIX");
+        const std::string before = rejectedOutput.str();
+        const bool refused = !rejectedOwner.writeBlockRecord(
+                "BLKREFS_TEST", 0, {}, {0xA50u})
+            && rejectedOutput.str() == before;
+        t.expect(refused,
+                 "BLOCK_RECORD refuses unresolved BLKREFS targets before publishing bytes");
+    }
+}
+
 void testNavisworksDefinitionReferenceRemapping(TestContext& t) {
     for (const bool binary : {false, true}) {
         for (const bool useResolver : {false, true}) {
@@ -17774,6 +17862,15 @@ int main(int argc, char** argv) {
         TestContext focused;
         testPointCloudReferenceRemapping(focused);
         std::cout << "POINTCLOUD reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--blockrecord-insert-reference-remapping") {
+        TestContext focused;
+        testBlockRecordInsertReferenceRemapping(focused);
+        std::cout << "BLOCK_RECORD BLKREFS reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
