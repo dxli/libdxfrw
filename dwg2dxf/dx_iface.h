@@ -555,6 +555,7 @@ public:
     void addMaterial(const DRW_Material& data) override;
     void addGeoData(const DRW_GeoData& data) override;
     void addRasterVariables(const DRW_RasterVariables& data) override;
+    void addWipeoutVariables(const DRW_WipeoutVariables& data) override;
     void addVisualStyle(const DRW_VisualStyle& data) override;
     void addBackground(const DRW_Background& data) override;
     void addSun(const DRW_Sun& data) override;
@@ -1548,6 +1549,29 @@ public:
             }
             if (!recordOpaqueDwgOutputQualification(handle)) {
                 std::cerr << "RASTERVARIABLES output frame qualification failed for handle "
+                          << handle << '\n';
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+        }
+        objectWritePhase = "WIPEOUTVARIABLES";
+        for (const std::uint32_t handle : m_extensionWipeoutVariablesHandles) {
+            const dx_data::WipeoutVariablesKey key{
+                cData->importGeneration, handle};
+            const auto variables = cData->dwgWipeoutVariables.find(key);
+            if (variables == cData->dwgWipeoutVariables.end()) {
+                std::cerr << "WIPEOUTVARIABLES output binding lost before emission\n";
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+            if (!dxfW->writeWipeoutVariables(&variables->second)) {
+                std::cerr << "WIPEOUTVARIABLES writer refused source handle "
+                          << handle << '\n';
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+            if (!recordOpaqueDwgOutputQualification(handle)) {
+                std::cerr << "WIPEOUTVARIABLES output frame qualification failed for handle "
                           << handle << '\n';
                 dxfW->writeRawDxfObject(nullptr);
                 return;
@@ -2838,6 +2862,8 @@ private:
     bool prepareDwgGeoDataOutput(bool debug);
     bool prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                                          bool debug);
+    bool prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
+                                          bool debug);
     bool prepareTableFallbackGraph(dx_data& data, DRW::Version targetVersion);
     void writeEntityOrTableFallback(DRW_Entity* entity);
     bool validateSortEntsGraph(const dx_data& data, bool debug = false);
@@ -3457,6 +3483,7 @@ private:
     std::vector<std::uint32_t> m_extensionDictionaryHandles;
     std::vector<std::uint32_t> m_extensionGeoDataHandles;
     std::vector<std::uint32_t> m_extensionRasterVariablesHandles;
+    std::vector<std::uint32_t> m_extensionWipeoutVariablesHandles;
     std::vector<dx_data::UnderlayDefinitionKey>
         m_underlayDefinitionKeysToWrite;
     std::vector<std::uint32_t> m_extensionAssociativeHandles;

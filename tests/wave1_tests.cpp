@@ -9287,6 +9287,26 @@ void testImageObjectNumericWireKinds(TestContext& t) {
             "1:runtime-only.png", "10:0x1p+5", "20:0x1p+4"},
            "generated image OBJECTS typed numeric sentinel writes");
     }
+
+    for (const std::uint16_t displayFrame : {0u, 1u}) {
+        expectTypedNumericWire(t, [displayFrame](dxfRW& writer) {
+            DRW_WipeoutVariables variables;
+            variables.handle = 0x303u;
+            variables.parentHandle = 0x304u;
+            variables.m_displayFrame = displayFrame;
+            return writer.writeWipeoutVariables(&variables);
+        }, {"70:" + std::to_string(displayFrame)},
+           "WIPEOUTVARIABLES documented DXF display modes");
+    }
+    for (const std::uint16_t unsupported : {2u, 3u, 65535u}) {
+        expectTypedNumericRangeRejected(t, [unsupported](dxfRW& writer) {
+            DRW_WipeoutVariables variables;
+            variables.handle = 0x303u;
+            variables.parentHandle = 0x304u;
+            variables.m_displayFrame = unsupported;
+            return writer.writeWipeoutVariables(&variables);
+        });
+    }
 }
 
 void testSectionObjectIndicatorColorWire(TestContext& t) {
@@ -15714,6 +15734,14 @@ void testHeaderMaintenanceWidths(TestContext& t) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--wipeoutvariables-display-mode-domain") {
+        TestContext focused;
+        testImageObjectNumericWireKinds(focused);
+        std::cout << "WIPEOUTVARIABLES display-mode domain: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
     if (argc == 2
         && std::string(argv[1]) == "--sectionobject-indicator-color-wire") {
         TestContext focused;

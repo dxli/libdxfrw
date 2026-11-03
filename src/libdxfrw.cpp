@@ -32862,7 +32862,7 @@ bool dxfRW::writeMLineStyle(DRW_MLineStyle *ent) {
 //WIPEOUTVARIABLES (AcDbWipeoutVariables, custom class). Inverse of
 //DRW_WipeoutVariables::parseCode: only the global display-frame flag (DXF 70).
 bool dxfRW::writeWipeoutVariables(DRW_WipeoutVariables *ent) {
-    if (!preflightTableEntry(ent))
+    if (!preflightTableEntry(ent) || ent->m_displayFrame > 1u)
         return false;
     writer->writeString(0, "WIPEOUTVARIABLES");
     writer->writeString(5, toHexStr(ent->handle));

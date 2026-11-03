@@ -726,6 +726,10 @@ if(LIBDXFRW_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/dwg2dxf)
     target_link_libraries(libdxfrw_wave1_tests PRIVATE dxfrw)
     add_test(NAME libdxfrw_wave1 COMMAND libdxfrw_wave1_tests)
+    add_test(NAME libdxfrw_wipeoutvariables_display_mode_domain
+        COMMAND libdxfrw_wave1_tests --wipeoutvariables-display-mode-domain)
+    set_tests_properties(libdxfrw_wipeoutvariables_display_mode_domain PROPERTIES
+        LABELS "fast;dxf;writer;objects;wipeout;generated;transaction" TIMEOUT 15)
     add_test(NAME libdxfrw_dxf_standard_object_identities
         COMMAND libdxfrw_wave1_tests --dxf-standard-object-identities)
     set_tests_properties(libdxfrw_dxf_standard_object_identities PROPERTIES
