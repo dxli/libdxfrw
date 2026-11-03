@@ -29707,10 +29707,17 @@ void dxfRW::writeObjectOwner(std::uint32_t parentHandle) {
     }
     if (version < DRW::AC1014)
         return;  // R14+ object records carry owner handles.
-    if (parentHandle != 0)
-        writer->writeString(330, toHexStr(remapObjectHandle(parentHandle)));
-    else
+    if (parentHandle != 0) {
+        const std::uint32_t emittedOwner = m_referenceResolver
+            ? resolveReference(parentHandle) : remapObjectHandle(parentHandle);
+        if (emittedOwner == 0u || emittedOwner == DRW::NoHandle) {
+            m_writeError = true;
+            return;
+        }
+        writer->writeString(330, toHexStr(emittedOwner));
+    } else {
         writer->writeString(330, "C");
+    }
 }
 
 bool dxfRW::writeDictionaryRecord(

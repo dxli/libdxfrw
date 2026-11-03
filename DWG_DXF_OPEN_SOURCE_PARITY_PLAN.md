@@ -133,6 +133,12 @@ engines.
    become a typed reference; the generated wrong-role, rollback, and cursor
    alignment control is in the [default-handle role receipt](docs/research/p4-dictionary-default-handle-role-guard-2026-11-02.json).
    This does not establish target existence, ownership, or output closure.
+   The shared OBJECTS group-330 owner emitter now uses resolver-first final IDs,
+   with source-handle-remap fallback, and refuses unresolved nonzero owners.
+   Generated ASCII/Binary controls cover both mappings and atomic refusal with
+   corrected fresh-writer retry ([receipt](docs/research/p4-object-owner-reference-remapping-2026-11-03.json)).
+   This does not establish target existence, ownership validity, or graph
+   closure.
    LAYER's optional material hard pointer (group 347) now uses resolver-first
    output identity with source-handle-remap fallback; the generated ASCII/Binary
    control verifies both paths ([receipt](docs/research/p4-layer-material-reference-remapping-2026-11-03.json)).

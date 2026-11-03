@@ -2939,6 +2939,95 @@ void testTableReferenceRemapping(TestContext& t) {
     }
 }
 
+void testObjectOwnerReferenceRemapping(TestContext& t) {
+    const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
+        {0x801u, 0xA81u}};
+    const auto resolverValue = [](std::uint32_t source) {
+        return source == 0x801u ? std::uint32_t{0xB81u} : source;
+    };
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap(sourceToRemapped);
+            if (useResolver)
+                owner.setReferenceResolver(resolverValue);
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+            owner.writeObjectOwner(0x801u);
+            const bool wrote = !owner.m_writeError
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote, "OBJECTS owner reference serializes");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::vector<std::uint32_t> observed;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    if (reader->getString() == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (code == 330) {
+                    observed.push_back(reader->getHandleString());
+                }
+            }
+            const std::uint32_t expected = useResolver ? 0xB81u : 0xA81u;
+            t.expect(ended && observed == std::vector<std::uint32_t>{expected},
+                     useResolver
+                         ? "OBJECTS owner emits final resolver identity"
+                         : "OBJECTS owner emits source-handle remap");
+        }
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1032;
+        failedOwner.binFile = binary;
+        failedOwner.setReferenceResolver([](std::uint32_t) {
+            return std::uint32_t{0u};
+        });
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterAscii>(&output));
+        failedOwner.writeObjectOwner(0x801u);
+        t.expect(failedOwner.m_writeError && output.str().empty(),
+                 "unresolved OBJECTS owner preserves destination");
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1032;
+        retryOwner.binFile = binary;
+        retryOwner.setReferenceResolver(resolverValue);
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterAscii>(&retryOutput));
+        retryOwner.writeObjectOwner(0x801u);
+        const bool retried = !retryOwner.m_writeError
+            && retryOwner.writer->writeString(0, "WIRE_END");
+        t.expect(retried,
+                 "OBJECTS owner accepts corrected fresh-writer retry");
+    }
+}
+
 void testViewportReferenceRemapping(TestContext& t) {
     const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
         {0x901u, 0xA91u}, {0x902u, 0xA92u}, {0x903u, 0xA93u},
@@ -17135,6 +17224,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testTableReferenceRemapping(focused);
         std::cout << "TABLE reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--object-owner-reference-remapping") {
+        TestContext focused;
+        testObjectOwnerReferenceRemapping(focused);
+        std::cout << "OBJECTS owner reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

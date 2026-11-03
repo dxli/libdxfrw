@@ -751,6 +751,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_wave1_tests --table-reference-remapping)
     set_tests_properties(libdxfrw_table_reference_remapping PROPERTIES
         LABELS "fast;dxf;writer;table;references;generated" TIMEOUT 15)
+    add_test(NAME libdxfrw_object_owner_reference_remapping
+        COMMAND libdxfrw_wave1_tests --object-owner-reference-remapping)
+    set_tests_properties(libdxfrw_object_owner_reference_remapping PROPERTIES
+        LABELS "fast;dxf;writer;objects;references;generated" TIMEOUT 15)
     add_test(NAME libdxfrw_navisworks_definition_reference_remapping
         COMMAND libdxfrw_wave1_tests
             --navisworks-definition-reference-remapping)
