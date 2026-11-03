@@ -101,6 +101,20 @@
     "converterInvocation": "Not run because strict signature verification failed.",
     "qualificationEffect": "No conversion attempted; no support claim changed. The AC1027 suffix remains unresolved."
   },
+  "latestUnlockedSessionVerification": {
+    "date": "2026-11-03",
+    "time": "2026-11-03 12:46:46 UTC",
+    "userStateUpdate": "User reported unlocking the Mac session; strict signature verification was repeated.",
+    "applicationBundle": "/Applications/ODAFileConverter.app",
+    "bundleVersion": "27.1.0.0",
+    "executable": "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter",
+    "executableSha256": "21a8f029e7d41af64088f65492404d97ffec0d2f7886703b3b725f5ac4a55783",
+    "signatureCheckCommand": "codesign --verify --strict --verbose=2 /Applications/ODAFileConverter.app",
+    "signatureCheckExitCode": 1,
+    "signatureCheckResult": "FAIL: invalid signature (code or signature have been modified), arm64.",
+    "converterInvocation": "Not run because strict signature verification failed.",
+    "qualificationEffect": "No conversion attempted; no support claim changed. The AC1027 suffix remains unresolved."
+  },
   "latestUserUnlockCheck": {
     "date": "2026-11-03",
     "time": "2026-11-03 11:24:02 UTC",
