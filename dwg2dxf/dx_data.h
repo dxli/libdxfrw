@@ -700,6 +700,12 @@ public:
     std::size_t actionPathObjectRetainedRecords{0};
     std::size_t actionPathObjectRetainedBytes{0};
     bool actionPathObjectCaptureFailed{false};
+    // SUNSTUDY callbacks are retained separately from generated rendering
+    // transport evidence; their references and native meaning stay gated.
+    std::list<DRW_SunStudy> sunStudies;
+    std::size_t sunStudyRetainedRecords{0};
+    std::size_t sunStudyRetainedBytes{0};
+    bool sunStudyCaptureFailed{false};
     // Common DICTIONARY and named-object-root callback copies share one
     // aggregate budget because both retain the same entry-name/handle graph.
     std::size_t dictionaryRetainedRecords{0};

@@ -1151,6 +1151,10 @@ add_test(NAME dwg2dxf_action_path_object_capture_limits
     COMMAND libdxfrw_dwg2dxf_adapter_tests --action-path-object-capture-limits)
 set_tests_properties(dwg2dxf_action_path_object_capture_limits PROPERTIES
     LABELS "fast;dxf;adapter;objects" TIMEOUT 10)
+add_test(NAME dwg2dxf_sunstudy_callback_capture_limits
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --sunstudy-callback-capture-limits)
+set_tests_properties(dwg2dxf_sunstudy_callback_capture_limits PROPERTIES
+    LABELS "fast;dxf;adapter;objects;rendering" TIMEOUT 10)
 add_test(NAME dwg2dxf_hatch_mpolygon_runtime_dispatch
     COMMAND libdxfrw_dwg2dxf_adapter_tests --hatch-mpolygon-runtime-dispatch)
 set_tests_properties(dwg2dxf_hatch_mpolygon_runtime_dispatch PROPERTIES

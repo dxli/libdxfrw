@@ -18922,6 +18922,163 @@ bool actionPathObjectCallbackCaptureLimitsFailClosed() {
     return true;
 }
 
+bool sunStudyCallbackCaptureLimitsFailClosed() {
+    DRW_SunStudy study;
+    study.handle = 0xF101u;
+    study.parentHandle = 0xF1F0u;
+    study.name = "sun-study";
+    study.reactorHandles.push_back(0xF102u);
+    study.m_classVersion = 4;
+    study.m_setupName = "morning";
+    study.m_description = "winter-light";
+    study.m_sheetSetName = "site-plan";
+    study.m_sheetSubsetName = "north-wing";
+    study.m_outputType = 2;
+    study.m_useSubset = true;
+    study.m_selectDatesFromCalendar = true;
+    study.m_selectRangeOfDates = true;
+    study.m_lockViewports = true;
+    study.m_labelViewports = false;
+    study.m_startTime = 100;
+    study.m_endTime = 400;
+    study.m_interval = 15;
+    study.m_shadePlotType = 6;
+    study.m_viewportCount = 3;
+    study.m_rowCount = 2;
+    study.m_columnCount = 4;
+    study.m_spacing = 1.5;
+    study.m_dates = {{2460000, 3600000}, {2460001, 7200000}};
+    study.m_hours = {true, false, true, true};
+    study.m_pageSetupWizardHandle = 0xA101u;
+    study.m_viewHandle = 0xA102u;
+    study.m_visualStyleHandle = 0xA103u;
+    study.m_textStyleHandle = 0xA104u;
+
+    const std::size_t expectedBytes = sizeof(DRW_SunStudy)
+        + study.name.size() + 1u
+        + study.reactorHandles.size() * sizeof(std::uint32_t)
+        + study.m_setupName.size() + 1u
+        + study.m_description.size() + 1u
+        + study.m_sheetSetName.size() + 1u
+        + study.m_sheetSubsetName.size() + 1u
+        + study.m_dates.size() * sizeof(DRW_SunStudyDate)
+        + study.m_hours.size() * sizeof(bool)
+        + dx_iface::SunStudyListNodeBytes;
+
+    dx_data captured;
+    dx_iface receiver;
+    receiver.cData = &captured;
+    receiver.addSunStudy(study);
+    if (captured.sunStudyCaptureFailed
+        || captured.sunStudyRetainedRecords != 1u
+        || captured.sunStudyRetainedBytes != expectedBytes
+        || captured.sunStudies.size() != 1u)
+        return fail("SUNSTUDY typed callback did not retain its bounded payload");
+
+    const DRW_SunStudy& retained = captured.sunStudies.front();
+    if (retained.handle != study.handle
+        || retained.parentHandle != study.parentHandle
+        || retained.name != study.name
+        || retained.reactorHandles != study.reactorHandles
+        || retained.m_classVersion != study.m_classVersion
+        || retained.m_setupName != study.m_setupName
+        || retained.m_description != study.m_description
+        || retained.m_sheetSetName != study.m_sheetSetName
+        || retained.m_sheetSubsetName != study.m_sheetSubsetName
+        || retained.m_outputType != study.m_outputType
+        || retained.m_useSubset != study.m_useSubset
+        || retained.m_selectDatesFromCalendar
+            != study.m_selectDatesFromCalendar
+        || retained.m_selectRangeOfDates != study.m_selectRangeOfDates
+        || retained.m_lockViewports != study.m_lockViewports
+        || retained.m_labelViewports != study.m_labelViewports
+        || retained.m_startTime != study.m_startTime
+        || retained.m_endTime != study.m_endTime
+        || retained.m_interval != study.m_interval
+        || retained.m_shadePlotType != study.m_shadePlotType
+        || retained.m_viewportCount != study.m_viewportCount
+        || retained.m_rowCount != study.m_rowCount
+        || retained.m_columnCount != study.m_columnCount
+        || retained.m_spacing != study.m_spacing
+        || retained.m_dates.size() != study.m_dates.size()
+        || retained.m_dates[0].m_julianDay != study.m_dates[0].m_julianDay
+        || retained.m_dates[0].m_milliseconds
+            != study.m_dates[0].m_milliseconds
+        || retained.m_dates[1].m_julianDay != study.m_dates[1].m_julianDay
+        || retained.m_dates[1].m_milliseconds
+            != study.m_dates[1].m_milliseconds
+        || retained.m_hours != study.m_hours
+        || retained.m_pageSetupWizardHandle
+            != study.m_pageSetupWizardHandle
+        || retained.m_viewHandle != study.m_viewHandle
+        || retained.m_visualStyleHandle != study.m_visualStyleHandle
+        || retained.m_textStyleHandle != study.m_textStyleHandle)
+        return fail("SUNSTUDY typed callback fields changed during retention");
+
+    dx_data recordLimited;
+    recordLimited.sunStudyRetainedRecords =
+        dx_iface::SunStudyCaptureMaxRecords - 1u;
+    dx_iface recordLimitedReceiver;
+    recordLimitedReceiver.cData = &recordLimited;
+    recordLimitedReceiver.addSunStudy(study);
+    recordLimitedReceiver.addSunStudy(study);
+    if (!recordLimited.sunStudyCaptureFailed
+        || recordLimited.sunStudyRetainedRecords
+            != dx_iface::SunStudyCaptureMaxRecords
+        || recordLimited.sunStudies.size() != 1u)
+        return fail("SUNSTUDY exact record limit or sticky refusal changed");
+
+    dx_data byteLimited;
+    byteLimited.sunStudyRetainedBytes =
+        dx_iface::SunStudyCaptureMaxRetainedBytes - expectedBytes + 1u;
+    dx_iface byteLimitedReceiver;
+    byteLimitedReceiver.cData = &byteLimited;
+    byteLimitedReceiver.addSunStudy(study);
+    if (!byteLimited.sunStudyCaptureFailed
+        || byteLimited.sunStudyRetainedRecords != 0u
+        || byteLimited.sunStudyRetainedBytes
+            != dx_iface::SunStudyCaptureMaxRetainedBytes - expectedBytes + 1u
+        || !byteLimited.sunStudies.empty())
+        return fail("SUNSTUDY over-budget copy was not rejected atomically");
+
+    dx_data itemLimited;
+    dx_iface itemLimitedReceiver;
+    itemLimitedReceiver.cData = &itemLimited;
+    DRW_SunStudy tooManyHours = study;
+    tooManyHours.m_hours.resize(
+        static_cast<std::size_t>(DRW_SunStudy::kMaxHourCount) + 1u, true);
+    itemLimitedReceiver.addSunStudy(tooManyHours);
+    if (!itemLimited.sunStudyCaptureFailed
+        || itemLimited.sunStudyRetainedRecords != 0u
+        || !itemLimited.sunStudies.empty())
+        return fail("SUNSTUDY typed callback exceeded its bounded hour vector");
+
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch().count();
+    const std::filesystem::path refusedOutput =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-sunstudy-capture-refusal-"
+           + std::to_string(nonce) + ".dxf");
+    std::ostringstream diagnostics;
+    std::streambuf* previousErrorBuffer = std::cerr.rdbuf(diagnostics.rdbuf());
+    dx_iface refusingWriter;
+    const bool outputSucceeded = refusingWriter.fileExport(
+        refusedOutput.string(), DRW::AC1027, false, &byteLimited, true);
+    std::cerr.rdbuf(previousErrorBuffer);
+    const bool outputWasPublished = std::filesystem::exists(refusedOutput);
+    if (outputWasPublished) {
+        std::error_code ignored;
+        std::filesystem::remove(refusedOutput, ignored);
+    }
+    if (outputSucceeded || outputWasPublished
+        || diagnostics.str().find("SUNSTUDY callback capture")
+            == std::string::npos)
+        return fail("SUNSTUDY callback capture failure did not block output before publication");
+
+    std::cout << "bounded SUNSTUDY typed callback retention and limits pass; graph/output qualification remains separate\n";
+    return true;
+}
+
 bool typedEntityCallbackCaptureLimitsFailClosed() {
     const auto sameClipPath = [](const std::vector<DRW_Coord>& lhs,
                                  const std::vector<DRW_Coord>& rhs) {
@@ -67758,6 +67915,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--action-path-object-capture-limits")
         return actionPathObjectCallbackCaptureLimitsFailClosed() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--sunstudy-callback-capture-limits")
+        return sunStudyCallbackCaptureLimitsFailClosed() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--hatch-mpolygon-runtime-dispatch")
         return hatchMPolygonRuntimeDispatchGuard() ? 0 : 1;

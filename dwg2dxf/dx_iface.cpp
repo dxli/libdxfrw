@@ -15014,6 +15014,54 @@ bool addStringVectorPayloadBytes(
     return true;
 }
 
+bool estimateSunStudyTypedRetainedBytes(
+        const DRW_SunStudy& study, std::size_t& estimate) noexcept {
+    estimate = sizeof(DRW_SunStudy);
+    return study.m_dates.size() <= DRW_SunStudy::kMaxDateCount
+        && study.m_hours.size() <= DRW_SunStudy::kMaxHourCount
+        && addTableEntryRetainedBytes(study, estimate)
+        && addStringPayloadBytes(study.m_setupName, estimate)
+        && addStringPayloadBytes(study.m_description, estimate)
+        && addStringPayloadBytes(study.m_sheetSetName, estimate)
+        && addStringPayloadBytes(study.m_sheetSubsetName, estimate)
+        && addVectorPayloadBytes(study.m_dates, estimate)
+        // vector<bool> packs its bits; one byte per logical value is a
+        // conservative retained-memory estimate for the copied hour flags.
+        && addAssociativeSlotBytes(study.m_hours.size(), sizeof(bool), estimate);
+}
+
+void retainSunStudy(dx_data* data, const DRW_SunStudy& study) noexcept {
+    if (data == nullptr || data->sunStudyCaptureFailed)
+        return;
+    if (data->sunStudyRetainedRecords
+        >= dx_iface::SunStudyCaptureMaxRecords) {
+        data->sunStudyCaptureFailed = true;
+        return;
+    }
+
+    std::size_t estimatedBytes = 0u;
+    if (!estimateSunStudyTypedRetainedBytes(study, estimatedBytes)
+        || estimatedBytes > dx_iface::SunStudyCaptureMaxRetainedBytes
+                - dx_iface::SunStudyListNodeBytes
+        || data->sunStudyRetainedBytes
+            > dx_iface::SunStudyCaptureMaxRetainedBytes
+        || estimatedBytes + dx_iface::SunStudyListNodeBytes
+            > dx_iface::SunStudyCaptureMaxRetainedBytes
+                - data->sunStudyRetainedBytes) {
+        data->sunStudyCaptureFailed = true;
+        return;
+    }
+
+    estimatedBytes += dx_iface::SunStudyListNodeBytes;
+    try {
+        data->sunStudies.push_back(study);
+        ++data->sunStudyRetainedRecords;
+        data->sunStudyRetainedBytes += estimatedBytes;
+    } catch (...) {
+        data->sunStudyCaptureFailed = true;
+    }
+}
+
 template <typename T>
 bool addNestedVectorPayloadBytes(
         const std::vector<std::vector<T>>& values,
@@ -55748,6 +55796,10 @@ void dx_iface::addObjectPtr(const DRW_ObjectPtr& data) {
         retainActionPathObject(cData, cData->objectPtrs, data);
 }
 
+void dx_iface::addSunStudy(const DRW_SunStudy& data) {
+    retainSunStudy(cData, data);
+}
+
 void dx_iface::addRenderSettings(const DRW_RenderSettings& data) {
     observeRenderingInput(&data,nullptr);
     if (cData == nullptr || cData->renderSettingsCaptureFailed)
@@ -72218,6 +72270,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     if (cData->actionPathObjectCaptureFailed) {
         reportPreflightFailure(
             "MotionPath/CurvePath/PointPath/ObjectPtr callback capture incomplete or over record/byte limit");
+        return false;
+    }
+    if (cData->sunStudyCaptureFailed) {
+        reportPreflightFailure(
+            "SUNSTUDY callback capture incomplete, malformed, or over record/byte limit");
         return false;
     }
     if (cData->sourceFormat == dx_source_format::DWG

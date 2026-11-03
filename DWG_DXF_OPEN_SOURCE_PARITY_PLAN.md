@@ -421,9 +421,12 @@ cases and pre-AC1021 targets remain atomic refusals. Physical producer/source-
 owner evidence and native live-section behavior remain open; see the [LiveSection
 receipt](docs/research/p5-view-live-section-graph-closure-2026-11-03.json) and
 [SECTION_SETTINGS graph receipt](docs/research/p4-section-settings-adapter-graph-closure-2026-11-03.json).
-SUNSTUDY/MOTIONPATH/CURVEPATH/POINTPATH/OBJECTPTR physical producer coverage
-and native plotting/scene semantics remain open; generated record-identity and
-reference round-trips are transport evidence only (see the [SUNSTUDY receipt](docs/research/p5-sunstudy-record-identity-remapping-2026-11-03.json),
+The concrete adapter now retains typed SUNSTUDY callbacks under aggregate
+record, byte, and vector bounds ([capture receipt](docs/research/p5-sunstudy-callback-retention-2026-11-03.json));
+physical source-span/owner binding, adapter output, and native rendering remain
+unqualified. SUNSTUDY/MOTIONPATH/CURVEPATH/POINTPATH/OBJECTPTR physical
+producer coverage and native plotting/scene semantics remain open; generated
+record-identity and reference round-trips are transport evidence only (see the [SUNSTUDY receipt](docs/research/p5-sunstudy-record-identity-remapping-2026-11-03.json),
 [scene-path receipt](docs/research/p5-scene-path-record-identity-remapping-2026-11-03.json),
 and [path-carrier receipt](docs/research/p5-pointpath-objectptr-record-identity-remapping-2026-11-03.json)).
 Keep physical SUN ownership constrained to the documented VPORT/VIEWPORT
