@@ -1140,6 +1140,12 @@ eligible reader. The exact package and environment result are in the
   typed definitions and references; see the [Underlay target-version receipt](docs/research/p8-underlay-target-version-gates-2026-11-02.json).
   This proves transport only, not native consumer semantics or remaining BLOCK
   callback coverage.
+- Finish MotionPath/CurvePath/PointPath/ObjectPtr OBJECTS qualification. The
+  concrete adapter now retains their callbacks under aggregate record/byte
+  limits ([capture receipt](docs/research/p8-action-path-object-callback-retention-2026-11-03.json));
+  field/source-span matching, owner and handle-role closure, output binding,
+  strict ASCII/Binary readback, and native consumer semantics remain open.
+  Keep unsupported DWG profiles refused until those gates pass.
 - The optional desktop and native Linux/Windows FreeCAD CMake gates now bind to
   the existing tracked `ordinary_enc_AC1027.dwg`; a registration-only configure
   lists the desktop, open, and insert controls. Native execution is still open;

@@ -18769,6 +18769,159 @@ bool plotSettingsCallbackCaptureLimitsFailClosed() {
     return true;
 }
 
+bool actionPathObjectCallbackCaptureLimitsFailClosed() {
+    const auto expectedBytes = [](const DRW_TableEntry& value,
+                                  std::size_t inlineBytes) {
+        return inlineBytes + value.name.size() + 1u
+            + value.reactorHandles.size() * sizeof(std::uint32_t)
+            + dx_iface::ActionPathObjectListNodeBytes;
+    };
+
+    DRW_MotionPath motionPath;
+    motionPath.handle = 0xF001u;
+    motionPath.parentHandle = 0xF0F0u;
+    motionPath.name = "camera-path";
+    motionPath.reactorHandles.push_back(0xF002u);
+    motionPath.m_classVersion = 7;
+    motionPath.m_cameraPathHandle = 0xA101u;
+    motionPath.m_targetPathHandle = 0xA102u;
+    motionPath.m_viewTableHandle = 0xA103u;
+    motionPath.m_frames = 240;
+    motionPath.m_frameRate = 60;
+    motionPath.m_cornerDeceleration = true;
+
+    DRW_CurvePath curvePath;
+    curvePath.handle = 0xF003u;
+    curvePath.name = "curve-path";
+    curvePath.m_classVersion = 9;
+    curvePath.m_entityHandle = 0xB101u;
+
+    DRW_PointPath pointPath;
+    pointPath.handle = 0xF004u;
+    pointPath.name = "point-path";
+    pointPath.m_classVersion = 11;
+    pointPath.m_point = DRW_Coord{1.25, -2.5, 3.75};
+
+    DRW_ObjectPtr objectPtr;
+    objectPtr.handle = 0xF005u;
+    objectPtr.name = "object-pointer";
+    objectPtr.reactorHandles.push_back(0xF006u);
+
+    dx_data captured;
+    dx_iface receiver;
+    receiver.cData = &captured;
+    receiver.addMotionPath(motionPath);
+    receiver.addCurvePath(curvePath);
+    receiver.addPointPath(pointPath);
+    receiver.addObjectPtr(objectPtr);
+
+    const std::size_t expectedTotalBytes =
+        expectedBytes(motionPath, sizeof(DRW_MotionPath))
+        + expectedBytes(curvePath, sizeof(DRW_CurvePath))
+        + expectedBytes(pointPath, sizeof(DRW_PointPath))
+        + expectedBytes(objectPtr, sizeof(DRW_ObjectPtr));
+    if (captured.actionPathObjectCaptureFailed
+        || captured.actionPathObjectRetainedRecords != 4u
+        || captured.actionPathObjectRetainedBytes != expectedTotalBytes
+        || captured.motionPaths.size() != 1u
+        || captured.curvePaths.size() != 1u
+        || captured.pointPaths.size() != 1u
+        || captured.objectPtrs.size() != 1u)
+        return fail("action-path OBJECTS callbacks were not retained within the aggregate budget");
+
+    const DRW_MotionPath& retainedMotionPath = captured.motionPaths.front();
+    const DRW_CurvePath& retainedCurvePath = captured.curvePaths.front();
+    const DRW_PointPath& retainedPointPath = captured.pointPaths.front();
+    const DRW_ObjectPtr& retainedObjectPtr = captured.objectPtrs.front();
+    if (retainedMotionPath.handle != motionPath.handle
+        || retainedMotionPath.parentHandle != motionPath.parentHandle
+        || retainedMotionPath.name != motionPath.name
+        || retainedMotionPath.reactorHandles != motionPath.reactorHandles
+        || retainedMotionPath.m_classVersion != motionPath.m_classVersion
+        || retainedMotionPath.m_cameraPathHandle
+            != motionPath.m_cameraPathHandle
+        || retainedMotionPath.m_targetPathHandle
+            != motionPath.m_targetPathHandle
+        || retainedMotionPath.m_viewTableHandle
+            != motionPath.m_viewTableHandle
+        || retainedMotionPath.m_frames != motionPath.m_frames
+        || retainedMotionPath.m_frameRate != motionPath.m_frameRate
+        || retainedMotionPath.m_cornerDeceleration
+            != motionPath.m_cornerDeceleration
+        || retainedCurvePath.handle != curvePath.handle
+        || retainedCurvePath.name != curvePath.name
+        || retainedCurvePath.m_classVersion != curvePath.m_classVersion
+        || retainedCurvePath.m_entityHandle != curvePath.m_entityHandle
+        || retainedPointPath.handle != pointPath.handle
+        || retainedPointPath.name != pointPath.name
+        || retainedPointPath.m_classVersion != pointPath.m_classVersion
+        || retainedPointPath.m_point.x != pointPath.m_point.x
+        || retainedPointPath.m_point.y != pointPath.m_point.y
+        || retainedPointPath.m_point.z != pointPath.m_point.z
+        || retainedObjectPtr.handle != objectPtr.handle
+        || retainedObjectPtr.name != objectPtr.name
+        || retainedObjectPtr.reactorHandles != objectPtr.reactorHandles)
+        return fail("action-path OBJECTS callback values or common table-entry fields changed during capture");
+
+    dx_data recordLimited;
+    recordLimited.actionPathObjectRetainedRecords =
+        dx_iface::ActionPathObjectCaptureMaxRecords - 1u;
+    dx_iface recordLimitedReceiver;
+    recordLimitedReceiver.cData = &recordLimited;
+    recordLimitedReceiver.addMotionPath(motionPath);
+    recordLimitedReceiver.addCurvePath(curvePath);
+    if (!recordLimited.actionPathObjectCaptureFailed
+        || recordLimited.actionPathObjectRetainedRecords
+            != dx_iface::ActionPathObjectCaptureMaxRecords
+        || recordLimited.motionPaths.size() != 1u
+        || !recordLimited.curvePaths.empty())
+        return fail("action-path OBJECTS exact record bound or sticky refusal changed");
+
+    const std::size_t onePointPathBytes =
+        expectedBytes(pointPath, sizeof(DRW_PointPath));
+    dx_data byteLimited;
+    byteLimited.actionPathObjectRetainedBytes =
+        dx_iface::ActionPathObjectCaptureMaxRetainedBytes
+        - onePointPathBytes + 1u;
+    dx_iface byteLimitedReceiver;
+    byteLimitedReceiver.cData = &byteLimited;
+    byteLimitedReceiver.addPointPath(pointPath);
+    byteLimitedReceiver.addObjectPtr(objectPtr);
+    if (!byteLimited.actionPathObjectCaptureFailed
+        || byteLimited.actionPathObjectRetainedRecords != 0u
+        || byteLimited.actionPathObjectRetainedBytes
+            != dx_iface::ActionPathObjectCaptureMaxRetainedBytes
+                - onePointPathBytes + 1u
+        || !byteLimited.pointPaths.empty()
+        || !byteLimited.objectPtrs.empty())
+        return fail("action-path OBJECTS byte-limit failure did not remain atomic and sticky");
+
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch().count();
+    const std::filesystem::path refusedOutput =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-action-path-capture-refusal-"
+           + std::to_string(nonce) + ".dxf");
+    std::ostringstream diagnostics;
+    std::streambuf* previousErrorBuffer = std::cerr.rdbuf(diagnostics.rdbuf());
+    dx_iface refusingWriter;
+    const bool outputSucceeded = refusingWriter.fileExport(
+        refusedOutput.string(), DRW::AC1027, false, &byteLimited, true);
+    std::cerr.rdbuf(previousErrorBuffer);
+    const bool outputWasPublished = std::filesystem::exists(refusedOutput);
+    if (outputWasPublished) {
+        std::error_code ignored;
+        std::filesystem::remove(refusedOutput, ignored);
+    }
+    if (outputSucceeded || outputWasPublished
+        || diagnostics.str().find("MotionPath/CurvePath/PointPath/ObjectPtr")
+            == std::string::npos)
+        return fail("action-path OBJECTS capture failure did not block output with a specific diagnostic");
+
+    std::cout << "bounded MotionPath/CurvePath/PointPath/ObjectPtr typed callback capture passes; output qualification remains separate\n";
+    return true;
+}
+
 bool typedEntityCallbackCaptureLimitsFailClosed() {
     const auto sameClipPath = [](const std::vector<DRW_Coord>& lhs,
                                  const std::vector<DRW_Coord>& rhs) {
@@ -67602,6 +67755,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--typed-entity-capture-limits")
         return typedEntityCallbackCaptureLimitsFailClosed() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--action-path-object-capture-limits")
+        return actionPathObjectCallbackCaptureLimitsFailClosed() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--hatch-mpolygon-runtime-dispatch")
         return hatchMPolygonRuntimeDispatchGuard() ? 0 : 1;

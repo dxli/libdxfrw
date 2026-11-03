@@ -412,6 +412,11 @@ public:
         64u * 1024u * 1024u;
     static constexpr std::size_t TypedEntityListNodeBytes =
         sizeof(DRW_Entity*) + 2u * sizeof(void*);
+    static constexpr std::size_t ActionPathObjectCaptureMaxRecords = 100000u;
+    static constexpr std::size_t ActionPathObjectCaptureMaxRetainedBytes =
+        64u * 1024u * 1024u;
+    static constexpr std::size_t ActionPathObjectListNodeBytes =
+        2u * sizeof(void*);
     static constexpr std::size_t ImageDefinitionCaptureMaxRecords = 100000u;
     static constexpr std::size_t ImageDefinitionCaptureMaxRetainedBytes =
         64u * 1024u * 1024u;
@@ -612,6 +617,10 @@ public:
             const DRW_ObjectContextData& data) override;
     void addTableContent(const DRW_TableContentObject& data) override;
     void addTableGeometry(const DRW_TableGeometry& data) override;
+    void addMotionPath(const DRW_MotionPath& data) override;
+    void addCurvePath(const DRW_CurvePath& data) override;
+    void addPointPath(const DRW_PointPath& data) override;
+    void addObjectPtr(const DRW_ObjectPtr& data) override;
     void addUnsupportedObject(const DRW_UnsupportedObject& data) override;
     void addImageDefinitionReactor(const DRW_ImageDefinitionReactor& data) override;
     void addProxyEntity(const DRW_ProxyEntity& data) override;

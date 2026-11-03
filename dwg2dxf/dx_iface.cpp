@@ -14934,6 +14934,42 @@ bool addTableEntryRetainedBytes(
     return true;
 }
 
+template <typename ActionPathObject>
+void retainActionPathObject(dx_data* data,
+                            std::list<ActionPathObject>& destination,
+                            const ActionPathObject& object) noexcept {
+    if (data == nullptr || data->actionPathObjectCaptureFailed)
+        return;
+    if (data->actionPathObjectRetainedRecords
+        >= dx_iface::ActionPathObjectCaptureMaxRecords) {
+        data->actionPathObjectCaptureFailed = true;
+        return;
+    }
+
+    std::size_t estimatedBytes = sizeof(ActionPathObject);
+    if (!addTableEntryRetainedBytes(object, estimatedBytes)
+        || estimatedBytes
+            > dx_iface::ActionPathObjectCaptureMaxRetainedBytes
+                - dx_iface::ActionPathObjectListNodeBytes
+        || data->actionPathObjectRetainedBytes
+            > dx_iface::ActionPathObjectCaptureMaxRetainedBytes
+        || estimatedBytes + dx_iface::ActionPathObjectListNodeBytes
+            > dx_iface::ActionPathObjectCaptureMaxRetainedBytes
+                - data->actionPathObjectRetainedBytes) {
+        data->actionPathObjectCaptureFailed = true;
+        return;
+    }
+
+    estimatedBytes += dx_iface::ActionPathObjectListNodeBytes;
+    try {
+        destination.push_back(object);
+        ++data->actionPathObjectRetainedRecords;
+        data->actionPathObjectRetainedBytes += estimatedBytes;
+    } catch (...) {
+        data->actionPathObjectCaptureFailed = true;
+    }
+}
+
 bool addImageDefinitionRetainedBytes(
         const DRW_ImageDef& definition, std::size_t& estimate) noexcept {
     using ImageDefinitionMapValue =
@@ -55692,6 +55728,26 @@ void dx_iface::addTableGeometry(const DRW_TableGeometry& data) {
     } catch (...) { source.failed = true; }
 }
 
+void dx_iface::addMotionPath(const DRW_MotionPath& data) {
+    if (cData != nullptr)
+        retainActionPathObject(cData, cData->motionPaths, data);
+}
+
+void dx_iface::addCurvePath(const DRW_CurvePath& data) {
+    if (cData != nullptr)
+        retainActionPathObject(cData, cData->curvePaths, data);
+}
+
+void dx_iface::addPointPath(const DRW_PointPath& data) {
+    if (cData != nullptr)
+        retainActionPathObject(cData, cData->pointPaths, data);
+}
+
+void dx_iface::addObjectPtr(const DRW_ObjectPtr& data) {
+    if (cData != nullptr)
+        retainActionPathObject(cData, cData->objectPtrs, data);
+}
+
 void dx_iface::addRenderSettings(const DRW_RenderSettings& data) {
     observeRenderingInput(&data,nullptr);
     if (cData == nullptr || cData->renderSettingsCaptureFailed)
@@ -72157,6 +72213,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     if (cData->typedEntityCaptureFailed) {
         reportPreflightFailure(
             "typed entity/block/table callback capture incomplete or over record/byte limit");
+        return false;
+    }
+    if (cData->actionPathObjectCaptureFailed) {
+        reportPreflightFailure(
+            "MotionPath/CurvePath/PointPath/ObjectPtr callback capture incomplete or over record/byte limit");
         return false;
     }
     if (cData->sourceFormat == dx_source_format::DWG

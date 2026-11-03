@@ -691,6 +691,15 @@ public:
     std::size_t backgroundSunTypedRetainedBytes{0};
     bool backgroundSunTypedCaptureFailed{false};
     std::list<DRW_Dictionary>dictionaries; //typed OBJECTS dictionaries
+    // MotionPath/CurvePath/PointPath/ObjectPtr OBJECTS callbacks are retained
+    // for source inspection. Capture does not qualify graph roles or output.
+    std::list<DRW_MotionPath> motionPaths;
+    std::list<DRW_CurvePath> curvePaths;
+    std::list<DRW_PointPath> pointPaths;
+    std::list<DRW_ObjectPtr> objectPtrs;
+    std::size_t actionPathObjectRetainedRecords{0};
+    std::size_t actionPathObjectRetainedBytes{0};
+    bool actionPathObjectCaptureFailed{false};
     // Common DICTIONARY and named-object-root callback copies share one
     // aggregate budget because both retain the same entry-name/handle graph.
     std::size_t dictionaryRetainedRecords{0};
