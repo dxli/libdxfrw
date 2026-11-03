@@ -20408,8 +20408,12 @@ bool dwgProxyEntityOutputGate() {
         void addDxfClass(const DRW_Class& value) override {
             classes.push_back(value);
         }
+        void addLine(const DRW_Line& value) override {
+            lines.push_back(value);
+        }
         std::vector<DRW_ProxyEntity> proxies;
         std::vector<DRW_Class> classes;
+        std::vector<DRW_Line> lines;
     };
     const auto seedClassCoverage = [](dx_data& data) {
         data.dwgClassCoverage.m_status =
@@ -20517,9 +20521,9 @@ bool dwgProxyEntityOutputGate() {
         if (exported)
             return fail("proxy object-ID references escaped fail-closed output validation");
         if (diagnostics.str().find(
-                "proxy entity object-ID references lack a resolvable")
+                "proxy entity object-ID graph has a missing")
             == std::string::npos)
-            return fail("proxy refusal did not identify the unresolved object-ID edge");
+            return fail("proxy graph preflight did not identify its unresolved target");
         {
             std::ifstream previous(path, std::ios::binary);
             const std::string bytes{
@@ -20553,6 +20557,154 @@ bool dwgProxyEntityOutputGate() {
             || actualClass.instanceCount != 1
             || actualClass.entityFlag != 1)
             return fail("proxy fields or remapped class metadata changed on readback");
+
+        DRW_Line firstTarget;
+        firstTarget.handle = 0x456u;
+        firstTarget.basePoint = DRW_Coord(1.0, 2.0, 3.0);
+        firstTarget.secPoint = DRW_Coord(4.0, 5.0, 6.0);
+        DRW_Line secondTarget;
+        secondTarget.handle = 0x457u;
+        secondTarget.basePoint = DRW_Coord(7.0, 8.0, 9.0);
+        secondTarget.secPoint = DRW_Coord(10.0, 11.0, 12.0);
+        adapter.addLine(firstTarget);
+        adapter.addLine(secondTarget);
+        DRW_ProxyObjectIdRef softPointer;
+        softPointer.m_handleCode = 4u;
+        softPointer.m_dxfCode = 330;
+        softPointer.m_handle = firstTarget.handle;
+        softPointer.m_rawHandle = firstTarget.handle;
+        DRW_ProxyObjectIdRef hardPointer;
+        hardPointer.m_handleCode = 5u;
+        hardPointer.m_dxfCode = 340;
+        hardPointer.m_handle = secondTarget.handle;
+        hardPointer.m_rawHandle = secondTarget.handle;
+        retained->m_objectIdRefs = {softPointer, hardPointer};
+
+        const std::string graphSentinel = "PROXY_GRAPH_DESTINATION\n";
+        const auto writeSentinel = [&path](const std::string& value) {
+            std::ofstream existing(path, std::ios::binary | std::ios::trunc);
+            existing << value;
+            return static_cast<bool>(existing);
+        };
+        const auto pathContains = [&path](const std::string& expected) {
+            std::ifstream previous(path, std::ios::binary);
+            return std::string{std::istreambuf_iterator<char>(previous), {}}
+                == expected;
+        };
+        const auto refusesAtomically = [&]() {
+            return writeSentinel(graphSentinel)
+                && !adapter.fileExport(path.string(), DRW::AC1024, binary,
+                                       &data, false, true)
+                && pathContains(graphSentinel);
+        };
+
+        retained->m_objectIdRefs[0].m_handleCode = 2u;
+        retained->m_objectIdRefs[0].m_dxfCode = 350;
+        if (!refusesAtomically())
+            return fail("proxy adapter admitted an unsupported owner-role target");
+        retained->m_objectIdRefs[0] = softPointer;
+
+        dx_ifaceRawEntityEvent rawCollision;
+        rawCollision.typedEntityIndex = 0u;
+        rawCollision.record.name = "LINE";
+        rawCollision.record.handle = firstTarget.handle;
+        data.mBlock->rawEntities.push_back(std::move(rawCollision));
+        if (!refusesAtomically())
+            return fail("proxy adapter admitted a raw-record target collision");
+        data.mBlock->rawEntities.pop_back();
+
+        DRW_Layer objectCollision;
+        objectCollision.handle = firstTarget.handle;
+        objectCollision.name = "PROXY_TARGET_COLLISION";
+        data.layers.push_back(objectCollision);
+        if (!refusesAtomically())
+            return fail("proxy adapter admitted an OBJECTS/TABLES target collision");
+        data.layers.pop_back();
+
+        DRW_Line duplicateTarget = firstTarget;
+        adapter.addLine(duplicateTarget);
+        if (!refusesAtomically())
+            return fail("proxy graph accepted duplicate typed target identities");
+        DRW_Entity* duplicateEntity = data.mBlock->ent.back();
+        data.mBlock->ent.pop_back();
+        delete duplicateEntity;
+
+        if (!adapter.fileExport(path.string(), DRW::AC1024, binary,
+                                &data, false, true))
+            return fail("proxy graph with unique typed targets failed export");
+        dx_data graphReadData;
+        ProxyReadback graphReadback;
+        if (!graphReadback.fileImport(path.string(), &graphReadData, false)
+            || graphReadback.proxies.size() != 1u
+            || graphReadback.lines.size() != 2u)
+            return fail("proxy graph output failed typed ASCII/Binary readback");
+        const auto readLineHandle = [&graphReadback](std::uint32_t source) {
+            for (const DRW_Line& line : graphReadback.lines) {
+                if (line.basePoint.x == (source == 0x456u ? 1.0 : 7.0))
+                    return line.handle;
+            }
+            return 0u;
+        };
+        const DRW_ProxyEntity& graphProxy = graphReadback.proxies.front();
+        if (graphProxy.m_objectIdRefs.size() != 2u
+            || graphProxy.m_objectIdRefs[0].m_dxfCode != 330
+            || graphProxy.m_objectIdRefs[1].m_dxfCode != 340
+            || graphProxy.m_objectIdRefs[0].m_handle
+                != readLineHandle(0x456u)
+            || graphProxy.m_objectIdRefs[1].m_handle
+                != readLineHandle(0x457u)
+            || graphProxy.m_objectIdRefs[0].m_handle == 0u
+            || graphProxy.m_objectIdRefs[1].m_handle == 0u)
+            return fail("proxy graph did not preserve remapped typed target identities");
+
+        class OmitProxyTargetAdapter final : public dx_iface {
+        public:
+            void writeEntities() override {
+                if (!omitTargets) {
+                    dx_iface::writeEntities();
+                    return;
+                }
+                for (DRW_Entity* entity : cData->mBlock->ent) {
+                    if (entity != nullptr
+                        && entity->eType == DRW::PROXYENTITY)
+                        writeEntity(entity);
+                }
+            }
+            bool omitTargets{true};
+        } omitAdapter;
+        omitAdapter.cData = &data;
+        omitAdapter.currentBlock = data.mBlock;
+        const auto omitPath = std::filesystem::temp_directory_path()
+            / ("libdxfrw-dwg-proxy-omitted-target-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct OmitCleanup {
+            std::filesystem::path path;
+            ~OmitCleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } omitCleanup{omitPath};
+        {
+            std::ofstream existing(omitPath, std::ios::binary);
+            existing << graphSentinel;
+            if (!existing)
+                return fail("could not create proxy omission destination sentinel");
+        }
+        if (omitAdapter.fileExport(omitPath.string(), DRW::AC1024, binary,
+                                   &data, false, true))
+            return fail("proxy graph published when a planned target was omitted");
+        {
+            std::ifstream previous(omitPath, std::ios::binary);
+            if (std::string{std::istreambuf_iterator<char>(previous), {}}
+                != graphSentinel)
+                return fail("omitted proxy target changed the destination");
+        }
+        omitAdapter.omitTargets = false;
+        if (!omitAdapter.fileExport(omitPath.string(), DRW::AC1024, binary,
+                                    &data, false, true))
+            return fail("corrected proxy target omission failed adapter retry");
     }
 
     // The low-level DXF writer can serialize typed proxy object-ID edges only

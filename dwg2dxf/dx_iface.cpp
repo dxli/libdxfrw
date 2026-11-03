@@ -64541,6 +64541,7 @@ bool dx_iface::finalizeDxfWrite() {
             && !m_dxfDynamicReplayInspected)
         || (m_dxfAssociativeReplayPrepared
             && !m_dxfAssociativeReplayInspected)
+        || !finalizeDwgProxyEntityObjectIds()
         || !hasUnchangedDwgDynamicBlockOutputSources()
         || !finalizeDwgDynamicBlockOutput()
         || !finalizeDwgBlockRepresentationDataOutput()
@@ -65991,10 +65992,16 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         previousCompleteOutputRequirement};
     m_pendingOpaqueDwgOutputQualificationFrameIdentities.clear();
     m_dwgProxyEntityClassIdToOutput.clear();
+    m_dwgProxyEntityTargets.clear();
+    m_dwgProxyEntityOutputs.clear();
+    m_dwgProxyEntityGraphPlanned = false;
     struct DwgProxyClassOutputScope {
         dx_iface& owner;
         ~DwgProxyClassOutputScope() {
             owner.m_dwgProxyEntityClassIdToOutput.clear();
+            owner.m_dwgProxyEntityTargets.clear();
+            owner.m_dwgProxyEntityOutputs.clear();
+            owner.m_dwgProxyEntityGraphPlanned = false;
         }
     } dwgProxyClassOutputScope{*this};
     struct PendingOutputQualificationScope {
@@ -71236,6 +71243,447 @@ bool dx_iface::planLeaderAnnotationHandles() {
     }
 }
 
+bool dx_iface::planDwgProxyEntityObjectIds() {
+    m_dwgProxyEntityTargets.clear();
+    m_dwgProxyEntityOutputs.clear();
+    m_dwgProxyEntityGraphPlanned = false;
+    if (cData == nullptr || dxfW == nullptr)
+        return false;
+    if (!cData->dwgProxyEntityPresent) {
+        m_dwgProxyEntityGraphPlanned = true;
+        return true;
+    }
+    if (cData->sourceFormat != dx_source_format::DWG
+        || cData->sourceVersion != dxfW->getVersion()
+        || m_dwgProxyEntityClassIdToOutput.empty())
+        return false;
+
+    constexpr std::size_t maxInventoryRecords = 1000000u;
+    constexpr std::size_t maxReferenceEdges = 1000000u;
+    try {
+        std::unordered_set<std::uint32_t> referencedHandles;
+        std::unordered_map<std::uint32_t, DwgProxyEntityTarget> inventory;
+        std::unordered_set<std::uint32_t> nonEntityCollisions;
+        std::unordered_set<std::uint32_t> rawEntityCollisions;
+        std::size_t inventoryRecords = 0u;
+        std::size_t referenceEdges = 0u;
+
+        const auto entityRecordName = [this](const DRW_Entity* entity) {
+            if (entity == nullptr)
+                return std::string{};
+            if (entity->eType == DRW::PROXYENTITY) {
+                const auto* proxy = dynamic_cast<const DRW_ProxyEntity*>(entity);
+                if (proxy == nullptr || typeid(*entity) != typeid(DRW_ProxyEntity)
+                    || !proxy->m_hasProxyClassId || proxy->m_proxyClassId < 500
+                    || m_dwgProxyEntityClassIdToOutput.count(
+                           static_cast<std::uint32_t>(proxy->m_proxyClassId)) == 0u)
+                    return std::string{};
+                return std::string("ACAD_PROXY_ENTITY");
+            }
+            if (entity->eType == DRW::INSERT
+                && m_tableFallbacks.count(entity->handle) != 0u)
+                return std::string("ACAD_TABLE");
+            const char* name = commonReferenceRecordName(*entity);
+            return name == nullptr ? std::string{} : std::string(name);
+        };
+        const auto outputSection = [this](const dx_ifaceBlock* block) {
+            return block == cData->mBlock || isFixedSpaceBlock(block)
+                ? std::string("ENTITIES") : std::string("BLOCKS");
+        };
+        const auto outputOwner = [this](const dx_ifaceBlock* block) {
+            if (block == cData->mBlock)
+                return DRW::DxfModelSpaceBlockRecordHandle;
+            if (block == nullptr)
+                return 0u;
+            if (isFixedSpaceBlock(block)) {
+                std::string key = layoutSymbolKey(block->name);
+                if (key == "*MODEL_SPACE")
+                    return DRW::DxfModelSpaceBlockRecordHandle;
+                if (key == "*PAPER_SPACE")
+                    return DRW::DxfPaperSpaceBlockRecordHandle;
+                return 0u;
+            }
+            const std::uint32_t handle =
+                dxfW->getBlockRecordHandleToWrite(block->name);
+            return handle == DRW::NoHandle ? 0u : handle;
+        };
+
+        const auto inspectEntities = [&](const dx_ifaceBlock* block) {
+            if (block == nullptr)
+                return true;
+            const std::string section = outputSection(block);
+            const std::uint32_t owner = outputOwner(block);
+            for (const DRW_Entity* entity : block->ent) {
+                if (++inventoryRecords > maxInventoryRecords || entity == nullptr)
+                    return false;
+                if (entity->handle == 0u || entity->handle == DRW::NoHandle)
+                    continue;
+                auto inserted = inventory.emplace(
+                    entity->handle, DwgProxyEntityTarget{});
+                DwgProxyEntityTarget& target = inserted.first->second;
+                if (target.occurrences == 0u) {
+                    target.entity = entity;
+                    target.block = block;
+                    target.sourceHandle = entity->handle;
+                    target.sourceOwnerHandle = entity->parentHandle;
+                    target.blockSourceHandle = block->parentHandle;
+                    target.type = entity->eType;
+                    target.recordName = entityRecordName(entity);
+                    target.sectionName = section;
+                    target.ownerHandle = owner;
+                }
+                if (target.occurrences == maxInventoryRecords)
+                    return false;
+                ++target.occurrences;
+                if (target.entity != entity || target.type != entity->eType
+                    || target.sectionName != section
+                    || target.ownerHandle != owner)
+                    target.recordName.clear();
+                if (entity->parentHandle != 0u
+                    && entity->parentHandle != DRW::NoHandle
+                    && block->parentHandle != 0u
+                    && block->parentHandle != DRW::NoHandle
+                    && entity->parentHandle != block->parentHandle)
+                    target.recordName.clear();
+
+                if (entity->eType != DRW::PROXYENTITY)
+                    continue;
+                const auto* proxy = dynamic_cast<const DRW_ProxyEntity*>(entity);
+                if (proxy == nullptr || typeid(*entity) != typeid(DRW_ProxyEntity)
+                    || entity->handle == 0u || entity->handle == DRW::NoHandle
+                    || !proxy->m_hasProxyClassId || proxy->m_proxyClassId < 500)
+                    return false;
+                if (proxy->parentHandle != 0u
+                    && proxy->parentHandle != DRW::NoHandle
+                    && block->parentHandle != 0u
+                    && block->parentHandle != DRW::NoHandle
+                    && proxy->parentHandle != block->parentHandle)
+                    return false;
+                const std::uint32_t sourceClassId =
+                    static_cast<std::uint32_t>(proxy->m_proxyClassId);
+                const auto outputClass =
+                    m_dwgProxyEntityClassIdToOutput.find(sourceClassId);
+                if (outputClass == m_dwgProxyEntityClassIdToOutput.end())
+                    return false;
+                DwgProxyEntityOutput plan;
+                plan.entity = proxy;
+                plan.block = block;
+                plan.sourceHandle = proxy->handle;
+                plan.sourceOwnerHandle = proxy->parentHandle;
+                plan.blockSourceHandle = block->parentHandle;
+                plan.sourceClassId = sourceClassId;
+                plan.outputClassId = outputClass->second;
+                plan.sectionName = section;
+                plan.ownerHandle = owner;
+                if (proxy->m_objectIdRefs.size()
+                    > maxReferenceEdges - referenceEdges)
+                    return false;
+                plan.references.reserve(proxy->m_objectIdRefs.size());
+                for (const DRW_ProxyObjectIdRef& reference :
+                     proxy->m_objectIdRefs) {
+                    ++referenceEdges;
+                    const int expectedCode =
+                        DRW_ProxyObjectIdRef::dxfGroupCodeForDwgHandleCode(
+                            reference.m_handleCode);
+                    if ((reference.m_handleCode != 4u
+                         && reference.m_handleCode != 5u)
+                        || expectedCode < 0
+                        || reference.m_dxfCode != expectedCode
+                        || reference.m_handle == 0u
+                        || reference.m_handle == DRW::NoHandle
+                        || reference.m_handle
+                            > std::numeric_limits<std::uint32_t>::max())
+                        return false;
+                    const std::uint32_t targetHandle =
+                        static_cast<std::uint32_t>(reference.m_handle);
+                    referencedHandles.insert(targetHandle);
+                    plan.references.push_back({reference.m_handleCode,
+                        reference.m_dxfCode, targetHandle,
+                        reference.m_rawHandle});
+                }
+                if (!m_dwgProxyEntityOutputs.emplace(proxy,
+                                                     std::move(plan)).second)
+                    return false;
+            }
+            return true;
+        };
+
+        if (!inspectEntities(cData->mBlock))
+            return false;
+        for (const dx_ifaceBlock* block : cData->blocks) {
+            if (!inspectEntities(block))
+                return false;
+            if (block == nullptr)
+                continue;
+            for (std::uint32_t handle : {block->handle,
+                    block->hasEndBlockData ? block->endBlockData.handle : 0u}) {
+                if (handle != 0u && handle != DRW::NoHandle
+                    && referencedHandles.count(handle) != 0u)
+                    nonEntityCollisions.insert(handle);
+            }
+        }
+        const auto inspectRawEntities = [&](const dx_ifaceBlock* block) {
+            if (block == nullptr)
+                return true;
+            for (const dx_ifaceRawEntityEvent& event : block->rawEntities) {
+                if (++inventoryRecords > maxInventoryRecords)
+                    return false;
+                if (event.record.handle != 0u
+                    && event.record.handle != DRW::NoHandle
+                    && referencedHandles.count(event.record.handle) != 0u)
+                    rawEntityCollisions.insert(event.record.handle);
+            }
+            return true;
+        };
+        if (!inspectRawEntities(cData->mBlock))
+            return false;
+        for (const dx_ifaceBlock* block : cData->blocks) {
+            if (!inspectRawEntities(block))
+                return false;
+        }
+        if (cData->mBlock != nullptr) {
+            for (std::uint32_t handle : {cData->mBlock->handle,
+                    cData->mBlock->hasEndBlockData
+                        ? cData->mBlock->endBlockData.handle : 0u}) {
+                if (handle != 0u && handle != DRW::NoHandle
+                    && referencedHandles.count(handle) != 0u)
+                    nonEntityCollisions.insert(handle);
+            }
+        }
+
+        const auto inspectHandles = [&](const auto& records) {
+            for (const auto& record : records) {
+                if (++inventoryRecords > maxInventoryRecords)
+                    return false;
+                const std::uint64_t handle = record.handle;
+                if (handle != 0u && handle != DRW::NoHandle
+                    && handle <= std::numeric_limits<std::uint32_t>::max()
+                    && referencedHandles.count(
+                           static_cast<std::uint32_t>(handle)) != 0u)
+                    nonEntityCollisions.insert(
+                        static_cast<std::uint32_t>(handle));
+            }
+            return true;
+        };
+        const auto inspectRawHandles = [&](const auto& records) {
+            return inspectHandles(records);
+        };
+        const auto inspectMapValues = [&](const auto& records) {
+            for (const auto& entry : records) {
+                if (++inventoryRecords > maxInventoryRecords)
+                    return false;
+                const std::uint64_t handle = entry.second.handle;
+                if (handle != 0u && handle != DRW::NoHandle
+                    && handle <= std::numeric_limits<std::uint32_t>::max()
+                    && referencedHandles.count(
+                           static_cast<std::uint32_t>(handle)) != 0u)
+                    nonEntityCollisions.insert(
+                        static_cast<std::uint32_t>(handle));
+            }
+            return true;
+        };
+        // A pointer target that is also a table or OBJECTS identity is
+        // ambiguous even if the competing record is not selected for output.
+        if (!inspectHandles(cData->lineTypes)
+            || !inspectHandles(cData->layers)
+            || !inspectHandles(cData->dimStyles)
+            || !inspectHandles(cData->VPorts)
+            || !inspectHandles(cData->views)
+            || !inspectHandles(cData->ucsList)
+            || !inspectHandles(cData->textStyles)
+            || !inspectHandles(cData->appIds)
+            || !inspectHandles(cData->blockRecords)
+            || !inspectHandles(cData->layouts)
+            || !inspectHandles(cData->plotSettings)
+            || !inspectHandles(cData->renderSettings)
+            || !inspectHandles(cData->backgrounds)
+            || !inspectHandles(cData->suns)
+            || !inspectHandles(cData->dictionaries)
+            || !inspectHandles(cData->sortEntsTables)
+            || !inspectHandles(cData->groups)
+            || !inspectHandles(cData->tableContents)
+            || !inspectHandles(cData->tableGeometries)
+            || !inspectHandles(cData->dataLinks)
+            || !inspectHandles(cData->fields)
+            || !inspectHandles(cData->fieldLists)
+            || !inspectHandles(cData->dictionaryWithDefaults)
+            || !inspectHandles(cData->placeholders)
+            || !inspectHandles(cData->mLineStyles)
+            || !inspectHandles(cData->mLeaderStyles)
+            || !inspectHandles(cData->tableStyles)
+            || !inspectHandles(cData->cellStyleMaps)
+            || !inspectHandles(cData->detailViewStyles)
+            || !inspectHandles(cData->sectionViewStyles)
+            || !inspectHandles(cData->scales)
+            || !inspectHandles(cData->dictionaryVars)
+            || !inspectHandles(cData->xRecords)
+            || !inspectHandles(cData->materials)
+            || !inspectHandles(cData->visualStyles)
+            || !inspectHandles(cData->associativeObjects)
+            || !inspectHandles(cData->dwgAssociativeObjects)
+            || !inspectHandles(cData->spatialFilters)
+            || !inspectHandles(cData->dynamicBlockObjects)
+            || !inspectHandles(cData->evaluationGraphs)
+            || !inspectHandles(cData->blockRepresentationData)
+            || !inspectHandles(cData->acshHistoryObjects)
+            || !inspectMapValues(cData->imageDefinitions)
+            || !inspectMapValues(cData->imageDefinitionReactors)
+            || !inspectMapValues(cData->underlayDefinitions)
+            || !inspectHandles(cData->proxyObjects)
+            || !inspectRawHandles(cData->rawMaterialObjects)
+            || !inspectRawHandles(cData->rawVisualStyleObjects)
+            || !inspectRawHandles(cData->rawBackgroundObjects)
+            || !inspectRawHandles(cData->rawSunObjects)
+            || !inspectRawHandles(cData->rawRenderSettingsObjects)
+            || !inspectRawHandles(cData->rawDetailViewStyles)
+            || !inspectRawHandles(cData->rawSectionViewStyles)
+            || !inspectRawHandles(cData->rawTableStyles)
+            || !inspectRawHandles(cData->rawCellStyleMaps)
+            || !inspectRawHandles(cData->rawSortEntsTables)
+            || !inspectRawHandles(cData->rawFields)
+            || !inspectRawHandles(cData->rawFieldLists)
+            || !inspectRawHandles(cData->rawNamedResourceObjects)
+            || !inspectRawHandles(cData->rawDictionaryWithDefaults)
+            || !inspectRawHandles(cData->rawPlaceholders)
+            || !inspectRawHandles(cData->rawProxyObjects)
+            || !inspectRawHandles(cData->rawAssociativeObjects)
+            || !inspectRawHandles(cData->rawSpatialFilterObjects)
+            || !inspectRawHandles(cData->rawDynamicBlockObjects)
+            || !inspectRawHandles(cData->rawAcdsHistoryObjects))
+            return false;
+        if (cData->hasNamedObjectDictionary
+            && cData->namedObjectDictionary.handle != 0u
+            && cData->namedObjectDictionary.handle != DRW::NoHandle
+            && referencedHandles.count(
+                   cData->namedObjectDictionary.handle) != 0u)
+            nonEntityCollisions.insert(
+                cData->namedObjectDictionary.handle);
+        for (const auto& frame : cData->m_standardDwgObjectFrames) {
+            if (referencedHandles.count(frame.first.second) != 0u)
+                nonEntityCollisions.insert(frame.first.second);
+        }
+        for (const auto& frame : cData->m_opaqueDwgSourceFrameIdentities) {
+            if (referencedHandles.count(frame.second) != 0u)
+                nonEntityCollisions.insert(frame.second);
+        }
+
+        if (m_dwgProxyEntityOutputs.empty())
+            return false;
+        for (const std::uint32_t sourceHandle : referencedHandles) {
+            const auto target = inventory.find(sourceHandle);
+            if (target == inventory.end() || target->second.entity == nullptr
+                || target->second.occurrences != 1u
+                || target->second.recordName.empty()
+                || target->second.ownerHandle == 0u
+                || target->second.ownerHandle == DRW::NoHandle
+                || rawEntityCollisions.count(sourceHandle) != 0u
+                || nonEntityCollisions.count(sourceHandle) != 0u) {
+                dxfW->markSourceHandleAmbiguous(sourceHandle);
+                return false;
+            }
+            const std::uint32_t emitted =
+                dxfW->preallocateEntityHandle(sourceHandle);
+            if (emitted == 0u || emitted == DRW::NoHandle)
+                return false;
+            target->second.emittedHandle = emitted;
+            if (!m_dwgProxyEntityTargets.emplace(
+                    sourceHandle, target->second).second)
+                return false;
+        }
+        m_dwgProxyEntityGraphPlanned = true;
+        return true;
+    } catch (...) {
+        m_dwgProxyEntityTargets.clear();
+        m_dwgProxyEntityOutputs.clear();
+        return false;
+    }
+}
+
+bool dx_iface::finalizeDwgProxyEntityObjectIds() {
+    if (cData == nullptr || dxfW == nullptr)
+        return false;
+    if (!cData->dwgProxyEntityPresent)
+        return m_dwgProxyEntityGraphPlanned
+            && m_dwgProxyEntityTargets.empty()
+            && m_dwgProxyEntityOutputs.empty();
+    if (!m_dwgProxyEntityGraphPlanned || m_dwgProxyEntityOutputs.empty())
+        return false;
+    const auto appearsOnceInBlock = [](const dx_ifaceBlock* block,
+                                       const DRW_Entity* entity) {
+        if (block == nullptr || entity == nullptr)
+            return false;
+        std::size_t count = 0u;
+        for (const DRW_Entity* current : block->ent) {
+            if (current == entity)
+                ++count;
+        }
+        return count == 1u;
+    };
+    for (const auto& selected : m_dwgProxyEntityTargets) {
+        const DwgProxyEntityTarget& target = selected.second;
+        if (target.entity == nullptr
+            || !appearsOnceInBlock(target.block, target.entity)
+            || target.block->parentHandle != target.blockSourceHandle
+            || target.entity->parentHandle != target.sourceOwnerHandle
+            || target.sourceHandle != selected.first
+            || target.entity->handle != target.sourceHandle
+            || target.entity->eType != target.type
+            || target.occurrences != 1u || target.recordName.empty()
+            || target.emittedHandle == 0u
+            || target.emittedHandle == DRW::NoHandle
+            || dxfW->remapEntityHandle(target.sourceHandle)
+                != target.emittedHandle
+            || !dxfW->dxfWriteSourceEntityHasIdentity(
+                target.sourceHandle, target.emittedHandle,
+                target.recordName, target.sectionName, target.ownerHandle))
+            return false;
+    }
+    for (const auto& selected : m_dwgProxyEntityOutputs) {
+        const DwgProxyEntityOutput& output = selected.second;
+        const DRW_ProxyEntity* proxy = selected.first;
+        if (proxy == nullptr || output.entity != proxy
+            || !appearsOnceInBlock(output.block, proxy)
+            || output.block->parentHandle != output.blockSourceHandle
+            || proxy->parentHandle != output.sourceOwnerHandle
+            || proxy->handle != output.sourceHandle
+            || proxy->eType != DRW::PROXYENTITY
+            || !proxy->m_hasProxyClassId
+            || proxy->m_proxyClassId < 500
+            || static_cast<std::uint32_t>(proxy->m_proxyClassId)
+                != output.sourceClassId
+            || output.references.size() != proxy->m_objectIdRefs.size())
+            return false;
+        const auto outputClass = m_dwgProxyEntityClassIdToOutput.find(
+            output.sourceClassId);
+        if (outputClass == m_dwgProxyEntityClassIdToOutput.end()
+            || outputClass->second != output.outputClassId)
+            return false;
+        for (std::size_t index = 0u; index < output.references.size(); ++index) {
+            const DwgProxyEntityReference& expected = output.references[index];
+            const DRW_ProxyObjectIdRef& actual = proxy->m_objectIdRefs[index];
+            if (actual.m_handleCode != expected.handleCode
+                || actual.m_dxfCode != expected.dxfCode
+                || actual.m_handle != expected.sourceHandle
+                || actual.m_rawHandle != expected.rawHandle)
+                return false;
+            const auto target = m_dwgProxyEntityTargets.find(
+                expected.sourceHandle);
+            if (target == m_dwgProxyEntityTargets.end()
+                || target->second.emittedHandle == 0u
+                || target->second.emittedHandle == DRW::NoHandle)
+                return false;
+        }
+        const std::uint32_t emitted =
+            dxfW->remapEntityHandle(output.sourceHandle);
+        if (emitted == 0u || emitted == DRW::NoHandle
+            || !dxfW->dxfWriteSourceEntityHasIdentity(
+                output.sourceHandle, emitted, "ACAD_PROXY_ENTITY",
+                output.sectionName, output.ownerHandle))
+            return false;
+    }
+    return true;
+}
+
 void dx_iface::writeEntity(DRW_Entity* e){
     if(!checkDxfCommonEntity(e)){dxfW->writeRawDxfEntity(nullptr);return;}
     if (e == nullptr) {
@@ -71755,11 +72203,50 @@ void dx_iface::writeEntity(DRW_Entity* e){
             ? m_dwgProxyEntityClassIdToOutput.end()
             : m_dwgProxyEntityClassIdToOutput.find(
                   static_cast<std::uint32_t>(proxy->m_proxyClassId));
-        if (proxy != nullptr
-            && outputClass != m_dwgProxyEntityClassIdToOutput.end())
-            written = dxfW->writeProxyEntity(proxy, outputClass->second);
-        else
+        if (proxy == nullptr
+            || outputClass == m_dwgProxyEntityClassIdToOutput.end()) {
             dxfW->writeRawDxfEntity(nullptr);
+            break;
+        }
+        if (cData != nullptr && cData->dwgProxyEntityPresent) {
+            const auto planned = m_dwgProxyEntityOutputs.find(proxy);
+            bool unchanged = planned != m_dwgProxyEntityOutputs.end()
+                && planned->second.sourceHandle == proxy->handle
+                && planned->second.sourceClassId
+                    == static_cast<std::uint32_t>(proxy->m_proxyClassId)
+                && planned->second.outputClassId == outputClass->second
+                && planned->second.references.size()
+                    == proxy->m_objectIdRefs.size();
+            if (unchanged) {
+                for (std::size_t index = 0u;
+                     index < planned->second.references.size(); ++index) {
+                    const DwgProxyEntityReference& expected =
+                        planned->second.references[index];
+                    const DRW_ProxyObjectIdRef& actual =
+                        proxy->m_objectIdRefs[index];
+                    if (actual.m_handleCode != expected.handleCode
+                        || actual.m_dxfCode != expected.dxfCode
+                        || actual.m_handle != expected.sourceHandle
+                        || actual.m_rawHandle != expected.rawHandle) {
+                        unchanged = false;
+                        break;
+                    }
+                }
+            }
+            if (!unchanged) {
+                dxfW->writeRawDxfEntity(nullptr);
+                break;
+            }
+            const auto resolver = [this](std::uint32_t sourceHandle) {
+                const auto target = m_dwgProxyEntityTargets.find(sourceHandle);
+                return target == m_dwgProxyEntityTargets.end()
+                    ? 0u : target->second.emittedHandle;
+            };
+            written = dxfW->writeProxyEntity(
+                proxy, outputClass->second, resolver);
+        } else {
+            written = dxfW->writeProxyEntity(proxy, outputClass->second);
+        }
         break;
     }
     case DRW::PLANESURFACE:

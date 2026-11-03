@@ -20,7 +20,7 @@
       "Resolved references are emitted in source order before group 94. Mappings exercised include DWG codes 4→DXF 330, 5→340, 2→350, 3→360, and 6/8/10/12→330; the DXF representation preserves the pointer/owner group role but canonicalizes those DWG soft-pointer encoding codes to group 330.",
       "The explicit resolver overload is scoped to proxy object-ID edges; an independently configured global resolver remains unchanged and does not rewrite these groups. It provides an adapter integration point for a bounded source-graph mapping without changing common-reference behavior for other records.",
       "Resolver output is treated as a final emitted handle and is not remapped again. The resolver is caller-supplied; this does not prove that its targets exist or have the required graph roles.",
-      "The dwg2dxf adapter still has no complete proxy-reference graph resolver and remains fail-closed for nonempty proxy object-ID lists."
+      "The dwg2dxf adapter now supplies a proxy-scoped resolver for the bounded DWG handle-code 4/5 to typed top-level entity profile; other proxy object-ID profiles remain fail-closed."
     ]
   },
   "validationProfile": {
@@ -62,7 +62,7 @@
   "limitations": [
     "Generated low-level serializer/readback evidence only; no physical DWG source-to-output, independent consumer, or native proxy semantics qualification.",
     "The resolver is trusted to return a correct final output identity. The writer does not verify target existence, target type, ownership, recursive dependencies, or target emission.",
-    "dwg2dxf does not configure this resolver, so physical conversion remains fail-closed for these references until source-bound graph planning and output binding are implemented.",
+    "The adapter graph route has generated controls but does not establish physical producer support, independent consumer acceptance, recursive dependencies, or native semantics. Only code 4/5 pointers to unique top-level typed entity targets are admitted; all other roles remain fail-closed. See the adapter graph receipt for its source inventory and final-emission gate.",
     "Unknown-data slots, EED/common references, mixed class/ACDS graphs, and other unsupported proxy profiles remain refused. No support claim is promoted."
   ]
 }

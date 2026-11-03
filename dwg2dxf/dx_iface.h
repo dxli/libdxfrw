@@ -1290,6 +1290,11 @@ public:
                 return;
             }
         }
+        if (!planDwgProxyEntityObjectIds()) {
+            std::cerr << "proxy entity object-ID graph has a missing, ambiguous, or unsupported target\n";
+            (void)dxfW->writeTable(nullptr);
+            return;
+        }
     }
     //write entities of model space and first paper_space
     virtual void writeEntities() override{
@@ -2721,6 +2726,8 @@ private:
         const dxfRW::DxfObjectsWriteView& view) noexcept;
     bool finalizeDwgViewportOutputQualifications() noexcept;
     bool planLeaderAnnotationHandles();
+    bool planDwgProxyEntityObjectIds();
+    bool finalizeDwgProxyEntityObjectIds();
     bool preallocateBlockRecordXdataEntityHandles();
 
     dx_dxfSourceTextAdmission m_sourceTextAdmission;
@@ -3632,6 +3639,42 @@ private:
     // after the matching source class metadata has been validated.
     std::unordered_map<std::uint32_t, std::uint32_t>
         m_dwgProxyEntityClassIdToOutput;
+    struct DwgProxyEntityTarget {
+        const DRW_Entity* entity{nullptr};
+        const dx_ifaceBlock* block{nullptr};
+        std::uint32_t sourceHandle{0u};
+        std::uint32_t sourceOwnerHandle{DRW::NoHandle};
+        std::uint32_t blockSourceHandle{DRW::NoHandle};
+        std::uint32_t emittedHandle{0u};
+        DRW::ETYPE type{DRW::UNKNOWN};
+        std::string recordName;
+        std::string sectionName;
+        std::uint32_t ownerHandle{0u};
+        std::size_t occurrences{0u};
+    };
+    struct DwgProxyEntityReference {
+        std::uint8_t handleCode{0u};
+        int dxfCode{0};
+        std::uint32_t sourceHandle{0u};
+        std::uint64_t rawHandle{0u};
+    };
+    struct DwgProxyEntityOutput {
+        const DRW_ProxyEntity* entity{nullptr};
+        const dx_ifaceBlock* block{nullptr};
+        std::uint32_t sourceHandle{0u};
+        std::uint32_t sourceOwnerHandle{DRW::NoHandle};
+        std::uint32_t blockSourceHandle{DRW::NoHandle};
+        std::uint32_t sourceClassId{0u};
+        std::uint32_t outputClassId{0u};
+        std::string sectionName;
+        std::uint32_t ownerHandle{0u};
+        std::vector<DwgProxyEntityReference> references;
+    };
+    std::unordered_map<std::uint32_t, DwgProxyEntityTarget>
+        m_dwgProxyEntityTargets;
+    std::unordered_map<const DRW_ProxyEntity*, DwgProxyEntityOutput>
+        m_dwgProxyEntityOutputs;
+    bool m_dwgProxyEntityGraphPlanned{false};
     std::unordered_map<std::uint32_t, std::string> m_hatchOwnerAliases;
     std::unordered_map<std::string, bool> m_hatchOwnerBlocks;
     std::string m_hatchOwnerContext;
