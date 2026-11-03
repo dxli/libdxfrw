@@ -1275,6 +1275,11 @@ public:
     return *this;
   }
   void reset();
+  // Autodesk stores the ACAD_LIGHT owner-dictionary pointer as the first
+  // group-330 value inside the LIGHTLIST ACAD_REACTORS app-data group. The
+  // original group remains in appData for lossless DXF replay.
+  [[nodiscard]] bool getAcLightDictionaryHandle(
+      std::uint32_t& handle) const noexcept;
 
 protected:
   bool parseCode(int code, const std::unique_ptr<dxfReader> &reader) override;

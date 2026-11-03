@@ -19127,6 +19127,45 @@ bool sunStudyCallbackCaptureLimitsFailClosed() {
 }
 
 bool lightListCallbackCaptureLimitsFailClosed() {
+    const std::string lightListDxf =
+        "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1027\n"
+        "0\nENDSEC\n0\nSECTION\n2\nOBJECTS\n"
+        "0\nLIGHTLIST\n5\n70\n100\nAcDbObject\n"
+        "102\n{ACAD_REACTORS\n330\nA0\n102\n}\n"
+        "330\nC\n100\nAcDbLightList\n90\n1\n90\n1\n"
+        "5\nB0\n1\nkey-light\n"
+        "0\nENDSEC\n0\nEOF\n";
+    dx_data parsedLightListData;
+    dx_iface lightListParser;
+    lightListParser.cData = &parsedLightListData;
+    dxfRW lightListReader("generated-lightlist-owner-role");
+    std::string lightListInput = lightListDxf;
+    if (!lightListReader.readAscii(
+            &lightListParser, true, lightListInput)
+        || parsedLightListData.lightLists.size() != 1u)
+        return fail("could not parse generated LIGHTLIST owner-role control");
+    const DRW_LightList& parsedLightList =
+        parsedLightListData.lightLists.front();
+    std::uint32_t acLightDictionaryHandle = 0u;
+    const bool hasAcLightDictionary =
+        parsedLightList.getAcLightDictionaryHandle(acLightDictionaryHandle);
+    if (!hasAcLightDictionary || acLightDictionaryHandle != 0xA0u
+        || parsedLightList.parentHandle != 0xCu
+        || !parsedLightList.reactorHandles.empty()
+        || parsedLightList.m_lights.size() != 1u
+        || parsedLightList.m_lights.front().m_handle != 0xB0u
+        || parsedLightList.m_lights.front().m_name != "key-light"
+        || parsedLightList.appData.size() != 1u
+        || parsedLightList.appData.front().size() != 3u) {
+        return fail("LIGHTLIST ACAD_LIGHT dictionary pointer was classified as a reactor or lost from the retained app-data group");
+    }
+    auto retainedOwnerIt = parsedLightList.appData.front().begin();
+    ++retainedOwnerIt;
+    if (retainedOwnerIt->code() != 330
+        || retainedOwnerIt->content.s == nullptr
+        || *retainedOwnerIt->content.s != "A0")
+        return fail("LIGHTLIST ACAD_LIGHT owner pointer changed in the retained app-data group");
+
     DRW_LightList lightList;
     lightList.handle = 0xF201u;
     lightList.parentHandle = 0xF2F0u;

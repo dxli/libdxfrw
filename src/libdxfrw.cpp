@@ -29318,10 +29318,21 @@ bool dxfRW::captureRawDxfApplicationGroup(DRW_RawDxfObject &obj,
 
 bool dxfRW::captureRawDxfApplicationGroup(DRW_RawDxfObject &obj,
                                           DRW_TableEntry &entry) {
-    return captureRawDxfApplicationGroup(obj, entry.appData,
-                                         entry.reactorHandles,
-                                         entry.xDictHandle,
-                                         entry.m_dxfRetainedStringLease);
+    if (!captureRawDxfApplicationGroup(obj, entry.appData,
+                                       entry.reactorHandles,
+                                       entry.xDictHandle,
+                                       entry.m_dxfRetainedStringLease))
+        return false;
+    auto* lightList = dynamic_cast<DRW_LightList*>(&entry);
+    if (lightList == nullptr)
+        return true;
+    std::uint32_t ownerDictionaryHandle = 0u;
+    if (!lightList->getAcLightDictionaryHandle(ownerDictionaryHandle))
+        return true;
+    if (!entry.reactorHandles.empty()
+        && entry.reactorHandles.front() == ownerDictionaryHandle)
+        entry.reactorHandles.erase(entry.reactorHandles.begin());
+    return true;
 }
 
 bool dxfRW::captureRawDxfApplicationGroup(DRW_RawDxfObject &obj,

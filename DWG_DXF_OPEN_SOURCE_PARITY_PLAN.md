@@ -434,8 +434,11 @@ present until source and reference closure are qualified, preventing silent
 loss; see the [callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json).
 The adapter also retains typed LIGHTLIST callbacks within aggregate record,
 item, and byte bounds ([capture receipt](docs/research/p5-lightlist-callback-retention-2026-11-03.json));
-source-span/owner binding, LIGHT target resolution, emitted graph closure, and
-native lighting semantics remain open. The adapter now refuses output for a
+the source-aware DXF parser now separates the first ACAD_REACTORS group-330
+ACAD_LIGHT dictionary pointer from actual reactors and exposes its typed role
+while retaining the original app-data group ([role receipt](docs/research/p5-lightlist-owner-dictionary-role-2026-11-03.json)).
+Physical DWG source binding, LIGHT target resolution, emitted graph closure,
+and native lighting semantics remain open. The adapter refuses output for a
 retained LIGHTLIST until those gates pass, rather than dropping it silently
 (see the [callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json)).
 The adapter also retains bounded GEOMAPIMAGE callback fields

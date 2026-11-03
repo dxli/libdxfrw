@@ -23112,11 +23112,105 @@ bool DRW_Group::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     }
 }
 
+bool DRW_LightList::getAcLightDictionaryHandle(
+        std::uint32_t& handle) const noexcept {
+    handle = 0u;
+    bool foundGroup = false;
+    for (const auto& group : appData) {
+        if (group.empty())
+            continue;
+        const DRW_Variant& marker = group.front();
+        if (marker.code() != 102 || marker.type() != DRW_Variant::STRING
+            || marker.content.s == nullptr)
+            continue;
+        std::string_view name(*marker.content.s);
+        if (!name.empty() && name.front() == '{')
+            name.remove_prefix(1u);
+        if (name != "ACAD_REACTORS")
+            continue;
+        if (foundGroup)
+            return false;
+        foundGroup = true;
+
+        auto valueIt = group.begin();
+        ++valueIt;
+        for (; valueIt != group.end(); ++valueIt) {
+            const DRW_Variant& value = *valueIt;
+            if (value.code() == 102 && value.type() == DRW_Variant::STRING
+                && value.content.s != nullptr
+                && *value.content.s == "}")
+                break;
+            if (value.code() != 330)
+                continue;
+            if (value.type() != DRW_Variant::STRING
+                || value.content.s == nullptr)
+                return false;
+
+            std::string_view digits(*value.content.s);
+            if (digits.size() >= 2u && digits[0] == '0'
+                && (digits[1] == 'x' || digits[1] == 'X'))
+                digits.remove_prefix(2u);
+            if (digits.empty())
+                return false;
+            std::uint32_t parsed = 0u;
+            for (const char character : digits) {
+                std::uint32_t digit = 0u;
+                if (character >= '0' && character <= '9')
+                    digit = static_cast<std::uint32_t>(character - '0');
+                else if (character >= 'a' && character <= 'f')
+                    digit = static_cast<std::uint32_t>(character - 'a' + 10);
+                else if (character >= 'A' && character <= 'F')
+                    digit = static_cast<std::uint32_t>(character - 'A' + 10);
+                else
+                    return false;
+                if (parsed > (std::numeric_limits<std::uint32_t>::max()
+                                  - digit)
+                                 / 16u)
+                    return false;
+                parsed = parsed * 16u + digit;
+            }
+            if (parsed == 0u)
+                return false;
+            handle = parsed;
+            return true;
+        }
+        return false;
+    }
+    return false;
+}
+
 bool DRW_LightList::parseCode(int code,
                               const std::unique_ptr<dxfReader>& reader) {
     if (code == 100) {
         m_dxfInLightListSubclass =
             reader->getStringView() == "AcDbLightList";
+        return true;
+    }
+    if (code == 102) {
+        const std::size_t reactorStart = reactorHandles.size();
+        const std::size_t appDataStart = appData.size();
+        if (!DRW_TableEntry::parseCode(code, reader))
+            return false;
+        if (appData.size() == appDataStart + 1u
+            && !appData.back().empty()) {
+            const DRW_Variant& marker = appData.back().front();
+            std::string_view appName;
+            if (marker.type() == DRW_Variant::STRING
+                && marker.content.s != nullptr) {
+                appName = *marker.content.s;
+                if (!appName.empty() && appName.front() == '{')
+                    appName.remove_prefix(1u);
+            }
+            if (marker.code() == 102
+                && marker.type() == DRW_Variant::STRING
+                && appName == "ACAD_REACTORS"
+                && reactorHandles.size() > reactorStart) {
+                // For LIGHTLIST, Autodesk defines the first 330 in this group
+                // as the ACAD_LIGHT owner-dictionary pointer, not a reactor.
+                reactorHandles.erase(reactorHandles.begin()
+                                     + static_cast<std::ptrdiff_t>(reactorStart));
+            }
+        }
         return true;
     }
     if (m_dxfInLightListSubclass) {
