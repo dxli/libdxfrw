@@ -794,6 +794,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_lofted_surface_path_reference_dxf_refusal PROPERTIES
         LABELS "fast;dxf;writer;3d;references;generated;transaction"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_direct_surface_subtype_admission
+        COMMAND libdxfrw_wave1_tests --direct-surface-subtype-admission)
+    set_tests_properties(libdxfrw_direct_surface_subtype_admission PROPERTIES
+        LABELS "fast;dxf;writer;3d;runtime-type;generated;transaction"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_layer_material_reference_remapping
         COMMAND libdxfrw_wave1_tests --layer-material-reference-remapping)
     set_tests_properties(libdxfrw_layer_material_reference_remapping PROPERTIES

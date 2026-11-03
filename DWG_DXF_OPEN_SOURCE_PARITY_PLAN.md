@@ -904,6 +904,12 @@ eligible reader. The exact package and environment result are in the
   [3D subclass-admission receipt](docs/research/p8-3d-runtime-subclass-admission-2026-11-03.json).
   This only prevents runtime-object slicing; it does not qualify payload
   syntax, physical source breadth, topology/kernel meaning or native consumers.
+  A follow-up direct-writer matrix now executes all six exact surface subtypes
+  in ASCII and Binary DXF. Matching-tag derived subclasses are refused with
+  destination preservation, and exact built-in retries write the expected
+  record and subtype marker ([receipt](docs/research/p8-direct-surface-subtype-admission-2026-11-03.json)).
+  This closes direct guard execution coverage only; payload semantics, producer
+  breadth, topology and native consumers remain unqualified.
   The same adapter now checks the HATCH/MPOLYGON subtype boundary in both
   directions: a plain HATCH cannot enter the MPOLYGON writer, and an MPOLYGON
   cannot be serialized as HATCH with its distinct fields dropped. Generated

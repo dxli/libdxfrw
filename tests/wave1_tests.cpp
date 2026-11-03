@@ -4113,6 +4113,107 @@ void testLoftedSurfacePathReferenceDxfRefusal(TestContext& t) {
     }
 }
 
+void testDirectSurfaceSubtypeRuntimeAdmission(TestContext& t) {
+    struct DerivedPlaneSurface final : DRW_PlaneSurface {};
+    struct DerivedExtrudedSurface final : DRW_ExtrudedSurface {};
+    struct DerivedRevolvedSurface final : DRW_RevolvedSurface {};
+    struct DerivedSweptSurface final : DRW_SweptSurface {};
+    struct DerivedLoftedSurface final : DRW_LoftedSurface {};
+    struct DerivedNurbsSurface final : DRW_NurbsSurface {};
+    struct SurfaceCase {
+        DRW::ETYPE type;
+        const char* recordName;
+        const char* subtypeMarker;
+        std::function<std::unique_ptr<DRW_Surface>()> makeExact;
+        std::function<std::unique_ptr<DRW_Surface>()> makeDerived;
+    };
+    const std::array<SurfaceCase, 6> cases{{
+        {DRW::PLANESURFACE, "PLANESURFACE", "AcDbSurface",
+         [] { return std::make_unique<DRW_PlaneSurface>(); },
+         [] { return std::make_unique<DerivedPlaneSurface>(); }},
+        {DRW::EXTRUDEDSURFACE, "EXTRUDEDSURFACE", "AcDbExtrudedSurface",
+         [] { return std::make_unique<DRW_ExtrudedSurface>(); },
+         [] { return std::make_unique<DerivedExtrudedSurface>(); }},
+        {DRW::REVOLVEDSURFACE, "REVOLVEDSURFACE", "AcDbRevolvedSurface",
+         [] { return std::make_unique<DRW_RevolvedSurface>(); },
+         [] { return std::make_unique<DerivedRevolvedSurface>(); }},
+        {DRW::SWEPTSURFACE, "SWEPTSURFACE", "AcDbSweptSurface",
+         [] { return std::make_unique<DRW_SweptSurface>(); },
+         [] { return std::make_unique<DerivedSweptSurface>(); }},
+        {DRW::LOFTEDSURFACE, "LOFTEDSURFACE", "AcDbLoftedSurface",
+         [] { return std::make_unique<DRW_LoftedSurface>(); },
+         [] { return std::make_unique<DerivedLoftedSurface>(); }},
+        {DRW::NURBSURFACE, "NURBSSURFACE", "AcDbNurbSurface",
+         [] { return std::make_unique<DRW_NurbsSurface>(); },
+         [] { return std::make_unique<DerivedNurbsSurface>(); }}}};
+
+    for (std::size_t index = 0; index < cases.size(); ++index) {
+        const SurfaceCase& surfaceCase = cases[index];
+        for (const bool binary : {false, true}) {
+            std::ostringstream rejectedOutput;
+            dxfRW rejectedWriter("");
+            rejectedWriter.version = DRW::AC1027;
+            rejectedWriter.binFile = binary;
+            rejectedWriter.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&rejectedOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&rejectedOutput));
+            rejectedWriter.writer->writeString(1, "PRESERVED_PREFIX");
+            const std::string before = rejectedOutput.str();
+            auto derived = surfaceCase.makeDerived();
+            derived->eType = surfaceCase.type;
+            derived->handle = static_cast<std::uint32_t>(0xAB00u + index);
+            const bool refused = !rejectedWriter.writeSurface(derived.get())
+                && rejectedOutput.str() == before;
+            t.expect(refused,
+                     "direct SURFACE writer refuses each derived runtime subtype atomically");
+
+            // A failed low-level dxfRW write is sticky. Retry with the exact
+            // built-in runtime class on a fresh writer and inspect its wire
+            // record in both encodings.
+            std::ostringstream output;
+            dxfRW retryWriter("");
+            retryWriter.version = DRW::AC1027;
+            retryWriter.binFile = binary;
+            retryWriter.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+            auto exact = surfaceCase.makeExact();
+            exact->eType = surfaceCase.type;
+            exact->handle = static_cast<std::uint32_t>(0xAB00u + index);
+            const bool written = retryWriter.writeSurface(exact.get())
+                && retryWriter.writer->writeString(0, "WIRE_END");
+            bool ended = false;
+            const auto tags = numericWireProjection(
+                output.str(), binary, ended,
+                DxfClassifierProfile::StandaloneSafe);
+            const std::string expectedRecord =
+                std::string("0:") + surfaceCase.recordName;
+            const std::string expectedHandle =
+                std::string("5:") + [&]() {
+                    std::ostringstream value;
+                    value << std::uppercase << std::hex << exact->handle;
+                    return value.str();
+                }();
+            const std::string expectedSubtype =
+                std::string("100:") + surfaceCase.subtypeMarker;
+            t.expect(written && ended
+                         && std::find(tags.begin(), tags.end(), expectedRecord)
+                                != tags.end()
+                         && std::find(tags.begin(), tags.end(), expectedHandle)
+                                != tags.end()
+                         && std::find(tags.begin(), tags.end(), expectedSubtype)
+                                != tags.end(),
+                     binary
+                         ? "Binary SURFACE exact-class retry writes its subtype record"
+                         : "ASCII SURFACE exact-class retry writes its subtype record");
+        }
+    }
+}
+
 void testNavisworksDefinitionReferenceRemapping(TestContext& t) {
     for (const bool binary : {false, true}) {
         for (const bool useResolver : {false, true}) {
@@ -21511,6 +21612,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testLoftedSurfacePathReferenceDxfRefusal(focused);
         std::cout << "LOFTEDSURFACE path reference DXF refusal: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--direct-surface-subtype-admission") {
+        TestContext focused;
+        testDirectSurfaceSubtypeRuntimeAdmission(focused);
+        std::cout << "Direct SURFACE subtype runtime admission: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
