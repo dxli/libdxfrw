@@ -3421,6 +3421,81 @@ bool dxfRW::estimateCanonicalLineTypeMetadataRetainedBytes(
                                    estimateOneCanonicalLineType);
 }
 
+bool dxfRW::estimateRootDictEntriesRetainedBytes(
+        const std::vector<std::pair<std::string, std::string>>& entries,
+        std::size_t byteLimit, std::size_t& estimate) noexcept {
+    using Entry = std::pair<std::string, std::string>;
+    estimate = 0u;
+    if (entries.size() > DRW_Dictionary::kMaxEntries
+        || entries.size() > byteLimit / sizeof(Entry))
+        return false;
+    estimate = entries.size() * sizeof(Entry);
+    const auto addText = [byteLimit, &estimate](
+            const std::string& value) noexcept {
+        if (estimate > byteLimit || value.size() >= byteLimit
+            || value.size() + 1u > byteLimit - estimate)
+            return false;
+        estimate += value.size() + 1u;
+        return true;
+    };
+    for (const auto& entry : entries) {
+        if (!addText(entry.first) || !addText(entry.second))
+            return false;
+    }
+    return true;
+}
+
+void dxfRW::rejectDxfRootDictEntriesInput() noexcept {
+    std::vector<std::pair<std::string, std::string>>().swap(m_rootDictEntries);
+    m_dxfRootDictEntriesInputRejected = true;
+    if (m_dxfWriteAttemptActive)
+        m_writeError = true;
+}
+
+void dxfRW::setRootDictEntries(
+        const std::vector<std::pair<std::string, std::string>>& entries) {
+    if (!preflightDxfSetup())
+        return;
+    if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen
+        && m_generatedNodSource) {
+        m_writeError = true;
+        return;
+    }
+    std::size_t estimate = 0u;
+    if (!estimateRootDictEntriesRetainedBytes(
+            entries, DRW::kMaxDxfTypedTableRetainedBytes, estimate)) {
+        rejectDxfRootDictEntriesInput();
+        return;
+    }
+    try {
+        std::vector<std::pair<std::string, std::string>> copied = entries;
+        m_rootDictEntries.swap(copied);
+    } catch (...) {
+        rejectDxfRootDictEntriesInput();
+        return;
+    }
+    m_dxfRootDictEntriesInputRejected = false;
+}
+
+void dxfRW::setRootDictEntries(
+        std::vector<std::pair<std::string, std::string>>&& entries) {
+    if (!preflightDxfSetup())
+        return;
+    if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen
+        && m_generatedNodSource) {
+        m_writeError = true;
+        return;
+    }
+    std::size_t estimate = 0u;
+    if (!estimateRootDictEntriesRetainedBytes(
+            entries, DRW::kMaxDxfTypedTableRetainedBytes, estimate)) {
+        rejectDxfRootDictEntriesInput();
+        return;
+    }
+    m_rootDictEntries = std::move(entries);
+    m_dxfRootDictEntriesInputRejected = false;
+}
+
 void dxfRW::setSourceBlockRecords(
         const std::vector<DRW_Block_Record>& records,
         bool requireResolvedOwners) {
@@ -4838,6 +4913,14 @@ bool dxfRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
             DRW::OperationCause::ResourceLimit,
             "dxf-class-metadata-budget",
             "DXF CLASS metadata exceeded the bounded setter limits");
+        return setError(DRW::BAD_OPEN);
+    }
+    if (m_dxfRootDictEntriesInputRejected) {
+        recordOperationDiagnostic(
+            DRW::OperationPhase::Validation,
+            DRW::OperationCause::ResourceLimit,
+            "dxf-root-dictionary-entry-budget",
+            "root dictionary entries exceeded the bounded setter limits");
         return setError(DRW::BAD_OPEN);
     }
     if (m_dxfRawDxfSectionsInputRejected) {

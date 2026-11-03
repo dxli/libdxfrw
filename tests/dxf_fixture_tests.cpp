@@ -74,6 +74,12 @@ public:
     static std::size_t rootEntriesCount(const dxfRW& owner) {
         return owner.m_rootDictEntries.size();
     }
+    static bool estimateRootEntries(
+            const std::vector<std::pair<std::string, std::string>>& entries,
+            std::size_t byteLimit, std::size_t& estimate) {
+        return dxfRW::estimateRootDictEntriesRetainedBytes(
+            entries, byteLimit, estimate);
+    }
     static bool namedDictObjectsRejected(const dxfRW& owner) {
         return owner.m_dxfNamedDictObjectsInputRejected;
     }
@@ -59527,6 +59533,23 @@ void testGroupAdoptionCountBound(TestContext& t) {
 
 void testRootDictEntryCountBound(TestContext& t) {
     const std::size_t overLimitCount = DRW_Dictionary::kMaxEntries + 1u;
+    const std::vector<std::pair<std::string, std::string>> smallEntries{
+        {"ROOT_RETRY", "A100"}};
+    std::size_t exactBytes = 0u;
+    const bool exactMeasured = DxfGroupSetterTestAccess::estimateRootEntries(
+        smallEntries, DRW::kMaxDxfTypedTableRetainedBytes, exactBytes);
+    std::size_t exactResult = 0u;
+    const bool exactAccepted = exactMeasured
+        && DxfGroupSetterTestAccess::estimateRootEntries(
+            smallEntries, exactBytes, exactResult)
+        && exactResult == exactBytes;
+    std::size_t belowResult = 0u;
+    const bool belowRejected = exactMeasured && exactBytes > 0u
+        && !DxfGroupSetterTestAccess::estimateRootEntries(
+            smallEntries, exactBytes - 1u, belowResult);
+    t.expect(exactAccepted && belowRejected,
+             "root dictionary entry estimator accepts exact byte budget and rejects one byte below it");
+
     for (const bool binary : {false, true}) {
         std::ostringstream output;
         dxfRW codec("");
@@ -59543,9 +59566,7 @@ void testRootDictEntryCountBound(TestContext& t) {
         t.expect(rejectedBeforeCopy && refused && output.str() == sentinel,
                  "over-limit root dictionary setter refuses before copying and preserves output");
 
-        const std::vector<std::pair<std::string, std::string>> corrected{
-            {"ROOT_RETRY", "A100"}};
-        codec.setRootDictEntries(corrected);
+        codec.setRootDictEntries(smallEntries);
         DxfGroupSetterTestAccess::resetWriteSession(codec);
         const bool correctedAccepted =
             !DxfGroupSetterTestAccess::rootEntriesRejected(codec)
@@ -59554,24 +59575,90 @@ void testRootDictEntryCountBound(TestContext& t) {
         t.expect(correctedAccepted,
                  "corrected root dictionary input clears rejection on the same codec");
 
+        std::vector<std::pair<std::string, std::string>> exactEntries(
+            DRW_Dictionary::kMaxEntries);
+        codec.setRootDictEntries(std::move(exactEntries));
+        const bool exactCountAccepted =
+            !DxfGroupSetterTestAccess::rootEntriesRejected(codec)
+            && DxfGroupSetterTestAccess::rootEntriesCount(codec)
+                == DRW_Dictionary::kMaxEntries;
+        t.expect(exactCountAccepted,
+                 "root dictionary entry setter accepts the exact row-count ceiling");
+
         std::vector<std::pair<std::string, std::string>> oversizedMove(
             overLimitCount);
         codec.setRootDictEntries(std::move(oversizedMove));
         const bool rejectedMoveBeforeConsume =
             DxfGroupSetterTestAccess::rootEntriesRejected(codec)
-            && DxfGroupSetterTestAccess::rootEntriesCount(codec) == 1u
+            && DxfGroupSetterTestAccess::rootEntriesCount(codec) == 0u
             && oversizedMove.size() == overLimitCount;
         const bool refusedMove = !DxfGroupSetterTestAccess::writeObjects(codec);
         t.expect(rejectedMoveBeforeConsume && refusedMove
                      && output.str() == sentinel,
                  "over-limit root dictionary move setter preserves caller and prior state, and refuses output");
 
-        codec.setRootDictEntries(corrected);
+        codec.setRootDictEntries(smallEntries);
         DxfGroupSetterTestAccess::resetWriteSession(codec);
         t.expect(!DxfGroupSetterTestAccess::rootEntriesRejected(codec)
                      && DxfGroupSetterTestAccess::rootEntriesCount(codec) == 1u
                      && output.str() == sentinel,
                  "corrected root dictionary input recovers after move-setter refusal");
+    }
+
+    dxfRW allocationCodec("");
+    const std::size_t failuresBefore = materialFailedAllocations;
+    {
+        MaterialAllocationFailure failCopy(0);
+        allocationCodec.setRootDictEntries(smallEntries);
+    }
+    const bool allocationFailureRejected = materialFailedAllocations > failuresBefore
+        && DxfGroupSetterTestAccess::rootEntriesRejected(allocationCodec)
+        && DxfGroupSetterTestAccess::rootEntriesCount(allocationCodec) == 0u;
+    allocationCodec.setRootDictEntries(std::move(
+        std::vector<std::pair<std::string, std::string>>(smallEntries)));
+    const bool allocationFailureRetry =
+        !DxfGroupSetterTestAccess::rootEntriesRejected(allocationCodec)
+        && DxfGroupSetterTestAccess::rootEntriesCount(allocationCodec) == 1u;
+    t.expect(allocationFailureRejected && allocationFailureRetry,
+             "const root dictionary copy catches allocation failure and accepts corrected retry");
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    for (const bool binary : {false, true}) {
+        const auto outputPath = std::filesystem::temp_directory_path()
+            / ("libdxfrw-root-dict-setter-bound-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        const std::string sentinel = "ROOT_DICT_WRITE_SENTINEL\n";
+        {
+            std::ofstream seed(outputPath,
+                               std::ios::binary | std::ios::trunc);
+            seed << sentinel;
+        }
+        dx_data data;
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        dxfRW writer(outputPath.string().c_str());
+        adapter.dxfW = &writer;
+        std::vector<std::pair<std::string, std::string>> oversized(
+            overLimitCount);
+        writer.setRootDictEntries(std::move(oversized));
+        const bool refused = !writer.write(&adapter, DRW::AC1027, binary);
+        std::ifstream preservedInput(outputPath, std::ios::binary);
+        const std::string preserved(
+            (std::istreambuf_iterator<char>(preservedInput)),
+            std::istreambuf_iterator<char>());
+        writer.setRootDictEntries(
+            std::vector<std::pair<std::string, std::string>>{});
+        const bool retried = writer.write(&adapter, DRW::AC1027, binary);
+        t.expect(refused && preserved == sentinel && retried,
+                 binary
+                     ? "binary oversized root entries preserve destination and succeed after corrected retry"
+                     : "ASCII oversized root entries preserve destination and succeed after corrected retry");
+        adapter.dxfW = nullptr;
+        std::error_code removeError;
+        std::filesystem::remove(outputPath, removeError);
     }
 }
 

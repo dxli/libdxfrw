@@ -696,42 +696,10 @@ public:
      * root NamedObjectsDictionary (handle C) so raw-net-routed named dictionaries
      * are reachable from the root and not pruned as orphans. The filter builds
      * this from the source root dict before write(); empty by default. */
-    void setRootDictEntries(const std::vector<std::pair<std::string, std::string>> &entries) {
-        if (!preflightDxfSetup())
-            return;
-        if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen && m_generatedNodSource) {
-            m_writeError = true;
-            return;
-        }
-        if (entries.size() > DRW_Dictionary::kMaxEntries) {
-            m_dxfRootDictEntriesInputRejected = true;
-            return;
-        }
-        std::vector<std::pair<std::string, std::string>> copied;
-        try {
-            copied = entries;
-        } catch (...) {
-            m_dxfRootDictEntriesInputRejected = true;
-            return;
-        }
-        m_rootDictEntries.swap(copied);
-        m_dxfRootDictEntriesInputRejected = false;
-    }
     void setRootDictEntries(
-            std::vector<std::pair<std::string, std::string>>&& entries) {
-        if (!preflightDxfSetup())
-            return;
-        if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen && m_generatedNodSource) {
-            m_writeError = true;
-            return;
-        }
-        if (entries.size() > DRW_Dictionary::kMaxEntries) {
-            m_dxfRootDictEntriesInputRejected = true;
-            return;
-        }
-        m_rootDictEntries = std::move(entries);
-        m_dxfRootDictEntriesInputRejected = false;
-    }
+        const std::vector<std::pair<std::string, std::string>>& entries);
+    void setRootDictEntries(
+        std::vector<std::pair<std::string, std::string>>&& entries);
     /*!< Register named-dictionary OBJECTS to emit verbatim in the regenerated
      * OBJECTS section (DXF write path only). Each carries its source code-5
      * handle, parent (330) owner, and entry (name -> child handle) list. The
@@ -1474,6 +1442,7 @@ private:
             m_writeError = true;
     }
     void rejectDxfClassesInput() noexcept;
+    void rejectDxfRootDictEntriesInput() noexcept;
     // Executable-local allocation instrumentation; no runtime/public test API.
     friend class DxIfaceStandardDwgCaptureTestAccess;
     friend class DxfGroupSetterTestAccess;
@@ -1792,6 +1761,9 @@ public:
     static bool estimateCanonicalLineTypeMetadataRetainedBytes(
         const std::vector<DRW_LType>& lineTypes,
         std::size_t& estimate, std::size_t& itemCount) noexcept;
+    static bool estimateRootDictEntriesRetainedBytes(
+        const std::vector<std::pair<std::string, std::string>>& entries,
+        std::size_t byteLimit, std::size_t& estimate) noexcept;
     bool preflightRawDxfSections() noexcept;
     bool preflightDxfSetup() noexcept {
         if (!m_dxfWriteFinalizing && !m_dxfWriteInspecting)
