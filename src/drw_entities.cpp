@@ -28716,7 +28716,14 @@ bool DRW_Viewport::validatePayloadFields() const {
 }
 
 bool DRW_Viewport::validateDxf() const {
-    return validatePayloadFields();
+    // Autodesk's VIEWPORT DXF table defines these three fields as enums.
+    // Keep the DWG codec's wire-width validation separate so unknown DWG
+    // values remain readable, while typed DXF output refuses values that the
+    // published DXF schema does not define.
+    return validatePayloadFields()
+        && renderMode <= 6
+        && defaultLightingType <= 1
+        && ucsOrthographicType <= 6;
 }
 //ex 22 dec 34
 void DRW_Viewport::resetDwgState() {

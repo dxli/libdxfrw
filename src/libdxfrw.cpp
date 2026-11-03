@@ -13929,7 +13929,7 @@ bool dxfRW::writeViewport(DRW_Viewport *ent) {
     // The typed DXF facade has no graph context. Only references whose target
     // was registered by a validating adapter are safe to emit; direct codec
     // callers remain fail-closed by default.
-    if (ent == nullptr || writer == nullptr || !ent->validatePayloadFields()
+    if (ent == nullptr || writer == nullptr || !ent->validateDxf()
         || (ent->backgroundHandle != 0
             && std::find(m_resolvedBackgroundHandles.begin(),
                          m_resolvedBackgroundHandles.end(),
