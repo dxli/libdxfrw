@@ -109,11 +109,13 @@ engines.
    refused. Never weaken the completeness predicate, emit a partial graph, or
    infer edges from adjacent handle values.
    DWG entities are delivered before DBCOLOR OBJECTS callbacks; the adapter now
-   reconciles generation-keyed RGB/name appearance and refuses unresolved
-   references (see the [late DBCOLOR callback receipt](docs/research/p4-dbcolor-late-callback-binding-2026-11-02.json)).
-   This does not close the DBCOLOR source frame, its ACAD_COLOR dictionary
-   owner/entry graph, strict source-to-output/readback, or native color-book
-   semantics; those remain refused and unqualified.
+   reconciles generation-keyed RGB/name appearance, retains a bounded typed
+   DBCOLOR source model, and refuses unresolved references (see the [late
+   callback](docs/research/p4-dbcolor-late-callback-binding-2026-11-02.json)
+   and [typed capture](docs/research/p4-dbcolor-typed-source-capture-2026-11-02.json)
+   receipts). This capture is not output admission. The DBCOLOR source frame,
+   ACAD_COLOR dictionary owner/entry graph, strict source-to-output/readback,
+   and native color-book semantics remain refused and unqualified.
    The `DICTIONARYWDFLT` default edge is checked as a hard pointer before it can
    become a typed reference; the generated wrong-role, rollback, and cursor
    alignment control is in the [default-handle role receipt](docs/research/p4-dictionary-default-handle-role-guard-2026-11-02.json).

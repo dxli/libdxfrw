@@ -15859,6 +15859,16 @@ bool estimateWipeoutVariablesTypedBytes(
         && estimate <= kMaxAdapterWipeoutVariablesRetainedBytes;
 }
 
+bool estimateDbColorTypedBytes(
+        const DRW_DbColor& data, std::size_t& estimate) noexcept {
+    using DbColorMapValue = std::pair<
+        const dx_data::DwgDbColorKey, DRW_DbColor>;
+    estimate = sizeof(DbColorMapValue) + 4u * sizeof(void*);
+    return addTableEntryRetainedBytes(data, estimate)
+        && addStringPayloadBytes(data.bookName, estimate)
+        && estimate <= dx_iface::DwgDbColorCaptureMaxRetainedBytes;
+}
+
 bool samePlotSettingsPendingReference(
         const DRW_TableEntry::PendingHandleRef& left,
         const DRW_TableEntry::PendingHandleRef& right) noexcept {
@@ -58883,6 +58893,17 @@ void dx_iface::addDbColor(const DRW_DbColor& data) {
         reject();
         return;
     }
+    std::size_t typedObjectBytes = 0u;
+    if (cData->dwgDbColorObjectRetainedRecords
+            >= DwgDbColorCaptureMaxRecords
+        || !estimateDbColorTypedBytes(data, typedObjectBytes)
+        || cData->dwgDbColorObjectRetainedBytes
+            > DwgDbColorCaptureMaxRetainedBytes
+        || typedObjectBytes > DwgDbColorCaptureMaxRetainedBytes
+            - cData->dwgDbColorObjectRetainedBytes) {
+        reject();
+        return;
+    }
     const std::size_t displayNameBytes = data.name.size()
         + data.bookName.size()
         + (data.bookName.empty() ? 0u : 1u);
@@ -58904,7 +58925,9 @@ void dx_iface::addDbColor(const DRW_DbColor& data) {
 
     const dx_data::DwgDbColorKey key{
         cData->importGeneration, data.handle};
-    if (cData->dwgDbColors.find(key) != cData->dwgDbColors.end()) {
+    if (cData->dwgDbColors.find(key) != cData->dwgDbColors.end()
+        || cData->dwgDbColorObjects.find(key)
+            != cData->dwgDbColorObjects.end()) {
         reject();
         return;
     }
@@ -58972,14 +58995,24 @@ void dx_iface::addDbColor(const DRW_DbColor& data) {
         return;
     }
 
+    bool objectInserted = false;
     try {
+        const auto object = cData->dwgDbColorObjects.emplace(key, data);
+        if (!object.second) {
+            reject();
+            return;
+        }
+        objectInserted = true;
         const auto inserted = cData->dwgDbColors.emplace(
             key, std::move(appearance));
         if (!inserted.second) {
+            cData->dwgDbColorObjects.erase(key);
             reject();
             return;
         }
     } catch (...) {
+        if (objectInserted)
+            cData->dwgDbColorObjects.erase(key);
         reject();
         return;
     }
@@ -58992,6 +59025,8 @@ void dx_iface::addDbColor(const DRW_DbColor& data) {
     }
     ++cData->dwgDbColorRetainedRecords;
     cData->dwgDbColorRetainedBytes += appearanceBaseBytes + displayNameBytes;
+    ++cData->dwgDbColorObjectRetainedRecords;
+    cData->dwgDbColorObjectRetainedBytes += typedObjectBytes;
 }
 
 void dx_iface::addGeoData(const DRW_GeoData& data) {

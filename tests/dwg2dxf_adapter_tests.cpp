@@ -64740,24 +64740,43 @@ static bool dbColorLateCallbackBinding() {
 
     DRW_DbColor color;
     color.handle = 0xA001u;
+    color.parentHandle = 0xA100u;
     color.rgb = 0x123456;
     color.colorMethod = 0xC2u;
+    color.colorDwgFlags = 0x03u;
+    color.colorDwgIndex = 0u;
+    color.colorDwgMetadataPresent = true;
+    color.reactorHandles = {0xA101u};
+    color.xDictHandle = 0xA102u;
     color.bookName = "LOCAL";
     color.name = "ACCENT";
     iface.addDbColor(color);
 
+    const auto retainedColor = data.dwgDbColorObjects.find({17u, 0xA001u});
     auto entity = data.mBlock->ent.begin();
     const auto* resolved = dynamic_cast<const DRW_Line*>(*entity++);
     const auto* overridden = dynamic_cast<const DRW_Line*>(*entity);
-    if (resolved == nullptr || overridden == nullptr
+    if (retainedColor == data.dwgDbColorObjects.end()
+        || retainedColor->second.parentHandle != color.parentHandle
+        || retainedColor->second.colorDwgFlags != color.colorDwgFlags
+        || retainedColor->second.colorDwgIndex != color.colorDwgIndex
+        || retainedColor->second.colorDwgMetadataPresent
+            != color.colorDwgMetadataPresent
+        || retainedColor->second.reactorHandles != color.reactorHandles
+        || retainedColor->second.xDictHandle != color.xDictHandle
+        || retainedColor->second.bookName != color.bookName
+        || retainedColor->second.name != color.name
+        || resolved == nullptr || overridden == nullptr
         || resolved->color24 != 0x123456
         || resolved->colorName != "LOCAL$ACCENT"
         || overridden->color24 != 0x234567
         || overridden->colorName != "ENTITY$OVERRIDE"
         || data.dwgDbColors.size() != 1u
+        || data.dwgDbColorObjectRetainedRecords != 1u
+        || !data.hasCompleteDwgDbColorTypedCapture()
         || !data.hasCompleteDwgDbColorAppearanceBindings()
         || data.dwgDbColorCaptureFailed)
-        return fail("late callback did not resolve appearance or preserve overrides");
+        return fail("late callback did not retain the typed source object, resolve appearance, or preserve overrides");
 
     // A later import reusing the same source handles must bind only to its
     // own generation's OBJECTS callback.
@@ -64779,6 +64798,8 @@ static bool dbColorLateCallbackBinding() {
         || resolved->color24 != 0x123456
         || resolved->colorName != "LOCAL$ACCENT"
         || data.dwgDbColors.size() != 2u
+        || data.dwgDbColorObjectRetainedRecords != 2u
+        || !data.hasCompleteDwgDbColorTypedCapture()
         || !data.hasCompleteDwgDbColorAppearanceBindings()
         || data.dwgDbColorCaptureFailed)
         return fail("import generation did not isolate reused handles");
@@ -64789,6 +64810,9 @@ static bool dbColorLateCallbackBinding() {
     iface.addDbColor(nextColor);
     const bool rejectedConflict = data.dwgDbColorCaptureFailed
         && !data.hasCompleteDwgDbColorAppearanceBindings()
+        && !data.hasCompleteDwgDbColorTypedCapture()
+        && data.dwgDbColors.size() == 2u
+        && data.dwgDbColorObjects.size() == 2u
         && data.typedEntityCaptureFailed
         && nextResolved->color24 == 0x654321
         && nextResolved->colorName == "LOCAL$SECOND";

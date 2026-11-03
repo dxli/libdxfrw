@@ -1013,12 +1013,27 @@ public:
         std::string displayName;
     };
     std::map<DwgDbColorKey, DwgDbColorAppearance> dwgDbColors;
+    std::map<DwgDbColorKey, DRW_DbColor> dwgDbColorObjects;
     std::multimap<DwgDbColorKey, DRW_Entity*> dwgDbColorEntityReferences;
     std::size_t dwgDbColorRetainedRecords{0u};
     std::size_t dwgDbColorRetainedBytes{0u};
+    std::size_t dwgDbColorObjectRetainedRecords{0u};
+    std::size_t dwgDbColorObjectRetainedBytes{0u};
     std::size_t dwgDbColorReferenceRetainedRecords{0u};
     std::size_t dwgDbColorReferenceRetainedBytes{0u};
     bool dwgDbColorCaptureFailed{false};
+
+    bool hasCompleteDwgDbColorTypedCapture() const noexcept {
+        if (dwgDbColorCaptureFailed
+            || dwgDbColors.size() != dwgDbColorObjects.size())
+            return false;
+        for (const auto& color : dwgDbColors) {
+            if (dwgDbColorObjects.find(color.first)
+                == dwgDbColorObjects.end())
+                return false;
+        }
+        return true;
+    }
 
     bool hasCompleteDwgDbColorAppearanceBindings() const noexcept {
         if (dwgDbColorCaptureFailed)
