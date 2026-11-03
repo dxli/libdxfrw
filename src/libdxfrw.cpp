@@ -33407,7 +33407,7 @@ bool dxfRW::writeBackground(DRW_Background *ent, const char *recordName) {
 }
 
 bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
-    if (!preflightTableEntry(ent))
+    if (!preflightTableEntry(ent) || writer == nullptr)
         return false;
     const auto emittedReference = [this](std::uint32_t source) {
         if (source == 0u)
@@ -33434,10 +33434,23 @@ bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
         || !isResolvedOptional(ent->m_visualStyleHandle, visualStyleHandle)
         || !isResolvedOptional(ent->m_textStyleHandle, textStyleHandle))
         return failDxfWrite();
+    const std::uint32_t sourceHandle = ent->handle;
+    std::uint32_t emittedHandle = sourceHandle == 0u
+        ? 0u : remapObjectHandle(sourceHandle);
+    if (sourceHandle != 0u
+        && (emittedHandle == 0u || emittedHandle == DRW::NoHandle
+            || isDxfFixedOutputHandle(emittedHandle)))
+        return failDxfWrite();
     RecordStateScope state(*this, ent);
+    if (sourceHandle == 0u) {
+        if (!allocateDxfHandle(emittedHandle))
+            return false;
+    } else if (!reserveHandle(emittedHandle)) {
+        return failDxfWrite();
+    }
     DxfWriterRecordScope record(*writer);
     writer->writeString(0, "SUNSTUDY");
-    writer->writeString(5, toHexStr(ent->handle));
+    writer->writeString(5, toHexStr(emittedHandle));
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
     if (m_writeError)
         return false;
@@ -33485,7 +33498,10 @@ bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
         writer->writeString(343, toHexStr(textStyleHandle));
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    if (writer->hasWriteError() || !record.commit())
+    if (writer->hasWriteError() || !preflightDxfWrite()
+        || (sourceHandle != 0u
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit())
         return failDxfWrite();
     state.commit();
     return true;

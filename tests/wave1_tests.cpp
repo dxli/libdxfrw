@@ -2975,7 +2975,8 @@ void testWipeoutReferenceRemapping(TestContext& t) {
 
 void testSceneObjectReferenceRemapping(TestContext& t) {
     const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
-        {0x701u, 0xA01u}, {0x702u, 0xA02u}, {0x703u, 0xA03u},
+        {0x700u, 0xA00u}, {0x701u, 0xA01u}, {0x702u, 0xA02u},
+        {0x703u, 0xA03u},
         {0x704u, 0xA04u}, {0x705u, 0xA05u}, {0x706u, 0xA06u},
         {0x707u, 0xA07u}, {0x708u, 0xA08u}};
     const auto resolverValue = [](std::uint32_t source) {
@@ -3008,10 +3009,12 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
                     std::make_unique<dxfWriterAscii>(&output));
 
             DRW_SunStudy sunStudy;
+            sunStudy.handle = 0x700u;
             sunStudy.m_pageSetupWizardHandle = 0x701u;
             sunStudy.m_viewHandle = 0x702u;
             sunStudy.m_visualStyleHandle = 0x703u;
             sunStudy.m_textStyleHandle = 0x704u;
+            DRW_SunStudy generatedSunStudy;
             DRW_MotionPath motionPath;
             motionPath.m_cameraPathHandle = 0x705u;
             motionPath.m_targetPathHandle = 0x706u;
@@ -3020,6 +3023,7 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
             curvePath.m_entityHandle = 0x708u;
 
             const bool wrote = owner.writeSunStudy(&sunStudy)
+                && owner.writeSunStudy(&generatedSunStudy)
                 && owner.writeMotionPath(&motionPath)
                 && owner.writeCurvePath(&curvePath)
                 && owner.writer->writeString(0, "WIRE_END");
@@ -3035,6 +3039,7 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
                     std::make_unique<dxfReaderAscii>(&input));
             std::map<std::string, std::vector<std::pair<int, std::uint32_t>>>
                 observed;
+            std::vector<std::uint32_t> sunStudyIdentities;
             std::string recordName;
             bool ended = false;
             int code = 0;
@@ -3045,6 +3050,8 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
                         ended = true;
                         break;
                     }
+                } else if (recordName == "SUNSTUDY" && code == 5) {
+                    sunStudyIdentities.push_back(reader->getHandleString());
                 } else if ((recordName == "SUNSTUDY"
                             && code >= 340 && code <= 343)
                            || (recordName == "MOTIONPATH" && code == 340)
@@ -3069,7 +3076,9 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
                 {340, expected(0x707u)}};
             const std::vector<std::pair<int, std::uint32_t>> curvePathExpected = {
                 {340, expected(0x708u)}};
-            t.expect(ended
+            t.expect(ended && sunStudyIdentities.size() == 2u
+                         && sunStudyIdentities[0] == 0xA00u
+                         && sunStudyIdentities[1] != 0u
                          && observed["SUNSTUDY"] == sunStudyExpected
                          && observed["MOTIONPATH"] == motionPathExpected
                          && observed["ACDBCURVEPATH"] == curvePathExpected,
@@ -3087,6 +3096,7 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
             dxfRW failedOwner("");
             failedOwner.version = DRW::AC1032;
             failedOwner.binFile = binary;
+            failedOwner.setHandleRemap(sourceToRemapped);
             failedOwner.setReferenceResolver(
                 [unresolved](std::uint32_t source) {
                     return source == unresolved ? 0u : source;
@@ -3099,6 +3109,7 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
             bool failedAsExpected = false;
             if (unresolved <= 0x704u) {
                 DRW_SunStudy sunStudy;
+                sunStudy.handle = 0x700u;
                 sunStudy.m_pageSetupWizardHandle = 0x701u;
                 sunStudy.m_viewHandle = 0x702u;
                 sunStudy.m_visualStyleHandle = 0x703u;
@@ -3122,6 +3133,7 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
             dxfRW retryOwner("");
             retryOwner.version = DRW::AC1032;
             retryOwner.binFile = binary;
+            retryOwner.setHandleRemap(sourceToRemapped);
             retryOwner.setReferenceResolver(resolverValue);
             retryOwner.writer = binary
                 ? std::unique_ptr<dxfWriter>(
@@ -3131,6 +3143,7 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
             bool retrySucceeded = false;
             if (unresolved <= 0x704u) {
                 DRW_SunStudy sunStudy;
+                sunStudy.handle = 0x700u;
                 sunStudy.m_pageSetupWizardHandle = 0x701u;
                 sunStudy.m_viewHandle = 0x702u;
                 sunStudy.m_visualStyleHandle = 0x703u;
@@ -3150,6 +3163,78 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
             t.expect(retrySucceeded,
                      "scene object accepts corrected fresh-writer retry");
         }
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream failedOutput;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1032;
+        failedOwner.binFile = binary;
+        failedOwner.setHandleRemap(sourceToRemapped);
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&failedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&failedOutput));
+        failedOwner.writer->writeString(0, "PRESERVE");
+        const std::string beforeFailedRecord = failedOutput.str();
+        DRW_SunStudy malformed;
+        malformed.handle = 0x700u;
+        malformed.m_pageSetupWizardHandle = 0x701u;
+        malformed.m_viewHandle = 0x702u;
+        malformed.m_visualStyleHandle = 0x703u;
+        malformed.m_textStyleHandle = 0x704u;
+        malformed.extData.push_back(new DRW_Variant(
+            1009, std::string("unsupported-xdata-code")));
+        const bool malformedRejected = !failedOwner.writeSunStudy(&malformed);
+        t.expect(malformedRejected
+                     && failedOutput.str() == beforeFailedRecord
+                     && failedOwner.m_writingContext
+                            .sourceHandleToWrittenObjectMap.count(0x700u) == 0u,
+                 "late SUNSTUDY XDATA failure rolls back bytes and identity binding");
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1032;
+        retryOwner.binFile = binary;
+        retryOwner.setHandleRemap(sourceToRemapped);
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        DRW_SunStudy corrected;
+        corrected.handle = 0x700u;
+        corrected.m_pageSetupWizardHandle = 0x701u;
+        corrected.m_viewHandle = 0x702u;
+        corrected.m_visualStyleHandle = 0x703u;
+        corrected.m_textStyleHandle = 0x704u;
+        const bool correctedWrite = retryOwner.writeSunStudy(&corrected);
+        std::uint32_t emittedIdentity = 0u;
+        if (correctedWrite) {
+            std::istringstream input(retryOutput.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderAscii>(&input));
+            std::string recordName;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0)
+                    recordName = reader->getString();
+                else if (recordName == "SUNSTUDY" && code == 5)
+                    emittedIdentity = reader->getHandleString();
+            }
+        }
+        const auto identityBinding = retryOwner.m_writingContext
+            .sourceHandleToWrittenObjectMap.find(0x700u);
+        t.expect(correctedWrite && emittedIdentity == 0xA00u
+                     && identityBinding
+                            != retryOwner.m_writingContext
+                                   .sourceHandleToWrittenObjectMap.end()
+                     && identityBinding->second == 0xA00u,
+                 "corrected SUNSTUDY retry emits and binds its remapped identity");
     }
 }
 

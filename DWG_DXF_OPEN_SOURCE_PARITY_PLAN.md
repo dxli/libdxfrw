@@ -313,6 +313,9 @@ required field, role, or output gap.
 **Rendering:** close only the unqualified engine/class-revision/schema and
 optional-presence profiles; establish source-backed active/global/environment
 and background/live-section relations; then qualify native rendering semantics.
+SUNSTUDY physical producer coverage and native plotting semantics remain open;
+generated record-identity and reference round-trips are transport evidence only
+(see the [record-identity receipt](docs/research/p5-sunstudy-record-identity-remapping-2026-11-03.json)).
 Keep physical SUN ownership constrained to the documented VPORT/VIEWPORT
 hard-owner route. The AC1024 aerial sample's SUN `0x24C` is owned by XRECORD
 `0x246`, so it is not evidence for a valid alternate route; preserve strict
