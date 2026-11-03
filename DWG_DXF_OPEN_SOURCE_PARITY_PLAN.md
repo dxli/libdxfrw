@@ -133,13 +133,12 @@ engines.
    become a typed reference; the generated wrong-role, rollback, and cursor
    alignment control is in the [default-handle role receipt](docs/research/p4-dictionary-default-handle-role-guard-2026-11-02.json).
    This does not establish target existence, ownership, or output closure.
-   Continue the remaining reference-ID audit for typed writers beyond the
-   already-covered object and common-entity fields whose modeled pointers may
-   still serialize source identities. Confirm each field against its parser
-   contract and applicable format mapping before editing; add focused
-   ASCII/Binary controls for resolver precedence and remap fallback. Correct
-   output IDs alone do not establish target kind, ownership, recursive closure,
-   physical producer breadth, or native-consumer semantics.
+   Continue the remaining reference-ID audit from the current field receipts,
+   prioritizing typed owner/dependency pointers on supported 3D records. Confirm
+   each field against its parser contract and applicable format mapping before
+   editing; add focused ASCII/Binary controls for resolver precedence and remap
+   fallback. Correct output IDs alone do not establish target kind, ownership,
+   recursive closure, physical producer breadth, or native-consumer semantics.
 3. **Recursive closure:** follow only source-required edges reached from the
    admitted graph. Reuse a qualified provider when it closes the exact target
    role; otherwise resolve that source-required body and its descendants, and

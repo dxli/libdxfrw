@@ -2538,12 +2538,14 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
 
 void testEntityReferenceRemapping(TestContext& t) {
     const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
-        {0x801u, 0xA81u}, {0x802u, 0xA82u}, {0x803u, 0xA83u}};
+        {0x801u, 0xA81u}, {0x802u, 0xA82u}, {0x803u, 0xA83u},
+        {0x804u, 0xA84u}};
     const auto resolverValue = [](std::uint32_t source) {
         switch (source) {
         case 0x801u: return std::uint32_t{0xB81u};
         case 0x802u: return std::uint32_t{0xB82u};
         case 0x803u: return std::uint32_t{0xB83u};
+        case 0x804u: return std::uint32_t{0xB84u};
         default: return source;
         }
     };
@@ -2566,9 +2568,12 @@ void testEntityReferenceRemapping(TestContext& t) {
             point.material = 0x801u;
             point.fullVisualStyleHandle = 0x802u;
             point.plotStyle = static_cast<int>(0x803u);
+            DRW_SectionObject section;
+            section.m_sectionSettingsHandle = 0x804u;
             const bool wrote = owner.writePoint(&point)
+                && owner.writeSectionObject(&section)
                 && owner.writer->writeString(0, "WIRE_END");
-            t.expect(wrote, "common entity references serialize");
+            t.expect(wrote, "typed entity references serialize");
             if (!wrote)
                 continue;
 
@@ -2579,6 +2584,7 @@ void testEntityReferenceRemapping(TestContext& t) {
                 : std::unique_ptr<dxfReader>(
                     std::make_unique<dxfReaderAscii>(&input));
             std::vector<std::pair<int, std::uint32_t>> observed;
+            std::vector<std::pair<int, std::uint32_t>> sectionReferences;
             std::string recordName;
             bool ended = false;
             int code = 0;
@@ -2592,6 +2598,9 @@ void testEntityReferenceRemapping(TestContext& t) {
                 } else if (recordName == "POINT"
                            && (code == 347 || code == 348 || code == 390)) {
                     observed.emplace_back(code, reader->getHandleString());
+                } else if (recordName == "SECTIONOBJECT" && code == 360) {
+                    sectionReferences.emplace_back(
+                        code, reader->getHandleString());
                 }
             }
             const std::vector<std::pair<int, std::uint32_t>> expected =
@@ -2600,10 +2609,14 @@ void testEntityReferenceRemapping(TestContext& t) {
                           {347, 0xB81u}, {348, 0xB82u}, {390, 0xB83u}}
                     : std::vector<std::pair<int, std::uint32_t>>{
                           {347, 0xA81u}, {348, 0xA82u}, {390, 0xA83u}};
-            t.expect(ended && observed == expected,
+            const std::vector<std::pair<int, std::uint32_t>>
+                expectedSectionReferences = {{360, useResolver
+                    ? 0xB84u : 0xA84u}};
+            t.expect(ended && observed == expected
+                         && sectionReferences == expectedSectionReferences,
                      useResolver
-                         ? "common entity fields emit final resolver identities"
-                         : "common entity fields emit source-handle remaps");
+                         ? "typed entity references emit final resolver identities"
+                         : "typed entity references emit source-handle remaps");
         }
     }
 }

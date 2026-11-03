@@ -12488,6 +12488,12 @@ bool dxfRW::writeSectionObject(DRW_SectionObject *ent) {
         m_writeError = true;
         return false;
     }
+    const std::uint32_t sectionSettingsHandle =
+        ent->m_sectionSettingsHandle == 0u
+            ? 0u
+            : (m_referenceResolver
+                   ? resolveReference(ent->m_sectionSettingsHandle)
+                   : remapObjectHandle(ent->m_sectionSettingsHandle));
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "SECTIONOBJECT");
     if (!writeEntity(ent))
@@ -12516,7 +12522,7 @@ bool dxfRW::writeSectionObject(DRW_SectionObject *ent) {
         writer->writeDouble(32, point.z);
     }
     if (ent->m_sectionSettingsHandle != 0)
-        writer->writeString(360, toHexStr(ent->m_sectionSettingsHandle));
+        writer->writeString(360, toHexStr(sectionSettingsHandle));
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
     return !writer->hasWriteError();
