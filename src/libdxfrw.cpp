@@ -33014,8 +33014,9 @@ bool dxfRW::writeBackground(DRW_Background *ent, const char *recordName) {
                       ent->m_secondaryBackgroundHandle)
             == m_resolvedBackgroundHandles.end())
             return failDxfWrite();
-        emittedSecondaryBackground = remapObjectHandle(
-            ent->m_secondaryBackgroundHandle);
+        emittedSecondaryBackground = m_referenceResolver
+            ? resolveReference(ent->m_secondaryBackgroundHandle)
+            : remapObjectHandle(ent->m_secondaryBackgroundHandle);
         if (emittedSecondaryBackground == 0
             || emittedSecondaryBackground == DRW::NoHandle)
             return failDxfWrite();

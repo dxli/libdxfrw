@@ -240,6 +240,10 @@ hard-owner route. The AC1024 aerial sample's SUN `0x24C` is owned by XRECORD
 `0x246`, so it is not evidence for a valid alternate route; preserve strict
 refusal and reopen implementation only if a conforming source demonstrates a
 missing route ([outlier receipt](docs/research/p5-ac1024-sun-xrecord-owner-outlier-2026-11-01.json)).
+For IBL backgrounds, the admitted group-340 secondary-Background reference now
+uses resolver-first output identity with handle-remap fallback after the existing
+same-root target registration check; see the [IBL reference receipt](docs/research/p5-background-reference-remapping-2026-11-03.json).
+This preserves the graph gate and does not qualify native lighting semantics.
 Unsupported RGB/name/book CMC states remain refused unless a lossless documented
 route is established. Generated ASCII/Binary tests already cover selected
 LAYOUT shade-mode 4/5 provider graphs and VIEWPORT shade-mode transport, including

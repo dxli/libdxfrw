@@ -3005,6 +3005,69 @@ void testLayoutPlotSettingsReferenceRemapping(TestContext& t) {
     }
 }
 
+void testBackgroundReferenceRemapping(TestContext& t) {
+    const auto resolverValue = [](std::uint32_t source) {
+        return source == 0x941u ? std::uint32_t{0xB41u} : source;
+    };
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap({{0x941u, 0xA41u}});
+            owner.setResolvedBackgroundHandles({0x941u});
+            if (useResolver)
+                owner.setReferenceResolver(resolverValue);
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_Background ibl;
+            ibl.handle = 0xA400u;
+            ibl.parentHandle = 0xCu;
+            ibl.m_kind = DRW_Background::Ibl;
+            ibl.m_classVersion = 1;
+            ibl.m_secondaryBackgroundHandle = 0x941u;
+            const bool wrote = owner.writeBackground(
+                    &ibl, "IBLBACKGROUND")
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote, "IBL secondary Background reference serializes");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::uint32_t emittedReference = 0u;
+            std::string recordName;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (recordName == "IBLBACKGROUND" && code == 340) {
+                    emittedReference = reader->getHandleString();
+                }
+            }
+            const std::uint32_t expected = useResolver ? 0xB41u : 0xA41u;
+            t.expect(ended && emittedReference == expected,
+                     useResolver
+                         ? "IBL uses final Background resolver identity"
+                         : "IBL uses secondary Background handle remap");
+        }
+    }
+}
+
 void testDimensionAssociationGraphClosure(TestContext& t) {
     const auto readAssociationTargets = [&t](const std::string& bytes,
                                               bool binary,
@@ -16763,6 +16826,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testLayoutPlotSettingsReferenceRemapping(focused);
         std::cout << "LAYOUT/PLOTSETTINGS reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--background-reference-remapping") {
+        TestContext focused;
+        testBackgroundReferenceRemapping(focused);
+        std::cout << "Background reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
