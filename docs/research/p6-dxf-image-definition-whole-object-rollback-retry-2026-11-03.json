@@ -2,16 +2,16 @@
   "schema": "libdxfrw.research-receipt.v1",
   "id": "p6-dxf-image-definition-whole-object-rollback-retry-2026-11-03",
   "date": "2026-11-03",
-  "status": "COMPLETED_LOCAL_TRANSACTION_ROLLBACK_CONTROL",
+  "status": "COMPLETED_LOCAL_TRANSACTION_ROLLBACK_SWEEP",
   "supportClaimEffect": "none",
-  "scope": "Verify whole OBJECTS rollback, same-writer retry and typed readback for IMAGEDEF callback rejection and a core IMAGEDEF allocation failure.",
+  "scope": "Verify whole OBJECTS rollback, same-writer retry and typed readback for IMAGEDEF callback rejection and every calibrated core IMAGEDEF OBJECTS allocation point.",
   "source": {
-    "parentCommit": "804da559",
+    "parentCommit": "c70f3edd",
     "files": {
-      "src/libdxfrw.cpp": "5751845b6b6ca893c3102694957d3320ea112cffaeb811e42ff7e8c767e9776c",
+      "src/libdxfrw.cpp": "356faeb09e59ef6a3a60292bd0958329fe0bd7e74286c6275a4381dbd83d2abe",
       "src/libdxfrw.h": "54af5f45476a14c6046ddaed33ef290c0779eaa02c2eb2ac6141d5f6101a36d3",
-      "tests/dxf_fixture_tests.cpp": "6e680b3794846966da70c1fc6c6f275c084b0910db6c4fe086b9fb4dc702c116",
-      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "2d2cd21cf9402c6c4adcb7467d7ec17301b263c5e085fd2ccbe6c986c0f51fd4"
+      "tests/dxf_fixture_tests.cpp": "c39394c75ec04ef0b55d06b1302383f6e257b3988ecc0f9c64fb8baee7ef4eb8",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "216cbe547e3623f3f51cbdedbaede16b05e1045e675916c464be1fc78f05e903"
     }
   },
   "implementation": {
@@ -21,9 +21,9 @@
     ],
     "behavior": [
       "The existing IMAGEDEF failure/retry control covers entity-stage rejection and consumer OBJECTS callback validation/bad_alloc after the core has staged NOD, GROUP, IMAGEDEF dictionary, reactor, and IMAGEDEF records.",
-      "A calibrated ASCII/Binary control measures allocations between the end of ENTITIES and the adapter OBJECTS callback, then injects one failure at the final allocation on the successful core OBJECTS path with a generated IMAGEDEF as the only added object family.",
-      "The core allocation failure occurs before the adapter callback; the OBJECTS record scope and whole-file transaction preserve the existing destination and clear derived entity identities.",
-      "The same writer retries after the one-shot allocation failure; a fresh typed DXF import verifies IMAGE and IMAGEDEF data in both encodings.",
+      "A calibrated ASCII/Binary control measures allocations between the end of ENTITIES and the adapter OBJECTS callback, then injects std::bad_alloc at each measured allocation offset on the successful core OBJECTS path with a generated IMAGEDEF as the only added object family.",
+      "Each core allocation failure occurs before the adapter callback; the OBJECTS record scope and whole-file transaction preserve the existing destination and clear derived entity identities.",
+      "The same writer retries after every one-shot allocation failure; a fresh typed DXF import verifies IMAGE and IMAGEDEF data in both encodings.",
       "The allocation injector disables itself when it fires to avoid cascading failures during error reporting. No repository DWG/DXF fixtures are added and no support claim is established."
     ]
   },
@@ -34,8 +34,8 @@
     },
     "normalFocused": {
       "command": "ctest --test-dir build-gcc --output-on-failure -R '^libdxfrw_image_definition_plan_failure_retry$'",
-      "result": "PASS 1/1; 0.08 seconds",
-      "coverage": "ASCII/Binary callback validation and bad_alloc rollback/retry/readback, plus calibrated core OBJECTS final-allocation failure, destination preservation, derived identity rollback, same-writer retry, and typed IMAGE/IMAGEDEF readback."
+      "result": "PASS 1/1; 0.86 seconds",
+      "coverage": "ASCII/Binary callback validation plus calibrated core IMAGEDEF OBJECTS all-allocation-offset failure sweep, destination preservation, derived identity rollback, same-writer retry after each failure, and typed IMAGE/IMAGEDEF readback."
     },
     "asanBuild": {
       "command": "cmake --build build-asan-custom --target libdxfrw_dxf_fixture_tests -j4",
@@ -43,19 +43,19 @@
     },
     "asanFocused": {
       "command": "ctest --test-dir build-asan-custom --output-on-failure -R '^libdxfrw_image_definition_plan_failure_retry$'",
-      "result": "PASS 1/1; 0.17 seconds"
+      "result": "PASS 1/1; 1.72 seconds"
     },
     "diffCheck": "PASS",
     "repositoryFixturesAdded": 0,
     "coreObjectsAllocationCalibration": {
       "result": "PASS in ASCII and Binary DXF",
-      "counts": "7 allocations in the no-image baseline; 18 allocations with the generated IMAGEDEF path; 11 additional allocations attributable to the IMAGEDEF OBJECTS path.",
-      "injection": "Set the failure countdown to 17 so the 18th and final allocation before the consumer OBJECTS callback fails. Exactly one injected failure is observed and the callback is not reached.",
+      "counts": "7 allocations in the no-image baseline; 18 allocations with the generated IMAGEDEF path; 11 additional allocations attributable to the IMAGEDEF OBJECTS path. Every offset 0 through 17 is injected in turn for the full path.",
+      "injection": "A fresh writer runs at each allocation offset. Each injection is observed exactly once before the consumer OBJECTS callback, then that same writer retries with injection disabled and produces typed IMAGE/IMAGEDEF readback.",
       "diagnostic": "The current build reports emit-failure because the bounded reserve path normalizes the injected bad_alloc; the assertion also permits allocation-failure if a platform path propagates it."
     }
   },
   "limitations": [
-    "The core injection covers the final allocation on the generated IMAGEDEF OBJECTS path; allocations in independent core OBJECTS builders and other staged families remain open.",
+    "The sweep covers all calibrated allocation offsets on the generated IMAGEDEF path; independent core OBJECTS builders and other staged families remain open.",
     "DRW::reserve may normalize bad_alloc into a generic emit-failure diagnostic. The test proves failure atomicity and retry, not diagnostic precision for every allocation site.",
     "Generated round-trip evidence does not qualify native consumer semantics, physical producer breadth, or independent interoperability."
   ],

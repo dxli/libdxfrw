@@ -16524,73 +16524,85 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
             true, false, binary, imageAllocations);
         const long imageOnlyAllocations = imageAllocations
             - baselineAllocations;
-        const long failAt = imageAllocations - 1L;
         const bool calibrated = baselineMeasured && imageMeasured
-            && imageOnlyAllocations > 2L && failAt >= 0L;
+            && imageOnlyAllocations > 2L && imageAllocations > 0L;
+        bool everyOffsetRolledBack = calibrated;
+        bool everyOffsetRetried = calibrated;
+        long sweptFailures = 0L;
+        for (long allocation = 0; calibrated && allocation < imageAllocations;
+             ++allocation) {
+            {
+                std::ofstream sentinel(corePath,
+                                       std::ios::binary | std::ios::trunc);
+                sentinel << "core OBJECTS allocation sentinel\n";
+            }
+            dx_data data;
+            CoreObjectsAllocationWriter adapter;
+            adapter.cData = &data;
+            adapter.currentBlock = data.mBlock;
+            adapter.emitImage = true;
+            adapter.armObjectAllocation = true;
+            adapter.objectAllocationCountdown = allocation;
+            dxfRW writer(coreFilename.c_str());
+            adapter.dxfW = &writer;
+            const std::size_t failuresBefore = materialFailedAllocations;
+            const bool failed = !writer.write(&adapter, DRW::AC1027, binary);
+            materialAllocationCountdown = -1;
+            const DRW_OperationDiagnostic diagnostic =
+                writer.getLastDiagnostic();
+            const bool allocationReported =
+                (diagnostic.phase == DRW::OperationPhase::Allocation
+                     && diagnostic.code == "allocation-failure")
+                || (diagnostic.phase == DRW::OperationPhase::Emit
+                    && diagnostic.code == "emit-failure");
+            const bool rolledBack = failed && adapter.imageWritten
+                && !adapter.objectsCallbackReached
+                && materialFailedAllocations == failuresBefore + 1u
+                && allocationReported
+                && coreContents() == "core OBJECTS allocation sentinel\n"
+                && writer.getWritingContext()
+                    ->sourceHandleToMintedMap.empty()
+                && writer.getWritingContext()
+                    ->writtenSourceEntityHandles.empty();
+            everyOffsetRolledBack = everyOffsetRolledBack && rolledBack;
+            if (rolledBack)
+                ++sweptFailures;
 
-        {
-            std::ofstream sentinel(corePath,
-                                   std::ios::binary | std::ios::trunc);
-            sentinel << "core OBJECTS allocation sentinel\n";
+            adapter.armObjectAllocation = false;
+            adapter.image.handle = 0u;
+            adapter.imageWritten = false;
+            adapter.objectsCallbackReached = false;
+            const bool retried = rolledBack
+                && writer.write(&adapter, DRW::AC1027, binary)
+                && adapter.imageWritten && adapter.objectsCallbackReached
+                && writer.getError() == DRW::BAD_NONE;
+            dx_data decoded;
+            dx_iface reader;
+            const bool readBack = retried
+                && reader.fileImport(coreFilename, &decoded, false)
+                && decoded.mBlock->ent.size() == 1u;
+            const auto* image = readBack
+                ? dynamic_cast<const DRW_Image*>(decoded.mBlock->ent.front())
+                : nullptr;
+            const DRW_ImageDef* definition = image == nullptr ? nullptr
+                : decoded.findImageDefinition(decoded.importGeneration,
+                                              image->ref);
+            everyOffsetRetried = everyOffsetRetried
+                && readBack && image != nullptr && definition != nullptr
+                && definition->name
+                    == "core-objects-allocation-"
+                        + std::string(96u, 'i');
+            adapter.dxfW = nullptr;
         }
-        dx_data data;
-        CoreObjectsAllocationWriter adapter;
-        adapter.cData = &data;
-        adapter.currentBlock = data.mBlock;
-        adapter.emitImage = true;
-        adapter.armObjectAllocation = true;
-        adapter.objectAllocationCountdown = failAt;
-        dxfRW writer(coreFilename.c_str());
-        adapter.dxfW = &writer;
-        const std::size_t failuresBefore = materialFailedAllocations;
-        const bool failed = calibrated
-            && !writer.write(&adapter, DRW::AC1027, binary);
-        materialAllocationCountdown = -1;
-        const DRW_OperationDiagnostic diagnostic = writer.getLastDiagnostic();
-        const bool allocationReported =
-            (diagnostic.phase == DRW::OperationPhase::Allocation
-                 && diagnostic.code == "allocation-failure")
-            || (diagnostic.phase == DRW::OperationPhase::Emit
-                && diagnostic.code == "emit-failure");
-        const bool rolledBack = failed && adapter.imageWritten
-            && !adapter.objectsCallbackReached
-            && materialFailedAllocations == failuresBefore + 1u
-            && allocationReported
-            && coreContents() == "core OBJECTS allocation sentinel\n"
-            && writer.getWritingContext()->sourceHandleToMintedMap.empty()
-            && writer.getWritingContext()->writtenSourceEntityHandles.empty();
-
-        adapter.armObjectAllocation = false;
-        adapter.image.handle = 0u;
-        adapter.imageWritten = false;
-        adapter.objectsCallbackReached = false;
-        const bool retried = rolledBack
-            && writer.write(&adapter, DRW::AC1027, binary)
-            && adapter.imageWritten && adapter.objectsCallbackReached
-            && writer.getError() == DRW::BAD_NONE;
-        dx_data decoded;
-        dx_iface reader;
-        const bool readBack = retried
-            && reader.fileImport(coreFilename, &decoded, false)
-            && decoded.mBlock->ent.size() == 1u;
-        const auto* image = readBack
-            ? dynamic_cast<const DRW_Image*>(decoded.mBlock->ent.front())
-            : nullptr;
-        const DRW_ImageDef* definition = image == nullptr ? nullptr
-            : decoded.findImageDefinition(decoded.importGeneration,
-                                          image->ref);
-        t.expect(calibrated && rolledBack,
+        t.expect(calibrated && everyOffsetRolledBack
+                     && sweptFailures == imageAllocations,
                  binary
-                     ? "binary core OBJECTS final IMAGEDEF allocation failure rolls back destination and identities"
-                     : "ASCII core OBJECTS final IMAGEDEF allocation failure rolls back destination and identities");
-        t.expect(readBack && image != nullptr && definition != nullptr
-                     && definition->name
-                         == "core-objects-allocation-"
-                             + std::string(96u, 'i'),
+                     ? "binary core IMAGEDEF OBJECTS allocation sweep rolls back every staged allocation"
+                     : "ASCII core IMAGEDEF OBJECTS allocation sweep rolls back every staged allocation");
+        t.expect(everyOffsetRetried,
                  binary
-                     ? "binary core OBJECTS allocation failure accepts same-writer retry and typed image readback"
-                     : "ASCII core OBJECTS allocation failure accepts same-writer retry and typed image readback");
-        adapter.dxfW = nullptr;
+                     ? "binary core IMAGEDEF OBJECTS allocation sweep retries every failure on the same writer and reads typed IMAGE/IMAGEDEF"
+                     : "ASCII core IMAGEDEF OBJECTS allocation sweep retries every failure on the same writer and reads typed IMAGE/IMAGEDEF");
 
         long namedDictionaryAllocations = 0L;
         const bool namedDictionaryMeasured = measureObjectAllocations(
