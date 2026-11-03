@@ -2230,6 +2230,216 @@ void testPointCloudReferenceRemapping(TestContext& t) {
     }
 }
 
+void testPointCloudDefinitionIdentityRemapping(TestContext& t) {
+    constexpr std::uint32_t firstSource = 0xA21u;
+    constexpr std::uint32_t firstOutput = 0xB21u;
+    const std::array<const char*, 4> recordNames = {
+        "POINTCLOUDDEFINITION", "POINTCLOUDDEFINITIONEX",
+        "POINTCLOUDDEFREACTOR", "POINTCLOUDDEFREACTOREX"};
+
+    class PointCloudDefProbe final : public dx_iface {
+    public:
+        void addPointCloudDef(const DRW_PointCloudDef& value) override {
+            captured = value;
+            found = true;
+        }
+
+        DRW_PointCloudDef captured;
+        bool found {false};
+    };
+
+    const auto readTyped = [](const std::string& bytes, bool binary,
+                              const char* recordName,
+                              DRW_PointCloudDef& value) {
+        std::istringstream input(bytes);
+        PointCloudDefProbe probe;
+        dxfRW readerOwner("");
+        readerOwner.binFile = binary;
+        readerOwner.iface = &probe;
+        readerOwner.reader = binary
+            ? std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderBinary>(&input))
+            : std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderAscii>(&input));
+        int code = 0;
+        while (readerOwner.reader->readRec(&code)) {
+            if (code != 0)
+                continue;
+            readerOwner.nextentity = readerOwner.reader->getString();
+            if (readerOwner.nextentity == recordName) {
+                const bool processed = readerOwner.processPointCloudDef();
+                if (processed && probe.found)
+                    value = probe.captured;
+                return processed && probe.found;
+            }
+        }
+        return false;
+    };
+
+    for (const bool binary : {false, true}) {
+        for (std::size_t kindIndex = 0; kindIndex < recordNames.size();
+             ++kindIndex) {
+            const std::uint32_t source = firstSource
+                + static_cast<std::uint32_t>(kindIndex);
+            const std::uint32_t emitted = firstOutput
+                + static_cast<std::uint32_t>(kindIndex);
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap({{source, emitted}});
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+            owner.writer->setRecordInventoryEnabled(true, 16u);
+            const bool objectSection = owner.writer->writeString(0, "SECTION")
+                && owner.writer->writeString(2, "OBJECTS");
+
+            DRW_PointCloudDef definition;
+            definition.handle = source;
+            definition.parentHandle = 0xCu;
+            definition.m_kind = static_cast<DRW_PointCloudDef::Kind>(kindIndex);
+            definition.m_classVersion = 2;
+            definition.m_sourceFilename = "survey.e57";
+            definition.m_isLoaded = true;
+            definition.m_pointCount = 1234567890u;
+            definition.m_extentsMin = DRW_Coord{-1.0, -2.0, -3.0};
+            definition.m_extentsMax = DRW_Coord{4.0, 5.0, 6.0};
+            const bool wrote = objectSection
+                && owner.writePointCloudDef(&definition)
+                && owner.writer->writeString(0, "ENDSEC");
+            const auto binding = owner.m_writingContext
+                .sourceHandleToWrittenObjectMap.find(source);
+            const std::string label = std::string(recordNames[kindIndex])
+                + " remaps and binds its own identity";
+            t.expect(wrote
+                         && owner.writer->recordHandleCount(emitted) == 1u
+                         && owner.writer->recordHandleHasIdentity(
+                             emitted, recordNames[kindIndex], "OBJECTS")
+                         && binding != owner.m_writingContext
+                                            .sourceHandleToWrittenObjectMap.end()
+                         && binding->second == emitted,
+                     label.c_str());
+            if (!wrote)
+                continue;
+
+            DRW_PointCloudDef readback;
+            const bool read = readTyped(output.str(), binary,
+                                        recordNames[kindIndex], readback);
+            const bool payloadMatches = kindIndex >= 2u
+                || (readback.m_sourceFilename == "survey.e57"
+                    && readback.m_isLoaded
+                    && readback.m_pointCount == 1234567890u
+                    && readback.m_extentsMin.x == -1.0
+                    && readback.m_extentsMax.z == 6.0);
+            t.expect(read && readback.handle == emitted
+                         && static_cast<std::size_t>(readback.m_kind)
+                                == kindIndex
+                         && payloadMatches,
+                     "POINTCLOUD definition variant passes typed readback");
+        }
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream allocatedOutput;
+        dxfRW allocatedOwner("");
+        allocatedOwner.version = DRW::AC1032;
+        allocatedOwner.binFile = binary;
+        allocatedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&allocatedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&allocatedOutput));
+        allocatedOwner.writer->setRecordInventoryEnabled(true, 16u);
+        const bool allocatedSection = allocatedOwner.writer->writeString(
+                0, "SECTION")
+            && allocatedOwner.writer->writeString(2, "OBJECTS");
+        DRW_PointCloudDef generated;
+        const bool allocated = allocatedSection
+            && allocatedOwner.writePointCloudDef(&generated)
+            && allocatedOwner.writer->writeString(0, "ENDSEC");
+        DRW_PointCloudDef generatedReadback;
+        const bool allocatedRead = allocated
+            && readTyped(allocatedOutput.str(), binary,
+                         "POINTCLOUDDEFINITION", generatedReadback);
+        t.expect(allocatedRead && generatedReadback.handle != 0u
+                     && generatedReadback.handle != DRW::NoHandle
+                     && allocatedOwner.writer->recordHandleCount(
+                            generatedReadback.handle) == 1u,
+                 "POINTCLOUDDEFINITION allocates and reads back a missing identity");
+
+        std::ostringstream invalidOutput;
+        dxfRW invalidOwner("");
+        invalidOwner.version = DRW::AC1032;
+        invalidOwner.binFile = binary;
+        invalidOwner.setHandleRemap({{firstSource, 0xCu}});
+        invalidOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&invalidOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&invalidOutput));
+        DRW_PointCloudDef invalid;
+        invalid.handle = firstSource;
+        t.expect(!invalidOwner.writePointCloudDef(&invalid)
+                     && invalidOutput.str().empty(),
+                 "POINTCLOUDDEFINITION rejects a fixed own-identity remap atomically");
+
+        std::ostringstream failedOutput;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1032;
+        failedOwner.binFile = binary;
+        failedOwner.setHandleRemap({{firstSource, firstOutput}});
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&failedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&failedOutput));
+        failedOwner.writer->setRecordInventoryEnabled(true, 16u);
+        const bool failedSection = failedOwner.writer->writeString(0, "SECTION")
+            && failedOwner.writer->writeString(2, "OBJECTS");
+        const std::string beforeFailure = failedOutput.str();
+        DRW_PointCloudDef malformed;
+        malformed.handle = firstSource;
+        malformed.extData.push_back(new DRW_Variant(
+            1009, std::string("unsupported-xdata-code")));
+        const bool rejected = failedSection
+            && !failedOwner.writePointCloudDef(&malformed);
+        t.expect(rejected && failedOutput.str() == beforeFailure
+                     && failedOwner.m_writingContext
+                                .sourceHandleToWrittenObjectMap.count(firstSource)
+                            == 0u
+                     && failedOwner.writer->recordHandleCount(firstOutput) == 0u,
+                 "late POINTCLOUDDEFINITION XDATA failure rolls back bytes and identity");
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1032;
+        retryOwner.binFile = binary;
+        retryOwner.setHandleRemap({{firstSource, firstOutput}});
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        retryOwner.writer->setRecordInventoryEnabled(true, 16u);
+        const bool retrySection = retryOwner.writer->writeString(0, "SECTION")
+            && retryOwner.writer->writeString(2, "OBJECTS");
+        DRW_PointCloudDef corrected;
+        corrected.handle = firstSource;
+        const bool retryWrote = retrySection
+            && retryOwner.writePointCloudDef(&corrected)
+            && retryOwner.writer->writeString(0, "ENDSEC");
+        DRW_PointCloudDef retryReadback;
+        const bool retryRead = retryWrote
+            && readTyped(retryOutput.str(), binary,
+                         "POINTCLOUDDEFINITION", retryReadback);
+        t.expect(rejected && retryRead && retryReadback.handle == firstOutput,
+                 "corrected POINTCLOUDDEFINITION retry reads back on a fresh writer");
+    }
+}
+
 void testBlockRecordInsertReferenceRemapping(TestContext& t) {
     for (const bool binary : {false, true}) {
         for (const bool useResolver : {false, true}) {
@@ -18999,6 +19209,15 @@ int main(int argc, char** argv) {
         TestContext focused;
         testPointCloudReferenceRemapping(focused);
         std::cout << "POINTCLOUD reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--pointcloud-definition-identity-remapping") {
+        TestContext focused;
+        testPointCloudDefinitionIdentityRemapping(focused);
+        std::cout << "POINTCLOUD definition identity remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

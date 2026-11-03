@@ -783,6 +783,15 @@ eligible reader. The exact package and environment result are in the
   definition/reactor references through the configured resolver (final output
   IDs) or source-handle remap fallback. Generated ASCII/Binary controls verify
   both paths; see the [reference remapping receipt](docs/research/p8-point-cloud-dxf-reference-remapping-2026-11-03.json).
+  The four low-level POINTCLOUDDEFINITION, POINTCLOUDDEFINITIONEX,
+  POINTCLOUDDEFREACTOR, and POINTCLOUDDEFREACTOREX records now remap and
+  reserve/allocate their group-5 identity, then bind source identity only after
+  staged record commit. Generated ASCII/Binary controls cover all four typed
+  variants, allocated identities, fixed-handle refusal, late-XDATA rollback,
+  fresh-writer retry and typed readback ([receipt](docs/research/p8-pointcloud-definition-identity-remapping-2026-11-03.json)).
+  This closes identity transport only; physical producer coverage, exact
+  definition/reactor association, target ownership, asset loading and native
+  3D behavior remain open.
   The NAVISWORKSMODEL low-level writer now applies the same resolver/remap
   policy to its optional definition reference; its ASCII/Binary control is
   recorded in the [NAVISWORKS reference receipt](docs/research/p8-navisworks-dxf-reference-remapping-2026-11-03.json).
