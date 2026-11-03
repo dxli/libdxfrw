@@ -20400,23 +20400,80 @@ bool dwgProxyEntityOutputGate() {
             : previous(std::cerr.rdbuf(output.rdbuf())) {}
         ~CerrRedirect() { std::cerr.rdbuf(previous); }
     };
+    class ProxyReadback final : public dx_iface {
+    public:
+        void addProxyEntity(const DRW_ProxyEntity& value) override {
+            proxies.push_back(value);
+        }
+        void addDxfClass(const DRW_Class& value) override {
+            classes.push_back(value);
+        }
+        std::vector<DRW_ProxyEntity> proxies;
+        std::vector<DRW_Class> classes;
+    };
+    const auto seedClassCoverage = [](dx_data& data) {
+        data.dwgClassCoverage.m_status =
+            DRW_DwgClassCoverageStatus::FinalizedComplete;
+        data.dwgClassCoverage.m_complete = true;
+        DRW_DwgClassCoverageEntry unusedClass;
+        unusedClass.m_streamOrdinal = 0u;
+        unusedClass.m_classNumber = 500u;
+        unusedClass.m_recordName = "UNUSED_PROXY_RECORD";
+        unusedClass.m_className = "AcDbUnusedProxyEntity";
+        unusedClass.m_appName = "TEST_APPLICATION";
+        unusedClass.m_entityFlag = 1;
+        unusedClass.m_instanceCount = 0;
+        unusedClass.m_state = DRW_DwgClassCoverageState::Published;
+        unusedClass.m_reason = DRW_DwgClassCoverageReason::None;
+        data.dwgClassCoverage.m_entries.push_back(std::move(unusedClass));
+        DRW_DwgClassCoverageEntry sourceClass;
+        sourceClass.m_streamOrdinal = 1u;
+        sourceClass.m_classNumber = 501u;
+        sourceClass.m_recordName = "TEST_PROXY_RECORD";
+        sourceClass.m_className = "AcDbTestProxyEntity";
+        sourceClass.m_appName = "TEST_APPLICATION";
+        sourceClass.m_proxyFlag = 0x401;
+        sourceClass.m_wasAProxyFlag = 1;
+        sourceClass.m_entityFlag = 1;
+        sourceClass.m_instanceCount = 1;
+        sourceClass.m_state = DRW_DwgClassCoverageState::Published;
+        sourceClass.m_reason = DRW_DwgClassCoverageReason::None;
+        data.dwgClassCoverage.m_entries.push_back(std::move(sourceClass));
+    };
+    const auto makeProxy = []() {
+        DRW_ProxyEntity proxy;
+        proxy.handle = 0x123u;
+        proxy.m_hasProxyClassId = true;
+        proxy.m_proxyClassId = 501;
+        proxy.m_hasProxyCarrierId = true;
+        proxy.m_proxyCarrierId = DRW_ProxyEntity::kDwgType;
+        proxy.m_proxySubclass = "AcDbProxyEntity";
+        proxy.m_hasProxyDrawingFormat = true;
+        proxy.m_proxyDrawingFormat = 0x00001024u;
+        proxy.m_hasFromDxf = true;
+        proxy.m_fromDxf = false;
+        proxy.m_entityData = {0x31u, 0x32u, 0x33u};
+        proxy.m_hasEntityDataBitSize = true;
+        proxy.m_entityDataBitSize = 19u;
+        return proxy;
+    };
+
     for (const bool binary : {false, true}) {
         dx_data data;
         data.sourceFormat = dx_source_format::DWG;
+        data.sourceVersion = DRW::AC1024;
+        seedClassCoverage(data);
         dx_iface adapter;
         adapter.cData = &data;
         adapter.currentBlock = data.mBlock;
 
-        DRW_ProxyEntity proxy;
-        proxy.handle = 0x123u;
-        proxy.m_proxyClassId = 498;
-        proxy.m_proxySubclass = "AcDbProxyEntity";
-        proxy.m_entityData = {0x31u, 0x32u, 0x33u};
-        proxy.m_hasEntityDataBitSize = true;
-        proxy.m_entityDataBitSize = 24u;
+        DRW_ProxyEntity proxy = makeProxy();
         adapter.addProxyEntity(proxy);
-        if (!data.unqualifiedProxyEntityOutputPresent)
-            return fail("DWG proxy callback did not retain unsupported-output presence");
+        if (!data.dwgProxyEntityPresent
+            || data.mBlock->ent.size() != 1u
+            || dynamic_cast<DRW_ProxyEntity*>(
+                   data.mBlock->ent.front()) == nullptr)
+            return fail("DWG proxy callback did not retain its bounded typed payload");
 
         const auto path = std::filesystem::temp_directory_path()
             / ("libdxfrw-dwg-proxy-output-gate-"
@@ -20432,6 +20489,17 @@ bool dwgProxyEntityOutputGate() {
                 std::filesystem::remove(path, ignored);
             }
         } cleanup{path};
+
+        // An unresolved optional object-ID list must refuse atomically. The
+        // retained typed object remains editable, and a corrected retry on
+        // the same adapter must succeed.
+        auto* retained = static_cast<DRW_ProxyEntity*>(data.mBlock->ent.front());
+        DRW_ProxyObjectIdRef unresolvedReference;
+        unresolvedReference.m_dxfCode = 340;
+        unresolvedReference.m_handleCode = 5u;
+        unresolvedReference.m_handle = 0x456u;
+        unresolvedReference.m_rawHandle = 0x456u;
+        retained->m_objectIdRefs.push_back(unresolvedReference);
         const std::string sentinel = "DWG_PROXY_ENTITY_DESTINATION\n";
         {
             std::ofstream existing(path, std::ios::binary);
@@ -20447,18 +20515,44 @@ bool dwgProxyEntityOutputGate() {
                 path.string(), DRW::AC1024, binary, &data, false, true);
         }
         if (exported)
-            return fail("DWG ACAD_PROXY_ENTITY was silently omitted on export");
+            return fail("proxy object-ID references escaped fail-closed output validation");
         if (diagnostics.str().find(
-                "non-DXF ACAD_PROXY_ENTITY has no qualified replay path")
+                "proxy entity has an unresolved class, reference, payload")
             == std::string::npos)
-            return fail("export refusal did not come from the proxy completeness gate");
+            return fail("proxy refusal did not identify the unsupported profile");
         {
             std::ifstream previous(path, std::ios::binary);
             const std::string bytes{
                 std::istreambuf_iterator<char>(previous), {}};
             if (bytes != sentinel)
-                return fail("unqualified DWG proxy changed the destination");
+                return fail("unresolved DWG proxy changed the destination");
         }
+        retained->m_objectIdRefs.clear();
+        if (!adapter.fileExport(path.string(), DRW::AC1024, binary,
+                                &data, false, true))
+            return fail("corrected DWG proxy failed same-adapter export retry");
+
+        dx_data readData;
+        ProxyReadback readback;
+        if (!readback.fileImport(path.string(), &readData, false)
+            || readback.proxies.size() != 1u
+            || readback.classes.size() != 1u)
+            return fail("serialized DWG proxy or its CLASSES row failed readback");
+        const DRW_ProxyEntity& actual = readback.proxies.front();
+        const DRW_Class& actualClass = readback.classes.front();
+        if (actual.handle == 0u || !actual.m_hasProxyClassId
+            || actual.m_proxyClassId != 500
+            || actual.m_proxyCarrierId != DRW_ProxyEntity::kDwgType
+            || actual.m_entityDataBitSize != 19u
+            || actual.m_entityData != std::vector<std::uint8_t>{0x31u, 0x32u, 0x33u}
+            || actual.m_proxyDrawingFormat != 0x00001024u
+            || actual.m_fromDxf
+            || actualClass.recName != "TEST_PROXY_RECORD"
+            || actualClass.className != "AcDbTestProxyEntity"
+            || actualClass.appName != "TEST_APPLICATION"
+            || actualClass.instanceCount != 1
+            || actualClass.entityFlag != 1)
+            return fail("proxy fields or remapped class metadata changed on readback");
     }
 
     // DXF-origin proxy entities use the exact raw carrier delivered directly
@@ -20477,7 +20571,7 @@ bool dwgProxyEntityOutputGate() {
     raw.groups = {{5, std::string("234")},
                   {100, std::string("AcDbProxyEntity")}};
     dxfAdapter.addRawDxfEntity(raw);
-    if (dxfData.unqualifiedProxyEntityOutputPresent
+    if (dxfData.dwgProxyEntityPresent
         || dxfData.rawDxfEntityCaptureFailed
         || dxfData.mBlock->rawEntities.size() != 1u
         || dxfData.mBlock->rawEntities.front().record.name

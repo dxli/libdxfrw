@@ -15421,6 +15421,13 @@ bool estimateTypedEntityRetainedBytes(
     estimate = inlineBytes;
     if (!addEntityCommonRetainedBytes(entity, estimate))
         return false;
+    if (const auto* proxy = dynamic_cast<const DRW_ProxyEntity*>(&entity)) {
+        if (!addStringPayloadBytes(proxy->m_proxySubclass, estimate)
+            || !addVectorPayloadBytes(proxy->m_entityData, estimate)
+            || !addVectorPayloadBytes(proxy->m_unknownData, estimate)
+            || !addVectorPayloadBytes(proxy->m_objectIdRefs, estimate))
+            return false;
+    }
     if (const auto* modeler =
             dynamic_cast<const DRW_ModelerGeometry*>(&entity)) {
         if (!addModelerGeometryRetainedBytes(*modeler, estimate))
@@ -59981,9 +59988,16 @@ void dx_iface::addRawDxfEntity(const DRW_RawDxfObject& data) {
 }
 
 void dx_iface::addProxyEntity(const DRW_ProxyEntity& data) {
-    (void)data;
-    if (cData != nullptr && cData->sourceFormat != dx_source_format::DXF)
-        cData->unqualifiedProxyEntityOutputPresent = true;
+    if (cData == nullptr || cData->sourceFormat == dx_source_format::DXF)
+        return;
+    cData->dwgProxyEntityPresent = true;
+    DRW_ProxyEntity retained(data);
+    if ((!retained.proxyGraphics.empty() || retained.numProxyGraph != 0)
+        && !retained.authorizeParsedDwgProxyGraphicsReplay()) {
+        cData->typedEntityCaptureFailed = true;
+        return;
+    }
+    retainTypedEntity<DRW_ProxyEntity>(std::move(retained));
 }
 
 bool dx_iface::validateSortEntsGraph(const dx_data& data, bool debug) {
@@ -65976,6 +65990,13 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         m_requireCompleteDwgOutputQualification,
         previousCompleteOutputRequirement};
     m_pendingOpaqueDwgOutputQualificationFrameIdentities.clear();
+    m_dwgProxyEntityClassIdToOutput.clear();
+    struct DwgProxyClassOutputScope {
+        dx_iface& owner;
+        ~DwgProxyClassOutputScope() {
+            owner.m_dwgProxyEntityClassIdToOutput.clear();
+        }
+    } dwgProxyClassOutputScope{*this};
     struct PendingOutputQualificationScope {
         std::set<OpaqueDwgOutputKey>& identities;
         ~PendingOutputQualificationScope() { identities.clear(); }
@@ -66325,15 +66346,6 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             std::cerr << "DXF export refused: standalone DWG "
                          "OBJECTCONTEXTDATA has no qualified replay path; "
                          "output would be incomplete\n";
-        } catch (...) {
-            // Diagnostics cannot authorize publication of incomplete output.
-        }
-        return false;
-    }
-    if (cData->unqualifiedProxyEntityOutputPresent) {
-        try {
-            std::cerr << "DXF export refused: non-DXF ACAD_PROXY_ENTITY has no "
-                         "qualified replay path; output would be incomplete\n";
         } catch (...) {
             // Diagnostics cannot authorize publication of incomplete output.
         }
@@ -68354,7 +68366,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     }
     if (!cData->dataStorageSections.empty()
         && (!cData->rawProxyObjects.empty()
-            || !cData->dxfClasses.empty())) {
+            || !cData->dxfClasses.empty()
+            || cData->dwgProxyEntityPresent)) {
         // The narrow DWG DataStorage projection owns its four CLASS ordinal
         // slots. Do not silently discard unrelated custom classes/proxies.
         reportPreflightFailure("mixed source DXF classes/proxies with ACDS data");
@@ -68946,6 +68959,134 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             && registerClass("ACDBPLACEHOLDER", "ACDBPLACEHOLDER", nullptr,
                              m_extensionPlaceholderHandles.size());
     };
+    const auto registerProxyEntityClasses = [this, v](
+            std::vector<DRW_Class>& classes) {
+        m_dwgProxyEntityClassIdToOutput.clear();
+        if (!cData->dwgProxyEntityPresent)
+            return true;
+        if (cData->sourceFormat != dx_source_format::DWG
+            || !cData->dataStorageSections.empty()
+            || cData->sourceVersion != v || v < DRW::AC1018
+            || cData->dwgClassCoverage.m_status
+                != DRW_DwgClassCoverageStatus::FinalizedComplete
+            || !cData->dwgClassCoverage.m_complete)
+            return false;
+
+        std::map<std::uint32_t, std::size_t> instanceCounts;
+        std::unordered_set<const DRW_Entity*> seenEntities;
+        std::size_t proxyCount = 0u;
+        const auto collect = [&instanceCounts, &seenEntities, &proxyCount](
+                const std::list<DRW_Entity*>& entities) {
+            for (const DRW_Entity* entity : entities) {
+                if (entity == nullptr || entity->eType != DRW::PROXYENTITY)
+                    continue;
+                if (!seenEntities.insert(entity).second
+                    || typeid(*entity) != typeid(DRW_ProxyEntity))
+                    return false;
+                const auto* proxy =
+                    static_cast<const DRW_ProxyEntity*>(entity);
+                if (!proxy->m_hasProxyClassId || proxy->m_proxyClassId < 500)
+                    return false;
+                const std::uint32_t sourceClassId =
+                    static_cast<std::uint32_t>(proxy->m_proxyClassId);
+                auto& count = instanceCounts[sourceClassId];
+                if (count == static_cast<std::size_t>(
+                                 std::numeric_limits<int>::max()))
+                    return false;
+                ++count;
+                ++proxyCount;
+            }
+            return true;
+        };
+        try {
+            if ((cData->mBlock != nullptr
+                 && !collect(cData->mBlock->ent)))
+                return false;
+            for (const dx_ifaceBlock* block : cData->blocks) {
+                if (block != nullptr && !collect(block->ent))
+                    return false;
+            }
+            if (proxyCount == 0u)
+                return false;
+
+            std::unordered_set<std::string> outputClassNames;
+            outputClassNames.reserve(instanceCounts.size());
+            for (const auto& selected : instanceCounts) {
+                const DRW_DwgClassCoverageEntry* sourceClass = nullptr;
+                std::size_t matches = 0u;
+                for (const DRW_DwgClassCoverageEntry& entry :
+                     cData->dwgClassCoverage.m_entries) {
+                    if (entry.m_classNumber != selected.first)
+                        continue;
+                    sourceClass = &entry;
+                    ++matches;
+                }
+                if (matches != 1u || sourceClass == nullptr
+                    || sourceClass->m_state
+                        != DRW_DwgClassCoverageState::Published
+                    || sourceClass->m_reason
+                        != DRW_DwgClassCoverageReason::None
+                    || sourceClass->m_classNumber < 500u
+                    || sourceClass->m_streamOrdinal
+                        > std::numeric_limits<std::uint64_t>::max() - 500u
+                    || 500u + sourceClass->m_streamOrdinal
+                        != sourceClass->m_classNumber
+                    || sourceClass->m_entityFlag != 1
+                    || sourceClass->m_proxyFlag < 0
+                    || sourceClass->m_proxyFlag
+                        > std::numeric_limits<std::uint16_t>::max()
+                    || sourceClass->m_wasAProxyFlag < 0
+                    || sourceClass->m_wasAProxyFlag > 1
+                    || sourceClass->m_instanceCount
+                        != static_cast<std::int32_t>(selected.second)
+                    || sourceClass->m_className.empty()
+                    || sourceClass->m_appName.empty())
+                    return false;
+
+                const std::string className =
+                    layoutSymbolKey(sourceClass->m_className);
+                if (className.empty()
+                    || !outputClassNames.insert(className).second)
+                    return false;
+                for (const DRW_Class& existing : classes) {
+                    if (layoutSymbolKey(existing.className) == className
+                        || (!sourceClass->m_recordName.empty()
+                            && layoutSymbolKey(existing.recName)
+                                == layoutSymbolKey(
+                                    sourceClass->m_recordName)))
+                        return false;
+                }
+                if (classes.size() >= DRW::kMaxDxfClasses
+                    || classes.size()
+                        > static_cast<std::size_t>(
+                              std::numeric_limits<std::int32_t>::max()
+                                  - 500))
+                    return false;
+
+                DRW_Class outputClass;
+                outputClass.recName = sourceClass->m_recordName;
+                outputClass.className = sourceClass->m_className;
+                outputClass.appName = sourceClass->m_appName;
+                outputClass.proxyFlag = sourceClass->m_proxyFlag;
+                outputClass.instanceCount =
+                    static_cast<int>(selected.second);
+                outputClass.wasaProxyFlag = sourceClass->m_wasAProxyFlag;
+                outputClass.entityFlag = sourceClass->m_entityFlag;
+                outputClass.classNum = sourceClass->m_classNumber;
+                outputClass.entityFlagRaw = sourceClass->m_entityFlagRaw;
+                const std::uint32_t outputClassId =
+                    500u + static_cast<std::uint32_t>(classes.size());
+                classes.push_back(std::move(outputClass));
+                if (!m_dwgProxyEntityClassIdToOutput.emplace(
+                        selected.first, outputClassId).second)
+                    return false;
+            }
+        } catch (...) {
+            m_dwgProxyEntityClassIdToOutput.clear();
+            return false;
+        }
+        return true;
+    };
     std::vector<DRW_Block_Record> sourceBlockRecords;
     sourceBlockRecords.reserve(cData->blockRecords.size());
     for (const auto& selected : selectedBlockRecordXdicts) {
@@ -69434,6 +69575,9 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             }
             return rejectClassRegistration(reason);
         }
+        if (!registerProxyEntityClasses(classes))
+            return rejectClassRegistration(
+                "ACAD_PROXY_ENTITY source class ordinals or instances");
         dxfW->setDxfClasses(std::move(classes));
     }
     if (appendedAcdsDataSection)
@@ -70066,6 +70210,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         || !m_dxfMLineLinetypes.empty()
         || !m_dxfAssociativeGeometrySources.empty()
         || !m_dxfAssociativeValueSources.empty()
+        || cData->dwgProxyEntityPresent
         || !m_dwgAssociativeDimensionDependencies.empty());
     if ((!m_dxfMLineStyles.empty() || needsDxfMLineConsumerInspection())
         && !dxfW->setDxfStagedOutputAuthentication(true)) {
@@ -71603,6 +71748,20 @@ void dx_iface::writeEntity(DRW_Entity* e){
             dxfW->writeRawDxfEntity(nullptr);
         }
         break;
+    case DRW::PROXYENTITY: {
+        auto* proxy = exactEntityForDxfWrite<DRW_ProxyEntity>(
+            e, DRW::PROXYENTITY);
+        const auto outputClass = proxy == nullptr
+            ? m_dwgProxyEntityClassIdToOutput.end()
+            : m_dwgProxyEntityClassIdToOutput.find(
+                  static_cast<std::uint32_t>(proxy->m_proxyClassId));
+        if (proxy != nullptr
+            && outputClass != m_dwgProxyEntityClassIdToOutput.end())
+            written = dxfW->writeProxyEntity(proxy, outputClass->second);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
+        break;
+    }
     case DRW::PLANESURFACE:
     case DRW::EXTRUDEDSURFACE:
     case DRW::REVOLVEDSURFACE:

@@ -3627,6 +3627,11 @@ private:
         bool published{false};
     };
     std::unordered_map<std::uint32_t, HatchPublication> m_hatchTargets;
+    // DWG proxy group-91 class numbers are source identifiers; DXF group 91
+    // is an ordinal in the emitted CLASSES row list. Built per export only
+    // after the matching source class metadata has been validated.
+    std::unordered_map<std::uint32_t, std::uint32_t>
+        m_dwgProxyEntityClassIdToOutput;
     std::unordered_map<std::uint32_t, std::string> m_hatchOwnerAliases;
     std::unordered_map<std::string, bool> m_hatchOwnerBlocks;
     std::string m_hatchOwnerContext;

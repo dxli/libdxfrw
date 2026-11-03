@@ -443,6 +443,11 @@ public:
     bool writeUCS(DRW_UCS *ent);
     bool writeAppId(DRW_AppId *ent);
     bool writePoint(DRW_Point *ent);
+    // Writes the documented payload only when the adapter has resolved and
+    // supplied this proxy's emitted CLASSES ordinal. Object-ID and unknown
+    // payload slots remain fail-closed until their graph mappings are proved.
+    bool writeProxyEntity(DRW_ProxyEntity *ent,
+                          std::uint32_t outputClassId);
     bool writeLine(DRW_Line *ent);
     bool write3DLine(DRW_3DLine *ent);
     bool writeRay(DRW_Ray *ent);

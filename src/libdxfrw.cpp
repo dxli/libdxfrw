@@ -738,11 +738,20 @@ bool canReplayTypedProxyGraphics(const DRW_Entity& entity,
         || provenance.declaredByteCount != entity.proxyGraphics.size()
         || provenance.sourceVersion < DRW::AC1014
         || provenance.sourceVersion > DRW::AC1032
-        || provenance.sourceVersion != targetVersion
-        || provenance.sourceCodePage.empty()
-        || provenance.sourceCodePage != targetCodePage) {
+        || provenance.sourceVersion != targetVersion) {
         return false;
     }
+
+    if (entity.eType == DRW::PROXYENTITY) {
+        return provenance.origin == DRW_ProxyGraphicsOrigin::ParsedDwg
+            && provenance.encoding == DRW_ProxyGraphicsEncoding::DwgBitStream
+            && provenance.sourceVersion >= DRW::AC1018
+            && provenance.sourceCodePage.empty()
+            && provenance.countCode == 0;
+    }
+    if (provenance.sourceCodePage.empty()
+        || provenance.sourceCodePage != targetCodePage)
+        return false;
 
     // Proxy groups share numbers with class-local fields, and parse/write
     // ordering is not uniform across entity types (for example MLEADER 92 and
@@ -7754,6 +7763,85 @@ bool dxfRW::writePoint(DRW_Point *ent) {
         writer->writeDouble(50, ent->xAxisAngle * ARAD);  // radians -> DXF degrees (rad * 180/pi)
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
+    if (!preflightDxfWrite() || !record.commit()) {
+        m_writeError = true;
+        return false;
+    }
+    state.commit();
+    return true;
+}
+
+bool dxfRW::writeProxyEntity(DRW_ProxyEntity *ent,
+                             std::uint32_t outputClassId) {
+    if (!preflightEntity(ent))
+        return false;
+    if (typeid(*ent) != typeid(DRW_ProxyEntity))
+        return failDxfWrite();
+    const std::uint64_t entityBytes =
+        (static_cast<std::uint64_t>(ent->m_entityDataBitSize) + 7u) / 8u;
+    const bool hasGraphics = hasTypedProxyGraphics(*ent);
+    if (version < DRW::AC1018 || outputClassId < 500u
+        || outputClassId > static_cast<std::uint32_t>(
+                               std::numeric_limits<std::int32_t>::max())
+        || !ent->m_hasProxyClassId || ent->m_proxyClassId < 500
+        || !ent->m_hasProxyCarrierId
+        || ent->m_proxyCarrierId != DRW_ProxyEntity::kDwgType
+        || (!ent->m_proxySubclass.empty()
+            && ent->m_proxySubclass != "AcDbProxyEntity")
+        || !ent->m_hasProxyDrawingFormat
+        || ent->m_proxyDrawingFormat > static_cast<std::uint32_t>(
+                                          std::numeric_limits<std::int32_t>::max())
+        || !ent->m_hasFromDxf || !ent->m_hasEntityDataBitSize
+        || entityBytes != ent->m_entityData.size()
+        || ent->m_entityData.size() > DRW::kMaxDxfBinaryPayloadBytes
+        || ent->m_entityDataBitSize > static_cast<std::uint32_t>(
+                                          std::numeric_limits<std::int32_t>::max())
+        || ent->m_hasUnknownDataByteSize || !ent->m_unknownData.empty()
+        || !ent->m_objectIdRefs.empty() || !ent->reactorHandles.empty()
+        || ent->xDictHandle != 0u || !ent->appData.empty()
+        || !ent->extData.empty()
+        || ent->material != DRW::MaterialByLayer
+        || ent->fullVisualStyleHandle != 0u
+        || ent->plotStyle != DRW::DefaultPlotStyle
+        || (hasGraphics
+            && (!ent->m_hasProxyGraphicsByteSize
+                || ent->m_proxyGraphicsByteSize
+                       != ent->proxyGraphics.size()
+                || !ent->proxyGraphicsProvenance().replayAuthorized
+                || ent->proxyGraphicsProvenance().sourceVersion != version))
+        || (!hasGraphics
+            && (ent->numProxyGraph != 0 || !ent->proxyGraphics.empty()))) {
+        recordOperationDiagnostic(
+            DRW::OperationPhase::Validation,
+            DRW::OperationCause::ValidationFailure,
+            "proxy-entity-profile-unqualified",
+            "proxy entity has an unresolved class, reference, payload, or version profile",
+            0, false, ent->handle, ent->handle != 0u);
+        m_writeError = true;
+        return false;
+    }
+
+    RecordStateScope state(*this, ent);
+    DxfWriterRecordScope record(*writer);
+    if (!writer->writeString(0, "ACAD_PROXY_ENTITY")
+        || !writeEntity(ent)
+        || !writer->writeString(100, "AcDbProxyEntity")
+        || !writer->writeInt32(90, DRW_ProxyEntity::kDwgType)
+        || !writer->writeInt32(91, static_cast<std::int32_t>(outputClassId))
+        || !writer->writeInt32(93,
+                               static_cast<std::int32_t>(
+                                   ent->m_entityDataBitSize))
+        || (!ent->m_entityData.empty()
+            && (writeDxfBinaryChunks(writer.get(), ent->m_entityData),
+                writer->hasWriteError()))
+        || !writer->writeInt32(94, 0)
+        || !writer->writeInt32(95,
+                               static_cast<std::int32_t>(
+                                   ent->m_proxyDrawingFormat))
+        || !writer->writeInt16(70, ent->m_fromDxf ? 1 : 0)
+        || writer->hasWriteError())
+        return failDxfWrite();
+
     if (!preflightDxfWrite() || !record.commit()) {
         m_writeError = true;
         return false;

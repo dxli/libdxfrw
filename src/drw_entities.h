@@ -400,6 +400,25 @@ public:
         m_proxyGraphicsProvenance.replayAuthorized = true;
         return true;
     }
+    //! Authorize an unchanged DWG ACAD_PROXY_ENTITY cache for same-revision
+    //! DXF transport. DWG proxy graphics are a byte stream, so they have no
+    //! source DXF code page or DXF count group to bind here.
+    bool authorizeParsedDwgProxyGraphicsReplay() noexcept {
+        const DRW_ProxyGraphicsProvenance& provenance =
+            m_proxyGraphicsProvenance;
+        if (provenance.origin != DRW_ProxyGraphicsOrigin::ParsedDwg
+            || provenance.encoding != DRW_ProxyGraphicsEncoding::DwgBitStream
+            || provenance.sourceVersion < DRW::AC1018
+            || provenance.sourceVersion > DRW::AC1032
+            || !provenance.sourceCodePage.empty()
+            || provenance.countCode != 0
+            || numProxyGraph <= 0 || proxyGraphics.empty()
+            || proxyGraphics.size() != static_cast<std::size_t>(numProxyGraph)
+            || provenance.declaredByteCount != proxyGraphics.size())
+            return false;
+        m_proxyGraphicsProvenance.replayAuthorized = true;
+        return true;
+    }
     void revokeProxyGraphicsReplayAuthorization() noexcept {
         m_proxyGraphicsProvenance.replayAuthorized = false;
     }
