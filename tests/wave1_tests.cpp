@@ -8638,8 +8638,7 @@ void testCommonObjectReferenceOutputIdGuard(TestContext& t) {
 
     for (const bool binary : {false, true}) {
         for (const Edge edge : {Edge::Reactor, Edge::ExtensionDictionary}) {
-            const std::uint32_t invalidSources[] = {
-                static_cast<std::uint32_t>(DRW::NoHandle), 0u};
+            const std::uint32_t invalidSources[] = {0u};
             for (const std::uint32_t source : invalidSources) {
                 if (edge == Edge::ExtensionDictionary && source == 0u)
                     continue; // zero means the optional edge is absent.
@@ -8656,8 +8655,7 @@ void testCommonObjectReferenceOutputIdGuard(TestContext& t) {
                          "common reactor/XDICTIONARY rejects invalid source IDs before output");
             }
 
-            for (const std::uint32_t mapped : {
-                     0u, static_cast<std::uint32_t>(DRW::NoHandle)}) {
+            for (const std::uint32_t mapped : {0u}) {
                 const std::uint32_t source = 0x1110u;
                 std::ostringstream output;
                 dxfRW writer("");
@@ -8680,9 +8678,7 @@ void testCommonObjectReferenceOutputIdGuard(TestContext& t) {
             resolverWriter.binFile = binary;
             resolverWriter.setReferenceResolver(
                 [source](std::uint32_t candidate) {
-                    return candidate == source
-                        ? static_cast<std::uint32_t>(DRW::NoHandle)
-                        : candidate;
+                    return candidate == source ? 0u : candidate;
                 });
             if (binary)
                 resolverWriter.writer =
@@ -8690,9 +8686,96 @@ void testCommonObjectReferenceOutputIdGuard(TestContext& t) {
             else
                 resolverWriter.writer =
                     std::make_unique<dxfWriterAscii>(&resolverOutput);
-            t.expect(!writeDictionary(resolverWriter, edge, source)
-                         && resolverOutput.str().empty(),
-                     "common reactor/XDICTIONARY rejects NoHandle resolver result before output");
+            const bool wrote = writeDictionary(resolverWriter, edge, source);
+            const bool sentinelWritten =
+                resolverWriter.writer->writeString(0, "WIRE_END");
+            bool ended = false;
+            const auto tags = numericWireProjection(resolverOutput.str(), binary,
+                                                     ended);
+            const char* marker = edge == Edge::Reactor
+                ? "102:{ACAD_REACTORS" : "102:{ACAD_XDICTIONARY";
+            t.expect(wrote && sentinelWritten && ended,
+                     "common resolver zero preserves record framing");
+            t.expect(std::find(tags.begin(), tags.end(), marker) == tags.end(),
+                     "common resolver zero omits the optional edge group");
+        }
+    }
+
+    const auto writeRetainedGroup = [](dxfRW& writer, Edge edge,
+                                       const std::string& handle) {
+        DRW_Dictionary object;
+        object.handle = 0x500u;
+        object.parentHandle = 0x600u;
+        if (edge == Edge::Reactor) {
+            object.appData.push_back({
+                {102, std::string("{ACAD_REACTORS")},
+                {330, handle}, {102, std::string("}")}});
+        } else {
+            object.appData.push_back({
+                {102, std::string("{ACAD_XDICTIONARY")},
+                {360, handle}, {102, std::string("}")}});
+        }
+        return writer.writeDictionary(&object);
+    };
+    for (const bool binary : {false, true}) {
+        for (const Edge edge : {Edge::Reactor, Edge::ExtensionDictionary}) {
+            for (const std::string& source : {std::string("0")}) {
+                std::ostringstream output;
+                dxfRW writer("");
+                writer.version = DRW::AC1032;
+                writer.binFile = binary;
+                if (binary)
+                    writer.writer = std::make_unique<dxfWriterBinary>(&output);
+                else
+                    writer.writer = std::make_unique<dxfWriterAscii>(&output);
+                const bool wrote = writeRetainedGroup(writer, edge, source);
+                const std::string label = std::string("retained ACAD ")
+                    + (edge == Edge::Reactor ? "REACTORS" : "XDICTIONARY")
+                    + " source " + source;
+                t.expect(!wrote, (label + " rejects invalid source ID").c_str());
+                t.expect(output.str().empty(),
+                         (label + " refusal rolls back record bytes").c_str());
+            }
+            for (const std::uint32_t mapped : {0u}) {
+                std::ostringstream output;
+                dxfRW writer("");
+                writer.version = DRW::AC1032;
+                writer.binFile = binary;
+                writer.setHandleRemap({{0x1110u, mapped}});
+                if (binary)
+                    writer.writer = std::make_unique<dxfWriterBinary>(&output);
+                else
+                    writer.writer = std::make_unique<dxfWriterAscii>(&output);
+                t.expect(!writeRetainedGroup(writer, edge, "1110")
+                             && output.str().empty(),
+                         "retained ACAD common group rejects null/sentinel remap IDs before output");
+            }
+
+            std::ostringstream resolverOutput;
+            dxfRW resolverWriter("");
+            resolverWriter.version = DRW::AC1032;
+            resolverWriter.binFile = binary;
+            resolverWriter.setReferenceResolver([](std::uint32_t source) {
+                return source == 0x1110u ? 0u : source;
+            });
+            if (binary)
+                resolverWriter.writer =
+                    std::make_unique<dxfWriterBinary>(&resolverOutput);
+            else
+                resolverWriter.writer =
+                    std::make_unique<dxfWriterAscii>(&resolverOutput);
+            const bool wrote = writeRetainedGroup(resolverWriter, edge, "1110");
+            const bool sentinelWritten =
+                resolverWriter.writer->writeString(0, "WIRE_END");
+            bool ended = false;
+            const auto tags = numericWireProjection(resolverOutput.str(), binary,
+                                                     ended);
+            const char* marker = edge == Edge::Reactor
+                ? "102:{ACAD_REACTORS" : "102:{ACAD_XDICTIONARY";
+            t.expect(wrote && sentinelWritten && ended,
+                     "retained app-data resolver zero preserves record framing");
+            t.expect(std::find(tags.begin(), tags.end(), marker) == tags.end(),
+                     "retained app-data resolver zero omits the optional group");
         }
     }
 }

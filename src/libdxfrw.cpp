@@ -5763,6 +5763,55 @@ bool dxfRW::writeAppData(const std::list<std::list<DRW_Variant>>& appData) {
         handle = static_cast<std::uint32_t>(parsed);
         return true;
     };
+
+    if (!m_referenceResolver) {
+        for (const auto& group : appData) {
+            const DRW_Variant* opener = group.empty() ? nullptr : &group.front();
+            const std::string_view marker = opener != nullptr
+                    && opener->code() == 102
+                    && opener->type() == DRW_Variant::STRING
+                    && opener->content.s != nullptr
+                ? std::string_view(*opener->content.s) : std::string_view{};
+            const std::string_view name = !marker.empty()
+                    && marker.front() == '{'
+                ? marker.substr(1) : marker;
+            const int referenceCode = name == "ACAD_REACTORS" ? 330
+                                    : name == "ACAD_XDICTIONARY" ? 360 : 0;
+            if (referenceCode == 0)
+                continue;
+            int depth = 0;
+            for (const DRW_Variant& value : group) {
+                if (value.code() == 102
+                    && value.type() == DRW_Variant::STRING
+                    && value.content.s != nullptr) {
+                    const std::string& nested = *value.content.s;
+                    if (depth == 0)
+                        depth = 1;
+                    else if (nested == "}")
+                        --depth;
+                    else if (!nested.empty() && nested.front() == '{')
+                        ++depth;
+                    continue;
+                }
+                if (depth != 1 || value.code() != referenceCode)
+                    continue;
+                std::uint32_t sourceHandle = 0u;
+                if (!parseHandle(value, sourceHandle))
+                    continue; // Preserve the existing opaque malformed route.
+                if (sourceHandle == 0u) {
+                    m_writeError = true;
+                    return false;
+                }
+                const std::uint32_t emittedHandle =
+                    remapObjectHandle(sourceHandle);
+                if (emittedHandle == 0u) {
+                    m_writeError = true;
+                    return false;
+                }
+            }
+        }
+    }
+
     struct AppDataReferenceEmission {
         enum class Kind { OmitGroup, OmitValue, ReplaceHandle };
         std::size_t groupIndex;
@@ -5813,6 +5862,10 @@ bool dxfRW::writeAppData(const std::list<std::list<DRW_Variant>>& appData) {
                 if (!parseHandle(value, sourceHandle)) {
                     namesSomething = true;
                     continue;
+                }
+                if (sourceHandle == 0u) {
+                    m_writeError = true;
+                    return false;
                 }
                 const std::uint32_t emittedHandle =
                     resolveReference(sourceHandle);
@@ -6071,14 +6124,13 @@ bool dxfRW::writeTableEntryAppData(const DRW_TableEntry& entry, bool emitReactor
         && !hasAppGroup("ACAD_REACTORS")) {
         reactors.reserve(entry.reactorHandles.size());
         for (const std::uint32_t reactor : entry.reactorHandles) {
-            if (reactor == 0u || reactor == DRW::NoHandle) {
+            if (reactor == 0u) {
                 m_writeError = true;
                 return false;
             }
             const std::uint32_t emitted = m_referenceResolver
                 ? resolveReference(reactor) : remapObjectHandle(reactor);
-            if (emitted == DRW::NoHandle
-                || (!m_referenceResolver && emitted == 0u)) {
+            if (!m_referenceResolver && emitted == 0u) {
                 m_writeError = true;
                 return false;
             }
@@ -6090,15 +6142,10 @@ bool dxfRW::writeTableEntryAppData(const DRW_TableEntry& entry, bool emitReactor
         && !hasAppGroup("ACAD_XDICTIONARY");
     std::uint32_t emittedXDictionary = 0u;
     if (writeXDictionary) {
-        if (entry.xDictHandle == DRW::NoHandle) {
-            m_writeError = true;
-            return false;
-        }
         emittedXDictionary = m_referenceResolver
             ? resolveReference(entry.xDictHandle)
             : remapObjectHandle(entry.xDictHandle);
-        if (emittedXDictionary == DRW::NoHandle
-            || (!m_referenceResolver && emittedXDictionary == 0u)) {
+        if (!m_referenceResolver && emittedXDictionary == 0u) {
             m_writeError = true;
             return false;
         }
