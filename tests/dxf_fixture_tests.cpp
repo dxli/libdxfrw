@@ -37,6 +37,7 @@
 #include "dxf_entity_identity_test_helpers.h"
 #include "intern/dxfreader.h"
 #include "intern/dxfwriter.h"
+#include "intern/dwgsafety.h"
 #include "intern/proxygraphicdecoder.h"
 #include "intern/dwgbufferw.h"
 #include "intern/dxftablecapacity.h"
@@ -59241,6 +59242,42 @@ void testInsertChildHandleRollback(TestContext& t) {
     }
 }
 
+void testInsertAttributeCountBound(TestContext& t) {
+    const std::size_t overLimitCount =
+        dwgSafety::MaxOwnedObjectCount + 1u;
+    const auto path = std::filesystem::temp_directory_path()
+        / ("libdxfrw-insert-count-bound-"
+            + std::to_string(std::chrono::steady_clock::now()
+                .time_since_epoch().count()) + ".dxf");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); }
+    } cleanup{path};
+    const std::string sentinel = "INSERT_COUNT_DESTINATION";
+    for (const bool binary : {false, true}) {
+        { std::ofstream existing(path, std::ios::binary); existing << sentinel; }
+        dx_data data;
+        auto attribute = std::make_shared<DRW_Attrib>();
+        attribute->tag = "COUNT_BOUND";
+        attribute->text = "value";
+        auto* insert = new DRW_Insert;
+        insert->name = "*Model_Space";
+        insert->attlist.assign(overLimitCount, attribute);
+        data.mBlock->ent.push_back(insert);
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        const bool written = adapter.fileExport(
+            path.string(), DRW::AC1032, binary, &data, false);
+        std::ifstream saved(path, std::ios::binary);
+        const std::string contents{
+            std::istreambuf_iterator<char>{saved},
+            std::istreambuf_iterator<char>{}};
+        t.expect(!written && contents == sentinel,
+                 "INSERT attribute chains above the owned-object bound preserve the destination");
+    }
+}
+
 void populateLegacyEllipseCarriers(dx_data& data, bool includeControls = true) {
     DRW_AppId app;
     app.name = "ELLIPSE_APP";
@@ -62717,6 +62754,22 @@ int main(int argc, char** argv) {
         TestContext context;
         testClassicVertexXdata(context);
         std::cout << "Classic VERTEX XDATA/polyface raw wire matrix: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--insert-child-handle-rollback") {
+        TestContext context;
+        testInsertChildHandleRollback(context);
+        std::cout << "INSERT child rollback/retry/readback: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--insert-attribute-count-bound") {
+        TestContext context;
+        testInsertAttributeCountBound(context);
+        std::cout << "INSERT attribute count bound: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

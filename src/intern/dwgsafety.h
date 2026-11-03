@@ -102,9 +102,9 @@ constexpr std::uint64_t MaxPageCount = 1ULL << 20;
 // format has no small semantic maximum, so this is a resource limit for the
 // in-memory representation used by libdxfrw.
 constexpr std::uint32_t MaxReactorCount = 1000000;
-// POLYLINE and BLOCK_RECORD owned-object lists are file-controlled repeated
-// handle sequences. Keep the allocation ceiling aligned with reactor lists;
-// the enclosing object-body bound remains the primary format limit.
+// POLYLINE, INSERT attribute, and BLOCK_RECORD owned-object lists are
+// file-controlled repeated sequences. Keep their allocation ceiling aligned
+// with reactor lists; enclosing record/body limits remain primary.
 constexpr std::uint32_t MaxOwnedObjectCount = 1000000;
 // Temporary sorted-index, ordered-pointer, duplicate-marker, and child-handle
 // storage used while preparing one compound POLYLINE commit. This bounds the

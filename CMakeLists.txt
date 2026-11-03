@@ -2407,6 +2407,14 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dxf_fixture_tests --classic-vertex-xdata)
     set_tests_properties(libdxfrw_classic_vertex_xdata PROPERTIES
         LABELS "fast;dxf;identity;polyline;xdata" TIMEOUT 15)
+    add_test(NAME libdxfrw_insert_child_handle_rollback
+        COMMAND libdxfrw_dxf_fixture_tests --insert-child-handle-rollback)
+    set_tests_properties(libdxfrw_insert_child_handle_rollback PROPERTIES
+        LABELS "fast;dxf;insert;transaction;retry;readback" TIMEOUT 30)
+    add_test(NAME libdxfrw_insert_attribute_count_bound
+        COMMAND libdxfrw_dxf_fixture_tests --insert-attribute-count-bound)
+    set_tests_properties(libdxfrw_insert_attribute_count_bound PROPERTIES
+        LABELS "fast;dxf;insert;resources;generated;transaction" TIMEOUT 15)
     add_test(NAME libdxfrw_dictionary_key_admission
         COMMAND libdxfrw_dxf_fixture_tests --dictionary-key-admission)
     set_tests_properties(libdxfrw_dictionary_key_admission PROPERTIES

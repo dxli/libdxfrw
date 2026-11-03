@@ -8627,7 +8627,9 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
             }
         }
     } vertexState;
-    vertexState.handles.reserve(ent->vertlist.size());
+    if (!DRW::reserve(vertexState.handles,
+                      static_cast<int>(ent->vertlist.size())))
+        return failDxfWrite();
     writer->writeString(0, "POLYLINE");
     if (!writeEntity(ent))
         return false;
@@ -10042,6 +10044,7 @@ bool dxfRW::writeInsert(DRW_Insert *ent){
         || ent->rowcount <= 0
         || ent->colcount > std::numeric_limits<std::int16_t>::max()
         || ent->rowcount > std::numeric_limits<std::int16_t>::max()
+        || ent->attlist.size() > dwgSafety::MaxOwnedObjectCount
         || std::any_of(ent->attlist.cbegin(), ent->attlist.cend(),
                        [](const auto& attribute) {
                            return attribute == nullptr
@@ -10104,7 +10107,9 @@ bool dxfRW::writeInsert(DRW_Insert *ent){
             }
         }
     } attributeState;
-    attributeState.handles.reserve(ent->attlist.size());
+    if (!DRW::reserve(attributeState.handles,
+                      static_cast<int>(ent->attlist.size())))
+        return failDxfWrite();
     const bool hasAttribs = !ent->attlist.empty();
     const bool hasSequenceEnd = hasAttribs || ent->seqEndEntity != nullptr;
     const bool isMInsert = ent->isMInsert();
