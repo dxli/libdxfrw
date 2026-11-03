@@ -136,6 +136,13 @@ engines.
    LAYER's optional material hard pointer (group 347) now uses resolver-first
    output identity with source-handle-remap fallback; the generated ASCII/Binary
    control verifies both paths ([receipt](docs/research/p4-layer-material-reference-remapping-2026-11-03.json)).
+   For 3DSOLID, the modeled group-350 history soft-owner reference now uses the
+   same resolver/remap policy. Generated ASCII/Binary controls verify both
+   output paths and atomic refusal of an unresolved nonzero history target;
+   corrected output succeeds with a fresh low-level writer because failed
+   `dxfRW` writes retain their sticky error state ([receipt](docs/research/p4-solid-history-reference-remapping-2026-11-03.json)).
+   This does not establish history-target existence/role, source association,
+   recursive graph closure, or ACIS semantics.
    Continue the remaining reference-ID audit from the current field receipts,
    prioritizing typed owner/dependency pointers on supported 3D records. Confirm
    each field against its parser contract and applicable format mapping before

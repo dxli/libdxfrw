@@ -743,6 +743,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_wave1_tests --layer-material-reference-remapping)
     set_tests_properties(libdxfrw_layer_material_reference_remapping PROPERTIES
         LABELS "fast;dxf;writer;layer;references;generated" TIMEOUT 15)
+    add_test(NAME libdxfrw_solid_history_reference_remapping
+        COMMAND libdxfrw_wave1_tests --solid-history-reference-remapping)
+    set_tests_properties(libdxfrw_solid_history_reference_remapping PROPERTIES
+        LABELS "fast;dxf;writer;3d;references;generated" TIMEOUT 15)
     add_test(NAME libdxfrw_navisworks_definition_reference_remapping
         COMMAND libdxfrw_wave1_tests
             --navisworks-definition-reference-remapping)

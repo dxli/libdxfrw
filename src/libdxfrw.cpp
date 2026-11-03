@@ -14407,7 +14407,15 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     // following subclass/history pair; REGION and BODY have no such subclass.
     if (writeSolidHistory) {
         writer->writeString(100, "AcDb3dSolid");
-        writer->writeString(350, toHexStr(remapObjectHandle(ent->m_historyHandle)));
+        const std::uint32_t sourceHistoryHandle = ent->m_historyHandle;
+        const std::uint32_t historyHandle = sourceHistoryHandle == 0u
+            ? 0u : (m_referenceResolver
+                ? resolveReference(sourceHistoryHandle)
+                : remapObjectHandle(sourceHistoryHandle));
+        if (sourceHistoryHandle != 0u
+            && (historyHandle == 0u || historyHandle == DRW::NoHandle))
+            return failDxfWrite();
+        writer->writeString(350, toHexStr(historyHandle));
     }
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;

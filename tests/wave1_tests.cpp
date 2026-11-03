@@ -2681,6 +2681,125 @@ void testLayerMaterialReferenceRemapping(TestContext& t) {
     }
 }
 
+void testSolidHistoryReferenceRemapping(TestContext& t) {
+    const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
+        {0x901u, 0xA91u}};
+    const auto resolverValue = [](std::uint32_t source) {
+        return source == 0x901u ? std::uint32_t{0xB91u} : source;
+    };
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap(sourceToRemapped);
+            if (useResolver)
+                owner.setReferenceResolver(resolverValue);
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_ModelerGeometry solid(DRW::E3DSOLID);
+            solid.m_historyHandle = 0x901u;
+            DRW_ModelerGeometry historylessSolid(DRW::E3DSOLID);
+            const bool wrote = owner.writeModelerGeometry(&solid)
+                && owner.writeModelerGeometry(&historylessSolid)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote, "3DSOLID history reference serializes");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::vector<std::uint32_t> observed;
+            std::string recordName;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (recordName == "3DSOLID" && code == 350) {
+                    observed.push_back(reader->getHandleString());
+                }
+            }
+            const std::uint32_t expected = useResolver ? 0xB91u : 0xA91u;
+            t.expect(ended && observed
+                         == std::vector<std::uint32_t>{expected, 0u},
+                     useResolver
+                         ? "3DSOLID history emits resolver identity and preserves absent target"
+                         : "3DSOLID history emits remap and preserves absent target");
+        }
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1032;
+        failedOwner.binFile = binary;
+        failedOwner.setReferenceResolver([](std::uint32_t source) {
+            return source == 0x901u ? std::uint32_t{0u} : source;
+        });
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterAscii>(&output));
+
+        DRW_ModelerGeometry solid(DRW::E3DSOLID);
+        solid.m_historyHandle = 0x901u;
+        const bool refused = !failedOwner.writeModelerGeometry(&solid);
+        t.expect(refused && output.str().empty(),
+                 "unresolved 3DSOLID history preserves destination");
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1032;
+        retryOwner.binFile = binary;
+        retryOwner.setReferenceResolver([](std::uint32_t source) {
+            return source == 0x901u ? std::uint32_t{0xB91u} : source;
+        });
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterAscii>(&retryOutput));
+        const bool retried = retryOwner.writeModelerGeometry(&solid);
+        t.expect(retried,
+                 "3DSOLID history accepts corrected fresh-writer retry");
+        if (!retried)
+            continue;
+
+        std::istringstream input(retryOutput.str());
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(
+                std::make_unique<dxfReaderBinary>(&input))
+            : std::unique_ptr<dxfReader>(
+                std::make_unique<dxfReaderAscii>(&input));
+        std::vector<std::uint32_t> observed;
+        std::string recordName;
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (code == 0)
+                recordName = reader->getString();
+            else if (recordName == "3DSOLID" && code == 350)
+                observed.push_back(reader->getHandleString());
+        }
+        t.expect(observed == std::vector<std::uint32_t>{0xB91u},
+                 "corrected 3DSOLID retry emits the resolver target");
+    }
+}
+
 void testViewportReferenceRemapping(TestContext& t) {
     const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
         {0x901u, 0xA91u}, {0x902u, 0xA92u}, {0x903u, 0xA93u},
@@ -16861,6 +16980,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testLayerMaterialReferenceRemapping(focused);
         std::cout << "LAYER material reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--solid-history-reference-remapping") {
+        TestContext focused;
+        testSolidHistoryReferenceRemapping(focused);
+        std::cout << "3DSOLID history reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
