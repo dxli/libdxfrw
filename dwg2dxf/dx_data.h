@@ -771,6 +771,10 @@ public:
     bool pointCloudExSourceBindingAttempted{false};
     bool pointCloudExSourceBindingComplete{false};
     bool pointCloudExSourceFieldProfileComplete{false};
+    std::size_t pointCloudSourceBoundEntities{0u};
+    bool pointCloudSourceBindingAttempted{false};
+    bool pointCloudSourceBindingComplete{false};
+    bool pointCloudSourceFieldProfileComplete{false};
     // Typed FIELD/FIELDLIST callbacks are retained for a later graph-aware
     // writer gate; raw DXF companions remain separate and are not emitted yet.
     std::list<DRW_Field>fields;

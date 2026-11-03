@@ -3023,6 +3023,12 @@ private:
     bool preparePointCloudExOutputGraph(dx_data& data,
                                         DRW::Version targetVersion,
                                         bool debug);
+    bool preparePointCloudOutputGraph(dx_data& data,
+                                      DRW::Version targetVersion,
+                                      bool debug);
+    bool validateImportedDxfPointCloudSourceBindings(
+        dx_data& data, std::size_t& boundCount,
+        const char*& failure) noexcept;
     bool validateImportedDxfPointCloudExSourceBindings(
         dx_data& data, std::size_t& boundCount,
         const char*& failure) noexcept;

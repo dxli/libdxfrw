@@ -1051,7 +1051,16 @@ eligible reader. The exact package and environment result are in the
   references remain fail-closed until their source-bound object graphs and
   output bindings qualify. This does not close external-definition source
   coverage, asset loading, native 3D consumer, or broader BLOCK callback
-  qualification.
+  qualification. Imported classic POINTCLOUD now also has source binding for
+  the generated same-revision AC1027 modelspace reference-free profile: each
+  physical ENTITIES record is joined to its dispatch, typed callback and output
+  entity, with exact subclass order, common identity/owner, modeled fields and
+  field cardinality checked. ASCII/Binary controls cover changed-model refusal,
+  corrected same-adapter retry and fresh typed readback; an ASCII duplicate
+  class-version field is refused atomically. Named-BLOCK and paper-space
+  records, nonzero definition/reactor references, DWG source records, physical
+  producer breadth, external asset loading and native semantics remain
+  unqualified. See the [classic POINTCLOUD source-binding receipt](docs/research/p8-pointcloud-classic-dxf-source-binding-2026-11-03.json).
   The local adapter now retains LIGHT callbacks through modelspace and named-
   BLOCK delivery, with bounded DXF read/write support for the documented core
   fields. Both callback-delivery wrappers forward LIGHT instead of dropping

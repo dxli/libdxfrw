@@ -21454,6 +21454,209 @@ bool pointCloudAndNavisworksAdapterTransport() {
             || actualModel->transform[11] != 4.0
             || actualModel->unitFactor != 2.5)
             return fail("NAVISWORKSMODEL modeled fields changed on readback");
+
+        const auto importedClassicSourcePath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-imported-classic-pointcloud-source-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        const auto importedClassicOutputPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-imported-classic-pointcloud-output-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct ImportedClassicCleanup {
+            std::filesystem::path source;
+            std::filesystem::path output;
+            ~ImportedClassicCleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(source, ignored);
+                std::filesystem::remove(output, ignored);
+            }
+        } importedClassicCleanup{importedClassicSourcePath,
+                                 importedClassicOutputPath};
+        if (std::filesystem::exists(importedClassicSourcePath)
+            || std::filesystem::exists(importedClassicOutputPath))
+            return fail("imported classic POINTCLOUD path unexpectedly exists");
+        dx_data classicOnlyData;
+        dx_iface classicOnlyWriter;
+        classicOnlyWriter.cData = &classicOnlyData;
+        classicOnlyWriter.currentBlock = classicOnlyData.mBlock;
+        DRW_PointCloud authoredClassic(*retainedCloud);
+        authoredClassic.handle = 0u;
+        authoredClassic.parentHandle = 0u;
+        authoredClassic.definitionHandle = 0u;
+        authoredClassic.reactorHandle = 0u;
+        classicOnlyWriter.addPointCloud(&authoredClassic);
+        if (!classicOnlyWriter.fileExport(
+                importedClassicSourcePath.string(), DRW::AC1027, binary,
+                &classicOnlyData, false, true))
+            return fail("could not author a standalone classic POINTCLOUD source");
+        if (!binary) {
+            const auto duplicateFieldSourcePath =
+                std::filesystem::temp_directory_path()
+                / ("libdxfrw-pointcloud-duplicate-field-source-"
+                   + std::to_string(std::chrono::steady_clock::now()
+                                        .time_since_epoch().count())
+                   + ".dxf");
+            const auto duplicateFieldOutputPath =
+                std::filesystem::temp_directory_path()
+                / ("libdxfrw-pointcloud-duplicate-field-output-"
+                   + std::to_string(std::chrono::steady_clock::now()
+                                        .time_since_epoch().count())
+                   + ".dxf");
+            struct DuplicateFieldCleanup {
+                std::filesystem::path source;
+                std::filesystem::path output;
+                ~DuplicateFieldCleanup() {
+                    std::error_code ignored;
+                    std::filesystem::remove(source, ignored);
+                    std::filesystem::remove(output, ignored);
+                }
+            } duplicateFieldCleanup{duplicateFieldSourcePath,
+                                    duplicateFieldOutputPath};
+            if (std::filesystem::exists(duplicateFieldSourcePath)
+                || std::filesystem::exists(duplicateFieldOutputPath))
+                return fail("duplicate-field POINTCLOUD paths unexpectedly exist");
+            std::ifstream authoredSource(importedClassicSourcePath,
+                                         std::ios::binary);
+            if (!authoredSource)
+                return fail("could not open generated POINTCLOUD source for field mutation");
+            std::string duplicateFieldBytes{
+                std::istreambuf_iterator<char>(authoredSource), {}};
+            if (authoredSource.bad())
+                return fail("could not read generated POINTCLOUD source for field mutation");
+            const std::string lfMarker = "100\nAcDbPointCloud\n";
+            const std::string crlfMarker = "100\r\nAcDbPointCloud\r\n";
+            const std::string lf = duplicateFieldBytes.find(crlfMarker)
+                    == std::string::npos
+                ? "\n" : "\r\n";
+            const std::string& marker = lf == "\n" ? lfMarker : crlfMarker;
+            const std::size_t markerOffset = duplicateFieldBytes.find(marker);
+            if (markerOffset == std::string::npos)
+                return fail("generated POINTCLOUD source lacked its body subclass marker");
+            duplicateFieldBytes.insert(
+                markerOffset + marker.size(), "70" + lf + "2" + lf);
+            {
+                std::ofstream duplicateSource(duplicateFieldSourcePath,
+                                              std::ios::binary);
+                duplicateSource.write(duplicateFieldBytes.data(),
+                                      static_cast<std::streamsize>(
+                                          duplicateFieldBytes.size()));
+                if (!duplicateSource)
+                    return fail("could not write duplicate-field POINTCLOUD source");
+            }
+            dx_data duplicateFieldData;
+            dx_iface duplicateFieldReader;
+            if (!duplicateFieldReader.fileImport(
+                    duplicateFieldSourcePath.string(), &duplicateFieldData,
+                    false)
+                || duplicateFieldData.sourceVersion != DRW::AC1027
+                || duplicateFieldData.mBlock == nullptr
+                || duplicateFieldData.mBlock->ent.size() != 1u)
+                return fail("duplicate-field POINTCLOUD source did not import for strict refusal");
+            const std::string duplicateFieldSentinel =
+                "DUPLICATE_POINTCLOUD_FIELD_DESTINATION\n";
+            {
+                std::ofstream existing(duplicateFieldOutputPath,
+                                       std::ios::binary);
+                existing << duplicateFieldSentinel;
+                if (!existing)
+                    return fail("could not create duplicate-field output sentinel");
+            }
+            dx_iface duplicateFieldWriter;
+            if (duplicateFieldWriter.fileExport(
+                    duplicateFieldOutputPath.string(), DRW::AC1027, false,
+                    &duplicateFieldData, false, true)
+                || !duplicateFieldData.pointCloudSourceBindingAttempted
+                || duplicateFieldData.pointCloudSourceBindingComplete
+                || duplicateFieldData.pointCloudSourceFieldProfileComplete)
+                return fail("duplicate physical POINTCLOUD field passed strict source binding");
+            std::ifstream duplicatePrevious(duplicateFieldOutputPath,
+                                            std::ios::binary);
+            const std::string duplicatePreviousBytes{
+                std::istreambuf_iterator<char>(duplicatePrevious), {}};
+            if (duplicatePreviousBytes != duplicateFieldSentinel)
+                return fail("duplicate physical POINTCLOUD field changed the destination");
+        }
+        dx_data classicSourceData;
+        dx_iface classicSourceReader;
+        if (!classicSourceReader.fileImport(importedClassicSourcePath.string(),
+                                             &classicSourceData, false)
+            || classicSourceData.sourceVersion != DRW::AC1027
+            || classicSourceData.mBlock == nullptr
+            || classicSourceData.mBlock->ent.size() != 1u)
+            return fail("standalone classic POINTCLOUD source did not import");
+        const std::string importedClassicSentinel =
+            "IMPORTED_CLASSIC_POINTCLOUD_DESTINATION\n";
+        {
+            std::ofstream existing(importedClassicOutputPath, std::ios::binary);
+            existing << importedClassicSentinel;
+            if (!existing)
+                return fail("could not create imported classic POINTCLOUD sentinel");
+        }
+        DRW_PointCloud* importedClassic = nullptr;
+        for (DRW_Entity* entity : classicSourceData.mBlock->ent) {
+            if (auto* value = dynamic_cast<DRW_PointCloud*>(entity))
+                importedClassic = value;
+        }
+        if (importedClassic == nullptr)
+            return fail("classic POINTCLOUD source model was unavailable for retry control");
+        dx_iface importedClassicWriter;
+        ++importedClassic->pointCount;
+        if (importedClassicWriter.fileExport(
+                importedClassicOutputPath.string(), DRW::AC1027, binary,
+                &classicSourceData, false, true)
+            || !classicSourceData.pointCloudSourceBindingAttempted
+            || classicSourceData.pointCloudSourceBindingComplete
+            || classicSourceData.pointCloudSourceFieldProfileComplete
+            || classicSourceData.pointCloudSourceBoundEntities != 0u)
+            return fail("mutated imported POINTCLOUD model passed source binding");
+        {
+            std::ifstream previous(importedClassicOutputPath, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != importedClassicSentinel)
+                return fail("mutated imported POINTCLOUD model changed the destination");
+        }
+        --importedClassic->pointCount;
+        if (!importedClassicWriter.fileExport(
+                importedClassicOutputPath.string(), DRW::AC1027, binary,
+                &classicSourceData, false, true)
+            || !classicSourceData.pointCloudSourceBindingAttempted
+            || !classicSourceData.pointCloudSourceBindingComplete
+            || !classicSourceData.pointCloudSourceFieldProfileComplete
+            || classicSourceData.pointCloudSourceBoundEntities != 1u)
+            return fail("corrected imported classic POINTCLOUD graph failed same-adapter retry");
+        dx_data importedClassicRoundTrip;
+        dx_iface importedClassicReader;
+        if (!importedClassicReader.fileImport(importedClassicOutputPath.string(),
+                                               &importedClassicRoundTrip,
+                                               false)
+            || importedClassicRoundTrip.sourceVersion != DRW::AC1027
+            || importedClassicRoundTrip.mBlock == nullptr)
+            return fail("imported classic POINTCLOUD output did not read back");
+        const DRW_PointCloud* importedClassicOutput = nullptr;
+        for (const DRW_Entity* entity : importedClassicRoundTrip.mBlock->ent) {
+            if (const auto* value = dynamic_cast<const DRW_PointCloud*>(entity))
+                importedClassicOutput = value;
+        }
+        if (importedClassicOutput == nullptr
+            || importedClassicOutput->classVersion != 2u
+            || importedClassicOutput->savedFilename
+                != "local-point-cloud.rcs"
+            || importedClassicOutput->sourceFiles
+                != std::vector<UTF8STRING>{"local-point-cloud.rcs"}
+            || importedClassicOutput->pointCount != 7u
+            || importedClassicOutput->definitionHandle != 0u
+            || importedClassicOutput->reactorHandle != 0u
+            || importedClassicOutput->ucsName != "LOCAL_UCS"
+            || importedClassicOutput->ucsXDirection.x != 1.0
+            || importedClassicOutput->ucsYDirection.y != 1.0
+            || importedClassicOutput->ucsZDirection.z != 1.0)
+            return fail("imported classic POINTCLOUD fields changed on typed readback");
     }
     return true;
 }
