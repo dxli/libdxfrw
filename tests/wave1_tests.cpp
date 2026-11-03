@@ -6272,6 +6272,71 @@ void testVportReferenceRemapping(TestContext& t) {
                      "VPORT accepts corrected fresh-writer retry");
         }
     }
+
+    for (const bool binary : {false, true}) {
+        for (int invalidField = 0; invalidField < 2; ++invalidField) {
+            std::ostringstream failedOutput;
+            failedOutput << "KEEP";
+            dxfRW failedOwner("");
+            failedOwner.version = DRW::AC1032;
+            failedOwner.binFile = binary;
+            failedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&failedOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&failedOutput));
+            DRW_Vport invalidVport;
+            invalidVport.name = "ENUM_DOMAIN_TEST";
+            if (invalidField == 0)
+                invalidVport.renderMode = 7;
+            else
+                invalidVport.defaultLightingType = 2;
+            t.expect(!failedOwner.writeVport(&invalidVport)
+                         && failedOutput.str() == "KEEP",
+                     "VPORT refuses an undocumented enum without changing destination");
+        }
+
+        std::ostringstream validOutput;
+        dxfRW validOwner("");
+        validOwner.version = DRW::AC1032;
+        validOwner.binFile = binary;
+        validOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterBinary>(&validOutput))
+            : std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterAscii>(&validOutput));
+        DRW_Vport validVport;
+        validVport.name = "ENUM_DOMAIN_TEST";
+        validVport.renderMode = 6u;
+        validVport.defaultLightingType = 1u;
+        const bool wrote = validOwner.writeVport(&validVport)
+            && validOwner.writer->writeString(0, "WIRE_END");
+        t.expect(wrote, "VPORT accepts documented enum upper bounds");
+        if (!wrote)
+            continue;
+
+        std::istringstream input(validOutput.str());
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(
+                std::make_unique<dxfReaderBinary>(&input))
+            : std::unique_ptr<dxfReader>(
+                std::make_unique<dxfReaderAscii>(&input));
+        std::map<int, int> observed;
+        std::string recordName;
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (code == 0) {
+                recordName = reader->getString();
+                if (recordName == "WIRE_END")
+                    break;
+            } else if (recordName == "VPORT"
+                       && (code == 281 || code == 282)) {
+                observed[code] = reader->getInt32();
+            }
+        }
+        t.expect(observed == std::map<int, int>{{281, 6}, {282, 1}},
+                 "VPORT upper-bound enum values read back exactly");
+    }
 }
 
 void testViewReferenceRemapping(TestContext& t) {

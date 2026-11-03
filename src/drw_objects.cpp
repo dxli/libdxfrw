@@ -6175,6 +6175,8 @@ bool DRW_Vport::validatePayloadFields() const {
 bool DRW_Vport::validateDxf() const {
     return validatePayloadFields()
         && shadePlotMode >= 0 && shadePlotMode <= 5
+        && renderMode <= 6u
+        && defaultLightingType <= 1u
         && validAmbientColorDxfProjection(m_ambientColorCmc, ambientColor,
                                           ambientColorRgb)
         && ambientColor <= static_cast<std::uint32_t>(
