@@ -5010,6 +5010,13 @@ bool dxfRW::preflightDxfClasses() {
         m_dxfClassesFrozen = false;
         return true;
     }
+    static_assert(kMaxDxfClassEntries == DRW::kMaxDxfClasses,
+                  "DXF CLASS setter and parser limits must agree");
+    if (m_dxfClassesInputRejected
+        || m_dxfClasses.size() > kMaxDxfClassEntries) {
+        m_writeError = true;
+        return false;
+    }
 
     std::unordered_set<std::string> recordNames;
     std::unordered_set<std::string> classNames;

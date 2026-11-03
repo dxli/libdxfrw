@@ -79,6 +79,18 @@ public:
     static std::size_t namedDictObjectsCount(const dxfRW& owner) {
         return owner.m_namedDictObjects.size();
     }
+    static bool classesRejected(const dxfRW& owner) {
+        return owner.m_dxfClassesInputRejected;
+    }
+    static std::size_t classesCount(const dxfRW& owner) {
+        return owner.m_dxfClasses.size();
+    }
+    static std::size_t maxClassEntries() {
+        return dxfRW::kMaxDxfClassEntries;
+    }
+    static bool preflightClasses(dxfRW& owner) {
+        return owner.preflightDxfClasses();
+    }
 };
 
 namespace {
@@ -59531,6 +59543,63 @@ void testNamedDictObjectCountBound(TestContext& t) {
     }
 }
 
+void testDxfClassCountBound(TestContext& t) {
+    const std::size_t overLimitCount =
+        DxfGroupSetterTestAccess::maxClassEntries() + 1u;
+    DRW_Class classValue;
+    classValue.recName = "BOUND_CLASS_OBJECT";
+    classValue.className = "BoundClassObject";
+    classValue.appName = "libdxfrw tests";
+    const std::vector<DRW_Class> corrected{classValue};
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW codec("");
+        DxfGroupSetterTestAccess::configureWriter(codec, output, binary);
+        const std::string sentinel = "DXF_CLASSES_SETTER_DESTINATION_SENTINEL";
+        output << sentinel;
+        std::vector<DRW_Class> oversized(overLimitCount);
+        codec.setDxfClasses(oversized);
+        const bool rejectedBeforeCopy =
+            DxfGroupSetterTestAccess::classesRejected(codec)
+            && DxfGroupSetterTestAccess::classesCount(codec) == 0u;
+        const bool refused =
+            !DxfGroupSetterTestAccess::preflightClasses(codec);
+        t.expect(rejectedBeforeCopy && refused && output.str() == sentinel,
+                 "over-limit DXF CLASS setter refuses before copying and preserves output");
+
+        codec.setDxfClasses(corrected);
+        DxfGroupSetterTestAccess::resetWriteSession(codec);
+        const bool correctedAccepted =
+            !DxfGroupSetterTestAccess::classesRejected(codec)
+            && DxfGroupSetterTestAccess::classesCount(codec) == 1u
+            && DxfGroupSetterTestAccess::preflightClasses(codec);
+        t.expect(correctedAccepted && output.str() == sentinel,
+                 "corrected DXF CLASS setter input clears rejection on the same codec");
+
+        DxfGroupSetterTestAccess::resetWriteSession(codec);
+        std::vector<DRW_Class> oversizedMove(overLimitCount);
+        codec.setDxfClasses(std::move(oversizedMove));
+        const bool rejectedMoveBeforeConsume =
+            DxfGroupSetterTestAccess::classesRejected(codec)
+            && DxfGroupSetterTestAccess::classesCount(codec) == 1u
+            && oversizedMove.size() == overLimitCount;
+        const bool refusedMove =
+            !DxfGroupSetterTestAccess::preflightClasses(codec);
+        t.expect(rejectedMoveBeforeConsume && refusedMove
+                     && output.str() == sentinel,
+                 "over-limit DXF CLASS move setter preserves caller and prior state, and refuses preflight");
+
+        codec.setDxfClasses(corrected);
+        DxfGroupSetterTestAccess::resetWriteSession(codec);
+        const bool retry =
+            !DxfGroupSetterTestAccess::classesRejected(codec)
+            && DxfGroupSetterTestAccess::preflightClasses(codec);
+        t.expect(retry && output.str() == sentinel,
+                 "corrected DXF CLASS input recovers after move-setter refusal");
+    }
+}
+
 void populateLegacyEllipseCarriers(dx_data& data, bool includeControls = true) {
     DRW_AppId app;
     app.name = "ELLIPSE_APP";
@@ -63055,6 +63124,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testNamedDictObjectCountBound(context);
         std::cout << "Named dictionary object count bound: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--dxf-class-count-bound") {
+        TestContext context;
+        testDxfClassCountBound(context);
+        std::cout << "DXF CLASS count bound: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

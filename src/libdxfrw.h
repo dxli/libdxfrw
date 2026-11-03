@@ -661,7 +661,19 @@ public:
             m_writeError = true;
             return;
         }
-        m_dxfClasses = classes;
+        if (classes.size() > kMaxDxfClassEntries) {
+            m_dxfClassesInputRejected = true;
+            return;
+        }
+        std::vector<DRW_Class> copied;
+        try {
+            copied = classes;
+        } catch (...) {
+            m_dxfClassesInputRejected = true;
+            return;
+        }
+        m_dxfClasses.swap(copied);
+        m_dxfClassesInputRejected = false;
         m_dxfClassesFrozen = false;
     }
     void setDxfClasses(std::vector<DRW_Class>&& classes) {
@@ -671,7 +683,12 @@ public:
             m_writeError = true;
             return;
         }
+        if (classes.size() > kMaxDxfClassEntries) {
+            m_dxfClassesInputRejected = true;
+            return;
+        }
         m_dxfClasses = std::move(classes);
+        m_dxfClassesInputRejected = false;
         m_dxfClassesFrozen = false;
     }
     /** Default-off per-write admission. When enabled before a write, the
@@ -1444,6 +1461,7 @@ public:
     }
 
 private:
+    static constexpr std::size_t kMaxDxfClassEntries = 65536u;
     // Executable-local allocation instrumentation; no runtime/public test API.
     friend class DxIfaceStandardDwgCaptureTestAccess;
     friend class DxfGroupSetterTestAccess;
@@ -2033,6 +2051,7 @@ private:
     std::size_t m_dxfWriteRecordInventoryLimit {4u * 1024u * 1024u};
     std::vector<DRW_Class> m_dxfClasses;
     bool m_dxfClassesFrozen {false};
+    bool m_dxfClassesInputRejected{false};
     std::vector<DRW_RawDxfSection> m_rawDxfSections;
     std::vector<std::pair<std::string, std::string>> m_rootDictEntries;
     bool m_dxfRootDictEntriesInputRejected{false};
