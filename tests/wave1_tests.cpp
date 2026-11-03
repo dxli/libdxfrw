@@ -3169,6 +3169,187 @@ void testGeoDataIdentityRemapping(TestContext& t) {
     }
 }
 
+void testDbColorIdentityRemapping(TestContext& t) {
+    constexpr std::uint32_t source = 0xA91u;
+    constexpr std::uint32_t emitted = 0xB91u;
+
+    class DbColorProbe final : public dx_iface {
+    public:
+        void addDbColor(const DRW_DbColor& value) override {
+            captured = value;
+            found = true;
+        }
+
+        DRW_DbColor captured;
+        bool found {false};
+    };
+
+    const auto readTyped = [](const std::string& bytes, bool binary,
+                              DRW_DbColor& value) {
+        std::istringstream input(bytes);
+        DbColorProbe probe;
+        dxfRW readerOwner("");
+        readerOwner.binFile = binary;
+        readerOwner.iface = &probe;
+        readerOwner.reader = binary
+            ? std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderBinary>(&input))
+            : std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderAscii>(&input));
+        int code = 0;
+        while (readerOwner.reader->readRec(&code)) {
+            if (code != 0)
+                continue;
+            readerOwner.nextentity = readerOwner.reader->getString();
+            if (readerOwner.nextentity == "DBCOLOR") {
+                const bool processed = readerOwner.processDbColor();
+                if (processed && probe.found)
+                    value = probe.captured;
+                return processed && probe.found;
+            }
+        }
+        return false;
+    };
+    const auto makeColor = [] {
+        DRW_DbColor value;
+        value.parentHandle = 0xCu;
+        value.rgb = 0x123456;
+        value.bookName = "Acme";
+        value.name = "Warm Gray";
+        return value;
+    };
+    const auto payloadMatches = [](const DRW_DbColor& value) {
+        return value.rgb == 0x123456 && value.bookName == "Acme"
+            && value.name == "Warm Gray";
+    };
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW owner("");
+        owner.version = DRW::AC1032;
+        owner.binFile = binary;
+        owner.setHandleRemap({{source, emitted}});
+        owner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        owner.writer->setRecordInventoryEnabled(true, 16u);
+        DRW_DbColor color = makeColor();
+        color.handle = source;
+        const bool wrote = owner.writer->writeString(0, "SECTION")
+            && owner.writer->writeString(2, "OBJECTS")
+            && owner.writeDbColor(&color, "DBCOLOR")
+            && owner.writer->writeString(0, "WIRE_END");
+        const auto binding = owner.m_writingContext
+            .sourceHandleToWrittenObjectMap.find(source);
+        t.expect(wrote && owner.writer->recordHandleCount(emitted) == 1u
+                     && owner.writer->recordHandleHasIdentity(
+                            emitted, "DBCOLOR", "OBJECTS")
+                     && binding != owner.m_writingContext
+                                        .sourceHandleToWrittenObjectMap.end()
+                     && binding->second == emitted,
+                 "DBCOLOR remaps, inventories, and binds its own identity");
+        DRW_DbColor readback;
+        const bool read = wrote && readTyped(output.str(), binary, readback);
+        t.expect(read && readback.handle == emitted && payloadMatches(readback),
+                 "DBCOLOR mapped identity has typed ASCII/Binary readback");
+
+        std::ostringstream allocatedOutput;
+        dxfRW allocatedOwner("");
+        allocatedOwner.version = DRW::AC1032;
+        allocatedOwner.binFile = binary;
+        allocatedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&allocatedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&allocatedOutput));
+        allocatedOwner.writer->setRecordInventoryEnabled(true, 16u);
+        DRW_DbColor generated = makeColor();
+        const bool generatedWrite =
+            allocatedOwner.writer->writeString(0, "SECTION")
+            && allocatedOwner.writer->writeString(2, "OBJECTS")
+            && allocatedOwner.writeDbColor(&generated, "DBCOLOR")
+            && allocatedOwner.writer->writeString(0, "WIRE_END");
+        DRW_DbColor generatedReadback;
+        const bool generatedRead = generatedWrite
+            && readTyped(allocatedOutput.str(), binary, generatedReadback);
+        t.expect(generatedRead && generatedReadback.handle != 0u
+                     && generatedReadback.handle != DRW::NoHandle
+                     && allocatedOwner.writer->recordHandleCount(
+                            generatedReadback.handle) == 1u
+                     && payloadMatches(generatedReadback),
+                 "DBCOLOR allocates a missing identity and reads back");
+
+        std::ostringstream invalidOutput;
+        dxfRW invalidOwner("");
+        invalidOwner.version = DRW::AC1032;
+        invalidOwner.binFile = binary;
+        invalidOwner.setHandleRemap({{source, 0xCu}});
+        invalidOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&invalidOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&invalidOutput));
+        DRW_DbColor invalid = makeColor();
+        invalid.handle = source;
+        t.expect(!invalidOwner.writeDbColor(&invalid, "DBCOLOR")
+                     && invalidOutput.str().empty(),
+                 "DBCOLOR fixed identity remap refusal preserves destination");
+
+        std::ostringstream failedOutput;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1032;
+        failedOwner.binFile = binary;
+        failedOwner.setHandleRemap({{source, emitted}});
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&failedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&failedOutput));
+        failedOwner.writer->setRecordInventoryEnabled(true, 16u);
+        const bool section = failedOwner.writer->writeString(0, "SECTION")
+            && failedOwner.writer->writeString(2, "OBJECTS");
+        const std::string beforeFailure = failedOutput.str();
+        DRW_DbColor malformed = makeColor();
+        malformed.handle = source;
+        malformed.extData.push_back(new DRW_Variant(
+            1009, std::string("unsupported-xdata-code")));
+        const bool rejected = section
+            && !failedOwner.writeDbColor(&malformed, "DBCOLOR");
+        t.expect(rejected && failedOutput.str() == beforeFailure
+                     && failedOwner.m_writingContext
+                                .sourceHandleToWrittenObjectMap.count(source)
+                            == 0u
+                     && failedOwner.writer->recordHandleCount(emitted) == 0u,
+                 "DBCOLOR late XDATA failure rolls back bytes and identity map");
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1032;
+        retryOwner.binFile = binary;
+        retryOwner.setHandleRemap({{source, emitted}});
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        retryOwner.writer->setRecordInventoryEnabled(true, 16u);
+        DRW_DbColor corrected = makeColor();
+        corrected.handle = source;
+        const bool retried = retryOwner.writer->writeString(0, "SECTION")
+            && retryOwner.writer->writeString(2, "OBJECTS")
+            && retryOwner.writeDbColor(&corrected, "DBCOLOR")
+            && retryOwner.writer->writeString(0, "WIRE_END");
+        DRW_DbColor retryReadback;
+        const bool retryRead = retried
+            && readTyped(retryOutput.str(), binary, retryReadback);
+        t.expect(rejected && retryRead && retryReadback.handle == emitted
+                     && payloadMatches(retryReadback),
+                 "DBCOLOR corrected fresh-writer retry has typed readback");
+    }
+}
+
 void testBlockRecordInsertReferenceRemapping(TestContext& t) {
     for (const bool binary : {false, true}) {
         for (const bool useResolver : {false, true}) {
@@ -20360,6 +20541,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testGeoDataIdentityRemapping(focused);
         std::cout << "GEODATA identity remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--dbcolor-identity-remapping") {
+        TestContext focused;
+        testDbColorIdentityRemapping(focused);
+        std::cout << "DBCOLOR identity remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

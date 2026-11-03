@@ -695,6 +695,12 @@ Binary typed readback, fixed-handle refusal, XDATA rollback, and fresh-writer
 retry controls ([identity receipt](docs/research/p8-geodata-identity-remapping-2026-11-03.json)).
 This closes only own-identity transport; producer breadth and native coordinate
 and projection semantics remain open.
+The low-level DBCOLOR writer now remaps or allocates its own group-5 identity
+and binds source identity after staged output commits. ASCII/Binary controls
+cover ACI/book-color typed readback, fixed-ID refusal, late-XDATA rollback, and
+fresh-writer retry ([identity receipt](docs/research/p8-dbcolor-identity-remapping-2026-11-03.json)).
+This closes only DBCOLOR identity transport; physical producer prevalence and
+native color-book acceptance remain open.
 
 ## P7 — ACIS/ACDS and independent 3D meaning
 
