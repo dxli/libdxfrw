@@ -26593,7 +26593,10 @@ bool DRW_MLeader::parseDxfContextCode(int code, const std::unique_ptr<dxfReader>
             return true;
         case 302:
             if (m_dxfCtxState != 1 || reader->getStringView() != "LEADER{"
-                || context.roots.size() >= static_cast<std::size_t>(kMaxMLeaderItems))
+                || context.roots.size() >= static_cast<std::size_t>(kMaxMLeaderItems)
+                || !DRW::reserve(
+                    context.roots,
+                    static_cast<int>(context.roots.size() + 1u)))
                 return false;
             context.roots.emplace_back();
             m_dxfCtxState = 2;
@@ -26615,7 +26618,11 @@ bool DRW_MLeader::parseDxfContextCode(int code, const std::unique_ptr<dxfReader>
                 || reader->getStringView() != "LEADER_LINE{"
                 || context.roots.empty()
                 || context.roots.back().leaderLines.size()
-                       >= static_cast<std::size_t>(kMaxMLeaderItems))
+                       >= static_cast<std::size_t>(kMaxMLeaderItems)
+                || !DRW::reserve(
+                    context.roots.back().leaderLines,
+                    static_cast<int>(
+                        context.roots.back().leaderLines.size() + 1u)))
                 return false;
             context.roots.back().leaderLines.emplace_back();
             m_dxfLineVertexComponentCounts.fill(0u);
@@ -26656,8 +26663,13 @@ bool DRW_MLeader::parseDxfContextCode(int code, const std::unique_ptr<dxfReader>
                 if (count >= static_cast<std::size_t>(kMaxLeaderVertices)
                     || count > line->points.size())
                     return false;
-                if (count == line->points.size())
+                if (count == line->points.size()) {
+                    if (!DRW::reserve(
+                            line->points,
+                            static_cast<int>(line->points.size() + 1u)))
+                        return false;
                     line->points.emplace_back();
+                }
                 const double value = reader->getDouble();
                 DRW_Coord& point = line->points[count];
                 if (component == 0u)
@@ -26695,6 +26707,12 @@ bool DRW_MLeader::parseDxfContextCode(int code, const std::unique_ptr<dxfReader>
                     line->arrowHandle.ref64 = line->arrowHandle.ref;
                     return true;
                 case 11:
+                    if (line->breaks.size()
+                            >= static_cast<std::size_t>(kMaxMLeaderItems)
+                        || !DRW::reserve(
+                            line->breaks,
+                            static_cast<int>(line->breaks.size() + 1u)))
+                        return false;
                     line->breaks.emplace_back(
                         DRW_Coord{reader->getDouble(), 0.0, 0.0},
                         DRW_Coord{});
@@ -26739,6 +26757,12 @@ bool DRW_MLeader::parseDxfContextCode(int code, const std::unique_ptr<dxfReader>
                 case 40: root->landingDistance = reader->getDouble(); return true;
                 case 271: root->attachmentDirection = reader->getInt32(); return true;
                 case 12:
+                    if (root->breaks.size()
+                            >= static_cast<std::size_t>(kMaxMLeaderItems)
+                        || !DRW::reserve(
+                            root->breaks,
+                            static_cast<int>(root->breaks.size() + 1u)))
+                        return false;
                     root->breaks.emplace_back(
                         DRW_Coord{reader->getDouble(), 0.0, 0.0},
                         DRW_Coord{});

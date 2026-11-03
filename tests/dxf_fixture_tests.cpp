@@ -13419,6 +13419,132 @@ void testMLeaderBlockLabelAllocationFailure(TestContext& t) {
     }
 }
 
+void testMLeaderNestedAllocationFailure(TestContext& t) {
+    struct MLeaderParseProbe final : DRW_MLeader {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+    };
+    const auto parseRecord = [](MLeaderParseProbe& leader, int expectedCode,
+                                std::string_view value,
+                                long allocationFailure = -1) {
+        const std::string record = std::to_string(expectedCode) + "\n"
+            + std::string(value) + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int code = 0;
+        if (!reader->readRec(&code) || code != expectedCode)
+            return false;
+        MaterialAllocationFailure failure(allocationFailure);
+        return leader.parse(code, reader);
+    };
+    const auto openContext = [&parseRecord](MLeaderParseProbe& leader) {
+        return parseRecord(leader, 300, "CONTEXT_DATA{");
+    };
+    const auto openRoot = [&parseRecord](MLeaderParseProbe& leader) {
+        return parseRecord(leader, 302, "LEADER{");
+    };
+    const auto openLine = [&parseRecord](MLeaderParseProbe& leader) {
+        return parseRecord(leader, 304, "LEADER_LINE{");
+    };
+    const auto closeRootAndContext = [&parseRecord](MLeaderParseProbe& leader) {
+        return parseRecord(leader, 303, "}")
+            && parseRecord(leader, 301, "}")
+            && leader.isDxfContextClosed();
+    };
+
+    {
+        MLeaderParseProbe leader;
+        const bool opened = openContext(leader);
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(leader, 302, "LEADER{", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = leader.context.roots.empty();
+        const bool retried = openRoot(leader)
+            && closeRootAndContext(leader);
+        t.expect(opened && rejected && failedOnce && rolledBack && retried,
+                 "MLEADER root allocation failure preserves CONTEXT_DATA for retry");
+    }
+    {
+        MLeaderParseProbe leader;
+        const bool opened = openContext(leader) && openRoot(leader);
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(
+            leader, 304, "LEADER_LINE{", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = leader.context.roots.size() == 1u
+            && leader.context.roots.front().leaderLines.empty();
+        const bool retried = openLine(leader)
+            && parseRecord(leader, 305, "}")
+            && closeRootAndContext(leader);
+        t.expect(opened && rejected && failedOnce && rolledBack && retried,
+                 "MLEADER line allocation failure preserves LEADER for retry");
+    }
+    {
+        MLeaderParseProbe leader;
+        const bool opened = openContext(leader) && openRoot(leader)
+            && openLine(leader);
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(leader, 10, "1.25", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = leader.context.roots.size() == 1u
+            && leader.context.roots.front().leaderLines.size() == 1u
+            && leader.context.roots.front()
+                .leaderLines.front().points.empty();
+        const bool retried = parseRecord(leader, 10, "1.25")
+            && parseRecord(leader, 20, "2.5")
+            && parseRecord(leader, 30, "3.75")
+            && parseRecord(leader, 305, "}")
+            && closeRootAndContext(leader)
+            && leader.context.roots.front().leaderLines.front().points.size() == 1u
+            && leader.context.roots.front().leaderLines.front().points.front().x == 1.25
+            && leader.context.roots.front().leaderLines.front().points.front().y == 2.5
+            && leader.context.roots.front().leaderLines.front().points.front().z == 3.75;
+        t.expect(opened && rejected && failedOnce && rolledBack && retried,
+                 "MLEADER vertex allocation failure preserves component retry state");
+    }
+    {
+        MLeaderParseProbe leader;
+        const bool opened = openContext(leader) && openRoot(leader)
+            && openLine(leader) && parseRecord(leader, 10, "1.0");
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(leader, 11, "3.5", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = leader.context.roots.size() == 1u
+            && leader.context.roots.front().leaderLines.size() == 1u
+            && leader.context.roots.front()
+                .leaderLines.front().breaks.empty();
+        const bool retried = parseRecord(leader, 11, "3.5")
+            && parseRecord(leader, 21, "4.5")
+            && parseRecord(leader, 305, "}")
+            && closeRootAndContext(leader)
+            && leader.context.roots.front().leaderLines.front().breaks.size() == 1u
+            && leader.context.roots.front().leaderLines.front().breaks.front()
+                   .first.x == 3.5
+            && leader.context.roots.front().leaderLines.front().breaks.front()
+                   .first.y == 4.5;
+        t.expect(opened && rejected && failedOnce && rolledBack && retried,
+                 "MLEADER line-break allocation failure preserves retry state");
+    }
+    {
+        MLeaderParseProbe leader;
+        const bool opened = openContext(leader) && openRoot(leader);
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(leader, 12, "5.5", 0);
+        const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+        const bool rolledBack = leader.context.roots.size() == 1u
+            && leader.context.roots.front().breaks.empty();
+        const bool retried = parseRecord(leader, 12, "5.5")
+            && parseRecord(leader, 22, "6.5")
+            && closeRootAndContext(leader)
+            && leader.context.roots.front().breaks.size() == 1u
+            && leader.context.roots.front().breaks.front().first.x == 5.5
+            && leader.context.roots.front().breaks.front().first.y == 6.5;
+        t.expect(opened && rejected && failedOnce && rolledBack && retried,
+                 "MLEADER root-break allocation failure preserves retry state");
+    }
+}
+
 void testHatchSplineDxfAllocationFailure(TestContext& t) {
     struct HatchParseProbe final : DRW_Hatch {
         bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
@@ -62399,6 +62525,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testMLeaderBlockLabelAllocationFailure(context);
         std::cout << "MLEADER block-label allocation-failure and retry controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--mleader-nested-allocation-failure") {
+        TestContext context;
+        testMLeaderNestedAllocationFailure(context);
+        std::cout << "MLEADER nested allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
