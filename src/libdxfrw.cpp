@@ -33932,50 +33932,74 @@ bool dxfRW::writeRenderSettings(DRW_RenderSettings *ent,
         return false;
     if (recordName == nullptr || *recordName == '\0')
         return failDxfWrite();
+    const std::uint32_t sourceHandle = ent->handle;
+    std::uint32_t emittedHandle = sourceHandle == 0u
+        ? 0u : remapObjectHandle(sourceHandle);
+    if (sourceHandle != 0u
+        && (emittedHandle == 0u || emittedHandle == DRW::NoHandle
+            || isDxfFixedOutputHandle(emittedHandle)))
+        return failDxfWrite();
+    RecordStateScope state(*this, ent);
+    if (sourceHandle == 0u) {
+        if (!allocateDxfHandle(emittedHandle))
+            return false;
+    } else if (!reserveHandle(emittedHandle)) {
+        return failDxfWrite();
+    }
+    DxfWriterRecordScope record(*writer);
     writer->writeString(0, recordName);
-    writer->writeString(5, toHexStr(ent->handle));
+    writer->writeString(5, toHexStr(emittedHandle));
     if (!writeTableEntryAppData(*ent))
         return false;
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
     if (preset || base) {
         dxfRenderSettings::writePresetBody(*writer, *ent, profile);
-        if (!ent->extData.empty() && !writeExtData(ent->extData))
-            return false;
-        return !writer->hasWriteError();
-    }
-    switch (ent->m_kind) {
-    case DRW_RenderSettings::Global:
-        writer->writeString(100, "AcDbRenderGlobal"); break;
-    case DRW_RenderSettings::Environment:
-        writer->writeString(100, "AcDbRenderEnvironment"); break;
-    case DRW_RenderSettings::Entry:
-        writer->writeString(100, "AcDbRenderEntry"); break;
-    case DRW_RenderSettings::RapidRT:
-        writer->writeString(100, "AcDbRapidRTRenderSettings"); break;
-    case DRW_RenderSettings::MentalRay:
-        writer->writeString(100, "AcDbMentalRayRenderSettings"); break;
-    case DRW_RenderSettings::Settings:
-    default:
-        writer->writeString(100, "AcDbRenderSettings"); break;
-    }
-    const bool hasVectors = !ent->m_longs.empty() || !ent->m_strings.empty()
-        || !ent->m_bools.empty() || !ent->m_shorts.empty()
-        || !ent->m_bytes.empty() || !ent->m_doubles.empty();
-    if (hasVectors) {
-        for (std::int32_t value : ent->m_longs) writer->writeInt32(90, value);
-        for (const UTF8STRING &value : ent->m_strings)
-            writer->writeUtf8String(1, value);
-        for (bool value : ent->m_bools) writer->writeBool(290, value);
-        for (std::int32_t value : ent->m_shorts) writer->writeInt16(70, value);
-        for (std::int32_t value : ent->m_bytes) writer->writeInt16(280, value);
-        for (double value : ent->m_doubles) writer->writeDouble(40, value);
     } else {
-        writer->writeInt32(90, ent->m_classVersion);
-        writer->writeUtf8String(1, ent->m_name);
+        switch (ent->m_kind) {
+        case DRW_RenderSettings::Global:
+            writer->writeString(100, "AcDbRenderGlobal"); break;
+        case DRW_RenderSettings::Environment:
+            writer->writeString(100, "AcDbRenderEnvironment"); break;
+        case DRW_RenderSettings::Entry:
+            writer->writeString(100, "AcDbRenderEntry"); break;
+        case DRW_RenderSettings::RapidRT:
+            writer->writeString(100, "AcDbRapidRTRenderSettings"); break;
+        case DRW_RenderSettings::MentalRay:
+            writer->writeString(100, "AcDbMentalRayRenderSettings"); break;
+        case DRW_RenderSettings::Settings:
+        default:
+            writer->writeString(100, "AcDbRenderSettings"); break;
+        }
+        const bool hasVectors = !ent->m_longs.empty()
+            || !ent->m_strings.empty() || !ent->m_bools.empty()
+            || !ent->m_shorts.empty() || !ent->m_bytes.empty()
+            || !ent->m_doubles.empty();
+        if (hasVectors) {
+            for (std::int32_t value : ent->m_longs)
+                writer->writeInt32(90, value);
+            for (const UTF8STRING &value : ent->m_strings)
+                writer->writeUtf8String(1, value);
+            for (bool value : ent->m_bools) writer->writeBool(290, value);
+            for (std::int32_t value : ent->m_shorts)
+                writer->writeInt16(70, value);
+            for (std::int32_t value : ent->m_bytes)
+                writer->writeInt16(280, value);
+            for (double value : ent->m_doubles)
+                writer->writeDouble(40, value);
+        } else {
+            writer->writeInt32(90, ent->m_classVersion);
+            writer->writeUtf8String(1, ent->m_name);
+        }
     }
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    if (writer->hasWriteError() || !preflightDxfWrite()
+        || (sourceHandle != 0u
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit())
+        return failDxfWrite();
+    state.commit();
+    return true;
 }
 
 bool dxfRW::writeSection(DRW_Section *ent, const char *recordName) {

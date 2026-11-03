@@ -701,6 +701,12 @@ cover ACI/book-color typed readback, fixed-ID refusal, late-XDATA rollback, and
 fresh-writer retry ([identity receipt](docs/research/p8-dbcolor-identity-remapping-2026-11-03.json)).
 This closes only DBCOLOR identity transport; physical producer prevalence and
 native color-book acceptance remain open.
+The shared low-level RENDERSETTINGS-family writer now remaps or allocates its
+group-5 identity and binds source identity after staged output commits. The
+focused ASCII/Binary identity control and existing preset output, graph, and
+transaction controls pass ([identity receipt](docs/research/p8-render-settings-identity-remapping-2026-11-03.json)).
+This closes only identity transport; physical producer breadth and native
+rendering semantics remain open.
 
 ## P7 — ACIS/ACDS and independent 3D meaning
 

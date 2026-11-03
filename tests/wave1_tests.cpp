@@ -3350,6 +3350,192 @@ void testDbColorIdentityRemapping(TestContext& t) {
     }
 }
 
+void testRenderSettingsIdentityRemapping(TestContext& t) {
+    constexpr std::uint32_t source = 0xAA1u;
+    constexpr std::uint32_t emitted = 0xBA1u;
+
+    class RenderSettingsProbe final : public dx_iface {
+    public:
+        void addRenderSettings(const DRW_RenderSettings& value) override {
+            captured = value;
+            found = true;
+        }
+
+        DRW_RenderSettings captured;
+        bool found {false};
+    };
+
+    const auto readTyped = [](const std::string& bytes, bool binary,
+                              DRW_RenderSettings& value) {
+        std::istringstream input(bytes);
+        RenderSettingsProbe probe;
+        dxfRW readerOwner("");
+        readerOwner.binFile = binary;
+        readerOwner.iface = &probe;
+        readerOwner.reader = binary
+            ? std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderBinary>(&input))
+            : std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderAscii>(&input));
+        int code = 0;
+        while (readerOwner.reader->readRec(&code)) {
+            if (code != 0)
+                continue;
+            readerOwner.nextentity = readerOwner.reader->getString();
+            if (readerOwner.nextentity == "RENDERSETTINGS") {
+                const bool processed = readerOwner.processRenderSettings();
+                if (processed && probe.found)
+                    value = probe.captured;
+                return processed && probe.found;
+            }
+        }
+        return false;
+    };
+    const auto makeSettings = [] {
+        DRW_RenderSettings value;
+        value.parentHandle = 0xCu;
+        value.m_kind = DRW_RenderSettings::Settings;
+        value.m_classVersion = 2;
+        value.m_name = "Main Render Settings";
+        return value;
+    };
+    const auto payloadMatches = [](const DRW_RenderSettings& value) {
+        return value.m_kind == DRW_RenderSettings::Settings
+            && value.m_classVersion == 2
+            && value.m_name == "Main Render Settings";
+    };
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW owner("");
+        owner.version = DRW::AC1032;
+        owner.binFile = binary;
+        owner.setHandleRemap({{source, emitted}});
+        owner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        owner.writer->setRecordInventoryEnabled(true, 16u);
+        DRW_RenderSettings settings = makeSettings();
+        settings.handle = source;
+        const bool wrote = owner.writer->writeString(0, "SECTION")
+            && owner.writer->writeString(2, "OBJECTS")
+            && owner.writeRenderSettings(&settings, "RENDERSETTINGS")
+            && owner.writer->writeString(0, "WIRE_END");
+        const auto binding = owner.m_writingContext
+            .sourceHandleToWrittenObjectMap.find(source);
+        t.expect(wrote && owner.writer->recordHandleCount(emitted) == 1u
+                     && owner.writer->recordHandleHasIdentity(
+                            emitted, "RENDERSETTINGS", "OBJECTS")
+                     && binding != owner.m_writingContext
+                                        .sourceHandleToWrittenObjectMap.end()
+                     && binding->second == emitted,
+                 "RENDERSETTINGS remaps, inventories, and binds its identity");
+        DRW_RenderSettings readback;
+        const bool read = wrote && readTyped(output.str(), binary, readback);
+        t.expect(read && readback.handle == emitted && payloadMatches(readback),
+                 "RENDERSETTINGS mapped identity has typed ASCII/Binary readback");
+
+        std::ostringstream allocatedOutput;
+        dxfRW allocatedOwner("");
+        allocatedOwner.version = DRW::AC1032;
+        allocatedOwner.binFile = binary;
+        allocatedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&allocatedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&allocatedOutput));
+        allocatedOwner.writer->setRecordInventoryEnabled(true, 16u);
+        DRW_RenderSettings generated = makeSettings();
+        const bool generatedWrite =
+            allocatedOwner.writer->writeString(0, "SECTION")
+            && allocatedOwner.writer->writeString(2, "OBJECTS")
+            && allocatedOwner.writeRenderSettings(
+                   &generated, "RENDERSETTINGS")
+            && allocatedOwner.writer->writeString(0, "WIRE_END");
+        DRW_RenderSettings generatedReadback;
+        const bool generatedRead = generatedWrite
+            && readTyped(allocatedOutput.str(), binary, generatedReadback);
+        t.expect(generatedRead && generatedReadback.handle != 0u
+                     && generatedReadback.handle != DRW::NoHandle
+                     && allocatedOwner.writer->recordHandleCount(
+                            generatedReadback.handle) == 1u
+                     && payloadMatches(generatedReadback),
+                 "RENDERSETTINGS allocates a missing identity and reads back");
+
+        std::ostringstream invalidOutput;
+        dxfRW invalidOwner("");
+        invalidOwner.version = DRW::AC1032;
+        invalidOwner.binFile = binary;
+        invalidOwner.setHandleRemap({{source, 0xCu}});
+        invalidOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&invalidOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&invalidOutput));
+        DRW_RenderSettings invalid = makeSettings();
+        invalid.handle = source;
+        t.expect(!invalidOwner.writeRenderSettings(
+                         &invalid, "RENDERSETTINGS")
+                     && invalidOutput.str().empty(),
+                 "RENDERSETTINGS fixed identity refusal preserves destination");
+
+        std::ostringstream failedOutput;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1032;
+        failedOwner.binFile = binary;
+        failedOwner.setHandleRemap({{source, emitted}});
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&failedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&failedOutput));
+        failedOwner.writer->setRecordInventoryEnabled(true, 16u);
+        const bool section = failedOwner.writer->writeString(0, "SECTION")
+            && failedOwner.writer->writeString(2, "OBJECTS");
+        const std::string beforeFailure = failedOutput.str();
+        DRW_RenderSettings malformed = makeSettings();
+        malformed.handle = source;
+        malformed.extData.push_back(new DRW_Variant(
+            1009, std::string("unsupported-xdata-code")));
+        const bool rejected = section
+            && !failedOwner.writeRenderSettings(
+                &malformed, "RENDERSETTINGS");
+        t.expect(rejected && failedOutput.str() == beforeFailure
+                     && failedOwner.m_writingContext
+                                .sourceHandleToWrittenObjectMap.count(source)
+                            == 0u
+                     && failedOwner.writer->recordHandleCount(emitted) == 0u,
+                 "RENDERSETTINGS late XDATA failure rolls back bytes and identity map");
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1032;
+        retryOwner.binFile = binary;
+        retryOwner.setHandleRemap({{source, emitted}});
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        retryOwner.writer->setRecordInventoryEnabled(true, 16u);
+        DRW_RenderSettings corrected = makeSettings();
+        corrected.handle = source;
+        const bool retried = retryOwner.writer->writeString(0, "SECTION")
+            && retryOwner.writer->writeString(2, "OBJECTS")
+            && retryOwner.writeRenderSettings(
+                   &corrected, "RENDERSETTINGS")
+            && retryOwner.writer->writeString(0, "WIRE_END");
+        DRW_RenderSettings retryReadback;
+        const bool retryRead = retried
+            && readTyped(retryOutput.str(), binary, retryReadback);
+        t.expect(rejected && retryRead && retryReadback.handle == emitted
+                     && payloadMatches(retryReadback),
+                 "RENDERSETTINGS corrected fresh-writer retry has typed readback");
+    }
+}
+
 void testBlockRecordInsertReferenceRemapping(TestContext& t) {
     for (const bool binary : {false, true}) {
         for (const bool useResolver : {false, true}) {
@@ -20549,6 +20735,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testDbColorIdentityRemapping(focused);
         std::cout << "DBCOLOR identity remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--render-settings-identity-remapping") {
+        TestContext focused;
+        testRenderSettingsIdentityRemapping(focused);
+        std::cout << "RENDERSETTINGS identity remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
