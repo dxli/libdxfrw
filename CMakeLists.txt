@@ -850,6 +850,11 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_wave1_tests --scene-object-reference-remapping)
     set_tests_properties(libdxfrw_scene_object_reference_remapping PROPERTIES
         LABELS "fast;dxf;writer;scene;references;generated" TIMEOUT 15)
+    add_test(NAME libdxfrw_sunstudy_dxf_hour_count
+        COMMAND libdxfrw_wave1_tests --sunstudy-dxf-hour-count)
+    set_tests_properties(libdxfrw_sunstudy_dxf_hour_count PROPERTIES
+        LABELS "fast;dxf;writer;objects;sunstudy;generated;readback"
+        TIMEOUT 20)
     add_test(NAME libdxfrw_lightlist_reference_remapping
         COMMAND libdxfrw_wave1_tests --lightlist-reference-remapping)
     set_tests_properties(libdxfrw_lightlist_reference_remapping PROPERTIES

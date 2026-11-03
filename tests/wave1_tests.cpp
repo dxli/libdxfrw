@@ -4870,6 +4870,178 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
     }
 }
 
+void testSunStudyDxfHourCount(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        if (binary)
+            output << "AutoCAD Binary DXF\r\n" << static_cast<char>(26)
+                   << '\0';
+        dxfRW owner("");
+        owner.version = DRW::AC1021;
+        owner.binFile = binary;
+        owner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        owner.writer->setVersion("AC1021", true);
+        const bool opened = owner.writer->writeString(0, "SECTION")
+            && owner.writer->writeString(2, "HEADER")
+            && owner.writer->writeString(9, "$ACADVER")
+            && owner.writer->writeString(1, "AC1021")
+            && owner.writer->writeString(0, "ENDSEC")
+            && owner.writer->writeString(0, "SECTION")
+            && owner.writer->writeString(2, "OBJECTS");
+
+        DRW_SunStudy study;
+        study.handle = 0x100u;
+        study.parentHandle = 0x200u;
+        study.m_classVersion = 1;
+        study.m_setupName = "SUMMER_SOLSTICE";
+        study.m_description = "Two dates, three hours";
+        study.m_outputType = 0;
+        study.m_useSubset = true;
+        study.m_sheetSetName = "SOLAR_SET";
+        study.m_sheetSubsetName = "NORTH";
+        study.m_selectDatesFromCalendar = true;
+        study.m_dates = {{2450000, 12345000}, {2450001, 86399000}};
+        study.m_selectRangeOfDates = true;
+        study.m_startTime = 100;
+        study.m_endTime = 900;
+        study.m_interval = 60;
+        study.m_hours = {true, false, true};
+        study.m_shadePlotType = 1;
+        study.m_viewportCount = 2;
+        study.m_rowCount = 1;
+        study.m_columnCount = 2;
+        study.m_spacing = 0.5;
+        study.m_lockViewports = true;
+        study.m_labelViewports = true;
+
+        const bool wrote = opened && owner.writeSunStudy(&study)
+            && owner.writer->writeString(0, "ENDSEC")
+            && owner.writer->writeString(0, "EOF");
+        t.expect(wrote, "SUNSTUDY documented field profile writes");
+        if (!wrote)
+            continue;
+
+        std::istringstream wireInput(output.str());
+        if (binary)
+            wireInput.seekg(22, std::ios::beg);
+        std::unique_ptr<dxfReader> wireReader = binary
+            ? std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderBinary>(&wireInput))
+            : std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderAscii>(&wireInput));
+        std::string recordName;
+        std::vector<std::int32_t> dateCounts;
+        std::vector<std::int32_t> dateValues;
+        std::vector<std::int32_t> hourCounts;
+        std::vector<std::int32_t> hourFlags;
+        int code = 0;
+        while (wireReader->readRec(&code)) {
+            if (code == 0) {
+                recordName = wireReader->getString();
+                continue;
+            }
+            if (recordName != "SUNSTUDY")
+                continue;
+            if (code == 90)
+                dateValues.push_back(wireReader->getInt32());
+            else if (code == 91)
+                dateCounts.push_back(wireReader->getInt32());
+            else if (code == 73)
+                hourCounts.push_back(wireReader->getInt32());
+            else if (code == 290)
+                hourFlags.push_back(wireReader->getInt32());
+        }
+        t.expect(dateCounts == std::vector<std::int32_t>{2}
+                     && dateValues == std::vector<std::int32_t>{
+                         1, 2450000, 12345, 2450001, 86399}
+                     && hourCounts == std::vector<std::int32_t>{3}
+                     && hourFlags == std::vector<std::int32_t>{1, 1, 0, 1},
+                 "SUNSTUDY emits date seconds and the documented group 73 count");
+
+        ProfileProbeInterface probe;
+        bool readback = false;
+        if (binary) {
+            const auto path = std::filesystem::temp_directory_path()
+                / ("libdxfrw-sunstudy-hour-count-"
+                   + std::to_string(std::chrono::steady_clock::now()
+                       .time_since_epoch().count())
+                   + ".dxf");
+            struct TempFile final {
+                std::filesystem::path path;
+                ~TempFile() {
+                    std::error_code ignored;
+                    std::filesystem::remove(path, ignored);
+                }
+            } cleanup {path};
+            {
+                std::ofstream file(path, std::ios::binary);
+                const std::string bytes = output.str();
+                file.write(bytes.data(),
+                           static_cast<std::streamsize>(bytes.size()));
+                readback = file.good();
+            }
+            if (readback) {
+                const std::string pathString = path.string();
+                dxfRW reader(pathString.c_str());
+                readback = reader.read(&probe, true);
+            }
+        } else {
+            std::string ascii = output.str();
+            dxfRW reader("generated-sunstudy-hour-count-readback");
+            readback = reader.readAscii(&probe, true, ascii);
+        }
+        t.expect(readback && probe.storage.sunStudies.size() == 1u,
+                 "SUNSTUDY generated document typed readback succeeds");
+        if (probe.storage.sunStudies.size() == 1u) {
+            const DRW_SunStudy& parsed = probe.storage.sunStudies.front();
+            const bool datesMatch = parsed.m_dates.size() == study.m_dates.size()
+                && parsed.m_dates[0].m_julianDay
+                    == study.m_dates[0].m_julianDay
+                && parsed.m_dates[0].m_milliseconds
+                    == study.m_dates[0].m_milliseconds
+                && parsed.m_dates[1].m_julianDay
+                    == study.m_dates[1].m_julianDay
+                && parsed.m_dates[1].m_milliseconds
+                    == study.m_dates[1].m_milliseconds;
+            t.expect(datesMatch && parsed.m_hours == study.m_hours,
+                     "SUNSTUDY parser restores date and hour arrays");
+        }
+
+        std::ostringstream failedOutput;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1021;
+        failedOwner.binFile = binary;
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&failedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&failedOutput));
+        DRW_SunStudy invalid = study;
+        invalid.handle = 0x300u;
+        invalid.m_dates[0].m_milliseconds = 1;
+        const bool refusedSubsecond = !failedOwner.writeSunStudy(&invalid);
+        const bool preserved = failedOutput.str().empty();
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1021;
+        retryOwner.binFile = binary;
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        invalid.m_dates[0].m_milliseconds = 1000;
+        const bool retried = retryOwner.writeSunStudy(&invalid);
+        t.expect(refusedSubsecond && preserved && retried,
+                 "SUNSTUDY refuses lossy subsecond output and retries corrected data");
+    }
+}
+
 void testLightListReferenceRemapping(TestContext& t) {
     class LightListProbe final : public dx_iface {
     public:
@@ -22000,6 +22172,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testSceneObjectReferenceRemapping(focused);
         std::cout << "Scene-object reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--sunstudy-dxf-hour-count") {
+        TestContext focused;
+        testSunStudyDxfHourCount(focused);
+        std::cout << "SUNSTUDY DXF hour count: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

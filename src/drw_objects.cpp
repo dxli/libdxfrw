@@ -13213,13 +13213,14 @@ void DRW_SunStudy::reset() {
     m_dxfDateCountSeen = false;
     m_dxfHourCountSeen = false;
     m_dxfDateValuesRemaining = 0;
+    m_dxfHourValuesRemaining = 0;
     m_dxfDateValue = 0;
     m_dxfHasPendingDateValue = false;
 }
 
 bool DRW_SunStudy::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
-    // 90/91/290 are positional in SUNSTUDY: class version, date pairs, date
-    // count, hour count, and hour flags reuse the same group codes.
+    // Group 90 is positional for the class version and date pairs. Group 91
+    // counts the dates; group 73 counts the hour flags carried by group 290.
     const auto readShort = [&reader](std::int32_t& target) {
         const int value = reader->getInt32();
         if (value < std::numeric_limits<std::int16_t>::min()
@@ -13238,7 +13239,14 @@ bool DRW_SunStudy::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
                 m_dxfDateValue = value;
                 m_dxfHasPendingDateValue = true;
             } else {
-                m_dates.push_back({m_dxfDateValue, value});
+                const std::int64_t milliseconds =
+                    static_cast<std::int64_t>(value) * 1000;
+                if (value < 0
+                    || milliseconds
+                        > std::numeric_limits<std::int32_t>::max())
+                    return false;
+                m_dates.push_back({m_dxfDateValue,
+                    static_cast<std::int32_t>(milliseconds)});
                 m_dxfHasPendingDateValue = false;
             }
             --m_dxfDateValuesRemaining;
@@ -13270,33 +13278,37 @@ bool DRW_SunStudy::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         break;
     case 70:  if (!readShort(m_outputType)) return false; break;
     case 290:
-        if (m_outputType == 0 && m_seen290++ == 0
-            && !m_dxfDateCountSeen) {
+        if (m_outputType == 0 && m_seen290 == 0
+            && !m_dxfDateCountSeen && !m_dxfHourCountSeen) {
+            ++m_seen290;
             m_useSubset = (reader->getInt32() != 0);
         } else if (m_dxfHourCountSeen
-                   && static_cast<std::int32_t>(m_hours.size())
-                          < kMaxHourCount) {
+                   && m_dxfHourValuesRemaining > 0) {
             m_hours.push_back(reader->getInt32() != 0);
+            --m_dxfHourValuesRemaining;
         } else {
-            (void)reader->getInt32();
+            return false;
         }
         break;
     case 91: {
         const std::int32_t count = reader->getInt32();
-        if (!m_dxfDateCountSeen) {
-            if (count < 0 || count > kMaxDateCount)
-                return false;
-            m_dxfDateCountSeen = true;
-            m_dxfDateValuesRemaining = count * 2;
-            if (!DRW::reserve(m_dates, count))
-                return false;
-        } else if (!m_dxfHourCountSeen) {
-            if (count < 0 || count > kMaxHourCount)
-                return false;
-            m_dxfHourCountSeen = true;
-            if (!DRW::reserve(m_hours, count))
-                return false;
-        }
+        if (m_dxfDateCountSeen || count < 0 || count > kMaxDateCount)
+            return false;
+        m_dxfDateCountSeen = true;
+        m_dxfDateValuesRemaining = count * 2;
+        if (!DRW::reserve(m_dates, count))
+            return false;
+        break;
+    }
+    case 73: {
+        std::int32_t count = 0;
+        if (m_dxfHourCountSeen || !readShort(count)
+            || count < 0 || count > kMaxHourCount)
+            return false;
+        m_dxfHourCountSeen = true;
+        m_dxfHourValuesRemaining = count;
+        if (!DRW::reserve(m_hours, count))
+            return false;
         break;
     }
     case 291: m_selectDatesFromCalendar = (reader->getInt32() != 0); break;

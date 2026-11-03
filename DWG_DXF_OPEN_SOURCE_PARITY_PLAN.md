@@ -429,6 +429,14 @@ producer coverage and native plotting/scene semantics remain open; generated
 record-identity and reference round-trips are transport evidence only (see the [SUNSTUDY receipt](docs/research/p5-sunstudy-record-identity-remapping-2026-11-03.json),
 [scene-path receipt](docs/research/p5-scene-path-record-identity-remapping-2026-11-03.json),
 and [path-carrier receipt](docs/research/p5-pointpath-objectptr-record-identity-remapping-2026-11-03.json)).
+The standalone SUNSTUDY DXF codec now follows Autodesk's group roles: group 91
+counts dates, group 73 counts hour flags, and date group 90 values convert
+between whole seconds in DXF and milliseconds in the DWG model. Output refuses
+subsecond times that DXF cannot preserve. Generated ASCII/Binary controls cover
+exact counts, typed readback, atomic lossy-value refusal, and corrected
+fresh-writer retry ([wire receipt](docs/research/p5-sunstudy-dxf-date-hour-wire-2026-11-03.json)).
+Physical source-span/owner binding, adapter output, producer breadth, and native
+rendering remain unqualified.
 The adapter now explicitly refuses output when any retained SUNSTUDY record is
 present until source and reference closure are qualified, preventing silent
 loss; see the [callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json).

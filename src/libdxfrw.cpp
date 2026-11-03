@@ -34988,6 +34988,24 @@ bool dxfRW::writeLightList(DRW_LightList *ent) {
 bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
     if (!preflightTableEntry(ent) || writer == nullptr)
         return false;
+    if (ent->m_dates.size() > DRW_SunStudy::kMaxDateCount
+        || ent->m_hours.size() > DRW_SunStudy::kMaxHourCount
+        || ent->m_outputType < std::numeric_limits<std::int16_t>::min()
+        || ent->m_outputType > std::numeric_limits<std::int16_t>::max()
+        || ent->m_shadePlotType < std::numeric_limits<std::int16_t>::min()
+        || ent->m_shadePlotType > std::numeric_limits<std::int16_t>::max()
+        || ent->m_viewportCount < std::numeric_limits<std::int16_t>::min()
+        || ent->m_viewportCount > std::numeric_limits<std::int16_t>::max()
+        || ent->m_rowCount < std::numeric_limits<std::int16_t>::min()
+        || ent->m_rowCount > std::numeric_limits<std::int16_t>::max()
+        || ent->m_columnCount < std::numeric_limits<std::int16_t>::min()
+        || ent->m_columnCount > std::numeric_limits<std::int16_t>::max()
+        || !std::isfinite(ent->m_spacing))
+        return failDxfWrite();
+    for (const DRW_SunStudyDate& date : ent->m_dates) {
+        if (date.m_milliseconds < 0 || date.m_milliseconds % 1000 != 0)
+            return failDxfWrite();
+    }
     const auto emittedReference = [this](std::uint32_t source) {
         if (source == 0u)
             return 0u;
@@ -35049,7 +35067,7 @@ bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
     writer->writeInt32(91, static_cast<std::int32_t>(ent->m_dates.size()));
     for (const DRW_SunStudyDate& date : ent->m_dates) {
         writer->writeInt32(90, date.m_julianDay);
-        writer->writeInt32(90, date.m_milliseconds);
+        writer->writeInt32(90, date.m_milliseconds / 1000);
     }
     writer->writeBool(292, ent->m_selectRangeOfDates);
     if (ent->m_selectRangeOfDates) {
@@ -35057,7 +35075,7 @@ bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
         writer->writeInt32(94, ent->m_endTime);
         writer->writeInt32(95, ent->m_interval);
     }
-    writer->writeInt32(91, static_cast<std::int32_t>(ent->m_hours.size()));
+    writer->writeInt16(73, static_cast<std::int16_t>(ent->m_hours.size()));
     for (bool hour : ent->m_hours)
         writer->writeBool(290, hour);
     writer->writeInt16(74, ent->m_shadePlotType);

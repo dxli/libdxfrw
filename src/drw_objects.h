@@ -5024,6 +5024,8 @@ private:
 
 struct DRW_SunStudyDate {
   std::int32_t m_julianDay = 0;
+  // DWG stores milliseconds since midnight; Autodesk's DXF group 90 stores
+  // whole seconds, so subsecond values cannot be emitted without loss.
   std::int32_t m_milliseconds = 0;
 };
 
@@ -5058,7 +5060,8 @@ public:
       m_dxfRetainedTextBytes(o.m_dxfRetainedTextBytes),
       m_seen90(0), m_seen290(0),
       m_dxfDateCountSeen(false), m_dxfHourCountSeen(false),
-      m_dxfDateValuesRemaining(0), m_dxfDateValue(0),
+      m_dxfDateValuesRemaining(0), m_dxfHourValuesRemaining(0),
+      m_dxfDateValue(0),
       m_dxfHasPendingDateValue(false) {
     tType = DRW::SUNSTUDY;
   }
@@ -5095,6 +5098,7 @@ public:
       m_dxfDateCountSeen = false;
       m_dxfHourCountSeen = false;
       m_dxfDateValuesRemaining = 0;
+      m_dxfHourValuesRemaining = 0;
       m_dxfDateValue = 0;
       m_dxfHasPendingDateValue = false;
       m_dxfRetainedTextBytes = o.m_dxfRetainedTextBytes;
@@ -5145,6 +5149,7 @@ private:
   bool m_dxfDateCountSeen = false;
   bool m_dxfHourCountSeen = false;
   std::int32_t m_dxfDateValuesRemaining = 0;
+  std::int32_t m_dxfHourValuesRemaining = 0;
   std::int32_t m_dxfDateValue = 0;
   bool m_dxfHasPendingDateValue = false;
 };
