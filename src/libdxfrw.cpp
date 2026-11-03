@@ -33508,7 +33508,7 @@ bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
 }
 
 bool dxfRW::writeMotionPath(DRW_MotionPath *ent) {
-    if (!preflightTableEntry(ent))
+    if (!preflightTableEntry(ent) || writer == nullptr)
         return false;
     const auto emittedReference = [this](std::uint32_t source) {
         if (source == 0u)
@@ -33532,10 +33532,23 @@ bool dxfRW::writeMotionPath(DRW_MotionPath *ent) {
         || !isResolvedOptional(ent->m_targetPathHandle, targetPathHandle)
         || !isResolvedOptional(ent->m_viewTableHandle, viewTableHandle))
         return failDxfWrite();
+    const std::uint32_t sourceHandle = ent->handle;
+    std::uint32_t emittedHandle = sourceHandle == 0u
+        ? 0u : remapObjectHandle(sourceHandle);
+    if (sourceHandle != 0u
+        && (emittedHandle == 0u || emittedHandle == DRW::NoHandle
+            || isDxfFixedOutputHandle(emittedHandle)))
+        return failDxfWrite();
     RecordStateScope state(*this, ent);
+    if (sourceHandle == 0u) {
+        if (!allocateDxfHandle(emittedHandle))
+            return false;
+    } else if (!reserveHandle(emittedHandle)) {
+        return failDxfWrite();
+    }
     DxfWriterRecordScope record(*writer);
     writer->writeString(0, "MOTIONPATH");
-    writer->writeString(5, toHexStr(ent->handle));
+    writer->writeString(5, toHexStr(emittedHandle));
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
     if (m_writeError)
         return false;
@@ -33551,14 +33564,17 @@ bool dxfRW::writeMotionPath(DRW_MotionPath *ent) {
     writer->writeBool(290, ent->m_cornerDeceleration);
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    if (writer->hasWriteError() || !record.commit())
+    if (writer->hasWriteError() || !preflightDxfWrite()
+        || (sourceHandle != 0u
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit())
         return failDxfWrite();
     state.commit();
     return true;
 }
 
 bool dxfRW::writeCurvePath(DRW_CurvePath *ent) {
-    if (!preflightTableEntry(ent))
+    if (!preflightTableEntry(ent) || writer == nullptr)
         return false;
     const std::uint32_t entityHandle = ent->m_entityHandle == 0u
         ? 0u
@@ -33568,10 +33584,23 @@ bool dxfRW::writeCurvePath(DRW_CurvePath *ent) {
         && (ent->m_entityHandle == DRW::NoHandle
             || entityHandle == 0u || entityHandle == DRW::NoHandle))
         return failDxfWrite();
+    const std::uint32_t sourceHandle = ent->handle;
+    std::uint32_t emittedHandle = sourceHandle == 0u
+        ? 0u : remapObjectHandle(sourceHandle);
+    if (sourceHandle != 0u
+        && (emittedHandle == 0u || emittedHandle == DRW::NoHandle
+            || isDxfFixedOutputHandle(emittedHandle)))
+        return failDxfWrite();
     RecordStateScope state(*this, ent);
+    if (sourceHandle == 0u) {
+        if (!allocateDxfHandle(emittedHandle))
+            return false;
+    } else if (!reserveHandle(emittedHandle)) {
+        return failDxfWrite();
+    }
     DxfWriterRecordScope record(*writer);
     writer->writeString(0, "ACDBCURVEPATH");
-    writer->writeString(5, toHexStr(ent->handle));
+    writer->writeString(5, toHexStr(emittedHandle));
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
     if (m_writeError)
         return false;
@@ -33582,7 +33611,10 @@ bool dxfRW::writeCurvePath(DRW_CurvePath *ent) {
     writer->writeString(340, toHexStr(entityHandle));
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    if (writer->hasWriteError() || !record.commit())
+    if (writer->hasWriteError() || !preflightDxfWrite()
+        || (sourceHandle != 0u
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit())
         return failDxfWrite();
     state.commit();
     return true;

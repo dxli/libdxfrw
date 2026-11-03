@@ -2978,7 +2978,8 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
         {0x700u, 0xA00u}, {0x701u, 0xA01u}, {0x702u, 0xA02u},
         {0x703u, 0xA03u},
         {0x704u, 0xA04u}, {0x705u, 0xA05u}, {0x706u, 0xA06u},
-        {0x707u, 0xA07u}, {0x708u, 0xA08u}};
+        {0x707u, 0xA07u}, {0x708u, 0xA08u},
+        {0x709u, 0xA09u}, {0x70Au, 0xA0Au}};
     const auto resolverValue = [](std::uint32_t source) {
         switch (source) {
         case 0x701u: return std::uint32_t{0xB01u};
@@ -3016,10 +3017,12 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
             sunStudy.m_textStyleHandle = 0x704u;
             DRW_SunStudy generatedSunStudy;
             DRW_MotionPath motionPath;
+            motionPath.handle = 0x709u;
             motionPath.m_cameraPathHandle = 0x705u;
             motionPath.m_targetPathHandle = 0x706u;
             motionPath.m_viewTableHandle = 0x707u;
             DRW_CurvePath curvePath;
+            curvePath.handle = 0x70Au;
             curvePath.m_entityHandle = 0x708u;
 
             const bool wrote = owner.writeSunStudy(&sunStudy)
@@ -3040,6 +3043,8 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
             std::map<std::string, std::vector<std::pair<int, std::uint32_t>>>
                 observed;
             std::vector<std::uint32_t> sunStudyIdentities;
+            std::uint32_t motionPathIdentity = 0u;
+            std::uint32_t curvePathIdentity = 0u;
             std::string recordName;
             bool ended = false;
             int code = 0;
@@ -3052,6 +3057,10 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
                     }
                 } else if (recordName == "SUNSTUDY" && code == 5) {
                     sunStudyIdentities.push_back(reader->getHandleString());
+                } else if (recordName == "MOTIONPATH" && code == 5) {
+                    motionPathIdentity = reader->getHandleString();
+                } else if (recordName == "ACDBCURVEPATH" && code == 5) {
+                    curvePathIdentity = reader->getHandleString();
                 } else if ((recordName == "SUNSTUDY"
                             && code >= 340 && code <= 343)
                            || (recordName == "MOTIONPATH" && code == 340)
@@ -3079,6 +3088,8 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
             t.expect(ended && sunStudyIdentities.size() == 2u
                          && sunStudyIdentities[0] == 0xA00u
                          && sunStudyIdentities[1] != 0u
+                         && motionPathIdentity == 0xA09u
+                         && curvePathIdentity == 0xA0Au
                          && observed["SUNSTUDY"] == sunStudyExpected
                          && observed["MOTIONPATH"] == motionPathExpected
                          && observed["ACDBCURVEPATH"] == curvePathExpected,
@@ -3118,11 +3129,13 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
             } else if (unresolved <= 0x707u) {
                 DRW_MotionPath motionPath;
                 motionPath.m_cameraPathHandle = 0x705u;
+                motionPath.handle = 0x709u;
                 motionPath.m_targetPathHandle = 0x706u;
                 motionPath.m_viewTableHandle = 0x707u;
                 failedAsExpected = !failedOwner.writeMotionPath(&motionPath);
             } else {
                 DRW_CurvePath curvePath;
+                curvePath.handle = 0x70Au;
                 curvePath.m_entityHandle = 0x708u;
                 failedAsExpected = !failedOwner.writeCurvePath(&curvePath);
             }
@@ -3151,12 +3164,14 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
                 retrySucceeded = retryOwner.writeSunStudy(&sunStudy);
             } else if (unresolved <= 0x707u) {
                 DRW_MotionPath motionPath;
+                motionPath.handle = 0x709u;
                 motionPath.m_cameraPathHandle = 0x705u;
                 motionPath.m_targetPathHandle = 0x706u;
                 motionPath.m_viewTableHandle = 0x707u;
                 retrySucceeded = retryOwner.writeMotionPath(&motionPath);
             } else {
                 DRW_CurvePath curvePath;
+                curvePath.handle = 0x70Au;
                 curvePath.m_entityHandle = 0x708u;
                 retrySucceeded = retryOwner.writeCurvePath(&curvePath);
             }
