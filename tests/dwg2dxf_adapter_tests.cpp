@@ -21130,6 +21130,106 @@ bool dwgProxyEntityOutputGate() {
         || dxfData.mBlock->rawEntities.front().record.name
             != "ACAD_PROXY_ENTITY")
         return fail("DXF proxy raw-carrier replay path was changed");
+
+    // A BLOCK identity encountered before the proxy that references its
+    // colliding typed entity must still participate in the completed source
+    // namespace inventory.
+    for (const bool binary : {false, true}) {
+        dx_data collisionData;
+        collisionData.sourceFormat = dx_source_format::DWG;
+        collisionData.sourceVersion = DRW::AC1024;
+        seedClassCoverage(collisionData);
+        dx_iface collisionAdapter;
+        collisionAdapter.cData = &collisionData;
+        collisionAdapter.currentBlock = collisionData.mBlock;
+
+        DRW_Block earlierBlock;
+        earlierBlock.name = "EARLIER_SOURCE_BLOCK";
+        earlierBlock.handle = 0x456u;
+        earlierBlock.parentHandle = 0x900u;
+        collisionAdapter.addBlock(earlierBlock);
+        DRW_Line collidingTarget;
+        collidingTarget.handle = earlierBlock.handle;
+        collidingTarget.parentHandle = earlierBlock.parentHandle;
+        collidingTarget.basePoint = DRW_Coord{1.0, 2.0, 3.0};
+        collidingTarget.secPoint = DRW_Coord{4.0, 5.0, 6.0};
+        collisionAdapter.addLine(collidingTarget);
+        DRW_Block earlierEnd = earlierBlock;
+        earlierEnd.handle = 0x457u;
+        earlierEnd.setIsEnd(true);
+        collisionAdapter.addBlockEnd(earlierEnd);
+        collisionAdapter.endBlock();
+
+        DRW_Block laterBlock;
+        laterBlock.name = "LATER_PROXY_BLOCK";
+        laterBlock.handle = 0x800u;
+        laterBlock.parentHandle = 0x901u;
+        collisionAdapter.addBlock(laterBlock);
+        DRW_ProxyEntity laterProxy = makeProxy();
+        laterProxy.handle = 0x801u;
+        laterProxy.parentHandle = laterBlock.parentHandle;
+        DRW_ProxyObjectIdRef forwardReference;
+        forwardReference.m_handleCode = 4u;
+        forwardReference.m_dxfCode = 330;
+        forwardReference.m_handle = collidingTarget.handle;
+        forwardReference.m_rawHandle = collidingTarget.handle;
+        laterProxy.m_objectIdRefs.push_back(forwardReference);
+        collisionAdapter.addProxyEntity(laterProxy);
+        DRW_Block laterEnd = laterBlock;
+        laterEnd.handle = 0x802u;
+        laterEnd.setIsEnd(true);
+        collisionAdapter.addBlockEnd(laterEnd);
+        collisionAdapter.endBlock();
+
+        DRW_Block_Record earlierRecord;
+        earlierRecord.name = earlierBlock.name;
+        earlierRecord.handle = earlierBlock.parentHandle;
+        collisionAdapter.addBlockRecord(earlierRecord);
+        DRW_Block_Record laterRecord;
+        laterRecord.name = laterBlock.name;
+        laterRecord.handle = laterBlock.parentHandle;
+        collisionAdapter.addBlockRecord(laterRecord);
+
+        const auto collisionPath = std::filesystem::temp_directory_path()
+            / ("libdxfrw-proxy-prior-block-collision-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct CollisionCleanup {
+            std::filesystem::path path;
+            ~CollisionCleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } collisionCleanup{collisionPath};
+        const std::string collisionSentinel =
+            "PROXY_PRIOR_BLOCK_COLLISION_DESTINATION\n";
+        {
+            std::ofstream existing(collisionPath, std::ios::binary);
+            existing << collisionSentinel;
+            if (!existing)
+                return fail("could not create prior-block collision sentinel");
+        }
+        std::ostringstream collisionDiagnostics;
+        bool collisionExported = false;
+        {
+            CerrRedirect redirect(collisionDiagnostics);
+            collisionExported = collisionAdapter.fileExport(
+                collisionPath.string(), DRW::AC1024, binary,
+                &collisionData, false, true);
+        }
+        if (collisionExported
+            || collisionDiagnostics.str().find(
+                   "proxy entity object-ID graph has a missing")
+                == std::string::npos)
+            return fail("proxy reference escaped an earlier BLOCK identity collision");
+        {
+            std::ifstream previous(collisionPath, std::ios::binary);
+            if (std::string{std::istreambuf_iterator<char>(previous), {}}
+                != collisionSentinel)
+                return fail("prior-block identity collision changed the destination");
+        }
+    }
     return true;
 }
 

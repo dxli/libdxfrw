@@ -71411,14 +71411,6 @@ bool dx_iface::planDwgProxyEntityObjectIds() {
         for (const dx_ifaceBlock* block : cData->blocks) {
             if (!inspectEntities(block))
                 return false;
-            if (block == nullptr)
-                continue;
-            for (std::uint32_t handle : {block->handle,
-                    block->hasEndBlockData ? block->endBlockData.handle : 0u}) {
-                if (handle != 0u && handle != DRW::NoHandle
-                    && referencedHandles.count(handle) != 0u)
-                    nonEntityCollisions.insert(handle);
-            }
         }
         const auto inspectRawEntities = [&](const dx_ifaceBlock* block) {
             if (block == nullptr)
@@ -71439,14 +71431,28 @@ bool dx_iface::planDwgProxyEntityObjectIds() {
             if (!inspectRawEntities(block))
                 return false;
         }
-        if (cData->mBlock != nullptr) {
-            for (std::uint32_t handle : {cData->mBlock->handle,
-                    cData->mBlock->hasEndBlockData
-                        ? cData->mBlock->endBlockData.handle : 0u}) {
+        // Check BLOCK/ENDBLK identities only after every proxy has contributed
+        // its references. A block encountered before the proxy that references
+        // it must not escape the source-namespace collision check.
+        const auto inspectBlockIdentities = [&](const dx_ifaceBlock* block) {
+            if (block == nullptr)
+                return true;
+            for (const std::uint32_t handle : {
+                     block->handle,
+                     block->hasEndBlockData ? block->endBlockData.handle : 0u}) {
+                if (++inventoryRecords > maxInventoryRecords)
+                    return false;
                 if (handle != 0u && handle != DRW::NoHandle
                     && referencedHandles.count(handle) != 0u)
                     nonEntityCollisions.insert(handle);
             }
+            return true;
+        };
+        if (!inspectBlockIdentities(cData->mBlock))
+            return false;
+        for (const dx_ifaceBlock* block : cData->blocks) {
+            if (!inspectBlockIdentities(block))
+                return false;
         }
 
         const auto inspectHandles = [&](const auto& records) {

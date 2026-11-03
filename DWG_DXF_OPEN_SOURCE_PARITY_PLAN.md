@@ -140,11 +140,15 @@ collisions, preallocates each target handle, and passes only that closed map to
 the proxy-scoped resolver. The collision inventory also covers retained
 standard/raster/plot-settings/opaque frame maps, opaque source/output identity
 sets, raster/standard ordinal and location indexes, and ACDS-history frames.
+BLOCK and ENDBLK source handles are checked only after the full proxy reference
+inventory is known, so a proxy in a later named block cannot bypass a
+collision with an earlier block identity.
 Finalization proves that every planned target and proxy was written once with
 the expected type, section, owner and handle. Generated ASCII/Binary coverage
 exercises missing targets, duplicate typed handles, collisions across those
 source namespaces, unsupported owner-role edges,
 preallocated targets omitted at emission, post-plan proxy-reference mutation,
+an earlier BLOCK identity colliding with a target referenced by a later block,
 atomic destination preservation, same-adapter retry and typed readback
 ([adapter graph receipt](docs/research/p4-dwg-proxy-entity-object-id-adapter-graph-closure-2026-11-02.json)).
 The admitted adapter profile is deliberately limited to pointer codes 4/5 and

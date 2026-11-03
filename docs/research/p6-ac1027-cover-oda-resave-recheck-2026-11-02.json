@@ -73,5 +73,14 @@
       "result": "Fresh invocation at 2026-11-02 09:55:14 EST aborted with SIGABRT after PasteBoard clipboard and find errors (-4960), followed by an invalid hiservices XPC reply. No conversion was run and no output was produced."
     },
     "qualificationEffect": "No change to the prior GUI conversion receipt. The currently installed executable cannot be used to reproduce or extend it; do not bypass signature verification."
+  },
+  "postUnlockSessionCheck": {
+    "date": "2026-11-02",
+    "time": "21:56:23 EST",
+    "userStateUpdate": "User reported unlocking the Mac session again.",
+    "signatureCheckCommand": "codesign --verify --strict --verbose=2 /Applications/ODAFileConverter.app",
+    "signatureCheckResult": "FAIL: invalid signature (code or signature have been modified), arm64.",
+    "converterInvocation": "Not run because the strict signature gate failed.",
+    "qualificationEffect": "The unlocked session does not alter the installed bundle integrity result. No conversion was attempted and no support claim changed."
   }
 }
