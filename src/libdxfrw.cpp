@@ -5279,6 +5279,12 @@ bool dxfRW::writeEntity(DRW_Entity *ent, bool captureSourceHandle,
                         std::uint32_t ownerOverride) {
     if (!preflightEntity(ent))
         return false;
+    const auto emittedReference = [this](std::uint32_t source) {
+        if (source == 0u)
+            return 0u;
+        return m_referenceResolver ? resolveReference(source)
+                                   : remapObjectHandle(source);
+    };
     // On entry, ent->handle is a SOURCE-handle key seeded by the filter from
     // RS_Entity::sourceHandle() (getEntityAttributes). A unique source may
     // already have a planned handle so BLOCK_RECORD {BLKREFS} can refer to it.
@@ -5494,7 +5500,7 @@ bool dxfRW::writeEntity(DRW_Entity *ent, bool captureSourceHandle,
     // DXF2007); emitting it at R2004 is non-conformant.
     if (version > DRW::AC1018 && ent->material != DRW::MaterialByLayer) {
         writer->writeUtf8String(347,
-                                toHexStr(remapObjectHandle(ent->material)));
+                                toHexStr(emittedReference(ent->material)));
     }
     const auto* styleViewport = ent->eType == DRW::VIEWPORT
         ? dynamic_cast<const DRW_Viewport*>(ent) : nullptr;
@@ -5504,7 +5510,8 @@ bool dxfRW::writeEntity(DRW_Entity *ent, bool captureSourceHandle,
     if (version > DRW::AC1018 && (ent->fullVisualStyleHandle != 0
             || (styleViewport != nullptr && styleViewport->visualStyleHandle != 0))) {
         writer->writeUtf8String(348,
-                                toHexStr(remapObjectHandle(ent->fullVisualStyleHandle)));
+                                toHexStr(emittedReference(
+                                    ent->fullVisualStyleHandle)));
     }
     if (version > DRW::AC1014) {
         writer->writeInt16(370, DRW_LW_Conv::lineWidth2dxfInt(ent->lWeight));
@@ -5512,7 +5519,8 @@ bool dxfRW::writeEntity(DRW_Entity *ent, bool captureSourceHandle,
     // Plot-style handle (390) is likewise R2007+ (ezdxf acdb_entity:390 ->
     // DXF2007).
     if (version > DRW::AC1018 && ent->plotStyle != DRW::DefaultPlotStyle) {
-        writer->writeUtf8String(390, toHexStr(ent->plotStyle));
+        writer->writeUtf8String(390, toHexStr(emittedReference(
+            static_cast<std::uint32_t>(ent->plotStyle))));
     }
     if (version > DRW::AC1015 && ent->transparency != DRW::Opaque) {
         writer->writeInt32(440, ent->transparency);

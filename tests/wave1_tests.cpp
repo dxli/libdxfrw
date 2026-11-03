@@ -2536,6 +2536,78 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
     }
 }
 
+void testEntityReferenceRemapping(TestContext& t) {
+    const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
+        {0x801u, 0xA81u}, {0x802u, 0xA82u}, {0x803u, 0xA83u}};
+    const auto resolverValue = [](std::uint32_t source) {
+        switch (source) {
+        case 0x801u: return std::uint32_t{0xB81u};
+        case 0x802u: return std::uint32_t{0xB82u};
+        case 0x803u: return std::uint32_t{0xB83u};
+        default: return source;
+        }
+    };
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap(sourceToRemapped);
+            if (useResolver)
+                owner.setReferenceResolver(resolverValue);
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_Point point;
+            point.material = 0x801u;
+            point.fullVisualStyleHandle = 0x802u;
+            point.plotStyle = static_cast<int>(0x803u);
+            const bool wrote = owner.writePoint(&point)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote, "common entity references serialize");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::vector<std::pair<int, std::uint32_t>> observed;
+            std::string recordName;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (recordName == "POINT"
+                           && (code == 347 || code == 348 || code == 390)) {
+                    observed.emplace_back(code, reader->getHandleString());
+                }
+            }
+            const std::vector<std::pair<int, std::uint32_t>> expected =
+                useResolver
+                    ? std::vector<std::pair<int, std::uint32_t>>{
+                          {347, 0xB81u}, {348, 0xB82u}, {390, 0xB83u}}
+                    : std::vector<std::pair<int, std::uint32_t>>{
+                          {347, 0xA81u}, {348, 0xA82u}, {390, 0xA83u}};
+            t.expect(ended && observed == expected,
+                     useResolver
+                         ? "common entity fields emit final resolver identities"
+                         : "common entity fields emit source-handle remaps");
+        }
+    }
+}
+
 void testDimensionAssociationGraphClosure(TestContext& t) {
     const auto readAssociationTargets = [&t](const std::string& bytes,
                                               bool binary,
@@ -16253,6 +16325,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testSceneObjectReferenceRemapping(focused);
         std::cout << "Scene-object reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--entity-reference-remapping") {
+        TestContext focused;
+        testEntityReferenceRemapping(focused);
+        std::cout << "Common entity reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
