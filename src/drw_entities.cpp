@@ -9535,6 +9535,7 @@ bool DRW_OleFrame::encodeDwg(DRW::Version version, dwgBufferW *buf,
 
 void DRW_Light::resetDwgState() {
     DRW_Entity::reset();
+    m_dxfRetainedNameBytes = 0u;
     m_classVersion = 0;
     m_name.clear();
     m_type = 0;
@@ -9575,6 +9576,104 @@ void DRW_Light::resetDwgState() {
     m_extendedLightLength = 0.0;
     m_extendedLightWidth = 0.0;
     m_extendedLightRadius = 0.0;
+}
+
+bool DRW_Light::parseCode(int code,
+                          const std::unique_ptr<dxfReader>& reader) {
+    int value = 0;
+    const auto readFiniteDouble = [&reader](double& target) {
+        target = reader->getDouble();
+        return std::isfinite(target);
+    };
+    try {
+    switch (code) {
+    case 90:
+        if (!readDxfIntInRange(reader, 0,
+                               std::numeric_limits<int>::max(), value))
+            return false;
+        m_classVersion = static_cast<std::uint32_t>(value);
+        return true;
+    case 1:
+        return replaceDxfRetainedStringField(
+            reader, m_dxfRetainedNameBytes, m_name,
+            reader->getUtf8String());
+    case 70:
+        if (!readDxfIntInRange(reader, 0,
+                               std::numeric_limits<int>::max(), value))
+            return false;
+        m_type = static_cast<std::uint32_t>(value);
+        return true;
+    case 290:
+        return readDxfBool(reader, m_status);
+    case 63:
+        if (!readDxfIntInRange(reader, 0, 256, value))
+            return false;
+        m_color = static_cast<std::uint32_t>(value);
+        return true;
+    case 291:
+        return readDxfBool(reader, m_plotGlyph);
+    case 40:
+        return readFiniteDouble(m_intensity);
+    case 10:
+        return readFiniteDouble(m_position.x);
+    case 20:
+        return readFiniteDouble(m_position.y);
+    case 30:
+        return readFiniteDouble(m_position.z);
+    case 11:
+        return readFiniteDouble(m_target.x);
+    case 21:
+        return readFiniteDouble(m_target.y);
+    case 31:
+        return readFiniteDouble(m_target.z);
+    case 72:
+        if (!readDxfIntInRange(reader, 0,
+                               std::numeric_limits<int>::max(), value))
+            return false;
+        m_attenuationType = static_cast<std::uint32_t>(value);
+        return true;
+    case 292:
+        return readDxfBool(reader, m_useAttenuationLimits);
+    case 41:
+        return readFiniteDouble(m_attenuationStartLimit);
+    case 42:
+        return readFiniteDouble(m_attenuationEndLimit);
+    case 50:
+        return readFiniteDouble(m_hotspotAngle);
+    case 51:
+        return readFiniteDouble(m_falloffAngle);
+    case 293:
+        return readDxfBool(reader, m_castShadows);
+    case 73:
+        if (!readDxfIntInRange(reader, 0,
+                               std::numeric_limits<int>::max(), value))
+            return false;
+        m_shadowType = static_cast<std::uint32_t>(value);
+        return true;
+    case 91:
+        if (!readDxfIntInRange(reader, 0,
+                               std::numeric_limits<std::uint16_t>::max(),
+                               value))
+            return false;
+        m_shadowMapSize = static_cast<std::uint16_t>(value);
+        return true;
+    case 280:
+        if (!readDxfIntInRange(reader, 0,
+                               std::numeric_limits<std::uint8_t>::max(),
+                               value))
+            return false;
+        m_shadowMapSoftness = static_cast<std::uint8_t>(value);
+        return true;
+    case 421:
+        // LIGHT's color payload mapping is not qualified. Refuse the record
+        // instead of silently dropping a value that the writer cannot prove.
+        return false;
+    default:
+        return DRW_Entity::parseCode(code, reader);
+    }
+    } catch (...) {
+        return false;
+    }
 }
 
 bool DRW_Light::parseDwg(DRW::Version v, dwgBuffer *buf, std::uint32_t bs){

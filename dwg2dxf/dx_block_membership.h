@@ -102,7 +102,7 @@ inline bool callbackName(DRW_DxfBlockCallback callback,std::string_view name) no
     case C::TableSource:case C::addTable:return equal(name,"ACAD_TABLE");
     DX_MEMBER_NAME(addTrace,"TRACE");DX_MEMBER_NAME(add3dFace,"3DFACE");
     DX_MEMBER_NAME(addSolid,"SOLID");DX_MEMBER_NAME(addMText,"MTEXT");DX_MEMBER_NAME(addTolerance,"TOLERANCE");
-    DX_MEMBER_NAME(addCamera,"CAMERA");DX_MEMBER_NAME(addLeader,"LEADER");DX_MEMBER_NAME(addHatch,"HATCH");
+    DX_MEMBER_NAME(addCamera,"CAMERA");DX_MEMBER_NAME(addLight,"LIGHT");DX_MEMBER_NAME(addLeader,"LEADER");DX_MEMBER_NAME(addHatch,"HATCH");
     DX_MEMBER_NAME(addMPolygon,"MPOLYGON");DX_MEMBER_NAME(addViewport,"VIEWPORT");DX_MEMBER_NAME(addImage,"IMAGE");
     DX_MEMBER_NAME(addWipeout,"WIPEOUT");DX_MEMBER_NAME(addPointCloud,"POINTCLOUD");DX_MEMBER_NAME(addPointCloudEx,"POINTCLOUDEX");
     DX_MEMBER_NAME(addNavisworksModel,"NAVISWORKSMODEL");DX_MEMBER_NAME(addMLeader,"MULTILEADER");

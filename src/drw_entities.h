@@ -1483,6 +1483,10 @@ public:
     std::uint8_t m_colorDwgFlags = 0;
     std::uint16_t m_colorDwgIndex = 0;
     bool m_colorDwgMetadataPresent = false;
+private:
+    std::size_t m_dxfRetainedNameBytes = 0u;
+public:
+    bool parseCode(int code, const std::unique_ptr<dxfReader>& reader) override;
 };
 
 //! CAMERA entity shell. LibreCAD does not render cameras, but preserves the

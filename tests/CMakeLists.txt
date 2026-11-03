@@ -1157,6 +1157,10 @@ add_test(NAME dwg2dxf_point_cloud_adapter_transport
 set_tests_properties(dwg2dxf_point_cloud_adapter_transport PROPERTIES
     LABELS "fast;dxf;adapter;entities;pointcloud;navisworks;transaction"
     TIMEOUT 20)
+add_test(NAME dwg2dxf_light_adapter_transport
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --light-adapter-transport)
+set_tests_properties(dwg2dxf_light_adapter_transport PROPERTIES
+    LABELS "fast;dxf;adapter;entities;light;transaction" TIMEOUT 15)
 add_test(NAME dwg2dxf_dictionary_default_typed_capture_limits
     COMMAND libdxfrw_dwg2dxf_adapter_tests
         --dictionary-default-typed-capture-limits)

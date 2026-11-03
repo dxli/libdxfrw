@@ -1069,7 +1069,7 @@ enum class DRW_DxfBlockCallback : std::uint8_t {
   addDimDiametric,addDimAngular,addDimAngular3P,addDimOrdinate,addDimArc,
   addLeader,addHatch,addMPolygon,addViewport,addImage,addWipeout,addPointCloud,
   addPointCloudEx,addNavisworksModel,addSurface,addMLeader,addModelerGeometry,
-  addRawDxfEntity,AttdefSource,TableSource,Count
+  addRawDxfEntity,AttdefSource,TableSource,addLight,Count
 };
 struct DRW_DxfBlockDispatch {
   DRW_DxfPhysicalRecordSpan begin,end;
@@ -1154,7 +1154,7 @@ enum class DRW_DxfEntitiesCallback : std::uint8_t {
   addDimDiametric,addDimAngular,addDimAngular3P,addDimOrdinate,addDimArc,
   addLeader,addHatch,addMPolygon,addViewport,addImage,addWipeout,addPointCloud,
   addPointCloudEx,addNavisworksModel,addSurface,addMLeader,addModelerGeometry,
-  addRawDxfEntity,TableSource,AttdefSource,Count
+  addRawDxfEntity,TableSource,AttdefSource,addLight,Count
 };
 struct DRW_DxfEntitiesDeliveryEvent {
   enum class Origin : std::uint8_t {Parser,SourceObserver,ProxyRendering};

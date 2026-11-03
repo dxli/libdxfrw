@@ -1496,6 +1496,7 @@ public:
     bool processText();
     bool processTolerance();
     bool processCamera();
+    bool processLight();
     bool processGeoPositionMarker();
     bool processSectionObject();
     bool processMText();

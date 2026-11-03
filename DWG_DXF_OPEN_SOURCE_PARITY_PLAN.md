@@ -507,6 +507,16 @@ eligible reader. The exact package and environment result are in the
   source-bound object graph providers and output bindings qualify them.
   This does not close external-definition graph, asset loading, native 3D
   consumer, or broader BLOCK callback qualification.
+  The local adapter now retains LIGHT callbacks through modelspace and named-
+  BLOCK delivery, with bounded DXF read/write support for the documented core
+  fields. Both callback-delivery wrappers forward LIGHT instead of dropping
+  it. Generated ASCII/Binary controls verify pre-AC1021 and unrepresented
+  metadata refusal, destination preservation, corrected-target retry, and
+  typed readback in both scopes;
+  see the [LIGHT adapter receipt](docs/research/p8-light-adapter-transport-2026-11-02.json).
+  This establishes generated transport only, not physical producer breadth or
+  native lighting/rendering semantics; LIGHT truecolor and photometric fields
+  remain refused pending a qualified mapping.
   The limited macOS ARM64
   2D open/insert profile is recorded in
   [the FreeCAD route receipt](docs/research/p8-macos-freecad-dwg2dxf-open-insert-qualification-2026-11-01.json);

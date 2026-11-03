@@ -2187,6 +2187,7 @@ public:
     DRW_BLOCK_EVENT_VALUE(addAttDef, DRW_Attdef)
     DRW_BLOCK_EVENT_VALUE(addTolerance, DRW_Tolerance)
     DRW_BLOCK_EVENT_VALUE(addCamera, DRW_Camera)
+    DRW_BLOCK_EVENT_VALUE(addLight, DRW_Light)
     DRW_BLOCK_EVENT_VALUE(addGeoPositionMarker, DRW_GeoPositionMarker)
     DRW_BLOCK_EVENT_VALUE(addSectionObject, DRW_SectionObject)
     DRW_BLOCK_EVENT_POINTER(addDimAlign, DRW_DimAligned)
@@ -18218,6 +18219,8 @@ bool dxfRW::processEntities(bool isblock) {
             processed = processRText();
         } else if (dxfKeywordEquals(nextentity, "CAMERA")) {
             processed = processCamera();
+        } else if (dxfKeywordEquals(nextentity, "LIGHT")) {
+            processed = processLight();
         } else if (dxfKeywordEquals(nextentity, "GEOPOSITIONMARKER")
                    || dxfKeywordEquals(nextentity, "POSITIONMARKER")) {
             processed = processGeoPositionMarker();
@@ -19418,6 +19421,28 @@ bool dxfRW::processCamera() {
             return true;
         }
         if (!camera.parseCode(code, reader))
+            return setError(DRW::BAD_CODE_PARSED);
+    }
+    return setError(DRW::BAD_READ_ENTITIES);
+}
+
+// LIGHT's documented AcDbLight fields are retained for metadata consumers;
+// LibreCAD itself does not render this entity.
+bool dxfRW::processLight() {
+    DRW_DBG("dxfRW::processLight");
+    int code;
+    DRW_Light light;
+    while (reader->readRec(&code)) {
+        DRW_DBG(code); DRW_DBG("\n");
+        if (code == 0) {
+            if (setEntityBoundary(code) == DxfEntityBoundary::Error)
+                return setError(DRW::BAD_READ_ENTITIES);
+            if (!acceptEntityCallbackBoundary())
+                return setError(DRW::BAD_READ_ENTITIES);
+            iface->addLight(light);
+            return true;
+        }
+        if (!light.parseCode(code, reader))
             return setError(DRW::BAD_CODE_PARSED);
     }
     return setError(DRW::BAD_READ_ENTITIES);

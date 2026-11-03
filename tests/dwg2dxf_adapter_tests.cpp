@@ -20232,6 +20232,190 @@ bool pointCloudAndNavisworksAdapterTransport() {
     return true;
 }
 
+bool lightAdapterTransport() {
+    for (const bool binary : {false, true}) {
+        dx_data data;
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        DRW_Light source;
+        source.m_classVersion = 2u;
+        source.m_name = "LOCAL_LIGHT";
+        source.m_type = 2u;
+        source.m_status = true;
+        source.m_color = 7u;
+        source.m_plotGlyph = true;
+        source.m_intensity = 2.5;
+        source.m_position = DRW_Coord{1.0, 2.0, 3.0};
+        source.m_target = DRW_Coord{4.0, 5.0, 6.0};
+        source.m_attenuationType = 1u;
+        source.m_useAttenuationLimits = true;
+        source.m_attenuationStartLimit = 0.25;
+        source.m_attenuationEndLimit = 12.5;
+        source.m_hotspotAngle = 0.3;
+        source.m_falloffAngle = 0.8;
+        source.m_castShadows = true;
+        source.m_shadowType = 1u;
+        source.m_shadowMapSize = 256u;
+        source.m_shadowMapSoftness = 4u;
+        adapter.addLight(source);
+        if (data.mBlock == nullptr || data.mBlock->ent.size() != 1u
+            || data.typedEntityCaptureFailed)
+            return fail("LIGHT callback was not retained");
+
+        const auto path = std::filesystem::temp_directory_path()
+            / ("libdxfrw-light-adapter-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        if (std::filesystem::exists(path))
+            return fail("LIGHT adapter output path unexpectedly exists");
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{path};
+        const std::string sentinel = "LIGHT_ADAPTER_DESTINATION\n";
+        {
+            std::ofstream existing(path, std::ios::binary);
+            existing << sentinel;
+            if (!existing)
+                return fail("could not create LIGHT destination sentinel");
+        }
+        if (adapter.fileExport(path.string(), DRW::AC1018, binary,
+                               &data, false, false))
+            return fail("LIGHT was emitted below its writer target floor");
+        {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail("unsupported LIGHT target changed the destination");
+        }
+        auto* retained = dynamic_cast<DRW_Light*>(data.mBlock->ent.front());
+        if (retained == nullptr)
+            return fail("retained LIGHT had the wrong runtime type");
+        retained->m_colorRgb = 0x123456;
+        if (adapter.fileExport(path.string(), DRW::AC1021, binary,
+                               &data, false, false))
+            return fail("LIGHT with unqualified truecolor was emitted");
+        {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail("unqualified LIGHT color changed the destination");
+        }
+        retained->m_colorRgb = -1;
+        retained->m_hasPhotometricData = true;
+        if (adapter.fileExport(path.string(), DRW::AC1021, binary,
+                               &data, false, false))
+            return fail("LIGHT with unrepresented photometric data was emitted");
+        {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail("unrepresented LIGHT fields changed the destination");
+        }
+        retained->m_hasPhotometricData = false;
+        if (!adapter.fileExport(path.string(), DRW::AC1021, binary,
+                                &data, false, false))
+            return fail("LIGHT corrected-target retry failed");
+
+        dx_data readback;
+        dx_iface reader;
+        if (!reader.fileImport(path.string(), &readback, false))
+            return fail("LIGHT output did not read back");
+        if (readback.mBlock == nullptr)
+            return fail("LIGHT readback did not create model space");
+        if (readback.mBlock->ent.size() != 1u) {
+            return fail("LIGHT readback entity count was "
+                        + std::to_string(readback.mBlock->ent.size()));
+        }
+        const auto* actual = dynamic_cast<const DRW_Light*>(
+            readback.mBlock->ent.front());
+        if (actual == nullptr || actual->eType != DRW::LIGHT
+            || actual->m_classVersion != 2u
+            || actual->m_name != "LOCAL_LIGHT" || actual->m_type != 2u
+            || !actual->m_status || actual->m_color != 7u
+            || !actual->m_plotGlyph || actual->m_intensity != 2.5
+            || actual->m_position.x != 1.0 || actual->m_position.z != 3.0
+            || actual->m_target.y != 5.0 || actual->m_target.z != 6.0
+            || actual->m_attenuationType != 1u
+            || !actual->m_useAttenuationLimits
+            || actual->m_attenuationStartLimit != 0.25
+            || actual->m_attenuationEndLimit != 12.5
+            || actual->m_hotspotAngle != 0.3
+            || actual->m_falloffAngle != 0.8
+            || !actual->m_castShadows || actual->m_shadowType != 1u
+            || actual->m_shadowMapSize != 256u
+            || actual->m_shadowMapSoftness != 4u)
+            return fail("LIGHT modeled fields changed on readback");
+        if (!binary) {
+            std::ifstream input(path, std::ios::binary);
+            std::string bytes{std::istreambuf_iterator<char>(input), {}};
+            const std::size_t lightStart = bytes.find("AcDbLight");
+            const std::size_t colorIndex = lightStart == std::string::npos
+                ? std::string::npos : bytes.find("\n 63\n", lightStart);
+            if (colorIndex == std::string::npos)
+                return fail("generated LIGHT did not contain the bounded color field");
+            bytes.replace(colorIndex + 1u, 3u, "421");
+            {
+                std::ofstream output(path, std::ios::binary | std::ios::trunc);
+                output.write(bytes.data(),
+                             static_cast<std::streamsize>(bytes.size()));
+                if (!output)
+                    return fail("could not create unqualified LIGHT color control");
+            }
+            dx_data refusedColor;
+            dx_iface refusedColorReader;
+            if (refusedColorReader.fileImport(path.string(), &refusedColor,
+                                              false)
+                || refusedColor.dxfReadOutcome.error != DRW::BAD_CODE_PARSED)
+                return fail("unqualified LIGHT color input was not refused");
+        }
+
+        dx_data blockData;
+        DRW_Block_Record blockRecord;
+        blockRecord.handle = 0xA601u;
+        blockRecord.name = "LIGHT_BLOCK_CONTROL";
+        blockData.blockRecords.push_back(blockRecord);
+        auto* namedBlock = new dx_ifaceBlock();
+        namedBlock->name = blockRecord.name;
+        namedBlock->parentHandle = blockRecord.handle;
+        auto* blockLight = new DRW_Light(source);
+        blockLight->handle = 0xA603u;
+        blockLight->parentHandle = blockRecord.handle;
+        namedBlock->ent.push_back(blockLight);
+        blockData.blocks.push_back(namedBlock);
+        dx_iface blockWriter;
+        if (!blockWriter.fileExport(path.string(), DRW::AC1021, binary,
+                                    &blockData, false, false))
+            return fail("named-BLOCK LIGHT export failed");
+        dx_data blockReadback;
+        dx_iface blockReader;
+        if (!blockReader.fileImport(path.string(), &blockReadback, false)
+            || blockReadback.typedEntityCaptureFailed)
+            return fail("named-BLOCK LIGHT delivery failed");
+        const auto blockIt = std::find_if(
+            blockReadback.blocks.begin(), blockReadback.blocks.end(),
+            [](const dx_ifaceBlock* value) {
+                return value != nullptr
+                    && value->name == "LIGHT_BLOCK_CONTROL";
+            });
+        if (blockIt == blockReadback.blocks.end()
+            || (*blockIt)->ent.size() != 1u)
+            return fail("named-BLOCK LIGHT was not retained");
+        const auto* blockReadbackLight = dynamic_cast<const DRW_Light*>(
+            (*blockIt)->ent.front());
+        if (blockReadbackLight == nullptr
+            || blockReadbackLight->m_name != "LOCAL_LIGHT"
+            || blockReadbackLight->m_position.y != 2.0)
+            return fail("named-BLOCK LIGHT fields changed on readback");
+    }
+    return true;
+}
+
 bool evaluationGraphCaptureLimitsFailClosed(bool binary) {
     dx_data data;
     dx_iface iface;
@@ -62842,6 +63026,8 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--point-cloud-adapter-transport")
         return pointCloudAndNavisworksAdapterTransport() ? 0 : 1;
+    if (argc == 2 && std::string(argv[1]) == "--light-adapter-transport")
+        return lightAdapterTransport() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--evaluation-graph-capture-limits")
         return evaluationGraphCaptureLimitsFailClosed(false)

@@ -164,6 +164,7 @@ public:
     DRW_ENTITIES_VALUE(addAttDef,DRW_Attdef)
     DRW_ENTITIES_VALUE(addTolerance,DRW_Tolerance)
     DRW_ENTITIES_VALUE(addCamera,DRW_Camera)
+    DRW_ENTITIES_VALUE(addLight,DRW_Light)
     DRW_ENTITIES_VALUE(addGeoPositionMarker,DRW_GeoPositionMarker)
     DRW_ENTITIES_VALUE(addSectionObject,DRW_SectionObject)
     DRW_ENTITIES_POINTER(addDimAlign,DRW_DimAligned)
