@@ -15477,6 +15477,14 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
                    static_cast<std::int32_t>(DRW_LoftedSurface::kMaxReferenceTokenCount)
             || lofted->numGuideCurves >
                    static_cast<std::int32_t>(DRW_LoftedSurface::kMaxReferenceTokenCount)
+            // These are DWG handle-stream dependencies. The DXF model retains
+            // only the original group-90/group-310 token sequence, so emitting
+            // this surface without a verified handle-to-token projection
+            // would silently drop or mis-map its source references.
+            || lofted->numCrossSections != 0
+            || lofted->numGuideCurves != 0
+            || !lofted->crossSectionHandles.empty()
+            || !lofted->guideCurveHandles.empty()
             || lofted->planeNormalLoftingType < 0
             || lofted->planeNormalLoftingType >
                    std::numeric_limits<std::int16_t>::max()

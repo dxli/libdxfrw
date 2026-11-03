@@ -4029,23 +4029,53 @@ void testSectionSettingsReferenceRemapping(TestContext& t) {
 
 void testLoftedSurfacePathReferenceDxfRefusal(TestContext& t) {
     for (const bool binary : {false, true}) {
-        std::ostringstream rejectedOutput;
-        dxfRW rejectedWriter("");
-        rejectedWriter.version = DRW::AC1032;
-        rejectedWriter.binFile = binary;
-        rejectedWriter.writer = binary
-            ? std::unique_ptr<dxfWriter>(
-                  std::make_unique<dxfWriterBinary>(&rejectedOutput))
-            : std::unique_ptr<dxfWriter>(
-                  std::make_unique<dxfWriterAscii>(&rejectedOutput));
-        rejectedWriter.writer->writeString(1, "PRESERVED_PREFIX");
-        const std::string before = rejectedOutput.str();
-        DRW_LoftedSurface unsupported;
-        unsupported.handle = 0x501u;
-        unsupported.pathCurveHandle = 0x1234u;
-        t.expect(!rejectedWriter.writeSurface(&unsupported)
-                     && rejectedOutput.str() == before,
-                 "LOFTEDSURFACE DWG path handle refuses DXF projection atomically");
+        const auto expectRefusal = [&](DRW_LoftedSurface& unsupported,
+                                       const char *message) {
+            std::ostringstream rejectedOutput;
+            dxfRW rejectedWriter("");
+            rejectedWriter.version = DRW::AC1032;
+            rejectedWriter.binFile = binary;
+            rejectedWriter.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&rejectedOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&rejectedOutput));
+            rejectedWriter.writer->writeString(1, "PRESERVED_PREFIX");
+            const std::string before = rejectedOutput.str();
+            t.expect(!rejectedWriter.writeSurface(&unsupported)
+                         && rejectedOutput.str() == before,
+                     message);
+        };
+
+        DRW_LoftedSurface pathReference;
+        pathReference.handle = 0x501u;
+        pathReference.pathCurveHandle = 0x1234u;
+        expectRefusal(pathReference,
+                      "LOFTEDSURFACE DWG path handle refuses DXF projection atomically");
+
+        DRW_LoftedSurface crossSectionReferences;
+        crossSectionReferences.handle = 0x502u;
+        crossSectionReferences.crossSectionHandles = {0x1234u};
+        expectRefusal(crossSectionReferences,
+                      "LOFTEDSURFACE DWG cross-section handle refuses DXF projection atomically");
+
+        DRW_LoftedSurface guideReferences;
+        guideReferences.handle = 0x503u;
+        guideReferences.guideCurveHandles = {0x2345u};
+        expectRefusal(guideReferences,
+                      "LOFTEDSURFACE DWG guide-curve handle refuses DXF projection atomically");
+
+        DRW_LoftedSurface crossSectionCount;
+        crossSectionCount.handle = 0x504u;
+        crossSectionCount.numCrossSections = 1;
+        expectRefusal(crossSectionCount,
+                      "LOFTEDSURFACE DWG cross-section count without DXF projection refuses atomically");
+
+        DRW_LoftedSurface guideCount;
+        guideCount.handle = 0x505u;
+        guideCount.numGuideCurves = 1;
+        expectRefusal(guideCount,
+                      "LOFTEDSURFACE DWG guide-curve count without DXF projection refuses atomically");
 
         std::ostringstream output;
         dxfRW writer("");
@@ -4058,6 +4088,9 @@ void testLoftedSurfacePathReferenceDxfRefusal(TestContext& t) {
                   std::make_unique<dxfWriterAscii>(&output));
         DRW_LoftedSurface supported;
         supported.handle = 0x500u;
+        supported.dxfReferenceData.emplace_back(90, std::int32_t{2});
+        supported.dxfReferenceData.emplace_back(
+            310, std::vector<std::uint8_t>{0x12u, 0x34u});
         const bool written = writer.writeSurface(&supported)
             && writer.writer->writeString(0, "WIRE_END");
         bool ended = false;
@@ -4073,6 +4106,10 @@ void testLoftedSurfacePathReferenceDxfRefusal(TestContext& t) {
         t.expect(code5Count == 1
                      && std::find(tags.begin(), tags.end(), "5:1234") == tags.end(),
                  "LOFTEDSURFACE output contains only its entity-handle group 5");
+        t.expect(std::find(tags.begin(), tags.end(), "90:2") != tags.end()
+                     && std::find(tags.begin(), tags.end(), "310:1234")
+                            != tags.end(),
+                 "LOFTEDSURFACE preserves already-captured DXF reference tokens");
     }
 }
 
