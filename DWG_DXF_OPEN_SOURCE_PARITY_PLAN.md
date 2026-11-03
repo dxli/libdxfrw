@@ -313,8 +313,9 @@ separate ambiguous VIEWPORT 335/343/344/91 fields described above.
 
 The VIEW writer now translates its admitted Background, VisualStyle, named UCS
 and base UCS references through the configured resolver or handle-remap
-fallback. Generated ASCII/Binary checks also verify the VIEW table-row identity;
-see the [VIEW reference receipt](docs/research/p5-view-reference-remapping-2026-11-03.json).
+fallback, and refuses zero/NoHandle resolutions before record output. Generated
+ASCII/Binary checks verify exact output IDs, per-edge refusal, corrected retry,
+and the VIEW table-row identity; see the [VIEW reference receipt](docs/research/p5-view-reference-remapping-2026-11-03.json).
 The writer continues to refuse SUN and live-section references without a
 qualified owner/dependency route. These controls prove ID translation only;
 physical target/owner closure and native rendering remain open.

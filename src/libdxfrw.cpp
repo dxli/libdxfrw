@@ -7292,6 +7292,35 @@ bool dxfRW::writeView(DRW_View *ent){
         m_writeError = true;
         return false;
     }
+    const std::uint32_t emittedBackgroundHandle =
+        version > DRW::AC1018 && ent->m_backgroundHandle != 0u
+            ? emittedReference(ent->m_backgroundHandle) : 0u;
+    const std::uint32_t emittedVisualStyleHandle =
+        version > DRW::AC1018 && ent->m_visualStyleHandle != 0u
+            ? emittedReference(ent->m_visualStyleHandle) : 0u;
+    const std::uint32_t emittedBaseUcsHandle =
+        version > DRW::AC1009 && ent->hasUCS && ent->baseUCS_ID != 0u
+            ? emittedReference(ent->baseUCS_ID) : 0u;
+    const std::uint32_t emittedNamedUcsHandle =
+        version > DRW::AC1009 && ent->hasUCS && ent->namedUCS_ID != 0u
+            ? emittedReference(ent->namedUCS_ID) : 0u;
+    if ((ent->m_backgroundHandle != 0u
+         && version > DRW::AC1018
+         && (emittedBackgroundHandle == 0u
+             || emittedBackgroundHandle == DRW::NoHandle))
+        || (ent->m_visualStyleHandle != 0u
+            && version > DRW::AC1018
+            && (emittedVisualStyleHandle == 0u
+                || emittedVisualStyleHandle == DRW::NoHandle))
+        || (ent->baseUCS_ID != 0u && ent->hasUCS
+            && version > DRW::AC1009
+            && (emittedBaseUcsHandle == 0u
+                || emittedBaseUcsHandle == DRW::NoHandle))
+        || (ent->namedUCS_ID != 0u && ent->hasUCS
+            && version > DRW::AC1009
+            && (emittedNamedUcsHandle == 0u
+                || emittedNamedUcsHandle == DRW::NoHandle)))
+        return failDxfWrite();
     RecordStateScope state(*this, ent);
     DxfWriterRecordScope record(*writer);
     std::uint32_t allocatedHandle = 0;
@@ -7373,21 +7402,17 @@ bool dxfRW::writeView(DRW_View *ent){
         writer->writeDouble(142, ent->m_contrast);
         writer->writeInt16(63, static_cast<int>(ent->m_ambientColor));
         if (ent->m_backgroundHandle != 0)
-            writer->writeString(332, toHexStr(
-                emittedReference(ent->m_backgroundHandle)));
+            writer->writeString(332, toHexStr(emittedBackgroundHandle));
         if (ent->m_visualStyleHandle != 0)
-            writer->writeString(348, toHexStr(
-                emittedReference(ent->m_visualStyleHandle)));
+            writer->writeString(348, toHexStr(emittedVisualStyleHandle));
         if (ent->m_sunHandle != 0)
             writer->writeString(361, toHexStr(ent->m_sunHandle));
     }
     if (version > DRW::AC1009 && ent->hasUCS) {
         if (ent->baseUCS_ID != 0)
-            writer->writeString(346, toHexStr(
-                emittedReference(ent->baseUCS_ID)));
+            writer->writeString(346, toHexStr(emittedBaseUcsHandle));
         if (ent->namedUCS_ID != 0)
-            writer->writeString(345, toHexStr(
-                emittedReference(ent->namedUCS_ID)));
+            writer->writeString(345, toHexStr(emittedNamedUcsHandle));
     }
     if (!ent->extData.empty())
         result = writeExtData(ent->extData) && result;

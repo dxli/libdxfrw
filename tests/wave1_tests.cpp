@@ -3546,6 +3546,61 @@ void testViewReferenceRemapping(TestContext& t) {
                          : "VIEW fields emit source-handle remaps");
         }
     }
+
+    for (const bool binary : {false, true}) {
+        for (const std::uint32_t unresolved : {
+                 0x921u, 0x922u, 0x923u, 0x924u}) {
+            std::ostringstream failedOutput;
+            dxfRW failedOwner("");
+            failedOwner.version = DRW::AC1032;
+            failedOwner.binFile = binary;
+            failedOwner.setResolvedBackgroundHandles({0x921u});
+            failedOwner.setReferenceResolver(
+                [unresolved](std::uint32_t source) {
+                    return source == unresolved ? 0u : source;
+                });
+            failedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&failedOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&failedOutput));
+            DRW_View failedView;
+            failedView.handle = 0xA200u;
+            failedView.name = "VIEW_TEST";
+            failedView.hasUCS = true;
+            failedView.ucsOrthoType = 1;
+            failedView.m_backgroundHandle = 0x921u;
+            failedView.m_visualStyleHandle = 0x922u;
+            failedView.baseUCS_ID = 0x923u;
+            failedView.namedUCS_ID = 0x924u;
+            t.expect(!failedOwner.writeView(&failedView)
+                         && failedOutput.str().empty(),
+                     "unresolved VIEW reference preserves destination");
+
+            std::ostringstream retryOutput;
+            dxfRW retryOwner("");
+            retryOwner.version = DRW::AC1032;
+            retryOwner.binFile = binary;
+            retryOwner.setResolvedBackgroundHandles({0x921u});
+            retryOwner.setReferenceResolver(resolverValue);
+            retryOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&retryOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&retryOutput));
+            DRW_View correctedView;
+            correctedView.handle = 0xA200u;
+            correctedView.name = "VIEW_TEST";
+            correctedView.hasUCS = true;
+            correctedView.ucsOrthoType = 1;
+            correctedView.m_backgroundHandle = 0x921u;
+            correctedView.m_visualStyleHandle = 0x922u;
+            correctedView.baseUCS_ID = 0x923u;
+            correctedView.namedUCS_ID = 0x924u;
+            t.expect(retryOwner.writeView(&correctedView),
+                     "VIEW accepts corrected fresh-writer retry");
+        }
+    }
 }
 
 void testLayoutPlotSettingsReferenceRemapping(TestContext& t) {
