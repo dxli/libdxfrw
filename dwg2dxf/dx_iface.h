@@ -429,6 +429,12 @@ public:
     static constexpr std::size_t PlotSettingsCaptureMaxRecords = 100000u;
     static constexpr std::size_t PlotSettingsCaptureMaxRetainedBytes =
         64u * 1024u * 1024u;
+    static constexpr std::size_t SectionCaptureMaxRecords = 100000u;
+    static constexpr std::size_t SectionCaptureMaxRetainedBytes =
+        64u * 1024u * 1024u;
+    static constexpr std::size_t SectionRawCaptureMaxGroups = 4000000u;
+    static constexpr std::size_t SectionRawCaptureMaxRetainedBytes =
+        64u * 1024u * 1024u;
     static constexpr std::size_t GroupCaptureMaxRecords = 100000u;
     static constexpr std::size_t GroupCaptureMaxMembers = 1000000u;
     static constexpr std::size_t GroupCaptureMaxRetainedBytes =
@@ -1083,6 +1089,7 @@ public:
 //writer part, send all in class dx_data to writer
     virtual void addComment(const char* /*comment*/) override{}
     void addPlotSettings(const DRW_PlotSettings *data) override;
+    void addSection(const DRW_Section& data) override;
     virtual void addRenderSettings(const DRW_RenderSettings& data) override;
 
     virtual void writeHeader(DRW_Header& data) override{
@@ -2474,6 +2481,13 @@ public:
                 return;
             }
         }
+        }
+        objectWritePhase = "SECTIONMANAGER/SECTIONSETTINGS records";
+        for (DRW_Section& section : cData->sectionRecords) {
+            const char* recordName = section.m_kind == DRW_Section::Manager
+                ? "SECTIONMANAGER" : "SECTIONSETTINGS";
+            if (!dxfW->writeSection(&section, recordName))
+                return;
         }
         objectWriteCompleted = true;
     }

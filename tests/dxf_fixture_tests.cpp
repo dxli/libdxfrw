@@ -1114,7 +1114,8 @@ bool writeBackgroundSunCaptureControl(const std::filesystem::path& path,
 
 bool writeViewReferenceControl(const std::filesystem::path& path,
                                bool binary, int referenceCode,
-                               const char* viewName) {
+                               const char* viewName,
+                               bool includeSectionSettings = false) {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     if (!output)
         return false;
@@ -1142,6 +1143,46 @@ bool writeViewReferenceControl(const std::filesystem::path& path,
         && writer->writeDouble(41, 10.0)
         && string(referenceCode, "777")
         && string(0, "ENDTAB") && string(0, "ENDSEC")
+        && (!includeSectionSettings
+            || (string(0, "SECTION") && string(2, "OBJECTS")
+                && string(0, "SECTIONMANAGER") && string(5, "789")
+                && string(330, "C") && string(100, "AcDbObject")
+                && string(100, "AcDbSectionManager")
+                && writer->writeInt16(70, 0)
+                && writer->writeInt32(90, 1)
+                && string(330, "777")
+                && string(0, "SECTIONSETTINGS") && string(5, "788")
+                && string(330, "C") && string(100, "AcDbObject")
+                && string(100, "AcDbSectionSettings")
+                && writer->writeInt32(90, 0)
+                && writer->writeInt32(91, 1)
+                && string(1, "SectionTypeSettings")
+                && writer->writeInt32(90, 1)
+                && writer->writeInt32(91, 0)
+                && writer->writeInt32(92, 1)
+                && string(330, "777")
+                && string(1, "")
+                && writer->writeInt32(93, 1)
+                && string(2, "SectionGeometrySettings")
+                && writer->writeInt32(90, 1)
+                && writer->writeInt32(91, 2)
+                && writer->writeInt32(92, 3)
+                && writer->writeInt16(63, 2)
+                && string(8, "0")
+                && string(6, "CONTINUOUS")
+                && writer->writeDouble(40, 1.0)
+                && string(1, "Normal")
+                && writer->writeInt16(370, 25)
+                && writer->writeInt16(70, 0)
+                && writer->writeInt16(71, 0)
+                && writer->writeInt16(72, 0)
+                && string(2, "SOLID")
+                && writer->writeDouble(41, 0.0)
+                && writer->writeDouble(42, 0.0)
+                && writer->writeDouble(43, 1.0)
+                && string(3, "SectionGeometrySettingsEnd")
+                && string(3, "SectionTypeSettingsEnd")
+                && string(0, "ENDSEC")))
         && string(0, "EOF");
     return written && !writer->hasWriteError() && output.good();
 }
@@ -7385,8 +7426,8 @@ void testViewLiveSectionReferenceClosure(TestContext& t) {
         const auto input = directory
             / (binary ? "source-binary.dxf" : "source-ascii.dxf");
         t.expect(writeViewReferenceControl(
-                     input, binary, 334, "LIVE_SECTION_VIEW"),
-                 "generated VIEW LiveSection source is complete");
+                     input, binary, 334, "LIVE_SECTION_VIEW", true),
+                 "generated VIEW LiveSection and SECTIONSETTINGS source is complete");
         dx_data data;
         dx_iface adapter;
         const bool imported = adapter.fileImport(input.string(), &data, false);
@@ -7394,11 +7435,55 @@ void testViewLiveSectionReferenceClosure(TestContext& t) {
             data.views.begin(), data.views.end(), [](const DRW_View& view) {
                 return view.name == "LIVE_SECTION_VIEW";
             });
+        const auto sourceSettings = std::find_if(
+            data.sectionRecords.begin(), data.sectionRecords.end(),
+            [](const DRW_Section& record) {
+                return record.m_kind == DRW_Section::Settings;
+            });
+        const auto sourceManager = std::find_if(
+            data.sectionRecords.begin(), data.sectionRecords.end(),
+            [](const DRW_Section& record) {
+                return record.m_kind == DRW_Section::Manager;
+            });
         t.expect(imported && sourceView != data.views.end()
-                     && sourceView->m_liveSectionHandle == 0x777u,
-                 "generated source VIEW retains its code-334 target identity");
-        if (!imported || sourceView == data.views.end())
+                     && sourceView->m_liveSectionHandle == 0x777u
+                     && sourceSettings != data.sectionRecords.end()
+                     && data.sectionRecords.size() == 2u
+                     && sourceSettings->handle == 0x788u
+                     && sourceSettings->m_types.size() == 1u
+                     && sourceSettings->m_types.front().m_sourceHandles
+                         == std::vector<std::uint32_t>{0x777u}
+                     && sourceSettings->m_types.front().m_geometry.size() == 1u
+                     && sourceSettings->m_types.front().m_geometry.front()
+                             .m_numGeometries == 1
+                     && sourceSettings->m_types.front().m_geometry.front()
+                             .m_hexIndex == 2
+                     && sourceSettings->m_types.front().m_geometry.front()
+                             .m_flags == 3
+                     && sourceSettings->m_types.front().m_geometry.front()
+                             .m_color == 2
+                     && sourceSettings->m_types.front().m_geometry.front()
+                             .m_layer == "0"
+                     && sourceSettings->m_types.front().m_geometry.front()
+                             .m_lineType == "CONTINUOUS"
+                     && sourceSettings->m_types.front().m_geometry.front()
+                             .m_plotStyle == "Normal"
+                     && sourceSettings->m_types.front().m_geometry.front()
+                             .m_lineWeight == 25
+                     && sourceSettings->m_types.front().m_geometry.front()
+                             .m_hatchPattern == "SOLID"
+                     && sourceManager != data.sectionRecords.end()
+                     && sourceManager->m_sectionHandles
+                         == std::vector<std::uint32_t>{0x777u}
+                     && data.rawSectionRecords.size() == 2u,
+                 "generated source retains VIEW, SECTIONMANAGER and nested typed/raw SECTIONSETTINGS callbacks");
+        if (!imported || sourceView == data.views.end()
+            || sourceSettings == data.sectionRecords.end()
+            || sourceManager == data.sectionRecords.end())
             continue;
+        const DRW_Section settingsSource = *sourceSettings;
+        const DRW_Section managerSource = *sourceManager;
+        data.sectionRecords.clear();
 
         const auto refusalPreservesDestination = [&](
                 const std::filesystem::path& path, DRW::Version version,
@@ -7435,12 +7520,38 @@ void testViewLiveSectionReferenceClosure(TestContext& t) {
         data.mBlock->ent.push_back(section);
 
         section->m_sectionSettingsHandle = 0x788u;
+        data.sectionRecords.push_back(managerSource);
         refusalPreservesDestination(
-            directory / (binary ? "settings-binary.dxf"
-                                : "settings-ascii.dxf"),
+            directory / (binary ? "missing-settings-binary.dxf"
+                                : "missing-settings-ascii.dxf"),
             DRW::AC1027,
-            "VIEW LiveSection rejects an unclosed SECTION_SETTINGS dependency");
-        section->m_sectionSettingsHandle = 0u;
+            "VIEW LiveSection rejects a missing SECTION_SETTINGS target");
+
+        DRW_Section wrongSettingsKind = settingsSource;
+        wrongSettingsKind.m_kind = DRW_Section::Manager;
+        wrongSettingsKind.m_sectionCount = 0;
+        wrongSettingsKind.m_sectionHandles.clear();
+        data.sectionRecords.clear();
+        data.sectionRecords.push_back(managerSource);
+        data.sectionRecords.push_back(wrongSettingsKind);
+        refusalPreservesDestination(
+            directory / (binary ? "wrong-settings-kind-binary.dxf"
+                                : "wrong-settings-kind-ascii.dxf"),
+            DRW::AC1027,
+            "SECTIONOBJECT group-360 rejects a SECTIONMANAGER target");
+        data.sectionRecords.clear();
+
+        data.sectionRecords.push_back(managerSource);
+        data.sectionRecords.push_back(settingsSource);
+        data.sectionRecords.push_back(settingsSource);
+        refusalPreservesDestination(
+            directory / (binary ? "duplicate-settings-binary.dxf"
+                                : "duplicate-settings-ascii.dxf"),
+            DRW::AC1027,
+            "SECTIONOBJECT group-360 rejects duplicate SECTIONSETTINGS identities");
+        data.sectionRecords.clear();
+        data.sectionRecords.push_back(managerSource);
+        data.sectionRecords.push_back(settingsSource);
 
         auto* duplicate = new DRW_SectionObject(*section);
         data.mBlock->ent.push_back(duplicate);
@@ -7458,12 +7569,28 @@ void testViewLiveSectionReferenceClosure(TestContext& t) {
             DRW::AC1018,
             "VIEW LiveSection refuses a target version without SECTIONOBJECT output");
 
+        const std::string originalRawName =
+            data.rawSectionRecords.front().name;
+        data.rawSectionRecords.front().name = "UNQUALIFIED_SECTION_RECORD";
+        refusalPreservesDestination(
+            directory / (binary ? "mutated-raw-binary.dxf"
+                                : "mutated-raw-ascii.dxf"),
+            DRW::AC1027,
+            "SECTION source raw-carrier edits cannot erase the import-time unknown-field guard");
+        data.rawSectionRecords.front().name = originalRawName;
+
         const auto outputPath = directory
             / (binary ? "closed-binary.dxf" : "closed-ascii.dxf");
         const bool exported = adapter.fileExport(
             outputPath.string(), DRW::AC1027, binary, &data, false);
+        t.expect(exported, binary
+                     ? "binary VIEW and nested SECTIONSETTINGS graph exports"
+                     : "ASCII VIEW and nested SECTIONSETTINGS graph exports");
         std::uint32_t emittedViewReference = 0u;
         std::uint32_t emittedSectionHandle = 0u;
+        std::uint32_t emittedManagerHandle = 0u;
+        std::uint32_t emittedSettingsHandle = 0u;
+        std::uint32_t emittedSectionSettingsReference = 0u;
         if (exported) {
             std::ifstream output(outputPath, std::ios::binary);
             if (binary)
@@ -7482,6 +7609,13 @@ void testViewLiveSectionReferenceClosure(TestContext& t) {
                     emittedViewReference = reader->getHandleString();
                 else if (recordName == "SECTIONOBJECT" && code == 5)
                     emittedSectionHandle = reader->getHandleString();
+                else if (recordName == "SECTIONOBJECT" && code == 360)
+                    emittedSectionSettingsReference =
+                        reader->getHandleString();
+                else if (recordName == "SECTIONMANAGER" && code == 5)
+                    emittedManagerHandle = reader->getHandleString();
+                else if (recordName == "SECTIONSETTINGS" && code == 5)
+                    emittedSettingsHandle = reader->getHandleString();
             }
         }
 
@@ -7489,6 +7623,9 @@ void testViewLiveSectionReferenceClosure(TestContext& t) {
         dx_iface verifier;
         const bool read = exported && verifier.fileImport(
             outputPath.string(), &readback, false);
+        t.expect(read, binary
+                     ? "binary SECTION output imports for fresh readback"
+                     : "ASCII SECTION output imports for fresh readback");
         const auto readView = std::find_if(
             readback.views.begin(), readback.views.end(),
             [](const DRW_View& view) {
@@ -7504,17 +7641,63 @@ void testViewLiveSectionReferenceClosure(TestContext& t) {
                     readSection = candidate;
             }
         }
+        const DRW_Section* readSettings = nullptr;
+        const DRW_Section* readManager = nullptr;
+        for (const DRW_Section& candidate : readback.sectionRecords) {
+            if (candidate.m_kind == DRW_Section::Settings
+                && candidate.handle == emittedSettingsHandle)
+                readSettings = &candidate;
+            else if (candidate.m_kind == DRW_Section::Manager
+                     && candidate.handle == emittedManagerHandle)
+                readManager = &candidate;
+        }
         t.expect(read && readView != readback.views.end()
                      && readSection != nullptr
+                     && readSettings != nullptr
+                     && readManager != nullptr
                      && emittedViewReference != 0u
                      && emittedViewReference == emittedSectionHandle
+                     && emittedSettingsHandle != 0u
+                     && emittedSettingsHandle
+                         == emittedSectionSettingsReference
+                     && emittedManagerHandle == readManager->handle
+                     && readManager->m_sectionHandles
+                         == std::vector<std::uint32_t>{readSection->handle}
                      && readView->m_liveSectionHandle
                          == readSection->handle
+                     && readSection->m_sectionSettingsHandle
+                         == readSettings->handle
                      && readView->m_liveSectionHandle
                          == emittedViewReference,
                  binary
-                     ? "binary VIEW code-334 maps to the emitted SECTIONOBJECT and survives fresh readback"
-                     : "ASCII VIEW code-334 maps to the emitted SECTIONOBJECT and survives fresh readback");
+                     ? "binary VIEW→SECTIONOBJECT→SECTIONSETTINGS graph remaps and survives fresh readback"
+                     : "ASCII VIEW→SECTIONOBJECT→SECTIONSETTINGS graph remaps and survives fresh readback");
+        t.expect(readSection != nullptr && readSettings != nullptr
+                     && readSettings->m_types.size() == 1u
+                     && readSettings->m_types.front().m_sourceHandles
+                         == std::vector<std::uint32_t>{readSection->handle}
+                     && readSettings->m_types.front().m_geometry.size() == 1u
+                     && readSettings->m_types.front().m_geometry.front()
+                             .m_numGeometries == 1
+                     && readSettings->m_types.front().m_geometry.front()
+                             .m_hexIndex == 2
+                     && readSettings->m_types.front().m_geometry.front()
+                             .m_flags == 3
+                     && readSettings->m_types.front().m_geometry.front()
+                             .m_color == 2
+                     && readSettings->m_types.front().m_geometry.front()
+                             .m_layer == "0"
+                     && readSettings->m_types.front().m_geometry.front()
+                             .m_lineType == "CONTINUOUS"
+                     && readSettings->m_types.front().m_geometry.front()
+                             .m_plotStyle == "Normal"
+                     && readSettings->m_types.front().m_geometry.front()
+                             .m_lineWeight == 25
+                     && readSettings->m_types.front().m_geometry.front()
+                             .m_hatchPattern == "SOLID",
+                 binary
+                     ? "binary SECTIONSETTINGS nested geometry fields survive readback"
+                     : "ASCII SECTIONSETTINGS nested geometry fields survive readback");
     }
 }
 

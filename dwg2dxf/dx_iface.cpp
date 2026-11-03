@@ -15302,6 +15302,44 @@ bool addSectionObjectRetainedBytes(
         && estimate <= kMaxAdapterTypedEntityRetainedBytes;
 }
 
+bool estimateSectionRetainedBytes(
+        const DRW_Section& section, std::size_t& estimate) noexcept {
+    estimate = sizeof(DRW_Section);
+    if (section.m_sectionHandles.size()
+            > static_cast<std::size_t>(DRW_Section::kMaxSectionCount)
+        || section.m_types.size()
+            > static_cast<std::size_t>(DRW_Section::kMaxSectionTypeCount)
+        || section.dwgRawData().size()
+            > DRW::kMaxDxfBinaryPayloadBytes
+        || !addTableEntryRetainedBytes(section, estimate)
+        || !addVectorPayloadBytes(section.m_sectionHandles, estimate)
+        || !addStringPayloadBytes(section.m_destinationFile, estimate)
+        || !addVectorPayloadBytes(section.m_types, estimate)
+        || !addVectorPayloadBytes(section.dwgRawData(), estimate))
+        return false;
+
+    for (const DRW_SectionTypeSettings& type : section.m_types) {
+        if (type.m_sourceHandles.size()
+                > static_cast<std::size_t>(DRW_Section::kMaxSectionSourceCount)
+            || type.m_geometry.size()
+                > static_cast<std::size_t>(DRW_Section::kMaxSectionGeometryCount)
+            || !addVectorPayloadBytes(type.m_sourceHandles, estimate)
+            || !addStringPayloadBytes(type.m_destinationFile, estimate)
+            || !addVectorPayloadBytes(type.m_geometry, estimate))
+            return false;
+        for (const DRW_SectionGeometrySettings& geometry : type.m_geometry) {
+            if (!addStringPayloadBytes(geometry.m_layer, estimate)
+                || !addStringPayloadBytes(geometry.m_lineType, estimate)
+                || !addStringPayloadBytes(geometry.m_plotStyle, estimate)
+                || !addStringPayloadBytes(geometry.m_hatchPattern, estimate)
+                || !addStringPayloadBytes(geometry.m_colorName, estimate)
+                || !addStringPayloadBytes(geometry.m_colorBookName, estimate))
+                return false;
+        }
+    }
+    return estimate <= dx_iface::SectionCaptureMaxRetainedBytes;
+}
+
 bool addOle2FrameRetainedBytes(
         const DRW_Ole2Frame& frame, std::size_t& estimate) noexcept {
     return frame.m_payloadBytes.size() <= DRW_Ole2Frame::kMaxOlePayloadBytes
@@ -58700,6 +58738,34 @@ void dx_iface::finishLayoutSourceAudits(dx_data& data) noexcept {
     }}catch(...){s.layoutCaptureFailed=true;}
 }
 
+void dx_iface::addSection(const DRW_Section& data) {
+    if (cData == nullptr || cData->sectionRecordsCaptureFailed)
+        return;
+    if (cData->sectionRecordsRetainedRecords
+            >= SectionCaptureMaxRecords) {
+        cData->sectionRecordsCaptureFailed = true;
+        return;
+    }
+
+    std::size_t estimatedBytes = 0u;
+    if (!estimateSectionRetainedBytes(data, estimatedBytes)
+        || cData->sectionRecordsRetainedBytes
+            > SectionCaptureMaxRetainedBytes
+        || estimatedBytes > SectionCaptureMaxRetainedBytes
+                                - cData->sectionRecordsRetainedBytes) {
+        cData->sectionRecordsCaptureFailed = true;
+        return;
+    }
+
+    try {
+        cData->sectionRecords.push_back(data);
+        ++cData->sectionRecordsRetainedRecords;
+        cData->sectionRecordsRetainedBytes += estimatedBytes;
+    } catch (...) {
+        cData->sectionRecordsCaptureFailed = true;
+    }
+}
+
 void dx_iface::addPlotSettings(const DRW_PlotSettings* data) {
     if (cData == nullptr || data == nullptr
         || cData->plotSettingsCaptureFailed)
@@ -59726,6 +59792,21 @@ bool dx_data::hasUnchangedAcdsRawDxfSections() const noexcept {
     return true;
 }
 
+bool dx_data::hasUnchangedRawSectionRecords() const noexcept {
+    if (rawSectionRecordsCaptureFailed
+        || m_rawSectionRecordBaselines.size()
+            != rawSectionRecords.size())
+        return false;
+    auto baseline = m_rawSectionRecordBaselines.begin();
+    auto current = rawSectionRecords.begin();
+    for (; baseline != m_rawSectionRecordBaselines.end();
+         ++baseline, ++current) {
+        if (!retainedRawDxfObjectsEqual(*baseline, *current))
+            return false;
+    }
+    return true;
+}
+
 void dx_iface::addRawDxfObject(const DRW_RawDxfObject& data) {
     if (cData == nullptr)
         return;
@@ -59735,6 +59816,46 @@ void dx_iface::addRawDxfObject(const DRW_RawDxfObject& data) {
     observePlotStyleSource(nullptr,&data);
     observeRenderingInput(nullptr,&data);
     if (retainTableSourceRaw(data)) return;
+    const bool sectionManagerRecord =
+        asciiIdentifierEquals(normalizedName, "SECTIONMANAGER");
+    const bool sectionSettingsRecord =
+        asciiIdentifierEquals(normalizedName, "SECTIONSETTINGS")
+        || asciiIdentifierEquals(normalizedName, "ACDBSECTIONSETTINGS")
+        || asciiIdentifierEquals(normalizedName, "SECTION_SETTINGS");
+    if (sectionManagerRecord || sectionSettingsRecord) {
+        if (cData->rawSectionRecordsCaptureFailed)
+            return;
+        std::size_t estimatedBytes = 0u;
+        if (cData->rawSectionRecords.size()
+                >= SectionCaptureMaxRecords
+            || cData->rawSectionRecordsRetainedGroups
+                > SectionRawCaptureMaxGroups
+            || data.groups.size() > SectionRawCaptureMaxGroups
+                - cData->rawSectionRecordsRetainedGroups
+            || !estimateRawDxfObjectListNodeBytes(data, estimatedBytes)
+            || estimatedBytes > SectionRawCaptureMaxRetainedBytes / 2u
+            || cData->rawSectionRecordsRetainedBytes
+                > SectionRawCaptureMaxRetainedBytes
+            || estimatedBytes * 2u > SectionRawCaptureMaxRetainedBytes
+                - cData->rawSectionRecordsRetainedBytes) {
+            cData->rawSectionRecordsCaptureFailed = true;
+            return;
+        }
+        try {
+            cData->rawSectionRecords.push_back(data);
+            try {
+                cData->m_rawSectionRecordBaselines.push_back(data);
+            } catch (...) {
+                cData->rawSectionRecords.pop_back();
+                throw;
+            }
+            cData->rawSectionRecordsRetainedGroups += data.groups.size();
+            cData->rawSectionRecordsRetainedBytes += estimatedBytes * 2u;
+        } catch (...) {
+            cData->rawSectionRecordsCaptureFailed = true;
+        }
+        return;
+    }
     if (data.name.rfind("ACSH_", 0u) == 0u || data.name == "ACAD_EVALUATION_GRAPH") {
         auto& receipt = cData->acdsHistoryDxfImport;
         if (data.name.rfind("ACSH_", 0u) == 0u && receipt.historyCallbacks < kMaxAcdsDxfHistoryRecords)
@@ -63592,6 +63713,182 @@ bool validateUcsBaseHeaderTargets(const dx_data& data,
     }
 }
 
+bool sectionRawRecordNameMatches(
+        const DRW_RawDxfObject& raw, DRW_Section::Kind kind) noexcept {
+    if (kind == DRW_Section::Manager)
+        return asciiIdentifierEquals(raw.name, "SECTIONMANAGER");
+    return asciiIdentifierEquals(raw.name, "SECTIONSETTINGS")
+        || asciiIdentifierEquals(raw.name, "ACDBSECTIONSETTINGS")
+        || asciiIdentifierEquals(raw.name, "SECTION_SETTINGS");
+}
+
+bool sectionRawRecordHasOnlyModeledFields(
+        const DRW_RawDxfObject& raw, DRW_Section::Kind kind) noexcept {
+    if (!sectionRawRecordNameMatches(raw, kind))
+        return false;
+    bool sawRecord = false;
+    bool sawObjectSubclass = false;
+    bool sawRecordSubclass = false;
+    bool inBody = false;
+    bool inSectionType = false;
+    bool inGeometry = false;
+    bool sawNestedType = false;
+    std::size_t flatScalarCount = 0u;
+    for (const DRW_Variant& group : raw.groups) {
+        switch (group.code()) {
+        case 0: {
+            if (sawRecord)
+                return false;
+            if (group.type() != DRW_Variant::STRING
+                || group.c_str() == nullptr)
+                return false;
+            const std::string_view name(group.c_str());
+            if (kind == DRW_Section::Manager) {
+                if (!asciiIdentifierEquals(name, "SECTIONMANAGER"))
+                    return false;
+            } else if (!asciiIdentifierEquals(name, "SECTIONSETTINGS")
+                       && !asciiIdentifierEquals(
+                           name, "ACDBSECTIONSETTINGS")
+                       && !asciiIdentifierEquals(name,
+                                                "SECTION_SETTINGS")) {
+                return false;
+            }
+            sawRecord = true;
+            break;
+        }
+        case 100: {
+            if (group.type() != DRW_Variant::STRING
+                || group.c_str() == nullptr)
+                return false;
+            const std::string_view subclass(group.c_str());
+            if (subclass == "AcDbObject") {
+                if (sawObjectSubclass || sawRecordSubclass)
+                    return false;
+                sawObjectSubclass = true;
+            } else if (subclass == (kind == DRW_Section::Manager
+                                        ? "AcDbSectionManager"
+                                        : "AcDbSectionSettings")) {
+                if (!sawObjectSubclass || sawRecordSubclass)
+                    return false;
+                sawRecordSubclass = true;
+                inBody = true;
+            } else {
+                return false;
+            }
+            break;
+        }
+        case 102:
+            if (group.type() != DRW_Variant::STRING
+                || group.c_str() == nullptr)
+                return false;
+            if (std::string_view(group.c_str()) != "}"
+                && std::string_view(group.c_str()) != "{ACAD_REACTORS"
+                && std::string_view(group.c_str())
+                    != "{ACAD_XDICTIONARY")
+                return false;
+            break;
+        case 5: case 330: case 360:
+            break;
+        case 70:
+            if (!inBody
+                || (kind == DRW_Section::Settings && !inGeometry))
+                return false;
+            break;
+        case 90:
+            if (!inBody)
+                return false;
+            if (kind == DRW_Section::Settings && !inSectionType) {
+                if (sawNestedType || flatScalarCount >= 3u)
+                    return false;
+                ++flatScalarCount;
+            }
+            break;
+        default:
+            if (kind != DRW_Section::Settings)
+                return false;
+            switch (group.code()) {
+            case 1:
+                if (!inBody || group.type() != DRW_Variant::STRING
+                    || group.c_str() == nullptr)
+                    return false;
+                if (std::string_view(group.c_str())
+                    == "SectionTypeSettings") {
+                    if (inSectionType || inGeometry)
+                        return false;
+                    sawNestedType = true;
+                    inSectionType = true;
+                    inGeometry = false;
+                } else if (!inSectionType) {
+                    return false;
+                }
+                break;
+            case 2:
+                if (!inBody || group.type() != DRW_Variant::STRING
+                    || group.c_str() == nullptr)
+                    return false;
+                if (std::string_view(group.c_str())
+                    == "SectionGeometrySettings") {
+                    if (!inSectionType || inGeometry)
+                        return false;
+                    inGeometry = true;
+                } else if (!inGeometry) {
+                    return false;
+                }
+                break;
+            case 3:
+                if (!inBody || group.type() != DRW_Variant::STRING
+                    || group.c_str() == nullptr)
+                    return false;
+                if (std::string_view(group.c_str())
+                    == "SectionGeometrySettingsEnd") {
+                    if (!inGeometry)
+                        return false;
+                    inGeometry = false;
+                } else if (std::string_view(group.c_str())
+                           == "SectionTypeSettingsEnd") {
+                    if (!inSectionType || inGeometry)
+                        return false;
+                    inSectionType = false;
+                } else {
+                    return false;
+                }
+                break;
+            case 6: case 8: case 40: case 41: case 42: case 43:
+            case 62: case 63: case 71: case 72: case 370: case 420:
+                if (!inGeometry)
+                    return false;
+                break;
+            case 91:
+                if (!inBody)
+                    return false;
+                if (!inSectionType) {
+                    if (sawNestedType || flatScalarCount >= 3u)
+                        return false;
+                    ++flatScalarCount;
+                }
+                break;
+            case 92:
+                if (!inSectionType)
+                    return false;
+                break;
+            case 93:
+                if (!inSectionType || inGeometry)
+                    return false;
+                break;
+            case 331:
+                if (!inBody || (sawNestedType && !inSectionType))
+                    return false;
+                break;
+            default:
+                return false;
+            }
+            break;
+        }
+    }
+    return sawObjectSubclass && sawRecordSubclass
+        && !inGeometry && !inSectionType;
+}
+
 bool validateLayoutGraph(const dx_data& data, DRW::Version targetVersion,
                          const std::vector<std::uint32_t>& resolvedSunHandles,
                          std::vector<std::uint32_t>& resolvedLiveSectionHandles,
@@ -63694,6 +63991,239 @@ bool validateLayoutGraph(const dx_data& data, DRW::Version targetVersion,
                 return reject("VIEWPORT entity type does not match its payload");
         }
 
+        if (!data.sectionRecords.empty()
+            && targetVersion < DRW::AC1021)
+            return reject(
+                "SECTIONMANAGER/SECTIONSETTINGS output requires an AC1021+ target");
+        std::unordered_map<std::uint32_t, const DRW_Section*> sectionsByHandle;
+        std::unordered_map<std::uint32_t, const DRW_Section*> settingsByHandle;
+        std::unordered_set<std::uint32_t> sectionHandles;
+        std::unordered_set<std::uint32_t> settingsHandlesReferenced;
+        std::unordered_map<std::uint32_t, const DRW_Block_Record*>
+            sectionBlocksByHandle;
+        std::unordered_set<std::uint32_t> ambiguousSectionBlockHandles;
+        for (const DRW_Block_Record& blockRecord : data.blockRecords) {
+            if (blockRecord.handle == 0u
+                || blockRecord.handle == DRW::NoHandle)
+                continue;
+            if (!sectionBlocksByHandle.emplace(
+                    blockRecord.handle, &blockRecord).second)
+                ambiguousSectionBlockHandles.insert(blockRecord.handle);
+        }
+        for (const DRW_Section& section : data.sectionRecords) {
+            if (section.handle == 0u || section.handle == DRW::NoHandle
+                || (section.m_kind != DRW_Section::Manager
+                    && section.m_kind != DRW_Section::Settings)
+                || section.hasDwgRawData()
+                || section.m_destinationFileHandle != 0u
+                || section.parentHandle == 0u
+                || section.parentHandle == DRW::NoHandle
+                || !section.reactorHandles.empty()
+                || section.xDictHandle != 0u
+                || !section.appData.empty() || !section.extData.empty()
+                || !section.pendingAppIdResolutions.empty()
+                || !section.pendingLayerRefResolutions.empty()
+                || !sectionHandles.insert(section.handle).second
+                || entityHandles.count(section.handle) != 0u
+                || sectionBlocksByHandle.count(section.handle) != 0u
+                || ucsByHandle.count(section.handle) != 0u
+                || section.handle == DRW::DwgNamedObjectsDictionaryHandle
+                || (data.hasNamedObjectDictionary
+                    && section.handle == data.namedObjectDictionary.handle))
+                return reject(
+                    "SECTIONMANAGER/SECTIONSETTINGS identity or unmodeled common data is invalid");
+            if (section.parentHandle != 0u
+                && section.parentHandle
+                    != DRW::DwgNamedObjectsDictionaryHandle
+                && (!data.hasNamedObjectDictionary
+                    || section.parentHandle
+                        != data.namedObjectDictionary.handle)) {
+                const auto owner = entitiesByHandle.find(
+                    section.parentHandle);
+                const auto* ownerSection = owner == entitiesByHandle.end()
+                    ? nullptr
+                    : dynamic_cast<const DRW_SectionObject*>(owner->second);
+                if (section.m_kind != DRW_Section::Settings
+                    || owner == entitiesByHandle.end()
+                    || ambiguousEntityHandles.count(section.parentHandle) != 0u
+                    || ownerSection == nullptr
+                    || ownerSection->eType != DRW::SECTION
+                    || ownerSection->handle != section.parentHandle
+                    || ownerSection->m_sectionSettingsHandle
+                        != section.handle)
+                    return reject(
+                        "SECTIONMANAGER/SECTIONSETTINGS common owner is outside the closed NOD or reciprocal SECTIONOBJECT profile");
+            }
+            if (section.m_kind == DRW_Section::Manager) {
+                if (section.m_sourceHandle != 0u
+                    || section.m_destinationBlockHandle != 0u
+                    || !section.m_destinationFile.empty()
+                    || !section.m_types.empty()
+                    || section.m_classVersion != 0
+                    || section.m_sectionType != 0
+                    || section.m_generationOptions != 0
+                    || section.m_currentType != 0
+                    || section.m_typeCount != 0
+                    || section.m_sectionCount < 0
+                    || section.m_sectionCount > DRW_Section::kMaxSectionCount
+                    || section.m_sectionHandles.size()
+                        != static_cast<std::size_t>(section.m_sectionCount))
+                    return reject(
+                        "SECTIONMANAGER count does not match its bounded section list");
+                std::unordered_set<std::uint32_t> members;
+                for (const std::uint32_t handle : section.m_sectionHandles) {
+                    const auto target = entitiesByHandle.find(handle);
+                    const auto* sectionEntity =
+                        target == entitiesByHandle.end() ? nullptr
+                        : dynamic_cast<const DRW_SectionObject*>(
+                              target->second);
+                    if (handle == 0u || handle == DRW::NoHandle
+                        || !members.insert(handle).second
+                        || target == entitiesByHandle.end()
+                        || ambiguousEntityHandles.count(handle) != 0u
+                        || sectionEntity == nullptr
+                        || sectionEntity->eType != DRW::SECTION)
+                        return reject(
+                            "SECTIONMANAGER member does not resolve uniquely to a SECTIONOBJECT entity");
+                }
+            } else {
+                if (section.m_isLive || section.m_sectionCount != 0
+                    || !section.m_sectionHandles.empty()
+                    || section.m_types.size()
+                        > static_cast<std::size_t>(
+                              DRW_Section::kMaxSectionTypeCount)
+                    || (!section.m_types.empty()
+                        && (section.m_typeCount < 0
+                            || section.m_typeCount
+                                != static_cast<std::int32_t>(
+                                    section.m_types.size()))))
+                    return reject(
+                        "SECTIONSETTINGS type count is outside its modeled profile");
+                if (section.m_types.empty()) {
+                    if (section.m_sourceHandle != 0u
+                        || !section.m_destinationFile.empty()
+                        || section.m_currentType != section.m_classVersion
+                        || section.m_typeCount != section.m_sectionType)
+                        return reject(
+                            "flat SECTIONSETTINGS contains an unrepresented source field or inconsistent legacy mirrors");
+                } else {
+                    const DRW_SectionTypeSettings& firstType =
+                        section.m_types.front();
+                    const std::uint32_t firstSourceHandle =
+                        firstType.m_sourceHandles.empty()
+                            ? 0u : firstType.m_sourceHandles.front();
+                    if (section.m_classVersion != section.m_currentType
+                        || section.m_sectionType
+                            != static_cast<std::int32_t>(
+                                section.m_types.size())
+                        || section.m_typeCount
+                            != static_cast<std::int32_t>(
+                                section.m_types.size())
+                        || section.m_generationOptions != 0
+                        || section.m_sourceHandle != firstSourceHandle
+                        || section.m_destinationBlockHandle
+                            != firstType.m_destinationBlockHandle
+                        || (!section.m_destinationFile.empty()
+                            && section.m_destinationFile
+                                != firstType.m_destinationFile))
+                        return reject(
+                            "SECTIONSETTINGS legacy mirrors disagree with the first nested type");
+                }
+                for (const DRW_SectionTypeSettings& type : section.m_types) {
+                    if (type.m_numSources < 0
+                        || type.m_numSources
+                            > DRW_Section::kMaxSectionSourceCount
+                        || type.m_sourceHandles.size()
+                            != static_cast<std::size_t>(type.m_numSources)
+                        || type.m_numGeometrySettings < 0
+                        || type.m_numGeometrySettings
+                            > DRW_Section::kMaxSectionGeometryCount
+                        || type.m_geometry.size()
+                            != static_cast<std::size_t>(
+                                type.m_numGeometrySettings))
+                        return reject(
+                            "SECTIONSETTINGS nested source/geometry counts are inconsistent");
+                    std::unordered_set<std::uint32_t> sources;
+                    for (const std::uint32_t handle : type.m_sourceHandles) {
+                        const auto target = entitiesByHandle.find(handle);
+                        if (handle == 0u || handle == DRW::NoHandle
+                            || !sources.insert(handle).second
+                            || target == entitiesByHandle.end()
+                            || ambiguousEntityHandles.count(handle) != 0u)
+                            return reject(
+                                "SECTIONSETTINGS source handle does not resolve uniquely to an entity");
+                    }
+                    if (type.m_destinationBlockHandle != 0u) {
+                        const std::uint32_t handle =
+                            type.m_destinationBlockHandle;
+                        if (handle == DRW::NoHandle
+                            || sectionBlocksByHandle.count(handle) != 1u
+                            || ambiguousSectionBlockHandles.count(handle)
+                                != 0u)
+                            return reject(
+                                "SECTIONSETTINGS destination does not resolve uniquely to a BLOCK_RECORD");
+                    }
+                }
+                if (section.m_types.empty()
+                    && section.m_destinationBlockHandle != 0u) {
+                    const std::uint32_t handle =
+                        section.m_destinationBlockHandle;
+                    if (handle == DRW::NoHandle
+                        || sectionBlocksByHandle.count(handle) != 1u
+                        || ambiguousSectionBlockHandles.count(handle) != 0u)
+                        return reject(
+                            "flat SECTIONSETTINGS destination does not resolve uniquely to a BLOCK_RECORD");
+                }
+            }
+            if (!sectionsByHandle.emplace(section.handle, &section).second)
+                return reject("SECTION record identity is duplicated");
+            if (section.m_kind == DRW_Section::Settings
+                && !settingsByHandle.emplace(section.handle, &section).second)
+                return reject("SECTIONSETTINGS identity is duplicated");
+        }
+        if (!data.hasUnchangedRawSectionRecords())
+            return reject(
+                "raw SECTION source carrier changed since import");
+        if (data.rawSectionRecords.size() > data.sectionRecords.size())
+            return reject(
+                "raw SECTION record has no typed callback companion");
+        std::unordered_set<std::uint32_t> rawSectionHandles;
+        for (const DRW_RawDxfObject& raw : data.rawSectionRecords) {
+            const auto typed = sectionsByHandle.find(raw.handle);
+            if (raw.handle == 0u || raw.handle == DRW::NoHandle
+                || typed == sectionsByHandle.end()
+                || !rawSectionHandles.insert(raw.handle).second
+                || raw.parentHandle
+                    != typed->second->parentHandle
+                || !sectionRawRecordHasOnlyModeledFields(
+                    raw, typed->second->m_kind))
+                return reject(
+                    "SECTION source record has an unmatched typed callback or unmodeled DXF fields");
+        }
+        for (const auto& entity : entitiesByHandle) {
+            const auto* section = dynamic_cast<const DRW_SectionObject*>(
+                entity.second);
+            if (section == nullptr)
+                continue;
+            if (section->eType != DRW::SECTION)
+                return reject(
+                    "SECTIONOBJECT runtime type does not match its entity tag");
+            if (section->m_sectionSettingsHandle != 0u) {
+                const std::uint32_t settingsHandle =
+                    section->m_sectionSettingsHandle;
+                const auto settings = settingsByHandle.find(settingsHandle);
+                if (settingsHandle == DRW::NoHandle
+                    || settings == settingsByHandle.end())
+                    return reject(
+                        "SECTIONOBJECT group-360 does not resolve uniquely to SECTIONSETTINGS");
+                settingsHandlesReferenced.insert(settingsHandle);
+            }
+        }
+        for (const auto& settings : settingsByHandle) {
+            if (settingsHandlesReferenced.count(settings.first) == 0u)
+                return reject(
+                    "SECTIONSETTINGS record has no retained SECTIONOBJECT group-360 owner");
+        }
         std::unordered_set<std::uint32_t> uniqueLiveSectionTargets;
         for (const DRW_View& view : data.views) {
             const std::uint32_t sourceHandle = view.m_liveSectionHandle;
@@ -63712,12 +64242,6 @@ bool validateLayoutGraph(const dx_data& data, DRW::Version targetVersion,
                 || section->handle != sourceHandle)
                 return reject(
                     "VIEW code-334 LiveSection does not resolve uniquely to a SECTIONOBJECT entity");
-            // The SECTIONOBJECT group-360 target is not yet admitted by the
-            // adapter's source/output graph. Keep this live-view profile
-            // bounded until SECTION_SETTINGS closure is implemented.
-            if (section->m_sectionSettingsHandle != 0u)
-                return reject(
-                    "VIEW code-334 SECTIONOBJECT has an unqualified SECTION_SETTINGS dependency");
             if (uniqueLiveSectionTargets.insert(sourceHandle).second)
                 stagedLiveSectionHandles.push_back(sourceHandle);
         }
@@ -68561,6 +69085,12 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             "PLOTSETTINGS callback capture incomplete or over budget");
         return false;
     }
+    if (cData->sectionRecordsCaptureFailed
+        || cData->rawSectionRecordsCaptureFailed) {
+        reportPreflightFailure(
+            "SECTIONMANAGER/SECTIONSETTINGS callback capture incomplete or over budget");
+        return false;
+    }
     if (cData->typedEntityCaptureFailed) {
         reportPreflightFailure(
             "typed entity/block/table callback capture incomplete or over record/byte limit");
@@ -71486,6 +72016,13 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             return false;
         }
     }
+    for (const DRW_Section& section : cData->sectionRecords) {
+        if (!remapFixedCollision(section.handle)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
     for (const DRW_UCS& ucs : cData->ucsList) {
         if (!remapFixedCollision(ucs.handle)) {
             delete dxfW;
@@ -71676,6 +72213,16 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     }
     std::unordered_set<std::uint32_t>().swap(rawEntityHandles);
     dxfW->setHandleRemap(std::move(handleRemap));
+    for (const DRW_Section& section : cData->sectionRecords) {
+        const std::uint32_t emittedHandle =
+            dxfW->remapHandle(section.handle);
+        if (emittedHandle == 0u || emittedHandle == DRW::NoHandle
+            || !dxfW->reserveHandle(emittedHandle)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
     dxfW->setResolvedTableStyleHandles(std::move(m_tableStylesToEmit));
     dxfW->setResolvedTableStyleBaseIds(
         std::move(m_extensionTableStyleBaseIds));

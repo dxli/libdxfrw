@@ -225,6 +225,18 @@ engines.
    ([receipt](docs/research/p4-section-record-identity-remapping-2026-11-03.json)).
    This does not prove that all section objects are emitted or close source-owner
    and generation-semantic gates.
+   The adapter now captures bounded SECTIONMANAGER/SECTIONSETTINGS callbacks,
+   snapshots their source DXF carriers, and admits a generated AC1021+ graph
+   only when manager members resolve to unique SECTIONOBJECT entities,
+   SECTIONOBJECT group-360 references resolve to retained settings, nested
+   source handles resolve to entities, destination handles resolve to unique
+   BLOCK_RECORDs, and owners fit the rooted/reciprocal profile. Duplicate,
+   orphaned, opaque-tail, changed-raw, and unmodeled-common-data cases refuse
+   atomically. Generated AC1027 ASCII/Binary controls cover nested geometry,
+   remapped manager/settings/source identities, fresh readback, and same-adapter
+   retry ([graph receipt](docs/research/p4-section-settings-adapter-graph-closure-2026-11-03.json)).
+   This closes that generated transport profile only; physical producer field
+   spans/owner binding and native section-generation semantics remain open.
    SUNSTUDY, MOTIONPATH, and ACDBCURVEPATH modeled links now also refuse
    unresolved nonzero output IDs before publishing records. Their low-level
    record scopes cover common-owner and write failures; generated ASCII/Binary
@@ -387,11 +399,15 @@ optional-presence profiles; establish source-backed active/global/environment
 and background/live-section relations; then qualify native rendering semantics.
 A generated VIEW code-334 adapter route now requires one unique retained
 SECTIONOBJECT target, preallocates/remaps its entity identity before VIEW output,
-and verifies ASCII/Binary group-334-to-group-5 readback. It admits only AC1021+
-output with a null SECTIONOBJECT group-360 SECTION_SETTINGS reference; missing,
-wrong-kind, duplicate, unclosed-settings and pre-AC1021 profiles remain atomic
-refusals. Physical producer/source-owner evidence and native live-section
-behavior remain open; see the [LiveSection graph receipt](docs/research/p5-view-live-section-graph-closure-2026-11-03.json).
+and verifies ASCII/Binary group-334-to-group-5 readback. Its generated AC1021+
+profile now also closes SECTIONOBJECT group-360 through a retained
+SECTIONSETTINGS record, with manager membership, nested source targets,
+destination BLOCK_RECORDs, common-owner checks, remapped IDs, nested geometry,
+and fresh ASCII/Binary readback. Missing/wrong-kind/duplicate/unclosed graph
+cases and pre-AC1021 targets remain atomic refusals. Physical producer/source-
+owner evidence and native live-section behavior remain open; see the [LiveSection
+receipt](docs/research/p5-view-live-section-graph-closure-2026-11-03.json) and
+[SECTION_SETTINGS graph receipt](docs/research/p4-section-settings-adapter-graph-closure-2026-11-03.json).
 SUNSTUDY/MOTIONPATH/CURVEPATH/POINTPATH/OBJECTPTR physical producer coverage
 and native plotting/scene semantics remain open; generated record-identity and
 reference round-trips are transport evidence only (see the [SUNSTUDY receipt](docs/research/p5-sunstudy-record-identity-remapping-2026-11-03.json),

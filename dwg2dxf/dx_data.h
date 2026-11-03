@@ -615,6 +615,19 @@ public:
     std::list<DRW_AppId>appIds;         //stores a copy of all line types
     std::vector<DRW_Block_Record> blockRecords; //owned source identity/metadata
     std::vector<DRW_Layout> layouts; //typed DXF LAYOUT graph records
+    // SECTIONMANAGER/SECTIONSETTINGS callbacks are retained separately from
+    // BLOCK-owned SECTIONOBJECT entities. Export validates and closes their
+    // shared handle graph before replaying these object records.
+    std::list<DRW_Section> sectionRecords;
+    std::size_t sectionRecordsRetainedRecords{0};
+    std::size_t sectionRecordsRetainedBytes{0};
+    bool sectionRecordsCaptureFailed{false};
+    // DXF source companions are held only to reject unmodeled section fields
+    // and pair each parsed source record with its typed callback.
+    std::list<DRW_RawDxfObject> rawSectionRecords;
+    std::size_t rawSectionRecordsRetainedGroups{0};
+    std::size_t rawSectionRecordsRetainedBytes{0};
+    bool rawSectionRecordsCaptureFailed{false};
     // Standalone OBJECTS PLOTSETTINGS records. Keep distinct from the
     // AcDbPlotSettings prefix embedded in each LAYOUT; export requires the
     // ACAD_PLOTSETTINGS owner graph and a qualified null-shade-reference path.
@@ -1348,6 +1361,9 @@ public:
     // Pre-export source check, while this container owns its sections (not
     // during their temporary synchronous transfer into the writer).
     bool hasUnchangedAcdsRawDxfSections() const noexcept;
+    // Confirms the mutable section raw carriers still match their exact
+    // import-time snapshots before they authorize typed SECTION replay.
+    bool hasUnchangedRawSectionRecords() const noexcept;
 
 private:
     // Original DXF scalar-resource bodies for represented three-way edits. Retention
@@ -2360,6 +2376,7 @@ private:
     // with the corresponding typed/raw retained carriers.
     friend class DxWholeSourceTestAccess;
     friend class dx_iface;
+    std::list<DRW_RawDxfObject> m_rawSectionRecordBaselines;
     std::list<DRW_CellStyleMap> m_cellStyleMapDxfBaselines;
     std::size_t m_cellStyleMapDxfBaselineRetainedRecords{0};
     std::size_t m_cellStyleMapDxfBaselineRetainedItems{0};
