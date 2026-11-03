@@ -16748,6 +16748,198 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
     prewriteAdapter.dxfW = nullptr;
 }
 
+void testGeneratedGroupDictionaryObjectsAllocationRetry(TestContext& t) {
+    using Edge = DRW_Dictionary::Entry::DxfHandleCode;
+    constexpr std::uint32_t groupHandle = 0xD912u;
+    constexpr std::uint32_t nodHandle = 0xD910u;
+    constexpr std::uint32_t groupDictionaryHandle = 0xD911u;
+    const std::string groupName = "GROUP_OBJECTS_ALLOCATION_SWEEP";
+    class GroupObjectsWriter final : public dx_iface {
+    public:
+        void writeEntities() override {
+            if (armObjectAllocation)
+                materialAllocationCountdown = objectAllocationCountdown;
+        }
+        void writeObjects() override {
+            objectsCallbackReached = true;
+            remainingAllocationCountdown = materialAllocationCountdown;
+            materialAllocationCountdown = -1;
+            dx_iface::writeObjects();
+        }
+
+        bool armObjectAllocation {false};
+        long objectAllocationCountdown {0L};
+        long remainingAllocationCountdown {-1L};
+        bool objectsCallbackReached {false};
+    };
+    const auto installGraph = [&](dxfRW& writer) {
+        DRW_Group group;
+        group.handle = groupHandle;
+        group.name = groupName;
+        writer.setGroups({group});
+        writer.setHandleRemap({{nodHandle, 0xCu},
+                               {groupDictionaryHandle, 0xDu}});
+
+        auto nod = std::make_unique<DRW_Dictionary>();
+        nod->handle = nodHandle;
+        nod->m_entries.push_back(
+            {"ACAD_GROUP", groupDictionaryHandle, Edge::SoftOwner});
+        auto groups = std::make_unique<DRW_Dictionary>();
+        groups->handle = groupDictionaryHandle;
+        groups->parentHandle = nodHandle;
+        groups->m_entries.push_back(
+            {groupName, groupHandle, Edge::SoftOwner});
+        return writer.setGeneratedDictionarySourceRecords(
+            std::move(nod), std::move(groups));
+    };
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-generated-group-objects-allocation-"
+           + std::to_string(nonce));
+    std::filesystem::create_directories(directory);
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+    const auto outputPath = directory / "group-objects.dxf";
+    const std::string filename = outputPath.string();
+    const auto outputBytes = [&outputPath]() {
+        std::ifstream input(outputPath, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input), {});
+    };
+    const auto measure = [&](bool binary, long& allocations) {
+        constexpr long allocationProbe = 1000000L;
+        dx_data data;
+        GroupObjectsWriter adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        adapter.armObjectAllocation = true;
+        adapter.objectAllocationCountdown = allocationProbe;
+        dxfRW writer(filename.c_str());
+        adapter.dxfW = &writer;
+        const bool setup = installGraph(writer);
+        const bool written = setup
+            && writer.write(&adapter, DRW::AC1027, binary);
+        materialAllocationCountdown = -1;
+        const bool measured = written && adapter.objectsCallbackReached
+            && adapter.remainingAllocationCountdown > 0L
+            && adapter.remainingAllocationCountdown <= allocationProbe;
+        allocations = measured
+            ? allocationProbe - adapter.remainingAllocationCountdown : 0L;
+        adapter.dxfW = nullptr;
+        return measured;
+    };
+
+    for (const bool binary : {false, true}) {
+        long allocations = 0L;
+        const bool calibrated = measure(binary, allocations)
+            && allocations > 0L;
+        bool everyOffsetRolledBack = calibrated;
+        bool everyOffsetRetried = calibrated;
+        long injectedFailures = 0L;
+        for (long allocation = 0;
+             calibrated && allocation < allocations; ++allocation) {
+            const std::string sentinel = "generated GROUP OBJECTS sentinel\n";
+            {
+                std::ofstream seed(outputPath,
+                                   std::ios::binary | std::ios::trunc);
+                seed << sentinel;
+            }
+            dx_data data;
+            GroupObjectsWriter adapter;
+            adapter.cData = &data;
+            adapter.currentBlock = data.mBlock;
+            adapter.armObjectAllocation = true;
+            adapter.objectAllocationCountdown = allocation;
+            dxfRW writer(filename.c_str());
+            adapter.dxfW = &writer;
+            const bool setup = installGraph(writer);
+            const std::size_t failuresBefore = materialFailedAllocations;
+            const bool failed = setup
+                && !writer.write(&adapter, DRW::AC1027, binary);
+            materialAllocationCountdown = -1;
+            const DRW_OperationDiagnostic diagnostic =
+                writer.getLastDiagnostic();
+            const bool allocationReported =
+                (diagnostic.phase == DRW::OperationPhase::Allocation
+                     && diagnostic.code == "allocation-failure")
+                || (diagnostic.phase == DRW::OperationPhase::Emit
+                    && diagnostic.code == "emit-failure");
+            const bool rolledBack = failed && !adapter.objectsCallbackReached
+                && materialFailedAllocations == failuresBefore + 1u
+                && allocationReported && outputBytes() == sentinel
+                && writer.getWritingContext()
+                    ->sourceHandleToWrittenObjectMap.empty()
+                && writer.getWritingContext()
+                    ->sourceHandleToMintedMap.empty();
+            everyOffsetRolledBack = everyOffsetRolledBack && rolledBack;
+            if (rolledBack)
+                ++injectedFailures;
+
+            adapter.armObjectAllocation = false;
+            adapter.objectsCallbackReached = false;
+            const bool retried = rolledBack && setup
+                && writer.write(&adapter, DRW::AC1027, binary)
+                && adapter.objectsCallbackReached
+                && writer.getError() == DRW::BAD_NONE;
+            dx_data decoded;
+            FixtureInterface reader;
+            const bool readBack = retried
+                && reader.fileImport(filename, &decoded, false);
+            const auto root = std::find_if(
+                reader.dictionaries.begin(), reader.dictionaries.end(),
+                [](const DRW_Dictionary& dictionary) {
+                    return dictionary.handle == 0xCu
+                        && dictionary.m_entries.size() == 1u
+                        && dictionary.m_entries.front().m_name == "ACAD_GROUP"
+                        && dictionary.m_entries.front().m_handle == 0xDu;
+                });
+            const auto groupDictionary = std::find_if(
+                reader.dictionaries.begin(), reader.dictionaries.end(),
+                [](const DRW_Dictionary& dictionary) {
+                    return dictionary.handle == 0xDu
+                        && dictionary.parentHandle == 0xCu
+                        && dictionary.m_entries.size() == 1u
+                        && dictionary.m_entries.front().m_name
+                            == "GROUP_OBJECTS_ALLOCATION_SWEEP";
+                });
+            const auto group = std::find_if(
+                reader.groups.begin(), reader.groups.end(),
+                [](const DRW_Group& value) {
+                    // GROUP names are carried by their owner DICTIONARY;
+                    // DRW_Group.name is not populated by this reader path.
+                    return value.handle != 0u
+                        && value.handle != DRW::NoHandle
+                        && value.m_entityHandles.empty();
+                });
+            const bool rootMatched = root != reader.dictionaries.end();
+            const bool groupDictionaryMatched =
+                groupDictionary != reader.dictionaries.end();
+            const bool groupMatched = reader.groups.size() == 1u
+                && group != reader.groups.end();
+            const bool entryMatched = groupDictionaryMatched && groupMatched
+                && groupDictionary->m_entries.front().m_handle == group->handle;
+            everyOffsetRetried = everyOffsetRetried && readBack
+                && rootMatched && groupDictionaryMatched && groupMatched
+                && entryMatched;
+            adapter.dxfW = nullptr;
+        }
+        t.expect(calibrated && everyOffsetRolledBack
+                     && injectedFailures == allocations,
+                 binary
+                     ? "binary generated NOD/GROUP OBJECTS allocation sweep rolls back every calibrated allocation"
+                     : "ASCII generated NOD/GROUP OBJECTS allocation sweep rolls back every calibrated allocation");
+        t.expect(everyOffsetRetried,
+                 binary
+                     ? "binary generated NOD/GROUP OBJECTS allocation sweep retries each failure and reads the complete dictionary/GROUP graph"
+                     : "ASCII generated NOD/GROUP OBJECTS allocation sweep retries each failure and reads the complete dictionary/GROUP graph");
+    }
+}
+
 void testImageDefinitionPlanResourceBounds(TestContext& t) {
     const auto makePlan = [](std::uint32_t handle,
                              const std::string& name) {
@@ -65059,6 +65251,15 @@ int main(int argc, char** argv) {
         TestContext context;
         testImageDefinitionPlanFailureRetry(context);
         std::cout << "IMAGEDEF plan failure/retry: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--generated-group-dictionary-objects-allocation-retry") {
+        TestContext context;
+        testGeneratedGroupDictionaryObjectsAllocationRetry(context);
+        std::cout << "Generated GROUP dictionary OBJECTS allocation retry: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
