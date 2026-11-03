@@ -2534,6 +2534,79 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
                          : "scene objects emit source-handle remaps");
         }
     }
+
+    for (const bool binary : {false, true}) {
+        for (const std::uint32_t unresolved : {
+                 0x701u, 0x702u, 0x703u, 0x704u,
+                 0x705u, 0x706u, 0x707u, 0x708u}) {
+            std::ostringstream failedOutput;
+            dxfRW failedOwner("");
+            failedOwner.version = DRW::AC1032;
+            failedOwner.binFile = binary;
+            failedOwner.setReferenceResolver(
+                [unresolved](std::uint32_t source) {
+                    return source == unresolved ? 0u : source;
+                });
+            failedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&failedOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&failedOutput));
+            bool failedAsExpected = false;
+            if (unresolved <= 0x704u) {
+                DRW_SunStudy sunStudy;
+                sunStudy.m_pageSetupWizardHandle = 0x701u;
+                sunStudy.m_viewHandle = 0x702u;
+                sunStudy.m_visualStyleHandle = 0x703u;
+                sunStudy.m_textStyleHandle = 0x704u;
+                failedAsExpected = !failedOwner.writeSunStudy(&sunStudy);
+            } else if (unresolved <= 0x707u) {
+                DRW_MotionPath motionPath;
+                motionPath.m_cameraPathHandle = 0x705u;
+                motionPath.m_targetPathHandle = 0x706u;
+                motionPath.m_viewTableHandle = 0x707u;
+                failedAsExpected = !failedOwner.writeMotionPath(&motionPath);
+            } else {
+                DRW_CurvePath curvePath;
+                curvePath.m_entityHandle = 0x708u;
+                failedAsExpected = !failedOwner.writeCurvePath(&curvePath);
+            }
+            t.expect(failedAsExpected && failedOutput.str().empty(),
+                     "unresolved scene-object reference preserves destination");
+
+            std::ostringstream retryOutput;
+            dxfRW retryOwner("");
+            retryOwner.version = DRW::AC1032;
+            retryOwner.binFile = binary;
+            retryOwner.setReferenceResolver(resolverValue);
+            retryOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&retryOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&retryOutput));
+            bool retrySucceeded = false;
+            if (unresolved <= 0x704u) {
+                DRW_SunStudy sunStudy;
+                sunStudy.m_pageSetupWizardHandle = 0x701u;
+                sunStudy.m_viewHandle = 0x702u;
+                sunStudy.m_visualStyleHandle = 0x703u;
+                sunStudy.m_textStyleHandle = 0x704u;
+                retrySucceeded = retryOwner.writeSunStudy(&sunStudy);
+            } else if (unresolved <= 0x707u) {
+                DRW_MotionPath motionPath;
+                motionPath.m_cameraPathHandle = 0x705u;
+                motionPath.m_targetPathHandle = 0x706u;
+                motionPath.m_viewTableHandle = 0x707u;
+                retrySucceeded = retryOwner.writeMotionPath(&motionPath);
+            } else {
+                DRW_CurvePath curvePath;
+                curvePath.m_entityHandle = 0x708u;
+                retrySucceeded = retryOwner.writeCurvePath(&curvePath);
+            }
+            t.expect(retrySucceeded,
+                     "scene object accepts corrected fresh-writer retry");
+        }
+    }
 }
 
 void testEntityReferenceRemapping(TestContext& t) {

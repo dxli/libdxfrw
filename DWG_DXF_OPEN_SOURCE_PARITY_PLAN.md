@@ -163,6 +163,13 @@ engines.
    ([receipt](docs/research/p4-sectionobject-settings-reference-remapping-2026-11-03.json)).
    This does not qualify source binding, target ownership/existence, or section
    semantics.
+   SUNSTUDY, MOTIONPATH, and ACDBCURVEPATH modeled links now also refuse
+   unresolved nonzero output IDs before publishing records. Their low-level
+   record scopes cover common-owner and write failures; generated ASCII/Binary
+   controls exercise all eight references, destination preservation, and
+   corrected fresh-writer retry ([receipt](docs/research/p4-scene-object-reference-remapping-2026-11-03.json)).
+   Target kinds, source dependencies, physical producer profiles, and native
+   scene semantics remain open.
    Continue the remaining reference-ID audit from the current field receipts,
    prioritizing typed owner/dependency pointers on supported 3D records. Confirm
    each field against its parser contract and applicable format mapping before

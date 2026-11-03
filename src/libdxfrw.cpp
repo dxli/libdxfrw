@@ -33256,9 +33256,25 @@ bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
         emittedReference(ent->m_visualStyleHandle);
     const std::uint32_t textStyleHandle =
         emittedReference(ent->m_textStyleHandle);
+    const auto isResolvedOptional = [](std::uint32_t source,
+                                       std::uint32_t emitted) {
+        return source == 0u
+            || (source != DRW::NoHandle && emitted != 0u
+                && emitted != DRW::NoHandle);
+    };
+    if (!isResolvedOptional(ent->m_pageSetupWizardHandle,
+                            pageSetupWizardHandle)
+        || !isResolvedOptional(ent->m_viewHandle, viewHandle)
+        || !isResolvedOptional(ent->m_visualStyleHandle, visualStyleHandle)
+        || !isResolvedOptional(ent->m_textStyleHandle, textStyleHandle))
+        return failDxfWrite();
+    RecordStateScope state(*this, ent);
+    DxfWriterRecordScope record(*writer);
     writer->writeString(0, "SUNSTUDY");
     writer->writeString(5, toHexStr(ent->handle));
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
+    if (m_writeError)
+        return false;
     if (!writeTableEntryAppData(*ent))
         return false;
     writer->writeString(100, "AcDbSunStudy");
@@ -33303,7 +33319,10 @@ bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
         writer->writeString(343, toHexStr(textStyleHandle));
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    if (writer->hasWriteError() || !record.commit())
+        return failDxfWrite();
+    state.commit();
+    return true;
 }
 
 bool dxfRW::writeMotionPath(DRW_MotionPath *ent) {
@@ -33321,9 +33340,23 @@ bool dxfRW::writeMotionPath(DRW_MotionPath *ent) {
         emittedReference(ent->m_targetPathHandle);
     const std::uint32_t viewTableHandle =
         emittedReference(ent->m_viewTableHandle);
+    const auto isResolvedOptional = [](std::uint32_t source,
+                                       std::uint32_t emitted) {
+        return source == 0u
+            || (source != DRW::NoHandle && emitted != 0u
+                && emitted != DRW::NoHandle);
+    };
+    if (!isResolvedOptional(ent->m_cameraPathHandle, cameraPathHandle)
+        || !isResolvedOptional(ent->m_targetPathHandle, targetPathHandle)
+        || !isResolvedOptional(ent->m_viewTableHandle, viewTableHandle))
+        return failDxfWrite();
+    RecordStateScope state(*this, ent);
+    DxfWriterRecordScope record(*writer);
     writer->writeString(0, "MOTIONPATH");
     writer->writeString(5, toHexStr(ent->handle));
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
+    if (m_writeError)
+        return false;
     if (!writeTableEntryAppData(*ent))
         return false;
     writer->writeString(100, "AcDbMotionPath");
@@ -33336,7 +33369,10 @@ bool dxfRW::writeMotionPath(DRW_MotionPath *ent) {
     writer->writeBool(290, ent->m_cornerDeceleration);
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    if (writer->hasWriteError() || !record.commit())
+        return failDxfWrite();
+    state.commit();
+    return true;
 }
 
 bool dxfRW::writeCurvePath(DRW_CurvePath *ent) {
@@ -33346,9 +33382,17 @@ bool dxfRW::writeCurvePath(DRW_CurvePath *ent) {
         ? 0u
         : (m_referenceResolver ? resolveReference(ent->m_entityHandle)
                                : remapObjectHandle(ent->m_entityHandle));
+    if (ent->m_entityHandle != 0u
+        && (ent->m_entityHandle == DRW::NoHandle
+            || entityHandle == 0u || entityHandle == DRW::NoHandle))
+        return failDxfWrite();
+    RecordStateScope state(*this, ent);
+    DxfWriterRecordScope record(*writer);
     writer->writeString(0, "ACDBCURVEPATH");
     writer->writeString(5, toHexStr(ent->handle));
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
+    if (m_writeError)
+        return false;
     if (!writeTableEntryAppData(*ent))
         return false;
     writer->writeString(100, "AcDbCurvePath");
@@ -33356,7 +33400,10 @@ bool dxfRW::writeCurvePath(DRW_CurvePath *ent) {
     writer->writeString(340, toHexStr(entityHandle));
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    if (writer->hasWriteError() || !record.commit())
+        return failDxfWrite();
+    state.commit();
+    return true;
 }
 
 bool dxfRW::writePointPath(DRW_PointPath *ent) {

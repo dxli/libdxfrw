@@ -26,12 +26,12 @@
       ]
     }
   ],
-  "mapping_policy": "Zero remains zero. For nonzero references, use the configured reference resolver when present; otherwise use remapObjectHandle.",
+  "mapping_policy": "Zero remains zero. For nonzero references, use the configured reference resolver when present; otherwise use remapObjectHandle. Refuse zero or NoHandle results before publishing the affected record; emit scene-object records transactionally so owner or write failures preserve the destination.",
   "validation": {
     "input": "Generated in-memory objects; no DWG/DXF fixture was added.",
     "formats": ["ASCII DXF", "Binary DXF"],
     "selectors": ["libdxfrw_wave1_tests --scene-object-reference-remapping"],
-    "result": "PASS for resolver precedence and remap fallback across all listed reference fields.",
+    "result": "PASS for resolver precedence and remap fallback across all listed reference fields; each of the eight nonzero links refuses an unresolved resolver result without output in ASCII/Binary and succeeds after corrected fresh-writer retry.",
     "build": "cmake --build build-gcc --target libdxfrw_wave1_tests --parallel 4"
   },
   "qualification_limits": [
