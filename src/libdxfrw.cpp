@@ -14384,6 +14384,7 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
                    std::numeric_limits<std::int16_t>::max()
             || lofted->dxfReferenceData.size() >
                    DRW_LoftedSurface::kMaxReferenceTokenCount
+            || lofted->pathCurveHandle != 0u
             || !finiteMatrix(lofted->loftEntityTransform)
             || !std::isfinite(lofted->startDraftAngle)
             || !std::isfinite(lofted->endDraftAngle)
@@ -14434,8 +14435,6 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
         writer->writeBool(295, lofted->solid);
         writer->writeBool(296, lofted->ruledSurface);
         writer->writeBool(297, lofted->virtualGuide);
-        if (lofted->pathCurveHandle != 0)
-            writer->writeString(5, toHexStr(lofted->pathCurveHandle));
     } else if (ent->eType == DRW::NURBSURFACE) {
         const auto *nurbs = dynamic_cast<const DRW_NurbsSurface *>(ent);
         const auto finiteCoord = [](const DRW_Coord& value) {

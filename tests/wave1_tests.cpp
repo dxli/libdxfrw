@@ -65,6 +65,10 @@ struct TestContext {
     }
 };
 
+std::vector<std::string> numericWireProjection(
+    const std::string& bytes, bool binary, bool& ended,
+    DxfClassifierProfile profile);
+
 class RejectingStreambuf final : public std::streambuf {
 public:
     std::size_t acceptedBytes() const { return 0; }
@@ -2675,6 +2679,55 @@ void testSectionSettingsReferenceRemapping(TestContext& t) {
         retry.m_types.push_back(retryType);
         t.expect(retryWriter.writeSection(&retry, "SECTIONSETTINGS"),
                  "SECTIONSETTINGS corrected fresh-writer retry succeeds");
+    }
+}
+
+void testLoftedSurfacePathReferenceDxfRefusal(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        std::ostringstream rejectedOutput;
+        dxfRW rejectedWriter("");
+        rejectedWriter.version = DRW::AC1032;
+        rejectedWriter.binFile = binary;
+        rejectedWriter.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&rejectedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&rejectedOutput));
+        rejectedWriter.writer->writeString(1, "PRESERVED_PREFIX");
+        const std::string before = rejectedOutput.str();
+        DRW_LoftedSurface unsupported;
+        unsupported.handle = 0x501u;
+        unsupported.pathCurveHandle = 0x1234u;
+        t.expect(!rejectedWriter.writeSurface(&unsupported)
+                     && rejectedOutput.str() == before,
+                 "LOFTEDSURFACE DWG path handle refuses DXF projection atomically");
+
+        std::ostringstream output;
+        dxfRW writer("");
+        writer.version = DRW::AC1032;
+        writer.binFile = binary;
+        writer.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        DRW_LoftedSurface supported;
+        supported.handle = 0x500u;
+        const bool written = writer.writeSurface(&supported)
+            && writer.writer->writeString(0, "WIRE_END");
+        bool ended = false;
+        const auto tags = numericWireProjection(
+            output.str(), binary, ended,
+            DxfClassifierProfile::StandaloneSafe);
+        t.expect(written && ended,
+                 "LOFTEDSURFACE without path reference writes a framed DXF record");
+        const auto code5Count = std::count_if(
+            tags.begin(), tags.end(), [](const std::string& tag) {
+                return tag.rfind("5:", 0) == 0;
+            });
+        t.expect(code5Count == 1
+                     && std::find(tags.begin(), tags.end(), "5:1234") == tags.end(),
+                 "LOFTEDSURFACE output contains only its entity-handle group 5");
     }
 }
 
@@ -18251,6 +18304,15 @@ int main(int argc, char** argv) {
         TestContext focused;
         testSectionSettingsReferenceRemapping(focused);
         std::cout << "SECTIONSETTINGS reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--lofted-surface-path-reference-dxf-refusal") {
+        TestContext focused;
+        testLoftedSurfacePathReferenceDxfRefusal(focused);
+        std::cout << "LOFTEDSURFACE path reference DXF refusal: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
