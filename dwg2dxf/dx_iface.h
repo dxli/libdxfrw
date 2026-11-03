@@ -406,6 +406,15 @@ public:
     static constexpr std::size_t ImageDefinitionCaptureMaxRecords = 100000u;
     static constexpr std::size_t ImageDefinitionCaptureMaxRetainedBytes =
         64u * 1024u * 1024u;
+    static constexpr std::size_t DwgDbColorCaptureMaxRecords = 100000u;
+    static constexpr std::size_t DwgDbColorCaptureMaxRetainedBytes =
+        64u * 1024u * 1024u;
+    static constexpr std::size_t DwgDbColorReferenceMaxRecords =
+        TypedEntityCaptureMaxRecords;
+    static constexpr std::size_t DwgDbColorReferenceMaxRetainedBytes =
+        TypedEntityCaptureMaxRetainedBytes;
+    static constexpr std::size_t DwgDbColorPatchMaxRetainedBytes =
+        8u * 1024u * 1024u;
     static constexpr std::size_t RawDxfSectionCaptureMaxRecords = 100000u;
     static constexpr std::size_t RawDxfSectionCaptureMaxGroups = 4000000u;
     static constexpr std::size_t RawDxfSectionCaptureMaxRetainedBytes =
@@ -553,6 +562,7 @@ public:
     void addXRecord(const DRW_XRecord& data) override;
     void addDataLink(const DRW_DataLink& data) override;
     void addMaterial(const DRW_Material& data) override;
+    void addDbColor(const DRW_DbColor& data) override;
     void addGeoData(const DRW_GeoData& data) override;
     void addRasterVariables(const DRW_RasterVariables& data) override;
     void addWipeoutVariables(const DRW_WipeoutVariables& data) override;
@@ -2850,6 +2860,40 @@ private:
             currentBlock->ent.push_back(entity);
             ++cData->typedEntityRetainedRecords;
             cData->typedEntityRetainedBytes += estimatedBytes;
+            if (cData->sourceFormat == dx_source_format::DWG
+                && cData->importGeneration != 0u
+                && entity->hasDwgAcDbColorHandle()) {
+                const std::uint32_t colorHandle =
+                    entity->dwgAcDbColorHandle();
+                const dx_data::DwgDbColorKey key{
+                    cData->importGeneration, colorHandle};
+                constexpr std::size_t mapNodeOverhead = 4u * sizeof(void*);
+                constexpr std::size_t referenceNodeBytes =
+                    sizeof(std::pair<const dx_data::DwgDbColorKey,
+                                     DRW_Entity*>)
+                    + mapNodeOverhead;
+                if (colorHandle == 0u || colorHandle == DRW::NoHandle
+                    || cData->dwgDbColorReferenceRetainedRecords
+                        >= DwgDbColorReferenceMaxRecords
+                    || cData->dwgDbColorReferenceRetainedBytes
+                        > DwgDbColorReferenceMaxRetainedBytes
+                    || referenceNodeBytes
+                        > DwgDbColorReferenceMaxRetainedBytes
+                            - cData->dwgDbColorReferenceRetainedBytes) {
+                    cData->dwgDbColorCaptureFailed = true;
+                    cData->typedEntityCaptureFailed = true;
+                    return entity;
+                }
+                try {
+                    cData->dwgDbColorEntityReferences.emplace(key, entity);
+                    ++cData->dwgDbColorReferenceRetainedRecords;
+                    cData->dwgDbColorReferenceRetainedBytes +=
+                        referenceNodeBytes;
+                } catch (...) {
+                    cData->dwgDbColorCaptureFailed = true;
+                    cData->typedEntityCaptureFailed = true;
+                }
+            }
             return entity;
         } catch (...) {
             delete entity;

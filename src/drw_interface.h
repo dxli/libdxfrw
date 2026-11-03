@@ -503,11 +503,12 @@ public:
 
   /**
    * Called for every DBCOLOR (AcDbColor) object encountered in the OBJECTS
-   * section.  ODA spec §20.4.  Default no-op for back-compat — most
-   * implementers don't need a per-object hook because the reader patches
-   * referencing entities' color24/colorName via dbColorMap before
-   * delivering them.  This hook is for filters that want to track the
-   * full set of named colors (e.g., to emit a layer book-color map).
+   * section.  DWG entity callbacks are delivered before OBJECTS, so a
+   * consumer that needs to resolve an entity's AcDbColor handle must retain
+   * that reference and reconcile it when this callback arrives.  The reader
+   * may also apply a color already present in its lookup map while parsing an
+   * entity, but this callback order does not guarantee that a referenced
+   * DBCOLOR has been seen yet.  Default no-op for back-compat.
    */
   virtual void addDbColor(const DRW_DbColor &data) { (void)data; }
 

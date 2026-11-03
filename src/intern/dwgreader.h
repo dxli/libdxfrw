@@ -2079,11 +2079,14 @@ public:
   std::unordered_map<std::uint32_t, DRW_Block_Record *> blockRecordmap;
 
   /// Resolved DBCOLOR (AcDbColor) lookup, populated as the OBJECTS section
-  /// is decoded.  Key: handle of the AcDbColor object.  Value: pair of
-  /// (24-bit RGB, display name) — entities referencing this handle (via
-  /// ENC flag 0x40) get color24 + colorName patched from this map after
-  /// their parseDwg returns.  Names are formatted as "BOOK$ENTRY" when a
-  /// book name is present, otherwise just the entry name.
+  /// is decoded. Key: handle of the AcDbColor object. Value: pair of
+  /// (24-bit RGB, display name) — an entity parsed after its referenced
+  /// object is available (via ENC flag 0x40) gets color24 + colorName patched
+  /// after parseDwg returns. Normal DWG callback order delivers entities
+  /// before OBJECTS, so consumers must also reconcile late addDbColor
+  /// callbacks by handle when they need the resolved appearance. Names are
+  /// formatted as "BOOK$ENTRY" when a book name is present, otherwise just
+  /// the entry name.
   std::unordered_map<std::uint32_t, std::pair<std::int32_t, std::string>>
       dbColorMap;
   /// MLINESTYLE handle → style name. Populated as MLINESTYLE objects are

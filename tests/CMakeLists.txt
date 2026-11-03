@@ -2108,6 +2108,15 @@ set_tests_properties(dwg2dxf_geodata_dwg_adapter_transport PROPERTIES
 )
 
 add_test(
+    NAME dwg2dxf_dbcolor_late_callback_binding
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --dbcolor-late-callback-binding
+)
+set_tests_properties(dwg2dxf_dbcolor_late_callback_binding PROPERTIES
+    LABELS "fast;dwg;dxf;color;adapter;generated;callback-order"
+    TIMEOUT 10
+)
+
+add_test(
     NAME dwg2dxf_rastervariables_dwg_adapter_transport
     COMMAND libdxfrw_dwg2dxf_adapter_tests --rastervariables-dwg-adapter-transport
 )

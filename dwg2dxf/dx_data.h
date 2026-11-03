@@ -1002,6 +1002,34 @@ public:
     std::set<ImageDefinitionKey> conflictingImageDefinitions;
     std::set<std::uint64_t> invalidImageDefinitionGenerations;
 
+    // DWG entity callbacks precede OBJECTS callbacks. Keep a bounded index
+    // from each source AcDbColor reference to its already-retained entity so
+    // the later DBCOLOR callback can restore the inline DXF color appearance.
+    // This is callback transport only; it does not qualify the source object
+    // graph or strict DWG-to-DXF output.
+    using DwgDbColorKey = std::pair<std::uint64_t, std::uint32_t>;
+    struct DwgDbColorAppearance {
+        std::int32_t rgb{-1};
+        std::string displayName;
+    };
+    std::map<DwgDbColorKey, DwgDbColorAppearance> dwgDbColors;
+    std::multimap<DwgDbColorKey, DRW_Entity*> dwgDbColorEntityReferences;
+    std::size_t dwgDbColorRetainedRecords{0u};
+    std::size_t dwgDbColorRetainedBytes{0u};
+    std::size_t dwgDbColorReferenceRetainedRecords{0u};
+    std::size_t dwgDbColorReferenceRetainedBytes{0u};
+    bool dwgDbColorCaptureFailed{false};
+
+    bool hasCompleteDwgDbColorAppearanceBindings() const noexcept {
+        if (dwgDbColorCaptureFailed)
+            return false;
+        for (const auto& reference : dwgDbColorEntityReferences) {
+            if (dwgDbColors.find(reference.first) == dwgDbColors.end())
+                return false;
+        }
+        return true;
+    }
+
     using UnderlayDefinitionKey = std::pair<std::uint64_t, std::uint32_t>;
     std::map<UnderlayDefinitionKey, DRW_UnderlayDefinition>
         underlayDefinitions;

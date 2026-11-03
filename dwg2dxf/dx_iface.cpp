@@ -58857,6 +58857,143 @@ void dx_iface::addMaterial(const DRW_Material& data) {
     retainMaterialTyped(cData, data);
 }
 
+void dx_iface::addDbColor(const DRW_DbColor& data) {
+    if (cData == nullptr || cData->sourceFormat != dx_source_format::DWG
+        || !cData->dwgReadOutcome.attempted
+        || cData->dwgDbColorCaptureFailed)
+        return;
+
+    const auto reject = [this]() {
+        cData->dwgDbColorCaptureFailed = true;
+        cData->typedEntityCaptureFailed = true;
+    };
+    if (cData->importGeneration == 0u || data.handle == 0u
+        || data.handle == DRW::NoHandle
+        || data.rgb < -1 || data.rgb > 0x00FFFFFF
+        || cData->dwgDbColorRetainedRecords
+            >= DwgDbColorCaptureMaxRecords) {
+        reject();
+        return;
+    }
+
+    constexpr std::size_t maxDisplayNameBytes = 1024u * 1024u;
+    if (data.name.size() > maxDisplayNameBytes
+        || data.bookName.size() > maxDisplayNameBytes
+        || data.name.size() > maxDisplayNameBytes - data.bookName.size()) {
+        reject();
+        return;
+    }
+    const std::size_t displayNameBytes = data.name.size()
+        + data.bookName.size()
+        + (data.bookName.empty() ? 0u : 1u);
+    constexpr std::size_t appearanceMapNodeOverhead = 4u * sizeof(void*);
+    constexpr std::size_t appearanceBaseBytes =
+        sizeof(std::pair<const dx_data::DwgDbColorKey,
+                         dx_data::DwgDbColorAppearance>)
+        + appearanceMapNodeOverhead;
+    if (displayNameBytes > DwgDbColorCaptureMaxRetainedBytes
+            - appearanceBaseBytes
+        || cData->dwgDbColorRetainedBytes
+            > DwgDbColorCaptureMaxRetainedBytes
+        || appearanceBaseBytes + displayNameBytes
+            > DwgDbColorCaptureMaxRetainedBytes
+                - cData->dwgDbColorRetainedBytes) {
+        reject();
+        return;
+    }
+
+    const dx_data::DwgDbColorKey key{
+        cData->importGeneration, data.handle};
+    if (cData->dwgDbColors.find(key) != cData->dwgDbColors.end()) {
+        reject();
+        return;
+    }
+
+    dx_data::DwgDbColorAppearance appearance;
+    appearance.rgb = data.rgb;
+    try {
+        if (!data.bookName.empty()) {
+            appearance.displayName.reserve(displayNameBytes);
+            appearance.displayName.append(data.bookName);
+            appearance.displayName.push_back('$');
+        }
+        appearance.displayName.append(data.name);
+    } catch (...) {
+        reject();
+        return;
+    }
+
+    const auto references = cData->dwgDbColorEntityReferences.equal_range(key);
+    const std::size_t referenceCount = static_cast<std::size_t>(
+        std::distance(references.first, references.second));
+    struct Patch {
+        DRW_Entity* entity{nullptr};
+        std::int32_t rgb{-1};
+        bool setRgb{false};
+        bool setName{false};
+        UTF8STRING displayName;
+    };
+    if (referenceCount > DwgDbColorPatchMaxRetainedBytes / sizeof(Patch)) {
+        reject();
+        return;
+    }
+    std::size_t patchBytes = referenceCount * sizeof(Patch);
+    std::vector<Patch> patches;
+    try {
+        patches.reserve(referenceCount);
+        for (auto reference = references.first;
+             reference != references.second; ++reference) {
+            DRW_Entity* entity = reference->second;
+            if (entity == nullptr || !entity->hasDwgAcDbColorHandle()
+                || entity->dwgAcDbColorHandle() != data.handle) {
+                reject();
+                return;
+            }
+            Patch patch;
+            patch.entity = entity;
+            patch.setRgb = appearance.rgb >= 0 && entity->color24 == -1;
+            patch.rgb = appearance.rgb;
+            patch.setName = !appearance.displayName.empty()
+                && entity->colorName.empty();
+            if (patch.setName) {
+                if (appearance.displayName.size()
+                    > DwgDbColorPatchMaxRetainedBytes - patchBytes) {
+                    reject();
+                    return;
+                }
+                patchBytes += appearance.displayName.size();
+                patch.displayName = appearance.displayName;
+            }
+            if (patch.setRgb || patch.setName)
+                patches.push_back(std::move(patch));
+        }
+    } catch (...) {
+        reject();
+        return;
+    }
+
+    try {
+        const auto inserted = cData->dwgDbColors.emplace(
+            key, std::move(appearance));
+        if (!inserted.second) {
+            reject();
+            return;
+        }
+    } catch (...) {
+        reject();
+        return;
+    }
+
+    for (Patch& patch : patches) {
+        if (patch.setRgb)
+            patch.entity->color24 = patch.rgb;
+        if (patch.setName)
+            patch.entity->colorName.swap(patch.displayName);
+    }
+    ++cData->dwgDbColorRetainedRecords;
+    cData->dwgDbColorRetainedBytes += appearanceBaseBytes + displayNameBytes;
+}
+
 void dx_iface::addGeoData(const DRW_GeoData& data) {
     if (cData == nullptr || cData->sourceFormat != dx_source_format::DWG
         || !cData->dwgReadOutcome.attempted)
@@ -68008,6 +68145,12 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     if (cData->typedEntityCaptureFailed) {
         reportPreflightFailure(
             "typed entity/block/table callback capture incomplete or over record/byte limit");
+        return false;
+    }
+    if (cData->sourceFormat == dx_source_format::DWG
+        && !cData->hasCompleteDwgDbColorAppearanceBindings()) {
+        reportPreflightFailure(
+            "DWG entity AcDbColor reference has no unique retained DBCOLOR appearance");
         return false;
     }
     if (cData->imageDefinitionReactorCaptureFailed) {

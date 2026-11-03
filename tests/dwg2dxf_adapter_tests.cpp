@@ -64706,7 +64706,100 @@ bool wipeoutVariablesDwgAdapterTransport() {
     return true;
 }
 
+static bool dbColorLateCallbackBinding() {
+    const auto fail = [](const char* message) {
+        std::cerr << "DBCOLOR late-callback binding: " << message << '\n';
+        return false;
+    };
+    dx_data data;
+    dx_iface iface;
+    iface.cData = &data;
+    iface.currentBlock = data.mBlock;
+    data.sourceFormat = dx_source_format::DWG;
+    data.sourceVersion = DRW::AC1027;
+    data.importGeneration = 17u;
+    data.dwgReadOutcome.attempted = true;
+
+    DRW_Line referenced;
+    referenced.handle = 0x100u;
+    referenced.setDwgAcDbColorHandle(true, 0xA001u);
+    iface.addLine(referenced);
+
+    DRW_Line inlineColor;
+    inlineColor.handle = 0x101u;
+    inlineColor.color24 = 0x234567;
+    inlineColor.colorName = "ENTITY$OVERRIDE";
+    inlineColor.setDwgAcDbColorHandle(true, 0xA001u);
+    iface.addLine(inlineColor);
+
+    if (data.mBlock->ent.size() != 2u
+        || data.dwgDbColorReferenceRetainedRecords != 2u
+        || data.hasCompleteDwgDbColorAppearanceBindings()
+        || data.dwgDbColorCaptureFailed)
+        return fail("entity reference callbacks were not retained");
+
+    DRW_DbColor color;
+    color.handle = 0xA001u;
+    color.rgb = 0x123456;
+    color.colorMethod = 0xC2u;
+    color.bookName = "LOCAL";
+    color.name = "ACCENT";
+    iface.addDbColor(color);
+
+    auto entity = data.mBlock->ent.begin();
+    const auto* resolved = dynamic_cast<const DRW_Line*>(*entity++);
+    const auto* overridden = dynamic_cast<const DRW_Line*>(*entity);
+    if (resolved == nullptr || overridden == nullptr
+        || resolved->color24 != 0x123456
+        || resolved->colorName != "LOCAL$ACCENT"
+        || overridden->color24 != 0x234567
+        || overridden->colorName != "ENTITY$OVERRIDE"
+        || data.dwgDbColors.size() != 1u
+        || !data.hasCompleteDwgDbColorAppearanceBindings()
+        || data.dwgDbColorCaptureFailed)
+        return fail("late callback did not resolve appearance or preserve overrides");
+
+    // A later import reusing the same source handles must bind only to its
+    // own generation's OBJECTS callback.
+    data.importGeneration = 18u;
+    DRW_Line nextImport;
+    nextImport.handle = 0x100u;
+    nextImport.setDwgAcDbColorHandle(true, 0xA001u);
+    iface.addLine(nextImport);
+    if (data.hasCompleteDwgDbColorAppearanceBindings())
+        return fail("unresolved later-generation reference was accepted");
+    DRW_DbColor nextColor = color;
+    nextColor.rgb = 0x654321;
+    nextColor.name = "SECOND";
+    iface.addDbColor(nextColor);
+    const auto* nextResolved = dynamic_cast<const DRW_Line*>(
+        data.mBlock->ent.back());
+    if (nextResolved == nullptr || nextResolved->color24 != 0x654321
+        || nextResolved->colorName != "LOCAL$SECOND"
+        || resolved->color24 != 0x123456
+        || resolved->colorName != "LOCAL$ACCENT"
+        || data.dwgDbColors.size() != 2u
+        || !data.hasCompleteDwgDbColorAppearanceBindings()
+        || data.dwgDbColorCaptureFailed)
+        return fail("import generation did not isolate reused handles");
+
+    // Conflicting definitions for one generation/handle are rejected and do
+    // not overwrite the first accepted color.
+    nextColor.rgb = 0xABCDEF;
+    iface.addDbColor(nextColor);
+    const bool rejectedConflict = data.dwgDbColorCaptureFailed
+        && !data.hasCompleteDwgDbColorAppearanceBindings()
+        && data.typedEntityCaptureFailed
+        && nextResolved->color24 == 0x654321
+        && nextResolved->colorName == "LOCAL$SECOND";
+    return rejectedConflict
+        ? true : fail("conflicting definition was not rejected atomically");
+}
+
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--dbcolor-late-callback-binding")
+        return dbColorLateCallbackBinding() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--ucs-base-name-target-closure")
         return ucsBaseHeaderNameTargetClosure() ? 0 : 1;
     if (argc == 2
