@@ -5061,6 +5061,113 @@ void testPartialViewingIndexReferenceClosure(TestContext& t) {
     }
 }
 
+void testLeaderAnnotationReferenceRemapping(TestContext& t) {
+    constexpr std::uint32_t sourceHandle = 0x801u;
+    const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
+        {sourceHandle, 0xA81u}};
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap(sourceToRemapped);
+            if (useResolver) {
+                owner.setReferenceResolver([](std::uint32_t source) {
+                    return source == sourceHandle ? 0xB81u : source;
+                });
+            }
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_Leader leader;
+            leader.handle = 0x700u;
+            leader.annotHandle = sourceHandle;
+            const bool wrote = owner.writeLeader(&leader)
+                && owner.writer->writeString(0, "WIRE_END");
+            bool ended = false;
+            const auto tags = numericWireProjection(
+                output.str(), binary, ended,
+                DxfClassifierProfile::StandaloneSafe);
+            const std::string expected = useResolver ? "340:B81" : "340:A81";
+            t.expect(wrote && ended
+                         && std::count(tags.begin(), tags.end(), expected) == 1
+                         && std::count_if(tags.begin(), tags.end(),
+                                [](const std::string& tag) {
+                                    return tag.rfind("340:", 0) == 0;
+                                }) == 1,
+                     useResolver
+                         ? "LEADER annotation uses the final resolver identity"
+                         : "LEADER annotation uses its explicit source-handle remap");
+        }
+
+        for (const std::uint32_t resolverResult : {0u}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setReferenceResolver(
+                [resolverResult](std::uint32_t source) {
+                    return source == sourceHandle ? resolverResult : source;
+                });
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+            owner.writer->writeString(1, "PRESERVED_PREFIX");
+            const std::string before = output.str();
+            DRW_Leader leader;
+            leader.handle = 0x700u;
+            leader.annotHandle = sourceHandle;
+            t.expect(!owner.writeLeader(&leader) && output.str() == before,
+                     "invalid LEADER annotation resolver result preserves destination");
+        }
+
+        std::ostringstream invalidRemapOutput;
+        dxfRW invalidRemapOwner("");
+        invalidRemapOwner.version = DRW::AC1032;
+        invalidRemapOwner.binFile = binary;
+        invalidRemapOwner.setHandleRemap(
+            {{sourceHandle, static_cast<std::uint32_t>(DRW::NoHandle)}});
+        invalidRemapOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&invalidRemapOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&invalidRemapOutput));
+        invalidRemapOwner.writer->writeString(1, "PRESERVED_PREFIX");
+        const std::string invalidRemapBefore = invalidRemapOutput.str();
+        DRW_Leader invalidRemapLeader;
+        invalidRemapLeader.handle = 0x700u;
+        invalidRemapLeader.annotHandle = sourceHandle;
+        t.expect(!invalidRemapOwner.writeLeader(&invalidRemapLeader)
+                     && invalidRemapOutput.str() == invalidRemapBefore,
+                 "NoHandle LEADER annotation remap preserves destination");
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW owner("");
+        owner.version = DRW::AC1032;
+        owner.binFile = binary;
+        owner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        owner.writer->writeString(1, "PRESERVED_PREFIX");
+        const std::string before = output.str();
+        DRW_Leader leader;
+        leader.handle = 0x700u;
+        leader.annotHandle = sourceHandle;
+        t.expect(!owner.writeLeader(&leader) && output.str() == before,
+                 "unmapped LEADER annotation target preserves destination");
+    }
+}
+
 void testEntityReferenceRemapping(TestContext& t) {
     const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
         {0x801u, 0xA81u}, {0x802u, 0xA82u}, {0x803u, 0xA83u},
@@ -21128,6 +21235,15 @@ int main(int argc, char** argv) {
         TestContext focused;
         testPartialViewingIndexReferenceClosure(focused);
         std::cout << "PARTIALVIEWINGINDEX reference closure: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--leader-annotation-reference-remapping") {
+        TestContext focused;
+        testLeaderAnnotationReferenceRemapping(focused);
+        std::cout << "LEADER annotation reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

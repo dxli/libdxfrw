@@ -814,6 +814,12 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_wave1_tests --block-reference-remapping)
     set_tests_properties(libdxfrw_block_reference_remapping PROPERTIES
         LABELS "fast;dxf;writer;blocks;references;generated" TIMEOUT 15)
+    add_test(NAME libdxfrw_leader_annotation_reference_remapping
+        COMMAND libdxfrw_wave1_tests
+            --leader-annotation-reference-remapping)
+    set_tests_properties(libdxfrw_leader_annotation_reference_remapping PROPERTIES
+        LABELS "fast;dxf;writer;entities;references;generated;transaction"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_entity_reference_remapping
         COMMAND libdxfrw_wave1_tests --entity-reference-remapping)
     set_tests_properties(libdxfrw_entity_reference_remapping PROPERTIES

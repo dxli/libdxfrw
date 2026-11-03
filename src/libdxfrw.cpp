@@ -10259,20 +10259,36 @@ bool dxfRW::writeLeader(DRW_Leader *ent){
         // block_color (77): color used when the leader annotation color is
         // BYBLOCK; ezdxf acdb_leader emits it unconditionally (default 7).
         writer->writeInt16(77, ent->coloruse);
-        // annotation_handle (340): hard ref to the associated annotation,
-        // resolved through the source->minted map. The adapter preplans this
-        // typed target before streaming so forward references remain valid;
-        // refuse an unresolved/ambiguous edge rather than silently dropping it.
+        // annotation_handle (340): hard ref to the associated annotation.
+        // Whole-file adapter output uses its preplanned typed target; direct
+        // record output may use the caller's resolver or explicit remap. Refuse
+        // an unresolved/ambiguous edge rather than silently dropping it.
         if (ent->annotHandle != 0) {
             if (m_writingContext.ambiguousSourceHandles.count(
                     ent->annotHandle) != 0)
                 return rejectUnsupportedDxfWrite(
                     "LEADER annotation reference");
-            auto it = m_writingContext.sourceHandleToMintedMap.find(ent->annotHandle);
-            if (it == m_writingContext.sourceHandleToMintedMap.end())
+            std::uint32_t emittedAnnotationHandle = 0u;
+            const auto planned =
+                m_writingContext.sourceHandleToMintedMap.find(
+                    ent->annotHandle);
+            if (planned != m_writingContext.sourceHandleToMintedMap.end()) {
+                // A whole-operation plan names the actual emitted entity and
+                // takes precedence over the low-level fallback mechanisms.
+                emittedAnnotationHandle = planned->second;
+            } else if (m_referenceResolver) {
+                emittedAnnotationHandle =
+                    resolveReference(ent->annotHandle);
+            } else {
+                const auto remapped = m_handleRemap.find(ent->annotHandle);
+                if (remapped != m_handleRemap.end())
+                    emittedAnnotationHandle = remapped->second;
+            }
+            if (emittedAnnotationHandle == 0u
+                || emittedAnnotationHandle == DRW::NoHandle)
                 return rejectUnsupportedDxfWrite(
                     "LEADER annotation reference");
-            writer->writeString(340, toHexStr(it->second));
+            writer->writeString(340, toHexStr(emittedAnnotationHandle));
         }
         if (ent->extrusionPoint.x != 0.0 || ent->extrusionPoint.y != 0.0 ||
             ent->extrusionPoint.z != 1.0) {

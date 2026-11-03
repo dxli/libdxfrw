@@ -232,6 +232,15 @@ engines.
    corrected fresh-writer retry ([receipt](docs/research/p4-scene-object-reference-remapping-2026-11-03.json)).
    Target kinds, source dependencies, physical producer profiles, and native
    scene semantics remain open.
+   LEADER group 340 now keeps the whole-file preplanned annotation identity as
+   its first choice, then supports the configured final-ID resolver or an
+   explicit source-handle remap for direct record writes. Zero/NoHandle and
+   unmapped references still refuse atomically. Focused generated ASCII/Binary
+   controls cover resolver precedence over remap, invalid results, destination
+   preservation, and the existing adapter's forward-reference/readback path
+   ([receipt](docs/research/p4-leader-annotation-reference-remapping-2026-11-03.json)).
+   This closes low-level identity translation only; target kind/existence,
+   ownership, recursive closure, and native annotation semantics remain open.
    Continue the remaining reference-ID audit from the current field receipts,
    prioritizing typed owner/dependency pointers on supported 3D records. Confirm
    each field against its parser contract and applicable format mapping before
