@@ -184,6 +184,27 @@ void testDxfTablesWriteInspection(TestContext& t) {
       }
     }
     t.expect(codec.write(&iface, DRW::AC1032, false), "Empty TABLES inspector retains ordinary authored write");
+    {
+        dxfRW owned(path.string().c_str());
+        Interface ownedIface;
+        ownedIface.dxfW = &owned;
+        auto state = std::make_shared<unsigned>(0u);
+        const std::weak_ptr<unsigned> weakState = state;
+        t.expect(owned.setDxfTablesWriteInspector(
+                     [state](const auto& view) {
+                         ++*state;
+                         return !view.bytes.empty();
+                     }),
+                 "Inspector with a value capture installs");
+        state.reset();
+        t.expect(!weakState.expired(),
+                 "Codec retains value-captured inspector state");
+        t.expect(owned.write(&ownedIface, DRW::AC1032, false)
+                     && !weakState.expired() && *weakState.lock() == 1u,
+                 "Retained inspector closure remains alive through invocation");
+        t.expect(owned.setDxfTablesWriteInspector({}) && weakState.expired(),
+                 "Clearing inspector releases its owned closure");
+    }
     unsigned r12Calls = 0u;
     dxfRW r12(path.string().c_str()); Interface r12Iface; r12Iface.dxfW = &r12;
     r12.setDxfTablesWriteInspector([&](const auto& view) {

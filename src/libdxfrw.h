@@ -202,6 +202,9 @@ public:
         DxfCompatibilityProfile compatibilityProfile;
     };
     using DxfObjectsWriteInspector = std::function<bool(const DxfObjectsWriteView&)>;
+    /** Inspector setters retain an owned copy of the callback and its value
+     * captures. Objects reached through reference captures remain the caller's
+     * lifetime responsibility and must outlive every possible invocation. */
     /** Install outside a write. Invoked once for a successfully staged OBJECTS
      * body, before append/publication. Views expire when the callback returns.
      * Returning false, throwing, or attempting a nested read/write or guarded setup mutation
