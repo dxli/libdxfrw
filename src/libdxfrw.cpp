@@ -3350,11 +3350,12 @@ bool addDxfSetupTableEntryPayload(const DRW_TableEntry& entry,
     return true;
 }
 
-template <typename Record, typename EstimateRecord>
-bool estimateDxfSetupRecords(const std::vector<Record>& records,
+template <typename Records, typename EstimateRecord>
+bool estimateDxfSetupRecords(const Records& records,
                              std::size_t& estimate,
                              std::size_t& itemCount,
                              EstimateRecord estimateRecord) noexcept {
+    using Record = typename Records::value_type;
     estimate = 0u;
     itemCount = 0u;
     if (records.size() > kMaxDxfSetupTableRecords
@@ -3420,6 +3421,15 @@ bool estimateOneNamedDictionary(const DRW_Dictionary& dictionary,
     return true;
 }
 
+bool estimateOneGroup(const DRW_Group& group, std::size_t& bytes,
+                      std::size_t& items) noexcept {
+    return group.m_entityHandles.size() <= DRW_Group::kMaxEntityHandles
+        && addDxfSetupTableEntryPayload(group, bytes, items)
+        && addDxfSetupText(group.m_description, bytes, items)
+        && addDxfSetupSlots(group.m_entityHandles.size(),
+                            sizeof(std::uint32_t), bytes, items);
+}
+
 } // namespace
 
 bool dxfRW::estimateSourceBlockRecordsRetainedBytes(
@@ -3470,6 +3480,24 @@ bool dxfRW::estimateNamedDictObjectsRetainedBytes(
         && estimate <= byteLimit;
 }
 
+bool dxfRW::estimateGroupsRetainedBytes(
+        const std::vector<DRW_Group>& groups, std::size_t byteLimit,
+        std::size_t& estimate, std::size_t& itemCount) noexcept {
+    return byteLimit <= DRW::kMaxDxfTypedTableRetainedBytes
+        && estimateDxfSetupRecords(groups, estimate, itemCount,
+                                   estimateOneGroup)
+        && estimate <= byteLimit;
+}
+
+bool dxfRW::estimateGroupsRetainedBytes(
+        const std::list<DRW_Group>& groups, std::size_t byteLimit,
+        std::size_t& estimate, std::size_t& itemCount) noexcept {
+    return byteLimit <= DRW::kMaxDxfTypedTableRetainedBytes
+        && estimateDxfSetupRecords(groups, estimate, itemCount,
+                                   estimateOneGroup)
+        && estimate <= byteLimit;
+}
+
 void dxfRW::rejectDxfRootDictEntriesInput() noexcept {
     std::vector<std::pair<std::string, std::string>>().swap(m_rootDictEntries);
     m_dxfRootDictEntriesInputRejected = true;
@@ -3480,6 +3508,14 @@ void dxfRW::rejectDxfRootDictEntriesInput() noexcept {
 void dxfRW::rejectDxfNamedDictObjectsInput() noexcept {
     std::vector<DRW_Dictionary>().swap(m_namedDictObjects);
     m_dxfNamedDictObjectsInputRejected = true;
+    if (m_dxfWriteAttemptActive)
+        m_writeError = true;
+}
+
+void dxfRW::rejectDxfGroupsInput() noexcept {
+    std::vector<DRW_Group>().swap(m_groups);
+    m_dxfGroupsInputRejected = true;
+    clearDxfGroupPlan();
     if (m_dxfWriteAttemptActive)
         m_writeError = true;
 }
@@ -3573,6 +3609,64 @@ void dxfRW::setNamedDictObjects(std::vector<DRW_Dictionary>&& dicts) {
     }
     m_namedDictObjects = std::move(dicts);
     m_dxfNamedDictObjectsInputRejected = false;
+}
+
+void dxfRW::setGroups(const std::vector<DRW_Group>& groups) {
+    if (!preflightDxfSetup())
+        return;
+    if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen) {
+        m_writeError = true;
+        return;
+    }
+    std::size_t estimate = 0u;
+    std::size_t itemCount = 0u;
+    if (!estimateGroupsRetainedBytes(
+            groups, DRW::kMaxDxfTypedTableRetainedBytes,
+            estimate, itemCount)) {
+        rejectDxfGroupsInput();
+        return;
+    }
+    try {
+        std::vector<DRW_Group> copied = groups;
+        m_groups.swap(copied);
+    } catch (...) {
+        rejectDxfGroupsInput();
+        return;
+    }
+    m_dxfGroupsInputRejected = false;
+    clearDxfGroupPlan();
+}
+
+bool dxfRW::adoptGroupsForWrite(std::list<DRW_Group>& groups) {
+    if (!preflightDxfSetup())
+        return false;
+    if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen) {
+        m_writeError = true;
+        return false;
+    }
+    std::size_t estimate = 0u;
+    std::size_t itemCount = 0u;
+    if (!estimateGroupsRetainedBytes(
+            groups, DRW::kMaxDxfTypedTableRetainedBytes,
+            estimate, itemCount)) {
+        rejectDxfGroupsInput();
+        return false;
+    }
+    static_assert(noexcept(DRW_Group(std::declval<DRW_Group&&>())),
+                  "GROUP write transfer requires nothrow move construction");
+    std::vector<DRW_Group> adopted;
+    try {
+        adopted.reserve(groups.size());
+    } catch (...) {
+        rejectDxfGroupsInput();
+        return false;
+    }
+    for (DRW_Group& group : groups)
+        adopted.emplace_back(std::move(group));
+    m_groups.swap(adopted);
+    m_dxfGroupsInputRejected = false;
+    clearDxfGroupPlan();
+    return true;
 }
 
 void dxfRW::setSourceBlockRecords(
@@ -4986,6 +5080,14 @@ bool dxfRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
     version = ver;
     binFile = bin;
     iface = interface_;
+    if (m_dxfGroupsInputRejected) {
+        recordOperationDiagnostic(
+            DRW::OperationPhase::Validation,
+            DRW::OperationCause::ResourceLimit,
+            "dxf-group-input-budget",
+            "GROUP records exceeded the bounded setter limits");
+        return setError(DRW::BAD_OPEN);
+    }
     if (m_dxfClassesInputRejected) {
         recordOperationDiagnostic(
             DRW::OperationPhase::Validation,

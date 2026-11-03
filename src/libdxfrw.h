@@ -860,62 +860,11 @@ public:
      * dependent records serialize. Changes during later callbacks refuse the
      * write. Planning is not evidence that a GROUP was emitted.
      * Empty by default. */
-    void setGroups(const std::vector<DRW_Group> &groups) {
-        if (!preflightDxfSetup())
-            return;
-        if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen) {
-            m_writeError = true;
-            return;
-        }
-        if (groups.size() > DRW_Dictionary::kMaxEntries) {
-            m_dxfGroupsInputRejected = true;
-            clearDxfGroupPlan();
-            return;
-        }
-        std::vector<DRW_Group> copied;
-        try {
-            copied = groups;
-        } catch (...) {
-            m_dxfGroupsInputRejected = true;
-            clearDxfGroupPlan();
-            return;
-        }
-        m_groups.swap(copied);
-        m_dxfGroupsInputRejected = false;
-        clearDxfGroupPlan();
-    }
+    void setGroups(const std::vector<DRW_Group>& groups);
     //! Move adapter-owned list values into the codec for one synchronous
     //! write. Restore them with returnAdoptedGroupsForWrite() before the
     //! source list is used again.
-    bool adoptGroupsForWrite(std::list<DRW_Group>& groups) {
-        if (!preflightDxfSetup())
-            return false;
-        if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen) {
-            m_writeError = true;
-            return false;
-        }
-        if (groups.size() > DRW_Dictionary::kMaxEntries) {
-            m_dxfGroupsInputRejected = true;
-            clearDxfGroupPlan();
-            return false;
-        }
-        static_assert(noexcept(DRW_Group(std::declval<DRW_Group&&>())),
-                      "GROUP write transfer requires nothrow move construction");
-        std::vector<DRW_Group> adopted;
-        try {
-            adopted.reserve(groups.size());
-        } catch (...) {
-            m_dxfGroupsInputRejected = true;
-            clearDxfGroupPlan();
-            return false;
-        }
-        for (DRW_Group& group : groups)
-            adopted.emplace_back(std::move(group));
-        m_groups = std::move(adopted);
-        m_dxfGroupsInputRejected = false;
-        clearDxfGroupPlan();
-        return true;
-    }
+    bool adoptGroupsForWrite(std::list<DRW_Group>& groups);
     //! Borrow the codec-owned GROUP input during a synchronous write callback.
     //! This is input state, not an emitted-record or preservation receipt.
     //! Invalidated by set/adopt/return operations and codec destruction.
@@ -1411,6 +1360,7 @@ private:
     void rejectDxfClassesInput() noexcept;
     void rejectDxfRootDictEntriesInput() noexcept;
     void rejectDxfNamedDictObjectsInput() noexcept;
+    void rejectDxfGroupsInput() noexcept;
     // Executable-local allocation instrumentation; no runtime/public test API.
     friend class DxIfaceStandardDwgCaptureTestAccess;
     friend class DxfGroupSetterTestAccess;
@@ -1736,6 +1686,12 @@ public:
         const std::vector<DRW_Dictionary>& dicts,
         std::size_t byteLimit, std::size_t& estimate,
         std::size_t& itemCount) noexcept;
+    static bool estimateGroupsRetainedBytes(
+        const std::vector<DRW_Group>& groups, std::size_t byteLimit,
+        std::size_t& estimate, std::size_t& itemCount) noexcept;
+    static bool estimateGroupsRetainedBytes(
+        const std::list<DRW_Group>& groups, std::size_t byteLimit,
+        std::size_t& estimate, std::size_t& itemCount) noexcept;
     bool preflightRawDxfSections() noexcept;
     bool preflightDxfSetup() noexcept {
         if (!m_dxfWriteFinalizing && !m_dxfWriteInspecting)

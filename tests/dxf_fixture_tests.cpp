@@ -68,6 +68,23 @@ public:
     static void resetWriteSession(dxfRW& owner) {
         owner.resetDxfWriteSession();
     }
+    static bool groupsRejected(const dxfRW& owner) {
+        return owner.m_dxfGroupsInputRejected;
+    }
+    static bool estimateGroups(const std::vector<DRW_Group>& groups,
+                               std::size_t byteLimit,
+                               std::size_t& bytes,
+                               std::size_t& items) {
+        return dxfRW::estimateGroupsRetainedBytes(
+            groups, byteLimit, bytes, items);
+    }
+    static bool estimateGroups(const std::list<DRW_Group>& groups,
+                               std::size_t byteLimit,
+                               std::size_t& bytes,
+                               std::size_t& items) {
+        return dxfRW::estimateGroupsRetainedBytes(
+            groups, byteLimit, bytes, items);
+    }
     static bool rootEntriesRejected(const dxfRW& owner) {
         return owner.m_dxfRootDictEntriesInputRejected;
     }
@@ -59488,7 +59505,7 @@ void testTableAttributeCountBound(TestContext& t) {
     }
 }
 
-void testGroupAdoptionCountBound(TestContext& t) {
+void testGroupSetterBounds(TestContext& t) {
     const std::size_t overLimitCount = DRW_Dictionary::kMaxEntries + 1u;
     std::list<DRW_Group> groups;
     for (std::size_t index = 0u; index < overLimitCount; ++index)
@@ -59535,6 +59552,246 @@ void testGroupAdoptionCountBound(TestContext& t) {
                      && codec.groupsForWrite().front().name == corrected.name
                      && output.str() == sentinel,
                  "corrected GROUP setter input replans on the same codec after refusal");
+    }
+
+    const std::size_t maxItems = DRW::kMaxDxfTypedTableItems;
+    const std::size_t nonHandleItems = 30u;
+    const std::size_t expectedOverLastGroupHandles =
+        maxItems - nonHandleItems + 1u
+        - 9u * DRW_Group::kMaxEntityHandles;
+    const auto makeGroupRows = [=](std::size_t totalHandles) {
+        std::vector<DRW_Group> result(10u);
+        for (DRW_Group& group : result) {
+            const std::size_t count = std::min(
+                totalHandles, DRW_Group::kMaxEntityHandles);
+            group.m_entityHandles.resize(count, 0x30u);
+            totalHandles -= count;
+        }
+        return result;
+    };
+    std::vector<DRW_Group> smallGroups(1u);
+    smallGroups.front().name = "GROUP_BOUND";
+    smallGroups.front().m_description = "small description";
+    std::size_t smallBytes = 0u;
+    std::size_t smallItems = 0u;
+    const bool smallMeasured = DxfGroupSetterTestAccess::estimateGroups(
+        smallGroups, DRW::kMaxDxfTypedTableRetainedBytes,
+        smallBytes, smallItems);
+    std::size_t exactSmallBytes = 0u;
+    std::size_t exactSmallItems = 0u;
+    const bool exactSmallAccepted = smallMeasured
+        && DxfGroupSetterTestAccess::estimateGroups(
+            smallGroups, smallBytes, exactSmallBytes, exactSmallItems)
+        && exactSmallBytes == smallBytes && exactSmallItems == smallItems;
+    std::size_t belowSmallBytes = 0u;
+    std::size_t belowSmallItems = 0u;
+    const bool belowSmallRejected = smallMeasured && smallBytes > 0u
+        && !DxfGroupSetterTestAccess::estimateGroups(
+            smallGroups, smallBytes - 1u,
+            belowSmallBytes, belowSmallItems);
+
+    std::vector<DRW_Group> exactNested =
+        makeGroupRows(maxItems - nonHandleItems);
+    std::size_t exactNestedBytes = 0u;
+    std::size_t exactNestedItems = 0u;
+    const bool exactNestedMeasured =
+        DxfGroupSetterTestAccess::estimateGroups(
+            exactNested, DRW::kMaxDxfTypedTableRetainedBytes,
+            exactNestedBytes, exactNestedItems)
+        && exactNestedItems == maxItems;
+    std::vector<DRW_Group> overNested =
+        makeGroupRows(maxItems - nonHandleItems + 1u);
+    std::size_t overNestedBytes = 0u;
+    std::size_t overNestedItems = 0u;
+    const bool overNestedMeasured =
+        !DxfGroupSetterTestAccess::estimateGroups(
+            overNested, DRW::kMaxDxfTypedTableRetainedBytes,
+            overNestedBytes, overNestedItems);
+    t.expect(exactSmallAccepted && belowSmallRejected
+                 && exactNestedMeasured && overNestedMeasured,
+             "GROUP estimator accepts exact byte and aggregate-item boundaries and rejects one byte or one handle over");
+
+    bool exactBytePayloadAccepted = false;
+    bool overBytePayloadRejected = false;
+    bool overByteSetterCleared = false;
+    {
+        std::vector<DRW_Group> byteBoundGroups(1u);
+        std::size_t emptyBytes = 0u;
+        std::size_t emptyItems = 0u;
+        const bool emptyMeasured =
+            DxfGroupSetterTestAccess::estimateGroups(
+                byteBoundGroups, DRW::kMaxDxfTypedTableRetainedBytes,
+                emptyBytes, emptyItems);
+        if (emptyMeasured
+            && emptyBytes < DRW::kMaxDxfTypedTableRetainedBytes) {
+            const std::size_t exactDescriptionBytes =
+                DRW::kMaxDxfTypedTableRetainedBytes - emptyBytes;
+            byteBoundGroups.front().m_description.assign(
+                exactDescriptionBytes, 'x');
+            std::size_t measuredExactBytes = 0u;
+            std::size_t measuredExactItems = 0u;
+            exactBytePayloadAccepted =
+                DxfGroupSetterTestAccess::estimateGroups(
+                    byteBoundGroups,
+                    DRW::kMaxDxfTypedTableRetainedBytes,
+                    measuredExactBytes, measuredExactItems)
+                && measuredExactBytes
+                    == DRW::kMaxDxfTypedTableRetainedBytes;
+            byteBoundGroups.front().m_description.push_back('x');
+            std::size_t measuredOverBytes = 0u;
+            std::size_t measuredOverItems = 0u;
+            overBytePayloadRejected =
+                !DxfGroupSetterTestAccess::estimateGroups(
+                    byteBoundGroups,
+                    DRW::kMaxDxfTypedTableRetainedBytes,
+                    measuredOverBytes, measuredOverItems);
+            dxfRW byteBoundSetter("");
+            byteBoundSetter.setGroups(smallGroups);
+            byteBoundSetter.setGroups(byteBoundGroups);
+            overByteSetterCleared =
+                DxfGroupSetterTestAccess::groupsRejected(byteBoundSetter)
+                && byteBoundSetter.groupsForWrite().empty();
+        }
+    }
+    t.expect(exactBytePayloadAccepted && overBytePayloadRejected
+                 && overByteSetterCleared,
+             "GROUP setter accepts exactly 64 MiB of accounted payload and rejects one byte over before copying");
+
+    dxfRW nestedSetter("");
+    nestedSetter.setGroups(exactNested);
+    const bool exactSetterAccepted =
+        !DxfGroupSetterTestAccess::groupsRejected(nestedSetter)
+        && nestedSetter.groupsForWrite().size() == exactNested.size();
+    nestedSetter.setGroups(overNested);
+    const bool overSetterCleared =
+        DxfGroupSetterTestAccess::groupsRejected(nestedSetter)
+        && nestedSetter.groupsForWrite().empty()
+        && overNested.size() == 10u
+        && overNested.back().m_entityHandles.size()
+            == expectedOverLastGroupHandles;
+    t.expect(exactSetterAccepted && overSetterCleared,
+             "GROUP setter accepts the exact aggregate-work ceiling and clears stale state on pre-copy overflow");
+
+    std::list<DRW_Group> overNestedList;
+    for (DRW_Group& group : overNested)
+        overNestedList.emplace_back(std::move(group));
+    dxfRW nestedAdoption("");
+    DRW_Group prior;
+    prior.name = "GROUP_ADOPTION_STALE";
+    nestedAdoption.setGroups({prior});
+    const bool overAdoptionRefused =
+        !nestedAdoption.adoptGroupsForWrite(overNestedList);
+    const bool overAdoptionPreserved =
+        overAdoptionRefused
+        && DxfGroupSetterTestAccess::groupsRejected(nestedAdoption)
+        && nestedAdoption.groupsForWrite().empty()
+        && overNestedList.size() == 10u
+        && overNestedList.back().m_entityHandles.size()
+            == expectedOverLastGroupHandles;
+    std::size_t listBytes = 0u;
+    std::size_t listItems = 0u;
+    const bool listOverflowMeasured =
+        !DxfGroupSetterTestAccess::estimateGroups(
+            overNestedList, DRW::kMaxDxfTypedTableRetainedBytes,
+            listBytes, listItems);
+    t.expect(overAdoptionPreserved && listOverflowMeasured,
+             "GROUP list adoption rejects aggregate overflow before moving any member and clears stale state");
+
+    dxfRW allocationCodec("");
+    const std::size_t failuresBefore = materialFailedAllocations;
+    {
+        MaterialAllocationFailure failCopy(0);
+        allocationCodec.setGroups(smallGroups);
+    }
+    const bool allocationFailureRejected =
+        materialFailedAllocations > failuresBefore
+        && DxfGroupSetterTestAccess::groupsRejected(allocationCodec)
+        && allocationCodec.groupsForWrite().empty();
+    allocationCodec.setGroups(smallGroups);
+    const bool allocationRetry =
+        !DxfGroupSetterTestAccess::groupsRejected(allocationCodec)
+        && allocationCodec.groupsForWrite().size() == 1u;
+    t.expect(allocationFailureRejected && allocationRetry,
+             "GROUP setter catches const-copy allocation failure and accepts corrected retry");
+
+    std::list<DRW_Group> allocationGroups(1u);
+    allocationGroups.front().name = "GROUP_ADOPTION_ALLOCATION";
+    dxfRW allocationAdopter("");
+    const std::size_t adoptionFailuresBefore = materialFailedAllocations;
+    bool adoptionAllocationFailed = false;
+    {
+        MaterialAllocationFailure failReserve(0);
+        adoptionAllocationFailed =
+            !allocationAdopter.adoptGroupsForWrite(allocationGroups);
+    }
+    const bool adoptionFailurePreservedInput =
+        adoptionAllocationFailed
+        && materialFailedAllocations > adoptionFailuresBefore
+        && DxfGroupSetterTestAccess::groupsRejected(allocationAdopter)
+        && allocationAdopter.groupsForWrite().empty()
+        && allocationGroups.size() == 1u
+        && allocationGroups.front().name == "GROUP_ADOPTION_ALLOCATION";
+    const bool adoptionRetry =
+        allocationAdopter.adoptGroupsForWrite(allocationGroups)
+        && allocationAdopter.groupsForWrite().size() == 1u
+        && allocationAdopter.groupsForWrite().front().name
+            == "GROUP_ADOPTION_ALLOCATION";
+    allocationAdopter.returnAdoptedGroupsForWrite(allocationGroups);
+    t.expect(adoptionFailurePreservedInput && adoptionRetry
+                 && allocationGroups.size() == 1u
+                 && allocationGroups.front().name
+                    == "GROUP_ADOPTION_ALLOCATION",
+             "GROUP list reserve allocation failure preserves caller data and accepts corrected retry/return");
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    for (const bool binary : {false, true}) {
+        const auto outputPath = std::filesystem::temp_directory_path()
+            / ("libdxfrw-group-nested-setter-bound-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        const std::string sentinel = "GROUP_NESTED_WRITE_SENTINEL\n";
+        {
+            std::ofstream seed(outputPath,
+                               std::ios::binary | std::ios::trunc);
+            seed << sentinel;
+        }
+        dx_data data;
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        dxfRW writer(outputPath.string().c_str());
+        adapter.dxfW = &writer;
+        std::vector<DRW_Group> rejectedRows =
+            makeGroupRows(maxItems - nonHandleItems + 1u);
+        std::list<DRW_Group> rejectedList;
+        for (DRW_Group& group : rejectedRows)
+            rejectedList.emplace_back(std::move(group));
+        const bool refusedAtAdoption =
+            !writer.adoptGroupsForWrite(rejectedList);
+        const bool refusedWrite = !writer.write(&adapter, DRW::AC1027, binary);
+        std::ifstream preservedInput(outputPath, std::ios::binary);
+        const std::string preserved(
+            (std::istreambuf_iterator<char>(preservedInput)),
+            std::istreambuf_iterator<char>());
+        const bool callerPreserved = rejectedList.size() == 10u
+            && rejectedList.back().m_entityHandles.size()
+                == expectedOverLastGroupHandles;
+        writer.setGroups(std::vector<DRW_Group>{});
+        const bool retried = writer.write(&adapter, DRW::AC1027, binary);
+        std::ifstream outputInput(outputPath, std::ios::binary);
+        const std::string output(
+            (std::istreambuf_iterator<char>(outputInput)),
+            std::istreambuf_iterator<char>());
+        t.expect(refusedAtAdoption && refusedWrite
+                     && preserved == sentinel && callerPreserved
+                     && retried && output != sentinel,
+                 binary
+                     ? "binary nested GROUP overflow preserves caller/destination and succeeds after corrected retry"
+                     : "ASCII nested GROUP overflow preserves caller/destination and succeeds after corrected retry");
+        adapter.dxfW = nullptr;
+        std::error_code removeError;
+        std::filesystem::remove(outputPath, removeError);
     }
 }
 
@@ -63794,10 +64051,10 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
-        && std::string(argv[1]) == "--group-adoption-count-bound") {
+        && std::string(argv[1]) == "--group-setter-bounds") {
         TestContext context;
-        testGroupAdoptionCountBound(context);
-        std::cout << "GROUP adoption count bound: "
+        testGroupSetterBounds(context);
+        std::cout << "GROUP setter resource bounds: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
