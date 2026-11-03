@@ -73,6 +73,12 @@ public:
     static std::size_t rootEntriesCount(const dxfRW& owner) {
         return owner.m_rootDictEntries.size();
     }
+    static bool namedDictObjectsRejected(const dxfRW& owner) {
+        return owner.m_dxfNamedDictObjectsInputRejected;
+    }
+    static std::size_t namedDictObjectsCount(const dxfRW& owner) {
+        return owner.m_namedDictObjects.size();
+    }
 };
 
 namespace {
@@ -59480,6 +59486,51 @@ void testRootDictEntryCountBound(TestContext& t) {
     }
 }
 
+void testNamedDictObjectCountBound(TestContext& t) {
+    const std::size_t overLimitCount = DRW_Dictionary::kMaxEntries + 1u;
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW codec("");
+        DxfGroupSetterTestAccess::configureWriter(codec, output, binary);
+        const std::string sentinel = "NAMED_DICT_SETTER_DESTINATION_SENTINEL";
+        output << sentinel;
+        std::vector<DRW_Dictionary> oversized(overLimitCount);
+        codec.setNamedDictObjects(oversized);
+        const bool rejectedBeforeCopy =
+            DxfGroupSetterTestAccess::namedDictObjectsRejected(codec)
+            && DxfGroupSetterTestAccess::namedDictObjectsCount(codec) == 0u;
+        const bool refused = !DxfGroupSetterTestAccess::writeObjects(codec);
+        t.expect(rejectedBeforeCopy && refused && output.str() == sentinel,
+                 "over-limit named dictionary setter refuses before copying and preserves output");
+
+        const std::vector<DRW_Dictionary> corrected(1u);
+        codec.setNamedDictObjects(corrected);
+        DxfGroupSetterTestAccess::resetWriteSession(codec);
+        t.expect(!DxfGroupSetterTestAccess::namedDictObjectsRejected(codec)
+                     && DxfGroupSetterTestAccess::namedDictObjectsCount(codec) == 1u
+                     && output.str() == sentinel,
+                 "corrected named dictionary setter input clears rejection on the same codec");
+
+        std::vector<DRW_Dictionary> oversizedMove(overLimitCount);
+        codec.setNamedDictObjects(std::move(oversizedMove));
+        const bool rejectedMoveBeforeConsume =
+            DxfGroupSetterTestAccess::namedDictObjectsRejected(codec)
+            && DxfGroupSetterTestAccess::namedDictObjectsCount(codec) == 1u
+            && oversizedMove.size() == overLimitCount;
+        const bool refusedMove = !DxfGroupSetterTestAccess::writeObjects(codec);
+        t.expect(rejectedMoveBeforeConsume && refusedMove
+                     && output.str() == sentinel,
+                 "over-limit named dictionary move setter preserves caller and prior state, and refuses output");
+
+        codec.setNamedDictObjects(corrected);
+        DxfGroupSetterTestAccess::resetWriteSession(codec);
+        t.expect(!DxfGroupSetterTestAccess::namedDictObjectsRejected(codec)
+                     && DxfGroupSetterTestAccess::namedDictObjectsCount(codec) == 1u
+                     && output.str() == sentinel,
+                 "corrected named dictionary input recovers after move-setter refusal");
+    }
+}
+
 void populateLegacyEllipseCarriers(dx_data& data, bool includeControls = true) {
     DRW_AppId app;
     app.name = "ELLIPSE_APP";
@@ -62996,6 +63047,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testRootDictEntryCountBound(context);
         std::cout << "Root dictionary entry count bound: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--named-dict-object-count-bound") {
+        TestContext context;
+        testNamedDictObjectCountBound(context);
+        std::cout << "Named dictionary object count bound: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

@@ -777,7 +777,19 @@ public:
             m_writeError = true;
             return;
         }
-        m_namedDictObjects = dicts;
+        if (dicts.size() > DRW_Dictionary::kMaxEntries) {
+            m_dxfNamedDictObjectsInputRejected = true;
+            return;
+        }
+        std::vector<DRW_Dictionary> copied;
+        try {
+            copied = dicts;
+        } catch (...) {
+            m_dxfNamedDictObjectsInputRejected = true;
+            return;
+        }
+        m_namedDictObjects.swap(copied);
+        m_dxfNamedDictObjectsInputRejected = false;
     }
     void setNamedDictObjects(std::vector<DRW_Dictionary>&& dicts) {
         if (!preflightDxfSetup())
@@ -786,7 +798,12 @@ public:
             m_writeError = true;
             return;
         }
+        if (dicts.size() > DRW_Dictionary::kMaxEntries) {
+            m_dxfNamedDictObjectsInputRejected = true;
+            return;
+        }
         m_namedDictObjects = std::move(dicts);
+        m_dxfNamedDictObjectsInputRejected = false;
     }
     /// Declare source identities for the generated NOD (C) and ACAD_GROUP
     /// dictionary (D). Zero leaves an identity unbound; a group dictionary
@@ -2023,6 +2040,7 @@ private:
     /// Populated via setNamedDictObjects; empty by default so a fresh write is
     /// byte-identical.
     std::vector<DRW_Dictionary> m_namedDictObjects;
+    bool m_dxfNamedDictObjectsInputRejected{false};
     /// TABLESTYLE source handles whose complete raw records are emitted by the
     /// owning adapter during this write.
     std::vector<std::uint32_t> m_resolvedTableStyleHandles;

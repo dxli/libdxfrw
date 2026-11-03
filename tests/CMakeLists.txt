@@ -3145,6 +3145,12 @@ set_tests_properties(libdxfrw_root_dict_entry_count_bound PROPERTIES
     LABELS "fast;dxf;dictionary;resource"
     TIMEOUT 30)
 
+add_test(NAME libdxfrw_named_dict_object_count_bound
+    COMMAND libdxfrw_dxf_fixture_tests --named-dict-object-count-bound)
+set_tests_properties(libdxfrw_named_dict_object_count_bound PROPERTIES
+    LABELS "fast;dxf;dictionary;resource"
+    TIMEOUT 30)
+
 add_test(NAME libdxfrw_tablecontent_multicell_field_reference
     COMMAND libdxfrw_dxf_fixture_tests --tablecontent-multicell-field)
 set_tests_properties(libdxfrw_tablecontent_multicell_field_reference PROPERTIES

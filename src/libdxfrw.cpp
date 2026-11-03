@@ -16244,7 +16244,8 @@ bool dxfRW::planDxfGroupHandles() {
 bool dxfRW::writeObjects() {
     if (!preflightDxfWrite())
         return false;
-    if (m_dxfRootDictEntriesInputRejected)
+    if (m_dxfRootDictEntriesInputRejected
+        || m_dxfNamedDictObjectsInputRejected)
         return failDxfWrite();
     if (!planDxfGroupHandles())
         return false;
