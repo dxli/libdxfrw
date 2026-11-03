@@ -501,8 +501,15 @@ eligible reader. The exact package and environment result are in the
   A POINT tagged as INSERT is refused atomically; correcting it permits a
   same-adapter retry and typed POINT readback in ASCII/Binary DXF. See the
   [INSERT dispatch receipt](docs/research/p8-insert-runtime-dispatch-2026-11-02.json).
-  This closes one adapter type-safety hole only; remaining entity tags still
-  require source-stable inventory and any applicable subtype guards.
+  The remaining former raw entity-writer casts now pass through an exact
+  runtime-type/public-tag gate, including the primitive inheritance families,
+  annotation types, all dimension tags, MLINE, IMAGE and WIPEOUT. The supported
+  DRW_DimLargeRadial and dx_ifaceImg routes remain explicit. Generated ASCII/
+  Binary controls cover invalid base-to-derived dispatch, derived-to-base
+  truncation, destination preservation, corrected retry and typed readback;
+  see the [entity runtime-dispatch receipt](docs/research/p8-entity-runtime-dispatch-2026-11-02.json).
+  This closes the unchecked static-cast inventory in `writeEntity`; native
+  consumer behavior and semantic support remain open.
   `dx_iface` now retains and dispatches POINTCLOUD, POINTCLOUDEX, and
   NAVISWORKSMODEL through existing bounded typed capture and DXF writer paths.
   Generated ASCII/Binary controls check AC1024 refusal for the AC1027-only

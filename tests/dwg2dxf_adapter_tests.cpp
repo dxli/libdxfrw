@@ -20098,6 +20098,99 @@ bool insertRuntimeDispatchGuard() {
     return true;
 }
 
+bool entityRuntimeDispatchGuard() {
+    for (const bool binary : {false, true}) {
+        for (const bool derivedAsBase : {false, true}) {
+            dx_data data;
+            dx_iface adapter;
+            adapter.cData = &data;
+            adapter.currentBlock = data.mBlock;
+            if (derivedAsBase) {
+                DRW_Circle source;
+                source.basePoint.x = 3.25;
+                source.basePoint.y = -6.5;
+                source.radious = 9.75;
+                adapter.addCircle(source);
+            } else {
+                DRW_Point source;
+                source.basePoint.x = -4.5;
+                source.basePoint.y = 8.25;
+                adapter.addPoint(source);
+            }
+            if (data.mBlock == nullptr || data.mBlock->ent.size() != 1u
+                || data.mBlock->ent.front() == nullptr
+                || data.typedEntityCaptureFailed)
+                return fail("primitive callback did not retain its source entity");
+
+            DRW_Entity* const retained = data.mBlock->ent.front();
+            const DRW::ETYPE correctType = derivedAsBase
+                ? DRW::CIRCLE : DRW::POINT;
+            retained->eType = derivedAsBase ? DRW::POINT : DRW::LINE;
+            const auto path = std::filesystem::temp_directory_path()
+                / ("libdxfrw-entity-runtime-"
+                   + std::to_string(std::chrono::steady_clock::now()
+                                        .time_since_epoch().count())
+                   + (derivedAsBase ? "-derived-as-base" : "-base-as-derived")
+                   + (binary ? "-binary.dxf" : "-ascii.dxf"));
+            if (std::filesystem::exists(path))
+                return fail("entity runtime output path unexpectedly exists");
+            struct Cleanup {
+                std::filesystem::path path;
+                ~Cleanup() {
+                    std::error_code ignored;
+                    std::filesystem::remove(path, ignored);
+                }
+            } cleanup{path};
+            const std::string sentinel = "ENTITY_DISPATCH_DESTINATION\n";
+            {
+                std::ofstream existing(path, std::ios::binary);
+                existing << sentinel;
+                if (!existing)
+                    return fail("could not create entity destination sentinel");
+            }
+            if (adapter.fileExport(path.string(), DRW::AC1027, binary,
+                                   &data, false, true))
+                return fail("mismatched primitive runtime type was emitted");
+            {
+                std::ifstream previous(path, std::ios::binary);
+                const std::string bytes{
+                    std::istreambuf_iterator<char>(previous), {}};
+                if (bytes != sentinel)
+                    return fail("mismatched primitive changed the destination");
+            }
+
+            retained->eType = correctType;
+            if (!adapter.fileExport(path.string(), DRW::AC1027, binary,
+                                    &data, false, true))
+                return fail("corrected primitive mismatch did not retry successfully");
+            dx_data readback;
+            dx_iface reader;
+            if (!reader.fileImport(path.string(), &readback, false)
+                || readback.mBlock == nullptr
+                || readback.mBlock->ent.size() != 1u)
+                return fail("corrected primitive mismatch did not read back");
+            const DRW_Entity* actual = readback.mBlock->ent.front();
+            if (derivedAsBase) {
+                const auto* circle = dynamic_cast<const DRW_Circle*>(actual);
+                if (circle == nullptr || typeid(*actual) != typeid(DRW_Circle)
+                    || actual->eType != DRW::CIRCLE
+                    || circle->basePoint.x != 3.25
+                    || circle->basePoint.y != -6.5
+                    || circle->radious != 9.75)
+                    return fail("corrected CIRCLE tag lost subtype or geometry");
+            } else {
+                const auto* point = dynamic_cast<const DRW_Point*>(actual);
+                if (point == nullptr || typeid(*actual) != typeid(DRW_Point)
+                    || actual->eType != DRW::POINT
+                    || point->basePoint.x != -4.5
+                    || point->basePoint.y != 8.25)
+                    return fail("corrected POINT tag changed its coordinates");
+            }
+        }
+    }
+    return true;
+}
+
 bool pointCloudAndNavisworksAdapterTransport() {
     for (const bool binary : {false, true}) {
         dx_data data;
@@ -63094,6 +63187,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--insert-runtime-dispatch")
         return insertRuntimeDispatchGuard() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--entity-runtime-dispatch")
+        return entityRuntimeDispatchGuard() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--point-cloud-adapter-transport")
         return pointCloudAndNavisworksAdapterTransport() ? 0 : 1;

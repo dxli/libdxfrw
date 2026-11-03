@@ -1156,6 +1156,10 @@ add_test(NAME dwg2dxf_insert_runtime_dispatch
     COMMAND libdxfrw_dwg2dxf_adapter_tests --insert-runtime-dispatch)
 set_tests_properties(dwg2dxf_insert_runtime_dispatch PROPERTIES
     LABELS "fast;dxf;adapter;entities;transaction;insert" TIMEOUT 15)
+add_test(NAME dwg2dxf_entity_runtime_dispatch
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --entity-runtime-dispatch)
+set_tests_properties(dwg2dxf_entity_runtime_dispatch PROPERTIES
+    LABELS "fast;dxf;adapter;entities;transaction;runtime-dispatch" TIMEOUT 15)
 add_test(NAME dwg2dxf_point_cloud_adapter_transport
     COMMAND libdxfrw_dwg2dxf_adapter_tests --point-cloud-adapter-transport)
 set_tests_properties(dwg2dxf_point_cloud_adapter_transport PROPERTIES

@@ -66,6 +66,15 @@
 
 namespace {
 
+template <typename EntityT>
+EntityT* exactEntityForDxfWrite(DRW_Entity* entity,
+                                DRW::ETYPE expectedType) noexcept {
+    if (entity == nullptr || entity->eType != expectedType
+        || typeid(*entity) != typeid(EntityT))
+        return nullptr;
+    return dynamic_cast<EntityT*>(entity);
+}
+
 dx_raster_output::Profile rasterOutputProfile(dxfRW::DxfCompatibilityProfile profile) noexcept {
     switch (profile) {
     case dxfRW::DxfCompatibilityProfile::StandaloneSafe: return dx_raster_output::Profile::StandaloneSafe;
@@ -71142,47 +71151,90 @@ void dx_iface::writeEntity(DRW_Entity* e){
     }
     bool written = false;
     switch (e->eType) {
-    case DRW::POINT:
-        written = dxfW->writePoint(static_cast<DRW_Point*>(e));
+    case DRW::POINT: {
+        auto* entity = exactEntityForDxfWrite<DRW_Point>(e, DRW::POINT);
+        if (entity) written = dxfW->writePoint(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
-    case DRW::LINE:
-        written = dxfW->writeLine(static_cast<DRW_Line*>(e));
+    }
+    case DRW::LINE: {
+        auto* entity = exactEntityForDxfWrite<DRW_Line>(e, DRW::LINE);
+        if (entity) written = dxfW->writeLine(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
-    case DRW::THREEDLINE:
-        written = dxfW->write3DLine(static_cast<DRW_3DLine*>(e));
+    }
+    case DRW::THREEDLINE: {
+        auto* entity = exactEntityForDxfWrite<DRW_3DLine>(e, DRW::THREEDLINE);
+        if (entity) written = dxfW->write3DLine(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
-    case DRW::RAY:
-        written = dxfW->writeRay(static_cast<DRW_Ray*>(e));
+    }
+    case DRW::RAY: {
+        auto* entity = exactEntityForDxfWrite<DRW_Ray>(e, DRW::RAY);
+        if (entity) written = dxfW->writeRay(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
-    case DRW::XLINE:
-        written = dxfW->writeXline(static_cast<DRW_Xline*>(e));
+    }
+    case DRW::XLINE: {
+        auto* entity = exactEntityForDxfWrite<DRW_Xline>(e, DRW::XLINE);
+        if (entity) written = dxfW->writeXline(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
-    case DRW::CIRCLE:
-        written = dxfW->writeCircle(static_cast<DRW_Circle*>(e));
+    }
+    case DRW::CIRCLE: {
+        auto* entity = exactEntityForDxfWrite<DRW_Circle>(e, DRW::CIRCLE);
+        if (entity) written = dxfW->writeCircle(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
-    case DRW::ARC:
-        written = dxfW->writeArc(static_cast<DRW_Arc*>(e));
+    }
+    case DRW::ARC: {
+        auto* entity = exactEntityForDxfWrite<DRW_Arc>(e, DRW::ARC);
+        if (entity) written = dxfW->writeArc(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
-    case DRW::SOLID:
-        written = dxfW->writeSolid(static_cast<DRW_Solid*>(e));
+    }
+    case DRW::SOLID: {
+        auto* entity = exactEntityForDxfWrite<DRW_Solid>(e, DRW::SOLID);
+        if (entity) written = dxfW->writeSolid(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
-    case DRW::DXF_TRACE:
-        written = dxfW->writeTrace(static_cast<DRW_Trace*>(e));
+    }
+    case DRW::DXF_TRACE: {
+        auto* entity = exactEntityForDxfWrite<DRW_Trace>(e, DRW::DXF_TRACE);
+        if (entity) written = dxfW->writeTrace(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
-    case DRW::E3DFACE:
-        written = dxfW->write3dface(static_cast<DRW_3Dface*>(e));
+    }
+    case DRW::E3DFACE: {
+        auto* entity = exactEntityForDxfWrite<DRW_3Dface>(e, DRW::E3DFACE);
+        if (entity) written = dxfW->write3dface(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
-    case DRW::ELLIPSE:
-        written = dxfW->writeEllipse(static_cast<DRW_Ellipse*>(e));
+    }
+    case DRW::ELLIPSE: {
+        auto* entity = exactEntityForDxfWrite<DRW_Ellipse>(e, DRW::ELLIPSE);
+        if (entity) written = dxfW->writeEllipse(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
-    case DRW::LWPOLYLINE:
-        written = dxfW->writeLWPolyline(static_cast<DRW_LWPolyline*>(e));
+    }
+    case DRW::LWPOLYLINE: {
+        auto* entity = exactEntityForDxfWrite<DRW_LWPolyline>(e, DRW::LWPOLYLINE);
+        if (entity) written = dxfW->writeLWPolyline(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
-    case DRW::POLYLINE:
-        written = dxfW->writePolyline(static_cast<DRW_Polyline*>(e));
+    }
+    case DRW::POLYLINE: {
+        auto* entity = exactEntityForDxfWrite<DRW_Polyline>(e, DRW::POLYLINE);
+        if (entity) written = dxfW->writePolyline(entity);
+        else dxfW->writeRawDxfEntity(nullptr);
         break;
+    }
     case DRW::MLINE: {
-        const auto* source = static_cast<const DRW_MLine*>(e);
+        const auto* source = exactEntityForDxfWrite<DRW_MLine>(e, DRW::MLINE);
+        if (source == nullptr) {
+            dxfW->writeRawDxfEntity(nullptr);
+            break;
+        }
         const auto style = m_mlineStyleNamesToWrite.find(source->styleHandle);
         if (style == m_mlineStyleNamesToWrite.end()) {
             written = dxfW->writeMLine(nullptr);
@@ -71225,7 +71277,7 @@ void dx_iface::writeEntity(DRW_Entity* e){
             dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::SPLINE:
-        if (auto* spline = dynamic_cast<DRW_Spline*>(e))
+        if (auto* spline = exactEntityForDxfWrite<DRW_Spline>(e, DRW::SPLINE))
             written = dxfW->writeSpline(spline);
         else
             dxfW->writeRawDxfEntity(nullptr);
@@ -71267,13 +71319,22 @@ void dx_iface::writeEntity(DRW_Entity* e){
         break;
     }
     case DRW::ATTDEF:
-        written = dxfW->writeAttdef(static_cast<DRW_Attdef*>(e));
+        if (auto* entity = exactEntityForDxfWrite<DRW_Attdef>(e, DRW::ATTDEF))
+            written = dxfW->writeAttdef(entity);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::MTEXT:
-        written = dxfW->writeMText(static_cast<DRW_MText*>(e));
+        if (auto* entity = exactEntityForDxfWrite<DRW_MText>(e, DRW::MTEXT))
+            written = dxfW->writeMText(entity);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::TOLERANCE:
-        written = dxfW->writeTolerance(static_cast<DRW_Tolerance*>(e));
+        if (auto* entity = exactEntityForDxfWrite<DRW_Tolerance>(e, DRW::TOLERANCE))
+            written = dxfW->writeTolerance(entity);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::CAMERA:
         if (auto* camera = dynamic_cast<DRW_Camera*>(e))
@@ -71374,12 +71435,14 @@ void dx_iface::writeEntity(DRW_Entity* e){
             written = dxfW->writeSectionObject(nullptr);
         break;
     case DRW::TEXT:
-        if (auto* rtext = dynamic_cast<DRW_RText*>(e))
+        if (auto* rtext = exactEntityForDxfWrite<DRW_RText>(e, DRW::TEXT))
             written = dxfW->writeRText(rtext);
-        else if (auto* arcText = dynamic_cast<DRW_ArcAlignedText*>(e))
+        else if (auto* arcText = exactEntityForDxfWrite<DRW_ArcAlignedText>(e, DRW::TEXT))
             written = dxfW->writeArcAlignedText(arcText);
+        else if (auto* text = exactEntityForDxfWrite<DRW_Text>(e, DRW::TEXT))
+            written = dxfW->writeText(text);
         else
-            written = dxfW->writeText(static_cast<DRW_Text*>(e));
+            dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::DIMLINEAR:
     case DRW::DIMALIGNED:
@@ -71389,13 +71452,56 @@ void dx_iface::writeEntity(DRW_Entity* e){
     case DRW::DIMDIAMETRIC:
     case DRW::DIMORDINATE:
     case DRW::DIMARC:
-        written = dxfW->writeDimension(static_cast<DRW_Dimension*>(e));
+    {
+        DRW_Dimension* dimension = nullptr;
+        switch (e->eType) {
+        case DRW::DIMLINEAR:
+            dimension = exactEntityForDxfWrite<DRW_DimLinear>(e, DRW::DIMLINEAR);
+            break;
+        case DRW::DIMALIGNED:
+            dimension = exactEntityForDxfWrite<DRW_DimAligned>(e, DRW::DIMALIGNED);
+            break;
+        case DRW::DIMANGULAR:
+            dimension = exactEntityForDxfWrite<DRW_DimAngular>(e, DRW::DIMANGULAR);
+            break;
+        case DRW::DIMANGULAR3P:
+            dimension = exactEntityForDxfWrite<DRW_DimAngular3p>(e, DRW::DIMANGULAR3P);
+            break;
+        case DRW::DIMRADIAL:
+            if (typeid(*e) == typeid(DRW_DimLargeRadial))
+                dimension = dynamic_cast<DRW_DimLargeRadial*>(e);
+            else
+                dimension = exactEntityForDxfWrite<DRW_DimRadial>(e, DRW::DIMRADIAL);
+            break;
+        case DRW::DIMDIAMETRIC:
+            dimension = exactEntityForDxfWrite<DRW_DimDiametric>(e, DRW::DIMDIAMETRIC);
+            break;
+        case DRW::DIMORDINATE:
+            dimension = exactEntityForDxfWrite<DRW_DimOrdinate>(e, DRW::DIMORDINATE);
+            break;
+        case DRW::DIMARC:
+            dimension = exactEntityForDxfWrite<DRW_DimArc>(e, DRW::DIMARC);
+            break;
+        default:
+            break;
+        }
+        if (dimension != nullptr)
+            written = dxfW->writeDimension(dimension);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
         break;
+    }
     case DRW::LEADER:
-        written = dxfW->writeLeader(static_cast<DRW_Leader*>(e));
+        if (auto* entity = exactEntityForDxfWrite<DRW_Leader>(e, DRW::LEADER))
+            written = dxfW->writeLeader(entity);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::MLEADER:
-        written = dxfW->writeMultiLeader(static_cast<DRW_MLeader*>(e));
+        if (auto* entity = exactEntityForDxfWrite<DRW_MLeader>(e, DRW::MLEADER))
+            written = dxfW->writeMultiLeader(entity);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::HATCH:
         if (auto* hatch = dynamic_cast<DRW_Hatch*>(e)) {
@@ -71437,6 +71543,10 @@ void dx_iface::writeEntity(DRW_Entity* e){
     }
     case DRW::IMAGE:
         if (auto* image = dynamic_cast<dx_ifaceImg*>(e)) {
+            if (image->eType != DRW::IMAGE) {
+                dxfW->writeRawDxfEntity(nullptr);
+                break;
+            }
             const bool hasSourceDefinition = cData != nullptr
                 && image->ref != 0 && image->ref != DRW::NoHandle
                 && cData->findImageDefinition(
@@ -71448,9 +71558,10 @@ void dx_iface::writeEntity(DRW_Entity* e){
             } else {
                 written = dxfW->writeImage(image, image->path) != nullptr;
             }
+        } else if (auto* image = exactEntityForDxfWrite<DRW_Image>(e, DRW::IMAGE)) {
+            written = dxfW->writeImage(image, {}) != nullptr;
         } else {
-            written = dxfW->writeImage(static_cast<DRW_Image*>(e), {})
-                != nullptr;
+            dxfW->writeRawDxfEntity(nullptr);
         }
         break;
     case DRW::UNDERLAY:
@@ -71476,7 +71587,10 @@ void dx_iface::writeEntity(DRW_Entity* e){
         }
         break;
     case DRW::WIPEOUT:
-        written = dxfW->writeWipeout(static_cast<DRW_Wipeout*>(e));
+        if (auto* entity = exactEntityForDxfWrite<DRW_Wipeout>(e, DRW::WIPEOUT))
+            written = dxfW->writeWipeout(entity);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::POINTCLOUD:
         if (auto* cloud = dynamic_cast<DRW_PointCloud*>(e)) {
