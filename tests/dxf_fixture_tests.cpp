@@ -7701,6 +7701,233 @@ void testViewLiveSectionReferenceClosure(TestContext& t) {
     }
 }
 
+void testSectionObjectsAllocationRetry(TestContext& t) {
+    class SectionAllocationWriter final : public dx_iface {
+    public:
+        void writeObjects() override {
+            objectsCallbackReached = true;
+            if (!armAllocationFailure) {
+                dx_iface::writeObjects();
+                return;
+            }
+            materialAllocationCountdown = allocationOffset;
+            dx_iface::writeObjects();
+            remainingAllocationCountdown = materialAllocationCountdown;
+            materialAllocationCountdown = -1;
+        }
+
+        bool armAllocationFailure{false};
+        bool objectsCallbackReached{false};
+        long allocationOffset{0L};
+        long remainingAllocationCountdown{-1L};
+    };
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-section-objects-allocation-"
+           + std::to_string(nonce));
+    std::error_code error;
+    if (!std::filesystem::create_directory(directory, error) || error) {
+        t.expect(false,
+                 "temporary SECTION OBJECTS allocation directory is available");
+        return;
+    }
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+
+    const auto sourceFor = [&](bool binary) {
+        return directory / (binary ? "source-binary.dxf" : "source-ascii.dxf");
+    };
+    const auto outputPath = directory / "section-objects.dxf";
+    const std::string outputFilename = outputPath.string();
+    const auto outputBytes = [&outputPath]() {
+        std::ifstream input(outputPath, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input), {});
+    };
+    const auto importSource = [&](bool binary, SectionAllocationWriter& adapter,
+                                  dx_data& data) {
+        const auto source = sourceFor(binary);
+        if (!writeViewReferenceControl(source, binary, 334,
+                                       "LIVE_SECTION_VIEW", true)
+            || !adapter.fileImport(source.string(), &data, false)
+            || data.mBlock == nullptr)
+            return false;
+        auto* section = new DRW_SectionObject();
+        section->handle = 0x777u;
+        section->m_name = "LIVE_SECTION_TARGET";
+        section->m_sectionSettingsHandle = 0x788u;
+        data.mBlock->ent.push_back(section);
+        return true;
+    };
+    const auto graphReadbackMatches = [&]() {
+        dx_data decoded;
+        dx_iface reader;
+        if (!reader.fileImport(outputFilename, &decoded, false)
+            || decoded.mBlock == nullptr)
+            return false;
+        const DRW_SectionObject* section = nullptr;
+        for (const DRW_Entity* entity : decoded.mBlock->ent) {
+            const auto* candidate =
+                dynamic_cast<const DRW_SectionObject*>(entity);
+            if (candidate != nullptr
+                && candidate->m_name == "LIVE_SECTION_TARGET")
+                section = candidate;
+        }
+        const auto manager = std::find_if(
+            decoded.sectionRecords.begin(), decoded.sectionRecords.end(),
+            [](const DRW_Section& value) {
+                return value.m_kind == DRW_Section::Manager;
+            });
+        const auto settings = std::find_if(
+            decoded.sectionRecords.begin(), decoded.sectionRecords.end(),
+            [](const DRW_Section& value) {
+                return value.m_kind == DRW_Section::Settings;
+            });
+        const auto view = std::find_if(
+            decoded.views.begin(), decoded.views.end(),
+            [](const DRW_View& value) {
+                return value.name == "LIVE_SECTION_VIEW";
+            });
+        return section != nullptr
+            && manager != decoded.sectionRecords.end()
+            && settings != decoded.sectionRecords.end()
+            && view != decoded.views.end()
+            && section->handle != 0u
+            && section->handle != DRW::NoHandle
+            && manager->handle != 0u
+            && settings->handle != 0u
+            && settings->handle != DRW::NoHandle
+            && section->m_sectionSettingsHandle == settings->handle
+            && manager->m_sectionHandles
+                == std::vector<std::uint32_t>{section->handle}
+            && settings->m_types.size() == 1u
+            && settings->m_types.front().m_sourceHandles
+                == std::vector<std::uint32_t>{section->handle}
+            && settings->m_types.front().m_geometry.size() == 1u
+            && settings->m_types.front().m_geometry.front().m_layer == "0"
+            && settings->m_types.front().m_geometry.front().m_hatchPattern
+                == "SOLID"
+            && view->m_liveSectionHandle == section->handle;
+    };
+
+    for (const bool binary : {false, true}) {
+        constexpr long allocationProbe = 1000000L;
+        SectionAllocationWriter measureAdapter;
+        dx_data measureData;
+        measureAdapter.armAllocationFailure = true;
+        measureAdapter.allocationOffset = allocationProbe;
+        const bool imported = importSource(binary, measureAdapter, measureData);
+        const bool measuredWrite = imported && measureAdapter.fileExport(
+            outputFilename, DRW::AC1027, binary, &measureData, false);
+        const long objectAllocations = allocationProbe
+            - measureAdapter.remainingAllocationCountdown;
+        const bool calibrated = measuredWrite
+            && measureAdapter.objectsCallbackReached
+            && measureAdapter.remainingAllocationCountdown > 0L
+            && measureAdapter.remainingAllocationCountdown < allocationProbe
+            && objectAllocations > 0L;
+        if (!calibrated) {
+            std::cerr << "SECTION OBJECTS allocation calibration binary="
+                      << binary << " imported=" << imported
+                      << " written=" << measuredWrite
+                      << " callback="
+                      << measureAdapter.objectsCallbackReached
+                      << " remaining="
+                      << measureAdapter.remainingAllocationCountdown
+                      << " allocations=" << objectAllocations << '\n';
+        }
+        bool everyOffsetRolledBack = calibrated;
+        bool everyOffsetRetried = calibrated;
+        long injectedFailures = 0L;
+        long firstRollbackFailure = -1L;
+        long firstRetryFailure = -1L;
+
+        for (long offset = 0L; calibrated && offset < objectAllocations;
+             ++offset) {
+            const std::string sentinel =
+                "SECTION OBJECTS allocation sentinel\n";
+            {
+                std::ofstream seed(outputPath,
+                                   std::ios::binary | std::ios::trunc);
+                seed << sentinel;
+            }
+
+            SectionAllocationWriter adapter;
+            dx_data data;
+            const bool sourceImported = importSource(binary, adapter, data);
+            adapter.armAllocationFailure = true;
+            adapter.allocationOffset = offset;
+            const std::size_t failuresBefore = materialFailedAllocations;
+            const bool failed = sourceImported && !adapter.fileExport(
+                outputFilename, DRW::AC1027, binary, &data, false);
+            materialAllocationCountdown = -1;
+            const bool rolledBack = failed
+                && adapter.objectsCallbackReached
+                && materialFailedAllocations == failuresBefore + 1u
+                && outputBytes() == sentinel;
+            if (!rolledBack) {
+                std::cerr << "SECTION OBJECTS allocation rollback binary="
+                          << binary << " offset=" << offset
+                          << " imported=" << sourceImported
+                          << " failed=" << failed
+                          << " callback=" << adapter.objectsCallbackReached
+                          << " failures="
+                          << (materialFailedAllocations - failuresBefore)
+                          << " preserved=" << (outputBytes() == sentinel)
+                          << " bytes=" << outputBytes().size()
+                          << '\n';
+            }
+            everyOffsetRolledBack = everyOffsetRolledBack && rolledBack;
+            if (rolledBack)
+                ++injectedFailures;
+            else if (firstRollbackFailure < 0L)
+                firstRollbackFailure = offset;
+
+            adapter.armAllocationFailure = false;
+            adapter.objectsCallbackReached = false;
+            const bool retried = rolledBack && adapter.fileExport(
+                outputFilename, DRW::AC1027, binary, &data, false);
+            const bool retryReadback = retried
+                && adapter.objectsCallbackReached
+                && graphReadbackMatches();
+            everyOffsetRetried = everyOffsetRetried && retryReadback;
+            if (rolledBack && !retryReadback && firstRetryFailure < 0L)
+                firstRetryFailure = offset;
+            if (rolledBack && !everyOffsetRetried && offset < 4L)
+                std::cerr << "SECTION OBJECTS allocation retry binary="
+                          << binary << " offset=" << offset
+                          << " retried=" << retried
+                          << " callback=" << adapter.objectsCallbackReached
+                          << " graph=" << graphReadbackMatches() << '\n';
+        }
+
+        if (!everyOffsetRolledBack || !everyOffsetRetried) {
+            std::cerr << "SECTION OBJECTS allocation summary binary="
+                      << binary << " calibrated=" << calibrated
+                      << " allocations=" << objectAllocations
+                      << " injectedFailures=" << injectedFailures
+                      << " firstRollbackFailure=" << firstRollbackFailure
+                      << " firstRetryFailure=" << firstRetryFailure << '\n';
+        }
+
+        t.expect(calibrated && everyOffsetRolledBack
+                     && injectedFailures == objectAllocations,
+                 binary
+                     ? "binary SECTION OBJECTS sweep rolls back every measured allocation"
+                     : "ASCII SECTION OBJECTS sweep rolls back every measured allocation");
+        t.expect(everyOffsetRetried,
+                 binary
+                     ? "binary SECTION OBJECTS sweep retries on the same adapter and reads the closed graph"
+                     : "ASCII SECTION OBJECTS sweep retries on the same adapter and reads the closed graph");
+    }
+}
+
 bool viewRecordHasCode(const std::filesystem::path& path, bool binary,
                       const std::string& viewName, int targetCode) {
     std::ifstream input(path, std::ios::binary);
@@ -66038,6 +66265,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testViewLiveSectionReferenceClosure(context);
         std::cout << "VIEW code-334 LiveSection graph closure: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--section-objects-allocation-retry") {
+        TestContext context;
+        testSectionObjectsAllocationRetry(context);
+        std::cout << "SECTION OBJECTS allocation rollback/retry: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
