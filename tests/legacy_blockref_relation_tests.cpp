@@ -183,11 +183,26 @@ public:
  bool attdef(const dx_data& d,std::uint32_t expected=0xF4u)const{return accepted&&DxIfaceTableSourceTestAccess::attdef(d,blockId,insertId,joinWork,joinBytes,expected);}
  bool target(const dx_data& d,std::array<std::uint32_t,2> expected={{0xF1u,0xF2u}})const{return accepted&&DxIfaceTableSourceTestAccess::target(d,blockId,insertId,joinWork,joinBytes,expected);}
  bool layers(const dx_data& d,std::array<std::uint32_t,3> expected={{0xC0u,0xC1u,0xC0u}})const{return accepted&&DxIfaceTableSourceTestAccess::layers(d,blockId,insertId,joinWork,joinBytes,expected);}
+ bool exportFile(const std::string& path,bool binary,dx_data& data){return fileExport(path,DRW::AC1018,binary,&data,false,false);}
 };
 static bool write(const std::filesystem::path& path,const Tags& tags,bool bin){std::ofstream out(path,std::ios::binary);const auto word=[&](std::uint64_t n,unsigned k){for(unsigned i=0;i<k;++i)out.put(static_cast<char>(n>>(i*8u)));};
  if(bin)out.write("AutoCAD Binary DXF\r\n\x1a\0",22);
  for(const auto& t:tags)if(!bin)out<<t.code<<'\n'<<t.value<<'\n';else {word(static_cast<unsigned>(t.code),2);if(t.code>=10&&t.code<=59){double v=std::stod(t.value);std::uint64_t bits=0;std::memcpy(&bits,&v,8);word(bits,8);}else if((t.code>=60&&t.code<=79)||t.code==1070)word(static_cast<std::uint16_t>(std::stoi(t.value)),2);else{out<<t.value;out.put('\0');}}
  return out.good();}
+static bool blockrefAdapterRefusesWrongTarget(const std::filesystem::path& dir,
+                                              bool binary){
+ dx_data data;data.sourceVersion=DRW::AC1018;
+ DRW_Block_Record record;record.handle=0xB0u;record.name="TEST_BLOCK";record.insertHandles={0xE0u};data.blockRecords.push_back(record);
+ auto* definition=new dx_ifaceBlock();definition->name="TEST_BLOCK";definition->handle=0xF1u;definition->parentHandle=0xB0u;
+ definition->hasEndBlockData=true;definition->endBlockData.handle=0xF2u;definition->endBlockData.parentHandle=0xB0u;data.blocks.push_back(definition);
+ auto* insert=new DRW_Insert();insert->name="WRONG_TARGET";insert->handle=0xE0u;
+ insert->parentHandle=DRW::DxfModelSpaceBlockRecordHandle;insert->space=DRW::ModelSpace;insert->layer="0";data.mBlock->ent.push_back(insert);
+ const auto output=dir/(binary?"blkrefs-invalid-binary.dxf":"blkrefs-invalid-ascii.dxf");
+ {std::ofstream sentinel(output,std::ios::binary);sentinel<<"prior destination";if(!sentinel.good())return false;}
+ Reader adapter;if(adapter.exportFile(output.string(),binary,data))return false;
+ std::ifstream sentinel(output,std::ios::binary);const std::string value((std::istreambuf_iterator<char>(sentinel)),{});
+ return value=="prior destination";
+}
 int main(int argc,char**argv){if(argc>1){Reader real;real.enableLegacyDxfIdentityObservation();real.blockId=0x6F2u;real.insertId=0x704u;real.spoofOriginal=0x703u;real.spoof=argc>2;dx_data data;if(!real.import(argv[1],data))return 30;const bool matched=real.relation(data),unique=real.unique(data),appid=real.appid(data,0x1457u),layers=real.layers(data,{{0x275u,0x10u,0x275u}});const bool target=real.target(data,{{0x6F4u,0x6F9u}}),attdef=real.attdef(data,0x6F8u);std::cout<<"attdef="<<attdef<<" target="<<target<<" real same-read relation="<<matched<<" unique="<<unique<<" appid="<<appid<<" layers="<<layers<<" spoof="<<real.spoof<<"\n";return matched==!real.spoof&&unique==!real.spoof&&appid==!real.spoof&&layers==!real.spoof&&target==!real.spoof&&attdef==!real.spoof?0:31;}
  std::error_code ec;const auto dir=libdxfrw_test::reserveTestScratch(std::filesystem::temp_directory_path(),"same-read-blockref",ec);if(ec)return 1;struct Cleanup{std::filesystem::path p;~Cleanup(){std::error_code e;std::filesystem::remove_all(p,e);}}cleanup{dir};
  Tags doc={{0,"SECTION"},{2,"HEADER"},{9,"$ACADVER"},{1,"AC1018"},{9,"$DWGCODEPAGE"},{3,"ANSI_1252"},{0,"ENDSEC"},
@@ -396,5 +411,6 @@ int main(int argc,char**argv){if(argc>1){Reader real;real.enableLegacyDxfIdentit
   if(!write(path,doc,binary))return 9;attack.spoof=false;dx_data retry;if(!attack.import(path.string(),retry)||!attack.relation(retry))return 10;++checks;
   Reader limited;limited.enableLegacyDxfIdentityObservation();limited.limits.fields=0;dx_data noFields;if(!limited.import(path.string(),noFields)||limited.relation(noFields))return 11;limited.limits={};dx_data recovered;if(!limited.import(path.string(),recovered)||!limited.relation(recovered))return 12;++checks;
   if(!reader.import(path.string(),other)||reader.relation(other))return 13;dx_data fresh;if(!reader.import(path.string(),fresh)||!reader.relation(fresh))return 14;++checks;
+  if(!blockrefAdapterRefusesWrongTarget(dir,binary))return 91;++checks;
  }
  std::cout<<"same-read source-only ascii-binary=2 controls="<<checks<<" callback-spoof=2 quota-retry=2 join-work-byte-retry=4 same-data-refusal=2 layer-census-ascii-binary=2 layer-controls=passed target-controls=passed attdef-tag-controls=passed\n";return 0;}

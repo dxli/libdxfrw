@@ -64986,6 +64986,339 @@ void dx_iface::failHatchPublication() noexcept {
         m_hatchGraphFailure = ExtensionGraphFailure::InvalidGraph;
 }
 
+bool dx_iface::validateDxfBlockRecordInsertReferences(
+        bool outputReady) const noexcept {
+    try {
+        if (cData == nullptr || dxfW == nullptr)
+            return false;
+        struct Reference {
+            std::uint32_t handle{0u};
+            const DRW_Block_Record* record{nullptr};
+            const DRW_Insert* insert{nullptr};
+            const dx_ifaceBlock* container{nullptr};
+            std::size_t matches{0u};
+        };
+        const auto validHandle = [](std::uint32_t handle) noexcept {
+            return handle != 0u && handle != DRW::NoHandle;
+        };
+        std::size_t expectedReferenceCount = 0u;
+        for (const DRW_Block_Record& record : cData->blockRecords) {
+            if (record.insertHandles.empty())
+                continue;
+            if (record.name.empty() || record.name.size() > 255u
+                || record.insertHandles.size()
+                    > DRW::kMaxDxfBlockRecordInsertHandles
+                || expectedReferenceCount
+                    > DRW::kMaxDxfBlockRecordInsertHandles
+                        - record.insertHandles.size())
+                return false;
+            expectedReferenceCount += record.insertHandles.size();
+        }
+        if (expectedReferenceCount == 0u)
+            return true;
+        if (cData->blockRecords.size() > DRW::kMaxDxfTypedTableRecords)
+            return false;
+        std::vector<const DRW_Block_Record*> recordsByHandle;
+        if (!DRW::reserve(recordsByHandle,
+                          static_cast<int>(cData->blockRecords.size())))
+            return false;
+        for (const DRW_Block_Record& record : cData->blockRecords)
+            if (validHandle(record.handle))
+                recordsByHandle.push_back(&record);
+        std::sort(recordsByHandle.begin(), recordsByHandle.end(),
+                  [](const DRW_Block_Record* left,
+                     const DRW_Block_Record* right) {
+                      return left->handle < right->handle;
+                  });
+        using NamedRecord = std::pair<std::string, const DRW_Block_Record*>;
+        const std::size_t recordIndexBytesPerEntry =
+            sizeof(const DRW_Block_Record*) + sizeof(NamedRecord);
+        if (cData->blockRecords.size()
+            > DRW::kMaxDxfTypedTableRetainedBytes
+                / recordIndexBytesPerEntry)
+            return false;
+        const std::size_t recordIndexBytes =
+            cData->blockRecords.size() * recordIndexBytesPerEntry;
+        std::size_t nameBytes = 0u;
+        std::vector<NamedRecord> recordsByName;
+        if (!DRW::reserve(recordsByName,
+                          static_cast<int>(cData->blockRecords.size())))
+            return false;
+        for (const DRW_Block_Record& record : cData->blockRecords) {
+            if (record.name.size() > 255u)
+                return false;
+            std::string key = layoutSymbolKey(record.name);
+            if (!key.empty()) {
+                if (key.size() > DRW::kMaxDxfTypedTableRetainedBytes
+                        - recordIndexBytes - nameBytes)
+                    return false;
+                nameBytes += key.size();
+                recordsByName.emplace_back(std::move(key), &record);
+            }
+        }
+        std::sort(recordsByName.begin(), recordsByName.end(),
+                  [](const NamedRecord& left, const NamedRecord& right) {
+                      return left.first < right.first;
+                  });
+        if (cData->blocks.size() > DRW::kMaxDxfTypedTableRecords)
+            return false;
+        const std::size_t blockIndexBytes =
+            cData->blocks.size() * sizeof(const dx_ifaceBlock*);
+        if (blockIndexBytes
+            > DRW::kMaxDxfTypedTableRetainedBytes
+                - recordIndexBytes - nameBytes)
+            return false;
+        std::vector<const dx_ifaceBlock*> blocksByParent;
+        if (!DRW::reserve(blocksByParent,
+                          static_cast<int>(cData->blocks.size())))
+            return false;
+        for (const dx_ifaceBlock* block : cData->blocks)
+            if (block != nullptr)
+                blocksByParent.push_back(block);
+        std::sort(blocksByParent.begin(), blocksByParent.end(),
+                  [](const dx_ifaceBlock* left, const dx_ifaceBlock* right) {
+                      return left->parentHandle < right->parentHandle;
+                  });
+        const std::size_t indexedBytes =
+            recordIndexBytes + nameBytes + blockIndexBytes;
+        const std::size_t remainingBytes =
+            DRW::kMaxDxfTypedTableRetainedBytes - indexedBytes;
+        if (expectedReferenceCount > remainingBytes / sizeof(Reference))
+            return false;
+        const auto recordForHandle = [&recordsByHandle](
+                std::uint32_t handle, const DRW_Block_Record*& out) {
+            out = nullptr;
+            const auto found = std::lower_bound(
+                recordsByHandle.begin(), recordsByHandle.end(), handle,
+                [](const DRW_Block_Record* record, std::uint32_t value) {
+                    return record->handle < value;
+                });
+            if (found == recordsByHandle.end() || (*found)->handle != handle
+                || ((found + 1) != recordsByHandle.end()
+                    && (*(found + 1))->handle == handle))
+                return false;
+            out = *found;
+            return true;
+        };
+        const auto uniqueBlockRecord = [&recordsByName, &recordForHandle](
+                std::uint32_t handle, std::string_view name,
+                const DRW_Block_Record*& out) {
+            const std::string key = layoutSymbolKey(std::string(name));
+            out = nullptr;
+            if (key.empty() || !recordForHandle(handle, out))
+                return false;
+            const auto named = std::lower_bound(
+                recordsByName.begin(), recordsByName.end(), key,
+                [](const NamedRecord& record, const std::string& value) {
+                    return record.first < value;
+                });
+            if (named == recordsByName.end() || named->first != key
+                || named->second != out)
+                return false;
+            return (named + 1) == recordsByName.end()
+                || (named + 1)->first != key;
+        };
+        const auto blockForRecord = [&blocksByParent](
+                std::uint32_t handle, const dx_ifaceBlock*& out) {
+            out = nullptr;
+            const auto found = std::lower_bound(
+                blocksByParent.begin(), blocksByParent.end(), handle,
+                [](const dx_ifaceBlock* block, std::uint32_t value) {
+                    return block->parentHandle < value;
+                });
+            if (found == blocksByParent.end()
+                || (*found)->parentHandle != handle
+                || ((found + 1) != blocksByParent.end()
+                    && (*(found + 1))->parentHandle == handle))
+                return false;
+            out = *found;
+            return true;
+        };
+        const auto sourceFixedOwner = [&validHandle, &uniqueBlockRecord,
+                                       &recordsByHandle](
+                const DRW_Entity& entity, std::string_view fixedName) {
+            const std::uint32_t fixedHandle = fixedName == "*PAPER_SPACE"
+                ? DRW::DxfPaperSpaceBlockRecordHandle
+                : DRW::DxfModelSpaceBlockRecordHandle;
+            if (!validHandle(entity.parentHandle))
+                return false;
+            const DRW_Block_Record* owner = nullptr;
+            if (uniqueBlockRecord(entity.parentHandle, fixedName, owner))
+                return true;
+            const auto found = std::lower_bound(
+                recordsByHandle.begin(), recordsByHandle.end(),
+                entity.parentHandle,
+                [](const DRW_Block_Record* record, std::uint32_t handle) {
+                    return record->handle < handle;
+                });
+            return (found == recordsByHandle.end()
+                    || (*found)->handle != entity.parentHandle)
+                && entity.parentHandle == fixedHandle;
+        };
+        std::vector<Reference> references;
+        if (!DRW::reserve(references,
+                          static_cast<int>(expectedReferenceCount)))
+            return false;
+        for (const DRW_Block_Record& record : cData->blockRecords) {
+            if (record.insertHandles.empty())
+                continue;
+            if (!validHandle(record.handle)
+                || record.insertHandles.size()
+                    > DRW::kMaxDxfBlockRecordInsertHandles
+                || dxfW->getVersion() <= DRW::AC1014
+                || layoutSymbolKey(record.name).empty())
+                return false;
+            const DRW_Block_Record* uniqueRecord = nullptr;
+            if (!uniqueBlockRecord(record.handle, record.name, uniqueRecord)
+                || uniqueRecord != &record)
+                return false;
+
+            // The adapter does not serialize BLKREFS on implicit fixed-space
+            // records, so refuse rather than silently dropping those edges.
+            const std::string recordName = layoutSymbolKey(record.name);
+            if (recordName == "*MODEL_SPACE" || recordName == "*PAPER_SPACE")
+                return false;
+
+            const dx_ifaceBlock* definition = nullptr;
+            if (!blockForRecord(record.handle, definition)
+                || definition == nullptr
+                || isFixedSpaceBlock(definition)
+                || !dx_block_membership::equal(definition->name, record.name)
+                || !validHandle(definition->handle)
+                || !definition->hasEndBlockData
+                || !validHandle(definition->endBlockData.handle)
+                || definition->endBlockData.parentHandle != record.handle)
+                return false;
+            for (const std::uint32_t sourceHandle : record.insertHandles) {
+                if (!validHandle(sourceHandle))
+                    return false;
+                references.push_back({sourceHandle, &record, nullptr, nullptr,
+                                      0u});
+            }
+        }
+        if (references.empty())
+            return true;
+        std::sort(references.begin(), references.end(),
+                  [](const Reference& left, const Reference& right) {
+                      return left.handle < right.handle;
+                  });
+        for (std::size_t i = 1u; i < references.size(); ++i)
+            if (references[i - 1u].handle == references[i].handle)
+                return false;
+
+        const auto inspect = [&references](const dx_ifaceBlock* block) {
+            if (block == nullptr)
+                return;
+            for (const DRW_Entity* entity : block->ent) {
+                if (entity == nullptr)
+                    continue;
+                const auto found = std::lower_bound(
+                    references.begin(), references.end(), entity->handle,
+                    [](const Reference& reference, std::uint32_t handle) {
+                        return reference.handle < handle;
+                    });
+                if (found == references.end() || found->handle != entity->handle)
+                    continue;
+                ++found->matches;
+                found->insert = dynamic_cast<const DRW_Insert*>(entity);
+                found->container = block;
+            }
+        };
+        inspect(cData->mBlock);
+        for (const dx_ifaceBlock* block : cData->blocks)
+            inspect(block);
+
+        for (const Reference& reference : references) {
+            const DRW_Block_Record& record = *reference.record;
+            const DRW_Insert* insert = reference.insert;
+            const dx_ifaceBlock* container = reference.container;
+            if (reference.matches != 1u || insert == nullptr
+                || container == nullptr
+                || !dx_block_membership::equal(insert->name, record.name))
+                return false;
+
+            std::string section;
+            std::uint32_t outputOwner = 0u;
+            if (container == cData->mBlock
+                || isFixedSpaceBlock(container)) {
+                const std::string expectedName =
+                    insert->space == DRW::PaperSpace
+                        ? "*PAPER_SPACE" : "*MODEL_SPACE";
+                if (container != cData->mBlock
+                    && layoutSymbolKey(container->name) != expectedName)
+                    return false;
+                if (!sourceFixedOwner(*insert, expectedName))
+                    return false;
+                section = "ENTITIES";
+                outputOwner = expectedName == "*PAPER_SPACE"
+                    ? DRW::DxfPaperSpaceBlockRecordHandle
+                    : DRW::DxfModelSpaceBlockRecordHandle;
+            } else {
+                if (!validHandle(container->parentHandle)
+                    || insert->parentHandle != container->parentHandle)
+                    return false;
+                const DRW_Block_Record* sourceOwner = nullptr;
+                if (!uniqueBlockRecord(container->parentHandle,
+                                       container->name, sourceOwner)
+                    || sourceOwner->handle != container->parentHandle)
+                    return false;
+                section = "BLOCKS";
+                outputOwner = outputReady
+                    ? dxfW->getBlockRecordHandleToWrite(container->name) : 0u;
+            }
+            if (outputReady && !validHandle(outputOwner))
+                return false;
+            if (outputReady) {
+                const std::uint32_t emittedInsert =
+                    dxfW->remapEntityHandle(reference.handle);
+                if (!validHandle(emittedInsert)
+                    || dxfW->dxfWriteRecordHandleCount(emittedInsert) != 1u
+                    || !dxfW->dxfWriteRecordHasIdentity(
+                        emittedInsert, "INSERT", section.c_str())
+                    || !dxfW->dxfWriteRecordHasOwner(
+                        emittedInsert, outputOwner)
+                    || !dxfW->dxfWriteSourceEntityHasIdentity(
+                        reference.handle, emittedInsert, "INSERT",
+                        section.c_str(), outputOwner))
+                    return false;
+            }
+        }
+
+        if (outputReady) {
+            for (const DRW_Block_Record& record : cData->blockRecords) {
+                if (record.insertHandles.empty())
+                    continue;
+                const dx_ifaceBlock* definition = nullptr;
+                if (!blockForRecord(record.handle, definition))
+                    return false;
+                const std::uint32_t emittedBlockRecord =
+                    dxfW->getBlockRecordHandleToWrite(record.name);
+                const std::uint32_t emittedBegin = definition == nullptr
+                    ? 0u : dxfW->remapEntityHandle(definition->handle);
+                const std::uint32_t emittedEnd = definition == nullptr
+                    ? 0u : dxfW->remapEntityHandle(
+                          definition->endBlockData.handle);
+                if (!validHandle(emittedBlockRecord)
+                    || dxfW->dxfWriteRecordHandleCount(emittedBlockRecord) != 1u
+                    || !dxfW->dxfWriteRecordHasIdentity(
+                        emittedBlockRecord, "BLOCK_RECORD", "TABLES")
+                    || !dxfW->dxfWriteRecordHasOwner(emittedBlockRecord, 1u)
+                    || !validHandle(emittedBegin) || !validHandle(emittedEnd)
+                    || !dxfW->dxfWriteSourceEntityHasIdentity(
+                        definition->handle, emittedBegin, "BLOCK", "BLOCKS",
+                        emittedBlockRecord)
+                    || !dxfW->dxfWriteSourceEntityHasIdentity(
+                        definition->endBlockData.handle, emittedEnd, "ENDBLK",
+                        "BLOCKS", emittedBlockRecord))
+                    return false;
+            }
+        }
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 void dx_iface::recordHatchBlockPublication(const std::string& name, bool written) {
     if (m_hatchOwnerBlocks.empty())
         return;
@@ -65000,7 +65333,8 @@ void dx_iface::recordHatchBlockPublication(const std::string& name, bool written
 
 bool dx_iface::finalizeDxfWrite() {
     const bool mlineGeometryTransaction=needsDxfMLineNoRawSectionsGuard();
-    if ((mlineGeometryTransaction
+    if (!validateDxfBlockRecordInsertReferences(true)
+        || (mlineGeometryTransaction
             && (!dxfW || !dxfW->dxfWriteNoRawSectionsObserved()))
         || (mlineGeometryTransaction&&m_dxfMLineDependencySourceLivePreflightPassed
             && (!mlineLayerSourceLiveProof(*cData,

@@ -258,17 +258,20 @@ engines.
    editing; add focused ASCII/Binary controls for resolver precedence and remap
    fallback. Correct output IDs alone do not establish target kind, ownership,
    recursive closure, physical producer breadth, or native-consumer semantics.
-   **BLOCK_RECORD BLKREFS residual:** the low-level writer now plans the INSERT
-   output identity before emitting retained group-331 entries; the focused
-   generated identity/refusal evidence is in the
+   **BLOCK_RECORD BLKREFS residual:** `dx_iface::writeBlockRecords()` now passes
+   the retained list to the low-level writer. Adapter preflight requires each
+   handle to identify exactly one typed INSERT, match the target BLOCK_RECORD
+   name, and have a valid source/output owner; finalization checks the remapped
+   INSERT identity plus the emitted BLOCK_RECORD/BLOCK/ENDBLK identities. The
+   bounded sorted-index lookup and ASCII/Binary wrong-target refusal control are
+   recorded in the [adapter graph receipt](docs/research/p4-blockrecord-blkrefs-adapter-graph-closure-2026-11-03.json);
+   low-level group-331 identity transport remains in the
    [BLKREFS transport receipt](docs/research/p4-blockrecord-blkrefs-reference-remapping-2026-11-03.json).
-   Still determine whether a source-bound profile requires preserving this
-   optional list and, if so, bind every entry to a unique emitted INSERT and its
-   source block relation. `dx_iface::writeBlockRecords()` currently supplies an
-   empty list. Autodesk's BLOCK_RECORD field table does not enumerate BLKREFS;
-   generic group-331 soft-pointer classification is not evidence of required
-   membership semantics. Keep whole-document output unqualified until producer,
-   target-kind, ownership, completeness and fresh-readback evidence closes.
+   This does not yet prove a valid adapter write/readback for the selected
+   physical source, source-bound complete membership, producer breadth or native
+   meaning. Autodesk's BLOCK_RECORD field table does not enumerate BLKREFS, and
+   generic group-331 classification is not evidence of required membership
+   semantics. Keep whole-document output unqualified until those gates close.
 3. **Recursive closure:** follow only source-required edges reached from the
    admitted graph. Reuse a qualified provider when it closes the exact target
    role; otherwise resolve that source-required body and its descendants, and

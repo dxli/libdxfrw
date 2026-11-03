@@ -1226,6 +1226,10 @@ public:
     }
     // Preplan emitted block identities while retaining source table metadata.
     virtual void writeBlockRecords() override{
+        if (!validateDxfBlockRecordInsertReferences(false)) {
+            (void)dxfW->writeTable(nullptr);
+            return;
+        }
         std::unordered_map<std::uint32_t, const DRW_Block_Record*> records;
         for (const DRW_Block_Record& record : cData->blockRecords)
             records.emplace(record.handle, &record);
@@ -1235,7 +1239,8 @@ public:
             const auto metadata = records.find((*it)->parentHandle);
             if (metadata != records.end())
                 dxfW->writeBlockRecord((*it)->name, metadata->second->insUnits,
-                                      metadata->second->previewData, {},
+                                      metadata->second->previewData,
+                                      metadata->second->insertHandles,
                                       metadata->second->extData);
             else
                 dxfW->writeBlockRecord((*it)->name);
@@ -2482,6 +2487,8 @@ private:
     bool mlineLtypeSourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
     bool hasTableContentFieldOutputProfile(
         const dx_data&, DRW::Version outputVersion) const noexcept;
+    bool validateDxfBlockRecordInsertReferences(
+        bool outputReady) const noexcept;
     bool tableContentDirectReferencesClosed(
         const DRW_TableContentObject&,
         const std::unordered_set<std::uint32_t>&) const noexcept;
