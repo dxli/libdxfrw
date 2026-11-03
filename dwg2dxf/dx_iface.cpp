@@ -23808,8 +23808,9 @@ bool dx_iface::inspectStandardDwgTablesOutput(const dxfRW::DxfTablesWriteView& v
             std::uint32_t sourceControl = 0u;
             std::uint32_t sourceDictionary = 0u;
             if (!cData->getLayerTableControlExtensionDictionary(
-                    sourceControl, sourceDictionary)) return fail();
-            if (sourceControl != 0u || sourceDictionary != 0u) {
+                    sourceControl, sourceDictionary))
+                return fail();
+            if (sourceDictionary != 0u) {
                 const auto* context = dxfW->getWritingContext();
                 if (sourceControl == 0u || sourceControl == DRW::NoHandle
                     || sourceDictionary == 0u

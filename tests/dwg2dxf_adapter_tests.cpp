@@ -6718,6 +6718,14 @@ bool rootedImageDictionaryUnselectedControls(bool importedCommonOnly = false) {
         if (!writer.write(&author, version, true) || !reader.fileImport(native.string(), &data, false)
             || !data.images.empty() || data.imageDefinitions.size() != (mode == 2u ? 0u : 2u)
             || !Access::rasterUnchanged(reader) || !dictionary(data)) return fail("unselected/empty native image dictionary setup failed");
+        if (version == DRW::AC1032 && mode == 1u) {
+            std::uint32_t layerControl = 0u;
+            std::uint32_t layerDictionary = 0u;
+            if (!data.getLayerTableControlExtensionDictionary(
+                    layerControl, layerDictionary)
+                || layerControl == 0u || layerDictionary != 0u)
+                return fail("generated AC1032 layer control without extension dictionary was not captured");
+        }
         const auto write = [&](DRW::Version targetVersion, bool binary) {
             return exporter.fileExport(target.string(), targetVersion, binary, &data, false, true,
                 dx_dxfSourceTextPolicy::Compatible, DRW::DxfTextWritePolicy::Compatible,

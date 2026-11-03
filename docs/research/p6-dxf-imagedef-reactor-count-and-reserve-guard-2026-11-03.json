@@ -48,7 +48,22 @@
   "limitations": [
     "The 1,000,000 limit is the existing internal reactor resource ceiling, not an Autodesk format maximum or support claim.",
     "Allocation-failure injection, unrelated OBJECTS assembly collections, and other copy/work bounds remain open.",
-    "The rooted IMAGEDEF graph cohort remains failing during TABLES emission. The emitted FIELDLIST warning is informational in the observed failure profile; identify the exact failing table callback before attributing cause or changing admission."
+    "The rooted IMAGEDEF closure selector now passes; this local result does not establish native CAD semantics or promote support claims."
   ],
-  "next": "Continue the bounded safety audit on remaining output staging paths. Separately instrument the failing TABLES callback for the rooted IMAGEDEF source profile before changing FIELDLIST or raster admission."
+  "next": "Continue the bounded safety audit on remaining output staging paths and allocation-failure behavior; do not reopen the resolved TABLES proof issue without a new failure.",
+  "followUp": {
+    "id": "p6-dxf-rooted-imagedef-layer-control-optional-extension-fix-2026-11-03",
+    "finding": "The original rooted IMAGEDEF closure failure was caused by standard DWG TABLES proof rejecting a valid LAYER_CONTROL handle with no extension dictionary when EED table-name checks were active. The FIELDLIST warning was unrelated.",
+    "fix": "The proof now validates the control/dictionary pair only when an extension dictionary is present. A present dictionary still requires a complete, unambiguous pair.",
+    "regressionControl": "Generated AC1032 mode-1 setup asserts a captured control handle and absent extension dictionary; the rooted IMAGEDEF closure matrix now passes.",
+    "validation": {
+      "build": "PASS: cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4",
+      "focused": [
+        "PASS: dwg2dxf_rooted_image_dictionary_closure",
+        "PASS: dwg2dxf_dwg_layer_table_control_dictionary"
+      ],
+      "repositoryFixturesAdded": 0
+    },
+    "receipt": "docs/research/p6-dxf-rooted-imagedef-layer-control-optional-extension-fix-2026-11-03.json"
+  }
 }
