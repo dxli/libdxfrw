@@ -1,0 +1,55 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-dxf-image-definition-whole-object-rollback-retry-2026-11-03",
+  "date": "2026-11-03",
+  "status": "COMPLETED_LOCAL_TRANSACTION_ROLLBACK_CONTROL",
+  "supportClaimEffect": "none",
+  "scope": "Verify OBJECTS section rollback after the core has staged an IMAGEDEF graph, followed by same-writer retry and typed readback.",
+  "source": {
+    "parentCommit": "81c88196",
+    "files": {
+      "src/libdxfrw.cpp": "5751845b6b6ca893c3102694957d3320ea112cffaeb811e42ff7e8c767e9776c",
+      "src/libdxfrw.h": "54af5f45476a14c6046ddaed33ef290c0779eaa02c2eb2ac6141d5f6101a36d3",
+      "tests/dxf_fixture_tests.cpp": "e97e61e524ce2ee521bba51c57a228954898d5f4a933be8337a60e799cf81341",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "16203db5580ace6e58801f27581ae91ba32e58f704c25575479a7f327a496c2d"
+    }
+  },
+  "implementation": {
+    "files": [
+      "tests/dxf_fixture_tests.cpp",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md"
+    ],
+    "behavior": [
+      "The IMAGEDEF plan failure/retry control now injects a malformed XRECORD value from the consumer OBJECTS callback after the core has emitted its NOD, GROUP, IMAGEDEF dictionary, reactor, and IMAGEDEF records.",
+      "The failed callback must preserve the pre-existing destination sentinel and clear derived entity identity maps.",
+      "Correcting the callback on the same writer must succeed; a fresh typed DXF import verifies the IMAGE, IMAGEDEF, reactor references, and independent XRECORD.",
+      "The sequence runs for ASCII and Binary DXF. It adds no repository DWG/DXF fixtures and establishes no support claim."
+    ]
+  },
+  "validation": {
+    "normalBuild": {
+      "command": "cmake --build build-gcc --target libdxfrw_dxf_fixture_tests -j4",
+      "result": "PASS"
+    },
+    "normalFocused": {
+      "command": "ctest --test-dir build-gcc --output-on-failure -R '^libdxfrw_image_definition_plan_failure_retry$'",
+      "result": "PASS 1/1; 0.60 seconds",
+      "coverage": "Both ASCII and Binary generated IMAGEDEF flows, earlier entity-callback failure rollback, later OBJECTS callback failure after core records were staged, destination preservation, identity rollback, corrected same-writer retry, and fresh typed readback."
+    },
+    "asanBuild": {
+      "command": "cmake --build build-asan-custom --target libdxfrw_dxf_fixture_tests -j4",
+      "result": "PASS"
+    },
+    "asanFocused": {
+      "command": "ctest --test-dir build-asan-custom --output-on-failure -R '^libdxfrw_image_definition_plan_failure_retry$'",
+      "result": "PASS 1/1; 1.08 seconds"
+    },
+    "diffCheck": "PASS",
+    "repositoryFixturesAdded": 0
+  },
+  "limitations": [
+    "The injected failure is a rejected XRECORD value in the adapter callback, not a bad_alloc inside each core OBJECTS builder.",
+    "The generated round-trip is local transport evidence; native consumer semantics, physical producer breadth, and independent interoperability remain unqualified."
+  ],
+  "next": "Inject allocation failures into independent OBJECTS builders and extend rollback controls to other staged families."
+}

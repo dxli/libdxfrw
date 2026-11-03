@@ -37,10 +37,10 @@
   },
   "limitations": [
     "The 100,000 value reuses the existing DRW_Dictionary::kMaxEntries resource ceiling; it is not an Autodesk format maximum or a support claim.",
-    "The oversized plan-setter branch is not separately exercised with a 100,001-entry DRW_ImageDef plan; the output inventory guard is exercised without allocating image records.",
+    "The OBJECTS output inventory guard refuses 100,001 planned IMAGEDEF rows without allocating image records; direct const/rvalue plan-setter refusal is covered by the successor receipt.",
     "Other writeObjects maps/vectors and unrelated copy/work bounds remain to audit."
   ],
   "followUpReceipt": "docs/research/p6-dxf-image-definition-plan-nested-setter-bounds-2026-11-03.json",
-  "followUpScope": "The successor receipt covers aggregate nested retained payload/work estimates and injected const/rvalue allocation failure. The specific 100,001-record plan-setter branch and other writeObjects assemblies remain open.",
-  "next": "Continue auditing other writeObjects maps/vectors and setup/assembly bounds. Keep whole-object rollback, source lifetime, platform numeric/string policies, scoped concurrency, and the separate rooted IMAGEDEF TABLES/FIELDLIST failure visible as open work."
+  "followUpScope": "The successor receipt covers aggregate nested retained payload/work estimates, injected const/rvalue allocation failure, and the direct 100,001-record plan-setter refusal. Other writeObjects assemblies remain open.",
+  "next": "Continue auditing other writeObjects maps/vectors and setup/assembly bounds. Keep allocation-failure coverage across independent builders, source lifetime, platform numeric/string policies, scoped concurrency, and whole-object rollback beyond the IMAGEDEF callback failure/retry control visible as open work."
 }

@@ -16249,12 +16249,15 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
             DRW_XRecord independent;
             independent.handle = 0xD730u;
             independent.parentHandle = 0xCu;
-            independent.m_values.emplace_back(1, std::string("INDEPENDENT_IMAGE_REACTOR"));
+            independent.m_values.emplace_back(
+                induceObjectsFailure ? 10 : 1,
+                std::string("INDEPENDENT_IMAGE_REACTOR"));
             independentWritten = dxfW->writeXRecord(&independent);
         }
         DRW_Image image;
         std::uint32_t generatedReactor{0u};
         bool induceFailure{true};
+        bool induceObjectsFailure{false};
         bool imageWritten{false};
         bool suffixWritten{false};
         bool independentWritten{false};
@@ -16322,9 +16325,25 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
             "failed planned IMAGE graph preserves destination and clears derived identity state");
 
         adapter.induceFailure = false;
+        adapter.induceObjectsFailure = true;
         adapter.image.handle = 0;
         adapter.imageWritten = false;
         adapter.suffixWritten = false;
+        adapter.independentWritten = false;
+        const bool objectsRejected =
+            planInstalled && !writer.write(&adapter, DRW::AC1027, binary)
+            && adapter.imageWritten && !adapter.independentWritten;
+        t.expect(objectsRejected
+                     && contents() == "image plan sentinel\n"
+                     && writer.getWritingContext()->sourceHandleToMintedMap.empty()
+                     && writer.getWritingContext()->writtenSourceEntityHandles.empty(),
+                 "failed OBJECTS callback rolls back already staged IMAGEDEF records, identities, and destination bytes");
+
+        adapter.induceObjectsFailure = false;
+        adapter.image.handle = 0;
+        adapter.imageWritten = false;
+        adapter.suffixWritten = false;
+        adapter.independentWritten = false;
         const bool retried = writer.write(&adapter, DRW::AC1027, binary) && adapter.imageWritten &&
                              !adapter.suffixWritten && adapter.independentWritten &&
                              generatedLookups == 0u && writer.getError() == DRW::BAD_NONE;

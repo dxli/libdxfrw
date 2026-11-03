@@ -14,7 +14,7 @@
       "src/libdxfrw.h": "54af5f45476a14c6046ddaed33ef290c0779eaa02c2eb2ac6141d5f6101a36d3",
       "tests/dxf_fixture_tests.cpp": "9bd63790a8a491cbc91550c59547f47a2de535261b5c2649cd489bccea409e32",
       "tests/CMakeLists.txt": "cc223e55b8828888408acb35555532455c32ff0fab8abbe1a941a81fc826a318",
-      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "fd710127cffdbe6b54ec9083ea271cac14df5782a7f622d5db246a94486b651c"
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "16203db5580ace6e58801f27581ae91ba32e58f704c25575479a7f327a496c2d"
     }
   },
   "limit": {
@@ -71,7 +71,7 @@
   "limitations": [
     "The byte estimate bounds logical retained payload/container slots; it does not measure allocator capacity or peak process RSS.",
     "The internal ceilings are resource policy, not DXF format maxima or support claims.",
-    "The prior count receipt covers the 100,001-slot OBJECTS inventory refusal; this receipt now separately covers the 100,001-entry IMAGEDEF plan-setter refusal. Other writeObjects maps/vectors, full-object rollback cases and the rooted IMAGEDEF TABLES/FIELDLIST failure remain open."
+    "The prior count receipt covers the 100,001-slot OBJECTS inventory refusal; this receipt now separately covers the 100,001-entry IMAGEDEF plan-setter refusal. Other writeObjects maps/vectors and broader OBJECTS rollback cases remain open; the rooted IMAGEDEF TABLES control issue is resolved by the [focused fix receipt](docs/research/p6-dxf-rooted-imagedef-layer-control-optional-extension-fix-2026-11-03.json)."
   ],
-  "next": "Continue auditing other writeObjects maps/vectors and setup/assembly bounds, including whole-object rollback after earlier staged records, source lifetime, platform numeric/string policies, scoped concurrency, and rooted IMAGEDEF TABLES/FIELDLIST failure."
+  "next": "Continue auditing other writeObjects maps/vectors and setup/assembly bounds, including allocation failures in independent builders and broader rollback after earlier staged records; also audit source lifetime, platform numeric/string policies and scoped concurrency."
 }
