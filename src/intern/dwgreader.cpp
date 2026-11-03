@@ -128,6 +128,8 @@ bool dwgReader::decodeDwgTemplate(DRW_Header& hdr, const std::uint8_t* data,
 
 namespace {
 bool isSpaceBlockRecordName(const std::string &name);
+bool isPaperSpaceBlockRecordName(const std::string &name);
+bool isModelSpaceBlockRecordName(const std::string &name);
 
 bool requiresAggregateDelivery(std::int16_t type) {
   switch (type) {
@@ -2875,29 +2877,57 @@ bool readControlBit(dwgBuffer &buffer, std::uint64_t endBit, bool &value) {
       value);
 }
 
-bool isSpaceBlockRecordName(const std::string &name) {
-  std::string normalized = name;
-  std::transform(normalized.begin(), normalized.end(), normalized.begin(),
-                 [](unsigned char value) {
-                   return static_cast<char>(std::toupper(value));
-                 });
-  if (normalized == "*MODEL_SPACE" || normalized == "*PAPER_SPACE")
-    return true;
-
-  // AutoCAD names the first paper-space layout *PAPER_SPACE and subsequent
-  // layouts *PAPER_SPACE0, *PAPER_SPACE1, and so on. They share the legacy
-  // ownerless BLOCK/ENDBLK and firstEH/lastEH path with the first layout.
-  constexpr char paperSpacePrefix[] = "*PAPER_SPACE";
-  constexpr std::size_t paperSpacePrefixSize = sizeof(paperSpacePrefix) - 1u;
-  if (normalized.size() <= paperSpacePrefixSize ||
-      normalized.compare(0, paperSpacePrefixSize, paperSpacePrefix,
-                         paperSpacePrefixSize) != 0)
+bool asciiCaseEqualsAt(const std::string &value, std::size_t offset,
+                       const char *expected, std::size_t length) noexcept {
+  if (offset > value.size() || length > value.size() - offset)
     return false;
-  return std::all_of(normalized.begin() +
-                         static_cast<std::ptrdiff_t>(paperSpacePrefixSize),
-                     normalized.end(), [](unsigned char value) {
-                       return std::isdigit(value) != 0;
-                     });
+  for (std::size_t index = 0; index < length; ++index) {
+    unsigned char actual =
+        static_cast<unsigned char>(value[offset + index]);
+    unsigned char wanted = static_cast<unsigned char>(expected[index]);
+    if (actual >= static_cast<unsigned char>('a') &&
+        actual <= static_cast<unsigned char>('z'))
+      actual = static_cast<unsigned char>(actual - 'a' + 'A');
+    if (wanted >= static_cast<unsigned char>('a') &&
+        wanted <= static_cast<unsigned char>('z'))
+      wanted = static_cast<unsigned char>(wanted - 'a' + 'A');
+    if (actual != wanted)
+      return false;
+  }
+  return true;
+}
+
+bool isSpaceBlockRecordName(const std::string &name) {
+  return isModelSpaceBlockRecordName(name) ||
+         isPaperSpaceBlockRecordName(name);
+}
+
+bool isModelSpaceBlockRecordName(const std::string &name) {
+  constexpr char modelSpaceName[] = "*MODEL_SPACE";
+  return name.size() == sizeof(modelSpaceName) - 1u &&
+         asciiCaseEqualsAt(name, 0u, modelSpaceName,
+                           sizeof(modelSpaceName) - 1u);
+}
+
+bool isPaperSpaceBlockRecordName(const std::string &name) {
+  constexpr char paperSpaceName[] = "*PAPER_SPACE";
+  constexpr std::size_t paperSpaceNameLength = sizeof(paperSpaceName) - 1u;
+  if (name.size() == paperSpaceNameLength)
+    return asciiCaseEqualsAt(name, 0u, paperSpaceName,
+                             paperSpaceNameLength);
+
+  // AutoCAD names subsequent paper-space layouts *PAPER_SPACE0,
+  // *PAPER_SPACE1, and so on.
+  if (name.size() <= paperSpaceNameLength ||
+      !asciiCaseEqualsAt(name, 0u, paperSpaceName, paperSpaceNameLength))
+    return false;
+  for (std::size_t index = paperSpaceNameLength; index < name.size(); ++index) {
+    const unsigned char digit = static_cast<unsigned char>(name[index]);
+    if (digit < static_cast<unsigned char>('0') ||
+        digit > static_cast<unsigned char>('9'))
+      return false;
+  }
+  return true;
 }
 
 // helper function to cleanup pointers in Look Up Tables
@@ -3168,6 +3198,41 @@ bool objectContextKindFromClassNames(const std::string &recName,
   return false;
 }
 } // namespace
+
+void dwgReader::normalizeEntitySpaceFromCurrentBlock(DRW_Entity &entity) {
+  const bool ordinaryBlockEntity =
+      entity.eType != DRW::ATTRIB && entity.eType != DRW::SEQEND &&
+      entity.eType != DRW::VERTEX;
+  if (!ordinaryBlockEntity || rawBlockEntityOwner == DRW::NoHandle)
+    return;
+
+  const bool ownerMatchesCurrentScope =
+      expectedBlockEntityOwner != DRW::NoHandle
+          ? entity.parentHandle == expectedBlockEntityOwner
+          : ownerlessSpaceWalk && entity.parentHandle == DRW::NoHandle;
+  if (!ownerMatchesCurrentScope)
+    return;
+
+  const auto record = blockRecordmap.find(rawBlockEntityOwner);
+  if (record == blockRecordmap.end() || record->second == nullptr)
+    return;
+
+  const std::string &blockName = record->second->name;
+  if (isPaperSpaceBlockRecordName(blockName))
+    entity.space = DRW::PaperSpace;
+  else if (isModelSpaceBlockRecordName(blockName))
+    entity.space = DRW::ModelSpace;
+}
+
+void dwgReader::inheritCompoundEntitySpace(
+    DRW_Entity &child, const DRW_Entity &parentEntity) noexcept {
+  const bool insertAttribute = child.eType == DRW::ATTRIB &&
+                               parentEntity.eType == DRW::INSERT;
+  const bool polylineVertex = child.eType == DRW::VERTEX &&
+                              parentEntity.eType == DRW::POLYLINE;
+  if (insertAttribute || polylineVertex)
+    child.space = parentEntity.space;
+}
 
 bool dwgReader::hasPendingCompoundStateForBlock(
     const DRW_Block_Record &block) const {
@@ -6064,6 +6129,7 @@ bool dwgReader::preparePolylineCommit(std::uint32_t handle,
         !validateStagedFrame(vertex.frame)) {
       return false;
     }
+    inheritCompoundEntitySpace(vertex.entity, pending.entity);
     prepared.orderedVertices.push_back(&vertex);
   }
   const auto rollbackMarkers = [this, &prepared, sequenceHandle]() {
@@ -6380,6 +6446,7 @@ bool dwgReader::prepareInsertCommit(std::uint32_t handle,
         indexed->second.owner != handle || indexed->second.index != index) {
       return false;
     }
+    inheritCompoundEntitySpace(*attribute.entity, pending.entity);
     prepared.orderedAttributes.push_back(&attribute);
     prepared.orderedEntities.push_back(attribute.entity);
     return true;

@@ -2305,6 +2305,14 @@ protected:
   // Model/paper-space ownership is identified by the BLOCK_RECORD name, not
   // by format-specific handle values.
   bool ownerlessSpaceWalk{false};
+  // Once a typed entity has passed the active block-owner check, derive the
+  // DXF space flag from its containing BLOCK_RECORD. DWG entmode alone does
+  // not identify entities in every numbered paper-space layout.
+  void normalizeEntitySpaceFromCurrentBlock(DRW_Entity &entity);
+  // Compound INSERT/ATTRIB and POLYLINE/VERTEX children inherit their
+  // validated parent's space when the aggregate is ready for delivery.
+  void inheritCompoundEntitySpace(DRW_Entity &child,
+                                  const DRW_Entity &parent) noexcept;
   // ObjectMap key currently being decoded; typed entity callbacks must not
   // publish a body carrying a different object handle.
   std::uint32_t expectedParsedEntityHandle{DRW::NoHandle};
@@ -2397,6 +2405,8 @@ private:
         m_currentEntityFailurePhase = DwgEntityFailurePhase::Identity;
       }
     }
+    if (ret)
+      normalizeEntitySpaceFromCurrentBlock(e);
     if (ret) {
       parseAttribs(&e);
       if (m_activeEntityFrameCapture != nullptr &&

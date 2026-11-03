@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-02. This file contains open work only. Implementation history and
+Updated 2026-11-03. This file contains open work only. Implementation history and
 completed-item evidence belong in Git and `docs/research/`, not in this queue.
 
 The objective remains full, evidence-backed DWG/DXF parity with the intended
@@ -283,6 +283,15 @@ a generated ASCII control verifies that group 72 value 725 survives a following
 group 46 value 2500. This is field-isolation evidence only, not physical producer
 or native-rendering qualification. See the [field-isolation receipt](docs/research/p5-viewport-undocumented-group46-isolation-2026-11-02.json)
 and [Autodesk's VIEWPORT DXF table](https://help.autodesk.com/cloudhelp/2025/ENU/AutoCAD-DXF/files/GUID-2602B0FB-02E4-4B9A-B03C-B1D904753D34.htm).
+
+The three locally available AC1021 strict-conversion witnesses that previously
+stopped at LAYOUT viewport-list validation now pass that check after typed
+entity space is derived from its validated model/paper BLOCK_RECORD owner.
+They currently stop at the next independent `VISUALSTYLE carrier coverage`
+gate; trace that source profile before changing its writer route. The bounded
+correction and peer differential are recorded in the
+[AC1021 space-classification receipt](docs/research/p4-ac1021-space-from-block-record-2026-11-03.json).
+Strict output still fails, and no support claim is promoted.
 
 **TABLE:**
 

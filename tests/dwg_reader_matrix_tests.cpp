@@ -4352,6 +4352,24 @@ public:
         decoder.setVersion(value, false);
     }
 
+    void normalizeSpaceForTest(DRW_Entity &entity,
+                               std::uint32_t blockRecordHandle,
+                               bool ownerless = false) {
+        rawBlockEntityOwner = blockRecordHandle;
+        expectedBlockEntityOwner =
+            ownerless ? DRW::NoHandle : blockRecordHandle;
+        ownerlessSpaceWalk = ownerless;
+        normalizeEntitySpaceFromCurrentBlock(entity);
+        rawBlockEntityOwner = DRW::NoHandle;
+        expectedBlockEntityOwner = DRW::NoHandle;
+        ownerlessSpaceWalk = false;
+    }
+
+    void inheritSpaceForTest(DRW_Entity &child,
+                             const DRW_Entity &parentEntity) {
+        inheritCompoundEntitySpace(child, parentEntity);
+    }
+
     void setPrototypeSectionData(std::vector<std::uint8_t> data) {
         m_prototypeSectionData = std::move(data);
         dwgSectionInfo section;
@@ -6953,6 +6971,102 @@ void testSpaceBlockDelimiterOwner(TestContext& t) {
                  && sink.blocks == std::vector<std::string>{blockName}
                  && sink.endBlocks == 1u,
              "owner-bearing paper-space delimiters publish one complete scope");
+}
+
+void testEntitySpaceFromBlockRecord(TestContext& t) {
+    constexpr std::uint32_t modelRecordHandle = 0x710u;
+    constexpr std::uint32_t paperRecordHandle = 0x711u;
+    constexpr std::uint32_t paper0RecordHandle = 0x712u;
+    constexpr std::uint32_t namedRecordHandle = 0x713u;
+
+    ModelerDispatchReader reader(nullptr, nullptr);
+    const auto addRecord = [&reader](std::uint32_t handle,
+                                    const char *name) {
+        auto record = std::make_unique<DRW_Block_Record>();
+        record->handle = handle;
+        record->name = name;
+        DRW_Block_Record *const recordPointer = record.get();
+        if (!reader.blockRecordmap.emplace(handle, recordPointer).second)
+            return false;
+        (void)record.release(); // dwgReader owns blockRecordmap values.
+        return true;
+    };
+
+    const bool recordsAdded =
+        addRecord(modelRecordHandle, "*MODEL_SPACE") &&
+        addRecord(paperRecordHandle, "*Paper_Space") &&
+        addRecord(paper0RecordHandle, "*PAPER_SPACE0") &&
+        addRecord(namedRecordHandle, "PaperContent");
+    t.expect(recordsAdded,
+             "model, paper, numbered paper, and named block records are installed");
+    if (!recordsAdded)
+        return;
+
+    DRW_Line paperEntity;
+    paperEntity.parentHandle = paperRecordHandle;
+    paperEntity.space = DRW::ModelSpace; // DWG entmode=0 default.
+    reader.normalizeSpaceForTest(paperEntity, paperRecordHandle);
+    t.expect(paperEntity.space == DRW::PaperSpace,
+             "owner-validated *PAPER_SPACE scope corrects the default model-space flag");
+
+    DRW_Line numberedPaperEntity;
+    numberedPaperEntity.parentHandle = DRW::NoHandle;
+    numberedPaperEntity.space = DRW::ModelSpace;
+    reader.normalizeSpaceForTest(numberedPaperEntity, paper0RecordHandle, true);
+    t.expect(numberedPaperEntity.space == DRW::PaperSpace,
+             "ownerless *PAPER_SPACE<n> scope projects to paper space");
+
+    DRW_Line modelEntity;
+    modelEntity.parentHandle = modelRecordHandle;
+    modelEntity.space = DRW::PaperSpace;
+    reader.normalizeSpaceForTest(modelEntity, modelRecordHandle);
+    t.expect(modelEntity.space == DRW::ModelSpace,
+             "model-space BLOCK_RECORD name canonicalizes its entity space");
+
+    DRW_Line wrongOwnerEntity;
+    wrongOwnerEntity.parentHandle = namedRecordHandle;
+    wrongOwnerEntity.space = DRW::ModelSpace;
+    reader.normalizeSpaceForTest(wrongOwnerEntity, paperRecordHandle);
+    t.expect(wrongOwnerEntity.space == DRW::ModelSpace,
+             "space normalization does not cross a mismatched entity owner");
+
+    DRW_Line namedBlockEntity;
+    namedBlockEntity.parentHandle = namedRecordHandle;
+    namedBlockEntity.space = DRW::PaperSpace;
+    reader.normalizeSpaceForTest(namedBlockEntity, namedRecordHandle);
+    t.expect(namedBlockEntity.space == DRW::PaperSpace,
+             "ordinary named-block space values are left untouched");
+
+    DRW_Vertex compoundChild;
+    compoundChild.parentHandle = paperRecordHandle;
+    compoundChild.space = DRW::ModelSpace;
+    reader.normalizeSpaceForTest(compoundChild, paperRecordHandle);
+    t.expect(compoundChild.space == DRW::ModelSpace,
+             "compound VERTEX children are not classified as block-level entities");
+
+    DRW_Insert insert;
+    insert.space = DRW::PaperSpace;
+    DRW_Attrib attribute;
+    attribute.space = DRW::ModelSpace;
+    reader.inheritSpaceForTest(attribute, insert);
+    t.expect(attribute.space == DRW::PaperSpace,
+             "validated INSERT space is inherited by its ATTRIB child");
+
+    DRW_Polyline polyline;
+    polyline.space = DRW::PaperSpace;
+    DRW_Vertex polylineVertex;
+    polylineVertex.space = DRW::ModelSpace;
+    reader.inheritSpaceForTest(polylineVertex, polyline);
+    t.expect(polylineVertex.space == DRW::PaperSpace,
+             "validated POLYLINE space is inherited by its VERTEX child");
+
+    DRW_Line unrelatedParent;
+    unrelatedParent.space = DRW::PaperSpace;
+    DRW_Attrib unrelatedChild;
+    unrelatedChild.space = DRW::ModelSpace;
+    reader.inheritSpaceForTest(unrelatedChild, unrelatedParent);
+    t.expect(unrelatedChild.space == DRW::ModelSpace,
+             "space inheritance is restricted to supported compound pairs");
 }
 
 class TableControlRecoveryReader final : public dwgReader15 {
@@ -17340,6 +17454,13 @@ int main(int argc, char** argv) {
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
+    if (argc == 2
+        && std::string(argv[1]) == "--entity-space-from-block-record") {
+        TestContext focused;
+        testEntitySpaceFromBlockRecord(focused);
+        std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--acds-modeler-move-callback") {
         TestContext focused;
         testOwnedUnsupportedObjectJournalEvent(focused);
@@ -17454,6 +17575,7 @@ int main(int argc, char** argv) {
     testModelerBlockWalkRejectsBadOwnership(context);
     testOrphanEntitySweepRecovery(context);
     testSpaceBlockDelimiterOwner(context);
+    testEntitySpaceFromBlockRecord(context);
     testErasedBlockRecordTableRecovery(context);
     testMixedMissingBlockOwnership(context);
     testBoundedEedApplicationChunks(context);

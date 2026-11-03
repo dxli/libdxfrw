@@ -4111,6 +4111,12 @@ add_test(NAME libdxfrw_persistent_manager_prefix_dispatch
 set_tests_properties(libdxfrw_persistent_manager_prefix_dispatch PROPERTIES
     LABELS "fast;dwg;objects;associative;generated" TIMEOUT 15)
 
+add_test(NAME libdxfrw_entity_space_from_block_record
+    COMMAND libdxfrw_dwg_reader_matrix_tests
+        --entity-space-from-block-record)
+set_tests_properties(libdxfrw_entity_space_from_block_record PROPERTIES
+    LABELS "fast;dwg;entities;ownership;space;generated" TIMEOUT 15)
+
 add_test(NAME libdxfrw_associative_constraint_group_generated
     COMMAND libdxfrw_dwg_reader_matrix_tests
         --associative-constraint-group-generated)
