@@ -938,6 +938,8 @@ public:
     bool adoptGroupsForWrite(std::list<DRW_Group>& groups) {
         if (!preflightDxfSetup())
             return false;
+        if (groups.size() > DRW_Dictionary::kMaxEntries)
+            return false;
         if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen) {
             m_writeError = true;
             return false;

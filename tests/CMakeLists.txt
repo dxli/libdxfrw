@@ -3133,6 +3133,12 @@ set_tests_properties(libdxfrw_table_attribute_count_bound PROPERTIES
     LABELS "fast;dxf;table;writer;transaction"
     TIMEOUT 30)
 
+add_test(NAME libdxfrw_group_adoption_count_bound
+    COMMAND libdxfrw_dxf_fixture_tests --group-adoption-count-bound)
+set_tests_properties(libdxfrw_group_adoption_count_bound PROPERTIES
+    LABELS "fast;dxf;group;adapter;resource"
+    TIMEOUT 30)
+
 add_test(NAME libdxfrw_tablecontent_multicell_field_reference
     COMMAND libdxfrw_dxf_fixture_tests --tablecontent-multicell-field)
 set_tests_properties(libdxfrw_tablecontent_multicell_field_reference PROPERTIES

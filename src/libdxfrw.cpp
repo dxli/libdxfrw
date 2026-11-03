@@ -16143,6 +16143,8 @@ bool dxfRW::writeBlocks() {
 bool dxfRW::planDxfGroupHandles() {
     if (!preflightDxfWrite())
         return false;
+    if (m_groups.size() > DRW_Dictionary::kMaxEntries)
+        return failDxfWrite();
     if (m_generatedGroupDictionarySource
         && m_generatedGroupDictionarySource->m_entries.size() != m_groups.size())
         return failDxfWrite();

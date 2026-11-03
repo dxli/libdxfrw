@@ -59352,6 +59352,32 @@ void testTableAttributeCountBound(TestContext& t) {
     }
 }
 
+void testGroupAdoptionCountBound(TestContext& t) {
+    const std::size_t overLimitCount = DRW_Dictionary::kMaxEntries + 1u;
+    std::list<DRW_Group> groups;
+    for (std::size_t index = 0u; index < overLimitCount; ++index)
+        groups.emplace_back();
+
+    dxfRW rejected("");
+    const bool adopted = rejected.adoptGroupsForWrite(groups);
+    t.expect(!adopted && groups.size() == overLimitCount
+                 && rejected.groupsForWrite().empty(),
+             "over-limit GROUP adoption preserves the caller list without staging a vector");
+
+    std::list<DRW_Group> validGroups;
+    validGroups.emplace_back();
+    validGroups.front().name = "GROUP_ADOPTION_CONTROL";
+    dxfRW accepted("");
+    const bool validAdopted = accepted.adoptGroupsForWrite(validGroups);
+    const bool retained = validAdopted
+        && accepted.groupsForWrite().size() == 1u
+        && accepted.groupsForWrite().front().name == "GROUP_ADOPTION_CONTROL";
+    accepted.returnAdoptedGroupsForWrite(validGroups);
+    t.expect(retained && validGroups.size() == 1u
+                 && validGroups.front().name == "GROUP_ADOPTION_CONTROL",
+             "in-limit GROUP adoption and ownership return remain intact");
+}
+
 void populateLegacyEllipseCarriers(dx_data& data, bool includeControls = true) {
     DRW_AppId app;
     app.name = "ELLIPSE_APP";
@@ -62852,6 +62878,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testTableAttributeCountBound(context);
         std::cout << "TABLE attribute count bound: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--group-adoption-count-bound") {
+        TestContext context;
+        testGroupAdoptionCountBound(context);
+        std::cout << "GROUP adoption count bound: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
