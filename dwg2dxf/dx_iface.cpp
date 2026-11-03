@@ -73973,13 +73973,13 @@ void dx_iface::writeEntity(DRW_Entity* e){
         break;
     }
     case DRW::MESH:
-        if (auto* mesh = dynamic_cast<DRW_Mesh*>(e))
+        if (auto* mesh = exactEntityForDxfWrite<DRW_Mesh>(e, DRW::MESH))
             written = dxfW->writeMesh(mesh);
         else
             dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::HELIX:
-        if (auto* helix = dynamic_cast<DRW_Helix*>(e))
+        if (auto* helix = exactEntityForDxfWrite<DRW_Helix>(e, DRW::HELIX))
             written = dxfW->writeHelix(helix);
         else
             dxfW->writeRawDxfEntity(nullptr);

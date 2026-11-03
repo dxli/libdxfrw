@@ -881,6 +881,14 @@ eligible reader. The exact package and environment result are in the
   retry, and line-geometry readback; see the [3D dispatch receipt](docs/research/p8-3d-entity-runtime-type-dispatch-2026-11-02.json).
   This protects callback integrity only; it does not qualify 3D payload syntax,
   topology/kernel meaning, native consumers, or whole BLOCK inventory.
+  A follow-up requires the exact built-in runtime class as well as the matching
+  public tag for MESH and HELIX, so user-derived runtime objects cannot be
+  accepted while their additional state is dropped. Generated ASCII/Binary
+  controls verify atomic refusal, destination preservation, exact-object retry,
+  triangle topology readback and selected HELIX field readback; see the
+  [MESH/HELIX subclass-dispatch receipt](docs/research/p8-mesh-helix-runtime-subclass-dispatch-2026-11-03.json).
+  This closes only the adapter subclass-truncation path; direct low-level writer
+  calls, physical producer profiles and native semantics remain unqualified.
   The same adapter now checks the HATCH/MPOLYGON subtype boundary in both
   directions: a plain HATCH cannot enter the MPOLYGON writer, and an MPOLYGON
   cannot be serialized as HATCH with its distinct fields dropped. Generated

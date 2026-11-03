@@ -20277,6 +20277,123 @@ bool entityRuntimeDispatchGuard() {
     return true;
 }
 
+bool meshHelixRuntimeSubclassDispatchGuard() {
+    struct DerivedMesh final : DRW_Mesh {
+        std::string unrepresentedMetadata{"must-not-be-dropped"};
+    };
+    struct DerivedHelix final : DRW_Helix {
+        std::string unrepresentedMetadata{"must-not-be-dropped"};
+    };
+
+    for (const bool binary : {false, true}) {
+        for (const bool meshCase : {true, false}) {
+            dx_data data;
+            dx_iface adapter;
+            adapter.cData = &data;
+            adapter.currentBlock = data.mBlock;
+            DRW_Entity* derived = meshCase
+                ? static_cast<DRW_Entity*>(new DerivedMesh())
+                : static_cast<DRW_Entity*>(new DerivedHelix());
+            data.mBlock->ent.push_back(derived);
+
+            const std::string entityName = meshCase ? "MESH" : "HELIX";
+            const auto path = std::filesystem::temp_directory_path()
+                / (std::string("libdxfrw-")
+                   + (meshCase ? "mesh" : "helix")
+                   + "-runtime-subclass-"
+                   + std::to_string(std::chrono::steady_clock::now()
+                                        .time_since_epoch().count())
+                   + (binary ? "-binary.dxf" : "-ascii.dxf"));
+            if (std::filesystem::exists(path))
+                return fail(entityName + " runtime output path unexpectedly exists");
+            struct Cleanup {
+                std::filesystem::path path;
+                ~Cleanup() {
+                    std::error_code ignored;
+                    std::filesystem::remove(path, ignored);
+                }
+            } cleanup{path};
+
+            const std::string sentinel = entityName + "_RUNTIME_DESTINATION\n";
+            {
+                std::ofstream existing(path, std::ios::binary);
+                existing << sentinel;
+                if (!existing)
+                    return fail("could not create " + entityName
+                                + " destination sentinel");
+            }
+            if (adapter.fileExport(path.string(), DRW::AC1027, binary,
+                                   &data, false, true))
+                return fail("derived " + entityName
+                            + " runtime type was serialized as its base");
+            {
+                std::ifstream previous(path, std::ios::binary);
+                const std::string bytes{
+                    std::istreambuf_iterator<char>(previous), {}};
+                if (bytes != sentinel)
+                    return fail("derived " + entityName
+                                + " changed the destination before refusal");
+            }
+
+            delete data.mBlock->ent.front();
+            data.mBlock->ent.clear();
+            if (meshCase) {
+                auto* mesh = new DRW_Mesh();
+                mesh->vertices = {DRW_Coord{0.0, 0.0, 0.0},
+                                  DRW_Coord{2.0, 0.0, 0.0},
+                                  DRW_Coord{0.0, 3.0, 0.0}};
+                mesh->faces.push_back({0, 1, 2});
+                data.mBlock->ent.push_back(mesh);
+            } else {
+                auto* helix = new DRW_Helix();
+                helix->degree = 1;
+                helix->fitlist.push_back(std::make_shared<DRW_Coord>(
+                    DRW_Coord{1.0, 0.0, 0.0}));
+                helix->fitlist.push_back(std::make_shared<DRW_Coord>(
+                    DRW_Coord{0.0, 1.0, 2.0}));
+                helix->axisBasePt = DRW_Coord{0.0, 0.0, 0.0};
+                helix->startPt = DRW_Coord{1.0, 0.0, 0.0};
+                helix->axisVector = DRW_Coord{0.0, 0.0, 1.0};
+                helix->radius = 1.0;
+                helix->turns = 2.0;
+                helix->turnHeight = 1.0;
+                data.mBlock->ent.push_back(helix);
+            }
+
+            if (!adapter.fileExport(path.string(), DRW::AC1027, binary,
+                                    &data, false, true))
+                return fail("exact " + entityName
+                            + " runtime type did not retry successfully");
+            dx_data readback;
+            dx_iface reader;
+            if (!reader.fileImport(path.string(), &readback, false)
+                || readback.mBlock == nullptr
+                || readback.mBlock->ent.size() != 1u)
+                return fail("exact " + entityName + " retry did not read back");
+            const DRW_Entity* actual = readback.mBlock->ent.front();
+            if (meshCase) {
+                const auto* mesh = dynamic_cast<const DRW_Mesh*>(actual);
+                if (mesh == nullptr || typeid(*actual) != typeid(DRW_Mesh)
+                    || actual->eType != DRW::MESH
+                    || mesh->vertices.size() != 3u
+                    || mesh->faces.size() != 1u
+                    || mesh->faces.front() != std::vector<std::int32_t>{0, 1, 2})
+                    return fail("exact MESH retry changed its runtime type or topology");
+            } else {
+                const auto* helix = dynamic_cast<const DRW_Helix*>(actual);
+                if (helix == nullptr || typeid(*actual) != typeid(DRW_Helix)
+                    || actual->eType != DRW::HELIX
+                    || helix->fitlist.size() != 2u
+                    || helix->fitlist[1]->z != 2.0
+                    || helix->radius != 1.0 || helix->turns != 2.0
+                    || helix->turnHeight != 1.0)
+                    return fail("exact HELIX retry changed its runtime type or payload");
+            }
+        }
+    }
+    return true;
+}
+
 bool pointCloudAndNavisworksAdapterTransport() {
     for (const bool binary : {false, true}) {
         dx_data data;
@@ -65178,7 +65295,8 @@ int main(int argc, char** argv) {
         return insertRuntimeDispatchGuard() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--entity-runtime-dispatch")
-        return entityRuntimeDispatchGuard() ? 0 : 1;
+        return entityRuntimeDispatchGuard()
+                && meshHelixRuntimeSubclassDispatchGuard() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--point-cloud-adapter-transport")
         return pointCloudAndNavisworksAdapterTransport() ? 0 : 1;
