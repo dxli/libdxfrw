@@ -6479,6 +6479,64 @@ void testViewReferenceRemapping(TestContext& t) {
                      "VIEW accepts corrected fresh-writer retry");
         }
     }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream failedOutput;
+        failedOutput << "KEEP";
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1032;
+        failedOwner.binFile = binary;
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterBinary>(&failedOutput))
+            : std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterAscii>(&failedOutput));
+        DRW_View invalidView;
+        invalidView.name = "ENUM_DOMAIN_TEST";
+        invalidView.renderMode = 7u;
+        t.expect(!failedOwner.writeView(&invalidView)
+                     && failedOutput.str() == "KEEP",
+                 "VIEW refuses an undocumented render mode without changing destination");
+
+        std::ostringstream validOutput;
+        dxfRW validOwner("");
+        validOwner.version = DRW::AC1032;
+        validOwner.binFile = binary;
+        validOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterBinary>(&validOutput))
+            : std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterAscii>(&validOutput));
+        DRW_View validView;
+        validView.name = "ENUM_DOMAIN_TEST";
+        validView.renderMode = 6u;
+        const bool wrote = validOwner.writeView(&validView)
+            && validOwner.writer->writeString(0, "WIRE_END");
+        t.expect(wrote, "VIEW accepts documented render mode upper bound");
+        if (!wrote)
+            continue;
+
+        std::istringstream input(validOutput.str());
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(
+                std::make_unique<dxfReaderBinary>(&input))
+            : std::unique_ptr<dxfReader>(
+                std::make_unique<dxfReaderAscii>(&input));
+        bool foundRenderMode = false;
+        std::string recordName;
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (code == 0) {
+                recordName = reader->getString();
+                if (recordName == "WIRE_END")
+                    break;
+            } else if (recordName == "VIEW" && code == 281) {
+                foundRenderMode = reader->getInt32() == 6;
+            }
+        }
+        t.expect(foundRenderMode,
+                 "VIEW documented render mode upper bound reads back exactly");
+    }
 }
 
 void testLayoutPlotSettingsReferenceRemapping(TestContext& t) {

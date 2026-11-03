@@ -502,15 +502,17 @@ group 46 value 2500. This is field-isolation evidence only, not physical produce
 or native-rendering qualification. See the [field-isolation receipt](docs/research/p5-viewport-undocumented-group46-isolation-2026-11-02.json)
 and [Autodesk's VIEWPORT DXF table](https://help.autodesk.com/cloudhelp/2025/ENU/AutoCAD-DXF/files/GUID-2602B0FB-02E4-4B9A-B03C-B1D904753D34.htm).
 
-The typed DXF writers now refuse undocumented VIEWPORT/VPORT enum values for
-render mode (group 281), default lighting type (282), and VIEWPORT orthographic
-UCS type (79), using Autodesk's published domains 0..6, 0..1, and 0..6.
+The typed DXF writers now refuse undocumented VIEWPORT/VPORT/VIEW enum values
+for render mode (group 281), default lighting type (282), and VIEWPORT
+orthographic UCS type (79), using Autodesk's published domains 0..6, 0..1,
+and 0..6. VIEW group 281 now has a DXF-only 0..6 guard as well.
 Generated ASCII and Binary controls verify invalid-value refusal without
 changing an existing destination and exact readback at each upper bound.
 DWG parsing/encoding keeps its wire-width checks unchanged; native rendering
 and physical producer qualification remain open. See the [VIEWPORT
-enum-domain guard receipt](docs/research/p5-viewport-dxf-enum-domains-2026-11-03.json)
-and [VPORT enum-domain guard receipt](docs/research/p5-vport-dxf-enum-domains-2026-11-03.json).
+enum-domain guard receipt](docs/research/p5-viewport-dxf-enum-domains-2026-11-03.json),
+[VPORT enum-domain guard receipt](docs/research/p5-vport-dxf-enum-domains-2026-11-03.json),
+and [VIEW enum-domain guard receipt](docs/research/p5-view-dxf-enum-domains-2026-11-03.json).
 
 The three locally available AC1021 strict-conversion witnesses that previously
 stopped at LAYOUT viewport-list validation now pass that check after typed
