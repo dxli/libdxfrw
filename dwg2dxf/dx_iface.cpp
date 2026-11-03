@@ -71236,7 +71236,15 @@ void dx_iface::writeEntity(DRW_Entity* e){
 //    case RS2::EntityVertex:
 //        break;
     case DRW::INSERT:
-        written = dxfW->writeInsert(static_cast<DRW_Insert*>(e));
+        if (auto* insert = dynamic_cast<DRW_Insert*>(e)) {
+            if (typeid(*e) == typeid(DRW_Insert)
+                && e->eType == DRW::INSERT)
+                written = dxfW->writeInsert(insert);
+            else
+                dxfW->writeRawDxfEntity(nullptr);
+        } else {
+            dxfW->writeRawDxfEntity(nullptr);
+        }
         break;
     case DRW::TABLE: {
         auto* table = dynamic_cast<DRW_Table*>(e);

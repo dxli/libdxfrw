@@ -496,6 +496,11 @@ eligible reader. The exact package and environment result are in the
   VIEWPORT before reaching the DXF writer's static cast. Generated ASCII/Binary
   controls verify atomic refusal, destination preservation, corrected retry,
   and POINT readback; see the [VIEWPORT dispatch receipt](docs/research/p8-viewport-runtime-dispatch-2026-11-02.json).
+  The INSERT writer dispatch now requires the exact `DRW_Insert` runtime type
+  before accessing the larger INSERT payload through its public `eType` tag.
+  A POINT tagged as INSERT is refused atomically; correcting it permits a
+  same-adapter retry and typed POINT readback in ASCII/Binary DXF. See the
+  [INSERT dispatch receipt](docs/research/p8-insert-runtime-dispatch-2026-11-02.json).
   This closes one adapter type-safety hole only; remaining entity tags still
   require source-stable inventory and any applicable subtype guards.
   `dx_iface` now retains and dispatches POINTCLOUD, POINTCLOUDEX, and
