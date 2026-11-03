@@ -1505,6 +1505,39 @@ public:
                 break;
             }
         }
+        objectWritePhase = "POINTCLOUDDEFINITIONEX/REACTOREX";
+        const auto writePointCloudObject = [this](
+                std::uint32_t handle,
+                DRW_PointCloudDef::Kind expectedKind) {
+            DRW_PointCloudDef* selected = nullptr;
+            std::size_t matches = 0u;
+            for (DRW_PointCloudDef& object : cData->pointCloudDefinitions) {
+                if (object.handle != handle)
+                    continue;
+                selected = &object;
+                ++matches;
+            }
+            if (matches != 1u || selected == nullptr
+                || selected->m_kind != expectedKind
+                || !dxfW->writePointCloudDef(selected))
+                return false;
+            return true;
+        };
+        for (const std::uint32_t handle :
+             m_pointCloudExDefinitionHandles) {
+            if (!writePointCloudObject(
+                    handle, DRW_PointCloudDef::DefinitionEx)) {
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+        }
+        for (const std::uint32_t handle : m_pointCloudExReactorHandles) {
+            if (!writePointCloudObject(
+                    handle, DRW_PointCloudDef::ReactorEx)) {
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+        }
         std::unordered_set<std::uint32_t> dictionaryWithDefaultHandles;
         std::unordered_set<std::uint32_t> placeholderHandles;
         objectWritePhase = "dictionary-with-default records";
@@ -2979,6 +3012,9 @@ private:
     }
     bool prepareExtensionObjectGraph(dx_data* data,
                                      bool includeNamedObjectRoot);
+    bool preparePointCloudExOutputGraph(dx_data& data,
+                                        DRW::Version targetVersion,
+                                        bool debug);
     bool prepareDwgGeoDataOutput(bool debug);
     bool prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                                          bool debug);
@@ -3604,6 +3640,9 @@ private:
     std::vector<std::uint32_t> m_extensionGeoDataHandles;
     std::vector<std::uint32_t> m_extensionRasterVariablesHandles;
     std::vector<std::uint32_t> m_extensionWipeoutVariablesHandles;
+    std::uint32_t m_pointCloudExDictionaryHandle{0u};
+    std::vector<std::uint32_t> m_pointCloudExDefinitionHandles;
+    std::vector<std::uint32_t> m_pointCloudExReactorHandles;
     std::vector<dx_data::UnderlayDefinitionKey>
         m_underlayDefinitionKeysToWrite;
     std::vector<std::uint32_t> m_extensionAssociativeHandles;

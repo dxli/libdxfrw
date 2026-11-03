@@ -949,12 +949,19 @@ eligible reader. The exact package and environment result are in the
   The adapter also retains POINTCLOUDDEFINITION/EX, their reactor variants,
   NAVISWORKSMODELDEF and POINTCLOUDCOLORMAP callbacks under shared record,
   item and byte budgets. Generated ASCII/Binary controls verify bounded typed
-  retention, malformed color-map refusal, and atomic output refusal while this
-  definition/reactor/color-map graph has no qualified adapter writer
+  retention, malformed color-map refusal, and atomic output refusal for an
+  unrooted mixed definition/NAVISWORKS/color-map graph
   ([callback-retention receipt](docs/research/p8-pointcloud-object-callback-retention-2026-11-03.json)).
-  This closes callback retention only; P4 source identity/owner/dependency
-  closure, output binding, physical producer coverage, asset loading and native
-  consumer semantics remain open.
+  A bounded authored-only AC1027+ adapter route now closes the exact
+  NOD `ACAD_POINTCLOUD_EX_DICT` → DICTIONARY → DefinitionEx path and the
+  reciprocal DefinitionEx/ReactorEx/POINTCLOUDEX owner/reference cycle. It
+  reserves and remaps object/entity identities, rejects an invalid reactor
+  owner without changing the destination, and permits same-adapter correction
+  and ASCII/Binary typed readback; see the [authored graph receipt](docs/research/p8-pointcloud-authored-definition-reactor-graph-2026-11-03.json).
+  This does not admit imported DXF or DWG point-cloud sources: DXF still needs
+  complete raw-carrier/source-span binding and DWG still needs source
+  CLASS/frame output binding. P4 source-profile closure, physical producer
+  breadth, asset loading and native consumer semantics remain open.
   The low-level POINTCLOUD and POINTCLOUDEX serializers now resolve their
   definition/reactor references through the configured resolver (final output
   IDs) or source-handle remap fallback. Generated ASCII/Binary controls verify
@@ -995,10 +1002,11 @@ eligible reader. The exact package and environment result are in the
   records the focused ASCII/Binary control, including unresolved-target refusal
   and corrected retry. This does not prove target
   existence or close the MLINESTYLE dependency graph.
-  The concrete adapter still atomically refuses nonzero definition/reactor
-  handles until P4's source-bound object graph providers and output bindings
-  qualify them.
-  This does not close external-definition graph, asset loading, native 3D
+  The concrete adapter admits nonzero DefinitionEx/ReactorEx references only
+  for the authored graph above. Imported DXF/DWG sources and nonzero classic
+  POINTCLOUD or NAVISWORKSMODEL definition references stay fail-closed until
+  their source-bound object graphs and output bindings qualify. This does not
+  close external-definition source coverage, asset loading, native 3D
   consumer, or broader BLOCK callback qualification.
   The local adapter now retains LIGHT callbacks through modelspace and named-
   BLOCK delivery, with bounded DXF read/write support for the documented core

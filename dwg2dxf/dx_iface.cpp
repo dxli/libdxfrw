@@ -8598,6 +8598,17 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     "duplicate or ambiguous DICTIONARY handle "
                     + std::to_string(dictionary.handle));
         }
+        inventoryFamily = "point-cloud definition/reactor identities";
+        for (const DRW_PointCloudDef& object :
+             data->pointCloudDefinitions) {
+            if (!examineSourceRecord())
+                return false;
+            if (object.handle == 0u || object.handle == DRW::NoHandle
+                || !sourceHandles.insert(object.handle).second)
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "invalid or colliding point-cloud object source handle "
+                    + std::to_string(object.handle));
+        }
         inventoryFamily = "UNDERLAY definition identities";
         for (const auto& definition : data->underlayDefinitions) {
             if (definition.first.first != data->importGeneration)
@@ -12604,6 +12615,16 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     && (!data->backgrounds.empty()
                         || !data->rawBackgroundObjects.empty()))
                     continue;
+                if (key == "ACAD_POINTCLOUD_EX_DICT") {
+                    if (m_pointCloudExDictionaryHandle == 0u
+                        || entry.m_handle
+                            != m_pointCloudExDictionaryHandle)
+                        return reject(ExtensionGraphFailure::InvalidGraph,
+                            "ACAD_POINTCLOUD_EX_DICT lacks the dedicated closed output graph");
+                    // Its dictionary and DefinitionEx/ReactorEx records are
+                    // validated and emitted by the point-cloud graph plan.
+                    continue;
+                }
                 if (key == "ACAD_LAYOUT" || key == "ACAD_GROUP"
                     || (key == "ACAD_IMAGE_DICT" && rootedImageDictionary)
                     || (key == "ACAD_MATERIAL"
@@ -67692,6 +67713,286 @@ bool dx_iface::prepareDwgGeoDataOutput(bool debug) {
     return m_extensionGeoDataHandles.size() == typedCount;
 }
 
+bool dx_iface::preparePointCloudExOutputGraph(
+        dx_data& data, DRW::Version targetVersion, bool debug) {
+    m_pointCloudExDictionaryHandle = 0u;
+    m_pointCloudExDefinitionHandles.clear();
+    m_pointCloudExReactorHandles.clear();
+    const auto fail = [debug](const char* reason) {
+        if (debug)
+            std::cerr << "POINTCLOUDEX output graph failed: " << reason
+                      << '\n';
+        return false;
+    };
+    if (data.pointCloudObjectCaptureFailed)
+        return fail("typed object callback capture is incomplete");
+    const std::size_t retainedTypedCount =
+        data.pointCloudDefinitions.size()
+        + data.navisworksModelDefinitions.size()
+        + data.pointCloudColorMaps.size();
+    if (retainedTypedCount != data.pointCloudObjectRetainedRecords)
+        return fail("retained callback counters do not match the typed records");
+    if (retainedTypedCount == 0u)
+        return true;
+    // Imported DXF records need a raw-carrier/source-span join before the
+    // typed projection can be treated as complete; DWG also needs a source
+    // CLASS/frame/output binding. Keep this first graph writer authored-only.
+    if (data.sourceFormat != dx_source_format::Unknown)
+        return fail("imported DXF/DWG source-to-output binding is not installed");
+    if (targetVersion <= DRW::AC1024)
+        return fail("POINTCLOUDEX output requires AC1027 or later");
+    if (!data.navisworksModelDefinitions.empty()
+        || !data.pointCloudColorMaps.empty())
+        return fail("NAVISWORKSMODELDEF and POINTCLOUDCOLORMAP are outside this graph profile");
+    if (!data.hasNamedObjectDictionary
+        || data.namedObjectDictionary.handle == 0u
+        || data.namedObjectDictionary.handle == DRW::NoHandle
+        || data.namedObjectDictionary.parentHandle != 0u
+        || !data.namedObjectDictionary.hasCompleteDxfEntries()
+        || !data.namedObjectDictionary.hasCompleteDwgEntries())
+        return fail("a complete named-object dictionary root is required");
+
+    std::size_t rootMatches = 0u;
+    std::uint32_t dictionaryHandle = 0u;
+    for (const DRW_Dictionary::Entry& entry :
+         data.namedObjectDictionary.m_entries) {
+        if (!sameAsciiName(entry.m_name, "ACAD_POINTCLOUD_EX_DICT"))
+            continue;
+        ++rootMatches;
+        dictionaryHandle = entry.m_handle;
+    }
+    const std::size_t rootTargetAliases = static_cast<std::size_t>(
+        std::count_if(data.namedObjectDictionary.m_entries.begin(),
+                      data.namedObjectDictionary.m_entries.end(),
+            [dictionaryHandle](const DRW_Dictionary::Entry& entry) {
+                return entry.m_handle == dictionaryHandle;
+            }));
+    if (rootMatches != 1u || dictionaryHandle == 0u
+        || dictionaryHandle == DRW::NoHandle || rootTargetAliases != 1u)
+        return fail("NOD must contain one ACAD_POINTCLOUD_EX_DICT edge");
+
+    const DRW_Dictionary* definitionDictionary = nullptr;
+    std::size_t dictionaryMatches = 0u;
+    for (const DRW_Dictionary& candidate : data.dictionaries) {
+        if (candidate.handle != dictionaryHandle)
+            continue;
+        definitionDictionary = &candidate;
+        ++dictionaryMatches;
+    }
+    if (dictionaryMatches != 1u || definitionDictionary == nullptr
+        || definitionDictionary->tType != DRW::DICTIONARY
+        || definitionDictionary->parentHandle
+            != data.namedObjectDictionary.handle
+        || !definitionDictionary->hasCompleteDxfEntries()
+        || !definitionDictionary->hasCompleteDwgEntries()
+        || definitionDictionary->hardOwner < 0
+        || definitionDictionary->hardOwner > 1
+        || definitionDictionary->xDictHandle != 0u
+        || !definitionDictionary->reactorHandles.empty()
+        || definitionDictionary->reactorCount() != 0
+        || !definitionDictionary->appData.empty()
+        || !definitionDictionary->extData.empty()
+        || definitionDictionary->hasDataStorageBinaryData())
+        return fail("point-cloud definition dictionary is missing, ambiguous, or has unsupported metadata");
+
+    std::unordered_map<std::uint32_t, const DRW_PointCloudDef*> definitions;
+    std::unordered_map<std::uint32_t, const DRW_PointCloudDef*> reactors;
+    std::unordered_set<std::uint32_t> entryHandles;
+    std::unordered_set<std::string> entryNames;
+    std::unordered_set<std::uint32_t> entityHandles;
+    std::unordered_set<std::uint32_t> allEntityHandles;
+    std::unordered_map<std::uint32_t, std::vector<std::uint32_t>>
+        entityReactorsByDefinition;
+    std::unordered_set<std::uint32_t> usedReactors;
+    const auto commonMetadataIsEmpty = [](const DRW_TableEntry& entry) {
+        return entry.xDictHandle == 0u
+            && entry.extensionDictionaryFlag() == 0u
+            && entry.reactorCount()
+                == static_cast<std::int32_t>(entry.reactorHandles.size())
+            && entry.pendingAppIdResolutions.empty()
+            && entry.pendingLayerRefResolutions.empty()
+            && entry.appData.empty() && entry.extData.empty()
+            && !entry.hasDataStorageBinaryData();
+    };
+    const auto finiteCoord = [](const DRW_Coord& value) {
+        return std::isfinite(value.x) && std::isfinite(value.y)
+            && std::isfinite(value.z);
+    };
+    try {
+        definitions.reserve(data.pointCloudDefinitions.size());
+        reactors.reserve(data.pointCloudDefinitions.size());
+        entryHandles.reserve(definitionDictionary->m_entries.size());
+        entryNames.reserve(definitionDictionary->m_entries.size());
+        for (const DRW_PointCloudDef& definition :
+             data.pointCloudDefinitions) {
+            if (definition.tType != DRW::POINTCLOUDDEF
+                || definition.handle == 0u
+                || definition.handle == DRW::NoHandle
+                || definition.m_classVersion < 0
+                || definition.m_classVersion
+                    > DRW_PointCloudDef::kMaxClassVersion
+                || !commonMetadataIsEmpty(definition))
+                return fail("point-cloud definition identity or common metadata is outside the closed profile");
+            if (definition.m_kind == DRW_PointCloudDef::DefinitionEx) {
+                if (definition.parentHandle != dictionaryHandle
+                    || definition.m_sourceFilename.empty()
+                    || definition.m_pointCount
+                        > DRW_PointCloudDef::kMaxPointCount
+                    || !finiteCoord(definition.m_extentsMin)
+                    || !finiteCoord(definition.m_extentsMax)
+                    || !definitions.emplace(definition.handle,
+                                             &definition).second)
+                    return fail("POINTCLOUDDEFINITIONEX fields or dictionary owner are invalid");
+                m_pointCloudExDefinitionHandles.push_back(definition.handle);
+            } else if (definition.m_kind == DRW_PointCloudDef::ReactorEx) {
+                if (definition.parentHandle == 0u
+                    || definition.parentHandle == DRW::NoHandle
+                    || !definition.reactorHandles.empty()
+                    || definition.reactorCount() != 0
+                    || !definition.m_sourceFilename.empty()
+                    || definition.m_isLoaded || definition.m_pointCount != 0u
+                    || definition.m_extentsMin.x != 0.0
+                    || definition.m_extentsMin.y != 0.0
+                    || definition.m_extentsMin.z != 0.0
+                    || definition.m_extentsMax.x != 0.0
+                    || definition.m_extentsMax.y != 0.0
+                    || definition.m_extentsMax.z != 0.0
+                    || !reactors.emplace(definition.handle,
+                                         &definition).second)
+                    return fail("POINTCLOUDDEFREACTOREX fields or entity owner are invalid");
+                m_pointCloudExReactorHandles.push_back(definition.handle);
+            } else {
+                return fail("classic point-cloud definition/reactor variants are outside this graph profile");
+            }
+        }
+        if (definitions.empty() || reactors.empty()
+            || definitions.size() + reactors.size()
+                != data.pointCloudDefinitions.size()
+            || definitionDictionary->m_entries.size() != definitions.size())
+            return fail("only complete DefinitionEx/ReactorEx pairs are admitted");
+
+        for (const DRW_Dictionary::Entry& entry :
+             definitionDictionary->m_entries) {
+            const std::string foldedName = layoutSymbolKey(entry.m_name);
+            const std::uint32_t target = entry.m_handle;
+            const bool hasUniqueDefinition = definitions.count(target) == 1u;
+            const int expectedCode = definitionDictionary->hardOwner == 1
+                ? 360 : 350;
+            const int actualCode = entry.m_dxfHandleCode
+                    == DRW_Dictionary::Entry::DxfHandleCode::Unspecified
+                ? expectedCode
+                : static_cast<int>(entry.m_dxfHandleCode);
+            if (entry.m_name.empty() || foldedName.empty()
+                || target == 0u || target == DRW::NoHandle
+                || !entryHandles.insert(target).second
+                || !entryNames.insert(foldedName).second
+                || actualCode != expectedCode || !hasUniqueDefinition
+                || definitions.at(target)->parentHandle
+                    != definitionDictionary->handle)
+                return fail("definition dictionary entries do not uniquely own every DefinitionEx");
+        }
+        for (const auto& definition : definitions) {
+            if (entryHandles.count(definition.first) != 1u
+                || definition.second->reactorHandles.empty()
+                || definition.second->reactorCount()
+                    != static_cast<std::int32_t>(
+                        definition.second->reactorHandles.size()))
+                return fail("each DefinitionEx must own its complete reactor list");
+            std::unordered_set<std::uint32_t> reactorSet;
+            reactorSet.reserve(definition.second->reactorHandles.size());
+            for (const std::uint32_t reactorHandle :
+                 definition.second->reactorHandles) {
+                if (reactorHandle == 0u || reactorHandle == DRW::NoHandle
+                    || reactors.count(reactorHandle) != 1u
+                    || !reactorSet.insert(reactorHandle).second)
+                    return fail("DefinitionEx reactor list contains a missing, duplicate, or wrong-kind target");
+            }
+        }
+
+        std::unordered_set<const dx_ifaceBlock*> scannedBlocks;
+        const auto inspectBlock = [&](const dx_ifaceBlock* block) {
+            if (block == nullptr || !scannedBlocks.insert(block).second)
+                return true;
+            for (const DRW_Entity* entity : block->ent) {
+                if (entity == nullptr)
+                    return false;
+                if (entity->handle != 0u
+                    && entity->handle != DRW::NoHandle
+                    && !allEntityHandles.insert(entity->handle).second)
+                    return false;
+                if (entity->eType != DRW::POINTCLOUDEX)
+                    continue;
+                const auto* cloud = dynamic_cast<const DRW_PointCloudEx*>(entity);
+                if (cloud == nullptr || typeid(*entity) != typeid(DRW_PointCloudEx)
+                    || cloud->handle == 0u || cloud->handle == DRW::NoHandle
+                    || !entityHandles.insert(cloud->handle).second
+                    || !cloud->appData.empty() || !cloud->extData.empty()
+                    || cloud->numProxyGraph != 0
+                    || !cloud->proxyGraphics.empty()
+                    || cloud->definitionHandle == 0u
+                    || cloud->definitionHandle == DRW::NoHandle
+                    || cloud->reactorHandle == 0u
+                    || cloud->reactorHandle == DRW::NoHandle
+                    || definitions.count(cloud->definitionHandle) != 1u
+                    || reactors.count(cloud->reactorHandle) != 1u
+                    || reactors.at(cloud->reactorHandle)->parentHandle
+                        != cloud->handle
+                    || !usedReactors.insert(cloud->reactorHandle).second)
+                    return false;
+                entityReactorsByDefinition[cloud->definitionHandle]
+                    .push_back(cloud->reactorHandle);
+            }
+            return true;
+        };
+        if (!inspectBlock(data.mBlock))
+            return fail("POINTCLOUDEX entity references are missing, ambiguous, or wrongly owned");
+        for (const dx_ifaceBlock* block : data.blocks) {
+            if (!inspectBlock(block))
+                return fail("POINTCLOUDEX entity references are missing, ambiguous, or wrongly owned");
+        }
+        if (usedReactors.size() != reactors.size()
+            || entityReactorsByDefinition.size() != definitions.size())
+            return fail("every retained reactor and definition must be referenced by an emitted POINTCLOUDEX entity");
+        for (const std::uint32_t entityHandle : allEntityHandles) {
+            if (definitions.count(entityHandle) != 0u
+                || reactors.count(entityHandle) != 0u
+                || entityHandle == data.namedObjectDictionary.handle
+                || entityHandle == definitionDictionary->handle)
+                return fail("POINTCLOUDEX graph identities collide with a source entity");
+        }
+        for (const auto& definition : definitions) {
+            auto expected = definition.second->reactorHandles;
+            auto observed = entityReactorsByDefinition[definition.first];
+            std::sort(expected.begin(), expected.end());
+            std::sort(observed.begin(), observed.end());
+            if (expected != observed)
+                return fail("DefinitionEx reactor list is not reciprocal with its cloud entities");
+        }
+        for (const auto& dictionary : data.dictionaries) {
+            if (dictionary.handle == definitionDictionary->handle)
+                continue;
+            if (dictionary.handle == 0u
+                || dictionary.handle == DRW::NoHandle)
+                continue;
+            if (definitions.count(dictionary.handle) != 0u
+                || reactors.count(dictionary.handle) != 0u)
+                return fail("point-cloud object identity collides with a DICTIONARY");
+        }
+        if (definitions.count(data.namedObjectDictionary.handle) != 0u
+            || reactors.count(data.namedObjectDictionary.handle) != 0u
+            || definitions.count(definitionDictionary->handle) != 0u
+            || reactors.count(definitionDictionary->handle) != 0u)
+            return fail("point-cloud object identity collides with its owner dictionary");
+    } catch (...) {
+        m_pointCloudExDefinitionHandles.clear();
+        m_pointCloudExReactorHandles.clear();
+        return fail("allocation failure while validating the bounded graph");
+    }
+    m_pointCloudExDictionaryHandle = dictionaryHandle;
+    return !m_pointCloudExDefinitionHandles.empty()
+        && !m_pointCloudExReactorHandles.empty();
+}
+
 bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                                                bool debug) {
     const auto fail = [debug](const char* reason) {
@@ -68441,6 +68742,9 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     m_sunHandlesToWrite.clear();
     m_liveSectionHandlesToWrite.clear();
     m_spatialFilterHandlesToWrite.clear();
+    m_pointCloudExDictionaryHandle = 0u;
+    m_pointCloudExDefinitionHandles.clear();
+    m_pointCloudExReactorHandles.clear();
     const auto reportPreflightFailure = [debug, requireResolvedOwners](
             const std::string& stage) {
         if (debug || requireResolvedOwners) {
@@ -68507,11 +68811,6 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     if (cData->pointCloudObjectCaptureFailed) {
         reportPreflightFailure(
             "point-cloud definition/object capture incomplete or over budget");
-        return false;
-    }
-    if (cData->pointCloudObjectRetainedRecords != 0u) {
-        reportPreflightFailure(
-            "point-cloud definition/reactor/color-map graph has no qualified output route");
         return false;
     }
     if (cData->groupCaptureFailed || cData->groupNameResolutionFailed) {
@@ -69619,7 +69918,10 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         cData->sourceFormat == dx_source_format::DWG
         && wipeoutVariablesFirst != cData->dwgWipeoutVariables.end()
         && wipeoutVariablesFirst->first.first == cData->importGeneration;
+    const bool hasPointCloudObjectRecords =
+        cData->pointCloudObjectRetainedRecords != 0u;
     const bool includeNamedObjectRoot = requireResolvedOwners
+        || hasPointCloudObjectRecords
         || hasDwgAssociativeObjects
         || validateVisualStyles || validateMLineStyles
         || validateMLeaderStyles || validateModelDocViewStyles
@@ -69665,6 +69967,12 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     // XRECORD-to-LAYER edge admission in prepareExtensionObjectGraph().
     if (!prepareDwgLayerStateOutput(v, debug || requireResolvedOwners)) {
         reportPreflightFailure("LayerStates DWG source/output snapshot");
+        return false;
+    }
+    if (!preparePointCloudExOutputGraph(
+            *cData, v, debug || requireResolvedOwners)) {
+        reportPreflightFailure(
+            "POINTCLOUDEX definition/reactor source graph");
         return false;
     }
     if (!prepareExtensionObjectGraph(cData, includeNamedObjectRoot)) {
@@ -70907,6 +71215,12 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                              m_extensionScaleHandles.size())
             && registerClass("DICTIONARYVAR", "AcDbDictionaryVar",
                              m_extensionDictionaryVarHandles.size())
+            && registerClass("POINTCLOUDDEFINITIONEX",
+                             "AcDbPointCloudDefEx",
+                             m_pointCloudExDefinitionHandles.size())
+            && registerClass("POINTCLOUDDEFREACTOREX",
+                             "AcDbPointCloudDefReactorEx",
+                             m_pointCloudExReactorHandles.size())
             && (cData->sourceFormat != dx_source_format::DWG
                 || (registerClass("GEODATA", "AcDbGeoData",
                                   m_extensionGeoDataHandles.size())
@@ -71884,6 +72198,20 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             return false;
         }
     }
+    for (const std::uint32_t handle : m_pointCloudExDefinitionHandles) {
+        if (!dxfW->reserveHandle(handle)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
+    for (const std::uint32_t handle : m_pointCloudExReactorHandles) {
+        if (!dxfW->reserveHandle(handle)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
     for (const DRW_UCS& ucs : cData->ucsList) {
         if (ucs.handle != 0 && ucs.handle != DRW::NoHandle
             && !dxfW->reserveHandle(ucs.handle)) {
@@ -72241,6 +72569,20 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         }
     }
     for (const std::uint32_t handle : m_extensionDictionaryHandles) {
+        if (!remapFixedCollision(handle)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
+    for (const std::uint32_t handle : m_pointCloudExDefinitionHandles) {
+        if (!remapFixedCollision(handle)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
+    for (const std::uint32_t handle : m_pointCloudExReactorHandles) {
         if (!remapFixedCollision(handle)) {
             delete dxfW;
             dxfW = nullptr;
@@ -73021,6 +73363,12 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 m_extensionDictionaryHandles.begin(),
                 m_extensionDictionaryHandles.end(), sourceEntry.m_handle)
                     != m_extensionDictionaryHandles.end();
+            const bool pointCloudDictionaryQueued =
+                m_pointCloudExDictionaryHandle != 0u
+                && sourceEntry.m_handle
+                    == m_pointCloudExDictionaryHandle
+                && layoutSymbolKey(sourceEntry.m_name)
+                    == "ACAD_POINTCLOUD_EX_DICT";
             const bool underlayDictionaryQueued =
                 underlayDictionaryHandles.count(sourceEntry.m_handle) != 0u;
             const bool xRecordQueued = std::find(
@@ -73048,6 +73396,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 && targetDictionary->parentHandle
                     == cData->namedObjectDictionary.handle
                 && (dictionaryQueued || underlayDictionaryQueued
+                    || pointCloudDictionaryQueued
                     || (!requireResolvedOwners
                         && targetDictionary->m_entries.empty()));
             const bool closedDictionaryWithDefault =
@@ -74485,8 +74834,11 @@ void dx_iface::writeEntity(DRW_Entity* e){
     case DRW::POINTCLOUDEX:
         if (auto* cloud = dynamic_cast<DRW_PointCloudEx*>(e)) {
             if (typeid(*e) == typeid(DRW_PointCloudEx)
-                && cloud->definitionHandle == 0u
-                && cloud->reactorHandle == 0u)
+                && ((cloud->definitionHandle == 0u
+                     && cloud->reactorHandle == 0u)
+                    || (m_pointCloudExDictionaryHandle != 0u
+                        && cloud->definitionHandle != 0u
+                        && cloud->reactorHandle != 0u)))
                 written = dxfW->writePointCloudEx(cloud);
             else
                 dxfW->writeRawDxfEntity(nullptr);

@@ -20895,6 +20895,190 @@ bool pointCloudAndNavisworksAdapterTransport() {
             || !rejectedObjectData.pointCloudColorMaps.empty())
             return fail("invalid point-cloud object capture was not atomic");
 
+        dx_data graphData;
+        graphData.sourceFormat = dx_source_format::Unknown;
+        graphData.sourceVersion = DRW::AC1032;
+        graphData.hasNamedObjectDictionary = true;
+        graphData.namedObjectDictionary.handle = 0xCu;
+        graphData.namedObjectDictionary.hardOwner = 1;
+        graphData.namedObjectDictionary.m_entries.push_back(
+            {"ACAD_POINTCLOUD_EX_DICT", 0xA600u,
+             DRW_Dictionary::Entry::DxfHandleCode::SoftOwner});
+        DRW_Dictionary pointCloudDictionary;
+        pointCloudDictionary.handle = 0xA600u;
+        pointCloudDictionary.parentHandle = 0xCu;
+        pointCloudDictionary.hardOwner = 1;
+        pointCloudDictionary.m_entries.push_back(
+            {"LOCAL_POINTCLOUD_DEF", 0xA601u,
+             DRW_Dictionary::Entry::DxfHandleCode::HardOwner});
+        graphData.dictionaries.push_back(pointCloudDictionary);
+        dx_iface graphAdapter;
+        graphAdapter.cData = &graphData;
+        graphAdapter.currentBlock = graphData.mBlock;
+        DRW_PointCloudDef graphDefinition;
+        graphDefinition.m_kind = DRW_PointCloudDef::DefinitionEx;
+        graphDefinition.handle = 0xA601u;
+        graphDefinition.parentHandle = 0xA600u;
+        graphDefinition.m_classVersion = 7;
+        graphDefinition.m_sourceFilename = "local-point-cloud.rcs";
+        graphDefinition.m_pointCount = 17u;
+        graphDefinition.m_extentsMin = DRW_Coord{-1.0, -2.0, -3.0};
+        graphDefinition.m_extentsMax = DRW_Coord{4.0, 5.0, 6.0};
+        graphDefinition.reactorHandles.push_back(0xA603u);
+        graphDefinition.setDwgCommonObjectState(1, 0u, false);
+        graphAdapter.addPointCloudDef(graphDefinition);
+        DRW_PointCloudDef graphReactor;
+        graphReactor.m_kind = DRW_PointCloudDef::ReactorEx;
+        graphReactor.handle = 0xA603u;
+        graphReactor.parentHandle = 0xA602u;
+        graphReactor.m_classVersion = 7;
+        graphAdapter.addPointCloudDef(graphReactor);
+        DRW_PointCloudEx graphCloud;
+        graphCloud.handle = 0xA602u;
+        graphCloud.classVersion = 3u;
+        graphCloud.definitionHandle = 0xA601u;
+        graphCloud.reactorHandle = 0xA603u;
+        graphCloud.name = "LOCAL_POINTCLOUDEX";
+        graphAdapter.addPointCloudEx(&graphCloud);
+        if (graphData.typedEntityCaptureFailed
+            || graphData.pointCloudObjectCaptureFailed
+            || graphData.pointCloudObjectRetainedRecords != 2u
+            || graphData.pointCloudDefinitions.size() != 2u
+            || graphData.mBlock == nullptr
+            || graphData.mBlock->ent.size() != 1u)
+            return fail("authored DefinitionEx/ReactorEx graph was not retained");
+
+        const auto graphPath = std::filesystem::temp_directory_path()
+            / ("libdxfrw-cloud-graph-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        if (std::filesystem::exists(graphPath))
+            return fail("point-cloud graph output path unexpectedly exists");
+        struct GraphCleanup {
+            std::filesystem::path path;
+            ~GraphCleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } graphCleanup{graphPath};
+        const std::string graphSentinel = "POINTCLOUD_GRAPH_DESTINATION\n";
+        {
+            std::ofstream existing(graphPath, std::ios::binary);
+            existing << graphSentinel;
+            if (!existing)
+                return fail("could not create point-cloud graph sentinel");
+        }
+        graphReactor.parentHandle = 0xA604u;
+        graphData.pointCloudDefinitions.back().parentHandle = 0xA604u;
+        if (graphAdapter.fileExport(graphPath.string(), DRW::AC1027, binary,
+                                    &graphData, false, true))
+            return fail("nonreciprocal point-cloud reactor owner was emitted");
+        {
+            std::ifstream previous(graphPath, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != graphSentinel)
+                return fail("invalid point-cloud graph changed the destination");
+        }
+        graphReactor.parentHandle = 0xA602u;
+        graphData.pointCloudDefinitions.back().parentHandle = 0xA602u;
+        if (!graphAdapter.fileExport(graphPath.string(), DRW::AC1027, binary,
+                                     &graphData, false, true))
+            return fail("corrected point-cloud graph retry failed");
+        dx_data graphReadback;
+        dx_iface graphReader;
+        if (!graphReader.fileImport(graphPath.string(), &graphReadback, false)
+            || graphReadback.pointCloudDefinitions.size() != 2u
+            || !graphReadback.hasNamedObjectDictionary
+            || graphReadback.namedObjectDictionary.m_entries.size() < 2u
+            || graphReadback.mBlock == nullptr
+            || graphReadback.mBlock->ent.size() != 1u)
+            return fail("point-cloud definition/reactor graph did not read back");
+        const DRW_PointCloudDef* actualDefinition = nullptr;
+        const DRW_PointCloudDef* actualReactor = nullptr;
+        for (const DRW_PointCloudDef& object :
+             graphReadback.pointCloudDefinitions) {
+            if (object.m_kind == DRW_PointCloudDef::DefinitionEx)
+                actualDefinition = &object;
+            else if (object.m_kind == DRW_PointCloudDef::ReactorEx)
+                actualReactor = &object;
+        }
+        const auto* actualGraphCloud = dynamic_cast<const DRW_PointCloudEx*>(
+            graphReadback.mBlock->ent.front());
+        const std::size_t rootDefinitionDictionaryLinks =
+            static_cast<std::size_t>(std::count_if(
+                graphReadback.namedObjectDictionary.m_entries.begin(),
+                graphReadback.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ACAD_POINTCLOUD_EX_DICT"
+                        && entry.m_handle == 0xA600u;
+                }));
+        const std::size_t definitionDictionaryEntries =
+            static_cast<std::size_t>(std::count_if(
+                graphReadback.dictionaries.begin(),
+                graphReadback.dictionaries.end(),
+                [](const DRW_Dictionary& dictionary) {
+                    return dictionary.handle == 0xA600u
+                        && dictionary.parentHandle == 0xCu
+                        && dictionary.m_entries.size() == 1u
+                        && dictionary.m_entries.front().m_name
+                            == "LOCAL_POINTCLOUD_DEF"
+                        && dictionary.m_entries.front().m_handle
+                            == 0xA601u;
+                }));
+        const auto classCount = [&graphReadback](const char* recordName,
+                                                  const char* className) {
+            return std::count_if(
+                graphReadback.dxfClasses.begin(),
+                graphReadback.dxfClasses.end(),
+                [recordName, className](const DRW_Class& value) {
+                    return value.recName == recordName
+                        && value.className == className
+                        && value.instanceCount == 1;
+                });
+        };
+        if (actualDefinition == nullptr || actualReactor == nullptr
+            || actualGraphCloud == nullptr
+            || rootDefinitionDictionaryLinks != 1u
+            || definitionDictionaryEntries != 1u
+            || classCount("POINTCLOUDDEFINITIONEX",
+                          "AcDbPointCloudDefEx") != 1
+            || classCount("POINTCLOUDDEFREACTOREX",
+                          "AcDbPointCloudDefReactorEx") != 1
+            || actualDefinition->handle != 0xA601u
+            || actualDefinition->parentHandle != 0xA600u
+            || actualDefinition->m_sourceFilename != "local-point-cloud.rcs"
+            || actualDefinition->m_pointCount != 17u
+            || actualDefinition->reactorHandles
+                != std::vector<std::uint32_t>{0xA603u}
+            || actualReactor->handle != 0xA603u
+            || actualReactor->parentHandle != actualGraphCloud->handle
+            || actualGraphCloud->handle == 0u
+            || actualGraphCloud->definitionHandle != 0xA601u
+            || actualGraphCloud->reactorHandle != 0xA603u) {
+            std::cerr << "point-cloud readback handles: definition="
+                      << (actualDefinition ? actualDefinition->handle : 0u)
+                      << "/owner="
+                      << (actualDefinition ? actualDefinition->parentHandle : 0u)
+                      << "/reactors="
+                      << (actualDefinition
+                              ? actualDefinition->reactorHandles.size() : 0u)
+                      << " reactor="
+                      << (actualReactor ? actualReactor->handle : 0u)
+                      << "/owner="
+                      << (actualReactor ? actualReactor->parentHandle : 0u)
+                      << " entity="
+                      << (actualGraphCloud ? actualGraphCloud->handle : 0u)
+                      << "/definition="
+                      << (actualGraphCloud
+                              ? actualGraphCloud->definitionHandle : 0u)
+                      << "/reactor="
+                      << (actualGraphCloud
+                              ? actualGraphCloud->reactorHandle : 0u) << '\n';
+            return fail("point-cloud output handles or reciprocal ownership changed on readback");
+        }
+
         if (objectAdapter.fileExport(path.string(), DRW::AC1027, binary,
                                      &objectData, false, true))
             return fail("unqualified point-cloud object graph was emitted");
