@@ -6,6 +6,7 @@
 #include <limits>
 #include <memory>
 #include <map>
+#include <new>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -214,6 +215,83 @@ void testDxfTablesWriteInspection(TestContext& t) {
              "Legacy handle-free TABLES still has an honest raw inspection, not fabricated name qualification");
     std::cout << "TABLES inspector profile cells=" << profiles
               << " atomic refusal/retries=24 OBJECTS nesting/retries=6 finalizer non-mutating nesting=6 legacy raw=1\n";
+}
+
+void testDxfObjectsCallbackBadAlloc(TestContext& t) {
+    class Interface final : public dx_iface {
+    public:
+        Interface() { cData = &data; currentBlock = data.mBlock; }
+        void writeHeader(DRW_Header& header) override { header.vars.clear(); }
+        void writeObjects() override {
+            ++objectCalls;
+            DRW_XRecord record;
+            record.handle = 0xA880u;
+            record.parentHandle = 0xCu;
+            if (!dxfW->writeXRecord(&record)) {
+                writeFailed = true;
+                return;
+            }
+            if (throwAllocation)
+                throw std::bad_alloc();
+        }
+        bool finalizeDxfWrite() override {
+            if (!dx_iface::finalizeDxfWrite())
+                return false;
+            ++finalizeCalls;
+            return true;
+        }
+        dx_data data;
+        unsigned objectCalls{0u};
+        unsigned finalizeCalls{0u};
+        bool throwAllocation{false};
+        bool writeFailed{false};
+    } iface;
+
+    const auto path = std::filesystem::temp_directory_path()
+        / ("libdxfrw-objects-callback-bad-alloc-"
+            + std::to_string(std::chrono::steady_clock::now()
+                .time_since_epoch().count()) + ".dxf");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() { std::error_code ignored; std::filesystem::remove(path, ignored); }
+    } cleanup{path};
+
+    dxfRW codec(path.string().c_str());
+    iface.dxfW = &codec;
+    codec.setDxfWriteRecordInventoryEnabled(true);
+    for (const bool binary : {false, true}) {
+        const std::string sentinel = "OBJECTS_CALLBACK_BAD_ALLOC_DESTINATION";
+        { std::ofstream previous(path, std::ios::binary); previous << sentinel; }
+        iface.objectCalls = 0u;
+        iface.finalizeCalls = 0u;
+        iface.writeFailed = false;
+        iface.throwAllocation = true;
+        const bool failedWrite = codec.write(&iface, DRW::AC1032, binary);
+        std::ifstream retainedInput(path, std::ios::binary);
+        const std::string retained((std::istreambuf_iterator<char>(retainedInput)),
+                                   std::istreambuf_iterator<char>());
+        retainedInput.close();
+        const auto* context = codec.getWritingContext();
+        t.expect(!failedWrite && !iface.writeFailed && iface.objectCalls == 1u
+                     && iface.finalizeCalls == 0u && retained == sentinel
+                     && context != nullptr
+                     && context->sourceHandleToWrittenObjectMap.empty(),
+                 "Thrown OBJECTS callback bad_alloc rolls back staged records, aliases, and prior destination");
+
+        iface.throwAllocation = false;
+        iface.writeFailed = false;
+        t.expect(codec.write(&iface, DRW::AC1032, binary)
+                     && !iface.writeFailed && iface.objectCalls == 2u
+                     && iface.finalizeCalls == 1u,
+                 "Same-codec OBJECTS callback retry succeeds after allocation exception");
+        dx_data readback;
+        dx_iface reader;
+        t.expect(reader.fileImport(path.string(), &readback, false)
+                     && readback.xRecords.size() == 1u
+                     && readback.xRecords.front().handle == 0xA880u,
+                 "Successful retry has typed XRECORD readback");
+    }
+    std::cout << "OBJECTS callback allocation exception ASCII/Binary rollback and retry=2\n";
 }
 
 void testSymbolUnicodeKeys(TestContext& t) {
@@ -643,6 +721,8 @@ int main(int argc, char** argv) {
     TestContext context;
     if (argc == 1 || (argc == 2 && std::string(argv[1]) == "--dxf-tables-write-inspection"))
         testDxfTablesWriteInspection(context);
+    if (argc == 1 || (argc == 2 && std::string(argv[1]) == "--dxf-objects-callback-bad-alloc"))
+        testDxfObjectsCallbackBadAlloc(context);
     if (argc == 1 || (argc == 2 && std::string(argv[1]) == "--symbol-name-wire-inspection"))
         testSymbolNameWireInspection(context);
     if (argc == 1 || (argc == 2 && std::string(argv[1]) == "--source-table-identities")) {
@@ -652,6 +732,7 @@ int main(int argc, char** argv) {
     if (argc == 1 || (argc == 2 && std::string(argv[1]) == "--symbol-unicode-keys"))
         testSymbolUnicodeKeys(context);
     if (argc > 2 || (argc == 2 && std::string(argv[1]) != "--dxf-tables-write-inspection"
+        && std::string(argv[1]) != "--dxf-objects-callback-bad-alloc"
         && std::string(argv[1]) != "--symbol-name-wire-inspection"
         && std::string(argv[1]) != "--source-table-identities"
         && std::string(argv[1]) != "--symbol-unicode-keys")) return 2;
