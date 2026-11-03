@@ -6481,22 +6481,27 @@ void testViewReferenceRemapping(TestContext& t) {
     }
 
     for (const bool binary : {false, true}) {
-        std::ostringstream failedOutput;
-        failedOutput << "KEEP";
-        dxfRW failedOwner("");
-        failedOwner.version = DRW::AC1032;
-        failedOwner.binFile = binary;
-        failedOwner.writer = binary
-            ? std::unique_ptr<dxfWriter>(
-                std::make_unique<dxfWriterBinary>(&failedOutput))
-            : std::unique_ptr<dxfWriter>(
-                std::make_unique<dxfWriterAscii>(&failedOutput));
-        DRW_View invalidView;
-        invalidView.name = "ENUM_DOMAIN_TEST";
-        invalidView.renderMode = 7u;
-        t.expect(!failedOwner.writeView(&invalidView)
-                     && failedOutput.str() == "KEEP",
-                 "VIEW refuses an undocumented render mode without changing destination");
+        for (int invalidField = 0; invalidField < 2; ++invalidField) {
+            std::ostringstream failedOutput;
+            failedOutput << "KEEP";
+            dxfRW failedOwner("");
+            failedOwner.version = DRW::AC1032;
+            failedOwner.binFile = binary;
+            failedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&failedOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&failedOutput));
+            DRW_View invalidView;
+            invalidView.name = "ENUM_DOMAIN_TEST";
+            if (invalidField == 0)
+                invalidView.renderMode = 7u;
+            else
+                invalidView.m_defaultLightingType = 2u;
+            t.expect(!failedOwner.writeView(&invalidView)
+                         && failedOutput.str() == "KEEP",
+                     "VIEW refuses an undocumented enum without changing destination");
+        }
 
         std::ostringstream validOutput;
         dxfRW validOwner("");
@@ -6510,9 +6515,10 @@ void testViewReferenceRemapping(TestContext& t) {
         DRW_View validView;
         validView.name = "ENUM_DOMAIN_TEST";
         validView.renderMode = 6u;
+        validView.m_defaultLightingType = 1u;
         const bool wrote = validOwner.writeView(&validView)
             && validOwner.writer->writeString(0, "WIRE_END");
-        t.expect(wrote, "VIEW accepts documented render mode upper bound");
+        t.expect(wrote, "VIEW accepts documented enum upper bounds");
         if (!wrote)
             continue;
 
@@ -6522,7 +6528,7 @@ void testViewReferenceRemapping(TestContext& t) {
                 std::make_unique<dxfReaderBinary>(&input))
             : std::unique_ptr<dxfReader>(
                 std::make_unique<dxfReaderAscii>(&input));
-        bool foundRenderMode = false;
+        std::map<int, int> observed;
         std::string recordName;
         int code = 0;
         while (reader->readRec(&code)) {
@@ -6530,12 +6536,12 @@ void testViewReferenceRemapping(TestContext& t) {
                 recordName = reader->getString();
                 if (recordName == "WIRE_END")
                     break;
-            } else if (recordName == "VIEW" && code == 281) {
-                foundRenderMode = reader->getInt32() == 6;
+            } else if (recordName == "VIEW" && (code == 281 || code == 282)) {
+                observed[code] = reader->getInt32();
             }
         }
-        t.expect(foundRenderMode,
-                 "VIEW documented render mode upper bound reads back exactly");
+        t.expect(observed == std::map<int, int>{{281, 6}, {282, 1}},
+                 "VIEW documented enum upper bounds read back exactly");
     }
 }
 

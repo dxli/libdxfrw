@@ -7568,6 +7568,7 @@ bool DRW_View::validateDxf() const {
         && flags <= std::numeric_limits<std::int16_t>::max()
         && viewMode <= std::numeric_limits<std::int16_t>::max()
         && renderMode <= 6u
+        && m_defaultLightingType <= 1u
         && ucsOrthoType <= std::numeric_limits<std::int16_t>::max()
         && m_ambientColor <= static_cast<std::uint32_t>(
             std::numeric_limits<std::int16_t>::max());
