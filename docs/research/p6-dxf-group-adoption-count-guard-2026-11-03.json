@@ -39,8 +39,25 @@
     "repositoryFixturesAdded": 0
   },
   "limitations": [
-    "This is an internal resource ceiling aligned with DRW_Dictionary::kMaxEntries, not a format support claim.",
-    "The legacy const-vector setGroups API still copies caller input before the independent planner check; the adapter list-adoption path is bounded before staging."
+    "The count ceiling is internal and aligned with DRW_Dictionary::kMaxEntries, not a format support claim.",
+    "Other writer staging and caller-state paths remain open; see the follow-up receipt for the vector-setter control."
   ],
-  "next": "Continue auditing writer staging and caller-state paths. Keep source-preservation and allocation-failure checks scoped to one reachable transfer API at a time."
+  "next": "Continue auditing other writer/import staging bounds, allocation-failure behavior, source lifetime and scoped concurrency.",
+  "followUp": {
+    "id": "p6-dxf-group-vector-setter-count-guard-2026-11-03",
+    "finding": "The public const-vector setGroups API copied caller data before the independent planner enforced the 100,000-entry ceiling.",
+    "fix": "setGroups now checks the count first, copies accepted data into a temporary with failure capture, and records rejected input so a later plan refuses until corrected. Valid setter/adoption input clears the rejection state.",
+    "validation": {
+      "builds": [
+        "PASS: cmake --build build-gcc --target libdxfrw_dxf_fixture_tests -j4",
+        "PASS: cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4"
+      ],
+      "focused": [
+        "PASS: libdxfrw_group_adoption_count_bound",
+        "PASS: libdxfrw_group_adapter_roundtrip"
+      ],
+      "repositoryFixturesAdded": 0
+    },
+    "receipt": "docs/research/p6-dxf-group-vector-setter-count-guard-2026-11-03.json"
+  }
 }

@@ -929,7 +929,21 @@ public:
             m_writeError = true;
             return;
         }
-        m_groups = groups;
+        if (groups.size() > DRW_Dictionary::kMaxEntries) {
+            m_dxfGroupsInputRejected = true;
+            clearDxfGroupPlan();
+            return;
+        }
+        std::vector<DRW_Group> copied;
+        try {
+            copied = groups;
+        } catch (...) {
+            m_dxfGroupsInputRejected = true;
+            clearDxfGroupPlan();
+            return;
+        }
+        m_groups.swap(copied);
+        m_dxfGroupsInputRejected = false;
         clearDxfGroupPlan();
     }
     //! Move adapter-owned list values into the codec for one synchronous
@@ -938,10 +952,13 @@ public:
     bool adoptGroupsForWrite(std::list<DRW_Group>& groups) {
         if (!preflightDxfSetup())
             return false;
-        if (groups.size() > DRW_Dictionary::kMaxEntries)
-            return false;
         if (m_dxfWriteAttemptActive && m_dxfGroupPlanFrozen) {
             m_writeError = true;
+            return false;
+        }
+        if (groups.size() > DRW_Dictionary::kMaxEntries) {
+            m_dxfGroupsInputRejected = true;
+            clearDxfGroupPlan();
             return false;
         }
         static_assert(noexcept(DRW_Group(std::declval<DRW_Group&&>())),
@@ -950,11 +967,14 @@ public:
         try {
             adopted.reserve(groups.size());
         } catch (...) {
+            m_dxfGroupsInputRejected = true;
+            clearDxfGroupPlan();
             return false;
         }
         for (DRW_Group& group : groups)
             adopted.emplace_back(std::move(group));
         m_groups = std::move(adopted);
+        m_dxfGroupsInputRejected = false;
         clearDxfGroupPlan();
         return true;
     }
@@ -1392,6 +1412,7 @@ public:
 private:
     // Executable-local allocation instrumentation; no runtime/public test API.
     friend class DxIfaceStandardDwgCaptureTestAccess;
+    friend class DxfGroupSetterTestAccess;
     enum class DxfEntityBoundary {
         NextEntity,
         EndSection,
@@ -2004,6 +2025,7 @@ private:
     std::vector<std::uint32_t> m_plannedDxfGroupHandles;
     std::map<std::uint32_t, std::uint32_t> m_plannedDxfGroupSourceHandles;
     bool m_dxfGroupPlanFrozen{false};
+    bool m_dxfGroupsInputRejected{false};
     std::uint32_t m_generatedNodSourceHandle{0};
     std::uint32_t m_generatedGroupDictionarySourceHandle{0};
     std::unique_ptr<const DRW_Dictionary> m_generatedNodSource;

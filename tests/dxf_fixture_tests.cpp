@@ -47,6 +47,25 @@
 #include "intern/dwgbufferw.h"
 #include "libdwgr.h"
 
+class DxfGroupSetterTestAccess {
+public:
+    static void configureWriter(dxfRW& owner, std::ostream& output,
+                                bool binary) {
+        owner.version = DRW::AC1032;
+        owner.binFile = binary;
+        if (binary)
+            owner.writer = std::make_unique<dxfWriterBinary>(&output);
+        else
+            owner.writer = std::make_unique<dxfWriterAscii>(&output);
+    }
+    static bool plan(dxfRW& owner) {
+        return owner.planDxfGroupHandles();
+    }
+    static void resetWriteSession(dxfRW& owner) {
+        owner.resetDxfWriteSession();
+    }
+};
+
 namespace {
 long materialAllocationCountdown=-1;std::size_t materialFailedAllocations=0u;
 struct MaterialAllocationFailure {explicit MaterialAllocationFailure(long value){materialAllocationCountdown=value;}~MaterialAllocationFailure(){materialAllocationCountdown=-1;}};
@@ -59376,6 +59395,30 @@ void testGroupAdoptionCountBound(TestContext& t) {
     t.expect(retained && validGroups.size() == 1u
                  && validGroups.front().name == "GROUP_ADOPTION_CONTROL",
              "in-limit GROUP adoption and ownership return remain intact");
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW codec("");
+        DxfGroupSetterTestAccess::configureWriter(codec, output, binary);
+        const std::string sentinel = "GROUP_SETTER_DESTINATION_SENTINEL";
+        output << sentinel;
+        std::vector<DRW_Group> oversized(overLimitCount);
+        codec.setGroups(oversized);
+        const bool rejectedBeforeCopy = codec.groupsForWrite().empty();
+        const bool refused = !DxfGroupSetterTestAccess::plan(codec);
+        t.expect(rejectedBeforeCopy && refused && output.str() == sentinel,
+                 "over-limit GROUP vector setter refuses before copying and preserves destination");
+
+        DRW_Group corrected;
+        corrected.name = "GROUP_SETTER_RETRY";
+        codec.setGroups({corrected});
+        DxfGroupSetterTestAccess::resetWriteSession(codec);
+        const bool retried = DxfGroupSetterTestAccess::plan(codec);
+        t.expect(retried && codec.groupsForWrite().size() == 1u
+                     && codec.groupsForWrite().front().name == corrected.name
+                     && output.str() == sentinel,
+                 "corrected GROUP setter input replans on the same codec after refusal");
+    }
 }
 
 void populateLegacyEllipseCarriers(dx_data& data, bool includeControls = true) {
