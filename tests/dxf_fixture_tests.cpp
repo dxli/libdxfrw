@@ -16940,6 +16940,228 @@ void testGeneratedGroupDictionaryObjectsAllocationRetry(TestContext& t) {
     }
 }
 
+void testGeneratedImageDictionaryObjectsAllocationRetry(TestContext& t) {
+    constexpr std::uint64_t importGeneration = 17u;
+    constexpr std::uint32_t imageHandle = 0xD920u;
+    constexpr std::uint32_t entityHandle = 0xD930u;
+    constexpr std::uint32_t nodHandle = 0xD910u;
+    constexpr std::uint32_t imageDictionaryHandle = 0xD911u;
+    const std::string imageName = "IMAGE_OBJECTS_ALLOCATION_SWEEP.png";
+    using Edge = DRW_Dictionary::Entry::DxfHandleCode;
+    class ImageObjectsWriter final : public dx_iface {
+    public:
+        void writeEntities() override {
+            image = DRW_Image{};
+            image.handle = 0xD930u;
+            image.ref = 0xD920u;
+            image.sizeu = 640.0;
+            image.sizev = 480.0;
+            image.secPoint = {1.0, 0.0, 0.0};
+            image.vVector = {0.0, 1.0, 0.0};
+            imageWritten = dxfW->writeImage(
+                &image, "IMAGE_OBJECTS_ALLOCATION_SWEEP.png", 17u,
+                0xD920u) != nullptr;
+            if (armObjectAllocation)
+                materialAllocationCountdown = objectAllocationCountdown;
+        }
+        void writeObjects() override {
+            objectsCallbackReached = true;
+            remainingAllocationCountdown = materialAllocationCountdown;
+            materialAllocationCountdown = -1;
+            dx_iface::writeObjects();
+        }
+
+        DRW_Image image;
+        bool imageWritten {false};
+        bool armObjectAllocation {false};
+        long objectAllocationCountdown {0L};
+        long remainingAllocationCountdown {-1L};
+        bool objectsCallbackReached {false};
+    };
+    const auto installGraph = [&](dxfRW& writer) {
+        dxfRW::ImageDefinitionPlanEntry plan;
+        plan.importGeneration = importGeneration;
+        plan.sourceHandle = imageHandle;
+        plan.definition.handle = imageHandle;
+        plan.definition.name = imageName;
+        plan.definition.imgVersion = 2;
+        plan.definition.u = 640.0;
+        plan.definition.v = 480.0;
+        plan.definition.up = 0.25;
+        plan.definition.vp = 0.5;
+        plan.definition.loaded = 1;
+        plan.definition.resolution = 5;
+        if (!writer.setImageDefinitionPlan({plan}))
+            return false;
+        auto nod = std::make_unique<DRW_Dictionary>();
+        nod->handle = nodHandle;
+        nod->m_entries.push_back(
+            {"ACAD_IMAGE_DICT", imageDictionaryHandle, Edge::SoftOwner});
+        auto images = std::make_unique<DRW_Dictionary>();
+        images->handle = imageDictionaryHandle;
+        images->parentHandle = nodHandle;
+        images->m_entries.push_back(
+            {"SOURCE_IMAGE", imageHandle, Edge::SoftOwner});
+        if (!writer.setGeneratedDictionarySourceRecords(
+                std::move(nod), nullptr, std::move(images), importGeneration))
+            return false;
+        writer.setHandleRemap({{nodHandle, 0xCu},
+                               {imageDictionaryHandle, 0xEu},
+                               {imageHandle, 0xFu}});
+        return true;
+    };
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-generated-image-objects-allocation-"
+           + std::to_string(nonce));
+    std::filesystem::create_directories(directory);
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+    const auto outputPath = directory / "image-objects.dxf";
+    const std::string filename = outputPath.string();
+    const auto outputBytes = [&outputPath]() {
+        std::ifstream input(outputPath, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input), {});
+    };
+    const auto measure = [&](bool binary, long& allocations) {
+        constexpr long allocationProbe = 1000000L;
+        dx_data data;
+        ImageObjectsWriter adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        adapter.armObjectAllocation = true;
+        adapter.objectAllocationCountdown = allocationProbe;
+        dxfRW writer(filename.c_str());
+        adapter.dxfW = &writer;
+        const bool setup = installGraph(writer);
+        const bool written = setup
+            && writer.write(&adapter, DRW::AC1027, binary);
+        materialAllocationCountdown = -1;
+        const bool measured = written && adapter.imageWritten
+            && adapter.objectsCallbackReached
+            && adapter.remainingAllocationCountdown > 0L
+            && adapter.remainingAllocationCountdown <= allocationProbe;
+        allocations = measured
+            ? allocationProbe - adapter.remainingAllocationCountdown : 0L;
+        adapter.dxfW = nullptr;
+        return measured;
+    };
+
+    for (const bool binary : {false, true}) {
+        long allocations = 0L;
+        const bool calibrated = measure(binary, allocations)
+            && allocations > 0L;
+        bool everyOffsetRolledBack = calibrated;
+        bool everyOffsetRetried = calibrated;
+        long injectedFailures = 0L;
+        for (long allocation = 0;
+             calibrated && allocation < allocations; ++allocation) {
+            const std::string sentinel =
+                "generated IMAGE OBJECTS sentinel\n";
+            {
+                std::ofstream seed(outputPath,
+                                   std::ios::binary | std::ios::trunc);
+                seed << sentinel;
+            }
+            dx_data data;
+            ImageObjectsWriter adapter;
+            adapter.cData = &data;
+            adapter.currentBlock = data.mBlock;
+            adapter.armObjectAllocation = true;
+            adapter.objectAllocationCountdown = allocation;
+            dxfRW writer(filename.c_str());
+            adapter.dxfW = &writer;
+            const bool setup = installGraph(writer);
+            const std::size_t failuresBefore = materialFailedAllocations;
+            const bool failed = setup
+                && !writer.write(&adapter, DRW::AC1027, binary);
+            materialAllocationCountdown = -1;
+            const DRW_OperationDiagnostic diagnostic =
+                writer.getLastDiagnostic();
+            const bool allocationReported =
+                (diagnostic.phase == DRW::OperationPhase::Allocation
+                     && diagnostic.code == "allocation-failure")
+                || (diagnostic.phase == DRW_OperationPhase::Emit
+                    && diagnostic.code == "emit-failure");
+            const bool rolledBack = failed && adapter.imageWritten
+                && !adapter.objectsCallbackReached
+                && materialFailedAllocations == failuresBefore + 1u
+                && allocationReported && outputBytes() == sentinel
+                && writer.getWritingContext()
+                    ->sourceHandleToWrittenObjectMap.empty()
+                && writer.getWritingContext()
+                    ->sourceHandleToMintedMap.empty();
+            everyOffsetRolledBack = everyOffsetRolledBack && rolledBack;
+            if (rolledBack)
+                ++injectedFailures;
+
+            adapter.armObjectAllocation = false;
+            adapter.image = DRW_Image{};
+            adapter.imageWritten = false;
+            adapter.objectsCallbackReached = false;
+            const bool retried = rolledBack && setup
+                && writer.write(&adapter, DRW::AC1027, binary)
+                && adapter.imageWritten && adapter.objectsCallbackReached
+                && writer.getError() == DRW::BAD_NONE;
+            dx_data decoded;
+            FixtureInterface reader;
+            const bool readBack = retried
+                && reader.fileImport(filename, &decoded, false)
+                && decoded.mBlock->ent.size() == 1u;
+            const auto* image = readBack
+                ? dynamic_cast<const DRW_Image*>(decoded.mBlock->ent.front())
+                : nullptr;
+            const DRW_ImageDef* definition = image == nullptr ? nullptr
+                : decoded.findImageDefinition(decoded.importGeneration,
+                                              image->ref);
+            const auto root = std::find_if(
+                reader.dictionaries.begin(), reader.dictionaries.end(),
+                [](const DRW_Dictionary& dictionary) {
+                    return dictionary.handle == 0xCu
+                        && dictionary.parentHandle == 0u
+                        && std::any_of(
+                            dictionary.m_entries.begin(),
+                            dictionary.m_entries.end(),
+                            [](const DRW_Dictionary::Entry& entry) {
+                                return entry.m_name == "ACAD_IMAGE_DICT"
+                                    && entry.m_handle == 0xEu;
+                            });
+                });
+            const auto imageDictionary = std::find_if(
+                reader.dictionaries.begin(), reader.dictionaries.end(),
+                [](const DRW_Dictionary& dictionary) {
+                    return dictionary.handle == 0xEu
+                        && dictionary.parentHandle == 0xCu
+                        && dictionary.m_entries.size() == 1u
+                        && dictionary.m_entries.front().m_name
+                            == "SOURCE_IMAGE";
+                });
+            const bool graphMatched = image != nullptr
+                && definition != nullptr && definition->name == imageName
+                && root != reader.dictionaries.end()
+                && imageDictionary != reader.dictionaries.end()
+                && imageDictionary->m_entries.front().m_handle == image->ref;
+            everyOffsetRetried = everyOffsetRetried && readBack && graphMatched;
+            adapter.dxfW = nullptr;
+        }
+        t.expect(calibrated && everyOffsetRolledBack
+                     && injectedFailures == allocations,
+                 binary
+                     ? "binary generated NOD/IMAGE OBJECTS allocation sweep rolls back every calibrated allocation"
+                     : "ASCII generated NOD/IMAGE OBJECTS allocation sweep rolls back every calibrated allocation");
+        t.expect(everyOffsetRetried,
+                 binary
+                     ? "binary generated NOD/IMAGE OBJECTS allocation sweep retries and reads the complete IMAGEDEF graph"
+                     : "ASCII generated NOD/IMAGE OBJECTS allocation sweep retries and reads the complete IMAGEDEF graph");
+    }
+}
+
 void testImageDefinitionPlanResourceBounds(TestContext& t) {
     const auto makePlan = [](std::uint32_t handle,
                              const std::string& name) {
@@ -65260,6 +65482,15 @@ int main(int argc, char** argv) {
         TestContext context;
         testGeneratedGroupDictionaryObjectsAllocationRetry(context);
         std::cout << "Generated GROUP dictionary OBJECTS allocation retry: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--generated-image-dictionary-objects-allocation-retry") {
+        TestContext context;
+        testGeneratedImageDictionaryObjectsAllocationRetry(context);
+        std::cout << "Generated IMAGE dictionary OBJECTS allocation retry: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

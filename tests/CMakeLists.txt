@@ -3157,6 +3157,15 @@ set_tests_properties(
     LABELS "fast;dxf;writer;objects;group;dictionary;allocation;transaction"
     TIMEOUT 30)
 
+add_test(
+    NAME libdxfrw_generated_image_dictionary_objects_allocation_retry
+    COMMAND libdxfrw_dxf_fixture_tests
+        --generated-image-dictionary-objects-allocation-retry)
+set_tests_properties(
+    libdxfrw_generated_image_dictionary_objects_allocation_retry PROPERTIES
+    LABELS "fast;dxf;writer;objects;image;dictionary;allocation;transaction"
+    TIMEOUT 30)
+
 add_test(NAME libdxfrw_generated_dictionary_source_allocation_failure
     COMMAND libdxfrw_dxf_fixture_tests
         --generated-dictionary-source-allocation-failure)
