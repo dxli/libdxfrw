@@ -2802,6 +2802,93 @@ void testVportReferenceRemapping(TestContext& t) {
     }
 }
 
+void testViewReferenceRemapping(TestContext& t) {
+    const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
+        {0xA200u, 0xAA20u}, {0x921u, 0xA21u}, {0x922u, 0xA22u},
+        {0x923u, 0xA23u}, {0x924u, 0xA24u}};
+    const auto resolverValue = [](std::uint32_t source) {
+        switch (source) {
+        case 0x921u: return std::uint32_t{0xB21u};
+        case 0x922u: return std::uint32_t{0xB22u};
+        case 0x923u: return std::uint32_t{0xB23u};
+        case 0x924u: return std::uint32_t{0xB24u};
+        default: return source;
+        }
+    };
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap(sourceToRemapped);
+            owner.setResolvedBackgroundHandles({0x921u});
+            if (useResolver)
+                owner.setReferenceResolver(resolverValue);
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_View view;
+            view.handle = 0xA200u;
+            view.name = "VIEW_TEST";
+            view.hasUCS = true;
+            view.ucsOrthoType = 1;
+            view.m_backgroundHandle = 0x921u;
+            view.m_visualStyleHandle = 0x922u;
+            view.baseUCS_ID = 0x923u;
+            view.namedUCS_ID = 0x924u;
+            const bool wrote = owner.writeView(&view)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote, "VIEW references serialize");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::vector<std::pair<int, std::uint32_t>> observed;
+            std::uint32_t emittedRowHandle = 0u;
+            std::string recordName;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (recordName == "VIEW" && code == 5) {
+                    emittedRowHandle = reader->getHandleString();
+                } else if (recordName == "VIEW"
+                           && (code == 332 || code == 345 || code == 346
+                               || code == 348)) {
+                    observed.emplace_back(code, reader->getHandleString());
+                }
+            }
+            const std::vector<std::pair<int, std::uint32_t>> expected =
+                useResolver
+                    ? std::vector<std::pair<int, std::uint32_t>>{
+                          {332, 0xB21u}, {348, 0xB22u}, {346, 0xB23u},
+                          {345, 0xB24u}}
+                    : std::vector<std::pair<int, std::uint32_t>>{
+                          {332, 0xA21u}, {348, 0xA22u}, {346, 0xA23u},
+                          {345, 0xA24u}};
+            t.expect(ended && emittedRowHandle == 0xAA20u
+                         && observed == expected,
+                     useResolver
+                         ? "VIEW fields emit final resolver identities"
+                         : "VIEW fields emit source-handle remaps");
+        }
+    }
+}
+
 void testDimensionAssociationGraphClosure(TestContext& t) {
     const auto readAssociationTargets = [&t](const std::string& bytes,
                                               bool binary,
@@ -16543,6 +16630,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testVportReferenceRemapping(focused);
         std::cout << "VPORT reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--view-reference-remapping") {
+        TestContext focused;
+        testViewReferenceRemapping(focused);
+        std::cout << "VIEW reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

@@ -7261,6 +7261,12 @@ bool dxfRW::writeDimstyle(DRW_Dimstyle *ent){
 }
 
 bool dxfRW::writeView(DRW_View *ent){
+    const auto emittedReference = [this](std::uint32_t source) {
+        if (source == 0u)
+            return 0u;
+        return m_referenceResolver ? resolveReference(source)
+                                   : remapObjectHandle(source);
+    };
     const bool hasUcsReferences = ent != nullptr
         && (ent->namedUCS_ID != 0 || ent->baseUCS_ID != 0);
     if (!preflightTableEntry(ent)
@@ -7365,20 +7371,20 @@ bool dxfRW::writeView(DRW_View *ent){
         writer->writeInt16(63, static_cast<int>(ent->m_ambientColor));
         if (ent->m_backgroundHandle != 0)
             writer->writeString(332, toHexStr(
-                remapObjectHandle(ent->m_backgroundHandle)));
+                emittedReference(ent->m_backgroundHandle)));
         if (ent->m_visualStyleHandle != 0)
             writer->writeString(348, toHexStr(
-                remapObjectHandle(ent->m_visualStyleHandle)));
+                emittedReference(ent->m_visualStyleHandle)));
         if (ent->m_sunHandle != 0)
             writer->writeString(361, toHexStr(ent->m_sunHandle));
     }
     if (version > DRW::AC1009 && ent->hasUCS) {
         if (ent->baseUCS_ID != 0)
             writer->writeString(346, toHexStr(
-                remapObjectHandle(ent->baseUCS_ID)));
+                emittedReference(ent->baseUCS_ID)));
         if (ent->namedUCS_ID != 0)
             writer->writeString(345, toHexStr(
-                remapObjectHandle(ent->namedUCS_ID)));
+                emittedReference(ent->namedUCS_ID)));
     }
     if (!ent->extData.empty())
         result = writeExtData(ent->extData) && result;

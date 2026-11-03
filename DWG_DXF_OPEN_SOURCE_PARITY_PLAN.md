@@ -271,6 +271,14 @@ This closes only low-level ID translation. Physical producer/target-role proof,
 strict graph closure and native VIEWPORT rendering remain open, as do the
 separate ambiguous VIEWPORT 335/343/344/91 fields described above.
 
+The VIEW writer now translates its admitted Background, VisualStyle, named UCS
+and base UCS references through the configured resolver or handle-remap
+fallback. Generated ASCII/Binary checks also verify the VIEW table-row identity;
+see the [VIEW reference receipt](docs/research/p5-view-reference-remapping-2026-11-03.json).
+The writer continues to refuse SUN and live-section references without a
+qualified owner/dependency route. These controls prove ID translation only;
+physical target/owner closure and native rendering remain open.
+
 The VPORT table writer now translates its modeled named/base UCS, Background,
 VisualStyle and SUN references through the configured resolver or handle-remap
 fallback, retaining the existing source-registration checks for Background and
