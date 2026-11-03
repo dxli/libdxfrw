@@ -342,7 +342,14 @@ and [Autodesk's VIEWPORT DXF table](https://help.autodesk.com/cloudhelp/2025/ENU
    ACadSharp reader independently opens the same file and reads the 20×9
    `TABLE` entity, but handle `0xC94` is absent from its document; its
    `readTableContent` path is called only for embedded `TABLE` entity data, not
-   this standalone type-529 object. It cannot adjudicate this span. The source
+   this standalone type-529 object. It cannot adjudicate this span. A separate
+   scratch attempt to enable LibreDWG's unstable TABLECONTENT decoder also
+   failed as an adjudicator: it required a forced class route and ODA-guided
+   schema edits, then emitted wrapped string-stream offsets and a non-Boolean
+   `has_linked_data` value before reporting the same unrelated STYLE handle.
+   Preserve this result as a decoder limitation, not independent wire proof;
+   see the [scratch decoder limitation receipt](docs/research/p5-ac1027-tablecontent-scratch-libredwg-decoder-limits-2026-11-02.json).
+   The source
    and all traces remain external to the repository; see the [source-bound span
    mismatch receipt](docs/research/p5-ac1027-tablecontent-attdef-handle-span-mismatch-2026-11-02.json).
 
