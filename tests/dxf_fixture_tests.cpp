@@ -236,7 +236,11 @@ long materialAllocationCountdown=-1;std::size_t materialFailedAllocations=0u;
 struct MaterialAllocationFailure {explicit MaterialAllocationFailure(long value){materialAllocationCountdown=value;}~MaterialAllocationFailure(){materialAllocationCountdown=-1;}};
 }
 void* operator new(std::size_t size){
-    if(materialAllocationCountdown==0){++materialFailedAllocations;throw std::bad_alloc();}
+    if(materialAllocationCountdown==0){
+        ++materialFailedAllocations;
+        materialAllocationCountdown=-1;
+        throw std::bad_alloc();
+    }
     if(materialAllocationCountdown>0)--materialAllocationCountdown;
     if(void* value=std::malloc(size?size:1u))return value;throw std::bad_alloc();
 }
@@ -16416,6 +16420,152 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
                      decoded.xRecords.size() == 1u && decoded.xRecords.front().handle == 0xD731u &&
                      image->m_imageDefReactorHandle != 0,
                  "retry publishes one closed planned IMAGEDEF/reactor graph");
+        adapter.dxfW = nullptr;
+    }
+
+    // Calibrate the successful core OBJECTS path, then fail its final
+    // allocation before the adapter callback.  The no-image run supplies the
+    // common section/OBJECTS allocation count; the image run adds the generated
+    // IMAGEDEF dictionary and IMAGEDEF records.  A last-allocation failure in
+    // that run therefore unwinds the core record scope before publication.
+    class CoreImageAllocationWriter final : public dx_iface {
+    public:
+        void writeEntities() override {
+            image = DRW_Image{};
+            if (emitImage) {
+                image.ref = 0xD820u;
+                image.sizeu = 640.0;
+                image.sizev = 480.0;
+                image.secPoint = {1.0, 0.0, 0.0};
+                image.vVector = {0.0, 1.0, 0.0};
+                imageWritten = dxfW->writeImage(
+                    &image, "core-objects-allocation-"
+                        + std::string(96u, 'i')) != nullptr;
+            }
+            if (armObjectAllocation)
+                materialAllocationCountdown = objectAllocationCountdown;
+        }
+        void writeObjects() override {
+            objectsCallbackReached = true;
+            remainingAllocationCountdown = materialAllocationCountdown;
+            materialAllocationCountdown = -1;
+            dx_iface::writeObjects();
+        }
+
+        DRW_Image image;
+        bool emitImage{false};
+        bool armObjectAllocation{false};
+        bool imageWritten{false};
+        bool objectsCallbackReached{false};
+        long objectAllocationCountdown{0};
+        long remainingAllocationCountdown{-1};
+    };
+
+    const auto corePath = directory / "core-image-allocation.dxf";
+    const std::string coreFilename = corePath.string();
+    const auto coreContents = [&corePath]() {
+        std::ifstream input(corePath, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input), {});
+    };
+    const auto measureObjectAllocations = [&](bool emitImage, bool binary,
+                                               long& allocations) {
+        constexpr long kAllocationProbe = 1000000L;
+        dx_data data;
+        CoreImageAllocationWriter adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        adapter.emitImage = emitImage;
+        adapter.armObjectAllocation = true;
+        adapter.objectAllocationCountdown = kAllocationProbe;
+        dxfRW writer(coreFilename.c_str());
+        adapter.dxfW = &writer;
+        const bool written = writer.write(&adapter, DRW::AC1027, binary);
+        materialAllocationCountdown = -1;
+        const bool reachedCallback = adapter.objectsCallbackReached
+            && adapter.remainingAllocationCountdown > 0
+            && adapter.remainingAllocationCountdown <= kAllocationProbe;
+        allocations = reachedCallback
+            ? kAllocationProbe - adapter.remainingAllocationCountdown : 0L;
+        adapter.dxfW = nullptr;
+        return written && reachedCallback
+            && (!emitImage || adapter.imageWritten);
+    };
+
+    for (const bool binary : {false, true}) {
+        long baselineAllocations = 0L;
+        long imageAllocations = 0L;
+        const bool baselineMeasured = measureObjectAllocations(
+            false, binary, baselineAllocations);
+        const bool imageMeasured = measureObjectAllocations(
+            true, binary, imageAllocations);
+        const long imageOnlyAllocations = imageAllocations
+            - baselineAllocations;
+        const long failAt = imageAllocations - 1L;
+        const bool calibrated = baselineMeasured && imageMeasured
+            && imageOnlyAllocations > 2L && failAt >= 0L;
+
+        {
+            std::ofstream sentinel(corePath,
+                                   std::ios::binary | std::ios::trunc);
+            sentinel << "core OBJECTS allocation sentinel\n";
+        }
+        dx_data data;
+        CoreImageAllocationWriter adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        adapter.emitImage = true;
+        adapter.armObjectAllocation = true;
+        adapter.objectAllocationCountdown = failAt;
+        dxfRW writer(coreFilename.c_str());
+        adapter.dxfW = &writer;
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool failed = calibrated
+            && !writer.write(&adapter, DRW::AC1027, binary);
+        materialAllocationCountdown = -1;
+        const DRW_OperationDiagnostic diagnostic = writer.getLastDiagnostic();
+        const bool allocationReported =
+            (diagnostic.phase == DRW::OperationPhase::Allocation
+                 && diagnostic.code == "allocation-failure")
+            || (diagnostic.phase == DRW::OperationPhase::Emit
+                && diagnostic.code == "emit-failure");
+        const bool rolledBack = failed && adapter.imageWritten
+            && !adapter.objectsCallbackReached
+            && materialFailedAllocations == failuresBefore + 1u
+            && allocationReported
+            && coreContents() == "core OBJECTS allocation sentinel\n"
+            && writer.getWritingContext()->sourceHandleToMintedMap.empty()
+            && writer.getWritingContext()->writtenSourceEntityHandles.empty();
+
+        adapter.armObjectAllocation = false;
+        adapter.image.handle = 0u;
+        adapter.imageWritten = false;
+        adapter.objectsCallbackReached = false;
+        const bool retried = rolledBack
+            && writer.write(&adapter, DRW::AC1027, binary)
+            && adapter.imageWritten && adapter.objectsCallbackReached
+            && writer.getError() == DRW::BAD_NONE;
+        dx_data decoded;
+        dx_iface reader;
+        const bool readBack = retried
+            && reader.fileImport(coreFilename, &decoded, false)
+            && decoded.mBlock->ent.size() == 1u;
+        const auto* image = readBack
+            ? dynamic_cast<const DRW_Image*>(decoded.mBlock->ent.front())
+            : nullptr;
+        const DRW_ImageDef* definition = image == nullptr ? nullptr
+            : decoded.findImageDefinition(decoded.importGeneration,
+                                          image->ref);
+        t.expect(calibrated && rolledBack,
+                 binary
+                     ? "binary core OBJECTS final IMAGEDEF allocation failure rolls back destination and identities"
+                     : "ASCII core OBJECTS final IMAGEDEF allocation failure rolls back destination and identities");
+        t.expect(readBack && image != nullptr && definition != nullptr
+                     && definition->name
+                         == "core-objects-allocation-"
+                             + std::string(96u, 'i'),
+                 binary
+                     ? "binary core OBJECTS allocation failure accepts same-writer retry and typed image readback"
+                     : "ASCII core OBJECTS allocation failure accepts same-writer retry and typed image readback");
         adapter.dxfW = nullptr;
     }
 }
