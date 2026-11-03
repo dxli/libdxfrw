@@ -27036,7 +27036,9 @@ bool DRW_MLeader::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         classVersion = reader->getInt32();
         break;
     case 94: {
-        if (arrowHeads.size() >= kMaxLeaderLines)
+        if (arrowHeads.size() >= kMaxLeaderLines
+            || !DRW::reserve(
+                arrowHeads, static_cast<int>(arrowHeads.size() + 1u)))
             return false;
         ArrowHeadEntry entry;
         entry.dxfIndex = reader->getInt32();
