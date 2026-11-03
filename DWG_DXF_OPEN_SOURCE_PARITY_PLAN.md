@@ -990,13 +990,17 @@ eligible reader. The exact package and environment result are in the
   admits the bounded same-revision AC1027+ DefinitionEx/ReactorEx graph after
   source-span/callback binding, definition identity binding, reciprocal owner/
   reactor validation, collision checks, staged serialization and fresh typed
-  readback. Generated AC1027 ASCII/Binary controls reject mutated entity
-  references and body fields atomically, then re-export through the same adapter
-  after correction; readback verifies the NOD/dictionary/object/entity graph.
+  readback. Generated AC1027 and AC1032 ASCII/Binary controls reject mutated
+  entity references and body fields atomically, then re-export through the same
+  adapter after correction. The AC1032 control also proves wrong-target
+  destination preservation followed by same-revision retry; fresh readback
+  verifies the NOD/dictionary/object/entity graph.
   The parser now normalizes DXF ACAD_REACTORS into both the typed link vector
   and its count, and defers physical/source revision equality to completed-read
   preflight because dxfRW has not finalized sourceVersion during OBJECTS
   callbacks. See the [imported graph output receipt](docs/research/p8-pointcloud-imported-graph-output-2026-11-03.json).
+  A focused version-boundary receipt records the AC1032 wrong-target refusal
+  and same-revision ASCII/Binary graph readback ([receipt](docs/research/p8-pointcloud-imported-graph-ac1032-version-coverage-2026-11-03.json)).
   This is generated transport evidence, not independent producer or native
   semantic evidence; DWG still needs source CLASS/frame/output binding. P4
   source-profile closure, physical producer breadth, asset loading and native

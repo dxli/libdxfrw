@@ -21209,6 +21209,135 @@ bool pointCloudAndNavisworksAdapterTransport() {
                 != roundTripDefinition->handle)
             return fail("imported DefinitionEx/ReactorEx identities or reciprocal graph edges changed on readback");
 
+        const auto ac1032SourcePath = std::filesystem::temp_directory_path()
+            / ("libdxfrw-cloud-graph-ac1032-source-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        const auto ac1032OutputPath = std::filesystem::temp_directory_path()
+            / ("libdxfrw-cloud-graph-ac1032-output-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Ac1032GraphCleanup {
+            std::filesystem::path source;
+            std::filesystem::path output;
+            ~Ac1032GraphCleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(source, ignored);
+                std::filesystem::remove(output, ignored);
+            }
+        } ac1032GraphCleanup{ac1032SourcePath, ac1032OutputPath};
+        if (std::filesystem::exists(ac1032SourcePath)
+            || std::filesystem::exists(ac1032OutputPath))
+            return fail("AC1032 graph output path unexpectedly exists");
+        dx_iface ac1032Author;
+        if (!ac1032Author.fileExport(ac1032SourcePath.string(),
+                                     DRW::AC1032, binary, &graphData,
+                                     false, true))
+            return fail("could not author the AC1032 point-cloud graph source");
+        dx_data ac1032Source;
+        dx_iface ac1032SourceReader;
+        if (!ac1032SourceReader.fileImport(ac1032SourcePath.string(),
+                                           &ac1032Source, false)
+            || ac1032Source.sourceVersion != DRW::AC1032)
+            return fail("AC1032 point-cloud graph source did not import at its declared revision");
+        const std::string ac1032Sentinel =
+            "AC1032_POINTCLOUD_GRAPH_DESTINATION\n";
+        {
+            std::ofstream existing(ac1032OutputPath, std::ios::binary);
+            existing << ac1032Sentinel;
+            if (!existing)
+                return fail("could not create AC1032 graph output sentinel");
+        }
+        dx_iface ac1032Writer;
+        if (ac1032Writer.fileExport(ac1032OutputPath.string(),
+                                    DRW::AC1027, binary, &ac1032Source,
+                                    false, true))
+            return fail("AC1032 imported point-cloud graph was written to AC1027");
+        {
+            std::ifstream previous(ac1032OutputPath, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != ac1032Sentinel)
+                return fail("wrong-revision AC1032 graph attempt changed the destination");
+        }
+        if (!ac1032Writer.fileExport(ac1032OutputPath.string(),
+                                     DRW::AC1032, binary, &ac1032Source,
+                                     false, true)
+            || !ac1032Source.pointCloudExSourceBindingComplete
+            || !ac1032Source.pointCloudExSourceFieldProfileComplete
+            || ac1032Source.pointCloudExSourceBoundEntities != 1u)
+            return fail("corrected same-adapter AC1032 graph export did not bind its source");
+        dx_data ac1032RoundTrip;
+        dx_iface ac1032RoundTripReader;
+        if (!ac1032RoundTripReader.fileImport(ac1032OutputPath.string(),
+                                              &ac1032RoundTrip, false)
+            || ac1032RoundTrip.sourceVersion != DRW::AC1032
+            || ac1032RoundTrip.pointCloudDefinitions.size() != 2u
+            || !ac1032RoundTrip.hasNamedObjectDictionary
+            || ac1032RoundTrip.mBlock == nullptr
+            || ac1032RoundTrip.mBlock->ent.size() != 1u)
+            return fail("same-revision AC1032 point-cloud graph did not read back");
+        const DRW_PointCloudDef* ac1032Definition = nullptr;
+        const DRW_PointCloudDef* ac1032Reactor = nullptr;
+        for (const DRW_PointCloudDef& object :
+             ac1032RoundTrip.pointCloudDefinitions) {
+            if (object.m_kind == DRW_PointCloudDef::DefinitionEx)
+                ac1032Definition = &object;
+            else if (object.m_kind == DRW_PointCloudDef::ReactorEx)
+                ac1032Reactor = &object;
+        }
+        const auto* ac1032Cloud = dynamic_cast<const DRW_PointCloudEx*>(
+            ac1032RoundTrip.mBlock->ent.front());
+        std::uint32_t ac1032DefinitionDictionaryHandle = 0u;
+        std::size_t ac1032RootLinks = 0u;
+        for (const DRW_Dictionary::Entry& entry :
+             ac1032RoundTrip.namedObjectDictionary.m_entries) {
+            if (entry.m_name == "ACAD_POINTCLOUD_EX_DICT") {
+                ++ac1032RootLinks;
+                ac1032DefinitionDictionaryHandle = entry.m_handle;
+            }
+        }
+        const auto ac1032DefinitionDictionary = std::find_if(
+            ac1032RoundTrip.dictionaries.begin(),
+            ac1032RoundTrip.dictionaries.end(),
+            [ac1032DefinitionDictionaryHandle](
+                const DRW_Dictionary& dictionary) {
+                return dictionary.handle == ac1032DefinitionDictionaryHandle;
+            });
+        if (ac1032Definition == nullptr || ac1032Reactor == nullptr
+            || ac1032Cloud == nullptr || ac1032RootLinks != 1u
+            || ac1032DefinitionDictionaryHandle == 0u
+            || ac1032DefinitionDictionaryHandle == DRW::NoHandle
+            || ac1032DefinitionDictionary
+                == ac1032RoundTrip.dictionaries.end()
+            || ac1032Definition->handle == 0u
+            || ac1032Definition->handle == DRW::NoHandle
+            || ac1032Reactor->handle == 0u
+            || ac1032Reactor->handle == DRW::NoHandle
+            || ac1032Definition->m_classVersion != 7
+            || ac1032Definition->m_sourceFilename
+                != "local-point-cloud.rcs"
+            || ac1032Definition->m_pointCount != 17u
+            || ac1032Reactor->m_classVersion != 7
+            || ac1032Cloud->classVersion != 3u
+            || ac1032Definition->parentHandle
+                != ac1032DefinitionDictionaryHandle
+            || ac1032Definition->reactorHandles
+                != std::vector<std::uint32_t>{ac1032Reactor->handle}
+            || ac1032Reactor->parentHandle != ac1032Cloud->handle
+            || ac1032Cloud->definitionHandle != ac1032Definition->handle
+            || ac1032Cloud->reactorHandle != ac1032Reactor->handle
+            || ac1032DefinitionDictionary->parentHandle
+                != ac1032RoundTrip.namedObjectDictionary.handle
+            || ac1032DefinitionDictionary->m_entries.size() != 1u
+            || ac1032DefinitionDictionary->m_entries.front().m_name
+                != "LOCAL_POINTCLOUD_DEF"
+            || ac1032DefinitionDictionary->m_entries.front().m_handle
+                != ac1032Definition->handle)
+            return fail("AC1032 same-revision readback changed point-cloud graph roles or edges");
+
         if (objectAdapter.fileExport(path.string(), DRW::AC1027, binary,
                                      &objectData, false, true))
             return fail("unqualified point-cloud object graph was emitted");
