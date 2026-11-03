@@ -757,6 +757,20 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 Audit only a current failing source/profile; do not revive historical defects whose
 receipt and code path already agree.
 
+**Current AC1024 ACSH parser repro (2026-11-03):** the existing local
+`visualization_-_condominium_with_skylight.dwg` and
+`visualization_-_conference_room.dwg` each reproduce three OBJECTS failures.
+The failing frames are two `ACSH_LOFT_CLASS` and one `ACSH_REVOLVE_CLASS` in
+the condominium drawing, and three `ACSH_REVOLVE_CLASS` in the conference-room
+drawing. Their shared prefixes parse, but the Loft counts and Revolve 2RD/next
+BD fields do not produce a qualified body span. ODA v5.4.1 has no class-specific
+layout for these proprietary records; the peer schemas agree with the current
+assumptions but do not independently resolve the failure. Keep these frames
+raw-retained but unvalidated and strict output refused until exact fields,
+following-handle alignment, and meaningful values have independent evidence.
+The files remain local and were not added to the repository. See the
+[current ACSH failure receipt](docs/research/p6-ac1024-acsh-current-parser-failures-2026-11-03.json).
+
 | Boundary | Remaining decision or proof |
 | --- | --- |
 | Version/route parity | Finish the standalone versus pinned LibreCAD/bundled/LibreCAD_3 route differential. Establish authoritative DXF fields for the derived `AcDbAssocValueDependency` body, validate it with a reader that implements that subclass, and establish native acceptance for the associative profile. See [the P6 differential receipt](docs/research/p6-libre-dwg-associative-dxf-import-differential-2026-10-31.json). |
