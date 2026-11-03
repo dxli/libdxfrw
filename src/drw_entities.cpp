@@ -26868,7 +26868,10 @@ bool DRW_MLeader::parseDxfContextCode(int code, const std::unique_ptr<dxfReader>
         case 143: context.columnGutter = reader->getDouble(); return true;
         case 294: context.columnFlowReversed = (reader->getInt32() != 0); return true;
         case 144:
-            if (context.columnSizes.size() >= static_cast<std::size_t>(kMaxMLeaderItems))
+            if (context.columnSizes.size() >= static_cast<std::size_t>(kMaxMLeaderItems)
+                || !DRW::reserve(
+                    context.columnSizes,
+                    static_cast<int>(context.columnSizes.size() + 1u)))
                 return false;
             context.columnSizes.push_back(reader->getDouble());
             return true;

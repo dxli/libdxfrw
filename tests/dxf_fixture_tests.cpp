@@ -13307,6 +13307,43 @@ void testSplineDxfAllocationFailure(TestContext& t) {
     }
 }
 
+void testMLeaderColumnSizeAllocationFailure(TestContext& t) {
+    struct MLeaderParseProbe final : DRW_MLeader {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+    };
+    const auto parseRecord = [](MLeaderParseProbe& leader, int expectedCode,
+                                std::string_view value,
+                                long allocationFailure = -1) {
+        const std::string record = std::to_string(expectedCode) + "\n"
+            + std::string(value) + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int code = 0;
+        if (!reader->readRec(&code) || code != expectedCode)
+            return false;
+        MaterialAllocationFailure failure(allocationFailure);
+        return leader.parse(code, reader);
+    };
+
+    MLeaderParseProbe leader;
+    const bool opened = parseRecord(leader, 300, "CONTEXT_DATA{")
+        && parseRecord(leader, 290, "1");
+    const std::size_t failuresBefore = materialFailedAllocations;
+    const bool rejected = !parseRecord(leader, 144, "1.25", 0);
+    const bool failedOnce = materialFailedAllocations == failuresBefore + 1u;
+    const bool rolledBack = leader.context.columnSizes.empty()
+        && !leader.isDxfContextClosed();
+    const bool retried = parseRecord(leader, 144, "1.25")
+        && parseRecord(leader, 144, "2.5")
+        && leader.context.columnSizes == std::vector<double>{1.25, 2.5}
+        && parseRecord(leader, 301, "}")
+        && leader.isDxfContextClosed();
+    t.expect(opened && rejected && failedOnce && rolledBack && retried,
+             "MLEADER column-size allocation failure leaves CONTEXT_DATA retryable");
+}
+
 void testHatchSplineDxfAllocationFailure(TestContext& t) {
     struct HatchParseProbe final : DRW_Hatch {
         bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
@@ -62263,6 +62300,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testSplineDxfAllocationFailure(context);
         std::cout << "SPLINE DXF allocation-failure and retry controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--mleader-column-size-allocation-failure") {
+        TestContext context;
+        testMLeaderColumnSizeAllocationFailure(context);
+        std::cout << "MLEADER column-size allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

@@ -2327,6 +2327,11 @@ if(LIBDXFRW_BUILD_TESTS)
             --spline-dxf-allocation-failure)
     set_tests_properties(libdxfrw_spline_dxf_allocation_failure PROPERTIES
         LABELS "fast;dxf;reader;spline;allocation;retry" TIMEOUT 30)
+    add_test(NAME libdxfrw_mleader_column_size_allocation_failure
+        COMMAND libdxfrw_dxf_fixture_tests
+            --mleader-column-size-allocation-failure)
+    set_tests_properties(libdxfrw_mleader_column_size_allocation_failure PROPERTIES
+        LABELS "fast;dxf;reader;mleader;allocation;retry" TIMEOUT 30)
     add_test(NAME libdxfrw_hatch_spline_dxf_allocation_failure
         COMMAND libdxfrw_dxf_fixture_tests
             --hatch-spline-dxf-allocation-failure)
