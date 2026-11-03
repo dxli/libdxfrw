@@ -59278,6 +59278,80 @@ void testInsertAttributeCountBound(TestContext& t) {
     }
 }
 
+void testTableAttributeCountBound(TestContext& t) {
+    const std::size_t overLimitCount =
+        dwgSafety::MaxOwnedObjectCount + 1u;
+    const auto path = std::filesystem::temp_directory_path()
+        / ("libdxfrw-table-count-bound-"
+            + std::to_string(std::chrono::steady_clock::now()
+                .time_since_epoch().count()) + ".dxf");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); }
+    } cleanup{path};
+    const std::string sentinel = "TABLE_COUNT_DESTINATION";
+    for (const bool binary : {false, true}) {
+        dx_data validData;
+        auto validAttribute = std::make_shared<DRW_Attrib>();
+        validAttribute->tag = "COUNT_BOUND";
+        validAttribute->text = "value";
+        auto* validTable = new DRW_Table;
+        validTable->m_hasSemanticContent = true;
+        validTable->m_semanticContentComplete = true;
+        validTable->m_content.m_columns.resize(1u);
+        validTable->m_content.m_rows.resize(1u);
+        DRW_TableCell& validCell =
+            validTable->m_content.m_rows.front().m_cells.emplace_back();
+        validCell.m_type = 1;
+        validCell.m_contents.emplace_back();
+        validCell.m_contents.back().m_type = 1;
+        validCell.m_contents.back().m_text = "count bound";
+        validTable->attlist.push_back(validAttribute);
+        validData.mBlock->ent.push_back(validTable);
+        dx_iface validAdapter;
+        validAdapter.cData = &validData;
+        validAdapter.currentBlock = validData.mBlock;
+        const bool validWritten = validAdapter.fileExport(
+            path.string(), DRW::AC1032, binary, &validData, false);
+        t.expect(validWritten,
+                 "TABLE with one owned attribute remains writable");
+
+        { std::ofstream existing(path, std::ios::binary); existing << sentinel; }
+        dx_data data;
+        auto attribute = std::make_shared<DRW_Attrib>();
+        attribute->tag = "COUNT_BOUND";
+        attribute->text = "value";
+        auto* table = new DRW_Table;
+        table->m_hasSemanticContent = true;
+        table->m_semanticContentComplete = true;
+        table->m_content.m_columns.resize(1u);
+        table->m_content.m_rows.resize(1u);
+        DRW_TableCell& cell = table->m_content.m_rows.front().m_cells.emplace_back();
+        cell.m_type = 1;
+        cell.m_contents.emplace_back();
+        cell.m_contents.back().m_type = 1;
+        cell.m_contents.back().m_text = "count bound";
+        table->attlist.assign(overLimitCount, attribute);
+        data.mBlock->ent.push_back(table);
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        const bool written = adapter.fileExport(
+            path.string(), DRW::AC1032, binary, &data, false);
+        std::ifstream saved(path, std::ios::binary);
+        const std::string contents{
+            std::istreambuf_iterator<char>{saved},
+            std::istreambuf_iterator<char>{}};
+        t.expect(!written && contents == sentinel,
+                 "TABLE attribute chains above the owned-object bound preserve the destination");
+        table->attlist.resize(1u);
+        const bool retried = adapter.fileExport(
+            path.string(), DRW::AC1032, binary, &data, false);
+        t.expect(retried,
+                 "TABLE attribute count refusal accepts corrected same-adapter retry");
+    }
+}
+
 void populateLegacyEllipseCarriers(dx_data& data, bool includeControls = true) {
     DRW_AppId app;
     app.name = "ELLIPSE_APP";
@@ -62770,6 +62844,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testInsertAttributeCountBound(context);
         std::cout << "INSERT attribute count bound: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--table-attribute-count-bound") {
+        TestContext context;
+        testTableAttributeCountBound(context);
+        std::cout << "TABLE attribute count bound: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

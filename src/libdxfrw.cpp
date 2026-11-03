@@ -10187,6 +10187,8 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         || (ent != nullptr && ent->seqEndEntity != nullptr
             && !preflightEntity(ent->seqEndEntity.get())))
         return false;
+    if (ent->attlist.size() > dwgSafety::MaxOwnedObjectCount)
+        return failDxfWrite();
 
     constexpr std::size_t maxRows = 10000u;
     constexpr std::size_t maxColumns = 1000u;
@@ -10652,7 +10654,9 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
             }
         }
     } attributeState;
-    attributeState.handles.reserve(ent->attlist.size());
+    if (!DRW::reserve(attributeState.handles,
+                      static_cast<int>(ent->attlist.size())))
+        return failDxfWrite();
     const bool hasAttribs = !ent->attlist.empty();
     const bool hasSequenceEnd = hasAttribs || ent->seqEndEntity != nullptr;
     writer->writeString(0, "ACAD_TABLE");
