@@ -1,0 +1,54 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-dxf-group-handle-plan-allocation-failure-retry-2026-11-03",
+  "date": "2026-11-03",
+  "status": "COMPLETED_LOCAL_ALLOCATION_FAILURE_CONTROL",
+  "supportClaimEffect": "none",
+  "scope": "Inject allocation failure into the GROUP handle planner remap-destination index and verify retry state.",
+  "source": {
+    "parentCommit": "7fbd8d6e",
+    "files": {
+      "tests/dxf_fixture_tests.cpp": "dd446d5c591f5388387c323539aa247ca423cfe3b0014de83b7d15cdadd209e0",
+      "src/libdxfrw.cpp": "5751845b6b6ca893c3102694957d3320ea112cffaeb811e42ff7e8c767e9776c",
+      "src/libdxfrw.h": "54af5f45476a14c6046ddaed33ef290c0779eaa02c2eb2ac6141d5f6101a36d3",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "dbf467eb17ec5ee5bc8ca2a15f9709d79238266a72a57837bf1e6d05c34e3c13"
+    }
+  },
+  "implementation": {
+    "files": [
+      "tests/dxf_fixture_tests.cpp",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md"
+    ],
+    "behavior": [
+      "The focused test configures a source GROUP handle and explicit output remap, then injects std::bad_alloc at the remapDestinationCounts map node allocation in planDxfGroupHandles.",
+      "The planner returns failure without freezing or retaining a partial planned GROUP handle vector.",
+      "After resetting the same codec write session, planning succeeds and binds the expected remapped output handle.",
+      "The control runs with both ASCII and Binary writer configurations and creates no DWG/DXF fixtures."
+    ]
+  },
+  "validation": {
+    "normalBuild": {
+      "command": "cmake --build build-gcc --target libdxfrw_dxf_fixture_tests -j4",
+      "result": "PASS"
+    },
+    "normalFocused": {
+      "command": "ctest --test-dir build-gcc --output-on-failure -R '^libdxfrw_group_setter_bounds$'",
+      "result": "PASS 1/1; 0.69 seconds"
+    },
+    "asanBuild": {
+      "command": "cmake --build build-asan-custom --target libdxfrw_dxf_fixture_tests -j4",
+      "result": "PASS"
+    },
+    "asanFocused": {
+      "command": "ctest --test-dir build-asan-custom --output-on-failure -R '^libdxfrw_group_setter_bounds$'",
+      "result": "PASS 1/1; 1.24 seconds"
+    },
+    "diffCheck": "PASS",
+    "repositoryFixturesAdded": 0
+  },
+  "limitations": [
+    "This isolates the GROUP handle planner allocation path; it does not inject allocation failures into later IMAGEDEF, dictionary, or other OBJECTS assembly builders.",
+    "The control is internal writer safety evidence only and does not qualify DXF consumer semantics or promote support claims."
+  ],
+  "next": "Inject failures into the remaining OBJECTS staging builders and keep cross-family rollback, source lifetime, platform policy, and scoped concurrency open."
+}

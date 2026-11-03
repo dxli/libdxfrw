@@ -62,6 +62,17 @@ public:
     static bool plan(dxfRW& owner) {
         return owner.planDxfGroupHandles();
     }
+    static bool groupPlanFrozen(const dxfRW& owner) {
+        return owner.m_dxfGroupPlanFrozen;
+    }
+    static std::size_t plannedGroupHandleCount(const dxfRW& owner) {
+        return owner.m_plannedDxfGroupHandles.size();
+    }
+    static std::uint32_t plannedGroupHandle(const dxfRW& owner,
+                                            std::size_t index) {
+        return index < owner.m_plannedDxfGroupHandles.size()
+            ? owner.m_plannedDxfGroupHandles[index] : 0u;
+    }
     static bool writeObjects(dxfRW& owner) {
         return owner.writeObjects();
     }
@@ -59922,6 +59933,37 @@ void testGroupSetterBounds(TestContext& t) {
         && allocationCodec.groupsForWrite().size() == 1u;
     t.expect(allocationFailureRejected && allocationRetry,
              "GROUP setter catches const-copy allocation failure and accepts corrected retry");
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW planner("");
+        DRW_Group plannedGroup;
+        plannedGroup.handle = 0xD801u;
+        plannedGroup.name = "GROUP_PLAN_ALLOCATION_RETRY";
+        planner.setGroups({plannedGroup});
+        planner.setHandleRemap({{plannedGroup.handle, 0xE001u}});
+        DxfGroupSetterTestAccess::configureWriter(planner, output, binary);
+        const std::size_t failuresBefore = materialFailedAllocations;
+        bool firstPlan = false;
+        {
+            MaterialAllocationFailure failPlannerMap(0);
+            firstPlan = DxfGroupSetterTestAccess::plan(planner);
+        }
+        const bool allocationFailureRolledBack =
+            !firstPlan && materialFailedAllocations == failuresBefore + 1u
+            && !DxfGroupSetterTestAccess::groupPlanFrozen(planner)
+            && DxfGroupSetterTestAccess::plannedGroupHandleCount(planner) == 0u;
+        DxfGroupSetterTestAccess::resetWriteSession(planner);
+        const bool retried = DxfGroupSetterTestAccess::plan(planner)
+            && DxfGroupSetterTestAccess::groupPlanFrozen(planner)
+            && DxfGroupSetterTestAccess::plannedGroupHandleCount(planner) == 1u
+            && DxfGroupSetterTestAccess::plannedGroupHandle(planner, 0u)
+                == 0xE001u;
+        t.expect(allocationFailureRolledBack && retried,
+                 binary
+                     ? "binary GROUP handle planning catches remap-index allocation failure and accepts same-codec retry"
+                     : "ASCII GROUP handle planning catches remap-index allocation failure and accepts same-codec retry");
+    }
 
     std::list<DRW_Group> allocationGroups(1u);
     allocationGroups.front().name = "GROUP_ADOPTION_ALLOCATION";
