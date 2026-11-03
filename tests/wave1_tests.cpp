@@ -2984,6 +2984,191 @@ void testRasterAndWipeoutVariablesIdentityRemapping(TestContext& t) {
         }, readWipeout, wipeoutPayloadMatches);
 }
 
+void testGeoDataIdentityRemapping(TestContext& t) {
+    constexpr std::uint32_t source = 0xA81u;
+    constexpr std::uint32_t emitted = 0xB81u;
+
+    class GeoDataProbe final : public dx_iface {
+    public:
+        void addGeoData(const DRW_GeoData& value) override {
+            captured = value;
+            found = true;
+        }
+
+        DRW_GeoData captured;
+        bool found {false};
+    };
+
+    const auto readTyped = [](const std::string& bytes, bool binary,
+                              DRW_GeoData& value) {
+        std::istringstream input(bytes);
+        GeoDataProbe probe;
+        dxfRW readerOwner("");
+        readerOwner.binFile = binary;
+        readerOwner.iface = &probe;
+        readerOwner.reader = binary
+            ? std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderBinary>(&input))
+            : std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderAscii>(&input));
+        int code = 0;
+        while (readerOwner.reader->readRec(&code)) {
+            if (code != 0)
+                continue;
+            readerOwner.nextentity = readerOwner.reader->getString();
+            if (readerOwner.nextentity == "GEODATA") {
+                const bool processed = readerOwner.processGeoData();
+                if (processed && probe.found)
+                    value = probe.captured;
+                return processed && probe.found;
+            }
+        }
+        return false;
+    };
+    const auto makeGeoData = [] {
+        DRW_GeoData value;
+        value.parentHandle = 0xCu;
+        value.m_version = 2;
+        value.m_coordinatesType = 2;
+        value.m_designPoint = DRW_Coord{1.25, -2.5, 3.75};
+        value.m_referencePoint = DRW_Coord{4.5, 5.5, 6.5};
+        value.m_coordinateSystemDefinition = "LOCAL_CS";
+        return value;
+    };
+    const auto payloadMatches = [](const DRW_GeoData& value) {
+        return value.m_version == 2 && value.m_coordinatesType == 2
+            && value.m_designPoint.x == 1.25
+            && value.m_designPoint.y == -2.5
+            && value.m_referencePoint.z == 6.5
+            && value.m_coordinateSystemDefinition == "LOCAL_CS";
+    };
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW owner("");
+        owner.version = DRW::AC1027;
+        owner.binFile = binary;
+        owner.setHandleRemap({{source, emitted}});
+        owner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        owner.writer->setRecordInventoryEnabled(true, 16u);
+        DRW_GeoData geo = makeGeoData();
+        geo.handle = source;
+        const bool wrote = owner.writer->writeString(0, "SECTION")
+            && owner.writer->writeString(2, "OBJECTS")
+            && owner.writeGeoData(&geo)
+            && owner.writer->writeString(0, "WIRE_END");
+        const auto binding = owner.m_writingContext
+            .sourceHandleToWrittenObjectMap.find(source);
+        t.expect(wrote && owner.writer->recordHandleCount(emitted) == 1u
+                     && owner.writer->recordHandleHasIdentity(
+                            emitted, "GEODATA", "OBJECTS")
+                     && binding != owner.m_writingContext
+                                        .sourceHandleToWrittenObjectMap.end()
+                     && binding->second == emitted,
+                 "GEODATA remaps, inventories, and binds its own identity");
+        DRW_GeoData readback;
+        const bool read = wrote && readTyped(output.str(), binary, readback);
+        t.expect(read && readback.handle == emitted && payloadMatches(readback),
+                 "GEODATA mapped identity has typed ASCII/Binary readback");
+
+        std::ostringstream allocatedOutput;
+        dxfRW allocatedOwner("");
+        allocatedOwner.version = DRW::AC1027;
+        allocatedOwner.binFile = binary;
+        allocatedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&allocatedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&allocatedOutput));
+        allocatedOwner.writer->setRecordInventoryEnabled(true, 16u);
+        DRW_GeoData generated = makeGeoData();
+        const bool generatedWrite =
+            allocatedOwner.writer->writeString(0, "SECTION")
+            && allocatedOwner.writer->writeString(2, "OBJECTS")
+            && allocatedOwner.writeGeoData(&generated)
+            && allocatedOwner.writer->writeString(0, "WIRE_END");
+        DRW_GeoData generatedReadback;
+        const bool generatedRead = generatedWrite
+            && readTyped(allocatedOutput.str(), binary, generatedReadback);
+        t.expect(generatedRead && generatedReadback.handle != 0u
+                     && generatedReadback.handle != DRW::NoHandle
+                     && allocatedOwner.writer->recordHandleCount(
+                            generatedReadback.handle) == 1u
+                     && payloadMatches(generatedReadback),
+                 "GEODATA allocates a missing identity and reads back");
+
+        std::ostringstream invalidOutput;
+        dxfRW invalidOwner("");
+        invalidOwner.version = DRW::AC1027;
+        invalidOwner.binFile = binary;
+        invalidOwner.setHandleRemap({{source, 0xCu}});
+        invalidOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&invalidOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&invalidOutput));
+        DRW_GeoData invalidIdentity = makeGeoData();
+        invalidIdentity.handle = source;
+        t.expect(!invalidOwner.writeGeoData(&invalidIdentity)
+                     && invalidOutput.str().empty(),
+                 "GEODATA fixed identity remap refusal preserves destination");
+
+        std::ostringstream failedOutput;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1027;
+        failedOwner.binFile = binary;
+        failedOwner.setHandleRemap({{source, emitted}});
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&failedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&failedOutput));
+        failedOwner.writer->setRecordInventoryEnabled(true, 16u);
+        const bool section = failedOwner.writer->writeString(0, "SECTION")
+            && failedOwner.writer->writeString(2, "OBJECTS");
+        const std::string beforeFailure = failedOutput.str();
+        DRW_GeoData malformed = makeGeoData();
+        malformed.handle = source;
+        malformed.extData.push_back(new DRW_Variant(
+            1009, std::string("unsupported-xdata-code")));
+        const bool rejected = section && !failedOwner.writeGeoData(&malformed);
+        t.expect(rejected && failedOutput.str() == beforeFailure
+                     && failedOwner.m_writingContext
+                                .sourceHandleToWrittenObjectMap.count(source)
+                            == 0u
+                     && failedOwner.writer->recordHandleCount(emitted) == 0u,
+                 "GEODATA late XDATA failure rolls back bytes and identity map");
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1027;
+        retryOwner.binFile = binary;
+        retryOwner.setHandleRemap({{source, emitted}});
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        retryOwner.writer->setRecordInventoryEnabled(true, 16u);
+        DRW_GeoData corrected = makeGeoData();
+        corrected.handle = source;
+        const bool retried = retryOwner.writer->writeString(0, "SECTION")
+            && retryOwner.writer->writeString(2, "OBJECTS")
+            && retryOwner.writeGeoData(&corrected)
+            && retryOwner.writer->writeString(0, "WIRE_END");
+        DRW_GeoData retryReadback;
+        const bool retryRead = retried
+            && readTyped(retryOutput.str(), binary, retryReadback);
+        t.expect(rejected && retryRead && retryReadback.handle == emitted
+                     && payloadMatches(retryReadback),
+                 "GEODATA corrected fresh-writer retry has typed readback");
+    }
+}
+
 void testBlockRecordInsertReferenceRemapping(TestContext& t) {
     for (const bool binary : {false, true}) {
         for (const bool useResolver : {false, true}) {
@@ -20167,6 +20352,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testGeoDataVersionedWriter(focused);
         std::cout << "GEODATA versioned writer: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--geodata-identity-remapping") {
+        TestContext focused;
+        testGeoDataIdentityRemapping(focused);
+        std::cout << "GEODATA identity remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

@@ -689,6 +689,12 @@ source-span/target-role evidence for other profiles, native coordinate and
 projection semantics, and composed whole-document qualification remain open.
 See the [adapter transport receipt](docs/research/p6-geodata-dwg-adapter-transport-2026-11-02.json)
 and [host-block remap receipt](docs/research/p6-geodata-host-block-reference-remap-2026-11-02.json).
+The low-level GEODATA writer also remaps or allocates its own group-5 identity,
+binds source identity after staged output commits, and passes focused ASCII/
+Binary typed readback, fixed-handle refusal, XDATA rollback, and fresh-writer
+retry controls ([identity receipt](docs/research/p8-geodata-identity-remapping-2026-11-03.json)).
+This closes only own-identity transport; producer breadth and native coordinate
+and projection semantics remain open.
 
 ## P7 — ACIS/ACDS and independent 3D meaning
 
