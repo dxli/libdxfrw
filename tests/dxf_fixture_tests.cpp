@@ -16263,6 +16263,11 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
         }
         void writeObjects() override {
             dx_iface::writeObjects();
+            if (induceObjectsAllocationFailure) {
+                MaterialAllocationFailure failObjectsCallback(0);
+                const std::string allocationProbe(64u, 'x');
+                (void)allocationProbe;
+            }
             DRW_XRecord independent;
             independent.handle = 0xD730u;
             independent.parentHandle = 0xCu;
@@ -16275,6 +16280,7 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
         std::uint32_t generatedReactor{0u};
         bool induceFailure{true};
         bool induceObjectsFailure{false};
+        bool induceObjectsAllocationFailure{false};
         bool imageWritten{false};
         bool suffixWritten{false};
         bool independentWritten{false};
@@ -16357,6 +16363,30 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
                  "failed OBJECTS callback rolls back already staged IMAGEDEF records, identities, and destination bytes");
 
         adapter.induceObjectsFailure = false;
+        adapter.induceObjectsAllocationFailure = true;
+        adapter.image.handle = 0;
+        adapter.imageWritten = false;
+        adapter.suffixWritten = false;
+        adapter.independentWritten = false;
+        const std::size_t allocationFailuresBefore =
+            materialFailedAllocations;
+        const bool allocationRejected =
+            planInstalled && !writer.write(&adapter, DRW::AC1027, binary)
+            && adapter.imageWritten && !adapter.independentWritten;
+        const DRW_OperationDiagnostic allocationDiagnostic =
+            writer.getLastDiagnostic();
+        t.expect(allocationRejected
+                     && materialFailedAllocations
+                         == allocationFailuresBefore + 1u
+                     && allocationDiagnostic.phase
+                         == DRW::OperationPhase::Allocation
+                     && allocationDiagnostic.code == "allocation-failure"
+                     && contents() == "image plan sentinel\n"
+                     && writer.getWritingContext()->sourceHandleToMintedMap.empty()
+                     && writer.getWritingContext()->writtenSourceEntityHandles.empty(),
+                 "OBJECTS callback bad_alloc after IMAGEDEF staging aborts publication and clears derived identities");
+
+        adapter.induceObjectsAllocationFailure = false;
         adapter.image.handle = 0;
         adapter.imageWritten = false;
         adapter.suffixWritten = false;

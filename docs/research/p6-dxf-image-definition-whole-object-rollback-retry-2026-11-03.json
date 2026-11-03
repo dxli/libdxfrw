@@ -10,8 +10,8 @@
     "files": {
       "src/libdxfrw.cpp": "5751845b6b6ca893c3102694957d3320ea112cffaeb811e42ff7e8c767e9776c",
       "src/libdxfrw.h": "54af5f45476a14c6046ddaed33ef290c0779eaa02c2eb2ac6141d5f6101a36d3",
-      "tests/dxf_fixture_tests.cpp": "ee29ac718966874467cc1cd8a345f7409a39ed892861025fdbc9ebeaf2faed2a",
-      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "91c45dc614e415a62b56b7325701263a8d3af53c5fc41212e8e17189140bf43f"
+      "tests/dxf_fixture_tests.cpp": "d4bc43ccef2cdac1c6de5a0b7c0964a8d5a00811dcd2005f6a275626f16a9df0",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "05e0ba6b89c6c8ec0f2e164b3753bf2128788f2f2af8434813f55bf85ee69295"
     }
   },
   "implementation": {
@@ -20,8 +20,9 @@
       "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md"
     ],
     "behavior": [
-      "The IMAGEDEF plan failure/retry control now injects a malformed XRECORD value from the consumer OBJECTS callback after the core has emitted its NOD, GROUP, IMAGEDEF dictionary, reactor, and IMAGEDEF records.",
-      "The failed callback must preserve the pre-existing destination sentinel and clear derived entity identity maps.",
+      "The IMAGEDEF plan failure/retry control injects a malformed XRECORD value from the consumer OBJECTS callback after the core has emitted its NOD, GROUP, IMAGEDEF dictionary, reactor, and IMAGEDEF records.",
+      "A second callback mode injects std::bad_alloc while constructing a probe after those core OBJECTS records have been staged; the top-level writer reports phase Allocation and code allocation-failure.",
+      "Both failed attempts preserve the pre-existing destination sentinel and clear derived entity identity maps.",
       "Correcting the callback on the same writer must succeed; a fresh typed DXF import verifies the IMAGE, IMAGEDEF, reactor references, and independent XRECORD.",
       "The sequence runs for ASCII and Binary DXF. It adds no repository DWG/DXF fixtures and establishes no support claim."
     ]
@@ -33,8 +34,8 @@
     },
     "normalFocused": {
       "command": "ctest --test-dir build-gcc --output-on-failure -R '^libdxfrw_image_definition_plan_failure_retry$'",
-      "result": "PASS 1/1; 0.60 seconds",
-      "coverage": "Both ASCII and Binary generated IMAGEDEF flows, earlier entity-callback failure rollback, later OBJECTS callback failure after core records were staged, destination preservation, identity rollback, corrected same-writer retry, and fresh typed readback."
+      "result": "PASS 1/1; 0.07 seconds",
+      "coverage": "Both ASCII and Binary generated IMAGEDEF flows; earlier entity-callback failure, later OBJECTS callback validation failure and callback bad_alloc after core records were staged; destination preservation, identity rollback, corrected same-writer retry, and fresh typed readback."
     },
     "asanBuild": {
       "command": "cmake --build build-asan-custom --target libdxfrw_dxf_fixture_tests -j4",
@@ -42,14 +43,14 @@
     },
     "asanFocused": {
       "command": "ctest --test-dir build-asan-custom --output-on-failure -R '^libdxfrw_image_definition_plan_failure_retry$'",
-      "result": "PASS 1/1; 1.08 seconds"
+      "result": "PASS 1/1; 0.14 seconds"
     },
     "diffCheck": "PASS",
     "repositoryFixturesAdded": 0
   },
   "limitations": [
-    "The injected failure is a rejected XRECORD value in the adapter callback, not a bad_alloc inside each core OBJECTS builder.",
+    "The bad_alloc is injected in the consumer callback after the core OBJECTS records are staged; allocation failures inside each core OBJECTS builder remain open.",
     "The generated round-trip is local transport evidence; native consumer semantics, physical producer breadth, and independent interoperability remain unqualified."
   ],
-  "next": "Inject allocation failures into independent OBJECTS builders and extend rollback controls to other staged families."
+  "next": "Inject allocation failures inside independent core OBJECTS builders and extend rollback controls to other staged families."
 }
