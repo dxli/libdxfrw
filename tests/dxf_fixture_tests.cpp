@@ -126,6 +126,15 @@ public:
     static std::size_t resolvedSunHandleCount(const dxfRW& owner) {
         return owner.m_resolvedSunHandles.size();
     }
+    static std::size_t maxDxfHandleRemapEntries() {
+        return dxfRW::kMaxDxfHandleRemapEntries;
+    }
+    static bool dxfHandleRemapRejected(const dxfRW& owner) {
+        return owner.m_dxfHandleRemapInputRejected;
+    }
+    static std::size_t dxfHandleRemapCount(const dxfRW& owner) {
+        return owner.m_handleRemap.size();
+    }
 };
 
 namespace {
@@ -59763,6 +59772,48 @@ void testResolvedWriteReferenceSetterBounds(TestContext& t) {
              "base-style and SUN proof setters preserve move input and accept corrected same-codec retries");
 }
 
+void testDxfHandleRemapSetterBound(TestContext& t) {
+    const std::size_t maxEntries =
+        DxfGroupSetterTestAccess::maxDxfHandleRemapEntries();
+    std::map<std::uint32_t, std::uint32_t> remap;
+    for (std::size_t index = 0u; index <= maxEntries; ++index) {
+        const auto source = static_cast<std::uint32_t>(0x10000000u + index);
+        const auto target = static_cast<std::uint32_t>(0x20000000u + index);
+        remap.emplace(source, target);
+    }
+
+    dxfRW codec("");
+    codec.setHandleRemap(remap);
+    const bool constRejectedBeforeCopy =
+        DxfGroupSetterTestAccess::dxfHandleRemapRejected(codec)
+        && DxfGroupSetterTestAccess::dxfHandleRemapCount(codec) == 0u
+        && remap.size() == maxEntries + 1u;
+    t.expect(constRejectedBeforeCopy,
+             "over-limit const handle-remap setter refuses before copying");
+
+    remap.erase(std::prev(remap.end()));
+    codec.setHandleRemap(remap);
+    const bool exactLimitAccepted =
+        !DxfGroupSetterTestAccess::dxfHandleRemapRejected(codec)
+        && DxfGroupSetterTestAccess::dxfHandleRemapCount(codec) == maxEntries;
+    t.expect(exactLimitAccepted,
+             "handle-remap setter accepts the exact entry ceiling after correction");
+
+    remap.emplace(0x30000000u, 0x30000001u);
+    codec.setHandleRemap(std::move(remap));
+    const bool moveRejectedWithoutConsumption =
+        DxfGroupSetterTestAccess::dxfHandleRemapRejected(codec)
+        && DxfGroupSetterTestAccess::dxfHandleRemapCount(codec) == 0u
+        && remap.size() == maxEntries + 1u;
+    codec.setHandleRemap(
+        std::map<std::uint32_t, std::uint32_t>{{0xA400u, 0xA401u}});
+    const bool correctedRetry =
+        !DxfGroupSetterTestAccess::dxfHandleRemapRejected(codec)
+        && DxfGroupSetterTestAccess::dxfHandleRemapCount(codec) == 1u;
+    t.expect(moveRejectedWithoutConsumption && correctedRetry,
+             "over-limit move remap preserves caller data and corrected setter retry clears rejection");
+}
+
 void populateLegacyEllipseCarriers(dx_data& data, bool includeControls = true) {
     DRW_AppId app;
     app.name = "ELLIPSE_APP";
@@ -63311,6 +63362,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testResolvedWriteReferenceSetterBounds(context);
         std::cout << "Resolved DXF write-reference setter bounds: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--dxf-handle-remap-setter-bound") {
+        TestContext context;
+        testDxfHandleRemapSetterBound(context);
+        std::cout << "DXF handle-remap setter bound: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

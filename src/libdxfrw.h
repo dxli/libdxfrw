@@ -1079,7 +1079,17 @@ public:
             m_writeError = true;
             return;
         }
-        m_handleRemap = remap;
+        if (remap.size() > kMaxDxfHandleRemapEntries) {
+            rejectDxfHandleRemapInput();
+            return;
+        }
+        try {
+            std::map<std::uint32_t, std::uint32_t> copied = remap;
+            m_handleRemap.swap(copied);
+            m_dxfHandleRemapInputRejected = false;
+        } catch (...) {
+            rejectDxfHandleRemapInput();
+        }
     }
     void setHandleRemap(std::map<std::uint32_t, std::uint32_t>&& remap) {
         if (!preflightDxfSetup())
@@ -1088,7 +1098,12 @@ public:
             m_writeError = true;
             return;
         }
+        if (remap.size() > kMaxDxfHandleRemapEntries) {
+            rejectDxfHandleRemapInput();
+            return;
+        }
         m_handleRemap = std::move(remap);
+        m_dxfHandleRemapInputRejected = false;
     }
     /*!< Install an owned reference resolver for selected DXF references.
      * Its result is the final emitted identity (it is not remapped again).
@@ -1452,6 +1467,7 @@ public:
 
 private:
     static constexpr std::size_t kMaxDxfClassEntries = 65536u;
+    static constexpr std::size_t kMaxDxfHandleRemapEntries = 100000u;
     static constexpr std::size_t kMaxResolvedWriteReferences = 100000u;
     enum DxfResolvedWriteInput : std::uint8_t {
         ResolvedTableStyleHandlesInput = 1u << 0,
@@ -1500,6 +1516,12 @@ private:
                                   std::uint8_t rejectionBit) noexcept {
         m_dxfResolvedWriteInputRejectedMask |= rejectionBit;
         std::vector<T>().swap(destination);
+        if (m_dxfWriteAttemptActive)
+            m_writeError = true;
+    }
+    void rejectDxfHandleRemapInput() noexcept {
+        std::map<std::uint32_t, std::uint32_t>().swap(m_handleRemap);
+        m_dxfHandleRemapInputRejected = true;
         if (m_dxfWriteAttemptActive)
             m_writeError = true;
     }
@@ -2145,6 +2167,7 @@ private:
     /// few raw objects whose original handle collides with a fixed structural
     /// literal. Empty by default (raw handles emitted verbatim).
     std::map<std::uint32_t, std::uint32_t> m_handleRemap;
+    bool m_dxfHandleRemapInputRejected{false};
     // Consumer-derived BLOCK_RECORD mappings live for one write attempt and
     // never overwrite the caller-owned setHandleRemap map above.
     std::map<std::uint32_t, std::uint32_t> m_dxfWriteHandleRemap;

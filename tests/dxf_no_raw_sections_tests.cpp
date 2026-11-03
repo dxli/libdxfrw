@@ -4,10 +4,12 @@
 #include "intern/dxfparserlimits.h"
 #include "test_scratch.h"
 #include <cstdio>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -157,6 +159,24 @@ int main() {
     if (!boundedCodec.write(&boundedAdapter, DRW::AC1027, binary) ||
         read(path) == "sentinel")
       return 14;
+  }
+  std::map<std::uint32_t, std::uint32_t> oversizedHandleRemap;
+  for (std::uint32_t index = 0u; index < 100001u; ++index)
+    oversizedHandleRemap.emplace(0x10000000u + index,
+                                 0x20000000u + index);
+  for (bool binary : {false, true}) {
+    Bare boundedAdapter;
+    dxfRW boundedCodec(path.c_str());
+    boundedAdapter.codec = &boundedCodec;
+    boundedCodec.setHandleRemap(oversizedHandleRemap);
+    sentinel(path);
+    if (boundedCodec.write(&boundedAdapter, DRW::AC1027, binary) ||
+        read(path) != "sentinel")
+      return 15;
+    boundedCodec.setHandleRemap({{0xA500u, 0xA501u}});
+    if (!boundedCodec.write(&boundedAdapter, DRW::AC1027, binary) ||
+        read(path) == "sentinel")
+      return 16;
   }
   Bare b;
   dxfRW c(path.c_str());

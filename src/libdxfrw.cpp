@@ -4578,6 +4578,14 @@ bool dxfRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
             "resolved DXF write references exceeded the bounded setter limit");
         return setError(DRW::BAD_OPEN);
     }
+    if (m_dxfHandleRemapInputRejected) {
+        recordOperationDiagnostic(
+            DRW::OperationPhase::Validation,
+            DRW::OperationCause::ResourceLimit,
+            "dxf-handle-remap-budget",
+            "DXF handle remap exceeded the bounded setter limit");
+        return setError(DRW::BAD_OPEN);
+    }
     if (version < DRW::AC1014 && m_generatedNodSource) {
         recordOperationDiagnostic(DRW::OperationPhase::Validation,
             DRW::OperationCause::ValidationFailure,
