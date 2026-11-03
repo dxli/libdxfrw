@@ -2326,10 +2326,13 @@ void testSectionManagerReferenceRemapping(TestContext& t) {
             writer.version = DRW::AC1032;
             writer.binFile = binary;
             writer.setHandleRemap({{0x600u, 0xA600u},
+                                   {0x700u, 0xA700u},
                                    {0x800u, 0xB800u},
                                    {0x810u, 0xB810u}});
             if (useResolver) {
                 writer.setReferenceResolver([](std::uint32_t source) {
+                    if (source == 0x600u)
+                        return 0xA600u;
                     if (source == 0x800u)
                         return 0xC800u;
                     if (source == 0x810u)
@@ -2361,6 +2364,8 @@ void testSectionManagerReferenceRemapping(TestContext& t) {
             std::string recordName;
             bool inManagerSubclass = false;
             bool ended = false;
+            std::uint32_t managerIdentity = 0u;
+            std::uint32_t managerOwner = 0u;
             std::int32_t sectionCount = -1;
             std::vector<std::uint32_t> sectionHandles;
             int code = 0;
@@ -2372,6 +2377,11 @@ void testSectionManagerReferenceRemapping(TestContext& t) {
                         ended = true;
                         break;
                     }
+                } else if (recordName == "SECTIONMANAGER" && code == 5) {
+                    managerIdentity = reader->getHandleString();
+                } else if (recordName == "SECTIONMANAGER"
+                           && !inManagerSubclass && code == 330) {
+                    managerOwner = reader->getHandleString();
                 } else if (recordName == "SECTIONMANAGER" && code == 100) {
                     inManagerSubclass = reader->getString()
                         == "AcDbSectionManager";
@@ -2386,7 +2396,8 @@ void testSectionManagerReferenceRemapping(TestContext& t) {
             const std::vector<std::uint32_t> expected = useResolver
                 ? std::vector<std::uint32_t>{0xC800u, 0xC810u}
                 : std::vector<std::uint32_t>{0xB800u, 0xB810u};
-            t.expect(written && ended && sectionCount == 2
+            t.expect(written && ended && managerIdentity == 0xA700u
+                         && managerOwner == 0xA600u && sectionCount == 2
                          && sectionHandles == expected,
                      useResolver
                          ? "SECTIONMANAGER section pointers use final resolver identities"
@@ -2453,7 +2464,23 @@ void testSectionManagerReferenceRemapping(TestContext& t) {
         DRW_Section retry = malformed;
         retry.m_sectionCount = 2;
         const bool retried = retryWriter.writeSection(&retry, "SECTIONMANAGER");
-        t.expect(retried,
+        std::istringstream retryInput(retryOutput.str());
+        std::unique_ptr<dxfReader> retryReader = binary
+            ? std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderBinary>(&retryInput))
+            : std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderAscii>(&retryInput));
+        std::string retryRecordName;
+        std::uint32_t retryIdentity = 0u;
+        int retryCode = 0;
+        while (retryReader->readRec(&retryCode)) {
+            if (retryCode == 0)
+                retryRecordName = retryReader->getString();
+            else if (retryRecordName == "SECTIONMANAGER" && retryCode == 5)
+                retryIdentity = retryReader->getHandleString();
+        }
+        t.expect(retried && retryIdentity != 0u
+                     && retryIdentity != DRW::NoHandle,
                  "SECTIONMANAGER corrected fresh-writer retry succeeds");
     }
 }
@@ -2465,11 +2492,15 @@ void testSectionSettingsReferenceRemapping(TestContext& t) {
             dxfRW writer("");
             writer.version = DRW::AC1032;
             writer.binFile = binary;
-            writer.setHandleRemap({{0x800u, 0xB800u},
+            writer.setHandleRemap({{0x600u, 0xA600u},
+                                   {0x800u, 0xB800u},
                                    {0x810u, 0xB810u},
-                                   {0x820u, 0xB820u}});
+                                   {0x820u, 0xB820u},
+                                   {0x900u, 0xA900u}});
             if (useResolver) {
                 writer.setReferenceResolver([](std::uint32_t source) {
+                    if (source == 0x600u)
+                        return 0xA600u;
                     if (source == 0x800u)
                         return 0xC800u;
                     if (source == 0x810u)
@@ -2512,6 +2543,8 @@ void testSectionSettingsReferenceRemapping(TestContext& t) {
             std::string recordName;
             bool inSectionType = false;
             bool ended = false;
+            std::uint32_t settingsIdentity = 0u;
+            std::uint32_t settingsOwner = 0u;
             std::int32_t sourceCount = -1;
             std::vector<std::uint32_t> sourceHandles;
             std::vector<std::uint32_t> destinationHandles;
@@ -2524,6 +2557,11 @@ void testSectionSettingsReferenceRemapping(TestContext& t) {
                         ended = true;
                         break;
                     }
+                } else if (recordName == "SECTIONSETTINGS" && code == 5) {
+                    settingsIdentity = reader->getHandleString();
+                } else if (recordName == "SECTIONSETTINGS"
+                           && !inSectionType && code == 330) {
+                    settingsOwner = reader->getHandleString();
                 } else if (recordName == "SECTIONSETTINGS" && code == 1) {
                     inSectionType = reader->getString()
                         == "SectionTypeSettings";
@@ -2543,7 +2581,8 @@ void testSectionSettingsReferenceRemapping(TestContext& t) {
                 : std::vector<std::uint32_t>{0xB800u, 0xB810u};
             const std::vector<std::uint32_t> expectedDestination = {
                 useResolver ? 0xC820u : 0xB820u};
-            t.expect(written && ended && sourceCount == 2
+            t.expect(written && ended && settingsIdentity == 0xA900u
+                         && settingsOwner == 0xA600u && sourceCount == 2
                          && sourceHandles == expectedSources
                          && destinationHandles == expectedDestination,
                      useResolver

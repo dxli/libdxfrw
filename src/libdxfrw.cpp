@@ -33679,7 +33679,7 @@ bool dxfRW::writeRenderSettings(DRW_RenderSettings *ent,
 }
 
 bool dxfRW::writeSection(DRW_Section *ent, const char *recordName) {
-    if (!preflightTableEntry(ent))
+    if (!preflightTableEntry(ent) || writer == nullptr)
         return false;
     if (recordName == nullptr || *recordName == '\0')
         return failDxfWrite();
@@ -33793,8 +33793,22 @@ bool dxfRW::writeSection(DRW_Section *ent, const char *recordName) {
                 return failDxfWrite();
         }
     }
+
+    const std::uint32_t sourceHandle = ent->handle;
+    std::uint32_t emittedHandle = 0u;
+    RecordStateScope state(*this, ent);
+    if (sourceHandle != 0u && sourceHandle != DRW::NoHandle) {
+        emittedHandle = remapObjectHandle(sourceHandle);
+        if (emittedHandle == 0u || emittedHandle == DRW::NoHandle
+            || isDxfFixedOutputHandle(emittedHandle)
+            || !reserveHandle(emittedHandle))
+            return failDxfWrite();
+    } else if (!allocateDxfHandle(emittedHandle)) {
+        return false;
+    }
+    DxfWriterRecordScope record(*writer);
     writer->writeString(0, recordName);
-    writer->writeString(5, toHexStr(ent->handle));
+    writer->writeString(5, toHexStr(emittedHandle));
     if (!writeTableEntryAppData(*ent))
         return false;
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
@@ -33865,7 +33879,13 @@ bool dxfRW::writeSection(DRW_Section *ent, const char *recordName) {
     }
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    if (writer->hasWriteError() || !preflightDxfWrite()
+        || ((sourceHandle != 0u && sourceHandle != DRW::NoHandle)
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit())
+        return failDxfWrite();
+    state.commit();
+    return true;
 }
 
 bool dxfRW::writeDbColor(DRW_DbColor *ent, const char *recordName) {

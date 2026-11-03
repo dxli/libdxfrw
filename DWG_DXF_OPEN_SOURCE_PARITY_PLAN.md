@@ -182,6 +182,14 @@ engines.
    The DXF schema establishes the pointer roles, but not source target
    existence, owner validity, complete SECTIONOBJECT/SECTIONSETTINGS graph
    closure, or native section-generation semantics.
+   SECTIONMANAGER/SECTIONSETTINGS record identities now follow the source
+   handle remap, reserve their emitted ID, and bind valid source object IDs after
+   successful publication; newly authored no-source records receive an
+   allocated identity. Generated ASCII/Binary checks verify group-5 record IDs,
+   common owner group 330, and the body-reference projections
+   ([receipt](docs/research/p4-section-record-identity-remapping-2026-11-03.json)).
+   This does not prove that all section objects are emitted or close source-owner
+   and generation-semantic gates.
    SUNSTUDY, MOTIONPATH, and ACDBCURVEPATH modeled links now also refuse
    unresolved nonzero output IDs before publishing records. Their low-level
    record scopes cover common-owner and write failures; generated ASCII/Binary
