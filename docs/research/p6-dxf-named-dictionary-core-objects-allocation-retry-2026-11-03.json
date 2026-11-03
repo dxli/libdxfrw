@@ -1,0 +1,61 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-dxf-named-dictionary-core-objects-allocation-retry-2026-11-03",
+  "date": "2026-11-03",
+  "status": "COMPLETED_LOCAL_TRANSACTION_ROLLBACK_CONTROL",
+  "supportClaimEffect": "none",
+  "scope": "Verify core OBJECTS rollback and same-writer retry when allocation fails during output of a rooted named DICTIONARY.",
+  "source": {
+    "parentCommit": "ce330bf1",
+    "files": {
+      "src/libdxfrw.cpp": "5751845b6b6ca893c3102694957d3320ea112cffaeb811e42ff7e8c767e9776c",
+      "src/libdxfrw.h": "54af5f45476a14c6046ddaed33ef290c0779eaa02c2eb2ac6141d5f6101a36d3",
+      "tests/dxf_fixture_tests.cpp": "f71ea74a8e162a22654db99f3484782f32f0998d1c5f93a00dad093bbde12425",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "be58075f737fa96b480eedb3098cf23d82fb4ae3d51de81d51f4addc0e5a8aa9"
+    }
+  },
+  "implementation": {
+    "files": [
+      "tests/dxf_fixture_tests.cpp",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md"
+    ],
+    "behavior": [
+      "The generated source graph roots named DICTIONARY handle E000 from the NOD and gives it one GROUP_DICTIONARY target; the default core writer emits the named dictionary in OBJECTS.",
+      "ASCII and Binary controls measure the successful empty OBJECTS baseline and the named-dictionary path, then inject a one-shot allocation failure at the final allocation before the adapter OBJECTS callback.",
+      "The failure occurs before the adapter callback. Whole-file publication preserves a pre-existing sentinel, and derived written-object identities are empty after rollback.",
+      "The same writer retries without the injection. Fresh typed DXF import verifies dictionary handle E000, owner C, and its GROUP_ALIAS entry to handle D.",
+      "The allocator disarms at the first injected failure to avoid cascading failures during error handling. No repository DWG/DXF fixtures are added and no support claim is established."
+    ]
+  },
+  "validation": {
+    "normalBuild": {
+      "command": "cmake --build build-gcc --target libdxfrw_dxf_fixture_tests -j4",
+      "result": "PASS"
+    },
+    "normalFocused": {
+      "command": "ctest --test-dir build-gcc --output-on-failure -R '^libdxfrw_image_definition_plan_failure_retry$'",
+      "result": "PASS 1/1; 0.56 seconds",
+      "coverage": "The selector runs callback rollback controls plus the calibrated core IMAGEDEF and rooted named-dictionary allocation failures, destination preservation, identity rollback, same-writer retries, and typed readbacks in ASCII and Binary."
+    },
+    "asanBuild": {
+      "command": "cmake --build build-asan-custom --target libdxfrw_dxf_fixture_tests -j4",
+      "result": "PASS"
+    },
+    "asanFocused": {
+      "command": "ctest --test-dir build-asan-custom --output-on-failure -R '^libdxfrw_image_definition_plan_failure_retry$'",
+      "result": "PASS 1/1; 1.13 seconds"
+    },
+    "namedDictionaryAllocationCalibration": {
+      "result": "PASS in ASCII and Binary DXF",
+      "method": "The test measures the empty OBJECTS baseline and named-dictionary path per encoding, requires additional allocations for the named path, and injects at the final measured allocation before the callback. Exactly one failure is observed and the callback is not reached."
+    },
+    "diffCheck": "PASS",
+    "repositoryFixturesAdded": 0
+  },
+  "limitations": [
+    "This covers one rooted named-dictionary profile and the IMAGEDEF path; other independent core OBJECTS builders and staged families remain open.",
+    "Allocation failures normalized by bounded helpers may report generic emit-failure rather than allocation-failure; this control proves atomic rollback and retry.",
+    "Generated transport evidence does not qualify physical producer breadth, native consumer semantics, or independent interoperability."
+  ],
+  "next": "Exercise allocation and rollback in remaining core OBJECTS builders, then continue source lifetime, platform numeric/string policy, and scoped concurrency audits."
+}

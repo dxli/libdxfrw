@@ -16424,11 +16424,11 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
     }
 
     // Calibrate the successful core OBJECTS path, then fail its final
-    // allocation before the adapter callback.  The no-image run supplies the
-    // common section/OBJECTS allocation count; the image run adds the generated
-    // IMAGEDEF dictionary and IMAGEDEF records.  A last-allocation failure in
-    // that run therefore unwinds the core record scope before publication.
-    class CoreImageAllocationWriter final : public dx_iface {
+    // allocation before the adapter callback. The empty run supplies the
+    // common section/OBJECTS allocation count; each object-family run adds
+    // either the IMAGEDEF graph or a rooted named dictionary. A last-allocation
+    // failure in either run unwinds the core record scope before publication.
+    class CoreObjectsAllocationWriter final : public dx_iface {
     public:
         void writeEntities() override {
             image = DRW_Image{};
@@ -16467,11 +16467,25 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
         std::ifstream input(corePath, std::ios::binary);
         return std::string(std::istreambuf_iterator<char>(input), {});
     };
-    const auto measureObjectAllocations = [&](bool emitImage, bool binary,
+    const auto installNamedDictionary = [](dxfRW& writer) {
+        using Edge = DRW_Dictionary::Entry::DxfHandleCode;
+        DRW_Dictionary dictionary;
+        dictionary.handle = 0xE000u;
+        dictionary.parentHandle = 0xCu;
+        dictionary.m_entries.push_back(
+            {"GROUP_ALIAS", 0xDu, Edge::SoftOwner});
+        std::vector<DRW_Dictionary> dictionaries;
+        dictionaries.push_back(std::move(dictionary));
+        writer.setRootDictEntries({{"TEST_DICT", "E000"}});
+        writer.setNamedDictObjects(std::move(dictionaries));
+    };
+    const auto measureObjectAllocations = [&](bool emitImage,
+                                               bool emitNamedDictionary,
+                                               bool binary,
                                                long& allocations) {
         constexpr long kAllocationProbe = 1000000L;
         dx_data data;
-        CoreImageAllocationWriter adapter;
+        CoreObjectsAllocationWriter adapter;
         adapter.cData = &data;
         adapter.currentBlock = data.mBlock;
         adapter.emitImage = emitImage;
@@ -16479,6 +16493,8 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
         adapter.objectAllocationCountdown = kAllocationProbe;
         dxfRW writer(coreFilename.c_str());
         adapter.dxfW = &writer;
+        if (emitNamedDictionary)
+            installNamedDictionary(writer);
         const bool written = writer.write(&adapter, DRW::AC1027, binary);
         materialAllocationCountdown = -1;
         const bool reachedCallback = adapter.objectsCallbackReached
@@ -16495,9 +16511,9 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
         long baselineAllocations = 0L;
         long imageAllocations = 0L;
         const bool baselineMeasured = measureObjectAllocations(
-            false, binary, baselineAllocations);
+            false, false, binary, baselineAllocations);
         const bool imageMeasured = measureObjectAllocations(
-            true, binary, imageAllocations);
+            true, false, binary, imageAllocations);
         const long imageOnlyAllocations = imageAllocations
             - baselineAllocations;
         const long failAt = imageAllocations - 1L;
@@ -16510,7 +16526,7 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
             sentinel << "core OBJECTS allocation sentinel\n";
         }
         dx_data data;
-        CoreImageAllocationWriter adapter;
+        CoreObjectsAllocationWriter adapter;
         adapter.cData = &data;
         adapter.currentBlock = data.mBlock;
         adapter.emitImage = true;
@@ -16567,6 +16583,85 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
                      ? "binary core OBJECTS allocation failure accepts same-writer retry and typed image readback"
                      : "ASCII core OBJECTS allocation failure accepts same-writer retry and typed image readback");
         adapter.dxfW = nullptr;
+
+        long namedDictionaryAllocations = 0L;
+        const bool namedDictionaryMeasured = measureObjectAllocations(
+            false, true, binary, namedDictionaryAllocations);
+        const long namedDictionaryOnlyAllocations =
+            namedDictionaryAllocations - baselineAllocations;
+        const long namedDictionaryFailAt = namedDictionaryAllocations - 1L;
+        const bool namedDictionaryCalibrated = baselineMeasured
+            && namedDictionaryMeasured
+            && namedDictionaryOnlyAllocations > 2L
+            && namedDictionaryFailAt >= 0L;
+        const auto namedPath = directory / "named-dictionary-allocation.dxf";
+        const std::string namedFilename = namedPath.string();
+        const auto namedContents = [&namedPath]() {
+            std::ifstream input(namedPath, std::ios::binary);
+            return std::string(std::istreambuf_iterator<char>(input), {});
+        };
+        {
+            std::ofstream sentinel(namedPath,
+                                   std::ios::binary | std::ios::trunc);
+            sentinel << "named dictionary allocation sentinel\n";
+        }
+        dx_data namedData;
+        CoreObjectsAllocationWriter namedAdapter;
+        namedAdapter.cData = &namedData;
+        namedAdapter.currentBlock = namedData.mBlock;
+        namedAdapter.armObjectAllocation = true;
+        namedAdapter.objectAllocationCountdown = namedDictionaryFailAt;
+        dxfRW namedWriter(namedFilename.c_str());
+        namedAdapter.dxfW = &namedWriter;
+        installNamedDictionary(namedWriter);
+        const std::size_t namedFailuresBefore = materialFailedAllocations;
+        const bool namedFailed = namedDictionaryCalibrated
+            && !namedWriter.write(&namedAdapter, DRW::AC1027, binary);
+        materialAllocationCountdown = -1;
+        const DRW_OperationDiagnostic namedDiagnostic =
+            namedWriter.getLastDiagnostic();
+        const bool namedAllocationReported =
+            (namedDiagnostic.phase == DRW::OperationPhase::Allocation
+                 && namedDiagnostic.code == "allocation-failure")
+            || (namedDiagnostic.phase == DRW::OperationPhase::Emit
+                && namedDiagnostic.code == "emit-failure");
+        const bool namedRolledBack = namedFailed
+            && !namedAdapter.objectsCallbackReached
+            && materialFailedAllocations == namedFailuresBefore + 1u
+            && namedAllocationReported
+            && namedContents()
+                == "named dictionary allocation sentinel\n"
+            && namedWriter.getWritingContext()
+                ->sourceHandleToWrittenObjectMap.empty();
+        namedAdapter.armObjectAllocation = false;
+        namedAdapter.objectsCallbackReached = false;
+        const bool namedRetried = namedRolledBack
+            && namedWriter.write(&namedAdapter, DRW::AC1027, binary)
+            && namedAdapter.objectsCallbackReached
+            && namedWriter.getError() == DRW::BAD_NONE;
+        dx_data namedDecoded;
+        dx_iface namedReader;
+        const bool namedReadBack = namedRetried
+            && namedReader.fileImport(namedFilename, &namedDecoded, false);
+        const auto namedOutput = std::find_if(
+            namedDecoded.dictionaries.begin(), namedDecoded.dictionaries.end(),
+            [](const DRW_Dictionary& dictionary) {
+                return dictionary.handle == 0xE000u
+                    && dictionary.parentHandle == 0xCu
+                    && dictionary.m_entries.size() == 1u
+                    && dictionary.m_entries.front().m_name == "GROUP_ALIAS"
+                    && dictionary.m_entries.front().m_handle == 0xDu;
+            });
+        t.expect(namedDictionaryCalibrated && namedRolledBack,
+                 binary
+                     ? "binary core named-dictionary allocation failure rolls back staged OBJECTS and identities"
+                     : "ASCII core named-dictionary allocation failure rolls back staged OBJECTS and identities");
+        t.expect(namedReadBack
+                     && namedOutput != namedDecoded.dictionaries.end(),
+                 binary
+                     ? "binary core named-dictionary allocation failure accepts same-writer retry and typed readback"
+                     : "ASCII core named-dictionary allocation failure accepts same-writer retry and typed readback");
+        namedAdapter.dxfW = nullptr;
     }
 }
 
