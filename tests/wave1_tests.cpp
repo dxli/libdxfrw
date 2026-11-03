@@ -3590,6 +3590,63 @@ void testVportReferenceRemapping(TestContext& t) {
                          : "VPORT fields emit source-handle remaps");
         }
     }
+
+    for (const bool binary : {false, true}) {
+        for (const std::uint32_t unresolved : {
+                 0x911u, 0x912u, 0x913u, 0x914u, 0x915u}) {
+            std::ostringstream failedOutput;
+            dxfRW failedOwner("");
+            failedOwner.version = DRW::AC1032;
+            failedOwner.binFile = binary;
+            failedOwner.setResolvedBackgroundHandles({0x911u});
+            failedOwner.setResolvedSunHandles({0x915u});
+            failedOwner.setReferenceResolver(
+                [unresolved](std::uint32_t source) {
+                    return source == unresolved ? 0u : source;
+                });
+            failedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&failedOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&failedOutput));
+            DRW_Vport failedVport;
+            failedVport.handle = 0xA100u;
+            failedVport.name = "VIEWPORT_TEST";
+            failedVport.backgroundHandle = 0x911u;
+            failedVport.namedUcsHandle = 0x912u;
+            failedVport.baseUcsHandle = 0x913u;
+            failedVport.ucsOrthoType = 1;
+            failedVport.visualStyleHandle = 0x914u;
+            failedVport.m_sunHandle = 0x915u;
+            t.expect(!failedOwner.writeVport(&failedVport)
+                         && failedOutput.str().empty(),
+                     "unresolved VPORT reference preserves destination");
+
+            std::ostringstream retryOutput;
+            dxfRW retryOwner("");
+            retryOwner.version = DRW::AC1032;
+            retryOwner.binFile = binary;
+            retryOwner.setResolvedBackgroundHandles({0x911u});
+            retryOwner.setResolvedSunHandles({0x915u});
+            retryOwner.setReferenceResolver(resolverValue);
+            retryOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&retryOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&retryOutput));
+            DRW_Vport correctedVport;
+            correctedVport.handle = 0xA100u;
+            correctedVport.name = "VIEWPORT_TEST";
+            correctedVport.backgroundHandle = 0x911u;
+            correctedVport.namedUcsHandle = 0x912u;
+            correctedVport.baseUcsHandle = 0x913u;
+            correctedVport.ucsOrthoType = 1;
+            correctedVport.visualStyleHandle = 0x914u;
+            correctedVport.m_sunHandle = 0x915u;
+            t.expect(retryOwner.writeVport(&correctedVport),
+                     "VPORT accepts corrected fresh-writer retry");
+        }
+    }
 }
 
 void testViewReferenceRemapping(TestContext& t) {

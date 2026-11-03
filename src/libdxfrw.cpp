@@ -6477,6 +6477,39 @@ bool dxfRW::writeVport(DRW_Vport *ent){
         return m_referenceResolver ? resolveReference(source)
                                    : remapObjectHandle(source);
     };
+    const std::uint32_t emittedNamedUcsHandle =
+        version > DRW::AC1014 && ent->namedUcsHandle != 0u
+            ? emittedReference(ent->namedUcsHandle) : 0u;
+    const std::uint32_t emittedBaseUcsHandle =
+        version > DRW::AC1014 && ent->baseUcsHandle != 0u
+            ? emittedReference(ent->baseUcsHandle) : 0u;
+    const std::uint32_t emittedBackgroundHandle =
+        version > DRW::AC1018 && ent->backgroundHandle != 0u
+            ? emittedReference(ent->backgroundHandle) : 0u;
+    const std::uint32_t emittedVisualStyleHandle =
+        version > DRW::AC1018 && ent->visualStyleHandle != 0u
+            ? emittedReference(ent->visualStyleHandle) : 0u;
+    const std::uint32_t emittedSunHandle =
+        version > DRW::AC1018 && ent->m_sunHandle != 0u
+            ? emittedReference(ent->m_sunHandle) : 0u;
+    const auto isResolvedOptional = [](std::uint32_t source,
+                                       std::uint32_t emitted) {
+        return source == 0u
+            || (source != DRW::NoHandle && emitted != 0u
+                && emitted != DRW::NoHandle);
+    };
+    if ((version > DRW::AC1014
+         && (!isResolvedOptional(ent->namedUcsHandle,
+                                 emittedNamedUcsHandle)
+             || !isResolvedOptional(ent->baseUcsHandle,
+                                    emittedBaseUcsHandle)))
+        || (version > DRW::AC1018
+            && (!isResolvedOptional(ent->backgroundHandle,
+                                    emittedBackgroundHandle)
+                || !isResolvedOptional(ent->visualStyleHandle,
+                                       emittedVisualStyleHandle)
+                || !isResolvedOptional(ent->m_sunHandle, emittedSunHandle))))
+        return failDxfWrite();
     RecordStateScope state(*this, ent);
     DxfWriterRecordScope record(*writer);
     const std::string emittedName = !dimstyleStd ? "*ACTIVE" : ent->name;
@@ -6567,11 +6600,9 @@ bool dxfRW::writeVport(DRW_Vport *ent){
         writer->writeInt16(79, ent->ucsOrthoType);
         writer->writeDouble(146, ent->ucsElevation);
         if (ent->namedUcsHandle != 0)
-            writer->writeString(345, toHexStr(
-                emittedReference(ent->namedUcsHandle)));
+            writer->writeString(345, toHexStr(emittedNamedUcsHandle));
         if (ent->baseUcsHandle != 0)
-            writer->writeString(346, toHexStr(
-                emittedReference(ent->baseUcsHandle)));
+            writer->writeString(346, toHexStr(emittedBaseUcsHandle));
         if (version > DRW::AC1018) {
             writer->writeInt16(60, ent->gridBehavior);
             writer->writeInt16(61, ent->gridMajorLines);
@@ -6585,19 +6616,16 @@ bool dxfRW::writeVport(DRW_Vport *ent){
             if (!ent->ambientColorName.empty())
                 writer->writeUtf8String(431, ent->ambientColorName);
             if (ent->backgroundHandle != 0)
-                writer->writeString(332, toHexStr(
-                    emittedReference(ent->backgroundHandle)));
+                writer->writeString(332, toHexStr(emittedBackgroundHandle));
             if (ent->hasDxfShadePlotMode || ent->shadePlotMode != 0)
                 writer->writeInt16(170, ent->shadePlotMode);
             if (ent->hasDxfShadePlotHandle || ent->shadePlotHandle != 0)
                 writer->writeString(333, toHexStr(
                     remapObjectHandle(ent->shadePlotHandle)));
             if (ent->visualStyleHandle != 0)
-                writer->writeString(348, toHexStr(
-                    emittedReference(ent->visualStyleHandle)));
+                writer->writeString(348, toHexStr(emittedVisualStyleHandle));
             if (ent->m_sunHandle != 0)
-                writer->writeString(361, toHexStr(
-                    emittedReference(ent->m_sunHandle)));
+                writer->writeString(361, toHexStr(emittedSunHandle));
     }
     }
     bool result = !writer->hasWriteError();
