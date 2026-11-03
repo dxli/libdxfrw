@@ -33684,6 +33684,29 @@ bool dxfRW::writeSection(DRW_Section *ent, const char *recordName) {
         return false;
     if (recordName == nullptr || *recordName == '\0')
         return failDxfWrite();
+    std::vector<std::uint32_t> emittedSectionHandles;
+    if (ent->m_kind == DRW_Section::Manager) {
+        if (ent->m_sectionCount < 0
+            || ent->m_sectionCount > DRW_Section::kMaxSectionCount
+            || ent->m_sectionHandles.size()
+                != static_cast<std::size_t>(ent->m_sectionCount))
+            return failDxfWrite();
+        try {
+            emittedSectionHandles.reserve(ent->m_sectionHandles.size());
+            for (const std::uint32_t sourceHandle : ent->m_sectionHandles) {
+                if (sourceHandle == 0u || sourceHandle == DRW::NoHandle)
+                    return failDxfWrite();
+                const std::uint32_t emittedHandle = m_referenceResolver
+                    ? resolveReference(sourceHandle)
+                    : remapObjectHandle(sourceHandle);
+                if (emittedHandle == 0u || emittedHandle == DRW::NoHandle)
+                    return failDxfWrite();
+                emittedSectionHandles.push_back(emittedHandle);
+            }
+        } catch (...) {
+            return failDxfWrite();
+        }
+    }
     const auto geometryColorIsProjectable = [](
             const DRW_SectionGeometrySettings& geometry) {
         const std::int32_t scalar = geometry.m_color;
@@ -33732,9 +33755,8 @@ bool dxfRW::writeSection(DRW_Section *ent, const char *recordName) {
         writer->writeString(100, "AcDbSectionManager");
         writer->writeInt16(70, ent->m_isLive ? 1 : 0);
         writer->writeInt32(90, ent->m_sectionCount);
-        for (std::uint32_t handle : ent->m_sectionHandles)
-            if (handle != 0)
-                writer->writeString(330, toHexStr(handle));
+        for (const std::uint32_t handle : emittedSectionHandles)
+            writer->writeString(330, toHexStr(handle));
     } else {
         writer->writeString(100, "AcDbSectionSettings");
         if (ent->m_types.empty()) {

@@ -163,6 +163,15 @@ engines.
    ([receipt](docs/research/p4-sectionobject-settings-reference-remapping-2026-11-03.json)).
    This does not qualify source binding, target ownership/existence, or section
    semantics.
+   SECTIONMANAGER's repeated group-330 soft pointers now use final resolver
+   identities, with source-handle-remap fallback; output rejects invalid target
+   IDs and a section-count/list mismatch before publication. Generated
+   ASCII/Binary controls distinguish the list from common owner/reactor group
+   330s and cover mapping, refusal, and fresh-writer retry
+   ([receipt](docs/research/p4-sectionmanager-section-pointer-remapping-2026-11-03.json)).
+   Autodesk documents these list entries as pointers to section entities, but
+   source binding, target existence/owner, and complete graph closure remain
+   unqualified.
    SUNSTUDY, MOTIONPATH, and ACDBCURVEPATH modeled links now also refuse
    unresolved nonzero output IDs before publishing records. Their low-level
    record scopes cover common-owner and write failures; generated ASCII/Binary

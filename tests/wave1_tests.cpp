@@ -2314,6 +2314,146 @@ void testBlockRecordInsertReferenceRemapping(TestContext& t) {
     }
 }
 
+void testSectionManagerReferenceRemapping(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW writer("");
+            writer.version = DRW::AC1032;
+            writer.binFile = binary;
+            writer.setHandleRemap({{0x600u, 0xA600u},
+                                   {0x800u, 0xB800u},
+                                   {0x810u, 0xB810u}});
+            if (useResolver) {
+                writer.setReferenceResolver([](std::uint32_t source) {
+                    if (source == 0x800u)
+                        return 0xC800u;
+                    if (source == 0x810u)
+                        return 0xC810u;
+                    return source;
+                });
+            }
+            writer.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_Section manager;
+            manager.handle = 0x700u;
+            manager.parentHandle = 0x600u;
+            manager.m_kind = DRW_Section::Manager;
+            manager.m_sectionCount = 2;
+            manager.m_sectionHandles = {0x800u, 0x810u};
+            const bool written = writer.writeSection(&manager, "SECTIONMANAGER")
+                && writer.writer->writeString(0, "WIRE_END");
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderAscii>(&input));
+            std::string recordName;
+            bool inManagerSubclass = false;
+            bool ended = false;
+            std::int32_t sectionCount = -1;
+            std::vector<std::uint32_t> sectionHandles;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    inManagerSubclass = false;
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (recordName == "SECTIONMANAGER" && code == 100) {
+                    inManagerSubclass = reader->getString()
+                        == "AcDbSectionManager";
+                } else if (recordName == "SECTIONMANAGER"
+                           && inManagerSubclass && code == 90) {
+                    sectionCount = reader->getInt32();
+                } else if (recordName == "SECTIONMANAGER"
+                           && inManagerSubclass && code == 330) {
+                    sectionHandles.push_back(reader->getHandleString());
+                }
+            }
+            const std::vector<std::uint32_t> expected = useResolver
+                ? std::vector<std::uint32_t>{0xC800u, 0xC810u}
+                : std::vector<std::uint32_t>{0xB800u, 0xB810u};
+            t.expect(written && ended && sectionCount == 2
+                         && sectionHandles == expected,
+                     useResolver
+                         ? "SECTIONMANAGER section pointers use final resolver identities"
+                         : "SECTIONMANAGER section pointers use source-handle remaps");
+        }
+
+        for (const std::uint32_t unresolved : {
+                 0u, static_cast<std::uint32_t>(DRW::NoHandle)}) {
+            std::ostringstream rejectedOutput;
+            dxfRW rejectedWriter("");
+            rejectedWriter.version = DRW::AC1032;
+            rejectedWriter.binFile = binary;
+            rejectedWriter.setReferenceResolver(
+                [unresolved](std::uint32_t source) {
+                    return source == 0x810u ? unresolved : source;
+                });
+            rejectedWriter.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&rejectedOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&rejectedOutput));
+            rejectedWriter.writer->writeString(1, "PRESERVED_PREFIX");
+            const std::string before = rejectedOutput.str();
+            DRW_Section invalid;
+            invalid.handle = 0x700u;
+            invalid.m_kind = DRW_Section::Manager;
+            invalid.m_sectionCount = 2;
+            invalid.m_sectionHandles = {0x800u, 0x810u};
+            t.expect(!rejectedWriter.writeSection(&invalid, "SECTIONMANAGER")
+                         && rejectedOutput.str() == before,
+                     "SECTIONMANAGER refuses unresolved list targets before publication");
+        }
+
+        std::ostringstream malformedOutput;
+        dxfRW malformedWriter("");
+        malformedWriter.version = DRW::AC1032;
+        malformedWriter.binFile = binary;
+        malformedWriter.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&malformedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&malformedOutput));
+        DRW_Section malformed;
+        malformed.m_kind = DRW_Section::Manager;
+        malformed.m_sectionCount = 1;
+        malformed.m_sectionHandles = {0x800u, 0x810u};
+        t.expect(!malformedWriter.writeSection(&malformed, "SECTIONMANAGER")
+                     && malformedOutput.str().empty(),
+                 "SECTIONMANAGER count mismatch refuses before publication");
+
+        std::ostringstream retryOutput;
+        dxfRW retryWriter("");
+        retryWriter.version = DRW::AC1032;
+        retryWriter.binFile = binary;
+        retryWriter.setReferenceResolver([](std::uint32_t source) {
+            return source == 0x810u ? 0xC810u
+                : source == 0x800u ? 0xC800u : source;
+        });
+        retryWriter.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        DRW_Section retry = malformed;
+        retry.m_sectionCount = 2;
+        const bool retried = retryWriter.writeSection(&retry, "SECTIONMANAGER");
+        t.expect(retried,
+                 "SECTIONMANAGER corrected fresh-writer retry succeeds");
+    }
+}
+
 void testNavisworksDefinitionReferenceRemapping(TestContext& t) {
     for (const bool binary : {false, true}) {
         for (const bool useResolver : {false, true}) {
@@ -17871,6 +18011,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testBlockRecordInsertReferenceRemapping(focused);
         std::cout << "BLOCK_RECORD BLKREFS reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--section-manager-reference-remapping") {
+        TestContext focused;
+        testSectionManagerReferenceRemapping(focused);
+        std::cout << "SECTIONMANAGER reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
