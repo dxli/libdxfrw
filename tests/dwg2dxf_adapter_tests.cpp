@@ -19079,6 +19079,122 @@ bool sunStudyCallbackCaptureLimitsFailClosed() {
     return true;
 }
 
+bool lightListCallbackCaptureLimitsFailClosed() {
+    DRW_LightList lightList;
+    lightList.handle = 0xF201u;
+    lightList.parentHandle = 0xF2F0u;
+    lightList.name = "lighting-set";
+    lightList.reactorHandles.push_back(0xF202u);
+    lightList.m_classVersion = 3u;
+    lightList.m_lightCount = 2u;
+    lightList.m_lights = {
+        DRW_LightListEntry{0xA201u, "key-light"},
+        DRW_LightListEntry{0xA202u, "fill-light"}};
+
+    const std::size_t expectedBytes = sizeof(DRW_LightList)
+        + lightList.name.size() + 1u
+        + lightList.reactorHandles.size() * sizeof(std::uint32_t)
+        + lightList.m_lights.size() * sizeof(DRW_LightListEntry)
+        + lightList.m_lights[0].m_name.size() + 1u
+        + lightList.m_lights[1].m_name.size() + 1u
+        + dx_iface::LightListNodeBytes;
+
+    dx_data captured;
+    dx_iface receiver;
+    receiver.cData = &captured;
+    receiver.addLightList(lightList);
+    if (captured.lightListCaptureFailed
+        || captured.lightListRetainedRecords != 1u
+        || captured.lightListRetainedItems != lightList.m_lights.size()
+        || captured.lightListRetainedBytes != expectedBytes
+        || captured.lightLists.size() != 1u)
+        return fail("LIGHTLIST callback did not retain its bounded reference list");
+
+    const DRW_LightList& retained = captured.lightLists.front();
+    if (retained.handle != lightList.handle
+        || retained.parentHandle != lightList.parentHandle
+        || retained.name != lightList.name
+        || retained.reactorHandles != lightList.reactorHandles
+        || retained.m_classVersion != lightList.m_classVersion
+        || retained.m_lightCount != lightList.m_lightCount
+        || retained.m_lights.size() != lightList.m_lights.size()
+        || retained.m_lights[0].m_handle != lightList.m_lights[0].m_handle
+        || retained.m_lights[0].m_name != lightList.m_lights[0].m_name
+        || retained.m_lights[1].m_handle != lightList.m_lights[1].m_handle
+        || retained.m_lights[1].m_name != lightList.m_lights[1].m_name)
+        return fail("LIGHTLIST callback handles, names, or common metadata changed during retention");
+
+    dx_data recordLimited;
+    recordLimited.lightListRetainedRecords =
+        dx_iface::LightListCaptureMaxRecords - 1u;
+    dx_iface recordLimitedReceiver;
+    recordLimitedReceiver.cData = &recordLimited;
+    recordLimitedReceiver.addLightList(lightList);
+    recordLimitedReceiver.addLightList(lightList);
+    if (!recordLimited.lightListCaptureFailed
+        || recordLimited.lightListRetainedRecords
+            != dx_iface::LightListCaptureMaxRecords
+        || recordLimited.lightLists.size() != 1u)
+        return fail("LIGHTLIST exact record limit or sticky refusal changed");
+
+    dx_data itemLimited;
+    itemLimited.lightListRetainedItems =
+        dx_iface::LightListCaptureMaxItems - 1u;
+    dx_iface itemLimitedReceiver;
+    itemLimitedReceiver.cData = &itemLimited;
+    itemLimitedReceiver.addLightList(lightList);
+    if (!itemLimited.lightListCaptureFailed
+        || itemLimited.lightListRetainedRecords != 0u
+        || !itemLimited.lightLists.empty())
+        return fail("LIGHTLIST aggregate item limit admitted a partial callback");
+
+    dx_data byteLimited;
+    byteLimited.lightListRetainedBytes =
+        dx_iface::LightListCaptureMaxRetainedBytes - expectedBytes + 1u;
+    dx_iface byteLimitedReceiver;
+    byteLimitedReceiver.cData = &byteLimited;
+    byteLimitedReceiver.addLightList(lightList);
+    if (!byteLimited.lightListCaptureFailed
+        || byteLimited.lightListRetainedRecords != 0u
+        || byteLimited.lightListRetainedItems != 0u
+        || !byteLimited.lightLists.empty())
+        return fail("LIGHTLIST one-byte-over-budget admission retained data");
+
+    DRW_LightList invalidCount = lightList;
+    invalidCount.m_lightCount = DRW_LightList::kMaxLightCount + 1u;
+    dx_data invalid;
+    dx_iface invalidReceiver;
+    invalidReceiver.cData = &invalid;
+    invalidReceiver.addLightList(invalidCount);
+    if (!invalid.lightListCaptureFailed || !invalid.lightLists.empty())
+        return fail("LIGHTLIST callback exceeded its validated record-count bound");
+
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch().count();
+    const std::filesystem::path refusedOutput =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-lightlist-capture-refusal-"
+           + std::to_string(nonce) + ".dxf");
+    std::ostringstream diagnostics;
+    std::streambuf* previousErrorBuffer = std::cerr.rdbuf(diagnostics.rdbuf());
+    dx_iface refusingWriter;
+    const bool outputSucceeded = refusingWriter.fileExport(
+        refusedOutput.string(), DRW::AC1027, false, &byteLimited, true);
+    std::cerr.rdbuf(previousErrorBuffer);
+    const bool outputWasPublished = std::filesystem::exists(refusedOutput);
+    if (outputWasPublished) {
+        std::error_code ignored;
+        std::filesystem::remove(refusedOutput, ignored);
+    }
+    if (outputSucceeded || outputWasPublished
+        || diagnostics.str().find("LIGHTLIST callback capture")
+            == std::string::npos)
+        return fail("LIGHTLIST capture failure did not block output before publication");
+
+    std::cout << "bounded LIGHTLIST callback retention and limits pass; target/output qualification remains separate\n";
+    return true;
+}
+
 bool typedEntityCallbackCaptureLimitsFailClosed() {
     const auto sameClipPath = [](const std::vector<DRW_Coord>& lhs,
                                  const std::vector<DRW_Coord>& rhs) {
@@ -67918,6 +68034,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--sunstudy-callback-capture-limits")
         return sunStudyCallbackCaptureLimitsFailClosed() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--lightlist-callback-capture-limits")
+        return lightListCallbackCaptureLimitsFailClosed() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--hatch-mpolygon-runtime-dispatch")
         return hatchMPolygonRuntimeDispatchGuard() ? 0 : 1;

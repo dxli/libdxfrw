@@ -15062,6 +15062,59 @@ void retainSunStudy(dx_data* data, const DRW_SunStudy& study) noexcept {
     }
 }
 
+bool estimateLightListRetainedBytes(
+        const DRW_LightList& lightList, std::size_t& estimate) noexcept {
+    estimate = sizeof(DRW_LightList);
+    if (lightList.m_lightCount > DRW_LightList::kMaxLightCount
+        || lightList.m_lights.size() > DRW_LightList::kMaxLightCount
+        || !addTableEntryRetainedBytes(lightList, estimate)
+        || !addVectorPayloadBytes(lightList.m_lights, estimate))
+        return false;
+    for (const DRW_LightListEntry& light : lightList.m_lights) {
+        if (!addStringPayloadBytes(light.m_name, estimate))
+            return false;
+    }
+    return true;
+}
+
+void retainLightList(dx_data* data, const DRW_LightList& lightList) noexcept {
+    if (data == nullptr || data->lightListCaptureFailed)
+        return;
+    if (data->lightListRetainedRecords
+        >= dx_iface::LightListCaptureMaxRecords
+        || data->lightListRetainedItems
+            > dx_iface::LightListCaptureMaxItems
+        || lightList.m_lights.size()
+            > dx_iface::LightListCaptureMaxItems
+                - data->lightListRetainedItems) {
+        data->lightListCaptureFailed = true;
+        return;
+    }
+
+    std::size_t estimatedBytes = 0u;
+    if (!estimateLightListRetainedBytes(lightList, estimatedBytes)
+        || estimatedBytes > dx_iface::LightListCaptureMaxRetainedBytes
+                - dx_iface::LightListNodeBytes
+        || data->lightListRetainedBytes
+            > dx_iface::LightListCaptureMaxRetainedBytes
+        || estimatedBytes + dx_iface::LightListNodeBytes
+            > dx_iface::LightListCaptureMaxRetainedBytes
+                - data->lightListRetainedBytes) {
+        data->lightListCaptureFailed = true;
+        return;
+    }
+
+    estimatedBytes += dx_iface::LightListNodeBytes;
+    try {
+        data->lightLists.push_back(lightList);
+        ++data->lightListRetainedRecords;
+        data->lightListRetainedItems += lightList.m_lights.size();
+        data->lightListRetainedBytes += estimatedBytes;
+    } catch (...) {
+        data->lightListCaptureFailed = true;
+    }
+}
+
 template <typename T>
 bool addNestedVectorPayloadBytes(
         const std::vector<std::vector<T>>& values,
@@ -55800,6 +55853,10 @@ void dx_iface::addSunStudy(const DRW_SunStudy& data) {
     retainSunStudy(cData, data);
 }
 
+void dx_iface::addLightList(const DRW_LightList& data) {
+    retainLightList(cData, data);
+}
+
 void dx_iface::addRenderSettings(const DRW_RenderSettings& data) {
     observeRenderingInput(&data,nullptr);
     if (cData == nullptr || cData->renderSettingsCaptureFailed)
@@ -72275,6 +72332,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     if (cData->sunStudyCaptureFailed) {
         reportPreflightFailure(
             "SUNSTUDY callback capture incomplete, malformed, or over record/byte limit");
+        return false;
+    }
+    if (cData->lightListCaptureFailed) {
+        reportPreflightFailure(
+            "LIGHTLIST callback capture incomplete, malformed, or over record/item/byte limit");
         return false;
     }
     if (cData->sourceFormat == dx_source_format::DWG

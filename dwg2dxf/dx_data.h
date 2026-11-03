@@ -706,6 +706,13 @@ public:
     std::size_t sunStudyRetainedRecords{0};
     std::size_t sunStudyRetainedBytes{0};
     bool sunStudyCaptureFailed{false};
+    // LIGHTLIST retains named LIGHT references for later source-graph work;
+    // callback capture alone does not qualify lighting output or semantics.
+    std::list<DRW_LightList> lightLists;
+    std::size_t lightListRetainedRecords{0};
+    std::size_t lightListRetainedItems{0};
+    std::size_t lightListRetainedBytes{0};
+    bool lightListCaptureFailed{false};
     // Common DICTIONARY and named-object-root callback copies share one
     // aggregate budget because both retain the same entry-name/handle graph.
     std::size_t dictionaryRetainedRecords{0};

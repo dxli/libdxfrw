@@ -429,6 +429,10 @@ producer coverage and native plotting/scene semantics remain open; generated
 record-identity and reference round-trips are transport evidence only (see the [SUNSTUDY receipt](docs/research/p5-sunstudy-record-identity-remapping-2026-11-03.json),
 [scene-path receipt](docs/research/p5-scene-path-record-identity-remapping-2026-11-03.json),
 and [path-carrier receipt](docs/research/p5-pointpath-objectptr-record-identity-remapping-2026-11-03.json)).
+The adapter also retains typed LIGHTLIST callbacks within aggregate record,
+item, and byte bounds ([capture receipt](docs/research/p5-lightlist-callback-retention-2026-11-03.json));
+source-span/owner binding, LIGHT target resolution, emitted graph closure, and
+native lighting semantics remain open.
 Keep physical SUN ownership constrained to the documented VPORT/VIEWPORT
 hard-owner route. The AC1024 aerial sample's SUN `0x24C` is owned by XRECORD
 `0x246`, so it is not evidence for a valid alternate source-owner route; keep
