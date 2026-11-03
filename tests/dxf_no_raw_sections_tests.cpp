@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Synthetic write controls only; no drawing fixture is committed.
 #include "libdxfrw.h"
+#include "intern/dxfparserlimits.h"
 #include "test_scratch.h"
 #include <cstdio>
 #include <filesystem>
@@ -125,6 +126,22 @@ int main() {
     }
   } cleanup{directory};
   const std::string path = (directory / "output.dxf").string();
+  const std::vector<DRW_RawDxfSection> oversizedRawSections(
+      DRW::kMaxDxfRawSections + 1u);
+  for (bool binary : {false, true}) {
+    Bare boundedAdapter;
+    dxfRW boundedCodec(path.c_str());
+    boundedAdapter.codec = &boundedCodec;
+    boundedCodec.setRawDxfSections(oversizedRawSections);
+    sentinel(path);
+    if (boundedCodec.write(&boundedAdapter, DRW::AC1027, binary) ||
+        read(path) != "sentinel")
+      return 11;
+    boundedCodec.setRawDxfSections({Bare::raw()});
+    if (!boundedCodec.write(&boundedAdapter, DRW::AC1027, binary) ||
+        read(path).find("TEST_PRIVATE") == std::string::npos)
+      return 12;
+  }
   Bare b;
   dxfRW c(path.c_str());
   b.codec = &c;

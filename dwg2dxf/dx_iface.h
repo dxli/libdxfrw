@@ -18,6 +18,7 @@
 #include "dx_data.h"
 #include "dx_mline_source_dependency.h"
 #include "intern/dxfcode.h"
+#include "intern/dxfparserlimits.h"
 #include "intern/drw_dbg.h"
 #include "intern/dxfwholesource.h"
 namespace blockref_source_relation { struct Result; }
@@ -415,10 +416,12 @@ public:
         TypedEntityCaptureMaxRetainedBytes;
     static constexpr std::size_t DwgDbColorPatchMaxRetainedBytes =
         8u * 1024u * 1024u;
-    static constexpr std::size_t RawDxfSectionCaptureMaxRecords = 100000u;
-    static constexpr std::size_t RawDxfSectionCaptureMaxGroups = 4000000u;
+    static constexpr std::size_t RawDxfSectionCaptureMaxRecords =
+        DRW::kMaxDxfRawSections;
+    static constexpr std::size_t RawDxfSectionCaptureMaxGroups =
+        DRW::kMaxDxfRawSectionGroups;
     static constexpr std::size_t RawDxfSectionCaptureMaxRetainedBytes =
-        64u * 1024u * 1024u;
+        DRW::kMaxDxfRawSectionsRetainedBytes;
     static constexpr std::size_t TypedBlockCaptureMaxRetainedBytes =
         64u * 1024u * 1024u;
     static constexpr std::size_t TypedBlockListNodeBytes =

@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <new>
 #include "intern/dxfcode.h"
+#include "intern/dxfparserlimits.h"
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -90,6 +91,21 @@ public:
     }
     static bool preflightClasses(dxfRW& owner) {
         return owner.preflightDxfClasses();
+    }
+    static bool rawSectionsRejected(const dxfRW& owner) {
+        return owner.m_dxfRawDxfSectionsInputRejected;
+    }
+    static std::size_t rawSectionsCount(const dxfRW& owner) {
+        return owner.m_rawDxfSections.size();
+    }
+    static bool preflightRawSections(dxfRW& owner) {
+        return owner.preflightRawDxfSections();
+    }
+    static bool estimateRawSection(const DRW_RawDxfSection& section,
+                                   std::size_t limit,
+                                   std::size_t& estimate) {
+        return dxfRW::estimateRawDxfSectionRetainedBytes(
+            section, limit, estimate);
     }
 };
 
@@ -59600,6 +59616,80 @@ void testDxfClassCountBound(TestContext& t) {
     }
 }
 
+void testRawDxfSectionSetterBound(TestContext& t) {
+    DRW_RawDxfSection section;
+    section.m_name = "BOUND_RAW_SECTION";
+    section.m_hasRawValues = true;
+    section.m_groups.emplace_back(0, "BOUND_RECORD");
+    section.m_groups.emplace_back(1, "payload");
+    section.m_rawValues = {"BOUND_RECORD", "payload"};
+
+    std::size_t exactBytes = 0u;
+    const bool measured = DxfGroupSetterTestAccess::estimateRawSection(
+        section, DRW::kMaxDxfRawSectionsRetainedBytes, exactBytes);
+    std::size_t exactResult = 0u;
+    const bool exactAccepted = measured
+        && DxfGroupSetterTestAccess::estimateRawSection(
+            section, exactBytes, exactResult)
+        && exactResult == exactBytes;
+    std::size_t underResult = 0u;
+    const bool underRejected = measured && exactBytes > 0u
+        && !DxfGroupSetterTestAccess::estimateRawSection(
+            section, exactBytes - 1u, underResult);
+    t.expect(exactAccepted && underRejected,
+             "raw-section retained-byte estimator accepts the exact bound and rejects one byte below it");
+
+    std::vector<DRW_RawDxfSection> oversized(
+        DRW::kMaxDxfRawSections + 1u);
+    dxfRW codec("");
+    codec.setRawDxfSections(oversized);
+    const bool constRejectedBeforeCopy =
+        DxfGroupSetterTestAccess::rawSectionsRejected(codec)
+        && DxfGroupSetterTestAccess::rawSectionsCount(codec) == 0u
+        && !DxfGroupSetterTestAccess::preflightRawSections(codec);
+    t.expect(constRejectedBeforeCopy,
+             "over-limit const raw-section setter refuses before copying");
+
+    codec.setRawDxfSections(std::vector<DRW_RawDxfSection>{section});
+    const bool correctedAccepted =
+        !DxfGroupSetterTestAccess::rawSectionsRejected(codec)
+        && DxfGroupSetterTestAccess::rawSectionsCount(codec) == 1u
+        && DxfGroupSetterTestAccess::preflightRawSections(codec);
+    t.expect(correctedAccepted,
+             "corrected raw-section input clears rejection on the same codec");
+
+    std::vector<DRW_RawDxfSection> oversizedMove(
+        DRW::kMaxDxfRawSections + 1u);
+    codec.setRawDxfSections(std::move(oversizedMove));
+    const bool moveRejectedWithoutConsumption =
+        DxfGroupSetterTestAccess::rawSectionsRejected(codec)
+        && DxfGroupSetterTestAccess::rawSectionsCount(codec) == 0u
+        && oversizedMove.size() == DRW::kMaxDxfRawSections + 1u;
+    t.expect(moveRejectedWithoutConsumption,
+             "over-limit move raw-section setter preserves caller input and clears stale replay state");
+
+    std::vector<DRW_RawDxfSection> oversizedAdoption(
+        DRW::kMaxDxfRawSections + 1u);
+    const bool adopted = codec.adoptRawDxfSectionsForWrite(
+        std::move(oversizedAdoption));
+    t.expect(!adopted && oversizedAdoption.size()
+                 == DRW::kMaxDxfRawSections + 1u
+                 && DxfGroupSetterTestAccess::rawSectionsRejected(codec)
+                 && DxfGroupSetterTestAccess::rawSectionsCount(codec) == 0u,
+             "over-limit adoption preserves caller input and refuses stale replay data");
+
+    codec.setRawDxfSections(std::vector<DRW_RawDxfSection>{section});
+    std::vector<DRW_RawDxfSection> returned;
+    const bool validAdopted = codec.adoptRawDxfSectionsForWrite(
+        std::vector<DRW_RawDxfSection>{section});
+    codec.returnAdoptedRawDxfSections(returned);
+    t.expect(validAdopted && returned.size() == 1u
+                 && returned.front().m_name == section.m_name
+                 && !DxfGroupSetterTestAccess::rawSectionsRejected(codec)
+                 && DxfGroupSetterTestAccess::rawSectionsCount(codec) == 0u,
+             "valid raw-section adoption and return retain the bounded payload");
+}
+
 void populateLegacyEllipseCarriers(dx_data& data, bool includeControls = true) {
     DRW_AppId app;
     app.name = "ELLIPSE_APP";
@@ -63132,6 +63222,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testDxfClassCountBound(context);
         std::cout << "DXF CLASS count bound: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--raw-dxf-section-setter-bound") {
+        TestContext context;
+        testRawDxfSectionSetterBound(context);
+        std::cout << "Raw DXF section setter bounds: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

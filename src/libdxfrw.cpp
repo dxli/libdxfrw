@@ -3247,6 +3247,147 @@ void dxfRW::setDxfWriteRecordInventoryEnabled(
     m_dxfWriteRecordInventoryLimit = maxHandles;
 }
 
+bool dxfRW::estimateRawDxfSectionRetainedBytes(
+        const DRW_RawDxfSection& section, std::size_t byteLimit,
+        std::size_t& estimate) noexcept {
+    estimate = sizeof(DRW_RawDxfSection);
+    const auto add = [byteLimit, &estimate](std::size_t amount) {
+        if (estimate > byteLimit || amount > byteLimit - estimate)
+            return false;
+        estimate += amount;
+        return true;
+    };
+    const auto addSlots = [&add, byteLimit](std::size_t count,
+                                             std::size_t slotSize) {
+        if (slotSize != 0u && count > byteLimit / slotSize)
+            return false;
+        return add(count * slotSize);
+    };
+    const auto addText = [&add, byteLimit](const std::string& text) {
+        if (text.size() >= byteLimit)
+            return false;
+        return add(text.size()) && add(1u);
+    };
+
+    if (!addText(section.m_name)
+        || section.m_groups.size() > DRW::kMaxDxfRawSectionGroups
+        || section.m_rawValues.size() > DRW::kMaxDxfRawSectionGroups
+        || !addSlots(section.m_groups.size(), sizeof(DRW_Variant))
+        || !addSlots(section.m_rawValues.size(), sizeof(UTF8STRING)))
+        return false;
+
+    for (const DRW_Variant& value : section.m_groups) {
+        std::size_t payload = 0u;
+        if (!value.estimateRetainedPayloadBytes(byteLimit, payload)
+            || !add(payload))
+            return false;
+    }
+    for (const UTF8STRING& rawValue : section.m_rawValues) {
+        if (!addText(rawValue))
+            return false;
+    }
+    return true;
+}
+
+bool dxfRW::estimateRawDxfSectionsRetainedBytes(
+        const std::vector<DRW_RawDxfSection>& sections,
+        std::size_t maxRecords, std::size_t maxGroups,
+        std::size_t maxBytes, std::size_t& estimate) noexcept {
+    estimate = 0u;
+    if (sections.size() > maxRecords)
+        return false;
+
+    std::size_t groupCount = 0u;
+    std::size_t rawValueCount = 0u;
+    for (const DRW_RawDxfSection& section : sections) {
+        if (groupCount > maxGroups || rawValueCount > maxGroups
+            || section.m_groups.size() > maxGroups - groupCount
+            || section.m_rawValues.size() > maxGroups - rawValueCount)
+            return false;
+        groupCount += section.m_groups.size();
+        rawValueCount += section.m_rawValues.size();
+
+        std::size_t sectionBytes = 0u;
+        if (!estimateRawDxfSectionRetainedBytes(
+                section, maxBytes - estimate, sectionBytes)
+            || sectionBytes > maxBytes - estimate)
+            return false;
+        estimate += sectionBytes;
+    }
+    return true;
+}
+
+bool dxfRW::preflightRawDxfSections() noexcept {
+    std::size_t estimate = 0u;
+    if (m_dxfRawDxfSectionsInputRejected
+        || !estimateRawDxfSectionsRetainedBytes(
+            m_rawDxfSections, DRW::kMaxDxfRawSections,
+            DRW::kMaxDxfRawSectionGroups,
+            DRW::kMaxDxfRawSectionsRetainedBytes, estimate)) {
+        m_writeError = true;
+        return false;
+    }
+    return true;
+}
+
+void dxfRW::setRawDxfSections(
+        const std::vector<DRW_RawDxfSection>& sections) {
+    if (!preflightDxfSetup())
+        return;
+    std::size_t estimate = 0u;
+    if (!estimateRawDxfSectionsRetainedBytes(
+            sections, DRW::kMaxDxfRawSections,
+            DRW::kMaxDxfRawSectionGroups,
+            DRW::kMaxDxfRawSectionsRetainedBytes, estimate)) {
+        m_dxfRawDxfSectionsInputRejected = true;
+        std::vector<DRW_RawDxfSection>().swap(m_rawDxfSections);
+        return;
+    }
+    try {
+        std::vector<DRW_RawDxfSection> copied = sections;
+        m_rawDxfSections.swap(copied);
+        m_dxfRawDxfSectionsInputRejected = false;
+    } catch (...) {
+        m_dxfRawDxfSectionsInputRejected = true;
+        std::vector<DRW_RawDxfSection>().swap(m_rawDxfSections);
+    }
+}
+
+void dxfRW::setRawDxfSections(
+        std::vector<DRW_RawDxfSection>&& sections) {
+    if (!preflightDxfSetup())
+        return;
+    std::size_t estimate = 0u;
+    if (!estimateRawDxfSectionsRetainedBytes(
+            sections, DRW::kMaxDxfRawSections,
+            DRW::kMaxDxfRawSectionGroups,
+            DRW::kMaxDxfRawSectionsRetainedBytes, estimate)) {
+        m_dxfRawDxfSectionsInputRejected = true;
+        std::vector<DRW_RawDxfSection>().swap(m_rawDxfSections);
+        return;
+    }
+    m_rawDxfSections = std::move(sections);
+    m_dxfRawDxfSectionsInputRejected = false;
+}
+
+bool dxfRW::adoptRawDxfSectionsForWrite(
+        std::vector<DRW_RawDxfSection>&& sections) {
+    if (!preflightDxfSetup())
+        return false;
+    std::size_t estimate = 0u;
+    if (!estimateRawDxfSectionsRetainedBytes(
+            sections, DRW::kMaxDxfRawSections,
+            DRW::kMaxDxfRawSectionGroups,
+            DRW::kMaxDxfRawSectionsRetainedBytes, estimate)) {
+        m_dxfRawDxfSectionsInputRejected = true;
+        std::vector<DRW_RawDxfSection>().swap(m_rawDxfSections);
+        return false;
+    }
+    m_rawDxfSections = std::move(sections);
+    m_dxfRawDxfSectionsInputRejected = false;
+    return true;
+}
+
 bool dxfRW::setDxfNoRawSectionsWriteGuard(bool enabled) noexcept {
     if (m_wholeOperationActive || writer != nullptr) {
         if (m_dxfWriteAttemptActive) m_writeError = true;
@@ -4421,6 +4562,14 @@ bool dxfRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
     version = ver;
     binFile = bin;
     iface = interface_;
+    if (m_dxfRawDxfSectionsInputRejected) {
+        recordOperationDiagnostic(
+            DRW::OperationPhase::Validation,
+            DRW::OperationCause::ResourceLimit,
+            "dxf-raw-section-budget",
+            "raw DXF sections exceeded the bounded setter limits");
+        return setError(DRW::BAD_OPEN);
+    }
     if (version < DRW::AC1014 && m_generatedNodSource) {
         recordOperationDiagnostic(DRW::OperationPhase::Validation,
             DRW::OperationCause::ValidationFailure,
@@ -4689,6 +4838,8 @@ bool dxfRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
     }
     outputStage = "raw DXF section replay";
     if (m_dxfNoRawSectionsSelected && !m_rawDxfSections.empty())
+        return failWrite();
+    if (!preflightRawDxfSections())
         return failWrite();
     if (m_dxfNoRawSectionsSelected) m_dxfNoRawSectionsObserved = true;
     for (const DRW_RawDxfSection &section : m_rawDxfSections) {
@@ -29592,6 +29743,13 @@ bool dxfRW::writeRawDxfSection(const DRW_RawDxfSection &section) {
         || dxfKeywordEquals(section.m_name, "OBJECTS")
         || (section.m_version != DRW::UNKNOWNV
             && section.m_version != version)) {
+        m_writeError = true;
+        return false;
+    }
+    std::size_t retainedBytes = 0u;
+    if (!estimateRawDxfSectionRetainedBytes(
+            section, DRW::kMaxDxfRawSectionsRetainedBytes,
+            retainedBytes)) {
         m_writeError = true;
         return false;
     }

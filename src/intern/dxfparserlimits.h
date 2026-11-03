@@ -69,6 +69,14 @@ constexpr int kMaxDxfApplicationGroupNesting = 64;
 constexpr std::size_t kMaxDxfBinaryPayloadBytes = 64u * 1024u * 1024u;
 //! Maximum number of CLASS records staged before the section is committed.
 constexpr std::size_t kMaxDxfClasses = 65536u;
+//! Maximum raw DXF sections retained for a later replay write.
+constexpr std::size_t kMaxDxfRawSections = 100000u;
+//! Maximum raw groups (and source spellings) retained across raw sections.
+constexpr std::size_t kMaxDxfRawSectionGroups = 4000000u;
+//! Maximum logical bytes retained by raw sections before replay.
+//! This bounds owned values, not vector capacity or process RSS.
+constexpr std::size_t kMaxDxfRawSectionsRetainedBytes =
+    64u * 1024u * 1024u;
 //! Maximum number of 102 application groups retained on one entity.
 constexpr std::size_t kMaxDxfApplicationGroups = 65536u;
 //! Maximum number of INSERT handles retained by one BLOCK_RECORD BLKREFS group.

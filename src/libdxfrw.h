@@ -702,27 +702,18 @@ public:
      * finalization callback after the replay boundary. A true result is
      * tentative until publication and is not a document dependency proof. */
     bool dxfWriteNoRawSectionsObserved() const noexcept;
-    /*!< Register unmodeled DXF sections for same-version raw replay. */
-    void setRawDxfSections(const std::vector<DRW_RawDxfSection> &sections) {
-        if (!preflightDxfSetup())
-            return;
-        m_rawDxfSections = sections;
-    }
-    void setRawDxfSections(std::vector<DRW_RawDxfSection>&& sections) {
-        if (!preflightDxfSetup())
-            return;
-        m_rawDxfSections = std::move(sections);
-    }
+    /*!< Register unmodeled DXF sections for same-version raw replay. The
+     * shared section/aggregate/group/byte ceilings bound copies, adoption and
+     * replay. Rejected or failed copies make the next write fail until a valid
+     * replacement is supplied. Rebuild consumers: rejection tracking adds
+     * private state to dxfRW; ABI compatibility remains a release gate. */
+    void setRawDxfSections(const std::vector<DRW_RawDxfSection> &sections);
+    void setRawDxfSections(std::vector<DRW_RawDxfSection>&& sections);
     //! Transfer adapter-owned raw sections into this codec for one synchronous
     //! write, avoiding a second full copy. Restore them with
     //! returnAdoptedRawDxfSections() before the source container is reused.
     bool adoptRawDxfSectionsForWrite(
-            std::vector<DRW_RawDxfSection>&& sections) {
-        if (!preflightDxfSetup())
-            return false;
-        m_rawDxfSections = std::move(sections);
-        return true;
-    }
+            std::vector<DRW_RawDxfSection>&& sections);
     //! Return sections previously adopted for a synchronous write without
     //! copying their nested group/value storage.
     void returnAdoptedRawDxfSections(
@@ -1767,6 +1758,14 @@ public:
     bool writeRequiredString(int code, const std::string& value);
     bool allocateDxfHandle(std::uint32_t& handle) noexcept;
     bool preflightDxfWrite() noexcept;
+    static bool estimateRawDxfSectionRetainedBytes(
+        const DRW_RawDxfSection& section, std::size_t byteLimit,
+        std::size_t& estimate) noexcept;
+    static bool estimateRawDxfSectionsRetainedBytes(
+        const std::vector<DRW_RawDxfSection>& sections,
+        std::size_t maxRecords, std::size_t maxGroups,
+        std::size_t maxBytes, std::size_t& estimate) noexcept;
+    bool preflightRawDxfSections() noexcept;
     bool preflightDxfSetup() noexcept {
         if (!m_dxfWriteFinalizing && !m_dxfWriteInspecting)
             return true;
@@ -2053,6 +2052,8 @@ private:
     bool m_dxfClassesFrozen {false};
     bool m_dxfClassesInputRejected{false};
     std::vector<DRW_RawDxfSection> m_rawDxfSections;
+    // Rebuild consumers: private dxfRW layout change; see P8 ABI gate.
+    bool m_dxfRawDxfSectionsInputRejected{false};
     std::vector<std::pair<std::string, std::string>> m_rootDictEntries;
     bool m_dxfRootDictEntriesInputRejected{false};
     /// Named-dictionary OBJECTS to emit verbatim in writeObjects (DXF path).
