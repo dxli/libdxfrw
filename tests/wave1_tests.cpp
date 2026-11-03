@@ -3717,6 +3717,95 @@ void testLayoutPlotSettingsReferenceRemapping(TestContext& t) {
                          : "PLOTSETTINGS and LAYOUT emit source-handle remaps");
         }
     }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream failedPlotOutput;
+        dxfRW failedPlotOwner("");
+        failedPlotOwner.version = DRW::AC1032;
+        failedPlotOwner.binFile = binary;
+        failedPlotOwner.setReferenceResolver([](std::uint32_t source) {
+            return source == 0x931u ? 0u : source;
+        });
+        failedPlotOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterBinary>(&failedPlotOutput))
+            : std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterAscii>(&failedPlotOutput));
+        DRW_PlotSettings failedPlot;
+        failedPlot.shadePlotHandle.ref = 0x931u;
+        t.expect(!failedPlotOwner.writePlotSettings(&failedPlot)
+                     && failedPlotOutput.str().empty(),
+                 "unresolved PLOTSETTINGS shade target preserves destination");
+
+        std::ostringstream retryPlotOutput;
+        dxfRW retryPlotOwner("");
+        retryPlotOwner.version = DRW::AC1032;
+        retryPlotOwner.binFile = binary;
+        retryPlotOwner.setReferenceResolver(resolverValue);
+        retryPlotOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterBinary>(&retryPlotOutput))
+            : std::unique_ptr<dxfWriter>(
+                std::make_unique<dxfWriterAscii>(&retryPlotOutput));
+        DRW_PlotSettings correctedPlot;
+        correctedPlot.shadePlotHandle.ref = 0x931u;
+        t.expect(retryPlotOwner.writePlotSettings(&correctedPlot),
+                 "PLOTSETTINGS accepts corrected fresh-writer retry");
+
+        for (const std::uint32_t unresolved : {
+                 0x932u, 0x933u, 0x934u, 0x935u, 0x936u, 0x937u}) {
+            std::ostringstream failedLayoutOutput;
+            dxfRW failedLayoutOwner("");
+            failedLayoutOwner.version = DRW::AC1032;
+            failedLayoutOwner.binFile = binary;
+            failedLayoutOwner.setReferenceResolver(
+                [unresolved](std::uint32_t source) {
+                    return source == unresolved ? 0u : source;
+                });
+            failedLayoutOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&failedLayoutOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&failedLayoutOutput));
+            DRW_Layout failedLayout;
+            failedLayout.handle = 0xA301u;
+            failedLayout.parentHandle = unresolved == 0x937u
+                ? 0x937u : 0xCu;
+            failedLayout.name = "LAYOUT_TEST";
+            failedLayout.shadePlotHandle.ref = 0x932u;
+            failedLayout.paperSpaceBlockRecordHandle.ref = 0x933u;
+            failedLayout.lastActiveViewportHandle.ref = 0x934u;
+            failedLayout.namedUcsHandle.ref = 0x935u;
+            failedLayout.baseUcsHandle.ref = 0x936u;
+            failedLayout.orthoViewType = 1;
+            t.expect(!failedLayoutOwner.writeLayout(&failedLayout)
+                         && failedLayoutOutput.str().empty(),
+                     "unresolved LAYOUT reference preserves destination");
+
+            std::ostringstream retryLayoutOutput;
+            dxfRW retryLayoutOwner("");
+            retryLayoutOwner.version = DRW::AC1032;
+            retryLayoutOwner.binFile = binary;
+            retryLayoutOwner.setReferenceResolver(resolverValue);
+            retryLayoutOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&retryLayoutOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&retryLayoutOutput));
+            DRW_Layout correctedLayout;
+            correctedLayout.handle = 0xA301u;
+            correctedLayout.parentHandle = 0xCu;
+            correctedLayout.name = "LAYOUT_TEST";
+            correctedLayout.shadePlotHandle.ref = 0x932u;
+            correctedLayout.paperSpaceBlockRecordHandle.ref = 0x933u;
+            correctedLayout.lastActiveViewportHandle.ref = 0x934u;
+            correctedLayout.namedUcsHandle.ref = 0x935u;
+            correctedLayout.baseUcsHandle.ref = 0x936u;
+            correctedLayout.orthoViewType = 1;
+            t.expect(retryLayoutOwner.writeLayout(&correctedLayout),
+                     "LAYOUT accepts corrected fresh-writer retry");
+        }
+    }
 }
 
 void testBackgroundReferenceRemapping(TestContext& t) {

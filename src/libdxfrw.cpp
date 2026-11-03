@@ -29555,6 +29555,11 @@ bool dxfRW::writePlotSettings(DRW_PlotSettings *ent) {
         : (m_referenceResolver
                ? resolveReference(ent->shadePlotHandle.ref)
                : remapObjectHandle(ent->shadePlotHandle.ref));
+    if (ent->shadePlotHandle.ref != 0u
+        && (ent->shadePlotHandle.ref == DRW::NoHandle
+            || shadePlotHandle == 0u
+            || shadePlotHandle == DRW::NoHandle))
+        return failDxfWrite();
     RecordStateScope state(*this, ent);
     DxfWriterRecordScope record(*writer);
     if (handle != 0) {
@@ -29654,6 +29659,35 @@ bool dxfRW::writeLayout(DRW_Layout *ent) {
         return m_referenceResolver ? resolveReference(source)
                                    : remapObjectHandle(source);
     };
+    const std::uint32_t emittedShadePlotHandle =
+        emittedReference(ent->shadePlotHandle.ref);
+    const std::uint32_t emittedBlockRecordHandle =
+        emittedReference(ent->paperSpaceBlockRecordHandle.ref);
+    const std::uint32_t emittedViewportHandle =
+        emittedReference(ent->lastActiveViewportHandle.ref);
+    const std::uint32_t emittedNamedUcsHandle =
+        emittedReference(ent->namedUcsHandle.ref);
+    const std::uint32_t emittedBaseUcsHandle =
+        emittedReference(ent->baseUcsHandle.ref);
+    const auto isResolvedOptional = [](std::uint32_t source,
+                                       std::uint32_t emitted) {
+        return source == 0u
+            || (source != DRW::NoHandle && emitted != 0u
+                && emitted != DRW::NoHandle);
+    };
+    if (!isResolvedOptional(ent->shadePlotHandle.ref,
+                            emittedShadePlotHandle)
+        || !isResolvedOptional(ent->paperSpaceBlockRecordHandle.ref,
+                               emittedBlockRecordHandle)
+        || !isResolvedOptional(ent->lastActiveViewportHandle.ref,
+                               emittedViewportHandle)
+        || !isResolvedOptional(ent->namedUcsHandle.ref,
+                               emittedNamedUcsHandle)
+        || !isResolvedOptional(ent->baseUcsHandle.ref,
+                               emittedBaseUcsHandle))
+        return failDxfWrite();
+    RecordStateScope state(*this, ent);
+    DxfWriterRecordScope record(*writer);
     std::uint32_t handle = remapObjectHandle(
         static_cast<std::uint32_t>(ent->handle));
     if (handle != 0) {
@@ -29667,6 +29701,8 @@ bool dxfRW::writeLayout(DRW_Layout *ent) {
     if (!writeTableEntryAppData(*ent))
         return false;
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
+    if (m_writeError)
+        return false;
     writer->writeString(100, "AcDbPlotSettings");
     DRW_PlotSettings plotSettings;
     plotSettings.pageSetupName = ent->pageSetupName;
@@ -29730,25 +29766,27 @@ bool dxfRW::writeLayout(DRW_Layout *ent) {
     writer->writeDouble(37, ent->ucsYAxis.z);
     writer->writeInt16(76, ent->orthoViewType);
     if (ent->shadePlotHandle.ref != 0)
-        writer->writeString(
-            333, toHexStr(emittedReference(ent->shadePlotHandle.ref)));
+        writer->writeString(333, toHexStr(emittedShadePlotHandle));
     if (ent->paperSpaceBlockRecordHandle.ref != 0)
-        writer->writeString(
-            330, toHexStr(emittedReference(
-                              ent->paperSpaceBlockRecordHandle.ref)));
+        writer->writeString(330, toHexStr(emittedBlockRecordHandle));
     if (ent->lastActiveViewportHandle.ref != 0)
-        writer->writeString(
-            331, toHexStr(emittedReference(
-                              ent->lastActiveViewportHandle.ref)));
+        writer->writeString(331, toHexStr(emittedViewportHandle));
     if (ent->namedUcsHandle.ref != 0)
-        writer->writeString(
-            345, toHexStr(emittedReference(ent->namedUcsHandle.ref)));
+        writer->writeString(345, toHexStr(emittedNamedUcsHandle));
     if (ent->baseUcsHandle.ref != 0)
-        writer->writeString(
-            346, toHexStr(emittedReference(ent->baseUcsHandle.ref)));
+        writer->writeString(346, toHexStr(emittedBaseUcsHandle));
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    if (writer->hasWriteError()) {
+        m_writeError = true;
+        return false;
+    }
+    if (!record.commit()) {
+        m_writeError = true;
+        return false;
+    }
+    state.commit();
+    return true;
 }
 
 //F4: typed DXF emitters for the routed data-only OBJECTS that the DWG reader

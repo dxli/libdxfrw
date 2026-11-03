@@ -232,8 +232,11 @@ receipt](docs/research/p4-plotsettings-r2007plus-dwg-codec-decode-roundtrip-2026
 and [current strict readback receipt](docs/research/p4-plotsettings-ac1015-current-strict-readback-2026-11-02.json).
 The low-level PLOTSETTINGS and LAYOUT writers now resolve their modeled shade-
 plot, paper-space BLOCK_RECORD, last-active VIEWPORT, and UCS references to
-final output IDs, with handle-remap fallback. Generated ASCII/Binary controls
-cover the exact fields; see the [reference-remapping receipt](docs/research/p4-layout-plotsettings-reference-remapping-2026-11-03.json).
+final output IDs, with handle-remap fallback, and reject zero/NoHandle targets
+before publishing records. LAYOUT now rolls back the record and writer state on
+a late common-owner failure. Generated ASCII/Binary controls cover exact fields,
+per-reference refusal, owner-failure rollback and corrected retry; see the
+[reference-remapping receipt](docs/research/p4-layout-plotsettings-reference-remapping-2026-11-03.json).
 This is transport only; it does not establish those target records' presence,
 roles, ownership, or native plotting behavior.
 
