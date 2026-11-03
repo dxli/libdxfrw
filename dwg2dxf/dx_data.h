@@ -624,6 +624,14 @@ public:
     std::size_t plotSettingsRetainedRecords{0};
     std::size_t plotSettingsRetainedBytes{0};
     bool plotSettingsCaptureFailed{false};
+    // Typed DWG GEODATA callbacks are retained by import generation and source
+    // handle. The raw source-frame lane remains responsible for class/frame
+    // identity and output-qualification accounting.
+    using GeoDataKey = std::pair<std::uint64_t, std::uint32_t>;
+    std::map<GeoDataKey, DRW_GeoData> geoDataObjects;
+    std::size_t geoDataRetainedRecords{0};
+    std::size_t geoDataRetainedBytes{0};
+    bool geoDataCaptureFailed{false};
     // Render-settings callbacks are paired with raw positional DXF carriers;
     // export only replays complete rooted graphs at the exact source version.
     std::list<DRW_RenderSettings> renderSettings;

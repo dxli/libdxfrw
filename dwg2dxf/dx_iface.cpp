@@ -14641,6 +14641,9 @@ constexpr std::size_t kMaxAdapterMLineDependencyProofWork =
 constexpr std::size_t kMaxAdapterNamedResourceTypedRecords = 100000u;
 constexpr std::size_t kMaxAdapterNamedResourceTypedRetainedBytes =
     DRW::kMaxDxfBinaryPayloadBytes;
+constexpr std::size_t kMaxAdapterGeoDataRecords = 100000u;
+constexpr std::size_t kMaxAdapterGeoDataRetainedBytes =
+    DRW::kMaxDxfBinaryPayloadBytes;
 constexpr std::size_t kMaxAdapterRawNamedResourceRecords = 100000u;
 constexpr std::size_t kMaxAdapterRawNamedResourceGroups = 4000000u;
 constexpr std::size_t kMaxAdapterRawNamedResourceRetainedBytes =
@@ -15681,6 +15684,29 @@ bool estimatePlotSettingsTypedBytes(
         && addVectorPayloadBytes(settings.dwgEedLayerReferences, estimate)
         && addAssociativeSlotBytes(1u, 2u * sizeof(void*), estimate)
         && estimate <= dx_iface::PlotSettingsCaptureMaxRetainedBytes;
+}
+
+bool estimateGeoDataTypedBytes(
+        const DRW_GeoData& data, std::size_t& estimate) noexcept {
+    using GeoDataMapValue =
+        std::pair<const dx_data::GeoDataKey, DRW_GeoData>;
+    estimate = sizeof(GeoDataMapValue) + 4u * sizeof(void*);
+    if (data.m_points.size() > DRW_GeoData::kMaxMeshItems
+        || data.m_faces.size() > DRW_GeoData::kMaxMeshItems
+        || !addTableEntryRetainedBytes(data, estimate)
+        || !addVectorPayloadBytes(data.m_points, estimate)
+        || !addVectorPayloadBytes(data.m_faces, estimate)
+        || !addStringPayloadBytes(data.m_coordinateSystemDefinition, estimate)
+        || !addStringPayloadBytes(data.m_geoRssTag, estimate)
+        || !addStringPayloadBytes(data.m_observationFromTag, estimate)
+        || !addStringPayloadBytes(data.m_observationToTag, estimate)
+        || !addStringPayloadBytes(data.m_observationCoverageTag, estimate)
+        || !addStringPayloadBytes(
+               data.m_legacy.m_coordinateSystemDescription, estimate)
+        || !addStringPayloadBytes(data.m_legacy.m_coordinateSystemDatum,
+                                  estimate))
+        return false;
+    return estimate <= kMaxAdapterGeoDataRetainedBytes;
 }
 
 bool samePlotSettingsPendingReference(
@@ -58681,6 +58707,44 @@ void dx_iface::addMaterial(const DRW_Material& data) {
     retainMaterialTyped(cData, data);
 }
 
+void dx_iface::addGeoData(const DRW_GeoData& data) {
+    if (cData == nullptr || cData->sourceFormat != dx_source_format::DWG
+        || !cData->dwgReadOutcome.attempted)
+        return;
+    if (cData->geoDataCaptureFailed)
+        return;
+    const auto reject = [this]() {
+        cData->geoDataCaptureFailed = true;
+    };
+    if (cData->importGeneration == 0u || data.handle == 0u
+        || data.handle == DRW::NoHandle
+        || cData->geoDataRetainedRecords >= kMaxAdapterGeoDataRecords) {
+        reject();
+        return;
+    }
+
+    std::size_t estimatedBytes = 0u;
+    if (!estimateGeoDataTypedBytes(data, estimatedBytes)
+        || cData->geoDataRetainedBytes > kMaxAdapterGeoDataRetainedBytes
+        || estimatedBytes > kMaxAdapterGeoDataRetainedBytes
+                                - cData->geoDataRetainedBytes) {
+        reject();
+        return;
+    }
+    const dx_data::GeoDataKey key{cData->importGeneration, data.handle};
+    try {
+        const auto inserted = cData->geoDataObjects.emplace(key, data);
+        if (!inserted.second) {
+            reject();
+            return;
+        }
+        ++cData->geoDataRetainedRecords;
+        cData->geoDataRetainedBytes += estimatedBytes;
+    } catch (...) {
+        reject();
+    }
+}
+
 void dx_iface::addBackground(const DRW_Background& data) {
     if (cData == nullptr)
         return;
@@ -65962,6 +66026,162 @@ bool dx_iface::preallocateDxfMLineLinetypeXdataEntityHandles() {
     return true;
 }
 
+bool dx_iface::prepareDwgGeoDataOutput(bool debug) {
+    m_extensionGeoDataHandles.clear();
+    const auto fail = [debug](const char* reason) {
+        if (debug)
+            std::cerr << "GEODATA output profile failed: " << reason << '\n';
+        return false;
+    };
+    if (cData == nullptr)
+        return fail("missing adapter data");
+    if (cData->sourceFormat != dx_source_format::DWG)
+        return true;
+    if (cData->geoDataCaptureFailed)
+        return fail("typed callback capture failed");
+
+    const std::uint64_t generation = cData->importGeneration;
+    const auto firstGeoData = cData->geoDataObjects.lower_bound({generation, 0u});
+    std::size_t typedCount = 0u;
+    for (auto current = firstGeoData;
+         current != cData->geoDataObjects.end()
+             && current->first.first == generation;
+         ++current)
+        ++typedCount;
+
+    const bool completeClassReport = cData->dwgClassCoverage.m_complete
+        && cData->dwgClassCoverage.m_status
+            == DRW_DwgClassCoverageStatus::FinalizedComplete
+        && cData->hasUnchangedDwgClassEvidence();
+    if (!completeClassReport)
+        return typedCount == 0u ? true
+            : fail("complete unchanged DWG CLASS evidence unavailable");
+
+    const auto isGeoDataClass = [](const DRW_DwgClassCoverageEntry& entry) {
+        return sameAsciiName(entry.m_className, "AcDbGeoData")
+            || sameAsciiName(entry.m_recordName, "GEODATA")
+            || sameAsciiName(entry.m_recordName, "ACDBGEODATA");
+    };
+    const DRW_DwgClassCoverageEntry* sourceClass = nullptr;
+    for (const DRW_DwgClassCoverageEntry& entry :
+         cData->dwgClassCoverage.m_entries) {
+        if (!isGeoDataClass(entry))
+            continue;
+        if (sourceClass != nullptr)
+            return fail("ambiguous source GEODATA CLASS rows");
+        sourceClass = &entry;
+    }
+
+    std::size_t sourceFrameCount = 0u;
+    if (sourceClass != nullptr) {
+        for (const auto& source : cData->m_opaqueDwgSourceFrames) {
+            if (source.first.first != generation)
+                continue;
+            const DRW_UnsupportedObject& frame = source.second;
+            if (sameAsciiName(frame.m_className, sourceClass->m_className)
+                && sameAsciiName(frame.m_recordName,
+                                 sourceClass->m_recordName))
+                ++sourceFrameCount;
+        }
+    }
+
+    if (sourceClass == nullptr) {
+        return typedCount == 0u && sourceFrameCount == 0u
+            ? true : fail("typed or source frames lack a matching CLASS row");
+    }
+    if (sourceClass->m_state != DRW_DwgClassCoverageState::Published
+        || sourceClass->m_reason != DRW_DwgClassCoverageReason::None
+        || sourceClass->m_instanceCount < 0
+        || sourceClass->m_wasAProxyFlag != 0
+        || sourceClass->m_entityFlag != 0
+        || !sameAsciiName(sourceClass->m_className, "AcDbGeoData")
+        || (!sameAsciiName(sourceClass->m_recordName, "GEODATA")
+            && !sameAsciiName(sourceClass->m_recordName, "ACDBGEODATA")))
+        return fail("source CLASS is unpublished, proxy, entity, or unsupported name");
+
+    DRW_Class canonicalClass;
+    if (!dxfRW::dxfClassForRecordName("GEODATA", canonicalClass)
+        || !sameAsciiName(canonicalClass.className,
+                          sourceClass->m_className)
+        || !sameAsciiName(canonicalClass.appName, sourceClass->m_appName)
+        || canonicalClass.proxyFlag != sourceClass->m_proxyFlag)
+        return fail("source CLASS metadata differs from canonical DXF GEODATA");
+
+    if (static_cast<std::size_t>(sourceClass->m_instanceCount)
+            != sourceFrameCount
+        || sourceFrameCount != typedCount)
+        return fail("CLASS instance count, opaque frames, and typed callbacks differ");
+    if (typedCount == 0u)
+        return true;
+    if (generation == 0u || cData->blockRecords.empty())
+        return fail("missing import generation or BLOCK_RECORD table");
+
+    std::unordered_set<std::uint32_t> outputHandles;
+    try {
+        outputHandles.reserve(typedCount);
+        m_extensionGeoDataHandles.reserve(typedCount);
+        for (auto current = firstGeoData;
+             current != cData->geoDataObjects.end()
+                 && current->first.first == generation;
+             ++current) {
+            const DRW_GeoData& geoData = current->second;
+            if (current->first.second == 0u
+                || current->first.second == DRW::NoHandle
+                || geoData.handle != current->first.second
+                || geoData.m_version < 1 || geoData.m_version > 2
+                || geoData.parentHandle == 0u
+                || geoData.parentHandle == DRW::NoHandle
+                || geoData.m_hostBlockHandle != geoData.parentHandle
+                || !geoData.reactorHandles.empty()
+                || geoData.reactorCount() != 0
+                || geoData.xDictHandle != 0u
+                || geoData.extensionDictionaryFlag() != 0u
+                || geoData.hasDataStorageBinaryData()
+                || !geoData.appData.empty() || !geoData.extData.empty()
+                || !outputHandles.insert(geoData.handle).second)
+                return fail("body, common metadata, owner, host pointer, or identity is outside the closed profile");
+
+            const DRW_UnsupportedObject* sourceFrame = nullptr;
+            const dx_data::StandardDwgFrameKey sourceKey{
+                generation, geoData.handle};
+            const auto raw = cData->m_opaqueDwgSourceFrames.find(sourceKey);
+            if (raw == cData->m_opaqueDwgSourceFrames.end())
+                return fail("typed record lacks a retained source frame");
+            sourceFrame = &raw->second;
+            if (!sourceFrame->m_isCustomClass || sourceFrame->m_isEntity
+                || !sourceFrame->m_hasClassDefinition
+                || sourceFrame->m_objectType != sourceClass->m_classNumber
+                || !sameAsciiName(sourceFrame->m_className,
+                                  sourceClass->m_className)
+                || !sameAsciiName(sourceFrame->m_recordName,
+                                  sourceClass->m_recordName))
+                return fail("source frame/class binding mismatch");
+            if (!sourceFrame->m_commonHandleDataValidated
+                || !drwDwgCommonLinkEvidenceValidated(
+                    sourceFrame->m_commonLinkEvidence))
+                return fail("source frame common-link evidence is unvalidated");
+            if (sourceFrame->m_parentHandle != geoData.parentHandle)
+                return fail("source frame owner differs from typed GEODATA owner");
+
+            std::size_t hostMatches = 0u;
+            for (const DRW_Block_Record& block : cData->blockRecords) {
+                if (block.handle == geoData.m_hostBlockHandle) {
+                    if (!sameAsciiName(block.name, "*Model_Space"))
+                        return fail("host pointer resolves to a non-model-space BLOCK_RECORD");
+                    ++hostMatches;
+                }
+            }
+            if (hostMatches != 1u)
+                return fail("host pointer does not resolve to one model-space BLOCK_RECORD");
+            m_extensionGeoDataHandles.push_back(geoData.handle);
+        }
+    } catch (...) {
+        m_extensionGeoDataHandles.clear();
+        return fail("allocation failure while preparing output bindings");
+    }
+    return m_extensionGeoDataHandles.size() == typedCount;
+}
+
 bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                           dx_data *fData, bool debug, bool requireResolvedOwners,
                           dx_dxfSourceTextPolicy sourceTextPolicy,
@@ -67502,6 +67722,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         }
         return false;
     }
+    if (!prepareDwgGeoDataOutput(debug || requireResolvedOwners)) {
+        reportPreflightFailure(
+            "GEODATA source CLASS, owner, host-block, or body profile");
+        return false;
+    }
     if (hasDwgAssociativeObjects
         && m_extensionAssociativeHandles.size()
             != cData->dwgAssociativeObjects.size()) {
@@ -68710,7 +68935,10 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             && registerClass("SCALE", "AcDbScale",
                              m_extensionScaleHandles.size())
             && registerClass("DICTIONARYVAR", "AcDbDictionaryVar",
-                             m_extensionDictionaryVarHandles.size());
+                             m_extensionDictionaryVarHandles.size())
+            && (cData->sourceFormat != dx_source_format::DWG
+                || registerClass("GEODATA", "AcDbGeoData",
+                                 m_extensionGeoDataHandles.size()));
     };
     const auto registerSunClass = [this](std::vector<DRW_Class>& classes) {
         if (cData->sourceFormat != dx_source_format::DWG
@@ -69653,6 +69881,13 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     }
     for (const DRW_PlotSettings& settings : cData->plotSettings) {
         if (!dxfW->reserveHandle(settings.handle)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
+    for (const std::uint32_t handle : m_extensionGeoDataHandles) {
+        if (!dxfW->reserveHandle(handle)) {
             delete dxfW;
             dxfW = nullptr;
             return false;

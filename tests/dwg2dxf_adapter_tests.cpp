@@ -271,6 +271,20 @@ public:
     static std::size_t opaqueSourceFrameCount(const dx_data& data) {
         return data.m_opaqueDwgSourceFrames.size();
     }
+    static void printOpaqueSourceFrames(const dx_data& data,
+                                        std::uint64_t generation) {
+        for (const auto& entry : data.m_opaqueDwgSourceFrames) {
+            if (entry.first.first != generation)
+                continue;
+            const DRW_UnsupportedObject& frame = entry.second;
+            std::cerr << " opaque handle=" << frame.m_handle
+                      << " type=" << frame.m_objectType
+                      << " record=" << frame.m_recordName
+                      << " class=" << frame.m_className
+                      << " custom=" << frame.m_isCustomClass
+                      << '\n';
+        }
+    }
     static bool opaqueOutputQualified(const dx_data& data,
             std::uint64_t generation, std::uint32_t handle) {
         return data.m_opaqueDwgOutputQualifiedFrameIdentities.count(
@@ -64100,6 +64114,214 @@ bool underlayDefinitionGraphRoundTrip() {
     return true;
 }
 
+bool geodataDwgAdapterTransport() {
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch()
+                           .count();
+    const std::filesystem::path base =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-geodata-adapter-" + std::to_string(nonce));
+    const std::filesystem::path sourcePath = base.string() + ".dwg";
+    const std::filesystem::path asciiPath = base.string() + "-ascii.dxf";
+    const std::filesystem::path binaryPath = base.string() + "-binary.dxf";
+    struct Cleanup {
+        std::array<std::filesystem::path, 3> paths;
+        ~Cleanup() {
+            for (const auto& path : paths) {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        }
+    } cleanup{{sourcePath, asciiPath, binaryPath}};
+    if (std::filesystem::exists(sourcePath)
+        || std::filesystem::exists(asciiPath)
+        || std::filesystem::exists(binaryPath))
+        return fail("GEODATA adapter scratch path unexpectedly exists");
+
+    class Author final : public dx_iface {
+    public:
+        explicit Author(dwgRW& output) : output(output) {
+            cData = &storage;
+            currentBlock = storage.mBlock;
+        }
+        void writeHeader(DRW_Header& header) override {
+            header.vars.clear();
+        }
+        void writeDwgClasses() override {
+            DRW_GeoData classRecord;
+            classRecord.handle = geo.handle;
+            registered = output.registerGeoDataObjectClass(&classRecord);
+        }
+        void writeObjects() override {
+            wrote = output.writeGeoData(&geo);
+        }
+        bool finalizeDwgWrite() override {
+            return registered && wrote;
+        }
+        bool finalizeDwgWriteStructure() override { return true; }
+
+        dwgRW& output;
+        dx_data storage;
+        DRW_GeoData geo;
+        bool registered{false};
+        bool wrote{false};
+    };
+
+    dwgRW sourceWriter(sourcePath.string().c_str());
+    Author author(sourceWriter);
+    author.geo.handle = 0xD7A0u;
+    author.geo.parentHandle = DRW::DwgModelSpaceBlockRecordHandle;
+    author.geo.m_hostBlockHandle = DRW::DwgModelSpaceBlockRecordHandle;
+    author.geo.m_version = 2;
+    author.geo.m_designPoint = DRW_Coord{100.0, 200.0, 0.0};
+    author.geo.m_referencePoint = DRW_Coord{10.0, 20.0, 0.0};
+    author.geo.m_coordinateSystemDefinition = "LOCAL_GRID_PROFILE";
+    author.geo.m_geoRssTag = "LOCAL_GEODATA_TAG";
+    if (!sourceWriter.write(&author, DRW::AC1027, true))
+        return fail("generated GEODATA DWG source failed to write");
+
+    dx_data imported;
+    dx_iface importer;
+    const bool importedOkay =
+        importer.fileImport(sourcePath.string(), &imported, false);
+    if (!importedOkay || imported.sourceFormat != dx_source_format::DWG
+        || imported.geoDataObjects.size() != 1u
+        || imported.geoDataRetainedRecords != 1u
+        || imported.geoDataCaptureFailed
+        || !imported.hasCompleteOpaqueDwgSourceCapture()
+        || imported.dwgReadOutcome.opaqueViewCallbacks < 1u
+        || imported.dwgReadOutcome.opaqueSourceFramesCaptured
+            != imported.dwgReadOutcome.opaqueViewCallbacks) {
+        std::cerr << "GEODATA source diagnostics: imported=" << importedOkay
+                  << " format=" << static_cast<unsigned>(imported.sourceFormat)
+                  << " generation=" << imported.importGeneration
+                  << " typed=" << imported.geoDataObjects.size()
+                  << " typedCount=" << imported.geoDataRetainedRecords
+                  << " captureFailed=" << imported.geoDataCaptureFailed
+                  << " opaqueCallbacks="
+                  << imported.dwgReadOutcome.opaqueViewCallbacks
+                  << " opaqueCaptured="
+                  << imported.dwgReadOutcome.opaqueSourceFramesCaptured
+                  << " classStatus="
+                  << static_cast<unsigned>(imported.dwgClassCoverage.m_status)
+                  << " classComplete="
+                  << imported.dwgClassCoverage.m_complete
+                  << " classEvidence="
+                  << imported.hasUnchangedDwgClassEvidence()
+                  << " firstError="
+                  << static_cast<unsigned>(imported.dwgReadOutcome.error)
+                  << '\n';
+        DxIfaceStandardDwgCaptureTestAccess::printOpaqueSourceFrames(
+            imported, imported.importGeneration);
+        return fail("generated GEODATA DWG callback lacked bounded typed/raw capture");
+    }
+
+    const dx_data::GeoDataKey key{
+        imported.importGeneration, author.geo.handle};
+    const auto source = imported.geoDataObjects.find(key);
+    if (source == imported.geoDataObjects.end()
+        || source->second.m_hostBlockHandle
+            != DRW::DwgModelSpaceBlockRecordHandle
+        || source->second.parentHandle
+            != DRW::DwgModelSpaceBlockRecordHandle
+        || source->second.m_coordinateSystemDefinition
+            != "LOCAL_GRID_PROFILE")
+        return fail("generated GEODATA typed source/owner fields changed on read");
+
+    class Readback final : public dx_iface {
+    public:
+        void addGeoData(const DRW_GeoData& data) override {
+            records.push_back(data);
+        }
+        std::vector<DRW_GeoData> records;
+    } readback;
+    dx_iface exporter;
+    for (const auto& target : {
+             std::make_pair(asciiPath, false),
+             std::make_pair(binaryPath, true)}) {
+        const std::string sentinel = "GEODATA_ATOMIC_DESTINATION";
+        const auto refusesMutation = [&](auto corrupt, auto repair) {
+            {
+                std::ofstream previous(target.first, std::ios::binary);
+                if (!previous)
+                    return false;
+                previous << sentinel;
+                if (!previous)
+                    return false;
+            }
+            corrupt();
+            const bool invalidWrite = exporter.fileExport(
+                target.first.string(), DRW::AC1027, target.second, &imported,
+                false, true);
+            std::ifstream previous(target.first, std::ios::binary);
+            const std::string previousBytes{
+                std::istreambuf_iterator<char>{previous},
+                std::istreambuf_iterator<char>{}};
+            repair();
+            return !invalidWrite && previousBytes == sentinel;
+        };
+        DRW_GeoData& mutableSource = imported.geoDataObjects.find(key)->second;
+        if (!refusesMutation(
+                [&]() { mutableSource.m_hostBlockHandle = 0xFFFFu; },
+                [&]() {
+                    mutableSource.m_hostBlockHandle =
+                        DRW::DwgModelSpaceBlockRecordHandle;
+                }))
+            return fail("invalid GEODATA host-block target was not refused atomically");
+
+        if (!exporter.fileExport(target.first.string(), DRW::AC1027,
+                                 target.second, &imported, false, true))
+            return fail("corrected GEODATA host-block profile failed same-adapter retry");
+        if (!DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
+                imported, imported.importGeneration, author.geo.handle))
+            return fail("corrected GEODATA retry did not bind output to the source frame");
+        readback.records.clear();
+        dx_data outputData;
+        const bool readbackOkay =
+            readback.fileImport(target.first.string(), &outputData, false);
+        const auto outputModelSpace = std::find_if(
+            outputData.blockRecords.begin(), outputData.blockRecords.end(),
+            [](const DRW_Block_Record& block) {
+                return block.name == "*Model_Space";
+            });
+        if (!readbackOkay || readback.records.size() != 1u
+            || outputModelSpace == outputData.blockRecords.end()
+            || readback.records.front().handle != author.geo.handle
+            || readback.records.front().parentHandle
+                != outputModelSpace->handle
+            || readback.records.front().m_hostBlockHandle
+                != outputModelSpace->handle
+            || readback.records.front().m_version != 2
+            || readback.records.front().m_designPoint.x != 100.0
+            || readback.records.front().m_designPoint.y != 200.0
+            || readback.records.front().m_coordinateSystemDefinition
+                != "LOCAL_GRID_PROFILE"
+            || readback.records.front().m_geoRssTag
+                != "LOCAL_GEODATA_TAG") {
+            std::cerr << "GEODATA readback diagnostics: imported="
+                      << readbackOkay << " count=" << readback.records.size();
+            if (!readback.records.empty()) {
+                const DRW_GeoData& actual = readback.records.front();
+                std::cerr << " handle=" << actual.handle
+                          << " parent=" << actual.parentHandle
+                          << " host=" << actual.m_hostBlockHandle
+                          << " outputModelSpace="
+                          << (outputModelSpace == outputData.blockRecords.end()
+                                  ? 0u : outputModelSpace->handle)
+                          << " version=" << actual.m_version
+                          << " design=(" << actual.m_designPoint.x << ','
+                          << actual.m_designPoint.y << ','
+                          << actual.m_designPoint.z << ") coord="
+                          << actual.m_coordinateSystemDefinition
+                          << " rss=" << actual.m_geoRssTag;
+            }
+            std::cerr << '\n';
+            return fail("generated GEODATA ASCII/Binary output did not type-read back exact fields");
+        }
+    }
+    return true;
+}
+
 int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--ucs-base-name-target-closure")
         return ucsBaseHeaderNameTargetClosure() ? 0 : 1;
@@ -64252,6 +64474,9 @@ int main(int argc, char** argv) {
         && std::string(argv[1])
             == "--opaque-dwg-source-capture-and-output-gate")
         return opaqueDwgSourceCaptureAndStrictOutputGate() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--geodata-dwg-adapter-transport")
+        return geodataDwgAdapterTransport() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--standard-dwg-object-source-capture")
         return standardDwgObjectSourceCapture() ? 0 : 1;

@@ -553,6 +553,7 @@ public:
     void addXRecord(const DRW_XRecord& data) override;
     void addDataLink(const DRW_DataLink& data) override;
     void addMaterial(const DRW_Material& data) override;
+    void addGeoData(const DRW_GeoData& data) override;
     void addVisualStyle(const DRW_VisualStyle& data) override;
     void addBackground(const DRW_Background& data) override;
     void addSun(const DRW_Sun& data) override;
@@ -1504,6 +1505,28 @@ public:
                 if (!dxfW->writePlotSettings(&settings))
                     return;
                 break;
+            }
+        }
+        objectWritePhase = "GEODATA";
+        for (const std::uint32_t handle : m_extensionGeoDataHandles) {
+            const dx_data::GeoDataKey key{cData->importGeneration, handle};
+            const auto geoData = cData->geoDataObjects.find(key);
+            if (geoData == cData->geoDataObjects.end()) {
+                std::cerr << "GEODATA output binding lost before emission\n";
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+            if (!dxfW->writeGeoData(&geoData->second)) {
+                std::cerr << "GEODATA writer refused source handle "
+                          << handle << '\n';
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+            if (!recordOpaqueDwgOutputQualification(handle)) {
+                std::cerr << "GEODATA output frame qualification failed for handle "
+                          << handle << '\n';
+                dxfW->writeRawDxfObject(nullptr);
+                return;
             }
         }
         objectWritePhase = "underlay definitions";
@@ -2788,6 +2811,7 @@ private:
     }
     bool prepareExtensionObjectGraph(dx_data* data,
                                      bool includeNamedObjectRoot);
+    bool prepareDwgGeoDataOutput(bool debug);
     bool prepareTableFallbackGraph(dx_data& data, DRW::Version targetVersion);
     void writeEntityOrTableFallback(DRW_Entity* entity);
     bool validateSortEntsGraph(const dx_data& data, bool debug = false);
@@ -3405,6 +3429,7 @@ private:
     bool hasUnchangedDynamicBlockOutputProfile() const noexcept;
 
     std::vector<std::uint32_t> m_extensionDictionaryHandles;
+    std::vector<std::uint32_t> m_extensionGeoDataHandles;
     std::vector<dx_data::UnderlayDefinitionKey>
         m_underlayDefinitionKeysToWrite;
     std::vector<std::uint32_t> m_extensionAssociativeHandles;
