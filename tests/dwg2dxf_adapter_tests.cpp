@@ -20637,7 +20637,22 @@ bool dwgProxyEntityOutputGate() {
         hardPointer.m_dxfCode = 340;
         hardPointer.m_handle = secondTarget.handle;
         hardPointer.m_rawHandle = secondTarget.handle;
-        retained->m_objectIdRefs = {softPointer, hardPointer};
+        std::vector<DRW_ProxyObjectIdRef> proxyReferences{
+            softPointer, hardPointer};
+        const std::array<std::pair<std::uint8_t, std::uint32_t>, 4>
+            offsetPointerAliases{{{6u, firstTarget.handle},
+                                  {8u, secondTarget.handle},
+                                  {10u, firstTarget.handle},
+                                  {12u, secondTarget.handle}}};
+        for (const auto& alias : offsetPointerAliases) {
+            DRW_ProxyObjectIdRef reference;
+            reference.m_handleCode = alias.first;
+            reference.m_dxfCode = 330;
+            reference.m_handle = alias.second;
+            reference.m_rawHandle = alias.second;
+            proxyReferences.push_back(reference);
+        }
+        retained->m_objectIdRefs = proxyReferences;
 
         const std::string graphSentinel = "PROXY_GRAPH_DESTINATION\n";
         const auto writeSentinel = [&path](const std::string& value) {
@@ -20660,6 +20675,15 @@ bool dwgProxyEntityOutputGate() {
         retained->m_objectIdRefs[0].m_dxfCode = 350;
         if (!refusesAtomically())
             return fail("proxy adapter admitted an unsupported owner-role target");
+        retained->m_objectIdRefs[0] = softPointer;
+        retained->m_objectIdRefs[0].m_handleCode = 3u;
+        retained->m_objectIdRefs[0].m_dxfCode = 360;
+        if (!refusesAtomically())
+            return fail("proxy adapter admitted an unsupported hard-owner target");
+        retained->m_objectIdRefs[0] = softPointer;
+        retained->m_objectIdRefs[0].m_handleCode = 7u;
+        if (!refusesAtomically())
+            return fail("proxy adapter admitted an unknown handle-code alias");
         retained->m_objectIdRefs[0] = softPointer;
 
         dx_ifaceRawEntityEvent rawCollision;
@@ -20716,7 +20740,7 @@ bool dwgProxyEntityOutputGate() {
             return 0u;
         };
         const DRW_ProxyEntity& graphProxy = graphReadback.proxies.front();
-        if (graphProxy.m_objectIdRefs.size() != 2u
+        if (graphProxy.m_objectIdRefs.size() != proxyReferences.size()
             || graphProxy.m_objectIdRefs[0].m_dxfCode != 330
             || graphProxy.m_objectIdRefs[1].m_dxfCode != 340
             || graphProxy.m_objectIdRefs[0].m_handle
@@ -20726,6 +20750,15 @@ bool dwgProxyEntityOutputGate() {
             || graphProxy.m_objectIdRefs[0].m_handle == 0u
             || graphProxy.m_objectIdRefs[1].m_handle == 0u)
             return fail("proxy graph did not preserve remapped typed target identities");
+        for (std::size_t index = 2u;
+             index < graphProxy.m_objectIdRefs.size(); ++index) {
+            const std::uint32_t source = proxyReferences[index].m_handle;
+            if (proxyReferences[index].m_dxfCode != 330
+                || graphProxy.m_objectIdRefs[index].m_dxfCode != 330
+                || graphProxy.m_objectIdRefs[index].m_handle
+                    != readLineHandle(source))
+                return fail("proxy offset-pointer alias did not canonicalize to its remapped target");
+        }
 
         class OmitProxyTargetAdapter final : public dx_iface {
         public:

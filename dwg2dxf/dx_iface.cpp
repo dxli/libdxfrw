@@ -71385,9 +71385,7 @@ bool dx_iface::planDwgProxyEntityObjectIds() {
                     const int expectedCode =
                         DRW_ProxyObjectIdRef::dxfGroupCodeForDwgHandleCode(
                             reference.m_handleCode);
-                    if ((reference.m_handleCode != 4u
-                         && reference.m_handleCode != 5u)
-                        || expectedCode < 0
+                    if ((expectedCode != 330 && expectedCode != 340)
                         || reference.m_dxfCode != expectedCode
                         || reference.m_handle == 0u
                         || reference.m_handle == DRW::NoHandle
