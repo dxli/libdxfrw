@@ -36755,6 +36755,14 @@ bool dwgTypedSunOutputProfile() {
         viewportSun.m_colorCmc.method = dwgColor::ACI;
         iface.addSun(viewportSun);
 
+        DRW_Sun viewSun;
+        viewSun.handle = 0xA77Cu;
+        viewSun.parentHandle = 0xA77Bu;
+        viewSun.m_color = 8u;
+        viewSun.m_colorCmc.present = true;
+        viewSun.m_colorCmc.method = dwgColor::ACI;
+        iface.addSun(viewSun);
+
         DRW_Vport owner;
         owner.handle = 0xA775u;
         owner.name = "SUN_OWNER";
@@ -36765,6 +36773,12 @@ bool dwgTypedSunOutputProfile() {
         viewportOwner.handle = 0xA778u;
         viewportOwner.m_sunHandle = viewportSun.handle;
         iface.addViewport(viewportOwner);
+
+        DRW_View viewOwner;
+        viewOwner.handle = 0xA77Bu;
+        viewOwner.name = "SUN_VIEW_OWNER";
+        viewOwner.m_sunHandle = viewSun.handle;
+        iface.addView(viewOwner);
 
         const std::string sentinel = "existing SUN destination survives\n";
         {
@@ -36797,9 +36811,10 @@ bool dwgTypedSunOutputProfile() {
         dx_data readback;
         dx_iface reader;
         if (!reader.fileImport(output.string(), &readback, false)
-            || readback.suns.size() != 2u
-            || readback.rawSunObjects.size() != 2u
-            || readback.VPorts.size() != 1u)
+            || readback.suns.size() != 3u
+            || readback.rawSunObjects.size() != 3u
+            || readback.VPorts.size() != 1u
+            || readback.views.size() != 1u)
             return fail("typed DWG SUN failed fresh DXF readback on "
                         + encoding);
         const auto firstSun = std::find_if(readback.suns.begin(),
@@ -36810,12 +36825,18 @@ bool dwgTypedSunOutputProfile() {
             readback.suns.end(), [](const DRW_Sun& sun) {
                 return sun.m_color == 7u;
             });
+        const auto thirdSun = std::find_if(readback.suns.begin(),
+            readback.suns.end(), [](const DRW_Sun& sun) {
+                return sun.m_color == 8u;
+            });
         if (firstSun == readback.suns.end()
-            || secondSun == readback.suns.end())
-            return fail("typed DWG SUN colors were not both read back on "
+            || secondSun == readback.suns.end()
+            || thirdSun == readback.suns.end())
+            return fail("typed DWG SUN colors were not all read back on "
                         + encoding);
         const DRW_Sun& emittedSun = *firstSun;
         const DRW_Sun& emittedViewportSun = *secondSun;
+        const DRW_Sun& emittedViewSun = *thirdSun;
         const auto firstRawSun = std::find_if(
             readback.rawSunObjects.begin(), readback.rawSunObjects.end(),
             [&emittedSun](const DRW_RawDxfObject& raw) {
@@ -36826,12 +36847,24 @@ bool dwgTypedSunOutputProfile() {
             [&emittedViewportSun](const DRW_RawDxfObject& raw) {
                 return raw.handle == emittedViewportSun.handle;
             });
+        const auto thirdRawSun = std::find_if(
+            readback.rawSunObjects.begin(), readback.rawSunObjects.end(),
+            [&emittedViewSun](const DRW_RawDxfObject& raw) {
+                return raw.handle == emittedViewSun.handle;
+            });
         if (firstRawSun == readback.rawSunObjects.end()
-            || secondRawSun == readback.rawSunObjects.end())
+            || secondRawSun == readback.rawSunObjects.end()
+            || thirdRawSun == readback.rawSunObjects.end())
             return fail("typed DWG SUN raw carriers did not match typed handles");
         const DRW_RawDxfObject& rawSun = *firstRawSun;
         const DRW_RawDxfObject& rawViewportSun = *secondRawSun;
+        const DRW_RawDxfObject& rawViewSun = *thirdRawSun;
         const DRW_Vport& emittedOwner = readback.VPorts.front();
+        const auto emittedViewOwner = std::find_if(
+            readback.views.begin(), readback.views.end(),
+            [](const DRW_View& view) {
+                return view.name == "SUN_VIEW_OWNER";
+            });
         const DRW_Viewport* emittedViewportOwner = nullptr;
         const auto findViewportOwner = [&emittedViewportOwner](
                 const std::list<DRW_Entity*>& entities) {
@@ -36853,7 +36886,8 @@ bool dwgTypedSunOutputProfile() {
             if (block != nullptr && !findViewportOwner(block->ent))
                 return fail("typed DWG VIEWPORT SUN owner is ambiguous");
         }
-        if (emittedViewportOwner == nullptr)
+        if (emittedViewportOwner == nullptr
+            || emittedViewOwner == readback.views.end())
             return fail("typed DWG VIEWPORT SUN owner was not read back");
         std::ifstream outputInput(output, std::ios::binary);
         const std::string outputBytes(
@@ -36865,7 +36899,7 @@ bool dwgTypedSunOutputProfile() {
                 [](const DRW_Class& cls) {
                     return cls.recName == "SUN"
                         && cls.className == "AcDbSun"
-                        && cls.instanceCount == 2;
+                        && cls.instanceCount == 3;
                 }));
         if (emittedSun.handle == 0u
             || emittedSun.parentHandle != emittedOwner.handle
@@ -36890,6 +36924,14 @@ bool dwgTypedSunOutputProfile() {
             || !hasWireGroup(outputBytes, binary, 361,
                              hexHandle(emittedViewportSun.handle))
             || !hasInteger(rawViewportSun, 63, 7)
+            || emittedViewSun.handle == 0u
+            || emittedViewSun.parentHandle != emittedViewOwner->handle
+            || emittedViewOwner->m_sunHandle != emittedViewSun.handle
+            || rawViewSun.parentHandle != emittedViewOwner->handle
+            || !hasTag(rawViewSun, 5, hexHandle(emittedViewSun.handle))
+            || !hasWireGroup(outputBytes, binary, 361,
+                             hexHandle(emittedViewSun.handle))
+            || !hasInteger(rawViewSun, 63, 8)
             || sunClassMatches != 1u) {
             return fail("typed DWG SUN output mismatch on " + encoding
                         + ": sun=" + std::to_string(emittedSun.handle)

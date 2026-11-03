@@ -669,8 +669,9 @@ public:
     bool renderSettingsCaptureFailed{false};
     // Background and SUN callback data are retained separately from their raw
     // DXF carriers. Same-version Background records can be replayed only
-    // through a validated ACAD_BACKGROUND dictionary; VIEW/VPORT/VIEWPORT
-    // references require rooted, remapped targets and viewport non-sharing.
+    // through a validated ACAD_BACKGROUND dictionary; VIEW table-record,
+    // VPORT and VIEWPORT references require rooted, remapped targets, with
+    // viewport non-sharing.
     // IBL group-340 edges admit only uniquely owned rooted Solid/Gradient/Image
     // targets. Skylight-to-SUN and common reactor/extension-dictionary edges
     // remain fail-closed.

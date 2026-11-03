@@ -8397,7 +8397,11 @@ bool dxfRW::writeView(DRW_View *ent){
                          m_resolvedBackgroundHandles.end(),
                          ent->m_backgroundHandle)
                 == m_resolvedBackgroundHandles.end())
-        || ent->m_sunHandle != 0
+        || (ent->m_sunHandle != 0
+            && (version < DRW::AC1021
+                || std::find(m_resolvedSunHandles.begin(),
+                             m_resolvedSunHandles.end(), ent->m_sunHandle)
+                    == m_resolvedSunHandles.end()))
         || (hasLiveSectionReference
             && (version < DRW::AC1021
                 || std::find(m_resolvedLiveSectionHandles.begin(),
@@ -8422,6 +8426,9 @@ bool dxfRW::writeView(DRW_View *ent){
     const std::uint32_t emittedLiveSectionHandle =
         hasLiveSectionReference
             ? emittedReference(ent->m_liveSectionHandle) : 0u;
+    const std::uint32_t emittedSunHandle =
+        version > DRW::AC1018 && ent->m_sunHandle != 0u
+            ? emittedReference(ent->m_sunHandle) : 0u;
     if ((ent->m_backgroundHandle != 0u
          && version > DRW::AC1018
          && (emittedBackgroundHandle == 0u
@@ -8440,7 +8447,9 @@ bool dxfRW::writeView(DRW_View *ent){
                 || emittedNamedUcsHandle == DRW::NoHandle))
         || (hasLiveSectionReference
             && (emittedLiveSectionHandle == 0u
-                || emittedLiveSectionHandle == DRW::NoHandle)))
+                || emittedLiveSectionHandle == DRW::NoHandle))
+        || (ent->m_sunHandle != 0u
+            && (emittedSunHandle == 0u || emittedSunHandle == DRW::NoHandle)))
         return failDxfWrite();
     RecordStateScope state(*this, ent);
     DxfWriterRecordScope record(*writer);
@@ -8529,7 +8538,7 @@ bool dxfRW::writeView(DRW_View *ent){
         if (ent->m_visualStyleHandle != 0)
             writer->writeString(348, toHexStr(emittedVisualStyleHandle));
         if (ent->m_sunHandle != 0)
-            writer->writeString(361, toHexStr(ent->m_sunHandle));
+            writer->writeString(361, toHexStr(emittedSunHandle));
     }
     if (version > DRW::AC1009 && ent->hasUCS) {
         if (ent->baseUCS_ID != 0)

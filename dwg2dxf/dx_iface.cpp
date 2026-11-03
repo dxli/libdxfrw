@@ -5210,6 +5210,9 @@ bool collectSunOwnerGraph(const dx_data& data, DRW::Version targetVersion,
         const bool hasSunOwners = std::any_of(
             data.VPorts.begin(), data.VPorts.end(),
             [](const DRW_Vport& vport) { return vport.m_sunHandle != 0; });
+        const bool hasViewSunOwners = std::any_of(
+            data.views.begin(), data.views.end(),
+            [](const DRW_View& view) { return view.m_sunHandle != 0; });
         const auto hasViewportSun = [](const std::list<DRW_Entity*>& entities) {
             return std::any_of(entities.begin(), entities.end(),
                 [](const DRW_Entity* entity) {
@@ -5218,7 +5221,7 @@ bool collectSunOwnerGraph(const dx_data& data, DRW::Version targetVersion,
                     return viewport != nullptr && viewport->m_sunHandle != 0;
                 });
         };
-        bool hasOwnerReference = hasSunOwners
+        bool hasOwnerReference = hasSunOwners || hasViewSunOwners
             || (data.mBlock != nullptr && hasViewportSun(data.mBlock->ent));
         for (const dx_ifaceBlock* block : data.blocks) {
             hasOwnerReference = hasOwnerReference
@@ -5261,9 +5264,14 @@ bool collectSunOwnerGraph(const dx_data& data, DRW::Version targetVersion,
                 || !ownerHandles.insert(ownerHandle).second
                 || sun->second->parentHandle != ownerHandle
                 || ++ownerCounts[sunHandle] != 1u)
-                return reject("SUN must have exactly one matching VPORT or VIEWPORT hard owner");
+                return reject("SUN must have exactly one matching VIEW, VPORT, or VIEWPORT hard owner");
             return true;
         };
+        for (const DRW_View& view : data.views) {
+            if (view.m_sunHandle != 0
+                && !acceptOwner(view.handle, view.m_sunHandle))
+                return false;
+        }
         for (const DRW_Vport& vport : data.VPorts) {
             if (vport.m_sunHandle == 0)
                 continue;
@@ -65842,8 +65850,11 @@ bool validateLayoutGraph(const dx_data& data, DRW::Version targetVersion,
                 return reject("VPORT 346 base-UCS handle is inconsistent or does not resolve uniquely to a UCS record");
         }
         for (const DRW_View& view : data.views) {
-            if (view.m_sunHandle != 0)
-                return reject("VIEW 361 SUN ownership graph is not retained for DXF export");
+            if (view.m_sunHandle != 0
+                && std::find(resolvedSunHandles.begin(),
+                             resolvedSunHandles.end(), view.m_sunHandle)
+                    == resolvedSunHandles.end())
+                return reject("VIEW 361 sun handle has no validated hard-owner closure");
             const bool hasUcsReferences = view.namedUCS_ID != 0
                 || view.baseUCS_ID != 0;
             if ((!view.hasUCS && hasUcsReferences)
