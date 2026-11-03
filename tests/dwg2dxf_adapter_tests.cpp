@@ -80,6 +80,16 @@ public:
     }
 };
 
+class DxfDimensionDstyleTestAccess {
+public:
+    static void setStyleHandle(DRW_Dimension& dimension,
+                               std::uint32_t handle) {
+        dimension.dimStyleH.code = 5;
+        dimension.dimStyleH.ref = handle;
+        dimension.dimStyleH.ref64 = handle;
+    }
+};
+
 template<class Record> class RasterProductionProbe final : public Record {
 public:
     using Record::parseDwg;
@@ -66151,6 +66161,194 @@ bool toleranceDimstyleReferenceBinding() {
     return outputReadbacks == 2u && refusals == 2u && retries == 2u;
 }
 
+bool dimensionDimstyleReferenceBinding() {
+    const auto nonce = static_cast<std::uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-dimension-dimstyle-" + std::to_string(nonce));
+    std::error_code filesystemError;
+    std::filesystem::create_directories(directory, filesystemError);
+    if (filesystemError)
+        return fail("could not create the DIMENSION DIMSTYLE scratch directory");
+    struct Cleanup final {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+
+    class Author final : public dx_iface {
+    public:
+        Author(dwgRW& output, bool missingTarget) : output(output) {
+            cData = &storage;
+            currentBlock = storage.mBlock;
+            style.name = "ANSI-25";
+            dimension.handle = 0xA230u;
+            dimension.setStyle(style.name);
+            dimension.setName("");
+            dimension.setText("20");
+            dimension.setDef1Point(DRW_Coord(1.0, 2.0, 0.0));
+            dimension.setDef2Point(DRW_Coord(5.0, 2.0, 0.0));
+            dimension.setDimPoint(DRW_Coord(3.0, 4.0, 0.0));
+            dimension.setTextPoint(DRW_Coord(3.0, 5.0, 0.0));
+            wrongTarget = missingTarget;
+        }
+
+        void writeHeader(DRW_Header& header) override { header.vars.clear(); }
+        void writeLayers() override {
+            DRW_Layer layer;
+            layer.name = "0";
+            layersWritten = output.addLayer(&layer) && layersWritten;
+        }
+        void writeDimstyles() override {
+            stylesWritten = output.addDimstyle(&style) && stylesWritten;
+        }
+        void writeEntities() override {
+            const std::uint32_t target = wrongTarget
+                ? style.handle + 0x100u : style.handle;
+            DxfDimensionDstyleTestAccess::setStyleHandle(dimension, target);
+            dimensionWritten = output.writeDimension(&dimension);
+        }
+        bool finalizeDwgWrite() override {
+            return layersWritten && stylesWritten && dimensionWritten;
+        }
+
+        dwgRW& output;
+        dx_data storage;
+        DRW_Dimstyle style;
+        DRW_DimAligned dimension;
+        bool wrongTarget{false};
+        bool layersWritten{true};
+        bool stylesWritten{true};
+        bool dimensionWritten{false};
+    };
+
+    const auto authorSource = [&](const std::filesystem::path& path,
+                                  bool missingTarget) {
+        dwgRW sourceWriter(path.string().c_str());
+        Author sourceAuthor(sourceWriter, missingTarget);
+        return sourceWriter.write(&sourceAuthor, DRW::AC1024, true);
+    };
+    const auto dimensionIn = [](dx_data& data) -> DRW_Dimension* {
+        if (data.mBlock == nullptr)
+            return nullptr;
+        for (DRW_Entity* entity : data.mBlock->ent)
+            if (auto* dimension = dynamic_cast<DRW_Dimension*>(entity))
+                return dimension;
+        return nullptr;
+    };
+    const auto styleIn = [](dx_data& data) -> DRW_Dimstyle* {
+        const auto style = std::find_if(data.dimStyles.begin(),
+            data.dimStyles.end(), [](const DRW_Dimstyle& value) {
+                return value.name == "ANSI-25";
+            });
+        return style == data.dimStyles.end() ? nullptr : &*style;
+    };
+
+    const auto sourcePath = directory / "dimension-source.dwg";
+    if (!authorSource(sourcePath, false))
+        return fail("could not author the custom-DIMSTYLE DIMENSION DWG control");
+    dx_data imported;
+    dx_iface importer;
+    if (!importer.fileImport(sourcePath.string(), &imported, false))
+        return fail("could not read the generated DIMENSION DWG control");
+    DRW_Dimension* dimension = dimensionIn(imported);
+    DRW_Dimstyle* style = styleIn(imported);
+    if (dimension == nullptr || style == nullptr
+        || dimension->getStyle() != style->name) {
+        std::cerr << "DIMENSION DIMSTYLE source diagnostics: dimension="
+                  << (dimension != nullptr) << " style=" << (style != nullptr);
+        if (dimension != nullptr)
+            std::cerr << " resolvedName='" << dimension->getStyle() << "'";
+        if (style != nullptr)
+            std::cerr << " tableHandle=" << style->handle
+                      << " tableName='" << style->name << "'";
+        std::cerr << '\n';
+        return fail("DWG DIMENSION DIMSTYLE handle was not resolved to its exact table name");
+    }
+
+    dx_iface exporter;
+    unsigned outputReadbacks = 0u;
+    for (const bool binary : {false, true}) {
+        const auto outputPath = directory
+            / (binary ? "dimension-boundary.dxf"
+                      : "dimension-boundary-ascii.dxf");
+        if (!exporter.fileExport(outputPath.string(), DRW::AC1024, binary,
+                                 &imported, false, true))
+            return fail("resolved custom DIMENSION DIMSTYLE did not export");
+        dx_data readback;
+        dx_iface dxfReader;
+        if (!dxfReader.fileImport(outputPath.string(), &readback, false))
+            return fail("custom-style DIMENSION DXF readback failed");
+        DRW_Dimension* actual = dimensionIn(readback);
+        DRW_Dimstyle* actualStyle = styleIn(readback);
+        if (actual == nullptr || actual->getStyle() != "ANSI-25"
+            || actualStyle == nullptr || actual->getText() != dimension->getText())
+            return fail("DXF DIMENSION group-3 name or DIMSTYLE target changed on readback");
+        ++outputReadbacks;
+    }
+
+    const auto missingSourcePath = directory / "dimension-missing-target.dwg";
+    if (!authorSource(missingSourcePath, true))
+        return fail("could not author the missing-DIMSTYLE-target DIMENSION DWG control");
+    dx_data missingData;
+    dx_iface missingReader;
+    if (!missingReader.fileImport(missingSourcePath.string(), &missingData, false))
+        return fail("could not read the missing-DIMSTYLE-target DIMENSION DWG control");
+    DRW_Dimension* missingDimension = dimensionIn(missingData);
+    DRW_Dimstyle* missingStyle = styleIn(missingData);
+    if (missingDimension == nullptr || missingStyle == nullptr
+        || !missingDimension->getStyle().empty())
+        return fail("missing DIMENSION DIMSTYLE target was not preserved as unresolved");
+
+    dx_iface retryExporter;
+    unsigned refusals = 0u;
+    unsigned retries = 0u;
+    for (const bool binary : {false, true}) {
+        const auto outputPath = directory
+            / (binary ? "dimension-missing-target.dxf"
+                      : "dimension-missing-target-ascii.dxf");
+        const std::string sentinel = "DIMENSION_DIMSTYLE_DESTINATION";
+        {
+            std::ofstream prior(outputPath, std::ios::binary);
+            prior << sentinel;
+        }
+        if (retryExporter.fileExport(outputPath.string(), DRW::AC1024, binary,
+                                     &missingData, false, true))
+            return fail("unresolved DIMENSION DIMSTYLE target was written");
+        std::ifstream preserved(outputPath, std::ios::binary);
+        const std::string actual((std::istreambuf_iterator<char>(preserved)),
+                                 std::istreambuf_iterator<char>());
+        if (actual != sentinel)
+            return fail("unresolved DIMENSION failure modified the destination");
+        ++refusals;
+
+        missingDimension->setStyle(missingStyle->name);
+        if (!retryExporter.fileExport(outputPath.string(), DRW::AC1024, binary,
+                                      &missingData, false, true))
+            return fail("corrected DIMENSION DIMSTYLE did not retry on the same adapter");
+        dx_data readback;
+        dx_iface dxfReader;
+        if (!dxfReader.fileImport(outputPath.string(), &readback, false))
+            return fail("corrected DIMENSION retry produced unreadable DXF");
+        DRW_Dimension* actualDimension = dimensionIn(readback);
+        DRW_Dimstyle* actualStyle = styleIn(readback);
+        if (actualDimension == nullptr || actualStyle == nullptr
+            || actualDimension->getStyle() != "ANSI-25")
+            return fail("corrected DIMENSION retry lost its group-3 style name or DIMSTYLE target");
+        ++retries;
+
+        missingDimension->setStyle("");
+    }
+
+    std::cout << "DIMENSION DIMSTYLE handle/name binding: exact custom mapping, "
+              << outputReadbacks << " ASCII/Binary readbacks, " << refusals
+              << " atomic unresolved-target refusals, " << retries
+              << " same-adapter retries; generated drawing only\n";
+    return outputReadbacks == 2u && refusals == 2u && retries == 2u;
+}
+
 bool geodataDwgAdapterTransport() {
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch()
@@ -66982,6 +67180,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--tolerance-dimstyle-reference-binding")
         return toleranceDimstyleReferenceBinding() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--dimension-dimstyle-reference-binding")
+        return dimensionDimstyleReferenceBinding() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--dbcolor-late-callback-binding")
         return dbColorLateCallbackBinding() ? 0 : 1;

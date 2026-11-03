@@ -7244,7 +7244,15 @@ std::string dwgReader::findTableName(DRW::TTYPE table, std::int32_t handle) {
 }
 
 void dwgReader::resolveDimensionTableReferences(DRW_Dimension &dimension) {
-  dimension.style = findTableName(DRW::DIMSTYLE, dimension.dimStyleH.ref);
+  if (dimension.dimStyleH.ref == 0u
+      || dimension.dimStyleH.ref == DRW::NoHandle) {
+    // Match the dimension encoder's null-handle default. A missing non-null
+    // target below remains empty so strict DXF output can refuse it instead
+    // of silently changing the source association to STANDARD.
+    dimension.style = "STANDARD";
+  } else {
+    dimension.style = findTableName(DRW::DIMSTYLE, dimension.dimStyleH.ref);
+  }
   // DWG dimensions store a hard pointer to their anonymous BLOCK_RECORD;
   // DXF represents that relationship by the dimension's group-2 block name.
   // Resolve it while the source BLOCK_RECORD map is available so downstream

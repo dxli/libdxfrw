@@ -90,6 +90,14 @@ P4 supplies source/context/role providers and composes them with the existing
 local record providers and P5 output. Do not create parallel capture or graph
 engines.
 
+**DIMENSION DIMSTYLE binding:** The generated AC1024 control now proves the
+bounded group-3 projection and fail-closed behavior. A resolved hard pointer
+maps to the exact DIMSTYLE name; a missing non-null target stays unresolved and
+strict full conversion refuses it atomically. ASCII/Binary output, destination
+preservation, same-adapter correction retry, and typed readback pass. This adds
+no physical producer or native-rendering qualification; see the
+[DIMENSION DIMSTYLE receipt](docs/research/p4-dimension-dimstyle-reference-fail-closed-2026-11-03.json).
+
 1. **Source admission:** open another associative parser/schema packet only when
    a physical source identifies a required nonempty or mismatched body,
    action-dependency, owned-parameter, or versioned-registry profile. Prove its

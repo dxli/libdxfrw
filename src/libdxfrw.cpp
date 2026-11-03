@@ -10565,9 +10565,24 @@ bool dxfRW::preflightDimensionStyle(const DRW_Dimension *dimension) {
     // strict full conversion, after TABLES has been emitted; standalone writer
     // calls retain their historical behavior.
     if (!m_requireResolvedBlockOwners || version <= DRW::AC1009
-        || dimension == nullptr || dimension->getStyle().empty()
+        || dimension == nullptr
         || (!m_dxfBlockSectionActive && !m_dxfBlockSectionComplete))
         return true;
+
+    if (dimension->getStyle().empty()) {
+        // A DWG DIMENSION carries a hard pointer to its DIMSTYLE. The reader
+        // resolves that pointer to the DXF group-3 name before callback
+        // delivery, retaining an empty name for unresolved non-null targets.
+        // Do not silently emit an unstyled DIMENSION during strict conversion.
+        recordOperationDiagnostic(writingBlock ? DRW::OperationPhase::Blocks
+                                               : DRW::OperationPhase::Entities,
+            DRW::OperationCause::ValidationFailure,
+            "unresolved-dimension-style",
+            "DIMENSION group-3 style has no resolved DIMSTYLE name", 0,
+            false, dimension->handle,
+            dimension->handle != DRW::NoHandle);
+        return failDxfWrite();
+    }
 
     const std::string key = dxfSymbolNameKey(dimension->getStyle());
     if (key.empty() || m_emittedDxfDimStyleNames.count(key) == 0) {
