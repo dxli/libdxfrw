@@ -892,29 +892,29 @@ public:
      * or validate the object graph. */
     void setResolvedTableStyleHandles(
             const std::vector<std::uint32_t> &handles) {
-        if (!preflightDxfSetup())
-            return;
-        m_resolvedTableStyleHandles = handles;
+        setBoundedResolvedWriteInput(
+            handles, m_resolvedTableStyleHandles,
+            ResolvedTableStyleHandlesInput);
     }
     void setResolvedTableStyleHandles(std::vector<std::uint32_t>&& handles) {
-        if (!preflightDxfSetup())
-            return;
-        m_resolvedTableStyleHandles = std::move(handles);
+        setBoundedResolvedWriteInput(
+            std::move(handles), m_resolvedTableStyleHandles,
+            ResolvedTableStyleHandlesInput);
     }
     /*!< Register base-style IDs that were uniquely resolved in the rooted
      * CELLSTYLEMAP of each emitted TABLESTYLE. Standalone TABLECONTENT IDs
      * 4 and 101+ require this proof in addition to the TABLESTYLE handle. */
     void setResolvedTableStyleBaseIds(
             const std::vector<std::pair<std::uint32_t, std::int32_t>>& ids) {
-        if (!preflightDxfSetup())
-            return;
-        m_resolvedTableStyleBaseIds = ids;
+        setBoundedResolvedWriteInput(
+            ids, m_resolvedTableStyleBaseIds,
+            ResolvedTableStyleBaseIdsInput);
     }
     void setResolvedTableStyleBaseIds(
             std::vector<std::pair<std::uint32_t, std::int32_t>>&& ids) {
-        if (!preflightDxfSetup())
-            return;
-        m_resolvedTableStyleBaseIds = std::move(ids);
+        setBoundedResolvedWriteInput(
+            std::move(ids), m_resolvedTableStyleBaseIds,
+            ResolvedTableStyleBaseIdsInput);
     }
     /*!< Register rooted Background handles whose typed group-332 consumer or
      * IBL group-340 references will be emitted by this same adapter write.
@@ -922,14 +922,14 @@ public:
      * fail-closed. */
     void setResolvedBackgroundHandles(
             const std::vector<std::uint32_t> &handles) {
-        if (!preflightDxfSetup())
-            return;
-        m_resolvedBackgroundHandles = handles;
+        setBoundedResolvedWriteInput(
+            handles, m_resolvedBackgroundHandles,
+            ResolvedBackgroundHandlesInput);
     }
     void setResolvedBackgroundHandles(std::vector<std::uint32_t>&& handles) {
-        if (!preflightDxfSetup())
-            return;
-        m_resolvedBackgroundHandles = std::move(handles);
+        setBoundedResolvedWriteInput(
+            std::move(handles), m_resolvedBackgroundHandles,
+            ResolvedBackgroundHandlesInput);
     }
     const std::vector<std::uint32_t>& resolvedBackgroundHandles() const noexcept {
         return m_resolvedBackgroundHandles;
@@ -939,14 +939,13 @@ public:
      * callers have no resolved SUN targets by default and remain fail-closed. */
     void setResolvedSunHandles(
             const std::vector<std::uint32_t> &handles) {
-        if (!preflightDxfSetup())
-            return;
-        m_resolvedSunHandles = handles;
+        setBoundedResolvedWriteInput(
+            handles, m_resolvedSunHandles, ResolvedSunHandlesInput);
     }
     void setResolvedSunHandles(std::vector<std::uint32_t>&& handles) {
-        if (!preflightDxfSetup())
-            return;
-        m_resolvedSunHandles = std::move(handles);
+        setBoundedResolvedWriteInput(
+            std::move(handles), m_resolvedSunHandles,
+            ResolvedSunHandlesInput);
     }
     const std::vector<std::uint32_t>& resolvedSunHandles() const noexcept {
         return m_resolvedSunHandles;
@@ -1453,6 +1452,57 @@ public:
 
 private:
     static constexpr std::size_t kMaxDxfClassEntries = 65536u;
+    static constexpr std::size_t kMaxResolvedWriteReferences = 100000u;
+    enum DxfResolvedWriteInput : std::uint8_t {
+        ResolvedTableStyleHandlesInput = 1u << 0,
+        ResolvedTableStyleBaseIdsInput = 1u << 1,
+        ResolvedBackgroundHandlesInput = 1u << 2,
+        ResolvedSunHandlesInput = 1u << 3
+    };
+    template <class T>
+    void setBoundedResolvedWriteInput(
+            const std::vector<T>& values, std::vector<T>& destination,
+            std::uint8_t rejectionBit) {
+        if (!preflightDxfSetup())
+            return;
+        if (values.size() > kMaxResolvedWriteReferences) {
+            rejectResolvedWriteInput(destination, rejectionBit);
+            return;
+        }
+        try {
+            std::vector<T> copied = values;
+            destination.swap(copied);
+        } catch (...) {
+            rejectResolvedWriteInput(destination, rejectionBit);
+            return;
+        }
+        m_dxfResolvedWriteInputRejectedMask = static_cast<std::uint8_t>(
+            m_dxfResolvedWriteInputRejectedMask
+            & static_cast<std::uint8_t>(~rejectionBit));
+    }
+    template <class T>
+    void setBoundedResolvedWriteInput(
+            std::vector<T>&& values, std::vector<T>& destination,
+            std::uint8_t rejectionBit) {
+        if (!preflightDxfSetup())
+            return;
+        if (values.size() > kMaxResolvedWriteReferences) {
+            rejectResolvedWriteInput(destination, rejectionBit);
+            return;
+        }
+        destination = std::move(values);
+        m_dxfResolvedWriteInputRejectedMask = static_cast<std::uint8_t>(
+            m_dxfResolvedWriteInputRejectedMask
+            & static_cast<std::uint8_t>(~rejectionBit));
+    }
+    template <class T>
+    void rejectResolvedWriteInput(std::vector<T>& destination,
+                                  std::uint8_t rejectionBit) noexcept {
+        m_dxfResolvedWriteInputRejectedMask |= rejectionBit;
+        std::vector<T>().swap(destination);
+        if (m_dxfWriteAttemptActive)
+            m_writeError = true;
+    }
     // Executable-local allocation instrumentation; no runtime/public test API.
     friend class DxIfaceStandardDwgCaptureTestAccess;
     friend class DxfGroupSetterTestAccess;
@@ -2071,6 +2121,7 @@ private:
     std::vector<std::uint32_t> m_resolvedBackgroundHandles;
     /// SUN targets whose VPORT/VIEWPORT hard-owner graph was validated by the adapter.
     std::vector<std::uint32_t> m_resolvedSunHandles;
+    std::uint8_t m_dxfResolvedWriteInputRejectedMask{0u};
     /// Source linetypes used to attach metadata to canonical mandatory rows.
     std::vector<DRW_LType> m_canonicalLineTypeMetadata;
     /// GROUP objects to typed-emit in writeObjects (DXF path). Populated via

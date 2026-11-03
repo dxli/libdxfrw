@@ -128,6 +128,8 @@ int main() {
   const std::string path = (directory / "output.dxf").string();
   const std::vector<DRW_RawDxfSection> oversizedRawSections(
       DRW::kMaxDxfRawSections + 1u);
+  // Keep this count one above dxfRW's private 100,000-reference ceiling.
+  const std::vector<std::uint32_t> oversizedSunReferences(100001u, 0xA100u);
   for (bool binary : {false, true}) {
     Bare boundedAdapter;
     dxfRW boundedCodec(path.c_str());
@@ -141,6 +143,20 @@ int main() {
     if (!boundedCodec.write(&boundedAdapter, DRW::AC1027, binary) ||
         read(path).find("TEST_PRIVATE") == std::string::npos)
       return 12;
+  }
+  for (bool binary : {false, true}) {
+    Bare boundedAdapter;
+    dxfRW boundedCodec(path.c_str());
+    boundedAdapter.codec = &boundedCodec;
+    boundedCodec.setResolvedSunHandles(oversizedSunReferences);
+    sentinel(path);
+    if (boundedCodec.write(&boundedAdapter, DRW::AC1027, binary) ||
+        read(path) != "sentinel")
+      return 13;
+    boundedCodec.setResolvedSunHandles({0xA101u});
+    if (!boundedCodec.write(&boundedAdapter, DRW::AC1027, binary) ||
+        read(path) == "sentinel")
+      return 14;
   }
   Bare b;
   dxfRW c(path.c_str());

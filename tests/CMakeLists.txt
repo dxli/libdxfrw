@@ -3163,6 +3163,12 @@ set_tests_properties(libdxfrw_raw_dxf_section_setter_bound PROPERTIES
     LABELS "fast;dxf;raw-section;resource;transaction"
     TIMEOUT 30)
 
+add_test(NAME libdxfrw_resolved_write_reference_setter_bounds
+    COMMAND libdxfrw_dxf_fixture_tests --resolved-write-reference-setter-bounds)
+set_tests_properties(libdxfrw_resolved_write_reference_setter_bounds PROPERTIES
+    LABELS "fast;dxf;reference;resource;transaction"
+    TIMEOUT 30)
+
 add_test(NAME libdxfrw_tablecontent_multicell_field_reference
     COMMAND libdxfrw_dxf_fixture_tests --tablecontent-multicell-field)
 set_tests_properties(libdxfrw_tablecontent_multicell_field_reference PROPERTIES

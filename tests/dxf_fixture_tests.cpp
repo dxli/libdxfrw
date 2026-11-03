@@ -107,6 +107,25 @@ public:
         return dxfRW::estimateRawDxfSectionRetainedBytes(
             section, limit, estimate);
     }
+    static std::size_t maxResolvedWriteReferences() {
+        return dxfRW::kMaxResolvedWriteReferences;
+    }
+    static std::uint8_t resolvedWriteInputRejectedMask(
+            const dxfRW& owner) {
+        return owner.m_dxfResolvedWriteInputRejectedMask;
+    }
+    static std::size_t resolvedTableStyleHandleCount(const dxfRW& owner) {
+        return owner.m_resolvedTableStyleHandles.size();
+    }
+    static std::size_t resolvedTableStyleBaseIdCount(const dxfRW& owner) {
+        return owner.m_resolvedTableStyleBaseIds.size();
+    }
+    static std::size_t resolvedBackgroundHandleCount(const dxfRW& owner) {
+        return owner.m_resolvedBackgroundHandles.size();
+    }
+    static std::size_t resolvedSunHandleCount(const dxfRW& owner) {
+        return owner.m_resolvedSunHandles.size();
+    }
 };
 
 namespace {
@@ -59690,6 +59709,60 @@ void testRawDxfSectionSetterBound(TestContext& t) {
              "valid raw-section adoption and return retain the bounded payload");
 }
 
+void testResolvedWriteReferenceSetterBounds(TestContext& t) {
+    const std::size_t overLimitCount =
+        DxfGroupSetterTestAccess::maxResolvedWriteReferences() + 1u;
+    std::vector<std::uint32_t> oversizedHandles(overLimitCount, 0xA100u);
+    std::vector<std::uint32_t> exactHandles(
+        overLimitCount - 1u, 0xA101u);
+    std::vector<std::pair<std::uint32_t, std::int32_t>> oversizedBaseIds(
+        overLimitCount, {0xA200u, 3});
+
+    dxfRW codec("");
+    codec.setResolvedTableStyleHandles(oversizedHandles);
+    codec.setResolvedBackgroundHandles(oversizedHandles);
+    const bool twoRejectsAndClearStale =
+        DxfGroupSetterTestAccess::resolvedWriteInputRejectedMask(codec) != 0u
+        && DxfGroupSetterTestAccess::resolvedTableStyleHandleCount(codec) == 0u
+        && DxfGroupSetterTestAccess::resolvedBackgroundHandleCount(codec) == 0u;
+    codec.setResolvedTableStyleHandles(exactHandles);
+    const bool independentRejectionSurvives =
+        DxfGroupSetterTestAccess::resolvedWriteInputRejectedMask(codec) != 0u
+        && DxfGroupSetterTestAccess::resolvedTableStyleHandleCount(codec)
+            == exactHandles.size();
+    codec.setResolvedBackgroundHandles({0xA102u});
+    const bool correctedHandleInputsAccepted =
+        DxfGroupSetterTestAccess::resolvedWriteInputRejectedMask(codec) == 0u
+        && DxfGroupSetterTestAccess::resolvedBackgroundHandleCount(codec) == 1u;
+    t.expect(twoRejectsAndClearStale && independentRejectionSurvives
+                 && correctedHandleInputsAccepted,
+             "bounded handle-list setters reject before copying and track independent correction state");
+
+    codec.setResolvedTableStyleBaseIds(oversizedBaseIds);
+    const bool baseIdsRejected =
+        DxfGroupSetterTestAccess::resolvedWriteInputRejectedMask(codec) != 0u
+        && DxfGroupSetterTestAccess::resolvedTableStyleBaseIdCount(codec) == 0u;
+    codec.setResolvedTableStyleBaseIds(
+        std::vector<std::pair<std::uint32_t, std::int32_t>>{{0xA200u, 3}});
+    const bool baseIdsCorrected =
+        DxfGroupSetterTestAccess::resolvedWriteInputRejectedMask(codec) == 0u
+        && DxfGroupSetterTestAccess::resolvedTableStyleBaseIdCount(codec) == 1u;
+
+    std::vector<std::uint32_t> oversizedMove(overLimitCount, 0xA300u);
+    codec.setResolvedSunHandles(std::move(oversizedMove));
+    const bool sunMoveRejectedWithoutConsumption =
+        DxfGroupSetterTestAccess::resolvedWriteInputRejectedMask(codec) != 0u
+        && DxfGroupSetterTestAccess::resolvedSunHandleCount(codec) == 0u
+        && oversizedMove.size() == overLimitCount;
+    codec.setResolvedSunHandles({0xA301u});
+    const bool sunCorrected =
+        DxfGroupSetterTestAccess::resolvedWriteInputRejectedMask(codec) == 0u
+        && DxfGroupSetterTestAccess::resolvedSunHandleCount(codec) == 1u;
+    t.expect(baseIdsRejected && baseIdsCorrected
+                 && sunMoveRejectedWithoutConsumption && sunCorrected,
+             "base-style and SUN proof setters preserve move input and accept corrected same-codec retries");
+}
+
 void populateLegacyEllipseCarriers(dx_data& data, bool includeControls = true) {
     DRW_AppId app;
     app.name = "ELLIPSE_APP";
@@ -63230,6 +63303,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testRawDxfSectionSetterBound(context);
         std::cout << "Raw DXF section setter bounds: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--resolved-write-reference-setter-bounds") {
+        TestContext context;
+        testResolvedWriteReferenceSetterBounds(context);
+        std::cout << "Resolved DXF write-reference setter bounds: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
