@@ -60307,26 +60307,55 @@ void testGroupSetterBounds(TestContext& t) {
         planner.setGroups({plannedGroup});
         planner.setHandleRemap({{plannedGroup.handle, 0xE001u}});
         DxfGroupSetterTestAccess::configureWriter(planner, output, binary);
-        const std::size_t failuresBefore = materialFailedAllocations;
-        bool firstPlan = false;
-        {
-            MaterialAllocationFailure failPlannerMap(0);
-            firstPlan = DxfGroupSetterTestAccess::plan(planner);
-        }
-        const bool allocationFailureRolledBack =
-            !firstPlan && materialFailedAllocations == failuresBefore + 1u
-            && !DxfGroupSetterTestAccess::groupPlanFrozen(planner)
-            && DxfGroupSetterTestAccess::plannedGroupHandleCount(planner) == 0u;
-        DxfGroupSetterTestAccess::resetWriteSession(planner);
-        const bool retried = DxfGroupSetterTestAccess::plan(planner)
+        constexpr long allocationProbe = 1000000L;
+        materialAllocationCountdown = allocationProbe;
+        const bool measuredPlan = DxfGroupSetterTestAccess::plan(planner);
+        const long plannedAllocations =
+            allocationProbe - materialAllocationCountdown;
+        materialAllocationCountdown = -1;
+        const bool calibrated = measuredPlan && plannedAllocations > 0L
             && DxfGroupSetterTestAccess::groupPlanFrozen(planner)
-            && DxfGroupSetterTestAccess::plannedGroupHandleCount(planner) == 1u
-            && DxfGroupSetterTestAccess::plannedGroupHandle(planner, 0u)
-                == 0xE001u;
-        t.expect(allocationFailureRolledBack && retried,
+            && DxfGroupSetterTestAccess::plannedGroupHandleCount(planner) == 1u;
+        DxfGroupSetterTestAccess::resetWriteSession(planner);
+        bool everyOffsetRolledBack = calibrated;
+        bool everyOffsetRetried = calibrated;
+        long injectedFailures = 0L;
+        for (long allocation = 0;
+             calibrated && allocation < plannedAllocations; ++allocation) {
+            const std::size_t failuresBefore = materialFailedAllocations;
+            bool firstPlan = false;
+            {
+                MaterialAllocationFailure failure(allocation);
+                firstPlan = DxfGroupSetterTestAccess::plan(planner);
+            }
+            const bool rolledBack = !firstPlan
+                && materialFailedAllocations == failuresBefore + 1u
+                && !DxfGroupSetterTestAccess::groupPlanFrozen(planner)
+                && DxfGroupSetterTestAccess::plannedGroupHandleCount(planner)
+                    == 0u;
+            everyOffsetRolledBack = everyOffsetRolledBack && rolledBack;
+            if (rolledBack)
+                ++injectedFailures;
+            DxfGroupSetterTestAccess::resetWriteSession(planner);
+            const bool retried = rolledBack
+                && DxfGroupSetterTestAccess::plan(planner)
+                && DxfGroupSetterTestAccess::groupPlanFrozen(planner)
+                && DxfGroupSetterTestAccess::plannedGroupHandleCount(planner)
+                    == 1u
+                && DxfGroupSetterTestAccess::plannedGroupHandle(planner, 0u)
+                    == 0xE001u;
+            everyOffsetRetried = everyOffsetRetried && retried;
+            DxfGroupSetterTestAccess::resetWriteSession(planner);
+        }
+        t.expect(calibrated && everyOffsetRolledBack
+                     && injectedFailures == plannedAllocations,
                  binary
-                     ? "binary GROUP handle planning catches remap-index allocation failure and accepts same-codec retry"
-                     : "ASCII GROUP handle planning catches remap-index allocation failure and accepts same-codec retry");
+                     ? "binary GROUP handle planning rolls back every calibrated allocation failure"
+                     : "ASCII GROUP handle planning rolls back every calibrated allocation failure");
+        t.expect(everyOffsetRetried,
+                 binary
+                     ? "binary GROUP handle planning accepts same-codec retry after every allocation failure"
+                     : "ASCII GROUP handle planning accepts same-codec retry after every allocation failure");
     }
 
     std::list<DRW_Group> allocationGroups(1u);
