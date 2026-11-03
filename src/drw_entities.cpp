@@ -8650,11 +8650,11 @@ bool DRW_Mesh::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         const std::int32_t count = reader->getInt32();
         if (!isValidCount(count, DRW_Mesh::kMaxMeshItems))
             return false;
+        if (!DRW::reserve(edges, count))
+            return false;
         m_dxfState = 94;
         m_dxfPhaseCounts[1] = count * 2;
         m_dxfEdgeFrom = -1;
-        if (!DRW::reserve(edges, count))
-            return false;
         return true;
     }
     case 90: {
@@ -8665,6 +8665,8 @@ bool DRW_Mesh::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             if (m_dxfOverrideEntityCount >= 0)
                 return false;
             if (!isValidCount(val, DRW_Mesh::kMaxMeshItems))
+                return false;
+            if (!DRW::reserve(propertyOverrides, val))
                 return false;
             m_dxfOverrideEntityCount = val;
             m_dxfOverridePropertyCount = val == 0 ? 0 : -1;
@@ -8718,10 +8720,10 @@ bool DRW_Mesh::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         if (!isValidCount(count, DRW_Mesh::kMaxMeshItems)
             || static_cast<std::size_t>(count) > edges.size())
             return false;
-        m_dxfState = 95;
-        m_dxfPhaseCounts[2] = count;
         if (!DRW::reserve(creases, count))
             return false;
+        m_dxfState = 95;
+        m_dxfPhaseCounts[2] = count;
         return true;
     }
     case 140:

@@ -13903,6 +13903,17 @@ void testMeshDxfAllocationFailure(TestContext& t) {
         MaterialAllocationFailure failure(allocationFailure);
         return mesh.parse(code, reader);
     };
+    const auto parseTwoVertexFacePhase = [&](MeshParseProbe& mesh) {
+        return parseRecord(mesh, 100, "AcDbSubDMesh")
+            && parseRecord(mesh, 92, "2")
+            && parseRecord(mesh, 10, "0")
+            && parseRecord(mesh, 20, "0")
+            && parseRecord(mesh, 30, "0")
+            && parseRecord(mesh, 10, "1")
+            && parseRecord(mesh, 20, "0")
+            && parseRecord(mesh, 30, "0")
+            && parseRecord(mesh, 93, "0");
+    };
 
     MeshParseProbe mesh;
     const bool subclass = parseRecord(mesh, 100, "AcDbSubDMesh");
@@ -13945,6 +13956,69 @@ void testMeshDxfAllocationFailure(TestContext& t) {
                  && faceCountUnchanged && faceCountRetry && faceRejected
                  && faceFailedOnce && faceRolledBack && faceRetry && faceReadback,
              "MESH face-list reservations and face construction roll back and retry after allocation failure");
+
+    MeshParseProbe edgeCountMesh;
+    const bool edgeBaseline = parseTwoVertexFacePhase(edgeCountMesh);
+    const std::size_t edgeFailuresBefore = materialFailedAllocations;
+    const bool edgeCountRejected = !parseRecord(edgeCountMesh, 94, "1", 0);
+    const bool edgeFailedOnce = materialFailedAllocations
+        == edgeFailuresBefore + 1u;
+    const bool edgeStateUnchanged = !parseRecord(edgeCountMesh, 90, "0")
+        && edgeCountMesh.edges.empty();
+    const bool edgeRetry = parseRecord(edgeCountMesh, 94, "1")
+        && parseRecord(edgeCountMesh, 90, "0")
+        && parseRecord(edgeCountMesh, 90, "1")
+        && edgeCountMesh.edges
+            == std::vector<std::pair<std::int32_t, std::int32_t>>{{0, 1}};
+    t.expect(edgeBaseline && edgeCountRejected && edgeFailedOnce
+                 && edgeStateUnchanged && edgeRetry,
+             "MESH edge-count allocation failure leaves parser phase unchanged and retries cleanly");
+
+    MeshParseProbe creaseCountMesh;
+    const bool creaseBaseline = parseTwoVertexFacePhase(creaseCountMesh)
+        && parseRecord(creaseCountMesh, 94, "1")
+        && parseRecord(creaseCountMesh, 90, "0")
+        && parseRecord(creaseCountMesh, 90, "1");
+    const std::size_t creaseFailuresBefore = materialFailedAllocations;
+    const bool creaseCountRejected = !parseRecord(creaseCountMesh, 95, "1", 0);
+    const bool creaseFailedOnce = materialFailedAllocations
+        == creaseFailuresBefore + 1u;
+    const bool creaseStateUnchanged = !parseRecord(creaseCountMesh, 140, "0.5")
+        && creaseCountMesh.creases.empty();
+    const bool creaseRetry = parseRecord(creaseCountMesh, 95, "1")
+        && parseRecord(creaseCountMesh, 140, "0.5")
+        && creaseCountMesh.creases == std::vector<double>{0.5};
+    t.expect(creaseBaseline && creaseCountRejected && creaseFailedOnce
+                 && creaseStateUnchanged && creaseRetry,
+             "MESH crease-count allocation failure leaves parser phase unchanged and retries cleanly");
+
+    MeshParseProbe overrideCountMesh;
+    const bool overrideBaseline = parseTwoVertexFacePhase(overrideCountMesh)
+        && parseRecord(overrideCountMesh, 94, "0")
+        && parseRecord(overrideCountMesh, 95, "0");
+    const std::size_t overrideFailuresBefore = materialFailedAllocations;
+    const bool overrideCountRejected = !parseRecord(
+        overrideCountMesh, 90, "1", 0);
+    const bool overrideFailedOnce = materialFailedAllocations
+        == overrideFailuresBefore + 1u;
+    const bool overrideStateUnchanged = overrideCountMesh.propertyOverrides.empty();
+    const bool overrideCountRetry = parseRecord(overrideCountMesh, 90, "1");
+    const std::size_t overrideAppendFailuresBefore = materialFailedAllocations;
+    const bool overrideAppendWithoutAllocation = parseRecord(
+        overrideCountMesh, 91, "5", 0);
+    const bool overrideAppendDidNotAllocate = materialFailedAllocations
+        == overrideAppendFailuresBefore;
+    const bool overridePropertiesRetry = parseRecord(overrideCountMesh, 92, "1")
+        && parseRecord(overrideCountMesh, 90, "2")
+        && overrideCountMesh.propertyOverrides.size() == 1u
+        && overrideCountMesh.propertyOverrides.front().subEntityMarker == 5
+        && overrideCountMesh.propertyOverrides.front().propertyTypes
+            == std::vector<std::int32_t>{2};
+    t.expect(overrideBaseline && overrideCountRejected && overrideFailedOnce
+                 && overrideStateUnchanged && overrideCountRetry
+                 && overrideAppendWithoutAllocation
+                 && overrideAppendDidNotAllocate && overridePropertiesRetry,
+             "MESH property-override count reserves before state publication and supports allocation-free append/retry");
 }
 
 void testMPolygonDegenerateCountDomain(TestContext& t) {
