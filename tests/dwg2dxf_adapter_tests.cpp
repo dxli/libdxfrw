@@ -19195,6 +19195,106 @@ bool lightListCallbackCaptureLimitsFailClosed() {
     return true;
 }
 
+bool geoMapImageCallbackCaptureLimitsFailClosed() {
+    DRW_GeoMapImage image;
+    image.handle = 0xF301u;
+    image.parentHandle = 0xF3F0u;
+    image.name = "site-map";
+    image.reactorHandles.push_back(0xF302u);
+    image.m_classVersion = 5;
+    image.m_insertionPoint = DRW_Coord{100.25, 200.5, 30.75};
+    image.m_imageSize = DRW_Coord{2048.0, 1024.0, 0.0};
+    image.m_displayProps = 0x1234u;
+    image.m_clipping = true;
+    image.m_brightness = 73u;
+    image.m_contrast = 64u;
+    image.m_fade = 18u;
+    const std::size_t expectedBytes = sizeof(DRW_GeoMapImage)
+        + image.name.size() + 1u
+        + image.reactorHandles.size() * sizeof(std::uint32_t)
+        + dx_iface::GeoMapImageListNodeBytes;
+
+    dx_data captured;
+    dx_iface receiver;
+    receiver.cData = &captured;
+    receiver.addGeoMapImage(image);
+    if (captured.geoMapImageCaptureFailed
+        || captured.geoMapImageRetainedRecords != 1u
+        || captured.geoMapImageRetainedBytes != expectedBytes
+        || captured.geoMapImages.size() != 1u)
+        return fail("GEOMAPIMAGE callback did not retain its bounded display payload");
+
+    const DRW_GeoMapImage& retained = captured.geoMapImages.front();
+    if (retained.handle != image.handle
+        || retained.parentHandle != image.parentHandle
+        || retained.name != image.name
+        || retained.reactorHandles != image.reactorHandles
+        || retained.m_classVersion != image.m_classVersion
+        || retained.m_insertionPoint.x != image.m_insertionPoint.x
+        || retained.m_insertionPoint.y != image.m_insertionPoint.y
+        || retained.m_insertionPoint.z != image.m_insertionPoint.z
+        || retained.m_imageSize.x != image.m_imageSize.x
+        || retained.m_imageSize.y != image.m_imageSize.y
+        || retained.m_imageSize.z != image.m_imageSize.z
+        || retained.m_displayProps != image.m_displayProps
+        || retained.m_clipping != image.m_clipping
+        || retained.m_brightness != image.m_brightness
+        || retained.m_contrast != image.m_contrast
+        || retained.m_fade != image.m_fade)
+        return fail("GEOMAPIMAGE callback fields changed during typed retention");
+
+    dx_data recordLimited;
+    recordLimited.geoMapImageRetainedRecords =
+        dx_iface::GeoMapImageCaptureMaxRecords - 1u;
+    dx_iface recordLimitedReceiver;
+    recordLimitedReceiver.cData = &recordLimited;
+    recordLimitedReceiver.addGeoMapImage(image);
+    recordLimitedReceiver.addGeoMapImage(image);
+    if (!recordLimited.geoMapImageCaptureFailed
+        || recordLimited.geoMapImageRetainedRecords
+            != dx_iface::GeoMapImageCaptureMaxRecords
+        || recordLimited.geoMapImages.size() != 1u)
+        return fail("GEOMAPIMAGE exact record limit or sticky refusal changed");
+
+    dx_data byteLimited;
+    byteLimited.geoMapImageRetainedBytes =
+        dx_iface::GeoMapImageCaptureMaxRetainedBytes - expectedBytes + 1u;
+    dx_iface byteLimitedReceiver;
+    byteLimitedReceiver.cData = &byteLimited;
+    byteLimitedReceiver.addGeoMapImage(image);
+    if (!byteLimited.geoMapImageCaptureFailed
+        || byteLimited.geoMapImageRetainedRecords != 0u
+        || byteLimited.geoMapImageRetainedBytes
+            != dx_iface::GeoMapImageCaptureMaxRetainedBytes - expectedBytes + 1u
+        || !byteLimited.geoMapImages.empty())
+        return fail("GEOMAPIMAGE one-byte-over-budget admission retained data");
+
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch().count();
+    const std::filesystem::path refusedOutput =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-geomapimage-capture-refusal-"
+           + std::to_string(nonce) + ".dxf");
+    std::ostringstream diagnostics;
+    std::streambuf* previousErrorBuffer = std::cerr.rdbuf(diagnostics.rdbuf());
+    dx_iface refusingWriter;
+    const bool outputSucceeded = refusingWriter.fileExport(
+        refusedOutput.string(), DRW::AC1027, false, &byteLimited, true);
+    std::cerr.rdbuf(previousErrorBuffer);
+    const bool outputWasPublished = std::filesystem::exists(refusedOutput);
+    if (outputWasPublished) {
+        std::error_code ignored;
+        std::filesystem::remove(refusedOutput, ignored);
+    }
+    if (outputSucceeded || outputWasPublished
+        || diagnostics.str().find("GEOMAPIMAGE callback capture")
+            == std::string::npos)
+        return fail("GEOMAPIMAGE capture failure did not block output before publication");
+
+    std::cout << "bounded GEOMAPIMAGE callback retention passes; asset/source/rendering qualification remains separate\n";
+    return true;
+}
+
 bool typedEntityCallbackCaptureLimitsFailClosed() {
     const auto sameClipPath = [](const std::vector<DRW_Coord>& lhs,
                                  const std::vector<DRW_Coord>& rhs) {
@@ -68037,6 +68137,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--lightlist-callback-capture-limits")
         return lightListCallbackCaptureLimitsFailClosed() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--geomapimage-callback-capture-limits")
+        return geoMapImageCallbackCaptureLimitsFailClosed() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--hatch-mpolygon-runtime-dispatch")
         return hatchMPolygonRuntimeDispatchGuard() ? 0 : 1;

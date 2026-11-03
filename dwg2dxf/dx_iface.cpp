@@ -15115,6 +15115,44 @@ void retainLightList(dx_data* data, const DRW_LightList& lightList) noexcept {
     }
 }
 
+bool estimateGeoMapImageRetainedBytes(
+        const DRW_GeoMapImage& image, std::size_t& estimate) noexcept {
+    estimate = sizeof(DRW_GeoMapImage);
+    return addTableEntryRetainedBytes(image, estimate);
+}
+
+void retainGeoMapImage(dx_data* data, const DRW_GeoMapImage& image) noexcept {
+    if (data == nullptr || data->geoMapImageCaptureFailed)
+        return;
+    if (data->geoMapImageRetainedRecords
+        >= dx_iface::GeoMapImageCaptureMaxRecords) {
+        data->geoMapImageCaptureFailed = true;
+        return;
+    }
+
+    std::size_t estimatedBytes = 0u;
+    if (!estimateGeoMapImageRetainedBytes(image, estimatedBytes)
+        || estimatedBytes > dx_iface::GeoMapImageCaptureMaxRetainedBytes
+                - dx_iface::GeoMapImageListNodeBytes
+        || data->geoMapImageRetainedBytes
+            > dx_iface::GeoMapImageCaptureMaxRetainedBytes
+        || estimatedBytes + dx_iface::GeoMapImageListNodeBytes
+            > dx_iface::GeoMapImageCaptureMaxRetainedBytes
+                - data->geoMapImageRetainedBytes) {
+        data->geoMapImageCaptureFailed = true;
+        return;
+    }
+
+    estimatedBytes += dx_iface::GeoMapImageListNodeBytes;
+    try {
+        data->geoMapImages.push_back(image);
+        ++data->geoMapImageRetainedRecords;
+        data->geoMapImageRetainedBytes += estimatedBytes;
+    } catch (...) {
+        data->geoMapImageCaptureFailed = true;
+    }
+}
+
 template <typename T>
 bool addNestedVectorPayloadBytes(
         const std::vector<std::vector<T>>& values,
@@ -55857,6 +55895,10 @@ void dx_iface::addLightList(const DRW_LightList& data) {
     retainLightList(cData, data);
 }
 
+void dx_iface::addGeoMapImage(const DRW_GeoMapImage& data) {
+    retainGeoMapImage(cData, data);
+}
+
 void dx_iface::addRenderSettings(const DRW_RenderSettings& data) {
     observeRenderingInput(&data,nullptr);
     if (cData == nullptr || cData->renderSettingsCaptureFailed)
@@ -72337,6 +72379,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     if (cData->lightListCaptureFailed) {
         reportPreflightFailure(
             "LIGHTLIST callback capture incomplete, malformed, or over record/item/byte limit");
+        return false;
+    }
+    if (cData->geoMapImageCaptureFailed) {
+        reportPreflightFailure(
+            "GEOMAPIMAGE callback capture incomplete or over record/byte limit");
         return false;
     }
     if (cData->sourceFormat == dx_source_format::DWG

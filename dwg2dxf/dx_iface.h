@@ -426,6 +426,11 @@ public:
     static constexpr std::size_t LightListCaptureMaxRetainedBytes =
         64u * 1024u * 1024u;
     static constexpr std::size_t LightListNodeBytes = 2u * sizeof(void*);
+    static constexpr std::size_t GeoMapImageCaptureMaxRecords = 100000u;
+    static constexpr std::size_t GeoMapImageCaptureMaxRetainedBytes =
+        64u * 1024u * 1024u;
+    static constexpr std::size_t GeoMapImageListNodeBytes =
+        2u * sizeof(void*);
     static constexpr std::size_t ImageDefinitionCaptureMaxRecords = 100000u;
     static constexpr std::size_t ImageDefinitionCaptureMaxRetainedBytes =
         64u * 1024u * 1024u;
@@ -632,6 +637,7 @@ public:
     void addObjectPtr(const DRW_ObjectPtr& data) override;
     void addSunStudy(const DRW_SunStudy& data) override;
     void addLightList(const DRW_LightList& data) override;
+    void addGeoMapImage(const DRW_GeoMapImage& data) override;
     void addUnsupportedObject(const DRW_UnsupportedObject& data) override;
     void addImageDefinitionReactor(const DRW_ImageDefinitionReactor& data) override;
     void addProxyEntity(const DRW_ProxyEntity& data) override;

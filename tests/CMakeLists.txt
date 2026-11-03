@@ -1159,6 +1159,10 @@ add_test(NAME dwg2dxf_lightlist_callback_capture_limits
     COMMAND libdxfrw_dwg2dxf_adapter_tests --lightlist-callback-capture-limits)
 set_tests_properties(dwg2dxf_lightlist_callback_capture_limits PROPERTIES
     LABELS "fast;dxf;adapter;objects;rendering" TIMEOUT 10)
+add_test(NAME dwg2dxf_geomapimage_callback_capture_limits
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --geomapimage-callback-capture-limits)
+set_tests_properties(dwg2dxf_geomapimage_callback_capture_limits PROPERTIES
+    LABELS "fast;dxf;adapter;objects;rendering" TIMEOUT 10)
 add_test(NAME dwg2dxf_hatch_mpolygon_runtime_dispatch
     COMMAND libdxfrw_dwg2dxf_adapter_tests --hatch-mpolygon-runtime-dispatch)
 set_tests_properties(dwg2dxf_hatch_mpolygon_runtime_dispatch PROPERTIES

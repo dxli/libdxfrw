@@ -713,6 +713,12 @@ public:
     std::size_t lightListRetainedItems{0};
     std::size_t lightListRetainedBytes{0};
     bool lightListCaptureFailed{false};
+    // GEOMAPIMAGE retains decoded display scalars for later geospatial source
+    // binding; payload and native-map semantics remain unqualified.
+    std::list<DRW_GeoMapImage> geoMapImages;
+    std::size_t geoMapImageRetainedRecords{0};
+    std::size_t geoMapImageRetainedBytes{0};
+    bool geoMapImageCaptureFailed{false};
     // Common DICTIONARY and named-object-root callback copies share one
     // aggregate budget because both retain the same entry-name/handle graph.
     std::size_t dictionaryRetainedRecords{0};
