@@ -20284,6 +20284,48 @@ bool meshHelixRuntimeSubclassDispatchGuard() {
     struct DerivedHelix final : DRW_Helix {
         std::string unrepresentedMetadata{"must-not-be-dropped"};
     };
+    class DirectWriterAuthor final : public dx_iface {
+    public:
+        DRW_Entity* entity{nullptr};
+        bool meshCase{false};
+        bool wrote{false};
+
+        void writeHeader(DRW_Header& header) override {
+            header.vars.clear();
+        }
+        void writeBlockRecords() override {}
+        void writeBlocks() override {}
+        void writeEntities() override {
+            if (dxfW == nullptr || entity == nullptr)
+                return;
+            if (meshCase)
+                wrote = dxfW->writeMesh(dynamic_cast<DRW_Mesh*>(entity));
+            else
+                wrote = dxfW->writeHelix(dynamic_cast<DRW_Helix*>(entity));
+        }
+        void writeObjects() override {}
+        bool finalizeDxfWrite() override { return true; }
+    };
+
+    const auto populateMesh = [](DRW_Mesh& mesh) {
+        mesh.vertices = {DRW_Coord{0.0, 0.0, 0.0},
+                         DRW_Coord{2.0, 0.0, 0.0},
+                         DRW_Coord{0.0, 3.0, 0.0}};
+        mesh.faces.push_back({0, 1, 2});
+    };
+    const auto populateHelix = [](DRW_Helix& helix) {
+        helix.degree = 1;
+        helix.fitlist.push_back(std::make_shared<DRW_Coord>(
+            DRW_Coord{1.0, 0.0, 0.0}));
+        helix.fitlist.push_back(std::make_shared<DRW_Coord>(
+            DRW_Coord{0.0, 1.0, 2.0}));
+        helix.axisBasePt = DRW_Coord{0.0, 0.0, 0.0};
+        helix.startPt = DRW_Coord{1.0, 0.0, 0.0};
+        helix.axisVector = DRW_Coord{0.0, 0.0, 1.0};
+        helix.radius = 1.0;
+        helix.turns = 2.0;
+        helix.turnHeight = 1.0;
+    };
 
     for (const bool binary : {false, true}) {
         for (const bool meshCase : {true, false}) {
@@ -20339,24 +20381,11 @@ bool meshHelixRuntimeSubclassDispatchGuard() {
             data.mBlock->ent.clear();
             if (meshCase) {
                 auto* mesh = new DRW_Mesh();
-                mesh->vertices = {DRW_Coord{0.0, 0.0, 0.0},
-                                  DRW_Coord{2.0, 0.0, 0.0},
-                                  DRW_Coord{0.0, 3.0, 0.0}};
-                mesh->faces.push_back({0, 1, 2});
+                populateMesh(*mesh);
                 data.mBlock->ent.push_back(mesh);
             } else {
                 auto* helix = new DRW_Helix();
-                helix->degree = 1;
-                helix->fitlist.push_back(std::make_shared<DRW_Coord>(
-                    DRW_Coord{1.0, 0.0, 0.0}));
-                helix->fitlist.push_back(std::make_shared<DRW_Coord>(
-                    DRW_Coord{0.0, 1.0, 2.0}));
-                helix->axisBasePt = DRW_Coord{0.0, 0.0, 0.0};
-                helix->startPt = DRW_Coord{1.0, 0.0, 0.0};
-                helix->axisVector = DRW_Coord{0.0, 0.0, 1.0};
-                helix->radius = 1.0;
-                helix->turns = 2.0;
-                helix->turnHeight = 1.0;
+                populateHelix(*helix);
                 data.mBlock->ent.push_back(helix);
             }
 
@@ -20388,6 +20417,107 @@ bool meshHelixRuntimeSubclassDispatchGuard() {
                     || helix->radius != 1.0 || helix->turns != 2.0
                     || helix->turnHeight != 1.0)
                     return fail("exact HELIX retry changed its runtime type or payload");
+            }
+
+            dx_data directData;
+            DirectWriterAuthor author;
+            author.cData = &directData;
+            author.meshCase = meshCase;
+            DerivedMesh derivedMesh;
+            DerivedHelix derivedHelix;
+            if (meshCase) {
+                populateMesh(derivedMesh);
+                author.entity = &derivedMesh;
+            } else {
+                populateHelix(derivedHelix);
+                author.entity = &derivedHelix;
+            }
+            const auto directPath = std::filesystem::temp_directory_path()
+                / (std::string("libdxfrw-")
+                   + (meshCase ? "mesh" : "helix")
+                   + "-direct-runtime-subclass-"
+                   + std::to_string(std::chrono::steady_clock::now()
+                                        .time_since_epoch().count())
+                   + (binary ? "-binary.dxf" : "-ascii.dxf"));
+            if (std::filesystem::exists(directPath))
+                return fail("direct " + entityName
+                            + " output path unexpectedly exists");
+            struct DirectCleanup {
+                std::filesystem::path path;
+                ~DirectCleanup() {
+                    std::error_code ignored;
+                    std::filesystem::remove(path, ignored);
+                }
+            } directCleanup{directPath};
+            const std::string directSentinel =
+                entityName + "_DIRECT_RUNTIME_DESTINATION\n";
+            {
+                std::ofstream existing(directPath, std::ios::binary);
+                existing << directSentinel;
+                if (!existing)
+                    return fail("could not create direct " + entityName
+                                + " destination sentinel");
+            }
+            dxfRW directWriter(directPath.string().c_str());
+            author.dxfW = &directWriter;
+            if (directWriter.write(&author, DRW::AC1027, binary)
+                || author.wrote)
+                return fail("direct low-level " + entityName
+                            + " writer accepted a derived runtime class");
+            {
+                std::ifstream previous(directPath, std::ios::binary);
+                const std::string bytes{
+                    std::istreambuf_iterator<char>(previous), {}};
+                if (bytes != directSentinel)
+                    return fail("direct low-level " + entityName
+                                + " refusal changed the destination");
+            }
+            DRW_Mesh exactMesh;
+            DRW_Helix exactHelix;
+            if (meshCase) {
+                populateMesh(exactMesh);
+                author.entity = &exactMesh;
+            } else {
+                populateHelix(exactHelix);
+                author.entity = &exactHelix;
+            }
+            author.wrote = false;
+            if (!directWriter.write(&author, DRW::AC1027, binary)
+                || !author.wrote)
+                return fail("direct exact " + entityName
+                            + " retry did not succeed");
+            dx_data directReadback;
+            dx_iface directReader;
+            if (!directReader.fileImport(directPath.string(),
+                                         &directReadback, false)
+                || directReadback.mBlock == nullptr
+                || directReadback.mBlock->ent.size() != 1u)
+                return fail("direct exact " + entityName
+                            + " retry did not read back");
+            const DRW_Entity* directActual =
+                directReadback.mBlock->ent.front();
+            if (meshCase) {
+                const auto* mesh =
+                    dynamic_cast<const DRW_Mesh*>(directActual);
+                if (mesh == nullptr
+                    || typeid(*directActual) != typeid(DRW_Mesh)
+                    || directActual->eType != DRW::MESH
+                    || mesh->vertices.size() != 3u
+                    || mesh->faces.size() != 1u
+                    || mesh->faces.front()
+                        != std::vector<std::int32_t>{0, 1, 2})
+                    return fail("direct MESH retry changed its runtime type or topology");
+            } else {
+                const auto* helix =
+                    dynamic_cast<const DRW_Helix*>(directActual);
+                if (helix == nullptr
+                    || typeid(*directActual) != typeid(DRW_Helix)
+                    || directActual->eType != DRW::HELIX
+                    || helix->fitlist.size() != 2u
+                    || helix->fitlist[1]->z != 2.0
+                    || helix->radius != 1.0 || helix->turns != 2.0
+                    || helix->turnHeight != 1.0)
+                    return fail("direct HELIX retry changed its runtime type or payload");
             }
         }
     }

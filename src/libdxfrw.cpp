@@ -9745,6 +9745,8 @@ bool dxfRW::writeHelix(DRW_Helix *ent){
         return rejectUnsupportedDxfWrite("HELIX");
     if (version > DRW::AC1009) {
         if (writer == nullptr || ent == nullptr
+            || typeid(*ent) != typeid(DRW_Helix)
+            || ent->eType != DRW::HELIX
             || !ent->validateDxf()
             || ent->knotslist.size()
                    > static_cast<std::size_t>(std::numeric_limits<std::int16_t>::max())
@@ -13742,7 +13744,10 @@ bool dxfRW::writeMesh(DRW_Mesh *ent) {
     const char* recordName = dxfMeshRecordNameForVersion(version);
     if (recordName == nullptr)
         return rejectUnsupportedDxfWrite("MESH");
-    if (ent == nullptr || writer == nullptr || !ent->validateDxfOutput()) {
+    if (ent == nullptr || writer == nullptr
+        || typeid(*ent) != typeid(DRW_Mesh)
+        || ent->eType != DRW::MESH
+        || !ent->validateDxfOutput()) {
         m_writeError = true;
         return false;
     }

@@ -887,8 +887,13 @@ eligible reader. The exact package and environment result are in the
   controls verify atomic refusal, destination preservation, exact-object retry,
   triangle topology readback and selected HELIX field readback; see the
   [MESH/HELIX subclass-dispatch receipt](docs/research/p8-mesh-helix-runtime-subclass-dispatch-2026-11-03.json).
-  This closes only the adapter subclass-truncation path; direct low-level writer
-  calls, physical producer profiles and native semantics remain unqualified.
+  The public low-level MESH and HELIX writers now enforce the same exact
+  runtime-type/public-tag contract. Direct ASCII/Binary calls also refuse
+  derived classes atomically and support same-writer exact-object retry with
+  typed topology/payload readback; see the
+  [low-level MESH/HELIX receipt](docs/research/p8-mesh-helix-low-level-runtime-dispatch-2026-11-03.json).
+  These guards close only subclass-truncation paths; physical producer profiles
+  and native semantics remain unqualified.
   The same adapter now checks the HATCH/MPOLYGON subtype boundary in both
   directions: a plain HATCH cannot enter the MPOLYGON writer, and an MPOLYGON
   cannot be serialized as HATCH with its distinct fields dropped. Generated
