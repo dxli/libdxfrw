@@ -2788,7 +2788,8 @@ bool validImageDefinitionPlanEntry(
 
 bool dxfRW::setImageDefinitionPlan(
         const std::vector<ImageDefinitionPlanEntry>& definitions) {
-    if (!preflightDxfSetup() || writer != nullptr)
+    if (!preflightDxfSetup() || writer != nullptr
+        || definitions.size() > DRW_Dictionary::kMaxEntries)
         return false;
     std::map<ImageDefinitionKey, ImageDefinitionPlanEntry> planned;
     try {
@@ -2809,7 +2810,8 @@ bool dxfRW::setImageDefinitionPlan(
 
 bool dxfRW::setImageDefinitionPlan(
         std::vector<ImageDefinitionPlanEntry>&& definitions) {
-    if (!preflightDxfSetup() || writer != nullptr)
+    if (!preflightDxfSetup() || writer != nullptr
+        || definitions.size() > DRW_Dictionary::kMaxEntries)
         return false;
     std::map<ImageDefinitionKey, ImageDefinitionPlanEntry> planned;
     try {
@@ -2830,6 +2832,9 @@ bool dxfRW::setImageDefinitionPlan(
 
 bool dxfRW::materializeImageDefinitionPlan() noexcept {
     try {
+        if (m_sourceImageDefinitionPlan.size()
+            > DRW_Dictionary::kMaxEntries)
+            return false;
         std::map<std::uint32_t, unsigned char> sourceCounts;
         std::set<std::uint32_t> destinations;
         if (m_generatedImageDictionarySource) {
@@ -13242,6 +13247,8 @@ DRW_ImageDef* dxfRW::writeImageRecord(
         }
     }
     if (id == NULL) {
+        if (imageDef.size() >= DRW_Dictionary::kMaxEntries)
+            return failDxfWrite(), nullptr;
         newId = std::make_unique<DRW_ImageDef>();
         id = newId.get();
         if (!allocateDxfHandle(id->handle))
@@ -16281,6 +16288,8 @@ bool dxfRW::writeObjects() {
         m_writeError = true;
         return false;
     }
+    if (imageDef.size() > DRW_Dictionary::kMaxEntries)
+        return failDxfWrite();
     for (const DRW_ImageDef* definition : imageDef) {
         if (definition == nullptr
             || definition->reactorHandles.size() > dwgSafety::MaxReactorCount
@@ -16301,7 +16310,9 @@ bool dxfRW::writeObjects() {
                 return false;
             m_plannedImageDictionaryHandle = imageDictionaryHandle;
             imgDictH = toHexStr(imageDictionaryHandle);
-            imageDictionaryKeys.reserve(imageDef.size());
+            if (!DRW::reserve(imageDictionaryKeys,
+                              static_cast<int>(imageDef.size())))
+                return failDxfWrite();
             std::set<std::string> normalizedKeys;
             if (m_generatedImageDictionarySource) {
                 for (const auto& entry : m_generatedImageDictionarySource->m_entries) {
@@ -16342,7 +16353,9 @@ bool dxfRW::writeObjects() {
                 for (std::size_t index = 0; index < imageDef.size(); ++index)
                     if (!indices.emplace(imageDef[index]->handle, index).second) return failDxfWrite();
                 std::vector<bool> selected(imageDef.size(), false);
-                imageDictionaryEntries.reserve(imageDef.size());
+                if (!DRW::reserve(imageDictionaryEntries,
+                                  static_cast<int>(imageDef.size())))
+                    return failDxfWrite();
                 for (const auto& entry : m_generatedImageDictionarySource->m_entries) {
                     const auto definition = m_plannedImageDefinitions.find(
                         {m_generatedImageDictionaryGeneration, entry.m_handle});

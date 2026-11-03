@@ -910,6 +910,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_image_definition_reactor_count_bound PROPERTIES
         LABELS "fast;dxf;writer;objects;references;resources;generated;transaction"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_image_definition_count_bound
+        COMMAND libdxfrw_wave1_tests --image-definition-count-bound)
+    set_tests_properties(libdxfrw_image_definition_count_bound PROPERTIES
+        LABELS "fast;dxf;writer;objects;references;resources;generated;transaction"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_dxf_tables_write_inspection
         COMMAND libdxfrw_symbol_output_tests --dxf-tables-write-inspection)
     set_tests_properties(libdxfrw_dxf_tables_write_inspection PROPERTIES

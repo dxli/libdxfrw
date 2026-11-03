@@ -14450,6 +14450,24 @@ void testImageDefinitionReactorCountBound(TestContext& t) {
     }
 }
 
+void testImageDefinitionCountBound(TestContext& t) {
+    const std::size_t overLimitDefinitionCount =
+        DRW_Dictionary::kMaxEntries + 1u;
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW writer("");
+        writer.version = DRW::AC1032;
+        writer.binFile = binary;
+        if (binary)
+            writer.writer = std::make_unique<dxfWriterBinary>(&output);
+        else
+            writer.writer = std::make_unique<dxfWriterAscii>(&output);
+        writer.imageDef.resize(overLimitDefinitionCount, nullptr);
+        t.expect(!writer.writeObjects() && output.str().empty(),
+                 "IMAGEDEF sets above the DXF dictionary count refuse before staging or publication");
+    }
+}
+
 void testSectionObjectIndicatorColorWire(TestContext& t) {
     const auto expectCmcLossRejected = [&t](
             const std::function<bool(dxfRW&)>& emit) {
@@ -21294,6 +21312,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testImageDefinitionReactorCountBound(focused);
         std::cout << "IMAGEDEF reactor count bound: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--image-definition-count-bound") {
+        TestContext focused;
+        testImageDefinitionCountBound(focused);
+        std::cout << "IMAGEDEF count bound: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

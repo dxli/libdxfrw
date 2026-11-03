@@ -1,0 +1,44 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-dxf-image-definition-count-and-staging-guard-2026-11-03",
+  "date": "2026-11-03",
+  "status": "COMPLETED_LOCAL_RESOURCE_GUARD",
+  "supportClaimEffect": "none",
+  "scope": "Bound IMAGEDEF plan cardinality and dictionary-entry staging before DXF OBJECTS output.",
+  "implementation": {
+    "files": [
+      "src/libdxfrw.cpp",
+      "tests/wave1_tests.cpp",
+      "CMakeLists.txt",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md"
+    ],
+    "behavior": [
+      "Both image-definition plan setters reject more than DRW_Dictionary::kMaxEntries (100,000) before copying or moving records into the internal plan.",
+      "Plan materialization checks the same count before creating per-definition state.",
+      "writeImageRecord refuses to create a new definition when the existing definition vector already reaches the dictionary entry limit.",
+      "writeObjects rejects oversized IMAGEDEF inventories before opening OBJECTS output staging and reserves the image dictionary key and projected-entry vectors through DRW::reserve."
+    ]
+  },
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_wave1_tests libdxfrw_dxf_fixture_tests libdxfrw_dwg2dxf_adapter_tests -j4",
+    "focused": [
+      {
+        "command": "ctest --test-dir build-gcc -R '^libdxfrw_image_definition_count_bound$' --output-on-failure",
+        "result": "PASS",
+        "coverage": "ASCII/Binary inventories containing 100,001 IMAGEDEF slots refuse with no published bytes."
+      },
+      {
+        "command": "ctest --test-dir build-gcc -R '^(libdxfrw_image_definition_reactor_count_bound|libdxfrw_image_definition_plan_failure_retry|dwg2dxf_generated_image_dictionary_source_identity)$' --output-on-failure",
+        "result": "PASS"
+      }
+    ],
+    "repositoryFixturesAdded": 0,
+    "allocationFailureInjected": false
+  },
+  "limitations": [
+    "The 100,000 value reuses the existing DRW_Dictionary::kMaxEntries resource ceiling; it is not an Autodesk format maximum or a support claim.",
+    "The oversized plan-setter branch is not separately exercised with a 100,001-entry DRW_ImageDef plan; the output inventory guard is exercised without allocating image records.",
+    "Other writeObjects maps/vectors and unrelated copy/work bounds remain to audit."
+  ],
+  "next": "Continue the P6 safety audit on the next bounded output assembly path. Keep allocation-failure injection and the separate rooted IMAGEDEF TABLES/FIELDLIST failure visible as open work."
+}
