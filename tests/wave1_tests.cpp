@@ -3936,7 +3936,12 @@ void testTypedObjectCommonMetadata(TestContext& t) {
             }
         }
     };
-    exercise("UNDERLAYDEFINITION", DRW_UnderlayDefinition{}, [](auto& w, auto& e) { return w.writeUnderlayDefinition(&e); });
+    DRW_UnderlayDefinition underlayDefinition;
+    underlayDefinition.filename = "common-metadata.pdf";
+    exercise("UNDERLAYDEFINITION", underlayDefinition,
+             [](auto& w, auto& e) {
+                 return w.writeUnderlayDefinition(&e);
+             });
     exercise("POINTCLOUDDEF", DRW_PointCloudDef{}, [](auto& w, auto& e) { return w.writePointCloudDef(&e); });
     exercise("NAVISWORKSMODELDEF", DRW_NavisworksModelDef{}, [](auto& w, auto& e) { return w.writeNavisworksModelDef(&e); });
     exercise("POINTCLOUDCOLORMAP", DRW_PointCloudColorMap{}, [](auto& w, auto& e) { return w.writePointCloudColorMap(&e); });
@@ -8172,6 +8177,7 @@ void testDxfWriterEmittedHandleInventory(TestContext& t) {
                 && wrongOwnerRejected;
             if (dxfW != nullptr && dxfW->writer != nullptr) {
                 const auto& emitted = dxfW->writer->emittedRecords();
+                inventory.clear();
                 inventory.reserve(emitted.size());
                 inventoryCaptured = true;
                 for (const auto& identity : emitted) {
@@ -15766,6 +15772,14 @@ void testHeaderMaintenanceWidths(TestContext& t) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--dxf-writer-emitted-handle-inventory") {
+        TestContext focused;
+        testDxfWriterEmittedHandleInventory(focused);
+        std::cout << "DXF writer emitted-handle inventory: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-display-mode-domain") {
         TestContext focused;
