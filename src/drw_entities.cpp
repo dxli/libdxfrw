@@ -9580,6 +9580,40 @@ void DRW_Light::resetDwgState() {
     m_extendedLightRadius = 0.0;
 }
 
+bool DRW_Light::validateDxf() const {
+    const auto finite = [](const DRW_Coord& point) {
+        return std::isfinite(point.x) && std::isfinite(point.y)
+            && std::isfinite(point.z);
+    };
+    const bool supportedColorMethod = m_colorMethod == 0u
+        || m_colorMethod == 0xC3u;
+    return typeid(*this) == typeid(DRW_Light)
+        && eType == DRW::LIGHT
+        && m_classVersion
+            <= static_cast<std::uint32_t>(std::numeric_limits<int>::max())
+        && m_type >= 1u && m_type <= 3u
+        // The bounded DXF profile currently emits only group-63 ACI values.
+        // DWG CMC packed values and group-421 LIGHT mappings are unqualified.
+        && m_color <= 255u && m_colorRgb == -1
+        && supportedColorMethod && m_colorName.empty()
+        && m_colorBookName.empty() && m_colorDwgFlags == 0u
+        && m_colorDwgIndex == 0u && !m_colorDwgMetadataPresent
+        && m_attenuationType <= 2u && m_shadowType <= 1u
+        && !m_hasPhotometricData && !m_hasWebFile && m_webFile.empty()
+        && m_physicalIntensityMethod == 0u && m_physicalIntensity == 0.0
+        && m_illuminanceDistance == 0.0 && m_lampColorType == 0u
+        && m_lampColorTemperature == 0.0 && m_lampColorPreset == 0u
+        && m_webRotation.x == 1.0 && m_webRotation.y == 0.0
+        && m_webRotation.z == 0.0 && m_extendedLightShape == 0u
+        && m_extendedLightLength == 0.0 && m_extendedLightWidth == 0.0
+        && m_extendedLightRadius == 0.0
+        && finite(m_position) && finite(m_target)
+        && std::isfinite(m_intensity)
+        && std::isfinite(m_attenuationStartLimit)
+        && std::isfinite(m_attenuationEndLimit)
+        && std::isfinite(m_hotspotAngle) && std::isfinite(m_falloffAngle);
+}
+
 bool DRW_Light::parseCode(int code,
                           const std::unique_ptr<dxfReader>& reader) {
     int value = 0;

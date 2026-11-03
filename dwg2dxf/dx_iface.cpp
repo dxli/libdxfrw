@@ -71345,47 +71345,7 @@ void dx_iface::writeEntity(DRW_Entity* e){
         break;
     case DRW::LIGHT:
         if (auto* light = dynamic_cast<DRW_Light*>(e)) {
-            const auto finite = [](const DRW_Coord& point) {
-                return std::isfinite(point.x) && std::isfinite(point.y)
-                    && std::isfinite(point.z);
-            };
-            const bool supportedColorMethod = light->m_colorMethod == 0u
-                || light->m_colorMethod == 0xC3u;
-            const bool representable = typeid(*e) == typeid(DRW_Light)
-                && light->eType == DRW::LIGHT
-                && light->m_classVersion
-                    <= static_cast<std::uint32_t>(
-                        std::numeric_limits<int>::max())
-                && light->m_type >= 1u && light->m_type <= 3u
-                && light->m_color <= 255u && light->m_colorRgb == -1
-                && supportedColorMethod && light->m_colorName.empty()
-                && light->m_colorBookName.empty()
-                && light->m_colorDwgFlags == 0u
-                && light->m_colorDwgIndex == 0u
-                && light->m_attenuationType <= 2u
-                && light->m_shadowType <= 1u
-                && !light->m_hasPhotometricData && !light->m_hasWebFile
-                && light->m_webFile.empty()
-                && light->m_physicalIntensityMethod == 0u
-                && light->m_physicalIntensity == 0.0
-                && light->m_illuminanceDistance == 0.0
-                && light->m_lampColorType == 0u
-                && light->m_lampColorTemperature == 0.0
-                && light->m_lampColorPreset == 0u
-                && light->m_webRotation.x == 1.0
-                && light->m_webRotation.y == 0.0
-                && light->m_webRotation.z == 0.0
-                && light->m_extendedLightShape == 0u
-                && light->m_extendedLightLength == 0.0
-                && light->m_extendedLightWidth == 0.0
-                && light->m_extendedLightRadius == 0.0
-                && finite(light->m_position) && finite(light->m_target)
-                && std::isfinite(light->m_intensity)
-                && std::isfinite(light->m_attenuationStartLimit)
-                && std::isfinite(light->m_attenuationEndLimit)
-                && std::isfinite(light->m_hotspotAngle)
-                && std::isfinite(light->m_falloffAngle);
-            if (representable)
+            if (light->validateDxf())
                 written = dxfW->writeLight(light);
             else
                 dxfW->writeRawDxfEntity(nullptr);

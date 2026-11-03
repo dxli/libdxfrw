@@ -12141,6 +12141,9 @@ bool dxfRW::writeLight(DRW_Light *ent) {
         return rejectUnsupportedDxfWrite("LIGHT");
     if (!preflightEntity(ent))
         return false;
+    if (!ent->validateDxf())
+        return rejectDxfWriteWithReason(
+            "LIGHT", "contains unsupported or unrepresented fields");
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "LIGHT");
     if (!writeEntity(ent))
@@ -12150,11 +12153,9 @@ bool dxfRW::writeLight(DRW_Light *ent) {
     writer->writeUtf8String(1, ent->m_name);
     writer->writeInt16(70, static_cast<int>(ent->m_type));
     writer->writeBool(290, ent->m_status);
-    // ACI index in 63; a packed true-color value goes in 421 instead.
-    if (ent->m_color < 256)
-        writer->writeInt16(63, static_cast<int>(ent->m_color));
-    else
-        writer->writeInt32(421, static_cast<int>(ent->m_color));
+    // This bounded profile admits only the ACI group-63 value. The
+    // AcDbLight group-421 mapping for DWG CMC data has not been qualified.
+    writer->writeInt16(63, static_cast<int>(ent->m_color));
     writer->writeBool(291, ent->m_plotGlyph);
     writer->writeDouble(40, ent->m_intensity);
     writer->writeDouble(10, ent->m_position.x);

@@ -543,6 +543,14 @@ eligible reader. The exact package and environment result are in the
   metadata refusal, destination preservation, corrected-target retry, and
   typed readback in both scopes;
   see the [LIGHT adapter receipt](docs/research/p8-light-adapter-transport-2026-11-02.json).
+  Follow-up slice: `DRW_Light::validateDxf` now centralizes the bounded
+  representable profile for both the adapter and the public `writeLight`
+  method. The direct writer refuses packed DWG CMC values, CMC metadata,
+  photometric payloads and other unrepresented fields before writing the
+  record; it emits no unqualified group 421. Generated ASCII/Binary controls
+  verify atomic refusal, destination preservation, corrected same-adapter retry
+  and typed readback. The focused test passes; no fixture was added. The same
+  receipt records this direct-writer boundary.
   This establishes generated transport only, not physical producer breadth or
   native lighting/rendering semantics; LIGHT truecolor and photometric fields
   remain refused pending a qualified mapping.

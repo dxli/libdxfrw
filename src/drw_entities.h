@@ -1487,6 +1487,7 @@ private:
     std::size_t m_dxfRetainedNameBytes = 0u;
 public:
     bool parseCode(int code, const std::unique_ptr<dxfReader>& reader) override;
+    [[nodiscard]] bool validateDxf() const;
 };
 
 //! CAMERA entity shell. LibreCAD does not render cameras, but preserves the

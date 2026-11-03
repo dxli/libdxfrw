@@ -20394,6 +20394,14 @@ bool pointCloudAndNavisworksAdapterTransport() {
 }
 
 bool lightAdapterTransport() {
+    class DirectLightWriter final : public dx_iface {
+    public:
+        DRW_Light light;
+        void writeEntities() override {
+            (void)dxfW->writeLight(&light);
+        }
+    };
+
     for (const bool binary : {false, true}) {
         dx_data data;
         dx_iface adapter;
@@ -20535,6 +20543,57 @@ bool lightAdapterTransport() {
                 || refusedColor.dxfReadOutcome.error != DRW::BAD_CODE_PARSED)
                 return fail("unqualified LIGHT color input was not refused");
         }
+
+        DirectLightWriter directWriter;
+        dx_data directData;
+        directWriter.light = source;
+        const auto refuseDirectWrite = [&](const char* field) {
+            {
+                std::ofstream previous(path, std::ios::binary | std::ios::trunc);
+                previous << sentinel;
+                if (!previous)
+                    return fail(std::string("could not reset LIGHT direct-writer ")
+                                + field + " sentinel");
+            }
+            if (directWriter.fileExport(path.string(), DRW::AC1021, binary,
+                                        &directData, false, false))
+                return fail(std::string("direct LIGHT writer emitted unqualified ")
+                            + field);
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail(std::string("direct LIGHT writer changed destination for ")
+                            + field);
+            return true;
+        };
+        directWriter.light.m_color = 0xC2FFFFFFu;
+        if (!refuseDirectWrite("packed DWG CMC color"))
+            return false;
+        directWriter.light = source;
+        directWriter.light.m_colorDwgMetadataPresent = true;
+        if (!refuseDirectWrite("DWG CMC metadata"))
+            return false;
+        directWriter.light = source;
+        directWriter.light.m_hasPhotometricData = true;
+        if (!refuseDirectWrite("photometric payload"))
+            return false;
+        directWriter.light = source;
+        if (!directWriter.fileExport(path.string(), DRW::AC1021, binary,
+                                     &directData, false, false))
+            return fail("direct LIGHT writer corrected retry failed");
+        dx_data directReadback;
+        dx_iface directReader;
+        if (!directReader.fileImport(path.string(), &directReadback, false)
+            || directReadback.mBlock == nullptr
+            || directReadback.mBlock->ent.size() != 1u) {
+            return fail("direct LIGHT writer output did not read back");
+        }
+        const auto* directActual = dynamic_cast<const DRW_Light*>(
+            directReadback.mBlock->ent.front());
+        if (directActual == nullptr || directActual->m_color != source.m_color
+            || directActual->m_name != source.m_name)
+            return fail("direct LIGHT writer corrected output changed fields");
 
         dx_data blockData;
         DRW_Block_Record blockRecord;
