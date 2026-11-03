@@ -14766,10 +14766,12 @@ constexpr std::size_t kMaxAdapterDictionaryTypedRetainedBytes =
 constexpr std::size_t kMaxAdapterDxfClassRecords = 100000u;
 constexpr std::size_t kMaxAdapterDxfClassRetainedBytes =
     DRW::kMaxDxfBinaryPayloadBytes;
-constexpr std::size_t kMaxAdapterBasicTableRecords = 100000u;
-constexpr std::size_t kMaxAdapterBasicTableItems = 1000000u;
+constexpr std::size_t kMaxAdapterBasicTableRecords =
+    DRW::kMaxDxfTypedTableRecords;
+constexpr std::size_t kMaxAdapterBasicTableItems =
+    DRW::kMaxDxfTypedTableItems;
 constexpr std::size_t kMaxAdapterBasicTableRetainedBytes =
-    DRW::kMaxDxfBinaryPayloadBytes;
+    DRW::kMaxDxfTypedTableRetainedBytes;
 constexpr std::size_t kMaxAdapterMLineStyleRecords = 100000u;
 constexpr std::size_t kMaxAdapterMLineStyleItems = 1000000u;
 constexpr std::size_t kMaxAdapterMLineStyleRetainedBytes =

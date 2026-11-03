@@ -135,6 +135,33 @@ public:
     static std::size_t dxfHandleRemapCount(const dxfRW& owner) {
         return owner.m_handleRemap.size();
     }
+    static std::size_t maxDxfSourceTableItems() {
+        return dxfRW::kMaxDxfSourceTableItems;
+    }
+    static bool sourceBlockRecordsRejected(const dxfRW& owner) {
+        return owner.m_dxfSourceBlockRecordsInputRejected;
+    }
+    static std::size_t sourceBlockRecordsCount(const dxfRW& owner) {
+        return owner.m_sourceBlockRecords.size();
+    }
+    static bool estimateSourceBlockRecords(
+            const std::vector<DRW_Block_Record>& records,
+            std::size_t& bytes, std::size_t& items) {
+        return dxfRW::estimateSourceBlockRecordsRetainedBytes(
+            records, bytes, items);
+    }
+    static bool canonicalLineTypesRejected(const dxfRW& owner) {
+        return owner.m_dxfCanonicalLineTypeMetadataInputRejected;
+    }
+    static std::size_t canonicalLineTypesCount(const dxfRW& owner) {
+        return owner.m_canonicalLineTypeMetadata.size();
+    }
+    static bool estimateCanonicalLineTypes(
+            const std::vector<DRW_LType>& lineTypes,
+            std::size_t& bytes, std::size_t& items) {
+        return dxfRW::estimateCanonicalLineTypeMetadataRetainedBytes(
+            lineTypes, bytes, items);
+    }
 };
 
 namespace {
@@ -59814,6 +59841,166 @@ void testDxfHandleRemapSetterBound(TestContext& t) {
              "over-limit move remap preserves caller data and corrected setter retry clears rejection");
 }
 
+void testDxfSourceTableMetadataSetterBounds(TestContext& t) {
+    const std::size_t maxItems =
+        DxfGroupSetterTestAccess::maxDxfSourceTableItems();
+    DRW_Block_Record exactBlock;
+    exactBlock.previewData.resize(maxItems - 4u);
+    std::vector<DRW_Block_Record> exactBlocks;
+    exactBlocks.push_back(std::move(exactBlock));
+    std::size_t blockBytes = 0u;
+    std::size_t blockItems = 0u;
+    const bool exactBlockMeasured =
+        DxfGroupSetterTestAccess::estimateSourceBlockRecords(
+            exactBlocks, blockBytes, blockItems)
+        && blockItems == maxItems;
+    dxfRW codec("");
+    codec.setSourceBlockRecords(std::move(exactBlocks), true);
+    const bool exactBlockAccepted = exactBlockMeasured
+        && !DxfGroupSetterTestAccess::sourceBlockRecordsRejected(codec)
+        && DxfGroupSetterTestAccess::sourceBlockRecordsCount(codec) == 1u;
+    t.expect(exactBlockAccepted,
+             "source BLOCK_RECORD setup accepts the exact aggregate item ceiling");
+
+    DRW_Block_Record oversizedBlock;
+    oversizedBlock.previewData.resize(maxItems - 3u);
+    std::vector<DRW_Block_Record> oversizedBlocks;
+    oversizedBlocks.push_back(std::move(oversizedBlock));
+    codec.setSourceBlockRecords(oversizedBlocks, true);
+    const bool blockRejectedBeforeCopy =
+        DxfGroupSetterTestAccess::sourceBlockRecordsRejected(codec)
+        && DxfGroupSetterTestAccess::sourceBlockRecordsCount(codec) == 0u
+        && oversizedBlocks.size() == 1u;
+    t.expect(blockRejectedBeforeCopy,
+             "over-limit const BLOCK_RECORD setup clears stale data before copying");
+
+    std::vector<DRW_Block_Record> oversizedBlockMove;
+    oversizedBlockMove.push_back(std::move(oversizedBlocks.front()));
+    codec.setSourceBlockRecords(std::move(oversizedBlockMove), true);
+    const bool blockMovePreserved =
+        DxfGroupSetterTestAccess::sourceBlockRecordsRejected(codec)
+        && DxfGroupSetterTestAccess::sourceBlockRecordsCount(codec) == 0u
+        && oversizedBlockMove.size() == 1u
+        && oversizedBlockMove.front().previewData.size() == maxItems - 3u;
+    codec.setSourceBlockRecords(std::vector<DRW_Block_Record>{}, true);
+    const bool blockRetry =
+        !DxfGroupSetterTestAccess::sourceBlockRecordsRejected(codec)
+        && DxfGroupSetterTestAccess::sourceBlockRecordsCount(codec) == 0u;
+    t.expect(blockMovePreserved && blockRetry,
+             "over-limit move BLOCK_RECORD setup preserves input and corrected retry clears rejection");
+
+    DRW_LType exactLineType;
+    exactLineType.path.resize(maxItems - 3u);
+    std::vector<DRW_LType> exactLineTypes;
+    exactLineTypes.push_back(std::move(exactLineType));
+    std::size_t lineTypeBytes = 0u;
+    std::size_t lineTypeItems = 0u;
+    const bool exactLineTypeMeasured =
+        DxfGroupSetterTestAccess::estimateCanonicalLineTypes(
+            exactLineTypes, lineTypeBytes, lineTypeItems)
+        && lineTypeItems == maxItems;
+    codec.setCanonicalLineTypeMetadata(std::move(exactLineTypes));
+    const bool exactLineTypeAccepted = exactLineTypeMeasured
+        && !DxfGroupSetterTestAccess::canonicalLineTypesRejected(codec)
+        && DxfGroupSetterTestAccess::canonicalLineTypesCount(codec) == 1u;
+    t.expect(exactLineTypeAccepted,
+             "canonical LTYPE metadata accepts the exact aggregate item ceiling");
+
+    DRW_LType oversizedLineType;
+    oversizedLineType.path.resize(maxItems - 2u);
+    std::vector<DRW_LType> oversizedLineTypes;
+    oversizedLineTypes.push_back(std::move(oversizedLineType));
+    codec.setCanonicalLineTypeMetadata(oversizedLineTypes);
+    const bool lineTypeRejectedBeforeCopy =
+        DxfGroupSetterTestAccess::canonicalLineTypesRejected(codec)
+        && DxfGroupSetterTestAccess::canonicalLineTypesCount(codec) == 0u
+        && oversizedLineTypes.size() == 1u;
+    std::vector<DRW_LType> oversizedLineTypeMove;
+    oversizedLineTypeMove.push_back(std::move(oversizedLineTypes.front()));
+    codec.setCanonicalLineTypeMetadata(std::move(oversizedLineTypeMove));
+    const bool lineTypeMovePreserved =
+        DxfGroupSetterTestAccess::canonicalLineTypesRejected(codec)
+        && DxfGroupSetterTestAccess::canonicalLineTypesCount(codec) == 0u
+        && oversizedLineTypeMove.size() == 1u
+        && oversizedLineTypeMove.front().path.size() == maxItems - 2u;
+    codec.setCanonicalLineTypeMetadata(std::vector<DRW_LType>{});
+    const bool lineTypeRetry =
+        !DxfGroupSetterTestAccess::canonicalLineTypesRejected(codec)
+        && DxfGroupSetterTestAccess::canonicalLineTypesCount(codec) == 0u;
+    t.expect(lineTypeRejectedBeforeCopy && lineTypeMovePreserved && lineTypeRetry,
+             "over-limit canonical LTYPE setup preserves move input and corrected retry clears rejection");
+
+    std::vector<DRW_LType> allocationInput(1u);
+    const std::size_t failuresBefore = materialFailedAllocations;
+    {
+        MaterialAllocationFailure failCopy(0);
+        codec.setCanonicalLineTypeMetadata(allocationInput);
+    }
+    const bool allocationFailureRejected =
+        materialFailedAllocations > failuresBefore
+        && DxfGroupSetterTestAccess::canonicalLineTypesRejected(codec)
+        && DxfGroupSetterTestAccess::canonicalLineTypesCount(codec) == 0u;
+    codec.setCanonicalLineTypeMetadata(std::move(allocationInput));
+    const bool allocationRetry =
+        !DxfGroupSetterTestAccess::canonicalLineTypesRejected(codec)
+        && DxfGroupSetterTestAccess::canonicalLineTypesCount(codec) == 1u;
+    t.expect(allocationFailureRejected && allocationRetry,
+             "const canonical LTYPE copy catches allocation failure and accepts corrected retry");
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    for (const bool binary : {false, true}) {
+        const auto output = std::filesystem::temp_directory_path()
+            / ("libdxfrw-source-table-setter-bound-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        const std::string sentinel = "source table metadata sentinel\n";
+        {
+            std::ofstream seed(output, std::ios::binary | std::ios::trunc);
+            seed << sentinel;
+        }
+        dx_data data;
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        dxfRW writer(output.string().c_str());
+        adapter.dxfW = &writer;
+        DRW_Block_Record outputBlock;
+        outputBlock.previewData.resize(maxItems - 3u);
+        writer.setSourceBlockRecords(
+            std::vector<DRW_Block_Record>{std::move(outputBlock)}, true);
+        DRW_LType outputLineType;
+        outputLineType.path.resize(maxItems - 2u);
+        writer.setCanonicalLineTypeMetadata(
+            std::vector<DRW_LType>{std::move(outputLineType)});
+        const bool refused = !writer.write(&adapter, DRW::AC1027, binary);
+        std::ifstream preservedInput(output, std::ios::binary);
+        const std::string preserved(
+            (std::istreambuf_iterator<char>(preservedInput)),
+            std::istreambuf_iterator<char>());
+        const bool destinationPreserved = refused && preserved == sentinel;
+
+        writer.setSourceBlockRecords(std::vector<DRW_Block_Record>{}, true);
+        const bool secondRefusal =
+            !writer.write(&adapter, DRW::AC1027, binary);
+        std::ifstream secondPreservedInput(output, std::ios::binary);
+        const std::string secondPreserved(
+            (std::istreambuf_iterator<char>(secondPreservedInput)),
+            std::istreambuf_iterator<char>());
+        const bool independentGuard = secondRefusal
+            && secondPreserved == sentinel;
+        writer.setCanonicalLineTypeMetadata(std::vector<DRW_LType>{});
+        const bool retried = writer.write(&adapter, DRW::AC1027, binary);
+        t.expect(destinationPreserved && independentGuard && retried,
+                 binary
+                     ? "binary source table metadata bounds preserve destination and support corrected same-writer retry"
+                     : "ASCII source table metadata bounds preserve destination and support corrected same-writer retry");
+        adapter.dxfW = nullptr;
+        std::error_code removeError;
+        std::filesystem::remove(output, removeError);
+    }
+}
+
 void populateLegacyEllipseCarriers(dx_data& data, bool includeControls = true) {
     DRW_AppId app;
     app.name = "ELLIPSE_APP";
@@ -63370,6 +63557,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testDxfHandleRemapSetterBound(context);
         std::cout << "DXF handle-remap setter bound: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--dxf-source-table-metadata-setter-bounds") {
+        TestContext context;
+        testDxfSourceTableMetadataSetterBounds(context);
+        std::cout << "DXF source table metadata setter bounds: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

@@ -77,6 +77,12 @@ constexpr std::size_t kMaxDxfRawSectionGroups = 4000000u;
 //! This bounds owned values, not vector capacity or process RSS.
 constexpr std::size_t kMaxDxfRawSectionsRetainedBytes =
     64u * 1024u * 1024u;
+//! Resource ceilings for codec-owned snapshots of typed TABLE records.
+//! These are setup/work limits, not DXF format maxima.
+constexpr std::size_t kMaxDxfTypedTableRecords = 100000u;
+constexpr std::size_t kMaxDxfTypedTableItems = 1000000u;
+constexpr std::size_t kMaxDxfTypedTableRetainedBytes =
+    kMaxDxfBinaryPayloadBytes;
 //! Maximum number of 102 application groups retained on one entity.
 constexpr std::size_t kMaxDxfApplicationGroups = 65536u;
 //! Maximum number of INSERT handles retained by one BLOCK_RECORD BLKREFS group.

@@ -3247,6 +3247,276 @@ void dxfRW::setDxfWriteRecordInventoryEnabled(
     m_dxfWriteRecordInventoryLimit = maxHandles;
 }
 
+namespace {
+
+constexpr std::size_t kMaxDxfSetupTableRecords =
+    DRW::kMaxDxfTypedTableRecords;
+constexpr std::size_t kMaxDxfSetupTableItems =
+    DRW::kMaxDxfTypedTableItems;
+constexpr std::size_t kMaxDxfSetupTableRetainedBytes =
+    DRW::kMaxDxfTypedTableRetainedBytes;
+
+bool addDxfSetupRetainedBytes(std::size_t amount,
+                              std::size_t& total) noexcept {
+    if (total > kMaxDxfSetupTableRetainedBytes
+        || amount > kMaxDxfSetupTableRetainedBytes - total)
+        return false;
+    total += amount;
+    return true;
+}
+
+bool addDxfSetupItems(std::size_t count, std::size_t& total) noexcept {
+    if (total > kMaxDxfSetupTableItems
+        || count > kMaxDxfSetupTableItems - total)
+        return false;
+    total += count;
+    return true;
+}
+
+bool addDxfSetupVectorStorage(std::size_t count, std::size_t slotSize,
+                              std::size_t& bytes) noexcept {
+    if (slotSize != 0u
+        && count > kMaxDxfSetupTableRetainedBytes / slotSize)
+        return false;
+    return addDxfSetupRetainedBytes(count * slotSize, bytes);
+}
+
+bool addDxfSetupSlots(std::size_t count, std::size_t slotSize,
+                      std::size_t& bytes,
+                      std::size_t& items) noexcept {
+    if (!addDxfSetupItems(count, items))
+        return false;
+    return addDxfSetupVectorStorage(count, slotSize, bytes);
+}
+
+bool addDxfSetupText(const std::string& value, std::size_t& bytes,
+                     std::size_t& items) noexcept {
+    if (value.size() >= kMaxDxfSetupTableRetainedBytes
+        || !addDxfSetupItems(1u, items))
+        return false;
+    return addDxfSetupRetainedBytes(value.size() + 1u, bytes);
+}
+
+bool addDxfSetupVariant(const DRW_Variant& value, std::size_t nodeBytes,
+                        std::size_t& bytes,
+                        std::size_t& items,
+                        bool countItem = true) noexcept {
+    if ((countItem && !addDxfSetupItems(1u, items))
+        || !addDxfSetupRetainedBytes(nodeBytes, bytes))
+        return false;
+    std::size_t payload = 0u;
+    if (!value.estimateRetainedPayloadBytes(
+            kMaxDxfSetupTableRetainedBytes - bytes, payload))
+        return false;
+    return addDxfSetupRetainedBytes(payload, bytes);
+}
+
+bool addDxfSetupTableEntryPayload(const DRW_TableEntry& entry,
+                                  std::size_t& bytes,
+                                  std::size_t& items) noexcept {
+    if (!addDxfSetupText(entry.name, bytes, items)
+        || !addDxfSetupSlots(entry.reactorHandles.size(),
+                             sizeof(std::uint32_t), bytes, items)
+        || !addDxfSetupSlots(entry.pendingAppIdResolutions.size(),
+                             sizeof(DRW_TableEntry::PendingHandleRef),
+                             bytes, items)
+        || !addDxfSetupSlots(entry.pendingLayerRefResolutions.size(),
+                             sizeof(DRW_TableEntry::PendingHandleRef),
+                             bytes, items)
+        || !addDxfSetupItems(entry.extData.size(), items)
+        || !addDxfSetupVectorStorage(entry.extData.size(),
+                                     sizeof(DRW_Variant*), bytes))
+        return false;
+    for (const DRW_Variant* value : entry.extData) {
+        if (value != nullptr
+            && !addDxfSetupVariant(*value, sizeof(DRW_Variant), bytes,
+                                   items, false))
+            return false;
+    }
+
+    for (const auto& appGroup : entry.appData) {
+        if (!addDxfSetupItems(1u, items)
+            || !addDxfSetupRetainedBytes(
+                   sizeof(std::list<DRW_Variant>) + 2u * sizeof(void*),
+                   bytes))
+            return false;
+        for (const DRW_Variant& value : appGroup) {
+            if (!addDxfSetupVariant(
+                    value, sizeof(DRW_Variant) + 2u * sizeof(void*),
+                    bytes, items))
+                return false;
+        }
+    }
+    return true;
+}
+
+template <typename Record, typename EstimateRecord>
+bool estimateDxfSetupRecords(const std::vector<Record>& records,
+                             std::size_t& estimate,
+                             std::size_t& itemCount,
+                             EstimateRecord estimateRecord) noexcept {
+    estimate = 0u;
+    itemCount = 0u;
+    if (records.size() > kMaxDxfSetupTableRecords
+        || !addDxfSetupSlots(records.size(), sizeof(Record), estimate,
+                             itemCount))
+        return false;
+    for (const Record& record : records) {
+        if (!estimateRecord(record, estimate, itemCount))
+            return false;
+    }
+    return true;
+}
+
+bool estimateOneSourceBlockRecord(const DRW_Block_Record& record,
+                                  std::size_t& bytes,
+                                  std::size_t& items) noexcept {
+    return addDxfSetupTableEntryPayload(record, bytes, items)
+        && addDxfSetupText(record.xrefPath, bytes, items)
+        && addDxfSetupText(record.description, bytes, items)
+        && addDxfSetupSlots(record.previewData.size(), sizeof(std::uint8_t),
+                            bytes, items)
+        && addDxfSetupSlots(record.insertHandles.size(),
+                            sizeof(std::uint32_t), bytes, items)
+        && addDxfSetupSlots(record.entityMapCount(), sizeof(std::uint32_t),
+                            bytes, items);
+}
+
+bool estimateOneCanonicalLineType(const DRW_LType& lineType,
+                                  std::size_t& bytes,
+                                  std::size_t& items) noexcept {
+    if (!addDxfSetupTableEntryPayload(lineType, bytes, items)
+        || !addDxfSetupText(lineType.desc, bytes, items)
+        || !addDxfSetupSlots(lineType.path.size(), sizeof(double), bytes,
+                             items)
+        || !addDxfSetupSlots(lineType.segments.size(),
+                             sizeof(DRW_LTypeSegment), bytes, items)
+        || !addDxfSetupSlots(lineType.shapeHandles.size(),
+                             sizeof(std::uint32_t), bytes, items)
+        || !addDxfSetupSlots(lineType.synchronizedLengthCount(),
+                             sizeof(double), bytes, items)
+        || !addDxfSetupSlots(lineType.retainedSegmentTextCount(),
+                             sizeof(std::size_t), bytes, items))
+        return false;
+    for (const DRW_LTypeSegment& segment : lineType.segments) {
+        if (!addDxfSetupText(segment.text, bytes, items))
+            return false;
+    }
+    return true;
+}
+
+} // namespace
+
+bool dxfRW::estimateSourceBlockRecordsRetainedBytes(
+        const std::vector<DRW_Block_Record>& records,
+        std::size_t& estimate, std::size_t& itemCount) noexcept {
+    return estimateDxfSetupRecords(records, estimate, itemCount,
+                                   estimateOneSourceBlockRecord);
+}
+
+bool dxfRW::estimateCanonicalLineTypeMetadataRetainedBytes(
+        const std::vector<DRW_LType>& lineTypes,
+        std::size_t& estimate, std::size_t& itemCount) noexcept {
+    return estimateDxfSetupRecords(lineTypes, estimate, itemCount,
+                                   estimateOneCanonicalLineType);
+}
+
+void dxfRW::setSourceBlockRecords(
+        const std::vector<DRW_Block_Record>& records,
+        bool requireResolvedOwners) {
+    if (!preflightDxfSetup())
+        return;
+    if (m_dxfWriteAttemptActive) {
+        m_writeError = true;
+        return;
+    }
+    std::size_t estimate = 0u;
+    std::size_t itemCount = 0u;
+    if (!estimateSourceBlockRecordsRetainedBytes(records, estimate, itemCount)) {
+        std::vector<DRW_Block_Record>().swap(m_sourceBlockRecords);
+        m_dxfSourceBlockRecordsInputRejected = true;
+        return;
+    }
+    try {
+        std::vector<DRW_Block_Record> copied = records;
+        m_sourceBlockRecords.swap(copied);
+    } catch (...) {
+        std::vector<DRW_Block_Record>().swap(m_sourceBlockRecords);
+        m_dxfSourceBlockRecordsInputRejected = true;
+        return;
+    }
+    m_requireResolvedBlockOwners = requireResolvedOwners;
+    m_dxfSourceBlockRecordsInputRejected = false;
+}
+
+void dxfRW::setSourceBlockRecords(
+        std::vector<DRW_Block_Record>&& records,
+        bool requireResolvedOwners) {
+    if (!preflightDxfSetup())
+        return;
+    if (m_dxfWriteAttemptActive) {
+        m_writeError = true;
+        return;
+    }
+    std::size_t estimate = 0u;
+    std::size_t itemCount = 0u;
+    if (!estimateSourceBlockRecordsRetainedBytes(records, estimate, itemCount)) {
+        std::vector<DRW_Block_Record>().swap(m_sourceBlockRecords);
+        m_dxfSourceBlockRecordsInputRejected = true;
+        return;
+    }
+    m_sourceBlockRecords = std::move(records);
+    m_requireResolvedBlockOwners = requireResolvedOwners;
+    m_dxfSourceBlockRecordsInputRejected = false;
+}
+
+void dxfRW::setCanonicalLineTypeMetadata(
+        const std::vector<DRW_LType>& lineTypes) {
+    if (!preflightDxfSetup())
+        return;
+    if (m_dxfWriteAttemptActive) {
+        m_writeError = true;
+        return;
+    }
+    std::size_t estimate = 0u;
+    std::size_t itemCount = 0u;
+    if (!estimateCanonicalLineTypeMetadataRetainedBytes(
+            lineTypes, estimate, itemCount)) {
+        std::vector<DRW_LType>().swap(m_canonicalLineTypeMetadata);
+        m_dxfCanonicalLineTypeMetadataInputRejected = true;
+        return;
+    }
+    try {
+        std::vector<DRW_LType> copied = lineTypes;
+        m_canonicalLineTypeMetadata.swap(copied);
+    } catch (...) {
+        std::vector<DRW_LType>().swap(m_canonicalLineTypeMetadata);
+        m_dxfCanonicalLineTypeMetadataInputRejected = true;
+        return;
+    }
+    m_dxfCanonicalLineTypeMetadataInputRejected = false;
+}
+
+void dxfRW::setCanonicalLineTypeMetadata(
+        std::vector<DRW_LType>&& lineTypes) {
+    if (!preflightDxfSetup())
+        return;
+    if (m_dxfWriteAttemptActive) {
+        m_writeError = true;
+        return;
+    }
+    std::size_t estimate = 0u;
+    std::size_t itemCount = 0u;
+    if (!estimateCanonicalLineTypeMetadataRetainedBytes(
+            lineTypes, estimate, itemCount)) {
+        std::vector<DRW_LType>().swap(m_canonicalLineTypeMetadata);
+        m_dxfCanonicalLineTypeMetadataInputRejected = true;
+        return;
+    }
+    m_canonicalLineTypeMetadata = std::move(lineTypes);
+    m_dxfCanonicalLineTypeMetadataInputRejected = false;
+}
+
 bool dxfRW::estimateRawDxfSectionRetainedBytes(
         const DRW_RawDxfSection& section, std::size_t byteLimit,
         std::size_t& estimate) noexcept {
@@ -4568,6 +4838,22 @@ bool dxfRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
             DRW::OperationCause::ResourceLimit,
             "dxf-raw-section-budget",
             "raw DXF sections exceeded the bounded setter limits");
+        return setError(DRW::BAD_OPEN);
+    }
+    if (m_dxfSourceBlockRecordsInputRejected) {
+        recordOperationDiagnostic(
+            DRW::OperationPhase::Validation,
+            DRW::OperationCause::ResourceLimit,
+            "dxf-source-block-record-budget",
+            "source BLOCK_RECORD metadata exceeded the bounded setter limits");
+        return setError(DRW::BAD_OPEN);
+    }
+    if (m_dxfCanonicalLineTypeMetadataInputRejected) {
+        recordOperationDiagnostic(
+            DRW::OperationPhase::Validation,
+            DRW::OperationCause::ResourceLimit,
+            "dxf-canonical-linetype-budget",
+            "canonical LTYPE metadata exceeded the bounded setter limits");
         return setError(DRW::BAD_OPEN);
     }
     if (m_dxfResolvedWriteInputRejectedMask != 0u) {

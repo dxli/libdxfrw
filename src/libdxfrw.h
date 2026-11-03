@@ -1126,32 +1126,14 @@ public:
     //! and modern INSERT names without a planned BLOCK_RECORD target.
     //! Legacy writers without this metadata retain their existing fallback.
     void setSourceBlockRecords(const std::vector<DRW_Block_Record>& records,
-                               bool requireResolvedOwners = false) {
-        if (!preflightDxfSetup())
-            return;
-        m_sourceBlockRecords = records;
-        m_requireResolvedBlockOwners = requireResolvedOwners;
-    }
+                               bool requireResolvedOwners = false);
     void setSourceBlockRecords(std::vector<DRW_Block_Record>&& records,
-                               bool requireResolvedOwners = false) {
-        if (!preflightDxfSetup())
-            return;
-        m_sourceBlockRecords = std::move(records);
-        m_requireResolvedBlockOwners = requireResolvedOwners;
-    }
+                               bool requireResolvedOwners = false);
     /*!< Register source linetypes so metadata attached to the three mandatory
      * canonical rows can be emitted before the LTYPE table is closed. */
     void setCanonicalLineTypeMetadata(
-        const std::vector<DRW_LType> &lineTypes) {
-        if (!preflightDxfSetup())
-            return;
-        m_canonicalLineTypeMetadata = lineTypes;
-    }
-    void setCanonicalLineTypeMetadata(std::vector<DRW_LType>&& lineTypes) {
-        if (!preflightDxfSetup())
-            return;
-        m_canonicalLineTypeMetadata = std::move(lineTypes);
-    }
+        const std::vector<DRW_LType> &lineTypes);
+    void setCanonicalLineTypeMetadata(std::vector<DRW_LType>&& lineTypes);
     std::uint32_t remapHandle(std::uint32_t handle) const {
         auto it = m_handleRemap.find(handle);
         if (it != m_handleRemap.end())
@@ -1469,6 +1451,10 @@ private:
     static constexpr std::size_t kMaxDxfClassEntries = 65536u;
     static constexpr std::size_t kMaxDxfHandleRemapEntries = 100000u;
     static constexpr std::size_t kMaxResolvedWriteReferences = 100000u;
+    static constexpr std::size_t kMaxDxfSourceTableRecords = 100000u;
+    static constexpr std::size_t kMaxDxfSourceTableItems = 1000000u;
+    static constexpr std::size_t kMaxDxfSourceTableRetainedBytes =
+        64u * 1024u * 1024u;
     enum DxfResolvedWriteInput : std::uint8_t {
         ResolvedTableStyleHandlesInput = 1u << 0,
         ResolvedTableStyleBaseIdsInput = 1u << 1,
@@ -1837,6 +1823,12 @@ public:
         const std::vector<DRW_RawDxfSection>& sections,
         std::size_t maxRecords, std::size_t maxGroups,
         std::size_t maxBytes, std::size_t& estimate) noexcept;
+    static bool estimateSourceBlockRecordsRetainedBytes(
+        const std::vector<DRW_Block_Record>& records,
+        std::size_t& estimate, std::size_t& itemCount) noexcept;
+    static bool estimateCanonicalLineTypeMetadataRetainedBytes(
+        const std::vector<DRW_LType>& lineTypes,
+        std::size_t& estimate, std::size_t& itemCount) noexcept;
     bool preflightRawDxfSections() noexcept;
     bool preflightDxfSetup() noexcept {
         if (!m_dxfWriteFinalizing && !m_dxfWriteInspecting)
@@ -2146,6 +2138,7 @@ private:
     std::uint8_t m_dxfResolvedWriteInputRejectedMask{0u};
     /// Source linetypes used to attach metadata to canonical mandatory rows.
     std::vector<DRW_LType> m_canonicalLineTypeMetadata;
+    bool m_dxfCanonicalLineTypeMetadataInputRejected{false};
     /// GROUP objects to typed-emit in writeObjects (DXF path). Populated via
     /// setGroups; empty by default so a fresh write is byte-identical.
     std::vector<DRW_Group> m_groups;
@@ -2200,6 +2193,7 @@ private:
     bool m_dxfBlockSectionActive {false};
     bool m_dxfBlockSectionComplete {false};
     std::vector<DRW_Block_Record> m_sourceBlockRecords;
+    bool m_dxfSourceBlockRecordsInputRejected{false};
     std::unordered_set<std::uint32_t> m_writtenDxfFieldSourceHandles;
     std::unique_ptr<DRW_Block> m_fixedModelSpaceBlockBegin;
     std::unique_ptr<DRW_Block> m_fixedPaperSpaceBlockBegin;

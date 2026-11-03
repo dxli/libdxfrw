@@ -3175,6 +3175,12 @@ set_tests_properties(libdxfrw_dxf_handle_remap_setter_bound PROPERTIES
     LABELS "fast;dxf;handle-remap;resource;transaction"
     TIMEOUT 30)
 
+add_test(NAME libdxfrw_dxf_source_table_metadata_setter_bounds
+    COMMAND libdxfrw_dxf_fixture_tests --dxf-source-table-metadata-setter-bounds)
+set_tests_properties(libdxfrw_dxf_source_table_metadata_setter_bounds PROPERTIES
+    LABELS "fast;dxf;table;resource;transaction"
+    TIMEOUT 30)
+
 add_test(NAME libdxfrw_tablecontent_multicell_field_reference
     COMMAND libdxfrw_dxf_fixture_tests --tablecontent-multicell-field)
 set_tests_properties(libdxfrw_tablecontent_multicell_field_reference PROPERTIES
