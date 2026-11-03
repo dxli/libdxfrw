@@ -12520,6 +12520,10 @@ bool dxfRW::writeSectionObject(DRW_SectionObject *ent) {
             : (m_referenceResolver
                    ? resolveReference(ent->m_sectionSettingsHandle)
                    : remapObjectHandle(ent->m_sectionSettingsHandle));
+    if (ent->m_sectionSettingsHandle != 0u
+        && (sectionSettingsHandle == 0u
+            || sectionSettingsHandle == DRW::NoHandle))
+        return failDxfWrite();
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "SECTIONOBJECT");
     if (!writeEntity(ent))

@@ -157,6 +157,12 @@ engines.
    This closes low-level identity translation only; target kinds, existence,
    ownership, recursive closure, physical source profiles, and native behavior
    remain open.
+   SECTIONOBJECT's modeled group-360 SECTION_SETTINGS hard-owner reference now
+   also refuses zero/NoHandle resolver results before publishing a record;
+   generated ASCII/Binary checks cover both invalid results and corrected retry
+   ([receipt](docs/research/p4-sectionobject-settings-reference-remapping-2026-11-03.json)).
+   This does not qualify source binding, target ownership/existence, or section
+   semantics.
    Continue the remaining reference-ID audit from the current field receipts,
    prioritizing typed owner/dependency pointers on supported 3D records. Confirm
    each field against its parser contract and applicable format mapping before

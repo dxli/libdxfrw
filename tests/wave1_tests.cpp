@@ -2619,6 +2619,44 @@ void testEntityReferenceRemapping(TestContext& t) {
                          : "typed entity references emit source-handle remaps");
         }
     }
+
+    for (const bool binary : {false, true}) {
+        for (const std::uint32_t unresolved : {
+                 0u, static_cast<std::uint32_t>(DRW::NoHandle)}) {
+            std::ostringstream failedOutput;
+            dxfRW failedOwner("");
+            failedOwner.version = DRW::AC1032;
+            failedOwner.binFile = binary;
+            failedOwner.setReferenceResolver([unresolved](std::uint32_t source) {
+                return source == 0x804u ? unresolved : source;
+            });
+            failedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&failedOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&failedOutput));
+            DRW_SectionObject failedSection;
+            failedSection.m_sectionSettingsHandle = 0x804u;
+            t.expect(!failedOwner.writeSectionObject(&failedSection)
+                         && failedOutput.str().empty(),
+                     "unresolved SECTIONOBJECT settings target preserves destination");
+
+            std::ostringstream retryOutput;
+            dxfRW retryOwner("");
+            retryOwner.version = DRW::AC1032;
+            retryOwner.binFile = binary;
+            retryOwner.setReferenceResolver(resolverValue);
+            retryOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&retryOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&retryOutput));
+            DRW_SectionObject correctedSection;
+            correctedSection.m_sectionSettingsHandle = 0x804u;
+            t.expect(retryOwner.writeSectionObject(&correctedSection),
+                     "SECTIONOBJECT accepts corrected fresh-writer retry");
+        }
+    }
 }
 
 void testLayerMaterialReferenceRemapping(TestContext& t) {
