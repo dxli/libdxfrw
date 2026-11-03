@@ -17110,6 +17110,252 @@ bool pointCloudExPhysicalRecordValid(
         && version >= DRW::AC1021 && version <= DRW::AC1032;
 }
 
+bool pointCloudExSourceFieldProfileComplete(
+        const DRW_DxfPhysicalEntitySource& record,
+        const DRW_PointCloudEx& cloud, DRW::Version version,
+        bool binary) noexcept {
+    if (!pointCloudExPhysicalRecordValid(record, version, binary)
+        || version < DRW::AC1027)
+        return false;
+    enum class Scope : std::uint8_t { Header, Entity, PointCloud };
+    Scope scope = Scope::Header;
+    std::size_t subclassCount = 0u;
+    bool entityHandleMatched = false;
+    bool entityOwnerMatched = false;
+    bool definitionReferenceMatched = false;
+    bool reactorReferenceMatched = false;
+    std::array<std::size_t, 1072u> commonCounts{};
+    std::array<std::size_t, 1072u> pointCloudCounts{};
+    const auto isType = [](const DRW_Variant& field,
+                           DRW_Variant::TYPE type) {
+        return field.type() == type;
+    };
+    const auto isText = [&isType](const DRW_Variant& field) {
+        return isType(field, DRW_Variant::STRING)
+            && field.content.s != nullptr;
+    };
+    const auto isInt = [&isType](const DRW_Variant& field) {
+        return isType(field, DRW_Variant::INTEGER);
+    };
+    const auto isReal = [&isType](const DRW_Variant& field) {
+        return isType(field, DRW_Variant::DOUBLE)
+            && std::isfinite(field.content.d);
+    };
+    const auto isHandle = [](const DRW_Variant& field,
+                             std::uint32_t expected) {
+        if (field.type() != DRW_Variant::STRING || field.content.s == nullptr
+            || field.content.s->empty())
+            return false;
+        std::uint64_t parsedHandle = 0u;
+        const std::string& text = *field.content.s;
+        const auto parsed = std::from_chars(
+            text.data(), text.data() + text.size(), parsedHandle, 16);
+        return parsed.ec == std::errc{}
+            && parsed.ptr == text.data() + text.size()
+            && parsedHandle <= (std::numeric_limits<std::uint32_t>::max)()
+            && parsedHandle == expected;
+    };
+    const auto increment = [](std::array<std::size_t, 1072u>& counts,
+                              int code) {
+        if (code < 0 || static_cast<std::size_t>(code) >= counts.size()
+            || counts[static_cast<std::size_t>(code)]
+                == (std::numeric_limits<std::size_t>::max)())
+            return false;
+        ++counts[static_cast<std::size_t>(code)];
+        return true;
+    };
+    for (std::size_t i = 0u; i < record.groups.size(); ++i) {
+        const DRW_Variant& field = record.groups[i];
+        const int code = field.code();
+        if (record.spans[i].ignoredComment)
+            continue;
+        // The current imported graph route refuses application data and
+        // XDATA. Fail here instead of treating recognizable scalar encodings
+        // as a complete output field profile.
+        if (code == 102 || (code >= 1000 && code <= 1071))
+            return false;
+        if (code == 100) {
+            if (!isText(field))
+                return false;
+            const std::string& subclass = *field.content.s;
+            if (subclassCount == 0u && subclass == "AcDbEntity")
+                scope = Scope::Entity;
+            else if (subclassCount == 1u
+                     && subclass == "AcDbPointCloud")
+                scope = Scope::PointCloud;
+            else
+                return false;
+            ++subclassCount;
+            continue;
+        }
+        if (scope != Scope::PointCloud) {
+            bool projected = false;
+            switch (code) {
+            case 5:
+            case 6:
+            case 8:
+            case 330:
+            case 347:
+            case 348:
+            case 360:
+            case 390:
+            case 430:
+                projected = isText(field);
+                break;
+            case 48:
+                projected = isReal(field);
+                break;
+            case 60:
+            case 62:
+            case 67:
+            case 284:
+            case 370:
+            case 420:
+            case 440:
+                projected = isInt(field);
+                break;
+            case 160:
+            case 310:
+                // Proxy graphics are not admitted by the current point-cloud
+                // graph writer; never let its physical payload be dropped.
+                return false;
+            default:
+                break;
+            }
+            if (!projected)
+                return false;
+            if (code == 5) {
+                entityHandleMatched = isHandle(field, cloud.handle);
+                if (!entityHandleMatched)
+                    return false;
+            } else if (code == 6) {
+                if (*field.content.s != cloud.lineType)
+                    return false;
+            } else if (code == 8) {
+                if (*field.content.s != cloud.layer)
+                    return false;
+            } else if (code == 330) {
+                entityOwnerMatched = isHandle(field, cloud.parentHandle);
+                if (!entityOwnerMatched)
+                    return false;
+            } else if (code == 347) {
+                if (!isHandle(field, cloud.material))
+                    return false;
+            } else if (code == 348) {
+                if (!isHandle(field, cloud.fullVisualStyleHandle))
+                    return false;
+            } else if (code == 360) {
+                if (!isHandle(field, cloud.xDictHandle))
+                    return false;
+            } else if (code == 390) {
+                if (!isHandle(field, static_cast<std::uint32_t>(
+                                         cloud.plotStyle)))
+                    return false;
+            } else if (code == 430) {
+                if (*field.content.s != cloud.colorName)
+                    return false;
+            } else if (code == 48) {
+                if (!isReal(field)
+                    || std::memcmp(&field.content.d, &cloud.ltypeScale,
+                                   sizeof(cloud.ltypeScale)) != 0)
+                    return false;
+            } else if (code == 60) {
+                if (!isInt(field) || (field.i_val() != 0
+                                      && field.i_val() != 1)
+                    || cloud.visible != (field.i_val() == 0))
+                    return false;
+            } else if (code == 62) {
+                if (!isInt(field) || field.i_val() != cloud.color)
+                    return false;
+            } else if (code == 67) {
+                if (!isInt(field)
+                    || field.i_val() != static_cast<int>(cloud.space))
+                    return false;
+            } else if (code == 284) {
+                if (!isInt(field)
+                    || field.i_val() != static_cast<int>(cloud.shadow))
+                    return false;
+            } else if (code == 370) {
+                if (!isInt(field)
+                    || field.i_val()
+                        != DRW_LW_Conv::lineWidth2dxfInt(cloud.lWeight))
+                    return false;
+            } else if (code == 420) {
+                if (!isInt(field) || field.i_val() != cloud.color24)
+                    return false;
+            } else if (code == 440) {
+                if (!isInt(field) || field.i_val() != cloud.transparency)
+                    return false;
+            }
+            if (!increment(commonCounts, code))
+                return false;
+            continue;
+        }
+
+        bool projected = false;
+        switch (code) {
+        case 1:
+            projected = isText(field);
+            break;
+        case 330:
+            projected = isText(field);
+            definitionReferenceMatched =
+                projected && isHandle(field, cloud.definitionHandle);
+            break;
+        case 360:
+            projected = isText(field);
+            reactorReferenceMatched =
+                projected && isHandle(field, cloud.reactorHandle);
+            break;
+        case 10: case 11: case 12: case 13:
+        case 20: case 21: case 22: case 23:
+        case 30: case 31: case 32: case 33:
+        case 40: case 41:
+        case 210: case 211: case 212: case 213:
+        case 220: case 221: case 222: case 223:
+        case 230: case 231: case 232: case 233:
+            projected = isReal(field);
+            break;
+        case 70: case 71: case 72: case 90: case 91: case 92: case 93:
+        case 280: case 290: case 291: case 292: case 293: case 294: case 295:
+            projected = isInt(field);
+            break;
+        default:
+            break;
+        }
+        if (!projected || !increment(pointCloudCounts, code))
+            return false;
+    }
+    if (subclassCount != 2u || cloud.croppingCount < 0
+        || cloud.croppings.size()
+            != static_cast<std::size_t>(cloud.croppingCount)
+        || commonCounts[5u] != 1u || commonCounts[330u] != 1u
+        || !entityHandleMatched || !entityOwnerMatched
+        || pointCloudCounts[70u] != 1u || pointCloudCounts[92u] != 1u
+        || pointCloudCounts[330u] != 1u || !definitionReferenceMatched
+        || pointCloudCounts[360u] != 1u || !reactorReferenceMatched
+        || pointCloudCounts[280u]
+            != static_cast<std::size_t>(cloud.croppingCount)
+        || pointCloudCounts[1u] > 4u || pointCloudCounts[71u] > 2u
+        || pointCloudCounts[72u] > 1u || pointCloudCounts[90u] > 1u
+        || pointCloudCounts[91u] > 1u || pointCloudCounts[40u] > 2u
+        || pointCloudCounts[41u] > 1u || pointCloudCounts[291u] > 1u
+        || pointCloudCounts[292u] > 1u || pointCloudCounts[293u] > 1u
+        || pointCloudCounts[294u] > 1u || pointCloudCounts[295u] > 1u
+        || pointCloudCounts[330u] > 1u || pointCloudCounts[360u] > 1u
+        || pointCloudCounts[93u]
+            != (cloud.croppingCount == 0
+                    ? 2u
+                    : static_cast<std::size_t>(cloud.croppingCount)))
+    {
+        return false;
+    }
+    const std::size_t expectedCroppingBooleans =
+        static_cast<std::size_t>(cloud.croppingCount) * 2u;
+    return pointCloudCounts[290u] >= expectedCroppingBooleans
+        && pointCloudCounts[290u] <= expectedCroppingBooleans + 1u;
+}
+
 bool pointCloudExDispatchMatchesRecord(
         const DRW_DxfPhysicalEntitySource& record,
         const DRW_DxfPhysicalRecordSpan& begin,
@@ -63845,6 +64091,7 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
     fData->pointCloudExSourceBoundEntities = 0u;
     fData->pointCloudExSourceBindingAttempted = false;
     fData->pointCloudExSourceBindingComplete = false;
+    fData->pointCloudExSourceFieldProfileComplete = false;
     fData->acdsHistoryDxfImport = {};
     fData->acdsHistoryDxfImport.generation = fData->importGeneration;
     fData->acdsHistoryDxfImport.failed = !fData->rawAcdsHistoryObjects.empty();
@@ -68103,6 +68350,7 @@ bool dx_iface::validateImportedDxfPointCloudExSourceBindings(
     auto& source = data.m_tableDxfSource;
     data.pointCloudExSourceBindingAttempted = true;
     data.pointCloudExSourceBindingComplete = false;
+    data.pointCloudExSourceFieldProfileComplete = false;
     data.pointCloudExSourceBoundEntities = 0u;
     if (data.sourceFormat != dx_source_format::DXF
         || data.importGeneration == 0u
@@ -68248,8 +68496,11 @@ bool dx_iface::validateImportedDxfPointCloudExSourceBindings(
                     || typeid(observedModel) != typeid(DRW_PointCloudEx)
                     || cloud->handle != event.handle
                     || cloud->parentHandle != event.owner
+                    || !pointCloudExSourceFieldProfileComplete(
+                        *record, *cloud, scope.physical->version,
+                        scope.physical->binary)
                     || !bind(*cloud, scope.physical->version)) {
-                    failure = "DXF ENTITIES POINTCLOUDEX typed state differs from its emitted model";
+                    failure = "DXF ENTITIES POINTCLOUDEX fields are outside the bounded profile or differ from its emitted model";
                     return false;
                 }
                 ++physicalEntityCount;
@@ -68321,8 +68572,11 @@ bool dx_iface::validateImportedDxfPointCloudExSourceBindings(
                     || model->second.get() != owner->second.get()
                     || model->second->handle != event.handle
                     || model->second->parentHandle != event.owner
+                    || !pointCloudExSourceFieldProfileComplete(
+                        *record, *model->second, row.children->version,
+                        row.children->binary)
                     || !bind(*model->second, row.children->version)) {
-                    failure = "DXF BLOCK POINTCLOUDEX callback is not bound to its physical record and output model";
+                    failure = "DXF BLOCK POINTCLOUDEX fields are outside the bounded profile or differ from their output model";
                     return false;
                 }
                 ++physicalEntityCount;
@@ -68350,6 +68604,7 @@ bool dx_iface::validateImportedDxfPointCloudExSourceBindings(
     }
     boundCount = outputCount;
     data.pointCloudExSourceBoundEntities = outputCount;
+    data.pointCloudExSourceFieldProfileComplete = true;
     data.pointCloudExSourceBindingComplete = true;
     failure = nullptr;
     return true;

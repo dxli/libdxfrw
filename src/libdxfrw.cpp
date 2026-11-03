@@ -14811,7 +14811,6 @@ bool dxfRW::writePointCloud(DRW_PointCloud *ent){
     writer->writeString(0, "POINTCLOUD");
     if (!writeEntity(ent))
         return false;
-    writer->writeString(100, "AcDbEntity");
     writer->writeString(100, "AcDbPointCloud");
     writer->writeInt16(70, ent->classVersion);
     writer->writeDouble(10, ent->origin.x);
@@ -14926,7 +14925,6 @@ bool dxfRW::writePointCloudEx(DRW_PointCloudEx *ent){
     writer->writeString(0, "POINTCLOUDEX");
     if (!writeEntity(ent))
         return false;
-    writer->writeString(100, "AcDbEntity");
     writer->writeString(100, "AcDbPointCloud");
     writer->writeInt16(70, ent->classVersion);
     writer->writeDouble(10, ent->extentsMin.x);

@@ -21004,7 +21004,7 @@ bool pointCloudAndNavisworksAdapterTransport() {
             else if (object.m_kind == DRW_PointCloudDef::ReactorEx)
                 actualReactor = &object;
         }
-        const auto* actualGraphCloud = dynamic_cast<const DRW_PointCloudEx*>(
+        auto* actualGraphCloud = dynamic_cast<DRW_PointCloudEx*>(
             graphReadback.mBlock->ent.front());
         const std::size_t rootDefinitionDictionaryLinks =
             static_cast<std::size_t>(std::count_if(
@@ -21100,14 +21100,34 @@ bool pointCloudAndNavisworksAdapterTransport() {
                 return fail("could not create imported point-cloud destination sentinel");
         }
         dx_iface importedWriter;
+        const std::uint32_t actualDefinitionHandle =
+            actualGraphCloud->definitionHandle;
+        actualGraphCloud->definitionHandle = actualReactor->handle;
+        if (importedWriter.fileExport(importedAttemptPath.string(),
+                                      DRW::AC1027, binary, &graphReadback,
+                                      false, true)
+            || !graphReadback.pointCloudExSourceBindingAttempted
+            || graphReadback.pointCloudExSourceBindingComplete
+            || graphReadback.pointCloudExSourceFieldProfileComplete
+            || graphReadback.pointCloudExSourceBoundEntities != 0u)
+            return fail("mismatched POINTCLOUDEX definition reference passed physical field-profile binding");
+        {
+            std::ifstream previous(importedAttemptPath, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != importedSentinel)
+                return fail("mismatched point-cloud reference changed the destination");
+        }
+        actualGraphCloud->definitionHandle = actualDefinitionHandle;
         if (importedWriter.fileExport(importedAttemptPath.string(),
                                       DRW::AC1027, binary, &graphReadback,
                                       false, true))
-            return fail("imported point-cloud source graph was admitted for output");
+            return fail("corrected imported point-cloud graph was admitted for output");
         if (!graphReadback.pointCloudExSourceBindingAttempted
             || !graphReadback.pointCloudExSourceBindingComplete
+            || !graphReadback.pointCloudExSourceFieldProfileComplete
             || graphReadback.pointCloudExSourceBoundEntities != 1u)
-            return fail("imported POINTCLOUDEX callback was not bound to its physical source record");
+            return fail("imported POINTCLOUDEX source record, callback and supported field profile were not fully bound");
         {
             std::ifstream previous(importedAttemptPath, std::ios::binary);
             const std::string bytes{

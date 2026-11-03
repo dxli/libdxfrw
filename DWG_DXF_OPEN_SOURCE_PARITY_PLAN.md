@@ -970,12 +970,20 @@ eligible reader. The exact package and environment result are in the
   current emitted models, with bounded BLOCK snapshots. Generated ASCII/Binary
   import controls verify one-to-one source/output inventories and keep imported
   output atomically refused; see the [DXF entity source-binding receipt](docs/research/p8-pointcloud-dxf-entity-source-binding-2026-11-03.json).
-  This is association evidence only. Imported DXF graph output remains refused
-  until every physical field is covered by the complete writer projection and
-  the DefinitionEx/ReactorEx graph is qualified for source-derived identities.
-  DWG still needs source CLASS/frame/output binding. P4 source-profile closure,
-  physical producer breadth, asset loading and native consumer semantics remain
-  open.
+  A bounded AC1027+ physical field-profile gate now checks the exact
+  `AcDbEntity`/`AcDbPointCloud` subclass sequence, accepted group-code/type and
+  cardinality profile, modeled common values, and exact entity/owner/definition/
+  reactor handle fields. It refuses app-data, XDATA, proxy payload and unknown
+  groups. This caught and fixed a duplicate `AcDbEntity` subclass marker in
+  both POINTCLOUD writers. Generated ASCII/Binary controls reject a mutated
+  definition reference without touching the destination, then bind the corrected
+  source profile on retry; imported output remains atomically refused. See the
+  [field-profile receipt](docs/research/p8-pointcloud-dxf-field-profile-2026-11-03.json).
+  This does not establish physical producer breadth, independent value semantics
+  for every POINTCLOUDEX body group, or source-derived DefinitionEx/ReactorEx
+  output identity closure. DWG still needs source CLASS/frame/output binding.
+  P4 source-profile closure, physical producer breadth, asset loading and native
+  consumer semantics remain open.
   The low-level POINTCLOUD and POINTCLOUDEX serializers now resolve their
   definition/reactor references through the configured resolver (final output
   IDs) or source-handle remap fallback. Generated ASCII/Binary controls verify

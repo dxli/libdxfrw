@@ -764,12 +764,13 @@ public:
     std::size_t pointCloudObjectRetainedItems{0};
     std::size_t pointCloudObjectRetainedBytes{0};
     bool pointCloudObjectCaptureFailed{false};
-    // Current-import output-preflight observation for the physical-record /
-    // callback / retained-model POINTCLOUDEX association. Not support or
-    // semantic qualification.
+    // Current-import output-preflight observation for the bounded physical
+    // field profile and physical-record/callback/retained-model association.
+    // Not support or semantic qualification.
     std::size_t pointCloudExSourceBoundEntities{0u};
     bool pointCloudExSourceBindingAttempted{false};
     bool pointCloudExSourceBindingComplete{false};
+    bool pointCloudExSourceFieldProfileComplete{false};
     // Typed FIELD/FIELDLIST callbacks are retained for a later graph-aware
     // writer gate; raw DXF companions remain separate and are not emitted yet.
     std::list<DRW_Field>fields;
