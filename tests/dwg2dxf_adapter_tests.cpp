@@ -57,6 +57,10 @@ public:
         return interface_.m_extensionMaterialHandles;
     }
 
+    static const std::string& failureDetail(const dx_iface& interface_) {
+        return interface_.m_extensionGraphFailureDetail;
+    }
+
     static bool materialSourcesUnchanged(const dx_iface& interface_) {
         return interface_.hasUnchangedExtensionMaterialSources();
     }
@@ -64820,10 +64824,134 @@ static bool dbColorLateCallbackBinding() {
         ? true : fail("conflicting definition was not rejected atomically");
 }
 
+static bool dbColorExternalEvidenceGate() {
+    const auto fail = [](const char* message) {
+        std::cerr << "DBCOLOR ACAD_COLOR graph: " << message << '\n';
+        return false;
+    };
+    const auto nonce = std::to_string(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto inputPath = std::filesystem::temp_directory_path()
+        / ("libdxfrw-dbcolor-acad-color-" + nonce + ".dwg");
+    const auto outputPath = std::filesystem::temp_directory_path()
+        / ("libdxfrw-dbcolor-acad-color-" + nonce + ".dxf");
+    struct Cleanup {
+        std::filesystem::path input;
+        std::filesystem::path output;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove(input, ignored);
+            std::filesystem::remove(output, ignored);
+        }
+    } cleanup{inputPath, outputPath};
+
+    class Author final : public dx_iface {
+    public:
+        explicit Author(dwgRW& writer) : output(writer) {
+            cData = &storage;
+            currentBlock = storage.mBlock;
+            dictionary.handle = 0xD200u;
+            dictionary.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+            dictionary.hardOwner = 1u;
+            dictionary.cloning = 2u;
+            color.handle = 0xD201u;
+            color.parentHandle = dictionary.handle;
+            color.rgb = 0x2468AC;
+            color.colorIndex = 256u;
+            color.colorMethod = 0xC2u;
+            color.colorDwgFlags = 0x03u;
+            color.colorDwgMetadataPresent = true;
+            color.name = "ACCENT";
+            color.bookName = "LOCAL";
+            dictionary.m_entries = {{"LOCAL$ACCENT", color.handle}};
+        }
+
+        void writeHeader(DRW_Header& header) override { header.vars.clear(); }
+        void writeDwgClasses() override {
+            registered = output.registerDbColorObjectClass(&color)
+                && output.registerDwgNamedObjectDictionaryEntry(
+                    "ACAD_COLOR", dictionary.handle);
+        }
+        void writeObjects() override {
+            wrote = output.writeDictionary(&dictionary)
+                && output.writeDbColor(&color);
+        }
+        bool finalizeDwgWrite() override { return registered && wrote; }
+        bool finalizeDwgWriteStructure() override { return true; }
+
+        dwgRW& output;
+        dx_data storage;
+        DRW_Dictionary dictionary;
+        DRW_DbColor color;
+        bool registered{false};
+        bool wrote{false};
+    };
+
+    dwgRW writer(inputPath.string().c_str());
+    Author author(writer);
+    if (!writer.write(&author, DRW::AC1027, true))
+        return fail("scratch AC1027 DBCOLOR source could not be authored");
+
+    dx_data imported;
+    dx_iface importer;
+    if (!importer.fileImport(inputPath.string(), &imported, false))
+        return fail("locally authored AC1027 DBCOLOR source could not be read");
+    if (imported.dwgDbColorObjects.size() != 1u
+        || imported.dwgDbColorObjectRetainedRecords != 1u
+        || !imported.hasCompleteDwgDbColorTypedCapture()
+        || !imported.hasCompleteDwgDbColorAppearanceBindings()
+        || !imported.hasNamedObjectDictionary)
+        return fail("typed callback or NOD root did not retain the authored record");
+
+    const auto findColorRoot = [&imported]() {
+        return std::find_if(
+            imported.namedObjectDictionary.m_entries.begin(),
+            imported.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_COLOR";
+            });
+    };
+    const auto root = findColorRoot();
+    if (root == imported.namedObjectDictionary.m_entries.end()
+        || root->m_handle != author.dictionary.handle)
+        return fail("ACAD_COLOR root was not present in the imported NOD");
+
+    dx_iface graph;
+    if (DxIfaceExtensionGraphTestAccess::prepare(graph, imported, true))
+        return fail("generated same-implementation source incorrectly promoted DBCOLOR output support");
+    const std::string gate =
+        DxIfaceExtensionGraphTestAccess::failureDetail(graph);
+    if (gate.find("independent producer source profile") == std::string::npos
+        || DxIfaceExtensionGraphTestAccess::prepare(graph, imported, true)
+        || DxIfaceExtensionGraphTestAccess::failureDetail(graph) != gate)
+        return fail("independent-evidence gate did not remain stable after a repeated retry");
+
+    const auto baseline = std::string("old destination");
+    {
+        std::ofstream output(outputPath, std::ios::binary);
+        output << baseline;
+    }
+    dx_iface exporter;
+    const bool outputRefused = !exporter.fileExport(
+        outputPath.string(), DRW::AC1027, false, &imported, false, true);
+    std::ifstream preserved(outputPath, std::ios::binary);
+    const std::string actual((std::istreambuf_iterator<char>(preserved)),
+                             std::istreambuf_iterator<char>());
+    if (!outputRefused || actual != baseline)
+        return fail("unqualified source frame was emitted or destination rollback failed");
+
+    std::cout << "Generated AC1027 DBCOLOR/NOD self-consistency passed; independent-evidence gate, "
+                 "strict-output rollback, and retry remain enforced\n";
+    return true;
+}
+
 int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--dbcolor-late-callback-binding")
         return dbColorLateCallbackBinding() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--dbcolor-external-evidence-gate")
+        return dbColorExternalEvidenceGate() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--ucs-base-name-target-closure")
         return ucsBaseHeaderNameTargetClosure() ? 0 : 1;
     if (argc == 2

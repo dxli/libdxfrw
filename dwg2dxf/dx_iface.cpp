@@ -8374,6 +8374,18 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
     if (data == nullptr)
         return reject();
 
+    if (data->sourceFormat == dx_source_format::DWG
+        && data->importGeneration != 0u) {
+        const auto color = data->dwgDbColorObjects.lower_bound(
+            {data->importGeneration, 0u});
+        if (color != data->dwgDbColorObjects.end()
+            && color->first.first == data->importGeneration) {
+            inventoryFamily = "DBCOLOR source/output qualification";
+            return reject(ExtensionGraphFailure::InvalidGraph,
+                "DWG DBCOLOR export remains refused pending an independent producer source profile, exact ACAD_COLOR entry semantics, and fresh DXF readback evidence");
+        }
+    }
+
     std::uint64_t headerPlotStyleHandle = 0;
     bool hasHeaderPlotStyleHandle = false;
     if (!data->headerC.getDxfPlotStyleIdHandle(

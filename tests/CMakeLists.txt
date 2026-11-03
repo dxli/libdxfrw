@@ -2116,6 +2116,17 @@ set_tests_properties(dwg2dxf_dbcolor_late_callback_binding PROPERTIES
     TIMEOUT 10
 )
 
+# Locally authored AC1027 DBCOLOR proves only self-consistency. It cannot
+# discharge the independent producer/profile/readback gate for output support.
+add_test(
+    NAME dwg2dxf_dbcolor_external_evidence_gate
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --dbcolor-external-evidence-gate
+)
+set_tests_properties(dwg2dxf_dbcolor_external_evidence_gate PROPERTIES
+    LABELS "fast;dwg;dxf;color;adapter;generated;transaction"
+    TIMEOUT 60
+)
+
 add_test(
     NAME dwg2dxf_rastervariables_dwg_adapter_transport
     COMMAND libdxfrw_dwg2dxf_adapter_tests --rastervariables-dwg-adapter-transport

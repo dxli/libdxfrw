@@ -113,9 +113,22 @@ engines.
    DBCOLOR source model, and refuses unresolved references (see the [late
    callback](docs/research/p4-dbcolor-late-callback-binding-2026-11-02.json)
    and [typed capture](docs/research/p4-dbcolor-typed-source-capture-2026-11-02.json)
-   receipts). This capture is not output admission. The DBCOLOR source frame,
-   ACAD_COLOR dictionary owner/entry graph, strict source-to-output/readback,
-   and native color-book semantics remain refused and unqualified.
+   receipts). A generated AC1027 DWG authored and read by this same library now
+   provides a fast self-consistency control for typed capture and the NOD's
+   `ACAD_COLOR` root. It is not independent source evidence. A preflight gate
+   refuses DBCOLOR output until an independent producer profile, exact
+   `ACAD_COLOR` entry semantics, and fresh DXF readback are evidenced (see the
+   [external-evidence gate receipt](docs/research/p4-dbcolor-external-evidence-gate-2026-11-03.json)).
+   Research confirms that Autodesk exposes a color dictionary containing
+   `AcDbColor` entries and that the root drawing dictionary uses the
+   `ACAD_COLOR` key, while the Open Design Specification describes entity
+   color references but does not specify the complete DBCOLOR object body or
+   dictionary-key serialization. LibreDWG's object schema independently
+   models DBCOLOR as common parent plus CMC color; this corroborates the field
+   family, not producer interoperability. The DBCOLOR physical field span,
+   actual dictionary key/value relation, cross-producer output semantics, and
+   native color-book behavior therefore remain unqualified. No fixture is
+   committed; the authored DWG exists only during the generated test.
    The `DICTIONARYWDFLT` default edge is checked as a hard pointer before it can
    become a typed reference; the generated wrong-role, rollback, and cursor
    alignment control is in the [default-handle role receipt](docs/research/p4-dictionary-default-handle-role-guard-2026-11-02.json).
