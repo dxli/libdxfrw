@@ -16501,9 +16501,33 @@ void testImageDefinitionPlanResourceBounds(TestContext& t) {
             codec, {7u, 0xA400u})
         && DxfGroupSetterTestAccess::hasImageDefinitionPlan(
             codec, {7u, 0xA500u});
+    const std::size_t overRecordCount =
+        DRW::kMaxDxfTypedTableRecords + 1u;
+    std::vector<dxfRW::ImageDefinitionPlanEntry> overCountPlan(
+        overRecordCount);
+    dxfRW countCodec("");
+    const bool countPriorInstalled =
+        countCodec.setImageDefinitionPlan(smallPlan);
+    const bool constCountRefused =
+        !countCodec.setImageDefinitionPlan(overCountPlan);
+    const bool constCountPreserved = constCountRefused
+        && overCountPlan.size() == overRecordCount
+        && DxfGroupSetterTestAccess::imageDefinitionPlanCount(countCodec) == 1u
+        && DxfGroupSetterTestAccess::hasImageDefinitionPlan(
+            countCodec, {7u, 0xA100u});
+    const bool moveCountRefused =
+        !countCodec.setImageDefinitionPlan(std::move(overCountPlan));
+    const bool moveCountPreserved = moveCountRefused
+        && overCountPlan.size() == overRecordCount
+        && DxfGroupSetterTestAccess::imageDefinitionPlanCount(countCodec) == 1u
+        && DxfGroupSetterTestAccess::hasImageDefinitionPlan(
+            countCodec, {7u, 0xA100u});
     t.expect(priorInstalled && constFailurePreservedPrior
                  && moveFailurePreservedInput && moveRetry,
              "IMAGEDEF plan const/move allocation failure preserves prior state and caller values until a complete allocation retry");
+    t.expect(countPriorInstalled && constCountPreserved
+                 && moveCountPreserved,
+             "100,001-entry IMAGEDEF const/move plan setters refuse before walking or consuming the vector and preserve prior state");
 }
 
 void testImageAdjustmentAdmission(TestContext& t,
