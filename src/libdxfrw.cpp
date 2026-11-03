@@ -12729,6 +12729,12 @@ bool dxfRW::writeOleFrame(DRW_OleFrame *ent) {
 bool dxfRW::writeViewport(DRW_Viewport *ent) {
     if (!preflightDxfWrite())
         return false;
+    const auto emittedReference = [this](std::uint32_t source) {
+        if (source == 0u)
+            return 0u;
+        return m_referenceResolver ? resolveReference(source)
+                                   : remapObjectHandle(source);
+    };
     // The typed DXF facade has no graph context. Only references whose target
     // was registered by a validating adapter are safe to emit; direct codec
     // callers remain fail-closed by default.
@@ -12807,7 +12813,7 @@ bool dxfRW::writeViewport(DRW_Viewport *ent) {
         writer->writeInt16(79, ent->ucsOrthographicType);
         for (const std::uint32_t ref : ent->frozenLayerHandles) {
             if (ref != 0)
-                writer->writeString(331, toHexStr(remapObjectHandle(ref)));
+                writer->writeString(331, toHexStr(emittedReference(ref)));
         }
     }
     if (version > DRW::AC1015)
@@ -12824,29 +12830,29 @@ bool dxfRW::writeViewport(DRW_Viewport *ent) {
             writer->writeUtf8String(431, ent->ambientColorName);
         if (ent->backgroundHandle != 0)
             writer->writeString(332, toHexStr(
-                remapObjectHandle(ent->backgroundHandle)));
+                emittedReference(ent->backgroundHandle)));
         if (ent->shadePlotHandle != 0)
             writer->writeString(333, toHexStr(
-                remapObjectHandle(ent->shadePlotHandle)));
+                emittedReference(ent->shadePlotHandle)));
     }
     if (version > DRW::AC1014) {
         if (ent->clipBoundaryHandle != 0)
             writer->writeString(340, toHexStr(
-                remapObjectHandle(ent->clipBoundaryHandle)));
+                emittedReference(ent->clipBoundaryHandle)));
         if (ent->namedUcsHandle != 0)
             writer->writeString(345, toHexStr(
-                remapObjectHandle(ent->namedUcsHandle)));
+                emittedReference(ent->namedUcsHandle)));
         if (ent->baseUcsHandle != 0)
             writer->writeString(346, toHexStr(
-                remapObjectHandle(ent->baseUcsHandle)));
+                emittedReference(ent->baseUcsHandle)));
     }
     if (version > DRW::AC1018) {
         if (ent->visualStyleHandle != 0)
             writer->writeString(348, toHexStr(
-                remapObjectHandle(ent->visualStyleHandle)));
+                emittedReference(ent->visualStyleHandle)));
         if (ent->m_sunHandle != 0)
             writer->writeString(361, toHexStr(
-                remapObjectHandle(ent->m_sunHandle)));
+                emittedReference(ent->m_sunHandle)));
     }
     if (!ent->extData.empty())
         result = writeExtData(ent->extData) && result;

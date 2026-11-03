@@ -2621,6 +2621,98 @@ void testEntityReferenceRemapping(TestContext& t) {
     }
 }
 
+void testViewportReferenceRemapping(TestContext& t) {
+    const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
+        {0x901u, 0xA91u}, {0x902u, 0xA92u}, {0x903u, 0xA93u},
+        {0x904u, 0xA94u}, {0x905u, 0xA95u}, {0x906u, 0xA96u},
+        {0x907u, 0xA97u}, {0x908u, 0xA98u}};
+    const auto resolverValue = [](std::uint32_t source) {
+        switch (source) {
+        case 0x901u: return std::uint32_t{0xB91u};
+        case 0x902u: return std::uint32_t{0xB92u};
+        case 0x903u: return std::uint32_t{0xB93u};
+        case 0x904u: return std::uint32_t{0xB94u};
+        case 0x905u: return std::uint32_t{0xB95u};
+        case 0x906u: return std::uint32_t{0xB96u};
+        case 0x907u: return std::uint32_t{0xB97u};
+        case 0x908u: return std::uint32_t{0xB98u};
+        default: return source;
+        }
+    };
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap(sourceToRemapped);
+            owner.setResolvedBackgroundHandles({0x902u});
+            owner.setResolvedSunHandles({0x908u});
+            if (useResolver)
+                owner.setReferenceResolver(resolverValue);
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_Viewport viewport;
+            viewport.frozenLayerHandles = {0x901u};
+            viewport.backgroundHandle = 0x902u;
+            viewport.shadePlotHandle = 0x903u;
+            viewport.clipBoundaryHandle = 0x904u;
+            viewport.namedUcsHandle = 0x905u;
+            viewport.baseUcsHandle = 0x906u;
+            viewport.visualStyleHandle = 0x907u;
+            viewport.m_sunHandle = 0x908u;
+            const bool wrote = owner.writeViewport(&viewport)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote, "VIEWPORT references serialize");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::vector<std::pair<int, std::uint32_t>> observed;
+            std::string recordName;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (recordName == "VIEWPORT"
+                           && (code == 331 || code == 332 || code == 333
+                               || code == 340 || code == 345 || code == 346
+                               || code == 348 || code == 361)) {
+                    observed.emplace_back(code, reader->getHandleString());
+                }
+            }
+            const std::vector<int> codes = {
+                331, 332, 333, 340, 345, 346, 348, 361};
+            std::vector<std::pair<int, std::uint32_t>> expected = {{348, 0u}};
+            for (std::size_t index = 0; index < codes.size(); ++index) {
+                const std::uint32_t source = 0x901u
+                    + static_cast<std::uint32_t>(index);
+                const std::uint32_t value = useResolver
+                    ? resolverValue(source) : sourceToRemapped.at(source);
+                expected.emplace_back(codes[index], value);
+            }
+            t.expect(ended && observed == expected,
+                     useResolver
+                         ? "VIEWPORT fields emit final resolver identities"
+                         : "VIEWPORT fields emit source-handle remaps");
+        }
+    }
+}
+
 void testDimensionAssociationGraphClosure(TestContext& t) {
     const auto readAssociationTargets = [&t](const std::string& bytes,
                                               bool binary,
@@ -16346,6 +16438,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testEntityReferenceRemapping(focused);
         std::cout << "Common entity reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--viewport-reference-remapping") {
+        TestContext focused;
+        testViewportReferenceRemapping(focused);
+        std::cout << "VIEWPORT reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
