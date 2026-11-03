@@ -6253,9 +6253,12 @@ bool dxfRW::writeLayer(DRW_Layer *ent){
         write(writer->writeUtf8Caps(2, ent->name));
     }
     // R2007+ material hard pointer: preserve supplied presence, including
-    // explicit null, and use the shared object remap rather than a source ID.
+    // explicit null, and emit the final target identity.
     if (hasMaterial) {
-        const auto target = material ? remapObjectHandle(material) : 0u;
+        const auto target = material
+            ? (m_referenceResolver ? resolveReference(material)
+                                   : remapObjectHandle(material))
+            : 0u;
         if (material && (!target || target == DRW::NoHandle))
             return failDxfWrite();
         write(writer->writeString(347, toHexStr(target)));

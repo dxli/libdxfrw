@@ -133,6 +133,9 @@ engines.
    become a typed reference; the generated wrong-role, rollback, and cursor
    alignment control is in the [default-handle role receipt](docs/research/p4-dictionary-default-handle-role-guard-2026-11-02.json).
    This does not establish target existence, ownership, or output closure.
+   LAYER's optional material hard pointer (group 347) now uses resolver-first
+   output identity with source-handle-remap fallback; the generated ASCII/Binary
+   control verifies both paths ([receipt](docs/research/p4-layer-material-reference-remapping-2026-11-03.json)).
    Continue the remaining reference-ID audit from the current field receipts,
    prioritizing typed owner/dependency pointers on supported 3D records. Confirm
    each field against its parser contract and applicable format mapping before

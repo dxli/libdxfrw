@@ -2621,6 +2621,66 @@ void testEntityReferenceRemapping(TestContext& t) {
     }
 }
 
+void testLayerMaterialReferenceRemapping(TestContext& t) {
+    const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
+        {0x801u, 0xA81u}};
+    const auto resolverValue = [](std::uint32_t source) {
+        return source == 0x801u ? std::uint32_t{0xB81u} : source;
+    };
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap(sourceToRemapped);
+            if (useResolver)
+                owner.setReferenceResolver(resolverValue);
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_Layer layer;
+            layer.name = "REFERENCE_TEST";
+            layer.handleMaterialS = "801";
+            const bool wrote = owner.writeLayer(&layer)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote, "LAYER material reference serializes");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::vector<std::uint32_t> observed;
+            std::string recordName;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (recordName == "LAYER" && code == 347) {
+                    observed.push_back(reader->getHandleString());
+                }
+            }
+            const std::uint32_t expected = useResolver ? 0xB81u : 0xA81u;
+            t.expect(ended && observed == std::vector<std::uint32_t>{expected},
+                     useResolver
+                         ? "LAYER material emits final resolver identity"
+                         : "LAYER material emits source-handle remap");
+        }
+    }
+}
+
 void testViewportReferenceRemapping(TestContext& t) {
     const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
         {0x901u, 0xA91u}, {0x902u, 0xA92u}, {0x903u, 0xA93u},
@@ -16793,6 +16853,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testEntityReferenceRemapping(focused);
         std::cout << "Common entity reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--layer-material-reference-remapping") {
+        TestContext focused;
+        testLayerMaterialReferenceRemapping(focused);
+        std::cout << "LAYER material reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
