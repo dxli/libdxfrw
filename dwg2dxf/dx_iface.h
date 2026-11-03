@@ -554,6 +554,7 @@ public:
     void addDataLink(const DRW_DataLink& data) override;
     void addMaterial(const DRW_Material& data) override;
     void addGeoData(const DRW_GeoData& data) override;
+    void addRasterVariables(const DRW_RasterVariables& data) override;
     void addVisualStyle(const DRW_VisualStyle& data) override;
     void addBackground(const DRW_Background& data) override;
     void addSun(const DRW_Sun& data) override;
@@ -1524,6 +1525,29 @@ public:
             }
             if (!recordOpaqueDwgOutputQualification(handle)) {
                 std::cerr << "GEODATA output frame qualification failed for handle "
+                          << handle << '\n';
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+        }
+        objectWritePhase = "RASTERVARIABLES";
+        for (const std::uint32_t handle : m_extensionRasterVariablesHandles) {
+            const dx_data::RasterVariablesKey key{
+                cData->importGeneration, handle};
+            const auto variables = cData->dwgRasterVariables.find(key);
+            if (variables == cData->dwgRasterVariables.end()) {
+                std::cerr << "RASTERVARIABLES output binding lost before emission\n";
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+            if (!dxfW->writeRasterVariables(&variables->second)) {
+                std::cerr << "RASTERVARIABLES writer refused source handle "
+                          << handle << '\n';
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+            if (!recordOpaqueDwgOutputQualification(handle)) {
+                std::cerr << "RASTERVARIABLES output frame qualification failed for handle "
                           << handle << '\n';
                 dxfW->writeRawDxfObject(nullptr);
                 return;
@@ -2812,6 +2836,8 @@ private:
     bool prepareExtensionObjectGraph(dx_data* data,
                                      bool includeNamedObjectRoot);
     bool prepareDwgGeoDataOutput(bool debug);
+    bool prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
+                                         bool debug);
     bool prepareTableFallbackGraph(dx_data& data, DRW::Version targetVersion);
     void writeEntityOrTableFallback(DRW_Entity* entity);
     bool validateSortEntsGraph(const dx_data& data, bool debug = false);
@@ -3430,6 +3456,7 @@ private:
 
     std::vector<std::uint32_t> m_extensionDictionaryHandles;
     std::vector<std::uint32_t> m_extensionGeoDataHandles;
+    std::vector<std::uint32_t> m_extensionRasterVariablesHandles;
     std::vector<dx_data::UnderlayDefinitionKey>
         m_underlayDefinitionKeysToWrite;
     std::vector<std::uint32_t> m_extensionAssociativeHandles;

@@ -2108,6 +2108,15 @@ set_tests_properties(dwg2dxf_geodata_dwg_adapter_transport PROPERTIES
 )
 
 add_test(
+    NAME dwg2dxf_rastervariables_dwg_adapter_transport
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --rastervariables-dwg-adapter-transport
+)
+set_tests_properties(dwg2dxf_rastervariables_dwg_adapter_transport PROPERTIES
+    LABELS "fast;dwg;dxf;raster;adapter;generated;transaction"
+    TIMEOUT 30
+)
+
+add_test(
     NAME dwg2dxf_standard_dwg_object_source_capture
     COMMAND libdxfrw_dwg2dxf_adapter_tests --standard-dwg-object-source-capture
 )

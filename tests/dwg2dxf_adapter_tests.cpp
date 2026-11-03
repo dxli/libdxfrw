@@ -64322,6 +64322,191 @@ bool geodataDwgAdapterTransport() {
     return true;
 }
 
+bool rasterVariablesDwgAdapterTransport() {
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch()
+                           .count();
+    const std::filesystem::path base =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-rastervariables-adapter-" + std::to_string(nonce));
+    const std::filesystem::path sourcePath = base.string() + ".dwg";
+    const std::filesystem::path asciiPath = base.string() + "-ascii.dxf";
+    const std::filesystem::path binaryPath = base.string() + "-binary.dxf";
+    struct Cleanup {
+        std::array<std::filesystem::path, 3> paths;
+        ~Cleanup() {
+            for (const auto& path : paths) {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        }
+    } cleanup{{sourcePath, asciiPath, binaryPath}};
+    if (std::filesystem::exists(sourcePath)
+        || std::filesystem::exists(asciiPath)
+        || std::filesystem::exists(binaryPath))
+        return fail("RASTERVARIABLES adapter scratch path unexpectedly exists");
+
+    class Author final : public dx_iface {
+    public:
+        explicit Author(dwgRW& output) : output(output) {
+            cData = &storage;
+            currentBlock = storage.mBlock;
+            dictionary.handle = 0xA601u;
+            dictionary.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+            dictionary.cloning = 1;
+            dictionary.hardOwner = 1;
+            variables.handle = 0xB500u;
+            variables.parentHandle = dictionary.handle;
+            variables.m_classVersion = 1;
+            variables.m_imageFrame = 1;
+            variables.m_imageQuality = 2;
+            variables.m_units = 3;
+            dictionary.m_entries = {{"RASTERVARIABLES", variables.handle}};
+        }
+        void writeHeader(DRW_Header& header) override {
+            header.vars.clear();
+        }
+        void writeDwgClasses() override {
+            DRW_RasterVariables registration;
+            registration.handle = variables.handle;
+            rootRegistered = output.registerDwgNamedObjectDictionaryEntry(
+                "LOCAL_RASTER_SETTINGS", dictionary.handle);
+            classRegistered = output.registerRasterVariablesObjectClass(
+                &registration);
+        }
+        void writeObjects() override {
+            dictionaryWritten = output.writeDictionary(&dictionary);
+            variablesWritten = output.writeRasterVariables(&variables);
+        }
+        bool finalizeDwgWrite() override {
+            return rootRegistered && classRegistered && dictionaryWritten
+                && variablesWritten;
+        }
+        bool finalizeDwgWriteStructure() override { return true; }
+
+        dwgRW& output;
+        dx_data storage;
+        DRW_Dictionary dictionary;
+        DRW_RasterVariables variables;
+        bool rootRegistered{false};
+        bool classRegistered{false};
+        bool dictionaryWritten{false};
+        bool variablesWritten{false};
+    };
+
+    dwgRW sourceWriter(sourcePath.string().c_str());
+    Author author(sourceWriter);
+    if (!sourceWriter.write(&author, DRW::AC1027, true))
+        return fail("generated RASTERVARIABLES DWG source failed to write");
+
+    dx_data imported;
+    dx_iface importer;
+    if (!importer.fileImport(sourcePath.string(), &imported, false)
+        || imported.sourceFormat != dx_source_format::DWG
+        || imported.dwgReadOutcome.opaqueViewCallbacks < 1u
+        || !imported.hasCompleteOpaqueDwgSourceCapture()
+        || !imported.dwgClassCoverage.m_complete
+        || !imported.hasUnchangedDwgClassEvidence()
+        || imported.rasterVariablesCaptureFailed
+        || imported.dwgRasterVariables.size() != 1u
+        || imported.rasterVariablesRetainedRecords != 1u)
+        return fail("generated RASTERVARIABLES source lacked bounded typed/raw capture");
+
+    const dx_data::RasterVariablesKey key{
+        imported.importGeneration, author.variables.handle};
+    const auto source = imported.dwgRasterVariables.find(key);
+    if (source == imported.dwgRasterVariables.end()
+        || source->second.parentHandle != author.dictionary.handle
+        || source->second.m_classVersion != 1
+        || source->second.m_imageFrame != 1
+        || source->second.m_imageQuality != 2
+        || source->second.m_units != 3)
+        return fail("generated RASTERVARIABLES typed owner/field values changed on read");
+
+    class Readback final : public dx_iface {
+    public:
+        void addRasterVariables(const DRW_RasterVariables& data) override {
+            records.push_back(data);
+        }
+        std::vector<DRW_RasterVariables> records;
+    } readback;
+    dx_iface exporter;
+    for (const auto& target : {
+             std::make_pair(asciiPath, false),
+             std::make_pair(binaryPath, true)}) {
+        const bool requireResolvedOwners = target.second;
+        const std::string sentinel = "RASTERVARIABLES_ATOMIC_DESTINATION";
+        {
+            std::ofstream previous(target.first, std::ios::binary);
+            if (!previous)
+                return fail("failed to create RASTERVARIABLES destination sentinel");
+            previous << sentinel;
+            if (!previous)
+                return fail("failed to write RASTERVARIABLES destination sentinel");
+        }
+        DRW_RasterVariables& mutableSource =
+            imported.dwgRasterVariables.find(key)->second;
+        mutableSource.m_units = std::numeric_limits<std::int16_t>::max() + 1;
+        const bool invalidWrite = exporter.fileExport(
+            target.first.string(), DRW::AC1027, target.second, &imported,
+            false, requireResolvedOwners);
+        std::ifstream previous(target.first, std::ios::binary);
+        const std::string previousBytes{
+            std::istreambuf_iterator<char>{previous},
+            std::istreambuf_iterator<char>{}};
+        previous.close();
+        if (invalidWrite || previousBytes != sentinel)
+            return fail("unrepresentable RASTERVARIABLES field was not refused atomically");
+        mutableSource.m_units = 3;
+
+        if (!exporter.fileExport(target.first.string(), DRW::AC1027,
+                                 target.second, &imported, false,
+                                 requireResolvedOwners))
+            return fail("corrected RASTERVARIABLES profile failed same-adapter retry");
+        if (!DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
+                imported, imported.importGeneration, author.variables.handle))
+            return fail("corrected RASTERVARIABLES retry did not bind output to the source frame");
+
+        readback.records.clear();
+        dx_data outputData;
+        if (!readback.fileImport(target.first.string(), &outputData, false)
+            || readback.records.size() != 1u)
+            return fail("RASTERVARIABLES ASCII/Binary DXF readback did not restore one typed object");
+        const DRW_RasterVariables& actual = readback.records.front();
+        const auto owner = std::find_if(
+            outputData.dictionaries.begin(), outputData.dictionaries.end(),
+            [&actual](const DRW_Dictionary& dictionary) {
+                return dictionary.handle == actual.parentHandle;
+            });
+        const std::size_t rootOwnerEntries = owner
+                == outputData.dictionaries.end()
+            ? 0u
+            : static_cast<std::size_t>(std::count_if(
+                outputData.namedObjectDictionary.m_entries.begin(),
+                outputData.namedObjectDictionary.m_entries.end(),
+                [&owner](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "LOCAL_RASTER_SETTINGS"
+                        && entry.m_handle == owner->handle;
+                }));
+        if (actual.handle != author.variables.handle
+            || actual.parentHandle == 0u
+            || actual.parentHandle == DRW::NoHandle
+            || owner == outputData.dictionaries.end()
+            || !owner->hasCompleteDxfEntries()
+            || owner->parentHandle != outputData.namedObjectDictionary.handle
+            || rootOwnerEntries != 1u
+            || std::count_if(owner->m_entries.begin(), owner->m_entries.end(),
+                [&actual](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "RASTERVARIABLES"
+                        && entry.m_handle == actual.handle;
+                }) != 1
+            || actual.m_classVersion != 1 || actual.m_imageFrame != 1
+            || actual.m_imageQuality != 2 || actual.m_units != 3)
+            return fail("RASTERVARIABLES output fields or dictionary graph changed on typed readback");
+    }
+    return true;
+}
+
 int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--ucs-base-name-target-closure")
         return ucsBaseHeaderNameTargetClosure() ? 0 : 1;
@@ -64477,6 +64662,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--geodata-dwg-adapter-transport")
         return geodataDwgAdapterTransport() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--rastervariables-dwg-adapter-transport")
+        return rasterVariablesDwgAdapterTransport() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--standard-dwg-object-source-capture")
         return standardDwgObjectSourceCapture() ? 0 : 1;

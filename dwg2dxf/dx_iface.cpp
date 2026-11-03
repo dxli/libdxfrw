@@ -8224,6 +8224,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
     m_extensionDetailViewStyleHandles.clear();
     m_extensionSectionViewStyleHandles.clear();
     m_extensionPlotSettingsHandles.clear();
+    m_extensionRasterVariablesHandles.clear();
     m_extensionRenderSettingsHandles.clear();
     m_extensionGraphStats = {};
     m_extensionGraphFailure = ExtensionGraphFailure::None;
@@ -8313,6 +8314,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         m_extensionDetailViewStyleHandles.clear();
         m_extensionSectionViewStyleHandles.clear();
         m_extensionPlotSettingsHandles.clear();
+        m_extensionRasterVariablesHandles.clear();
         m_extensionRenderSettingsHandles.clear();
         if (m_extensionGraphFailure == ExtensionGraphFailure::None) {
             m_extensionGraphFailure = reason;
@@ -8449,6 +8451,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         std::unordered_map<std::uint32_t, const DRW_RawDxfObject*>
             rawSectionViewStyles;
         std::unordered_map<std::uint32_t, const DRW_PlotSettings*> plotSettings;
+        std::unordered_map<std::uint32_t, const DRW_RasterVariables*>
+            rasterVariables;
         std::unordered_map<std::uint32_t, const DRW_RenderSettings*> renderSettings;
         std::unordered_map<std::uint32_t, const DRW_RawDxfObject*> rawRenderSettings;
         std::unordered_map<std::uint32_t,
@@ -9275,6 +9279,27 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     "invalid or duplicate standalone PLOTSETTINGS handle "
                     + std::to_string(settings.handle));
         }
+        inventoryFamily = "standalone RASTERVARIABLES records";
+        if (data->sourceFormat == dx_source_format::DWG) {
+            const auto first = data->dwgRasterVariables.lower_bound(
+                {data->importGeneration, 0u});
+            for (auto current = first;
+                 current != data->dwgRasterVariables.end()
+                     && current->first.first == data->importGeneration;
+                 ++current) {
+                if (!examineSourceRecord())
+                    return false;
+                const DRW_RasterVariables& variables = current->second;
+                if (current->first.second == 0u
+                    || current->first.second == DRW::NoHandle
+                    || variables.handle != current->first.second
+                    || !sourceHandles.insert(variables.handle).second
+                    || !rasterVariables.emplace(
+                        variables.handle, &variables).second)
+                    return reject(ExtensionGraphFailure::InvalidGraph,
+                        "invalid, duplicate, or colliding RASTERVARIABLES identity");
+            }
+        }
         inventoryFamily = "standalone RenderSettings records";
         for (const DRW_RenderSettings& settings : data->renderSettings) {
             if (!examineSourceRecord())
@@ -9621,6 +9646,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         std::unordered_set<std::uint32_t> visitedDetailViewStyles;
         std::unordered_set<std::uint32_t> visitedSectionViewStyles;
         std::unordered_set<std::uint32_t> visitedPlotSettings;
+        std::unordered_set<std::uint32_t> visitedRasterVariables;
         std::unordered_set<std::uint32_t> visitedRenderSettings;
         std::unordered_set<std::uint32_t> visitedMaterials;
         std::unordered_set<std::uint32_t> visitedUnderlayDefinitions;
@@ -9648,6 +9674,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             const DRW_MLineStyle* mlineStyle{nullptr};
             const DRW_MLeaderStyle* mleaderStyle{nullptr};
             const DRW_PlotSettings* plotSettings{nullptr};
+            const DRW_RasterVariables* rasterVariables{nullptr};
             const DRW_RenderSettings* renderSettings{nullptr};
             const DRW_DictionaryWithDefault* dictionaryWithDefault{nullptr};
             const DRW_DetailViewStyle* detailViewStyle{nullptr};
@@ -9780,6 +9807,14 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     frames.push_back(frame);
                     return true;
                 }
+                const auto rasterVariablesTarget = rasterVariables.find(handle);
+                if (rasterVariablesTarget != rasterVariables.end()) {
+                    Frame frame{handle, nullptr, nullptr, nullptr, nullptr,
+                                nullptr, nullptr, Phase::Enter, 0};
+                    frame.rasterVariables = rasterVariablesTarget->second;
+                    frames.push_back(frame);
+                    return true;
+                }
                 const auto renderSettingsTarget = renderSettings.find(handle);
                 if (renderSettingsTarget != renderSettings.end()) {
                     Frame frame{handle, nullptr, nullptr, nullptr, nullptr,
@@ -9818,6 +9853,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 addOwner(detailViewStyles);
                 addOwner(sectionViewStyles);
                 addOwner(plotSettings);
+                addOwner(rasterVariables);
                 addOwner(renderSettings);
                 addOwner(materials);
                 addOwner(associativeRecords);
@@ -9876,6 +9912,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     entryPointer = frame.sectionViewStyle;
                 else if (frame.plotSettings != nullptr)
                     entryPointer = frame.plotSettings;
+                else if (frame.rasterVariables != nullptr)
+                    entryPointer = frame.rasterVariables;
                 else if (frame.mlineStyle != nullptr)
                     entryPointer = frame.mlineStyle;
                 else if (frame.mleaderStyle != nullptr)
@@ -9920,6 +9958,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                             ? visitedSectionViewStyles.count(frame.handle) != 0
                                         : frame.plotSettings != nullptr
                                             ? visitedPlotSettings.count(frame.handle) != 0
+                                        : frame.rasterVariables != nullptr
+                                            ? visitedRasterVariables.count(frame.handle) != 0
                                         : frame.material != nullptr
                                             ? visitedMaterials.count(frame.handle) != 0
                                         : frame.underlayDefinition != nullptr
@@ -11406,6 +11446,21 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             return reject(ExtensionGraphFailure::InvalidGraph,
                                 "standalone PLOTSETTINGS source profile or "
                                 "shade mode/reference pair is unsupported");
+                    } else if (frame.rasterVariables != nullptr) {
+                        const DRW_RasterVariables& variables =
+                            *frame.rasterVariables;
+                        if (data->sourceFormat != dx_source_format::DWG
+                            || data->sourceVersion != DRW::AC1027
+                            || variables.parentHandle != entry.parentHandle
+                            || !variables.reactorHandles.empty()
+                            || variables.reactorCount() != 0
+                            || variables.xDictHandle != 0u
+                            || variables.extensionDictionaryFlag() != 0u
+                            || variables.hasDataStorageBinaryData()
+                            || !variables.appData.empty()
+                            || !variables.extData.empty())
+                            return reject(ExtensionGraphFailure::InvalidGraph,
+                                "RASTERVARIABLES is outside the bounded AC1027 DWG dictionary-owned profile");
                     } else if (frame.material != nullptr) {
                         if (data->sourceFormat == dx_source_format::DWG) {
                             if (data->sourceVersion != DRW::AC1024
@@ -11498,6 +11553,9 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             frame.handle);
                     else if (frame.plotSettings != nullptr)
                         m_extensionPlotSettingsHandles.push_back(frame.handle);
+                    else if (frame.rasterVariables != nullptr)
+                        m_extensionRasterVariablesHandles.push_back(
+                            frame.handle);
                     else if (frame.renderSettings != nullptr)
                         m_extensionRenderSettingsHandles.push_back(frame.handle);
                     else if (frame.associative != nullptr)
@@ -12129,6 +12187,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         visitedSectionViewStyles.insert(frame.handle);
                     else if (frame.plotSettings != nullptr)
                         visitedPlotSettings.insert(frame.handle);
+                    else if (frame.rasterVariables != nullptr)
+                        visitedRasterVariables.insert(frame.handle);
                     else if (frame.renderSettings != nullptr)
                         visitedRenderSettings.insert(frame.handle);
                     else if (frame.associative != nullptr)
@@ -12383,6 +12443,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                 &visitedDetailViewStyles,
                                 &visitedSectionViewStyles,
                                 &visitedPlotSettings,
+                                &visitedRasterVariables,
                                 &visitedRenderSettings, &visitedMaterials,
                                 &visitedAssociatives,
                                 &linetypeHandles, &backgroundHandles,
@@ -12428,6 +12489,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 || visitedDetailViewStyles.count(parent) != 0
                 || visitedSectionViewStyles.count(parent) != 0
                 || visitedPlotSettings.count(parent) != 0
+                || visitedRasterVariables.count(parent) != 0
                 || visitedRenderSettings.count(parent) != 0
                 || visitedMaterials.count(parent) != 0
                 || visitedAssociatives.count(parent) != 0;
@@ -14644,6 +14706,9 @@ constexpr std::size_t kMaxAdapterNamedResourceTypedRetainedBytes =
 constexpr std::size_t kMaxAdapterGeoDataRecords = 100000u;
 constexpr std::size_t kMaxAdapterGeoDataRetainedBytes =
     DRW::kMaxDxfBinaryPayloadBytes;
+constexpr std::size_t kMaxAdapterRasterVariablesRecords = 1024u;
+constexpr std::size_t kMaxAdapterRasterVariablesRetainedBytes =
+    DRW::kMaxDxfBinaryPayloadBytes;
 constexpr std::size_t kMaxAdapterRawNamedResourceRecords = 100000u;
 constexpr std::size_t kMaxAdapterRawNamedResourceGroups = 4000000u;
 constexpr std::size_t kMaxAdapterRawNamedResourceRetainedBytes =
@@ -15707,6 +15772,15 @@ bool estimateGeoDataTypedBytes(
                                   estimate))
         return false;
     return estimate <= kMaxAdapterGeoDataRetainedBytes;
+}
+
+bool estimateRasterVariablesTypedBytes(
+        const DRW_RasterVariables& data, std::size_t& estimate) noexcept {
+    using RasterVariablesMapValue = std::pair<
+        const dx_data::RasterVariablesKey, DRW_RasterVariables>;
+    estimate = sizeof(RasterVariablesMapValue) + 4u * sizeof(void*);
+    return addTableEntryRetainedBytes(data, estimate)
+        && estimate <= kMaxAdapterRasterVariablesRetainedBytes;
 }
 
 bool samePlotSettingsPendingReference(
@@ -58745,6 +58819,46 @@ void dx_iface::addGeoData(const DRW_GeoData& data) {
     }
 }
 
+void dx_iface::addRasterVariables(const DRW_RasterVariables& data) {
+    if (cData == nullptr || cData->sourceFormat != dx_source_format::DWG
+        || !cData->dwgReadOutcome.attempted || cData->rasterVariablesCaptureFailed)
+        return;
+    const auto reject = [this]() {
+        cData->rasterVariablesCaptureFailed = true;
+    };
+    if (cData->importGeneration == 0u || data.handle == 0u
+        || data.handle == DRW::NoHandle
+        || cData->rasterVariablesRetainedRecords
+            >= kMaxAdapterRasterVariablesRecords) {
+        reject();
+        return;
+    }
+
+    std::size_t estimatedBytes = 0u;
+    if (!estimateRasterVariablesTypedBytes(data, estimatedBytes)
+        || cData->rasterVariablesRetainedBytes
+            > kMaxAdapterRasterVariablesRetainedBytes
+        || estimatedBytes > kMaxAdapterRasterVariablesRetainedBytes
+                - cData->rasterVariablesRetainedBytes) {
+        reject();
+        return;
+    }
+
+    const dx_data::RasterVariablesKey key{
+        cData->importGeneration, data.handle};
+    try {
+        const auto inserted = cData->dwgRasterVariables.emplace(key, data);
+        if (!inserted.second) {
+            reject();
+            return;
+        }
+        ++cData->rasterVariablesRetainedRecords;
+        cData->rasterVariablesRetainedBytes += estimatedBytes;
+    } catch (...) {
+        reject();
+    }
+}
+
 void dx_iface::addBackground(const DRW_Background& data) {
     if (cData == nullptr)
         return;
@@ -66182,6 +66296,206 @@ bool dx_iface::prepareDwgGeoDataOutput(bool debug) {
     return m_extensionGeoDataHandles.size() == typedCount;
 }
 
+bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
+                                               bool debug) {
+    const auto fail = [debug](const char* reason) {
+        if (debug)
+            std::cerr << "RASTERVARIABLES output profile failed: "
+                      << reason << '\n';
+        return false;
+    };
+    if (cData == nullptr)
+        return fail("missing adapter data");
+    if (cData->sourceFormat != dx_source_format::DWG)
+        return true;
+    if (cData->rasterVariablesCaptureFailed)
+        return fail("typed callback capture failed");
+
+    const std::uint64_t generation = cData->importGeneration;
+    const auto first = cData->dwgRasterVariables.lower_bound({generation, 0u});
+    std::size_t typedCount = 0u;
+    for (auto current = first;
+         current != cData->dwgRasterVariables.end()
+             && current->first.first == generation;
+         ++current)
+        ++typedCount;
+    if (typedCount != 0u
+        && (cData->sourceVersion != DRW::AC1027
+            || targetVersion != cData->sourceVersion))
+        return fail("output requires same-revision AC1027 source and target");
+
+    const bool completeClassReport = cData->dwgClassCoverage.m_complete
+        && cData->dwgClassCoverage.m_status
+            == DRW_DwgClassCoverageStatus::FinalizedComplete
+        && cData->hasUnchangedDwgClassEvidence();
+    if (!completeClassReport)
+        return typedCount == 0u ? true
+            : fail("complete unchanged DWG CLASS evidence unavailable");
+
+    const auto isRasterVariablesClass = [](
+            const DRW_DwgClassCoverageEntry& entry) {
+        return sameAsciiName(entry.m_className, "AcDbRasterVariables")
+            || sameAsciiName(entry.m_recordName, "RASTERVARIABLES")
+            || sameAsciiName(entry.m_recordName, "ACDBRASTERVARIABLES");
+    };
+    const DRW_DwgClassCoverageEntry* sourceClass = nullptr;
+    for (const DRW_DwgClassCoverageEntry& entry :
+         cData->dwgClassCoverage.m_entries) {
+        if (!isRasterVariablesClass(entry))
+            continue;
+        if (sourceClass != nullptr)
+            return fail("ambiguous source RASTERVARIABLES CLASS rows");
+        sourceClass = &entry;
+    }
+
+    std::size_t sourceFrameCount = 0u;
+    if (sourceClass != nullptr) {
+        for (const auto& source : cData->m_opaqueDwgSourceFrames) {
+            if (source.first.first != generation)
+                continue;
+            const DRW_UnsupportedObject& frame = source.second;
+            if (sameAsciiName(frame.m_className, sourceClass->m_className)
+                && sameAsciiName(frame.m_recordName,
+                                 sourceClass->m_recordName))
+                ++sourceFrameCount;
+        }
+    }
+
+    if (sourceClass == nullptr) {
+        return typedCount == 0u && sourceFrameCount == 0u
+            ? true : fail("typed or source frames lack a matching CLASS row");
+    }
+    if (sourceClass->m_state != DRW_DwgClassCoverageState::Published
+        || sourceClass->m_reason != DRW_DwgClassCoverageReason::None
+        || sourceClass->m_instanceCount < 0
+        || sourceClass->m_wasAProxyFlag != 0
+        || sourceClass->m_entityFlag != 0
+        || !sameAsciiName(sourceClass->m_className,
+                          "AcDbRasterVariables")
+        || (!sameAsciiName(sourceClass->m_recordName, "RASTERVARIABLES")
+            && !sameAsciiName(sourceClass->m_recordName,
+                              "ACDBRASTERVARIABLES")))
+        return fail("source CLASS is unpublished, proxy, entity, or unsupported name");
+
+    DRW_Class canonicalClass;
+    if (!dxfRW::dxfClassForRecordName("RASTERVARIABLES", canonicalClass)
+        || !sameAsciiName(canonicalClass.className,
+                          sourceClass->m_className)
+        || !sameAsciiName(canonicalClass.appName, sourceClass->m_appName))
+        return fail("source CLASS metadata differs from canonical RASTERVARIABLES");
+
+    if (static_cast<std::size_t>(sourceClass->m_instanceCount)
+            != sourceFrameCount
+        || sourceFrameCount != typedCount)
+        return fail("CLASS instance count, opaque frames, and typed callbacks differ");
+    if (typedCount == 0u)
+        return true;
+    if (generation == 0u || !cData->hasNamedObjectDictionary
+        || cData->namedObjectDictionary.handle == 0u
+        || cData->namedObjectDictionary.handle == DRW::NoHandle
+        || !cData->namedObjectDictionary.hasCompleteDwgEntries())
+        return fail("missing complete named-object root graph");
+
+    std::unordered_set<std::uint32_t> outputHandles;
+    try {
+        outputHandles.reserve(typedCount);
+        for (auto current = first;
+             current != cData->dwgRasterVariables.end()
+                 && current->first.first == generation;
+             ++current) {
+            const DRW_RasterVariables& variables = current->second;
+            if (current->first.second == 0u
+                || current->first.second == DRW::NoHandle
+                || variables.handle != current->first.second
+                || variables.m_classVersion != 1
+                || variables.m_imageFrame
+                    < std::numeric_limits<std::int16_t>::min()
+                || variables.m_imageFrame
+                    > std::numeric_limits<std::int16_t>::max()
+                || variables.m_imageQuality
+                    < std::numeric_limits<std::int16_t>::min()
+                || variables.m_imageQuality
+                    > std::numeric_limits<std::int16_t>::max()
+                || variables.m_units
+                    < std::numeric_limits<std::int16_t>::min()
+                || variables.m_units
+                    > std::numeric_limits<std::int16_t>::max()
+                || variables.parentHandle == 0u
+                || variables.parentHandle == DRW::NoHandle
+                || !variables.reactorHandles.empty()
+                || variables.reactorCount() != 0
+                || variables.xDictHandle != 0u
+                || variables.extensionDictionaryFlag() != 0u
+                || variables.hasDataStorageBinaryData()
+                || !variables.appData.empty() || !variables.extData.empty()
+                || !outputHandles.insert(variables.handle).second)
+                return fail("field, owner, common metadata, or identity is outside the closed profile");
+
+            const dx_data::StandardDwgFrameKey sourceKey{
+                generation, variables.handle};
+            const auto raw = cData->m_opaqueDwgSourceFrames.find(sourceKey);
+            if (raw == cData->m_opaqueDwgSourceFrames.end())
+                return fail("typed record lacks a retained source frame");
+            const DRW_UnsupportedObject& sourceFrame = raw->second;
+            if (!sourceFrame.m_isCustomClass || sourceFrame.m_isEntity
+                || !sourceFrame.m_hasClassDefinition
+                || sourceFrame.m_objectType != sourceClass->m_classNumber
+                || !sameAsciiName(sourceFrame.m_className,
+                                  sourceClass->m_className)
+                || !sameAsciiName(sourceFrame.m_recordName,
+                                  sourceClass->m_recordName))
+                return fail("source frame/class binding mismatch");
+            if (!sourceFrame.m_commonHandleDataValidated
+                || !drwDwgCommonLinkEvidenceValidated(
+                    sourceFrame.m_commonLinkEvidence))
+                return fail("source frame common-link evidence is unvalidated");
+            if (sourceFrame.m_parentHandle != variables.parentHandle
+                || !sourceFrame.m_reactorHandles.empty()
+                || sourceFrame.m_xDictHandle != 0u)
+                return fail("source frame common metadata differs from typed record");
+
+            const DRW_Dictionary* owner = nullptr;
+            std::size_t ownerCount = 0u;
+            for (const DRW_Dictionary& dictionary : cData->dictionaries) {
+                if (dictionary.handle != variables.parentHandle)
+                    continue;
+                owner = &dictionary;
+                ++ownerCount;
+            }
+            if (ownerCount != 1u || owner == nullptr
+                || owner->parentHandle
+                    != cData->namedObjectDictionary.handle
+                || !owner->hasCompleteDwgEntries())
+                return fail("parent is not one complete NOD-owned DICTIONARY");
+
+            const auto countEntry = [](std::uint32_t target,
+                                       const auto& entries) {
+                return std::count_if(entries.begin(), entries.end(),
+                    [target](const DRW_Dictionary::Entry& entry) {
+                        return entry.m_handle == target;
+                    });
+            };
+            if (countEntry(variables.handle, owner->m_entries) != 1
+                || countEntry(owner->handle,
+                    cData->namedObjectDictionary.m_entries) != 1)
+                return fail("owner dictionary and NOD do not bind the object path exactly once");
+
+            const std::size_t stagedDictionaryCount = static_cast<std::size_t>(
+                std::count(m_extensionDictionaryHandles.begin(),
+                           m_extensionDictionaryHandles.end(), owner->handle));
+            const std::size_t stagedObjectCount = static_cast<std::size_t>(
+                std::count(m_extensionRasterVariablesHandles.begin(),
+                           m_extensionRasterVariablesHandles.end(),
+                           variables.handle));
+            if (stagedDictionaryCount != 1u || stagedObjectCount != 1u)
+                return fail("owner dictionary and typed object are not staged exactly once by the graph");
+        }
+    } catch (...) {
+        return fail("allocation failure while preparing output bindings");
+    }
+    return m_extensionRasterVariablesHandles.size() == typedCount;
+}
+
 bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                           dx_data *fData, bool debug, bool requireResolvedOwners,
                           dx_dxfSourceTextPolicy sourceTextPolicy,
@@ -67662,6 +67976,12 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             "AC1024 associative output requires an AC1024 target and rooted NOD");
         return false;
     }
+    const auto rasterVariablesFirst = cData->dwgRasterVariables.lower_bound(
+        {cData->importGeneration, 0u});
+    const bool hasCurrentDwgRasterVariables =
+        cData->sourceFormat == dx_source_format::DWG
+        && rasterVariablesFirst != cData->dwgRasterVariables.end()
+        && rasterVariablesFirst->first.first == cData->importGeneration;
     const bool includeNamedObjectRoot = requireResolvedOwners
         || hasDwgAssociativeObjects
         || validateVisualStyles || validateMLineStyles
@@ -67670,6 +67990,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         || !cData->cellStyleMaps.empty()
         || !cData->rawCellStyleMaps.empty()
         || !cData->plotSettings.empty()
+        || hasCurrentDwgRasterVariables
         || !cData->renderSettings.empty()
         || !cData->backgrounds.empty()
         || !cData->rawBackgroundObjects.empty()
@@ -67725,6 +68046,12 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     if (!prepareDwgGeoDataOutput(debug || requireResolvedOwners)) {
         reportPreflightFailure(
             "GEODATA source CLASS, owner, host-block, or body profile");
+        return false;
+    }
+    if (!prepareDwgRasterVariablesOutput(v,
+                                         debug || requireResolvedOwners)) {
+        reportPreflightFailure(
+            "RASTERVARIABLES source CLASS, dictionary-owner, or field profile");
         return false;
     }
     if (hasDwgAssociativeObjects
@@ -68937,8 +69264,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             && registerClass("DICTIONARYVAR", "AcDbDictionaryVar",
                              m_extensionDictionaryVarHandles.size())
             && (cData->sourceFormat != dx_source_format::DWG
-                || registerClass("GEODATA", "AcDbGeoData",
-                                 m_extensionGeoDataHandles.size()));
+                || (registerClass("GEODATA", "AcDbGeoData",
+                                  m_extensionGeoDataHandles.size())
+                    && registerClass("RASTERVARIABLES",
+                                     "AcDbRasterVariables",
+                                     m_extensionRasterVariablesHandles.size())));
     };
     const auto registerSunClass = [this](std::vector<DRW_Class>& classes) {
         if (cData->sourceFormat != dx_source_format::DWG
@@ -69887,6 +70217,13 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         }
     }
     for (const std::uint32_t handle : m_extensionGeoDataHandles) {
+        if (!dxfW->reserveHandle(handle)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
+    for (const std::uint32_t handle : m_extensionRasterVariablesHandles) {
         if (!dxfW->reserveHandle(handle)) {
             delete dxfW;
             dxfW = nullptr;

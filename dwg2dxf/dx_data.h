@@ -632,6 +632,11 @@ public:
     std::size_t geoDataRetainedRecords{0};
     std::size_t geoDataRetainedBytes{0};
     bool geoDataCaptureFailed{false};
+    using RasterVariablesKey = std::pair<std::uint64_t, std::uint32_t>;
+    std::map<RasterVariablesKey, DRW_RasterVariables> dwgRasterVariables;
+    std::size_t rasterVariablesRetainedRecords{0};
+    std::size_t rasterVariablesRetainedBytes{0};
+    bool rasterVariablesCaptureFailed{false};
     // Render-settings callbacks are paired with raw positional DXF carriers;
     // export only replays complete rooted graphs at the exact source version.
     std::list<DRW_RenderSettings> renderSettings;
