@@ -16609,80 +16609,143 @@ void testImageDefinitionPlanFailureRetry(TestContext &t) {
             false, true, binary, namedDictionaryAllocations);
         const long namedDictionaryOnlyAllocations =
             namedDictionaryAllocations - baselineAllocations;
-        const long namedDictionaryFailAt = namedDictionaryAllocations - 1L;
         const bool namedDictionaryCalibrated = baselineMeasured
             && namedDictionaryMeasured
             && namedDictionaryOnlyAllocations > 2L
-            && namedDictionaryFailAt >= 0L;
+            && namedDictionaryAllocations > 0L;
         const auto namedPath = directory / "named-dictionary-allocation.dxf";
         const std::string namedFilename = namedPath.string();
         const auto namedContents = [&namedPath]() {
             std::ifstream input(namedPath, std::ios::binary);
             return std::string(std::istreambuf_iterator<char>(input), {});
         };
-        {
-            std::ofstream sentinel(namedPath,
-                                   std::ios::binary | std::ios::trunc);
-            sentinel << "named dictionary allocation sentinel\n";
+        bool everyNamedOffsetRolledBack = namedDictionaryCalibrated;
+        bool everyNamedOffsetRetried = namedDictionaryCalibrated;
+        long sweptNamedFailures = 0L;
+        for (long allocation = 0;
+             namedDictionaryCalibrated
+                 && allocation < namedDictionaryAllocations;
+             ++allocation) {
+            {
+                std::ofstream sentinel(namedPath,
+                                       std::ios::binary | std::ios::trunc);
+                sentinel << "named dictionary allocation sentinel\n";
+            }
+            dx_data namedData;
+            CoreObjectsAllocationWriter namedAdapter;
+            namedAdapter.cData = &namedData;
+            namedAdapter.currentBlock = namedData.mBlock;
+            namedAdapter.armObjectAllocation = true;
+            namedAdapter.objectAllocationCountdown = allocation;
+            dxfRW namedWriter(namedFilename.c_str());
+            namedAdapter.dxfW = &namedWriter;
+            installNamedDictionary(namedWriter);
+            const std::size_t namedFailuresBefore =
+                materialFailedAllocations;
+            const bool namedFailed =
+                !namedWriter.write(&namedAdapter, DRW::AC1027, binary);
+            materialAllocationCountdown = -1;
+            const DRW_OperationDiagnostic namedDiagnostic =
+                namedWriter.getLastDiagnostic();
+            const bool namedAllocationReported =
+                (namedDiagnostic.phase == DRW::OperationPhase::Allocation
+                     && namedDiagnostic.code == "allocation-failure")
+                || (namedDiagnostic.phase == DRW::OperationPhase::Emit
+                    && namedDiagnostic.code == "emit-failure");
+            const bool namedRolledBack = namedFailed
+                && !namedAdapter.objectsCallbackReached
+                && materialFailedAllocations == namedFailuresBefore + 1u
+                && namedAllocationReported
+                && namedContents()
+                    == "named dictionary allocation sentinel\n"
+                && namedWriter.getWritingContext()
+                    ->sourceHandleToWrittenObjectMap.empty();
+            everyNamedOffsetRolledBack = everyNamedOffsetRolledBack
+                && namedRolledBack;
+            if (namedRolledBack)
+                ++sweptNamedFailures;
+
+            namedAdapter.armObjectAllocation = false;
+            namedAdapter.objectsCallbackReached = false;
+            const bool namedRetryWrite = namedRolledBack
+                && namedWriter.write(&namedAdapter, DRW::AC1027, binary);
+            const bool namedRetried = namedRetryWrite
+                && namedAdapter.objectsCallbackReached
+                && namedWriter.getError() == DRW::BAD_NONE;
+            dx_data namedDecoded;
+            dx_iface namedReader;
+            const bool namedReadBack = namedRetried
+                && namedReader.fileImport(namedFilename, &namedDecoded, false);
+            const auto namedOutput = std::find_if(
+                namedDecoded.dictionaries.begin(),
+                namedDecoded.dictionaries.end(),
+                [](const DRW_Dictionary& dictionary) {
+                    return dictionary.handle == 0xE000u
+                        && dictionary.parentHandle == 0xCu
+                        && dictionary.m_entries.size() == 1u
+                        && dictionary.m_entries.front().m_name
+                            == "GROUP_ALIAS"
+                        && dictionary.m_entries.front().m_handle == 0xDu;
+                });
+            if (!namedRetried || !namedReadBack
+                || namedOutput == namedDecoded.dictionaries.end()) {
+                std::cerr << "named dictionary retry offset=" << allocation
+                          << " rolledBack=" << namedRolledBack
+                          << " write=" << namedRetryWrite
+                          << " callback="
+                          << namedAdapter.objectsCallbackReached
+                          << " retryOk=" << namedRetried
+                          << " readBack=" << namedReadBack
+                          << " dictCount="
+                          << namedDecoded.dictionaries.size()
+                          << " error=" << static_cast<int>(namedWriter.getError())
+                          << " phase="
+                          << static_cast<int>(namedWriter.getLastDiagnostic().phase)
+                          << " diagnostic="
+                          << namedWriter.getLastDiagnostic().code
+                          << '\n';
+            }
+            everyNamedOffsetRetried = everyNamedOffsetRetried
+                && namedReadBack
+                && namedOutput != namedDecoded.dictionaries.end();
+            namedAdapter.dxfW = nullptr;
         }
-        dx_data namedData;
-        CoreObjectsAllocationWriter namedAdapter;
-        namedAdapter.cData = &namedData;
-        namedAdapter.currentBlock = namedData.mBlock;
-        namedAdapter.armObjectAllocation = true;
-        namedAdapter.objectAllocationCountdown = namedDictionaryFailAt;
-        dxfRW namedWriter(namedFilename.c_str());
-        namedAdapter.dxfW = &namedWriter;
-        installNamedDictionary(namedWriter);
-        const std::size_t namedFailuresBefore = materialFailedAllocations;
-        const bool namedFailed = namedDictionaryCalibrated
-            && !namedWriter.write(&namedAdapter, DRW::AC1027, binary);
-        materialAllocationCountdown = -1;
-        const DRW_OperationDiagnostic namedDiagnostic =
-            namedWriter.getLastDiagnostic();
-        const bool namedAllocationReported =
-            (namedDiagnostic.phase == DRW::OperationPhase::Allocation
-                 && namedDiagnostic.code == "allocation-failure")
-            || (namedDiagnostic.phase == DRW::OperationPhase::Emit
-                && namedDiagnostic.code == "emit-failure");
-        const bool namedRolledBack = namedFailed
-            && !namedAdapter.objectsCallbackReached
-            && materialFailedAllocations == namedFailuresBefore + 1u
-            && namedAllocationReported
-            && namedContents()
-                == "named dictionary allocation sentinel\n"
-            && namedWriter.getWritingContext()
-                ->sourceHandleToWrittenObjectMap.empty();
-        namedAdapter.armObjectAllocation = false;
-        namedAdapter.objectsCallbackReached = false;
-        const bool namedRetried = namedRolledBack
-            && namedWriter.write(&namedAdapter, DRW::AC1027, binary)
-            && namedAdapter.objectsCallbackReached
-            && namedWriter.getError() == DRW::BAD_NONE;
-        dx_data namedDecoded;
-        dx_iface namedReader;
-        const bool namedReadBack = namedRetried
-            && namedReader.fileImport(namedFilename, &namedDecoded, false);
-        const auto namedOutput = std::find_if(
-            namedDecoded.dictionaries.begin(), namedDecoded.dictionaries.end(),
-            [](const DRW_Dictionary& dictionary) {
-                return dictionary.handle == 0xE000u
-                    && dictionary.parentHandle == 0xCu
-                    && dictionary.m_entries.size() == 1u
-                    && dictionary.m_entries.front().m_name == "GROUP_ALIAS"
-                    && dictionary.m_entries.front().m_handle == 0xDu;
-            });
-        t.expect(namedDictionaryCalibrated && namedRolledBack,
+        t.expect(namedDictionaryCalibrated && everyNamedOffsetRolledBack
+                     && sweptNamedFailures == namedDictionaryAllocations,
                  binary
-                     ? "binary core named-dictionary allocation failure rolls back staged OBJECTS and identities"
-                     : "ASCII core named-dictionary allocation failure rolls back staged OBJECTS and identities");
-        t.expect(namedReadBack
-                     && namedOutput != namedDecoded.dictionaries.end(),
+                     ? "binary core named-dictionary OBJECTS allocation sweep rolls back every staged allocation"
+                     : "ASCII core named-dictionary OBJECTS allocation sweep rolls back every staged allocation");
+        t.expect(everyNamedOffsetRetried,
                  binary
-                     ? "binary core named-dictionary allocation failure accepts same-writer retry and typed readback"
-                     : "ASCII core named-dictionary allocation failure accepts same-writer retry and typed readback");
-        namedAdapter.dxfW = nullptr;
+                     ? "binary core named-dictionary allocation sweep retries every failure on the same writer and reads typed DICTIONARY"
+                     : "ASCII core named-dictionary allocation sweep retries every failure on the same writer and reads typed DICTIONARY");
     }
+
+    const auto prewritePath = directory / "prewrite-reservation-allocation.dxf";
+    dx_data prewriteData;
+    dx_iface prewriteAdapter;
+    prewriteAdapter.cData = &prewriteData;
+    prewriteAdapter.currentBlock = prewriteData.mBlock;
+    dxfRW prewriteWriter(prewritePath.string().c_str());
+    prewriteAdapter.dxfW = &prewriteWriter;
+    const std::size_t reservationFailuresBefore = materialFailedAllocations;
+    bool reservationFailed = false;
+    {
+        MaterialAllocationFailure failure(0);
+        reservationFailed = !prewriteWriter.reserveHandle(0xE500u);
+    }
+    const bool reservationCorrected = prewriteWriter.reserveHandle(0xE500u);
+    const bool firstAttemptGuarded = reservationFailed && reservationCorrected
+        && materialFailedAllocations == reservationFailuresBefore + 1u
+        && !prewriteWriter.write(&prewriteAdapter, DRW::AC1027, false)
+        && prewriteWriter.getLastDiagnostic().code == "handle-reservation";
+    const bool correctedRetry = firstAttemptGuarded
+        && prewriteWriter.write(&prewriteAdapter, DRW::AC1027, false)
+        && prewriteWriter.isReservedHandle(0xE500u)
+        && prewriteWriter.getError() == DRW::BAD_NONE;
+    t.expect(correctedRetry,
+             "pre-write reservation allocation failure remains guarded once and permits a later corrected writer attempt");
+    prewriteAdapter.dxfW = nullptr;
 }
 
 void testImageDefinitionPlanResourceBounds(TestContext& t) {

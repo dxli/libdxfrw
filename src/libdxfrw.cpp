@@ -2993,7 +2993,17 @@ bool dxfRW::reserveHandle(std::uint32_t h) {
         return true;
     } catch (...) {
         m_handleReservationFailed = true;
-        ++m_reservationFailureGeneration;
+        if (m_dxfWriteAttemptActive) {
+            // The admitted write will fail and roll back this reservation
+            // failure itself. Do not poison its corrected same-codec retry
+            // with a second, stale preflight failure.
+            m_writeError = true;
+        } else {
+            // A caller may reserve raw/source handles before write(). Keep
+            // the generation guard for a failure that would otherwise be
+            // invisible to the next whole-file transaction.
+            ++m_reservationFailureGeneration;
+        }
         return false;
     }
 }

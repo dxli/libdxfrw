@@ -6,16 +6,17 @@
   "supportClaimEffect": "none",
   "scope": "Verify whole OBJECTS rollback, same-writer retry and typed readback for IMAGEDEF callback rejection and every calibrated core IMAGEDEF OBJECTS allocation point.",
   "source": {
-    "parentCommit": "c70f3edd",
+    "parentCommit": "b272469f",
     "files": {
-      "src/libdxfrw.cpp": "356faeb09e59ef6a3a60292bd0958329fe0bd7e74286c6275a4381dbd83d2abe",
+      "src/libdxfrw.cpp": "87d171d9be7ed48efac532325915c815874f890f42a6853b5c680b097bc61232",
       "src/libdxfrw.h": "54af5f45476a14c6046ddaed33ef290c0779eaa02c2eb2ac6141d5f6101a36d3",
-      "tests/dxf_fixture_tests.cpp": "c39394c75ec04ef0b55d06b1302383f6e257b3988ecc0f9c64fb8baee7ef4eb8",
-      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "216cbe547e3623f3f51cbdedbaede16b05e1045e675916c464be1fc78f05e903"
+      "tests/dxf_fixture_tests.cpp": "5697692c9787cc0859fc9b029c5f555e889afb7a64ba8f9b7832125f5b5facb4",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md": "b6af0d6b156c8dcca7e78c33dc798b6dc9930e21d7e8aca4b4f809b729862d34"
     }
   },
   "implementation": {
     "files": [
+      "src/libdxfrw.cpp",
       "tests/dxf_fixture_tests.cpp",
       "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md"
     ],
@@ -34,7 +35,7 @@
     },
     "normalFocused": {
       "command": "ctest --test-dir build-gcc --output-on-failure -R '^libdxfrw_image_definition_plan_failure_retry$'",
-      "result": "PASS 1/1; 0.86 seconds",
+      "result": "PASS 1/1; 1.02 seconds",
       "coverage": "ASCII/Binary callback validation plus calibrated core IMAGEDEF OBJECTS all-allocation-offset failure sweep, destination preservation, derived identity rollback, same-writer retry after each failure, and typed IMAGE/IMAGEDEF readback."
     },
     "asanBuild": {
@@ -43,7 +44,7 @@
     },
     "asanFocused": {
       "command": "ctest --test-dir build-asan-custom --output-on-failure -R '^libdxfrw_image_definition_plan_failure_retry$'",
-      "result": "PASS 1/1; 1.72 seconds"
+      "result": "PASS 1/1; 2.21 seconds"
     },
     "diffCheck": "PASS",
     "repositoryFixturesAdded": 0,
