@@ -14780,6 +14780,9 @@ constexpr std::size_t kMaxAdapterTableGeometryRetainedBytes =
 bool standardDwgCommonEqual(const DRW_TableEntry& left,
                             const DRW_TableEntry& right,
                             DRW::Version version, bool compareName) noexcept;
+bool standardDwgVariantEqual(const DRW_Variant& left,
+                             const DRW_Variant& right,
+                             DRW::Version version) noexcept;
 constexpr std::size_t kMaxAdapterXRecordRecords = 100000u;
 constexpr std::size_t kMaxAdapterXRecordItems = 1000000u;
 constexpr std::size_t kMaxAdapterXRecordRetainedBytes =
@@ -15660,6 +15663,24 @@ bool estimateTypedEntityRetainedBytes(
     if (const auto* image = dynamic_cast<const DRW_Image*>(&entity)) {
         if (!addImageRetainedBytes(*image, estimate))
             return false;
+    }
+    if (const auto* cloud =
+            dynamic_cast<const DRW_PointCloudEx*>(&entity)) {
+        if (cloud->croppings.size() > DRW_PointCloudEx::kMaxItems
+            || !addStringPayloadBytes(cloud->name, estimate)
+            || !addStringPayloadBytes(cloud->intensityColorScheme, estimate)
+            || !addStringPayloadBytes(cloud->currentColorScheme, estimate)
+            || !addStringPayloadBytes(cloud->classificationColorScheme,
+                                      estimate)
+            || !addAssociativeSlotBytes(cloud->croppings.size(),
+                    sizeof(DRW_PointCloudExCropping), estimate))
+            return false;
+        for (const DRW_PointCloudExCropping& cropping : cloud->croppings) {
+            if (cropping.points.size() > DRW_PointCloudEx::kMaxItems
+                || !addAssociativeSlotBytes(cropping.points.size(),
+                        sizeof(DRW_Coord), estimate))
+                return false;
+        }
     }
     if (const auto* viewport =
             dynamic_cast<const DRW_Viewport*>(&entity)) {
@@ -16979,6 +17000,126 @@ bool pointCloudDefinitionRawMatchesPhysical(
     return groupIndex == raw.groups.size()
         && physical.endMarker.ordinal > previousOrdinal
         && physical.endMarker.beginOffset >= previousOffset;
+}
+
+bool pointCloudExModelEqual(const DRW_PointCloudEx& left,
+                            const DRW_PointCloudEx& right,
+                            DRW::Version version) noexcept {
+    const auto equalVariant = [version](const DRW_Variant& a,
+                                        const DRW_Variant& b) {
+        return standardDwgVariantEqual(a, b, version);
+    };
+    const auto sameReal = [](double a, double b) {
+        return std::memcmp(&a, &b, sizeof(a)) == 0;
+    };
+    const auto sameCoord = [&sameReal](const DRW_Coord& a,
+                                       const DRW_Coord& b) {
+        return sameReal(a.x, b.x) && sameReal(a.y, b.y)
+            && sameReal(a.z, b.z);
+    };
+    if (!dxfAttdef::Decoder::sameEntityModel(left, right, equalVariant)
+        || std::tie(left.classVersion, left.isLocked, left.definitionHandle,
+                    left.reactorHandle, left.name, left.showIntensity,
+                    left.showCropping, left.croppingCount, left.unknownInt0,
+                    left.unknownInt1, left.stylizationType,
+                    left.intensityColorScheme, left.currentColorScheme,
+                    left.classificationColorScheme, left.intensityMin,
+                    left.intensityMax, left.intensityOutOfRangeBehavior,
+                    left.elevationOutOfRangeBehavior,
+                    left.elevationApplyToFixedRange,
+                    left.intensityAsGradient, left.elevationAsGradient)
+            != std::tie(right.classVersion, right.isLocked,
+                        right.definitionHandle, right.reactorHandle,
+                        right.name, right.showIntensity, right.showCropping,
+                        right.croppingCount, right.unknownInt0,
+                        right.unknownInt1, right.stylizationType,
+                        right.intensityColorScheme, right.currentColorScheme,
+                        right.classificationColorScheme, right.intensityMin,
+                        right.intensityMax,
+                        right.intensityOutOfRangeBehavior,
+                        right.elevationOutOfRangeBehavior,
+                        right.elevationApplyToFixedRange,
+                        right.intensityAsGradient, right.elevationAsGradient)
+        || left.croppings.size() != right.croppings.size()
+        || !sameCoord(left.extentsMin, right.extentsMin)
+        || !sameCoord(left.extentsMax, right.extentsMax)
+        || !sameCoord(left.ucsOrigin, right.ucsOrigin)
+        || !sameCoord(left.ucsXDirection, right.ucsXDirection)
+        || !sameCoord(left.ucsYDirection, right.ucsYDirection)
+        || !sameCoord(left.ucsZDirection, right.ucsZDirection)
+        || !sameReal(left.elevationMin, right.elevationMin)
+        || !sameReal(left.elevationMax, right.elevationMax)
+        || !sameReal(left.intensityMin, right.intensityMin)
+        || !sameReal(left.intensityMax, right.intensityMax))
+        return false;
+    for (std::size_t i = 0u; i < left.croppings.size(); ++i) {
+        const DRW_PointCloudExCropping& a = left.croppings[i];
+        const DRW_PointCloudExCropping& b = right.croppings[i];
+        if (std::tie(a.type, a.isInside, a.isInverted, a.pointCount)
+                != std::tie(b.type, b.isInside, b.isInverted, b.pointCount)
+            || a.points.size() != b.points.size()
+            || !sameCoord(a.cropPlane, b.cropPlane)
+            || !sameCoord(a.cropXDirection, b.cropXDirection)
+            || !sameCoord(a.cropYDirection, b.cropYDirection))
+            return false;
+        for (std::size_t point = 0u; point < a.points.size(); ++point) {
+            if (!sameCoord(a.points[point], b.points[point]))
+                return false;
+        }
+    }
+    return true;
+}
+
+bool pointCloudExPhysicalRecordValid(
+        const DRW_DxfPhysicalEntitySource& record,
+        DRW::Version version, bool binary) noexcept {
+    if (!dx_block_membership::equal(record.name, "POINTCLOUDEX")
+        || record.marker.ignoredComment
+        || record.marker.beginOffset >= record.marker.endOffset
+        || record.marker.ordinal >= record.endOrdinal
+        || record.endOffset < record.marker.endOffset
+        || record.groups.size() != record.rawValues.size()
+        || record.groups.size() != record.spans.size())
+        return false;
+    std::size_t ordinal = record.marker.ordinal;
+    std::size_t offset = record.marker.endOffset;
+    for (std::size_t i = 0u; i < record.groups.size(); ++i) {
+        const DRW_Variant& field = record.groups[i];
+        const DRW_DxfPhysicalRecordSpan& span = record.spans[i];
+        if (ordinal == (std::numeric_limits<std::size_t>::max)()
+            || span.ordinal != ordinal + 1u
+            || span.beginOffset < offset || span.beginOffset >= span.endOffset
+            || (span.ignoredComment && field.code() != 999)
+            || field.code() == 0
+            || (binary && !record.rawValues[i].empty()))
+            return false;
+        if (field.type() == DRW_Variant::STRING) {
+            if (!field.content.s)
+                return false;
+        } else if (field.type() != DRW_Variant::INTEGER
+                   && field.type() != DRW_Variant::INTEGER64
+                   && field.type() != DRW_Variant::DOUBLE) {
+            return false;
+        }
+        ordinal = span.ordinal;
+        offset = span.endOffset;
+    }
+    return ordinal != (std::numeric_limits<std::size_t>::max)()
+        && ordinal + 1u == record.endOrdinal
+        && offset <= record.endOffset
+        && version >= DRW::AC1021 && version <= DRW::AC1032;
+}
+
+bool pointCloudExDispatchMatchesRecord(
+        const DRW_DxfPhysicalEntitySource& record,
+        const DRW_DxfPhysicalRecordSpan& begin,
+        const DRW_DxfPhysicalRecordSpan& end) noexcept {
+    return record.marker.ordinal == begin.ordinal
+        && record.marker.beginOffset == begin.beginOffset
+        && record.marker.endOffset == begin.endOffset
+        && record.marker.ignoredComment == begin.ignoredComment
+        && record.endOrdinal == end.ordinal
+        && record.endOffset == end.beginOffset;
 }
 
 bool estimateNavisworksDefinitionBytes(
@@ -51769,6 +51910,64 @@ void dx_iface::observeDxfBlockDeliveryValue(std::int32_t type,std::uint32_t hand
     observeDxfBlockMembership(row,event,entity);
     observeDxfBlockReadContext(row);
     captureDxfCompoundBody(row,event,entity);
+    if (entity && event.callback == DRW_DxfBlockCallback::addPointCloudEx) {
+        const auto* cloud = dynamic_cast<const DRW_PointCloudEx*>(entity);
+        const auto failPointCloud = [&]() {
+            source.blockDeliveryCaptureFailed = true;
+        };
+        std::size_t modelBytes = 0u, retainedBytes = 0u, work = 0u;
+        bool dispatchValid = false;
+        if (event.dispatch < row.delivery->dispatches.size()) {
+            const auto& dispatch = row.delivery->dispatches[event.dispatch];
+            const auto record = std::lower_bound(
+                row.children->records.begin(), row.children->records.end(),
+                dispatch.begin.ordinal,
+                [](const DRW_DxfPhysicalEntitySource& value,
+                   std::size_t ordinal) {
+                    return value.marker.ordinal < ordinal;
+                });
+            dispatchValid = dispatch.events == 1u
+                && dispatch.firstEvent == row.deliveryNext
+                && record != row.children->records.end()
+                && pointCloudExDispatchMatchesRecord(
+                    *record, dispatch.begin, dispatch.end)
+                && pointCloudExPhysicalRecordValid(
+                    *record, row.children->version, row.children->binary);
+        }
+        if (!cloud || typeid(*entity) != typeid(DRW_PointCloudEx)
+            || !dispatchValid
+            || row.pointCloudExModels.count(event.dispatch) != 0u
+            || row.pointCloudExModelOwners.count(event.dispatch) != 0u
+            || !estimateTypedEntityRetainedBytes(
+                *cloud, sizeof(DRW_PointCloudEx), modelBytes)
+            || !addAssociativeRetainedBytes(
+                sizeof(DRW_PointCloudEx) + 8u * sizeof(void*), modelBytes)
+            || !addAssociativeSlotBytes(modelBytes, 2u, retainedBytes)
+            || !addAssociativeRetainedBytes(
+                sizeof(std::pair<const std::size_t,
+                    std::shared_ptr<const DRW_PointCloudEx>>) + 8u * sizeof(void*),
+                retainedBytes)
+            || !addAssociativeRetainedBytes(retainedBytes, work)
+            || source.blockDeliveryBytes > source.maxBlockDeliveryBytes
+            || retainedBytes
+                > source.maxBlockDeliveryBytes - source.blockDeliveryBytes
+            || source.blockDeliveryWork > source.maxBlockDeliveryWork
+            || work > source.maxBlockDeliveryWork - source.blockDeliveryWork) {
+            failPointCloud();
+            return;
+        }
+        source.blockDeliveryBytes += retainedBytes;
+        source.blockDeliveryWork += work;
+        try {
+            auto saved = std::make_shared<const DRW_PointCloudEx>(*cloud);
+            if (!row.pointCloudExModels.emplace(event.dispatch, saved).second
+                || !row.pointCloudExModelOwners.emplace(event.dispatch,
+                                                std::move(saved)).second)
+                failPointCloud();
+        } catch (...) {
+            failPointCloud();
+        }
+    }
     if (entity && event.callback==DRW_DxfBlockCallback::addMLine && !source.compoundBodyCaptureFailed) {
         const auto* mline=dynamic_cast<const DRW_MLine*>(entity);
         std::size_t bytes=0u;
@@ -63643,6 +63842,9 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
         fData->dictionaries.size();
     fData->dxfReadOutcome = {};
     fData->dwgReadOutcome = {};
+    fData->pointCloudExSourceBoundEntities = 0u;
+    fData->pointCloudExSourceBindingAttempted = false;
+    fData->pointCloudExSourceBindingComplete = false;
     fData->acdsHistoryDxfImport = {};
     fData->acdsHistoryDxfImport.generation = fData->importGeneration;
     fData->acdsHistoryDxfImport.failed = !fData->rawAcdsHistoryObjects.empty();
@@ -67890,6 +68092,268 @@ bool dx_iface::prepareDwgGeoDataOutput(bool debug) {
     return m_extensionGeoDataHandles.size() == typedCount;
 }
 
+bool dx_iface::validateImportedDxfPointCloudExSourceBindings(
+        dx_data& data, std::size_t& boundCount,
+        const char*& failure) noexcept {
+    using Physical = DRW_DxfPhysicalEntitySource;
+    using Callback = DRW_DxfEntitiesCallback;
+    using BlockCallback = DRW_DxfBlockCallback;
+    boundCount = 0u;
+    failure = "incomplete DXF point-cloud source capture";
+    auto& source = data.m_tableDxfSource;
+    data.pointCloudExSourceBindingAttempted = true;
+    data.pointCloudExSourceBindingComplete = false;
+    data.pointCloudExSourceBoundEntities = 0u;
+    if (data.sourceFormat != dx_source_format::DXF
+        || data.importGeneration == 0u
+        || !data.dxfReadOutcome.readReturned
+        || data.dxfReadOutcome.readThrew
+        || !data.dxfReadOutcome.operationSucceeded
+        || data.dxfReadOutcome.error != DRW::BAD_NONE
+        || source.generation != data.importGeneration
+        || !source.closed || !source.successful || source.failed
+        || source.contextFailed || source.reader != nullptr
+        || source.entitiesCaptureFailed
+        || source.entitiesDeliveryCaptureFailed
+        || source.blockSourceCaptureFailed
+        || source.blockChildrenCaptureFailed
+        || source.blockDeliveryCaptureFailed
+        || !data.m_entitiesContainerIdentity.value)
+        return false;
+
+    std::unordered_map<std::uint32_t, const DRW_PointCloudEx*> output;
+    std::unordered_set<const dx_ifaceBlock*> scanned;
+    std::unordered_set<std::uint32_t> boundHandles;
+    std::size_t outputCount = 0u;
+    const auto scanOutput = [&](const dx_ifaceBlock* block) {
+        if (block == nullptr)
+            return false;
+        if (!scanned.insert(block).second)
+            return true;
+        for (const DRW_Entity* entity : block->ent) {
+            if (entity == nullptr)
+                return false;
+            if (entity->eType != DRW::POINTCLOUDEX)
+                continue;
+            const auto* cloud = dynamic_cast<const DRW_PointCloudEx*>(entity);
+            if (cloud == nullptr || typeid(*entity) != typeid(DRW_PointCloudEx)
+                || cloud->handle == 0u || cloud->handle == DRW::NoHandle
+                || !output.emplace(cloud->handle, cloud).second)
+                return false;
+            ++outputCount;
+        }
+        return true;
+    };
+    try {
+        if (!scanOutput(data.mBlock)) {
+            failure = "retained DXF POINTCLOUDEX output inventory is ambiguous";
+            return false;
+        }
+        for (const dx_ifaceBlock* block : data.blocks) {
+            if (!scanOutput(block)) {
+                failure = "retained DXF POINTCLOUDEX output inventory is ambiguous";
+                return false;
+            }
+        }
+        const auto bind = [&](const DRW_PointCloudEx& original,
+                              DRW::Version version) {
+            const auto emitted = output.find(original.handle);
+            return emitted != output.end()
+                && original.parentHandle == emitted->second->parentHandle
+                && pointCloudExModelEqual(original, *emitted->second, version)
+                && boundHandles.insert(original.handle).second;
+        };
+        const auto findRecord = [](const std::vector<Physical>& records,
+                                   const DRW_DxfPhysicalRecordSpan& begin)
+                -> const Physical* {
+            const auto found = std::lower_bound(records.begin(), records.end(),
+                begin.ordinal, [](const Physical& record, std::size_t ordinal) {
+                    return record.marker.ordinal < ordinal;
+                });
+            return found != records.end()
+                    && found->marker.ordinal == begin.ordinal
+                ? &*found : nullptr;
+        };
+
+        std::size_t physicalEntityCount = 0u;
+        for (const auto& scope : source.entitiesDeliveries) {
+            const auto& certificate = scope.certificate;
+            if (scope.container != &data
+                || scope.generation != data.importGeneration
+                || scope.containerId != data.m_entitiesContainerIdentity.value
+                || !scope.physical || !scope.delivery || !scope.observed
+                || !scope.context || !certificate
+                || certificate->container != &data
+                || certificate->generation != scope.generation
+                || certificate->containerId != scope.containerId
+                || certificate->section != scope.section
+                || certificate->physical.get() != scope.physical.get()
+                || certificate->delivery.get() != scope.delivery.get()
+                || certificate->observed.get() != scope.observed.get()
+                || scope.physical->status
+                    != DRW_DxfEntitiesSource::Status::Complete
+                || scope.delivery->status
+                    != DRW_DxfEntitiesDeliverySource::Status::Complete
+                || scope.delivery->completedEvents
+                    != scope.delivery->events.size()
+                || scope.observed->size() != scope.delivery->events.size()
+                || scope.physical->version != data.sourceVersion
+                || scope.delivery->version != scope.physical->version
+                || scope.delivery->binary != scope.physical->binary
+                || !scope.context->captured
+                || scope.context->sourceVersion != scope.physical->version
+                || scope.context->binary != scope.physical->binary) {
+                failure = "DXF ENTITIES source/delivery ownership is incomplete";
+                return false;
+            }
+            std::unordered_set<std::size_t> matchedPhysical;
+            for (std::size_t i = 0u; i < scope.delivery->events.size(); ++i) {
+                const auto& event = scope.delivery->events[i];
+                if (event.callback != Callback::addPointCloudEx)
+                    continue;
+                const auto& observed = (*scope.observed)[i];
+                if (event.origin
+                        != DRW_DxfEntitiesDeliveryEvent::Origin::Parser
+                    || event.dispatch >= scope.delivery->dispatches.size()
+                    || !event.hasValue
+                    || event.entityType
+                        != static_cast<std::int32_t>(DRW::POINTCLOUDEX)
+                    || !observed.valueObserved || observed.modelUnavailable
+                    || !observed.model) {
+                    failure = "DXF ENTITIES POINTCLOUDEX event lacks an exact typed callback";
+                    return false;
+                }
+                const auto& dispatch =
+                    scope.delivery->dispatches[event.dispatch];
+                if (dispatch.events != 1u || dispatch.firstEvent != i) {
+                    failure = "DXF ENTITIES POINTCLOUDEX dispatch is not one-to-one";
+                    return false;
+                }
+                const Physical* record = findRecord(
+                    scope.physical->records, dispatch.begin);
+                if (record == nullptr
+                    || !pointCloudExDispatchMatchesRecord(
+                        *record, dispatch.begin, dispatch.end)
+                    || !pointCloudExPhysicalRecordValid(
+                        *record, scope.physical->version,
+                        scope.physical->binary)
+                    || !matchedPhysical.insert(record->marker.ordinal).second) {
+                    failure = "DXF ENTITIES POINTCLOUDEX event does not bind to one complete physical record";
+                    return false;
+                }
+                const DRW_Entity& observedModel = *observed.model;
+                const auto* cloud =
+                    dynamic_cast<const DRW_PointCloudEx*>(&observedModel);
+                if (cloud == nullptr
+                    || typeid(observedModel) != typeid(DRW_PointCloudEx)
+                    || cloud->handle != event.handle
+                    || cloud->parentHandle != event.owner
+                    || !bind(*cloud, scope.physical->version)) {
+                    failure = "DXF ENTITIES POINTCLOUDEX typed state differs from its emitted model";
+                    return false;
+                }
+                ++physicalEntityCount;
+            }
+            for (const Physical& record : scope.physical->records) {
+                if (dx_block_membership::equal(record.name, "POINTCLOUDEX")
+                    && matchedPhysical.count(record.marker.ordinal) != 1u) {
+                    failure = "DXF ENTITIES POINTCLOUDEX physical record has no unique typed callback";
+                    return false;
+                }
+            }
+        }
+
+        for (const auto& blockEntry : source.blockSources) {
+            const auto& row = blockEntry.second;
+            if (!row.children || !row.delivery) {
+                if (row.deliveryExpected) {
+                    failure = "DXF BLOCK POINTCLOUDEX source scope was not fully captured";
+                    return false;
+                }
+                continue;
+            }
+            if (!row.closed || !row.beginPaired || !row.footerPaired
+                || !row.deliveryFinished || row.deliveryPending
+                || row.deliveryNext != row.delivery->events.size()
+                || row.children->status
+                    != DRW_DxfBlockChildrenSource::Status::Complete
+                || row.delivery->status
+                    != DRW_DxfBlockDeliverySource::Status::Complete
+                || row.children->version != data.sourceVersion
+                || row.delivery->version != row.children->version
+                || row.delivery->binary != row.children->binary
+                || row.children->blockHandle != blockEntry.first
+                || row.delivery->blockHandle != blockEntry.first
+                || row.pointCloudExModels.size()
+                    != row.pointCloudExModelOwners.size()) {
+                failure = "DXF BLOCK point-cloud source/delivery closure is incomplete";
+                return false;
+            }
+            std::unordered_set<std::size_t> matchedPhysical;
+            std::size_t blockCloudEvents = 0u;
+            for (std::size_t i = 0u; i < row.delivery->events.size(); ++i) {
+                const auto& event = row.delivery->events[i];
+                if (event.callback != BlockCallback::addPointCloudEx)
+                    continue;
+                ++blockCloudEvents;
+                if (!event.hasValue
+                    || event.entityType
+                        != static_cast<std::int32_t>(DRW::POINTCLOUDEX)
+                    || event.dispatch >= row.delivery->dispatches.size()) {
+                    failure = "DXF BLOCK POINTCLOUDEX event is malformed";
+                    return false;
+                }
+                const auto& dispatch = row.delivery->dispatches[event.dispatch];
+                const Physical* record = findRecord(
+                    row.children->records, dispatch.begin);
+                const auto model = row.pointCloudExModels.find(event.dispatch);
+                const auto owner = row.pointCloudExModelOwners.find(event.dispatch);
+                if (dispatch.events != 1u || dispatch.firstEvent != i
+                    || record == nullptr
+                    || !pointCloudExDispatchMatchesRecord(
+                        *record, dispatch.begin, dispatch.end)
+                    || !pointCloudExPhysicalRecordValid(
+                        *record, row.children->version, row.children->binary)
+                    || !matchedPhysical.insert(record->marker.ordinal).second
+                    || model == row.pointCloudExModels.end()
+                    || owner == row.pointCloudExModelOwners.end()
+                    || !model->second || !owner->second
+                    || model->second.get() != owner->second.get()
+                    || model->second->handle != event.handle
+                    || model->second->parentHandle != event.owner
+                    || !bind(*model->second, row.children->version)) {
+                    failure = "DXF BLOCK POINTCLOUDEX callback is not bound to its physical record and output model";
+                    return false;
+                }
+                ++physicalEntityCount;
+            }
+            if (blockCloudEvents != row.pointCloudExModels.size()) {
+                failure = "DXF BLOCK POINTCLOUDEX model snapshots do not match callbacks";
+                return false;
+            }
+            for (const Physical& record : row.children->records) {
+                if (dx_block_membership::equal(record.name, "POINTCLOUDEX")
+                    && matchedPhysical.count(record.marker.ordinal) != 1u) {
+                    failure = "DXF BLOCK POINTCLOUDEX physical record has no unique typed callback";
+                    return false;
+                }
+            }
+        }
+        if (physicalEntityCount != outputCount
+            || boundHandles.size() != outputCount) {
+            failure = "DXF POINTCLOUDEX callbacks and emitted entity inventory differ";
+            return false;
+        }
+    } catch (...) {
+        failure = "allocation failure while binding DXF POINTCLOUDEX source rows";
+        return false;
+    }
+    boundCount = outputCount;
+    data.pointCloudExSourceBoundEntities = outputCount;
+    data.pointCloudExSourceBindingComplete = true;
+    failure = nullptr;
+    return true;
+}
 bool dx_iface::preparePointCloudExOutputGraph(
         dx_data& data, DRW::Version targetVersion, bool debug) {
     m_pointCloudExDictionaryHandle = 0u;
@@ -67909,8 +68373,54 @@ bool dx_iface::preparePointCloudExOutputGraph(
         + data.pointCloudColorMaps.size();
     if (retainedTypedCount != data.pointCloudObjectRetainedRecords)
         return fail("retained callback counters do not match the typed records");
-    if (retainedTypedCount == 0u)
+    std::size_t pointCloudExEntityCount = 0u;
+    std::unordered_set<const dx_ifaceBlock*> scannedPointCloudBlocks;
+    const auto countPointCloudEx = [&](const dx_ifaceBlock* block) {
+        if (block == nullptr)
+            return false;
+        if (!scannedPointCloudBlocks.insert(block).second)
+            return true;
+        for (const DRW_Entity* entity : block->ent) {
+            if (entity == nullptr)
+                return false;
+            if (entity->eType == DRW::POINTCLOUDEX) {
+                if (dynamic_cast<const DRW_PointCloudEx*>(entity) == nullptr
+                    || typeid(*entity) != typeid(DRW_PointCloudEx)
+                    || pointCloudExEntityCount
+                        == (std::numeric_limits<std::size_t>::max)())
+                    return false;
+                ++pointCloudExEntityCount;
+            }
+        }
         return true;
+    };
+    try {
+        if (!countPointCloudEx(data.mBlock))
+            return fail("invalid POINTCLOUDEX output inventory");
+        for (const dx_ifaceBlock* block : data.blocks) {
+            if (!countPointCloudEx(block))
+                return fail("invalid POINTCLOUDEX output inventory");
+        }
+    } catch (...) {
+        return fail("allocation failure while counting POINTCLOUDEX entities");
+    }
+    if (data.sourceFormat == dx_source_format::DXF
+        && pointCloudExEntityCount != 0u) {
+        std::size_t boundCount = 0u;
+        const char* bindingFailure = nullptr;
+        if (!validateImportedDxfPointCloudExSourceBindings(
+                data, boundCount, bindingFailure))
+            return fail(bindingFailure != nullptr
+                ? bindingFailure : "DXF POINTCLOUDEX source binding failed");
+        if (boundCount != pointCloudExEntityCount)
+            return fail("DXF POINTCLOUDEX source and output counts differ");
+    }
+    if (retainedTypedCount == 0u) {
+        if (pointCloudExEntityCount != 0u
+            && data.sourceFormat != dx_source_format::Unknown)
+            return fail("POINTCLOUDEX entity has no retained definition/reactor graph");
+        return true;
+    }
     if (data.sourceFormat == dx_source_format::DXF) {
         const auto& capture = data.m_pointCloudDefinitionSources;
         if (data.m_pointCloudDefinitionSourceCaptureFailed

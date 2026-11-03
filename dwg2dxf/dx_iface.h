@@ -3023,6 +3023,9 @@ private:
     bool preparePointCloudExOutputGraph(dx_data& data,
                                         DRW::Version targetVersion,
                                         bool debug);
+    bool validateImportedDxfPointCloudExSourceBindings(
+        dx_data& data, std::size_t& boundCount,
+        const char*& failure) noexcept;
     bool prepareDwgGeoDataOutput(bool debug);
     bool prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                                          bool debug);

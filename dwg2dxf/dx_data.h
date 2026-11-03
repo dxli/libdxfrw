@@ -764,6 +764,12 @@ public:
     std::size_t pointCloudObjectRetainedItems{0};
     std::size_t pointCloudObjectRetainedBytes{0};
     bool pointCloudObjectCaptureFailed{false};
+    // Current-import output-preflight observation for the physical-record /
+    // callback / retained-model POINTCLOUDEX association. Not support or
+    // semantic qualification.
+    std::size_t pointCloudExSourceBoundEntities{0u};
+    bool pointCloudExSourceBindingAttempted{false};
+    bool pointCloudExSourceBindingComplete{false};
     // Typed FIELD/FIELDLIST callbacks are retained for a later graph-aware
     // writer gate; raw DXF companions remain separate and are not emitted yet.
     std::list<DRW_Field>fields;
@@ -1558,6 +1564,12 @@ private:
             // cannot borrow the enclosing block's provenance certificate.
             std::map<std::size_t,std::shared_ptr<const DRW_MLine>> mlineModels;
             std::map<std::size_t,std::shared_ptr<const DRW_MLine>> mlineModelOwners;
+            // Original bounded POINTCLOUDEX callback snapshots, keyed by the
+            // actual staged BLOCK dispatch. These bind the parser callback to
+            // the physical child record; they do not qualify its schema or
+            // authorize output.
+            std::map<std::size_t,std::shared_ptr<const DRW_PointCloudEx>> pointCloudExModels;
+            std::map<std::size_t,std::shared_ptr<const DRW_PointCloudEx>> pointCloudExModelOwners;
             std::vector<std::uint32_t> attdefOrigins;
         };
         std::map<std::uint32_t,BlockSource> blockSources;

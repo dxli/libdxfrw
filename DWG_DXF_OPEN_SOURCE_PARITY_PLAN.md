@@ -965,11 +965,17 @@ eligible reader. The exact package and environment result are in the
   unchanged-state checks. Generated ASCII/Binary controls cover nested
   ACAD_REACTORS fields and exact group/span order; see the [DXF definition
   source-span receipt](docs/research/p8-pointcloud-dxf-definition-source-span-binding-2026-11-03.json).
-  This is transport evidence only. Imported DXF graph output remains refused
-  until POINTCLOUDEX entity source fields are bound and the full field
-  projection is proven; DWG still needs source CLASS/frame/output binding. P4
-  source-profile closure, physical producer breadth, asset loading and native
-  consumer semantics remain open.
+  Imported DXF POINTCLOUDEX entities now also bind ENTITIES and named-BLOCK
+  callbacks to their exact physical dispatch spans, retained source models and
+  current emitted models, with bounded BLOCK snapshots. Generated ASCII/Binary
+  import controls verify one-to-one source/output inventories and keep imported
+  output atomically refused; see the [DXF entity source-binding receipt](docs/research/p8-pointcloud-dxf-entity-source-binding-2026-11-03.json).
+  This is association evidence only. Imported DXF graph output remains refused
+  until every physical field is covered by the complete writer projection and
+  the DefinitionEx/ReactorEx graph is qualified for source-derived identities.
+  DWG still needs source CLASS/frame/output binding. P4 source-profile closure,
+  physical producer breadth, asset loading and native consumer semantics remain
+  open.
   The low-level POINTCLOUD and POINTCLOUDEX serializers now resolve their
   definition/reactor references through the configured resolver (final output
   IDs) or source-handle remap fallback. Generated ASCII/Binary controls verify

@@ -21079,6 +21079,43 @@ bool pointCloudAndNavisworksAdapterTransport() {
             return fail("point-cloud output handles or reciprocal ownership changed on readback");
         }
 
+        const auto importedAttemptPath = std::filesystem::temp_directory_path()
+            / ("libdxfrw-imported-pointcloud-binding-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct ImportedAttemptCleanup {
+            std::filesystem::path path;
+            ~ImportedAttemptCleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } importedAttemptCleanup{importedAttemptPath};
+        const std::string importedSentinel =
+            "IMPORTED_POINTCLOUD_BINDING_DESTINATION\n";
+        {
+            std::ofstream existing(importedAttemptPath, std::ios::binary);
+            existing << importedSentinel;
+            if (!existing)
+                return fail("could not create imported point-cloud destination sentinel");
+        }
+        dx_iface importedWriter;
+        if (importedWriter.fileExport(importedAttemptPath.string(),
+                                      DRW::AC1027, binary, &graphReadback,
+                                      false, true))
+            return fail("imported point-cloud source graph was admitted for output");
+        if (!graphReadback.pointCloudExSourceBindingAttempted
+            || !graphReadback.pointCloudExSourceBindingComplete
+            || graphReadback.pointCloudExSourceBoundEntities != 1u)
+            return fail("imported POINTCLOUDEX callback was not bound to its physical source record");
+        {
+            std::ifstream previous(importedAttemptPath, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != importedSentinel)
+                return fail("refused imported point-cloud graph changed the destination");
+        }
+
         if (objectAdapter.fileExport(path.string(), DRW::AC1027, binary,
                                      &objectData, false, true))
             return fail("unqualified point-cloud object graph was emitted");
