@@ -6342,13 +6342,14 @@ void testVportReferenceRemapping(TestContext& t) {
 void testViewReferenceRemapping(TestContext& t) {
     const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
         {0xA200u, 0xAA20u}, {0x921u, 0xA21u}, {0x922u, 0xA22u},
-        {0x923u, 0xA23u}, {0x924u, 0xA24u}};
+        {0x923u, 0xA23u}, {0x924u, 0xA24u}, {0x925u, 0xA25u}};
     const auto resolverValue = [](std::uint32_t source) {
         switch (source) {
         case 0x921u: return std::uint32_t{0xB21u};
         case 0x922u: return std::uint32_t{0xB22u};
         case 0x923u: return std::uint32_t{0xB23u};
         case 0x924u: return std::uint32_t{0xB24u};
+        case 0x925u: return std::uint32_t{0xB25u};
         default: return source;
         }
     };
@@ -6360,6 +6361,7 @@ void testViewReferenceRemapping(TestContext& t) {
             owner.binFile = binary;
             owner.setHandleRemap(sourceToRemapped);
             owner.setResolvedBackgroundHandles({0x921u});
+            owner.setResolvedLiveSectionHandles({0x925u});
             if (useResolver)
                 owner.setReferenceResolver(resolverValue);
             owner.writer = binary
@@ -6377,6 +6379,7 @@ void testViewReferenceRemapping(TestContext& t) {
             view.m_visualStyleHandle = 0x922u;
             view.baseUCS_ID = 0x923u;
             view.namedUCS_ID = 0x924u;
+            view.m_liveSectionHandle = 0x925u;
             const bool wrote = owner.writeView(&view)
                 && owner.writer->writeString(0, "WIRE_END");
             t.expect(wrote, "VIEW references serialize");
@@ -6404,19 +6407,19 @@ void testViewReferenceRemapping(TestContext& t) {
                 } else if (recordName == "VIEW" && code == 5) {
                     emittedRowHandle = reader->getHandleString();
                 } else if (recordName == "VIEW"
-                           && (code == 332 || code == 345 || code == 346
-                               || code == 348)) {
+                           && (code == 332 || code == 334 || code == 345
+                               || code == 346 || code == 348)) {
                     observed.emplace_back(code, reader->getHandleString());
                 }
             }
             const std::vector<std::pair<int, std::uint32_t>> expected =
                 useResolver
                     ? std::vector<std::pair<int, std::uint32_t>>{
-                          {332, 0xB21u}, {348, 0xB22u}, {346, 0xB23u},
-                          {345, 0xB24u}}
+                          {332, 0xB21u}, {334, 0xB25u}, {348, 0xB22u},
+                          {346, 0xB23u}, {345, 0xB24u}}
                     : std::vector<std::pair<int, std::uint32_t>>{
-                          {332, 0xA21u}, {348, 0xA22u}, {346, 0xA23u},
-                          {345, 0xA24u}};
+                          {332, 0xA21u}, {334, 0xA25u}, {348, 0xA22u},
+                          {346, 0xA23u}, {345, 0xA24u}};
             t.expect(ended && emittedRowHandle == 0xAA20u
                          && observed == expected,
                      useResolver
@@ -6433,6 +6436,7 @@ void testViewReferenceRemapping(TestContext& t) {
             failedOwner.version = DRW::AC1032;
             failedOwner.binFile = binary;
             failedOwner.setResolvedBackgroundHandles({0x921u});
+            failedOwner.setResolvedLiveSectionHandles({0x925u});
             failedOwner.setReferenceResolver(
                 [unresolved](std::uint32_t source) {
                     return source == unresolved ? 0u : source;
@@ -6451,6 +6455,7 @@ void testViewReferenceRemapping(TestContext& t) {
             failedView.m_visualStyleHandle = 0x922u;
             failedView.baseUCS_ID = 0x923u;
             failedView.namedUCS_ID = 0x924u;
+            failedView.m_liveSectionHandle = 0x925u;
             t.expect(!failedOwner.writeView(&failedView)
                          && failedOutput.str().empty(),
                      "unresolved VIEW reference preserves destination");
@@ -6460,6 +6465,7 @@ void testViewReferenceRemapping(TestContext& t) {
             retryOwner.version = DRW::AC1032;
             retryOwner.binFile = binary;
             retryOwner.setResolvedBackgroundHandles({0x921u});
+            retryOwner.setResolvedLiveSectionHandles({0x925u});
             retryOwner.setReferenceResolver(resolverValue);
             retryOwner.writer = binary
                 ? std::unique_ptr<dxfWriter>(
@@ -6475,6 +6481,7 @@ void testViewReferenceRemapping(TestContext& t) {
             correctedView.m_visualStyleHandle = 0x922u;
             correctedView.baseUCS_ID = 0x923u;
             correctedView.namedUCS_ID = 0x924u;
+            correctedView.m_liveSectionHandle = 0x925u;
             t.expect(retryOwner.writeView(&correctedView),
                      "VIEW accepts corrected fresh-writer retry");
         }

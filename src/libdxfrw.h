@@ -854,6 +854,21 @@ public:
     const std::vector<std::uint32_t>& resolvedSunHandles() const noexcept {
         return m_resolvedSunHandles;
     }
+    /*!< Register SECTIONOBJECT source handles uniquely resolved by the
+     * adapter's VIEW LiveSection graph. Direct codec callers have no resolved
+     * targets by default and remain fail-closed. */
+    void setResolvedLiveSectionHandles(
+            const std::vector<std::uint32_t>& handles) {
+        setBoundedResolvedWriteInput(
+            handles, m_resolvedLiveSectionHandles,
+            ResolvedLiveSectionHandlesInput);
+    }
+    void setResolvedLiveSectionHandles(
+            std::vector<std::uint32_t>&& handles) {
+        setBoundedResolvedWriteInput(
+            std::move(handles), m_resolvedLiveSectionHandles,
+            ResolvedLiveSectionHandlesInput);
+    }
     /*!< Register GROUP objects to typed-emit in the regenerated OBJECTS section
      * (DXF write path only). Each carries its name/description/flags and the
      * member entity SOURCE handles (DRW_Group::m_entityHandles). The codec mints
@@ -1312,7 +1327,8 @@ private:
         ResolvedTableStyleHandlesInput = 1u << 0,
         ResolvedTableStyleBaseIdsInput = 1u << 1,
         ResolvedBackgroundHandlesInput = 1u << 2,
-        ResolvedSunHandlesInput = 1u << 3
+        ResolvedSunHandlesInput = 1u << 3,
+        ResolvedLiveSectionHandlesInput = 1u << 4
     };
     template <class T>
     void setBoundedResolvedWriteInput(
@@ -2012,6 +2028,8 @@ private:
     std::vector<std::uint32_t> m_resolvedBackgroundHandles;
     /// SUN targets whose VPORT/VIEWPORT hard-owner graph was validated by the adapter.
     std::vector<std::uint32_t> m_resolvedSunHandles;
+    /// SECTIONOBJECT targets uniquely resolved by the adapter's VIEW graph.
+    std::vector<std::uint32_t> m_resolvedLiveSectionHandles;
     std::uint8_t m_dxfResolvedWriteInputRejectedMask{0u};
     /// Source linetypes used to attach metadata to canonical mandatory rows.
     std::vector<DRW_LType> m_canonicalLineTypeMetadata;

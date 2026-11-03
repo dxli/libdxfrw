@@ -63594,14 +63594,19 @@ bool validateUcsBaseHeaderTargets(const dx_data& data,
 
 bool validateLayoutGraph(const dx_data& data, DRW::Version targetVersion,
                          const std::vector<std::uint32_t>& resolvedSunHandles,
+                         std::vector<std::uint32_t>& resolvedLiveSectionHandles,
                          std::string& failure) {
     failure = "layout graph is incomplete or ambiguous";
+    resolvedLiveSectionHandles.clear();
+    std::vector<std::uint32_t> stagedLiveSectionHandles;
     const auto reject = [&failure](const std::string& reason) {
         failure = reason;
         return false;
     };
     const auto validateUcsAndViewportTargets =
-        [&data, &reject, &resolvedSunHandles, targetVersion](
+        [&data, &reject, &resolvedSunHandles,
+         &resolvedLiveSectionHandles, &stagedLiveSectionHandles,
+         targetVersion](
             std::unordered_set<std::uint32_t>* structuralHandles) {
         std::unordered_map<std::uint32_t, const DRW_UCS*> ucsByHandle;
         std::unordered_set<std::string> ucsNames;
@@ -63635,8 +63640,6 @@ bool validateLayoutGraph(const dx_data& data, DRW::Version targetVersion,
         for (const DRW_View& view : data.views) {
             if (view.m_sunHandle != 0)
                 return reject("VIEW 361 SUN ownership graph is not retained for DXF export");
-            if (view.m_liveSectionHandle != 0)
-                return reject("VIEW code-334 LiveSection target graph is not retained for DXF export");
             const bool hasUcsReferences = view.namedUCS_ID != 0
                 || view.baseUCS_ID != 0;
             if ((!view.hasUCS && hasUcsReferences)
@@ -63690,6 +63693,37 @@ bool validateLayoutGraph(const dx_data& data, DRW::Version targetVersion,
                 && !collectEntityHandles(block->ent, false))
                 return reject("VIEWPORT entity type does not match its payload");
         }
+
+        std::unordered_set<std::uint32_t> uniqueLiveSectionTargets;
+        for (const DRW_View& view : data.views) {
+            const std::uint32_t sourceHandle = view.m_liveSectionHandle;
+            if (sourceHandle == 0u)
+                continue;
+            if (targetVersion < DRW::AC1021)
+                return reject(
+                    "VIEW code-334 LiveSection requires an AC1021+ target");
+            const auto target = entitiesByHandle.find(sourceHandle);
+            const auto* section = target == entitiesByHandle.end()
+                ? nullptr
+                : dynamic_cast<const DRW_SectionObject*>(target->second);
+            if (target == entitiesByHandle.end()
+                || ambiguousEntityHandles.count(sourceHandle) != 0u
+                || section == nullptr || section->eType != DRW::SECTION
+                || section->handle != sourceHandle)
+                return reject(
+                    "VIEW code-334 LiveSection does not resolve uniquely to a SECTIONOBJECT entity");
+            // The SECTIONOBJECT group-360 target is not yet admitted by the
+            // adapter's source/output graph. Keep this live-view profile
+            // bounded until SECTION_SETTINGS closure is implemented.
+            if (section->m_sectionSettingsHandle != 0u)
+                return reject(
+                    "VIEW code-334 SECTIONOBJECT has an unqualified SECTION_SETTINGS dependency");
+            if (uniqueLiveSectionTargets.insert(sourceHandle).second)
+                stagedLiveSectionHandles.push_back(sourceHandle);
+        }
+        std::sort(stagedLiveSectionHandles.begin(),
+                  stagedLiveSectionHandles.end());
+        resolvedLiveSectionHandles = stagedLiveSectionHandles;
 
         if (data.sourceFormat == dx_source_format::DWG) {
             std::unordered_map<std::uint32_t, const DRW_Block_Record*>
@@ -67681,6 +67715,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     m_dxfMaterialWriteRequired = false;
     m_backgroundHandlesToWrite.clear();
     m_sunHandlesToWrite.clear();
+    m_liveSectionHandlesToWrite.clear();
     m_spatialFilterHandlesToWrite.clear();
     const auto reportPreflightFailure = [debug, requireResolvedOwners](
             const std::string& stage) {
@@ -68666,6 +68701,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     }
     std::string layoutGraphFailure;
     if (!validateLayoutGraph(*cData, v, m_sunHandlesToWrite,
+                              m_liveSectionHandlesToWrite,
                               layoutGraphFailure)) {
         reportPreflightFailure(layoutGraphFailure);
         return false;
@@ -71174,6 +71210,13 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             return false;
         }
     }
+    for (const std::uint32_t handle : m_liveSectionHandlesToWrite) {
+        if (!dxfW->reserveHandle(handle)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
     for (const std::uint32_t handle : m_dxfMaterialHandles) {
         if (!dxfW->reserveHandle(handle)) {
             delete dxfW;
@@ -71521,6 +71564,13 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         }
     }
     for (const std::uint32_t handle : m_sunHandlesToWrite) {
+        if (!remapFixedCollision(handle)) {
+            delete dxfW;
+            dxfW = nullptr;
+            return false;
+        }
+    }
+    for (const std::uint32_t handle : m_liveSectionHandlesToWrite) {
         if (!remapFixedCollision(handle)) {
             delete dxfW;
             dxfW = nullptr;
@@ -72362,6 +72412,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     dxfW->setResolvedBackgroundHandles(
         std::move(m_backgroundHandlesToWrite));
     dxfW->setResolvedSunHandles(std::move(m_sunHandlesToWrite));
+    dxfW->setResolvedLiveSectionHandles(m_liveSectionHandlesToWrite);
     exportStage = "DXF serialization and staged-output proof";
     bool success = false;
     if (appendedAcdsDataSection) {

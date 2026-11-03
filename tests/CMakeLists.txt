@@ -2434,6 +2434,10 @@ add_test(NAME libdxfrw_rendering_model_replay
     COMMAND libdxfrw_dxf_fixture_tests --rendering-model-replay)
 set_tests_properties(libdxfrw_rendering_model_replay PROPERTIES
     LABELS "fast;dxf;render;model;source" TIMEOUT 30)
+add_test(NAME libdxfrw_view_live_section_reference_closure
+    COMMAND libdxfrw_dxf_fixture_tests --view-live-section-reference-closure)
+set_tests_properties(libdxfrw_view_live_section_reference_closure PROPERTIES
+    LABELS "fast;dxf;view;section;graph;transaction" TIMEOUT 30)
 add_test(NAME libdxfrw_rendering_model_failures
     COMMAND libdxfrw_table_content_dxf_tests --rendering-model-failures)
 set_tests_properties(libdxfrw_rendering_model_failures PROPERTIES

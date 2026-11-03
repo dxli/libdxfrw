@@ -8380,6 +8380,8 @@ bool dxfRW::writeView(DRW_View *ent){
     };
     const bool hasUcsReferences = ent != nullptr
         && (ent->namedUCS_ID != 0 || ent->baseUCS_ID != 0);
+    const bool hasLiveSectionReference = ent != nullptr
+        && ent->m_liveSectionHandle != 0u;
     if (!preflightTableEntry(ent)
         || !ent->validateDxf(version)
         // VIEW group 79 is part of the UCS payload only when group 72 is set.
@@ -8396,7 +8398,12 @@ bool dxfRW::writeView(DRW_View *ent){
                          ent->m_backgroundHandle)
                 == m_resolvedBackgroundHandles.end())
         || ent->m_sunHandle != 0
-        || ent->m_liveSectionHandle != 0) {
+        || (hasLiveSectionReference
+            && (version < DRW::AC1021
+                || std::find(m_resolvedLiveSectionHandles.begin(),
+                             m_resolvedLiveSectionHandles.end(),
+                             ent->m_liveSectionHandle)
+                    == m_resolvedLiveSectionHandles.end()))) {
         m_writeError = true;
         return false;
     }
@@ -8412,6 +8419,9 @@ bool dxfRW::writeView(DRW_View *ent){
     const std::uint32_t emittedNamedUcsHandle =
         version > DRW::AC1009 && ent->hasUCS && ent->namedUCS_ID != 0u
             ? emittedReference(ent->namedUCS_ID) : 0u;
+    const std::uint32_t emittedLiveSectionHandle =
+        hasLiveSectionReference
+            ? emittedReference(ent->m_liveSectionHandle) : 0u;
     if ((ent->m_backgroundHandle != 0u
          && version > DRW::AC1018
          && (emittedBackgroundHandle == 0u
@@ -8427,7 +8437,10 @@ bool dxfRW::writeView(DRW_View *ent){
         || (ent->namedUCS_ID != 0u && ent->hasUCS
             && version > DRW::AC1009
             && (emittedNamedUcsHandle == 0u
-                || emittedNamedUcsHandle == DRW::NoHandle)))
+                || emittedNamedUcsHandle == DRW::NoHandle))
+        || (hasLiveSectionReference
+            && (emittedLiveSectionHandle == 0u
+                || emittedLiveSectionHandle == DRW::NoHandle)))
         return failDxfWrite();
     RecordStateScope state(*this, ent);
     DxfWriterRecordScope record(*writer);
@@ -8511,6 +8524,8 @@ bool dxfRW::writeView(DRW_View *ent){
         writer->writeInt16(63, static_cast<int>(ent->m_ambientColor));
         if (ent->m_backgroundHandle != 0)
             writer->writeString(332, toHexStr(emittedBackgroundHandle));
+        if (hasLiveSectionReference)
+            writer->writeString(334, toHexStr(emittedLiveSectionHandle));
         if (ent->m_visualStyleHandle != 0)
             writer->writeString(348, toHexStr(emittedVisualStyleHandle));
         if (ent->m_sunHandle != 0)

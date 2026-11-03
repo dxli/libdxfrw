@@ -7363,6 +7363,161 @@ void testViewLiveSectionFailClosed(TestContext& t) {
     }
 }
 
+void testViewLiveSectionReferenceClosure(TestContext& t) {
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-view-live-section-closure-" + std::to_string(nonce));
+    std::error_code error;
+    if (!std::filesystem::create_directory(directory, error) || error) {
+        t.expect(false, "temporary VIEW LiveSection closure directory is available");
+        return;
+    }
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code error;
+            std::filesystem::remove_all(path, error);
+        }
+    } cleanup{directory};
+
+    const std::string sentinel = "LiveSection refusal sentinel";
+    for (const bool binary : {false, true}) {
+        const auto input = directory
+            / (binary ? "source-binary.dxf" : "source-ascii.dxf");
+        t.expect(writeViewReferenceControl(
+                     input, binary, 334, "LIVE_SECTION_VIEW"),
+                 "generated VIEW LiveSection source is complete");
+        dx_data data;
+        dx_iface adapter;
+        const bool imported = adapter.fileImport(input.string(), &data, false);
+        const auto sourceView = std::find_if(
+            data.views.begin(), data.views.end(), [](const DRW_View& view) {
+                return view.name == "LIVE_SECTION_VIEW";
+            });
+        t.expect(imported && sourceView != data.views.end()
+                     && sourceView->m_liveSectionHandle == 0x777u,
+                 "generated source VIEW retains its code-334 target identity");
+        if (!imported || sourceView == data.views.end())
+            continue;
+
+        const auto refusalPreservesDestination = [&](
+                const std::filesystem::path& path, DRW::Version version,
+                const char* label) {
+            {
+                std::ofstream output(path,
+                    std::ios::binary | std::ios::trunc);
+                output << sentinel;
+            }
+            const bool rejected = !adapter.fileExport(
+                path.string(), version, binary, &data, false);
+            std::ifstream output(path, std::ios::binary);
+            const std::string bytes(
+                (std::istreambuf_iterator<char>(output)), {});
+            t.expect(rejected && bytes == sentinel, label);
+        };
+
+        // Existing entity identity is insufficient unless it is the right
+        // runtime type and unique in the complete retained entity census.
+        auto* wrongKind = new DRW_Point();
+        wrongKind->handle = sourceView->m_liveSectionHandle;
+        data.mBlock->ent.push_back(wrongKind);
+        refusalPreservesDestination(
+            directory / (binary ? "wrong-kind-binary.dxf"
+                                : "wrong-kind-ascii.dxf"),
+            DRW::AC1027,
+            "VIEW LiveSection rejects a same-handle non-SECTIONOBJECT target");
+        data.mBlock->ent.pop_back();
+        delete wrongKind;
+
+        auto* section = new DRW_SectionObject();
+        section->handle = sourceView->m_liveSectionHandle;
+        section->m_name = "LIVE_SECTION_TARGET";
+        data.mBlock->ent.push_back(section);
+
+        section->m_sectionSettingsHandle = 0x788u;
+        refusalPreservesDestination(
+            directory / (binary ? "settings-binary.dxf"
+                                : "settings-ascii.dxf"),
+            DRW::AC1027,
+            "VIEW LiveSection rejects an unclosed SECTION_SETTINGS dependency");
+        section->m_sectionSettingsHandle = 0u;
+
+        auto* duplicate = new DRW_SectionObject(*section);
+        data.mBlock->ent.push_back(duplicate);
+        refusalPreservesDestination(
+            directory / (binary ? "duplicate-binary.dxf"
+                                : "duplicate-ascii.dxf"),
+            DRW::AC1027,
+            "VIEW LiveSection rejects duplicate SECTIONOBJECT source identities");
+        data.mBlock->ent.pop_back();
+        delete duplicate;
+
+        refusalPreservesDestination(
+            directory / (binary ? "old-version-binary.dxf"
+                                : "old-version-ascii.dxf"),
+            DRW::AC1018,
+            "VIEW LiveSection refuses a target version without SECTIONOBJECT output");
+
+        const auto outputPath = directory
+            / (binary ? "closed-binary.dxf" : "closed-ascii.dxf");
+        const bool exported = adapter.fileExport(
+            outputPath.string(), DRW::AC1027, binary, &data, false);
+        std::uint32_t emittedViewReference = 0u;
+        std::uint32_t emittedSectionHandle = 0u;
+        if (exported) {
+            std::ifstream output(outputPath, std::ios::binary);
+            if (binary)
+                output.seekg(22);
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&output))
+                : std::unique_ptr<dxfReader>(new dxfReaderAscii(&output));
+            std::string recordName;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    continue;
+                }
+                if (recordName == "VIEW" && code == 334)
+                    emittedViewReference = reader->getHandleString();
+                else if (recordName == "SECTIONOBJECT" && code == 5)
+                    emittedSectionHandle = reader->getHandleString();
+            }
+        }
+
+        dx_data readback;
+        dx_iface verifier;
+        const bool read = exported && verifier.fileImport(
+            outputPath.string(), &readback, false);
+        const auto readView = std::find_if(
+            readback.views.begin(), readback.views.end(),
+            [](const DRW_View& view) {
+                return view.name == "LIVE_SECTION_VIEW";
+            });
+        const DRW_SectionObject* readSection = nullptr;
+        if (readback.mBlock != nullptr) {
+            for (const DRW_Entity* entity : readback.mBlock->ent) {
+                const auto* candidate =
+                    dynamic_cast<const DRW_SectionObject*>(entity);
+                if (candidate != nullptr
+                    && candidate->m_name == "LIVE_SECTION_TARGET")
+                    readSection = candidate;
+            }
+        }
+        t.expect(read && readView != readback.views.end()
+                     && readSection != nullptr
+                     && emittedViewReference != 0u
+                     && emittedViewReference == emittedSectionHandle
+                     && readView->m_liveSectionHandle
+                         == readSection->handle
+                     && readView->m_liveSectionHandle
+                         == emittedViewReference,
+                 binary
+                     ? "binary VIEW code-334 maps to the emitted SECTIONOBJECT and survives fresh readback"
+                     : "ASCII VIEW code-334 maps to the emitted SECTIONOBJECT and survives fresh readback");
+    }
+}
+
 bool viewRecordHasCode(const std::filesystem::path& path, bool binary,
                       const std::string& viewName, int targetCode) {
     std::ifstream input(path, std::ios::binary);
@@ -65692,6 +65847,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testViewLiveSectionFailClosed(context);
         std::cout << "VIEW code-334 LiveSection fail-closed export: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--view-live-section-reference-closure") {
+        TestContext context;
+        testViewLiveSectionReferenceClosure(context);
+        std::cout << "VIEW code-334 LiveSection graph closure: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

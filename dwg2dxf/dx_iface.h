@@ -1131,6 +1131,15 @@ public:
                 }
                 target->second.emitted = emitted;
             }
+            // VIEW code 334 is emitted before BLOCK bodies. Reserve the
+            // uniquely validated SECTIONOBJECT target identities now so the
+            // forward references and the later entity records share one ID.
+            for (std::uint32_t source : m_liveSectionHandlesToWrite) {
+                if (dxfW->preallocateEntityHandle(source) == 0u) {
+                    (void)dxfW->writeTable(nullptr);
+                    return;
+                }
+            }
             // LEADER code 340 is a hard reference and may point forward in
             // the physical entity sequence. Reserve typed annotation targets
             // before any table/owner records consume output handles.
@@ -3576,6 +3585,7 @@ private:
     std::vector<std::uint32_t> m_spatialFilterHandlesToWrite;
     std::vector<std::uint32_t> m_backgroundHandlesToWrite;
     std::vector<std::uint32_t> m_sunHandlesToWrite;
+    std::vector<std::uint32_t> m_liveSectionHandlesToWrite;
     std::vector<std::uint32_t> m_sortDictionaryHandles;
     std::vector<std::uint32_t> m_sortOwnerHandles;
     std::vector<DRW_SortEntsTable> m_sortEmissionTables;

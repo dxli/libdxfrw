@@ -385,6 +385,13 @@ required field, role, or output gap.
 **Rendering:** close only the unqualified engine/class-revision/schema and
 optional-presence profiles; establish source-backed active/global/environment
 and background/live-section relations; then qualify native rendering semantics.
+A generated VIEW code-334 adapter route now requires one unique retained
+SECTIONOBJECT target, preallocates/remaps its entity identity before VIEW output,
+and verifies ASCII/Binary group-334-to-group-5 readback. It admits only AC1021+
+output with a null SECTIONOBJECT group-360 SECTION_SETTINGS reference; missing,
+wrong-kind, duplicate, unclosed-settings and pre-AC1021 profiles remain atomic
+refusals. Physical producer/source-owner evidence and native live-section
+behavior remain open; see the [LiveSection graph receipt](docs/research/p5-view-live-section-graph-closure-2026-11-03.json).
 SUNSTUDY/MOTIONPATH/CURVEPATH/POINTPATH/OBJECTPTR physical producer coverage
 and native plotting/scene semantics remain open; generated record-identity and
 reference round-trips are transport evidence only (see the [SUNSTUDY receipt](docs/research/p5-sunstudy-record-identity-remapping-2026-11-03.json),
