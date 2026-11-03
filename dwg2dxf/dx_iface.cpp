@@ -72371,9 +72371,20 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             "MotionPath/CurvePath/PointPath/ObjectPtr callback capture incomplete or over record/byte limit");
         return false;
     }
+    if (!cData->motionPaths.empty() || !cData->curvePaths.empty()
+        || !cData->pointPaths.empty() || !cData->objectPtrs.empty()) {
+        reportPreflightFailure(
+            "MotionPath/CurvePath/PointPath/ObjectPtr records are retained, but no source- and graph-qualified adapter output path is available");
+        return false;
+    }
     if (cData->sunStudyCaptureFailed) {
         reportPreflightFailure(
             "SUNSTUDY callback capture incomplete, malformed, or over record/byte limit");
+        return false;
+    }
+    if (!cData->sunStudies.empty()) {
+        reportPreflightFailure(
+            "SUNSTUDY records are retained, but no source- and graph-qualified adapter output path is available");
         return false;
     }
     if (cData->lightListCaptureFailed) {
@@ -72381,9 +72392,19 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             "LIGHTLIST callback capture incomplete, malformed, or over record/item/byte limit");
         return false;
     }
+    if (!cData->lightLists.empty()) {
+        reportPreflightFailure(
+            "LIGHTLIST records are retained, but no source- and graph-qualified adapter output path is available");
+        return false;
+    }
     if (cData->geoMapImageCaptureFailed) {
         reportPreflightFailure(
             "GEOMAPIMAGE callback capture incomplete or over record/byte limit");
+        return false;
+    }
+    if (!cData->geoMapImages.empty()) {
+        reportPreflightFailure(
+            "GEOMAPIMAGE records are retained, but no source- and graph-qualified adapter output path is available");
         return false;
     }
     if (cData->sourceFormat == dx_source_format::DWG

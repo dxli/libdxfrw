@@ -18769,6 +18769,43 @@ bool plotSettingsCallbackCaptureLimitsFailClosed() {
     return true;
 }
 
+bool adapterRefusesUnqualifiedCapturedObjects(
+        dx_data& data, const std::string& diagnosticToken,
+        const std::string& fileStem) {
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch().count();
+    const std::filesystem::path output =
+        std::filesystem::temp_directory_path()
+        / (fileStem + "-" + std::to_string(nonce) + ".dxf");
+    const std::string sentinel = "existing unqualified-object destination\n";
+    {
+        std::ofstream existing(output, std::ios::binary | std::ios::trunc);
+        existing.write(sentinel.data(),
+                       static_cast<std::streamsize>(sentinel.size()));
+        if (!existing)
+            return false;
+    }
+
+    std::ostringstream diagnostics;
+    std::streambuf* previousErrorBuffer =
+        std::cerr.rdbuf(diagnostics.rdbuf());
+    dx_iface writer;
+    const bool outputSucceeded = writer.fileExport(
+        output.string(), DRW::AC1027, false, &data, true);
+    std::cerr.rdbuf(previousErrorBuffer);
+
+    std::string actualDestination;
+    {
+        std::ifstream existing(output, std::ios::binary);
+        actualDestination.assign(std::istreambuf_iterator<char>(existing),
+                                 std::istreambuf_iterator<char>());
+    }
+    std::error_code ignored;
+    std::filesystem::remove(output, ignored);
+    return !outputSucceeded && actualDestination == sentinel
+        && diagnostics.str().find(diagnosticToken) != std::string::npos;
+}
+
 bool actionPathObjectCallbackCaptureLimitsFailClosed() {
     const auto expectedBytes = [](const DRW_TableEntry& value,
                                   std::size_t inlineBytes) {
@@ -18917,6 +18954,11 @@ bool actionPathObjectCallbackCaptureLimitsFailClosed() {
         || diagnostics.str().find("MotionPath/CurvePath/PointPath/ObjectPtr")
             == std::string::npos)
         return fail("action-path OBJECTS capture failure did not block output with a specific diagnostic");
+
+    if (!adapterRefusesUnqualifiedCapturedObjects(
+            captured, "no source- and graph-qualified adapter output path",
+            "libdxfrw-action-path-unqualified"))
+        return fail("retained action-path OBJECTS records were dropped or changed an existing destination instead of refusing output");
 
     std::cout << "bounded MotionPath/CurvePath/PointPath/ObjectPtr typed callback capture passes; output qualification remains separate\n";
     return true;
@@ -19075,6 +19117,11 @@ bool sunStudyCallbackCaptureLimitsFailClosed() {
             == std::string::npos)
         return fail("SUNSTUDY callback capture failure did not block output before publication");
 
+    if (!adapterRefusesUnqualifiedCapturedObjects(
+            captured, "SUNSTUDY records are retained",
+            "libdxfrw-sunstudy-unqualified"))
+        return fail("retained SUNSTUDY record changed the destination instead of refusing unqualified output");
+
     std::cout << "bounded SUNSTUDY typed callback retention and limits pass; graph/output qualification remains separate\n";
     return true;
 }
@@ -19191,6 +19238,11 @@ bool lightListCallbackCaptureLimitsFailClosed() {
             == std::string::npos)
         return fail("LIGHTLIST capture failure did not block output before publication");
 
+    if (!adapterRefusesUnqualifiedCapturedObjects(
+            captured, "LIGHTLIST records are retained",
+            "libdxfrw-lightlist-unqualified"))
+        return fail("retained LIGHTLIST record changed the destination instead of refusing unqualified output");
+
     std::cout << "bounded LIGHTLIST callback retention and limits pass; target/output qualification remains separate\n";
     return true;
 }
@@ -19290,6 +19342,11 @@ bool geoMapImageCallbackCaptureLimitsFailClosed() {
         || diagnostics.str().find("GEOMAPIMAGE callback capture")
             == std::string::npos)
         return fail("GEOMAPIMAGE capture failure did not block output before publication");
+
+    if (!adapterRefusesUnqualifiedCapturedObjects(
+            captured, "GEOMAPIMAGE records are retained",
+            "libdxfrw-geomapimage-unqualified"))
+        return fail("retained GEOMAPIMAGE record changed the destination instead of refusing unqualified output");
 
     std::cout << "bounded GEOMAPIMAGE callback retention passes; asset/source/rendering qualification remains separate\n";
     return true;

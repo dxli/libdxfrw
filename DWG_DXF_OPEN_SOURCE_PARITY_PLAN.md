@@ -429,14 +429,20 @@ producer coverage and native plotting/scene semantics remain open; generated
 record-identity and reference round-trips are transport evidence only (see the [SUNSTUDY receipt](docs/research/p5-sunstudy-record-identity-remapping-2026-11-03.json),
 [scene-path receipt](docs/research/p5-scene-path-record-identity-remapping-2026-11-03.json),
 and [path-carrier receipt](docs/research/p5-pointpath-objectptr-record-identity-remapping-2026-11-03.json)).
+The adapter now explicitly refuses output when any retained SUNSTUDY record is
+present until source and reference closure are qualified, preventing silent
+loss; see the [callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json).
 The adapter also retains typed LIGHTLIST callbacks within aggregate record,
 item, and byte bounds ([capture receipt](docs/research/p5-lightlist-callback-retention-2026-11-03.json));
 source-span/owner binding, LIGHT target resolution, emitted graph closure, and
-native lighting semantics remain open.
+native lighting semantics remain open. The adapter now refuses output for a
+retained LIGHTLIST until those gates pass, rather than dropping it silently
+(see the [callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json)).
 The adapter also retains bounded GEOMAPIMAGE callback fields
 ([capture receipt](docs/research/p5-geomapimage-callback-retention-2026-11-03.json));
 source asset binding, exact producer fields, output closure, and native map
-rendering remain open.
+rendering remain open. A retained record now triggers strict adapter refusal
+until those gates pass (see the [callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json)).
 Keep physical SUN ownership constrained to the documented VPORT/VIEWPORT
 hard-owner route. The AC1024 aerial sample's SUN `0x24C` is owned by XRECORD
 `0x246`, so it is not evidence for a valid alternate source-owner route; keep
@@ -1156,6 +1162,14 @@ eligible reader. The exact package and environment result are in the
   limits ([capture receipt](docs/research/p8-action-path-object-callback-retention-2026-11-03.json));
   field/source-span matching, owner and handle-role closure, output binding,
   strict ASCII/Binary readback, and native consumer semantics remain open.
+  Strict adapter preflight now refuses any nonempty retained action-path list
+  with a specific diagnostic until a source- and graph-qualified output route
+  exists; this prevents successful conversion from silently dropping these
+  records. The focused capture-limit selector now checks that refusal and
+  destination preservation. SUNSTUDY, LIGHTLIST and GEOMAPIMAGE retention uses
+  the same fail-closed rule ([callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json)).
+  This guard is not output support and does not reduce the remaining
+  qualification work.
   Keep unsupported DWG profiles refused until those gates pass.
 - The optional desktop and native Linux/Windows FreeCAD CMake gates now bind to
   the existing tracked `ordinary_enc_AC1027.dwg`; a registration-only configure
