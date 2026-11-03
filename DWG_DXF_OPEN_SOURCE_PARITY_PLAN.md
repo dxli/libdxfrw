@@ -713,7 +713,8 @@ eligible reader. The exact package and environment result are in the
   [WIPEOUT reference receipt](docs/research/p8-wipeout-dxf-reference-remapping-2026-11-03.json).
   The low-level MLINE writer now gives its group-340 MLINESTYLE pointer the
   same resolver precedence and remap fallback; the [MLINE reference receipt](docs/research/p4-mline-dxf-reference-remapping-2026-11-03.json)
-  records the focused ASCII/Binary control. This does not prove target
+  records the focused ASCII/Binary control, including unresolved-target refusal
+  and corrected retry. This does not prove target
   existence or close the MLINESTYLE dependency graph.
   The concrete adapter still atomically refuses nonzero definition/reactor
   handles until P4's source-bound object graph providers and output bindings

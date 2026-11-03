@@ -3,7 +3,7 @@
   "id": "p4-mline-dxf-reference-remapping-2026-11-03",
   "date": "2026-11-03",
   "phase": "P4",
-  "status": "LOW_LEVEL_MLINESTYLE_REFERENCE_TRANSLATION_PASS",
+  "status": "LOW_LEVEL_MLINESTYLE_REFERENCE_TRANSLATION_AND_REFUSAL_PASS",
   "supportClaimEffect": "none",
   "scope": "Make low-level MLINE serialization use the final configured reference identity for its MLINESTYLE link.",
   "issue": {
@@ -19,6 +19,7 @@
     "behavior": [
       "The MLINE style handle uses the configured resolver when present, and treats its result as the final output identity.",
       "Without a resolver, it uses the established source-handle remap fallback.",
+      "A nonzero source style handle whose resolved identity is zero or NoHandle is refused before record publication.",
       "The existing source/output graph and style-name consistency checks are unchanged."
     ]
   },
@@ -27,13 +28,15 @@
     "encodings": ["ASCII DXF", "Binary DXF"],
     "cases": [
       "existing remap route to the emitted MLINESTYLE identity",
-      "reference resolver overrides a conflicting remap for the group-340 link"
+      "reference resolver overrides a conflicting remap for the group-340 link",
+      "unresolved nonzero target preserves the destination in ASCII and Binary",
+      "corrected reference succeeds with a fresh writer"
     ],
     "validation": {
       "buildCommand": "cmake --build build-gcc --target libdxfrw_wave1_tests --parallel 4",
       "buildResult": "PASS",
       "focusedTestCommand": "ctest --test-dir build-gcc -R '^libdxfrw_mline_style_validation$' --output-on-failure",
-      "focusedTestResult": "PASS: 1/1; MLINESTYLE validation including both ASCII/Binary resolver precedence controls, 0.47 seconds",
+      "focusedTestResult": "PASS: 1/1; MLINESTYLE validation including ASCII/Binary resolver precedence, unresolved-target refusal, and corrected retry",
       "diffCheck": "PASS: git diff --check"
     }
   },

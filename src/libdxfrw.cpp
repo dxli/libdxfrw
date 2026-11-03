@@ -12049,7 +12049,9 @@ bool dxfRW::writeMLine(DRW_MLine *ent) {
             : remapObjectHandle(ent->styleHandle);
     }
     if (ent->styleHandle == DRW::NoHandle
-        || emittedStyleHandle == DRW::NoHandle)
+        || (ent->styleHandle != 0u
+            && (emittedStyleHandle == 0u
+                || emittedStyleHandle == DRW::NoHandle)))
         return failDxfWrite();
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "MLINE");

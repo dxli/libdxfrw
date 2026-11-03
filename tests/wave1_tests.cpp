@@ -5900,6 +5900,37 @@ void testMLineStyleReferenceHandleRemapping(TestContext& t) {
                      && std::count(resolvedTags.begin(), resolvedTags.end(),
                                    "340:A500") == 0,
                  "MLINE code 340 uses the final resolver identity");
+
+        std::ostringstream missingOutput;
+        dxfRW missingWriter("");
+        missingWriter.version = DRW::AC1032;
+        missingWriter.binFile = binary;
+        missingWriter.setReferenceResolver([](std::uint32_t source) {
+            return source == 0x500u ? 0u : source;
+        });
+        missingWriter.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&missingOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&missingOutput));
+        t.expect(!missingWriter.writeMLine(&mline)
+                     && missingOutput.str().empty(),
+                 "unresolved MLINESTYLE target preserves destination");
+
+        std::ostringstream retryOutput;
+        dxfRW retryWriter("");
+        retryWriter.version = DRW::AC1032;
+        retryWriter.binFile = binary;
+        retryWriter.setReferenceResolver([](std::uint32_t source) {
+            return source == 0x500u ? 0xB500u : source;
+        });
+        retryWriter.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        t.expect(retryWriter.writeMLine(&mline),
+                 "MLINE accepts corrected fresh-writer retry");
     }
 
     for (const bool binary : {false, true}) {
