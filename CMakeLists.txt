@@ -767,6 +767,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_wave1_tests --view-reference-remapping)
     set_tests_properties(libdxfrw_view_reference_remapping PROPERTIES
         LABELS "fast;dxf;writer;view;references;generated" TIMEOUT 15)
+    add_test(NAME libdxfrw_viewport_reference_remapping
+        COMMAND libdxfrw_wave1_tests --viewport-reference-remapping)
+    set_tests_properties(libdxfrw_viewport_reference_remapping PROPERTIES
+        LABELS "fast;dxf;writer;viewport;references;generated" TIMEOUT 15)
     add_test(NAME libdxfrw_scene_object_reference_remapping
         COMMAND libdxfrw_wave1_tests --scene-object-reference-remapping)
     set_tests_properties(libdxfrw_scene_object_reference_remapping PROPERTIES

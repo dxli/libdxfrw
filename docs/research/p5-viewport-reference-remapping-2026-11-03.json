@@ -16,12 +16,12 @@
     "url": "https://help.autodesk.com/cloudhelp/2025/ENU/AutoCAD-DXF/files/GUID-2602B0FB-02E4-4B9A-B03C-B1D904753D34.htm",
     "supports": "The listed group-code meanings for frozen-layer, background, shade-plot, clip-boundary, UCS, visual-style, and SUN handles."
   },
-  "mapping_policy": "For nonzero source handles, use the configured reference resolver when present; otherwise use remapObjectHandle. Existing graph preflight for background and SUN source handles is unchanged.",
+  "mapping_policy": "For nonzero source handles emitted in the selected version, use the configured reference resolver when present; otherwise use remapObjectHandle. Refuse zero or NoHandle output identities before writing the record. Existing graph preflight for background and SUN source handles is unchanged.",
   "validation": {
     "input": "Generated in-memory VIEWPORT; background and SUN source handles were registered with the low-level writer. No DWG/DXF fixture was added.",
     "formats": ["ASCII DXF", "Binary DXF"],
     "selectors": ["libdxfrw_wave1_tests --viewport-reference-remapping"],
-    "result": "PASS for exact group/value order under resolver precedence and remap fallback. The check includes the common entity's explicit group-348 zero carrier before the nonzero VIEWPORT group-348 visual-style reference.",
+    "result": "PASS for exact group/value order under resolver precedence and remap fallback. The check includes the common entity's explicit group-348 zero carrier before the nonzero VIEWPORT group-348 visual-style reference. Each of the eight nonzero references refuses a zero resolver result without output in ASCII/Binary and succeeds after corrected fresh-writer retry.",
     "build": "cmake --build build-gcc --target libdxfrw_wave1_tests --parallel 4"
   },
   "qualification_limits": [

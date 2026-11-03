@@ -12809,6 +12809,69 @@ bool dxfRW::writeViewport(DRW_Viewport *ent) {
         m_writeError = true;
         return false;
     }
+    const std::uint32_t emittedBackgroundHandle =
+        version > DRW::AC1018 && ent->backgroundHandle != 0u
+            ? emittedReference(ent->backgroundHandle) : 0u;
+    const std::uint32_t emittedShadePlotHandle =
+        version > DRW::AC1018 && ent->shadePlotHandle != 0u
+            ? emittedReference(ent->shadePlotHandle) : 0u;
+    const std::uint32_t emittedClipBoundaryHandle =
+        version > DRW::AC1014 && ent->clipBoundaryHandle != 0u
+            ? emittedReference(ent->clipBoundaryHandle) : 0u;
+    const std::uint32_t emittedNamedUcsHandle =
+        version > DRW::AC1014 && ent->namedUcsHandle != 0u
+            ? emittedReference(ent->namedUcsHandle) : 0u;
+    const std::uint32_t emittedBaseUcsHandle =
+        version > DRW::AC1014 && ent->baseUcsHandle != 0u
+            ? emittedReference(ent->baseUcsHandle) : 0u;
+    const std::uint32_t emittedVisualStyleHandle =
+        version > DRW::AC1018 && ent->visualStyleHandle != 0u
+            ? emittedReference(ent->visualStyleHandle) : 0u;
+    const std::uint32_t emittedSunHandle =
+        version > DRW::AC1018 && ent->m_sunHandle != 0u
+            ? emittedReference(ent->m_sunHandle) : 0u;
+    const auto isResolvedOptional = [](std::uint32_t source,
+                                       std::uint32_t emitted) {
+        return source == 0u
+            || (source != DRW::NoHandle && emitted != 0u
+                && emitted != DRW::NoHandle);
+    };
+    if ((version > DRW::AC1018
+         && !isResolvedOptional(ent->backgroundHandle,
+                                emittedBackgroundHandle))
+        || (version > DRW::AC1018
+            && !isResolvedOptional(ent->shadePlotHandle,
+                                   emittedShadePlotHandle))
+        || (version > DRW::AC1014
+            && !isResolvedOptional(ent->clipBoundaryHandle,
+                                   emittedClipBoundaryHandle))
+        || (version > DRW::AC1014
+            && !isResolvedOptional(ent->namedUcsHandle,
+                                   emittedNamedUcsHandle))
+        || (version > DRW::AC1014
+            && !isResolvedOptional(ent->baseUcsHandle,
+                                   emittedBaseUcsHandle))
+        || (version > DRW::AC1018
+            && !isResolvedOptional(ent->visualStyleHandle,
+                                   emittedVisualStyleHandle))
+        || (version > DRW::AC1018
+            && !isResolvedOptional(ent->m_sunHandle, emittedSunHandle)))
+        return failDxfWrite();
+    std::vector<std::uint32_t> emittedFrozenLayerHandles;
+    if (version > DRW::AC1009) {
+        if (!DRW::reserve(emittedFrozenLayerHandles,
+                          static_cast<int>(ent->frozenLayerHandles.size())))
+            return failDxfWrite();
+        for (const std::uint32_t source : ent->frozenLayerHandles) {
+            if (source == 0u)
+                continue;
+            const std::uint32_t emitted = emittedReference(source);
+            if (source == DRW::NoHandle || emitted == 0u
+                || emitted == DRW::NoHandle)
+                return failDxfWrite();
+            emittedFrozenLayerHandles.push_back(emitted);
+        }
+    }
     EntityRecordScope scope(*this, ent);
     if (!writer->writeString(0, "VIEWPORT")) {
         m_writeError = true;
@@ -12868,10 +12931,8 @@ bool dxfRW::writeViewport(DRW_Viewport *ent) {
         writer->writeDouble(132, ent->ucsYAxis.z);
         writer->writeDouble(146, ent->ucsElevation);
         writer->writeInt16(79, ent->ucsOrthographicType);
-        for (const std::uint32_t ref : ent->frozenLayerHandles) {
-            if (ref != 0)
-                writer->writeString(331, toHexStr(emittedReference(ref)));
-        }
+        for (const std::uint32_t ref : emittedFrozenLayerHandles)
+            writer->writeString(331, toHexStr(ref));
     }
     if (version > DRW::AC1015)
         writer->writeInt16(170, ent->shadePlotMode);
@@ -12886,30 +12947,23 @@ bool dxfRW::writeViewport(DRW_Viewport *ent) {
         if (!ent->ambientColorName.empty())
             writer->writeUtf8String(431, ent->ambientColorName);
         if (ent->backgroundHandle != 0)
-            writer->writeString(332, toHexStr(
-                emittedReference(ent->backgroundHandle)));
+            writer->writeString(332, toHexStr(emittedBackgroundHandle));
         if (ent->shadePlotHandle != 0)
-            writer->writeString(333, toHexStr(
-                emittedReference(ent->shadePlotHandle)));
+            writer->writeString(333, toHexStr(emittedShadePlotHandle));
     }
     if (version > DRW::AC1014) {
         if (ent->clipBoundaryHandle != 0)
-            writer->writeString(340, toHexStr(
-                emittedReference(ent->clipBoundaryHandle)));
+            writer->writeString(340, toHexStr(emittedClipBoundaryHandle));
         if (ent->namedUcsHandle != 0)
-            writer->writeString(345, toHexStr(
-                emittedReference(ent->namedUcsHandle)));
+            writer->writeString(345, toHexStr(emittedNamedUcsHandle));
         if (ent->baseUcsHandle != 0)
-            writer->writeString(346, toHexStr(
-                emittedReference(ent->baseUcsHandle)));
+            writer->writeString(346, toHexStr(emittedBaseUcsHandle));
     }
     if (version > DRW::AC1018) {
         if (ent->visualStyleHandle != 0)
-            writer->writeString(348, toHexStr(
-                emittedReference(ent->visualStyleHandle)));
+            writer->writeString(348, toHexStr(emittedVisualStyleHandle));
         if (ent->m_sunHandle != 0)
-            writer->writeString(361, toHexStr(
-                emittedReference(ent->m_sunHandle)));
+            writer->writeString(361, toHexStr(emittedSunHandle));
     }
     if (!ent->extData.empty())
         result = writeExtData(ent->extData) && result;

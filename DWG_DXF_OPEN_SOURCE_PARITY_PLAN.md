@@ -315,7 +315,9 @@ The low-level VIEWPORT writer now uses resolver-first/fallback-remap output
 identities for its modeled frozen-layer, background, shade-plot, clipping,
 named/base UCS, visual-style and SUN references. A generated ASCII/Binary
 control checks every field and preserves the explicit common-entity group-348
-null carrier beside the viewport's nonnull visual-style reference; see the
+null carrier beside the viewport's nonnull visual-style reference. Nonzero
+references now refuse zero/NoHandle output identities before record emission;
+per-edge refusal and corrected retry are covered in both encodings; see the
 [reference-remapping receipt](docs/research/p5-viewport-reference-remapping-2026-11-03.json).
 This closes only low-level ID translation. Physical producer/target-role proof,
 strict graph closure and native VIEWPORT rendering remain open, as do the

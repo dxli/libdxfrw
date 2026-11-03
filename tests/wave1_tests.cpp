@@ -3443,6 +3443,64 @@ void testViewportReferenceRemapping(TestContext& t) {
                          : "VIEWPORT fields emit source-handle remaps");
         }
     }
+
+    for (const bool binary : {false, true}) {
+        for (const std::uint32_t unresolved : {
+                 0x901u, 0x902u, 0x903u, 0x904u,
+                 0x905u, 0x906u, 0x907u, 0x908u}) {
+            std::ostringstream failedOutput;
+            dxfRW failedOwner("");
+            failedOwner.version = DRW::AC1032;
+            failedOwner.binFile = binary;
+            failedOwner.setResolvedBackgroundHandles({0x902u});
+            failedOwner.setResolvedSunHandles({0x908u});
+            failedOwner.setReferenceResolver(
+                [unresolved](std::uint32_t source) {
+                    return source == unresolved ? 0u : source;
+                });
+            failedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&failedOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&failedOutput));
+            DRW_Viewport failedViewport;
+            failedViewport.frozenLayerHandles = {0x901u};
+            failedViewport.backgroundHandle = 0x902u;
+            failedViewport.shadePlotHandle = 0x903u;
+            failedViewport.clipBoundaryHandle = 0x904u;
+            failedViewport.namedUcsHandle = 0x905u;
+            failedViewport.baseUcsHandle = 0x906u;
+            failedViewport.visualStyleHandle = 0x907u;
+            failedViewport.m_sunHandle = 0x908u;
+            t.expect(!failedOwner.writeViewport(&failedViewport)
+                         && failedOutput.str().empty(),
+                     "unresolved VIEWPORT reference preserves destination");
+
+            std::ostringstream retryOutput;
+            dxfRW retryOwner("");
+            retryOwner.version = DRW::AC1032;
+            retryOwner.binFile = binary;
+            retryOwner.setResolvedBackgroundHandles({0x902u});
+            retryOwner.setResolvedSunHandles({0x908u});
+            retryOwner.setReferenceResolver(resolverValue);
+            retryOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&retryOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&retryOutput));
+            DRW_Viewport correctedViewport;
+            correctedViewport.frozenLayerHandles = {0x901u};
+            correctedViewport.backgroundHandle = 0x902u;
+            correctedViewport.shadePlotHandle = 0x903u;
+            correctedViewport.clipBoundaryHandle = 0x904u;
+            correctedViewport.namedUcsHandle = 0x905u;
+            correctedViewport.baseUcsHandle = 0x906u;
+            correctedViewport.visualStyleHandle = 0x907u;
+            correctedViewport.m_sunHandle = 0x908u;
+            t.expect(retryOwner.writeViewport(&correctedViewport),
+                     "VIEWPORT accepts corrected fresh-writer retry");
+        }
+    }
 }
 
 void testVportReferenceRemapping(TestContext& t) {
