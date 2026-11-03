@@ -692,15 +692,32 @@ public:
         retainTypedEntity<DRW_Polyline>(data);
     }
     virtual void addMesh(const DRW_Mesh& data) override{
+        if (data.eType != DRW::MESH || typeid(data) != typeid(DRW_Mesh)) {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
+            return;
+        }
         retainTypedEntity<DRW_Mesh>(data);
     }
     virtual void addSpline(const DRW_Spline* data) override{
-        if (data != nullptr)
-            retainTypedEntity<DRW_Spline>(*data);
+        if (data == nullptr)
+            return;
+        if (data->eType != DRW::SPLINE || typeid(*data) != typeid(DRW_Spline)) {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
+            return;
+        }
+        retainTypedEntity<DRW_Spline>(*data);
     }
     virtual void addHelix(const DRW_Helix* data) override{
-        if (data != nullptr)
-            retainTypedEntity<DRW_Helix>(*data);
+        if (data == nullptr)
+            return;
+        if (data->eType != DRW::HELIX || typeid(*data) != typeid(DRW_Helix)) {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
+            return;
+        }
+        retainTypedEntity<DRW_Helix>(*data);
     }
     // ¿para que se usa?
     virtual void addKnot(const DRW_Entity& data) override{(void)data;}
@@ -1019,7 +1036,7 @@ public:
         switch (data->eType) {
         case DRW::PLANESURFACE: {
             const auto* typed = dynamic_cast<const DRW_PlaneSurface*>(data);
-            if (typed != nullptr)
+            if (typed != nullptr && typeid(*data) == typeid(DRW_PlaneSurface))
                 retainTypedEntity<DRW_PlaneSurface>(*typed);
             else
                 rejectMismatchedSurface();
@@ -1027,7 +1044,8 @@ public:
         }
         case DRW::EXTRUDEDSURFACE: {
             const auto* typed = dynamic_cast<const DRW_ExtrudedSurface*>(data);
-            if (typed != nullptr)
+            if (typed != nullptr
+                && typeid(*data) == typeid(DRW_ExtrudedSurface))
                 retainTypedEntity<DRW_ExtrudedSurface>(*typed);
             else
                 rejectMismatchedSurface();
@@ -1035,7 +1053,8 @@ public:
         }
         case DRW::REVOLVEDSURFACE: {
             const auto* typed = dynamic_cast<const DRW_RevolvedSurface*>(data);
-            if (typed != nullptr)
+            if (typed != nullptr
+                && typeid(*data) == typeid(DRW_RevolvedSurface))
                 retainTypedEntity<DRW_RevolvedSurface>(*typed);
             else
                 rejectMismatchedSurface();
@@ -1043,7 +1062,8 @@ public:
         }
         case DRW::SWEPTSURFACE: {
             const auto* typed = dynamic_cast<const DRW_SweptSurface*>(data);
-            if (typed != nullptr)
+            if (typed != nullptr
+                && typeid(*data) == typeid(DRW_SweptSurface))
                 retainTypedEntity<DRW_SweptSurface>(*typed);
             else
                 rejectMismatchedSurface();
@@ -1051,7 +1071,8 @@ public:
         }
         case DRW::LOFTEDSURFACE: {
             const auto* typed = dynamic_cast<const DRW_LoftedSurface*>(data);
-            if (typed != nullptr)
+            if (typed != nullptr
+                && typeid(*data) == typeid(DRW_LoftedSurface))
                 retainTypedEntity<DRW_LoftedSurface>(*typed);
             else
                 rejectMismatchedSurface();
@@ -1059,7 +1080,8 @@ public:
         }
         case DRW::NURBSURFACE: {
             const auto* typed = dynamic_cast<const DRW_NurbsSurface*>(data);
-            if (typed != nullptr)
+            if (typed != nullptr
+                && typeid(*data) == typeid(DRW_NurbsSurface))
                 retainTypedEntity<DRW_NurbsSurface>(*typed);
             else
                 rejectMismatchedSurface();
@@ -1075,9 +1097,25 @@ public:
     void linkUnderlay(const DRW_UnderlayDefinition *data) override;
 
     virtual void addModelerGeometry(const DRW_ModelerGeometry& data) override{
+        if (typeid(data) != typeid(DRW_ModelerGeometry)
+            || (data.eType != DRW::E3DSOLID
+                && data.eType != DRW::REGION
+                && data.eType != DRW::BODY)) {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
+            return;
+        }
         retainTypedEntity<DRW_ModelerGeometry>(data);
     }
     virtual void addModelerGeometry(DRW_ModelerGeometry&& data) override{
+        if (typeid(data) != typeid(DRW_ModelerGeometry)
+            || (data.eType != DRW::E3DSOLID
+                && data.eType != DRW::REGION
+                && data.eType != DRW::BODY)) {
+            if (cData != nullptr)
+                cData->typedEntityCaptureFailed = true;
+            return;
+        }
         retainTypedEntity<DRW_ModelerGeometry>(std::move(data));
     }
 

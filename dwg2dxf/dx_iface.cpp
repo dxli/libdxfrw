@@ -74353,20 +74353,47 @@ void dx_iface::writeEntity(DRW_Entity* e){
     case DRW::REVOLVEDSURFACE:
     case DRW::SWEPTSURFACE:
     case DRW::LOFTEDSURFACE:
-    case DRW::NURBSURFACE:
-        if (auto* surface = dynamic_cast<DRW_Surface*>(e)) {
-            written = dxfW->writeSurface(surface);
-        } else {
-            // The public eType may have been mutated independently from the
-            // object's runtime type. Reject the export instead of silently
-            // omitting this entity and publishing a partial drawing.
-            dxfW->writeRawDxfEntity(nullptr);
+    case DRW::NURBSURFACE: {
+        DRW_Surface* surface = nullptr;
+        switch (e->eType) {
+        case DRW::PLANESURFACE:
+            surface = exactEntityForDxfWrite<DRW_PlaneSurface>(
+                e, DRW::PLANESURFACE);
+            break;
+        case DRW::EXTRUDEDSURFACE:
+            surface = exactEntityForDxfWrite<DRW_ExtrudedSurface>(
+                e, DRW::EXTRUDEDSURFACE);
+            break;
+        case DRW::REVOLVEDSURFACE:
+            surface = exactEntityForDxfWrite<DRW_RevolvedSurface>(
+                e, DRW::REVOLVEDSURFACE);
+            break;
+        case DRW::SWEPTSURFACE:
+            surface = exactEntityForDxfWrite<DRW_SweptSurface>(
+                e, DRW::SWEPTSURFACE);
+            break;
+        case DRW::LOFTEDSURFACE:
+            surface = exactEntityForDxfWrite<DRW_LoftedSurface>(
+                e, DRW::LOFTEDSURFACE);
+            break;
+        case DRW::NURBSURFACE:
+            surface = exactEntityForDxfWrite<DRW_NurbsSurface>(
+                e, DRW::NURBSURFACE);
+            break;
+        default:
+            break;
         }
+        if (surface != nullptr)
+            written = dxfW->writeSurface(surface);
+        else
+            dxfW->writeRawDxfEntity(nullptr);
         break;
+    }
     case DRW::E3DSOLID:
     case DRW::REGION:
     case DRW::BODY:
-        if (auto* modeler = dynamic_cast<DRW_ModelerGeometry*>(e)) {
+        if (auto* modeler = exactEntityForDxfWrite<DRW_ModelerGeometry>(
+                e, e->eType)) {
             written = dxfW->writeModelerGeometry(modeler);
         } else {
             // The public eType can be changed independently of the runtime

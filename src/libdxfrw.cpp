@@ -15275,21 +15275,20 @@ bool dxfRW::writeSurface(DRW_Surface *ent){
     const bool runtimeTypeMatches = [&]() {
         switch (ent->eType) {
         case DRW::PLANESURFACE:
-            // Keep the historical base-class representation for a plane,
-            // while rejecting another derived subtype whose public eType was
-            // mutated to PLANESURFACE.
-            return dynamic_cast<const DRW_PlaneSurface*>(ent) != nullptr
+            // Preserve the two historical built-in plane representations, but
+            // never slice a user-derived surface with additional payload.
+            return typeid(*ent) == typeid(DRW_PlaneSurface)
                 || typeid(*ent) == typeid(DRW_Surface);
         case DRW::EXTRUDEDSURFACE:
-            return dynamic_cast<const DRW_ExtrudedSurface*>(ent) != nullptr;
+            return typeid(*ent) == typeid(DRW_ExtrudedSurface);
         case DRW::REVOLVEDSURFACE:
-            return dynamic_cast<const DRW_RevolvedSurface*>(ent) != nullptr;
+            return typeid(*ent) == typeid(DRW_RevolvedSurface);
         case DRW::SWEPTSURFACE:
-            return dynamic_cast<const DRW_SweptSurface*>(ent) != nullptr;
+            return typeid(*ent) == typeid(DRW_SweptSurface);
         case DRW::LOFTEDSURFACE:
-            return dynamic_cast<const DRW_LoftedSurface*>(ent) != nullptr;
+            return typeid(*ent) == typeid(DRW_LoftedSurface);
         case DRW::NURBSURFACE:
-            return dynamic_cast<const DRW_NurbsSurface*>(ent) != nullptr;
+            return typeid(*ent) == typeid(DRW_NurbsSurface);
         default:
             return false;
         }
@@ -15653,6 +15652,11 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     }
     if (!preflightEntity(ent))
         return false;
+    if (typeid(*ent) != typeid(DRW_ModelerGeometry)
+        || modelerGeometryDxfName(ent->eType) == nullptr)
+        return rejectDxfWriteWithReason(
+            "3DSOLID/REGION/BODY",
+            "runtime type or public entity tag is not exact");
     const bool writeAc1027Shell = version >= DRW::AC1027;
     if (!writeAc1027Shell
         && (ent->m_hasDxfModelerFlag || ent->m_hasDxfModelerUid))

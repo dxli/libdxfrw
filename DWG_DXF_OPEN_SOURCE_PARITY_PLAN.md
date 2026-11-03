@@ -894,6 +894,16 @@ eligible reader. The exact package and environment result are in the
   [low-level MESH/HELIX receipt](docs/research/p8-mesh-helix-low-level-runtime-dispatch-2026-11-03.json).
   These guards close only subclass-truncation paths; physical producer profiles
   and native semantics remain unqualified.
+  The matching capture boundary now refuses derived MESH/SPLINE/HELIX,
+  surface-subtype and modeler-body callbacks before copying them into narrower
+  built-in records; same-adapter exact callback retry remains available. The
+  adapter dispatch and direct low-level SURFACE/modeler writers also require
+  exact built-in runtime types. Generated ASCII/Binary controls cover callback
+  refusal/retry and direct destination-preserving refusal, exact retry and
+  typed readback for plane-surface and modeler records; see the
+  [3D subclass-admission receipt](docs/research/p8-3d-runtime-subclass-admission-2026-11-03.json).
+  This only prevents runtime-object slicing; it does not qualify payload
+  syntax, physical source breadth, topology/kernel meaning or native consumers.
   The same adapter now checks the HATCH/MPOLYGON subtype boundary in both
   directions: a plain HATCH cannot enter the MPOLYGON writer, and an MPOLYGON
   cannot be serialized as HATCH with its distinct fields dropped. Generated

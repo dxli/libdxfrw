@@ -20284,10 +20284,18 @@ bool meshHelixRuntimeSubclassDispatchGuard() {
     struct DerivedHelix final : DRW_Helix {
         std::string unrepresentedMetadata{"must-not-be-dropped"};
     };
+    struct DerivedPlaneSurface final : DRW_PlaneSurface {
+        std::string unrepresentedMetadata{"must-not-be-dropped"};
+    };
+    struct DerivedModeler final : DRW_ModelerGeometry {
+        DerivedModeler() : DRW_ModelerGeometry(DRW::E3DSOLID) {}
+        std::string unrepresentedMetadata{"must-not-be-dropped"};
+    };
     class DirectWriterAuthor final : public dx_iface {
     public:
+        enum class Kind { Mesh, Helix, Surface, Modeler };
         DRW_Entity* entity{nullptr};
-        bool meshCase{false};
+        Kind kind{Kind::Mesh};
         bool wrote{false};
 
         void writeHeader(DRW_Header& header) override {
@@ -20298,10 +20306,15 @@ bool meshHelixRuntimeSubclassDispatchGuard() {
         void writeEntities() override {
             if (dxfW == nullptr || entity == nullptr)
                 return;
-            if (meshCase)
+            if (kind == Kind::Mesh)
                 wrote = dxfW->writeMesh(dynamic_cast<DRW_Mesh*>(entity));
-            else
+            else if (kind == Kind::Helix)
                 wrote = dxfW->writeHelix(dynamic_cast<DRW_Helix*>(entity));
+            else if (kind == Kind::Surface)
+                wrote = dxfW->writeSurface(dynamic_cast<DRW_Surface*>(entity));
+            else
+                wrote = dxfW->writeModelerGeometry(
+                    dynamic_cast<DRW_ModelerGeometry*>(entity));
         }
         void writeObjects() override {}
         bool finalizeDxfWrite() override { return true; }
@@ -20422,7 +20435,8 @@ bool meshHelixRuntimeSubclassDispatchGuard() {
             dx_data directData;
             DirectWriterAuthor author;
             author.cData = &directData;
-            author.meshCase = meshCase;
+            author.kind = meshCase ? DirectWriterAuthor::Kind::Mesh
+                                   : DirectWriterAuthor::Kind::Helix;
             DerivedMesh derivedMesh;
             DerivedHelix derivedHelix;
             if (meshCase) {
@@ -20521,7 +20535,211 @@ bool meshHelixRuntimeSubclassDispatchGuard() {
             }
         }
     }
+
+    const auto verifyDirectSubclassRefusalAndRetry = [](
+            bool binary, const std::string& entityName,
+            DirectWriterAuthor::Kind kind, DRW_Entity& derived,
+            DRW_Entity& exact, const auto& verifyReadback) {
+        dx_data data;
+        DirectWriterAuthor author;
+        author.cData = &data;
+        author.kind = kind;
+        author.entity = &derived;
+        const auto path = std::filesystem::temp_directory_path()
+            / ("libdxfrw-" + entityName
+               + "-direct-subclass-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        if (std::filesystem::exists(path))
+            return fail("direct " + entityName
+                        + " output path unexpectedly exists");
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{path};
+        const std::string sentinel =
+            entityName + "_DIRECT_SUBCLASS_DESTINATION\n";
+        {
+            std::ofstream existing(path, std::ios::binary);
+            existing << sentinel;
+            if (!existing)
+                return fail("could not create direct " + entityName
+                            + " destination sentinel");
+        }
+        dxfRW writer(path.string().c_str());
+        author.dxfW = &writer;
+        if (writer.write(&author, DRW::AC1027, binary) || author.wrote)
+            return fail("direct low-level " + entityName
+                        + " writer accepted a derived runtime class");
+        {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail("direct low-level " + entityName
+                            + " refusal changed the destination");
+        }
+        author.entity = &exact;
+        author.wrote = false;
+        if (!writer.write(&author, DRW::AC1027, binary) || !author.wrote)
+            return fail("direct exact " + entityName
+                        + " retry did not succeed");
+        dx_data readback;
+        dx_iface reader;
+        if (!reader.fileImport(path.string(), &readback, false)
+            || readback.mBlock == nullptr
+            || readback.mBlock->ent.size() != 1u
+            || !verifyReadback(readback.mBlock->ent.front()))
+            return fail("direct exact " + entityName
+                        + " retry did not preserve typed readback");
+        return true;
+    };
+
+    for (const bool binary : {false, true}) {
+        DerivedPlaneSurface derivedSurface;
+        DRW_PlaneSurface exactSurface;
+        if (!verifyDirectSubclassRefusalAndRetry(
+                binary, "plane-surface", DirectWriterAuthor::Kind::Surface,
+                derivedSurface, exactSurface,
+                [](const DRW_Entity* entity) {
+                    return entity != nullptr
+                        && entity->eType == DRW::PLANESURFACE
+                        && typeid(*entity) == typeid(DRW_PlaneSurface);
+                }))
+            return false;
+
+        DerivedModeler derivedModeler;
+        DRW_ModelerGeometry exactModeler(DRW::E3DSOLID);
+        if (!verifyDirectSubclassRefusalAndRetry(
+                binary, "modeler", DirectWriterAuthor::Kind::Modeler,
+                derivedModeler, exactModeler,
+                [](const DRW_Entity* entity) {
+                    return entity != nullptr
+                        && entity->eType == DRW::E3DSOLID
+                        && typeid(*entity) == typeid(DRW_ModelerGeometry);
+                }))
+            return false;
+    }
     return true;
+}
+
+bool threeDimensionalTypedCallbackExactRuntimeGuard() {
+    struct DerivedMesh final : DRW_Mesh {
+        std::uint32_t unrepresentedState{17u};
+    };
+    struct DerivedSpline final : DRW_Spline {
+        std::uint32_t unrepresentedState{19u};
+    };
+    struct DerivedHelix final : DRW_Helix {
+        std::uint32_t unrepresentedState{23u};
+    };
+    struct DerivedPlaneSurface final : DRW_PlaneSurface {
+        std::uint32_t unrepresentedState{29u};
+    };
+    struct DerivedModeler final : DRW_ModelerGeometry {
+        DerivedModeler() : DRW_ModelerGeometry(DRW::E3DSOLID) {}
+        std::uint32_t unrepresentedState{31u};
+    };
+
+    const auto verifyRefusalAndRetry = [](
+            const char* family, const auto& rejectDerived,
+            const auto& acceptExact, const auto& exactRuntimeType) {
+        dx_data data;
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        rejectDerived(adapter);
+        if (!data.typedEntityCaptureFailed || data.mBlock == nullptr
+            || !data.mBlock->ent.empty()
+            || data.typedEntityRetainedRecords != 0u)
+            return fail(std::string(family)
+                        + " callback retained a derived runtime object by slicing");
+
+        data.typedEntityCaptureFailed = false;
+        acceptExact(adapter);
+        if (data.typedEntityCaptureFailed || data.mBlock->ent.size() != 1u
+            || data.typedEntityRetainedRecords != 1u
+            || !exactRuntimeType(data.mBlock->ent.front()))
+            return fail(std::string(family)
+                        + " exact callback retry did not retain the built-in type");
+        return true;
+    };
+
+    DerivedMesh derivedMesh;
+    if (!verifyRefusalAndRetry(
+            "MESH",
+            [&](dx_iface& adapter) { adapter.addMesh(derivedMesh); },
+            [](dx_iface& adapter) {
+                const DRW_Mesh exact;
+                adapter.addMesh(exact);
+            },
+            [](const DRW_Entity* entity) {
+                return entity != nullptr && entity->eType == DRW::MESH
+                    && typeid(*entity) == typeid(DRW_Mesh);
+            }))
+        return false;
+
+    DerivedSpline derivedSpline;
+    if (!verifyRefusalAndRetry(
+            "SPLINE",
+            [&](dx_iface& adapter) { adapter.addSpline(&derivedSpline); },
+            [](dx_iface& adapter) {
+                const DRW_Spline exact;
+                adapter.addSpline(&exact);
+            },
+            [](const DRW_Entity* entity) {
+                return entity != nullptr && entity->eType == DRW::SPLINE
+                    && typeid(*entity) == typeid(DRW_Spline);
+            }))
+        return false;
+
+    DerivedHelix derivedHelix;
+    if (!verifyRefusalAndRetry(
+            "HELIX",
+            [&](dx_iface& adapter) { adapter.addHelix(&derivedHelix); },
+            [](dx_iface& adapter) {
+                const DRW_Helix exact;
+                adapter.addHelix(&exact);
+            },
+            [](const DRW_Entity* entity) {
+                return entity != nullptr && entity->eType == DRW::HELIX
+                    && typeid(*entity) == typeid(DRW_Helix);
+            }))
+        return false;
+
+    DerivedPlaneSurface derivedPlane;
+    if (!verifyRefusalAndRetry(
+            "PLANESURFACE",
+            [&](dx_iface& adapter) { adapter.addSurface(&derivedPlane); },
+            [](dx_iface& adapter) {
+                const DRW_PlaneSurface exact;
+                adapter.addSurface(&exact);
+            },
+            [](const DRW_Entity* entity) {
+                return entity != nullptr
+                    && entity->eType == DRW::PLANESURFACE
+                    && typeid(*entity) == typeid(DRW_PlaneSurface);
+            }))
+        return false;
+
+    DerivedModeler derivedModeler;
+    return verifyRefusalAndRetry(
+        "3DSOLID",
+        [&](dx_iface& adapter) {
+            adapter.addModelerGeometry(derivedModeler);
+        },
+        [](dx_iface& adapter) {
+            const DRW_ModelerGeometry exact(DRW::E3DSOLID);
+            adapter.addModelerGeometry(exact);
+        },
+        [](const DRW_Entity* entity) {
+            return entity != nullptr && entity->eType == DRW::E3DSOLID
+                && typeid(*entity) == typeid(DRW_ModelerGeometry);
+        });
 }
 
 bool pointCloudAndNavisworksAdapterTransport() {
@@ -65426,7 +65644,8 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--entity-runtime-dispatch")
         return entityRuntimeDispatchGuard()
-                && meshHelixRuntimeSubclassDispatchGuard() ? 0 : 1;
+                && meshHelixRuntimeSubclassDispatchGuard()
+                && threeDimensionalTypedCallbackExactRuntimeGuard() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--point-cloud-adapter-transport")
         return pointCloudAndNavisworksAdapterTransport() ? 0 : 1;
