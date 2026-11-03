@@ -6468,6 +6468,12 @@ bool dxfRW::writeVport(DRW_Vport *ent){
         m_writeError = true;
         return false;
     }
+    const auto emittedReference = [this](std::uint32_t source) {
+        if (source == 0u)
+            return 0u;
+        return m_referenceResolver ? resolveReference(source)
+                                   : remapObjectHandle(source);
+    };
     RecordStateScope state(*this, ent);
     DxfWriterRecordScope record(*writer);
     const std::string emittedName = !dimstyleStd ? "*ACTIVE" : ent->name;
@@ -6559,10 +6565,10 @@ bool dxfRW::writeVport(DRW_Vport *ent){
         writer->writeDouble(146, ent->ucsElevation);
         if (ent->namedUcsHandle != 0)
             writer->writeString(345, toHexStr(
-                remapObjectHandle(ent->namedUcsHandle)));
+                emittedReference(ent->namedUcsHandle)));
         if (ent->baseUcsHandle != 0)
             writer->writeString(346, toHexStr(
-                remapObjectHandle(ent->baseUcsHandle)));
+                emittedReference(ent->baseUcsHandle)));
         if (version > DRW::AC1018) {
             writer->writeInt16(60, ent->gridBehavior);
             writer->writeInt16(61, ent->gridMajorLines);
@@ -6577,7 +6583,7 @@ bool dxfRW::writeVport(DRW_Vport *ent){
                 writer->writeUtf8String(431, ent->ambientColorName);
             if (ent->backgroundHandle != 0)
                 writer->writeString(332, toHexStr(
-                    remapObjectHandle(ent->backgroundHandle)));
+                    emittedReference(ent->backgroundHandle)));
             if (ent->hasDxfShadePlotMode || ent->shadePlotMode != 0)
                 writer->writeInt16(170, ent->shadePlotMode);
             if (ent->hasDxfShadePlotHandle || ent->shadePlotHandle != 0)
@@ -6585,10 +6591,10 @@ bool dxfRW::writeVport(DRW_Vport *ent){
                     remapObjectHandle(ent->shadePlotHandle)));
             if (ent->visualStyleHandle != 0)
                 writer->writeString(348, toHexStr(
-                    remapObjectHandle(ent->visualStyleHandle)));
+                    emittedReference(ent->visualStyleHandle)));
             if (ent->m_sunHandle != 0)
                 writer->writeString(361, toHexStr(
-                    remapObjectHandle(ent->m_sunHandle)));
+                    emittedReference(ent->m_sunHandle)));
     }
     }
     bool result = !writer->hasWriteError();

@@ -271,6 +271,14 @@ This closes only low-level ID translation. Physical producer/target-role proof,
 strict graph closure and native VIEWPORT rendering remain open, as do the
 separate ambiguous VIEWPORT 335/343/344/91 fields described above.
 
+The VPORT table writer now translates its modeled named/base UCS, Background,
+VisualStyle and SUN references through the configured resolver or handle-remap
+fallback, retaining the existing source-registration checks for Background and
+SUN. Generated ASCII/Binary controls verify the reference values and the VPORT
+row's remapped identity; see the [VPORT reference receipt](docs/research/p5-vport-reference-remapping-2026-11-03.json).
+This is serializer transport only. The nonzero VPORT shade-plot handle remains
+refused, and physical target/owner closure and native rendering are open.
+
 Remaining implementation/evidence work includes native dictionary collation,
 eligible physical source profiles for the layer overrides, independent native
 consumer evaluation, any narrowly scoped producer-backed 420/440 compatibility

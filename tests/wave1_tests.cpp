@@ -2713,6 +2713,95 @@ void testViewportReferenceRemapping(TestContext& t) {
     }
 }
 
+void testVportReferenceRemapping(TestContext& t) {
+    const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
+        {0xA100u, 0xAA00u}, {0x911u, 0xA11u}, {0x912u, 0xA12u},
+        {0x913u, 0xA13u}, {0x914u, 0xA14u}, {0x915u, 0xA15u}};
+    const auto resolverValue = [](std::uint32_t source) {
+        switch (source) {
+        case 0x911u: return std::uint32_t{0xB11u};
+        case 0x912u: return std::uint32_t{0xB12u};
+        case 0x913u: return std::uint32_t{0xB13u};
+        case 0x914u: return std::uint32_t{0xB14u};
+        case 0x915u: return std::uint32_t{0xB15u};
+        default: return source;
+        }
+    };
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap(sourceToRemapped);
+            owner.setResolvedBackgroundHandles({0x911u});
+            owner.setResolvedSunHandles({0x915u});
+            if (useResolver)
+                owner.setReferenceResolver(resolverValue);
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_Vport vport;
+            vport.handle = 0xA100u;
+            vport.name = "VIEWPORT_TEST";
+            vport.backgroundHandle = 0x911u;
+            vport.namedUcsHandle = 0x912u;
+            vport.baseUcsHandle = 0x913u;
+            vport.ucsOrthoType = 1;
+            vport.visualStyleHandle = 0x914u;
+            vport.m_sunHandle = 0x915u;
+            const bool wrote = owner.writeVport(&vport)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote, "VPORT references serialize");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::vector<std::pair<int, std::uint32_t>> observed;
+            std::uint32_t emittedRowHandle = 0u;
+            std::string recordName;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (recordName == "VPORT" && code == 5) {
+                    emittedRowHandle = reader->getHandleString();
+                } else if (recordName == "VPORT"
+                           && (code == 332 || code == 345 || code == 346
+                               || code == 348 || code == 361)) {
+                    observed.emplace_back(code, reader->getHandleString());
+                }
+            }
+            const std::vector<std::pair<int, std::uint32_t>> expected =
+                useResolver
+                    ? std::vector<std::pair<int, std::uint32_t>>{
+                          {345, 0xB12u}, {346, 0xB13u}, {332, 0xB11u},
+                          {348, 0xB14u}, {361, 0xB15u}}
+                    : std::vector<std::pair<int, std::uint32_t>>{
+                          {345, 0xA12u}, {346, 0xA13u}, {332, 0xA11u},
+                          {348, 0xA14u}, {361, 0xA15u}};
+            t.expect(ended && emittedRowHandle == 0xAA00u
+                         && observed == expected,
+                     useResolver
+                         ? "VPORT fields emit final resolver identities"
+                         : "VPORT fields emit source-handle remaps");
+        }
+    }
+}
+
 void testDimensionAssociationGraphClosure(TestContext& t) {
     const auto readAssociationTargets = [&t](const std::string& bytes,
                                               bool binary,
@@ -16446,6 +16535,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testViewportReferenceRemapping(focused);
         std::cout << "VIEWPORT reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--vport-reference-remapping") {
+        TestContext focused;
+        testVportReferenceRemapping(focused);
+        std::cout << "VPORT reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
