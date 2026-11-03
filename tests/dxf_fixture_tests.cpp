@@ -134,6 +134,14 @@ public:
     static const DRW_Dictionary* generatedNodSource(const dxfRW& owner) {
         return owner.m_generatedNodSource.get();
     }
+    static const DRW_Dictionary* generatedGroupDictionarySource(
+            const dxfRW& owner) {
+        return owner.m_generatedGroupDictionarySource.get();
+    }
+    static const DRW_Dictionary* generatedImageDictionarySource(
+            const dxfRW& owner) {
+        return owner.m_generatedImageDictionarySource.get();
+    }
     static bool estimateNamedDictObjects(
             const std::vector<DRW_Dictionary>& dicts,
             std::size_t byteLimit, std::size_t& bytes,
@@ -60329,46 +60337,129 @@ void testGroupSetterBounds(TestContext& t) {
 
 void testGeneratedDictionarySourceAllocationFailure(TestContext& t) {
     using Edge = DRW_Dictionary::Entry::DxfHandleCode;
-    const auto makeRoot = [](std::uint32_t handle, const std::string& name,
-                             std::uint32_t child) {
-        auto root = std::make_unique<DRW_Dictionary>();
-        root->handle = handle;
-        root->m_entries.push_back({name, child, Edge::SoftOwner});
-        return root;
+    struct Candidate {
+        std::unique_ptr<DRW_Dictionary> nod;
+        std::unique_ptr<DRW_Dictionary> groups;
+        std::unique_ptr<DRW_Dictionary> images;
     };
-    dxfRW codec("");
-    const bool previousInstalled = codec.setGeneratedDictionarySourceRecords(
-        makeRoot(0xA540u, "PRIOR", 0xA541u), nullptr);
-    auto candidate = makeRoot(0xA550u, "REPLACEMENT", 0xA551u);
-    const std::size_t failuresBefore = materialFailedAllocations;
-    bool allocationRejected = false;
-    {
-        MaterialAllocationFailure failAdmissionMap(0);
-        allocationRejected = !codec.setGeneratedDictionarySourceRecords(
-            std::move(candidate), nullptr);
+    const auto makeCandidate = [](std::uint32_t base, bool withChildren) {
+        Candidate candidate;
+        candidate.nod = std::make_unique<DRW_Dictionary>();
+        candidate.nod->handle = base;
+        if (!withChildren) {
+            candidate.nod->m_entries.push_back(
+                {"ROOT_ENTRY", base + 1u, Edge::SoftOwner});
+            return candidate;
+        }
+
+        candidate.groups = std::make_unique<DRW_Dictionary>();
+        candidate.groups->handle = base + 1u;
+        candidate.groups->parentHandle = base;
+        candidate.groups->m_entries.push_back(
+            {"GROUP_ENTRY", base + 3u, Edge::SoftOwner});
+        candidate.images = std::make_unique<DRW_Dictionary>();
+        candidate.images->handle = base + 2u;
+        candidate.images->parentHandle = base;
+        candidate.images->m_entries.push_back(
+            {"IMAGE_ENTRY", base + 4u, Edge::SoftOwner});
+        candidate.nod->m_entries.push_back(
+            {"ACAD_GROUP", base + 1u, Edge::SoftOwner});
+        candidate.nod->m_entries.push_back(
+            {"ACAD_IMAGE_DICT", base + 2u, Edge::SoftOwner});
+        return candidate;
+    };
+    const auto install = [](dxfRW& codec, Candidate&& candidate) {
+        return codec.setGeneratedDictionarySourceRecords(
+            std::move(candidate.nod), std::move(candidate.groups),
+            std::move(candidate.images), 7u);
+    };
+    const auto isPrior = [](const dxfRW& codec) {
+        const DRW_Dictionary* nod =
+            DxfGroupSetterTestAccess::generatedNodSource(codec);
+        return DxfGroupSetterTestAccess::generatedNodSourceHandle(codec)
+                == 0xA540u
+            && nod != nullptr && nod->m_entries.size() == 1u
+            && nod->m_entries.front().m_name == "ROOT_ENTRY"
+            && nod->m_entries.front().m_handle == 0xA541u
+            && DxfGroupSetterTestAccess::generatedGroupDictionarySource(codec)
+                == nullptr
+            && DxfGroupSetterTestAccess::generatedImageDictionarySource(codec)
+                == nullptr;
+    };
+    const auto isReplacement = [](const dxfRW& codec, bool withChildren) {
+        const DRW_Dictionary* nod =
+            DxfGroupSetterTestAccess::generatedNodSource(codec);
+        if (DxfGroupSetterTestAccess::generatedNodSourceHandle(codec)
+                != 0xA550u
+            || nod == nullptr || nod->m_entries.size()
+                != (withChildren ? 2u : 1u))
+            return false;
+        if (!withChildren)
+            return nod->m_entries.front().m_name == "ROOT_ENTRY"
+                && nod->m_entries.front().m_handle == 0xA551u
+                && DxfGroupSetterTestAccess::generatedGroupDictionarySource(
+                    codec) == nullptr
+                && DxfGroupSetterTestAccess::generatedImageDictionarySource(
+                    codec) == nullptr;
+        const DRW_Dictionary* groups =
+            DxfGroupSetterTestAccess::generatedGroupDictionarySource(codec);
+        const DRW_Dictionary* images =
+            DxfGroupSetterTestAccess::generatedImageDictionarySource(codec);
+        return nod->m_entries[0].m_name == "ACAD_GROUP"
+            && nod->m_entries[0].m_handle == 0xA551u
+            && nod->m_entries[1].m_name == "ACAD_IMAGE_DICT"
+            && nod->m_entries[1].m_handle == 0xA552u
+            && groups != nullptr && groups->handle == 0xA551u
+            && groups->parentHandle == 0xA550u
+            && groups->m_entries.size() == 1u
+            && groups->m_entries.front().m_name == "GROUP_ENTRY"
+            && images != nullptr && images->handle == 0xA552u
+            && images->parentHandle == 0xA550u
+            && images->m_entries.size() == 1u
+            && images->m_entries.front().m_name == "IMAGE_ENTRY";
+    };
+
+    bool allProfilesPassed = true;
+    std::size_t totalFaults = 0u;
+    for (const bool withChildren : {false, true}) {
+        bool reachedPastLastAllocation = false;
+        std::size_t faults = 0u;
+        for (long offset = 0; offset < 128; ++offset) {
+            dxfRW codec("");
+            const bool previousInstalled = install(
+                codec, makeCandidate(0xA540u, false));
+            Candidate candidate = makeCandidate(0xA550u, withChildren);
+            const std::size_t failuresBefore = materialFailedAllocations;
+            bool accepted = false;
+            {
+                MaterialAllocationFailure failure(offset);
+                accepted = install(codec, std::move(candidate));
+            }
+            const bool injected = materialFailedAllocations
+                == failuresBefore + 1u;
+            if (!injected) {
+                const bool complete = previousInstalled && accepted
+                    && isReplacement(codec, withChildren);
+                allProfilesPassed = allProfilesPassed && complete;
+                reachedPastLastAllocation = true;
+                break;
+            }
+
+            ++faults;
+            const bool rejectedAtomically = previousInstalled && !accepted
+                && candidate.nod == nullptr && isPrior(codec);
+            const bool retried = rejectedAtomically
+                && install(codec, makeCandidate(0xA550u, withChildren))
+                && isReplacement(codec, withChildren);
+            allProfilesPassed = allProfilesPassed && rejectedAtomically
+                && retried;
+        }
+        totalFaults += faults;
+        allProfilesPassed = allProfilesPassed && reachedPastLastAllocation
+            && faults > 0u;
     }
-    const DRW_Dictionary* retained =
-        DxfGroupSetterTestAccess::generatedNodSource(codec);
-    const bool priorPreserved = allocationRejected
-        && materialFailedAllocations == failuresBefore + 1u
-        && candidate == nullptr
-        && DxfGroupSetterTestAccess::generatedNodSourceHandle(codec)
-            == 0xA540u
-        && retained != nullptr && retained->m_entries.size() == 1u
-        && retained->m_entries.front().m_name == "PRIOR"
-        && retained->m_entries.front().m_handle == 0xA541u;
-    const bool retried = codec.setGeneratedDictionarySourceRecords(
-        makeRoot(0xA550u, "REPLACEMENT", 0xA551u), nullptr);
-    const DRW_Dictionary* replacement =
-        DxfGroupSetterTestAccess::generatedNodSource(codec);
-    t.expect(previousInstalled && priorPreserved && retried
-                 && DxfGroupSetterTestAccess::generatedNodSourceHandle(codec)
-                     == 0xA550u
-                 && replacement != nullptr
-                 && replacement->m_entries.size() == 1u
-                 && replacement->m_entries.front().m_name == "REPLACEMENT"
-                 && replacement->m_entries.front().m_handle == 0xA551u,
-             "generated dictionary source admission catches allocation failure, preserves prior owned state, consumes the rejected candidate, and accepts retry");
+    t.expect(allProfilesPassed && totalFaults > 2u,
+             "generated NOD/GROUP/IMAGE dictionary admission sweeps every allocation, preserves prior owned state, and accepts same-codec retry after each injected failure");
 }
 
 void testRootDictEntryCountBound(TestContext& t) {
