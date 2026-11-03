@@ -4870,6 +4870,285 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
     }
 }
 
+void testLightListReferenceRemapping(TestContext& t) {
+    class LightListProbe final : public dx_iface {
+    public:
+        void addHeader(const DRW_Header*) override {}
+        void addLightList(const DRW_LightList& value) override {
+            captured = value;
+            found = true;
+        }
+
+        DRW_LightList captured;
+        bool found {false};
+    };
+
+    const auto makeLightList = [](bool invalidExtData = false) {
+        DRW_LightList lightList;
+        lightList.handle = 0xD00u;
+        lightList.parentHandle = 0xA02u;
+        lightList.m_classVersion = 1u;
+        lightList.m_lightCount = 2u;
+        lightList.m_lights = {
+            DRW_LightListEntry{0xB00u, "key-light"},
+            DRW_LightListEntry{0xB01u, "fill-light"}};
+        lightList.reactorHandles = {0xA01u};
+        std::list<DRW_Variant> reactors;
+        reactors.emplace_back(102, std::string("ACAD_REACTORS"));
+        reactors.emplace_back(330, std::string("A00"));
+        reactors.emplace_back(330, std::string("A01"));
+        reactors.emplace_back(102, std::string("}"));
+        lightList.appData.push_back(std::move(reactors));
+        if (invalidExtData)
+            lightList.extData.push_back(new DRW_Variant(
+                1009, std::string("unsupported-xdata-code")));
+        return lightList;
+    };
+    const std::map<std::uint32_t, std::uint32_t> remap = {
+        {0xD00u, 0xAD00u}, {0xA00u, 0xAA00u}, {0xA01u, 0xAA01u},
+        {0xA02u, 0xAA02u}, {0xB00u, 0xAB00u}, {0xB01u, 0xAB01u}};
+
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1021;
+            owner.binFile = binary;
+            owner.setHandleRemap(remap);
+            if (useResolver) {
+                owner.setReferenceResolver([](std::uint32_t source) {
+                    switch (source) {
+                    case 0xA00u: return std::uint32_t{0xBA00u};
+                    case 0xA01u: return std::uint32_t{0xBA01u};
+                    case 0xA02u: return std::uint32_t{0xBA02u};
+                    case 0xB00u: return std::uint32_t{0xBB00u};
+                    case 0xB01u: return std::uint32_t{0xBB01u};
+                    default: return source;
+                    }
+                });
+            }
+            if (binary)
+                output << "AutoCAD Binary DXF\r\n" << static_cast<char>(26)
+                       << '\0';
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+            owner.writer->setVersion("AC1021", true);
+            const bool openedDocument = owner.writer->writeString(0, "SECTION")
+                && owner.writer->writeString(2, "HEADER")
+                && owner.writer->writeString(9, "$ACADVER")
+                && owner.writer->writeString(1, "AC1021")
+                && owner.writer->writeString(0, "ENDSEC")
+                && owner.writer->writeString(0, "SECTION")
+                && owner.writer->writeString(2, "OBJECTS");
+            DRW_LightList lightList = makeLightList();
+            const bool wrote = openedDocument
+                && owner.writeLightList(&lightList)
+                && owner.writer->writeString(0, "ENDSEC")
+                && owner.writer->writeString(0, "EOF");
+            t.expect(wrote, "LIGHTLIST writes its required graph references");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            if (binary)
+                input.seekg(22, std::ios::beg);
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderAscii>(&input));
+            std::vector<std::pair<int, std::string>> observed;
+            std::string recordName;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "LIGHTLIST")
+                        observed.emplace_back(code, recordName);
+                    if (recordName == "EOF") {
+                        ended = true;
+                        break;
+                    }
+                } else if (recordName == "LIGHTLIST") {
+                    if (code == 5 || code == 330) {
+                        observed.emplace_back(
+                            code, std::to_string(reader->getHandleString()));
+                    } else if (code == 90) {
+                        observed.emplace_back(
+                            code, std::to_string(reader->getInt32()));
+                    } else {
+                        observed.emplace_back(code, reader->getString());
+                    }
+                }
+            }
+            const std::uint32_t dictionary = useResolver ? 0xBA00u : 0xAA00u;
+            const std::uint32_t reactor = useResolver ? 0xBA01u : 0xAA01u;
+            const std::uint32_t parent = useResolver ? 0xBA02u : 0xAA02u;
+            const std::uint32_t firstLight = useResolver ? 0xBB00u : 0xAB00u;
+            const std::uint32_t secondLight = useResolver ? 0xBB01u : 0xAB01u;
+            const std::vector<std::pair<int, std::string>> expected = {
+                {0, "LIGHTLIST"}, {5, std::to_string(0xAD00u)},
+                {102, "{ACAD_REACTORS"}, {330, std::to_string(dictionary)},
+                {330, std::to_string(reactor)}, {102, "}"},
+                {330, std::to_string(parent)}, {100, "AcDbLightList"},
+                {90, "1"}, {90, "2"}, {5, std::to_string(firstLight)},
+                {1, "key-light"}, {5, std::to_string(secondLight)},
+                {1, "fill-light"}};
+            t.expect(ended && observed == expected,
+                     useResolver
+                         ? "LIGHTLIST emits exact resolver-mapped field and handle roles"
+                         : "LIGHTLIST emits exact remapped field and handle roles");
+
+            LightListProbe probe;
+            bool typedReadback = false;
+            if (binary) {
+                const auto path = std::filesystem::temp_directory_path()
+                    / ("libdxfrw-lightlist-readback-"
+                       + std::to_string(std::chrono::steady_clock::now()
+                           .time_since_epoch().count())
+                       + ".dxf");
+                struct TempFile final {
+                    std::filesystem::path path;
+                    ~TempFile() {
+                        std::error_code ignored;
+                        std::filesystem::remove(path, ignored);
+                    }
+                } cleanup {path};
+                {
+                    std::ofstream file(path, std::ios::binary);
+                    const std::string bytes = output.str();
+                    file.write(bytes.data(),
+                               static_cast<std::streamsize>(bytes.size()));
+                    typedReadback = file.good();
+                }
+                if (typedReadback) {
+                    const std::string pathString = path.string();
+                    dxfRW typedReader(pathString.c_str());
+                    typedReadback = typedReader.read(&probe, true);
+                }
+            } else {
+                std::string asciiContent = output.str();
+                dxfRW typedReader("generated-lightlist-readback");
+                typedReadback = typedReader.readAscii(
+                    &probe, true, asciiContent);
+            }
+            const DRW_LightList* captured = probe.found
+                ? &probe.captured : nullptr;
+            std::uint32_t readbackDictionary = 0u;
+            t.expect(typedReadback,
+                     "LIGHTLIST generated document parses after write");
+            t.expect(captured != nullptr,
+                     "LIGHTLIST typed parser callback is delivered");
+            if (captured != nullptr) {
+                const bool hasReadbackDictionary =
+                    captured->getAcLightDictionaryHandle(readbackDictionary);
+                t.expect(captured->handle == 0xAD00u
+                             && captured->parentHandle
+                                    == (useResolver ? 0xBA02u : 0xAA02u)
+                             && hasReadbackDictionary
+                             && readbackDictionary == dictionary
+                             && captured->reactorHandles.size() == 1u
+                             && captured->reactorHandles.front() == reactor
+                             && captured->m_lights.size() == 2u
+                             && captured->m_lights[0].m_handle == firstLight
+                             && captured->m_lights[0].m_name == "key-light"
+                             && captured->m_lights[1].m_handle == secondLight
+                             && captured->m_lights[1].m_name == "fill-light",
+                         "LIGHTLIST typed readback preserves references and names");
+            }
+        }
+    }
+
+    for (const bool binary : {false, true}) {
+        for (const std::uint32_t unresolved : {
+                 0xA00u, 0xA01u, 0xA02u, 0xB00u, 0xB01u}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1021;
+            owner.binFile = binary;
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+            owner.writer->writeString(0, "PRESERVE");
+            const std::string before = output.str();
+            owner.setReferenceResolver([unresolved](std::uint32_t source) {
+                return source == unresolved ? 0u : source + 0x10000u;
+            });
+            DRW_LightList lightList = makeLightList();
+            const bool rejected = !owner.writeLightList(&lightList);
+            t.expect(rejected && output.str() == before,
+                     "unresolved LIGHTLIST graph edge preserves destination");
+        }
+
+        std::ostringstream failedOutput;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1021;
+        failedOwner.binFile = binary;
+        failedOwner.setHandleRemap(remap);
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&failedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&failedOutput));
+        failedOwner.writer->writeString(0, "PRESERVE");
+        const std::string beforeFailedRecord = failedOutput.str();
+        DRW_LightList malformed = makeLightList(true);
+        const bool malformedRejected = !failedOwner.writeLightList(&malformed);
+        t.expect(malformedRejected
+                     && failedOutput.str() == beforeFailedRecord
+                     && failedOwner.m_writingContext
+                            .sourceHandleToWrittenObjectMap.count(0xD00u) == 0u,
+                 "late LIGHTLIST XDATA failure rolls back bytes and identity binding");
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1021;
+        retryOwner.binFile = binary;
+        retryOwner.setHandleRemap(remap);
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        DRW_LightList corrected = makeLightList();
+        std::uint32_t emittedIdentity = 0u;
+        const bool retrySucceeded = retryOwner.writeLightList(&corrected);
+        if (retrySucceeded) {
+            std::istringstream input(retryOutput.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderAscii>(&input));
+            std::string recordName;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0)
+                    recordName = reader->getString();
+                else if (recordName == "LIGHTLIST" && code == 5
+                         && emittedIdentity == 0u)
+                    emittedIdentity = reader->getHandleString();
+            }
+        }
+        const auto binding = retryOwner.m_writingContext
+            .sourceHandleToWrittenObjectMap.find(0xD00u);
+        t.expect(retrySucceeded,
+                 "corrected LIGHTLIST retry succeeds");
+        t.expect(emittedIdentity == 0xAD00u,
+                 "corrected LIGHTLIST retry emits its remapped identity");
+        t.expect(binding != retryOwner.m_writingContext
+                                .sourceHandleToWrittenObjectMap.end()
+                     && binding->second == 0xAD00u,
+                 "corrected LIGHTLIST retry binds its remapped identity");
+    }
+}
+
 void testPartialViewingIndexReferenceClosure(TestContext& t) {
     constexpr std::uint32_t indexedSource = 0x901u;
     constexpr std::uint32_t indexedRemapped = 0xA01u;
@@ -21721,6 +22000,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testSceneObjectReferenceRemapping(focused);
         std::cout << "Scene-object reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--lightlist-reference-remapping") {
+        TestContext focused;
+        testLightListReferenceRemapping(focused);
+        std::cout << "LIGHTLIST reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

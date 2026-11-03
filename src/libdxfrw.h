@@ -587,6 +587,9 @@ public:
     bool writeMaterial(DRW_Material *ent);
     bool writeBackground(DRW_Background *ent, const char *recordName);
     bool writeSunStudy(DRW_SunStudy *ent);
+    //! Emit the Autodesk-documented AC1021+ LIGHTLIST profile with remapped
+    //! ACAD_LIGHT owner-dictionary, persistent-reactor, and LIGHT references.
+    bool writeLightList(DRW_LightList *ent);
     bool writeMotionPath(DRW_MotionPath *ent);
     bool writeCurvePath(DRW_CurvePath *ent);
     bool writePointPath(DRW_PointPath *ent);

@@ -34784,6 +34784,207 @@ bool dxfRW::writeBackground(DRW_Background *ent, const char *recordName) {
     return true;
 }
 
+bool dxfRW::writeLightList(DRW_LightList *ent) {
+    // LIGHTLIST is present in Autodesk's 2007 DXF reference (AC1021). Its
+    // first group-330 value inside {ACAD_REACTORS is a required pointer to the
+    // ACAD_LIGHT named-object-dictionary entry, not a reactor.
+    if (version < DRW::AC1021 || writer == nullptr
+        || !preflightTableEntry(ent))
+        return failDxfWrite();
+
+    if (ent->m_lights.size() > DRW_LightList::kMaxLightCount
+        || ent->m_lights.size() > static_cast<std::size_t>(
+               std::numeric_limits<std::int32_t>::max())
+        || ent->m_lightCount != ent->m_lights.size()
+        || ent->m_classVersion > static_cast<std::uint32_t>(
+               std::numeric_limits<std::int32_t>::max()))
+        return failDxfWrite();
+
+    std::uint32_t sourceAcLightDictionary = 0u;
+    if (!ent->getAcLightDictionaryHandle(sourceAcLightDictionary)
+        || sourceAcLightDictionary == 0u
+        || sourceAcLightDictionary == DRW::NoHandle)
+        return failDxfWrite();
+
+    const auto emittedReference = [this](std::uint32_t source) {
+        if (source == 0u || source == DRW::NoHandle)
+            return 0u;
+        return m_referenceResolver ? resolveReference(source)
+                                   : remapObjectHandle(source);
+    };
+    const auto isResolved = [](std::uint32_t emitted) {
+        return emitted != 0u && emitted != DRW::NoHandle;
+    };
+
+    const std::uint32_t emittedAcLightDictionary =
+        emittedReference(sourceAcLightDictionary);
+    if (!isResolved(emittedAcLightDictionary))
+        return failDxfWrite();
+
+    if (static_cast<std::uint32_t>(ent->parentHandle) == DRW::NoHandle)
+        return failDxfWrite();
+    if (ent->parentHandle != 0
+        && !isResolved(emittedReference(
+            static_cast<std::uint32_t>(ent->parentHandle))))
+        return failDxfWrite();
+    if (ent->xDictHandle != 0u
+        && !isResolved(emittedReference(ent->xDictHandle)))
+        return failDxfWrite();
+
+    // The first pointer in the ACAD_REACTORS group is the required dictionary
+    // edge. Every following pointer must agree, in order, with the typed
+    // reactor vector so neither duplicate nor missing references are hidden by
+    // the retained application-data copy.
+    bool foundReactorsGroup = false;
+    std::size_t reactorIndex = 0u;
+    const auto parseApplicationHandle = [](const DRW_Variant& value,
+                                           std::uint32_t& handle) {
+        if (value.type() == DRW_Variant::INTEGER) {
+            handle = static_cast<std::uint32_t>(value.i_val());
+            return handle != 0u;
+        }
+        if (value.type() != DRW_Variant::STRING || value.content.s == nullptr)
+            return false;
+        std::string_view text(*value.content.s);
+        if (text.size() >= 2u && text[0] == '0'
+            && (text[1] == 'x' || text[1] == 'X'))
+            text.remove_prefix(2u);
+        if (text.empty())
+            return false;
+        std::uint64_t parsed = 0u;
+        const auto result = std::from_chars(text.data(),
+                                            text.data() + text.size(),
+                                            parsed, 16);
+        if (result.ec != std::errc{}
+            || result.ptr != text.data() + text.size()
+            || parsed == 0u
+            || parsed > std::numeric_limits<std::uint32_t>::max())
+            return false;
+        handle = static_cast<std::uint32_t>(parsed);
+        return true;
+    };
+    for (const auto& group : ent->appData) {
+        if (group.empty())
+            continue;
+        const DRW_Variant& opener = group.front();
+        if (opener.code() != 102 || opener.type() != DRW_Variant::STRING
+            || opener.content.s == nullptr)
+            continue;
+        std::string_view name(*opener.content.s);
+        if (!name.empty() && name.front() == '{')
+            name.remove_prefix(1u);
+        if (name != "ACAD_REACTORS")
+            continue;
+        if (foundReactorsGroup)
+            return failDxfWrite();
+        foundReactorsGroup = true;
+
+        int depth = 0;
+        bool foundClosingMarker = false;
+        std::size_t pointerIndex = 0u;
+        for (const DRW_Variant& value : group) {
+            if (value.code() == 102) {
+                if (value.type() != DRW_Variant::STRING
+                    || value.content.s == nullptr)
+                    return failDxfWrite();
+                const std::string& marker = *value.content.s;
+                if (depth == 0) {
+                    if (marker.empty() || marker == "}")
+                        return failDxfWrite();
+                    depth = 1;
+                } else if (marker == "}") {
+                    if (--depth != 0)
+                        return failDxfWrite();
+                    foundClosingMarker = true;
+                } else if (!marker.empty() && marker.front() == '{') {
+                    // The documented LIGHTLIST owner/reactor group has no
+                    // nested app-data groups; preserve no ambiguous pointers.
+                    return failDxfWrite();
+                } else {
+                    return failDxfWrite();
+                }
+                continue;
+            }
+            if (depth != 1 || value.code() != 330)
+                continue;
+            std::uint32_t source = 0u;
+            if (!parseApplicationHandle(value, source))
+                return failDxfWrite();
+            if (pointerIndex == 0u) {
+                if (source != sourceAcLightDictionary)
+                    return failDxfWrite();
+            } else {
+                const std::size_t index = pointerIndex - 1u;
+                if (index >= ent->reactorHandles.size()
+                    || ent->reactorHandles[index] != source
+                    || !isResolved(emittedReference(source)))
+                    return failDxfWrite();
+                ++reactorIndex;
+            }
+            ++pointerIndex;
+        }
+        if (!foundClosingMarker || depth != 0 || pointerIndex == 0u
+            || reactorIndex != ent->reactorHandles.size())
+            return failDxfWrite();
+    }
+    if (!foundReactorsGroup)
+        return failDxfWrite();
+
+    std::vector<std::uint32_t> emittedLightHandles;
+    if (!DRW::reserve(emittedLightHandles,
+                      static_cast<int>(ent->m_lights.size())))
+        return failDxfWrite();
+    for (const DRW_LightListEntry& light : ent->m_lights) {
+        if (!isSafeDxfRecordText(light.m_name) || light.m_name.empty())
+            return failDxfWrite();
+        const std::uint32_t emitted = emittedReference(light.m_handle);
+        if (!isResolved(emitted))
+            return failDxfWrite();
+        emittedLightHandles.push_back(emitted);
+    }
+
+    const std::uint32_t sourceHandle = ent->handle;
+    std::uint32_t emittedHandle = sourceHandle == 0u
+        ? 0u : remapObjectHandle(sourceHandle);
+    if (sourceHandle == DRW::NoHandle
+        || (sourceHandle != 0u
+            && (!isResolved(emittedHandle)
+                || isDxfFixedOutputHandle(emittedHandle))))
+        return failDxfWrite();
+
+    RecordStateScope state(*this, ent);
+    if (sourceHandle == 0u) {
+        if (!allocateDxfHandle(emittedHandle))
+            return false;
+    } else if (!reserveHandle(emittedHandle)) {
+        return failDxfWrite();
+    }
+
+    DxfWriterRecordScope record(*writer);
+    writer->writeString(0, "LIGHTLIST");
+    writer->writeString(5, toHexStr(emittedHandle));
+    if (!writeTableEntryAppData(*ent))
+        return false;
+    writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
+    if (m_writeError)
+        return false;
+    writer->writeString(100, "AcDbLightList");
+    writer->writeInt32(90, static_cast<std::int32_t>(ent->m_classVersion));
+    writer->writeInt32(90, static_cast<std::int32_t>(ent->m_lights.size()));
+    for (std::size_t index = 0u; index < ent->m_lights.size(); ++index) {
+        writer->writeString(5, toHexStr(emittedLightHandles[index]));
+        writer->writeUtf8String(1, ent->m_lights[index].m_name);
+    }
+    if ((!ent->extData.empty() && !writeExtData(ent->extData))
+        || writer->hasWriteError() || !preflightDxfWrite()
+        || (sourceHandle != 0u
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit())
+        return failDxfWrite();
+    state.commit();
+    return true;
+}
+
 bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
     if (!preflightTableEntry(ent) || writer == nullptr)
         return false;

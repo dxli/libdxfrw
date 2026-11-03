@@ -441,6 +441,13 @@ Physical DWG source binding, LIGHT target resolution, emitted graph closure,
 and native lighting semantics remain open. The adapter refuses output for a
 retained LIGHTLIST until those gates pass, rather than dropping it silently
 (see the [callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json)).
+The low-level AC1021+ DXF writer now emits the documented LIGHTLIST group order
+and remaps the mandatory ACAD_LIGHT dictionary pointer, actual reactors, owner,
+and named LIGHT references. Generated ASCII/Binary exact-field and typed
+readback controls cover mapped output, unresolved-edge destination preservation,
+and late-failure rollback with corrected retry; this transport slice does not
+qualify physical DWG source binding, complete dictionary/target closure, or
+native lighting semantics ([writer receipt](docs/research/p4-lightlist-dxf-writer-transport-2026-11-03.json)).
 The adapter also retains bounded GEOMAPIMAGE callback fields
 ([capture receipt](docs/research/p5-geomapimage-callback-retention-2026-11-03.json));
 source asset binding, exact producer fields, output closure, and native map

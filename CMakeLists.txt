@@ -850,6 +850,11 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_wave1_tests --scene-object-reference-remapping)
     set_tests_properties(libdxfrw_scene_object_reference_remapping PROPERTIES
         LABELS "fast;dxf;writer;scene;references;generated" TIMEOUT 15)
+    add_test(NAME libdxfrw_lightlist_reference_remapping
+        COMMAND libdxfrw_wave1_tests --lightlist-reference-remapping)
+    set_tests_properties(libdxfrw_lightlist_reference_remapping PROPERTIES
+        LABELS "fast;dxf;writer;objects;references;generated;transaction"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_partialviewingindex_reference_closure
         COMMAND libdxfrw_wave1_tests
             --partialviewingindex-reference-closure)
