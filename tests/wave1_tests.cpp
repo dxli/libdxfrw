@@ -9307,6 +9307,38 @@ void testImageObjectNumericWireKinds(TestContext& t) {
             return writer.writeWipeoutVariables(&variables);
         });
     }
+
+    class TestableWipeoutVariables final : public DRW_WipeoutVariables {
+    public:
+        using DRW_WipeoutVariables::parseCode;
+    };
+    const auto parseFrame = [](std::int32_t wireValue,
+                               std::uint16_t initialValue,
+                               std::uint16_t expectedValue,
+                               bool expectedResult) {
+        std::stringstream input("70\n" + std::to_string(wireValue) + "\n");
+        std::unique_ptr<dxfReader> reader(
+            new dxfReaderAscii(&input));
+        TestableWipeoutVariables variables;
+        variables.m_displayFrame = initialValue;
+        int code = 0;
+        const bool recordRead = reader->readRec(&code);
+        if (!recordRead)
+            return !expectedResult && variables.m_displayFrame == initialValue;
+        return code == 70
+            && variables.parseCode(code, reader) == expectedResult
+            && variables.m_displayFrame == expectedValue;
+    };
+    for (const auto& accepted : {
+             std::pair<std::int32_t, std::uint16_t>{-32768, 32768u},
+             {-1, 65535u}, {0, 0u}, {1, 1u}, {2, 2u}, {32767, 32767u}}) {
+        t.expect(parseFrame(accepted.first, 0x1234u, accepted.second, true),
+                 "WIPEOUTVARIABLES parser retains signed-16-bit group 70 values");
+    }
+    for (const std::int32_t outOfRange : {-32769, 32768, 65535, 65536}) {
+        t.expect(parseFrame(outOfRange, 0x1234u, 0x1234u, false),
+                 "WIPEOUTVARIABLES parser rejects group 70 outside signed-16-bit range without mutation");
+    }
 }
 
 void testSectionObjectIndicatorColorWire(TestContext& t) {

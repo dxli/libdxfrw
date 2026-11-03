@@ -11518,7 +11518,16 @@ bool DRW_RasterVariables::parseDwg(DRW::Version version, dwgBuffer *buf, std::ui
 
 bool DRW_WipeoutVariables::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
     if (code == 70) {   //global display-frame flag
-        m_displayFrame = reader->getInt32();
+        const std::int32_t displayFrame = reader->getInt32();
+        if (displayFrame < std::numeric_limits<std::int16_t>::min()
+            || displayFrame > std::numeric_limits<std::int16_t>::max())
+            return false;
+        // The public carrier is unsigned, but DXF group 70 is a signed
+        // 16-bit wire value. Preserve its 16-bit representation so
+        // unsupported values remain distinguishable and strict output can
+        // refuse them without narrowing aliases (for example, 65536 -> 0).
+        m_displayFrame = static_cast<std::uint16_t>(
+            static_cast<std::int16_t>(displayFrame));
         return true;
     }
     return DRW_TableEntry::parseCode(code, reader);
