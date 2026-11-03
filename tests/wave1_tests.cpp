@@ -8778,6 +8778,106 @@ void testCommonObjectReferenceOutputIdGuard(TestContext& t) {
                      "retained app-data resolver zero omits the optional group");
         }
     }
+
+    const auto writeEntityReference = [](dxfRW& writer, Edge edge,
+                                         std::uint32_t source) {
+        DRW_Line entity;
+        if (edge == Edge::Reactor)
+            entity.reactorHandles = {source};
+        else
+            entity.xDictHandle = source;
+        return writer.writeLine(&entity);
+    };
+    for (const bool binary : {false, true}) {
+        for (const Edge edge : {Edge::Reactor, Edge::ExtensionDictionary}) {
+            if (edge == Edge::Reactor) {
+                std::ostringstream output;
+                dxfRW writer("");
+                writer.version = DRW::AC1032;
+                writer.binFile = binary;
+                if (binary)
+                    writer.writer = std::make_unique<dxfWriterBinary>(&output);
+                else
+                    writer.writer = std::make_unique<dxfWriterAscii>(&output);
+                t.expect(!writeEntityReference(writer, edge, 0u)
+                             && output.str().empty(),
+                         "entity reactor rejects zero source ID atomically");
+            }
+
+            {
+                std::ostringstream output;
+                dxfRW writer("");
+                writer.version = DRW::AC1032;
+                writer.binFile = binary;
+                writer.setHandleRemap({{0x1110u, 0u}});
+                if (binary)
+                    writer.writer = std::make_unique<dxfWriterBinary>(&output);
+                else
+                    writer.writer = std::make_unique<dxfWriterAscii>(&output);
+                t.expect(!writeEntityReference(writer, edge, 0x1110u)
+                             && output.str().empty(),
+                         "entity common reference rejects zero remap ID atomically");
+            }
+
+            {
+                std::ostringstream output;
+                dxfRW writer("");
+                writer.version = DRW::AC1032;
+                writer.binFile = binary;
+                writer.setHandleRemap({{0x1110u, 0xA110u}});
+                if (binary)
+                    writer.writer = std::make_unique<dxfWriterBinary>(&output);
+                else
+                    writer.writer = std::make_unique<dxfWriterAscii>(&output);
+                const bool wrote =
+                    writeEntityReference(writer, edge, 0x1110u);
+                const bool sentinelWritten =
+                    writer.writer->writeString(0, "WIRE_END");
+                bool ended = false;
+                const auto tags = numericWireProjection(output.str(), binary,
+                                                         ended);
+                const char* marker = edge == Edge::Reactor
+                    ? "102:{ACAD_REACTORS" : "102:{ACAD_XDICTIONARY";
+                const char* reference = edge == Edge::Reactor
+                    ? "330:A110" : "360:A110";
+                t.expect(wrote && sentinelWritten && ended,
+                         "entity common reference mapping preserves framing");
+                const auto markerAt =
+                    std::find(tags.begin(), tags.end(), marker);
+                t.expect(markerAt != tags.end()
+                             && tags.end() - markerAt >= 2
+                             && *(markerAt + 1) == reference,
+                         "entity common reference emits exact remapped ID");
+            }
+
+            {
+                std::ostringstream output;
+                dxfRW writer("");
+                writer.version = DRW::AC1032;
+                writer.binFile = binary;
+                writer.setReferenceResolver([](std::uint32_t source) {
+                    return source == 0x1110u ? 0u : source;
+                });
+                if (binary)
+                    writer.writer = std::make_unique<dxfWriterBinary>(&output);
+                else
+                    writer.writer = std::make_unique<dxfWriterAscii>(&output);
+                const bool wrote =
+                    writeEntityReference(writer, edge, 0x1110u);
+                const bool sentinelWritten =
+                    writer.writer->writeString(0, "WIRE_END");
+                bool ended = false;
+                const auto tags = numericWireProjection(output.str(), binary,
+                                                         ended);
+                const char* marker = edge == Edge::Reactor
+                    ? "102:{ACAD_REACTORS" : "102:{ACAD_XDICTIONARY";
+                t.expect(wrote && sentinelWritten && ended,
+                         "entity resolver zero preserves record framing");
+                t.expect(std::find(tags.begin(), tags.end(), marker) == tags.end(),
+                         "entity resolver zero omits the optional edge group");
+            }
+        }
+    }
 }
 
 void testMlineStyleColorAdmission(TestContext& t) {

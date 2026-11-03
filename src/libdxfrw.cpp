@@ -4945,31 +4945,46 @@ bool dxfRW::writeEntityReferenceGroups(const DRW_Entity *ent) {
     const bool hasReactorsAppGroup = hasAppGroup("ACAD_REACTORS");
     const bool hasXDictionaryAppGroup = hasAppGroup("ACAD_XDICTIONARY");
 
+    std::vector<std::uint32_t> reactors;
     if (!ent->reactorHandles.empty() && !hasReactorsAppGroup) {
-        std::vector<std::uint32_t> reactors;
         reactors.reserve(ent->reactorHandles.size());
         for (const std::uint32_t source : ent->reactorHandles) {
+            if (source == 0u) {
+                m_writeError = true;
+                return false;
+            }
             const std::uint32_t emitted = m_referenceResolver
                 ? resolveReference(source) : remapObjectHandle(source);
-            if (!m_referenceResolver || emitted != 0)
+            if (!m_referenceResolver && emitted == 0u) {
+                m_writeError = true;
+                return false;
+            }
+            if (emitted != 0u)
                 reactors.push_back(emitted);
         }
-        if (!reactors.empty()) {
-            writer->writeString(102, "{ACAD_REACTORS");
-            for (const std::uint32_t reactor : reactors)
-                writer->writeString(330, toHexStr(reactor));
-            writer->writeString(102, "}");
+    }
+    const std::uint32_t sourceXDictionary = ent->xDictHandle;
+    std::uint32_t emittedXDictionary = 0u;
+    if (sourceXDictionary != 0u && !hasXDictionaryAppGroup) {
+        emittedXDictionary = m_referenceResolver
+            ? resolveReference(sourceXDictionary)
+            : remapObjectHandle(sourceXDictionary);
+        if (!m_referenceResolver && emittedXDictionary == 0u) {
+            m_writeError = true;
+            return false;
         }
     }
-    if (ent->xDictHandle != 0 && !hasXDictionaryAppGroup) {
-        const std::uint32_t emitted = m_referenceResolver
-            ? resolveReference(ent->xDictHandle)
-            : remapObjectHandle(ent->xDictHandle);
-        if (!m_referenceResolver || emitted != 0) {
-            writer->writeString(102, "{ACAD_XDICTIONARY");
-            writer->writeString(360, toHexStr(emitted));
-            writer->writeString(102, "}");
-        }
+
+    if (!reactors.empty()) {
+        writer->writeString(102, "{ACAD_REACTORS");
+        for (const std::uint32_t reactor : reactors)
+            writer->writeString(330, toHexStr(reactor));
+        writer->writeString(102, "}");
+    }
+    if (emittedXDictionary != 0u) {
+        writer->writeString(102, "{ACAD_XDICTIONARY");
+        writer->writeString(360, toHexStr(emittedXDictionary));
+        writer->writeString(102, "}");
     }
     return !writer->hasWriteError();
 }

@@ -126,6 +126,13 @@ engines.
    These guards prove ID representation and framing only. They do not prove
    target existence, target kind, ownership, or graph closure; malformed or
    unparseable retained values remain on the opaque preservation route.
+   Ordinary entity reactor and extension-dictionary groups now use the same
+   preflight contract: zero source IDs and zero direct-remap results refuse
+   atomically, while resolver-zero optional edges are omitted. Generated
+   ASCII/Binary controls verify exact mapped IDs, omission framing, and rollback
+   ([receipt](docs/research/p4-entity-common-reference-output-id-guard-2026-11-03.json)).
+   This is still ID transport only and does not establish target existence,
+   owner validity, or recursive closure.
    For `PARTIALVIEWINGINDEX`, the generated low-level writer now remaps and
    reserves or allocates group-5 identity, binding the source identity only
    after successful staged emission; group-340 targets must resolve to one
