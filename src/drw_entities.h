@@ -5488,6 +5488,7 @@ public:
     [[nodiscard]] bool validateDxf() const;
 
 private:
+    friend class DxfLeaderDstyleTestAccess;
     std::shared_ptr<DRW_Coord> vertexpoint;   /*!< current control point to add data */
     bool hasVertexCount {false};
     dwgHandle dimStyleH;

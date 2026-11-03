@@ -10262,6 +10262,8 @@ bool dxfRW::writeLeader(DRW_Leader *ent){
         m_writeError = true;
         return false;
     }
+    if (!preflightDimensionStyleName(ent->style, ent->handle))
+        return false;
 
     {
         EntityRecordScope scope(*this, ent);
@@ -10561,38 +10563,45 @@ bool dxfRW::preflightDimensionPictureBlock(
 }
 
 bool dxfRW::preflightDimensionStyle(const DRW_Dimension *dimension) {
-    // DIMENSION group 3 names a DIMSTYLE table record. Resolve it only during
-    // strict full conversion, after TABLES has been emitted; standalone writer
-    // calls retain their historical behavior.
+    if (dimension == nullptr)
+        return true;
+    return preflightDimensionStyleName(dimension->getStyle(),
+                                       dimension->handle);
+}
+
+bool dxfRW::preflightDimensionStyleName(const std::string& styleName,
+                                       std::uint32_t entityHandle) {
+    // DIMENSION and LEADER group 3 name a DIMSTYLE table record. Resolve them
+    // only during strict full conversion, after TABLES has been emitted;
+    // standalone writer calls retain their historical behavior.
     if (!m_requireResolvedBlockOwners || version <= DRW::AC1009
-        || dimension == nullptr
         || (!m_dxfBlockSectionActive && !m_dxfBlockSectionComplete))
         return true;
 
-    if (dimension->getStyle().empty()) {
-        // A DWG DIMENSION carries a hard pointer to its DIMSTYLE. The reader
-        // resolves that pointer to the DXF group-3 name before callback
-        // delivery, retaining an empty name for unresolved non-null targets.
-        // Do not silently emit an unstyled DIMENSION during strict conversion.
+    if (styleName.empty()) {
+        // A DWG DIMENSION or LEADER carries a hard pointer to its DIMSTYLE.
+        // The reader resolves that pointer to the DXF group-3 name before
+        // callback delivery, retaining an empty name for unresolved non-null
+        // targets. Do not silently emit an unstyled annotation.
         recordOperationDiagnostic(writingBlock ? DRW::OperationPhase::Blocks
                                                : DRW::OperationPhase::Entities,
             DRW::OperationCause::ValidationFailure,
             "unresolved-dimension-style",
-            "DIMENSION group-3 style has no resolved DIMSTYLE name", 0,
-            false, dimension->handle,
-            dimension->handle != DRW::NoHandle);
+            "DIMENSION/LEADER group-3 style has no resolved DIMSTYLE name", 0,
+            false, entityHandle,
+            entityHandle != DRW::NoHandle);
         return failDxfWrite();
     }
 
-    const std::string key = dxfSymbolNameKey(dimension->getStyle());
+    const std::string key = dxfSymbolNameKey(styleName);
     if (key.empty() || m_emittedDxfDimStyleNames.count(key) == 0) {
         recordOperationDiagnostic(writingBlock ? DRW::OperationPhase::Blocks
                                                : DRW::OperationPhase::Entities,
             DRW::OperationCause::ValidationFailure,
             "unresolved-dimension-style",
-            "DIMENSION group-3 style has no emitted DIMSTYLE record", 0,
-            false, dimension->handle,
-            dimension->handle != DRW::NoHandle);
+            "DIMENSION/LEADER group-3 style has no emitted DIMSTYLE record", 0,
+            false, entityHandle,
+            entityHandle != DRW::NoHandle);
         return failDxfWrite();
     }
     return true;

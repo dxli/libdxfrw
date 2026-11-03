@@ -29303,7 +29303,7 @@ bool DRW_Leader::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
 
     dwgBufferW *hb = (handleBuf != nullptr) ? handleBuf : buf;
     putAbsHandle(hb, 0);       // AnnotH — null (no annotation entity)
-    putAbsHandle(hb, 0x15);    // dimStyleH — hard ptr to STANDARD (handle 0x15)
+    putAbsHandle(hb, (dimStyleH.ref == 0u) ? 0x15u : dimStyleH.ref);
 
     return buf->isGood() && hb->isGood();
 }

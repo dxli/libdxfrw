@@ -90,6 +90,15 @@ public:
     }
 };
 
+class DxfLeaderDstyleTestAccess {
+public:
+    static void setStyleHandle(DRW_Leader& leader, std::uint32_t handle) {
+        leader.dimStyleH.code = 5;
+        leader.dimStyleH.ref = handle;
+        leader.dimStyleH.ref64 = handle;
+    }
+};
+
 template<class Record> class RasterProductionProbe final : public Record {
 public:
     using Record::parseDwg;
@@ -66349,6 +66358,200 @@ bool dimensionDimstyleReferenceBinding() {
     return outputReadbacks == 2u && refusals == 2u && retries == 2u;
 }
 
+bool leaderDimstyleReferenceBinding() {
+    const auto nonce = static_cast<std::uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-leader-dimstyle-" + std::to_string(nonce));
+    std::error_code filesystemError;
+    std::filesystem::create_directories(directory, filesystemError);
+    if (filesystemError)
+        return fail("could not create the LEADER DIMSTYLE scratch directory");
+    struct Cleanup final {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+
+    class Author final : public dx_iface {
+    public:
+        Author(dwgRW& output, bool missingTarget) : output(output) {
+            cData = &storage;
+            currentBlock = storage.mBlock;
+            style.name = "ANSI-25";
+            leader.handle = 0xA240u;
+            leader.style = style.name;
+            leader.flag = 3;
+            leader.vertnum = 2;
+            leader.vertexlist.push_back(
+                std::make_shared<DRW_Coord>(1.0, 2.0, 0.0));
+            leader.vertexlist.push_back(
+                std::make_shared<DRW_Coord>(5.0, 4.0, 0.0));
+            wrongTarget = missingTarget;
+        }
+
+        void writeHeader(DRW_Header& header) override { header.vars.clear(); }
+        void writeLayers() override {
+            DRW_Layer layer;
+            layer.name = "0";
+            layersWritten = output.addLayer(&layer) && layersWritten;
+        }
+        void writeDimstyles() override {
+            stylesWritten = output.addDimstyle(&style) && stylesWritten;
+        }
+        void writeEntities() override {
+            const std::uint32_t target = wrongTarget
+                ? style.handle + 0x100u : style.handle;
+            DxfLeaderDstyleTestAccess::setStyleHandle(leader, target);
+            leaderWritten = output.writeLeader(&leader);
+        }
+        bool finalizeDwgWrite() override {
+            return layersWritten && stylesWritten && leaderWritten;
+        }
+
+        dwgRW& output;
+        dx_data storage;
+        DRW_Dimstyle style;
+        DRW_Leader leader;
+        bool wrongTarget{false};
+        bool layersWritten{true};
+        bool stylesWritten{true};
+        bool leaderWritten{false};
+    };
+
+    const auto authorSource = [&](const std::filesystem::path& path,
+                                  bool missingTarget,
+                                  DRW::Version version) {
+        dwgRW sourceWriter(path.string().c_str());
+        Author sourceAuthor(sourceWriter, missingTarget);
+        return sourceWriter.write(&sourceAuthor, version, true);
+    };
+    const auto leaderIn = [](dx_data& data) -> DRW_Leader* {
+        if (data.mBlock == nullptr)
+            return nullptr;
+        for (DRW_Entity* entity : data.mBlock->ent)
+            if (auto* leader = dynamic_cast<DRW_Leader*>(entity))
+                return leader;
+        return nullptr;
+    };
+    const auto styleIn = [](dx_data& data) -> DRW_Dimstyle* {
+        const auto style = std::find_if(data.dimStyles.begin(),
+            data.dimStyles.end(), [](const DRW_Dimstyle& value) {
+                return value.name == "ANSI-25";
+            });
+        return style == data.dimStyles.end() ? nullptr : &*style;
+    };
+
+    const std::array<DRW::Version, 6> writerVersions{
+        DRW::AC1015, DRW::AC1018, DRW::AC1021,
+        DRW::AC1024, DRW::AC1027, DRW::AC1032};
+    dx_iface exporter;
+    unsigned outputReadbacks = 0u;
+    for (const DRW::Version version : writerVersions) {
+        const std::string versionTag =
+            std::to_string(static_cast<unsigned>(version));
+        const auto sourcePath = directory
+            / ("leader-source-" + versionTag + ".dwg");
+        if (!authorSource(sourcePath, false, version))
+            return fail("could not author custom-DIMSTYLE LEADER DWG version "
+                        + versionTag);
+        dx_data imported;
+        dx_iface importer;
+        if (!importer.fileImport(sourcePath.string(), &imported, false))
+            return fail("could not read custom-DIMSTYLE LEADER DWG version "
+                        + versionTag);
+        DRW_Leader* leader = leaderIn(imported);
+        DRW_Dimstyle* style = styleIn(imported);
+        if (leader == nullptr || style == nullptr || leader->style != style->name)
+            return fail("LEADER DIMSTYLE handle/name mapping failed for DWG version "
+                        + versionTag);
+
+        if (version == DRW::AC1024) {
+            for (const bool binary : {false, true}) {
+                const auto outputPath = directory
+                    / ("leader-boundary-" + versionTag
+                       + (binary ? "-binary.dxf" : "-ascii.dxf"));
+                if (!exporter.fileExport(outputPath.string(), version, binary,
+                                         &imported, false, true))
+                    return fail("resolved AC1024 LEADER DIMSTYLE did not export");
+                dx_data readback;
+                dx_iface dxfReader;
+                if (!dxfReader.fileImport(outputPath.string(), &readback, false))
+                    return fail("custom-style LEADER DXF readback failed");
+                DRW_Leader* actual = leaderIn(readback);
+                DRW_Dimstyle* actualStyle = styleIn(readback);
+                if (actual == nullptr || actual->style != "ANSI-25"
+                    || actualStyle == nullptr || actual->vertexlist.size() != 2u)
+                    return fail("LEADER group-3 style changed on DXF readback");
+                ++outputReadbacks;
+            }
+        }
+    }
+
+    const auto missingSourcePath = directory / "leader-missing-target.dwg";
+    if (!authorSource(missingSourcePath, true, DRW::AC1024))
+        return fail("could not author the missing-DIMSTYLE-target LEADER DWG control");
+    dx_data missingData;
+    dx_iface missingReader;
+    if (!missingReader.fileImport(missingSourcePath.string(), &missingData, false))
+        return fail("could not read the missing-DIMSTYLE-target LEADER DWG control");
+    DRW_Leader* missingLeader = leaderIn(missingData);
+    DRW_Dimstyle* missingStyle = styleIn(missingData);
+    if (missingLeader == nullptr || missingStyle == nullptr
+        || !missingLeader->style.empty())
+        return fail("missing LEADER DIMSTYLE target was not preserved as unresolved");
+
+    dx_iface retryExporter;
+    unsigned refusals = 0u;
+    unsigned retries = 0u;
+    for (const bool binary : {false, true}) {
+        const auto outputPath = directory
+            / (binary ? "leader-missing-target.dxf"
+                      : "leader-missing-target-ascii.dxf");
+        const std::string sentinel = "LEADER_DIMSTYLE_DESTINATION";
+        {
+            std::ofstream prior(outputPath, std::ios::binary);
+            prior << sentinel;
+        }
+        if (retryExporter.fileExport(outputPath.string(), DRW::AC1024, binary,
+                                     &missingData, false, true))
+            return fail("unresolved LEADER DIMSTYLE target was written");
+        std::ifstream preserved(outputPath, std::ios::binary);
+        const std::string actual((std::istreambuf_iterator<char>(preserved)),
+                                 std::istreambuf_iterator<char>());
+        if (actual != sentinel)
+            return fail("unresolved LEADER failure modified the destination");
+        ++refusals;
+
+        missingLeader->style = missingStyle->name;
+        if (!retryExporter.fileExport(outputPath.string(), DRW::AC1024, binary,
+                                      &missingData, false, true))
+            return fail("corrected LEADER DIMSTYLE did not retry on the same adapter");
+        dx_data readback;
+        dx_iface dxfReader;
+        if (!dxfReader.fileImport(outputPath.string(), &readback, false))
+            return fail("corrected LEADER retry produced unreadable DXF");
+        DRW_Leader* actualLeader = leaderIn(readback);
+        DRW_Dimstyle* actualStyle = styleIn(readback);
+        if (actualLeader == nullptr || actualStyle == nullptr
+            || actualLeader->style != "ANSI-25")
+            return fail("corrected LEADER retry lost its group-3 style name or DIMSTYLE target");
+        ++retries;
+
+        missingLeader->style.clear();
+    }
+
+    std::cout << "LEADER DIMSTYLE handle/name binding: "
+              << writerVersions.size()
+              << " DWG writer revisions resolve custom style, "
+              << outputReadbacks << " ASCII/Binary readbacks, " << refusals
+              << " atomic unresolved-target refusals, " << retries
+              << " same-adapter retries; generated drawing only\n";
+    return outputReadbacks == 2u && refusals == 2u && retries == 2u;
+}
+
 bool geodataDwgAdapterTransport() {
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch()
@@ -67183,6 +67386,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--dimension-dimstyle-reference-binding")
         return dimensionDimstyleReferenceBinding() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--leader-dimstyle-reference-binding")
+        return leaderDimstyleReferenceBinding() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--dbcolor-late-callback-binding")
         return dbColorLateCallbackBinding() ? 0 : 1;

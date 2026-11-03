@@ -1181,6 +1181,12 @@ add_test(NAME libdxfrw_dimension_dimstyle_reference_binding
 set_tests_properties(libdxfrw_dimension_dimstyle_reference_binding PROPERTIES
     LABELS "fast;dwg;dxf;adapter;entities;references;annotation;transaction"
     TIMEOUT 30)
+add_test(NAME libdxfrw_leader_dimstyle_reference_binding
+    COMMAND libdxfrw_dwg2dxf_adapter_tests
+        --leader-dimstyle-reference-binding)
+set_tests_properties(libdxfrw_leader_dimstyle_reference_binding PROPERTIES
+    LABELS "fast;dwg;dxf;adapter;entities;references;annotation;transaction"
+    TIMEOUT 30)
 add_test(NAME dwg2dxf_proxy_entity_output_gate
     COMMAND libdxfrw_dwg2dxf_adapter_tests --dwg-proxy-entity-output-gate)
 set_tests_properties(dwg2dxf_proxy_entity_output_gate PROPERTIES

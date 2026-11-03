@@ -11806,7 +11806,10 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
       case dwgType::LEADER: {
         DRW_Leader e;
         if (entryParse(e, buff, bs, ret)) {
-          e.style = findTableName(DRW::DIMSTYLE, e.dimStyleH.ref);
+          if (e.dimStyleH.ref == 0u || e.dimStyleH.ref == DRW::NoHandle)
+            e.style = "STANDARD";
+          else
+            e.style = findTableName(DRW::DIMSTYLE, e.dimStyleH.ref);
           output.appendValue(e, &DRW_Interface::addLeader);
         }
         break;

@@ -1761,6 +1761,8 @@ public:
     bool writeArcDimension(DRW_DimArc *d);
     bool writeLargeRadialDimension(DRW_DimLargeRadial *d);
     bool preflightDimensionStyle(const DRW_Dimension *dimension);
+    bool preflightDimensionStyleName(const std::string& styleName,
+                                     std::uint32_t entityHandle);
     bool preflightDimensionPictureBlock(const DRW_Dimension *dimension);
     bool preflightInsertTargetBody(const DRW_Insert *insert);
     bool resolveInsertBlockRecordName(
