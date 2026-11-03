@@ -958,10 +958,18 @@ eligible reader. The exact package and environment result are in the
   reserves and remaps object/entity identities, rejects an invalid reactor
   owner without changing the destination, and permits same-adapter correction
   and ASCII/Binary typed readback; see the [authored graph receipt](docs/research/p8-pointcloud-authored-definition-reactor-graph-2026-11-03.json).
-  This does not admit imported DXF or DWG point-cloud sources: DXF still needs
-  complete raw-carrier/source-span binding and DWG still needs source
-  CLASS/frame output binding. P4 source-profile closure, physical producer
-  breadth, asset loading and native consumer semantics remain open.
+  Imported DXF point-cloud Definition/DefinitionEx/Reactor/ReactorEx callbacks
+  now have a bounded raw-carrier/physical-span binding: the optional source
+  facet joins the typed callback, complete raw group sequence, version/encoding
+  and physical OBJECTS spans, then keeps private bounded snapshots for later
+  unchanged-state checks. Generated ASCII/Binary controls cover nested
+  ACAD_REACTORS fields and exact group/span order; see the [DXF definition
+  source-span receipt](docs/research/p8-pointcloud-dxf-definition-source-span-binding-2026-11-03.json).
+  This is transport evidence only. Imported DXF graph output remains refused
+  until POINTCLOUDEX entity source fields are bound and the full field
+  projection is proven; DWG still needs source CLASS/frame/output binding. P4
+  source-profile closure, physical producer breadth, asset loading and native
+  consumer semantics remain open.
   The low-level POINTCLOUD and POINTCLOUDEX serializers now resolve their
   definition/reactor references through the configured resolver (final output
   IDs) or source-handle remap fallback. Generated ASCII/Binary controls verify

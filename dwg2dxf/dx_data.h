@@ -40,6 +40,7 @@
 #include <list>
 #include <limits>
 #include <map>
+#include <memory>
 #include <set>
 #include <utility>
 #include <vector>
@@ -2393,6 +2394,24 @@ private:
     std::size_t m_cellStyleMapDxfBaselineRetainedBytes{0};
     bool m_cellStyleMapDxfBaselineCaptureFailed{false};
     std::list<DRW_RawDxfObject> m_rawCellStyleMapDxfBaselines;
+    // Immutable-by-API DXF point-cloud definition source bindings. Each row
+    // joins the exact typed callback to its complete raw carrier and physical
+    // OBJECTS scalar spans; it does not independently qualify the carrier's
+    // field schema or authorize output.
+    struct PointCloudDefinitionSourceInput {
+        const void* container{nullptr};
+        std::uint64_t generation{0u},containerId{0u};
+        DRW_PointCloudDef typed;
+        DRW_RawDxfObject raw;
+        std::shared_ptr<const DRW_DxfObjectPhysicalSource> physical,physicalOwner;
+        DRW_DxfObjectPhysicalSource::Status physicalStatus{
+            DRW_DxfObjectPhysicalSource::Status::NotCaptured};
+        bool physicalCarrierMatched{false};
+        bool typedCallbackMatched{false};
+    };
+    std::vector<PointCloudDefinitionSourceInput> m_pointCloudDefinitionSources;
+    std::size_t m_pointCloudDefinitionSourceRetainedBytes{0u};
+    bool m_pointCloudDefinitionSourceCaptureFailed{false};
 };
 
 #endif // DX_DATA_H

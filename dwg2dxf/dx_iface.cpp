@@ -14776,6 +14776,10 @@ constexpr std::size_t kMaxAdapterTableContentRetainedBytes =
 constexpr std::size_t kMaxAdapterTableGeometryRecords = 100000u;
 constexpr std::size_t kMaxAdapterTableGeometryRetainedBytes =
     DRW::kMaxDxfBinaryPayloadBytes;
+
+bool standardDwgCommonEqual(const DRW_TableEntry& left,
+                            const DRW_TableEntry& right,
+                            DRW::Version version, bool compareName) noexcept;
 constexpr std::size_t kMaxAdapterXRecordRecords = 100000u;
 constexpr std::size_t kMaxAdapterXRecordItems = 1000000u;
 constexpr std::size_t kMaxAdapterXRecordRetainedBytes =
@@ -16882,6 +16886,99 @@ bool estimatePointCloudDefinitionBytes(
     if (!addStringPayloadBytes(value.m_sourceFilename, estimate))
         return false;
     return estimate <= kMaxAdapterPointCloudObjectRetainedBytes;
+}
+
+bool normalizePointCloudDefinitionReactors(DRW_PointCloudDef& value) noexcept {
+    if (value.appData.empty())
+        return true;
+    if (value.appData.size() != 1u)
+        return false;
+    const auto& group = value.appData.front();
+    if (group.size() < 2u || group.front().code() != 102
+        || group.front().type() != DRW_Variant::STRING
+        || group.front().content.s == nullptr
+        || *group.front().content.s != "ACAD_REACTORS"
+        || group.back().code() != 102
+        || group.back().type() != DRW_Variant::STRING
+        || group.back().content.s == nullptr
+        || *group.back().content.s != "}")
+        return false;
+
+    std::vector<std::uint32_t> reactors;
+    try {
+        reactors.reserve(group.size() - 2u);
+        for (auto item = std::next(group.begin());
+             item != std::prev(group.end()); ++item) {
+            if (item->code() != 330 || item->type() != DRW_Variant::STRING
+                || item->content.s == nullptr || item->content.s->empty())
+                return false;
+            std::uint32_t handle = 0u;
+            const std::string& text = *item->content.s;
+            const auto parsed = std::from_chars(
+                text.data(), text.data() + text.size(), handle, 16);
+            if (parsed.ec != std::errc{}
+                || parsed.ptr != text.data() + text.size()
+                || handle == 0u || handle == DRW::NoHandle)
+                return false;
+            reactors.push_back(handle);
+        }
+    } catch (...) {
+        return false;
+    }
+    if (reactors != value.reactorHandles)
+        return false;
+    value.appData.clear();
+    return true;
+}
+
+bool pointCloudDefinitionModelEqual(const DRW_PointCloudDef& left,
+                                    const DRW_PointCloudDef& right,
+                                    DRW::Version version) noexcept {
+    const auto sameCoord = [](const DRW_Coord& a, const DRW_Coord& b) {
+        return std::memcmp(&a.x, &b.x, sizeof(a.x)) == 0
+            && std::memcmp(&a.y, &b.y, sizeof(a.y)) == 0
+            && std::memcmp(&a.z, &b.z, sizeof(a.z)) == 0;
+    };
+    return standardDwgCommonEqual(left, right, version, true)
+        && left.m_kind == right.m_kind
+        && left.m_classVersion == right.m_classVersion
+        && left.m_sourceFilename == right.m_sourceFilename
+        && left.m_isLoaded == right.m_isLoaded
+        && left.m_pointCount == right.m_pointCount
+        && sameCoord(left.m_extentsMin, right.m_extentsMin)
+        && sameCoord(left.m_extentsMax, right.m_extentsMax);
+}
+
+bool pointCloudDefinitionRawMatchesPhysical(
+        const DRW_RawDxfObject& raw,
+        const DRW_DxfObjectPhysicalSource& physical) noexcept {
+    if (physical.status != DRW_DxfObjectPhysicalSource::Status::Complete
+        || physical.name != raw.name || physical.version != raw.m_version
+        || raw.hasRawValues == physical.binary
+        || physical.marker.endOffset <= physical.marker.beginOffset
+        || physical.endMarker.endOffset <= physical.endMarker.beginOffset
+        || physical.endMarker.beginOffset < physical.marker.endOffset)
+        return false;
+    std::size_t groupIndex = 0u;
+    std::size_t previousOrdinal = physical.marker.ordinal;
+    std::size_t previousOffset = physical.marker.endOffset;
+    for (const DRW_DxfObjectPhysicalSource::Field& field : physical.fields) {
+        const DRW_DxfPhysicalRecordSpan& span = field.span;
+        if (span.beginOffset < previousOffset || span.endOffset <= span.beginOffset
+            || span.ordinal <= previousOrdinal)
+            return false;
+        previousOrdinal = span.ordinal;
+        previousOffset = span.endOffset;
+        if (span.ignoredComment)
+            continue;
+        if (groupIndex >= raw.groups.size()
+            || raw.groups[groupIndex].code() != field.code)
+            return false;
+        ++groupIndex;
+    }
+    return groupIndex == raw.groups.size()
+        && physical.endMarker.ordinal > previousOrdinal
+        && physical.endMarker.beginOffset >= previousOffset;
 }
 
 bool estimateNavisworksDefinitionBytes(
@@ -50745,6 +50842,9 @@ bool dx_iface::wantsDxfNamespaceSource() const {return tableSourceCaptureOpen();
 
 bool dx_iface::wantsDxfRootDictionarySource() const {return tableSourceCaptureOpen();}
 bool dx_iface::wantsDxfDictionarySource() const {return tableSourceCaptureOpen();}
+bool dx_iface::wantsDxfPointCloudDefinitionSource() const {
+    return tableSourceCaptureOpen();
+}
 
 bool dx_iface::wantsDxfBlockRecordSource() const {return tableSourceCaptureOpen();}
 
@@ -54720,8 +54820,85 @@ void dx_iface::addPointCloudDef(const DRW_PointCloudDef& data) {
     observeResourceOrigin(&data, nullptr);
     if (cData == nullptr)
         return;
+    if (cData->sourceFormat == dx_source_format::DXF) {
+        DRW_PointCloudDef normalized(data);
+        if (normalizePointCloudDefinitionReactors(normalized)) {
+            retainPointCloudObjectTyped(
+                cData, cData->pointCloudDefinitions, normalized,
+                estimatePointCloudDefinitionBytes);
+            return;
+        }
+    }
     retainPointCloudObjectTyped(cData, cData->pointCloudDefinitions, data,
                                 estimatePointCloudDefinitionBytes);
+}
+
+void dx_iface::addDxfPointCloudDefinitionSource(
+        const DRW_PointCloudDef& data, const DRW_RawDxfObject& raw,
+        DRW_DxfObjectPhysicalSource::Status status,
+        std::shared_ptr<const DRW_DxfObjectPhysicalSource> physical) {
+    if (cData == nullptr)
+        return;
+    auto& sources = cData->m_pointCloudDefinitionSources;
+    if (cData->m_pointCloudDefinitionSourceCaptureFailed)
+        return;
+    const auto fail = [this]() {
+        cData->m_pointCloudDefinitionSourceCaptureFailed = true;
+    };
+    if (!tableSourceCaptureOpen()
+        || cData->sourceFormat != dx_source_format::DXF
+        || sources.size() >= kMaxAdapterPointCloudObjectRecords
+        || cData->pointCloudDefinitions.empty()
+        || sources.size() + 1u != cData->pointCloudDefinitions.size()) {
+        fail();
+        return;
+    }
+
+    DRW_PointCloudDef normalized(data);
+    const bool normalizedReactors =
+        normalizePointCloudDefinitionReactors(normalized);
+    const DRW_PointCloudDef& retained = cData->pointCloudDefinitions.back();
+    const bool typedMatched = normalizedReactors
+        && pointCloudDefinitionModelEqual(
+            retained, normalized, cData->sourceVersion);
+    const bool physicalMatched = physical != nullptr
+        && status == DRW_DxfObjectPhysicalSource::Status::Complete
+        && physical->status == DRW_DxfObjectPhysicalSource::Status::Complete
+        && physical->version == cData->sourceVersion
+        && pointCloudDefinitionRawMatchesPhysical(raw, *physical);
+
+    std::size_t typedBytes = 0u, typedItems = 0u, rawBytes = 0u;
+    std::size_t sourceBytes =
+        sizeof(dx_data::PointCloudDefinitionSourceInput);
+    if (!estimatePointCloudDefinitionBytes(normalized, typedBytes, typedItems)
+        || !estimateRawDxfObjectListNodeBytes(raw, rawBytes)
+        || typedBytes > kMaxAdapterPointCloudObjectRetainedBytes
+        || rawBytes > kMaxAdapterPointCloudObjectRetainedBytes - typedBytes
+        || !addAssociativeRetainedBytes(typedBytes + rawBytes, sourceBytes)
+        || sourceBytes > kMaxAdapterPointCloudObjectRetainedBytes
+        || cData->m_pointCloudDefinitionSourceRetainedBytes
+            > kMaxAdapterPointCloudObjectRetainedBytes - sourceBytes) {
+        fail();
+        return;
+    }
+    try {
+        dx_data::PointCloudDefinitionSourceInput input;
+        input.container = cData;
+        input.generation = cData->importGeneration;
+        input.containerId = cData->m_entitiesContainerIdentity.value;
+        input.typed = normalizedReactors ? normalized : data;
+        input.raw = raw;
+        input.physical = std::move(physical);
+        input.physicalOwner = input.physical;
+        input.physicalStatus = status;
+        input.physicalCarrierMatched = physicalMatched;
+        input.typedCallbackMatched = typedMatched;
+        sources.push_back(std::move(input));
+        cData->m_pointCloudDefinitionSourceRetainedBytes +=
+            sourceBytes;
+    } catch (...) {
+        fail();
+    }
 }
 
 void dx_iface::addNavisworksModelDef(
@@ -67734,11 +67911,42 @@ bool dx_iface::preparePointCloudExOutputGraph(
         return fail("retained callback counters do not match the typed records");
     if (retainedTypedCount == 0u)
         return true;
-    // Imported DXF records need a raw-carrier/source-span join before the
-    // typed projection can be treated as complete; DWG also needs a source
-    // CLASS/frame/output binding. Keep this first graph writer authored-only.
+    if (data.sourceFormat == dx_source_format::DXF) {
+        const auto& capture = data.m_pointCloudDefinitionSources;
+        if (data.m_pointCloudDefinitionSourceCaptureFailed
+            || capture.size() != data.pointCloudDefinitions.size())
+            return fail("DXF definition source/carrier capture is incomplete");
+        auto typed = data.pointCloudDefinitions.begin();
+        for (const dx_data::PointCloudDefinitionSourceInput& input : capture) {
+            if (typed == data.pointCloudDefinitions.end()
+                || input.container != &data
+                || input.generation != data.importGeneration
+                || input.containerId != data.m_entitiesContainerIdentity.value
+                || input.physical == nullptr
+                || input.physicalOwner.get() != input.physical.get()
+                || input.physicalStatus
+                    != DRW_DxfObjectPhysicalSource::Status::Complete
+                || !input.physicalCarrierMatched
+                || !input.typedCallbackMatched
+                || input.raw.m_version != data.sourceVersion
+                || !pointCloudDefinitionRawMatchesPhysical(
+                    input.raw, *input.physical)
+                || !pointCloudDefinitionModelEqual(
+                    *typed, input.typed, input.physical->version))
+                return fail("DXF definition raw carrier/source spans do not bind to the retained typed callback");
+            ++typed;
+        }
+        if (typed != data.pointCloudDefinitions.end())
+            return fail("DXF definition source rows are not complete");
+    }
+    // DXF definitions now have a bounded callback/carrier/span binding, but
+    // POINTCLOUDEX entity carriers and their complete field projection are
+    // still required before imported graph output can be admitted. DWG also
+    // needs source CLASS/frame/output binding. Keep this route fail-closed.
     if (data.sourceFormat != dx_source_format::Unknown)
-        return fail("imported DXF/DWG source-to-output binding is not installed");
+        return fail(data.sourceFormat == dx_source_format::DXF
+            ? "imported DXF point-cloud entity source binding is not installed"
+            : "imported DWG point-cloud CLASS/frame/output binding is not installed");
     if (targetVersion <= DRW::AC1024)
         return fail("POINTCLOUDEX output requires AC1027 or later");
     if (!data.navisworksModelDefinitions.empty()

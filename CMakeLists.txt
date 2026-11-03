@@ -726,6 +726,11 @@ if(LIBDXFRW_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/dwg2dxf)
     target_link_libraries(libdxfrw_wave1_tests PRIVATE dxfrw)
     add_test(NAME libdxfrw_wave1 COMMAND libdxfrw_wave1_tests)
+    add_test(NAME libdxfrw_pointcloud_definition_source_spans
+        COMMAND libdxfrw_wave1_tests --pointcloud-definition-source-spans)
+    set_tests_properties(libdxfrw_pointcloud_definition_source_spans PROPERTIES
+        LABELS "fast;dxf;objects;pointcloud;generated;source-spans"
+        TIMEOUT 30)
     add_test(NAME libdxfrw_wipeoutvariables_display_mode_domain
         COMMAND libdxfrw_wave1_tests --wipeoutvariables-display-mode-domain)
     set_tests_properties(libdxfrw_wipeoutvariables_display_mode_domain PROPERTIES

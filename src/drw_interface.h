@@ -26,6 +26,7 @@
 
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <string>
 
 #include "drw_datastorage.h"
@@ -926,6 +927,20 @@ class DRW_DxfObjectPhysicalSourcePolicy {
 public:
   virtual ~DRW_DxfObjectPhysicalSourcePolicy()=default;
   virtual DRW_DxfObjectPhysicalSourceLimits dxfObjectPhysicalSourceLimits() const noexcept {return {};}
+};
+/** Optional bounded source binding for typed point-cloud definition objects.
+ * Kept outside DRW_Interface so existing consumer vtables stay unchanged.
+ * The source carrier and physical spans are delivered only after the complete
+ * OBJECTS record boundary is accepted. This is parser/source association
+ * evidence, not field-profile, graph, output, or consumer qualification. */
+class DRW_DxfPointCloudDefinitionSourceHandler {
+public:
+  virtual ~DRW_DxfPointCloudDefinitionSourceHandler()=default;
+  virtual bool wantsDxfPointCloudDefinitionSource() const {return false;}
+  virtual void addDxfPointCloudDefinitionSource(
+      const DRW_PointCloudDef&, const DRW_RawDxfObject&,
+      DRW_DxfObjectPhysicalSource::Status,
+      std::shared_ptr<const DRW_DxfObjectPhysicalSource>) {}
 };
 /** Whole-read physical identity evidence, not object/body/target qualification.
  * Candidates preserve code 5/105 even in opaque scopes. HEADER/CLASSES are

@@ -26612,6 +26612,12 @@ bool dxfRW::processBackground() {
 bool dxfRW::processPointCloudDef() {
     DRW_DBG("dxfRW::processPointCloudDef");
     int code;
+    auto* sourceHandler =
+        dynamic_cast<DRW_DxfPointCloudDefinitionSourceHandler*>(iface);
+    const bool captureSource = sourceHandler != nullptr
+        && sourceHandler->wantsDxfPointCloudDefinitionSource();
+    dxfObjectPhysicalSource::Capture physical(
+        *reader, *iface, captureSource, nextentity);
     DRW_PointCloudDef data;
     if (dxfKeywordEquals(nextentity, "POINTCLOUDDEFINITIONEX")
         || dxfKeywordEquals(nextentity, "ACDBPOINTCLOUDDEFEX"))
@@ -26639,6 +26645,10 @@ bool dxfRW::processPointCloudDef() {
                 return setError(DRW::BAD_CODE_PARSED);
             iface->addPointCloudDef(data);
             iface->addRawDxfObject(raw);
+            if (captureSource) {
+                sourceHandler->addDxfPointCloudDefinitionSource(
+                    data, raw, physical.sourceStatus(), physical.source());
+            }
             return true;
         }
         if (!captureAndParseRawDxfGroup(raw, code, data))

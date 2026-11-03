@@ -2239,16 +2239,38 @@ void testPointCloudDefinitionIdentityRemapping(TestContext& t) {
 
     class PointCloudDefProbe final : public dx_iface {
     public:
+        bool wantsDxfPointCloudDefinitionSource() const override {
+            return capturePhysicalSource;
+        }
+        void addDxfPointCloudDefinitionSource(
+                const DRW_PointCloudDef& value,
+                const DRW_RawDxfObject& raw,
+                DRW_DxfObjectPhysicalSource::Status status,
+                std::shared_ptr<const DRW_DxfObjectPhysicalSource> physical)
+                override {
+            sourceTyped = value;
+            sourceRaw = raw;
+            sourceStatus = status;
+            sourcePhysical = std::move(physical);
+            sourceCalled = true;
+        }
         void addPointCloudDef(const DRW_PointCloudDef& value) override {
             captured = value;
             found = true;
         }
 
         DRW_PointCloudDef captured;
+        DRW_PointCloudDef sourceTyped;
+        DRW_RawDxfObject sourceRaw;
+        DRW_DxfObjectPhysicalSource::Status sourceStatus{
+            DRW_DxfObjectPhysicalSource::Status::NotCaptured};
+        std::shared_ptr<const DRW_DxfObjectPhysicalSource> sourcePhysical;
+        bool capturePhysicalSource{true};
+        bool sourceCalled{false};
         bool found {false};
     };
 
-    const auto readTyped = [](const std::string& bytes, bool binary,
+    const auto readTyped = [&t](const std::string& bytes, bool binary,
                               const char* recordName,
                               DRW_PointCloudDef& value) {
         std::istringstream input(bytes);
@@ -2261,6 +2283,7 @@ void testPointCloudDefinitionIdentityRemapping(TestContext& t) {
                   std::make_unique<dxfReaderBinary>(&input))
             : std::unique_ptr<dxfReader>(
                   std::make_unique<dxfReaderAscii>(&input));
+        readerOwner.reader->setVersion("AC1032", true);
         int code = 0;
         while (readerOwner.reader->readRec(&code)) {
             if (code != 0)
@@ -2270,6 +2293,37 @@ void testPointCloudDefinitionIdentityRemapping(TestContext& t) {
                 const bool processed = readerOwner.processPointCloudDef();
                 if (processed && probe.found)
                     value = probe.captured;
+                const auto physical = probe.sourcePhysical;
+                t.expect(processed && probe.sourceCalled
+                             && probe.sourceStatus
+                                 == DRW_DxfObjectPhysicalSource::Status::Complete
+                             && physical != nullptr
+                             && physical->version == DRW::AC1032
+                             && physical->binary == binary,
+                         "point-cloud definition exposes complete physical source spans");
+                if (physical != nullptr) {
+                    std::size_t group = 0u;
+                    bool spansMatch = true;
+                    for (const auto& field : physical->fields) {
+                        if (field.span.ignoredComment)
+                            continue;
+                        if (group >= probe.sourceRaw.groups.size()
+                            || probe.sourceRaw.groups[group].code()
+                                != field.code
+                            || field.span.endOffset
+                                <= field.span.beginOffset) {
+                            spansMatch = false;
+                            break;
+                        }
+                        ++group;
+                    }
+                    t.expect(spansMatch
+                                 && group == probe.sourceRaw.groups.size()
+                                 && probe.sourceRaw.name == recordName
+                                 && probe.sourceTyped.m_kind
+                                     == probe.captured.m_kind,
+                             "point-cloud raw groups bind in order to physical field spans");
+                }
                 return processed && probe.found;
             }
         }
@@ -2307,6 +2361,8 @@ void testPointCloudDefinitionIdentityRemapping(TestContext& t) {
             definition.m_pointCount = 1234567890u;
             definition.m_extentsMin = DRW_Coord{-1.0, -2.0, -3.0};
             definition.m_extentsMax = DRW_Coord{4.0, 5.0, 6.0};
+            if (kindIndex == 1u)
+                definition.reactorHandles.push_back(0xB77u);
             const bool wrote = objectSection
                 && owner.writePointCloudDef(&definition)
                 && owner.writer->writeString(0, "ENDSEC");
@@ -2333,7 +2389,10 @@ void testPointCloudDefinitionIdentityRemapping(TestContext& t) {
                     && readback.m_isLoaded
                     && readback.m_pointCount == 1234567890u
                     && readback.m_extentsMin.x == -1.0
-                    && readback.m_extentsMax.z == 6.0);
+                    && readback.m_extentsMax.z == 6.0
+                    && (kindIndex != 1u
+                        || readback.reactorHandles
+                            == std::vector<std::uint32_t>{0xB77u}));
             t.expect(read && readback.handle == emitted
                          && static_cast<std::size_t>(readback.m_kind)
                                 == kindIndex
@@ -21560,6 +21619,15 @@ int main(int argc, char** argv) {
         TestContext focused;
         testPointCloudDefinitionIdentityRemapping(focused);
         std::cout << "POINTCLOUD definition identity remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--pointcloud-definition-source-spans") {
+        TestContext focused;
+        testPointCloudDefinitionIdentityRemapping(focused);
+        std::cout << "POINTCLOUD definition physical source spans: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

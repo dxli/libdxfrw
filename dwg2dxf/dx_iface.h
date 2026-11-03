@@ -50,7 +50,10 @@ class dx_iface : public DRW_Interface, public DRW_UnmodeledDxfObjectHandler,
                  public DRW_DxfIdentitySourceHandler, public DRW_DxfDictionarySourceHandler,
                  public DRW_DxfResourceSourceHandler, public DRW_DxfNamespaceSourceHandler,
                  public DRW_DxfLayerTableControlHandler,
-                 public DRW_DxfViewUcsSourceHandler, public WholeSourceV2::Handler {
+                 public DRW_DxfViewUcsSourceHandler,
+                 public DRW_DxfObjectPhysicalSourcePolicy,
+                 public DRW_DxfPointCloudDefinitionSourceHandler,
+                 public WholeSourceV2::Handler {
 public:
     // Internal-only groundwork; opting in captures decoded physical scalars,
     // not source bytes, graph completeness or write/semantic eligibility.
@@ -222,6 +225,11 @@ public:
     static StructuralSourceReport structuralSourceReport(const dx_data&) noexcept;
     bool wantsDxfDictionarySource() const override;
     void addDxfDictionarySource(const DRW_Dictionary&,const DRW_RawDxfObject&) override;
+    bool wantsDxfPointCloudDefinitionSource() const override;
+    void addDxfPointCloudDefinitionSource(
+        const DRW_PointCloudDef&, const DRW_RawDxfObject&,
+        DRW_DxfObjectPhysicalSource::Status,
+        std::shared_ptr<const DRW_DxfObjectPhysicalSource>) override;
     enum class IdentitySourceState {NotCaptured,Reading,ImportFailed,ContextMismatch,CaptureFailed,NamespaceReady,Unqualified};
     struct IdentitySourceReport {
         IdentitySourceState state{IdentitySourceState::NotCaptured};
