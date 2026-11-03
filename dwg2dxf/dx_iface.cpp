@@ -65200,7 +65200,8 @@ bool dx_iface::prepareTableFallbackGraph(dx_data& data,
                     || entity->handle != table.handle)
                     continue;
                 ++count;
-                found = static_cast<DRW_Insert*>(entity);
+                found = exactEntityForDxfWrite<DRW_Insert>(
+                    entity, DRW::INSERT);
             }
         };
         if (data.mBlock != nullptr)

@@ -30581,6 +30581,98 @@ bool tableWriterRoundTrip(bool binary) {
     return true;
 }
 
+bool tableFallbackRuntimeTypeRoundTrip(bool binary) {
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch()
+                           .count();
+    const std::filesystem::path output =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-table-fallback-runtime-" + std::to_string(nonce)
+           + (binary ? "-binary.dxf" : "-ascii.dxf"));
+    dx_data authored;
+    dx_iface writer;
+    writer.cData = &authored;
+    writer.currentBlock = authored.mBlock;
+
+    DRW_Table table;
+    table.handle = 0x650u;
+    table.parentHandle = 0x1Fu;
+    table.name = "*T650";
+    table.m_hasSemanticContent = true;
+    table.m_semanticContentComplete = true;
+    table.m_content.m_columns.push_back(DRW_TableColumn{"", 2.0});
+    table.m_content.m_rows.resize(1u);
+    DRW_TableCell cell;
+    cell.m_type = 1;
+    DRW_TableCellContent content;
+    content.m_type = 1;
+    content.m_text = "fallback runtime sentinel";
+    cell.m_contents.push_back(content);
+    table.m_content.m_rows.front().m_cells.push_back(cell);
+    writer.addTable(table);
+
+    const auto fallbackPosition = std::find_if(
+        authored.mBlock->ent.begin(), authored.mBlock->ent.end(),
+        [&table](const DRW_Entity* entity) {
+            return entity != nullptr && entity->eType == DRW::INSERT
+                && entity->handle == table.handle;
+        });
+    DRW_Entity* const originalFallback =
+        fallbackPosition == authored.mBlock->ent.end()
+            ? nullptr : *fallbackPosition;
+    if (originalFallback == nullptr
+        || typeid(*originalFallback) != typeid(DRW_Insert))
+        return fail("ACAD_TABLE did not retain its exact INSERT projection");
+
+    auto* mismatchedFallback = new DRW_Point;
+    mismatchedFallback->handle = table.handle;
+    mismatchedFallback->eType = DRW::INSERT;
+    *fallbackPosition = mismatchedFallback;
+    const std::string sentinel = "TABLE_RUNTIME_DESTINATION\n";
+    {
+        std::ofstream existing(output, std::ios::binary | std::ios::trunc);
+        existing << sentinel;
+        if (!existing) {
+            *fallbackPosition = originalFallback;
+            delete mismatchedFallback;
+            return fail("could not create TABLE runtime-dispatch sentinel");
+        }
+    }
+    const bool refused = !writer.fileExport(
+        output.string(), DRW::AC1027, binary, &authored, false);
+    std::ifstream previous(output, std::ios::binary);
+    const std::string preserved{
+        std::istreambuf_iterator<char>(previous), {}};
+    *fallbackPosition = originalFallback;
+    delete mismatchedFallback;
+    if (!refused || preserved != sentinel) {
+        std::error_code ignored;
+        std::filesystem::remove(output, ignored);
+        return fail("mismatched TABLE fallback was accepted or replaced output");
+    }
+
+    if (!writer.fileExport(output.string(), DRW::AC1027, binary,
+                           &authored, false)) {
+        std::error_code ignored;
+        std::filesystem::remove(output, ignored);
+        return fail("corrected TABLE fallback did not retry on the same adapter");
+    }
+    dx_data readback;
+    dx_iface reader;
+    const bool imported = reader.fileImport(output.string(), &readback, false);
+    std::error_code ignored;
+    std::filesystem::remove(output, ignored);
+    if (!imported || readback.tables.size() != 1u
+        || readback.tables.front().m_content.m_rows.size() != 1u
+        || readback.tables.front().m_content.m_rows.front().m_cells.size() != 1u
+        || readback.tables.front().m_content.m_rows.front().m_cells.front()
+               .m_contents.empty()
+        || readback.tables.front().m_content.m_rows.front().m_cells.front()
+               .m_contents.front().m_text != "fallback runtime sentinel")
+        return fail("TABLE fallback retry lost typed readback content");
+    return true;
+}
+
 bool tableMergeMatrixWriterRoundTrip(bool binary, std::uint64_t nonce) {
     const std::filesystem::path output =
         std::filesystem::temp_directory_path()
@@ -63378,6 +63470,10 @@ int main(int argc, char** argv) {
         return groupAdapterRoundTrip() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--seqend-footer-table")
         return seqEndTableRoundTrip() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--table-fallback-runtime-type")
+        return tableFallbackRuntimeTypeRoundTrip(false)
+            && tableFallbackRuntimeTypeRoundTrip(true) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--table-base-style-id-dxf-refusal")
         return tableBaseStyleIdDxfRefusal() ? 0 : 1;

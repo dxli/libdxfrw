@@ -509,7 +509,12 @@ eligible reader. The exact package and environment result are in the
   truncation, destination preservation, corrected retry and typed readback;
   see the [entity runtime-dispatch receipt](docs/research/p8-entity-runtime-dispatch-2026-11-02.json).
   This closes the unchecked static-cast inventory in `writeEntity`; native
-  consumer behavior and semantic support remain open.
+  consumer behavior and semantic support remain open. The separate TABLE
+  fallback-graph preflight now validates the exact `DRW_Insert` runtime class
+  before reading its INSERT projection through the public tag. A locally
+  generated POINT tagged INSERT is refused with destination preservation, and
+  restoring the projection permits same-adapter ASCII/Binary retry and typed
+  TABLE readback; see the [TABLE fallback dispatch receipt](docs/research/p8-table-fallback-runtime-dispatch-2026-11-02.json).
   `dx_iface` now retains and dispatches POINTCLOUD, POINTCLOUDEX, and
   NAVISWORKSMODEL through existing bounded typed capture and DXF writer paths.
   Generated ASCII/Binary controls check AC1024 refusal for the AC1027-only
