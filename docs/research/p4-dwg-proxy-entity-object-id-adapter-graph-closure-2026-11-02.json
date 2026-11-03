@@ -24,7 +24,7 @@
     },
     "behavior": [
       "During writeBlockRecords, build a bounded typed entity inventory across model and named block containers, including expected output record name, section, and owner. Resolve only DWG soft/hard pointer codes 4/5 with their mapped DXF groups 330/340; unsupported code/group roles fail closed.",
-      "Reject absent or duplicate typed source targets, raw entity handle collisions, BLOCK/ENDBLK collisions, known TABLES/OBJECTS collisions, and inconsistent retained owner context before allowing a proxy resolver mapping.",
+      "Reject absent or duplicate typed source targets, raw entity handle collisions, BLOCK/ENDBLK collisions, known TABLES/OBJECTS collisions, retained ACDS-history handles, collisions with standard/raster/plot-settings/opaque source-frame maps and identity sets, and collisions with retained ordinal/location indexes before allowing a proxy resolver mapping.",
       "Preallocate each admitted target output handle before any proxy is emitted. The proxy-scoped resolver returns only identities in this plan; the generic resolver used for reactors, XDATA, and other records is unchanged.",
       "Before publication, compare the retained proxy reference snapshot and verify each proxy and each referenced target was emitted exactly once with the planned source-to-output handle, DXF type, section, and owner. A missing target emission rejects the complete output transaction.",
       "The plan is export-scoped and cleared on success or failure. Same-adapter correction/retry rebuilds the inventory and output bindings from the live typed model."
@@ -34,7 +34,7 @@
     "source": "Locally authored DRW_ProxyEntity and LINE records assembled in memory; all temporary DXF outputs are created under the system temp directory and removed by the test. No DWG/DXF fixture was added.",
     "encodings": ["ASCII DXF", "Binary DXF"],
     "assertions": [
-      "Missing target, duplicate typed target, raw entity collision, TABLES collision, and unsupported owner-role code 2/group 350 each refuse atomically and preserve an existing destination.",
+      "Missing target, duplicate typed target, raw entity collision, TABLES collision, ACDS-history collision, standard/raster/plot-settings/opaque frame-map and identity-set collisions, raster/standard ordinal and location-index collisions, and unsupported owner-role code 2/group 350 each refuse atomically and preserve an existing destination.",
       "Soft pointer code 4/group 330 and hard pointer code 5/group 340 both resolve to preallocated output handles and match the corresponding typed LINE handles after a fresh ASCII/Binary readback.",
       "A target that is present during planning but deliberately omitted by an adapter override fails during finalization, preserves the destination, and succeeds on corrected same-adapter retry.",
       "A proxy reference changed after graph planning is rejected before output publication; restoring the planned references allows the same adapter to retry successfully.",
@@ -45,11 +45,11 @@
     "buildCommand": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests --parallel 4",
     "buildResult": "PASS",
     "focusedTestCommand": "ctest --test-dir build-gcc -R '^dwg2dxf_proxy_entity_output_gate$' --output-on-failure",
-    "focusedTestResult": "PASS: 1/1 in 0.57 seconds.",
+    "focusedTestResult": "PASS: 1/1 in 0.59 seconds.",
     "asanBuildCommand": "cmake --build build-asan-custom --target libdxfrw_dwg2dxf_adapter_tests --parallel 4",
     "asanBuildResult": "PASS",
     "asanCommand": "ASAN_OPTIONS=abort_on_error=1:detect_leaks=0 ctest --test-dir build-asan-custom -R '^dwg2dxf_proxy_entity_output_gate$' --output-on-failure",
-    "asanResult": "PASS: 1/1 in 1.09 seconds.",
+    "asanResult": "PASS: 1/1 in 1.10 seconds.",
     "diffCheck": "PASS",
     "fixturePolicy": "No DWG/DXF fixture files were added or committed."
   },

@@ -136,10 +136,13 @@ an adapter shortcut. `writeBlockRecords` now plans only DWG handle-code 4/5
 pointer edges to unique top-level typed entities. It checks the source block
 container and owner, rejects known OBJECTS/TABLES and raw-entity handle
 collisions, preallocates each target handle, and passes only that closed map to
-the proxy-scoped resolver. Finalization proves that every planned target and
-proxy was written once with the expected type, section, owner and handle.
-Generated ASCII/Binary coverage exercises missing targets, duplicate typed
-handles, raw/object namespace collisions, unsupported owner-role edges,
+the proxy-scoped resolver. The collision inventory also covers retained
+standard/raster/plot-settings/opaque frame maps, opaque source/output identity
+sets, raster/standard ordinal and location indexes, and ACDS-history frames.
+Finalization proves that every planned target and proxy was written once with
+the expected type, section, owner and handle. Generated ASCII/Binary coverage
+exercises missing targets, duplicate typed handles, collisions across those
+source namespaces, unsupported owner-role edges,
 preallocated targets omitted at emission, post-plan proxy-reference mutation,
 atomic destination preservation, same-adapter retry and typed readback
 ([adapter graph receipt](docs/research/p4-dwg-proxy-entity-object-id-adapter-graph-closure-2026-11-02.json)).

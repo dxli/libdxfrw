@@ -71482,6 +71482,39 @@ bool dx_iface::planDwgProxyEntityObjectIds() {
             }
             return true;
         };
+        const auto inspectFrameMapKeys = [&](const auto& records) {
+            for (const auto& entry : records) {
+                if (++inventoryRecords > maxInventoryRecords)
+                    return false;
+                const std::uint32_t handle = entry.first.second;
+                if (handle != 0u && handle != DRW::NoHandle
+                    && referencedHandles.count(handle) != 0u)
+                    nonEntityCollisions.insert(handle);
+            }
+            return true;
+        };
+        const auto inspectFrameSetKeys = [&](const auto& records) {
+            for (const auto& key : records) {
+                if (++inventoryRecords > maxInventoryRecords)
+                    return false;
+                const std::uint32_t handle = key.second;
+                if (handle != 0u && handle != DRW::NoHandle
+                    && referencedHandles.count(handle) != 0u)
+                    nonEntityCollisions.insert(handle);
+            }
+            return true;
+        };
+        const auto inspectHandleValues = [&](const auto& records) {
+            for (const auto& entry : records) {
+                if (++inventoryRecords > maxInventoryRecords)
+                    return false;
+                const std::uint32_t handle = entry.second;
+                if (handle != 0u && handle != DRW::NoHandle
+                    && referencedHandles.count(handle) != 0u)
+                    nonEntityCollisions.insert(handle);
+            }
+            return true;
+        };
         // A pointer target that is also a table or OBJECTS identity is
         // ambiguous even if the competing record is not selected for output.
         if (!inspectHandles(cData->lineTypes)
@@ -71551,6 +71584,14 @@ bool dx_iface::planDwgProxyEntityObjectIds() {
             || !inspectRawHandles(cData->rawDynamicBlockObjects)
             || !inspectRawHandles(cData->rawAcdsHistoryObjects))
             return false;
+        for (const DRW_UnsupportedObject& frame :
+             cData->acdsHistoryDwgFrames) {
+            if (++inventoryRecords > maxInventoryRecords)
+                return false;
+            if (frame.m_handle != 0u && frame.m_handle != DRW::NoHandle
+                && referencedHandles.count(frame.m_handle) != 0u)
+                nonEntityCollisions.insert(frame.m_handle);
+        }
         if (cData->hasNamedObjectDictionary
             && cData->namedObjectDictionary.handle != 0u
             && cData->namedObjectDictionary.handle != DRW::NoHandle
@@ -71558,14 +71599,20 @@ bool dx_iface::planDwgProxyEntityObjectIds() {
                    cData->namedObjectDictionary.handle) != 0u)
             nonEntityCollisions.insert(
                 cData->namedObjectDictionary.handle);
-        for (const auto& frame : cData->m_standardDwgObjectFrames) {
-            if (referencedHandles.count(frame.first.second) != 0u)
-                nonEntityCollisions.insert(frame.first.second);
-        }
-        for (const auto& frame : cData->m_opaqueDwgSourceFrameIdentities) {
-            if (referencedHandles.count(frame.second) != 0u)
-                nonEntityCollisions.insert(frame.second);
-        }
+        if (!inspectFrameMapKeys(cData->m_standardDwgObjectFrames)
+            || !inspectFrameMapKeys(cData->m_standardDwgAppIdSources)
+            || !inspectFrameMapKeys(cData->m_standardDwgLayerSources)
+            || !inspectFrameMapKeys(cData->m_dwgPlotSettingsSources)
+            || !inspectFrameMapKeys(cData->m_rasterDwgSources)
+            || !inspectFrameMapKeys(cData->m_opaqueDwgSourceFrames)
+            || !inspectFrameSetKeys(cData->m_opaqueDwgSourceFrameIdentities)
+            || !inspectFrameSetKeys(
+                cData->m_opaqueDwgOutputQualifiedFrameIdentities)
+            || !inspectHandleValues(cData->m_rasterDwgOrdinals)
+            || !inspectHandleValues(cData->m_rasterDwgLocations)
+            || !inspectHandleValues(cData->m_standardDwgObjectOrdinals)
+            || !inspectHandleValues(cData->m_standardDwgObjectLocations))
+            return false;
 
         if (m_dwgProxyEntityOutputs.empty())
             return false;

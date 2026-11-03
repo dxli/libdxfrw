@@ -1070,6 +1070,65 @@ public:
         raw.m_rawBytes = bytes;
         return true;
     }
+    static bool proxySourceNamespaceCollisionControls(dx_data& data,
+            std::uint32_t handle,
+            const std::function<bool()>& refusesAtomically) {
+        const dx_data::StandardDwgFrameKey frameKey{
+            data.importGeneration, handle};
+        const auto mapCollision = [&](auto& records, const auto& key,
+                                      const auto& value) {
+            const auto inserted = records.emplace(key, value);
+            if (!inserted.second)
+                return false;
+            const bool refused = refusesAtomically();
+            records.erase(inserted.first);
+            return refused;
+        };
+        const auto setCollision = [&](auto& records, const auto& key) {
+            const auto inserted = records.insert(key);
+            if (!inserted.second)
+                return false;
+            const bool refused = refusesAtomically();
+            records.erase(inserted.first);
+            return refused;
+        };
+        if (!mapCollision(data.m_standardDwgObjectFrames, frameKey,
+                          dx_data::StandardDwgObjectFrame{})
+            || !mapCollision(data.m_standardDwgAppIdSources, frameKey,
+                             std::shared_ptr<const DRW_AppId>{})
+            || !mapCollision(data.m_standardDwgLayerSources, frameKey,
+                             std::shared_ptr<const DRW_Layer>{})
+            || !mapCollision(data.m_dwgPlotSettingsSources, frameKey,
+                             dx_data::DwgPlotSettingsSourceFrame{})
+            || !mapCollision(data.m_rasterDwgSources, frameKey,
+                             dx_data::RasterDwgObjectFrame{})
+            || !mapCollision(data.m_opaqueDwgSourceFrames, frameKey,
+                             DRW_UnsupportedObject{})
+            || !setCollision(data.m_opaqueDwgSourceFrameIdentities,
+                             frameKey)
+            || !setCollision(
+                data.m_opaqueDwgOutputQualifiedFrameIdentities, frameKey))
+            return false;
+
+        const dx_data::StandardDwgOrdinalKey rasterOrdinalKey{
+            data.importGeneration, 0xA11u};
+        const dx_data::StandardDwgOrdinalKey objectOrdinalKey{
+            data.importGeneration, 0xA12u};
+        const dx_data::StandardDwgLocationKey rasterLocationKey{
+            data.importGeneration,
+            {DRW_DwgFrameOffsetSpace::DecodedBuffer, 0xA13u}};
+        const dx_data::StandardDwgLocationKey objectLocationKey{
+            data.importGeneration,
+            {DRW_DwgFrameOffsetSpace::DecodedBuffer, 0xA14u}};
+        return mapCollision(data.m_rasterDwgOrdinals, rasterOrdinalKey,
+                            handle)
+            && mapCollision(data.m_rasterDwgLocations,
+                            rasterLocationKey, handle)
+            && mapCollision(data.m_standardDwgObjectOrdinals,
+                            objectOrdinalKey, handle)
+            && mapCollision(data.m_standardDwgObjectLocations,
+                            objectLocationKey, handle);
+    }
 };
 
 namespace {
@@ -20597,7 +20656,6 @@ bool dwgProxyEntityOutputGate() {
                                        &data, false, true)
                 && pathContains(graphSentinel);
         };
-
         retained->m_objectIdRefs[0].m_handleCode = 2u;
         retained->m_objectIdRefs[0].m_dxfCode = 350;
         if (!refusesAtomically())
@@ -20620,6 +20678,18 @@ bool dwgProxyEntityOutputGate() {
         if (!refusesAtomically())
             return fail("proxy adapter admitted an OBJECTS/TABLES target collision");
         data.layers.pop_back();
+
+        DRW_UnsupportedObject acdsHistoryCollision;
+        acdsHistoryCollision.m_handle = secondTarget.handle;
+        data.acdsHistoryDwgFrames.push_back(acdsHistoryCollision);
+        if (!refusesAtomically())
+            return fail("proxy adapter admitted an ACDS-history object target collision");
+        data.acdsHistoryDwgFrames.pop_back();
+
+        if (!DxIfaceStandardDwgCaptureTestAccess::
+                proxySourceNamespaceCollisionControls(
+                    data, firstTarget.handle, refusesAtomically))
+            return fail("proxy adapter admitted a retained source-namespace collision");
 
         DRW_Line duplicateTarget = firstTarget;
         adapter.addLine(duplicateTarget);
