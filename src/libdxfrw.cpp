@@ -10381,10 +10381,15 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
         || ent->m_horizontalCellMargin < 0.0
         || ent->m_verticalCellMargin < 0.0)
         return failDxfWrite();
+    const std::uint32_t sourceOwnerBlockRecord =
+        ent->m_ownerBlockRecordHandle;
     const std::uint32_t emittedOwnerBlockRecord =
-        remapObjectHandle(ent->m_ownerBlockRecordHandle);
+        sourceOwnerBlockRecord == 0u ? 0u
+        : (m_referenceResolver ? resolveReference(sourceOwnerBlockRecord)
+                               : remapObjectHandle(sourceOwnerBlockRecord));
     if (ent->m_ownerBlockRecordHandle != 0u
-        && emittedOwnerBlockRecord == 0u)
+        && (emittedOwnerBlockRecord == 0u
+            || emittedOwnerBlockRecord == DRW::NoHandle))
         return failDxfWrite();
 
     if (std::any_of(ent->attlist.cbegin(), ent->attlist.cend(),
@@ -10442,9 +10447,15 @@ bool dxfRW::writeTableWithLegacySourcePresence(DRW_Table *ent, const std::vector
     }
 
     writer->writeString(100, "AcDbTable");
-    if (ent->m_tableStyleHandle != 0u)
+    if (ent->m_tableStyleHandle != 0u) {
+        const std::uint32_t emittedTableStyle = m_referenceResolver
+            ? resolveReference(ent->m_tableStyleHandle)
+            : remapObjectHandle(ent->m_tableStyleHandle);
+        if (emittedTableStyle == 0u || emittedTableStyle == DRW::NoHandle)
+            return failDxfWrite();
         writer->writeString(342,
-            toHexStr(remapObjectHandle(ent->m_tableStyleHandle)));
+            toHexStr(emittedTableStyle));
+    }
     if (version >= DRW::AC1024)
         writer->writeInt16(280, ent->m_dataVersion);
     if (ent->m_ownerBlockRecordHandle != 0u)

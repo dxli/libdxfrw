@@ -307,6 +307,15 @@ row's remapped identity; see the [VPORT reference receipt](docs/research/p5-vpor
 This is serializer transport only. The nonzero VPORT shade-plot handle remains
 refused, and physical target/owner closure and native rendering are open.
 
+The ACAD_TABLE writer now resolves both modeled hard pointers—TABLESTYLE group
+342 and owner BLOCK_RECORD group 343—to final output IDs, with source-handle
+remap fallback. Generated ASCII/Binary controls cover exact values and atomic
+refusal of either unresolved target, followed by corrected output from a fresh
+writer ([receipt](docs/research/p5-table-reference-remapping-2026-11-03.json)).
+This is low-level identity transport only; it does not establish target record
+emission, ownership consistency, recursive graph closure, physical producer
+breadth, or native table behavior.
+
 Remaining implementation/evidence work includes native dictionary collation,
 eligible physical source profiles for the layer overrides, independent native
 consumer evaluation, any narrowly scoped producer-backed 420/440 compatibility

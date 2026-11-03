@@ -2800,6 +2800,145 @@ void testSolidHistoryReferenceRemapping(TestContext& t) {
     }
 }
 
+void testTableReferenceRemapping(TestContext& t) {
+    const auto makeTable = []() {
+        DRW_Table table;
+        table.handle = 0xA900u;
+        table.parentHandle = 0x1Fu;
+        table.name = "*T901";
+        table.m_hasSemanticContent = true;
+        table.m_semanticContentComplete = true;
+        table.m_tableStyleHandle = 0x901u;
+        table.m_content.m_tableStyleHandle = 0x901u;
+        table.m_ownerBlockRecordHandle = 0x902u;
+        table.m_content.m_columns = {DRW_TableColumn{"", 3.0}};
+        DRW_TableRow row;
+        row.m_height = 1.0;
+        DRW_TableCell cell;
+        cell.m_type = 1;
+        DRW_TableCellContent content;
+        content.m_type = 1;
+        content.m_text = "REFERENCE_TEST";
+        cell.m_contents.push_back(content);
+        row.m_cells.push_back(cell);
+        table.m_content.m_rows.push_back(row);
+        return table;
+    };
+    const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
+        {0x901u, 0xA91u}, {0x902u, 0xA92u}};
+    const auto resolverValue = [](std::uint32_t source) {
+        switch (source) {
+        case 0x901u: return std::uint32_t{0xB91u};
+        case 0x902u: return std::uint32_t{0xB92u};
+        default: return source;
+        }
+    };
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap(sourceToRemapped);
+            owner.setResolvedTableStyleHandles({0x901u});
+            if (useResolver)
+                owner.setReferenceResolver(resolverValue);
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+            owner.writer->setVersion("AC1032", true);
+            owner.writer->setCodePage("ANSI_1252");
+
+            DRW_Table table = makeTable();
+            const bool tableWritten = owner.writeTable(&table);
+            const bool sentinelWritten = tableWritten
+                && owner.writer->writeString(0, "WIRE_END");
+            const bool wrote = tableWritten && sentinelWritten;
+            t.expect(wrote, "TABLE references serialize");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::vector<std::pair<int, std::uint32_t>> observed;
+            std::string recordName;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (recordName == "ACAD_TABLE"
+                           && (code == 342 || code == 343)) {
+                    observed.emplace_back(code, reader->getHandleString());
+                }
+            }
+            const std::vector<std::pair<int, std::uint32_t>> expected =
+                useResolver
+                    ? std::vector<std::pair<int, std::uint32_t>>{
+                          {342, 0xB91u}, {343, 0xB92u}}
+                    : std::vector<std::pair<int, std::uint32_t>>{
+                          {342, 0xA91u}, {343, 0xA92u}};
+            t.expect(ended && observed == expected,
+                     useResolver
+                         ? "TABLE style and owner emit final resolver identities"
+                         : "TABLE style and owner emit source-handle remaps");
+        }
+    }
+
+    for (const bool binary : {false, true}) {
+        for (const std::uint32_t unresolved : {0x901u, 0x902u}) {
+            std::ostringstream output;
+            dxfRW failedOwner("");
+            failedOwner.version = DRW::AC1032;
+            failedOwner.binFile = binary;
+            failedOwner.setResolvedTableStyleHandles({0x901u});
+            failedOwner.setReferenceResolver([unresolved](std::uint32_t source) {
+                if (source == unresolved)
+                    return std::uint32_t{0u};
+                return source == 0x901u ? std::uint32_t{0xB91u}
+                                        : std::uint32_t{0xB92u};
+            });
+            failedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+            failedOwner.writer->setVersion("AC1032", true);
+            failedOwner.writer->setCodePage("ANSI_1252");
+            DRW_Table table = makeTable();
+            t.expect(!failedOwner.writeTable(&table) && output.str().empty(),
+                     "unresolved TABLE style/owner target preserves destination");
+
+            std::ostringstream retryOutput;
+            dxfRW retryOwner("");
+            retryOwner.version = DRW::AC1032;
+            retryOwner.binFile = binary;
+            retryOwner.setResolvedTableStyleHandles({0x901u});
+            retryOwner.setReferenceResolver(resolverValue);
+            retryOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&retryOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&retryOutput));
+            retryOwner.writer->setVersion("AC1032", true);
+            retryOwner.writer->setCodePage("ANSI_1252");
+            const bool retryWritten = retryOwner.writeTable(&table);
+            t.expect(retryWritten,
+                     "TABLE reference accepts corrected fresh-writer retry");
+        }
+    }
+}
+
 void testViewportReferenceRemapping(TestContext& t) {
     const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
         {0x901u, 0xA91u}, {0x902u, 0xA92u}, {0x903u, 0xA93u},
@@ -16988,6 +17127,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testSolidHistoryReferenceRemapping(focused);
         std::cout << "3DSOLID history reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--table-reference-remapping") {
+        TestContext focused;
+        testTableReferenceRemapping(focused);
+        std::cout << "TABLE reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
