@@ -658,6 +658,10 @@ eligible reader. The exact package and environment result are in the
   named-object dictionary, with AC1024/AC1032 ASCII/Binary readback and atomic
   missing-target/wrong-kind refusal plus retry; see the [Underlay graph
   receipt](docs/research/p8-underlay-definition-graph-adapter-2026-11-02.json).
+  The low-level UNDERLAY writer now also honors the configured resolver for its
+  group-340 definition ID before falling back to source-handle remapping; its
+  focused ASCII/Binary control is recorded in the [UNDERLAY reference
+  receipt](docs/research/p8-underlay-dxf-reference-remapping-2026-11-03.json).
   Both definition and reference writers now enforce kind-specific target
   floors: DWF at AC1021 and DGN/PDF at AC1024. Autodesk documents DWF before
   AutoCAD 2007 as unsupported, DGN before AutoCAD 2008 as unsupported, and PDF

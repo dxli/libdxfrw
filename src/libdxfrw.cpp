@@ -12095,12 +12095,13 @@ bool dxfRW::writeUnderlay(DRW_Underlay *ent) {
         m_writeError = true;
         return false;
     }
-    EntityRecordScope scope(*this, ent);
-    const std::uint32_t definitionHandle =
-        remapObjectHandle(ent->definitionHandle);
+    const std::uint32_t definitionHandle = m_referenceResolver
+        ? resolveReference(ent->definitionHandle)
+        : remapObjectHandle(ent->definitionHandle);
     if (definitionHandle == 0u || definitionHandle == DRW::NoHandle
         || isDxfFixedOutputHandle(definitionHandle))
         return failDxfWrite();
+    EntityRecordScope scope(*this, ent);
     const bool hasInverseClip = !ent->inverseClipBoundary.empty()
                                 || (ent->flags & 0x10) != 0;
     const std::uint8_t wireFlags =

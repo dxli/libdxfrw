@@ -2290,6 +2290,69 @@ void testNavisworksDefinitionReferenceRemapping(TestContext& t) {
     }
 }
 
+void testUnderlayDefinitionReferenceRemapping(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1027;
+            owner.binFile = binary;
+            owner.setHandleRemap({{0x501u, 0xA51u}});
+            if (useResolver) {
+                owner.setReferenceResolver([](std::uint32_t source) {
+                    return source == 0x501u ? 0xB51u : source;
+                });
+            }
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_Underlay underlay;
+            underlay.kind = DRW_Underlay::PDF;
+            underlay.definitionHandle = 0x501u;
+            const bool wrote = owner.writeUnderlay(&underlay)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote, "UNDERLAY definition reference serializes");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::uint32_t definitionHandle = 0u;
+            std::string recordName;
+            bool inUnderlayBody = false;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                    inUnderlayBody = false;
+                } else if (code == 100) {
+                    inUnderlayBody =
+                        reader->getString() == "AcDbUnderlayReference";
+                } else if (inUnderlayBody && code == 340) {
+                    definitionHandle = reader->getHandleString();
+                }
+            }
+            const std::uint32_t expected = useResolver ? 0xB51u : 0xA51u;
+            t.expect(ended && definitionHandle == expected,
+                     useResolver
+                         ? "UNDERLAY uses final resolver identity"
+                         : "UNDERLAY uses source-handle remap");
+        }
+    }
+}
+
 void testDimensionAssociationGraphClosure(TestContext& t) {
     const auto readAssociationTargets = [&t](const std::string& bytes,
                                               bool binary,
@@ -15958,6 +16021,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testNavisworksDefinitionReferenceRemapping(focused);
         std::cout << "NAVISWORKSMODEL definition reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--underlay-definition-reference-remapping") {
+        TestContext focused;
+        testUnderlayDefinitionReferenceRemapping(focused);
+        std::cout << "UNDERLAY definition reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
