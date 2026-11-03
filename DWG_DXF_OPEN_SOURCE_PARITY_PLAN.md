@@ -803,6 +803,14 @@ eligible reader. The exact package and environment result are in the
   This closes only these records' identity transport; source producer coverage,
   definition/owner graph closure, asset loading, and native consumer semantics
   remain open.
+  The low-level `RASTERVARIABLES` and `WIPEOUTVARIABLES` writers now remap or
+  allocate their group-5 identities and bind source identities after staged
+  output commits. Focused ASCII/Binary controls cover typed readback, fixed-ID
+  refusal, byte/inventory/identity-map rollback on late XDATA failure, and
+  corrected fresh-writer retry ([identity receipt](docs/research/p8-raster-wipeout-variables-identity-remapping-2026-11-03.json)).
+  This closes only identity transport; physical producer coverage, native
+  image/wipeout display behavior, and complete drawing qualification remain
+  open.
   The low-level WIPEOUT writer now translates both IMAGEDEF and IMAGEDEF_REACTOR
   references through the configured resolver or remap fallback; see the
   [WIPEOUT reference receipt](docs/research/p8-wipeout-dxf-reference-remapping-2026-11-03.json).

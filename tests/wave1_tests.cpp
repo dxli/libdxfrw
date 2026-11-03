@@ -2724,6 +2724,266 @@ void testExternalDefinitionIdentityRemapping(TestContext& t) {
         }, readColorMap, colorMapPayloadMatches);
 }
 
+void testRasterAndWipeoutVariablesIdentityRemapping(TestContext& t) {
+    constexpr std::uint32_t rasterSource = 0xA71u;
+    constexpr std::uint32_t rasterOutput = 0xB71u;
+    constexpr std::uint32_t wipeoutSource = 0xA72u;
+    constexpr std::uint32_t wipeoutOutput = 0xB72u;
+
+    class VariablesProbe final : public dx_iface {
+    public:
+        void addRasterVariables(const DRW_RasterVariables& value) override {
+            raster = value;
+            rasterFound = true;
+        }
+        void addWipeoutVariables(const DRW_WipeoutVariables& value) override {
+            wipeout = value;
+            wipeoutFound = true;
+        }
+
+        DRW_RasterVariables raster;
+        DRW_WipeoutVariables wipeout;
+        bool rasterFound {false};
+        bool wipeoutFound {false};
+    };
+
+    const auto readRaster = [](const std::string& bytes, bool binary,
+                               DRW_RasterVariables& value) {
+        std::istringstream input(bytes);
+        VariablesProbe probe;
+        dxfRW readerOwner("");
+        readerOwner.binFile = binary;
+        readerOwner.iface = &probe;
+        readerOwner.reader = binary
+            ? std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderBinary>(&input))
+            : std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderAscii>(&input));
+        int code = 0;
+        while (readerOwner.reader->readRec(&code)) {
+            if (code != 0)
+                continue;
+            readerOwner.nextentity = readerOwner.reader->getString();
+            if (readerOwner.nextentity == "RASTERVARIABLES") {
+                const bool processed = readerOwner.processRasterVariables();
+                if (processed && probe.rasterFound)
+                    value = probe.raster;
+                return processed && probe.rasterFound;
+            }
+        }
+        return false;
+    };
+
+    const auto readWipeout = [](const std::string& bytes, bool binary,
+                                DRW_WipeoutVariables& value) {
+        std::istringstream input(bytes);
+        VariablesProbe probe;
+        dxfRW readerOwner("");
+        readerOwner.binFile = binary;
+        readerOwner.iface = &probe;
+        readerOwner.reader = binary
+            ? std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderBinary>(&input))
+            : std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderAscii>(&input));
+        int code = 0;
+        while (readerOwner.reader->readRec(&code)) {
+            if (code != 0)
+                continue;
+            readerOwner.nextentity = readerOwner.reader->getString();
+            if (readerOwner.nextentity == "WIPEOUTVARIABLES") {
+                const bool processed = readerOwner.processWipeoutVariables();
+                if (processed && probe.wipeoutFound)
+                    value = probe.wipeout;
+                return processed && probe.wipeoutFound;
+            }
+        }
+        return false;
+    };
+
+    const auto prepareRaster = [](DRW_RasterVariables& value) {
+        value.parentHandle = 0xCu;
+        value.m_classVersion = 2;
+        value.m_imageFrame = 1;
+        value.m_imageQuality = 2;
+        value.m_units = 3;
+    };
+    const auto prepareWipeout = [](DRW_WipeoutVariables& value) {
+        value.parentHandle = 0xCu;
+        value.m_displayFrame = 1u;
+    };
+    const auto rasterPayloadMatches = [](const DRW_RasterVariables& value) {
+        return value.m_classVersion == 2 && value.m_imageFrame == 1
+            && value.m_imageQuality == 2 && value.m_units == 3;
+    };
+    const auto wipeoutPayloadMatches = [](const DRW_WipeoutVariables& value) {
+        return value.m_displayFrame == 1u;
+    };
+
+    const auto exercise = [&](const char* recordName, std::uint32_t source,
+                              std::uint32_t emitted, auto makeObject,
+                              auto prepare, auto writeObject, auto readObject,
+                              auto payloadMatches) {
+        using Object = decltype(makeObject());
+        for (const bool binary : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap({{source, emitted}});
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+            owner.writer->setRecordInventoryEnabled(true, 16u);
+            Object value = makeObject();
+            value.handle = source;
+            prepare(value);
+            const bool wrote = owner.writer->writeString(0, "SECTION")
+                && owner.writer->writeString(2, "OBJECTS")
+                && writeObject(owner, value)
+                && owner.writer->writeString(0, "WIRE_END");
+            const auto binding = owner.m_writingContext
+                .sourceHandleToWrittenObjectMap.find(source);
+            const std::string identityLabel = std::string(recordName)
+                + " remaps and binds its own identity";
+            t.expect(wrote
+                         && owner.writer->recordHandleCount(emitted) == 1u
+                         && owner.writer->recordHandleHasIdentity(
+                             emitted, recordName, "OBJECTS")
+                         && binding != owner.m_writingContext
+                                            .sourceHandleToWrittenObjectMap.end()
+                         && binding->second == emitted,
+                     identityLabel.c_str());
+            if (!wrote)
+                continue;
+            Object readback = makeObject();
+            const bool read = readObject(output.str(), binary, readback);
+            const std::string readLabel = std::string(recordName)
+                + " has typed ASCII/Binary readback";
+            t.expect(read && readback.handle == emitted
+                         && payloadMatches(readback),
+                     readLabel.c_str());
+
+            std::ostringstream allocatedOutput;
+            dxfRW allocatedOwner("");
+            allocatedOwner.version = DRW::AC1032;
+            allocatedOwner.binFile = binary;
+            allocatedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&allocatedOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&allocatedOutput));
+            allocatedOwner.writer->setRecordInventoryEnabled(true, 16u);
+            Object generated = makeObject();
+            prepare(generated);
+            const bool generatedWrite =
+                allocatedOwner.writer->writeString(0, "SECTION")
+                && allocatedOwner.writer->writeString(2, "OBJECTS")
+                && writeObject(allocatedOwner, generated)
+                && allocatedOwner.writer->writeString(0, "WIRE_END");
+            Object generatedReadback = makeObject();
+            const bool generatedRead = generatedWrite
+                && readObject(allocatedOutput.str(), binary, generatedReadback);
+            const std::string allocationLabel = std::string(recordName)
+                + " allocates and reads back a missing identity";
+            t.expect(generatedRead && generatedReadback.handle != 0u
+                         && generatedReadback.handle != DRW::NoHandle
+                         && allocatedOwner.writer->recordHandleCount(
+                                generatedReadback.handle) == 1u,
+                     allocationLabel.c_str());
+
+            std::ostringstream invalidOutput;
+            dxfRW invalidOwner("");
+            invalidOwner.version = DRW::AC1032;
+            invalidOwner.binFile = binary;
+            invalidOwner.setHandleRemap({{source, 0xCu}});
+            invalidOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&invalidOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&invalidOutput));
+            Object invalid = makeObject();
+            invalid.handle = source;
+            prepare(invalid);
+            const std::string refusalLabel = std::string(recordName)
+                + " rejects a fixed identity remap atomically";
+            t.expect(!writeObject(invalidOwner, invalid)
+                         && invalidOutput.str().empty(),
+                     refusalLabel.c_str());
+
+            std::ostringstream failedOutput;
+            dxfRW failedOwner("");
+            failedOwner.version = DRW::AC1032;
+            failedOwner.binFile = binary;
+            failedOwner.setHandleRemap({{source, emitted}});
+            failedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&failedOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&failedOutput));
+            failedOwner.writer->setRecordInventoryEnabled(true, 16u);
+            const bool section = failedOwner.writer->writeString(0, "SECTION")
+                && failedOwner.writer->writeString(2, "OBJECTS");
+            const std::string beforeFailure = failedOutput.str();
+            Object malformed = makeObject();
+            malformed.handle = source;
+            prepare(malformed);
+            malformed.extData.push_back(new DRW_Variant(
+                1009, std::string("unsupported-xdata-code")));
+            const bool rejected = section
+                && !writeObject(failedOwner, malformed);
+            const std::string rollbackLabel = std::string(recordName)
+                + " rolls back bytes, inventory, and source identity on XDATA failure";
+            t.expect(rejected && failedOutput.str() == beforeFailure
+                         && failedOwner.m_writingContext
+                                    .sourceHandleToWrittenObjectMap.count(source)
+                                == 0u
+                         && failedOwner.writer->recordHandleCount(emitted) == 0u,
+                     rollbackLabel.c_str());
+
+            std::ostringstream retryOutput;
+            dxfRW retryOwner("");
+            retryOwner.version = DRW::AC1032;
+            retryOwner.binFile = binary;
+            retryOwner.setHandleRemap({{source, emitted}});
+            retryOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&retryOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&retryOutput));
+            retryOwner.writer->setRecordInventoryEnabled(true, 16u);
+            Object corrected = makeObject();
+            corrected.handle = source;
+            prepare(corrected);
+            const bool retried = retryOwner.writer->writeString(0, "SECTION")
+                && retryOwner.writer->writeString(2, "OBJECTS")
+                && writeObject(retryOwner, corrected)
+                && retryOwner.writer->writeString(0, "WIRE_END");
+            Object retryReadback = makeObject();
+            const bool retryRead = retried
+                && readObject(retryOutput.str(), binary, retryReadback);
+            const std::string retryLabel = std::string(recordName)
+                + " corrected fresh-writer retry has typed readback";
+            t.expect(rejected && retryRead && retryReadback.handle == emitted
+                         && payloadMatches(retryReadback),
+                     retryLabel.c_str());
+        }
+    };
+
+    exercise("RASTERVARIABLES", rasterSource, rasterOutput,
+        [] { return DRW_RasterVariables{}; }, prepareRaster,
+        [](dxfRW& owner, DRW_RasterVariables& value) {
+            return owner.writeRasterVariables(&value);
+        }, readRaster, rasterPayloadMatches);
+    exercise("WIPEOUTVARIABLES", wipeoutSource, wipeoutOutput,
+        [] { return DRW_WipeoutVariables{}; }, prepareWipeout,
+        [](dxfRW& owner, DRW_WipeoutVariables& value) {
+            return owner.writeWipeoutVariables(&value);
+        }, readWipeout, wipeoutPayloadMatches);
+}
+
 void testBlockRecordInsertReferenceRemapping(TestContext& t) {
     for (const bool binary : {false, true}) {
         for (const bool useResolver : {false, true}) {
@@ -19511,6 +19771,15 @@ int main(int argc, char** argv) {
         TestContext focused;
         testExternalDefinitionIdentityRemapping(focused);
         std::cout << "External definition identity remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--raster-wipeout-variables-identity-remapping") {
+        TestContext focused;
+        testRasterAndWipeoutVariablesIdentityRemapping(focused);
+        std::cout << "RASTERVARIABLES/WIPEOUTVARIABLES identity remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

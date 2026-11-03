@@ -751,6 +751,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_external_definition_identity_remapping
         PROPERTIES LABELS "fast;dxf;writer;objects;identity;generated;transaction"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_raster_wipeout_variables_identity_remapping
+        COMMAND libdxfrw_wave1_tests
+            --raster-wipeout-variables-identity-remapping)
+    set_tests_properties(libdxfrw_raster_wipeout_variables_identity_remapping
+        PROPERTIES LABELS "fast;dxf;writer;objects;identity;generated;transaction"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_blockrecord_insert_reference_remapping
         COMMAND libdxfrw_wave1_tests
             --blockrecord-insert-reference-remapping)

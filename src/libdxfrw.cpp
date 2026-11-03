@@ -32301,9 +32301,23 @@ bool dxfRW::writeDictionaryVar(DRW_DictionaryVar *ent) {
 bool dxfRW::writeRasterVariables(DRW_RasterVariables *ent) {
     if (!preflightTableEntry(ent))
         return false;
+    const std::uint32_t sourceHandle = ent->handle;
+    std::uint32_t emittedHandle = sourceHandle == 0u
+        ? 0u : remapObjectHandle(sourceHandle);
+    if (sourceHandle != 0u
+        && (emittedHandle == 0u || emittedHandle == DRW::NoHandle
+            || isDxfFixedOutputHandle(emittedHandle)))
+        return failDxfWrite();
+    RecordStateScope state(*this, ent);
+    if (sourceHandle == 0u) {
+        if (!allocateDxfHandle(emittedHandle))
+            return false;
+    } else if (!reserveHandle(emittedHandle)) {
+        return failDxfWrite();
+    }
     DxfWriterRecordScope record(*writer);
     writer->writeString(0, "RASTERVARIABLES");
-    writer->writeString(5, toHexStr(ent->handle));
+    writer->writeString(5, toHexStr(emittedHandle));
     if (!writeTableEntryAppData(*ent))
         return false;
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
@@ -32318,10 +32332,12 @@ bool dxfRW::writeRasterVariables(DRW_RasterVariables *ent) {
         m_writeError = true;
         return false;
     }
-    if (!preflightDxfWrite() || !record.commit()) {
-        m_writeError = true;
-        return false;
-    }
+    if (!preflightDxfWrite()
+        || (sourceHandle != 0u
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit())
+        return failDxfWrite();
+    state.commit();
     return true;
 }
 
@@ -33290,8 +33306,23 @@ bool dxfRW::writeMLineStyle(DRW_MLineStyle *ent) {
 bool dxfRW::writeWipeoutVariables(DRW_WipeoutVariables *ent) {
     if (!preflightTableEntry(ent) || ent->m_displayFrame > 1u)
         return false;
+    const std::uint32_t sourceHandle = ent->handle;
+    std::uint32_t emittedHandle = sourceHandle == 0u
+        ? 0u : remapObjectHandle(sourceHandle);
+    if (sourceHandle != 0u
+        && (emittedHandle == 0u || emittedHandle == DRW::NoHandle
+            || isDxfFixedOutputHandle(emittedHandle)))
+        return failDxfWrite();
+    RecordStateScope state(*this, ent);
+    if (sourceHandle == 0u) {
+        if (!allocateDxfHandle(emittedHandle))
+            return false;
+    } else if (!reserveHandle(emittedHandle)) {
+        return failDxfWrite();
+    }
+    DxfWriterRecordScope record(*writer);
     writer->writeString(0, "WIPEOUTVARIABLES");
-    writer->writeString(5, toHexStr(ent->handle));
+    writer->writeString(5, toHexStr(emittedHandle));
     if (!writeTableEntryAppData(*ent))
         return false;
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
@@ -33299,7 +33330,13 @@ bool dxfRW::writeWipeoutVariables(DRW_WipeoutVariables *ent) {
     writer->writeInt16(70, ent->m_displayFrame);
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    if (writer->hasWriteError() || !preflightDxfWrite()
+        || (sourceHandle != 0u
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit())
+        return failDxfWrite();
+    state.commit();
+    return true;
 }
 
 bool dxfRW::writeMaterial(DRW_Material *ent) {
