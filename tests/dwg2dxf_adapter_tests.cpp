@@ -20517,9 +20517,9 @@ bool dwgProxyEntityOutputGate() {
         if (exported)
             return fail("proxy object-ID references escaped fail-closed output validation");
         if (diagnostics.str().find(
-                "proxy entity has an unresolved class, reference, payload")
+                "proxy entity object-ID references lack a resolvable")
             == std::string::npos)
-            return fail("proxy refusal did not identify the unsupported profile");
+            return fail("proxy refusal did not identify the unresolved object-ID edge");
         {
             std::ifstream previous(path, std::ios::binary);
             const std::string bytes{
@@ -20553,6 +20553,198 @@ bool dwgProxyEntityOutputGate() {
             || actualClass.instanceCount != 1
             || actualClass.entityFlag != 1)
             return fail("proxy fields or remapped class metadata changed on readback");
+    }
+
+    // The low-level DXF writer can serialize typed proxy object-ID edges only
+    // when the caller supplies final target identities. The adapter path above
+    // intentionally has no such graph resolver and must continue to refuse.
+    class DirectProxyWriter final : public dx_iface {
+    public:
+        void writeEntities() override {
+            written = dxfW->writeProxyEntity(&proxy, 500u);
+        }
+        DRW_ProxyEntity proxy;
+        bool written {false};
+    };
+    struct ProxyReferenceCase {
+        std::uint8_t handleCode;
+        int dxfCode;
+        std::uint32_t sourceHandle;
+        std::uint32_t outputHandle;
+    };
+    const std::array<ProxyReferenceCase, 8> referenceCases{{
+        {4u, 330, 0x456u, 0xD101u},
+        {5u, 340, 0x457u, 0xD102u},
+        {2u, 350, 0x458u, 0xD103u},
+        {3u, 360, 0x459u, 0xD104u},
+        {6u, 330, 0x45Au, 0xD105u},
+        {8u, 330, 0x45Bu, 0xD106u},
+        {10u, 330, 0x45Cu, 0xD107u},
+        {12u, 330, 0x45Du, 0xD108u},
+    }};
+    for (const bool binary : {false, true}) {
+        dx_data data;
+        DirectProxyWriter adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        adapter.proxy = makeProxy();
+        adapter.proxy.m_proxyClassId = 500;
+        for (const ProxyReferenceCase& selected : referenceCases) {
+            DRW_ProxyObjectIdRef reference;
+            reference.m_handleCode = selected.handleCode;
+            reference.m_dxfCode = selected.dxfCode;
+            reference.m_handle = selected.sourceHandle;
+            reference.m_rawHandle = selected.sourceHandle;
+            adapter.proxy.m_objectIdRefs.push_back(reference);
+        }
+        const std::vector<DRW_ProxyObjectIdRef> originalReferences =
+            adapter.proxy.m_objectIdRefs;
+        DRW_Class proxyClass;
+        proxyClass.recName = "TEST_PROXY_RECORD";
+        proxyClass.className = "AcDbTestProxyEntity";
+        proxyClass.appName = "TEST_APPLICATION";
+        proxyClass.proxyFlag = 0x401;
+        proxyClass.entityFlag = 1;
+        proxyClass.instanceCount = 1;
+        proxyClass.wasaProxyFlag = 1;
+
+        const auto path = std::filesystem::temp_directory_path()
+            / ("libdxfrw-dwg-proxy-object-ids-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{path};
+        const std::string sentinel = "PROXY_OBJECT_IDS_DESTINATION\n";
+        {
+            std::ofstream existing(path, std::ios::binary);
+            existing << sentinel;
+            if (!existing)
+                return fail("could not create proxy object-ID destination sentinel");
+        }
+
+        dxfRW writer(path.string().c_str());
+        adapter.dxfW = &writer;
+        writer.setDxfClasses(std::vector<DRW_Class>{proxyClass});
+        std::map<std::uint32_t, std::size_t> resolverCalls;
+        bool omitOneTarget = true;
+        const auto installResolver = [&]() {
+            writer.setReferenceResolver(
+                [&resolverCalls, &omitOneTarget, &referenceCases](
+                    std::uint32_t source) {
+                    ++resolverCalls[source];
+                    for (const ProxyReferenceCase& selected : referenceCases) {
+                        if (selected.sourceHandle != source)
+                            continue;
+                        if (omitOneTarget && source == 0x459u)
+                            return 0u;
+                        return selected.outputHandle;
+                    }
+                    return 0u;
+                });
+        };
+        installResolver();
+        if (writer.write(&adapter, DRW::AC1024, binary) || adapter.written)
+            return fail("proxy object-ID writer accepted a missing target mapping");
+        {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail("missing proxy object-ID target changed the destination");
+        }
+
+        // A mismatched source handle-code/group-code pair must fail before any
+        // record bytes are published; correcting both inputs then retries on
+        // the same writer and adapter.
+        omitOneTarget = false;
+        installResolver();
+        adapter.proxy.m_objectIdRefs[1].m_dxfCode = 330;
+        if (writer.write(&adapter, DRW::AC1024, binary) || adapter.written)
+            return fail("proxy object-ID writer accepted a mismatched handle role");
+        {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail("mismatched proxy object-ID role changed the destination");
+        }
+        adapter.proxy.m_objectIdRefs[1].m_dxfCode = 340;
+
+        adapter.proxy.m_objectIdRefs[0].m_handleCode = 7u;
+        if (writer.write(&adapter, DRW::AC1024, binary) || adapter.written)
+            return fail("proxy object-ID writer accepted an unsupported DWG handle code");
+        {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail("unsupported proxy object-ID code changed the destination");
+        }
+        adapter.proxy.m_objectIdRefs[0].m_handleCode = 4u;
+
+        adapter.proxy.m_objectIdRefs[0].m_handle =
+            static_cast<std::uint64_t>(std::numeric_limits<std::uint32_t>::max())
+            + 1u;
+        if (writer.write(&adapter, DRW::AC1024, binary) || adapter.written)
+            return fail("proxy object-ID writer accepted a wider-than-supported source handle");
+        {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail("wide proxy object-ID handle changed the destination");
+        }
+        adapter.proxy.m_objectIdRefs[0].m_handle = 0x456u;
+        if (!writer.write(&adapter, DRW::AC1024, binary) || !adapter.written)
+            return fail("corrected proxy object-ID profile failed same-writer retry");
+
+        dx_data readData;
+        ProxyReadback readback;
+        if (!readback.fileImport(path.string(), &readData, false)
+            || readback.proxies.size() != 1u
+            || readback.classes.size() != 1u)
+            return fail("proxy object-ID output failed typed DXF readback");
+        const DRW_ProxyEntity& actual = readback.proxies.front();
+        if (actual.m_objectIdRefs.size() != referenceCases.size())
+            return fail("proxy object-ID output changed the reference count");
+        for (std::size_t index = 0; index < referenceCases.size(); ++index) {
+            const ProxyReferenceCase& expected = referenceCases[index];
+            const DRW_ProxyObjectIdRef& reference =
+                actual.m_objectIdRefs[index];
+            const std::uint8_t expectedRoundTripHandleCode =
+                expected.handleCode == 4u || expected.handleCode == 6u
+                    || expected.handleCode == 8u || expected.handleCode == 10u
+                    || expected.handleCode == 12u
+                ? 4u : expected.handleCode;
+            if (reference.m_dxfCode != expected.dxfCode
+                || reference.m_handleCode != expectedRoundTripHandleCode
+                || reference.m_handle != expected.outputHandle
+                || reference.m_rawHandle != expected.outputHandle)
+                return fail("proxy object-ID order, role, or mapped target changed on readback");
+        }
+        if (resolverCalls != std::map<std::uint32_t, std::size_t>{
+                {0x456u, 3u}, {0x457u, 2u}, {0x458u, 2u},
+                {0x459u, 2u}, {0x45Au, 1u}, {0x45Bu, 1u},
+                {0x45Cu, 1u}, {0x45Du, 1u}})
+            return fail("proxy object-ID resolver was not called once per attempted edge");
+        if (adapter.proxy.m_objectIdRefs.size() != originalReferences.size())
+            return fail("proxy object-ID serialization changed caller reference storage");
+        for (std::size_t index = 0; index < originalReferences.size(); ++index) {
+            const DRW_ProxyObjectIdRef& before = originalReferences[index];
+            const DRW_ProxyObjectIdRef& after =
+                adapter.proxy.m_objectIdRefs[index];
+            if (before.m_dxfCode != after.m_dxfCode
+                || before.m_handleCode != after.m_handleCode
+                || before.m_handle != after.m_handle
+                || before.m_rawHandle != after.m_rawHandle)
+                return fail("proxy object-ID serialization mutated source handles");
+        }
     }
 
     // DXF-origin proxy entities use the exact raw carrier delivered directly

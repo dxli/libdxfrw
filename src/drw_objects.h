@@ -7042,6 +7042,21 @@ public:
 
 //! A decoded ACAD_PROXY_OBJECT OBJECTS record (fixed DWG type 499).
 struct DRW_ProxyObjectIdRef {
+  static constexpr int dxfGroupCodeForDwgHandleCode(
+      std::uint8_t handleCode) noexcept {
+    switch (handleCode) {
+    case 2: return 350; // soft owner
+    case 3: return 360; // hard owner
+    case 4: return 330; // soft pointer
+    case 5: return 340; // hard pointer
+    case 6:
+    case 8:
+    case 10:
+    case 12: return 330; // soft pointer
+    default: return -1;
+    }
+  }
+
   int m_dxfCode = 330;
   std::uint8_t m_handleCode = 0;
   std::uint64_t m_handle = 0;

@@ -7777,6 +7777,11 @@ bool dxfRW::writeProxyEntity(DRW_ProxyEntity *ent,
         return false;
     if (typeid(*ent) != typeid(DRW_ProxyEntity))
         return failDxfWrite();
+    struct ResolvedObjectId {
+        int dxfCode;
+        std::uint32_t handle;
+    };
+    std::vector<ResolvedObjectId> resolvedObjectIds;
     const std::uint64_t entityBytes =
         (static_cast<std::uint64_t>(ent->m_entityDataBitSize) + 7u) / 8u;
     const bool hasGraphics = hasTypedProxyGraphics(*ent);
@@ -7797,7 +7802,7 @@ bool dxfRW::writeProxyEntity(DRW_ProxyEntity *ent,
         || ent->m_entityDataBitSize > static_cast<std::uint32_t>(
                                           std::numeric_limits<std::int32_t>::max())
         || ent->m_hasUnknownDataByteSize || !ent->m_unknownData.empty()
-        || !ent->m_objectIdRefs.empty() || !ent->reactorHandles.empty()
+        || !ent->reactorHandles.empty()
         || ent->xDictHandle != 0u || !ent->appData.empty()
         || !ent->extData.empty()
         || ent->material != DRW::MaterialByLayer
@@ -7821,6 +7826,52 @@ bool dxfRW::writeProxyEntity(DRW_ProxyEntity *ent,
         return false;
     }
 
+    if (!ent->m_objectIdRefs.empty()) {
+        const auto failObjectIds = [this, ent]() {
+            recordOperationDiagnostic(
+                DRW::OperationPhase::Validation,
+                DRW::OperationCause::ValidationFailure,
+                "proxy-entity-object-id-reference",
+                "proxy entity object-ID references lack a resolvable "
+                "supported role or target",
+                0, false, ent->handle, ent->handle != 0u);
+            m_writeError = true;
+            return false;
+        };
+        if (!m_referenceResolver
+            || ent->m_objectIdRefs.size() > DRW::kMaxDxfRawRecordGroups
+            || ent->m_objectIdRefs.size()
+                > static_cast<std::size_t>(std::numeric_limits<int>::max())
+            || !DRW::reserve(resolvedObjectIds,
+                             static_cast<int>(ent->m_objectIdRefs.size())))
+            return failObjectIds();
+
+        try {
+            for (const DRW_ProxyObjectIdRef& source :
+                 ent->m_objectIdRefs) {
+                const int expectedDxfCode =
+                    DRW_ProxyObjectIdRef::dxfGroupCodeForDwgHandleCode(
+                        source.m_handleCode);
+                if (expectedDxfCode < 0
+                    || source.m_dxfCode != expectedDxfCode
+                    || source.m_handle == 0u
+                    || source.m_handle == DRW::NoHandle
+                    || source.m_handle
+                        > std::numeric_limits<std::uint32_t>::max())
+                    return failObjectIds();
+
+                const std::uint32_t emitted = resolveReference(
+                    static_cast<std::uint32_t>(source.m_handle));
+                if (m_writeError || emitted == 0u
+                    || emitted == DRW::NoHandle)
+                    return failObjectIds();
+                resolvedObjectIds.push_back({expectedDxfCode, emitted});
+            }
+        } catch (...) {
+            return failObjectIds();
+        }
+    }
+
     RecordStateScope state(*this, ent);
     DxfWriterRecordScope record(*writer);
     if (!writer->writeString(0, "ACAD_PROXY_ENTITY")
@@ -7833,8 +7884,15 @@ bool dxfRW::writeProxyEntity(DRW_ProxyEntity *ent,
                                    ent->m_entityDataBitSize))
         || (!ent->m_entityData.empty()
             && (writeDxfBinaryChunks(writer.get(), ent->m_entityData),
-                writer->hasWriteError()))
-        || !writer->writeInt32(94, 0)
+                writer->hasWriteError())))
+        return failDxfWrite();
+
+    for (const ResolvedObjectId& reference : resolvedObjectIds) {
+        if (!writer->writeString(reference.dxfCode,
+                                 toHexStr(reference.handle)))
+            return failDxfWrite();
+    }
+    if (!writer->writeInt32(94, 0)
         || !writer->writeInt32(95,
                                static_cast<std::int32_t>(
                                    ent->m_proxyDrawingFormat))

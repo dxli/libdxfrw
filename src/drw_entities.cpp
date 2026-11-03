@@ -2288,17 +2288,9 @@ bool readSurfaceDwgPayload(const std::vector<std::uint8_t>& data,
 
 int proxyEntityDxfCode(std::uint8_t handleCode) {
     // Same typed-handle mapping as ACAD_PROXY_OBJECT (ODA §2.13/§20.4.90).
-    switch (handleCode) {
-    case 2: return 350;
-    case 3: return 360;
-    case 5: return 340;
-    case 4:
-    case 6:
-    case 8:
-    case 10:
-    case 12: return 330;
-    default: return 330;
-    }
+    const int code = DRW_ProxyObjectIdRef::dxfGroupCodeForDwgHandleCode(
+        handleCode);
+    return code < 0 ? 330 : code;
 }
 
 DRW_DwgSubrecordRange makeDwgSubrecordRange(const char *name, std::uint64_t startBit,

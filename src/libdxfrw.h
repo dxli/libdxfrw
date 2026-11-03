@@ -1022,9 +1022,10 @@ public:
     }
     /*!< Install an owned reference resolver for selected DXF references.
      * Its result is the final emitted identity (it is not remapped again).
-     * Zero omits optional reactor/extension-dictionary references; XDATA
-     * handle zero is retained as a literal. The callback and its closure are
-     * owned/copied by the codec, but objects referenced by closure captures
+     * Zero omits optional reactor/extension-dictionary references; proxy
+     * object-ID references require a nonzero result and fail closed otherwise.
+     * XDATA handle zero is retained as a literal. The callback and its closure
+     * are owned/copied by the codec, but objects referenced by closure captures
      * remain the caller's lifetime responsibility. Setup, replacement, and
      * clearing are rejected during a write or finalization. */
     void setReferenceResolver(
