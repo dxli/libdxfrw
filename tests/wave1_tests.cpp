@@ -2889,6 +2889,122 @@ void testViewReferenceRemapping(TestContext& t) {
     }
 }
 
+void testLayoutPlotSettingsReferenceRemapping(TestContext& t) {
+    const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
+        {0xA300u, 0xAA30u}, {0xA301u, 0xAA31u},
+        {0x931u, 0xA31u}, {0x932u, 0xA32u}, {0x933u, 0xA33u},
+        {0x934u, 0xA34u}, {0x935u, 0xA35u}, {0x936u, 0xA36u}};
+    const auto resolverValue = [](std::uint32_t source) {
+        switch (source) {
+        case 0x931u: return std::uint32_t{0xB31u};
+        case 0x932u: return std::uint32_t{0xB32u};
+        case 0x933u: return std::uint32_t{0xB33u};
+        case 0x934u: return std::uint32_t{0xB34u};
+        case 0x935u: return std::uint32_t{0xB35u};
+        case 0x936u: return std::uint32_t{0xB36u};
+        default: return source;
+        }
+    };
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap(sourceToRemapped);
+            if (useResolver)
+                owner.setReferenceResolver(resolverValue);
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_PlotSettings plotSettings;
+            plotSettings.handle = 0xA300u;
+            plotSettings.parentHandle = 0xCu;
+            plotSettings.shadePlotHandle.ref = 0x931u;
+            DRW_Layout layout;
+            layout.handle = 0xA301u;
+            layout.parentHandle = 0xCu;
+            layout.name = "LAYOUT_TEST";
+            layout.shadePlotHandle.ref = 0x932u;
+            layout.paperSpaceBlockRecordHandle.ref = 0x933u;
+            layout.lastActiveViewportHandle.ref = 0x934u;
+            layout.namedUcsHandle.ref = 0x935u;
+            layout.baseUcsHandle.ref = 0x936u;
+            layout.orthoViewType = 1;
+
+            const bool wrote = owner.writePlotSettings(&plotSettings)
+                && owner.writeLayout(&layout)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote,
+                     "PLOTSETTINGS and LAYOUT references serialize");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::uint32_t plotSettingsRow = 0u;
+            std::uint32_t layoutRow = 0u;
+            std::vector<std::pair<int, std::uint32_t>> plotSettingsRefs;
+            std::vector<std::pair<int, std::uint32_t>> layoutRefs;
+            std::string recordName;
+            bool inLayoutSubclass = false;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    inLayoutSubclass = false;
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if (code == 100 && recordName == "LAYOUT") {
+                    inLayoutSubclass = reader->getString()
+                        == "AcDbLayout";
+                } else if (recordName == "PLOTSETTINGS" && code == 5) {
+                    plotSettingsRow = reader->getHandleString();
+                } else if (recordName == "PLOTSETTINGS" && code == 333) {
+                    plotSettingsRefs.emplace_back(
+                        code, reader->getHandleString());
+                } else if (recordName == "LAYOUT" && code == 5) {
+                    layoutRow = reader->getHandleString();
+                } else if (recordName == "LAYOUT"
+                           && (code == 333
+                               || (inLayoutSubclass
+                                   && (code == 330 || code == 331
+                                       || code == 345 || code == 346)))) {
+                    layoutRefs.emplace_back(code, reader->getHandleString());
+                }
+            }
+            const std::vector<std::pair<int, std::uint32_t>>
+                expectedPlotSettingsRefs = {{333, useResolver
+                    ? 0xB31u : 0xA31u}};
+            const std::vector<std::pair<int, std::uint32_t>> expectedLayoutRefs =
+                useResolver
+                    ? std::vector<std::pair<int, std::uint32_t>>{
+                          {333, 0xB32u}, {330, 0xB33u}, {331, 0xB34u},
+                          {345, 0xB35u}, {346, 0xB36u}}
+                    : std::vector<std::pair<int, std::uint32_t>>{
+                          {333, 0xA32u}, {330, 0xA33u}, {331, 0xA34u},
+                          {345, 0xA35u}, {346, 0xA36u}};
+            t.expect(ended && plotSettingsRow == 0xAA30u
+                         && layoutRow == 0xAA31u
+                         && plotSettingsRefs == expectedPlotSettingsRefs
+                         && layoutRefs == expectedLayoutRefs,
+                     useResolver
+                         ? "PLOTSETTINGS and LAYOUT emit final resolver identities"
+                         : "PLOTSETTINGS and LAYOUT emit source-handle remaps");
+        }
+    }
+}
+
 void testDimensionAssociationGraphClosure(TestContext& t) {
     const auto readAssociationTargets = [&t](const std::string& bytes,
                                               bool binary,
@@ -16638,6 +16754,15 @@ int main(int argc, char** argv) {
         TestContext focused;
         testViewReferenceRemapping(focused);
         std::cout << "VIEW reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--layout-plotsettings-reference-remapping") {
+        TestContext focused;
+        testLayoutPlotSettingsReferenceRemapping(focused);
+        std::cout << "LAYOUT/PLOTSETTINGS reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

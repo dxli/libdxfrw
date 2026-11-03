@@ -29462,6 +29462,11 @@ bool dxfRW::writePlotSettings(DRW_PlotSettings *ent) {
     if (sourceHandle != 0
         && (handle == 0 || handle == DRW::NoHandle))
         return failDxfWrite();
+    const std::uint32_t shadePlotHandle = ent->shadePlotHandle.ref == 0u
+        ? 0u
+        : (m_referenceResolver
+               ? resolveReference(ent->shadePlotHandle.ref)
+               : remapObjectHandle(ent->shadePlotHandle.ref));
     RecordStateScope state(*this, ent);
     DxfWriterRecordScope record(*writer);
     if (handle != 0) {
@@ -29481,8 +29486,7 @@ bool dxfRW::writePlotSettings(DRW_PlotSettings *ent) {
     write(writer->writeString(100, "AcDbPlotSettings"));
     writePlotSettingsFields(ent);
     if (ent->shadePlotHandle.ref != 0)
-        write(writer->writeString(
-            333, toHexStr(remapObjectHandle(ent->shadePlotHandle.ref))));
+        write(writer->writeString(333, toHexStr(shadePlotHandle)));
     if (!ent->extData.empty())
         result = writeExtData(ent->extData) && result;
     if (!result || writer->hasWriteError())
@@ -29556,6 +29560,12 @@ bool dxfRW::writeLayout(DRW_Layout *ent) {
         m_writeError = true;
         return false;
     }
+    const auto emittedReference = [this](std::uint32_t source) {
+        if (source == 0u)
+            return 0u;
+        return m_referenceResolver ? resolveReference(source)
+                                   : remapObjectHandle(source);
+    };
     std::uint32_t handle = remapObjectHandle(
         static_cast<std::uint32_t>(ent->handle));
     if (handle != 0) {
@@ -29633,21 +29643,21 @@ bool dxfRW::writeLayout(DRW_Layout *ent) {
     writer->writeInt16(76, ent->orthoViewType);
     if (ent->shadePlotHandle.ref != 0)
         writer->writeString(
-            333, toHexStr(remapObjectHandle(ent->shadePlotHandle.ref)));
+            333, toHexStr(emittedReference(ent->shadePlotHandle.ref)));
     if (ent->paperSpaceBlockRecordHandle.ref != 0)
         writer->writeString(
-            330, toHexStr(remapObjectHandle(
+            330, toHexStr(emittedReference(
                               ent->paperSpaceBlockRecordHandle.ref)));
     if (ent->lastActiveViewportHandle.ref != 0)
         writer->writeString(
-            331, toHexStr(remapObjectHandle(
+            331, toHexStr(emittedReference(
                               ent->lastActiveViewportHandle.ref)));
     if (ent->namedUcsHandle.ref != 0)
         writer->writeString(
-            345, toHexStr(remapObjectHandle(ent->namedUcsHandle.ref)));
+            345, toHexStr(emittedReference(ent->namedUcsHandle.ref)));
     if (ent->baseUcsHandle.ref != 0)
         writer->writeString(
-            346, toHexStr(remapObjectHandle(ent->baseUcsHandle.ref)));
+            346, toHexStr(emittedReference(ent->baseUcsHandle.ref)));
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
     return !writer->hasWriteError();

@@ -200,6 +200,12 @@ missing; do not synthesize it. Neither result qualifies external producer
 breadth, native plotting, or whole-document closure. See the [codec round-trip
 receipt](docs/research/p4-plotsettings-r2007plus-dwg-codec-decode-roundtrip-2026-11-02.json)
 and [current strict readback receipt](docs/research/p4-plotsettings-ac1015-current-strict-readback-2026-11-02.json).
+The low-level PLOTSETTINGS and LAYOUT writers now resolve their modeled shade-
+plot, paper-space BLOCK_RECORD, last-active VIEWPORT, and UCS references to
+final output IDs, with handle-remap fallback. Generated ASCII/Binary controls
+cover the exact fields; see the [reference-remapping receipt](docs/research/p4-layout-plotsettings-reference-remapping-2026-11-03.json).
+This is transport only; it does not establish those target records' presence,
+roles, ownership, or native plotting behavior.
 
 **AC1018 DICTIONARYVAR isolation boundary:** the current physical selector first
 refuses the unrelated `ET Border block` HATCH (handle `0x2BA`) because it has
