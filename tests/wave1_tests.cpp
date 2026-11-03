@@ -2429,6 +2429,113 @@ void testWipeoutReferenceRemapping(TestContext& t) {
     }
 }
 
+void testSceneObjectReferenceRemapping(TestContext& t) {
+    const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
+        {0x701u, 0xA01u}, {0x702u, 0xA02u}, {0x703u, 0xA03u},
+        {0x704u, 0xA04u}, {0x705u, 0xA05u}, {0x706u, 0xA06u},
+        {0x707u, 0xA07u}, {0x708u, 0xA08u}};
+    const auto resolverValue = [](std::uint32_t source) {
+        switch (source) {
+        case 0x701u: return std::uint32_t{0xB01u};
+        case 0x702u: return std::uint32_t{0xB02u};
+        case 0x703u: return std::uint32_t{0xB03u};
+        case 0x704u: return std::uint32_t{0xB04u};
+        case 0x705u: return std::uint32_t{0xB05u};
+        case 0x706u: return std::uint32_t{0xB06u};
+        case 0x707u: return std::uint32_t{0xB07u};
+        case 0x708u: return std::uint32_t{0xB08u};
+        default: return source;
+        }
+    };
+
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap(sourceToRemapped);
+            if (useResolver)
+                owner.setReferenceResolver(resolverValue);
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_SunStudy sunStudy;
+            sunStudy.m_pageSetupWizardHandle = 0x701u;
+            sunStudy.m_viewHandle = 0x702u;
+            sunStudy.m_visualStyleHandle = 0x703u;
+            sunStudy.m_textStyleHandle = 0x704u;
+            DRW_MotionPath motionPath;
+            motionPath.m_cameraPathHandle = 0x705u;
+            motionPath.m_targetPathHandle = 0x706u;
+            motionPath.m_viewTableHandle = 0x707u;
+            DRW_CurvePath curvePath;
+            curvePath.m_entityHandle = 0x708u;
+
+            const bool wrote = owner.writeSunStudy(&sunStudy)
+                && owner.writeMotionPath(&motionPath)
+                && owner.writeCurvePath(&curvePath)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote, "scene-object references serialize");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::map<std::string, std::vector<std::pair<int, std::uint32_t>>>
+                observed;
+            std::string recordName;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                } else if ((recordName == "SUNSTUDY"
+                            && code >= 340 && code <= 343)
+                           || (recordName == "MOTIONPATH" && code == 340)
+                           || (recordName == "ACDBCURVEPATH" && code == 340)) {
+                    observed[recordName].emplace_back(
+                        code, reader->getHandleString());
+                }
+            }
+
+            const auto expected = [&useResolver, &sourceToRemapped,
+                                   &resolverValue](std::uint32_t source) {
+                if (useResolver)
+                    return resolverValue(source);
+                const auto found = sourceToRemapped.find(source);
+                return found == sourceToRemapped.end() ? source : found->second;
+            };
+            const std::vector<std::pair<int, std::uint32_t>> sunStudyExpected = {
+                {340, expected(0x701u)}, {341, expected(0x702u)},
+                {342, expected(0x703u)}, {343, expected(0x704u)}};
+            const std::vector<std::pair<int, std::uint32_t>> motionPathExpected = {
+                {340, expected(0x705u)}, {340, expected(0x706u)},
+                {340, expected(0x707u)}};
+            const std::vector<std::pair<int, std::uint32_t>> curvePathExpected = {
+                {340, expected(0x708u)}};
+            t.expect(ended
+                         && observed["SUNSTUDY"] == sunStudyExpected
+                         && observed["MOTIONPATH"] == motionPathExpected
+                         && observed["ACDBCURVEPATH"] == curvePathExpected,
+                     useResolver
+                         ? "scene objects emit final resolver identities"
+                         : "scene objects emit source-handle remaps");
+        }
+    }
+}
+
 void testDimensionAssociationGraphClosure(TestContext& t) {
     const auto readAssociationTargets = [&t](const std::string& bytes,
                                               bool binary,
@@ -16138,6 +16245,14 @@ int main(int argc, char** argv) {
         TestContext focused;
         testWipeoutReferenceRemapping(focused);
         std::cout << "WIPEOUT reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--scene-object-reference-remapping") {
+        TestContext focused;
+        testSceneObjectReferenceRemapping(focused);
+        std::cout << "Scene-object reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

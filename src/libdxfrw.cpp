@@ -33067,6 +33067,19 @@ bool dxfRW::writeBackground(DRW_Background *ent, const char *recordName) {
 bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
     if (!preflightTableEntry(ent))
         return false;
+    const auto emittedReference = [this](std::uint32_t source) {
+        if (source == 0u)
+            return 0u;
+        return m_referenceResolver ? resolveReference(source)
+                                   : remapObjectHandle(source);
+    };
+    const std::uint32_t pageSetupWizardHandle =
+        emittedReference(ent->m_pageSetupWizardHandle);
+    const std::uint32_t viewHandle = emittedReference(ent->m_viewHandle);
+    const std::uint32_t visualStyleHandle =
+        emittedReference(ent->m_visualStyleHandle);
+    const std::uint32_t textStyleHandle =
+        emittedReference(ent->m_textStyleHandle);
     writer->writeString(0, "SUNSTUDY");
     writer->writeString(5, toHexStr(ent->handle));
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
@@ -33105,13 +33118,13 @@ bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
     writer->writeBool(293, ent->m_lockViewports);
     writer->writeBool(294, ent->m_labelViewports);
     if (ent->m_pageSetupWizardHandle != 0)
-        writer->writeString(340, toHexStr(ent->m_pageSetupWizardHandle));
+        writer->writeString(340, toHexStr(pageSetupWizardHandle));
     if (ent->m_viewHandle != 0)
-        writer->writeString(341, toHexStr(ent->m_viewHandle));
+        writer->writeString(341, toHexStr(viewHandle));
     if (ent->m_visualStyleHandle != 0)
-        writer->writeString(342, toHexStr(ent->m_visualStyleHandle));
+        writer->writeString(342, toHexStr(visualStyleHandle));
     if (ent->m_textStyleHandle != 0)
-        writer->writeString(343, toHexStr(ent->m_textStyleHandle));
+        writer->writeString(343, toHexStr(textStyleHandle));
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
     return !writer->hasWriteError();
@@ -33120,6 +33133,18 @@ bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
 bool dxfRW::writeMotionPath(DRW_MotionPath *ent) {
     if (!preflightTableEntry(ent))
         return false;
+    const auto emittedReference = [this](std::uint32_t source) {
+        if (source == 0u)
+            return 0u;
+        return m_referenceResolver ? resolveReference(source)
+                                   : remapObjectHandle(source);
+    };
+    const std::uint32_t cameraPathHandle =
+        emittedReference(ent->m_cameraPathHandle);
+    const std::uint32_t targetPathHandle =
+        emittedReference(ent->m_targetPathHandle);
+    const std::uint32_t viewTableHandle =
+        emittedReference(ent->m_viewTableHandle);
     writer->writeString(0, "MOTIONPATH");
     writer->writeString(5, toHexStr(ent->handle));
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
@@ -33127,9 +33152,9 @@ bool dxfRW::writeMotionPath(DRW_MotionPath *ent) {
         return false;
     writer->writeString(100, "AcDbMotionPath");
     writer->writeInt32(90, ent->m_classVersion);
-    writer->writeString(340, toHexStr(ent->m_cameraPathHandle));
-    writer->writeString(340, toHexStr(ent->m_targetPathHandle));
-    writer->writeString(340, toHexStr(ent->m_viewTableHandle));
+    writer->writeString(340, toHexStr(cameraPathHandle));
+    writer->writeString(340, toHexStr(targetPathHandle));
+    writer->writeString(340, toHexStr(viewTableHandle));
     writer->writeInt32(90, ent->m_frames);
     writer->writeInt32(90, ent->m_frameRate);
     writer->writeBool(290, ent->m_cornerDeceleration);
@@ -33141,6 +33166,10 @@ bool dxfRW::writeMotionPath(DRW_MotionPath *ent) {
 bool dxfRW::writeCurvePath(DRW_CurvePath *ent) {
     if (!preflightTableEntry(ent))
         return false;
+    const std::uint32_t entityHandle = ent->m_entityHandle == 0u
+        ? 0u
+        : (m_referenceResolver ? resolveReference(ent->m_entityHandle)
+                               : remapObjectHandle(ent->m_entityHandle));
     writer->writeString(0, "ACDBCURVEPATH");
     writer->writeString(5, toHexStr(ent->handle));
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
@@ -33148,7 +33177,7 @@ bool dxfRW::writeCurvePath(DRW_CurvePath *ent) {
         return false;
     writer->writeString(100, "AcDbCurvePath");
     writer->writeInt32(90, ent->m_classVersion);
-    writer->writeString(340, toHexStr(ent->m_entityHandle));
+    writer->writeString(340, toHexStr(entityHandle));
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
     return !writer->hasWriteError();
