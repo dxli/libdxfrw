@@ -7928,6 +7928,240 @@ void testSectionObjectsAllocationRetry(TestContext& t) {
     }
 }
 
+void testPointCloudObjectsAllocationRetry(TestContext& t) {
+    using Edge = DRW_Dictionary::Entry::DxfHandleCode;
+    class PointCloudObjectsWriter final : public dx_iface {
+    public:
+        void writeObjects() override {
+            objectsCallbackReached = true;
+            if (!armAllocationFailure) {
+                dx_iface::writeObjects();
+                return;
+            }
+            materialAllocationCountdown = allocationOffset;
+            dx_iface::writeObjects();
+            remainingAllocationCountdown = materialAllocationCountdown;
+            materialAllocationCountdown = -1;
+        }
+
+        bool armAllocationFailure{false};
+        bool objectsCallbackReached{false};
+        long allocationOffset{0L};
+        long remainingAllocationCountdown{-1L};
+    };
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-pointcloud-objects-allocation-"
+           + std::to_string(nonce));
+    std::error_code error;
+    if (!std::filesystem::create_directory(directory, error) || error) {
+        t.expect(false, "temporary POINTCLOUD OBJECTS allocation directory is available");
+        return;
+    }
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+
+    const auto outputPath = directory / "pointcloud-objects.dxf";
+    const std::string outputFilename = outputPath.string();
+    const auto outputBytes = [&outputPath]() {
+        std::ifstream input(outputPath, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input), {});
+    };
+    const auto installGraph = [](PointCloudObjectsWriter& adapter,
+                                 dx_data& data) {
+        constexpr std::uint32_t nodHandle = 0xCu;
+        constexpr std::uint32_t dictionaryHandle = 0xA600u;
+        constexpr std::uint32_t definitionHandle = 0xA601u;
+        constexpr std::uint32_t cloudHandle = 0xA602u;
+        constexpr std::uint32_t reactorHandle = 0xA603u;
+        data.sourceFormat = dx_source_format::Unknown;
+        data.sourceVersion = DRW::AC1032;
+        data.hasNamedObjectDictionary = true;
+        data.namedObjectDictionary.handle = nodHandle;
+        data.namedObjectDictionary.hardOwner = 1;
+        data.namedObjectDictionary.m_entries.push_back(
+            {"ACAD_POINTCLOUD_EX_DICT", dictionaryHandle,
+             Edge::SoftOwner});
+        DRW_Dictionary definitionDictionary;
+        definitionDictionary.handle = dictionaryHandle;
+        definitionDictionary.parentHandle = nodHandle;
+        definitionDictionary.hardOwner = 1;
+        definitionDictionary.m_entries.push_back(
+            {"LOCAL_POINTCLOUD_DEF", definitionHandle, Edge::HardOwner});
+        data.dictionaries.push_back(std::move(definitionDictionary));
+
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+        DRW_PointCloudDef definition;
+        definition.m_kind = DRW_PointCloudDef::DefinitionEx;
+        definition.handle = definitionHandle;
+        definition.parentHandle = dictionaryHandle;
+        definition.m_classVersion = 7;
+        definition.m_sourceFilename = "local-point-cloud.rcs";
+        definition.m_pointCount = 17u;
+        definition.m_extentsMin = DRW_Coord{-1.0, -2.0, -3.0};
+        definition.m_extentsMax = DRW_Coord{4.0, 5.0, 6.0};
+        definition.reactorHandles.push_back(reactorHandle);
+        definition.setDwgCommonObjectState(1, 0u, false);
+        adapter.addPointCloudDef(definition);
+
+        DRW_PointCloudDef reactor;
+        reactor.m_kind = DRW_PointCloudDef::ReactorEx;
+        reactor.handle = reactorHandle;
+        reactor.parentHandle = cloudHandle;
+        reactor.m_classVersion = 7;
+        adapter.addPointCloudDef(reactor);
+
+        DRW_PointCloudEx cloud;
+        cloud.handle = cloudHandle;
+        cloud.classVersion = 3u;
+        cloud.definitionHandle = definitionHandle;
+        cloud.reactorHandle = reactorHandle;
+        cloud.name = "LOCAL_POINTCLOUDEX";
+        adapter.addPointCloudEx(&cloud);
+        return !data.pointCloudObjectCaptureFailed
+            && !data.typedEntityCaptureFailed
+            && data.pointCloudDefinitions.size() == 2u
+            && data.mBlock != nullptr && data.mBlock->ent.size() == 1u;
+    };
+    const auto graphReadbackMatches = [&]() {
+        dx_data decoded;
+        dx_iface reader;
+        if (!reader.fileImport(outputFilename, &decoded, false)
+            || decoded.mBlock == nullptr
+            || decoded.pointCloudDefinitions.size() != 2u
+            || decoded.mBlock->ent.size() != 1u
+            || !decoded.hasNamedObjectDictionary)
+            return false;
+        const DRW_PointCloudDef* definition = nullptr;
+        const DRW_PointCloudDef* reactor = nullptr;
+        for (const DRW_PointCloudDef& object : decoded.pointCloudDefinitions) {
+            if (object.m_kind == DRW_PointCloudDef::DefinitionEx)
+                definition = &object;
+            else if (object.m_kind == DRW_PointCloudDef::ReactorEx)
+                reactor = &object;
+        }
+        const auto* cloud = dynamic_cast<const DRW_PointCloudEx*>(
+            decoded.mBlock->ent.front());
+        const auto rootEntry = std::count_if(
+            decoded.namedObjectDictionary.m_entries.begin(),
+            decoded.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_POINTCLOUD_EX_DICT"
+                    && entry.m_handle == 0xA600u;
+            });
+        const auto definitionEntry = std::count_if(
+            decoded.dictionaries.begin(), decoded.dictionaries.end(),
+            [](const DRW_Dictionary& dictionary) {
+                return dictionary.handle == 0xA600u
+                    && dictionary.parentHandle == 0xCu
+                    && dictionary.m_entries.size() == 1u
+                    && dictionary.m_entries.front().m_name
+                        == "LOCAL_POINTCLOUD_DEF"
+                    && dictionary.m_entries.front().m_handle == 0xA601u;
+            });
+        return definition != nullptr && reactor != nullptr && cloud != nullptr
+            && rootEntry == 1 && definitionEntry == 1
+            && definition->handle == 0xA601u
+            && definition->parentHandle == 0xA600u
+            && definition->m_sourceFilename == "local-point-cloud.rcs"
+            && definition->m_pointCount == 17u
+            && definition->reactorHandles
+                == std::vector<std::uint32_t>{reactor->handle}
+            && reactor->parentHandle == cloud->handle
+            && cloud->definitionHandle == definition->handle
+            && cloud->reactorHandle == reactor->handle
+            && cloud->name == "LOCAL_POINTCLOUDEX";
+    };
+    const auto measure = [&](bool binary, long& allocations) {
+        constexpr long allocationProbe = 1000000L;
+        dx_data data;
+        PointCloudObjectsWriter adapter;
+        const bool installed = installGraph(adapter, data);
+        adapter.armAllocationFailure = true;
+        adapter.allocationOffset = allocationProbe;
+        const bool written = installed && adapter.fileExport(
+            outputFilename, DRW::AC1027, binary, &data, false, true);
+        materialAllocationCountdown = -1;
+        const bool measured = written && adapter.objectsCallbackReached
+            && adapter.remainingAllocationCountdown > 0L
+            && adapter.remainingAllocationCountdown < allocationProbe;
+        allocations = measured
+            ? allocationProbe - adapter.remainingAllocationCountdown : 0L;
+        return measured;
+    };
+
+    for (const bool binary : {false, true}) {
+        long allocations = 0L;
+        const bool calibrated = measure(binary, allocations)
+            && allocations > 0L;
+        bool everyOffsetRolledBack = calibrated;
+        bool everyOffsetRetried = calibrated;
+        long injectedFailures = 0L;
+        long firstRollbackFailure = -1L;
+        long firstRetryFailure = -1L;
+        for (long offset = 0L; calibrated && offset < allocations; ++offset) {
+            const std::string sentinel = "POINTCLOUD OBJECTS allocation sentinel\n";
+            {
+                std::ofstream seed(outputPath,
+                                   std::ios::binary | std::ios::trunc);
+                seed << sentinel;
+            }
+            dx_data data;
+            PointCloudObjectsWriter adapter;
+            const bool installed = installGraph(adapter, data);
+            adapter.armAllocationFailure = true;
+            adapter.allocationOffset = offset;
+            const std::size_t failuresBefore = materialFailedAllocations;
+            const bool failed = installed && !adapter.fileExport(
+                outputFilename, DRW::AC1027, binary, &data, false, true);
+            materialAllocationCountdown = -1;
+            const bool rolledBack = failed && adapter.objectsCallbackReached
+                && materialFailedAllocations == failuresBefore + 1u
+                && outputBytes() == sentinel;
+            everyOffsetRolledBack = everyOffsetRolledBack && rolledBack;
+            if (rolledBack)
+                ++injectedFailures;
+            else if (firstRollbackFailure < 0L)
+                firstRollbackFailure = offset;
+
+            adapter.armAllocationFailure = false;
+            adapter.objectsCallbackReached = false;
+            const bool retried = rolledBack && adapter.fileExport(
+                outputFilename, DRW::AC1027, binary, &data, false, true);
+            const bool readback = retried && adapter.objectsCallbackReached
+                && graphReadbackMatches();
+            everyOffsetRetried = everyOffsetRetried && readback;
+            if (rolledBack && !readback && firstRetryFailure < 0L)
+                firstRetryFailure = offset;
+        }
+        if (!everyOffsetRolledBack || !everyOffsetRetried) {
+            std::cerr << "POINTCLOUD OBJECTS allocation sweep binary="
+                      << binary << " calibrated=" << calibrated
+                      << " allocations=" << allocations
+                      << " injectedFailures=" << injectedFailures
+                      << " firstRollbackFailure=" << firstRollbackFailure
+                      << " firstRetryFailure=" << firstRetryFailure << '\n';
+        }
+        t.expect(calibrated && everyOffsetRolledBack
+                     && injectedFailures == allocations,
+                 binary
+                     ? "binary POINTCLOUD OBJECTS allocation sweep rolls back every measured allocation"
+                     : "ASCII POINTCLOUD OBJECTS allocation sweep rolls back every measured allocation");
+        t.expect(everyOffsetRetried,
+                 binary
+                     ? "binary POINTCLOUD OBJECTS allocation sweep retries on the same adapter and reads the closed graph"
+                     : "ASCII POINTCLOUD OBJECTS allocation sweep retries on the same adapter and reads the closed graph");
+    }
+}
+
 bool viewRecordHasCode(const std::filesystem::path& path, bool binary,
                       const std::string& viewName, int targetCode) {
     std::ifstream input(path, std::ios::binary);
@@ -66273,6 +66507,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testSectionObjectsAllocationRetry(context);
         std::cout << "SECTION OBJECTS allocation rollback/retry: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--pointcloud-objects-allocation-retry") {
+        TestContext context;
+        testPointCloudObjectsAllocationRetry(context);
+        std::cout << "POINTCLOUD OBJECTS allocation rollback/retry: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
