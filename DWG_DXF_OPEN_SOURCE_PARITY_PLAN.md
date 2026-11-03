@@ -969,7 +969,7 @@ eligible reader. The exact package and environment result are in the
   callbacks to their exact physical dispatch spans, retained source models and
   current emitted models, with bounded BLOCK snapshots. Generated ASCII/Binary
   import controls verify one-to-one source/output inventories and keep imported
-  output atomically refused; see the [DXF entity source-binding receipt](docs/research/p8-pointcloud-dxf-entity-source-binding-2026-11-03.json).
+  output atomically refused at that stage; see the [DXF entity source-binding receipt](docs/research/p8-pointcloud-dxf-entity-source-binding-2026-11-03.json).
   A bounded AC1027+ physical field-profile gate now checks the exact
   `AcDbEntity`/`AcDbPointCloud` subclass sequence, accepted group-code/type and
   cardinality profile, modeled common values, and exact entity/owner/definition/
@@ -977,7 +977,8 @@ eligible reader. The exact package and environment result are in the
   groups. This caught and fixed a duplicate `AcDbEntity` subclass marker in
   both POINTCLOUD writers. Generated ASCII/Binary controls reject a mutated
   definition reference without touching the destination, then bind the corrected
-  source profile on retry; imported output remains atomically refused. See the
+  source profile on retry; graph admission additionally requires the complete
+  DefinitionEx/ReactorEx checks below. See the
   [field-profile receipt](docs/research/p8-pointcloud-dxf-field-profile-2026-11-03.json).
   A follow-on compares every admitted POINTCLOUDEX body group value directly
   against its associated typed model, including crop framing, direction vectors
@@ -985,11 +986,21 @@ eligible reader. The exact package and environment result are in the
   atomically before the corrected source profile is rebound. See the
   [body-value projection receipt](docs/research/p8-pointcloud-dxf-body-value-projection-2026-11-03.json).
   This closes the bounded AC1027+ field-to-model comparison only; it is not
-  independent producer/spec/native semantic evidence. Imported output remains
-  refused pending source-derived DefinitionEx/ReactorEx identity closure. DWG
-  still needs source CLASS/frame/output binding. P4 source-profile closure,
-  physical producer breadth, asset loading and native consumer semantics remain
-  open.
+  independent producer/spec/native semantic evidence. Imported DXF output now
+  admits the bounded same-revision AC1027+ DefinitionEx/ReactorEx graph after
+  source-span/callback binding, definition identity binding, reciprocal owner/
+  reactor validation, collision checks, staged serialization and fresh typed
+  readback. Generated AC1027 ASCII/Binary controls reject mutated entity
+  references and body fields atomically, then re-export through the same adapter
+  after correction; readback verifies the NOD/dictionary/object/entity graph.
+  The parser now normalizes DXF ACAD_REACTORS into both the typed link vector
+  and its count, and defers physical/source revision equality to completed-read
+  preflight because dxfRW has not finalized sourceVersion during OBJECTS
+  callbacks. See the [imported graph output receipt](docs/research/p8-pointcloud-imported-graph-output-2026-11-03.json).
+  This is generated transport evidence, not independent producer or native
+  semantic evidence; DWG still needs source CLASS/frame/output binding. P4
+  source-profile closure, physical producer breadth, asset loading and native
+  consumer semantics remain open.
   The low-level POINTCLOUD and POINTCLOUDEX serializers now resolve their
   definition/reactor references through the configured resolver (final output
   IDs) or source-handle remap fallback. Generated ASCII/Binary controls verify
@@ -1030,12 +1041,13 @@ eligible reader. The exact package and environment result are in the
   records the focused ASCII/Binary control, including unresolved-target refusal
   and corrected retry. This does not prove target
   existence or close the MLINESTYLE dependency graph.
-  The concrete adapter admits nonzero DefinitionEx/ReactorEx references only
-  for the authored graph above. Imported DXF/DWG sources and nonzero classic
-  POINTCLOUD or NAVISWORKSMODEL definition references stay fail-closed until
-  their source-bound object graphs and output bindings qualify. This does not
-  close external-definition source coverage, asset loading, native 3D
-  consumer, or broader BLOCK callback qualification.
+  The concrete adapter admits authored and imported same-revision AC1027+
+  DefinitionEx/ReactorEx DXF graphs within the bounded profile above. DWG
+  source graphs and nonzero classic POINTCLOUD or NAVISWORKSMODEL definition
+  references remain fail-closed until their source-bound object graphs and
+  output bindings qualify. This does not close external-definition source
+  coverage, asset loading, native 3D consumer, or broader BLOCK callback
+  qualification.
   The local adapter now retains LIGHT callbacks through modelspace and named-
   BLOCK delivery, with bounded DXF read/write support for the documented core
   fields. Both callback-delivery wrappers forward LIGHT instead of dropping

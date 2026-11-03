@@ -17,7 +17,7 @@
     ],
     "comparison": "Each admitted physical group value is checked against the associated parsed typed model in source order. Crop framing follows the parser's ordered three-component plane, six-component direction, and point-vertex sequence.",
     "unsupported_fields": "Application data, XDATA, proxy payload, and unknown group codes remain refused by this profile.",
-    "failure_retry": "A changed definition reference and a changed class-version model value each fail source binding while preserving the existing destination. Restoring the exact source values lets the same adapter rebind; imported graph output remains refused."
+    "failure_retry": "A changed definition reference and a changed class-version model value each fail source binding while preserving the existing destination. Restoring the exact source values lets the same adapter rebind. At the time of this receipt, imported graph output remained refused."
   },
   "validation": {
     "build": {

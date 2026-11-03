@@ -21137,22 +21137,77 @@ bool pointCloudAndNavisworksAdapterTransport() {
                 return fail("mismatched point-cloud body field changed the destination");
         }
         actualGraphCloud->classVersion = actualClassVersion;
-        if (importedWriter.fileExport(importedAttemptPath.string(),
-                                      DRW::AC1027, binary, &graphReadback,
-                                      false, true))
-            return fail("corrected imported point-cloud graph was admitted for output");
+        if (!importedWriter.fileExport(importedAttemptPath.string(),
+                                       DRW::AC1027, binary, &graphReadback,
+                                       false, true))
+            return fail("corrected imported point-cloud graph failed strict output");
         if (!graphReadback.pointCloudExSourceBindingAttempted
             || !graphReadback.pointCloudExSourceBindingComplete
             || !graphReadback.pointCloudExSourceFieldProfileComplete
             || graphReadback.pointCloudExSourceBoundEntities != 1u)
             return fail("imported POINTCLOUDEX source record, callback and supported field profile were not fully bound");
-        {
-            std::ifstream previous(importedAttemptPath, std::ios::binary);
-            const std::string bytes{
-                std::istreambuf_iterator<char>(previous), {}};
-            if (bytes != importedSentinel)
-                return fail("refused imported point-cloud graph changed the destination");
+        dx_data importedRoundTrip;
+        dx_iface importedReader;
+        if (!importedReader.fileImport(importedAttemptPath.string(),
+                                       &importedRoundTrip, false)
+            || importedRoundTrip.pointCloudDefinitions.size() != 2u
+            || !importedRoundTrip.hasNamedObjectDictionary
+            || importedRoundTrip.mBlock == nullptr
+            || importedRoundTrip.mBlock->ent.size() != 1u)
+            return fail("imported point-cloud graph output did not read back");
+        const DRW_PointCloudDef* roundTripDefinition = nullptr;
+        const DRW_PointCloudDef* roundTripReactor = nullptr;
+        for (const DRW_PointCloudDef& object :
+             importedRoundTrip.pointCloudDefinitions) {
+            if (object.m_kind == DRW_PointCloudDef::DefinitionEx)
+                roundTripDefinition = &object;
+            else if (object.m_kind == DRW_PointCloudDef::ReactorEx)
+                roundTripReactor = &object;
         }
+        const auto* roundTripCloud =
+            dynamic_cast<const DRW_PointCloudEx*>(
+                importedRoundTrip.mBlock->ent.front());
+        const DRW_Dictionary* roundTripDefinitionDictionary = nullptr;
+        std::size_t rootLinks = 0u;
+        if (roundTripDefinition != nullptr && roundTripReactor != nullptr) {
+            for (const DRW_Dictionary::Entry& entry :
+                 importedRoundTrip.namedObjectDictionary.m_entries) {
+                if (entry.m_name == "ACAD_POINTCLOUD_EX_DICT") {
+                    ++rootLinks;
+                    if (entry.m_handle != 0u
+                        && entry.m_handle != DRW::NoHandle) {
+                        for (const DRW_Dictionary& dictionary :
+                             importedRoundTrip.dictionaries) {
+                            if (dictionary.handle == entry.m_handle
+                                && dictionary.parentHandle
+                                    == importedRoundTrip.namedObjectDictionary.handle)
+                                roundTripDefinitionDictionary = &dictionary;
+                        }
+                    }
+                }
+            }
+        }
+        if (roundTripCloud == nullptr || roundTripDefinition == nullptr
+            || roundTripReactor == nullptr || rootLinks != 1u
+            || roundTripDefinitionDictionary == nullptr
+            || roundTripDefinition->handle == 0u
+            || roundTripDefinition->handle == DRW::NoHandle
+            || roundTripReactor->handle == 0u
+            || roundTripReactor->handle == DRW::NoHandle
+            || roundTripDefinition->parentHandle
+                != roundTripDefinitionDictionary->handle
+            || roundTripDefinition->reactorHandles
+                != std::vector<std::uint32_t>{roundTripReactor->handle}
+            || roundTripReactor->parentHandle != roundTripCloud->handle
+            || roundTripCloud->definitionHandle
+                != roundTripDefinition->handle
+            || roundTripCloud->reactorHandle != roundTripReactor->handle
+            || roundTripDefinitionDictionary->m_entries.size() != 1u
+            || roundTripDefinitionDictionary->m_entries.front().m_name
+                != "LOCAL_POINTCLOUD_DEF"
+            || roundTripDefinitionDictionary->m_entries.front().m_handle
+                != roundTripDefinition->handle)
+            return fail("imported DefinitionEx/ReactorEx identities or reciprocal graph edges changed on readback");
 
         if (objectAdapter.fileExport(path.string(), DRW::AC1027, binary,
                                      &objectData, false, true))

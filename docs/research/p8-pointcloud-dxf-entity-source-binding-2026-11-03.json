@@ -5,7 +5,7 @@
   "phase": "P8",
   "status": "BOUNDED_DXF_POINTCLOUDEX_ENTITY_SOURCE_BINDING_PASS",
   "supportClaimEffect": "none",
-  "scope": "Bind imported DXF POINTCLOUDEX callbacks in ENTITIES and named BLOCKS to exact physical records and the retained output entity; keep imported graph output refused.",
+  "scope": "At the time of this receipt, bind imported DXF POINTCLOUDEX callbacks in ENTITIES and named BLOCKS to exact physical records and the retained output entity; imported graph output remained refused.",
   "implementation": {
     "sourceFiles": [
       "dwg2dxf/dx_data.h",

@@ -16946,8 +16946,14 @@ bool normalizePointCloudDefinitionReactors(DRW_PointCloudDef& value) noexcept {
     } catch (...) {
         return false;
     }
-    if (reactors != value.reactorHandles)
+    if (reactors.size()
+            > static_cast<std::size_t>(
+                (std::numeric_limits<std::int32_t>::max)())
+        || reactors != value.reactorHandles)
         return false;
+    value.setDwgCommonObjectState(
+        static_cast<std::int32_t>(reactors.size()),
+        value.extensionDictionaryFlag(), value.hasDataStorageBinaryData());
     value.appData.clear();
     return true;
 }
@@ -55578,7 +55584,10 @@ void dx_iface::addDxfPointCloudDefinitionSource(
     const bool physicalMatched = physical != nullptr
         && status == DRW_DxfObjectPhysicalSource::Status::Complete
         && physical->status == DRW_DxfObjectPhysicalSource::Status::Complete
-        && physical->version == cData->sourceVersion
+        // sourceVersion is finalized only after dxfRW::read() returns; this
+        // callback runs while OBJECTS records are parsed. Bind the raw
+        // carrier to its physical spans here and compare revisions with the
+        // completed import during output preflight.
         && pointCloudDefinitionRawMatchesPhysical(raw, *physical);
 
     std::size_t typedBytes = 0u, typedItems = 0u, rawBytes = 0u;
@@ -68963,24 +68972,26 @@ bool dx_iface::preparePointCloudExOutputGraph(
                 || !input.physicalCarrierMatched
                 || !input.typedCallbackMatched
                 || input.raw.m_version != data.sourceVersion
+                || input.physical->version != data.sourceVersion
                 || !pointCloudDefinitionRawMatchesPhysical(
                     input.raw, *input.physical)
                 || !pointCloudDefinitionModelEqual(
-                    *typed, input.typed, input.physical->version))
+                    *typed, input.typed, input.physical->version)) {
                 return fail("DXF definition raw carrier/source spans do not bind to the retained typed callback");
+            }
             ++typed;
         }
         if (typed != data.pointCloudDefinitions.end())
             return fail("DXF definition source rows are not complete");
     }
-    // DXF definitions now have a bounded callback/carrier/span binding, but
-    // POINTCLOUDEX entity carriers and their complete field projection are
-    // still required before imported graph output can be admitted. DWG also
-    // needs source CLASS/frame/output binding. Keep this route fail-closed.
-    if (data.sourceFormat != dx_source_format::Unknown)
-        return fail(data.sourceFormat == dx_source_format::DXF
-            ? "imported DXF point-cloud entity source binding is not installed"
-            : "imported DWG point-cloud CLASS/frame/output binding is not installed");
+    if (data.sourceFormat == dx_source_format::DXF
+        && (data.sourceVersion < DRW::AC1027
+            || data.sourceVersion > DRW::AC1032
+            || targetVersion != data.sourceVersion))
+        return fail("imported DXF point-cloud graph requires its exact AC1027+ source revision");
+    if (data.sourceFormat != dx_source_format::Unknown
+        && data.sourceFormat != dx_source_format::DXF)
+        return fail("imported DWG point-cloud CLASS/frame/output binding is not installed");
     if (targetVersion <= DRW::AC1024)
         return fail("POINTCLOUDEX output requires AC1027 or later");
     if (!data.navisworksModelDefinitions.empty()
@@ -69067,14 +69078,17 @@ bool dx_iface::preparePointCloudExOutputGraph(
         entryNames.reserve(definitionDictionary->m_entries.size());
         for (const DRW_PointCloudDef& definition :
              data.pointCloudDefinitions) {
-            if (definition.tType != DRW::POINTCLOUDDEF
-                || definition.handle == 0u
-                || definition.handle == DRW::NoHandle
-                || definition.m_classVersion < 0
+            if (definition.tType != DRW::POINTCLOUDDEF)
+                return fail("point-cloud definition callback has the wrong object type");
+            if (definition.handle == 0u
+                || definition.handle == DRW::NoHandle)
+                return fail("point-cloud definition callback has no valid identity");
+            if (definition.m_classVersion < 0
                 || definition.m_classVersion
-                    > DRW_PointCloudDef::kMaxClassVersion
-                || !commonMetadataIsEmpty(definition))
-                return fail("point-cloud definition identity or common metadata is outside the closed profile");
+                    > DRW_PointCloudDef::kMaxClassVersion)
+                return fail("point-cloud definition class version is outside the closed profile");
+            if (!commonMetadataIsEmpty(definition))
+                return fail("point-cloud definition has unbound common object metadata");
             if (definition.m_kind == DRW_PointCloudDef::DefinitionEx) {
                 if (definition.parentHandle != dictionaryHandle
                     || definition.m_sourceFilename.empty()

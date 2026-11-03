@@ -17,7 +17,7 @@
       "Checks represented common entity field values against the retained typed model, then requires source callback and current output model equality."
     ],
     "writer_correction": "Removed a duplicate AcDbEntity subclass marker from both POINTCLOUD and POINTCLOUDEX writers; writeEntity already emits that marker.",
-    "failure_retry": "A generated imported graph with a deliberately changed DefinitionEx handle fails source binding without changing the destination. Restoring the original handle allows the same adapter to complete binding; imported graph output remains refused and preserves the destination."
+    "failure_retry": "A generated imported graph with a deliberately changed DefinitionEx handle fails source binding without changing the destination. Restoring the original handle allows the same adapter to complete binding. At the time of this receipt, imported graph output remained refused and preserved the destination."
   },
   "validation": {
     "build": {
