@@ -733,7 +733,19 @@ public:
             m_writeError = true;
             return;
         }
-        m_rootDictEntries = entries;
+        if (entries.size() > DRW_Dictionary::kMaxEntries) {
+            m_dxfRootDictEntriesInputRejected = true;
+            return;
+        }
+        std::vector<std::pair<std::string, std::string>> copied;
+        try {
+            copied = entries;
+        } catch (...) {
+            m_dxfRootDictEntriesInputRejected = true;
+            return;
+        }
+        m_rootDictEntries.swap(copied);
+        m_dxfRootDictEntriesInputRejected = false;
     }
     void setRootDictEntries(
             std::vector<std::pair<std::string, std::string>>&& entries) {
@@ -743,7 +755,12 @@ public:
             m_writeError = true;
             return;
         }
+        if (entries.size() > DRW_Dictionary::kMaxEntries) {
+            m_dxfRootDictEntriesInputRejected = true;
+            return;
+        }
         m_rootDictEntries = std::move(entries);
+        m_dxfRootDictEntriesInputRejected = false;
     }
     /*!< Register named-dictionary OBJECTS to emit verbatim in the regenerated
      * OBJECTS section (DXF write path only). Each carries its source code-5
@@ -2001,6 +2018,7 @@ private:
     bool m_dxfClassesFrozen {false};
     std::vector<DRW_RawDxfSection> m_rawDxfSections;
     std::vector<std::pair<std::string, std::string>> m_rootDictEntries;
+    bool m_dxfRootDictEntriesInputRejected{false};
     /// Named-dictionary OBJECTS to emit verbatim in writeObjects (DXF path).
     /// Populated via setNamedDictObjects; empty by default so a fresh write is
     /// byte-identical.

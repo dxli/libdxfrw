@@ -61,8 +61,17 @@ public:
     static bool plan(dxfRW& owner) {
         return owner.planDxfGroupHandles();
     }
+    static bool writeObjects(dxfRW& owner) {
+        return owner.writeObjects();
+    }
     static void resetWriteSession(dxfRW& owner) {
         owner.resetDxfWriteSession();
+    }
+    static bool rootEntriesRejected(const dxfRW& owner) {
+        return owner.m_dxfRootDictEntriesInputRejected;
+    }
+    static std::size_t rootEntriesCount(const dxfRW& owner) {
+        return owner.m_rootDictEntries.size();
     }
 };
 
@@ -59421,6 +59430,56 @@ void testGroupAdoptionCountBound(TestContext& t) {
     }
 }
 
+void testRootDictEntryCountBound(TestContext& t) {
+    const std::size_t overLimitCount = DRW_Dictionary::kMaxEntries + 1u;
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW codec("");
+        DxfGroupSetterTestAccess::configureWriter(codec, output, binary);
+        const std::string sentinel = "ROOT_DICT_SETTER_DESTINATION_SENTINEL";
+        output << sentinel;
+        std::vector<std::pair<std::string, std::string>> oversized(
+            overLimitCount);
+        codec.setRootDictEntries(oversized);
+        const bool rejectedBeforeCopy =
+            DxfGroupSetterTestAccess::rootEntriesRejected(codec)
+            && DxfGroupSetterTestAccess::rootEntriesCount(codec) == 0u;
+        const bool refused = !DxfGroupSetterTestAccess::writeObjects(codec);
+        t.expect(rejectedBeforeCopy && refused && output.str() == sentinel,
+                 "over-limit root dictionary setter refuses before copying and preserves output");
+
+        const std::vector<std::pair<std::string, std::string>> corrected{
+            {"ROOT_RETRY", "A100"}};
+        codec.setRootDictEntries(corrected);
+        DxfGroupSetterTestAccess::resetWriteSession(codec);
+        const bool correctedAccepted =
+            !DxfGroupSetterTestAccess::rootEntriesRejected(codec)
+            && DxfGroupSetterTestAccess::rootEntriesCount(codec) == 1u
+            && output.str() == sentinel;
+        t.expect(correctedAccepted,
+                 "corrected root dictionary input clears rejection on the same codec");
+
+        std::vector<std::pair<std::string, std::string>> oversizedMove(
+            overLimitCount);
+        codec.setRootDictEntries(std::move(oversizedMove));
+        const bool rejectedMoveBeforeConsume =
+            DxfGroupSetterTestAccess::rootEntriesRejected(codec)
+            && DxfGroupSetterTestAccess::rootEntriesCount(codec) == 1u
+            && oversizedMove.size() == overLimitCount;
+        const bool refusedMove = !DxfGroupSetterTestAccess::writeObjects(codec);
+        t.expect(rejectedMoveBeforeConsume && refusedMove
+                     && output.str() == sentinel,
+                 "over-limit root dictionary move setter preserves caller and prior state, and refuses output");
+
+        codec.setRootDictEntries(corrected);
+        DxfGroupSetterTestAccess::resetWriteSession(codec);
+        t.expect(!DxfGroupSetterTestAccess::rootEntriesRejected(codec)
+                     && DxfGroupSetterTestAccess::rootEntriesCount(codec) == 1u
+                     && output.str() == sentinel,
+                 "corrected root dictionary input recovers after move-setter refusal");
+    }
+}
+
 void populateLegacyEllipseCarriers(dx_data& data, bool includeControls = true) {
     DRW_AppId app;
     app.name = "ELLIPSE_APP";
@@ -62929,6 +62988,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testGroupAdoptionCountBound(context);
         std::cout << "GROUP adoption count bound: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--root-dict-entry-count-bound") {
+        TestContext context;
+        testRootDictEntryCountBound(context);
+        std::cout << "Root dictionary entry count bound: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
