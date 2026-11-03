@@ -624,6 +624,9 @@ eligible reader. The exact package and environment result are in the
   definition/reactor references through the configured resolver (final output
   IDs) or source-handle remap fallback. Generated ASCII/Binary controls verify
   both paths; see the [reference remapping receipt](docs/research/p8-point-cloud-dxf-reference-remapping-2026-11-03.json).
+  The NAVISWORKSMODEL low-level writer now applies the same resolver/remap
+  policy to its optional definition reference; its ASCII/Binary control is
+  recorded in the [NAVISWORKS reference receipt](docs/research/p8-navisworks-dxf-reference-remapping-2026-11-03.json).
   The concrete adapter still atomically refuses nonzero definition/reactor
   handles until P4's source-bound object graph providers and output bindings
   qualify them.

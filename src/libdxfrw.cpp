@@ -13844,14 +13844,20 @@ bool dxfRW::writeNavisworksModel(DRW_NavisworksModel *ent) {
         m_writeError = true;
         return false;
     }
+    std::uint32_t definitionHandle = 0u;
+    if (ent->definitionHandle != 0u) {
+        definitionHandle = m_referenceResolver
+            ? resolveReference(ent->definitionHandle)
+            : remapObjectHandle(ent->definitionHandle);
+    }
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "NAVISWORKSMODEL");
     if (!writeEntity(ent))
         return false;
     writer->writeString(100, "AcDbNavisworksModel");
     writer->writeInt16(70, ent->flags);
-    if (ent->definitionHandle != 0)
-        writer->writeString(340, toHexStr(ent->definitionHandle));
+    if (definitionHandle != 0u)
+        writer->writeString(340, toHexStr(definitionHandle));
     for (double value : ent->transform)
         writer->writeDouble(40, value);
     writer->writeDouble(40, ent->unitFactor);

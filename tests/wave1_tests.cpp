@@ -2226,6 +2226,70 @@ void testPointCloudReferenceRemapping(TestContext& t) {
     }
 }
 
+void testNavisworksDefinitionReferenceRemapping(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap({{0x401u, 0xA41u}});
+            if (useResolver) {
+                owner.setReferenceResolver([](std::uint32_t source) {
+                    return source == 0x401u ? 0xB41u : source;
+                });
+            }
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_NavisworksModel model;
+            model.definitionHandle = 0x401u;
+            const bool wrote = owner.writeNavisworksModel(&model)
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote,
+                     "NAVISWORKSMODEL definition reference serializes");
+            if (!wrote)
+                continue;
+
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                    std::make_unique<dxfReaderAscii>(&input));
+            std::uint32_t definitionHandle = 0u;
+            std::string recordName;
+            bool inModelBody = false;
+            bool ended = false;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0) {
+                    recordName = reader->getString();
+                    if (recordName == "WIRE_END") {
+                        ended = true;
+                        break;
+                    }
+                    inModelBody = false;
+                } else if (code == 100) {
+                    inModelBody =
+                        reader->getString() == "AcDbNavisworksModel";
+                } else if (inModelBody && code == 340) {
+                    definitionHandle = reader->getHandleString();
+                }
+            }
+            const std::uint32_t expected = useResolver ? 0xB41u : 0xA41u;
+            t.expect(ended && recordName == "WIRE_END"
+                         && definitionHandle == expected,
+                     useResolver
+                         ? "NAVISWORKSMODEL uses final resolver identity"
+                         : "NAVISWORKSMODEL uses source-handle remap");
+        }
+    }
+}
+
 void testDimensionAssociationGraphClosure(TestContext& t) {
     const auto readAssociationTargets = [&t](const std::string& bytes,
                                               bool binary,
@@ -15885,6 +15949,15 @@ int main(int argc, char** argv) {
         TestContext focused;
         testPointCloudReferenceRemapping(focused);
         std::cout << "POINTCLOUD reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--navisworks-definition-reference-remapping") {
+        TestContext focused;
+        testNavisworksDefinitionReferenceRemapping(focused);
+        std::cout << "NAVISWORKSMODEL definition reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
