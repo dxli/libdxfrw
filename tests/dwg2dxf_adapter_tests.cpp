@@ -20636,6 +20636,104 @@ bool lightAdapterTransport() {
     return true;
 }
 
+bool cameraViewReferenceClosure() {
+    for (const bool binary : {false, true}) {
+        dx_data data;
+        constexpr std::uint32_t sourceViewHandle = 0xA701u;
+        auto* camera = new DRW_Camera();
+        camera->m_viewHandle = sourceViewHandle;
+        data.mBlock->ent.push_back(camera);
+
+        const auto path = std::filesystem::temp_directory_path()
+            / ("libdxfrw-camera-view-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        if (std::filesystem::exists(path))
+            return fail("CAMERA output path unexpectedly exists");
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{path};
+        constexpr const char* sentinel = "CAMERA_VIEW_DESTINATION\n";
+        dx_iface writer;
+        const auto preserveSentinel = [&]() {
+            std::ofstream previous(path, std::ios::binary | std::ios::trunc);
+            previous << sentinel;
+            return static_cast<bool>(previous);
+        };
+        const auto destinationIsPreserved = [&]() {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            return bytes == sentinel;
+        };
+
+        if (!preserveSentinel())
+            return fail("could not create CAMERA output sentinel");
+        if (writer.fileExport(path.string(), DRW::AC1021, binary,
+                              &data, false, false))
+            return fail("CAMERA with a missing VIEW target was emitted");
+        if (!destinationIsPreserved())
+            return fail("missing CAMERA VIEW target changed the destination");
+
+        DRW_Layer wrongTarget;
+        wrongTarget.handle = sourceViewHandle;
+        wrongTarget.name = "CAMERA_WRONG_KIND";
+        data.layers.push_back(wrongTarget);
+        if (!preserveSentinel())
+            return fail("could not reset CAMERA wrong-kind sentinel");
+        if (writer.fileExport(path.string(), DRW::AC1021, binary,
+                              &data, false, false))
+            return fail("CAMERA reference to a non-VIEW table row was emitted");
+        if (!destinationIsPreserved())
+            return fail("wrong-kind CAMERA VIEW target changed the destination");
+
+        data.layers.clear();
+        DRW_View unrelatedView;
+        unrelatedView.handle = 0xA702u;
+        unrelatedView.name = "CAMERA_UNRELATED_VIEW";
+        data.views.push_back(unrelatedView);
+        if (!preserveSentinel())
+            return fail("could not reset CAMERA missing-target sentinel");
+        if (writer.fileExport(path.string(), DRW::AC1021, binary,
+                              &data, false, false))
+            return fail("CAMERA with an unrelated emitted VIEW was accepted");
+        if (!destinationIsPreserved())
+            return fail("late missing CAMERA VIEW target published a prefix");
+
+        DRW_View view;
+        view.handle = sourceViewHandle;
+        view.name = "CAMERA_TARGET_VIEW";
+        data.views.push_back(view);
+        if (!writer.fileExport(path.string(), DRW::AC1021, binary,
+                               &data, false, false))
+            return fail("CAMERA VIEW target corrected retry failed");
+
+        dx_data readback;
+        dx_iface reader;
+        if (!reader.fileImport(path.string(), &readback, false)
+            || readback.mBlock == nullptr
+            || readback.mBlock->ent.size() != 1u)
+            return fail("CAMERA with a VIEW target did not read back");
+        const auto* actualCamera = dynamic_cast<const DRW_Camera*>(
+            readback.mBlock->ent.front());
+        const auto actualView = std::find_if(
+            readback.views.begin(), readback.views.end(),
+            [](const DRW_View& candidate) {
+                return candidate.name == "CAMERA_TARGET_VIEW";
+            });
+        if (actualCamera == nullptr || actualView == readback.views.end()
+            || actualView->handle == 0u
+            || actualCamera->m_viewHandle != actualView->handle)
+            return fail("CAMERA code-340 handle did not remap to the emitted VIEW");
+    }
+    return true;
+}
+
 bool evaluationGraphCaptureLimitsFailClosed(bool binary) {
     dx_data data;
     dx_iface iface;
@@ -63346,6 +63444,9 @@ int main(int argc, char** argv) {
         return pointCloudAndNavisworksAdapterTransport() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--light-adapter-transport")
         return lightAdapterTransport() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--camera-view-reference-closure")
+        return cameraViewReferenceClosure() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--evaluation-graph-capture-limits")
         return evaluationGraphCaptureLimitsFailClosed(false)

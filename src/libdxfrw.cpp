@@ -2479,6 +2479,9 @@ private:
                 m_owner.m_writtenDxfSourceTableHandles.erase(mutation.handle);
                 m_owner.m_writtenDxfTableSourceHandles.erase(mutation.previousHandle);
                 break;
+            case DxfWriteMutationKind::ViewTableIdentityInsert:
+                m_owner.m_writtenDxfViewTableSources.erase(mutation.handle);
+                break;
             case DxfWriteMutationKind::SourceHandleErase:
                 m_owner.m_writingContext.sourceHandleToMintedMap.emplace(
                     mutation.handle, mutation.previousHandle);
@@ -4287,6 +4290,7 @@ void dxfRW::discardDxfWriteResults() noexcept {
     m_writingContext.sourceHandleToWrittenTableMap.clear();
     m_writtenDxfSourceTableHandles.clear();
     m_writtenDxfTableSourceHandles.clear();
+    m_writtenDxfViewTableSources.clear();
     m_writingContext.sourceHandleToWrittenObjectMap.clear();
     m_writingContext.modelerSourceHandleToMintedMap.clear();
     m_writingContext.writtenSourceEntityHandles.clear();
@@ -7259,8 +7263,26 @@ bool dxfRW::writeView(DRW_View *ent){
     RecordStateScope state(*this, ent);
     DxfWriterRecordScope record(*writer);
     std::uint32_t allocatedHandle = 0;
-    if (version > DRW::AC1009 && !allocateDxfHandle(allocatedHandle))
-        return false;
+    if (version > DRW::AC1009) {
+        const bool hasSourceHandle = ent->handle != 0u
+            && ent->handle != DRW::NoHandle;
+        if (hasSourceHandle) {
+            const auto existing =
+                m_writingContext.sourceHandleToWrittenTableMap.find(
+                    ent->handle);
+            if (m_writtenDxfViewTableSources.count(ent->handle) != 0u
+                || m_writtenDxfSourceTableHandles.count(ent->handle) != 0u)
+                return failDxfWrite();
+            allocatedHandle = existing ==
+                    m_writingContext.sourceHandleToWrittenTableMap.end()
+                ? preallocateTableRecordHandle(ent->handle)
+                : existing->second;
+            if (allocatedHandle == 0u)
+                return false;
+        } else if (!allocateDxfHandle(allocatedHandle)) {
+            return false;
+        }
+    }
     bool result = writer->writeString(0, "VIEW");
     if (version > DRW::AC1009) {
         writer->writeString(5, toHexStr(allocatedHandle));
@@ -7341,6 +7363,24 @@ bool dxfRW::writeView(DRW_View *ent){
         m_writeError = true;
     if (!result || writer->hasWriteError())
         return false;
+    if (version > DRW::AC1009 && ent->handle != 0u
+        && ent->handle != DRW::NoHandle) {
+        if (!bindDxfWriteSourceTableHandle(ent->handle, allocatedHandle))
+            return false;
+        const std::size_t mutationCheckpoint = m_dxfWriteMutations.size();
+        try {
+            m_dxfWriteMutations.push_back({
+                DxfWriteMutationKind::ViewTableIdentityInsert, {},
+                ent->handle, allocatedHandle, false});
+            if (!m_writtenDxfViewTableSources.insert(ent->handle).second) {
+                m_dxfWriteMutations.resize(mutationCheckpoint);
+                return failDxfWrite();
+            }
+        } catch (...) {
+            m_dxfWriteMutations.resize(mutationCheckpoint);
+            return failDxfWrite();
+        }
+    }
     if (!preflightDxfWrite() || !recordDxfTableRow() || !record.commit()) {
         m_writeError = true;
         return false;
@@ -12184,13 +12224,34 @@ bool dxfRW::writeCamera(DRW_Camera *ent) {
         return false;
     if (version < DRW::AC1015)
         return rejectUnsupportedDxfWrite("CAMERA");
+    std::uint32_t emittedViewHandle = 0u;
+    if (ent->m_viewHandle != 0u) {
+        const auto view =
+            m_writingContext.sourceHandleToWrittenTableMap.find(
+                ent->m_viewHandle);
+        const auto sourceTable = m_writtenDxfSourceTableHandles.find(
+            ent->m_viewHandle);
+        if (m_writtenDxfViewTableSources.count(ent->m_viewHandle) != 1u
+            || view == m_writingContext.sourceHandleToWrittenTableMap.end()
+            || view->second == 0u
+            || sourceTable == m_writtenDxfSourceTableHandles.end()
+            || sourceTable->second != view->second) {
+            return rejectDxfWriteWithReason(
+                "CAMERA", "VIEW target is missing or has the wrong record type");
+        }
+        emittedViewHandle = m_referenceResolver
+            ? resolveReference(ent->m_viewHandle) : view->second;
+        if (emittedViewHandle == 0u || emittedViewHandle != view->second)
+            return rejectDxfWriteWithReason(
+                "CAMERA", "VIEW reference does not match the emitted target");
+    }
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "CAMERA");
     if (!writeEntity(ent))
         return false;
     writer->writeString(100, "AcDbCamera");
-    if (ent->m_viewHandle != 0)
-        writer->writeString(340, toHexStr(ent->m_viewHandle));
+    if (emittedViewHandle != 0u)
+        writer->writeString(340, toHexStr(emittedViewHandle));
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
     return !writer->hasWriteError();

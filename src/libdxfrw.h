@@ -1617,6 +1617,7 @@ public:
         SourceHandleInsert,
         SourceTableRecordInsert,
         SourceTableIdentityInsert,
+        ViewTableIdentityInsert,
         SourceHandleErase,
         AmbiguousSourceHandleInsert,
         WrittenSourceEntityHandleInsert,
@@ -2005,6 +2006,9 @@ private:
     // The reverse index prevents two source identities borrowing one built-in.
     std::map<std::uint32_t, std::uint32_t> m_writtenDxfSourceTableHandles;
     std::map<std::uint32_t, std::uint32_t> m_writtenDxfTableSourceHandles;
+    // Source VIEW rows completed by writeView(), used to admit CAMERA code-340
+    // references only after the exact target record has been serialized.
+    std::unordered_set<std::uint32_t> m_writtenDxfViewTableSources;
     std::function<std::uint32_t(std::uint32_t)> m_referenceResolver;
     // Attempted target-version omissions from the most recent admitted write.
     std::map<std::string, std::size_t> m_leftOut;

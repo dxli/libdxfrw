@@ -487,7 +487,16 @@ eligible reader. The exact package and environment result are in the
   3D-consumer probe pass; see the [local API and 3D probe receipt](docs/research/p8-local-compat-and-generated-3d-probe-2026-11-02.json).
   These checks cover API shape and generated record delivery only, not native
   application behavior. Qualify intended 3D consumers and remaining FreeCAD
-  `dwg2dxf` profiles without dropping required geometry. The concrete BLOCK
+  `dwg2dxf` profiles without dropping required geometry.
+  A bounded generated CAMERA reference profile now binds source VIEW handles
+  to emitted VIEW table rows. CAMERA code 340 is emitted only for a VIEW row
+  serialized in the current attempt, and uses its remapped handle; missing,
+  wrong-kind, and late missing-target cases preserve the destination and
+  recover on same-adapter retry in ASCII and Binary DXF. The focused
+  compatibility cohort passes; no fixture was added. This closes only
+  generated reference transport, not physical producer coverage or native
+  camera semantics. See the [CAMERA VIEW receipt](docs/research/p8-camera-view-reference-closure-2026-11-02.json).
+  The concrete BLOCK
   serializer now runtime-checks `DRW_ModelerGeometry`, `DRW_Mesh`, `DRW_Helix`,
   and `DRW_Spline` before dispatching public `eType` tags `3DSOLID`, `REGION`,
   `BODY`, `MESH`, `HELIX`, and `SPLINE`; a mismatched object fails atomically
