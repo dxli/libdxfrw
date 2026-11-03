@@ -13379,6 +13379,46 @@ void testMLeaderArrowHeadAllocationFailure(TestContext& t) {
              "MLEADER arrowhead allocation failure leaves group 94 retryable");
 }
 
+void testMLeaderBlockLabelAllocationFailure(TestContext& t) {
+    struct MLeaderParseProbe final : DRW_MLeader {
+        bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
+            return parseCode(code, reader);
+        }
+    };
+    const auto parseRecord = [](MLeaderParseProbe& leader, int expectedCode,
+                                std::string_view value,
+                                long allocationFailure = -1) {
+        const std::string record = std::to_string(expectedCode) + "\n"
+            + std::string(value) + "\n";
+        std::istringstream input(record);
+        std::unique_ptr<dxfReader> reader(new dxfReaderAscii(&input));
+        int code = 0;
+        if (!reader->readRec(&code) || code != expectedCode)
+            return false;
+        MaterialAllocationFailure failure(allocationFailure);
+        return leader.parse(code, reader);
+    };
+
+    for (long allocationFailure = 0; allocationFailure < 2;
+         ++allocationFailure) {
+        MLeaderParseProbe leader;
+        const bool subclass = parseRecord(leader, 100, "AcDbMLeader");
+        const std::size_t failuresBefore = materialFailedAllocations;
+        const bool rejected = !parseRecord(
+            leader, 330, "A10B", allocationFailure);
+        const bool failedOnce = materialFailedAllocations
+            == failuresBefore + 1u;
+        const bool rolledBack = leader.blockLabels.empty();
+        const bool retried = parseRecord(leader, 330, "A10B")
+            && parseRecord(leader, 302, "block label")
+            && leader.blockLabels.size() == 1u
+            && leader.blockLabels.front().attDefHandle.ref == 0xA10Bu
+            && leader.blockLabels.front().labelText == "block label";
+        t.expect(subclass && rejected && failedOnce && rolledBack && retried,
+                 "MLEADER block-label paired allocations roll back and retry");
+    }
+}
+
 void testHatchSplineDxfAllocationFailure(TestContext& t) {
     struct HatchParseProbe final : DRW_Hatch {
         bool parse(int code, const std::unique_ptr<dxfReader>& reader) {
@@ -62351,6 +62391,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testMLeaderArrowHeadAllocationFailure(context);
         std::cout << "MLEADER arrowhead allocation-failure and retry controls: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--mleader-block-label-allocation-failure") {
+        TestContext context;
+        testMLeaderBlockLabelAllocationFailure(context);
+        std::cout << "MLEADER block-label allocation-failure and retry controls: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

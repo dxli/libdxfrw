@@ -2337,6 +2337,11 @@ if(LIBDXFRW_BUILD_TESTS)
             --mleader-arrowhead-allocation-failure)
     set_tests_properties(libdxfrw_mleader_arrowhead_allocation_failure PROPERTIES
         LABELS "fast;dxf;reader;mleader;allocation;retry" TIMEOUT 30)
+    add_test(NAME libdxfrw_mleader_block_label_allocation_failure
+        COMMAND libdxfrw_dxf_fixture_tests
+            --mleader-block-label-allocation-failure)
+    set_tests_properties(libdxfrw_mleader_block_label_allocation_failure PROPERTIES
+        LABELS "fast;dxf;reader;mleader;allocation;retry" TIMEOUT 30)
     add_test(NAME libdxfrw_hatch_spline_dxf_allocation_failure
         COMMAND libdxfrw_dxf_fixture_tests
             --hatch-spline-dxf-allocation-failure)

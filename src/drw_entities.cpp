@@ -27052,21 +27052,26 @@ bool DRW_MLeader::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         arrowHeads.back().handle.ref = reader->getHandleString();
         arrowHeads.back().handle.ref64 = arrowHeads.back().handle.ref;
         break;
-    case 330:
+    case 330: {
         if (!m_dxfMLeaderSubclassSeen)
             return DRW_Entity::parseCode(code, reader);
         if (blockLabels.size() >= kMaxLeaderLines
             || m_dxfRetainedBlockLabelTextBytes.size()
                    > blockLabels.size())
             return false;
+        const std::size_t required = blockLabels.size() + 1u;
+        if (!DRW::reserve(blockLabels, static_cast<int>(required))
+            || !DRW::reserve(m_dxfRetainedBlockLabelTextBytes,
+                             static_cast<int>(required)))
+            return false;
         m_dxfRetainedBlockLabelTextBytes.resize(blockLabels.size(), 0u);
-        m_dxfRetainedBlockLabelTextBytes.reserve(blockLabels.size() + 1u);
         blockLabels.emplace_back();
         m_dxfRetainedBlockLabelTextBytes.push_back(0u);
         blockLabels.back().attDefHandle.ref = reader->getHandleString();
         blockLabels.back().attDefHandle.ref64 =
             blockLabels.back().attDefHandle.ref;
         break;
+    }
     case 302:
         if (blockLabels.empty()
             || m_dxfRetainedBlockLabelTextBytes.size()
