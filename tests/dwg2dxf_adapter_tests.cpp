@@ -20637,6 +20637,8 @@ bool lightAdapterTransport() {
 }
 
 bool cameraViewReferenceClosure() {
+    class DerivedCamera final : public DRW_Camera {};
+
     for (const bool binary : {false, true}) {
         dx_data data;
         constexpr std::uint32_t sourceViewHandle = 0xA701u;
@@ -20709,6 +20711,36 @@ bool cameraViewReferenceClosure() {
         view.handle = sourceViewHandle;
         view.name = "CAMERA_TARGET_VIEW";
         data.views.push_back(view);
+
+        const auto refuseMalformedCamera = [&](const char* reason) {
+            if (!preserveSentinel())
+                return fail(std::string("could not reset CAMERA ")
+                            + reason + " sentinel");
+            if (writer.fileExport(path.string(), DRW::AC1021, binary,
+                                  &data, false, false))
+                return fail(std::string("CAMERA with ") + reason
+                            + " was emitted");
+            if (!destinationIsPreserved())
+                return fail(std::string("CAMERA ") + reason
+                            + " changed the destination");
+            return true;
+        };
+        camera->eType = DRW::POINT;
+        if (!refuseMalformedCamera("a mismatched public entity tag"))
+            return false;
+        camera->eType = DRW::CAMERA;
+
+        auto* derivedCamera = new DerivedCamera();
+        derivedCamera->m_viewHandle = sourceViewHandle;
+        data.mBlock->ent.front() = derivedCamera;
+        delete camera;
+        if (!refuseMalformedCamera("a derived runtime type"))
+            return false;
+
+        camera = new DRW_Camera();
+        camera->m_viewHandle = sourceViewHandle;
+        data.mBlock->ent.front() = camera;
+        delete derivedCamera;
         if (!writer.fileExport(path.string(), DRW::AC1021, binary,
                                &data, false, false))
             return fail("CAMERA VIEW target corrected retry failed");

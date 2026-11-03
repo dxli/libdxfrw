@@ -22,8 +22,8 @@
     ],
     "behavior": [
       "DXF VIEW serialization binds a non-null source table handle to its emitted handle and records the exact VIEW-row role within the record transaction; rollback removes both bindings.",
-      "CAMERA serialization emits group 340 only when that source handle was completed by the VIEW writer in the current output attempt, and writes the emitted handle rather than the source handle.",
-      "Missing targets, references to non-VIEW table rows, and a late missing target after another VIEW row has been serialized are refused before publication."
+      "CAMERA serialization requires the exact DRW_Camera runtime class and DRW::CAMERA public tag, then emits group 340 only when the source handle was completed by the VIEW writer in the current output attempt; it writes the emitted handle rather than the source handle.",
+      "Missing targets, references to non-VIEW table rows, a late missing target after another VIEW row has been serialized, derived runtime classes, and mismatched public tags are refused before publication."
     ]
   },
   "validationProfile": {
@@ -33,6 +33,7 @@
       "A missing VIEW target is refused and an existing destination remains byte-identical.",
       "A LAYER row with the same source handle does not satisfy the CAMERA VIEW reference.",
       "An unrelated VIEW is serialized before the missing-reference refusal; the destination remains unchanged and the same adapter retries successfully after adding the correct target.",
+      "A derived DRW_Camera and a base CAMERA tagged as another entity type are each refused atomically; restoring the exact class/tag permits corrected same-adapter retry.",
       "Fresh typed import verifies that CAMERA.m_viewHandle equals the emitted handle of CAMERA_TARGET_VIEW."
     ]
   },

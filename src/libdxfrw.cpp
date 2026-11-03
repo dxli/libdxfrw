@@ -12224,6 +12224,9 @@ bool dxfRW::writeCamera(DRW_Camera *ent) {
         return false;
     if (version < DRW::AC1015)
         return rejectUnsupportedDxfWrite("CAMERA");
+    if (typeid(*ent) != typeid(DRW_Camera) || ent->eType != DRW::CAMERA)
+        return rejectDxfWriteWithReason(
+            "CAMERA", "runtime type or public entity tag is not exact");
     std::uint32_t emittedViewHandle = 0u;
     if (ent->m_viewHandle != 0u) {
         const auto view =

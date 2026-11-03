@@ -491,8 +491,9 @@ eligible reader. The exact package and environment result are in the
   A bounded generated CAMERA reference profile now binds source VIEW handles
   to emitted VIEW table rows. CAMERA code 340 is emitted only for a VIEW row
   serialized in the current attempt, and uses its remapped handle; missing,
-  wrong-kind, and late missing-target cases preserve the destination and
-  recover on same-adapter retry in ASCII and Binary DXF. The focused
+  wrong-kind, late missing-target, derived-runtime, and mismatched-public-tag
+  cases preserve the destination and recover on same-adapter retry in ASCII
+  and Binary DXF. The focused
   compatibility cohort passes; no fixture was added. This closes only
   generated reference transport, not physical producer coverage or native
   camera semantics. See the [CAMERA VIEW receipt](docs/research/p8-camera-view-reference-closure-2026-11-02.json).
