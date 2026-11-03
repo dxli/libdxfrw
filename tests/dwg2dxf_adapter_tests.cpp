@@ -36763,6 +36763,26 @@ bool dwgTypedSunOutputProfile() {
         viewSun.m_colorCmc.method = dwgColor::ACI;
         iface.addSun(viewSun);
 
+        DRW_Sun dictionarySun;
+        dictionarySun.handle = 0xA77Fu;
+        dictionarySun.parentHandle = 0xA77Eu;
+        dictionarySun.m_color = 9u;
+        dictionarySun.m_colorCmc.present = true;
+        dictionarySun.m_colorCmc.method = dwgColor::ACI;
+        iface.addSun(dictionarySun);
+
+        data.hasNamedObjectDictionary = true;
+        data.namedObjectDictionary.handle = 0xA780u;
+        data.namedObjectDictionary.m_entries = {
+            {"ACAD_SUN", 0xA77Eu}};
+        DRW_Dictionary sunDictionary;
+        sunDictionary.handle = 0xA77Eu;
+        sunDictionary.parentHandle = data.namedObjectDictionary.handle;
+        sunDictionary.hardOwner = 0;
+        sunDictionary.cloning = 1;
+        sunDictionary.m_entries = {{"360", dictionarySun.handle}};
+        iface.addDictionary(sunDictionary);
+
         DRW_Vport owner;
         owner.handle = 0xA775u;
         owner.name = "SUN_OWNER";
@@ -36811,8 +36831,8 @@ bool dwgTypedSunOutputProfile() {
         dx_data readback;
         dx_iface reader;
         if (!reader.fileImport(output.string(), &readback, false)
-            || readback.suns.size() != 3u
-            || readback.rawSunObjects.size() != 3u
+            || readback.suns.size() != 4u
+            || readback.rawSunObjects.size() != 4u
             || readback.VPorts.size() != 1u
             || readback.views.size() != 1u)
             return fail("typed DWG SUN failed fresh DXF readback on "
@@ -36829,14 +36849,49 @@ bool dwgTypedSunOutputProfile() {
             readback.suns.end(), [](const DRW_Sun& sun) {
                 return sun.m_color == 8u;
             });
+        const auto dictionaryOwnedSun = std::find_if(
+            readback.suns.begin(), readback.suns.end(),
+            [](const DRW_Sun& sun) { return sun.m_color == 9u; });
         if (firstSun == readback.suns.end()
             || secondSun == readback.suns.end()
-            || thirdSun == readback.suns.end())
+            || thirdSun == readback.suns.end()
+            || dictionaryOwnedSun == readback.suns.end())
             return fail("typed DWG SUN colors were not all read back on "
                         + encoding);
         const DRW_Sun& emittedSun = *firstSun;
         const DRW_Sun& emittedViewportSun = *secondSun;
         const DRW_Sun& emittedViewSun = *thirdSun;
+        const DRW_Sun& emittedDictionarySun = *dictionaryOwnedSun;
+        const auto sunRoot = std::find_if(
+            readback.namedObjectDictionary.m_entries.begin(),
+            readback.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_SUN";
+            });
+        if (!readback.hasNamedObjectDictionary
+            || sunRoot == readback.namedObjectDictionary.m_entries.end())
+            return fail("ACAD_SUN root dictionary entry did not read back");
+        const auto emittedSunDictionary = std::find_if(
+            readback.dictionaries.begin(), readback.dictionaries.end(),
+            [&sunRoot](const DRW_Dictionary& dictionary) {
+                return dictionary.handle == sunRoot->m_handle;
+            });
+        if (emittedSunDictionary == readback.dictionaries.end()
+            || emittedSunDictionary->parentHandle
+                != readback.namedObjectDictionary.handle
+            || sunRoot->m_dxfHandleCode
+                != DRW_Dictionary::Entry::DxfHandleCode::SoftOwner
+            || emittedSunDictionary->hardOwner != 0
+            || !emittedSunDictionary->hasCompleteDxfEntries()
+            || emittedSunDictionary->m_entries.size() != 1u
+            || emittedSunDictionary->m_entries.front().m_name != "360"
+            || emittedSunDictionary->m_entries.front().m_handle
+                != emittedDictionarySun.handle
+            || emittedSunDictionary->m_entries.front().m_dxfHandleCode
+                != DRW_Dictionary::Entry::DxfHandleCode::SoftOwner
+            || emittedDictionarySun.parentHandle
+                != emittedSunDictionary->handle)
+            return fail("ACAD_SUN/360 dictionary ownership and reciprocal SUN parent did not read back");
         const auto firstRawSun = std::find_if(
             readback.rawSunObjects.begin(), readback.rawSunObjects.end(),
             [&emittedSun](const DRW_RawDxfObject& raw) {
@@ -36852,13 +36907,20 @@ bool dwgTypedSunOutputProfile() {
             [&emittedViewSun](const DRW_RawDxfObject& raw) {
                 return raw.handle == emittedViewSun.handle;
             });
+        const auto dictionaryRawSun = std::find_if(
+            readback.rawSunObjects.begin(), readback.rawSunObjects.end(),
+            [&emittedDictionarySun](const DRW_RawDxfObject& raw) {
+                return raw.handle == emittedDictionarySun.handle;
+            });
         if (firstRawSun == readback.rawSunObjects.end()
             || secondRawSun == readback.rawSunObjects.end()
-            || thirdRawSun == readback.rawSunObjects.end())
+            || thirdRawSun == readback.rawSunObjects.end()
+            || dictionaryRawSun == readback.rawSunObjects.end())
             return fail("typed DWG SUN raw carriers did not match typed handles");
         const DRW_RawDxfObject& rawSun = *firstRawSun;
         const DRW_RawDxfObject& rawViewportSun = *secondRawSun;
         const DRW_RawDxfObject& rawViewSun = *thirdRawSun;
+        const DRW_RawDxfObject& rawDictionarySun = *dictionaryRawSun;
         const DRW_Vport& emittedOwner = readback.VPorts.front();
         const auto emittedViewOwner = std::find_if(
             readback.views.begin(), readback.views.end(),
@@ -36899,7 +36961,7 @@ bool dwgTypedSunOutputProfile() {
                 [](const DRW_Class& cls) {
                     return cls.recName == "SUN"
                         && cls.className == "AcDbSun"
-                        && cls.instanceCount == 3;
+                        && cls.instanceCount == 4;
                 }));
         if (emittedSun.handle == 0u
             || emittedSun.parentHandle != emittedOwner.handle
@@ -36932,6 +36994,17 @@ bool dwgTypedSunOutputProfile() {
             || !hasWireGroup(outputBytes, binary, 361,
                              hexHandle(emittedViewSun.handle))
             || !hasInteger(rawViewSun, 63, 8)
+            || rawDictionarySun.parentHandle
+                != emittedSunDictionary->handle
+            || !hasTag(rawDictionarySun, 5,
+                       hexHandle(emittedDictionarySun.handle))
+            || !hasWireGroup(outputBytes, binary, 330,
+                             hexHandle(emittedSunDictionary->handle))
+            || !hasWireGroup(outputBytes, binary, 350,
+                             hexHandle(emittedSunDictionary->handle))
+            || !hasWireGroup(outputBytes, binary, 350,
+                             hexHandle(emittedDictionarySun.handle))
+            || !hasInteger(rawDictionarySun, 63, 9)
             || sunClassMatches != 1u) {
             return fail("typed DWG SUN output mismatch on " + encoding
                         + ": sun=" + std::to_string(emittedSun.handle)

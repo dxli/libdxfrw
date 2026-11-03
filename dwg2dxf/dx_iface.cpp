@@ -5183,8 +5183,10 @@ bool sunRawPayloadHasOnlyClosedIdentityEdges(
 
 bool collectSunOwnerGraph(const dx_data& data, DRW::Version targetVersion,
                           std::vector<std::uint32_t>& sunHandles,
+                          std::vector<std::uint32_t>& dictionaryHandles,
                           std::string& failure) {
     sunHandles.clear();
+    dictionaryHandles.clear();
     failure = "SUN owner graph is incomplete or ambiguous";
     const auto reject = [&failure](const char* reason) {
         failure = reason;
@@ -5210,6 +5212,12 @@ bool collectSunOwnerGraph(const dx_data& data, DRW::Version targetVersion,
         const bool hasSunOwners = std::any_of(
             data.VPorts.begin(), data.VPorts.end(),
             [](const DRW_Vport& vport) { return vport.m_sunHandle != 0; });
+        const bool hasSunDictionaryRoot = data.hasNamedObjectDictionary
+            && std::any_of(data.namedObjectDictionary.m_entries.begin(),
+                           data.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ACAD_SUN";
+                });
         const bool hasViewSunOwners = std::any_of(
             data.views.begin(), data.views.end(),
             [](const DRW_View& view) { return view.m_sunHandle != 0; });
@@ -5222,6 +5230,7 @@ bool collectSunOwnerGraph(const dx_data& data, DRW::Version targetVersion,
                 });
         };
         bool hasOwnerReference = hasSunOwners || hasViewSunOwners
+            || hasSunDictionaryRoot
             || (data.mBlock != nullptr && hasViewportSun(data.mBlock->ent));
         for (const dx_ifaceBlock* block : data.blocks) {
             hasOwnerReference = hasOwnerReference
@@ -5253,6 +5262,67 @@ bool collectSunOwnerGraph(const dx_data& data, DRW::Version targetVersion,
         if (sunsByHandle.empty())
             return reject("SUN owner edge has no typed SUN target");
 
+        // ODA §20.4.44 describes dictionary item handles as soft or hard
+        // ownership according to the dictionary flag. The AC1024
+        // sun-and-sky profile is rooted at NOD/ACAD_SUN, contains the
+        // canonical "360" entry, and uses soft ownership (hardOwner=0).
+        // The SUN's common parent handle is the reciprocal soft pointer.
+        std::uint32_t sunDictionaryHandle = 0u;
+        const DRW_Dictionary* sunDictionary = nullptr;
+        std::size_t sunRootMatches = 0u;
+        if (data.hasNamedObjectDictionary) {
+            for (const DRW_Dictionary::Entry& entry :
+                 data.namedObjectDictionary.m_entries) {
+                if (entry.m_name != "ACAD_SUN")
+                    continue;
+                ++sunRootMatches;
+                sunDictionaryHandle = entry.m_handle;
+            }
+        }
+        if (sunRootMatches != 0u) {
+            if (data.sourceFormat != dx_source_format::DWG
+                || data.sourceVersion != DRW::AC1024
+                || targetVersion != DRW::AC1024
+                || sunRootMatches != 1u
+                || data.namedObjectDictionary.handle == 0u
+                || data.namedObjectDictionary.handle == DRW::NoHandle
+                || data.namedObjectDictionary.hardOwner != 0
+                || sunDictionaryHandle == 0u
+                || sunDictionaryHandle == DRW::NoHandle
+                || std::count_if(
+                       data.namedObjectDictionary.m_entries.begin(),
+                       data.namedObjectDictionary.m_entries.end(),
+                       [sunDictionaryHandle](
+                               const DRW_Dictionary::Entry& entry) {
+                           return entry.m_handle == sunDictionaryHandle;
+                       }) != 1u)
+                return reject("ACAD_SUN root dictionary identity is invalid or aliased");
+            std::size_t dictionaryMatches = 0u;
+            for (const DRW_Dictionary& candidate : data.dictionaries) {
+                if (candidate.handle != sunDictionaryHandle)
+                    continue;
+                sunDictionary = &candidate;
+                ++dictionaryMatches;
+            }
+            if (dictionaryMatches != 1u || sunDictionary == nullptr
+                || !sunDictionary->hasCompleteDwgEntries()
+                || sunDictionary->parentHandle
+                    != data.namedObjectDictionary.handle
+                || sunDictionary->hardOwner != 0
+                || sunDictionary->m_entries.size() != 1u
+                || sunDictionary->m_entries.front().m_name != "360"
+                || sunDictionary->m_entries.front().m_handle == 0u
+                || sunDictionary->m_entries.front().m_handle
+                    == DRW::NoHandle)
+                return reject("ACAD_SUN dictionary does not match the bounded soft-owner 360 profile");
+            const std::uint32_t dictionaryOwnedSun =
+                sunDictionary->m_entries.front().m_handle;
+            const auto sun = sunsByHandle.find(dictionaryOwnedSun);
+            if (sun == sunsByHandle.end()
+                || sun->second->parentHandle != sunDictionaryHandle)
+                return reject("ACAD_SUN 360 entry and SUN parent pointer are not reciprocal");
+        }
+
         std::unordered_map<std::uint32_t, std::size_t> ownerCounts;
         std::unordered_set<std::uint32_t> ownerHandles;
         const auto acceptOwner = [&sunsByHandle, &ownerCounts, &ownerHandles,
@@ -5264,7 +5334,7 @@ bool collectSunOwnerGraph(const dx_data& data, DRW::Version targetVersion,
                 || !ownerHandles.insert(ownerHandle).second
                 || sun->second->parentHandle != ownerHandle
                 || ++ownerCounts[sunHandle] != 1u)
-                return reject("SUN must have exactly one matching VIEW, VPORT, or VIEWPORT hard owner");
+                return reject("SUN must have exactly one matching VIEW, VPORT, VIEWPORT, or validated dictionary owner");
             return true;
         };
         for (const DRW_View& view : data.views) {
@@ -5277,6 +5347,14 @@ bool collectSunOwnerGraph(const dx_data& data, DRW::Version targetVersion,
                 continue;
             if (!acceptOwner(vport.handle, vport.m_sunHandle))
                 return false;
+        }
+
+        if (sunDictionary != nullptr) {
+            const std::uint32_t dictionaryOwnedSun =
+                sunDictionary->m_entries.front().m_handle;
+            if (!acceptOwner(sunDictionary->handle, dictionaryOwnedSun))
+                return false;
+            dictionaryHandles.push_back(sunDictionary->handle);
         }
 
         const auto collectViewportOwners = [&acceptOwner](
@@ -5310,9 +5388,11 @@ bool collectSunOwnerGraph(const dx_data& data, DRW::Version targetVersion,
         for (const auto& entry : sunsByHandle)
             sunHandles.push_back(entry.first);
         std::sort(sunHandles.begin(), sunHandles.end());
+        std::sort(dictionaryHandles.begin(), dictionaryHandles.end());
         return true;
     } catch (...) {
         sunHandles.clear();
+        dictionaryHandles.clear();
         return reject("SUN owner graph allocation failed");
     }
 }
@@ -11996,6 +12076,44 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             // Owner/target relationships are validated here;
                             // complete dynamic-block output eligibility is a
                             // separate preflight gate.
+                            break;
+                        }
+                        if (dictionaryKey == "360"
+                            && frame.dictionary != nullptr
+                            && frame.dictionaryWithDefault == nullptr
+                            && data->sourceFormat
+                                == dx_source_format::DWG
+                            && data->sourceVersion == DRW::AC1024
+                            && frame.dictionary->hardOwner == 0
+                            && frame.dictionary->hasCompleteDwgEntries()
+                            && frame.dictionary->parentHandle
+                                == data->namedObjectDictionary.handle
+                            && data->hasNamedObjectDictionary
+                            && data->namedObjectDictionary.handle != 0u
+                            && data->namedObjectDictionary.hardOwner == 0
+                            && std::count_if(
+                                data->namedObjectDictionary.m_entries.begin(),
+                                data->namedObjectDictionary.m_entries.end(),
+                                [&frame](const DRW_Dictionary::Entry& entry) {
+                                    return entry.m_name == "ACAD_SUN"
+                                        && entry.m_handle == frame.handle;
+                                }) == 1u
+                            && std::count_if(
+                                frame.dictionary->m_entries.begin(),
+                                frame.dictionary->m_entries.end(),
+                                [&child](const DRW_Dictionary::Entry& entry) {
+                                    return entry.m_name == "360"
+                                        && entry.m_handle == child;
+                                }) == 1u
+                            && std::count_if(
+                                data->suns.begin(), data->suns.end(),
+                                [&frame, child](const DRW_Sun& sun) {
+                                    return sun.handle == child
+                                        && sun.parentHandle == frame.handle;
+                                }) == 1u) {
+                            // The dedicated SUN graph validator performs the
+                            // full NOD alias, item-role, target-uniqueness,
+                            // and reciprocal-parent checks before output.
                             break;
                         }
                         std::size_t targetMatches = 0;
@@ -72164,10 +72282,18 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         return false;
     }
     std::string sunGraphFailure;
+    std::vector<std::uint32_t> sunDictionaryHandles;
     if (!collectSunOwnerGraph(*cData, v, m_sunHandlesToWrite,
+                              sunDictionaryHandles,
                               sunGraphFailure)) {
         reportPreflightFailure("SUN owner graph closure: " + sunGraphFailure);
         return false;
+    }
+    for (const std::uint32_t handle : sunDictionaryHandles) {
+        if (std::find(m_extensionDictionaryHandles.begin(),
+                      m_extensionDictionaryHandles.end(), handle)
+            == m_extensionDictionaryHandles.end())
+            m_extensionDictionaryHandles.push_back(handle);
     }
     for (const DRW_Vport& vport : cData->VPorts) {
         if (vport.m_sunHandle != 0

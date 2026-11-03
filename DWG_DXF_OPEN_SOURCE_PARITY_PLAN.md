@@ -47,7 +47,7 @@ Phase rows express aggregate exit gates, not item-level completion counts.
 
 | ID | State | Remaining result | Dependency |
 | --- | --- | --- | --- |
-| P4 | OPEN — source and graph closure | Resolve the AC1027 ENC targets `0x35`–`0x38` before admitting those references. Keep AC1018 ET Border and AC1024 title-block named-block SORTENTSTABLE graphs refused until an authoritative owner mapping is available. Establish a source- and consumer-backed route for AC1018 empty-name STYLE `0xDF`. Extend proxy output only for evidenced nested/raw/OBJECTS targets, owner roles, recursive dependencies, EED/common references, unknown-data slots, and mixed ACDS graphs. Qualify physical/native GEODATA, RASTERVARIABLES, WIPEOUTVARIABLES, and LayerStates profiles. Keep WIPEOUTVARIABLES DXF modes outside 0/1 refused. For AC1024 sun-and-sky, resolve the `0x360` SUN / `0x35F` dictionary owner role before relaxing refusal; see the [VIEW SUN owner receipt](docs/research/p4-sun-view-hard-owner-output-2026-11-03.json). | ODA source layout, exact target kind/owner evidence, and complete typed readback; preserve atomic refusal for unclosed graphs. |
+| P4 | OPEN — source and graph closure | Resolve the AC1027 ENC targets `0x35`–`0x38` before admitting those references. Keep AC1018 ET Border and AC1024 title-block named-block SORTENTSTABLE graphs refused until an authoritative owner mapping is available. Establish a source- and consumer-backed route for AC1018 empty-name STYLE `0xDF`. Extend proxy output only for evidenced nested/raw/OBJECTS targets, owner roles, recursive dependencies, EED/common references, unknown-data slots, and mixed ACDS graphs. Qualify physical/native GEODATA, RASTERVARIABLES, WIPEOUTVARIABLES, and LayerStates profiles. Keep WIPEOUTVARIABLES DXF modes outside 0/1 refused. The bounded AC1024 `ACAD_SUN` / `360` soft-owner dictionary graph now has exact role checks and generated ASCII/Binary readback; physical whole-file output and native lighting remain unqualified ([receipt](docs/research/p4-ac1024-acad-sun-dictionary-soft-owner-output-2026-11-03.json)). | ODA source layout, exact target kind/owner evidence, and complete typed readback; preserve atomic refusal for unclosed graphs. |
 | P5 | OPEN — dynamic-block semantics, rendering and TABLE profiles | Establish native evaluation for the AC1024 dynamic-block graph after P4 owner closure. Resolve remaining FIELD flags/child profiles and AcObjProp spans/handle roles before output; qualify physical producer/version coverage and native FIELD evaluation. Close nonzero TABLEGEOMETRY spans, CONTENTFORMAT/CELLSTYLEMAP combinations, overlapping edge semantics, remaining AC1018 TABLE profiles, and VIEWPORT reference/rendering behavior. | P4 graph closure where required; source-backed fields plus native consumer evidence for semantic claims. |
 | P6 | OPEN — version, schema and semantic residuals | Resolve the reproduced AC1024 ACSH Loft/Revolve body spans with independent field and following-handle evidence. Explain the AC1027 Cover suffix and AC1032 resave HEADER suffix; keep strict output refused while bytes remain unclaimed. Qualify TABLEGEOMETRY nonzero source spans, uncovered revision/route profiles, associative semantics, HATCH/MPOLYGON/MESH, annotation/geometry, units/inheritance, and unknown/proxy data. Finish remaining safety/caller-state and CLI/oracle contracts without broad full-suite runs. | Read ODA v5.4.1 before DWG layout changes; trace current source failures; use focused fast controls and retain unknown data. |
 | P7 | OPEN — ACIS/ACDS and independent 3D meaning | Complete DWG entity-to-owner/key-to-AcDs segment-to-SAT/SAB associations, versioned framing/index/suffix/prototype assembly, and exact output binding. Qualify placements, units/transforms, topology, trims, periodicity and spline meaning. Obtain independent kernel measurements for each claimed profile; otherwise refuse required 3D data atomically. | P4 graph/output bindings and a genuinely independent semantic/kernel reader for the claimed profile. |
@@ -461,11 +461,17 @@ The adapter also retains bounded GEOMAPIMAGE callback fields
 source asset binding, exact producer fields, output closure, and native map
 rendering remain open. A retained record now triggers strict adapter refusal
 until those gates pass (see the [callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json)).
-Keep physical SUN ownership constrained to the documented VPORT/VIEWPORT
-hard-owner route. The AC1024 aerial sample's SUN `0x24C` is owned by XRECORD
-`0x246`, so it is not evidence for a valid alternate source-owner route; keep
-strict adapter/output refusal for that sample and reopen source-graph admission
-only if a conforming source demonstrates a missing route ([outlier receipt](docs/research/p5-ac1024-sun-xrecord-owner-outlier-2026-11-01.json)).
+The AC1024 sun-and-sky source's NOD/`ACAD_SUN` → DICTIONARY/`360` → SUN graph
+is now admitted only for the exact reciprocal soft-owner profile: both
+dictionary item handles use code 2 under `hardOwner=0`, and the SUN common
+parent resolves to the owning dictionary. A parser vector rejects item-role
+mismatch; generated ASCII/Binary output verifies group 350, parent group 330,
+handle remapping, rollback, and typed readback. The physical sample still fails
+the global strict-read-completeness gate, so no whole-file output is claimed
+([receipt](docs/research/p4-ac1024-acad-sun-dictionary-soft-owner-output-2026-11-03.json)).
+The AC1024 aerial sample's SUN `0x24C` is owned by XRECORD `0x246`, so it is
+not evidence for another valid source-owner route; keep strict output refused
+for that sample ([outlier receipt](docs/research/p5-ac1024-sun-xrecord-owner-outlier-2026-11-01.json)).
 The low-level SKYLIGHTBACKGROUND writer now translates a registered nonzero
 group-340 SUN handle through the configured resolver or source-handle remap,
 and refuses unresolved targets and pre-AC1021 output. Generated ASCII/Binary

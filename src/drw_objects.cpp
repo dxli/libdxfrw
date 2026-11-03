@@ -9945,6 +9945,8 @@ bool DRW_Dictionary::parseDwgImpl(DRW::Version version, dwgBuffer *buf,
             && (itemH.code == 0 || itemH.code == dwgItemHandleCode());
         if (itemH.ref == 0 && !nullItemHandleIsValid)
             return false;
+        if (itemH.ref != 0 && itemH.code != dwgItemHandleCode())
+            return false;
         // Preserve the observed DWG empty-name/null-handle slot as an exact
         // counted pair. DXF completeness and writer admission still reject an
         // empty dictionary key, so parsing it does not qualify lossy output.

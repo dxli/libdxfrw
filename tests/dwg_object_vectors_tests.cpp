@@ -57,6 +57,7 @@ public:
 class DictionaryEncodeProbe final : public DRW_Dictionary {
 public:
     using DRW_Dictionary::encodeDwg;
+    using DRW_Dictionary::parseDwg;
 };
 
 class DictionaryWithDefaultCodecProbe final
@@ -11823,6 +11824,177 @@ void testDictionaryVectors(TestContext& t) {
              "DICTIONARY preserves a valid null DWG child reference");
 }
 
+struct DictionaryHandleRoleFrame {
+    std::vector<std::uint8_t> bytes;
+    std::uint32_t handleBits = 0u;
+};
+
+bool makeDictionaryHandleRoleFrame(std::uint8_t hardOwner,
+                                   bool mismatchEntryRole,
+                                   DictionaryHandleRoleFrame& frame) {
+    constexpr DRW::Version version = DRW::AC1024;
+    constexpr std::uint32_t dictionaryHandle = 0x35Fu;
+    constexpr std::uint32_t parentHandle = 0x35Eu;
+    constexpr std::uint32_t childHandle = 0x360u;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+
+    DictionaryEncodeProbe source;
+    source.handle = dictionaryHandle;
+    source.parentHandle = parentHandle;
+    source.hardOwner = hardOwner;
+    source.cloning = 1;
+    source.m_entries = {{"360", childHandle}};
+    source.setDwgCommonObjectState(0, 1, false);
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    if (!source.encodeDwg(version, &body, &strings, &handles)
+        || handles.handleOccurrences().size() != 2u)
+        return false;
+    if (mismatchEntryRole) {
+        const auto occurrence = handles.handleOccurrences()[1];
+        const std::size_t headerOffset = static_cast<std::size_t>(
+            occurrence.startBit / 8u);
+        if (headerOffset >= handles.data().size())
+            return false;
+        const std::uint8_t encodedSize = static_cast<std::uint8_t>(
+            handles.data()[headerOffset] & 0x0Fu);
+        const std::uint8_t wrongCode = hardOwner == 0u
+            ? DRW::DwgHardOwnership : DRW::DwgSoftOwnership;
+        handles.data()[headerOffset] = static_cast<std::uint8_t>(
+            (wrongCode << 4u) | encodedSize);
+    }
+    dwgHandle sentinel;
+    sentinel.code = DRW::DwgSoftPointer;
+    sentinel.ref = 0xCAFEu;
+    sentinel.ref64 = sentinel.ref;
+    handles.putHandle(sentinel);
+    handles.alignToByte();
+
+    dwgBufferW object(&codec);
+    object.putObjType(version, DRW_Dictionary::kDwgFixedType);
+    dwgHandle ownHandle;
+    ownHandle.ref = dictionaryHandle;
+    ownHandle.ref64 = dictionaryHandle;
+    object.putHandle(ownHandle);
+    object.putBitShort(0u); // no EED
+    object.putBitLong(0); // no reactors
+    object.putBit(1u); // no extension-dictionary handle follows
+    appendBits(object, body);
+    object.alignToByte();
+
+    strings.alignToByte();
+    if (!strings.data().empty()) {
+        object.putBytes(strings.data().data(), strings.size());
+        for (int bit = 0; bit < 7; ++bit)
+            object.putBit(0u);
+        const std::uint64_t stringBits = strings.size() * 8u + 7u;
+        if (stringBits > std::numeric_limits<std::uint16_t>::max())
+            return false;
+        object.putRawShort16(static_cast<std::uint16_t>(stringBits));
+        object.putBit(1u); // bounded R2007+ string stream
+    } else {
+        for (int bit = 0; bit < 7; ++bit)
+            object.putBit(0u);
+        object.putRawShort16(0u);
+        object.putBit(0u);
+    }
+    object.alignToByte();
+    handles.alignToByte();
+    if (!object.isGood() || !handles.isGood()
+        || handles.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+    object.putBytes(handles.data().data(), handles.size());
+    if (!object.isGood())
+        return false;
+    frame.bytes = object.data();
+    return true;
+}
+
+void testDictionaryHandleRole(TestContext& t) {
+    DictionaryHandleRoleFrame validFrame;
+    const bool validBuilt = makeDictionaryHandleRoleFrame(
+        0u, false, validFrame);
+    t.expect(validBuilt, "DICTIONARY soft-owner role control frame builds");
+    if (validBuilt) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1024, false);
+        dwgBuffer input(validFrame.bytes.data(), validFrame.bytes.size(), &codec);
+        DictionaryEncodeProbe parsed;
+        const bool read = parsed.parseDwg(
+            DRW::AC1024, &input, validFrame.handleBits);
+        const dwgHandle sentinel = input.getHandle();
+        t.expect(read && input.isGood() && parsed.hasCompleteDwgEntries()
+                     && parsed.handle == 0x35Fu
+                     && parsed.parentHandle == 0x35Eu
+                     && parsed.hardOwner == 0
+                     && parsed.m_entries.size() == 1u
+                     && parsed.m_entries.front().m_name == "360"
+                     && parsed.m_entries.front().m_handle == 0x360u
+                     && sentinel.code == DRW::DwgSoftPointer
+                     && sentinel.ref == 0xCAFEu,
+                 "DICTIONARY accepts soft-owned items and preserves following-handle alignment");
+    }
+
+    DictionaryHandleRoleFrame wrongRoleFrame;
+    const bool wrongRoleBuilt =
+        makeDictionaryHandleRoleFrame(0u, true, wrongRoleFrame);
+    t.expect(wrongRoleBuilt,
+             "DICTIONARY mismatched hard-owner role control frame builds");
+    if (wrongRoleBuilt) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1024, false);
+        dwgBuffer input(wrongRoleFrame.bytes.data(),
+                        wrongRoleFrame.bytes.size(), &codec);
+        DictionaryEncodeProbe parsed;
+        parsed.m_entries = {{"stale", 0xDEADu}};
+        const bool read = parsed.parseDwg(
+            DRW::AC1024, &input, wrongRoleFrame.handleBits);
+        t.expect(!read && !input.isGood() && parsed.m_entries.empty()
+                     && !parsed.hasCompleteDwgEntries(),
+                 "DICTIONARY rejects item ownership inconsistent with hardOwner and resets typed state");
+    }
+
+    DictionaryHandleRoleFrame hardOwnerFrame;
+    const bool hardOwnerBuilt = makeDictionaryHandleRoleFrame(
+        1u, false, hardOwnerFrame);
+    t.expect(hardOwnerBuilt,
+             "DICTIONARY hard-owner role control frame builds");
+    if (hardOwnerBuilt) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1024, false);
+        dwgBuffer input(hardOwnerFrame.bytes.data(), hardOwnerFrame.bytes.size(),
+                        &codec);
+        DictionaryEncodeProbe parsed;
+        const bool read = parsed.parseDwg(
+            DRW::AC1024, &input, hardOwnerFrame.handleBits);
+        t.expect(read && input.isGood() && parsed.hardOwner == 1
+                     && parsed.m_entries.size() == 1u
+                     && parsed.m_entries.front().m_handle == 0x360u,
+                 "DICTIONARY accepts code-3 items when hardOwner is set");
+    }
+
+    DictionaryHandleRoleFrame wrongHardOwnerFrame;
+    const bool wrongHardOwnerBuilt = makeDictionaryHandleRoleFrame(
+        1u, true, wrongHardOwnerFrame);
+    t.expect(wrongHardOwnerBuilt,
+             "DICTIONARY hard-owner mismatch control frame builds");
+    if (wrongHardOwnerBuilt) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1024, false);
+        dwgBuffer input(wrongHardOwnerFrame.bytes.data(),
+                        wrongHardOwnerFrame.bytes.size(), &codec);
+        DictionaryEncodeProbe parsed;
+        parsed.m_entries = {{"stale", 0xDEADu}};
+        const bool read = parsed.parseDwg(
+            DRW::AC1024, &input, wrongHardOwnerFrame.handleBits);
+        t.expect(!read && !input.isGood() && parsed.m_entries.empty()
+                     && !parsed.hasCompleteDwgEntries(),
+                 "DICTIONARY rejects code-2 items when hardOwner is set");
+    }
+}
+
 void testXRecordVectors(TestContext& t) {
     for (DRW::Version version : kVersions) {
         XRecordEncodeProbe object;
@@ -20003,6 +20175,7 @@ int main(int argc, char** argv) {
     testScaleDwgPositiveUnitDomain(context);
     testGroupVectors(context);
     testDictionaryVectors(context);
+    testDictionaryHandleRole(context);
     testXRecordVectors(context);
     testOpaqueXRecordReplayGuards(context);
     testPlotSettingsVectors(context);
