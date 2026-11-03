@@ -3367,6 +3367,357 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
     }
 }
 
+void testPartialViewingIndexReferenceClosure(TestContext& t) {
+    constexpr std::uint32_t indexedSource = 0x901u;
+    constexpr std::uint32_t indexedRemapped = 0xA01u;
+    constexpr std::uint32_t indexSource = 0x902u;
+    constexpr std::uint32_t indexRemapped = 0xA02u;
+
+    class PartialViewingIndexProbe final : public dx_iface {
+    public:
+        void addPartialViewingIndex(
+                const DRW_PartialViewingIndex& value) override {
+            captured = value;
+            found = true;
+        }
+
+        DRW_PartialViewingIndex captured;
+        bool found {false};
+    };
+
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            std::uint32_t indexedOutput = 0u;
+            if (useResolver) {
+                owner.setReferenceResolver([&indexedOutput](
+                        std::uint32_t source) {
+                    return source == indexedSource ? indexedOutput : source;
+                });
+            }
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+            owner.writer->setRecordInventoryEnabled(true, 64u);
+            owner.setHandleRemap({{indexSource, indexRemapped}});
+
+            DRW_Point indexed;
+            indexed.handle = indexedSource;
+            indexed.parentHandle = 0xCu;
+            indexed.basePoint = DRW_Coord{1.25, 2.5, 3.75};
+            const bool indexedWritten = owner.writer->writeString(0, "SECTION")
+                && owner.writer->writeString(2, "ENTITIES")
+                && owner.writePoint(&indexed);
+            const auto indexedBinding = owner.m_writingContext
+                .sourceHandleToMintedMap.find(indexedSource);
+            indexedOutput =
+                indexedBinding == owner.m_writingContext
+                                     .sourceHandleToMintedMap.end()
+                    ? 0u : indexedBinding->second;
+            if (useResolver) {
+                // The resolver's output is the target's actual emitted ID;
+                // the conflicting fallback remap must not override it.
+                owner.setHandleRemap({{indexedSource, 0xA09u},
+                                      {indexSource, indexRemapped}});
+            }
+
+            DRW_PartialViewingIndex index;
+            index.handle = indexSource;
+            index.parentHandle = 0xCu;
+            DRW_PartialViewingIndexEntry entry;
+            entry.extentsMin = DRW_Coord{-1.0, -2.0, -3.0};
+            entry.extentsMax = DRW_Coord{4.0, 5.0, 6.0};
+            entry.objectHandle = indexedSource;
+            index.m_entries.push_back(entry);
+            const bool objectSection = indexedWritten
+                && owner.writer->writeString(0, "ENDSEC")
+                && owner.writer->writeString(0, "SECTION")
+                && owner.writer->writeString(2, "OBJECTS");
+            const bool indexWritten = objectSection
+                && owner.writePartialViewingIndex(&index);
+            const bool wrote = indexWritten
+                && owner.writer->writeString(0, "ENDSEC");
+            t.expect(indexedWritten,
+                     "PARTIALVIEWINGINDEX setup emits its typed target");
+            t.expect(indexWritten,
+                     "PARTIALVIEWINGINDEX closes a typed indexed target");
+            if (!wrote)
+                continue;
+
+            const auto binding = owner.m_writingContext
+                .sourceHandleToWrittenObjectMap.find(indexSource);
+            t.expect(owner.writer->recordHandleCount(indexedOutput) == 1u
+                         && binding != owner.m_writingContext
+                                            .sourceHandleToWrittenObjectMap.end()
+                         && binding->second == indexRemapped,
+                     "PARTIALVIEWINGINDEX identity and target are bound to output records");
+
+            std::istringstream input(output.str());
+            PartialViewingIndexProbe probe;
+            dxfRW readOwner("");
+            readOwner.binFile = binary;
+            readOwner.iface = &probe;
+            readOwner.reader = binary
+                ? std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderAscii>(&input));
+            int code = 0;
+            bool processed = false;
+            while (readOwner.reader->readRec(&code)) {
+                if (code != 0)
+                    continue;
+                readOwner.nextentity = readOwner.reader->getString();
+                if (readOwner.nextentity == "PARTIALVIEWINGINDEX") {
+                    processed = readOwner.processPartialViewingIndex();
+                    break;
+                }
+            }
+            const DRW_PartialViewingIndexEntry& readEntry =
+                probe.captured.m_entries.empty()
+                    ? DRW_PartialViewingIndexEntry{}
+                    : probe.captured.m_entries.front();
+            t.expect(processed && probe.found
+                         && probe.captured.handle == indexRemapped
+                         && probe.captured.m_entries.size() == 1u
+                         && readEntry.objectHandle == indexedOutput
+                         && readEntry.extentsMin.x == -1.0
+                         && readEntry.extentsMin.y == -2.0
+                         && readEntry.extentsMin.z == -3.0
+                         && readEntry.extentsMax.x == 4.0
+                         && readEntry.extentsMax.y == 5.0
+                         && readEntry.extentsMax.z == 6.0,
+                     "PARTIALVIEWINGINDEX passes fresh typed ASCII/Binary readback");
+        }
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream failedOutput;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1032;
+        failedOwner.binFile = binary;
+        failedOwner.setHandleRemap({{indexSource, indexRemapped}});
+        std::uint32_t targetOutput = 0u;
+        failedOwner.setReferenceResolver([&targetOutput](std::uint32_t source) {
+            return source == 0x903u ? targetOutput : source;
+        });
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&failedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&failedOutput));
+        failedOwner.writer->setRecordInventoryEnabled(true, 64u);
+        const bool entitySection = failedOwner.writer->writeString(0, "SECTION")
+            && failedOwner.writer->writeString(2, "ENTITIES");
+        DRW_Point indexed;
+        indexed.handle = indexedSource;
+        indexed.parentHandle = 0xCu;
+        const bool targetWritten = entitySection
+            && failedOwner.writePoint(&indexed);
+        targetOutput = failedOwner.m_writingContext
+            .sourceHandleToMintedMap[indexedSource];
+        const bool objectSection = targetWritten
+            && failedOwner.writer->writeString(0, "ENDSEC")
+            && failedOwner.writer->writeString(0, "SECTION")
+            && failedOwner.writer->writeString(2, "OBJECTS");
+        const std::string beforeInvalidIndex = failedOutput.str();
+        DRW_PartialViewingIndex wrongSource;
+        wrongSource.handle = indexSource;
+        wrongSource.m_entries.push_back(DRW_PartialViewingIndexEntry{
+            DRW_Coord{0.0, 0.0, 0.0}, DRW_Coord{1.0, 1.0, 1.0}, 0x903u});
+        const bool wrongSourceRejected =
+            objectSection && !failedOwner.writePartialViewingIndex(&wrongSource);
+        t.expect(targetWritten && objectSection && wrongSourceRejected
+                     && failedOutput.str() == beforeInvalidIndex
+                     && failedOwner.m_writingContext
+                                .sourceHandleToWrittenObjectMap.count(indexSource)
+                            == 0u,
+                 "PARTIALVIEWINGINDEX rejects a resolver alias without source identity proof");
+
+        std::ostringstream missingOutput;
+        dxfRW missingOwner("");
+        missingOwner.version = DRW::AC1032;
+        missingOwner.binFile = binary;
+        missingOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&missingOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&missingOutput));
+        missingOwner.writer->setRecordInventoryEnabled(true, 64u);
+        const bool missingSection = missingOwner.writer->writeString(
+                0, "SECTION")
+            && missingOwner.writer->writeString(2, "OBJECTS");
+        const std::string beforeMissingTarget = missingOutput.str();
+        DRW_PartialViewingIndex missingTarget;
+        missingTarget.handle = indexSource;
+        missingTarget.m_entries.push_back(DRW_PartialViewingIndexEntry{
+            DRW_Coord{0.0, 0.0, 0.0}, DRW_Coord{1.0, 1.0, 1.0},
+            0x904u});
+        t.expect(missingSection
+                     && !missingOwner.writePartialViewingIndex(&missingTarget)
+                     && missingOutput.str() == beforeMissingTarget
+                     && missingOwner.m_writingContext
+                                .sourceHandleToWrittenObjectMap.count(indexSource)
+                            == 0u,
+                 "PARTIALVIEWINGINDEX refuses an un-emitted nonzero target");
+
+        for (const std::uint32_t invalidTarget : {
+                 0u, static_cast<std::uint32_t>(DRW::NoHandle)}) {
+            std::ostringstream invalidOutput;
+            dxfRW invalidOwner("");
+            invalidOwner.version = DRW::AC1032;
+            invalidOwner.binFile = binary;
+            invalidOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&invalidOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&invalidOutput));
+            invalidOwner.writer->setRecordInventoryEnabled(true, 64u);
+            DRW_PartialViewingIndex invalid;
+            invalid.handle = indexSource;
+            invalid.m_entries.push_back(DRW_PartialViewingIndexEntry{
+                DRW_Coord{0.0, 0.0, 0.0}, DRW_Coord{1.0, 1.0, 1.0},
+                invalidTarget});
+            t.expect(!invalidOwner.writePartialViewingIndex(&invalid)
+                         && invalidOutput.str().empty(),
+                     "PARTIALVIEWINGINDEX rejects null and sentinel hard pointers atomically");
+        }
+
+        std::ostringstream lateFailureOutput;
+        dxfRW lateFailureOwner("");
+        lateFailureOwner.version = DRW::AC1032;
+        lateFailureOwner.binFile = binary;
+        lateFailureOwner.setHandleRemap({{indexSource, indexRemapped}});
+        lateFailureOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&lateFailureOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&lateFailureOutput));
+        lateFailureOwner.writer->setRecordInventoryEnabled(true, 64u);
+        const bool lateEntitySection =
+            lateFailureOwner.writer->writeString(0, "SECTION")
+            && lateFailureOwner.writer->writeString(2, "ENTITIES");
+        indexed.handle = indexedSource;
+        const bool retryTargetWritten = lateEntitySection
+            && lateFailureOwner.writePoint(&indexed);
+        const bool lateObjectSection = retryTargetWritten
+            && lateFailureOwner.writer->writeString(0, "ENDSEC")
+            && lateFailureOwner.writer->writeString(0, "SECTION")
+            && lateFailureOwner.writer->writeString(2, "OBJECTS");
+        const std::string beforeLateFailure = lateFailureOutput.str();
+        DRW_PartialViewingIndex malformed;
+        malformed.handle = indexSource;
+        malformed.m_entries.push_back(DRW_PartialViewingIndexEntry{
+            DRW_Coord{0.0, 0.0, 0.0}, DRW_Coord{1.0, 1.0, 1.0},
+            indexedSource});
+        malformed.extData.push_back(new DRW_Variant(
+            1009, std::string("unsupported-xdata-code")));
+        const bool lateFailure =
+            lateObjectSection
+            && !lateFailureOwner.writePartialViewingIndex(&malformed);
+        t.expect(lateFailure && lateFailureOutput.str() == beforeLateFailure
+                     && lateFailureOwner.m_writingContext
+                                .sourceHandleToWrittenObjectMap.count(indexSource)
+                            == 0u
+                     && lateFailureOwner.writer->recordHandleCount(
+                            indexRemapped) == 0u,
+                 "late PARTIALVIEWINGINDEX XDATA failure rolls back bytes and identity");
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1032;
+        retryOwner.binFile = binary;
+        retryOwner.setHandleRemap({{indexSource, indexRemapped}});
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        retryOwner.writer->setRecordInventoryEnabled(true, 64u);
+        const bool retryEntitySection = retryOwner.writer->writeString(0, "SECTION")
+            && retryOwner.writer->writeString(2, "ENTITIES");
+        indexed.handle = indexedSource;
+        const bool retryTarget = retryEntitySection
+            && retryOwner.writePoint(&indexed);
+        const bool retryObjectSection = retryTarget
+            && retryOwner.writer->writeString(0, "ENDSEC")
+            && retryOwner.writer->writeString(0, "SECTION")
+            && retryOwner.writer->writeString(2, "OBJECTS");
+        DRW_PartialViewingIndex corrected;
+        corrected.handle = indexSource;
+        corrected.m_entries.push_back(DRW_PartialViewingIndexEntry{
+            DRW_Coord{0.0, 0.0, 0.0}, DRW_Coord{1.0, 1.0, 1.0},
+            indexedSource});
+        const bool retryIndex = retryObjectSection
+            && retryOwner.writePartialViewingIndex(&corrected);
+        const auto retryBinding = retryOwner.m_writingContext
+            .sourceHandleToWrittenObjectMap.find(indexSource);
+        t.expect(lateFailure && retryIndex
+                     && retryBinding != retryOwner.m_writingContext
+                                            .sourceHandleToWrittenObjectMap.end()
+                     && retryBinding->second == indexRemapped,
+                 "corrected PARTIALVIEWINGINDEX retry succeeds on a fresh writer");
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW owner("");
+        owner.version = DRW::AC1032;
+        owner.binFile = binary;
+        owner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        owner.writer->setRecordInventoryEnabled(true, 64u);
+        const bool entitySection = owner.writer->writeString(0, "SECTION")
+            && owner.writer->writeString(2, "ENTITIES");
+        DRW_Point indexed;
+        indexed.handle = indexedSource;
+        indexed.parentHandle = 0xCu;
+        DRW_PartialViewingIndex generated;
+        generated.m_entries.push_back(DRW_PartialViewingIndexEntry{
+            DRW_Coord{0.0, 0.0, 0.0}, DRW_Coord{1.0, 1.0, 1.0},
+            indexedSource});
+        const bool indexedWritten = entitySection && owner.writePoint(&indexed);
+        const bool objectSection = indexedWritten
+            && owner.writer->writeString(0, "ENDSEC")
+            && owner.writer->writeString(0, "SECTION")
+            && owner.writer->writeString(2, "OBJECTS");
+        const bool wrote = objectSection
+            && owner.writePartialViewingIndex(&generated);
+        const auto generatedHandle = [&owner, &output, binary, wrote]() {
+            if (!wrote)
+                return std::uint32_t{0};
+            std::istringstream input(output.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderAscii>(&input));
+            std::string record;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0)
+                    record = reader->getString();
+                else if (record == "PARTIALVIEWINGINDEX" && code == 5)
+                    return reader->getHandleString();
+            }
+            return std::uint32_t{0};
+        }();
+        t.expect(indexedWritten,
+                 "PARTIALVIEWINGINDEX allocation setup emits its typed target");
+        t.expect(wrote && generatedHandle != 0u
+                     && generatedHandle != DRW::NoHandle,
+                 "PARTIALVIEWINGINDEX allocates a valid identity when absent");
+    }
+}
+
 void testEntityReferenceRemapping(TestContext& t) {
     const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
         {0x801u, 0xA81u}, {0x802u, 0xA82u}, {0x803u, 0xA83u},
@@ -18715,6 +19066,15 @@ int main(int argc, char** argv) {
         TestContext focused;
         testSceneObjectReferenceRemapping(focused);
         std::cout << "Scene-object reference remapping: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1])
+            == "--partialviewingindex-reference-closure") {
+        TestContext focused;
+        testPartialViewingIndexReferenceClosure(focused);
+        std::cout << "PARTIALVIEWINGINDEX reference closure: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

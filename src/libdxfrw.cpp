@@ -33695,27 +33695,104 @@ bool dxfRW::writeObjectPtr(DRW_ObjectPtr *ent) {
 }
 
 bool dxfRW::writePartialViewingIndex(DRW_PartialViewingIndex *ent) {
-    if (!preflightTableEntry(ent))
+    if (!preflightTableEntry(ent) || writer == nullptr)
         return false;
+    if (ent->m_entries.size() > DRW_PartialViewingIndex::kMaxEntryCount)
+        return failDxfWrite();
+
+    const std::uint32_t sourceHandle = ent->handle;
+    std::uint32_t emittedHandle = sourceHandle == 0u
+        ? 0u : remapObjectHandle(sourceHandle);
+    if (sourceHandle != 0u
+        && (emittedHandle == 0u || emittedHandle == DRW::NoHandle
+            || isDxfFixedOutputHandle(emittedHandle)))
+        return failDxfWrite();
+
+    std::vector<std::uint32_t> emittedTargets;
+    try {
+        emittedTargets.reserve(ent->m_entries.size());
+        for (const DRW_PartialViewingIndexEntry& entry : ent->m_entries) {
+            if (!std::isfinite(entry.extentsMin.x)
+                || !std::isfinite(entry.extentsMin.y)
+                || !std::isfinite(entry.extentsMin.z)
+                || !std::isfinite(entry.extentsMax.x)
+                || !std::isfinite(entry.extentsMax.y)
+                || !std::isfinite(entry.extentsMax.z)
+                || entry.objectHandle == 0u
+                || entry.objectHandle == DRW::NoHandle)
+                return failDxfWrite();
+
+            const std::uint32_t target = m_referenceResolver
+                ? resolveReference(entry.objectHandle)
+                : remapObjectHandle(entry.objectHandle);
+            if (target == 0u || target == DRW::NoHandle
+                || m_writingContext.ambiguousSourceHandles.count(
+                       entry.objectHandle) != 0u
+                || writer->recordHandleCount(target) != 1u)
+                return failDxfWrite();
+
+            const auto entity =
+                m_writingContext.sourceHandleToMintedMap.find(
+                    entry.objectHandle);
+            const auto object =
+                m_writingContext.sourceHandleToWrittenObjectMap.find(
+                    entry.objectHandle);
+            const auto table =
+                m_writingContext.sourceHandleToWrittenTableMap.find(
+                    entry.objectHandle);
+            const bool isWrittenEntity =
+                m_writingContext.writtenSourceEntityHandles.count(
+                    entry.objectHandle) == 1u
+                && entity != m_writingContext.sourceHandleToMintedMap.end()
+                && entity->second == target;
+            const bool isWrittenObject =
+                object != m_writingContext.sourceHandleToWrittenObjectMap.end()
+                && object->second == target;
+            const bool isWrittenTable =
+                table != m_writingContext.sourceHandleToWrittenTableMap.end()
+                && table->second == target;
+            if (!isWrittenEntity && !isWrittenObject && !isWrittenTable)
+                return failDxfWrite();
+            emittedTargets.push_back(target);
+        }
+    } catch (...) {
+        return failDxfWrite();
+    }
+
+    RecordStateScope state(*this, ent);
+    if (sourceHandle == 0u) {
+        if (!allocateDxfHandle(emittedHandle))
+            return false;
+    } else if (!reserveHandle(emittedHandle)) {
+        return failDxfWrite();
+    }
+
+    DxfWriterRecordScope record(*writer);
     writer->writeString(0, "PARTIALVIEWINGINDEX");
-    writer->writeString(5, toHexStr(ent->handle));
+    writer->writeString(5, toHexStr(emittedHandle));
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
     if (!writeTableEntryAppData(*ent))
         return false;
     writer->writeString(100, "AcDbPartialViewingIndex");
-    for (const DRW_PartialViewingIndexEntry& entry : ent->m_entries) {
+    for (std::size_t i = 0; i < ent->m_entries.size(); ++i) {
+        const DRW_PartialViewingIndexEntry& entry = ent->m_entries[i];
         writer->writeDouble(10, entry.extentsMin.x);
         writer->writeDouble(20, entry.extentsMin.y);
         writer->writeDouble(30, entry.extentsMin.z);
         writer->writeDouble(11, entry.extentsMax.x);
         writer->writeDouble(21, entry.extentsMax.y);
         writer->writeDouble(31, entry.extentsMax.z);
-        writer->writeString(340,
-                            toHexStr(entry.objectHandle));
+        writer->writeString(340, toHexStr(emittedTargets[i]));
     }
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    return !writer->hasWriteError();
+    if (writer->hasWriteError() || !preflightDxfWrite()
+        || (sourceHandle != 0u
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit())
+        return failDxfWrite();
+    state.commit();
+    return true;
 }
 
 bool dxfRW::writeRenderSettings(DRW_RenderSettings *ent,

@@ -108,11 +108,16 @@ engines.
    typed output or a proven end-to-end replay path. Keep unresolved records
    refused. Never weaken the completeness predicate, emit a partial graph, or
    infer edges from adjacent handle values.
-   `PARTIALVIEWINGINDEX` remains an explicit graph-closure gap: its current
-   writer emits the own group-5 identity and each group-340 indexed-object
-   hard-pointer from source handles. Remap and bind the record identity, then
-   resolve each target with source kind/owner proof and fresh readback before
-   admitting this profile.
+   For `PARTIALVIEWINGINDEX`, the generated low-level writer now remaps and
+   reserves or allocates group-5 identity, binding the source identity only
+   after successful staged emission; group-340 targets must resolve to one
+   emitted record and match an unambiguous typed entity/object/table source
+   identity. Generated ASCII/Binary controls cover
+   resolver precedence, missing and mismatched targets, rollback/retry, and
+   typed readback ([receipt](docs/research/p4-partialviewingindex-reference-closure-2026-11-03.json)).
+   The exact physical producer profile and indexed-target kind/owner semantics
+   remain unqualified; this generated inventory gate does not qualify adapter
+   graph closure or promote support.
    DWG entities are delivered before DBCOLOR OBJECTS callbacks; the adapter now
    reconciles generation-keyed RGB/name appearance, retains a bounded typed
    DBCOLOR source model, and refuses unresolved references (see the [late
