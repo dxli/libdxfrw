@@ -330,12 +330,20 @@ reference round-trips are transport evidence only (see the [SUNSTUDY receipt](do
 and [path-carrier receipt](docs/research/p5-pointpath-objectptr-record-identity-remapping-2026-11-03.json)).
 Keep physical SUN ownership constrained to the documented VPORT/VIEWPORT
 hard-owner route. The AC1024 aerial sample's SUN `0x24C` is owned by XRECORD
-`0x246`, so it is not evidence for a valid alternate route; preserve strict
-refusal and reopen implementation only if a conforming source demonstrates a
-missing route ([outlier receipt](docs/research/p5-ac1024-sun-xrecord-owner-outlier-2026-11-01.json)).
-For IBL backgrounds, physical producer coverage and native lighting semantics
-remain unqualified. Generated reference and record-identity round-trips do not
-close those gates; see the [IBL reference receipt](docs/research/p5-background-reference-remapping-2026-11-03.json)
+`0x246`, so it is not evidence for a valid alternate source-owner route; keep
+strict adapter/output refusal for that sample and reopen source-graph admission
+only if a conforming source demonstrates a missing route ([outlier receipt](docs/research/p5-ac1024-sun-xrecord-owner-outlier-2026-11-01.json)).
+The low-level SKYLIGHTBACKGROUND writer now translates a registered nonzero
+group-340 SUN handle through the configured resolver or source-handle remap,
+and refuses unresolved targets and pre-AC1021 output. Generated ASCII/Binary
+controls cover exact reference readback, destination preservation, corrected
+fresh-writer retry, and target-version refusal ([receipt](docs/research/p5-skylight-background-sun-reference-remapping-2026-11-03.json)).
+This closes ID transport only: registration does not prove target emission, and
+physical SUN owner/link qualification and native lighting semantics remain open.
+The earlier direct-writer refusal is superseded only for this registered low-level
+profile. For IBL backgrounds, physical producer coverage and native lighting
+semantics remain unqualified. Generated reference and record-identity
+round-trips do not close those gates; see the [IBL reference receipt](docs/research/p5-background-reference-remapping-2026-11-03.json)
 and [record-identity receipt](docs/research/p5-background-record-identity-remapping-2026-11-03.json).
 Unsupported RGB/name/book CMC states remain refused unless a lossless documented
 route is established. Generated ASCII/Binary tests already cover selected

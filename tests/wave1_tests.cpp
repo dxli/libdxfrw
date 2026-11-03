@@ -6415,6 +6415,34 @@ void testBackgroundReferenceRemapping(TestContext& t) {
     const auto resolverValue = [](std::uint32_t source) {
         return source == 0x941u ? std::uint32_t{0xB41u} : source;
     };
+    const auto readBackgroundSun = [](
+            const std::string& bytes, bool binary,
+            std::uint32_t& identity, std::uint32_t& sunHandle) {
+        std::istringstream input(bytes);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderBinary>(&input))
+            : std::unique_ptr<dxfReader>(
+                  std::make_unique<dxfReaderAscii>(&input));
+        std::string recordName;
+        bool ended = false;
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (code == 0) {
+                recordName = reader->getString();
+                if (recordName == "WIRE_END") {
+                    ended = true;
+                    break;
+                }
+            } else if (recordName == "SKYLIGHTBACKGROUND") {
+                if (code == 5)
+                    identity = reader->getHandleString();
+                else if (code == 340)
+                    sunHandle = reader->getHandleString();
+            }
+        }
+        return ended;
+    };
     for (const bool binary : {false, true}) {
         for (const bool useResolver : {false, true}) {
             std::ostringstream output;
@@ -6477,6 +6505,144 @@ void testBackgroundReferenceRemapping(TestContext& t) {
                          ? "IBL remaps its object identity and uses final Background resolver identity"
                          : "IBL remaps its object identity and secondary Background handle");
         }
+    }
+
+    for (const bool binary : {false, true}) {
+        for (const bool useResolver : {false, true}) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setHandleRemap({{0x941u, 0xA41u},
+                                  {0xA400u, 0xA42u}});
+            owner.setResolvedSunHandles({0x941u});
+            if (useResolver)
+                owner.setReferenceResolver(resolverValue);
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_Background skylight;
+            skylight.handle = 0xA400u;
+            skylight.parentHandle = 0xCu;
+            skylight.m_kind = DRW_Background::Skylight;
+            skylight.m_classVersion = 1;
+            skylight.m_sunHandle = 0x941u;
+            const bool wrote = owner.writeBackground(
+                    &skylight, "SKYLIGHTBACKGROUND")
+                && owner.writer->writeString(0, "WIRE_END");
+            t.expect(wrote,
+                     "registered Skylight SUN pointer serializes");
+            if (!wrote)
+                continue;
+
+            std::uint32_t emittedIdentity = 0u;
+            std::uint32_t emittedSun = 0u;
+            const bool ended = readBackgroundSun(
+                output.str(), binary, emittedIdentity, emittedSun);
+            const std::uint32_t expectedSun = useResolver ? 0xB41u : 0xA41u;
+            t.expect(ended && emittedIdentity == 0xA42u
+                         && emittedSun == expectedSun,
+                     useResolver
+                         ? "Skylight remaps its identity and uses final SUN resolver identity"
+                         : "Skylight remaps its identity and SUN handle");
+        }
+
+        std::ostringstream unregisteredOutput;
+        dxfRW unregisteredOwner("");
+        unregisteredOwner.version = DRW::AC1032;
+        unregisteredOwner.binFile = binary;
+        unregisteredOwner.setHandleRemap({{0x941u, 0xA41u}});
+        unregisteredOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&unregisteredOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&unregisteredOutput));
+        unregisteredOwner.writer->writeString(0, "PRESERVE");
+        const std::string beforeUnregistered = unregisteredOutput.str();
+        DRW_Background unregistered;
+        unregistered.m_kind = DRW_Background::Skylight;
+        unregistered.m_classVersion = 1;
+        unregistered.m_sunHandle = 0x941u;
+        t.expect(!unregisteredOwner.writeBackground(
+                         &unregistered, "SKYLIGHTBACKGROUND")
+                     && unregisteredOutput.str() == beforeUnregistered,
+                 "unregistered Skylight SUN target preserves destination");
+
+        // DRW::NoHandle is the zero/null handle in this API.
+        for (const std::uint32_t invalidResolution : {0u}) {
+            std::ostringstream failedOutput;
+            dxfRW failedOwner("");
+            failedOwner.version = DRW::AC1032;
+            failedOwner.binFile = binary;
+            failedOwner.setResolvedSunHandles({0x941u});
+            failedOwner.setReferenceResolver(
+                [invalidResolution](std::uint32_t source) {
+                    return source == 0x941u ? invalidResolution : source;
+                });
+            failedOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&failedOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&failedOutput));
+            failedOwner.writer->writeString(0, "PRESERVE");
+            const std::string beforeFailed = failedOutput.str();
+            DRW_Background failed;
+            failed.handle = 0xA400u;
+            failed.parentHandle = 0xCu;
+            failed.m_kind = DRW_Background::Skylight;
+            failed.m_classVersion = 1;
+            failed.m_sunHandle = 0x941u;
+            const bool refused = !failedOwner.writeBackground(
+                &failed, "SKYLIGHTBACKGROUND");
+
+            std::ostringstream retryOutput;
+            dxfRW retryOwner("");
+            retryOwner.version = DRW::AC1032;
+            retryOwner.binFile = binary;
+            retryOwner.setHandleRemap({{0xA400u, 0xA42u}});
+            retryOwner.setResolvedSunHandles({0x941u});
+            retryOwner.setReferenceResolver(resolverValue);
+            retryOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&retryOutput))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&retryOutput));
+            const bool retried = retryOwner.writeBackground(
+                    &failed, "SKYLIGHTBACKGROUND")
+                && retryOwner.writer->writeString(0, "WIRE_END");
+            std::uint32_t emittedIdentity = 0u;
+            std::uint32_t emittedSun = 0u;
+            const bool ended = retried && readBackgroundSun(
+                retryOutput.str(), binary, emittedIdentity, emittedSun);
+            t.expect(refused && failedOutput.str() == beforeFailed
+                         && ended && emittedIdentity == 0xA42u
+                         && emittedSun == 0xB41u,
+                     "invalid Skylight SUN resolution rolls back and corrected writer retry reads back");
+        }
+
+        std::ostringstream oldVersionOutput;
+        dxfRW oldVersionOwner("");
+        oldVersionOwner.version = DRW::AC1018;
+        oldVersionOwner.binFile = binary;
+        oldVersionOwner.setResolvedSunHandles({0x941u});
+        oldVersionOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&oldVersionOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&oldVersionOutput));
+        oldVersionOwner.writer->writeString(0, "PRESERVE");
+        const std::string beforeOldVersion = oldVersionOutput.str();
+        DRW_Background oldVersion;
+        oldVersion.m_kind = DRW_Background::Skylight;
+        oldVersion.m_classVersion = 1;
+        oldVersion.m_sunHandle = 0x941u;
+        t.expect(!oldVersionOwner.writeBackground(
+                         &oldVersion, "SKYLIGHTBACKGROUND")
+                     && oldVersionOutput.str() == beforeOldVersion,
+                 "pre-AC1021 Skylight SUN pointer preserves destination");
     }
 
     for (const bool binary : {false, true}) {

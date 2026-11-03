@@ -33403,6 +33403,7 @@ bool dxfRW::writeBackground(DRW_Background *ent, const char *recordName) {
         || hasUnqualifiedAppDataHandle)
         return failDxfWrite();
     std::uint32_t emittedSecondaryBackground = 0;
+    std::uint32_t emittedSunHandle = 0;
     if (ent->m_kind == DRW_Background::Ibl
         && ent->m_secondaryBackgroundHandle != 0) {
         if (std::find(m_resolvedBackgroundHandles.begin(),
@@ -33418,9 +33419,16 @@ bool dxfRW::writeBackground(DRW_Background *ent, const char *recordName) {
             return failDxfWrite();
     } else if (ent->m_kind == DRW_Background::Skylight
                && ent->m_sunHandle != 0) {
-        // The DXF SUN owner/link graph is not registered by the Background
-        // target-set capability; do not serialize an unclosed group-340 edge.
-        return failDxfWrite();
+        if (version < DRW::AC1021
+            || std::find(m_resolvedSunHandles.begin(),
+                         m_resolvedSunHandles.end(), ent->m_sunHandle)
+                == m_resolvedSunHandles.end())
+            return failDxfWrite();
+        emittedSunHandle = m_referenceResolver
+            ? resolveReference(ent->m_sunHandle)
+            : remapObjectHandle(ent->m_sunHandle);
+        if (emittedSunHandle == 0 || emittedSunHandle == DRW::NoHandle)
+            return failDxfWrite();
     }
     const std::uint32_t sourceHandle = ent->handle;
     std::uint32_t emittedHandle = sourceHandle == 0u
@@ -33505,7 +33513,7 @@ bool dxfRW::writeBackground(DRW_Background *ent, const char *recordName) {
         break;
     case DRW_Background::Skylight:
         if (ent->m_sunHandle != 0)
-            writer->writeString(340, toHexStr(ent->m_sunHandle));
+            writer->writeString(340, toHexStr(emittedSunHandle));
         break;
     }
     if (!ent->extData.empty() && !writeExtData(ent->extData))
