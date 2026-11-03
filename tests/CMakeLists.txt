@@ -1169,6 +1169,10 @@ add_test(NAME dwg2dxf_point_cloud_adapter_transport
 set_tests_properties(dwg2dxf_point_cloud_adapter_transport PROPERTIES
     LABELS "fast;dxf;adapter;entities;pointcloud;navisworks;transaction"
     TIMEOUT 20)
+add_test(NAME dwg2dxf_proxy_entity_output_gate
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --dwg-proxy-entity-output-gate)
+set_tests_properties(dwg2dxf_proxy_entity_output_gate PROPERTIES
+    LABELS "fast;dxf;adapter;entities;proxy;transaction" TIMEOUT 15)
 add_test(NAME dwg2dxf_light_adapter_transport
     COMMAND libdxfrw_dwg2dxf_adapter_tests --light-adapter-transport)
 set_tests_properties(dwg2dxf_light_adapter_transport PROPERTIES

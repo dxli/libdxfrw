@@ -940,6 +940,10 @@ public:
     // route. Keep a sticky presence marker so conversion cannot silently drop
     // a typed shell or its opaque companion.
     bool standaloneObjectContextDataPresent{false};
+    // Non-DXF ACAD_PROXY_ENTITY callbacks have no qualified replay route.
+    // DXF-origin proxy records retain their complete raw carrier and continue
+    // through that path; other source profiles block incomplete output.
+    bool unqualifiedProxyEntityOutputPresent{false};
     // Retain dynamic-block callbacks so export can fail closed rather than
     // silently discarding the graph. No dynamic-block DXF writer is qualified.
     std::vector<DRW_DynamicBlockObject> dynamicBlockObjects;

@@ -579,6 +579,7 @@ public:
     void addTableGeometry(const DRW_TableGeometry& data) override;
     void addUnsupportedObject(const DRW_UnsupportedObject& data) override;
     void addImageDefinitionReactor(const DRW_ImageDefinitionReactor& data) override;
+    void addProxyEntity(const DRW_ProxyEntity& data) override;
 
     //blocks
     virtual void addBlock(const DRW_Block& data) override{

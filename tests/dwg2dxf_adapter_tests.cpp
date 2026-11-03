@@ -20393,6 +20393,99 @@ bool pointCloudAndNavisworksAdapterTransport() {
     return true;
 }
 
+bool dwgProxyEntityOutputGate() {
+    struct CerrRedirect {
+        std::streambuf* previous;
+        explicit CerrRedirect(std::ostream& output)
+            : previous(std::cerr.rdbuf(output.rdbuf())) {}
+        ~CerrRedirect() { std::cerr.rdbuf(previous); }
+    };
+    for (const bool binary : {false, true}) {
+        dx_data data;
+        data.sourceFormat = dx_source_format::DWG;
+        dx_iface adapter;
+        adapter.cData = &data;
+        adapter.currentBlock = data.mBlock;
+
+        DRW_ProxyEntity proxy;
+        proxy.handle = 0x123u;
+        proxy.m_proxyClassId = 498;
+        proxy.m_proxySubclass = "AcDbProxyEntity";
+        proxy.m_entityData = {0x31u, 0x32u, 0x33u};
+        proxy.m_hasEntityDataBitSize = true;
+        proxy.m_entityDataBitSize = 24u;
+        adapter.addProxyEntity(proxy);
+        if (!data.unqualifiedProxyEntityOutputPresent)
+            return fail("DWG proxy callback did not retain unsupported-output presence");
+
+        const auto path = std::filesystem::temp_directory_path()
+            / ("libdxfrw-dwg-proxy-output-gate-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        if (std::filesystem::exists(path))
+            return fail("DWG proxy output path unexpectedly exists");
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{path};
+        const std::string sentinel = "DWG_PROXY_ENTITY_DESTINATION\n";
+        {
+            std::ofstream existing(path, std::ios::binary);
+            existing << sentinel;
+            if (!existing)
+                return fail("could not create DWG proxy destination sentinel");
+        }
+        std::ostringstream diagnostics;
+        bool exported = false;
+        {
+            CerrRedirect redirect(diagnostics);
+            exported = adapter.fileExport(
+                path.string(), DRW::AC1024, binary, &data, false, true);
+        }
+        if (exported)
+            return fail("DWG ACAD_PROXY_ENTITY was silently omitted on export");
+        if (diagnostics.str().find(
+                "non-DXF ACAD_PROXY_ENTITY has no qualified replay path")
+            == std::string::npos)
+            return fail("export refusal did not come from the proxy completeness gate");
+        {
+            std::ifstream previous(path, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != sentinel)
+                return fail("unqualified DWG proxy changed the destination");
+        }
+    }
+
+    // DXF-origin proxy entities use the exact raw carrier delivered directly
+    // after the typed convenience callback; preserve that replay route.
+    dx_data dxfData;
+    dxfData.sourceFormat = dx_source_format::DXF;
+    dx_iface dxfAdapter;
+    dxfAdapter.cData = &dxfData;
+    dxfAdapter.currentBlock = dxfData.mBlock;
+    DRW_ProxyEntity dxfProxy;
+    dxfProxy.handle = 0x234u;
+    dxfAdapter.addProxyEntity(dxfProxy);
+    DRW_RawDxfObject raw;
+    raw.name = "ACAD_PROXY_ENTITY";
+    raw.handle = dxfProxy.handle;
+    raw.groups = {{5, std::string("234")},
+                  {100, std::string("AcDbProxyEntity")}};
+    dxfAdapter.addRawDxfEntity(raw);
+    if (dxfData.unqualifiedProxyEntityOutputPresent
+        || dxfData.rawDxfEntityCaptureFailed
+        || dxfData.mBlock->rawEntities.size() != 1u
+        || dxfData.mBlock->rawEntities.front().record.name
+            != "ACAD_PROXY_ENTITY")
+        return fail("DXF proxy raw-carrier replay path was changed");
+    return true;
+}
+
 bool lightAdapterTransport() {
     class DirectLightWriter final : public dx_iface {
     public:
@@ -63474,6 +63567,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--point-cloud-adapter-transport")
         return pointCloudAndNavisworksAdapterTransport() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--dwg-proxy-entity-output-gate")
+        return dwgProxyEntityOutputGate() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--light-adapter-transport")
         return lightAdapterTransport() ? 0 : 1;
     if (argc == 2

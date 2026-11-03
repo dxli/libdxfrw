@@ -59980,6 +59980,12 @@ void dx_iface::addRawDxfEntity(const DRW_RawDxfObject& data) {
     }
 }
 
+void dx_iface::addProxyEntity(const DRW_ProxyEntity& data) {
+    (void)data;
+    if (cData != nullptr && cData->sourceFormat != dx_source_format::DXF)
+        cData->unqualifiedProxyEntityOutputPresent = true;
+}
+
 bool dx_iface::validateSortEntsGraph(const dx_data& data, bool debug) {
     constexpr std::size_t kMaxSourceRecords = 1000000u;
     constexpr std::size_t kMaxSortPairs = 1000000u;
@@ -66319,6 +66325,15 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             std::cerr << "DXF export refused: standalone DWG "
                          "OBJECTCONTEXTDATA has no qualified replay path; "
                          "output would be incomplete\n";
+        } catch (...) {
+            // Diagnostics cannot authorize publication of incomplete output.
+        }
+        return false;
+    }
+    if (cData->unqualifiedProxyEntityOutputPresent) {
+        try {
+            std::cerr << "DXF export refused: non-DXF ACAD_PROXY_ENTITY has no "
+                         "qualified replay path; output would be incomplete\n";
         } catch (...) {
             // Diagnostics cannot authorize publication of incomplete output.
         }
