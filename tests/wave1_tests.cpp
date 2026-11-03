@@ -4550,7 +4550,8 @@ void testBackgroundReferenceRemapping(TestContext& t) {
             dxfRW owner("");
             owner.version = DRW::AC1032;
             owner.binFile = binary;
-            owner.setHandleRemap({{0x941u, 0xA41u}});
+            owner.setHandleRemap({{0x941u, 0xA41u},
+                                  {0xA400u, 0xA42u}});
             owner.setResolvedBackgroundHandles({0x941u});
             if (useResolver)
                 owner.setReferenceResolver(resolverValue);
@@ -4579,6 +4580,7 @@ void testBackgroundReferenceRemapping(TestContext& t) {
                     std::make_unique<dxfReaderBinary>(&input))
                 : std::unique_ptr<dxfReader>(
                     std::make_unique<dxfReaderAscii>(&input));
+            std::uint32_t emittedIdentity = 0u;
             std::uint32_t emittedReference = 0u;
             std::string recordName;
             bool ended = false;
@@ -4590,16 +4592,130 @@ void testBackgroundReferenceRemapping(TestContext& t) {
                         ended = true;
                         break;
                     }
-                } else if (recordName == "IBLBACKGROUND" && code == 340) {
-                    emittedReference = reader->getHandleString();
+                } else if (recordName == "IBLBACKGROUND") {
+                    if (code == 5)
+                        emittedIdentity = reader->getHandleString();
+                    else if (code == 340)
+                        emittedReference = reader->getHandleString();
                 }
             }
             const std::uint32_t expected = useResolver ? 0xB41u : 0xA41u;
-            t.expect(ended && emittedReference == expected,
+            t.expect(ended && emittedIdentity == 0xA42u
+                         && emittedReference == expected,
                      useResolver
-                         ? "IBL uses final Background resolver identity"
-                         : "IBL uses secondary Background handle remap");
+                         ? "IBL remaps its object identity and uses final Background resolver identity"
+                         : "IBL remaps its object identity and secondary Background handle");
         }
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream generatedOutput;
+        dxfRW generatedOwner("");
+        generatedOwner.version = DRW::AC1032;
+        generatedOwner.binFile = binary;
+        generatedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&generatedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&generatedOutput));
+        DRW_Background generated;
+        generated.parentHandle = 0xCu;
+        generated.m_kind = DRW_Background::Ibl;
+        generated.m_classVersion = 1;
+        const bool generatedWrite = generatedOwner.writeBackground(
+            &generated, "IBLBACKGROUND");
+        std::uint32_t generatedIdentity = 0u;
+        if (generatedWrite) {
+            std::istringstream input(generatedOutput.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderAscii>(&input));
+            std::string recordName;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0)
+                    recordName = reader->getString();
+                else if (recordName == "IBLBACKGROUND" && code == 5)
+                    generatedIdentity = reader->getHandleString();
+            }
+        }
+        t.expect(generatedWrite,
+                 "Background without a source identity serializes");
+        t.expect(generatedWrite && generatedIdentity != 0u
+                     && generatedIdentity != DRW::NoHandle,
+                 "Background without a source identity receives a DXF handle");
+
+        std::ostringstream failedOutput;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1032;
+        failedOwner.binFile = binary;
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&failedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&failedOutput));
+        failedOwner.writer->writeString(0, "PRESERVE");
+        const std::string beforeFailedRecord = failedOutput.str();
+        failedOwner.setHandleRemap({{0xA400u, 0xA42u}});
+        DRW_Background malformed;
+        malformed.handle = 0xA400u;
+        malformed.parentHandle = 0xCu;
+        malformed.m_kind = DRW_Background::Ibl;
+        malformed.m_classVersion = 1;
+        malformed.extData.push_back(new DRW_Variant(
+            1009, std::string("unsupported-xdata-code")));
+        const bool malformedRejected = !failedOwner.writeBackground(
+            &malformed, "IBLBACKGROUND");
+        t.expect(malformedRejected
+                     && failedOutput.str() == beforeFailedRecord
+                     && failedOwner.m_writingContext
+                            .sourceHandleToWrittenObjectMap.count(0xA400u) == 0u,
+                 "late Background XDATA failure rolls back bytes and object identity");
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1032;
+        retryOwner.binFile = binary;
+        retryOwner.setHandleRemap({{0xA400u, 0xA42u}});
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        DRW_Background corrected;
+        corrected.handle = 0xA400u;
+        corrected.parentHandle = 0xCu;
+        corrected.m_kind = DRW_Background::Ibl;
+        corrected.m_classVersion = 1;
+        const bool correctedWrite = retryOwner.writeBackground(
+            &corrected, "IBLBACKGROUND");
+        const auto correctedIdentityBinding = retryOwner.m_writingContext
+            .sourceHandleToWrittenObjectMap.find(0xA400u);
+        std::uint32_t retriedIdentity = 0u;
+        if (correctedWrite) {
+            std::istringstream input(retryOutput.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderAscii>(&input));
+            std::string recordName;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0)
+                    recordName = reader->getString();
+                else if (recordName == "IBLBACKGROUND" && code == 5)
+                    retriedIdentity = reader->getHandleString();
+            }
+        }
+        t.expect(correctedWrite && retriedIdentity == 0xA42u
+                     && correctedIdentityBinding
+                            != retryOwner.m_writingContext
+                                   .sourceHandleToWrittenObjectMap.end()
+                     && correctedIdentityBinding->second == 0xA42u,
+                 "corrected Background retry emits and binds the remapped identity");
     }
 }
 

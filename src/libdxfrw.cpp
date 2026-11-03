@@ -33271,7 +33271,7 @@ bool dxfRW::writeMaterial(DRW_Material *ent) {
 }
 
 bool dxfRW::writeBackground(DRW_Background *ent, const char *recordName) {
-    if (!preflightTableEntry(ent))
+    if (!preflightTableEntry(ent) || writer == nullptr)
         return false;
     if (recordName == nullptr || *recordName == '\0')
         return failDxfWrite();
@@ -33307,9 +33307,23 @@ bool dxfRW::writeBackground(DRW_Background *ent, const char *recordName) {
         // target-set capability; do not serialize an unclosed group-340 edge.
         return failDxfWrite();
     }
+    const std::uint32_t sourceHandle = ent->handle;
+    std::uint32_t emittedHandle = sourceHandle == 0u
+        ? 0u : remapObjectHandle(sourceHandle);
+    if (sourceHandle != 0u
+        && (emittedHandle == 0u || emittedHandle == DRW::NoHandle
+            || isDxfFixedOutputHandle(emittedHandle)))
+        return failDxfWrite();
+    RecordStateScope state(*this, ent);
+    if (sourceHandle == 0u) {
+        if (!allocateDxfHandle(emittedHandle))
+            return false;
+    } else if (!reserveHandle(emittedHandle)) {
+        return failDxfWrite();
+    }
     DxfWriterRecordScope record(*writer);
     writer->writeString(0, recordName);
-    writer->writeString(5, toHexStr(ent->handle));
+    writer->writeString(5, toHexStr(emittedHandle));
     if (!writeTableEntryAppData(*ent))
         return false;
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
@@ -33381,10 +33395,14 @@ bool dxfRW::writeBackground(DRW_Background *ent, const char *recordName) {
     }
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;
-    if (!preflightDxfWrite() || !record.commit()) {
+    if (!preflightDxfWrite()
+        || (sourceHandle != 0u
+            && !bindDxfWriteSourceObjectHandle(sourceHandle, emittedHandle))
+        || !record.commit()) {
         m_writeError = true;
         return false;
     }
+    state.commit();
     return true;
 }
 
