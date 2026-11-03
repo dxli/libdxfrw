@@ -2979,7 +2979,8 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
         {0x703u, 0xA03u},
         {0x704u, 0xA04u}, {0x705u, 0xA05u}, {0x706u, 0xA06u},
         {0x707u, 0xA07u}, {0x708u, 0xA08u},
-        {0x709u, 0xA09u}, {0x70Au, 0xA0Au}};
+        {0x709u, 0xA09u}, {0x70Au, 0xA0Au},
+        {0x70Bu, 0xA0Bu}, {0x70Cu, 0xA0Cu}};
     const auto resolverValue = [](std::uint32_t source) {
         switch (source) {
         case 0x701u: return std::uint32_t{0xB01u};
@@ -3024,11 +3025,18 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
             DRW_CurvePath curvePath;
             curvePath.handle = 0x70Au;
             curvePath.m_entityHandle = 0x708u;
+            DRW_PointPath pointPath;
+            pointPath.handle = 0x70Bu;
+            pointPath.m_point = DRW_Coord{1.0, 2.0, 3.0};
+            DRW_ObjectPtr objectPtr;
+            objectPtr.handle = 0x70Cu;
 
             const bool wrote = owner.writeSunStudy(&sunStudy)
                 && owner.writeSunStudy(&generatedSunStudy)
                 && owner.writeMotionPath(&motionPath)
                 && owner.writeCurvePath(&curvePath)
+                && owner.writePointPath(&pointPath)
+                && owner.writeObjectPtr(&objectPtr)
                 && owner.writer->writeString(0, "WIRE_END");
             t.expect(wrote, "scene-object references serialize");
             if (!wrote)
@@ -3045,6 +3053,8 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
             std::vector<std::uint32_t> sunStudyIdentities;
             std::uint32_t motionPathIdentity = 0u;
             std::uint32_t curvePathIdentity = 0u;
+            std::uint32_t pointPathIdentity = 0u;
+            std::uint32_t objectPtrIdentity = 0u;
             std::string recordName;
             bool ended = false;
             int code = 0;
@@ -3061,6 +3071,10 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
                     motionPathIdentity = reader->getHandleString();
                 } else if (recordName == "ACDBCURVEPATH" && code == 5) {
                     curvePathIdentity = reader->getHandleString();
+                } else if (recordName == "ACDBPOINTPATH" && code == 5) {
+                    pointPathIdentity = reader->getHandleString();
+                } else if (recordName == "OBJECTPTR" && code == 5) {
+                    objectPtrIdentity = reader->getHandleString();
                 } else if ((recordName == "SUNSTUDY"
                             && code >= 340 && code <= 343)
                            || (recordName == "MOTIONPATH" && code == 340)
@@ -3090,6 +3104,8 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
                          && sunStudyIdentities[1] != 0u
                          && motionPathIdentity == 0xA09u
                          && curvePathIdentity == 0xA0Au
+                         && pointPathIdentity == 0xA0Bu
+                         && objectPtrIdentity == 0xA0Cu
                          && observed["SUNSTUDY"] == sunStudyExpected
                          && observed["MOTIONPATH"] == motionPathExpected
                          && observed["ACDBCURVEPATH"] == curvePathExpected,
@@ -3250,6 +3266,104 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
                                    .sourceHandleToWrittenObjectMap.end()
                      && identityBinding->second == 0xA00u,
                  "corrected SUNSTUDY retry emits and binds its remapped identity");
+    }
+
+    const auto verifyPathCarrierRollback = [&t](
+            bool binary, const char* recordName, std::uint32_t sourceHandle,
+            std::uint32_t emittedHandle, auto makeEntry, auto writeEntry) {
+        using Entry = decltype(makeEntry(false));
+        std::ostringstream failedOutput;
+        dxfRW failedOwner("");
+        failedOwner.version = DRW::AC1032;
+        failedOwner.binFile = binary;
+        failedOwner.setHandleRemap({{sourceHandle, emittedHandle}});
+        failedOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&failedOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&failedOutput));
+        failedOwner.writer->writeString(0, "PRESERVE");
+        const std::string beforeFailedRecord = failedOutput.str();
+        Entry malformed = makeEntry(true);
+        const bool rejected = !writeEntry(failedOwner, malformed);
+        const std::string lateFailureLabel = std::string("late ") + recordName
+            + " XDATA failure rolls back bytes and identity binding";
+        t.expect(rejected && failedOutput.str() == beforeFailedRecord
+                     && failedOwner.m_writingContext
+                            .sourceHandleToWrittenObjectMap.count(sourceHandle)
+                            == 0u,
+                 lateFailureLabel.c_str());
+
+        std::ostringstream retryOutput;
+        dxfRW retryOwner("");
+        retryOwner.version = DRW::AC1032;
+        retryOwner.binFile = binary;
+        retryOwner.setHandleRemap({{sourceHandle, emittedHandle}});
+        retryOwner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&retryOutput))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&retryOutput));
+        Entry corrected = makeEntry(false);
+        const bool wrote = writeEntry(retryOwner, corrected);
+        std::uint32_t actualIdentity = 0u;
+        if (wrote) {
+            std::istringstream input(retryOutput.str());
+            std::unique_ptr<dxfReader> reader = binary
+                ? std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderBinary>(&input))
+                : std::unique_ptr<dxfReader>(
+                      std::make_unique<dxfReaderAscii>(&input));
+            std::string activeRecord;
+            int code = 0;
+            while (reader->readRec(&code)) {
+                if (code == 0)
+                    activeRecord = reader->getString();
+                else if (activeRecord == recordName && code == 5)
+                    actualIdentity = reader->getHandleString();
+            }
+        }
+        const auto binding = retryOwner.m_writingContext
+            .sourceHandleToWrittenObjectMap.find(sourceHandle);
+        const std::string retryLabel = std::string("corrected ") + recordName
+            + " retry emits and binds its remapped identity";
+        t.expect(wrote && actualIdentity == emittedHandle
+                     && binding != retryOwner.m_writingContext
+                                        .sourceHandleToWrittenObjectMap.end()
+                     && binding->second == emittedHandle,
+                 retryLabel.c_str());
+    };
+
+    for (const bool binary : {false, true}) {
+        verifyPathCarrierRollback(
+            binary, "ACDBPOINTPATH", 0x70Bu, 0xA0Bu,
+            [](bool invalid) {
+                DRW_PointPath entry;
+                entry.handle = 0x70Bu;
+                entry.parentHandle = 0xCu;
+                entry.m_point = DRW_Coord{1.0, 2.0, 3.0};
+                if (invalid)
+                    entry.extData.push_back(new DRW_Variant(
+                        1009, std::string("unsupported-xdata-code")));
+                return entry;
+            },
+            [](dxfRW& owner, DRW_PointPath& entry) {
+                return owner.writePointPath(&entry);
+            });
+        verifyPathCarrierRollback(
+            binary, "OBJECTPTR", 0x70Cu, 0xA0Cu,
+            [](bool invalid) {
+                DRW_ObjectPtr entry;
+                entry.handle = 0x70Cu;
+                entry.parentHandle = 0xCu;
+                if (invalid)
+                    entry.extData.push_back(new DRW_Variant(
+                        1009, std::string("unsupported-xdata-code")));
+                return entry;
+            },
+            [](dxfRW& owner, DRW_ObjectPtr& entry) {
+                return owner.writeObjectPtr(&entry);
+            });
     }
 }
 
