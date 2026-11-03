@@ -21079,6 +21079,236 @@ bool pointCloudAndNavisworksAdapterTransport() {
             return fail("point-cloud output handles or reciprocal ownership changed on readback");
         }
 
+        // The classic POINTCLOUD profile is authored-only. Preserve the
+        // caller's root key while exercising the same closed graph edges as
+        // the Ex profile; this generated key is not a canonical-name claim.
+        dx_data classicGraphData;
+        classicGraphData.sourceFormat = dx_source_format::Unknown;
+        classicGraphData.sourceVersion = DRW::AC1027;
+        classicGraphData.hasNamedObjectDictionary = true;
+        classicGraphData.namedObjectDictionary.handle = 0xCu;
+        classicGraphData.namedObjectDictionary.hardOwner = 1;
+        classicGraphData.namedObjectDictionary.m_entries.push_back(
+            {"LOCAL_CLASSIC_POINTCLOUD_ROOT", 0xB600u,
+             DRW_Dictionary::Entry::DxfHandleCode::SoftOwner});
+        DRW_Dictionary classicPointCloudDictionary;
+        classicPointCloudDictionary.handle = 0xB600u;
+        classicPointCloudDictionary.parentHandle = 0xCu;
+        classicPointCloudDictionary.hardOwner = 1;
+        classicPointCloudDictionary.m_entries.push_back(
+            {"LOCAL_CLASSIC_POINTCLOUD_DEF", 0xB601u,
+             DRW_Dictionary::Entry::DxfHandleCode::HardOwner});
+        classicGraphData.dictionaries.push_back(classicPointCloudDictionary);
+        dx_iface classicGraphAdapter;
+        classicGraphAdapter.cData = &classicGraphData;
+        classicGraphAdapter.currentBlock = classicGraphData.mBlock;
+        DRW_PointCloudDef classicDefinition;
+        classicDefinition.m_kind = DRW_PointCloudDef::Definition;
+        classicDefinition.handle = 0xB601u;
+        classicDefinition.parentHandle = 0xB600u;
+        classicDefinition.m_classVersion = 2;
+        classicDefinition.m_sourceFilename = "local-classic-cloud.rcs";
+        classicDefinition.m_pointCount = 21u;
+        classicDefinition.m_extentsMin = DRW_Coord{-2.0, -3.0, -4.0};
+        classicDefinition.m_extentsMax = DRW_Coord{5.0, 6.0, 7.0};
+        classicDefinition.reactorHandles.push_back(0xB603u);
+        classicDefinition.setDwgCommonObjectState(1, 0u, false);
+        classicGraphAdapter.addPointCloudDef(classicDefinition);
+        DRW_PointCloudDef classicReactor;
+        classicReactor.m_kind = DRW_PointCloudDef::Reactor;
+        classicReactor.handle = 0xB603u;
+        classicReactor.parentHandle = 0xB602u;
+        classicReactor.m_classVersion = 2;
+        classicGraphAdapter.addPointCloudDef(classicReactor);
+        DRW_PointCloud classicCloud;
+        classicCloud.handle = 0xB602u;
+        classicCloud.classVersion = 2u;
+        classicCloud.definitionHandle = 0xB601u;
+        classicCloud.reactorHandle = 0xB603u;
+        classicCloud.savedFilename = "local-classic-cloud.rcs";
+        classicCloud.sourceFileCount = 1;
+        classicCloud.sourceFiles = {"local-classic-cloud.rcs"};
+        classicCloud.pointCount = 21u;
+        classicGraphAdapter.addPointCloud(&classicCloud);
+        if (classicGraphData.pointCloudObjectCaptureFailed
+            || classicGraphData.typedEntityCaptureFailed
+            || classicGraphData.pointCloudObjectRetainedRecords != 2u
+            || classicGraphData.pointCloudDefinitions.size() != 2u
+            || classicGraphData.mBlock == nullptr
+            || classicGraphData.mBlock->ent.size() != 1u)
+            return fail("authored classic POINTCLOUD graph was not retained");
+
+        const auto classicGraphPath = std::filesystem::temp_directory_path()
+            / ("libdxfrw-classic-cloud-graph-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        if (std::filesystem::exists(classicGraphPath))
+            return fail("classic point-cloud graph output path unexpectedly exists");
+        struct ClassicGraphCleanup {
+            std::filesystem::path path;
+            ~ClassicGraphCleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } classicGraphCleanup{classicGraphPath};
+        const std::string classicGraphSentinel =
+            "CLASSIC_POINTCLOUD_GRAPH_DESTINATION\n";
+        {
+            std::ofstream existing(classicGraphPath, std::ios::binary);
+            existing << classicGraphSentinel;
+            if (!existing)
+                return fail("could not create classic point-cloud graph sentinel");
+        }
+        if (classicGraphAdapter.fileExport(
+                classicGraphPath.string(), DRW::AC1024, binary,
+                &classicGraphData, false, true))
+            return fail("classic point-cloud reference graph was emitted below AC1027");
+        {
+            std::ifstream previous(classicGraphPath, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != classicGraphSentinel)
+                return fail("unsupported classic point-cloud target changed the destination");
+        }
+        DRW_PointCloudDef& retainedClassicDefinition =
+            classicGraphData.pointCloudDefinitions.front();
+        retainedClassicDefinition.name = "UNREPRESENTED_CLASSIC_CLOUD_NAME";
+        retainedClassicDefinition.flags = 1;
+        if (classicGraphAdapter.fileExport(
+                classicGraphPath.string(), DRW::AC1027, binary,
+                &classicGraphData, false, true))
+            return fail("unrepresented classic definition metadata was emitted");
+        {
+            std::ifstream previous(classicGraphPath, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != classicGraphSentinel)
+                return fail("unrepresented classic definition metadata changed the destination");
+        }
+        retainedClassicDefinition.name.clear();
+        retainedClassicDefinition.flags = 0;
+        classicReactor.parentHandle = 0xB604u;
+        classicGraphData.pointCloudDefinitions.back().parentHandle = 0xB604u;
+        if (classicGraphAdapter.fileExport(
+                classicGraphPath.string(), DRW::AC1027, binary,
+                &classicGraphData, false, true))
+            return fail("nonreciprocal classic point-cloud reactor owner was emitted");
+        {
+            std::ifstream previous(classicGraphPath, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != classicGraphSentinel)
+                return fail("invalid classic point-cloud graph changed the destination");
+        }
+        classicReactor.parentHandle = 0xB602u;
+        classicGraphData.pointCloudDefinitions.back().parentHandle = 0xB602u;
+        if (!classicGraphAdapter.fileExport(
+                classicGraphPath.string(), DRW::AC1027, binary,
+                &classicGraphData, false, true))
+            return fail("corrected classic point-cloud graph retry failed");
+        dx_data classicGraphReadback;
+        dx_iface classicGraphReader;
+        if (!classicGraphReader.fileImport(classicGraphPath.string(),
+                                           &classicGraphReadback, false)
+            || classicGraphReadback.pointCloudDefinitions.size() != 2u
+            || !classicGraphReadback.hasNamedObjectDictionary
+            || classicGraphReadback.namedObjectDictionary.m_entries.empty()
+            || classicGraphReadback.mBlock == nullptr
+            || classicGraphReadback.mBlock->ent.size() != 1u)
+            return fail("classic point-cloud definition/reactor graph did not read back");
+        const DRW_PointCloudDef* actualClassicDefinition = nullptr;
+        const DRW_PointCloudDef* actualClassicReactor = nullptr;
+        for (const DRW_PointCloudDef& object :
+             classicGraphReadback.pointCloudDefinitions) {
+            if (object.m_kind == DRW_PointCloudDef::Definition)
+                actualClassicDefinition = &object;
+            else if (object.m_kind == DRW_PointCloudDef::Reactor)
+                actualClassicReactor = &object;
+        }
+        const auto* actualClassicCloud = dynamic_cast<const DRW_PointCloud*>(
+            classicGraphReadback.mBlock->ent.front());
+        const std::size_t classicRootLinks = static_cast<std::size_t>(
+            std::count_if(
+                classicGraphReadback.namedObjectDictionary.m_entries.begin(),
+                classicGraphReadback.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "LOCAL_CLASSIC_POINTCLOUD_ROOT"
+                        && entry.m_handle == 0xB600u;
+                }));
+        const std::size_t classicDictionaryLinks = static_cast<std::size_t>(
+            std::count_if(
+                classicGraphReadback.dictionaries.begin(),
+                classicGraphReadback.dictionaries.end(),
+                [](const DRW_Dictionary& dictionary) {
+                    return dictionary.handle == 0xB600u
+                        && dictionary.parentHandle == 0xCu
+                        && dictionary.m_entries.size() == 1u
+                        && dictionary.m_entries.front().m_name
+                            == "LOCAL_CLASSIC_POINTCLOUD_DEF"
+                        && dictionary.m_entries.front().m_handle == 0xB601u;
+                }));
+        const auto classicClassCount = [&classicGraphReadback](
+                const char* recordName, const char* className) {
+            return std::count_if(
+                classicGraphReadback.dxfClasses.begin(),
+                classicGraphReadback.dxfClasses.end(),
+                [recordName, className](const DRW_Class& value) {
+                    return value.recName == recordName
+                        && value.className == className
+                        && value.instanceCount == 1;
+                });
+        };
+        if (actualClassicDefinition == nullptr
+            || actualClassicReactor == nullptr || actualClassicCloud == nullptr
+            || classicRootLinks != 1u || classicDictionaryLinks != 1u
+            || classicClassCount("POINTCLOUDDEFINITION",
+                                 "AcDbPointCloudDef") != 1
+            || classicClassCount("POINTCLOUDDEFREACTOR",
+                                 "AcDbPointCloudDefReactor") != 1
+            || actualClassicDefinition->handle != 0xB601u
+            || actualClassicDefinition->parentHandle != 0xB600u
+            || actualClassicDefinition->m_sourceFilename
+                != "local-classic-cloud.rcs"
+            || actualClassicDefinition->m_pointCount != 21u
+            || actualClassicDefinition->reactorHandles
+                != std::vector<std::uint32_t>{0xB603u}
+            || actualClassicReactor->handle != 0xB603u
+            || actualClassicReactor->parentHandle != actualClassicCloud->handle
+            || actualClassicCloud->handle == 0u
+            || actualClassicCloud->definitionHandle
+                != actualClassicDefinition->handle
+            || actualClassicCloud->reactorHandle
+                != actualClassicReactor->handle) {
+            std::cerr << "classic point-cloud readback handles: rootLinks="
+                      << classicRootLinks << " dictionaryLinks="
+                      << classicDictionaryLinks << " definition="
+                      << (actualClassicDefinition
+                              ? actualClassicDefinition->handle : 0u)
+                      << "/owner="
+                      << (actualClassicDefinition
+                              ? actualClassicDefinition->parentHandle : 0u)
+                      << "/reactors="
+                      << (actualClassicDefinition
+                              ? actualClassicDefinition->reactorHandles.size()
+                              : 0u)
+                      << " reactor="
+                      << (actualClassicReactor
+                              ? actualClassicReactor->handle : 0u)
+                      << "/owner="
+                      << (actualClassicReactor
+                              ? actualClassicReactor->parentHandle : 0u)
+                      << " entity="
+                      << (actualClassicCloud ? actualClassicCloud->handle : 0u)
+                      << "/definition="
+                      << (actualClassicCloud
+                              ? actualClassicCloud->definitionHandle : 0u)
+                      << "/reactor="
+                      << (actualClassicCloud
+                              ? actualClassicCloud->reactorHandle : 0u) << '\n';
+            return fail("classic point-cloud output handles, fields, or reciprocal ownership changed on readback");
+        }
+
         if (!binary) {
             const auto duplicateDefinitionSourcePath =
                 std::filesystem::temp_directory_path()

@@ -1499,6 +1499,7 @@ public:
         objectWritePhase = "extension dictionaries";
         for (std::uint32_t handle : m_extensionDictionaryHandles) {
             if (handle == layoutDictionaryHandle
+                || handle == m_pointCloudClassicDictionaryHandle
                 || !emittedDictionaryHandles.insert(handle).second)
                 continue;
             // The graph validates this subtree, but the named-dictionary
@@ -1511,6 +1512,56 @@ public:
                 if (!dxfW->writeDictionary(&dictionary))
                     return;
                 break;
+            }
+        }
+        objectWritePhase = "classic POINTCLOUD root dictionary";
+        if (m_pointCloudClassicDictionaryHandle != 0u
+            && emittedDictionaryHandles.insert(
+                   m_pointCloudClassicDictionaryHandle).second) {
+            DRW_Dictionary* selected = nullptr;
+            std::size_t matches = 0u;
+            for (DRW_Dictionary& dictionary : cData->dictionaries) {
+                if (dictionary.handle != m_pointCloudClassicDictionaryHandle)
+                    continue;
+                selected = &dictionary;
+                ++matches;
+            }
+            if (matches != 1u || selected == nullptr
+                || !dxfW->writeDictionary(selected))
+                return;
+        }
+        objectWritePhase = "POINTCLOUDDEFINITION/POINTCLOUDDEFREACTOR";
+        const auto writeClassicPointCloudObject = [this](
+                std::uint32_t handle,
+                DRW_PointCloudDef::Kind expectedKind) {
+            DRW_PointCloudDef* selected = nullptr;
+            std::size_t matches = 0u;
+            for (DRW_PointCloudDef& object : cData->pointCloudDefinitions) {
+                if (object.handle != handle)
+                    continue;
+                selected = &object;
+                ++matches;
+            }
+            if (matches != 1u || selected == nullptr
+                || selected->m_kind != expectedKind
+                || !dxfW->writePointCloudDef(selected))
+                return false;
+            return true;
+        };
+        for (const std::uint32_t handle :
+             m_pointCloudClassicDefinitionHandles) {
+            if (!writeClassicPointCloudObject(
+                    handle, DRW_PointCloudDef::Definition)) {
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+        }
+        for (const std::uint32_t handle :
+             m_pointCloudClassicReactorHandles) {
+            if (!writeClassicPointCloudObject(
+                    handle, DRW_PointCloudDef::Reactor)) {
+                dxfW->writeRawDxfObject(nullptr);
+                return;
             }
         }
         objectWritePhase = "POINTCLOUDDEFINITIONEX/REACTOREX";
@@ -3023,6 +3074,9 @@ private:
     bool preparePointCloudExOutputGraph(dx_data& data,
                                         DRW::Version targetVersion,
                                         bool debug);
+    bool preparePointCloudClassicOutputGraph(dx_data& data,
+                                             DRW::Version targetVersion,
+                                             bool debug);
     bool preparePointCloudOutputGraph(dx_data& data,
                                       DRW::Version targetVersion,
                                       bool debug);
@@ -3660,6 +3714,10 @@ private:
     std::uint32_t m_pointCloudExDictionaryHandle{0u};
     std::vector<std::uint32_t> m_pointCloudExDefinitionHandles;
     std::vector<std::uint32_t> m_pointCloudExReactorHandles;
+    std::uint32_t m_pointCloudClassicDictionaryHandle{0u};
+    std::string m_pointCloudClassicRootKey;
+    std::vector<std::uint32_t> m_pointCloudClassicDefinitionHandles;
+    std::vector<std::uint32_t> m_pointCloudClassicReactorHandles;
     std::vector<dx_data::UnderlayDefinitionKey>
         m_underlayDefinitionKeysToWrite;
     std::vector<std::uint32_t> m_extensionAssociativeHandles;

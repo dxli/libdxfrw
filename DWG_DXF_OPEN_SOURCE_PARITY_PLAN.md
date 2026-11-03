@@ -958,6 +958,13 @@ eligible reader. The exact package and environment result are in the
   reserves and remaps object/entity identities, rejects an invalid reactor
   owner without changing the destination, and permits same-adapter correction
   and ASCII/Binary typed readback; see the [authored graph receipt](docs/research/p8-pointcloud-authored-definition-reactor-graph-2026-11-03.json).
+  A separate authored-only AC1027+ classic POINTCLOUD graph now preserves the
+  supplied NOD root key, closes the dictionary/definition/reactor/entity
+  identities and reciprocal owner/reference roles, emits exact classic CLASS
+  counts, and supports typed ASCII/Binary readback. The generated root key is
+  deliberately local and does not assert a canonical producer key. Wrong
+  reactor ownership preserves the destination, and correction succeeds on the
+  same adapter; see the [classic authored graph receipt](docs/research/p8-pointcloud-classic-authored-graph-transport-2026-11-03.json).
   Imported DXF point-cloud Definition/DefinitionEx/Reactor/ReactorEx callbacks
   now have a bounded raw-carrier/physical-span binding: the optional source
   facet joins the typed callback, complete raw group sequence, version/encoding
@@ -1045,13 +1052,14 @@ eligible reader. The exact package and environment result are in the
   records the focused ASCII/Binary control, including unresolved-target refusal
   and corrected retry. This does not prove target
   existence or close the MLINESTYLE dependency graph.
-  The concrete adapter admits authored and imported same-revision AC1027+
-  DefinitionEx/ReactorEx DXF graphs within the bounded profile above. DWG
-  source graphs and nonzero classic POINTCLOUD or NAVISWORKSMODEL definition
-  references remain fail-closed until their source-bound object graphs and
-  output bindings qualify. This does not close external-definition source
-  coverage, asset loading, native 3D consumer, or broader BLOCK callback
-  qualification. Imported classic POINTCLOUD now also has source binding for
+  The concrete adapter admits authored classic Definition/Reactor and authored
+  and imported same-revision AC1027+ DefinitionEx/ReactorEx DXF graphs within
+  their bounded profiles above. Imported classic POINTCLOUD graphs with
+  nonzero references and DWG point-cloud source graphs remain fail-closed until
+  their source fields, CLASS/frame roles, identities and output bindings
+  qualify. This does not close external-definition source coverage, canonical
+  classic-root qualification, asset loading, native 3D consumer, or broader
+  BLOCK callback qualification. Imported classic POINTCLOUD now also has source binding for
   the generated same-revision AC1027 modelspace reference-free profile: each
   physical ENTITIES record is joined to its dispatch, typed callback and output
   entity, with exact subclass order, common identity/owner, modeled fields and
