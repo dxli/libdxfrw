@@ -979,11 +979,17 @@ eligible reader. The exact package and environment result are in the
   definition reference without touching the destination, then bind the corrected
   source profile on retry; imported output remains atomically refused. See the
   [field-profile receipt](docs/research/p8-pointcloud-dxf-field-profile-2026-11-03.json).
-  This does not establish physical producer breadth, independent value semantics
-  for every POINTCLOUDEX body group, or source-derived DefinitionEx/ReactorEx
-  output identity closure. DWG still needs source CLASS/frame/output binding.
-  P4 source-profile closure, physical producer breadth, asset loading and native
-  consumer semantics remain open.
+  A follow-on compares every admitted POINTCLOUDEX body group value directly
+  against its associated typed model, including crop framing, direction vectors
+  and vertices; generated controls also refuse a changed class-version value
+  atomically before the corrected source profile is rebound. See the
+  [body-value projection receipt](docs/research/p8-pointcloud-dxf-body-value-projection-2026-11-03.json).
+  This closes the bounded AC1027+ field-to-model comparison only; it is not
+  independent producer/spec/native semantic evidence. Imported output remains
+  refused pending source-derived DefinitionEx/ReactorEx identity closure. DWG
+  still needs source CLASS/frame/output binding. P4 source-profile closure,
+  physical producer breadth, asset loading and native consumer semantics remain
+  open.
   The low-level POINTCLOUD and POINTCLOUDEX serializers now resolve their
   definition/reactor references through the configured resolver (final output
   IDs) or source-handle remap fallback. Generated ASCII/Binary controls verify

@@ -21119,6 +21119,24 @@ bool pointCloudAndNavisworksAdapterTransport() {
                 return fail("mismatched point-cloud reference changed the destination");
         }
         actualGraphCloud->definitionHandle = actualDefinitionHandle;
+        const std::uint32_t actualClassVersion =
+            actualGraphCloud->classVersion;
+        ++actualGraphCloud->classVersion;
+        if (importedWriter.fileExport(importedAttemptPath.string(),
+                                      DRW::AC1027, binary, &graphReadback,
+                                      false, true)
+            || graphReadback.pointCloudExSourceBindingComplete
+            || graphReadback.pointCloudExSourceFieldProfileComplete
+            || graphReadback.pointCloudExSourceBoundEntities != 0u)
+            return fail("mismatched POINTCLOUDEX class-version value passed physical field-profile binding");
+        {
+            std::ifstream previous(importedAttemptPath, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(previous), {}};
+            if (bytes != importedSentinel)
+                return fail("mismatched point-cloud body field changed the destination");
+        }
+        actualGraphCloud->classVersion = actualClassVersion;
         if (importedWriter.fileExport(importedAttemptPath.string(),
                                       DRW::AC1027, binary, &graphReadback,
                                       false, true))

@@ -17120,10 +17120,29 @@ bool pointCloudExSourceFieldProfileComplete(
     enum class Scope : std::uint8_t { Header, Entity, PointCloud };
     Scope scope = Scope::Header;
     std::size_t subclassCount = 0u;
+    std::size_t textField = 0u;
+    std::size_t stylizationField = 0u;
+    std::size_t elevationMinField = 0u;
+    std::size_t zeroCropUnknownField = 0u;
+    std::size_t cropCount = 0u;
+    std::size_t activeCrop = (std::numeric_limits<std::size_t>::max)();
+    std::size_t cropBooleanCount = 0u;
+    std::size_t cropPlaneComponent = 0u;
+    std::size_t cropDirectionComponent = 0u;
+    std::size_t cropPointCountFields = 0u;
+    std::size_t cropPointCount = 0u;
+    std::size_t cropPointComponent = 0u;
+    std::size_t cropPointIndex = 0u;
     bool entityHandleMatched = false;
     bool entityOwnerMatched = false;
     bool definitionReferenceMatched = false;
     bool reactorReferenceMatched = false;
+    bool lockedFieldSeen = false;
+    bool showIntensitySeen = false;
+    bool showCroppingSeen = false;
+    bool elevationFixedRangeSeen = false;
+    bool intensityGradientSeen = false;
+    bool elevationGradientSeen = false;
     std::array<std::size_t, 1072u> commonCounts{};
     std::array<std::size_t, 1072u> pointCloudCounts{};
     const auto isType = [](const DRW_Variant& field,
@@ -17140,6 +17159,9 @@ bool pointCloudExSourceFieldProfileComplete(
     const auto isReal = [&isType](const DRW_Variant& field) {
         return isType(field, DRW_Variant::DOUBLE)
             && std::isfinite(field.content.d);
+    };
+    const auto sameReal = [](double left, double right) {
+        return std::memcmp(&left, &right, sizeof(left)) == 0;
     };
     const auto isHandle = [](const DRW_Variant& field,
                              std::uint32_t expected) {
@@ -17163,6 +17185,18 @@ bool pointCloudExSourceFieldProfileComplete(
             return false;
         ++counts[static_cast<std::size_t>(code)];
         return true;
+    };
+    const auto validCropEnd = [&cloud, &activeCrop, &cropBooleanCount,
+                               &cropPlaneComponent, &cropDirectionComponent,
+                               &cropPointCountFields, &cropPointCount,
+                               &cropPointComponent, &cropPointIndex]() {
+        if (activeCrop == (std::numeric_limits<std::size_t>::max)())
+            return true;
+        const DRW_PointCloudExCropping& crop = cloud.croppings[activeCrop];
+        return cropBooleanCount == 2u && cropPlaneComponent == 3u
+            && cropDirectionComponent == 6u && cropPointCountFields == 1u
+            && cropPointComponent == 0u && cropPointIndex == cropPointCount
+            && cropPointCount == crop.points.size();
     };
     for (std::size_t i = 0u; i < record.groups.size(); ++i) {
         const DRW_Variant& field = record.groups[i];
@@ -17292,41 +17326,271 @@ bool pointCloudExSourceFieldProfileComplete(
             continue;
         }
 
-        bool projected = false;
         switch (code) {
-        case 1:
-            projected = isText(field);
-            break;
-        case 330:
-            projected = isText(field);
-            definitionReferenceMatched =
-                projected && isHandle(field, cloud.definitionHandle);
-            break;
-        case 360:
-            projected = isText(field);
-            reactorReferenceMatched =
-                projected && isHandle(field, cloud.reactorHandle);
-            break;
-        case 10: case 11: case 12: case 13:
-        case 20: case 21: case 22: case 23:
-        case 30: case 31: case 32: case 33:
-        case 40: case 41:
-        case 210: case 211: case 212: case 213:
-        case 220: case 221: case 222: case 223:
-        case 230: case 231: case 232: case 233:
-            projected = isReal(field);
-            break;
-        case 70: case 71: case 72: case 90: case 91: case 92: case 93:
-        case 280: case 290: case 291: case 292: case 293: case 294: case 295:
-            projected = isInt(field);
-            break;
-        default:
+        case 1: {
+            if (!isText(field) || textField >= 4u)
+                return false;
+            const std::string* expected = textField == 0u ? &cloud.name
+                : textField == 1u ? &cloud.intensityColorScheme
+                : textField == 2u ? &cloud.currentColorScheme
+                : &cloud.classificationColorScheme;
+            if (*field.content.s != *expected)
+                return false;
+            ++textField;
             break;
         }
-        if (!projected || !increment(pointCloudCounts, code))
+        case 330:
+            definitionReferenceMatched =
+                isHandle(field, cloud.definitionHandle);
+            if (!definitionReferenceMatched)
+                return false;
+            break;
+        case 360:
+            reactorReferenceMatched = isHandle(field, cloud.reactorHandle);
+            if (!reactorReferenceMatched)
+                return false;
+            break;
+        case 10: case 11: case 12:
+        case 20: case 21: case 22:
+        case 30: case 31: case 32: {
+            if (!isReal(field))
+                return false;
+            const double expected = code == 10 ? cloud.extentsMin.x
+                : code == 11 ? cloud.extentsMax.x
+                : code == 12 ? cloud.ucsOrigin.x
+                : code == 20 ? cloud.extentsMin.y
+                : code == 21 ? cloud.extentsMax.y
+                : code == 22 ? cloud.ucsOrigin.y
+                : code == 30 ? cloud.extentsMin.z
+                : code == 31 ? cloud.extentsMax.z : cloud.ucsOrigin.z;
+            if (!sameReal(field.content.d, expected))
+                return false;
+            break;
+        }
+        case 13: case 23: case 33: {
+            if (!isReal(field))
+                return false;
+            const std::size_t component = code == 13 ? 0u
+                : code == 23 ? 1u : 2u;
+            double expected = 0.0;
+            if (activeCrop == (std::numeric_limits<std::size_t>::max)()) {
+                expected = component == 0u ? cloud.ucsOrigin.x
+                    : component == 1u ? cloud.ucsOrigin.y
+                    : cloud.ucsOrigin.z;
+            } else if (cropPlaneComponent < 3u) {
+                if (component != cropPlaneComponent)
+                    return false;
+                const DRW_Coord& plane =
+                    cloud.croppings[activeCrop].cropPlane;
+                expected = component == 0u ? plane.x
+                    : component == 1u ? plane.y : plane.z;
+                ++cropPlaneComponent;
+            } else {
+                if (cropPointCountFields != 1u
+                    || cropPointComponent != component
+                    || cropPointIndex
+                        >= cloud.croppings[activeCrop].points.size())
+                    return false;
+                const DRW_Coord& point =
+                    cloud.croppings[activeCrop].points[cropPointIndex];
+                expected = component == 0u ? point.x
+                    : component == 1u ? point.y : point.z;
+                ++cropPointComponent;
+                if (cropPointComponent == 3u) {
+                    cropPointComponent = 0u;
+                    ++cropPointIndex;
+                }
+            }
+            if (!sameReal(field.content.d, expected))
+                return false;
+            break;
+        }
+        case 40:
+            if (!isReal(field) || elevationMinField >= 2u
+                || !sameReal(field.content.d,
+                    elevationMinField++ == 0u
+                        ? cloud.elevationMin : cloud.elevationMax))
+                return false;
+            break;
+        case 41:
+            if (!isReal(field) || !sameReal(field.content.d,
+                                             cloud.elevationMax))
+                return false;
+            break;
+        case 210: case 220: case 230:
+        case 211: case 221: case 231:
+        case 212: case 222: case 232: {
+            if (!isReal(field))
+                return false;
+            const DRW_Coord& direction = code % 10 == 0
+                ? cloud.ucsXDirection : code % 10 == 1
+                ? cloud.ucsYDirection : cloud.ucsZDirection;
+            const int component = (code / 10) % 10 - 1;
+            const double expected = component == 0 ? direction.x
+                : component == 1 ? direction.y : direction.z;
+            if (!sameReal(field.content.d, expected))
+                return false;
+            break;
+        }
+        case 213: case 223: case 233: {
+            if (!isReal(field)
+                || activeCrop == (std::numeric_limits<std::size_t>::max)()
+                || cropDirectionComponent >= 6u)
+                return false;
+            const std::size_t component = cropDirectionComponent % 3u;
+            if (component != (code == 213 ? 0u : code == 223 ? 1u : 2u))
+                return false;
+            const DRW_PointCloudExCropping& cropping =
+                cloud.croppings[activeCrop];
+            const DRW_Coord& direction = cropDirectionComponent < 3u
+                ? cropping.cropXDirection : cropping.cropYDirection;
+            const double expected = component == 0u ? direction.x
+                : component == 1u ? direction.y : direction.z;
+            if (!sameReal(field.content.d, expected))
+                return false;
+            ++cropDirectionComponent;
+            break;
+        }
+        case 70:
+            if (!isInt(field) || field.i_val() < 0
+                || field.i_val()
+                    > std::numeric_limits<std::uint16_t>::max()
+                || static_cast<std::uint32_t>(field.i_val())
+                    != cloud.classVersion)
+                return false;
+            break;
+        case 71:
+            if (!isInt(field) || stylizationField >= 2u
+                || field.i_val() != (stylizationField++ == 0u
+                    ? cloud.stylizationType
+                    : cloud.intensityOutOfRangeBehavior))
+                return false;
+            break;
+        case 72:
+            if (!isInt(field)
+                || field.i_val() != cloud.elevationOutOfRangeBehavior)
+                return false;
+            break;
+        case 90:
+            if (!isInt(field)
+                || cloud.intensityMin != static_cast<double>(field.i_val()))
+                return false;
+            break;
+        case 91:
+            if (!isInt(field)
+                || cloud.intensityMax != static_cast<double>(field.i_val()))
+                return false;
+            break;
+        case 92:
+            if (!isInt(field) || field.i_val() != cloud.croppingCount)
+                return false;
+            break;
+        case 93:
+            if (!isInt(field))
+                return false;
+            if (activeCrop == (std::numeric_limits<std::size_t>::max)()) {
+                if (cloud.croppingCount != 0 || zeroCropUnknownField >= 2u
+                    || field.i_val() != (zeroCropUnknownField++ == 0u
+                        ? cloud.unknownInt0 : cloud.unknownInt1))
+                    return false;
+            } else {
+                const DRW_PointCloudExCropping& cropping =
+                    cloud.croppings[activeCrop];
+                if (cropPlaneComponent != 3u
+                    || cropDirectionComponent != 6u
+                    || cropPointCountFields != 0u || field.i_val() < 0
+                    || field.i_val() != cropping.pointCount
+                    || cropping.points.size()
+                        != static_cast<std::size_t>(field.i_val()))
+                    return false;
+                cropPointCountFields = 1u;
+                cropPointCount = static_cast<std::size_t>(field.i_val());
+            }
+            break;
+        case 280:
+            if (!isInt(field) || field.i_val() < 0
+                || field.i_val()
+                    > std::numeric_limits<std::uint16_t>::max()
+                || !validCropEnd() || cropCount >= cloud.croppings.size()
+                || field.i_val() != cloud.croppings[cropCount].type)
+                return false;
+            activeCrop = cropCount++;
+            cropBooleanCount = 0u;
+            cropPlaneComponent = 0u;
+            cropDirectionComponent = 0u;
+            cropPointCountFields = 0u;
+            cropPointCount = 0u;
+            cropPointComponent = 0u;
+            cropPointIndex = 0u;
+            break;
+        case 290:
+            if (!isInt(field) || (field.i_val() != 0 && field.i_val() != 1))
+                return false;
+            if (activeCrop == (std::numeric_limits<std::size_t>::max)()) {
+                if (lockedFieldSeen
+                    || cloud.isLocked != (field.i_val() != 0))
+                    return false;
+                lockedFieldSeen = true;
+            } else {
+                if (cropBooleanCount >= 2u
+                    || (cropBooleanCount == 0u
+                        ? cloud.croppings[activeCrop].isInside
+                        : cloud.croppings[activeCrop].isInverted)
+                            != (field.i_val() != 0))
+                    return false;
+                ++cropBooleanCount;
+            }
+            break;
+        case 291:
+            if (!isInt(field) || showIntensitySeen
+                || (field.i_val() != 0 && field.i_val() != 1)
+                || cloud.showIntensity != (field.i_val() != 0))
+                return false;
+            showIntensitySeen = true;
+            break;
+        case 292:
+            if (!isInt(field) || elevationFixedRangeSeen
+                || (field.i_val() != 0 && field.i_val() != 1)
+                || cloud.elevationApplyToFixedRange != (field.i_val() != 0))
+                return false;
+            elevationFixedRangeSeen = true;
+            break;
+        case 293:
+            if (!isInt(field) || intensityGradientSeen
+                || (field.i_val() != 0 && field.i_val() != 1)
+                || cloud.intensityAsGradient != (field.i_val() != 0))
+                return false;
+            intensityGradientSeen = true;
+            break;
+        case 294:
+            if (!isInt(field) || elevationGradientSeen
+                || (field.i_val() != 0 && field.i_val() != 1)
+                || cloud.elevationAsGradient != (field.i_val() != 0))
+                return false;
+            elevationGradientSeen = true;
+            break;
+        case 295:
+            if (!isInt(field) || showCroppingSeen
+                || (field.i_val() != 0 && field.i_val() != 1)
+                || cloud.showCropping != (field.i_val() != 0))
+                return false;
+            showCroppingSeen = true;
+            break;
+        default:
+            return false;
+        }
+        if (!increment(pointCloudCounts, code))
             return false;
     }
-    if (subclassCount != 2u || cloud.croppingCount < 0
+    static constexpr std::array<int, 18u> singletonBodyCodes{{
+        10, 11, 12, 20, 21, 22, 30, 31, 32,
+        210, 220, 230, 211, 221, 231, 212, 222, 232
+    }};
+    for (const int code : singletonBodyCodes) {
+        if (pointCloudCounts[static_cast<std::size_t>(code)] > 1u)
+            return false;
+    }
+    if (!validCropEnd() || subclassCount != 2u || cloud.croppingCount < 0
         || cloud.croppings.size()
             != static_cast<std::size_t>(cloud.croppingCount)
         || commonCounts[5u] != 1u || commonCounts[330u] != 1u
@@ -17336,6 +17600,7 @@ bool pointCloudExSourceFieldProfileComplete(
         || pointCloudCounts[360u] != 1u || !reactorReferenceMatched
         || pointCloudCounts[280u]
             != static_cast<std::size_t>(cloud.croppingCount)
+        || cropCount != cloud.croppings.size()
         || pointCloudCounts[1u] > 4u || pointCloudCounts[71u] > 2u
         || pointCloudCounts[72u] > 1u || pointCloudCounts[90u] > 1u
         || pointCloudCounts[91u] > 1u || pointCloudCounts[40u] > 2u
@@ -17353,7 +17618,11 @@ bool pointCloudExSourceFieldProfileComplete(
     const std::size_t expectedCroppingBooleans =
         static_cast<std::size_t>(cloud.croppingCount) * 2u;
     return pointCloudCounts[290u] >= expectedCroppingBooleans
-        && pointCloudCounts[290u] <= expectedCroppingBooleans + 1u;
+        && pointCloudCounts[290u]
+            == expectedCroppingBooleans
+                + static_cast<std::size_t>(lockedFieldSeen)
+        && zeroCropUnknownField
+            == (cloud.croppingCount == 0 ? 2u : 0u);
 }
 
 bool pointCloudExDispatchMatchesRecord(
