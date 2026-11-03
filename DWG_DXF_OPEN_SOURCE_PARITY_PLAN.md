@@ -756,8 +756,17 @@ Existing captured DXF tokens still pass through unchanged. See the [expanded
 reference refusal receipt](docs/research/p6-lofted-surface-dwg-reference-dxf-refusal-2026-11-03.json).
 Before relaxing either refusal, prove exact group-310 encoding and handle
 remapping for supported source profiles, then require graph closure and typed
-readback. These guards do not qualify the surface's source graph, ACIS shape,
-or native semantics.
+readback. A focused scan of 170 available local DWGs found only one
+LOFTEDSURFACE record, in LibreDWG's tracked AC1018 `Surface.dwg`; its decoded
+cross-section/guide counts are both zero. The paired DXF therefore provides no
+nonzero reference witness. Autodesk's general group-code table defines 310 as
+binary data and 320–349 as handle groups, while LibreDWG's local schema maps
+the vectors to 310 and prints hexadecimal handle text. Keep that mapping
+unqualified until a nonzero producer witness and native consumer readback
+resolve the encoding. See the [local corpus and contract scan
+receipt](docs/research/p6-lofted-surface-nonzero-reference-witness-scan-2026-11-03.json).
+These guards do not qualify the surface's source graph, ACIS shape, or native
+semantics.
 
 Use the ODA v5.4.1 PDF in `~/doc/dwg/` before DWG layout changes; discover type
 codes from real traces. Preserve tolerant record-level reading and the first
