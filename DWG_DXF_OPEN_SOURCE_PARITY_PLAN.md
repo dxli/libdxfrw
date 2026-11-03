@@ -108,6 +108,12 @@ engines.
    typed output or a proven end-to-end replay path. Keep unresolved records
    refused. Never weaken the completeness predicate, emit a partial graph, or
    infer edges from adjacent handle values.
+   HATCH and MPOLYGON group-330 boundary references now reject zero and
+   `DRW::NoHandle` sources and outputs. Generated ASCII/Binary controls cover
+   mapped IDs, invalid remaps, rollback, and refusal before publishing a
+   boundary record ([receipt](docs/research/p4-hatch-mpolygon-boundary-output-id-guard-2026-11-03.json)).
+   This validates ID representation only; target existence, target kind,
+   boundary association and native fill semantics remain open.
    For `PARTIALVIEWINGINDEX`, the generated low-level writer now remaps and
    reserves or allocates group-5 identity, binding the source identity only
    after successful staged emission; group-340 targets must resolve to one

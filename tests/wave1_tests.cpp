@@ -19231,6 +19231,88 @@ void testHatchValidationGuardsInactiveGradientStops(TestContext& t) {
     invalidMPolygon.extPoint = DRW_Coord{0.0, 0.0, 0.0};
     t.expect(!owner.validateHatchPayload(&invalidMPolygon),
              "MPOLYGON writer shares HATCH zero-extrusion validation");
+
+    const auto configureBoundary = [](auto& entity, std::uint32_t handle) {
+        auto loop = std::make_shared<DRW_HatchLoop>(2);
+        loop->objlist.push_back(std::make_shared<DRW_LWPolyline>());
+        loop->m_boundaryHandles.push_back(handle);
+        entity.looplist.push_back(std::move(loop));
+    };
+    using BoundaryWriter = std::function<bool(dxfRW&, std::uint32_t)>;
+    const std::vector<std::pair<const char*, BoundaryWriter>> writers{
+        {"HATCH", [&configureBoundary](dxfRW& writer, std::uint32_t handle) {
+             DRW_Hatch entity;
+             configureBoundary(entity, handle);
+             return writer.writeHatch(&entity);
+         }},
+        {"MPOLYGON", [&configureBoundary](dxfRW& writer,
+                                           std::uint32_t handle) {
+             DRW_MPolygon entity;
+             configureBoundary(entity, handle);
+             return writer.writeMPolygon(&entity);
+         }}};
+    const std::uint32_t sourceBoundary = 0x6F0u;
+    const std::uint32_t outputBoundary = 0x6F1u;
+    for (const bool binary : {false, true}) {
+        for (const auto& item : writers) {
+            std::ostringstream output;
+            dxfRW writer("");
+            writer.version = DRW::AC1027;
+            writer.binFile = binary;
+            writer.setHandleRemap({{sourceBoundary, outputBoundary}});
+            if (binary)
+                writer.writer = std::make_unique<dxfWriterBinary>(&output);
+            else
+                writer.writer = std::make_unique<dxfWriterAscii>(&output);
+            const bool written = item.second(writer, sourceBoundary)
+                && writer.writer->writeString(0, "WIRE_END");
+            bool ended = false;
+            const auto tags = numericWireProjection(output.str(), binary, ended);
+            const std::string expected = "330:6F1";
+            t.expect(written && ended
+                         && std::find(tags.begin(), tags.end(), expected)
+                                != tags.end(),
+                     (std::string("ASCII/Binary ") + item.first
+                         + " boundary pointer uses its remapped output ID")
+                         .c_str());
+
+            for (const std::uint32_t mapped : {
+                     0u, static_cast<std::uint32_t>(DRW::NoHandle)}) {
+                std::ostringstream rejectedOutput;
+                dxfRW rejectedWriter("");
+                rejectedWriter.version = DRW::AC1027;
+                rejectedWriter.binFile = binary;
+                rejectedWriter.setHandleRemap({{sourceBoundary, mapped}});
+                if (binary)
+                    rejectedWriter.writer =
+                        std::make_unique<dxfWriterBinary>(&rejectedOutput);
+                else
+                    rejectedWriter.writer =
+                        std::make_unique<dxfWriterAscii>(&rejectedOutput);
+                t.expect(!item.second(rejectedWriter, sourceBoundary)
+                             && rejectedOutput.str().empty(),
+                         (std::string("ASCII/Binary ") + item.first
+                             + " rejects invalid boundary remap atomically")
+                             .c_str());
+            }
+
+            std::ostringstream invalidSourceOutput;
+            dxfRW invalidSourceWriter("");
+            invalidSourceWriter.version = DRW::AC1027;
+            invalidSourceWriter.binFile = binary;
+            if (binary)
+                invalidSourceWriter.writer =
+                    std::make_unique<dxfWriterBinary>(&invalidSourceOutput);
+            else
+                invalidSourceWriter.writer =
+                    std::make_unique<dxfWriterAscii>(&invalidSourceOutput);
+            t.expect(!item.second(invalidSourceWriter, DRW::NoHandle)
+                         && invalidSourceOutput.str().empty(),
+                     (std::string("ASCII/Binary ") + item.first
+                         + " rejects NoHandle boundary source atomically")
+                         .c_str());
+        }
+    }
 }
 
 void testHatchGradientDxfGrammar(TestContext& t) {

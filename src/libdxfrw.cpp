@@ -5226,7 +5226,10 @@ bool dxfRW::validateHatchPayload(const DRW_Hatch *ent) const {
             || !validInt16(loop->m_boundaryHandles.size())
             || std::any_of(loop->m_boundaryHandles.cbegin(),
                            loop->m_boundaryHandles.cend(),
-                           [](std::uint32_t handle) { return handle == 0; }))
+                           [](std::uint32_t handle) {
+                               return handle == 0u
+                                   || handle == DRW::NoHandle;
+                           }))
             return false;
 
         if ((loop->type & 2) != 0) {
@@ -8795,7 +8798,8 @@ bool dxfRW::writeHatch(DRW_Hatch *ent){
                 // the source map again can redirect a numeric handle alias.
                 const std::uint32_t emitted = m_referenceResolver
                     ? resolveReference(source) : remapObjectHandle(source);
-                if (emitted == 0 || !writer->writeString(330, toHexStr(emitted)))
+                if (emitted == 0 || emitted == DRW::NoHandle
+                    || !writer->writeString(330, toHexStr(emitted)))
                     return failDxfWrite();
             }
             return true;
@@ -9027,7 +9031,7 @@ bool dxfRW::writeMPolygon(DRW_MPolygon *ent){
             for (const std::uint32_t source : loop.m_boundaryHandles) {
                 const std::uint32_t emitted = m_referenceResolver
                     ? resolveReference(source) : remapObjectHandle(source);
-                if (emitted == 0
+                if (emitted == 0 || emitted == DRW::NoHandle
                     || !writer->writeString(330, toHexStr(emitted)))
                     return failDxfWrite();
             }
