@@ -275,14 +275,19 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    This remains ID translation evidence only; target kind/existence, ownership,
    physical profile breadth, recursive closure, and native annotation semantics
    remain open.
-   Remaining reference-ID implementation is limited to supported 3D records:
-   compare each modeled pointer field with its parser role and DXF writer path,
-   then change only fields that still bypass resolver/remap or fail to validate
-   a required target. Confirm the mapping before editing and add focused
-   ASCII/Binary exact-ID, unresolved-target refusal, retry, and typed-readback
-   controls. Do not repeat fields already covered by current receipts. Correct
-   output IDs alone do not establish target kind, ownership, recursive closure,
-   physical producer breadth, or native-consumer semantics.
+   `POINTCLOUDEX` direct DXF output now refuses a zero source definition or
+   reactor ID, and refuses either reference when resolution/remapping produces
+   zero, before staging record bytes. Autodesk's `PointCloudEx` API requires
+   the linked definition and reactor. Generated ASCII/Binary controls cover
+   each unresolved edge, either missing source edge, destination preservation,
+   and corrected output with a fresh writer ([receipt](docs/research/p4-pointcloudex-required-reference-output-guard-2026-11-03.json)).
+   This closes only nonzero admission for these required IDs; target kind and
+   existence, ownership, recursive graph closure, physical producer breadth,
+   point-cloud asset loading, and native-consumer semantics remain open.
+   Continue the pointer-role audit only for other supported 3D fields not
+   covered by current receipts. Correct output IDs alone do not establish
+   target kind, ownership, recursive closure, physical producer breadth, or
+   native-consumer semantics.
    **BLOCK_RECORD BLKREFS residual:** `dx_iface::writeBlockRecords()` now passes
    the retained list to the low-level writer. Adapter preflight requires each
    handle to identify exactly one typed INSERT, match the target BLOCK_RECORD

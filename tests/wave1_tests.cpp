@@ -2230,6 +2230,83 @@ void testPointCloudReferenceRemapping(TestContext& t) {
     }
 }
 
+void testPointCloudExRequiredReferenceRefusal(TestContext& t) {
+    for (const bool binary : {false, true}) {
+        for (const std::uint32_t missingHandle : {0x301u, 0x302u}) {
+            std::ostringstream output;
+            const std::string sentinel = "POINTCLOUDEX reference sentinel";
+            output << sentinel;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.setReferenceResolver(
+                [missingHandle](std::uint32_t source) {
+                    return source == missingHandle ? 0u : source;
+                });
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+
+            DRW_PointCloudEx cloud;
+            cloud.definitionHandle = 0x301u;
+            cloud.reactorHandle = 0x302u;
+            const bool refused = !owner.writePointCloudEx(&cloud)
+                && output.str() == sentinel;
+            t.expect(refused,
+                     binary
+                         ? "binary POINTCLOUDEX refuses a missing required definition/reactor target before output"
+                         : "ASCII POINTCLOUDEX refuses a missing required definition/reactor target before output");
+
+            std::ostringstream retryOutput;
+            dxfRW retryOwner("");
+            retryOwner.version = DRW::AC1032;
+            retryOwner.binFile = binary;
+            retryOwner.setReferenceResolver([](std::uint32_t source) {
+                return source == 0x301u ? 0xB31u
+                     : source == 0x302u ? 0xB32u : source;
+            });
+            retryOwner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&retryOutput))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&retryOutput));
+            t.expect(retryOwner.writePointCloudEx(&cloud),
+                     binary
+                         ? "binary POINTCLOUDEX corrected required references write with a fresh writer"
+                         : "ASCII POINTCLOUDEX corrected required references write with a fresh writer");
+        }
+
+        for (const bool missingDefinition : {false, true}) {
+            std::ostringstream output;
+            const std::string sentinel = "POINTCLOUDEX null-reference sentinel";
+            output << sentinel;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                    std::make_unique<dxfWriterAscii>(&output));
+            DRW_PointCloudEx cloud;
+            cloud.definitionHandle = missingDefinition ? 0u : 0x301u;
+            cloud.reactorHandle = missingDefinition ? 0x302u : 0u;
+            const bool refused = !owner.writePointCloudEx(&cloud)
+                && output.str() == sentinel;
+            t.expect(refused,
+                     binary
+                         ? (missingDefinition
+                                ? "binary POINTCLOUDEX refuses a missing source definition reference"
+                                : "binary POINTCLOUDEX refuses a missing source reactor reference")
+                         : (missingDefinition
+                                ? "ASCII POINTCLOUDEX refuses a missing source definition reference"
+                                : "ASCII POINTCLOUDEX refuses a missing source reactor reference"));
+        }
+    }
+}
+
 void testPointCloudDefinitionIdentityRemapping(TestContext& t) {
     constexpr std::uint32_t firstSource = 0xA21u;
     constexpr std::uint32_t firstOutput = 0xB21u;
@@ -22060,6 +22137,7 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--pointcloud-reference-remapping") {
         TestContext focused;
         testPointCloudReferenceRemapping(focused);
+        testPointCloudExRequiredReferenceRefusal(focused);
         std::cout << "POINTCLOUD reference remapping: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;

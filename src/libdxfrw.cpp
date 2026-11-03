@@ -14965,6 +14965,15 @@ bool dxfRW::writePointCloudEx(DRW_PointCloudEx *ent){
     const std::uint32_t definitionHandle =
         emittedReference(ent->definitionHandle);
     const std::uint32_t reactorHandle = emittedReference(ent->reactorHandle);
+    // AutoCAD's PointCloudEx contract requires both a definition object and
+    // its reactor. A caller-supplied resolver may intentionally omit optional
+    // references elsewhere, but serializing either required PointCloudEx edge
+    // as handle zero would leave an unusable entity in the drawing.
+    if (ent->definitionHandle == 0u || ent->reactorHandle == 0u
+        || definitionHandle == 0u || reactorHandle == 0u) {
+        m_writeError = true;
+        return false;
+    }
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "POINTCLOUDEX");
     if (!writeEntity(ent))
