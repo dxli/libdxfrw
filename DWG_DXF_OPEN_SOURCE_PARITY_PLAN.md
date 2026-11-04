@@ -1890,6 +1890,10 @@ open/insert, native-platform or independent-kernel run.
 
 ## Fast implementation and validation rules
 
+The OBJECTS physical-source test target now uses the policy already inherited
+through `dx_iface`, eliminating duplicate-base `-Werror` failures while
+retaining its policy overrides. Use its focused selector for graph work.
+
 | Stage | Default validation | Escalation trigger |
 | --- | --- | --- |
 | Plan/docs only | Links, remaining-scope/gate checks and diff review | No C++ rebuild or format suite |

@@ -22,11 +22,11 @@ std::size_t comments(Tags& tags,unsigned form) {
     }
     return tags.size()-before;
 }
-struct Limits:dx_iface,DRW_DxfObjectPhysicalSourcePolicy {
+struct Limits:dx_iface {
     DRW_DxfObjectPhysicalSourceLimits limits;
     DRW_DxfObjectPhysicalSourceLimits dxfObjectPhysicalSourceLimits()const noexcept override{return limits;}
 };
-struct Probe:dx_iface,DRW_DxfObjectPhysicalSourcePolicy {
+struct Probe:dx_iface {
     dx_data data;const dxfRW* input=nullptr;bool selected=true,good=true;
     mutable std::size_t policies=0u;std::size_t queries=0u;std::uint32_t throwHandle=0u;V::Phase throwPhase=V::Phase::None;
     std::map<std::uint32_t,std::shared_ptr<const Source>> frames;
