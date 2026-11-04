@@ -161,6 +161,15 @@ target_link_libraries(libdxfrw_dxf_fourth_corner_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dxf_fourth_corner COMMAND libdxfrw_dxf_fourth_corner_tests)
 set_tests_properties(libdxfrw_dxf_fourth_corner PROPERTIES LABELS "dxf;fast;geometry" TIMEOUT 30)
 
+add_executable(libdxfrw_dwg_ltype_multiversion_count_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_ltype_multiversion_count_tests.cpp)
+target_compile_features(libdxfrw_dwg_ltype_multiversion_count_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_ltype_multiversion_count_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_ltype_multiversion_count_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_ltype_multiversion_count_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_ltype_multiversion_count COMMAND libdxfrw_dwg_ltype_multiversion_count_tests)
+set_tests_properties(libdxfrw_dwg_ltype_multiversion_count PROPERTIES LABELS "dwg;fast;ltype" TIMEOUT 30)
+
 # Keep the no-version FreeCAD CLI revision policy independently tested from
 # full DWG input availability. The source-version mapping is pure policy.
 add_executable(libdxfrw_dwg2dxf_version_tests

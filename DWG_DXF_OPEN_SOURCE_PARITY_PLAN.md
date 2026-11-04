@@ -834,9 +834,12 @@ remain supported; see the [corner receipt](docs/research/p6-dxf-incomplete-fourt
 Generated LTYPE_CONTROL output has a consumer-visible built-in linetype
 ordering risk: six ODA-produced files conflict with the PDF’s stated order.
 Keep the PDF authoritative and seek clarification before changing that order.
-AC1015 count encoding now follows the specified BL, with a tightly checked
-historical BS fallback; count behavior for later versions remains open. See
-the [count receipt](docs/research/p6-ac1015-ltype-control-bl-count-2026-11-04.json)
+AC1015, AC1018, AC1024, AC1027 and AC1032 count encoding now follows the
+specified BL, with a tightly checked historical BS fallback. AC1021 needs its
+own source-backed handle-framing and legacy compatibility fix. Physical
+control-record evidence does not establish whole-file interoperability. See
+the [AC1015 count receipt](docs/research/p6-ac1015-ltype-control-bl-count-2026-11-04.json),
+[later-version count receipt](docs/research/p6-multiversion-ltype-control-bl-count-2026-11-04.json),
 and [order conflict receipt](docs/research/p6-dwg-ltype-control-order-roles-2026-11-04.json).
 
 The AC1018 empty-name STYLE still fails strict output: ODA-produced bit

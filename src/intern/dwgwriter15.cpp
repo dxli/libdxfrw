@@ -382,9 +382,12 @@ bool controlEntryCountUsesBitShort(std::uint16_t objectType) {
 
 bool writeControlEntryCount(dwgBufferW& body, std::uint16_t objectType,
                             std::uint32_t count, DRW::Version version) {
-    // ODA v5.4.1 §20.4.57 specifies BL for R2000 LTYPE_CONTROL.
-    // Other versions keep their previous behavior pending separate proof.
-    if (version == DRW::AC1015 && objectType == DRW::DwgLTypeControlObjectType) {
+    // ODA v5.4.1 §20.4.57 specifies BL. R2007 is excluded until its
+    // historical inline-handle framing can be distinguished safely.
+    if ((version == DRW::AC1015 || version == DRW::AC1018
+         || version == DRW::AC1024 || version == DRW::AC1027
+         || version == DRW::AC1032)
+        && objectType == DRW::DwgLTypeControlObjectType) {
         if (count > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()))
             return false;
         body.putBitLong(static_cast<std::int32_t>(count));
