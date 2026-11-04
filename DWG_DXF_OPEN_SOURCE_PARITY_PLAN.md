@@ -758,42 +758,16 @@ Strict output still fails, and no support claim is promoted.
 6. Qualify native TABLE rendering independently. This gate concerns consumer
    geometry, merge visibility and rendered style; serializer/readback evidence
    remains scoped to its witnessed source profiles and does not close this gate.
-7. **AC1027 source TABLECONTENT span discrepancy:** on the public
-   `example_2013.dwg` source, object `0xC94` (type 529) parses its 9 columns and
-   20 rows, then fails at row 0/cell 0's first ATTDEF reference. ODA §20.4.97
-   specifies that reference as a soft pointer. The bounded probe reads
-   attribute count 208 at body bit 990/string bit 18176; the first handle starts
-   at handle bit 115929 and decodes as hard-pointer code `0x05`, reference
-   `0x11` (end bit 115945), where soft-pointer code `0x04` is expected.
-   The preceding custom key is `ACAD_ROUNDTRIP_2008_CELL_CHECKSUM` (string
-   bits 17556–18094); its flags=2/type=2 value spans body bits 840–928, followed
-   by a flags=6/type=4 cell value at body bits 950–980/string bits 18098–18176.
-   LibreDWG 0.14's paired DXF independently identifies handle `0x11` as a
-   `STYLE`, not an `ATTDEF`; this confirms the current cursor is on the wrong
-   record and does not identify the intended target. Treat this as unresolved
-   stream alignment, not proof that the producer violates ODA. Keep
-   the TABLECONTENT frame incomplete and strict output refused until the prior
-   body/string/handle spans and the target role are reconciled against an
-   independent decoder that implements this class. LibreDWG 0.14 reports the
-   object as `UNKNOWN_OBJ`, so it does not adjudicate the schema. A pinned
-   ACadSharp reader independently opens the same file and reads the 20×9
-   `TABLE` entity, but handle `0xC94` is absent from its document; its
-   `readTableContent` path is called only for embedded `TABLE` entity data, not
-   this standalone type-529 object. It cannot adjudicate this span. A separate
-   scratch attempt to enable LibreDWG's unstable TABLECONTENT decoder also
-   failed as an adjudicator: it required a forced class route and ODA-guided
-   schema edits. Its initial non-Boolean `has_linked_data` value came from a
-   stale April 2026 scratch checkout using `format_flags & 3`; current LibreDWG
-   master and ODA use `format_flags & 1`. Re-running the scratch copy with that
-   mask makes the value Boolean 0, but wrapped string offsets, an attribute
-   count of 208, the unrelated STYLE handle, handle-buffer overflows and a
-   process trap remain. Current master still routes standalone TABLECONTENT as
-   unstable, so this does not qualify it as an independent decoder. Preserve
-   the result as a decoder limitation, not independent wire proof; see the
-   [scratch decoder limitation receipt](docs/research/p5-ac1027-tablecontent-scratch-libredwg-decoder-limits-2026-11-02.json).
-   The source and all traces remain external to the repository; see the
-   [source-bound span
-   mismatch receipt](docs/research/p5-ac1027-tablecontent-attdef-handle-span-mismatch-2026-11-02.json).
+7. **AC1027 TABLECONTENT source alignment:** object `0xC94` in the public
+   `example_2013.dwg` remains incomplete under the specification's detached-TV
+   layout. ODA's audit-disabled DXF contains seven selected string values,
+   unit 0 and no attributes, while the documented-path parse misaligns before
+   those values. An in-body interpretation matches those selected values but
+   conflicts with ODA §20.4.99, and a generated input shows both grammars can
+   overlap. Keep the authoritative detached-TV interpretation and seek an ODA
+   correction or a nonconflicting source-backed explanation before changing the
+   DWG layout; retain incomplete output disposition. See the [comparison receipt](docs/research/p5-ac1027-tablecontent-native-string-dual-parse-2026-11-03.json)
+   and [prior span receipt](docs/research/p5-ac1027-tablecontent-attdef-handle-span-mismatch-2026-11-02.json).
 
 **TABLE CadValue flag scope:** ODA §20.4.99 uses one-based bit names: bit 1
 (`0x01`) marks `kGeneral` and suppresses the type-specific payload; setting
@@ -804,8 +778,8 @@ type=4 native-string carrier has a distinct body encoding. Generated vectors
 cover flags 0–3 and following-field alignment. The current flag-numbering
 recheck is recorded in the
 [flag-scope receipt](docs/research/p5-table-cadvalue-oda-flags-and-ac1021-checksum-scope-2026-11-02.json).
-It does not resolve the AC1027 TABLECONTENT span discrepancy, qualify native
-TABLE semantics, or promote any support claim.
+The AC1027 source alignment above remains unresolved; native TABLE semantics
+and support claims are not qualified.
 
 **Legacy FIELD DXF flag guard:** AC1018 serialization now refuses nonzero root
 or child CadValue format flags before emitting bytes. Autodesk's FIELD DXF

@@ -7866,8 +7866,11 @@ bool makeR2007TableContentObjectFrame(R2007TableContentObjectFrame& frame,
                                      bool nativeStringPayload = false,
                                      const std::vector<std::uint8_t>* nativeStringBytes = nullptr,
                                      std::int32_t nativeStringDeclaredSize =
-                                         std::numeric_limits<std::int32_t>::min()) {
-    constexpr DRW::Version version = DRW::AC1021;
+                                         std::numeric_limits<std::int32_t>::min(),
+                                     DRW::Version version = DRW::AC1021,
+                                     const std::string* nativeDisplayOverride = nullptr) {
+    if (version != DRW::AC1021 && version != DRW::AC1027)
+        return false;
     constexpr std::uint32_t objectHandle = 0xA500u;
     constexpr std::uint32_t parentHandle = 0xA600u;
     constexpr std::uint32_t tableStyleHandle = 0xA700u;
@@ -7915,7 +7918,8 @@ bool makeR2007TableContentObjectFrame(R2007TableContentObjectFrame& frame,
     // so no dynamic class number is inferred or asserted here.
     full.putObjType(version, 0);
     const std::size_t objectSizeBit = full.bitCount();
-    full.putRawLong32(0);
+    if (version < DRW::AC1024)
+        full.putRawLong32(0);
     dwgHandle ownHandle;
     ownHandle.code = DRW::DwgNullReference;
     ownHandle.size = 2;
@@ -7925,6 +7929,8 @@ bool makeR2007TableContentObjectFrame(R2007TableContentObjectFrame& frame,
     full.putBitShort(0); // no EED
     full.putBitLong(0);  // no reactors
     full.putBit(1);      // no extension-dictionary handle
+    if (version > DRW::AC1024)
+        full.putBit(0);  // no DataStorage payload
 
     // ODA v5.4.1 §20.4.97: one column, one row, one value cell. Optional
     // linked-data and ATTDEF tuples exercise semantic-loss handling.
@@ -7949,11 +7955,14 @@ bool makeR2007TableContentObjectFrame(R2007TableContentObjectFrame& frame,
     strings.putUCSText("0.0");
     strings.putUCSText(valueDataType == 0 ? "Unknown value"
                         : valueDataType == 1 ? "314159"
-                        : valueDataType == 4 ? "CAD Text"
+                        : valueDataType == 4 ? (nativeDisplayOverride
+                              ? *nativeDisplayOverride : "CAD Text")
                         : valueDataType == 8 ? "2026-10-22"
                         : valueDataType == 16 ? "2D point"
                         : valueDataType == 32 ? "3D point"
                         : valueDataType == 64 ? "Handle A721" : "42.5");
+    if (nativeDisplayOverride != nullptr)
+        strings.putUCSText(""); // extra TV for the detached candidate
     if (cellAttributeCount == 1u || multiContentBlockAttribute)
         strings.putUCSText("Attribute2007");
     if (hasCellContentFormatOverride)
@@ -8245,8 +8254,9 @@ bool makeR2007TableContentObjectFrame(R2007TableContentObjectFrame& frame,
     full.putBit(1); // string stream present
     if (!full.isGood())
         return false;
-    full.patchRawLong32AtBit(objectSizeBit,
-                             static_cast<std::uint32_t>(full.bitCount()));
+    if (version < DRW::AC1024)
+        full.patchRawLong32AtBit(objectSizeBit,
+                                 static_cast<std::uint32_t>(full.bitCount()));
 
     handles.alignToByte();
     frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
@@ -10353,6 +10363,122 @@ void testCadValuePayloadPresence(TestContext& t) {
                      "Negative and oversized native string byte counts fail closed");
         }
     }
+
+    // A non-spec AC1027 byte-counted carrier is not admitted as a typed
+    // TABLECONTENT object. The ODA detached-TV route remains authoritative.
+    R2007TableContentObjectFrame ac1027Native;
+    const bool ac1027Built = makeR2007TableContentObjectFrame(
+        ac1027Native, false, 0u, 0xA710u, false, 0u, 0u,
+        DRW::DwgHardOwnership, 0, DRW::DwgHardPointer, 4,
+        DRW::DwgSoftPointer, false, false, 0, 1, 1, 6,
+        {}, {}, {}, {{3, 1, 2, 4}}, false, false, false, true,
+        nullptr, std::numeric_limits<std::int32_t>::min(), DRW::AC1027);
+    t.expect(ac1027Built, "AC1027 alternate carrier control builds");
+    // This locally authored six-byte carrier overlaps two complete grammars.
+    // Its first four bytes are sixteen BL/BS/BD zero codes (binary 10), so a
+    // detached-TV parse can complete the remaining table structure before the
+    // end of those bytes. The same bytes encode two U+AAAA characters followed
+    // by NUL for the native route; the detached display equals that string.
+    const std::vector<std::uint8_t> overlap{0xAAu, 0xAAu, 0xAAu, 0xAAu, 0u, 0u};
+    const std::string overlapDisplay = "\xEA\xAA\xAA\xEA\xAA\xAA";
+    // A flags-4 AC1027 frame forces the documented interpretation and an
+    // AC1021 flags-6 frame forces the existing native interpretation. Their
+    // cell body and string payloads match the overlap frame, establishing
+    // both candidates structurally rather than merely checking a failure.
+    for (const auto& profile : std::array<std::array<int, 2>, 2>{{
+             {{static_cast<int>(DRW::AC1027), 4}},
+             {{static_cast<int>(DRW::AC1021), 6}}}}) {
+        const auto version = static_cast<DRW::Version>(profile[0]);
+        R2007TableContentObjectFrame oneRoute;
+        const bool built = makeR2007TableContentObjectFrame(
+            oneRoute, false, 0u, 0xA710u, false, 0u, 0u,
+            DRW::DwgHardOwnership, 0, DRW::DwgHardPointer, 4,
+            DRW::DwgSoftPointer, false, false, 0, 1, 1, profile[1],
+            {}, {}, {}, {{3, 1, 2, 4}}, false, false, false, true,
+            &overlap, std::numeric_limits<std::int32_t>::min(),
+            version, &overlapDisplay);
+        t.expect(built, "AC1027 overlap route control builds");
+        if (!built) continue;
+        dwgBuffer input(oneRoute.bytes.data(), oneRoute.bytes.size());
+        TableContentObjectCodecProbe parsed;
+        const bool read = parsed.parseDwg(version, &input, oneRoute.handleBits);
+        bool matched = read && parsed.m_parseComplete && !parsed.m_semanticContentComplete
+            && parsed.m_content.m_rows.size() == 1u
+            && parsed.m_content.m_rows[0].m_cells.size() == 1u
+            && parsed.m_content.m_rows[0].m_cells[0].m_contents.size() == 1u
+            && parsed.m_content.m_tableStyleHandle == 0xA700u;
+        if (matched) {
+            const auto& value = parsed.m_content.m_rows[0].m_cells[0].m_contents[0].m_value;
+            matched = value.m_value.type() == DRW_Variant::STRING
+                && (version == DRW::AC1027
+                    ? value.m_rawData.empty() && UTF8STRING(value.m_value.c_str()) == "0.0"
+                    : value.m_rawData == overlap && UTF8STRING(value.m_value.c_str()) == overlapDisplay);
+        }
+        t.expect(matched, "overlapping carrier has a complete forced interpretation");
+    }
+    R2007TableContentObjectFrame overlapFrame;
+    const bool overlapBuilt = makeR2007TableContentObjectFrame(
+        overlapFrame, false, 0u, 0xA710u, false, 0u, 0u,
+        DRW::DwgHardOwnership, 0, DRW::DwgHardPointer, 4,
+        DRW::DwgSoftPointer, false, false, 0, 1, 1, 6,
+        {}, {}, {}, {{3, 1, 2, 4}}, false, false, false, true,
+        &overlap, std::numeric_limits<std::int32_t>::min(),
+        DRW::AC1027, &overlapDisplay);
+    t.expect(overlapBuilt, "AC1027 overlapping carrier frame builds");
+    if (overlapBuilt && ac1027Built) {
+        TableContentObjectCodecProbe parsed;
+        dwgBuffer invalid(ac1027Native.bytes.data(), ac1027Native.bytes.size());
+        const bool refused = !parsed.parseDwg(DRW::AC1027, &invalid, ac1027Native.handleBits)
+            && !invalid.isGood() && !parsed.m_parseComplete;
+        dwgBuffer documented(overlapFrame.bytes.data(), overlapFrame.bytes.size());
+        const bool read = parsed.parseDwg(DRW::AC1027, &documented, overlapFrame.handleBits);
+        bool matched = read && parsed.m_parseComplete && !parsed.m_semanticContentComplete
+            && parsed.m_content.m_rows.size() == 1u
+            && parsed.m_content.m_rows[0].m_cells.size() == 1u
+            && parsed.m_content.m_rows[0].m_cells[0].m_contents.size() == 1u
+            && parsed.m_content.m_tableStyleHandle == 0xA700u;
+        if (matched) {
+            const auto& value = parsed.m_content.m_rows[0].m_cells[0].m_contents[0].m_value;
+            matched = value.m_formatFlags == 6 && value.m_unitType == 6
+                && value.m_rawData.empty() && value.m_value.type() == DRW_Variant::STRING
+                && UTF8STRING(value.m_value.c_str()) == "0.0"
+                && value.m_formatString == overlapDisplay && value.m_valueString.empty();
+        }
+        t.expect(refused && matched,
+                 "AC1027 overlap follows ODA detached-TV after refusing the alternate carrier");
+    }
+
+    for (const auto& profile : std::array<std::array<int, 2>, 4>{{
+             {{0, 1}}, {{6, 1}}, {{6, 6}}, {{6, 10}}}}) {
+        const int flags = profile[0];
+        const int unit = profile[1];
+        R2007TableContentObjectFrame ac1027Tv;
+        const bool tvBuilt = makeR2007TableContentObjectFrame(
+            ac1027Tv, false, 0u, 0xA710u, false, 0u, 0u,
+            DRW::DwgHardOwnership, 0, DRW::DwgHardPointer, 4,
+            DRW::DwgSoftPointer, false, false, 0, 1, unit, flags,
+            {}, {}, {}, {{3, 1, 2, 4}}, false, false, false, false,
+            nullptr, std::numeric_limits<std::int32_t>::min(), DRW::AC1027);
+        t.expect(tvBuilt, "AC1027 documented detached string frame builds");
+        if (!tvBuilt) continue;
+        dwgBuffer input(ac1027Tv.bytes.data(), ac1027Tv.bytes.size());
+        TableContentObjectCodecProbe parsed;
+        const bool read = parsed.parseDwg(DRW::AC1027, &input, ac1027Tv.handleBits);
+        bool matched = read && parsed.m_parseComplete
+            && parsed.m_semanticContentComplete == (flags == 0)
+            && parsed.m_content.m_rows.size() == 1u
+            && parsed.m_content.m_rows[0].m_cells.size() == 1u
+            && parsed.m_content.m_rows[0].m_cells[0].m_contents.size() == 1u
+            && parsed.m_content.m_tableStyleHandle == 0xA700u;
+        if (matched) {
+            const auto& value = parsed.m_content.m_rows[0].m_cells[0].m_contents[0].m_value;
+            matched = value.m_formatFlags == flags && value.m_unitType == unit
+                && value.m_rawData.empty() && value.m_value.type() == DRW_Variant::STRING
+                && UTF8STRING(value.m_value.c_str()) == "CAD Text";
+        }
+        t.expect(matched, "AC1027 documented detached TV route remains readable");
+    }
+
 }
 
 void testTableCadValueLong(TestContext& t) {
