@@ -11677,7 +11677,9 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             && variables.reactorHandles.size() == 1u
                             && variables.reactorHandles.front() == variables.parentHandle
                             && variables.extensionDictionaryFlag() == 1u
-                            && variables.m_displayFrame == 0u;
+                            && (variables.m_displayFrame == 0u
+                                || (data->sourceVersion == DRW::AC1024
+                                    && variables.m_displayFrame == 1u));
                         const bool nested = variables.reactorCount() == 0
                             && variables.reactorHandles.empty()
                             && variables.extensionDictionaryFlag() == 0u;
@@ -72588,12 +72590,14 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
 // frame before granting its graph profile. The DWG parent and reactor are
 // distinct typed references even when they have the same numeric target.
 static bool matchesDirectNodWipeoutWire(const DRW_UnsupportedObject& raw,
-                                       std::uint32_t parent) noexcept {
+                                       std::uint32_t parent,
+                                       std::uint16_t frame) noexcept {
     using namespace dx_raster_wire;
     if (raw.m_version == DRW::AC1018)
-        return matchesAc1018DirectWipeoutWire(raw, parent);
+        return frame == 0u && matchesAc1018DirectWipeoutWire(raw, parent);
     if ((raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1027
          && raw.m_version != DRW::AC1032)
+        || (frame != 0u && (raw.m_version != DRW::AC1024 || frame != 1u))
         || raw.m_rawBytes.empty()
         || raw.m_rawBytes.size() > 64u * 1024u * 1024u) return false;
     const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
@@ -72607,9 +72611,11 @@ static bool matchesDirectNodWipeoutWire(const DRW_UnsupportedObject& raw,
         || detail::handle(body, 0u, 0u, true).value != raw.m_handle
         || body.shortValue() != 0u || body.longValue() != 1u
         || body.take(1u) != 1u
-        || (raw.m_version >= DRW::AC1027 && body.take(1u) != 0u)
-        || body.shortValue() != 0u || !body.good || body.pos >= end
-        || end - body.pos > 32u) return false;
+        || (raw.m_version >= DRW::AC1027 && body.take(1u) != 0u)) return false;
+    const auto frameStart = body.pos;
+    if (body.shortValue() != frame || !body.good
+        || (frame == 1u && body.pos - frameStart != 10u)
+        || body.pos >= end || end - body.pos > 32u) return false;
     while (body.pos < end) if (body.take(1u) != 0u) return false;
     detail::Bits handles{raw.m_rawBytes.data(), end, total};
     const auto owner = detail::handle(handles, 4u, raw.m_handle);
@@ -72738,7 +72744,9 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                 && variables.reactorHandles.size() == 1u
                 && variables.reactorHandles.front() == variables.parentHandle
                 && variables.extensionDictionaryFlag() == 1u
-                && variables.m_displayFrame == 0u;
+                && (variables.m_displayFrame == 0u
+                    || (cData->sourceVersion == DRW::AC1024
+                        && variables.m_displayFrame == 1u));
             const bool nested = cData->sourceVersion == DRW::AC1027
                 && variables.reactorCount() == 0
                 && variables.reactorHandles.empty()
@@ -72787,7 +72795,8 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                 || sourceFrame.m_xDictFlag != variables.extensionDictionaryFlag()))
                 || sourceFrame.m_hasDataStorage != variables.hasDataStorageBinaryData()
                 || (directNod && !matchesDirectNodWipeoutWire(
-                    sourceFrame, cData->namedObjectDictionary.handle)))
+                    sourceFrame, cData->namedObjectDictionary.handle,
+                    variables.m_displayFrame)))
                 return fail("source frame common metadata differs from typed record");
 
             const DRW_Dictionary* owner = nullptr;

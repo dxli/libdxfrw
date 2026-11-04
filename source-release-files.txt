@@ -661,6 +661,7 @@ tools/audit_polyline_owner_census.py
 tools/audit_rastervariables_ac1018_source.py
 tools/audit_sunstudy_dxf_graph.py
 tools/audit_wipeout_ac1018_source.py
+tools/audit_wipeout_ac1024_frame1_source.py
 tools/audit_wipeout_ac1024_source.py
 tools/audit_wipeout_ac1032_source.py
 tools/author_ac1021_curve_geometry.py
@@ -668,6 +669,7 @@ tools/author_ac1021_geometry_matrix.py
 tools/author_ac1021_polyline_owner_scopes.py
 tools/author_ac1021_varied_geometry.py
 tools/author_dwg_legacy_extrusion.py
+tools/author_wipeout_ac1024_frame1.py
 tools/author_wipeout_direct_nod.py
 tools/bounded_process.py
 tools/build_semantic_adapter.py
@@ -752,6 +754,7 @@ tools/probe_librecad3_native_dxf.cpp
 tools/probe_lightlist_physical_capture.cpp
 tools/probe_rastervariables_ac1018_source.cpp
 tools/probe_wipeout_ac1018_source.cpp
+tools/probe_wipeout_ac1024_frame1_source.cpp
 tools/probe_wipeout_ac1024_source.cpp
 tools/probe_wipeout_ac1032_source.cpp
 tools/qualify_material_source_order.py
