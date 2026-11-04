@@ -29537,6 +29537,21 @@ bool DRW_Polyline::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_
         if (version < DRW::AC1018) {
             putAbsHandle(hb, vertlist.empty() ? 0u : vertlist.front()->handle);
             putAbsHandle(hb, vertlist.empty() ? 0u : vertlist.back()->handle);
+        } else if (oType == 0x0F || oType == 0x10) {
+            // ODA §20.4.16–17: R2004+ POLYLINE owns each VERTEX and
+            // its SEQEND. Keep mesh and polyface framing on their existing
+            // path until those distinct records are independently qualified.
+            for (const auto& v : vertlist) {
+                dwgHandle vertex;
+                vertex.code = DRW::DwgHardOwnership;
+                vertex.ref = v ? v->handle : 0u;
+                hb->putHandle(vertex);
+            }
+            dwgHandle seqEnd;
+            seqEnd.code = DRW::DwgHardOwnership;
+            seqEnd.ref = seqEndH.ref;
+            hb->putHandle(seqEnd);
+            return true;
         } else {
             for (const auto& v : vertlist)
                 putAbsHandle(hb, v ? v->handle : 0u);

@@ -341,6 +341,7 @@ test_package/CMakeLists.txt
 test_package/conanfile.py
 test_package/src/package_consumer.cpp
 tests/CMakeLists.txt
+tests/ac1021_curve_geometry_peer_audit_tests.py
 tests/ac1021_field_acadsharp_probe.cs
 tests/ac1021_field_acadsharp_probe.csproj
 tests/ac1021_field_source_raw_probe.cpp
@@ -425,6 +426,8 @@ tests/dwg_ltype_multiversion_count_tests.cpp
 tests/dwg_material_replay_refusal_tests.cpp
 tests/dwg_object_vectors_tests.cpp
 tests/dwg_plotstyle_nod_admission_tests.cpp
+tests/dwg_polyline_owned_handle_roles_tests.cpp
+tests/dwg_polyline_owner_facade_tests.cpp
 tests/dwg_reader_matrix_tests.cpp
 tests/dxf_ellipse_extreme_axis_tests.cpp
 tests/dxf_entity_identity_test_helpers.h
@@ -630,6 +633,7 @@ tools/audit_ac1015_empty_attributed_insert.py
 tools/audit_ac1015_insert_scale.py
 tools/audit_ac1015_insert_tilted.py
 tools/audit_ac1018_dictionary_wire.py
+tools/audit_ac1021_curve_geometry_peer.py
 tools/audit_ac1021_geometry_peer.py
 tools/audit_ac1021_material_peer.py
 tools/audit_ac1021_varied_geometry_peer.py
@@ -647,11 +651,13 @@ tools/audit_dxf_sparse_lwpolyline.py
 tools/audit_dxf_table_values.py
 tools/audit_librecad3_native_dxf.py
 tools/audit_p9_rtext_native_history.py
+tools/audit_polyline_owner_census.py
 tools/audit_rastervariables_ac1018_source.py
 tools/audit_sunstudy_dxf_graph.py
 tools/audit_wipeout_ac1018_source.py
 tools/audit_wipeout_ac1024_source.py
 tools/audit_wipeout_ac1032_source.py
+tools/author_ac1021_curve_geometry.py
 tools/author_ac1021_geometry_matrix.py
 tools/author_ac1021_varied_geometry.py
 tools/author_dwg_legacy_extrusion.py
@@ -718,6 +724,7 @@ tools/normalize_drawing_result.py
 tools/normalize_oracle.py
 tools/probe_ac1014_imagedef_zero_size.py
 tools/probe_ac1021_control_frames.cpp
+tools/probe_ac1021_curve_geometry.cpp
 tools/probe_ac1021_default_material_source.cpp
 tools/probe_ac1021_envelope_variant.cpp
 tools/probe_ac1021_geometry_matrix.cpp
