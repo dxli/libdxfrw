@@ -44,6 +44,8 @@
 #include "dwgutil.h"
 #include "sabheader.h"
 
+bool drwHasEncodableDwgVportAngles(const DRW_Vport& entity) noexcept;
+
 namespace {
 
 constexpr std::uint32_t kMaxDwgBlockRecordPreviewBytes = 0xA00000u;
@@ -6687,10 +6689,19 @@ bool dwgWriter15::addVport(DRW_Vport& vp) {
     if (upper.empty())
         return false;
 
+    const auto existing = m_writingCtx.vportMap.find(upper);
+    // Non-active duplicates are ignored by the existing admission contract.
+    // Validate only records that will actually be emitted, before changing the
+    // caller's handle/owner; addVport stores a base copy even for subclasses.
+    if ((existing == m_writingCtx.vportMap.end()
+         || existing->second == DRW_Vport::kDwgActiveHandle)
+        && !drwHasEncodableDwgVportAngles(vp)) {
+        markObjectWriteFailure();
+        return false;
+    }
     // Every VPORT table record is owned by the fixed VPORT control object;
     // source-file ownership is not part of the output namespace.
     vp.parentHandle = DRW_Vport::kDwgControlHandle;
-    const auto existing = m_writingCtx.vportMap.find(upper);
     if (existing != m_writingCtx.vportMap.end()) {
         vp.handle = existing->second;
         if (existing->second == DRW_Vport::kDwgActiveHandle) {

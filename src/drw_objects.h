@@ -2825,8 +2825,8 @@ public:
   double lensHeight;       /*!< lens height, code 42 */
   double frontClip;        /*!< front clipping plane, code 43 */
   double backClip;         /*!< back clipping plane, code 44 */
-  double snapAngle;        /*!< snap rotation angle, code 50 */
-  double twistAngle;       /*!< view twist angle, code 51 */
+  double snapAngle;        /*!< snap rotation angle in degrees, DXF code 50 */
+  double twistAngle;       /*!< view twist angle in degrees, DXF code 51 */
   int viewMode;            /*!< view mode, code 71 */
   int circleZoom;          /*!< circle zoom percent, code 72 */
   int fastZoom;            /*!< fast zoom setting, code 73 */

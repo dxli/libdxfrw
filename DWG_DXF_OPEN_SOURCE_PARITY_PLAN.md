@@ -880,6 +880,12 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+DWG VPORT table snap and twist angles now convert radians to the existing
+degree-valued DXF API and back. Consumers compensating for the former
+raw-radian callback must remove that workaround. VIEW and VIEWPORT entity
+angles, broader producer coverage and generated ODA acceptance remain open
+([receipt](docs/research/p6-dwg-vport-angle-units-2026-11-04.json)).
+
 The explicit default-material and plotstyle opt-ins now cover the bounded
 AC1027 synthetic layer-0 graph and exact material frames. Source/peer controls
 verify selected fields and reference roles; ODA still stops at VPORT and the

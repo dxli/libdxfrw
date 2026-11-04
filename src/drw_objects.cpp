@@ -6202,6 +6202,18 @@ bool DRW_Vport::validateDxf(DRW::Version version) const {
                 ambientColorName));
 }
 
+// VPORT DXF groups 50 and 51 use degrees; their DWG BDs are radians.
+// Shared with writer admission so rejected selected records fail atomically.
+bool drwHasEncodableDwgVportAngles(const DRW_Vport& vport) noexcept {
+    const auto encodable = [](double degrees) noexcept {
+        if (!std::isfinite(degrees)) return false;
+        const double radians = degrees / ARAD;
+        return degrees == 0.0 || (radians != 0.0
+            && std::fpclassify(radians) != FP_SUBNORMAL);
+    };
+    return encodable(vport.snapAngle) && encodable(vport.twistAngle);
+}
+
 bool DRW_Vport::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
     reset();
     const auto fail = [this, buf]() {
@@ -6485,6 +6497,10 @@ bool DRW_Vport::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
     const double parsedAspectRatio =
         decodeVportAspectRatio(version, parsedHeight, parsedRatio);
     if (!std::isfinite(parsedAspectRatio))
+        return fail();
+    parsedSnapAngle *= ARAD;
+    parsedTwistAngle *= ARAD;
+    if (!std::isfinite(parsedSnapAngle) || !std::isfinite(parsedTwistAngle))
         return fail();
 
     parsed.name = std::move(parsedName);
@@ -8780,6 +8796,7 @@ bool DRW_Vport::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
                                     dwgBufferW *strBuf, dwgBufferW *hdlBuf,
                                     bool typedNullReferences) const {
     if (buf == nullptr || !validatePayloadFields()
+        || !drwHasEncodableDwgVportAngles(*this)
         || !std::isfinite(encodeVportAspectRatio(version, height, ratio)))
         return false;
     std::uint8_t ambientMethod = 0u;
@@ -8813,7 +8830,7 @@ bool DRW_Vport::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
     buf->put2RawDouble(center);
     buf->putBitDouble(viewTarget.x); buf->putBitDouble(viewTarget.y); buf->putBitDouble(viewTarget.z);
     buf->putBitDouble(viewDir.x);    buf->putBitDouble(viewDir.y);    buf->putBitDouble(viewDir.z);
-    buf->putBitDouble(twistAngle);
+    buf->putBitDouble(twistAngle / ARAD);
     buf->putBitDouble(lensHeight);
     buf->putBitDouble(frontClip);
     buf->putBitDouble(backClip);
@@ -8846,7 +8863,7 @@ bool DRW_Vport::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
     buf->putBit(static_cast<std::uint8_t>(snap & 1));
     buf->putBit(static_cast<std::uint8_t>(snapStyle & 1));
     buf->putBitShort(static_cast<std::uint16_t>(snapIsopair));
-    buf->putBitDouble(snapAngle);
+    buf->putBitDouble(snapAngle / ARAD);
     buf->put2RawDouble(snapBase);
     buf->put2RawDouble(snapSpacing);
     if (version > DRW::AC1014) {

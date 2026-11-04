@@ -455,6 +455,7 @@ EXTRA_DIST = \
     tests/dwg_solid_trace_elevation_tests.cpp \
     tests/dwg_text_style_resolution_tests.cpp \
     tests/dwg_vertex_tangent_units_tests.cpp \
+    tests/dwg_vport_angle_units_tests.cpp \
     tests/dxf_ellipse_extreme_axis_tests.cpp \
     tests/dxf_entity_identity_test_helpers.h \
     tests/dxf_fixture_tests.cpp \
@@ -700,6 +701,7 @@ EXTRA_DIST = \
     tools/audit_dwg_hatch_pattern_angles.py \
     tools/audit_dwg_ltype_control.py \
     tools/audit_dwg_vertex_tangent.py \
+    tools/audit_dwg_vport_angles.py \
     tools/audit_dxf_lwpolyline_missing_y.py \
     tools/audit_dxf_sparse_lwpolyline.py \
     tools/audit_dxf_table_values.py \
@@ -743,6 +745,8 @@ EXTRA_DIST = \
     tools/author_dwg_hatch_pattern_source.py \
     tools/author_dwg_legacy_extrusion.py \
     tools/author_dwg_vertex_tangent.cpp \
+    tools/author_dwg_vport.cpp \
+    tools/author_dwg_vport_source.py \
     tools/author_light_dxf_421.py \
     tools/author_r12_ellipse_wrap_source.py \
     tools/author_selected_ac1027_light.py \
@@ -841,6 +845,7 @@ EXTRA_DIST = \
     tools/probe_dwg_hatch_pattern.cpp \
     tools/probe_dwg_hatch_unsupported_edges.cpp \
     tools/probe_dwg_vertex_tangent.cpp \
+    tools/probe_dwg_vport.cpp \
     tools/probe_dxf_lwpolyline_missing_y.cpp \
     tools/probe_dxf_sparse_lwpolyline.cpp \
     tools/probe_geodata_physical_capture.cpp \

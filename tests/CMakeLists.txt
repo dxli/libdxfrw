@@ -5052,3 +5052,12 @@ set_tests_properties(libdxfrw_dxf_sun_color_order PROPERTIES LABELS "fast;dxf;su
 
 add_test(NAME libdxfrw_ac1027_material_peer_audit COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/ac1027_material_peer_audit_tests.py)
 set_tests_properties(libdxfrw_ac1027_material_peer_audit PROPERTIES LABELS "dwg;fast;AC1027;peer" TIMEOUT 30)
+
+add_executable(libdxfrw_dwg_vport_angle_units_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_vport_angle_units_tests.cpp)
+target_compile_features(libdxfrw_dwg_vport_angle_units_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_vport_angle_units_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_vport_angle_units_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_vport_angle_units_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_vport_angle_units COMMAND libdxfrw_dwg_vport_angle_units_tests)
+set_tests_properties(libdxfrw_dwg_vport_angle_units PROPERTIES LABELS "fast;dwg;vport;transaction" TIMEOUT 30)
