@@ -9810,9 +9810,10 @@ bool DRW_Light::validateDxf() const {
         && m_classVersion
             <= static_cast<std::uint32_t>(std::numeric_limits<int>::max())
         && m_type >= 1u && m_type <= 3u
-        // The bounded DXF profile currently emits only group-63 ACI values.
-        // DWG CMC packed values and group-421 LIGHT mappings are unqualified.
-        && m_color <= 255u && m_colorRgb == -1
+        // DXF-origin true color is preserved separately from group 63. DWG
+        // CMC metadata still needs an independently qualified mapping.
+        && m_color <= 255u && m_colorRgb >= -1 && m_colorRgb <= 0x00FFFFFF
+        && (m_colorRgb < 0 || m_colorMethod == 0u)
         && supportedColorMethod && m_colorName.empty()
         && m_colorBookName.empty() && m_colorDwgFlags == 0u
         && m_colorDwgIndex == 0u && !m_colorDwgMetadataPresent
@@ -9919,9 +9920,11 @@ bool DRW_Light::parseCode(int code,
         m_shadowMapSoftness = static_cast<std::uint8_t>(value);
         return true;
     case 421:
-        // LIGHT's color payload mapping is not qualified. Refuse the record
-        // instead of silently dropping a value that the writer cannot prove.
-        return false;
+        // A repeated value cannot be losslessly represented by this field.
+        if (m_colorRgb != -1 || !readDxfIntInRange(reader, 0, 0x00FFFFFF, value))
+            return false;
+        m_colorRgb = value;
+        return true;
     default:
         return DRW_Entity::parseCode(code, reader);
     }

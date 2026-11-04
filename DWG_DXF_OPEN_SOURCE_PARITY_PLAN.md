@@ -542,6 +542,9 @@ versions and native rendering remain open
 ([version receipt](docs/research/p5-sunstudy-dxf-ac1024-ac1032-2026-11-04.json)).
 The adapter also retains typed LIGHTLIST callbacks within aggregate record,
 item, and byte bounds ([capture receipt](docs/research/p5-lightlist-callback-retention-2026-11-03.json));
+DXF-origin LIGHT group 421 true color now has bounded ASCII/Binary transport;
+DWG CMC mapping and complete LIGHTLIST graph output remain open
+([color receipt](docs/research/p6-light-dxf-421-true-color-2026-11-04.json)).
 the source-aware DXF parser now separates the first ACAD_REACTORS group-330
 ACAD_LIGHT dictionary pointer from actual reactors and exposes its typed role
 while retaining the original app-data group ([role receipt](docs/research/p5-lightlist-owner-dictionary-role-2026-11-03.json)).
@@ -1654,13 +1657,13 @@ Native source-release builds and platform qualification remain open.
   representable profile for both the adapter and the public `writeLight`
   method. The direct writer refuses packed DWG CMC values, CMC metadata,
   photometric payloads and other unrepresented fields before writing the
-  record; it emits no unqualified group 421. Generated ASCII/Binary controls
+  record. Generated ASCII/Binary controls
   verify atomic refusal, destination preservation, corrected same-adapter retry
   and typed readback. The focused test passes; no fixture was added. The same
   receipt records this direct-writer boundary.
   This establishes generated transport only, not physical producer breadth or
-  native lighting/rendering semantics; LIGHT truecolor and photometric fields
-  remain refused pending a qualified mapping.
+  native lighting/rendering semantics; DWG CMC-to-DXF mapping and photometric
+  fields remain refused pending qualification.
   The limited macOS ARM64
   2D open/insert profile is recorded in
   [the FreeCAD route receipt](docs/research/p8-macos-freecad-dwg2dxf-open-insert-qualification-2026-11-01.json);

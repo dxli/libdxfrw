@@ -24392,9 +24392,10 @@ bool lightAdapterTransport() {
         if (retained == nullptr)
             return fail("retained LIGHT had the wrong runtime type");
         retained->m_colorRgb = 0x123456;
+        retained->m_colorDwgMetadataPresent = true;
         if (adapter.fileExport(path.string(), DRW::AC1021, binary,
                                &data, false, false))
-            return fail("LIGHT with unqualified truecolor was emitted");
+            return fail("LIGHT with unqualified DWG color metadata was emitted");
         {
             std::ifstream previous(path, std::ios::binary);
             const std::string bytes{std::istreambuf_iterator<char>(previous), {}};
@@ -24402,6 +24403,7 @@ bool lightAdapterTransport() {
                 return fail("unqualified LIGHT color changed the destination");
         }
         retained->m_colorRgb = -1;
+        retained->m_colorDwgMetadataPresent = false;
         retained->m_hasPhotometricData = true;
         if (adapter.fileExport(path.string(), DRW::AC1021, binary,
                                &data, false, false))
@@ -24460,14 +24462,17 @@ bool lightAdapterTransport() {
                 output.write(bytes.data(),
                              static_cast<std::streamsize>(bytes.size()));
                 if (!output)
-                    return fail("could not create unqualified LIGHT color control");
+                    return fail("could not create LIGHT true-color control");
             }
-            dx_data refusedColor;
-            dx_iface refusedColorReader;
-            if (refusedColorReader.fileImport(path.string(), &refusedColor,
-                                              false)
-                || refusedColor.dxfReadOutcome.error != DRW::BAD_CODE_PARSED)
-                return fail("unqualified LIGHT color input was not refused");
+            dx_data colorData;
+            dx_iface colorReader;
+            if (!colorReader.fileImport(path.string(), &colorData, false)
+                || colorData.mBlock == nullptr || colorData.mBlock->ent.size() != 1u)
+                return fail("LIGHT true-color input did not import");
+            const auto* colorLight = dynamic_cast<const DRW_Light*>(
+                colorData.mBlock->ent.front());
+            if (colorLight == nullptr || colorLight->m_colorRgb != 7)
+                return fail("LIGHT true-color input changed value");
         }
 
         DirectLightWriter directWriter;

@@ -13742,9 +13742,10 @@ bool dxfRW::writeLight(DRW_Light *ent) {
     writer->writeUtf8String(1, ent->m_name);
     writer->writeInt16(70, static_cast<int>(ent->m_type));
     writer->writeBool(290, ent->m_status);
-    // This bounded profile admits only the ACI group-63 value. The
-    // AcDbLight group-421 mapping for DWG CMC data has not been qualified.
+    // Preserve the separately sourced ACI and DXF true-color values.
     writer->writeInt16(63, static_cast<int>(ent->m_color));
+    if (ent->m_colorRgb >= 0)
+        writer->writeInt32(421, ent->m_colorRgb);
     writer->writeBool(291, ent->m_plotGlyph);
     writer->writeDouble(40, ent->m_intensity);
     writer->writeDouble(10, ent->m_position.x);
