@@ -3063,7 +3063,7 @@ public:
     double bulge;             /*!< bulge, code 42 */
 
     int flags;                 /*!< vertex flag, code 70, default 0 */
-    double tgdir = 0.0;     /*!< curve fit tangent direction, code 50 */
+    double tgdir = 0.0;     /*!< curve fit tangent direction in degrees, DXF code 50 */
     int vindex1;             /*!< polyface mesh vertex index, code 71, default 0 */
     int vindex2;             /*!< polyface mesh vertex index, code 72, default 0 */
     int vindex3;             /*!< polyface mesh vertex index, code 73, default 0 */

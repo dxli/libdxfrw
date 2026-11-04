@@ -18751,6 +18751,9 @@ bool DRW_Vertex::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs
         if (!readBoundedBitDouble(bodyProbe, bodyEndBit,
                                   parsedTangentDirection))
             return fail();
+        // DXF group 50 and the long-standing public tgdir field use degrees;
+        // the DWG VERTEX angle is stored in radians.
+        parsedTangentDirection *= ARAD;
     } else if (oType == 0x0B || oType == 0x0C || oType == 0x0D) { //PFACE
         if (oType == 0x0B)
             parsedSubtype = DwgSubtype::Vertex3D;
@@ -29514,6 +29517,12 @@ bool DRW_Vertex::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
     (void)bs; (void)strBuf;
     if (buf == nullptr || !validatePayloadFields())
         return false;
+    const double tangentRadians = tgdir / ARAD;
+    const bool is2D = m_dwgSubtype == DwgSubtype::Vertex2D
+        || (m_dwgSubtype == DwgSubtype::Auto && (flags & (64 | 128 | 16 | 32 | 8)) == 0);
+    if (is2D && tgdir != 0.0
+        && (tangentRadians == 0.0 || std::fpclassify(tangentRadians) == FP_SUBNORMAL))
+        return false;
     switch (m_dwgSubtype) {
     case DwgSubtype::Vertex2D:     oType = 0x0A; break;
     case DwgSubtype::Vertex3D:     oType = 0x0B; break;
@@ -29544,7 +29553,7 @@ bool DRW_Vertex::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
         buf->putBitDouble(bulge);
         if (version > DRW::AC1021)
             buf->putBitLong(static_cast<std::int32_t>(identifier));
-        buf->putBitDouble(tgdir);
+        buf->putBitDouble(tangentRadians);
     } else if (oType == 0x0B || oType == 0x0C || oType == 0x0D) {
         buf->putRawChar8(static_cast<std::uint8_t>(flags));
         buf->put3BitDouble(basePoint);

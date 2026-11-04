@@ -875,6 +875,12 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+DWG 2D POLYLINE vertex tangent directions now convert radians to the existing
+DXF/LibreCAD degree-valued API and back. Consumers that compensated for the
+previous raw-radian DWG callback must remove that compensation. The separate
+pre-R13 path and broader physical producer coverage remain unqualified
+([receipt](docs/research/p6-dwg-vertex-tangent-units-2026-11-04.json)).
+
 DXF LAYER color groups now preserve ACI/off state, true color and color name
 independently when group 62 follows groups 420 or 430. Reordered selected
 producer-derived records and generated ASCII/Binary controls cover the change;
