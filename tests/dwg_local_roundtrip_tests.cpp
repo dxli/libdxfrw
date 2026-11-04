@@ -21379,6 +21379,68 @@ bool runNonemptyRawAcdsSectionRoundTrip() {
         && section->m_data == sectionBytes;
 }
 
+// Append a locally authored ODA 24.2.2.7 search segment without changing
+// the existing data-record offsets. This makes the generated replay section
+// discoverable by an independent consumer, not merely by our reader.
+std::vector<std::uint8_t> withLocalDataStorageSearch(
+    const std::vector<std::uint8_t>& source) {
+    const DRW_DataStorageSection parsed = DRW_parseDataStorage(source, DRW::AC1027, false);
+    if (parsed.parseFailed || !parsed.structurallyValid || parsed.searchSegmentIndex != -1
+        || parsed.segmentIndexOffset > source.size()
+        || parsed.segmentIndexEntryCount != parsed.segments.size())
+        return {};
+    const auto indexSegment = std::find_if(parsed.segments.begin(), parsed.segments.end(),
+        [&parsed](const DRW_DataStorageSegment& segment) {
+            return segment.offset == parsed.segmentIndexOffset;
+        });
+    if (indexSegment == parsed.segments.end()) return {};
+    const std::size_t indexEntry = parsed.segmentIndexOffset + 48u
+        + static_cast<std::size_t>(parsed.segmentIndexEntryCount) * 12u;
+    if (indexEntry > source.size() || source.size() - indexEntry < 12u
+        || indexEntry + 12u > indexSegment->offset + indexSegment->size)
+        return {};
+    std::map<std::uint32_t, std::vector<std::uint64_t>> bySchema;
+    for (const auto& record : parsed.records)
+        bySchema[record.schemaIndex].push_back(record.handle);
+    std::vector<std::uint8_t> payload;
+    const auto append = [&payload](std::uint64_t value, unsigned count) {
+        for (unsigned i = 0; i < count; ++i)
+            payload.push_back(static_cast<std::uint8_t>(value >> (i * 8u)));
+    };
+    append(bySchema.size(), 4);
+    for (const auto& group : bySchema) {
+        append(group.first, 4); append(group.second.size(), 8);
+        for (std::size_t index = 0; index < group.second.size(); ++index)
+            append(index, 8);
+        append(1, 4); append(0, 4); append(group.second.size(), 4);
+        for (std::size_t index = 0; index < group.second.size(); ++index) {
+            append(group.second[index], 8); append(1, 8); append(index, 8);
+        }
+    }
+    const std::size_t offset = (source.size() + 63u) & ~std::size_t{63u};
+    const std::size_t segmentSize = (48u + payload.size() + 63u) & ~std::size_t{63u};
+    if (offset + segmentSize > UINT32_MAX) return {};
+    std::vector<std::uint8_t> bytes = source;
+    bytes.resize(offset + segmentSize, 0x70u);
+    std::fill(bytes.begin() + static_cast<std::ptrdiff_t>(offset),
+              bytes.begin() + static_cast<std::ptrdiff_t>(offset + 48u), 0u);
+    const auto put = [&bytes](std::size_t at, std::uint64_t value, unsigned count) {
+        for (unsigned i = 0; i < count; ++i)
+            bytes[at + i] = static_cast<std::uint8_t>(value >> (i * 8u));
+    };
+    put(offset, DRW_DataStorageConst::SEGMENT_SIGNATURE, 2);
+    std::copy_n("search", 6, bytes.begin() + static_cast<std::ptrdiff_t>(offset + 2u));
+    put(offset + 8u, parsed.segmentIndexEntryCount, 4);
+    put(offset + 16u, segmentSize, 4); put(offset + 24u, 1u, 4);
+    std::fill(bytes.begin() + static_cast<std::ptrdiff_t>(offset + 40u),
+              bytes.begin() + static_cast<std::ptrdiff_t>(offset + 48u), 0x55u);
+    std::copy(payload.begin(), payload.end(), bytes.begin() + static_cast<std::ptrdiff_t>(offset + 48u));
+    put(indexEntry, offset, 8); put(indexEntry + 8u, segmentSize, 4);
+    put(32u, parsed.segmentIndexEntryCount + 1u, 4);
+    put(44u, parsed.segmentIndexEntryCount, 4); put(52u, bytes.size(), 4);
+    return bytes;
+}
+
 bool runRawModelerDataStorageReplayContract() {
     const auto fail = [](const char* detail) {
         std::cerr << "AcDs/modeler replay test: " << detail << "\n";
@@ -21392,8 +21454,10 @@ bool runRawModelerDataStorageReplayContract() {
     const std::vector<LocalDataStorageWireRecord> records{
         {0x708u, 7u, payload}, {0x709u, 3u, unrelatedPayload},
         {0x704u, 7u, secondPayload}};
-    const std::vector<std::uint8_t> sectionBytes =
+    const std::vector<std::uint8_t> rawSectionBytes =
         makeLocalDataStorageRecordsAcDsBytes(records, {2u, 1u, 0u});
+    const std::vector<std::uint8_t> sectionBytes =
+        withLocalDataStorageSearch(rawSectionBytes);
     const DRW_DataStorageSection expectedStorage =
         DRW_parseDataStorage(sectionBytes, DRW::AC1027);
     const DRW_DataStorageRecord* expectedRecord =
@@ -21608,6 +21672,115 @@ bool runRawModelerDataStorageReplayContract() {
     const std::vector<std::uint8_t> decoyMarkerSection =
         makeLocalDataStorageRecordsAcDsBytes({
             {0x708u, 7u, payload}, {0x70Au, 3u, decoyMarkerPayload}});
+    // A single valid record isolates the search gate: no other SAB record can
+    // trigger the orphan check and mask a missing or forged search association.
+    const std::vector<std::uint8_t> singleNoSearch =
+        makeLocalDataStorageRecordAcDsBytes(0x708u, 7u, payload);
+    const std::vector<std::uint8_t> singleSearch =
+        withLocalDataStorageSearch(singleNoSearch);
+    const DRW_DataStorageSection singleMetadata =
+        DRW_parseDataStorage(singleSearch, DRW::AC1027, false);
+    if (singleSearch.empty() || singleMetadata.searchSegmentIndex < 0)
+        return fail("single search fixture");
+    const auto& searchSegment = singleMetadata.segments[
+        static_cast<std::size_t>(singleMetadata.searchSegmentIndex)];
+    const std::array<std::uint8_t, 8> modelerKey{{0x08u, 0x07u, 0, 0, 0, 0, 0, 0}};
+    auto searchBegin = singleSearch.cbegin() + static_cast<std::ptrdiff_t>(searchSegment.payloadOffset);
+    auto searchEnd = searchBegin + static_cast<std::ptrdiff_t>(searchSegment.payloadByteLength);
+    auto handleField = std::search(searchBegin, searchEnd, modelerKey.begin(), modelerKey.end());
+    if (handleField == searchEnd || std::distance(handleField, searchEnd) < 24)
+        return fail("search handle field");
+    const std::size_t handleOffset = static_cast<std::size_t>(handleField - singleSearch.cbegin());
+    auto wrongSearchHandle = singleSearch;
+    wrongSearchHandle[handleOffset] = 0x09u;
+    auto wrongSearchIndex = singleSearch;
+    wrongSearchIndex[handleOffset + 16u] = 0x7fu;
+    auto malformedSearch = singleSearch;
+    std::fill_n(malformedSearch.begin() + static_cast<std::ptrdiff_t>(searchSegment.payloadOffset), 4, 0xffu);
+    const auto rejectsSearchAndRetries = [&](const char* purpose,
+                                            const std::vector<std::uint8_t>& malformed) {
+        const auto path = makeOutputPath(purpose);
+        struct Cleanup { std::filesystem::path path; ~Cleanup() {
+            std::error_code error; std::filesystem::remove(path, error);
+        }} cleanup{path};
+        { std::ofstream sentinel(path, std::ios::binary); sentinel << "prior destination"; }
+        dwgRW codec(path.string().c_str());
+        LocalRawReplayInterface adapter(&codec, false, malformed, true, payload);
+        if (codec.write(&adapter, DRW::AC1027, true)) return false;
+        std::ifstream before(path, std::ios::binary);
+        const std::string saved{std::istreambuf_iterator<char>(before), {}};
+        before.close();
+        if (saved != "prior destination") return false;
+        adapter.acdsSection_.m_data = singleSearch;
+        if (!codec.write(&adapter, DRW::AC1027, true)) return false;
+        dwgRW reader(path.string().c_str());
+        LocalRawReplayInterface captured;
+        if (!reader.read(&captured, true) || captured.data_.dataStorageSections.size() != 1u)
+            return false;
+        const auto* record = captured.data_.dataStorageSections.front().findRecordByHandle(0x708u);
+        return record && record->payload == payload;
+    };
+    const bool missingSearchRejected = rejectsSearchAndRetries("acds-missing-search", singleNoSearch);
+    const bool wrongSearchHandleRejected = rejectsSearchAndRetries("acds-wrong-search-handle", wrongSearchHandle);
+    const bool wrongSearchIndexRejected = rejectsSearchAndRetries("acds-wrong-search-index", wrongSearchIndex);
+    const bool malformedSearchRejected = rejectsSearchAndRetries("acds-malformed-search", malformedSearch);
+    const auto& pairedSearchSegment = expectedStorage.segments[
+        static_cast<std::size_t>(expectedStorage.searchSegmentIndex)];
+    auto pairedBegin = sectionBytes.cbegin() + static_cast<std::ptrdiff_t>(pairedSearchSegment.payloadOffset);
+    auto pairedEnd = pairedBegin + static_cast<std::ptrdiff_t>(pairedSearchSegment.payloadByteLength);
+    const std::array<std::uint8_t, 8> secondKey{{0x04u, 0x07u, 0, 0, 0, 0, 0, 0}};
+    const auto pairedFirst = std::search(pairedBegin, pairedEnd, modelerKey.begin(), modelerKey.end());
+    const auto pairedSecond = std::search(pairedBegin, pairedEnd, secondKey.begin(), secondKey.end());
+    if (pairedFirst == pairedEnd || pairedSecond == pairedEnd
+        || std::distance(pairedFirst, pairedEnd) < 24
+        || std::distance(pairedSecond, pairedEnd) < 24)
+        return fail("paired search handle fields");
+    const std::size_t firstIndex = static_cast<std::size_t>(pairedFirst - sectionBytes.cbegin()) + 16u;
+    const std::size_t secondIndex = static_cast<std::size_t>(pairedSecond - sectionBytes.cbegin()) + 16u;
+    if (sectionBytes[firstIndex] == sectionBytes[secondIndex])
+        return fail("paired search index setup");
+    auto swappedSearch = sectionBytes;
+    std::swap(swappedSearch[firstIndex], swappedSearch[secondIndex]);
+    auto duplicatedSearch = sectionBytes;
+    duplicatedSearch[firstIndex] = duplicatedSearch[secondIndex];
+    const auto rejectsPairedSearchAndRetries = [&](const char* purpose,
+                                                   const std::vector<std::uint8_t>& malformed) {
+        const auto path = makeOutputPath(purpose);
+        struct Cleanup { std::filesystem::path path; ~Cleanup() {
+            std::error_code error; std::filesystem::remove(path, error);
+        }} cleanup{path};
+        { std::ofstream sentinel(path, std::ios::binary); sentinel << "prior destination"; }
+        dwgRW codec(path.string().c_str());
+        if (!codec.reserveHandle(0x708u) || !codec.reserveHandle(0x704u)) return false;
+        LocalRawReplayInterface adapter(&codec, false, malformed, true, payload, secondPayload, true);
+        if (codec.write(&adapter, DRW::AC1027, true)) return false;
+        std::ifstream before(path, std::ios::binary);
+        const std::string saved{std::istreambuf_iterator<char>(before), {}};
+        before.close();
+        if (saved != "prior destination") return false;
+        adapter.acdsSection_.m_data = sectionBytes;
+        if (!codec.write(&adapter, DRW::AC1027, true)) return false;
+        dwgRW reader(path.string().c_str()); LocalRawReplayInterface captured;
+        if (!reader.read(&captured, true) || captured.data_.dataStorageSections.size() != 1u)
+            return false;
+        const auto& storage = captured.data_.dataStorageSections.front();
+        const auto* first = storage.findRecordByHandle(0x708u);
+        const auto* second = storage.findRecordByHandle(0x704u);
+        return first && second && first->payload == payload && second->payload == secondPayload;
+    };
+    auto reorderedDataIndex = sectionBytes;
+    if (expectedStorage.dataIndexSegmentIndex < 0 || expectedStorage.dataIndexEntries.size() != 3u)
+        return fail("paired data index setup");
+    const auto& dataIndexSegment = expectedStorage.segments[
+        static_cast<std::size_t>(expectedStorage.dataIndexSegmentIndex)];
+    const auto firstRow = static_cast<std::size_t>(dataIndexSegment.payloadOffset) + 8u;
+    if (firstRow > reorderedDataIndex.size() || reorderedDataIndex.size() - firstRow < 36u)
+        return fail("paired data index range");
+    for (std::size_t i = 0; i < 12u; ++i)
+        std::swap(reorderedDataIndex[firstRow + i], reorderedDataIndex[firstRow + 24u + i]);
+    const bool swappedSearchRejected = rejectsPairedSearchAndRetries("acds-swapped-search-index", swappedSearch);
+    const bool duplicatedSearchRejected = rejectsPairedSearchAndRetries("acds-duplicated-search-index", duplicatedSearch);
+    const bool reorderedDataIndexRejected = rejectsPairedSearchAndRetries("acds-reordered-data-index", reorderedDataIndex);
     const bool missingSectionRejected =
         rejectsWrite("acds-missing-section", {}, payload, true);
     const bool wrongPayloadRejected =
@@ -21622,7 +21795,9 @@ bool runRawModelerDataStorageReplayContract() {
         "acds-duplicate-handle", duplicateHandleSection, payload, true);
     const bool decoyMarkerRejected = rejectsWrite(
         "acds-decoy-marker", decoyMarkerSection, payload, true);
-    if (!missingSectionRejected || !wrongPayloadRejected
+    if (!missingSearchRejected || !wrongSearchHandleRejected || !wrongSearchIndexRejected
+        || !swappedSearchRejected || !duplicatedSearchRejected || !reorderedDataIndexRejected
+        || !malformedSearchRejected || !missingSectionRejected || !wrongPayloadRejected
         || !wrongHandleRejected || !wrongSchemaRejected
         || !orphanMarkerRejected || !duplicateHandleRejected
         || !decoyMarkerRejected)
@@ -21633,7 +21808,9 @@ bool runRawModelerDataStorageReplayContract() {
                   << " orphan=" << orphanMarkerRejected
                   << " duplicate=" << duplicateHandleRejected
                   << " decoy=" << decoyMarkerRejected << "\n";
-    return missingSectionRejected && wrongPayloadRejected
+    return missingSearchRejected && wrongSearchHandleRejected && wrongSearchIndexRejected
+        && swappedSearchRejected && duplicatedSearchRejected && reorderedDataIndexRejected
+        && malformedSearchRejected && missingSectionRejected && wrongPayloadRejected
         && wrongHandleRejected && wrongSchemaRejected
         && orphanMarkerRejected && duplicateHandleRejected
         && decoyMarkerRejected
@@ -21685,6 +21862,8 @@ bool runRawModelerDataStorageBlobReplayContract() {
         || !putU32(dataIndexOffset + 56u + 8u, 7u))
         return false;
 
+    fixture.bytes = withLocalDataStorageSearch(fixture.bytes);
+    if (fixture.bytes.empty()) return false;
     const DRW_DataStorageSection metadata =
         DRW_parseDataStorage(fixture.bytes, DRW::AC1027, false);
     const DRW_DataStorageRecord* blobRecord =

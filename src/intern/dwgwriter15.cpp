@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <map>
 #include <set>
 
 #include "../drw_base.h"
@@ -42,6 +43,133 @@ namespace {
 
 constexpr std::uint32_t kMaxDwgBlockRecordPreviewBytes = 0xA00000u;
 constexpr int kDwgBlockRecordFlagsMask = 0x7Fu;
+
+// ODA 24.2.2.7.1: AutoCAD needs the schema-search entries to find
+// DataStorage-backed entities. Validate the exact modeler associations while
+// keeping unrelated opaque records available for raw section replay.
+bool validateModelerDataStorageSearch(
+    const DRW_DataStorageSection& section, const std::uint8_t* bytes,
+    std::size_t byteLength,
+    const std::set<std::pair<std::uint32_t, std::uint64_t>>& required) {
+    if (required.empty())
+        return true;
+    if (bytes == nullptr || section.searchSegmentIndex < 0
+        || static_cast<std::size_t>(section.searchSegmentIndex)
+               >= section.segments.size())
+        return false;
+    const auto& segment = section.segments[section.searchSegmentIndex];
+    if (segment.kind != DRW_DataStorageSegmentKind::Search
+        || segment.payloadOffset > byteLength
+        || segment.payloadByteLength > byteLength - segment.payloadOffset)
+        return false;
+    std::size_t cursor = static_cast<std::size_t>(segment.payloadOffset);
+    const std::size_t end = cursor + segment.payloadByteLength;
+    const auto read = [&](unsigned length, std::uint64_t& value) {
+        if (length > end - cursor)
+            return false;
+        value = 0;
+        for (unsigned n = 0; n < length; ++n)
+            value |= static_cast<std::uint64_t>(bytes[cursor++]) << (8u * n);
+        return true;
+    };
+    try {
+        // ODA's sequential sorted-index profile is interpreted in data-index
+        // order, per schema. Bind each row through its exact segment/local
+        // offset rather than relying on record-vector order.
+        using Location = std::pair<std::uint32_t, std::uint32_t>;
+        using Expected = std::map<std::uint64_t, std::uint64_t>;
+        std::map<std::uint32_t, Expected> expected;
+        for (const auto& pair : required)
+            expected.emplace(pair.first, Expected{});
+        std::map<Location, const DRW_DataStorageRecord*> byLocation;
+        for (const auto& record : section.records) {
+            if (expected.count(record.schemaIndex) != 0
+                && !byLocation.emplace(Location{record.segmentIndex, record.localOffset},
+                                       &record).second)
+                return false;
+        }
+        std::set<Location> usedLocations;
+        for (const auto& entry : section.dataIndexEntries) {
+            auto schema = expected.find(entry.schemaIndex);
+            if (schema == expected.end() || entry.segmentIndex == 0u)
+                continue;
+            const Location location{entry.segmentIndex, entry.localOffset};
+            const auto record = byLocation.find(location);
+            if (record == byLocation.end() || !usedLocations.insert(location).second
+                || record->second->schemaIndex != entry.schemaIndex
+                || !schema->second.emplace(record->second->handle,
+                                           schema->second.size()).second)
+                return false;
+        }
+        if (usedLocations.size() != byLocation.size())
+            return false;
+        for (const auto& pair : required) {
+            const auto schema = expected.find(pair.first);
+            if (schema == expected.end() || schema->second.count(pair.second) != 1u)
+                return false;
+        }
+
+        std::uint64_t schemaCount = 0;
+        if (!read(4, schemaCount) || schemaCount > (end - cursor) / 16u)
+            return false;
+        std::set<std::uint32_t> seenSchemas;
+        std::set<std::pair<std::uint32_t, std::uint64_t>> found;
+        for (std::uint64_t schema = 0; schema < schemaCount; ++schema) {
+            std::uint64_t name = 0, sortedCount = 0;
+            if (!read(4, name) || !read(8, sortedCount)
+                || sortedCount > (end - cursor) / 8u)
+                return false;
+            const auto schemaName = static_cast<std::uint32_t>(name);
+            const auto wanted = expected.find(schemaName);
+            if (wanted != expected.end()
+                && (!seenSchemas.insert(schemaName).second
+                    || sortedCount != wanted->second.size()))
+                return false;
+            for (std::uint64_t i = 0, index = 0; i < sortedCount; ++i) {
+                if (!read(8, index) || (wanted != expected.end() && index != i))
+                    return false;
+            }
+            std::uint64_t groups = 0;
+            if (!read(4, groups) || groups > (end - cursor) / 4u)
+                return false;
+            if (groups != 0) {
+                std::uint64_t unknown = 0;
+                if (!read(4, unknown)) return false;
+            }
+            for (std::uint64_t group = 0; group < groups; ++group) {
+                std::uint64_t entries = 0;
+                if (!read(4, entries) || entries > (end - cursor) / 16u)
+                    return false;
+                for (std::uint64_t entry = 0; entry < entries; ++entry) {
+                    std::uint64_t handle = 0, indexCount = 0;
+                    if (!read(8, handle) || !read(8, indexCount)
+                        || indexCount > (end - cursor) / 8u)
+                        return false;
+                    Expected::const_iterator record;
+                    if (wanted != expected.end()) {
+                        record = wanted->second.find(handle);
+                        if (record == wanted->second.end() || indexCount != 1u
+                            || !found.emplace(schemaName, handle).second)
+                            return false;
+                    }
+                    for (std::uint64_t i = 0, index = 0; i < indexCount; ++i) {
+                        if (!read(8, index)
+                            || (wanted != expected.end() && index != record->second))
+                            return false;
+                    }
+                }
+            }
+        }
+        if (seenSchemas.size() != expected.size())
+            return false;
+        std::size_t expectedCount = 0;
+        for (const auto& schema : expected)
+            expectedCount += schema.second.size();
+        return found.size() == expectedCount;
+    } catch (...) {
+        return false;
+    }
+}
 
 struct DataStoragePayloadInspection {
     bool hasAcisMarker = false;
@@ -7471,6 +7599,18 @@ bool dwgWriter15::validatePendingModelerDataStorageReplay(
         if (m_blockOwnedEntityHandles.count(
                 std::make_pair(membershipOwner, pending.modelerHandle)) == 0u)
             return false;
+    }
+
+    try {
+        std::set<std::pair<std::uint32_t, std::uint64_t>> requiredSearch;
+        for (const PendingModelerDataStorageReplay& pending :
+             m_pendingModelerDataStorageReplay)
+            requiredSearch.emplace(pending.schemaIndex, pending.recordHandle);
+        if (!validateModelerDataStorageSearch(
+                *section, sectionBytes, sectionByteLength, requiredSearch))
+            return false;
+    } catch (...) {
+        return false;
     }
 
     // A marker-bearing payload that the old retaining parse would have copied
