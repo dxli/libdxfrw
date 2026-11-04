@@ -8907,10 +8907,10 @@ bool DRW_Vport::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
         const auto reference = [version, typedNullReferences](std::uint32_t ref,
                                                               std::uint8_t role) {
             dwgHandle value = makeRefW(ref, role);
-            // ODA-produced AC1021 and AC1024 *ACTIVE VPORT records store
-            // typed nulls for these three slots. Keep caller records and
-            // other versions on their existing paths.
-            if ((version == DRW::AC1021 || version == DRW::AC1024)
+            // ODA-produced AC1021, AC1024 and AC1027 *ACTIVE records
+            // store typed nulls here; caller records retain their path.
+            if ((version == DRW::AC1021 || version == DRW::AC1024
+                 || version == DRW::AC1027)
                 && typedNullReferences && ref == 0u)
                 value.code = role;
             return value;

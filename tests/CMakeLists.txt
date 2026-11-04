@@ -5078,3 +5078,6 @@ target_include_directories(libdxfrw_dxf_sectionobject_411_tests PRIVATE ${CMAKE_
 target_link_libraries(libdxfrw_dxf_sectionobject_411_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dxf_sectionobject_411 COMMAND libdxfrw_dxf_sectionobject_411_tests)
 set_tests_properties(libdxfrw_dxf_sectionobject_411 PROPERTIES LABELS "fast;dxf;section;raw" TIMEOUT 30)
+
+add_test(NAME libdxfrw_ac1027_active_vport_peer COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/ac1027_active_vport_peer_tests.py)
+set_tests_properties(libdxfrw_ac1027_active_vport_peer PROPERTIES LABELS "dwg;fast;AC1027;peer" TIMEOUT 30)

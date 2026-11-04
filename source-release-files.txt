@@ -356,6 +356,7 @@ tests/ac1024_candidate_fields_v2_live.py
 tests/ac1024_candidate_self_test.py
 tests/ac1027_acds_source_compare.py
 tests/ac1027_acds_source_probe.cpp
+tests/ac1027_active_vport_peer_tests.py
 tests/ac1027_block_control_peer_audit_tests.py
 tests/ac1027_empty_view_ucs_peer_tests.py
 tests/ac1027_material_peer_audit_tests.py
@@ -689,6 +690,7 @@ tools/audit_ac1024_rastervariables_frame1_source.py
 tools/audit_ac1024_rastervariables_source.py
 tools/audit_ac1024_tilted_geometry.py
 tools/audit_ac1024_vport_null_roles.py
+tools/audit_ac1027_active_vport_peer.py
 tools/audit_ac1027_block_control_peer.py
 tools/audit_ac1027_empty_view_ucs_peer.py
 tools/audit_ac1027_header_suffix_compare.py

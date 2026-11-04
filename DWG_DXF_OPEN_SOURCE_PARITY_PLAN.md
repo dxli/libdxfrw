@@ -886,6 +886,12 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+The bounded synthetic AC1027 active VPORT now writes the three observed typed
+null handle roles. ODA converts only a diagnostic copy with a changed file
+header byte; the unmodified writer output still fails, so header and whole-file
+qualification remain open
+([receipt](docs/research/p6-ac1027-synthetic-vport-null-roles-2026-11-04.json)).
+
 DWG VIEW table twist angles now convert radians to the existing degree-valued
 DXF API and back. Consumers compensating for the former raw-radian callback
 must remove that workaround. VIEWPORT entity angles, broader producer coverage
