@@ -4,6 +4,7 @@
 #include "intern/dwgwriter24.h"
 #include "intern/dwgwriter27.h"
 #include "intern/dwgobjectframe.h"
+#include "intern/drw_textcodec.h"
 #include <algorithm>
 #include <atomic>
 #include <cstdlib>
@@ -35,6 +36,8 @@ public:
             DRW::DwgAcadGroupDictionaryHandle, 0, dict, current);
     }
 };
+
+class MaterialSemanticProbe : public DRW_Material { public: using DRW_Material::parseDwg; };
 
 class DwgBlockRecordXrefWireTestAccess {
 public:
@@ -86,6 +89,19 @@ public:
         if(!frame.readAt(buf,DRW::AC1027,it->second))return false;
         const auto expected=727u+(handle>0xffu?8u:0u);
         if(frame.objectDataBitSize()!=expected || r.dataBitSize!=frame.body().size()*8u) return false;
+        DRW_TextCodec codec;codec.setVersion(DRW::AC1027,false);
+        auto selectedBytes=frame.body();dwgBuffer original(selectedBytes.data(),selectedBytes.size(),&codec);MaterialSemanticProbe selected;
+        if(!selected.parseDwg(DRW::AC1027,&original,frame.bodyBitSize())
+            || !selected.hasCompleteDwgSemanticFields() || !selected.hasDwgRawData()
+            || selected.dwgRawDataBitSize()!=550u || selected.m_name!="Global")return false;
+        // Change one character in the independently bounded detached name;
+        // the frame remains parseable, but this is outside the exact default profile.
+        const auto bit=expected-17u-120u+10u+7u;
+        selectedBytes.at(bit/8u)^=static_cast<std::uint8_t>(1u<<(7u-bit%8u));
+        dwgBuffer changed(selectedBytes.data(),selectedBytes.size(),&codec);MaterialSemanticProbe unmatched;
+        if(!unmatched.parseDwg(DRW::AC1027,&changed,frame.bodyBitSize())
+            || unmatched.hasCompleteDwgSemanticFields() || !unmatched.hasDwgRawData()
+            || unmatched.dwgRawDataBitSize()!=550u || unmatched.m_name=="Global")return false;
         std::size_t count=0;
         for(const auto& o:r.occurrences)if(o.stream==DRW::DwgObjectHandleStream::Handles){
             if(o.serializedSegment!=DRW::DwgObjectSerializedSegment::Data || o.token.code!=DRW::DwgSoftPointer || o.token.reference!=dict || o.token.startBit<expected) return false;
@@ -400,8 +416,8 @@ struct Capture : LC3CompatCheck {
             || m.reactorHandles!=std::vector<std::uint32_t>{dictionary}
             || (requireSemantic && (!m.hasCompleteDwgSemanticFields()
                 || m.m_diffuseColorValue!=0xc2ffffffu || m.m_channelFlags!=63))
-            || (!requireSemantic && (m.hasCompleteDwgSemanticFields()
-                || !m.hasDwgRawData() || m.dwgRawDataVersion()!=rawVersion
+            || (!requireSemantic && m.hasCompleteDwgSemanticFields())
+            || (requireRaw && (!m.hasDwgRawData() || m.dwgRawDataVersion()!=rawVersion
                 || m.dwgRawDataBitSize()!=550u))) valid=false;
         materials.push_back({m.m_name,m.handle});
     }
@@ -420,15 +436,16 @@ struct Capture : LC3CompatCheck {
     std::uint32_t root=0,dictionary=0,owner=0,layerMaterial=0;
     std::array<std::uint32_t,3> children{};
     std::vector<std::pair<std::string,std::uint32_t>> materials;
-    bool valid=true, requireSemantic=true;
+    bool valid=true, requireSemantic=true, requireRaw=false;
     DRW::Version rawVersion=DRW::AC1021;
 };
 bool inspect(const std::string& path,const std::array<std::uint32_t,4>& h,bool supplied,
              DRW::Version version) {
     dwgRW reader(path.c_str()); Capture capture;
-    // AC1021 and AC1027 retain MATERIAL semantic fields as opaque data; peer
-    // readback checks the bounded source-derived profile independently.
-    capture.requireSemantic = version == DRW::AC1024;
+    // Only the exact AC1027 default body/string profile is promoted; its
+    // retained raw tail still carries 550 bits. AC1021 remains opaque.
+    capture.requireSemantic = version == DRW::AC1024 || version == DRW::AC1027;
+    capture.requireRaw = version == DRW::AC1021 || version == DRW::AC1027;
     capture.rawVersion = version;
     const bool r = reader.read(&capture,false); const bool m = capture.matches(h,supplied); if (!r || !m) std::cerr << "inspect read=" << r << " match=" << m << " root=" << capture.root << " dict=" << capture.dictionary << " layer=" << capture.layerMaterial << " materials=" << capture.materials.size() << " valid=" << capture.valid << "\n"; return r && m;
 }
