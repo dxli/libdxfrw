@@ -47,7 +47,7 @@ Phase rows express aggregate exit gates, not item-level completion counts.
 
 | ID | State | Remaining result | Dependency |
 | --- | --- | --- | --- |
-| P4 | OPEN — source and graph closure | Resolve the AC1027 ENC targets `0x35`–`0x38` before admitting those references. Keep AC1018 ET Border and AC1024 title-block named-block SORTENTSTABLE graphs refused until an authoritative owner mapping is available. Establish a source- and consumer-backed route for AC1018 empty-name STYLE `0xDF`. Extend proxy output only for evidenced nested/raw/OBJECTS targets, owner roles, recursive dependencies, EED/common references, unknown-data slots, and mixed ACDS graphs. Qualify physical/native GEODATA, broader physical/native RASTERVARIABLES profiles, WIPEOUTVARIABLES, and LayerStates profiles. The exact AC1027 direct-NOD source/field and generated adapter profile is covered by the [receipt](docs/research/p4-rastervariables-ac1027-direct-nod-owner-2026-11-03.json); physical whole-source output and native image behavior remain unqualified. Keep WIPEOUTVARIABLES DXF modes outside 0/1 refused. The bounded AC1024 `ACAD_SUN` / `360` soft-owner dictionary graph now has exact role checks and generated ASCII/Binary readback; physical whole-file output and native lighting remain unqualified ([receipt](docs/research/p4-ac1024-acad-sun-dictionary-soft-owner-output-2026-11-03.json)). | ODA source layout, exact target kind/owner evidence, and complete typed readback; preserve atomic refusal for unclosed graphs. |
+| P4 | OPEN — source and graph closure | Resolve the AC1027 ENC targets `0x35`–`0x38` before admitting those references. Keep AC1018 ET Border and AC1024 title-block named-block SORTENTSTABLE graphs refused until an authoritative owner mapping is available. Establish a source- and consumer-backed route for AC1018 empty-name STYLE `0xDF`. Extend proxy output only for evidenced nested/raw/OBJECTS targets, owner roles, recursive dependencies, EED/common references, unknown-data slots, and mixed ACDS graphs. Qualify physical/native GEODATA, broader physical/native RASTERVARIABLES profiles, WIPEOUTVARIABLES, and LayerStates profiles. The exact AC1021/AC1027 direct-NOD source/field/common-link and generated adapter profiles are covered by the [receipt](docs/research/p4-rastervariables-ac1021-ac1027-direct-nod-owner-2026-11-03.json); physical whole-source output and native image behavior remain unqualified. Keep WIPEOUTVARIABLES DXF modes outside 0/1 refused. The bounded AC1024 `ACAD_SUN` / `360` soft-owner dictionary graph now has exact role checks and generated ASCII/Binary readback; physical whole-file output and native lighting remain unqualified ([receipt](docs/research/p4-ac1024-acad-sun-dictionary-soft-owner-output-2026-11-03.json)). | ODA source layout, exact target kind/owner evidence, and complete typed readback; preserve atomic refusal for unclosed graphs. |
 | P5 | OPEN — dynamic-block semantics, rendering and TABLE profiles | Establish native evaluation for the AC1024 dynamic-block graph after P4 owner closure. Resolve remaining FIELD flags/child profiles and AcObjProp spans/handle roles before output; qualify physical producer/version coverage and native FIELD evaluation. Close nonzero TABLEGEOMETRY spans, CONTENTFORMAT/CELLSTYLEMAP combinations, overlapping edge semantics, remaining AC1018 TABLE profiles, and VIEWPORT reference/rendering behavior. | P4 graph closure where required; source-backed fields plus native consumer evidence for semantic claims. |
 | P6 | OPEN — version, schema and semantic residuals | Resolve the reproduced AC1024 ACSH Loft/Revolve body spans with independent field and following-handle evidence. Explain the AC1027 Cover suffix and AC1032 resave HEADER suffix; keep strict output refused while bytes remain unclaimed. Qualify TABLEGEOMETRY nonzero source spans, uncovered revision/route profiles, associative semantics, HATCH/MPOLYGON/MESH, annotation/geometry, units/inheritance, and unknown/proxy data. Finish remaining safety/caller-state and CLI/oracle contracts without broad full-suite runs. | Read ODA v5.4.1 before DWG layout changes; trace current source failures; use focused fast controls and retain unknown data. |
 | P7 | OPEN — ACIS/ACDS and independent 3D meaning | Complete DWG entity-to-owner/key-to-AcDs segment-to-SAT/SAB associations, versioned framing/index/suffix/prototype assembly, and exact output binding. Qualify placements, units/transforms, topology, trims, periodicity and spline meaning. Obtain independent kernel measurements for each claimed profile; otherwise refuse required 3D data atomically. | P4 graph/output bindings and a genuinely independent semantic/kernel reader for the claimed profile. |
@@ -1126,18 +1126,22 @@ eligible reader. The exact package and environment result are in the
   This closes only identity transport; physical producer coverage, native
   image/wipeout display behavior, and complete drawing qualification remain
   open.
-  Adapter output now also admits the bounded AC1027 direct NOD →
-  `ACAD_IMAGE_VARS` → `RASTERVARIABLES` owner route, alongside the existing
-  nested dictionary route. A physical `Cover.dwg` witness confirms handle
-  `0x6E`, NOD owner `0x0C`, class version 0, image frame 0, image quality 1,
-  and units 1; Autodesk documents the direct owner edge and fixed group-90
-  value. Generated AC1027 ASCII/Binary controls verify exact root/object
-  readback, nonzero class-version and out-of-range-unit refusal, destination
-  preservation, same-adapter retry, and source-frame binding. See the
-  [direct-owner receipt](docs/research/p4-rastervariables-ac1027-direct-nod-owner-2026-11-03.json).
-  The physical sample selector verifies import only. Whole-source output is
-  still blocked by its unrelated ACAD_LAYOUT and HEADER-integrity gaps, and
-  native image semantics and broader producer/version coverage remain open.
+  Adapter output now admits bounded AC1021 and AC1027 direct NOD →
+  `ACAD_IMAGE_VARS` → `RASTERVARIABLES` owner routes, alongside the existing
+  nested dictionary route. Physical `children-room-decoration.dwg` and
+  `Cover.dwg` witnesses confirm class version 0, their revision-specific
+  image-frame fields, image quality 1, units 1, and one soft-pointer reactor
+  back to owner NOD `0x0C`; both also carry the XDictionary-missing flag with no
+  XDictionary handle. Autodesk specifies the direct owner entry and class
+  version, and ODA §20.1/§20.4.91 defines the common reactor pointer role.
+  Generated AC1021/AC1027 ASCII/Binary controls verify exact root/object/reactor
+  readback, wrong-reactor, nonzero-class-version and out-of-range-unit
+  refusals, destination preservation, same-adapter retry, and source-frame
+  binding. See the
+  [direct-owner receipt](docs/research/p4-rastervariables-ac1021-ac1027-direct-nod-owner-2026-11-03.json).
+  The physical selectors verify import only. Whole-source output remains
+  blocked by the samples' unrelated read/layout-integrity gaps, and native
+  image semantics and broader producer/version coverage remain open.
   The low-level WIPEOUT writer now translates both IMAGEDEF and IMAGEDEF_REACTOR
   references through the configured resolver or remap fallback; see the
   [WIPEOUT reference receipt](docs/research/p8-wipeout-dxf-reference-remapping-2026-11-03.json).

@@ -11601,18 +11601,31 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     } else if (frame.rasterVariables != nullptr) {
                         const DRW_RasterVariables& variables =
                             *frame.rasterVariables;
+                        const bool exactDirectNodReactor =
+                            data->sourceFormat == dx_source_format::DWG
+                            && (data->sourceVersion == DRW::AC1021
+                                || data->sourceVersion == DRW::AC1027)
+                            && data->hasNamedObjectDictionary
+                            && variables.parentHandle
+                                == data->namedObjectDictionary.handle
+                            && variables.reactorCount() == 1
+                            && variables.reactorHandles.size() == 1u
+                            && variables.reactorHandles.front()
+                                == data->namedObjectDictionary.handle;
                         if (data->sourceFormat != dx_source_format::DWG
-                            || data->sourceVersion != DRW::AC1027
+                            || (data->sourceVersion != DRW::AC1021
+                                && data->sourceVersion != DRW::AC1027)
                             || variables.parentHandle != entry.parentHandle
-                            || !variables.reactorHandles.empty()
-                            || variables.reactorCount() != 0
+                            || ((!variables.reactorHandles.empty()
+                                    || variables.reactorCount() != 0)
+                                && !exactDirectNodReactor)
                             || variables.xDictHandle != 0u
-                            || variables.extensionDictionaryFlag() != 0u
+                            || variables.extensionDictionaryFlag() > 1u
                             || variables.hasDataStorageBinaryData()
                             || !variables.appData.empty()
                             || !variables.extData.empty())
                             return reject(ExtensionGraphFailure::InvalidGraph,
-                                "RASTERVARIABLES is outside the bounded AC1027 DWG dictionary-owned profile");
+                                "RASTERVARIABLES is outside the bounded AC1021/AC1027 DWG owner profile");
                     } else if (frame.wipeoutVariables != nullptr) {
                         const DRW_WipeoutVariables& variables =
                             *frame.wipeoutVariables;
@@ -11761,9 +11774,21 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             return false;
                         if (reactor == 0)
                             return reject();
+                        const bool directRasterVariablesNodReactor =
+                            frame.rasterVariables != nullptr
+                            && data->sourceFormat == dx_source_format::DWG
+                            && (data->sourceVersion == DRW::AC1021
+                                || data->sourceVersion == DRW::AC1027)
+                            && data->hasNamedObjectDictionary
+                            && entry.parentHandle
+                                == data->namedObjectDictionary.handle
+                            && reactor == entry.parentHandle
+                            && frame.rasterVariables->reactorCount() == 1
+                            && entry.reactorHandles.size() == 1u;
                         // Non-owning back-edges may refer to gray containment
                         // nodes. Both soft/hard dictionary entries remain owning.
-                        if (linetypeHandles.count(reactor) == 0
+                        if (!directRasterVariablesNodReactor
+                            && linetypeHandles.count(reactor) == 0
                             && groupReferenceHandles.count(reactor) == 0
                             && imageDefinitionOwners.count(reactor) == 0
                             && generatedDictionaryOwners.count(reactor) == 0
@@ -70909,10 +70934,12 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
              && current->first.first == generation;
          ++current)
         ++typedCount;
+    const bool supportedRevision = cData->sourceVersion == DRW::AC1021
+        || cData->sourceVersion == DRW::AC1027;
     if (typedCount != 0u
-        && (cData->sourceVersion != DRW::AC1027
-            || targetVersion != cData->sourceVersion))
-        return fail("output requires same-revision AC1027 source and target");
+        && (!supportedRevision || targetVersion != cData->sourceVersion))
+        return fail(
+            "output requires same-revision AC1021 or AC1027 source and target");
 
     const bool completeClassReport = cData->dwgClassCoverage.m_complete
         && cData->dwgClassCoverage.m_status
@@ -70995,6 +71022,18 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
              ++current) {
             const DRW_RasterVariables& variables = current->second;
             // Autodesk documents RASTERVARIABLES group 90 as fixed 0.
+            const bool noReactors = variables.reactorHandles.empty()
+                && variables.reactorCount() == 0;
+            const bool exactDirectNodReactor =
+                (cData->sourceVersion == DRW::AC1021
+                    || cData->sourceVersion == DRW::AC1027)
+                && cData->hasNamedObjectDictionary
+                && variables.parentHandle
+                    == cData->namedObjectDictionary.handle
+                && variables.reactorCount() == 1
+                && variables.reactorHandles.size() == 1u
+                && variables.reactorHandles.front()
+                    == cData->namedObjectDictionary.handle;
             if (current->first.second == 0u
                 || current->first.second == DRW::NoHandle
                 || variables.handle != current->first.second
@@ -71013,10 +71052,9 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                     > std::numeric_limits<std::int16_t>::max()
                 || variables.parentHandle == 0u
                 || variables.parentHandle == DRW::NoHandle
-                || !variables.reactorHandles.empty()
-                || variables.reactorCount() != 0
+                || (!noReactors && !exactDirectNodReactor)
                 || variables.xDictHandle != 0u
-                || variables.extensionDictionaryFlag() != 0u
+                || variables.extensionDictionaryFlag() > 1u
                 || variables.hasDataStorageBinaryData()
                 || !variables.appData.empty() || !variables.extData.empty()
                 || !outputHandles.insert(variables.handle).second)
@@ -71041,8 +71079,12 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                     sourceFrame.m_commonLinkEvidence))
                 return fail("source frame common-link evidence is unvalidated");
             if (sourceFrame.m_parentHandle != variables.parentHandle
-                || !sourceFrame.m_reactorHandles.empty()
-                || sourceFrame.m_xDictHandle != 0u)
+                || sourceFrame.m_reactorHandles
+                    != variables.reactorHandles
+                || sourceFrame.m_numReactors != variables.reactorCount()
+                || sourceFrame.m_xDictHandle != 0u
+                || sourceFrame.m_xDictFlag
+                    != variables.extensionDictionaryFlag())
                 return fail("source frame common metadata differs from typed record");
 
             const DRW_Dictionary* owner = nullptr;
@@ -76478,7 +76520,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             const bool closedRasterVariables =
                 targetRasterVariables != nullptr
                 && cData->sourceFormat == dx_source_format::DWG
-                && cData->sourceVersion == DRW::AC1027
+                && (cData->sourceVersion == DRW::AC1021
+                    || cData->sourceVersion == DRW::AC1027)
                 && key == "ACAD_IMAGE_VARS"
                 && targetRasterVariables->parentHandle
                     == cData->namedObjectDictionary.handle

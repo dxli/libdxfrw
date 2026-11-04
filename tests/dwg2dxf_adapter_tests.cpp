@@ -67499,7 +67499,8 @@ bool geodataDwgAdapterTransport() {
 
 bool rasterVariablesDwgAdapterTransport(
         const std::filesystem::path& physicalSourcePath = {},
-        bool directNodOwner = false) {
+        bool directNodOwner = false,
+        DRW::Version revision = DRW::AC1027) {
     const bool generatedSource = physicalSourcePath.empty();
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch()
@@ -67535,7 +67536,8 @@ bool rasterVariablesDwgAdapterTransport(
 
     class Author final : public dx_iface {
     public:
-        explicit Author(dwgRW& output, bool directNodOwner)
+        explicit Author(dwgRW& output, bool directNodOwner,
+                        DRW::Version revision)
             : output(output), directNodOwner(directNodOwner) {
             cData = &storage;
             currentBlock = storage.mBlock;
@@ -67547,9 +67549,17 @@ bool rasterVariablesDwgAdapterTransport(
             variables.parentHandle = directNodOwner
                 ? DRW::DwgNamedObjectsDictionaryHandle : dictionary.handle;
             variables.m_classVersion = 0;
-            variables.m_imageFrame = directNodOwner ? 0 : 1;
+            variables.m_imageFrame = directNodOwner
+                ? (revision == DRW::AC1021 ? 1 : 0) : 1;
             variables.m_imageQuality = directNodOwner ? 1 : 2;
             variables.m_units = directNodOwner ? 1 : 3;
+            if (directNodOwner
+                && (revision == DRW::AC1021
+                    || revision == DRW::AC1027)) {
+                variables.reactorHandles = {
+                    DRW::DwgNamedObjectsDictionaryHandle};
+                variables.setDwgCommonObjectState(1, 1, false);
+            }
             if (!directNodOwner)
                 dictionary.m_entries = {{"RASTERVARIABLES", variables.handle}};
         }
@@ -67594,17 +67604,21 @@ bool rasterVariablesDwgAdapterTransport(
     std::string expectedRootKey = directNodOwner
         ? "ACAD_IMAGE_VARS" : "LOCAL_RASTER_SETTINGS";
     std::int32_t expectedClassVersion = 0;
-    std::int32_t expectedFrame = directNodOwner ? 0 : 1;
+    std::int32_t expectedFrame = directNodOwner
+        ? (revision == DRW::AC1021 ? 1 : 0) : 1;
     std::int32_t expectedQuality = directNodOwner ? 1 : 2;
     std::int32_t expectedUnits = directNodOwner ? 1 : 3;
+    const bool expectedNodReactor = directNodOwner
+        && (revision == DRW::AC1021 || revision == DRW::AC1027);
+    std::uint8_t expectedXDictFlag = expectedNodReactor ? 1u : 0u;
     if (generatedSource) {
         dwgRW sourceWriter(sourcePath.string().c_str());
-        Author author(sourceWriter, directNodOwner);
-        if (!sourceWriter.write(&author, DRW::AC1027, true))
+        Author author(sourceWriter, directNodOwner, revision);
+        if (!sourceWriter.write(&author, revision, true))
             return fail("generated RASTERVARIABLES DWG source failed to write");
     } else {
         expectedRootKey = "ACAD_IMAGE_VARS";
-        expectedFrame = 0;
+        expectedFrame = revision == DRW::AC1021 ? 1 : 0;
         expectedQuality = 1;
         expectedUnits = 1;
     }
@@ -67613,6 +67627,7 @@ bool rasterVariablesDwgAdapterTransport(
     dx_iface importer;
     if (!importer.fileImport(sourcePath.string(), &imported, false)
         || imported.sourceFormat != dx_source_format::DWG
+        || imported.sourceVersion != revision
         || imported.dwgReadOutcome.opaqueViewCallbacks < 1u
         || !imported.hasCompleteOpaqueDwgSourceCapture()
         || !imported.dwgClassCoverage.m_complete
@@ -67645,7 +67660,7 @@ bool rasterVariablesDwgAdapterTransport(
                     [&rootEntry](const DRW_Dictionary::Entry& entry) {
                         return entry.m_handle == rootEntry->m_handle;
                     }));
-        if (imported.sourceVersion != DRW::AC1027
+        if (imported.sourceVersion != revision
             || rootEntry == imported.namedObjectDictionary.m_entries.end()
             || rootEntry->m_handle == 0u
             || rootEntry->m_handle == DRW::NoHandle
@@ -67664,7 +67679,15 @@ bool rasterVariablesDwgAdapterTransport(
         || source->second.m_classVersion != expectedClassVersion
         || source->second.m_imageFrame != expectedFrame
         || source->second.m_imageQuality != expectedQuality
-        || source->second.m_units != expectedUnits) {
+        || source->second.m_units != expectedUnits
+        || source->second.extensionDictionaryFlag() != expectedXDictFlag
+        || (expectedNodReactor
+            ? source->second.reactorCount() != 1
+                || source->second.reactorHandles.size() != 1u
+                || source->second.reactorHandles.front()
+                    != DRW::DwgNamedObjectsDictionaryHandle
+            : source->second.reactorCount() != 0
+                || !source->second.reactorHandles.empty())) {
         if (source != imported.dwgRasterVariables.end())
             std::cerr << "RASTERVARIABLES witness handle=" << expectedHandle
                       << " owner=" << source->second.parentHandle
@@ -67674,8 +67697,23 @@ bool rasterVariablesDwgAdapterTransport(
                       << " units=" << source->second.m_units << '\n';
         return fail("RASTERVARIABLES typed owner/field values changed on read");
     }
-    if (!generatedSource)
+    if (!generatedSource) {
+        std::cerr << "RASTERVARIABLES common metadata: reactor-vector="
+                  << source->second.reactorHandles.size()
+                  << " reactor-count=" << source->second.reactorCount()
+                  << " xdict=" << source->second.xDictHandle
+                  << " extdict-flag="
+                  << static_cast<int>(
+                      source->second.extensionDictionaryFlag())
+                  << " data-storage="
+                  << source->second.hasDataStorageBinaryData()
+                  << " app-data=" << source->second.appData.size()
+                  << " ext-data=" << source->second.extData.size() << '\n';
+        for (const std::uint32_t reactor :
+             source->second.reactorHandles)
+            std::cerr << "RASTERVARIABLES reactor handle=" << reactor << '\n';
         return true;
+    }
 
     class Readback final : public dx_iface {
     public:
@@ -67703,7 +67741,7 @@ bool rasterVariablesDwgAdapterTransport(
         const bool debugExport = !generatedSource || directNodOwner;
         mutableSource.m_classVersion = 1;
         const bool invalidClassVersionWrite = exporter.fileExport(
-            target.first.string(), DRW::AC1027, target.second, &imported,
+            target.first.string(), revision, target.second, &imported,
             debugExport, requireResolvedOwners);
         std::ifstream classVersionDestination(
             target.first, std::ios::binary);
@@ -67714,9 +67752,24 @@ bool rasterVariablesDwgAdapterTransport(
         if (invalidClassVersionWrite || classVersionBytes != sentinel)
             return fail("unsupported RASTERVARIABLES class version was not refused atomically");
         mutableSource.m_classVersion = expectedClassVersion;
+        if (expectedNodReactor) {
+            mutableSource.reactorHandles.front() = expectedHandle;
+            const bool invalidReactorWrite = exporter.fileExport(
+                target.first.string(), revision, target.second, &imported,
+                debugExport, requireResolvedOwners);
+            std::ifstream reactorDestination(target.first, std::ios::binary);
+            const std::string reactorBytes{
+                std::istreambuf_iterator<char>{reactorDestination},
+                std::istreambuf_iterator<char>{}};
+            reactorDestination.close();
+            if (invalidReactorWrite || reactorBytes != sentinel)
+                return fail("non-NOD RASTERVARIABLES reactor was not refused atomically");
+            mutableSource.reactorHandles.front() =
+                DRW::DwgNamedObjectsDictionaryHandle;
+        }
         mutableSource.m_units = std::numeric_limits<std::int16_t>::max() + 1;
         const bool invalidWrite = exporter.fileExport(
-            target.first.string(), DRW::AC1027, target.second, &imported,
+            target.first.string(), revision, target.second, &imported,
             debugExport, requireResolvedOwners);
         std::ifstream previous(target.first, std::ios::binary);
         const std::string previousBytes{
@@ -67727,7 +67780,7 @@ bool rasterVariablesDwgAdapterTransport(
             return fail("unrepresentable RASTERVARIABLES field was not refused atomically");
         mutableSource.m_units = expectedUnits;
 
-        if (!exporter.fileExport(target.first.string(), DRW::AC1027,
+        if (!exporter.fileExport(target.first.string(), revision,
                                  target.second, &imported, debugExport,
                                  requireResolvedOwners))
             return fail("corrected RASTERVARIABLES profile failed same-adapter retry");
@@ -67766,7 +67819,7 @@ bool rasterVariablesDwgAdapterTransport(
                         return entry.m_name == expectedRootKey
                             && entry.m_handle == owner->handle;
                     }));
-        if (actual.handle != expectedHandle
+        const bool outputMismatch = actual.handle != expectedHandle
             || actual.parentHandle == 0u
             || actual.parentHandle == DRW::NoHandle
             || (directNodOwner
@@ -67784,13 +67837,32 @@ bool rasterVariablesDwgAdapterTransport(
                         return entry.m_name == "RASTERVARIABLES"
                             && entry.m_handle == actual.handle;
                     }) != 1)
+            || (expectedNodReactor
+                ? actual.reactorHandles.size() != 1u
+                    || actual.reactorHandles.front()
+                        != outputData.namedObjectDictionary.handle
+                : !actual.reactorHandles.empty())
             || actual.m_classVersion != expectedClassVersion
             || actual.m_imageFrame != expectedFrame
             || actual.m_imageQuality != expectedQuality
-            || actual.m_units != expectedUnits)
+            || actual.m_units != expectedUnits;
+        if (outputMismatch) {
+            std::cerr << "RASTERVARIABLES output: handle=" << actual.handle
+                      << " parent=" << actual.parentHandle
+                      << " class-version=" << actual.m_classVersion
+                      << " frame=" << actual.m_imageFrame
+                      << " quality=" << actual.m_imageQuality
+                      << " units=" << actual.m_units
+                      << " reactors=" << actual.reactorHandles.size()
+                      << " reactor-count=" << actual.reactorCount()
+                      << " expected-handle=" << expectedHandle
+                      << " expected-parent=" << expectedParent
+                      << " direct-nod=" << directNodOwner
+                      << " root-entries=" << rootOwnerEntries << '\n';
             return fail(
                 "RASTERVARIABLES output fields or dictionary graph changed "
                 "on typed readback");
+        }
     }
     return true;
 }
@@ -68406,10 +68478,21 @@ int main(int argc, char** argv) {
         && std::string(argv[1])
             == "--rastervariables-dwg-adapter-transport-direct-nod")
         return rasterVariablesDwgAdapterTransport({}, true) ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1])
+            == "--rastervariables-dwg-adapter-transport-ac1021-direct-nod")
+        return rasterVariablesDwgAdapterTransport(
+            {}, true, DRW::AC1021) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1])
             == "--rastervariables-physical-ac1027-direct-nod")
-        return rasterVariablesDwgAdapterTransport(argv[2]) ? 0 : 1;
+        return rasterVariablesDwgAdapterTransport(
+            argv[2], true, DRW::AC1027) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1])
+            == "--rastervariables-physical-ac1021-direct-nod")
+        return rasterVariablesDwgAdapterTransport(
+            argv[2], true, DRW::AC1021) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-adapter-transport")
         return wipeoutVariablesDwgAdapterTransport() ? 0 : 1;
