@@ -404,6 +404,8 @@ tests/dwg_default_plotstyle_libredwg.py
 tests/dwg_default_plotstyle_optin_tests.cpp
 tests/dwg_ellipse_wcs_test.h
 tests/dwg_fixture_tests.cpp
+tests/dwg_legacy_block_content_chain_libredwg.py
+tests/dwg_legacy_block_content_chain_tests.cpp
 tests/dwg_legacy_insert_chain_libredwg.py
 tests/dwg_legacy_insert_chain_tests.cpp
 tests/dwg_legacy_model_chain_libredwg.py
@@ -606,6 +608,7 @@ tools/ac1024_rtext_successor_v3.cpp
 tools/acadsharp_rtext_probe.cs
 tools/acis218_autocad_witness.lsp
 tools/acis218_autocad_witness.md
+tools/audit_ac1015_attributed_insert_block_contents.py
 tools/audit_ac1015_compound_entity_chains.py
 tools/audit_ac1015_empty_attributed_insert.py
 tools/audit_dxf_table_values.py

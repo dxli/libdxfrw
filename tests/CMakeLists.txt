@@ -143,6 +143,15 @@ target_link_libraries(libdxfrw_dwg_legacy_insert_chain_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dwg_legacy_insert_chain COMMAND libdxfrw_dwg_legacy_insert_chain_tests)
 set_tests_properties(libdxfrw_dwg_legacy_insert_chain PROPERTIES LABELS "dwg;fast;legacy-chain;insert" TIMEOUT 30)
 
+add_executable(libdxfrw_dwg_legacy_block_content_chain_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_legacy_block_content_chain_tests.cpp)
+target_compile_features(libdxfrw_dwg_legacy_block_content_chain_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_legacy_block_content_chain_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_legacy_block_content_chain_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_legacy_block_content_chain_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_legacy_block_content_chain COMMAND libdxfrw_dwg_legacy_block_content_chain_tests)
+set_tests_properties(libdxfrw_dwg_legacy_block_content_chain PROPERTIES LABELS "dwg;fast;legacy-chain;block" TIMEOUT 30)
+
 # Keep the no-version FreeCAD CLI revision policy independently tested from
 # full DWG input availability. The source-version mapping is pure policy.
 add_executable(libdxfrw_dwg2dxf_version_tests

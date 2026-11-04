@@ -753,7 +753,8 @@ public:
   virtual std::vector<DRW_DwgLegacyPolylineChain> dwgLegacyPolylineChains() const = 0;
 };
 
-/** Exact identities for one ordinary empty block in an AC1015 INSERT plan. */
+/** Exact identities for one ordinary block in an AC1015 INSERT plan. It is
+ * empty unless DRW_DwgLegacyBlockContentProvider opts in to content. */
 struct DRW_DwgLegacyEmptyBlock {
   std::string name;
   std::uint32_t blockRecordHandle {0};
@@ -770,17 +771,29 @@ struct DRW_DwgLegacyInsertChain {
 };
 
 /** Separate bounded AC1015 attributed-INSERT extension. Exactly one ordinary
- * empty named block is predeclared and defined with zero base point/units.
+ * named block is predeclared and defined with zero base point/units; it is
+ * empty unless DRW_DwgLegacyBlockContentProvider opts in to content.
  * Each INSERT has at least one planned ATTRIB and its own SEQEND. Block names
  * and attribute tags use uppercase ASCII letters, digits, '_', '$' or '-';
  * attributes use printable ASCII text and a bounded default 2D text profile.
- * INSERT uses unit scaling and the default extrusion. ATTDEF, block contents,
- * MINSERT, paper space and opaque replay remain unsupported. */
+ * INSERT uses unit scaling and the default extrusion. ATTDEF, unplanned block
+ * contents, MINSERT, paper space and opaque replay remain unsupported. */
 class DRW_DwgLegacyInsertChainProvider {
 public:
   virtual ~DRW_DwgLegacyInsertChainProvider() = default;
   virtual DRW_DwgLegacyEmptyBlock dwgLegacyEmptyBlock() const = 0;
   virtual std::vector<DRW_DwgLegacyInsertChain> dwgLegacyInsertChains() const = 0;
+};
+
+/** Separate opt-in for a nonempty definition of the single block declared by
+ * DRW_DwgLegacyInsertChainProvider. Entries are concrete LINE, CIRCLE or ARC
+ * entities in their exact block-content callback order; all identities are
+ * reserved before emission. Emit the complete list in one begin/end scope
+ * before model entities. Other content remains outside this profile. */
+class DRW_DwgLegacyBlockContentProvider {
+public:
+  virtual ~DRW_DwgLegacyBlockContentProvider() = default;
+  virtual std::vector<DRW_DwgLegacyModelChainEntry> dwgLegacyBlockContent() const = 0;
 };
 
 /** Separate opt-in for synthesizing a default DWG plot-style graph. Existing

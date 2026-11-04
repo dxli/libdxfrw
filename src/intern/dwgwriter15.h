@@ -100,9 +100,17 @@ public:
                                const std::vector<DRW_DwgLegacyPolylineChain>& polylines,
                                const DRW_DwgLegacyEmptyBlock& block,
                                const std::vector<DRW_DwgLegacyInsertChain>& inserts);
+    bool stageLegacyModelChain(const std::vector<DRW_DwgLegacyModelChainEntry>& plan,
+                               const std::vector<DRW_DwgLegacyPolylineChain>& polylines,
+                               const DRW_DwgLegacyEmptyBlock& block,
+                               const std::vector<DRW_DwgLegacyInsertChain>& inserts,
+                               const std::vector<DRW_DwgLegacyModelChainEntry>& blockContent);
     const DRW_DwgLegacyPolylineChain* legacyPolylinePlan(std::uint32_t parent) const noexcept;
     const DRW_DwgLegacyInsertChain* legacyInsertPlan(std::uint32_t parent) const noexcept;
     bool legacyModelChainActive() const noexcept { return m_legacyModelChainActive; }
+    bool legacyBlockContentWriting() const noexcept {
+        return m_legacyModelChainActive && m_activeUserBlockRecordHandle != 0;
+    }
     bool conflictsLegacyModelChainDictionary(const DRW_Dictionary& dictionary) const noexcept;
     bool isLegacyModelChainHandle(std::uint32_t handle) const noexcept {
         return m_legacyModelChainActive && m_legacyModelChainHandles.count(handle) != 0;
@@ -897,6 +905,7 @@ private:
     // use entmode 2/1 (no owner handle) on their entities.  Their owned-handle
     // lists are emitted only after writeEntities() has supplied all members.
     std::vector<DRW_DwgLegacyModelChainEntry> m_legacyModelChain;
+    std::vector<DRW_DwgLegacyModelChainEntry> m_legacyBlockContent;
     DRW_DwgLegacyEmptyBlock m_legacyEmptyBlock;
     bool m_legacyEmptyBlockActive {false};
     std::map<std::uint32_t, DRW_DwgLegacyInsertChain> m_legacyInsertChains;

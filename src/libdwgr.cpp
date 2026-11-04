@@ -58,12 +58,16 @@ thread_local bool g_throwNextLegacyPolylineForTest = false;
 thread_local bool g_throwNextLegacyPolylineLateForTest = false;
 thread_local bool g_throwNextLegacyInsertForTest = false;
 thread_local bool g_throwNextLegacyInsertLateForTest = false;
+thread_local bool g_throwNextLegacyBlockEntityForTest = false;
+thread_local bool g_throwNextLegacyBlockEntityLateForTest = false;
 }
 // Internal test seams: no dwgRW or consumer class layout changes.
 void drwThrowNextLegacyPolylineForTest() { g_throwNextLegacyPolylineForTest = true; }
 void drwThrowNextLegacyPolylineLateForTest() { g_throwNextLegacyPolylineLateForTest = true; }
 void drwThrowNextLegacyInsertForTest() { g_throwNextLegacyInsertForTest = true; }
 void drwThrowNextLegacyInsertLateForTest() { g_throwNextLegacyInsertLateForTest = true; }
+void drwThrowNextLegacyBlockEntityForTest() { g_throwNextLegacyBlockEntityForTest = true; }
+void drwThrowNextLegacyBlockEntityLateForTest() { g_throwNextLegacyBlockEntityLateForTest = true; }
 
 namespace {
 
@@ -1630,9 +1634,47 @@ bool dwgRW::encodeEntityForWrite(DRW_Entity *ent,
 
     if (mutationTarget == nullptr)
         mutationTarget = ent;
-    const std::vector<DwgEntityWriteState> mutations {
+    std::vector<DwgEntityWriteState> mutations {
         captureEntityWriteState(mutationTarget)
     };
+    auto* native = dynamic_cast<dwgWriter15*>(writer.get());
+    const bool legacyBlock = native != nullptr && native->legacyBlockContentWriting();
+    dwgWriter::CompoundWriteCheckpoint legacyCheckpoint;
+    if (legacyBlock) legacyCheckpoint = writer->checkpointCompoundWrite();
+    const bool tracksMutations = legacyBlock && !m_dwgWriteTransactions.empty()
+        && m_dwgWriteTransactions.back()->trackCallerMutations;
+    const std::size_t originalMutationCount = tracksMutations
+        ? m_dwgWriteTransactions.back()->entityMutations.size() : 0u;
+    const auto undoLegacyException = [&]() noexcept {
+        try { writer->rollbackCompoundWrite(legacyCheckpoint); }
+        catch (...) { writer->markObjectWriteFailure(); }
+        for (auto it = mutations.rbegin(); it != mutations.rend(); ++it) {
+            auto appRefs = std::move(it->eedAppIdRefs);
+            auto layerRefs = std::move(it->eedLayerRefs);
+            try { restoreEntityWriteState(*it); }
+            catch (...) { writer->markObjectWriteFailure(); }
+            if (it->entity != nullptr) {
+                it->entity->dwgEedAppIdWriteRefs.swap(appRefs);
+                it->entity->dwgEedLayerWriteRefs.swap(layerRefs);
+            }
+        }
+        if (tracksMutations && !m_dwgWriteTransactions.empty()) {
+            auto& tracked = m_dwgWriteTransactions.back()->entityMutations;
+            if (tracked.size() >= originalMutationCount) tracked.resize(originalMutationCount);
+        }
+        m_lastWriteTransaction.reset();
+        m_lastDwgObjectFrame = {};
+        m_lastDwgObjectFrameValid = false;
+        m_lastDwgCompoundEntityWriteReceipt = {};
+        m_lastSuccessfulEntityHandle = 0;
+        markDwgWriteFailure();
+    };
+    struct LegacyBlockExceptionGuard {
+        const decltype(undoLegacyException)& undo; bool enabled; int depth;
+        ~LegacyBlockExceptionGuard() noexcept {
+            if (enabled && std::uncaught_exceptions() > depth) undo();
+        }
+    } exceptionGuard{undoLegacyException, legacyBlock, std::uncaught_exceptions()};
     const bool usesWriterEntityRollback =
         writer->supportsLastEntityWriteRollback();
     dwgWriter::CompoundWriteCheckpoint checkpoint;
@@ -1645,6 +1687,10 @@ bool dwgRW::encodeEntityForWrite(DRW_Entity *ent,
             writer->rollbackCompoundWrite(checkpoint);
         restoreEntityWriteStates(mutations);
         return recordWriteResult(WriteSkipKind::Entity, false);
+    }
+    if (legacyBlock && g_throwNextLegacyBlockEntityForTest) {
+        g_throwNextLegacyBlockEntityForTest = false;
+        throw std::bad_alloc();
     }
 
     if (!writer->getLastDwgObjectFrame(m_lastDwgObjectFrame)) {
@@ -1674,6 +1720,10 @@ bool dwgRW::encodeEntityForWrite(DRW_Entity *ent,
         transaction->checkpoint = std::move(checkpoint);
     transaction->entityMutations = mutations;
     rememberCallerMutations(mutations);
+    if (legacyBlock && g_throwNextLegacyBlockEntityLateForTest) {
+        g_throwNextLegacyBlockEntityLateForTest = false;
+        throw std::bad_alloc();
+    }
     m_lastWriteTransaction = std::move(transaction);
     m_lastDwgObjectFrameValid = true;
     ++m_successfulEntityWrites;
@@ -1762,7 +1812,10 @@ bool dwgRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
     auto* legacyChainProvider = dynamic_cast<DRW_DwgLegacyModelChainProvider*>(iface);
     auto* legacyPolylineProvider = dynamic_cast<DRW_DwgLegacyPolylineChainProvider*>(iface);
     auto* legacyInsertProvider = dynamic_cast<DRW_DwgLegacyInsertChainProvider*>(iface);
+    auto* legacyBlockProvider = dynamic_cast<DRW_DwgLegacyBlockContentProvider*>(iface);
     if (!m_requiredWriteFailure && (legacyPolylineProvider || legacyInsertProvider) && !legacyChainProvider)
+        markDwgWriteFailure();
+    if (!m_requiredWriteFailure && legacyBlockProvider && (!legacyChainProvider || !legacyInsertProvider))
         markDwgWriteFailure();
     if (!m_requiredWriteFailure && legacyChainProvider) {
         auto* native = dynamic_cast<dwgWriter15*>(writer.get());
@@ -1773,8 +1826,11 @@ bool dwgRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
             ? legacyInsertProvider->dwgLegacyEmptyBlock() : DRW_DwgLegacyEmptyBlock{};
         const auto inserts = legacyInsertProvider
             ? legacyInsertProvider->dwgLegacyInsertChains() : std::vector<DRW_DwgLegacyInsertChain>{};
+        const auto blockContent = legacyBlockProvider
+            ? legacyBlockProvider->dwgLegacyBlockContent() : std::vector<DRW_DwgLegacyModelChainEntry>{};
+        if (legacyBlockProvider && blockContent.empty()) markDwgWriteFailure();
         if (native == nullptr || !native->stageLegacyModelChain(
-                legacyChainProvider->dwgLegacyModelChain(), polylines, block, inserts))
+                legacyChainProvider->dwgLegacyModelChain(), polylines, block, inserts, blockContent))
             markDwgWriteFailure();
     }
 
