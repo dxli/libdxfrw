@@ -123,6 +123,9 @@ int main(int argc, char** argv) {
                       << modeler->hasDataStorageRecord << ' ' << modeler->m_modelerVersion
                       << ' ' << exact << ' ' << modeler->m_rawBytes.size() << ' ';
             hexBytes(modeler->m_rawBytes); std::cout << '\n';
+            std::cout << "REVISION_FRAME " << std::hex << modeler->handle
+                      << std::dec << ' ' << modeler->m_bodyBitSize << ' ';
+            hexBytes(modeler->m_rawBytes); std::cout << '\n';
         }
         return true;
     };

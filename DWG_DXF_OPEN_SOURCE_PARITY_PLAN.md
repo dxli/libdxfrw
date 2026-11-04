@@ -1057,7 +1057,10 @@ rendering semantics remain open.
   replay. A source-backed REGION experiment preserved SAB bytes but produced
   different shell values after ODA reimport; DWG-associated SAB output now
   requires explicitly supplied shell fields. The physical eight-name schema
-  remains gated. See the [shell-loss receipt](docs/research/p7-dwg-modeler-shell-loss-guard-2026-11-03.json).
+  remains gated. Matching UID suffixes have multiple plausible field boundaries
+  in several physical frames, so resolve forward framing before decoding them.
+  See the [shell-loss receipt](docs/research/p7-dwg-modeler-shell-loss-guard-2026-11-03.json)
+  and [UID span receipt](docs/research/p7-ac1027-modeler-revision-uid-physical-spans-2026-11-03.json).
 - Complete source placement, units/transforms, topology, trims, periodicity and
   spline geometry beyond locally verified analytic helpers. A local wireframe or
   repaired/count-only graph is not B-rep support evidence.

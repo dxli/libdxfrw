@@ -744,6 +744,11 @@ if(LIBDXFRW_BUILD_TESTS)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/ac1027_acds_source_compare.py --self-test)
     set_tests_properties(libdxfrw_ac1027_acds_source_compare_self_test PROPERTIES
         LABELS "fast;dwg;acds;generated")
+    add_test(NAME libdxfrw_ac1027_modeler_uid_span_self_test
+        COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/ac1027_modeler_uid_span.py --self-test)
+    set_tests_properties(libdxfrw_ac1027_modeler_uid_span_self_test PROPERTIES
+        LABELS "fast;dwg;acds;generated")
 
     add_executable(libdxfrw_wave1_tests
         tests/wave1_tests.cpp
