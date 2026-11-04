@@ -16676,6 +16676,13 @@ bool DRW_Material::encodeDwg(DRW::Version version, dwgBufferW *buf,
     if (m_rawDataValid && m_rawDataVersion != DRW::UNKNOWNV
         && version != m_rawDataVersion)
         return false;
+    // The retained tail contains only object-body bits. R2007+ MATERIAL
+    // maps may also consume detached filename strings, including explicit
+    // empty strings. Their original slots and bytes are not retained, and
+    // mutable decoded fields cannot prove the unmodified raw-body selectors.
+    // Refuse before touching any output buffer rather than emit a partial tail.
+    if (m_rawDataValid && version > DRW::AC1018)
+        return false;
 
     dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018)
         ? strBuf

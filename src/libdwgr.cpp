@@ -3589,6 +3589,20 @@ bool dwgRW::writeMaterial(DRW_Material *object) {
     }
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
+    if (object->hasDwgRawData()
+        && (version > DRW::AC1018
+            || object->dwgRawDataVersion() > DRW::AC1018)) {
+        // A caller that ignores this per-object refusal must not publish a
+        // drawing missing a retained MATERIAL or its detached string stream.
+        markDwgWriteFailure();
+        recordOperationDiagnostic(
+            DRW::OperationPhase::Validation,
+            DRW::OperationCause::WriteFailure,
+            "material-detached-string-replay",
+            "MATERIAL raw replay does not retain its detached strings",
+            0, false, object->handle, object->handle != 0);
+        return recordWriteResult(WriteSkipKind::Object, false);
+    }
     auto *w = asWriter15(writer);
     if (w == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);

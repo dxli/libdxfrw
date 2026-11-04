@@ -4460,3 +4460,13 @@ target_link_libraries(libdxfrw_block_control_reactor_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dwg_block_control_reactors COMMAND libdxfrw_block_control_reactor_tests)
 set_tests_properties(libdxfrw_dwg_block_control_reactors PROPERTIES
     LABELS "fast;dwg;AC1021;transaction" TIMEOUT 15)
+
+add_executable(libdxfrw_dwg_material_replay_refusal_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_material_replay_refusal_tests.cpp)
+target_compile_features(libdxfrw_dwg_material_replay_refusal_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_material_replay_refusal_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_material_replay_refusal_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_material_replay_refusal_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_material_replay_refusal COMMAND libdxfrw_dwg_material_replay_refusal_tests)
+set_tests_properties(libdxfrw_dwg_material_replay_refusal PROPERTIES
+    LABELS "fast;dwg;material;transaction" TIMEOUT 30)

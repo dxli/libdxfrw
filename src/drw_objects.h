@@ -4675,7 +4675,8 @@ public:
             || m_dxfNormalMapTransformCount == m_normalMapTransform.size());
   }
 
-  //! Preserve an opaque modern MATERIAL body tail for same-version replay.
+  //! Retain an opaque modern MATERIAL body tail for inspection. Detached
+  //! strings are not included, so this alone cannot reproduce the object.
   [[nodiscard]] bool setDwgRawData(std::vector<std::uint8_t> bytes,
                                    std::uint32_t bitSize,
                                    DRW::Version version) {

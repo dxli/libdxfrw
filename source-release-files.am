@@ -409,6 +409,7 @@ EXTRA_DIST = \
     tests/dwg_legacy_model_chain_libredwg.py \
     tests/dwg_legacy_model_chain_optin_tests.cpp \
     tests/dwg_local_roundtrip_tests.cpp \
+    tests/dwg_material_replay_refusal_tests.cpp \
     tests/dwg_object_vectors_tests.cpp \
     tests/dwg_plotstyle_nod_admission_tests.cpp \
     tests/dwg_reader_matrix_tests.cpp \

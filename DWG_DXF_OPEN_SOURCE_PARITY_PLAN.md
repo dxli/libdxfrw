@@ -911,9 +911,10 @@ and fails at VPORT. Resolve those failures and qualify other producers,
 versions and native semantics before broader claims. See the [material
 opt-in receipt](docs/research/p6-ac1024-default-material-optin-2026-11-04.json)
 and [source-profile receipt](docs/research/p6-ac1024-default-material-source-profile-2026-11-04.json).
-Audit generic DWG MATERIAL replay separately: opaque body replay currently
-does not emit the detached map filename strings; establish source order
-and immutable bindings or refuse output before any data can be lost.
+Modern retained DWG MATERIAL bodies now refuse replay when detached map
+strings cannot be proven, including facade calls whose failure is ignored.
+Complete replay still needs immutable source strings, selector binding and
+independent output proof; see the [refusal receipt](docs/research/p6-dwg-material-detached-string-replay-refusal-2026-11-04.json).
 AC1021 BLOCK_CONTROL now stages handles at its declared boundary; the reader
 also supports the witnessed historical inline profile under narrow checks.
 LibreDWG and an ODA-produced source confirm model/paper references, but ODA
