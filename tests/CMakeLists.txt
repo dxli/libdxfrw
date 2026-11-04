@@ -2553,6 +2553,11 @@ set_tests_properties(dwg2dxf_rastervariables_ac1024_direct_nod_adapter_transport
     TIMEOUT 30
 )
 
+add_test(NAME dwg2dxf_rastervariables_ac1018_frame1_adapter_transport
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --rastervariables-dwg-adapter-transport-ac1018-frame1)
+set_tests_properties(dwg2dxf_rastervariables_ac1018_frame1_adapter_transport PROPERTIES
+    LABELS "dwg;dxf;adapter;fast;AC1018;transaction" TIMEOUT 30)
+
 add_test(NAME dwg2dxf_rastervariables_ac1024_frame1_adapter_transport
     COMMAND libdxfrw_dwg2dxf_adapter_tests
         --rastervariables-dwg-adapter-transport-ac1024-frame1)

@@ -836,6 +836,98 @@ public:
         raw.m_rawBytes.swap(result);
         return true;
     }
+    static bool toggleAc1018RasterFrameBit(dx_data& data, std::uint32_t handle) {
+        const auto found = data.m_opaqueDwgSourceFrames.find({data.importGeneration, handle});
+        if (found == data.m_opaqueDwgSourceFrames.end()) return false;
+        auto& raw = found->second;
+        if (raw.m_version != DRW::AC1018) return false;
+        const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
+        dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u, total};
+        if (body.shortValue() != static_cast<std::uint32_t>(raw.m_objectType)) return false;
+        const auto end = static_cast<std::uint32_t>(body.little(4u));
+        if (!body.good || end > total || end <= body.pos) return false;
+        body.end = end;
+        if (dx_raster_wire::detail::handle(body, 0u, 0u, true).value != handle
+            || body.shortValue() != 0u || body.longValue() != 1u || body.take(1u) != 1u
+            || body.longValue() != 0u || body.take(2u) != 1u) return false;
+        const auto lowByte = body.pos;
+        const auto value = body.take(8u);
+        if (!body.good || (value != 1u && value != 3u)) return false;
+        const auto bit = lowByte + 6u;
+        raw.m_rawBytes[bit / 8u] ^= static_cast<std::uint8_t>(0x80u >> (bit % 8u));
+        return true;
+    }
+    static bool makeRasterFrameOneLongBitShort(dx_data& data, std::uint32_t handle) {
+        const auto found = data.m_opaqueDwgSourceFrames.find({data.importGeneration, handle});
+        if (found == data.m_opaqueDwgSourceFrames.end()) return false;
+        auto& raw = found->second;
+        const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
+        const bool inline2004 = raw.m_version == DRW::AC1018;
+        if ((!inline2004 && raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1027
+             && raw.m_version != DRW::AC1032)
+            || (!inline2004 && (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total)))
+            return false;
+        dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u,
+            inline2004 ? total : total - raw.m_bodyBitSize};
+        const auto tag = inline2004 ? 0u : body.take(2u);
+        const auto type = inline2004 ? body.shortValue() : tag == 0u ? body.take(8u)
+            : tag == 1u ? body.take(8u) + 0x1F0u : body.little(2u);
+        const auto lengthStart = body.pos;
+        if (inline2004) {
+            const auto end = static_cast<std::uint32_t>(body.little(4u));
+            if (!body.good || end > total || end <= body.pos) return false;
+            body.end = end;
+        }
+        if (tag == 3u || type != static_cast<std::uint32_t>(raw.m_objectType)
+            || dx_raster_wire::detail::handle(body, 0u, 0u, true).value != handle
+            || body.shortValue() != 0u || body.longValue() != 1u || body.take(1u) != 1u
+            || (raw.m_version >= DRW::AC1027 && body.take(1u) != 0u)
+            || body.longValue() != 0u)
+            return false;
+        const auto start = body.pos;
+        if (body.take(2u) != 1u || body.take(8u) != 1u || !body.good) return false;
+        std::vector<std::uint8_t> result(raw.m_rawBytes.size() + 1u, 0u);
+        std::uint32_t output = 0u;
+        const auto put = [&result, &output](std::uint32_t bit) {
+            if (bit != 0u) result[output / 8u] |= static_cast<std::uint8_t>(1u << (7u - output % 8u));
+            ++output;
+        };
+        const auto copy = [&raw, &put](std::uint32_t first, std::uint32_t last) {
+            for (auto bit = first; bit < last; ++bit)
+                put((raw.m_rawBytes[bit / 8u] >> (7u - bit % 8u)) & 1u);
+        };
+        copy(0u, start);
+        put(0u); put(0u); // BS tag 00: 16-bit little-endian payload
+        copy(start + 2u, start + 10u); // low byte is 1
+        for (unsigned bit = 0; bit != 8u; ++bit) put(0u);
+        copy(start + 10u, total);
+        if (output != total + 8u) return false;
+        const auto handleStart = inline2004 ? body.end + 8u : total + 8u - raw.m_bodyBitSize;
+        if (inline2004) {
+            for (unsigned byte = 0; byte != 4u; ++byte)
+                for (unsigned bit = 0; bit != 8u; ++bit) {
+                    const auto position = lengthStart + byte * 8u + bit;
+                    const auto mask = static_cast<std::uint8_t>(1u << (7u - position % 8u));
+                    if ((handleStart >> (byte * 8u + 7u - bit)) & 1u) result[position / 8u] |= mask;
+                    else result[position / 8u] &= static_cast<std::uint8_t>(~mask);
+                }
+        }
+        dx_raster_wire::detail::Bits scalar{result.data(), start, handleStart};
+        if (scalar.shortValue() != 1u || !scalar.good || scalar.pos != start + 18u
+            || scalar.shortValue() != 1u || scalar.shortValue() != 3u
+            || (inline2004 ? scalar.pos != handleStart : scalar.pos >= handleStart)) return false;
+        while (scalar.pos < handleStart) if (scalar.take(1u) != 0u) return false;
+        dx_raster_wire::detail::Bits handles{result.data(), handleStart, total + 8u};
+        const auto owner = dx_raster_wire::detail::handle(handles, 4u, handle);
+        const auto reactor = dx_raster_wire::detail::handle(handles, 4u, handle);
+        const auto expectedParent = inline2004 ? data.namedObjectDictionary.handle : raw.m_parentHandle;
+        if (!handles.good || owner.role != 4u || reactor.role != 4u
+            || owner.value != expectedParent || reactor.value != expectedParent
+            || handles.end - handles.pos > 7u) return false;
+        while (handles.pos < handles.end) if (handles.take(1u) != 0u) return false;
+        raw.m_rawBytes.swap(result);
+        return true;
+    }
     static bool toggleRetainedReactorRole(dx_data& data, std::uint32_t handle) {
         const auto found = data.m_opaqueDwgSourceFrames.find({data.importGeneration, handle});
         if (found == data.m_opaqueDwgSourceFrames.end()) return false;
@@ -68295,7 +68387,7 @@ bool rasterVariablesDwgAdapterTransport(
         const std::filesystem::path& physicalSourcePath = {},
         bool directNodOwner = false,
         DRW::Version revision = DRW::AC1027,
-        bool ac1024FrameOne = false) {
+        bool frameOne = false) {
     const bool generatedSource = physicalSourcePath.empty();
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch()
@@ -68332,7 +68424,7 @@ bool rasterVariablesDwgAdapterTransport(
     class Author final : public dx_iface {
     public:
         explicit Author(dwgRW& output, bool directNodOwner,
-                        DRW::Version revision, bool ac1024FrameOne)
+                        DRW::Version revision, bool frameOne)
             : output(output), directNodOwner(directNodOwner) {
             cData = &storage;
             currentBlock = storage.mBlock;
@@ -68345,7 +68437,7 @@ bool rasterVariablesDwgAdapterTransport(
                 ? DRW::DwgNamedObjectsDictionaryHandle : dictionary.handle;
             variables.m_classVersion = 0;
             variables.m_imageFrame = directNodOwner
-                ? (revision == DRW::AC1021 || ac1024FrameOne ? 1 : 0) : 1;
+                ? (revision == DRW::AC1021 || frameOne ? 1 : 0) : 1;
             variables.m_imageQuality = directNodOwner ? 1 : 2;
             variables.m_units = directNodOwner && revision != DRW::AC1018 && revision != DRW::AC1024 && revision != DRW::AC1032 ? 1 : 3;
             if (directNodOwner
@@ -68402,7 +68494,7 @@ bool rasterVariablesDwgAdapterTransport(
         ? "ACAD_IMAGE_VARS" : "LOCAL_RASTER_SETTINGS";
     std::int32_t expectedClassVersion = 0;
     std::int32_t expectedFrame = directNodOwner
-        ? (revision == DRW::AC1021 || ac1024FrameOne ? 1 : 0) : 1;
+        ? (revision == DRW::AC1021 || frameOne ? 1 : 0) : 1;
     std::int32_t expectedQuality = directNodOwner ? 1 : 2;
     std::int32_t expectedUnits = directNodOwner && revision != DRW::AC1018 && revision != DRW::AC1024 && revision != DRW::AC1032 ? 1 : 3;
     const bool expectedNodReactor = directNodOwner
@@ -68410,7 +68502,7 @@ bool rasterVariablesDwgAdapterTransport(
     std::uint8_t expectedXDictFlag = expectedNodReactor ? 1u : 0u;
     if (generatedSource) {
         dwgRW sourceWriter(sourcePath.string().c_str());
-        Author author(sourceWriter, directNodOwner, revision, ac1024FrameOne);
+        Author author(sourceWriter, directNodOwner, revision, frameOne);
         if (!sourceWriter.write(&author, revision, true))
             return fail("generated RASTERVARIABLES DWG source failed to write");
     } else {
@@ -68577,7 +68669,7 @@ bool rasterVariablesDwgAdapterTransport(
              std::make_pair(asciiPath, false),
              std::make_pair(binaryPath, true)}) {
         const bool requireResolvedOwners = (target.second && generatedSource)
-            || revision == DRW::AC1018 || ac1024FrameOne;
+            || revision == DRW::AC1018 || frameOne;
         const std::string sentinel = "RASTERVARIABLES_ATOMIC_DESTINATION";
         {
             std::ofstream previous(target.first, std::ios::binary);
@@ -68595,7 +68687,7 @@ bool rasterVariablesDwgAdapterTransport(
                 &imported, debugExport, requireResolvedOwners,
                 dx_dxfSourceTextPolicy::Compatible, DRW::DxfTextWritePolicy::Compatible,
                 dx_dxfProxyGraphicsPolicy::Compatible,
-                revision == DRW::AC1018 || ac1024FrameOne
+                revision == DRW::AC1018 || frameOne
                     ? dx_dwgReadCompletenessPolicy::RequireComplete
                                         : dx_dwgReadCompletenessPolicy::Legacy);
         };
@@ -68648,6 +68740,23 @@ bool rasterVariablesDwgAdapterTransport(
                     std::ofstream previous(target.first, std::ios::binary | std::ios::trunc);
                     previous << sentinel;
                 }
+                if (frameOne) {
+                    if (!Access::toggleAc1018RasterFrameBit(imported, expectedHandle))
+                        return fail("could not mutate AC1018 raster wire frame");
+                    const bool rejectedWireFrame = !imported.getCompleteDwgDictionaryOwner(root, owner)
+                        && refusedWithSentinel(revision);
+                    if (!Access::toggleAc1018RasterFrameBit(imported, expectedHandle)
+                        || !rejectedWireFrame || !imported.getCompleteDwgDictionaryOwner(root, owner))
+                        return fail("altered AC1018 raster wire frame retained source proof");
+                    if (!Access::makeRasterFrameOneLongBitShort(imported, expectedHandle))
+                        return fail("could not construct noncanonical raster frame BS");
+                    const bool rejected = !imported.getCompleteDwgDictionaryOwner(root, owner)
+                        && refusedWithSentinel(revision);
+                    opaque.m_rawBytes = originalRaw;
+                    if (!rejected || !imported.getCompleteDwgDictionaryOwner(root, owner))
+                        return fail("noncanonical raster frame retained source proof");
+                }
+
             }
             mutableSource.m_imageFrame = expectedFrame == 0 ? 1 : 0;
             if (!refusedWithSentinel(revision))
@@ -68679,7 +68788,7 @@ bool rasterVariablesDwgAdapterTransport(
             imported.namedObjectDictionary.m_entries.pop_back();
             if (!aliasRefused)
                 return fail("AC1024 duplicate NOD target was not refused atomically");
-            if (revision == DRW::AC1018 || revision == DRW::AC1032 || ac1024FrameOne) {
+            if (revision == DRW::AC1018 || revision == DRW::AC1032 || frameOne) {
                 const auto originalEntries = imported.namedObjectDictionary.m_entries;
                 if (originalEntries.empty()) return fail("AC1032 raster root is empty");
                 imported.namedObjectDictionary.m_entries.push_back(
@@ -68706,7 +68815,7 @@ bool rasterVariablesDwgAdapterTransport(
                 const bool reactorRoleRefused = refusedWithSentinel(revision);
                 if (!Access::toggleRetainedReactorRole(imported, expectedHandle) || !reactorRoleRefused)
                     return fail("AC1032 altered raster reactor role was accepted");
-                if (ac1024FrameOne) {
+                if (frameOne && revision == DRW::AC1024) {
                     if (!Access::toggleRetainedAc1024RasterFrame(imported, expectedHandle))
                         return fail("could not mutate AC1024 raster wire frame");
                     const bool frameRefused = refusedWithSentinel(revision);
@@ -70385,6 +70494,9 @@ int main(int argc, char** argv) {
             == "--rastervariables-dwg-adapter-transport-ac1024-direct-nod")
         return rasterVariablesDwgAdapterTransport(
             {}, true, DRW::AC1024) ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--rastervariables-dwg-adapter-transport-ac1018-frame1")
+        return rasterVariablesDwgAdapterTransport({}, true, DRW::AC1018, true) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1])
             == "--rastervariables-dwg-adapter-transport-ac1024-frame1")

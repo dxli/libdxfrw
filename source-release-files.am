@@ -671,6 +671,7 @@ EXTRA_DIST = \
     tools/audit_polyline_cross_scope_peer.py \
     tools/audit_polyline_cross_version_membership.py \
     tools/audit_polyline_owner_census.py \
+    tools/audit_rastervariables_ac1018_frame1_source.py \
     tools/audit_rastervariables_ac1018_source.py \
     tools/audit_sunstudy_dxf_graph.py \
     tools/audit_wipeout_ac1018_frame1_source.py \
@@ -774,6 +775,7 @@ EXTRA_DIST = \
     tools/probe_lightlist_physical_capture.cpp \
     tools/probe_polyline_cross_scope.cpp \
     tools/probe_polyline_cross_version.cpp \
+    tools/probe_rastervariables_ac1018_frame1_source.cpp \
     tools/probe_rastervariables_ac1018_source.cpp \
     tools/probe_wipeout_ac1018_frame1_source.cpp \
     tools/probe_wipeout_ac1018_source.cpp \

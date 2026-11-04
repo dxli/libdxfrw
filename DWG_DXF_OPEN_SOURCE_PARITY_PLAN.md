@@ -66,10 +66,11 @@ frame 1 with its witnessed 10-bit field encoding; physical whole-file output
 and native rendering remain open ([AC1018 receipt](docs/research/p4-ac1018-wipeoutvariables-frame1-direct-nod-2026-11-04.json),
 [AC1024 receipt](docs/research/p4-ac1024-wipeoutvariables-frame1-direct-nod-2026-11-04.json),
 [AC1027/AC1032 receipt](docs/research/p4-ac1027-ac1032-wipeoutvariables-frame1-direct-nod-2026-11-04.json)).
-The bounded AC1018 direct-NOD 0/0/1/3 RASTERVARIABLES graph has selected-source
-and generated ASCII/Binary output evidence; broader graphs, physical
-whole-document output and native image behavior remain open
-([receipt](docs/research/p4-ac1018-rastervariables-direct-nod-2026-11-04.json)).
+The bounded AC1018 direct-NOD RASTERVARIABLES graph covers the witnessed
+0/0/1/3 and 0/1/1/3 profiles in generated ASCII/Binary output; broader graphs,
+physical whole-document output and native image behavior remain open
+([frame-0 receipt](docs/research/p4-ac1018-rastervariables-direct-nod-2026-11-04.json),
+[frame-1 receipt](docs/research/p4-ac1018-rastervariables-frame1-direct-nod-2026-11-04.json)).
 The AC1024 direct-NOD profile additionally covers source-witnessed frame=1;
 other scalar values, graph shapes and native image behavior remain open
 ([receipt](docs/research/p4-ac1024-rastervariables-frame1-direct-nod-2026-11-04.json)).
