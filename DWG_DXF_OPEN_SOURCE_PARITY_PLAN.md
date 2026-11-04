@@ -850,8 +850,10 @@ qualifying this writer profile; see the [second-header receipt](docs/research/p6
 the [section-profile receipt](docs/research/p6-ac1021-section-capacity-appinfo-profile-2026-11-03.json)
 and earlier [framing receipt](docs/research/p6-ac1021-fixed-metadata-header-pointer-2026-11-03.json).
 HEADER table-control and pointer roles now use their specified handle codes,
-including typed hard-pointer nulls; caller-selected current table references
-still need source-backed output binding. See the [role receipt](docs/research/p6-dwg-header-nonnull-reference-wire-roles-2026-11-03.json)
+including typed hard-pointer nulls. The writer binds current layer, text style,
+linetype and dimension style names to emitted records; the DWG reader still
+needs to retain and resolve the original current-reference identities. See the
+[current-reference receipt](docs/research/p6-dwg-header-current-table-reference-binding-2026-11-03.json)
 and [typed-null receipt](docs/research/p6-dwg-header-typed-hard-pointer-null-2026-11-03.json).
 
 The ELLIPSE-to-polyline work bound now covers derived segment counts and R12

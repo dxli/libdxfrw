@@ -757,6 +757,60 @@ void dwgWriter15::initHeaderControlHandles() {
                    reservedHandle::VPORT_ENTITY_HEADER_CONTROL);
 }
 
+bool dwgWriter15::planHeaderCurrentReferences(
+        std::array<std::uint32_t, 4>& references) const {
+    if (m_header == nullptr || !m_dwgTableRecordsComplete)
+        return false;
+    struct RequestedReference {
+        const char* name;
+        const char* defaultName;
+        int group;
+        const std::map<std::string, std::uint32_t>* table;
+    };
+    const std::array<RequestedReference, 4> requests{{
+        {"CLAYER", "0", 8, &m_writingCtx.layerMap},
+        {"TEXTSTYLE", "STANDARD", 7, &m_writingCtx.styleMap},
+        {"CELTYPE", "BYLAYER", 6, &m_writingCtx.ltypeMap},
+        {"DIMSTYLE", "STANDARD", 2, &m_writingCtx.dimstyleMap}}};
+    std::array<std::uint32_t, 4> result{};
+    for (std::size_t i = 0; i < requests.size(); ++i) {
+        const auto& request = requests[i];
+        const std::string canonicalBare(request.name);
+        const std::string canonicalDollar = std::string("$") + request.name;
+        for (const auto& candidate : m_header->vars) {
+            const std::string& key = candidate.first;
+            const std::string normalized = !key.empty() && key.front() == '$'
+                ? toUpperCase(key.substr(1)) : toUpperCase(key);
+            if (normalized == canonicalBare && key != canonicalBare
+                && key != canonicalDollar)
+                return false;
+        }
+        const auto bare = m_header->vars.find(canonicalBare);
+        const auto dollar = m_header->vars.find(canonicalDollar);
+        if (bare != m_header->vars.end() && dollar != m_header->vars.end())
+            return false;
+        const auto found = dollar != m_header->vars.end() ? dollar : bare;
+        std::string name(request.defaultName);
+        if (found != m_header->vars.end()) {
+            const DRW_Variant* value = found->second;
+            if (value == nullptr || value->type() != DRW_Variant::STRING
+                || value->code() != request.group || value->content.s == nullptr)
+                return false;
+            name = *value->content.s;
+            if (name.empty() || name.find('\0') != std::string::npos)
+                return false;
+        }
+        const auto target = request.table->find(toUpperCase(name));
+        if (target == request.table->end() || target->second == 0u
+            || m_emittedDwgTableRecordHandles.find(target->second)
+                == m_emittedDwgTableRecordHandles.end())
+            return false;
+        result[i] = target->second;
+    }
+    references = result;
+    return true;
+}
+
 bool dwgWriter15::writeDwgHeader() {
     size_t sectionStart = m_buf.size();
     m_sectionOffsets[recno::HEADER] = static_cast<std::uint32_t>(sectionStart);
@@ -773,13 +827,15 @@ bool dwgWriter15::writeDwgHeader() {
     // the same accumulator for both buf and hBbuf.
     if (m_header != nullptr) {
         const std::uint64_t dataStartBit = m_buf.bitCount();
+        std::array<std::uint64_t, 4> currentReferenceBits{};
         // Propagate encode failure: writeDwgHeader reports success as a bool.
         if (!m_header->encodeDwgForWriter(
                 m_version, &m_buf, &m_buf, nullptr,
                 DRW::DwgNamedObjectsDictionaryHandle,
-                m_plotSettingsDictionaryHandle))
+                m_plotSettingsDictionaryHandle, &currentReferenceBits))
             return false;
-        if (!recordHeaderHandseedOffset(dataStartBit))
+        if (!recordHeaderHandseedOffset(dataStartBit)
+            || !recordHeaderCurrentReferenceOffsets(0u, currentReferenceBits))
             return false;
     }
 

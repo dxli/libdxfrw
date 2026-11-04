@@ -28,6 +28,7 @@
 # endif
 #endif
 
+#include <array>
 #include <bitset>
 #include <map>
 #include <memory>
@@ -407,7 +408,8 @@ private:
     [[nodiscard]] bool encodeDwgForWriter(
         DRW::Version version, dwgBufferW *buf, dwgBufferW *hBbuf,
         dwgBufferW *strBuf, std::uint32_t namedObjectDictionaryHandle,
-        std::uint32_t plotSettingsDictionaryHandle);
+        std::uint32_t plotSettingsDictionaryHandle,
+        std::array<std::uint64_t, 4>* currentReferenceBits = nullptr);
     bool parseCodeImpl(int code, const std::unique_ptr<dxfReader>& reader,
                        bool deferText);
     bool finalizeDxfHeader(const std::unique_ptr<dxfReader>& reader);

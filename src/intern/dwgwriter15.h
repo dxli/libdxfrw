@@ -85,6 +85,8 @@ public:
 
     bool writeFileHeaderStub() override;
     bool writeDwgHeader() override;
+    bool planHeaderCurrentReferences(
+        std::array<std::uint32_t, 4>& references) const override;
     bool writeDwgClasses() override;
     bool writeDwgObjects() override;
     bool completeDeferredDwgObjects() override;

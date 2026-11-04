@@ -1461,6 +1461,14 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dwg_reader_matrix_tests --header-reference-roles)
     set_tests_properties(libdxfrw_dwg_header_reference_roles PROPERTIES
         LABELS "fast;dwg;header;generated;handles" TIMEOUT 30)
+    add_test(NAME libdxfrw_dwg_header_current_references
+        COMMAND libdxfrw_dwg_reader_matrix_tests --header-current-references)
+    set_tests_properties(libdxfrw_dwg_header_current_references PROPERTIES
+        LABELS "fast;dwg;header;generated;handles;transaction" TIMEOUT 30)
+    add_test(NAME libdxfrw_dwg_header_writer_sealing
+        COMMAND libdxfrw_dwg_reader_matrix_tests --header-writer-sealing)
+    set_tests_properties(libdxfrw_dwg_header_writer_sealing PROPERTIES
+        LABELS "fast;dwg;header;generated;transaction" TIMEOUT 30)
     set_tests_properties(libdxfrw_dwg_r2007_section_map_page_extent PROPERTIES
         LABELS "fast;dwg;section-map;generated;AC1021"
         TIMEOUT 30)

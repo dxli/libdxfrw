@@ -54,6 +54,13 @@
 #include "intern/dwgwriter32.h"
 #include "intern/dwgsafety.h"
 
+class DwgHeaderCurrentTestAccess {
+public:
+    static std::array<std::uint32_t, 4> offsets(const dwgWriter& writer) {
+        return writer.m_headerCurrentReferenceBits;
+    }
+};
+
 class DrwHeaderEncodeTestAccess {
 public:
     static void setControlHandles(DRW_Header& header) {
@@ -15274,20 +15281,23 @@ void testHeaderWriterSealing(TestContext& t, const std::string& version) {
         const std::size_t dataPrefix = version == "AC1015" || version == "AC1018"
             ? 20u : version == "AC1027" || version == "AC1032" ? 28u : 24u;
         const auto patchBit = (start + dataPrefix) * 8u + header.dwgHandseedBitOffset();
+        const auto currentBits = DwgHeaderCurrentTestAccess::offsets(writer);
         bool otherBitsExact = before.size() == writer.buffer().size();
         for (std::size_t byte = 0; otherBitsExact && byte < before.size(); ++byte) {
             const auto changed = std::uint8_t(before[byte] ^ writer.buffer()[byte]);
             for (unsigned int bit = 0; bit < 8u; ++bit) {
                 const auto at = byte * 8u + bit;
                 if (at >= patchBit && at < patchBit + 32u) continue;
+                if (std::any_of(currentBits.begin(), currentBits.end(),
+                        [at](std::uint32_t startBit) {
+                            return at >= startBit && at < startBit + 32u;
+                        })) continue;
                 if (byte >= crcOffset && byte < crcOffset + 2u) continue;
                 if ((changed & (1u << (7u - bit))) != 0u) otherBitsExact = false;
             }
         }
         t.expect(otherBitsExact,
-                 "only HANDSEED bits/CRC change, including unaligned neighbors: " + label);
-        if (suppliedSeed != 0u)
-            t.expect(writer.buffer() == before, "unchanged high HANDSEED leaves all bytes exact: " + label);
+                 "only HEADER reference/HANDSEED bits and CRC change: " + label);
         const auto once = writer.buffer();
         t.expect(writer.finalizeHeaderHandseed() && writer.buffer() == once,
                  "HANDSEED patch/reseal is idempotent, not container finalization: " + label);
@@ -15319,6 +15329,204 @@ void testHeaderWriters(TestContext& t) {
     testHeaderWriterSealing<dwgWriter24>(t, "AC1024");
     testHeaderWriterSealing<dwgWriter27>(t, "AC1027");
     testHeaderWriterSealing<dwgWriter32>(t, "AC1032");
+}
+
+std::uint32_t readHeaderReferenceBits(const std::vector<std::uint8_t>& bytes,
+                                      std::uint32_t offset) {
+    std::uint32_t value = 0u;
+    for (std::uint64_t bit = offset; bit < static_cast<std::uint64_t>(offset) + 32u; ++bit) {
+        if (bit / 8u >= bytes.size())
+            return 0u;
+        value = (value << 1u) | ((bytes[bit / 8u] >> (7u - bit % 8u)) & 1u);
+    }
+    return value;
+}
+
+template<class Writer>
+void testHeaderCurrentReferencesForVersion(TestContext& t, const char* version) {
+    for (bool custom : {false, true}) {
+        std::stringbuf output(std::ios::out | std::ios::binary);
+        std::ofstream stream;
+        static_cast<std::ostream&>(stream).rdbuf(&output);
+        DRW_Header header;
+        if (custom) {
+            header.addStr("$CLAYER", "drawing-layer", 8);
+            header.addStr("$TEXTSTYLE", "drawing-style", 7);
+            header.addStr("$CELTYPE", "drawing-type", 6);
+            header.addStr("$DIMSTYLE", "drawing-dim", 2);
+        }
+        Writer writer(&stream, &header);
+        const bool headerWritten = writer.prepareDwgClassManifest()
+            && writer.writeFileHeaderStub() && writer.writeDwgHeader()
+            && writer.writeDwgClasses();
+        t.expect(headerWritten, std::string(version) + " current-reference header");
+        if (!headerWritten)
+            continue;
+        std::array<std::uint32_t, 4> expected{{0x12u, 0x13u, 0x10u, 0x15u}};
+        if (custom) {
+            DRW_LType lineType; lineType.name = "Drawing-Type";
+            DRW_Layer layer; layer.name = "Drawing-Layer";
+            DRW_Textstyle style; style.name = "Drawing-Style";
+            DRW_Dimstyle dim; dim.name = "Drawing-Dim";
+            expected[2] = writer.addLType(lineType);
+            expected[0] = writer.addLayer(layer);
+            expected[1] = writer.addTextstyle(style);
+            expected[3] = writer.addDimstyle(dim);
+        }
+        const bool objects = writer.writeDwgObjects() && writer.emitDeferredBlockControl();
+        t.expect(objects, std::string(version) + " current-reference targets emitted");
+        if (!objects)
+            continue;
+        const auto offsets = DwgHeaderCurrentTestAccess::offsets(writer);
+        const auto before = writer.buffer();
+        const bool finalized = writer.finalizeHeaderHandseed();
+        t.expect(finalized, std::string(version) + " current-reference finalization");
+        if (!finalized)
+            continue;
+        for (std::size_t i = 0; i < expected.size(); ++i) {
+            t.expect(expected[i] != 0u
+                         && readHeaderReferenceBits(before, offsets[i]) == 0u
+                         && readHeaderReferenceBits(writer.buffer(), offsets[i]) == expected[i],
+                     std::string(version) + " current name resolves to emitted table handle");
+        }
+        const auto once = writer.buffer();
+        t.expect(writer.finalizeHeaderHandseed() && writer.buffer() == once,
+                 std::string(version) + " current-reference finalization is idempotent");
+        t.expect(writer.writeDwgHandles() && writer.writeSecondHeader() && writer.finalize(),
+                 std::string(version) + " current-reference complete file publishes");
+        const auto file = output.str();
+        HeaderPublicationSink sink;
+        dwgRW reader("");
+        t.expect(reader.readBuffer(reinterpret_cast<const std::uint8_t*>(file.data()),
+                                   file.size(), &sink, false) && sink.headers == 1u,
+                 std::string(version) + " current-reference HEADER reads back");
+    }
+}
+
+class HeaderCurrentWriteAdapter final : public dx_iface {
+public:
+    explicit HeaderCurrentWriteAdapter(dwgRW& writer) : writer_(writer) {
+        cData = &data_;
+        currentBlock = data_.mBlock;
+    }
+    void writeHeader(DRW_Header& header) override {
+        header.addStr("$CLAYER", "selected-layer", 8);
+    }
+    void writeLTypes() override {}
+    void writeLayers() override {
+        if (includeLayer) {
+            DRW_Layer layer;
+            layer.name = "selected-layer";
+            wrote = writer_.addLayer(&layer) && wrote;
+        }
+    }
+    void writeTextstyles() override {}
+    void writeVports() override {}
+    void writeDimstyles() override {}
+    void writeAppId() override {}
+    void writeBlocks() override {}
+    void writeBlockRecords() override {}
+    void writeObjects() override {}
+    void writeEntities() override {
+        DRW_Line line;
+        line.basePoint = {1, 2, 3};
+        line.secPoint = {4, 5, 6};
+        wrote = writer_.writeLine(&line) && wrote;
+    }
+    bool includeLayer{false};
+    bool wrote{true};
+private:
+    dwgRW& writer_;
+    dx_data data_;
+};
+
+void testHeaderCurrentReferences(TestContext& t) {
+    testHeaderCurrentReferencesForVersion<dwgWriter15>(t, "AC1015");
+    testHeaderCurrentReferencesForVersion<dwgWriter18>(t, "AC1018");
+    testHeaderCurrentReferencesForVersion<dwgWriter21>(t, "AC1021");
+    testHeaderCurrentReferencesForVersion<dwgWriter24>(t, "AC1024");
+    testHeaderCurrentReferencesForVersion<dwgWriter27>(t, "AC1027");
+    testHeaderCurrentReferencesForVersion<dwgWriter32>(t, "AC1032");
+
+    // Every failure must precede any HEADER mutation; repairing the caller's
+    // value must make the same writer succeed and reseal its CRC.
+    for (int failure = 0; failure != 6; ++failure) {
+        std::stringbuf output(std::ios::out | std::ios::binary);
+        std::ofstream stream;
+        static_cast<std::ostream&>(stream).rdbuf(&output);
+        DRW_Header header;
+        if (failure == 0) header.addStr("$CLAYER", "missing", 8);
+        if (failure == 1) header.addStr("$CLAYER", "wrong-kind", 8);
+        if (failure == 2) header.addInt("$CLAYER", 0, 8);
+        if (failure == 3) {
+            header.addStr("$CLAYER", "0", 8);
+            header.addStr("CLAYER", "0", 8);
+        }
+        if (failure == 4) header.addStr("$CLAYER", "0", 7);
+        if (failure == 5) header.addStr("$clayer", "0", 8);
+        dwgWriter21 writer(&stream, &header);
+        const bool prepared = writer.prepareDwgClassManifest() && writer.writeFileHeaderStub()
+            && writer.writeDwgHeader() && writer.writeDwgClasses();
+        t.expect(prepared, "current-reference negative profile prepared");
+        if (!prepared) continue;
+        if (failure == 1) {
+            DRW_Textstyle wrong; wrong.name = "wrong-kind";
+            t.expect(writer.addTextstyle(wrong) != 0u, "wrong-kind target registered");
+        }
+        if (!writer.writeDwgObjects() || !writer.emitDeferredBlockControl()) {
+            t.expect(false, "current-reference negative profile tables emitted");
+            continue;
+        }
+        const auto before = writer.buffer();
+        const auto seed = header.getHandSeed();
+        t.expect(!writer.finalizeHeaderHandseed() && writer.buffer() == before
+                     && header.getHandSeed() == seed && output.str().empty(),
+                 "unresolved or ambiguous current reference refuses without mutation");
+        if (failure == 3) {
+            auto it = header.vars.find("CLAYER");
+            if (it != header.vars.end()) { delete it->second; header.vars.erase(it); }
+        }
+        if (failure == 5) {
+            auto it = header.vars.find("$clayer");
+            if (it != header.vars.end()) { delete it->second; header.vars.erase(it); }
+        }
+        header.addStr("$CLAYER", "0", 8);
+        t.expect(writer.finalizeHeaderHandseed()
+                     && readHeaderReferenceBits(writer.buffer(),
+                            DwgHeaderCurrentTestAccess::offsets(writer)[0]) == 0x12u,
+                 "corrected current reference retries on same writer");
+    }
+
+    const auto path = std::filesystem::temp_directory_path()
+        / ("libdxfrw-current-header-"
+           + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())
+           + ".dwg");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() { std::error_code ignored; std::filesystem::remove(path, ignored); }
+    } cleanup{path};
+    {
+        std::ofstream existing(path, std::ios::binary);
+        existing << "existing output sentinel";
+    }
+    dwgRW writer(path.string().c_str());
+    HeaderCurrentWriteAdapter adapter(writer);
+    const bool refused = !writer.write(&adapter, DRW::AC1021, true);
+    std::ifstream existing(path, std::ios::binary);
+    const std::string retained((std::istreambuf_iterator<char>(existing)), {});
+    existing.close();
+    t.expect(refused && retained == "existing output sentinel",
+             "missing current layer preserves an existing DWG destination");
+    adapter.includeLayer = true;
+    t.expect(writer.write(&adapter, DRW::AC1021, true) && adapter.wrote,
+             "adding the missing layer lets the same DWG writer retry");
+    std::ifstream published(path, std::ios::binary);
+    const std::vector<std::uint8_t> file((std::istreambuf_iterator<char>(published)), {});
+    HeaderPublicationSink sink;
+    dwgRW reader("");
+    t.expect(!file.empty() && reader.readBuffer(file.data(), file.size(), &sink, false)
+                 && sink.headers == 1u && sink.lines == 1u,
+             "corrected same-writer retry publishes a readable DWG");
 }
 
 void testHeaderWriterSealingFailures(TestContext& t) {
@@ -17739,6 +17947,19 @@ int main(int argc, char** argv) {
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
+    if (argc == 2 && std::string(argv[1]) == "--header-current-references") {
+        TestContext focused;
+        testHeaderCurrentReferences(focused);
+        std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--header-writer-sealing") {
+        TestContext focused;
+        testHeaderWriters(focused);
+        testHeaderWriterSealingFailures(focused);
+        std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--header-date-time-validation") {
         TestContext focused;
         testHeaderDateTimeEncoding(focused);
@@ -17965,6 +18186,7 @@ int main(int argc, char** argv) {
     testTrackedHeaderRead(context);
     testHeaderPublicRead(context);
     testHeaderReferenceRoles(context);
+    testHeaderCurrentReferences(context);
     testHeaderWriters(context);
     testHeaderWriterSealingFailures(context);
     testDwgOperationAdmission(context);

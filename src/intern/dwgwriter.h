@@ -15,6 +15,7 @@
 #define DWGWRITER_H
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <fstream>
 #include <limits>
@@ -227,6 +228,7 @@ static_assert(dwgTypedClassRowsAreWellFormed(),
 
 
 class dwgWriter {
+    friend class DwgHeaderCurrentTestAccess;
 public:
     /// Construct around an output stream and a populated header.
     /// The stream is held by reference for the final flush; the
@@ -737,6 +739,11 @@ public:
         return true;
     }
 
+    /// Resolve all current HEADER table names to already emitted identities.
+    /// A subclass must reject an incomplete or ambiguous plan before patching.
+    virtual bool planHeaderCurrentReferences(
+        std::array<std::uint32_t, 4>&) const { return false; }
+
     /// Patch the already-emitted HEADER field after all object handles have
     /// been minted, then reseal its CRC before container packaging. The fixed
     /// four-byte H payload can be unaligned but keeps section offsets stable.
@@ -757,6 +764,32 @@ public:
             (std::max)(m_header->getHandSeed(), highWaterHandle()), requiredSeed);
         if (seed <= maxHandle)
             return false;
+        std::array<std::uint32_t, 4> currentReferences{};
+        if (!planHeaderCurrentReferences(currentReferences))
+            return false;
+        const auto& headerBytes = m_buf.data();
+        const std::uint64_t crcBit = static_cast<std::uint64_t>(crcOffset) * 8u;
+        for (std::size_t i = 0; i < m_headerCurrentReferenceBits.size(); ++i) {
+            const std::uint64_t bit = m_headerCurrentReferenceBits[i];
+            if (currentReferences[i] == 0u
+                || bit < static_cast<std::uint64_t>(m_headerDataStartBit) + 8u
+                || bit > crcBit || crcBit - bit < 32u)
+                return false;
+            if (bit < static_cast<std::uint64_t>(m_headerHandseedBitOffset) + 32u
+                && m_headerHandseedBitOffset < bit + 32u)
+                return false;
+            std::uint8_t token = 0u;
+            for (std::uint64_t pos = bit - 8u; pos < bit; ++pos)
+                token = static_cast<std::uint8_t>((token << 1u)
+                    | ((headerBytes[pos / 8u] >> (7u - pos % 8u)) & 1u));
+            if (token != 0x54u)
+                return false;
+            for (std::size_t j = 0; j < i; ++j) {
+                const std::uint64_t other = m_headerCurrentReferenceBits[j];
+                if (bit < other + 32u && other < bit + 32u)
+                    return false;
+            }
+        }
         const std::uint8_t bytes[] = {
             static_cast<std::uint8_t>(seed >> 24),
             static_cast<std::uint8_t>(seed >> 16),
@@ -766,6 +799,17 @@ public:
         if (!m_buf.patchRawBytesAtBit(m_headerHandseedBitOffset, bytes,
                                       sizeof(bytes)))
             return false;
+        for (std::size_t i = 0; i < currentReferences.size(); ++i) {
+            const auto ref = currentReferences[i];
+            const std::uint8_t referenceBytes[] = {
+                static_cast<std::uint8_t>(ref >> 24),
+                static_cast<std::uint8_t>(ref >> 16),
+                static_cast<std::uint8_t>(ref >> 8),
+                static_cast<std::uint8_t>(ref)};
+            if (!m_buf.patchRawBytesAtBit(m_headerCurrentReferenceBits[i],
+                                          referenceBytes, sizeof(referenceBytes)))
+                return false;
+        }
         m_buf.patchRawShort16(crcOffset, m_buf.crc16(0xC0C1u, crcStart, crcOffset));
         m_header->setHandSeed(seed);
         return true;
@@ -1747,6 +1791,21 @@ protected:
         return true;
     }
 
+    bool recordHeaderCurrentReferenceOffsets(
+        std::uint64_t streamStartBit,
+        const std::array<std::uint64_t, 4>& relativeBits) {
+        std::array<std::uint32_t, 4> result{};
+        for (std::size_t i = 0; i < result.size(); ++i) {
+            std::uint64_t absolute = 0u;
+            if (!dwgSafety::add(streamStartBit, relativeBits[i], absolute)
+                || absolute > (std::numeric_limits<std::uint32_t>::max)())
+                return false;
+            result[i] = static_cast<std::uint32_t>(absolute);
+        }
+        m_headerCurrentReferenceBits = result;
+        return true;
+    }
+
     /// ODA v5.4.1 section 9: HEADER CRC covers RL and all declared data,
     /// including any optional maintenance word, and precedes the end sentinel.
     /// Use the writer's existing locator-0 range, not the accumulator's end:
@@ -2142,6 +2201,11 @@ protected:
         DRW_Header::kInvalidDwgHandseedBitOffset};
     std::uint32_t m_headerDataStartBit {
         DRW_Header::kInvalidDwgHandseedBitOffset};
+    std::array<std::uint32_t, 4> m_headerCurrentReferenceBits {{
+        DRW_Header::kInvalidDwgHandseedBitOffset,
+        DRW_Header::kInvalidDwgHandseedBitOffset,
+        DRW_Header::kInvalidDwgHandseedBitOffset,
+        DRW_Header::kInvalidDwgHandseedBitOffset}};
 
     /// Target write version.  Default AC1015 (R2000).  Subclasses for
     /// higher versions set this in their constructor before any emit calls

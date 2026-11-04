@@ -4141,7 +4141,8 @@ bool DRW_Header::encodeDwg(DRW::Version version, dwgBufferW *buf, dwgBufferW *hB
 bool DRW_Header::encodeDwgForWriter(
         DRW::Version version, dwgBufferW *buf, dwgBufferW *hBbuf,
         dwgBufferW *strBuf, std::uint32_t namedObjectDictionaryHandle,
-        std::uint32_t plotSettingsDictionaryHandle) {
+        std::uint32_t plotSettingsDictionaryHandle,
+        std::array<std::uint64_t, 4>* currentReferenceBits) {
     if (version != DRW::AC1015 && version != DRW::AC1018 &&
         version != DRW::AC1021 && version != DRW::AC1024 &&
         version != DRW::AC1027 &&
@@ -4371,13 +4372,21 @@ bool DRW_Header::encodeDwgForWriter(
     buf->putFixedHandle(4, static_cast<std::uint8_t>(sizeof(handSeed)), handSeed);
     // The following 5 handles emit to the HANDLE stream.  For R2000 the
     // handle stream is inline (buf == hBbuf in our usage).
-    hBbuf->putHandle(makeHardPtr(0));  // CLAYER
-    hBbuf->putHandle(makeHardPtr(0));  // TEXTSTYLE
-    hBbuf->putHandle(makeHardPtr(0));  // CELTYPE
+    const auto putCurrentReference = [&](std::size_t index) {
+        if (currentReferenceBits == nullptr) {
+            hBbuf->putHandle(makeHardPtr(0));
+            return;
+        }
+        (*currentReferenceBits)[index] = hBbuf->bitCount() + 8u;
+        hBbuf->putFixedHandle(DRW::DwgHardPointer, 4u, 0u);
+    };
+    putCurrentReference(0);           // CLAYER
+    putCurrentReference(1);           // TEXTSTYLE
+    putCurrentReference(2);           // CELTYPE
     if (version > DRW::AC1018) {       // 2007+: CMATERIAL (parseDwg:1960-1963)
         hBbuf->putHandle(makeHardPtr(0));
     }
-    hBbuf->putHandle(makeHardPtr(0));  // DIMSTYLE
+    putCurrentReference(3);           // DIMSTYLE
     hBbuf->putHandle(makeHardPtr(0));  // CMLSTYLE
 
     // -------- Paper-space view block (parseDwg:1965-1989) -------------------

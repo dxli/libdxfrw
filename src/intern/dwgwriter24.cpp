@@ -100,11 +100,12 @@ bool dwgWriter24::writeDwgHeader() {
         dwgBufferW dataBuf;
         dwgBufferW handleBuf;
         dwgBufferW strBuf;
+        std::array<std::uint64_t, 4> currentReferenceBits{};
         // Propagate encode failure: writeDwgHeader reports success as a bool.
         if (!m_header->encodeDwgForWriter(
                 m_version, &dataBuf, &handleBuf, &strBuf,
                 DRW::DwgNamedObjectsDictionaryHandle,
-                m_plotSettingsDictionaryHandle))
+                m_plotSettingsDictionaryHandle, &currentReferenceBits))
             return false;
         dataBuf.alignToByte();
         strBuf.alignToByte();
@@ -124,6 +125,9 @@ bool dwgWriter24::writeDwgHeader() {
         const std::uint64_t dataStartBit = m_buf.bitCount();
         m_buf.putBytes(dataBuf.data().data(), dataBuf.size());
         if (!recordHeaderHandseedOffset(dataStartBit))
+            return false;
+        if (!recordHeaderCurrentReferenceOffsets(m_buf.bitCount(),
+                                                 currentReferenceBits))
             return false;
         if (handleBuf.size() > 0)
             m_buf.putBytes(handleBuf.data().data(), handleBuf.size());
