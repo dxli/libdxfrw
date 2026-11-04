@@ -866,7 +866,10 @@ bit receipt](docs/research/p6-dwg-classes-true-header-bit-2026-11-03.json).
 R2004-family system pages now carry their required compressed-stream terminator.
 ODA advances past its prior invalid-input failure on a generated AC1018 drawing
 and reports an AcDbDictionary recovery error; resolve that object/graph failure
-next. The reader now rejects truncated declared literal runs while retaining
+next. The R2004+ DICTIONARY writer now retains the specified soft-pointer role
+for a null parent, but the effect on that ODA failure is not yet tested. See
+the [dictionary owner receipt](docs/research/p6-dictionary-root-typed-null-owner-2026-11-04.json).
+The reader now rejects truncated declared literal runs while retaining
 valid bounded and implicit-end streams; audit other malformed token profiles
 separately. See the [system-page receipt](docs/research/p6-r2004-system-page-termination-2026-11-03.json)
 and [literal-bounds receipt](docs/research/p6-r2004-decompress-literal-bounds-2026-11-03.json).

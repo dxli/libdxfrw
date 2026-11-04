@@ -12300,6 +12300,30 @@ bool makeDictionaryItemWireFrame(std::uint8_t hardOwner,
 }
 
 void testDictionaryItemWireRole(TestContext& t) {
+    // ODA 5.4.1 §20.4.44 specifies a soft-pointer parent. Independent
+    // AC1018/1024/1027/1032 producer controls show the root's null parent as
+    // the typed one-byte 0x40 handle. Check the bytes, not the writer ledger.
+    for (const DRW::Version version : kVersions) {
+        DictionaryEncodeProbe root;
+        root.parentHandle = 0u;
+        root.setDwgCommonObjectState(0, 1, false);
+        root.m_entries = {{"CHILD", 0x7fu}};
+        dwgBufferW body, strings, handles;
+        const bool encoded = root.encodeDwg(version, &body, &strings, &handles);
+        const std::vector<std::uint8_t> expected{
+            static_cast<std::uint8_t>(version >= DRW::AC1018 ? 0x40u : 0x00u),
+            0x21u, 0x7fu};
+        t.expect(encoded && handles.data() == expected,
+                 "DICTIONARY null parent and following entry use expected wire roles for version "
+                     + std::to_string(version));
+        root.parentHandle = 0x23u;
+        dwgBufferW secondBody, secondStrings, secondHandles;
+        t.expect(root.encodeDwg(version, &secondBody, &secondStrings, &secondHandles)
+                     && secondHandles.data() == std::vector<std::uint8_t>({0x41u, 0x23u, 0x21u, 0x7fu}),
+                 "DICTIONARY non-null parent and following entry retain wire roles for version "
+                     + std::to_string(version));
+    }
+
     for (const DRW::Version version : kVersions) {
         for (int hardOwnerValue = 0; hardOwnerValue <= 1; ++hardOwnerValue) {
             DictionaryEncodeProbe encoded;

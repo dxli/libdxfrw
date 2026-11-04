@@ -566,8 +566,12 @@ void putCommonObjectHandlePrefix(dwgBufferW* hb, std::uint32_t ownerRef,
                                  std::int32_t numReactors, std::uint8_t xDictFlag,
                                  const std::vector<std::uint32_t>* reactors = nullptr,
                                  std::uint32_t xDictRef = 0,
-                                 std::uint8_t ownerRole = DRW::DwgSoftPointer) {
-    hb->putHandle(makeRefW(ownerRef, ownerRole));
+                                 std::uint8_t ownerRole = DRW::DwgSoftPointer,
+                                 bool typedNullOwner = false) {
+    dwgHandle owner = makeRefW(ownerRef, ownerRole);
+    if (typedNullOwner && ownerRef == 0)
+        owner.code = ownerRole;
+    hb->putHandle(owner);
     for (std::int32_t i = 0; i < numReactors; ++i) {
         const std::uint32_t ref = reactors != nullptr
             && static_cast<std::size_t>(i) < reactors->size()
@@ -20959,7 +20963,8 @@ bool DRW_Dictionary::encodeDwgImpl(DRW::Version version, dwgBufferW *buf,
     // precede per-entry handles per ODA §20.4.44.
     putCommonObjectHandlePrefix(
         hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
-        &reactorHandles, xDictHandle);
+        &reactorHandles, xDictHandle, DRW::DwgSoftPointer,
+        version >= DRW::AC1018);
     for (const auto& e : m_entries) {
         hb->putHandle(makeRefW(e.m_handle, dwgItemHandleCode()));
     }
