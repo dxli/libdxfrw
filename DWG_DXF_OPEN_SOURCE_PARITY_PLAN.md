@@ -838,6 +838,10 @@ The AC1018 empty-name STYLE still fails strict output: ODA-produced bit
 observations conflict with the ODA v5.4.1 STYLE field order, which remains
 authoritative under repository instructions. A spurious FIELDLIST warning
 was also removed; see the [factorial receipt](docs/research/p4-ac1018-style-oda-factorial-and-fieldlist-diagnostic-2026-11-04.json).
+A diagnostic-only omission exposes a later HATCH with inactive gradient
+stops. ODA emits those stops in a profile conflicting with the DXF reference;
+keep strict refusal until a lossless qualified route exists. See the
+[ET blocker receipt](docs/research/p4-ac1018-et-style-hatch-later-blocker-2026-11-04.json).
 
 Older DXF output now refuses nonzero LWPOLYLINE vertex identifiers rather
 than silently dropping them; the earliest valid group-91 revision remains
