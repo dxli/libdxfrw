@@ -843,6 +843,9 @@ evidence and close the image/proxy graph while retaining the separate HEADER
 warnings and unclaimed suffix refusal. Audit other revisions' generic Unsupported
 paths separately. See the [HEADER receipt](docs/research/p6-ac1024-header-unclaimed-suffix-diagnostic-2026-11-04.json)
 and [IMAGEDEF receipt](docs/research/p4-ac1024-imagedef-owner-role-diagnostic-2026-11-04.json).
+An attributed AC1021 source also uses relative soft-pointer IMAGEDEF owners;
+its provenance and the absence of a located erratum do not resolve the conflict
+([receipt](docs/research/p4-imagedef-owner-role-ac1021-independent-source-2026-11-04.json)).
 
 SOLID, TRACE and 3DFACE input now refuse a fourth Z without fourth X/Y
 instead of silently replacing it. Valid triangle and default-Z inputs
