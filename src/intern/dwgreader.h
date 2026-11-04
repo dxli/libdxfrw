@@ -1560,6 +1560,9 @@ protected:
                                        DwgIntegrityAddressSpace::DecodedBuffer,
                                    std::int32_t sectionId = -1,
                                    std::uint64_t sectionOffset = 0);
+  /// Resolve the source HEADER current-table handles after all table maps
+  /// have been loaded, before publishing the header to the consumer.
+  void resolveDwgHeaderCurrentReferences(DRW_Header& hdr);
   [[nodiscard]] bool decodeDwgTemplate(DRW_Header& hdr,
                                        const std::uint8_t* data,
                                        std::size_t size,
@@ -2160,6 +2163,8 @@ public:
   std::unordered_map<std::string, size_t> m_skippedUnsupportedObjects;
   std::vector<DRW_RawDwgSection> m_rawDwgSections;
   std::optional<dwgHandle> m_dwgNodReference;
+  std::array<dwgHandle, 4> m_dwgHeaderCurrentReferences{};
+  bool m_haveDwgHeaderCurrentReferences{false};
   bool m_dwgNodPublished{false};
   bool m_dwgNodFailureReported{false};
   //! Typed AcDb:AcDsPrototype_1b index (PR-2a). Parallel to raw section store.

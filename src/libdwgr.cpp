@@ -4457,6 +4457,7 @@ bool dwgRW::processDwg() {
     }
 
     if (ret) {
+    reader->resolveDwgHeaderCurrentReferences(hdr);
     // The DWG header parser stores drawing variables, but $DWGCODEPAGE is a
     // file-envelope identity rather than a bit-stream header variable. Add it
     // immediately before publication so every DRW_Interface consumer receives

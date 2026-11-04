@@ -7287,6 +7287,8 @@ bool dwgReader::readDwgHeader(DRW_Header &hdr, dwgBuffer *buf,
                               std::int32_t sectionId,
                               std::uint64_t sectionOffset) {
   m_dwgNodReference.reset();
+  m_haveDwgHeaderCurrentReferences = false;
+  m_dwgHeaderCurrentReferences = {};
   m_dwgNodPublished = false;
   m_dwgNodFailureReported = false;
   hdr.m_dwgNamedObjectDictionaryReference.reset();
@@ -7353,7 +7355,9 @@ bool dwgReader::readDwgHeader(DRW_Header &hdr, dwgBuffer *buf,
              envelope.expected, envelope.observed, envelope.hasValues);
       return false;
     }
-    const bool ret = hdr.parseDwg(version, buf, hBuf, appMaintenanceVersion);
+    std::array<dwgHandle, 4> currentReferences{};
+    const bool ret = hdr.parseDwgForReader(
+        version, buf, hBuf, appMaintenanceVersion, &currentReferences);
     if (!ret) {
       clearHeader();
       report(DwgIntegrityCheckKind::HeaderSectionBounds,
@@ -7411,6 +7415,8 @@ bool dwgReader::readDwgHeader(DRW_Header &hdr, dwgBuffer *buf,
              wide ? m_dwgNodReference->ref64 : m_dwgNodReference->code, true);
       m_dwgNodFailureReported = true;
     }
+    m_dwgHeaderCurrentReferences = currentReferences;
+    m_haveDwgHeaderCurrentReferences = true;
     return true;
   } catch (...) {
     hdr.clearVars();
@@ -7420,6 +7426,93 @@ bool dwgReader::readDwgHeader(DRW_Header &hdr, dwgBuffer *buf,
            DwgIntegritySeverity::Error, {}, 0u, 0u, false);
     return false;
   }
+}
+
+void dwgReader::resolveDwgHeaderCurrentReferences(DRW_Header& hdr) {
+  if (!m_haveDwgHeaderCurrentReferences)
+    return; // Legacy readers did not parse this R13+ handle stream.
+
+  const auto equalName = [](const std::string& a, const std::string& b) {
+    if (a.size() != b.size())
+      return false;
+    for (std::size_t i = 0; i < a.size(); ++i) {
+      if (std::toupper(static_cast<unsigned char>(a[i]))
+          != std::toupper(static_cast<unsigned char>(b[i])))
+        return false;
+    }
+    return true;
+  };
+  const auto asciiName = [](const std::string& name) {
+    return std::all_of(name.begin(), name.end(), [](unsigned char c) {
+      return c < 0x80u;
+    });
+  };
+  const auto resolve = [&](std::size_t index, const char* key, int group,
+                           DwgIntegrityCheckKind kind, const auto& table) {
+    const dwgHandle& source = m_dwgHeaderCurrentReferences[index];
+    const bool narrow = source.ref64 <= (std::numeric_limits<std::uint32_t>::max)();
+    bool valid = source.code == DRW::DwgHardPointer && source.ref64 != 0u
+        && narrow && source.ref == source.ref64;
+    const auto found = valid ? table.find(source.ref) : table.end();
+    valid = valid && found != table.end() && found->second != nullptr;
+    std::string sourceName;
+    bool uniqueName = true;
+    if (valid) {
+      const auto* record = found->second;
+      sourceName = record->name;
+      valid = record->handle == source.ref && !sourceName.empty()
+          && sourceName.find('\0') == std::string::npos;
+      if (valid) {
+        for (const auto& entry : table) {
+          if (entry.first == source.ref || entry.second == nullptr)
+            continue;
+          const std::string& other = entry.second->name;
+          // The table writer uses bytewise case conversion, not proven
+          // Unicode collation. Keep the exact source name visible, but do
+          // not qualify its uniqueness when non-ASCII variants exist.
+          if (!asciiName(sourceName) || !asciiName(other)
+              || equalName(other, sourceName)) {
+            uniqueName = false;
+            break;
+          }
+        }
+      }
+    }
+    const std::string dollar = std::string("$") + key;
+    const auto bare = hdr.vars.find(key);
+    const auto qualified = hdr.vars.find(dollar);
+    if (bare != hdr.vars.end() && qualified != hdr.vars.end())
+      valid = false;
+    const auto existing = bare != hdr.vars.end() ? bare : qualified;
+    if (existing != hdr.vars.end()) {
+      const DRW_Variant* value = existing->second;
+      valid = valid && value != nullptr && value->type() == DRW_Variant::STRING
+          && value->code() == group && value->content.s != nullptr
+          && *value->content.s == sourceName;
+      if (valid && uniqueName)
+        return; // Repeated resolution of the same source is idempotent.
+    }
+    if (valid && existing == hdr.vars.end())
+      hdr.addStr(key, sourceName, group);
+    if (valid && uniqueName)
+      return;
+    // A record-level inconsistency remains a tolerant read, but must block
+    // strict-complete output rather than silently selecting a default.
+    recordIntegrityDiagnostic(
+        DwgIntegritySeverity::Error, DwgIntegrityAddressSpace::None,
+        DwgIntegrityPhase::SectionParser, kind, secEnum::HEADER, -1,
+        "AcDb:Header", 0u, false, 0u, false, source.ref, narrow,
+        DRW::DwgHardPointer, source.code, source.code != DRW::DwgHardPointer);
+  };
+  resolve(0u, "CLAYER", 8, DwgIntegrityCheckKind::HeaderCurrentLayerReference,
+          layermap);
+  resolve(1u, "TEXTSTYLE", 7,
+          DwgIntegrityCheckKind::HeaderCurrentTextStyleReference, stylemap);
+  resolve(2u, "CELTYPE", 6,
+          DwgIntegrityCheckKind::HeaderCurrentLineTypeReference, ltypemap);
+  resolve(3u, "DIMSTYLE", 2,
+          DwgIntegrityCheckKind::HeaderCurrentDimensionStyleReference,
+          dimstylemap);
 }
 
 bool dwgReader::checkSentinel(dwgBuffer *buf, enum secEnum::DWGSection sec,

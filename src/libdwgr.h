@@ -176,7 +176,11 @@ enum class DwgIntegrityCheckKind : std::uint8_t {
     EntityOwnerRecordMissing,
     /// An INSERT references an erased BLOCK_RECORD listed by BLOCK_CONTROL.
     /// The reference cannot be delivered without silently changing meaning.
-    EntityBlockRecordErased
+    EntityBlockRecordErased,
+    HeaderCurrentLayerReference,
+    HeaderCurrentTextStyleReference,
+    HeaderCurrentLineTypeReference,
+    HeaderCurrentDimensionStyleReference
 };
 
 /// Version of the field and enum contract carried by DwgIntegrityDiagnostic.

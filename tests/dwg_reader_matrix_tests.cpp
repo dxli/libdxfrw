@@ -14959,6 +14959,14 @@ public:
     void addHeader(const DRW_Header* header) override {
         ++headers;
         handseed = header->getHandSeed();
+        const std::array<const char*, 4> names{{"CLAYER", "TEXTSTYLE", "CELTYPE", "DIMSTYLE"}};
+        for (std::size_t i = 0; i < names.size(); ++i) {
+            const auto found = header->vars.find(names[i]);
+            if (found != header->vars.end() && found->second != nullptr
+                && found->second->type() == DRW_Variant::STRING
+                && found->second->content.s != nullptr)
+                currentNames[i] = *found->second->content.s;
+        }
     }
     void addLine(const DRW_Line& line) override {
         ++lines;
@@ -14967,6 +14975,7 @@ public:
     std::size_t headers{0};
     std::size_t lines{0};
     std::uint32_t handseed{0};
+    std::array<std::string, 4> currentNames{};
     DRW_Coord lineEnd;
     dx_data data;
 };
@@ -15400,6 +15409,11 @@ void testHeaderCurrentReferencesForVersion(TestContext& t, const char* version) 
         t.expect(reader.readBuffer(reinterpret_cast<const std::uint8_t*>(file.data()),
                                    file.size(), &sink, false) && sink.headers == 1u,
                  std::string(version) + " current-reference HEADER reads back");
+        const std::array<std::string, 4> expectedNames = custom
+            ? std::array<std::string, 4>{{"Drawing-Layer", "Drawing-Style", "Drawing-Type", "Drawing-Dim"}}
+            : std::array<std::string, 4>{{"0", "STANDARD", "BYLAYER", "STANDARD"}};
+        t.expect(sink.currentNames == expectedNames,
+                 std::string(version) + " source current handles resolve to table names");
     }
 }
 
@@ -15440,7 +15454,107 @@ private:
     dx_data data_;
 };
 
+class HeaderCurrentReaderProbe final : public dwgReader15 {
+public:
+    explicit HeaderCurrentReaderProbe(std::vector<std::uint8_t>& bytes)
+        : dwgReader15(std::make_unique<dwgBuffer>(bytes.data(), bytes.size()), nullptr) {
+        version = DRW::AC1015;
+        m_haveDwgHeaderCurrentReferences = true;
+        for (std::size_t i = 0; i < m_dwgHeaderCurrentReferences.size(); ++i) {
+            auto& ref = m_dwgHeaderCurrentReferences[i];
+            ref.code = DRW::DwgHardPointer;
+            ref.size = 1u;
+            ref.ref = static_cast<std::uint32_t>(0x51u + i);
+            ref.ref64 = ref.ref;
+        }
+        auto* layer = new DRW_Layer; layer->handle = 0x51u; layer->name = "Layer";
+        auto* style = new DRW_Textstyle; style->handle = 0x52u; style->name = "Style";
+        auto* type = new DRW_LType; type->handle = 0x53u; type->name = "Type";
+        auto* dim = new DRW_Dimstyle; dim->handle = 0x54u; dim->name = "Dim";
+        layermap.emplace(layer->handle, layer);
+        stylemap.emplace(style->handle, style);
+        ltypemap.emplace(type->handle, type);
+        dimstylemap.emplace(dim->handle, dim);
+    }
+    using dwgReader::resolveDwgHeaderCurrentReferences;
+    const std::vector<DwgIntegrityDiagnostic>& diagnostics() const {
+        return m_integrityDiagnostics;
+    }
+};
+
+void testHeaderSourceCurrentReferenceFailures(TestContext& t) {
+    // Each malformed reference stays diagnostic-only for tolerant reading;
+    // repairing the same source map/header can retry without inventing names.
+    for (int failure = 0; failure != 7; ++failure) {
+        std::vector<std::uint8_t> empty;
+        HeaderCurrentReaderProbe reader(empty);
+        DRW_Header header;
+        auto& layer = reader.m_dwgHeaderCurrentReferences[0];
+        if (failure == 0) layer.code = DRW::DwgSoftPointer;
+        if (failure == 1) { layer.ref = 0u; layer.ref64 = 0u; }
+        if (failure == 2) { layer.ref = 0x52u; layer.ref64 = 0x52u; } // STYLE, not LAYER
+        if (failure == 3) layer.ref64 = UINT64_C(0x100000051);
+        if (failure == 4) {
+            auto* duplicate = new DRW_Layer;
+            duplicate->handle = 0x55u; duplicate->name = "lAyEr";
+            reader.layermap.emplace(duplicate->handle, duplicate);
+        }
+        if (failure == 5) reader.layermap.at(0x51u)->handle = 0x77u;
+        if (failure == 6) {
+            auto* unknownCollation = new DRW_Layer;
+            unknownCollation->handle = 0x55u; unknownCollation->name = "\xc3\xa9";
+            reader.layermap.emplace(unknownCollation->handle, unknownCollation);
+        }
+        reader.resolveDwgHeaderCurrentReferences(header);
+        const auto layerVar = header.vars.find("CLAYER");
+        t.expect(reader.diagnostics().size() == 1u
+                     && reader.diagnostics()[0].severity == DwgIntegritySeverity::Error
+                     && reader.diagnostics()[0].kind
+                            == DwgIntegrityCheckKind::HeaderCurrentLayerReference,
+                 "unresolved or ambiguous source current layer is an error diagnostic");
+        const bool knownIdentity = failure == 4 || failure == 6;
+        t.expect((layerVar != header.vars.end()) == knownIdentity,
+                 "only an exactly resolved source handle publishes its name");
+        if (knownIdentity && layerVar != header.vars.end())
+            t.expect(layerVar->second->type() == DRW_Variant::STRING
+                         && *layerVar->second->content.s == "Layer",
+                     "ambiguous source keeps exact selected name visible");
+        t.expect(header.vars.count("TEXTSTYLE") == 1u
+                     && header.vars.count("CELTYPE") == 1u
+                     && header.vars.count("DIMSTYLE") == 1u,
+                 "independently valid current-reference names are retained");
+        layer.code = DRW::DwgHardPointer;
+        layer.ref = 0x51u; layer.ref64 = 0x51u;
+        reader.layermap.at(0x51u)->handle = 0x51u;
+        const auto duplicate = reader.layermap.find(0x55u);
+        if (duplicate != reader.layermap.end()) {
+            delete duplicate->second;
+            reader.layermap.erase(duplicate);
+        }
+        reader.resolveDwgHeaderCurrentReferences(header);
+        const auto corrected = header.vars.find("CLAYER");
+        t.expect(corrected != header.vars.end()
+                     && corrected->second->type() == DRW_Variant::STRING
+                     && *corrected->second->content.s == "Layer"
+                     && reader.diagnostics().size() == 1u,
+                 "corrected source reference retries idempotently on same reader/header");
+    }
+    // A sole non-ASCII table name is preserved exactly; an additional name
+    // leaves Unicode collation unqualified and produces a diagnostic above.
+    std::vector<std::uint8_t> empty;
+    HeaderCurrentReaderProbe reader(empty);
+    reader.layermap.at(0x51u)->name = "\xc3\xa9";
+    DRW_Header header;
+    reader.resolveDwgHeaderCurrentReferences(header);
+    const auto found = header.vars.find("CLAYER");
+    t.expect(found != header.vars.end()
+                 && *found->second->content.s == "\xc3\xa9"
+                 && reader.diagnostics().empty(),
+             "single non-ASCII source name is retained without invented collation");
+}
+
 void testHeaderCurrentReferences(TestContext& t) {
+    testHeaderSourceCurrentReferenceFailures(t);
     testHeaderCurrentReferencesForVersion<dwgWriter15>(t, "AC1015");
     testHeaderCurrentReferencesForVersion<dwgWriter18>(t, "AC1018");
     testHeaderCurrentReferencesForVersion<dwgWriter21>(t, "AC1021");
@@ -15527,6 +15641,25 @@ void testHeaderCurrentReferences(TestContext& t) {
     t.expect(!file.empty() && reader.readBuffer(file.data(), file.size(), &sink, false)
                  && sink.headers == 1u && sink.lines == 1u,
              "corrected same-writer retry publishes a readable DWG");
+}
+
+// Optional local physical-producer regression; the caller supplies the
+// separately held mechanical_example-imperial.dwg, never a vendored fixture.
+void testPhysicalMechanicalHeaderCurrentReferences(TestContext& t,
+                                                    const char* path) {
+    HeaderPublicationSink sink;
+    dwgRW reader(path);
+    const bool read = reader.read(&sink, false);
+    const std::array<std::string, 4> expected{{"0", "Notes", "ByLayer", "MEP"}};
+    t.expect(read && sink.headers == 1u && sink.currentNames == expected,
+             "physical AC1024 mechanical HEADER retains source current names");
+    const auto diagnostics = reader.getIntegrityDiagnostics();
+    t.expect(std::none_of(diagnostics.begin(), diagnostics.end(), [](const auto& d) {
+        return d.kind == DwgIntegrityCheckKind::HeaderCurrentLayerReference
+            || d.kind == DwgIntegrityCheckKind::HeaderCurrentTextStyleReference
+            || d.kind == DwgIntegrityCheckKind::HeaderCurrentLineTypeReference
+            || d.kind == DwgIntegrityCheckKind::HeaderCurrentDimensionStyleReference;
+    }), "physical AC1024 mechanical current references need no ambiguity/error diagnostics");
 }
 
 void testHeaderWriterSealingFailures(TestContext& t) {
@@ -17821,6 +17954,12 @@ int runAssociativeRawCarrierRetention(const std::string& path) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--header-current-mechanical") {
+        TestContext focused;
+        testPhysicalMechanicalHeaderCurrentReferences(focused, argv[2]);
+        std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
     if (argc == 2
         && std::string(argv[1]) == "--bounded-eed-application-chunks") {
         TestContext focused;

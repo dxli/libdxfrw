@@ -3163,6 +3163,13 @@ bool DRW_Header::getCoord(std::string key, DRW_Coord *varCoord){
 bool DRW_Header::parseDwg(DRW::Version version, dwgBuffer *buf,
                           dwgBuffer *hBbuf,
                           std::uint8_t maintenanceVersion) {
+    return parseDwgForReader(version, buf, hBbuf, maintenanceVersion, nullptr);
+}
+
+bool DRW_Header::parseDwgForReader(
+        DRW::Version version, dwgBuffer *buf, dwgBuffer *hBbuf,
+        std::uint8_t maintenanceVersion,
+        std::array<dwgHandle, 4>* currentReferences) {
     m_dwgNamedObjectDictionaryReference.reset();
     if (buf == nullptr || hBbuf == nullptr)
         return false;
@@ -3174,14 +3181,17 @@ bool DRW_Header::parseDwg(DRW::Version version, dwgBuffer *buf,
     curr = nullptr;
     name.clear();
     try {
-        const bool parsed = parseDwgImpl(version, buf, hBbuf,
-                                         maintenanceVersion);
+        std::array<dwgHandle, 4> stagedReferences{};
+        const bool parsed = parseDwgImplForReader(
+            version, buf, hBbuf, maintenanceVersion, &stagedReferences);
         const bool valid = parsed && buf->isGood() && hBbuf->isGood();
         if (!valid) {
             clearVars();
             curr = nullptr;
             name.clear();
         }
+        if (valid && currentReferences != nullptr)
+            *currentReferences = stagedReferences;
         return valid;
     } catch (...) {
         clearVars();
@@ -3197,24 +3207,35 @@ bool DRW_Header::parseDwg(DRW::Version version, dwgBuffer *buf,
 bool DRW_Header::parseDwgImpl(DRW::Version version, dwgBuffer *buf,
                               dwgBuffer *hBbuf,
                               std::uint8_t maintenanceVersion) {
+    return parseDwgImplForReader(version, buf, hBbuf, maintenanceVersion, nullptr);
+}
+
+bool DRW_Header::parseDwgImplForReader(
+        DRW::Version version, dwgBuffer *buf, dwgBuffer *hBbuf,
+        std::uint8_t maintenanceVersion,
+        std::array<dwgHandle, 4>* currentReferences) {
     // Preserve existing modern body-only callers. Full sections use the same
     // admitted envelope and upper ceilings on every version, not only R2000.
     if (version != DRW::AC1015 && buf->getPosition() == 0u)
-        return parseDwgBody(version, buf, hBbuf, maintenanceVersion, true);
+        return parseDwgBodyForReader(version, buf, hBbuf, maintenanceVersion,
+                                     true, currentReferences);
     const auto envelope = inspectDwgHeaderEnvelope(*buf, version,
                                                    maintenanceVersion);
     if (envelope.error != DwgHeaderEnvelopeError::None)
         return false;
     if (envelope.compact)
-        return parseDwgBody(version, buf, hBbuf, maintenanceVersion, true);
+        return parseDwgBodyForReader(version, buf, hBbuf, maintenanceVersion,
+                                     true, currentReferences);
     auto data = buf->forkBounded(envelope.payloadEnd);
     if (hBbuf == buf) {
-        if (!parseDwgBody(version, &data, &data, maintenanceVersion, false)
+        if (!parseDwgBodyForReader(version, &data, &data, maintenanceVersion,
+                                    false, currentReferences)
             || !data.isGood())
             return false;
     } else {
         auto handles = hBbuf->forkBounded(envelope.payloadEnd);
-        if (!parseDwgBody(version, &data, &handles, maintenanceVersion, false)
+        if (!parseDwgBodyForReader(version, &data, &handles, maintenanceVersion,
+                                    false, currentReferences)
             || !data.isGood() || !handles.isGood()
             || !hBbuf->setPosition(handles.getPosition()))
             return false;
@@ -3227,6 +3248,14 @@ bool DRW_Header::parseDwgBody(DRW::Version version, dwgBuffer *buf,
                               dwgBuffer *hBbuf,
                               std::uint8_t maintenanceVersion,
                               bool consumeTrailer) {
+    return parseDwgBodyForReader(version, buf, hBbuf, maintenanceVersion,
+                                 consumeTrailer, nullptr);
+}
+
+bool DRW_Header::parseDwgBodyForReader(
+        DRW::Version version, dwgBuffer *buf, dwgBuffer *hBbuf,
+        std::uint8_t maintenanceVersion, bool consumeTrailer,
+        std::array<dwgHandle, 4>* currentReferences) {
     bool result = true;
     const std::uint64_t headerStart = buf->getPosition();
     std::uint32_t size = buf->getRawLong32();
@@ -3478,6 +3507,8 @@ bool DRW_Header::parseDwgBody(DRW::Version version, dwgBuffer *buf,
     }
     dwgHandle DIMSTYLE = hBbuf->getHandle();
     DRW_DBG("\nDIMSTYLE: "); DRW_DBGHL(DIMSTYLE.code, DIMSTYLE.size, DIMSTYLE.ref);
+    if (currentReferences != nullptr)
+        *currentReferences = {{CLAYER, TEXTSTYLE, CELTYPE, DIMSTYLE}};
     dwgHandle CMLSTYLE = hBbuf->getHandle();
     DRW_DBG("\nCMLSTYLE: "); DRW_DBGHL(CMLSTYLE.code, CMLSTYLE.size, CMLSTYLE.ref);
     if (version > DRW::AC1014) {//2000+
