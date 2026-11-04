@@ -539,6 +539,107 @@ bool textControls(const std::filesystem::path& dir, bool binary) {
     retryInput.texts[1] = original;
     return retryWriter.write(&retryInput, DRW::AC1027, binary);
 }
+
+bool sameInsert(const DRW_Insert& a, const DRW_Insert& b) {
+    return same(a.basePoint,b.basePoint) && same(a.extPoint,b.extPoint)
+        && near(a.xscale,b.xscale) && near(a.yscale,b.yscale)
+        && near(a.zscale,b.zscale) && near(a.angle,b.angle)
+        && near(a.colspace,b.colspace) && near(a.rowspace,b.rowspace)
+        && a.colcount == b.colcount && a.rowcount == b.rowcount
+        && a.haveExtrusion == b.haveExtrusion && a.name == b.name && a.layer == b.layer;
+}
+struct InsertAdapter final : LC3CompatCheck {
+    std::vector<DRW_Insert> inserts;
+    dxfRW* writer = nullptr;
+    bool convert = false, failed = false;
+    void addInsert(const DRW_Insert& e) override { inserts.push_back(e); }
+    void writeEntities() override {
+        failed = false;
+        for (const auto& e : inserts) {
+            DRW_Insert out = e;
+            if ((convert && !DRW_DxfLegacyExtrusion::toNativeOcs(e,out))
+                || !writer->writeInsert(&out)) { failed = true; return; }
+        }
+    }
+    bool finalizeDxfWrite() override { return !failed; }
+};
+DRW_Insert authoredInsert(const DRW_Coord& normal) {
+    DRW_Insert e; e.name = "UNIT"; e.basePoint = {3.,4.,2.};
+    e.extPoint = normal; e.haveExtrusion = true; e.xscale = 2.;
+    e.yscale = 3.; e.zscale = 4.; e.angle = 0.5; e.layer = "INSERT_TEST";
+    e.colcount = 2; e.rowcount = 3; e.colspace = 5.; e.rowspace = 6.;
+    return e;
+}
+bool insertControls(const std::filesystem::path& dir, bool binary) {
+    InsertAdapter input;
+    for (const DRW_Coord normal : {DRW_Coord{0.,1.,0.}, DRW_Coord{0.,0.,-1.},
+                                   DRW_Coord{0.015625,0.,1.}, DRW_Coord{0.0158,0.,1.}})
+        input.inserts.push_back(authoredInsert(normal));
+    const auto initial = dir / (binary ? "insert-original-binary.dxf" : "insert-original-ascii.dxf");
+    const auto converted = dir / (binary ? "insert-converted-binary.dxf" : "insert-converted-ascii.dxf");
+    dxfRW first(initial.string().c_str()); input.writer = &first;
+    if (!first.write(&input, DRW::AC1027, binary)) return false;
+    InsertAdapter raw, applied;
+    dxfRW rawReader(initial.string().c_str()), appliedReader(initial.string().c_str());
+    if (!rawReader.read(&raw, false) || !appliedReader.read(&applied, true)
+        || raw.inserts.size() != 4u || applied.inserts.size() != 4u) return false;
+    dxfRW second(converted.string().c_str()); applied.writer = &second; applied.convert = true;
+    if (!second.write(&applied, DRW::AC1027, binary)) return false;
+    InsertAdapter result; dxfRW finalReader(converted.string().c_str());
+    if (!finalReader.read(&result, false) || result.inserts.size() != 4u) return false;
+    for (std::size_t i = 0; i < 4; ++i)
+        if (!sameInsert(raw.inserts[i], result.inserts[i])) return false;
+
+    DRW_Insert insert = authoredInsert({3.,4.,-5.});
+    insert.blockRecH.code = 5; insert.blockRecH.size = 2;
+    insert.blockRecH.ref = 42; insert.blockRecH.ref64 = 42;
+    const DRW_Insert original = insert; insert.applyExtrusion();
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(insert,insert) || !sameInsert(insert,original)
+        || insert.blockRecH.code != 5 || insert.blockRecH.size != 2
+        || insert.blockRecH.ref != 42 || insert.blockRecH.ref64 != 42) return false;
+    insert = original; insert.haveExtrusion = false; const DRW_Insert noOp = insert;
+    insert.applyExtrusion();
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(insert,insert) || !sameInsert(insert,noOp)) return false;
+    DRW_Insert unchanged = original, invalid = original;
+    invalid.extPoint = {0.,0.,0.}; const DRW_Insert invalidBefore = invalid;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid,unchanged) || !sameInsert(unchanged,original)
+        || DRW_DxfLegacyExtrusion::toNativeOcs(invalid,invalid) || !sameInsert(invalid,invalidBefore)) return false;
+    invalid = original; invalid.extPoint = {1.,1.,0.};
+    invalid.basePoint = {std::numeric_limits<double>::max(),-std::numeric_limits<double>::max(),0.};
+    const DRW_Insert overflowBefore = invalid;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid,unchanged) || !sameInsert(unchanged,original)
+        || DRW_DxfLegacyExtrusion::toNativeOcs(invalid,invalid) || !sameInsert(invalid,overflowBefore)) return false;
+    invalid = original; invalid.eType = DRW::LINE;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid,unchanged) || !sameInsert(unchanged,original)) return false;
+    struct DerivedInsert : DRW_Insert {} derived;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(derived,unchanged) || !sameInsert(unchanged,original)
+        || DRW_DxfLegacyExtrusion::toNativeOcs(original,derived)) return false;
+    invalid = original; invalid.attlist.push_back(std::make_shared<DRW_Attrib>());
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid,unchanged) || !sameInsert(unchanged,original)) return false;
+    invalid = original; invalid.attlist.push_back(nullptr);
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid,unchanged) || !sameInsert(unchanged,original)) return false;
+    invalid = original; invalid.seqEndEntity = std::make_shared<DRW_SeqEnd>();
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid,unchanged) || !sameInsert(unchanged,original)) return false;
+    invalid = original; invalid.attribHandles.emplace_back();
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid,unchanged) || !sameInsert(unchanged,original)) return false;
+    for (int part = 0; part < 4; ++part) {
+        invalid = original;
+        if (part == 0) invalid.seqendH.code = 3;
+        if (part == 1) invalid.seqendH.size = 1;
+        if (part == 2) invalid.seqendH.ref = 1;
+        if (part == 3) invalid.seqendH.ref64 = 1;
+        if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid,unchanged) || !sameInsert(unchanged,original)) return false;
+    }
+    const auto retry = dir / (binary ? "insert-retry-binary.dxf" : "insert-retry-ascii.dxf");
+    { std::ofstream out(retry, std::ios::binary); out << "unchanged"; }
+    invalid = original; invalid.attlist.push_back(std::make_shared<DRW_Attrib>());
+    InsertAdapter retryInput; retryInput.inserts = {original,invalid}; retryInput.convert = true;
+    dxfRW retryWriter(retry.string().c_str()); retryInput.writer = &retryWriter;
+    if (retryWriter.write(&retryInput,DRW::AC1027,binary)) return false;
+    { std::ifstream in(retry, std::ios::binary); if (std::string((std::istreambuf_iterator<char>(in)), {}) != "unchanged") return false; }
+    retryInput.inserts[1] = original;
+    return retryWriter.write(&retryInput,DRW::AC1027,binary);
+}
 } // namespace
 
 int main(int argc, char** argv) {
@@ -554,6 +655,7 @@ int main(int argc, char** argv) {
         pass = refusalAndRetry(dir / (binary ? "retry-binary.dxf" : "retry-ascii.dxf"), binary) && pass;
         pass = traceControls(dir, binary) && pass;
         pass = textControls(dir, binary) && pass;
+        pass = insertControls(dir, binary) && pass;
     }
     pass = dwgRoundTrip(dir) && pass;
     pass = dwgRefusalAndRetry(dir / "ac1024-retry.dwg") && pass;

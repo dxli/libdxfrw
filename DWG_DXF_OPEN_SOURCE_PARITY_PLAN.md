@@ -884,6 +884,10 @@ positive-finite chain profile, including external near-unit precision and native
 rendering ([receipt](docs/research/p6-ac1015-attributed-insert-positive-scale-2026-11-04.json)).
 Qualify additional INSERT extrusion normals and coordinate profiles beyond the
 explicit AC1015 default, tilted-Y and negative-Z controls ([receipt](docs/research/p6-ac1015-attributed-insert-tilted-2026-11-04.json)).
+Qualify attributed INSERT and SEQEND coordinate recovery, broader producers,
+normal profiles and native rendering beyond the explicit un-attributed DXF
+inverse-extrusion helper; DWG INSERT delivery currently retains native OCS
+([receipt](docs/research/p6-insert-legacy-extrusion-opt-in-2026-11-04.json)).
 Resolve the observed AC1024 VIEWPORT ambient CMC index discrepancy against
 the ODA CMC wording, including safe handling after caller edits; do not infer
 a rendering difference from the index alone ([receipt](docs/research/p6-ac1024-viewport-ambient-cmc-index-differential-2026-11-04.json)).

@@ -7314,6 +7314,8 @@ static_assert(std::is_nothrow_move_assignable<DRW_Solid>::value,
               "conversion publication must not throw");
 static_assert(std::is_nothrow_move_assignable<DRW_Text>::value,
               "conversion publication must not throw");
+static_assert(std::is_nothrow_move_assignable<DRW_Insert>::value,
+              "conversion publication must not throw");
 bool validLegacyDxfExtrusion(const DRW_Circle& value) noexcept {
     const DRW_Coord& normal = value.extPoint;
     const DRW_Coord& center = value.basePoint;
@@ -7439,6 +7441,34 @@ bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Text& input,
                 candidate.extPoint, candidate.secPoint);
             if (!finite(candidate.basePoint) || !finite(candidate.secPoint))
                 return false;
+        }
+        output = std::move(candidate);
+        return true;
+    } catch (...) { return false; }
+}
+
+bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Insert& input,
+                                         DRW_Insert& output) noexcept {
+    if (typeid(input) != typeid(DRW_Insert) || typeid(output) != typeid(DRW_Insert)
+        || input.eType != DRW::INSERT || !input.attlist.empty()
+        || input.seqEndEntity || !input.attribHandles.empty()
+        || input.seqendH.code != 0 || input.seqendH.size != 0
+        || input.seqendH.ref != 0 || input.seqendH.ref64 != 0) return false;
+    const auto finite = [](const DRW_Coord& p) noexcept {
+        return std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
+    };
+    if (!finite(input.basePoint) || !finite(input.extPoint)
+        || !std::isfinite(input.xscale) || !std::isfinite(input.yscale)
+        || !std::isfinite(input.zscale) || !std::isfinite(input.angle)
+        || !std::isfinite(input.colspace) || !std::isfinite(input.rowspace)
+        || (input.extPoint.x == 0.0 && input.extPoint.y == 0.0
+            && input.extPoint.z == 0.0)) return false;
+    try {
+        DRW_Insert candidate(input);
+        if (candidate.haveExtrusion) {
+            candidate.basePoint = inverseTransformOcsCoordinate(
+                candidate.extPoint, candidate.basePoint);
+            if (!finite(candidate.basePoint)) return false;
         }
         output = std::move(candidate);
         return true;

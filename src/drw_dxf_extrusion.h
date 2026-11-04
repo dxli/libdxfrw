@@ -36,6 +36,12 @@ namespace DRW_DxfLegacyExtrusion {
 // is for DXF output; the DWG reader does not currently apply that transform to
 // TEXT. Exact runtime types exclude ATTRIB, ATTDEF, MTEXT and other subclasses.
 [[nodiscard]] bool toNativeOcs(const DRW_Text& input, DRW_Text& output) noexcept;
+// Recover the insertion point of an exact, un-attributed INSERT after one
+// actual legacy extrusion application. Attached attributes, a retained SEQEND,
+// or stored child handles are refused; their independent frames need separate
+// recovery. This overload is qualified for DXF output only. The current DWG
+// reader delivers INSERT in its native frame without applying this transform.
+[[nodiscard]] bool toNativeOcs(const DRW_Insert& input, DRW_Insert& output) noexcept;
 }
 
 #endif
