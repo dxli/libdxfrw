@@ -45,6 +45,11 @@ void usage(){
     std::cout << "   decoding and unsupported legacy Unicode profiles fail without publication." << std::endl;
     std::cout << "   --dxf-codepage-policy=compatible|exact-named selects DXF input mapping." << std::endl;
     std::cout << "   Default is compatible; exact input still requires an eligible source profile." << std::endl;
+    std::cout << "   --observe-whole-dxf-source observes DXF scalars during import for" << std::endl;
+    std::cout << "   eligible lossless profiles, including in batch mode. It is off by default" << std::endl;
+    std::cout << "   and retains up to 64 MiB of source data with a separate work limit;" << std::endl;
+    std::cout << "   total memory can be higher and strict checks remain in force." << std::endl;
+    std::cout << "   An emitted DXF may not itself qualify for another conversion." << std::endl;
     std::cout << "   --allow-partial-dwg-read permits bounded terminal DWG frame losses;" << std::endl;
     std::cout << "   strict is the default; owner/reference checks remain strict and" << std::endl;
     std::cout << "   partial output is not a complete DWG semantics/support claim." << std::endl;
@@ -197,7 +202,8 @@ bool convertFile(std::string inName, std::string outName, DRW::Version ver,
                  bool binary, bool overwrite, bool debug,
                  bool nonInteractive = false,
                  DRW::DxfCodePagePolicy codePagePolicy = DRW::DxfCodePagePolicy::Compatible,
-                 bool allowPartialDwgRead = false){
+                 bool allowPartialDwgRead = false,
+                 bool observeWholeDxfSource = false){
     bool badState = false;
     //verify if input file exist
     std::ifstream ifs;
@@ -258,6 +264,10 @@ bool convertFile(std::string inName, std::string outName, DRW::Version ver,
     dx_data fData;
     //First read a dwg or dxf file
     dx_iface input;
+    if (observeWholeDxfSource && !input.enableWholeDxfSourceObservation()) {
+        std::cerr << "Error: cannot enable DXF source observation" << std::endl;
+        return false;
+    }
     badState = input.fileImport(inName, &fData, debug, codePagePolicy);
     if (!badState) {
         std::cout << "Error reading file " << inName << std::endl;
@@ -350,7 +360,8 @@ int main(int argc, char *argv[]) {
         const bool ok = convertFile(fileName, outName, options.version,
                                     options.binary, options.overwrite,
                                     options.debug, true, options.codePagePolicy,
-                                    options.allowPartialDwgRead);
+                                    options.allowPartialDwgRead,
+                                    options.observeWholeDxfSource);
         if (ok) {
             std::cout << "Success: converted " << fileName << " to " << outName << std::endl;
             return 0;
@@ -379,7 +390,7 @@ int main(int argc, char *argv[]) {
     if (!options.batch){ //no batch mode, only one file
         bool ok = convertFile(fileName, outName, options.version, options.binary,
                               options.overwrite, options.debug, false, options.codePagePolicy,
-                              options.allowPartialDwgRead);
+                              options.allowPartialDwgRead, options.observeWholeDxfSource);
         if (ok) {
             std::cout << "Success: converted " << fileName << " to " << outName << std::endl;
             return 0;
@@ -488,7 +499,7 @@ int main(int argc, char *argv[]) {
                 && convertFile(inputs[index], output, options.version,
                                options.binary, options.overwrite,
                                options.debug, true, options.codePagePolicy,
-                               options.allowPartialDwgRead);
+                               options.allowPartialDwgRead, options.observeWholeDxfSource);
             std::cout << (ok ? "Success: " : "Failed: ") << inputs[index]
                       << " -> " << output << '\n';
             allOk = ok && allOk;

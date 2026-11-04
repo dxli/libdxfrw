@@ -233,6 +233,14 @@ commands; missing/unknown values and repeated/conflicting policy tokens fail
 before file conversion. It affects DXF entries only; DWG decoding is unchanged.
 FreeCAD's original `[dwg2dxf, input, "-o", output]` call remains unchanged.
 
+For eligible DXF source profiles, `--observe-whole-dxf-source` enables bounded
+scalar observation before import. It is off by default and works with positional,
+`-o` and batch commands. Observation retains at most 64 MiB of source data and
+has a separate work limit; total process memory can be higher. It leaves strict
+text, ownership, graph and output checks in force. For example, it enables the
+qualified AC1027 SUNSTUDY graph profile; the resulting output may not itself
+qualify for another conversion under that narrow source profile.
+
 For example, `dwg2dxf input.dxf -o output.dxf --dxf-codepage-policy=exact-named`
 retains the input revision unless an output
 version is selected. Input selection does not weaken required source/target

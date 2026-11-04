@@ -11,6 +11,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from bounded_process import run_bounded
+from audit_sunstudy_dxf_graph import author as author_sunstudy, inspect as inspect_sunstudy
 
 
 SOURCE = (b"0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n0\nENDSEC\n"
@@ -19,6 +20,91 @@ SOURCE = (b"0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n0\nENDSEC\n"
           b"0\nENDSEC\n0\nEOF\n")
 BINARY_PREFIX = b"AutoCAD Binary DXF\r\n\x1a\x00"
 SENTINEL = b"CLI overwrite-authority sentinel\n"
+
+
+def check_sunstudy_observation_cli(converter, root):
+    """Locally authored graph: explicit observation, strict output, atomic refusal."""
+    source = root / "sun-source.dxf"
+    author_sunstudy(source)
+    source_bytes = source.read_bytes()
+    destination = root / "sun-output.dxf"
+    flag = "--observe-whole-dxf-source"
+
+    def convert(args, should_succeed):
+        result = run_bounded([str(converter), *map(str, args)], 8, 131072, cwd=root)
+        if (result.returncode == 0) != should_succeed:
+            raise AssertionError(f"SUNSTUDY CLI exit={result.returncode}: "
+                                 f"{(result.stdout + result.stderr)[:2048]!r}")
+
+    # No observation and an unknown similarly spelled switch must not grant it.
+    for options in ([], [flag + "-unexpected"]):
+        destination.write_bytes(SENTINEL)
+        convert([source, "-o", destination, "-y", *options], False)
+        if destination.read_bytes() != SENTINEL:
+            raise AssertionError("unqualified SUNSTUDY output replaced destination")
+
+    # The eligible source works in each encoding. The adapter selector checks
+    # exact graph readback in both; here inspect ASCII and Binary identity bytes.
+    for binary in (False, True):
+        options = ["-b"] if binary else []
+        convert([source, "-o", destination, "-y", flag, *options], True)
+        if destination.read_bytes().startswith(BINARY_PREFIX) != binary:
+            raise AssertionError("incorrect SUNSTUDY DXF encoding")
+        if binary:
+            payload = destination.read_bytes()
+            if any(value not in payload for value in
+                   (b"SUNSTUDY\x00", b"MY_SUNSTUDIES\x00", b"Morning\x00")):
+                raise AssertionError("Binary SUNSTUDY output lost selected identities")
+        else:
+            inspect_sunstudy(destination)
+            # The emitted root also contains ACAD_GROUP and therefore does not
+            # meet the narrowly qualified one-entry source profile for a second
+            # pass. This must remain an atomic refusal, not silent promotion.
+            second = root / "sun-second-pass.dxf"
+            second.write_bytes(SENTINEL)
+            convert([destination, "-o", second, "-y", flag], False)
+            if second.read_bytes() != SENTINEL:
+                raise AssertionError("unqualified second pass replaced destination")
+
+    # Unknown CLASS fields and wrong target revision still fail closed even
+    # with observation, preserving the existing output; corrected retry works.
+    altered = root / "sun-altered.dxf"
+    marker = b" 91\n1\n280\n0\n"
+    if source_bytes.count(marker) != 1:
+        raise AssertionError("expected unique SUNSTUDY CLASS marker")
+    altered.write_bytes(source_bytes.replace(marker, b" 91\n1\n300\nunknown\n280\n0\n"))
+    altered_dictionary = root / "sun-altered-dictionary.dxf"
+    dictionary_marker = b"100\nAcDbDictionary\n280\n0\n"
+    if source_bytes.count(dictionary_marker) != 2:
+        raise AssertionError("expected two canonical dictionaries")
+    altered_dictionary.write_bytes(source_bytes.replace(
+        dictionary_marker, b"100\nAcDbDictionary\n300\nunknown\n280\n0\n", 1))
+    for bad_source, extra in ((altered, []), (altered_dictionary, []),
+                              (source, ["-v2010"])):
+        destination.write_bytes(SENTINEL)
+        convert([bad_source, "-o", destination, "-y", flag, *extra], False)
+        if destination.read_bytes() != SENTINEL:
+            raise AssertionError("strict SUNSTUDY refusal replaced destination")
+        convert([source, "-o", destination, "-y", flag], True)
+        inspect_sunstudy(destination)
+
+    # Traditional syntax and batch propagation must also opt in explicitly.
+    traditional = root / "sun-traditional.dxf"
+    convert([source, "-y", "-v2013", flag, traditional], True)
+    inspect_sunstudy(traditional)
+    batch = root / "sun-batch"
+    batch.mkdir()
+    listing = root / "sun-list.txt"
+    listing.write_text(str(source) + "\n", encoding="utf-8")
+    (batch / source.name).write_bytes(SENTINEL)
+    convert([listing, "-B", "-y", "-v2013", batch], False)
+    if (batch / source.name).read_bytes() != SENTINEL:
+        raise AssertionError("batch without observation replaced destination")
+    convert([listing, "-B", "-y", "-v2013", flag, batch], True)
+    inspect_sunstudy(batch / source.name)
+    if source.read_bytes() != source_bytes:
+        raise AssertionError("source was modified")
+    return 14
 PRE_R13_MARKERS = (
     (5, b"unsupported-r11-repeat"),
     (6, b"unsupported-r11-endrep"),
@@ -1992,6 +2078,8 @@ def main():
                         help="run only the strict/explicit-partial DWG CLI controls")
     parser.add_argument("--source-disposition-only", action="store_true",
                         help="run only CLI repair/skip/mask preflight projections")
+    parser.add_argument("--sunstudy-observation-only", action="store_true",
+                        help="run only explicit DXF source observation CLI controls")
     args = parser.parse_args()
     converter = args.converter.resolve(strict=True)
     # Child processes run in a temporary directory, so resolve a caller's
@@ -2000,6 +2088,10 @@ def main():
         args.writer = args.writer.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="libdxfrw-cli-contract-") as directory:
         root = Path(directory)
+        if args.sunstudy_observation_only:
+            checked = check_sunstudy_observation_cli(converter, root)
+            print(f"SUNSTUDY observation CLI: PASS ({checked} route/refusal controls)")
+            return
         if args.options_only:
             checked = check_options(converter, root)
             print(f"CLI option contract: PASS ({checked} token/filename/overwrite controls)")
@@ -2053,6 +2145,7 @@ def main():
             print(f"CLI source disposition projection: PASS ({checked} repair/skip/mask controls)")
             return
         if args.fast_only:
+            check_sunstudy_observation_cli(converter, root)
             checked = check_options(converter, root)
             batch_checked = check_batch(converter, root, args.writer)
             observation_checked = check_read_observations(converter, root)
@@ -2066,6 +2159,7 @@ def main():
                   f"partial-read controls, {disposition_checked} "
                   "source-disposition controls)")
             return
+        check_sunstudy_observation_cli(converter, root)
         checked = check_options(converter, root)
         batch_checked = check_batch(converter, root, args.writer)
         observation_checked = check_read_observations(converter, root)
