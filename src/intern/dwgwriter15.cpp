@@ -382,10 +382,9 @@ bool controlEntryCountUsesBitShort(std::uint16_t objectType) {
 
 bool writeControlEntryCount(dwgBufferW& body, std::uint16_t objectType,
                             std::uint32_t count, DRW::Version version) {
-    // ODA v5.4.1 §20.4.57 specifies BL. R2007 is excluded until its
-    // historical inline-handle framing can be distinguished safely.
+    // ODA v5.4.1 §20.4.57 specifies BL for LTYPE_CONTROL.
     if ((version == DRW::AC1015 || version == DRW::AC1018
-         || version == DRW::AC1024 || version == DRW::AC1027
+         || version == DRW::AC1021 || version == DRW::AC1024 || version == DRW::AC1027
          || version == DRW::AC1032)
         && objectType == DRW::DwgLTypeControlObjectType) {
         if (count > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()))
@@ -951,6 +950,7 @@ bool dwgWriter15::emitControlObject(
     dwgBufferW *hdlBuf = &body;
     const bool useControlHandleScratch =
         (m_version > DRW::AC1014 && m_version < DRW::AC1021) ||
+        (m_version == DRW::AC1021 && typeCode == DRW::DwgLTypeControlObjectType) ||
         m_version > DRW::AC1021;
     if (useControlHandleScratch) {
         m_objectHandles.reset();
@@ -996,6 +996,7 @@ bool dwgWriter15::emitControlObject(
     dwgBufferW *hdlBuf = &body;
     const bool useControlHandleScratch =
         (m_version > DRW::AC1014 && m_version < DRW::AC1021) ||
+        (m_version == DRW::AC1021 && typeCode == DRW::DwgLTypeControlObjectType) ||
         m_version > DRW::AC1021;
     if (useControlHandleScratch) {
         m_objectHandles.reset();

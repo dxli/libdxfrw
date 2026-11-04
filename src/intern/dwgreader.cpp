@@ -14483,6 +14483,10 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
       version == DRW::AC1021 && oType == DRW::DwgBlockControlObjectType
       && handle == DRW::DwgBlockControlHandle && objSize == totalBits
       && xDictFlag == 0 && numReactors == 0 && extData.empty();
+  const bool legacyR2007InlineLtypeControl =
+      version == DRW::AC1021 && oType == DRW::DwgLTypeControlObjectType
+      && handle == DRW::DwgLtypeControlHandle && objSize == totalBits
+      && xDictFlag == 0 && numReactors == 0 && extData.empty();
   if (version > DRW::AC1021) {
     const std::uint64_t totalBits =
         static_cast<std::uint64_t>(buf->size()) * 8u;
@@ -14494,9 +14498,11 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
     hBuff.setBitPos(static_cast<std::uint8_t>(objectBits & 7u));
     hBuf = &hBuff;
   } else if (version == DRW::AC1021
-             && oType == DRW::DwgBlockControlObjectType
-             && !legacyR2007InlineBlockControl) {
-    // R2007 BLOCK_CONTROL normally uses the declared pre-handles boundary.
+             && ((oType == DRW::DwgBlockControlObjectType
+                  && !legacyR2007InlineBlockControl)
+                 || (oType == DRW::DwgLTypeControlObjectType
+                     && !legacyR2007InlineLtypeControl))) {
+    // R2007 control objects normally use the declared pre-handles boundary.
     if (objSize == 0 || objSize >= totalBits
         || !hBuff.setPosition(objSize >> 3))
       return fail();
@@ -14511,25 +14517,23 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   bool countRead = false;
   const bool boundaryCheckedLtype = oType == DRW::DwgLTypeControlObjectType
       && (version == DRW::AC1015 || version == DRW::AC1018
-          || version == DRW::AC1024 || version == DRW::AC1027
-          || version == DRW::AC1032);
+          || version == DRW::AC1021 || version == DRW::AC1024
+          || version == DRW::AC1027 || version == DRW::AC1032);
   if (boundaryCheckedLtype) {
     // ODA §20.4.57 specifies BL. The previous writer used BS; extended
     // forms are accepted only when their complete fixed writer graph agrees.
-    const bool detached = version > DRW::AC1021;
+    const bool detached = version > DRW::AC1021
+        || (version == DRW::AC1021 && !legacyR2007InlineLtypeControl);
     const std::uint64_t footerBits = detached ? 1u : 0u;
     if (bodyEndBit < footerBits) return fail();
     const std::uint64_t countLimit = bodyEndBit - footerBits;
 
-    const auto validWriterTail = [&](std::int32_t count) {
+    const auto validWriterTail = [&](dwgBuffer legacy, std::int32_t count) {
       if (count < 1 || static_cast<std::uint32_t>(count) > dwgSafety::MaxOwnedObjectCount
           || count > std::numeric_limits<std::int32_t>::max() - 2
           || handle != DRW::DwgLtypeControlHandle || numReactors != 0
           || !extData.empty() || xDictFlag != 0 || hasDataStorageBinaryData())
         return false;
-      dwgBuffer legacy = (detached ? hBuff : *buf).forkIndependent();
-      // For inline streams the candidate supplies its own cursor below.
-      if (!detached) return false;
       dwgHandle owner, xdict, child;
       bool valid = readDwgHandleChecked(legacy, 0, false, owner)
           && owner.code == DRW::DwgSoftPointer && owner.size == 0 && owner.ref == 0
@@ -14565,74 +14569,56 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
       if (!controlCurrentBit(candidate, end) || end > countLimit)
         return false;
       if (end == countLimit) return true;
-      // Our R2010+ writer emits its immediate absent flag, zero-aligns the
-      // data, then adds a 24-bit zero absent-string footer. Distinguish this
-      // from arbitrary padding by exact position, zero bytes and graph roles.
+      // R2007's writer zero-aligns after the immediate absent flag. The
+      // R2010+ writer additionally emits a 24-bit zero absent-string footer.
+      // Require the exact trailer and complete fixed writer graph.
       if (!detached || end > UINT64_MAX - 8u) return false;
       const std::uint64_t aligned = (end + 8u) & ~std::uint64_t(7u);
-      if (aligned > UINT64_MAX - 24u || aligned + 24u != bodyEndBit
-          || !validWriterTail(count)) return false;
+      const std::uint64_t extra = version > DRW::AC1021 ? 24u : 0u;
+      if (aligned > UINT64_MAX - extra || aligned + extra != bodyEndBit
+          || !validWriterTail(hBuff.forkIndependent(), count)) return false;
       dwgBuffer trailer = candidate.forkIndependent();
       for (std::uint64_t i = end; i < bodyEndBit; ++i)
         if (trailer.getBit() != 0 || !trailer.isGood()) return false;
       return true;
     };
-    dwgBuffer tagProbe = buf->forkIndependent();
-    const std::uint8_t tag = tagProbe.get2Bits();
-    if (!tagProbe.isGood()) return fail();
-    if (tag == 1u || tag == 2u) {
-      countRead = readControlBitLong(*buf, countLimit, rawNumEntries);
-      if (countRead && objSize != 0u)
-        countRead = matchesBoundary(*buf, rawNumEntries);
-    } else if (objSize != 0u) {
-      dwgBuffer longProbe = buf->forkIndependent();
-      dwgBuffer shortProbe = buf->forkIndependent();
-      std::int32_t longCount = 0, shortCount = 0;
-      const bool longMatches = tag == 0u
-          && readControlBitLong(longProbe, countLimit, longCount)
-          && longCount >= 0 && matchesBoundary(longProbe, longCount);
-      const bool shortMatches = readControlBitShort(shortProbe, countLimit, shortCount)
-          && ((tag == 3u && shortCount == 256)
-              || (tag == 0u && shortCount >= 257))
-          && matchesBoundary(shortProbe, shortCount);
-      if (longMatches && !shortMatches) {
-        *buf = longProbe;
-        rawNumEntries = longCount;
-        countRead = true;
-      } else if (shortMatches && !longMatches
-                 && handle == DRW::DwgLtypeControlHandle && numReactors == 0
-                 && extData.empty() && xDictFlag == 0
-                 && !hasDataStorageBinaryData()) {
-        // Validate every old writer handle, not just the count's bit width.
-        dwgBuffer legacy = (detached ? hBuff : shortProbe).forkIndependent();
-        dwgHandle owner, xdict, child;
-        bool valid = readDwgHandleChecked(legacy, 0, false, owner)
-            && owner.code == DRW::DwgSoftPointer && owner.size == 0 && owner.ref == 0
-            && readDwgHandleChecked(legacy, 0, false, xdict)
-            && xdict.code == DRW::DwgHardOwnership && xdict.size == 0 && xdict.ref == 0;
-        std::unordered_set<std::uint32_t> seen;
-        try {
-          for (std::int32_t i = 0; valid && i < shortCount + 2; ++i) {
-            valid = readDwgHandleChecked(legacy, 0, false, child)
-                && child.code == DRW::DwgSoftOwnership && child.ref != 0
-                && child.ref64 <= std::numeric_limits<std::uint32_t>::max()
-                && seen.insert(child.ref).second;
-            if (valid && i < 3) {
-              const std::uint32_t fixed[] = {DRW::DwgLtypeByBlockHandle,
-                                              DRW::DwgLtypeByLayerHandle,
-                                              DRW::DwgLtypeContinuousHandle};
-              valid = child.ref == fixed[i];
-            }
-          }
-        } catch (...) { return fail(); }
-        std::uint64_t end = 0;
-        valid = valid && controlCurrentBit(legacy, end) && end <= totalBits
-            && totalBits - end <= 7u;
-        while (valid && end < totalBits) {
-          valid = legacy.getBit() == 0 && legacy.isGood();
-          ++end;
-        }
-        if (valid) {
+    if (legacyR2007InlineLtypeControl) {
+      // Old R2007 frames put BS and handles inline while objSize describes
+      // the entire padded frame. Only the complete old writer graph admits
+      // this special framing, including compact counts.
+      dwgBuffer candidate = buf->forkIndependent();
+      bool stringBit = false;
+      countRead = readControlBitShort(candidate, countLimit, rawNumEntries);
+      dwgBuffer tail = candidate.forkIndependent();
+      countRead = countRead && readControlBit(tail, bodyEndBit, stringBit)
+          && !stringBit && validWriterTail(tail, rawNumEntries);
+      if (countRead) *buf = candidate;
+    } else {
+      dwgBuffer tagProbe = buf->forkIndependent();
+      const std::uint8_t tag = tagProbe.get2Bits();
+      if (!tagProbe.isGood()) return fail();
+      if (tag == 1u || tag == 2u) {
+        countRead = readControlBitLong(*buf, countLimit, rawNumEntries);
+        if (countRead && objSize != 0u)
+          countRead = matchesBoundary(*buf, rawNumEntries);
+      } else if (objSize != 0u) {
+        dwgBuffer longProbe = buf->forkIndependent();
+        dwgBuffer shortProbe = buf->forkIndependent();
+        std::int32_t longCount = 0, shortCount = 0;
+        const bool longMatches = tag == 0u
+            && readControlBitLong(longProbe, countLimit, longCount)
+            && longCount >= 0 && matchesBoundary(longProbe, longCount);
+        const bool shortMatches = readControlBitShort(shortProbe, countLimit, shortCount)
+            && ((tag == 3u && shortCount == 256)
+                || (tag == 0u && shortCount >= 257))
+            && matchesBoundary(shortProbe, shortCount);
+        if (longMatches && !shortMatches) {
+          *buf = longProbe;
+          rawNumEntries = longCount;
+          countRead = true;
+        } else if (shortMatches && !longMatches
+                   && validWriterTail((detached ? hBuff : shortProbe)
+                                          .forkIndependent(), shortCount)) {
           *buf = shortProbe;
           rawNumEntries = shortCount;
           countRead = true;
