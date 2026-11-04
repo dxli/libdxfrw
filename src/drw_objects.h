@@ -2586,6 +2586,9 @@ public:
   dwgHandle unknownHandle;   /*!< AC1027 trailing hard pointer in DWG */
 
 private:
+  [[nodiscard]] bool encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                        dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                        bool typedLegacyNulls) const;
   std::shared_ptr<const DRW_DwgTableNameSource> m_dwgNameSource;
   bool hasInvalidDxfLineweight {false};
   int rawInvalidDxfLineweight {0};
@@ -2721,6 +2724,9 @@ public:
                                 stream */
 
 private:
+  [[nodiscard]] bool encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                        dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                        bool typedLegacyNulls) const;
   // Parsed DXF font names retained on the shared table-entry text lease.
   // Caller mutations and DWG string storage are outside this accounting.
   std::array<std::size_t, 2> m_dxfRetainedTextBytes{};

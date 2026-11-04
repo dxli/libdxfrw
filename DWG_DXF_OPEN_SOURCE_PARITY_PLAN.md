@@ -888,6 +888,9 @@ qualify broader producers, geometry and consumer behavior before support
 claims. See the [opt-in receipt](docs/research/p6-default-plotstyle-optin-2026-11-04.json),
 [AC1018 geometry receipt](docs/research/p6-oda-optin-ac1018-generated-geometry-2026-11-04.json),
 and [plot-style graph research](docs/research/p6-default-plotstyle-graph-research-2026-11-04.json).
+For AC1015 the synthetic layer and text style now use witnessed typed-null
+roles; the controlled ODA case advances to a linetype failure. See the
+[legacy layer/style receipt](docs/research/p6-ac1015-synthetic-layer-style-null-roles-2026-11-04.json).
 AC1021 BLOCK_CONTROL now stages handles at its declared boundary; the reader
 also supports the witnessed historical inline profile under narrow checks.
 LibreDWG and an ODA-produced source confirm model/paper references, but ODA

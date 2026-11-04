@@ -8301,6 +8301,12 @@ bool DRW_Layer::validateDxf() const {
 
 bool DRW_Layer::encodeDwg(DRW::Version version, dwgBufferW *buf,
                            dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
+    return encodeDwgForWriter(version, buf, strBuf, hdlBuf, false);
+}
+
+bool DRW_Layer::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                    dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                    bool typedLegacyNulls) const {
     if (buf == nullptr || hasInvalidDxfLineweight || !validatePayloadFields())
         return false;
     if (version > DRW::AC1018 && (strBuf == nullptr || strBuf == buf))
@@ -8381,8 +8387,11 @@ bool DRW_Layer::encodeDwg(DRW::Version version, dwgBufferW *buf,
     // ODA 20.4.54: common layer handles followed by versioned references.
     putCommonObjectHandlePrefix(
         hb, kLayerControl, static_cast<std::int32_t>(reactorHandles.size()),
-        xDictFlag, &reactorHandles, xDictHandle);
+        xDictFlag, &reactorHandles, xDictHandle, DRW::DwgSoftPointer, false,
+        version == DRW::AC1015 && typedLegacyNulls);
     dwgHandle xref = makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer);
+    if (version == DRW::AC1015 && typedLegacyNulls && xref.ref == 0u)
+        xref.code = DRW::DwgHardPointer;
     // Preserve an explicitly typed null; legacy untyped nulls stay unchanged.
     if (version >= DRW::AC1018 && xrefBlockHandle.ref == 0u
         && xrefBlockHandle.code == DRW::DwgHardPointer)
@@ -8400,6 +8409,12 @@ bool DRW_Layer::encodeDwg(DRW::Version version, dwgBufferW *buf,
 
 bool DRW_Textstyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
                                dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
+    return encodeDwgForWriter(version, buf, strBuf, hdlBuf, false);
+}
+
+bool DRW_Textstyle::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                        dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                        bool typedLegacyNulls) const {
     if (buf == nullptr || !validatePayloadFields())
         return false;
     dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
@@ -8424,8 +8439,12 @@ bool DRW_Textstyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
     sb->putVariableText(version, bigFont);
 
     putCommonObjectHandlePrefix(hb, kStyleControl, reactorCount,
-                                xDictFlag, &reactorHandles, xDictHandle);
+                                xDictFlag, &reactorHandles, xDictHandle,
+                                DRW::DwgSoftPointer, false,
+                                version == DRW::AC1015 && typedLegacyNulls);
     dwgHandle xref = makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer);
+    if (version == DRW::AC1015 && typedLegacyNulls && xref.ref == 0u)
+        xref.code = DRW::DwgHardPointer;
     // Preserve a typed null when explicitly supplied; ODA §20.4.56 gives
     // this field a hard-pointer role. Legacy untyped nulls stay unchanged.
     if (version >= DRW::AC1018 && xrefBlockHandle.ref == 0u

@@ -2879,14 +2879,36 @@ bool dwgWriter15::emitLayerRecord(std::uint32_t handle, const DRW_Layer& lay) {
                             &layerCopy.extData, &appIdRefs, &layerRefs,
                             fileCodePageId()))
         return false;
-    if (!layerCopy.encodeDwg(m_version, &body, sb, hb))
+    const bool typedLegacyNulls = m_version == DRW::AC1015
+        && handle == DRW::DwgLayer0Handle && !m_haveLayer0;
+    if (!layerCopy.encodeDwgForWriter(m_version, &body, sb, hb, typedLegacyNulls))
         return false;
 
     return finishTableRecord(handle);
 }
 
 bool dwgWriter15::emitStyleRecord(std::uint32_t handle, const DRW_Textstyle& ts) {
-    return emitTableRecord(handle, ts, DRW::DwgStyleObjectType);
+    const bool syntheticLegacy = m_version == DRW::AC1015
+        && handle == DRW::DwgStandardTextStyleHandle && !m_haveStandardStyle;
+    if (!syntheticLegacy)
+        return emitTableRecord(handle, ts, DRW::DwgStyleObjectType);
+    DRW_Textstyle object = ts;
+    if (!prepareDwgCommonObjectState(object, m_version))
+        return false;
+    std::vector<DRW_Entity::PendingHandleRef> appIdRefs;
+    std::vector<DRW_Entity::PendingHandleRef> layerRefs;
+    if (!prepareTableEntryEed(object, appIdRefs, layerRefs))
+        return false;
+    dwgBufferW& body = beginObject(handle);
+    dwgBufferW *sb = nullptr, *hb = nullptr;
+    if (!emitRecordPreamble(body, m_version, DRW::DwgStyleObjectType, handle,
+                            m_objectStrings, m_objectHandles, sb, hb,
+                            object.reactorCount(), object.extensionDictionaryFlag(),
+                            object.hasDataStorageBinaryData(), &object.extData,
+                            &appIdRefs, &layerRefs, fileCodePageId())
+        || !object.encodeDwgForWriter(m_version, &body, sb, hb, true))
+        return false;
+    return finishTableRecord(handle);
 }
 
 bool dwgWriter15::emitUcsRecord(std::uint32_t handle, const DRW_UCS& ucs) {

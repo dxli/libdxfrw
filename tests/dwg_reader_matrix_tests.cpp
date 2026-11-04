@@ -63,6 +63,15 @@ public:
 
 class DrwObjectEncodeTestAccess {
 public:
+    static bool encodeLayer(DRW_Layer& layer, DRW::Version version, dwgBufferW& data,
+                            dwgBufferW& strings, dwgBufferW& handles, bool typedLegacy) {
+        return layer.encodeDwgForWriter(version, &data, &strings, &handles, typedLegacy);
+    }
+    static bool encodeTextstyle(DRW_Textstyle& style, DRW::Version version,
+                                dwgBufferW& data, dwgBufferW& strings,
+                                dwgBufferW& handles, bool typedLegacy) {
+        return style.encodeDwgForWriter(version, &data, &strings, &handles, typedLegacy);
+    }
     static bool encodeDictionary(DRW_Dictionary& dictionary, DRW::Version version,
                                  dwgBufferW& data, dwgBufferW& strings,
                                  dwgBufferW& handles, bool typedLegacy) {
@@ -15716,7 +15725,7 @@ void testStandardStyleDefaults(TestContext& t, DRW::Version version,
         t.expect(read && sink.standardStyles == 1u && sink.lines == 1u
                      && sink.standardStyleFlag == (synthesized ? 1u : 0u)
                      && sink.standardStyleXrefCode
-                         == ((synthesized || (mode == 3 && version >= DRW::AC1018))
+                         == (((mode == 0) || (mode == 3 && version >= DRW::AC1018))
                                  ? DRW::DwgHardPointer : 0u)
                      && sink.standardStyleXrefRef == 0u
                      && sink.standardStyleFont == (mode == 0 ? "txt" : "caller-style"),
@@ -15772,7 +15781,7 @@ void testLayerZeroDefaults(TestContext& t, DRW::Version version,
         t.expect(read && sink.layerZeroCount == 1u && sink.lines == 1u
                      && sink.layerZeroFlag == (synthesized ? 1u : 0u)
                      && sink.layerZeroXrefCode
-                         == ((synthesized || (mode == 3 && version >= DRW::AC1018))
+                         == (((mode == 0) || (mode == 3 && version >= DRW::AC1018))
                                  ? DRW::DwgHardPointer : 0u)
                      && sink.layerZeroXrefRef == 0u && sink.layerZeroPlotRef == 0u,
                  "layer 0 source state and following LINE survive readback: " + label);
@@ -16083,7 +16092,42 @@ void testSyntheticRootDictionaryNullRoles(TestContext& t) {
     }
 }
 
+void testLegacySyntheticTableNullRoles(TestContext& t) {
+    for (const auto version : {DRW::AC1015, DRW::AC1018, DRW::AC1021,
+                               DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+        for (const bool synthetic : {false, true}) {
+            const bool typed = synthetic && version == DRW::AC1015;
+            DRW_Layer layer;
+            layer.name = "0";
+            layer.plotStyleHandle.ref = 0x71u;
+            layer.lTypeH.ref = 0x72u;
+            dwgBufferW layerBody, layerStrings, layerHandles;
+            const bool layerEncoded = DrwObjectEncodeTestAccess::encodeLayer(
+                layer, version, layerBody, layerStrings, layerHandles, synthetic);
+            std::vector<std::uint8_t> layerExpected{0x41u,0x02u,
+                static_cast<std::uint8_t>(typed ? 0x30u : 0x00u),
+                static_cast<std::uint8_t>(typed ? 0x50u : 0x00u),0x51u,0x71u};
+            if (version > DRW::AC1018) layerExpected.push_back(0x00u);
+            layerExpected.push_back(0x51u); layerExpected.push_back(0x72u);
+            if (version >= DRW::AC1027) layerExpected.push_back(0x00u);
+            t.expect(layerEncoded && layerHandles.data() == layerExpected,
+                     "legacy synthetic/caller LAYER nulls and following refs");
+            DRW_Textstyle style;
+            style.name = "STANDARD";
+            dwgBufferW styleBody, styleStrings, styleHandles;
+            const bool styleEncoded = DrwObjectEncodeTestAccess::encodeTextstyle(
+                style, version, styleBody, styleStrings, styleHandles, synthetic);
+            const std::vector<std::uint8_t> styleExpected{0x41u,0x03u,
+                static_cast<std::uint8_t>(typed ? 0x30u : 0x00u),
+                static_cast<std::uint8_t>(typed ? 0x50u : 0x00u)};
+            t.expect(styleEncoded && styleHandles.data() == styleExpected,
+                     "legacy synthetic/caller STYLE null handle roles");
+        }
+    }
+}
+
 void testHeaderWriters(TestContext& t) {
+    testLegacySyntheticTableNullRoles(t);
     testSyntheticRootDictionaryNullRoles(t);
     testStandardDimstyleDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
     testStandardDimstyleDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
