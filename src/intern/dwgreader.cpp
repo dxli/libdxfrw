@@ -8157,6 +8157,11 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
       publication.m_recordName = descriptor.controlReceiptName;
       publication.m_xDictHandle = control.xDictHandle;
       publication.m_xDictFlag = control.extensionDictionaryFlag();
+      if (version == DRW::AC1021
+          && descriptor.controlType == DRW::DwgBlockControlObjectType) {
+        publication.m_numReactors = control.reactorCount();
+        publication.m_reactorHandles = control.reactorHandles;
+      }
       publication.setCommonLinkEvidence(
           DRW_DwgCommonLinkEvidence::NotApplicable);
       publication.m_controlHandles.assign(control.handlesList.cbegin(),
@@ -14572,6 +14577,37 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   DRW_DBG(buf->numRemainingBytes());
   DRW_DBG("\n");
 
+  // The AC1021 BLOCK_CONTROL common tail contains persistent soft-pointer
+  // reactors between the null owner and the optional extension dictionary.
+  // Other control/version routes retain their existing parsing policy.
+  std::vector<std::uint32_t> parsedControlReactors;
+  if (version == DRW::AC1021 && oType == DRW::DwgBlockControlObjectType) {
+    // Every H needs at least its 8-bit header, even at an unaligned cursor.
+    // Bound allocation by actual remaining bits before reserving a vector.
+    const std::uint64_t reactorStartBit =
+        hBuf->getPosition() * 8u + hBuf->getBitPos();
+    if (reactorStartBit > totalBits
+        || static_cast<std::uint64_t>(numReactors)
+            > (totalBits - reactorStartBit) / 8u)
+      return fail();
+    if (!DRW::reserve(parsedControlReactors, numReactors))
+      return fail();
+    for (std::int32_t i = 0; i < numReactors; ++i) {
+      // Relative H6/H8/HA/HC are documented soft pointers. Inspect the
+      // original role before getOffsetHandle normalizes relative codes.
+      dwgBuffer rawHandle = *hBuf;
+      dwgHandle raw;
+      dwgHandle reactor;
+      if (!readDwgHandleChecked(rawHandle, handle, false, raw)
+          || (raw.code != DRW::DwgSoftPointer && raw.code != 6
+              && raw.code != 8 && raw.code != 10 && raw.code != 12)
+          || !readDwgHandleChecked(*hBuf, handle, true, reactor)
+          || reactor.ref64 > std::numeric_limits<std::uint32_t>::max())
+        return fail();
+      parsedControlReactors.push_back(reactor.ref);
+    }
+  }
+
   //    if (oType == 56 && version== DRW::AC1015){//linetype in 2004 seems not
   //    have XDicObjH or NULL handle
   if (xDictFlag !=
@@ -14666,5 +14702,7 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   handlesList = std::move(parsedHandles);
   phantomHandles = std::move(parsedPhantoms);
   orderedHandleSlots = std::move(parsedHandleSlots);
+  if (version == DRW::AC1021 && oType == DRW::DwgBlockControlObjectType)
+    reactorHandles = std::move(parsedControlReactors);
   return buf->isGood() && hBuf->isGood() ? true : fail();
 }

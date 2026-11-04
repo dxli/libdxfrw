@@ -916,6 +916,10 @@ LibreDWG and an ODA-produced source confirm model/paper references, but ODA
 still rejects generated whole files and general R2007 alignment and other
 controls remain open. See the [AC1021 receipt](docs/research/p6-ac1021-block-control-handle-boundary-2026-11-04.json)
 and [legacy boundary receipt](docs/research/p6-block-control-handle-boundary-2026-11-04.json).
+The AC1021 control reader now bounds and retains common reactor references;
+the adapter refuses output until that graph is closed. An ODA-produced
+reactor witness imports successfully, but full conversion remains gated.
+See the [reactor receipt](docs/research/p6-ac1021-block-control-reactors-2026-11-04.json).
 R2004-family object-section prefixes now roll back on failed writes and retry
 without duplication ([rollback receipt](docs/research/p6-r2004-object-section-prefix-rollback-2026-11-04.json)).
 The reader now rejects truncated declared literal runs while retaining

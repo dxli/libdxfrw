@@ -4412,3 +4412,14 @@ if(EXISTS "${_custom_objects_ac1024_sample}")
     set_tests_properties(dwg_read_AC1024_selected_custom_object_profiles PROPERTIES
         LABELS "dwg_read;AC1024;sample;fast" TIMEOUT 60)
 endif()
+
+# AC1021 BLOCK_CONTROL common-handle reactor ordering and reset/retry.
+add_executable(libdxfrw_block_control_reactor_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/block_control_reactor_tests.cpp)
+target_compile_features(libdxfrw_block_control_reactor_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_block_control_reactor_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_block_control_reactor_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_block_control_reactor_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_block_control_reactors COMMAND libdxfrw_block_control_reactor_tests)
+set_tests_properties(libdxfrw_dwg_block_control_reactors PROPERTIES
+    LABELS "fast;dwg;AC1021;transaction" TIMEOUT 15)

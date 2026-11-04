@@ -24874,11 +24874,15 @@ void dx_iface::addDwgFramePublication(const DRW_DwgFramePublication& data) {
             || !data.m_className.empty()
             || data.m_commonLinkEvidence
                 != DRW_DwgCommonLinkEvidence::NotApplicable
+            || data.m_numReactors < 0
+            || static_cast<std::size_t>(data.m_numReactors)
+                != data.m_reactorHandles.size()
             || data.m_controlHandles.size()
                 > kMaxAdapterBasicTableRecords
             || cData->m_dwgBlockControlPublicationSeen
             || cData->m_dwgBlockControlCaptureFailed
             || !addVectorPayloadBytes(data.m_controlHandles, estimate)
+            || !addVectorPayloadBytes(data.m_reactorHandles, estimate)
             || !addStringPayloadBytes(data.m_recordName, estimate)
             || estimate > kMaxDwgBlockControlPublicationBytes) {
             reject();
@@ -72353,6 +72357,16 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         m_hatchGraphStats = {};
         m_hatchGraphFailure = ExtensionGraphFailure::InvalidGraph;
         reportPreflightFailure("HATCH graph source drawing is null");
+        return false;
+    }
+    if (cData->sourceFormat == dx_source_format::DWG
+        && cData->sourceVersion == DRW::AC1021
+        && (cData->m_dwgBlockControlCaptureFailed
+            || (cData->m_dwgBlockControlPublicationSeen
+                && cData->m_dwgBlockControlGeneration == cData->importGeneration
+                && cData->m_dwgBlockControlPublication.m_numReactors != 0))) {
+        reportPreflightFailure(
+            "AC1021 BLOCK_CONTROL reactor references lack a closed DXF output route");
         return false;
     }
     if (readCompletenessPolicy != dx_dwgReadCompletenessPolicy::Legacy
