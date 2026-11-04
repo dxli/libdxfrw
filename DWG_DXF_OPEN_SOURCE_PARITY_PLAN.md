@@ -122,6 +122,25 @@ and [original receipt](docs/research/p4-ac1018-empty-style-dwg-bit-order-differe
 
 ## P4 — original bodies and complete document closure
 
+**Open strict-output defect:** a CRC-resealed AC1027 source with layer 0's
+linetype handle changed to a missing target can currently export successfully
+with `CONTINUOUS` substituted. Keep the selected one-layer graph's output
+qualification open until same-import LTYPE identity, target kind/name and
+emitted reference are bound, with dangling and wrong-kind refusal/retry tests.
+The proposed two-layer extension has the same issue and also accepts an
+unresolved or wrong-kind LINE layer handle while substituting layer 0. It must
+remain uncommitted until both reference paths are closed. Invalid explicit LINE
+linetype handles can also be emitted as an empty linetype name. Audit common
+entity references systematically, and check the one-layer entity path before
+qualifying its strict output. Handle implicit BYLAYER/BYBLOCK/CONTINUOUS modes
+separately; source handle codes must also match their required roles, since
+wrong-role entity LAYER and LTYPE references currently pass. Nondefault owner,
+reactor, extension dictionary, color, material,
+plotstyle, visual-style and EED APPID/LAYER references require independent
+closure proof or refusal. Audit referenced color, text/dimension style, block
+record and MLINESTYLE lookup fallbacks as well; class-specific gates do not
+automatically establish closure for every entity route.
+
 The bounded one-layer AC1027 default-material/plotstyle graph now converts a
 selected generated LINE DWG through strict CLI in ASCII and Binary. Source
 frames, CLASS rows, HEADER material, LAYER targets and emitted OBJECTS are
