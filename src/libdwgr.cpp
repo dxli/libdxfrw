@@ -53,6 +53,7 @@
 
 // Internal shared preflight, also enforced by the SOLID/TRACE DWG codecs.
 bool drwHasDwgSingleElevation(const DRW_Trace& entity) noexcept;
+bool drwHasEncodableDwgHatchPatternAngles(const DRW_Hatch& entity) noexcept;
 
 #define FIRSTHANDLE 48
 
@@ -1643,6 +1644,15 @@ bool dwgRW::encodeEntityForWrite(DRW_Entity *ent,
     // disappear from the document when a legacy callback ignores false.
     if ((typeid(*ent) == typeid(DRW_Trace) || typeid(*ent) == typeid(DRW_Solid))
         && !drwHasDwgSingleElevation(static_cast<const DRW_Trace&>(*ent))) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::Entity, false);
+    }
+
+    // The same built-in HATCH codec can be reached through writeHatch or
+    // the inherited writePoint route. Do not let an ignored failed write
+    // silently omit a pattern whose angle cannot be represented.
+    if (typeid(*ent) == typeid(DRW_Hatch)
+        && !drwHasEncodableDwgHatchPatternAngles(static_cast<const DRW_Hatch&>(*ent))) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::Entity, false);
     }

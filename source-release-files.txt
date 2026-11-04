@@ -422,6 +422,7 @@ tests/dwg_ellipse_wcs_test.h
 tests/dwg_fixture_tests.cpp
 tests/dwg_hatch_edge_subtype_tests.cpp
 tests/dwg_hatch_ellipse_edge_dwg_tests.cpp
+tests/dwg_hatch_pattern_angle_units_tests.cpp
 tests/dwg_legacy_block_content_chain_libredwg.py
 tests/dwg_legacy_block_content_chain_tests.cpp
 tests/dwg_legacy_extrusion_oda_ezdxf.py
@@ -691,6 +692,7 @@ tools/audit_ac1027_lightlist_snapshot.py
 tools/audit_ac1027_planar_sab_geometry.py
 tools/audit_ac1027_sab_brlcad_rays.py
 tools/audit_dwg_hatch_ellipse_edge.py
+tools/audit_dwg_hatch_pattern_angles.py
 tools/audit_dwg_ltype_control.py
 tools/audit_dwg_vertex_tangent.py
 tools/audit_dxf_lwpolyline_missing_y.py
@@ -731,6 +733,8 @@ tools/author_ac1021_solid_trace.py
 tools/author_ac1021_text_style_source.py
 tools/author_ac1021_varied_geometry.py
 tools/author_ac1027_1032_writer_control.py
+tools/author_dwg_hatch_pattern.cpp
+tools/author_dwg_hatch_pattern_source.py
 tools/author_dwg_legacy_extrusion.py
 tools/author_dwg_vertex_tangent.cpp
 tools/author_light_dxf_421.py
@@ -776,6 +780,7 @@ tools/check_target_advisory_differential.py
 tools/check_version_surfaces.py
 tools/circle_arc_extrusion_repro.cpp
 tools/compare_dwg_3d_consumer_oracle.py
+tools/compare_dwg_hatch_pattern.cpp
 tools/create_acis218_mesh_witness.py
 tools/dbcolor_fallback_differential.py
 tools/dbcolor_palette_probe.py
@@ -826,6 +831,7 @@ tools/probe_ac1024_rastervariables_source.cpp
 tools/probe_ac1024_tilted_geometry.cpp
 tools/probe_ac1027_1032_writer_rejection.cpp
 tools/probe_ac1027_source_sab_cqacis.py
+tools/probe_dwg_hatch_pattern.cpp
 tools/probe_dwg_hatch_unsupported_edges.cpp
 tools/probe_dwg_vertex_tangent.cpp
 tools/probe_dxf_lwpolyline_missing_y.cpp

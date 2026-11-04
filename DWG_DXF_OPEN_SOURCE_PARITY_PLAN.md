@@ -875,6 +875,13 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+DWG HATCH patterned-fill and definition-line angles now convert radians to the
+existing degree-valued DXF API and back. Consumers compensating for the old
+raw-radian callbacks must remove that workaround. MPOLYGON remains unchanged
+because its producer observations conflict; broader producer and native render
+qualification remain open
+([receipt](docs/research/p6-dwg-hatch-pattern-angle-units-2026-11-04.json)).
+
 DXF VIEWPORT ambient color index, RGB and color-book name now survive any
 ordering of their independent groups. Producer-derived selected records and
 generated ASCII/Binary controls cover the fields; full-source and native

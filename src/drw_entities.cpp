@@ -20036,6 +20036,22 @@ bool DRW_MPolygon::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
 // DRW_Hatch::parseDwg so DRW_MPolygon::parseDwg reuses the identical body while
 // supplying its own differing leading (BS style) and trailing (fill CMC +
 // x-direction + degenerate count) field order.
+// Shared with the facade so ignored false returns cannot silently omit a
+// built-in HATCH whose pattern angles cannot be represented in DWG.
+bool drwHasEncodableDwgHatchPatternAngles(const DRW_Hatch& hatch) noexcept {
+    if (hatch.solid) return true;
+    const auto encodable = [](double degrees) noexcept {
+        if (!std::isfinite(degrees)) return false;
+        const double radians = degrees / ARAD;
+        return degrees == 0.0 || (radians != 0.0
+            && std::fpclassify(radians) != FP_SUBNORMAL);
+    };
+    if (!encodable(hatch.angle)) return false;
+    for (const auto& line : hatch.patternLines)
+        if (!encodable(line.angle)) return false;
+    return true;
+}
+
 bool validateDwgHatchData(const DRW_Hatch& hatch, DRW::Version version) {
     if (hatch.looplist.size() > static_cast<std::size_t>(kMaxHatchItems)
         || hatch.patternLines.size() > static_cast<std::size_t>(kMaxHatchItems)
@@ -20133,6 +20149,8 @@ bool validateDwgHatchData(const DRW_Hatch& hatch, DRW::Version version) {
         }
     }
 
+    if (dynamic_cast<const DRW_MPolygon*>(&hatch) == nullptr
+        && !drwHasEncodableDwgHatchPatternAngles(hatch)) return false;
     for (const auto &line : hatch.patternLines) {
       if (line.dashList.size() > static_cast<std::size_t>(kMaxHatchItems))
         return false;
@@ -20708,6 +20726,8 @@ bool DRW_Hatch::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
             || !std::isfinite(parsedAngle)
             || !std::isfinite(parsedScale))
             return fail();
+        parsedAngle *= ARAD; // DWG radians to public/DXF degrees
+        if (!std::isfinite(parsedAngle)) return fail();
         angle = parsedAngle;
         scale = parsedScale;
         doubleflag = parsedDoubleFlag;
@@ -20729,6 +20749,8 @@ bool DRW_Hatch::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs)
                 || !std::isfinite(patternLine.offsetX)
                 || !std::isfinite(patternLine.offsetY))
                 return fail();
+            patternLine.angle *= ARAD;
+            if (!std::isfinite(patternLine.angle)) return fail();
             std::uint32_t numDashL = 0;
             if (!readTableBodyCount(version, buf, objSize, kMaxHatchItems, 2,
                                     numDashL)
@@ -20967,12 +20989,12 @@ bool DRW_Hatch::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t b
     buf->putBitShort(static_cast<std::uint16_t>(hpattern));
 
     if (!solid) {
-        buf->putBitDouble(angle);
+        buf->putBitDouble(angle / ARAD);
         buf->putBitDouble(scale);
         buf->putBit(static_cast<std::uint8_t>(doubleflag));
         buf->putBitShort(static_cast<std::uint16_t>(patternLines.size()));
         for (const PatternLine& patternLine : patternLines) {
-            buf->putBitDouble(patternLine.angle);
+            buf->putBitDouble(patternLine.angle / ARAD);
             buf->putBitDouble(patternLine.baseX);
             buf->putBitDouble(patternLine.baseY);
             buf->putBitDouble(patternLine.offsetX);

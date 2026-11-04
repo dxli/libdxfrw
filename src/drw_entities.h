@@ -3463,7 +3463,7 @@ public:
      * Present only for non-solid hatches with explicit pattern data.
      */
     struct PatternLine {
-        double angle   {0.0};   /*!< line angle, code 53 */
+        double angle   {0.0};   /*!< line angle in degrees for DXF/HATCH, code 53 */
         double baseX   {0.0};   /*!< base point x, code 43 */
         double baseY   {0.0};   /*!< base point y, code 44 */
         double offsetX {0.0};   /*!< offset x, code 45 */
@@ -3648,7 +3648,7 @@ public:
     int hpattern;              /*!< hatch pattern type, code 76 */
     int doubleflag;            /*!< hatch pattern double flag, code 77, double=1, single=0 */
     int loopsnum;              /*!< namber of boundary paths (loops), code 91 */
-    double angle;              /*!< hatch pattern angle, code 52 */
+    double angle;              /*!< hatch pattern angle in degrees for DXF/HATCH, code 52 */
     double scale;              /*!< hatch pattern scale, code 41 */
     int deflines;              /*!< number of pattern definition lines, code 78 */
     double pixelSize {0.0};   /*!< pixel size, code 47 */
