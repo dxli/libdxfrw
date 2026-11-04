@@ -326,6 +326,7 @@ src/intern/proxygraphicdecoder.cpp
 src/intern/proxygraphicdecoder.h
 src/intern/rscodec.cpp
 src/intern/rscodec.h
+src/intern/sabheader.h
 src/libdwgr.cpp
 src/libdwgr.h
 src/libdxfrw.cpp
@@ -336,8 +337,15 @@ test_package/CMakeLists.txt
 test_package/conanfile.py
 test_package/src/package_consumer.cpp
 tests/CMakeLists.txt
+tests/ac1021_field_acadsharp_probe.cs
+tests/ac1021_field_acadsharp_probe.csproj
+tests/ac1021_field_source_raw_probe.cpp
+tests/ac1021_field_source_span_probe.py
 tests/ac1024_candidate_fields_v2_live.py
 tests/ac1024_candidate_self_test.py
+tests/ac1027_acds_source_compare.py
+tests/ac1027_acds_source_probe.cpp
+tests/ac1027_modeler_uid_span.py
 tests/acds_delivery_tests.cpp
 tests/adapter_build_context_tests.py
 tests/appid_test_helpers.h
@@ -376,6 +384,7 @@ tests/debug_state_tests.cpp
 tests/dependency_controls.h
 tests/diagnostic_tests.cpp
 tests/dictionary_role_controls.h
+tests/dimassoc_physical_transport_tests.cpp
 tests/dimstyle_optional_handle_tests.cpp
 tests/dwg2dxf_adapter_tests.cpp
 tests/dwg2dxf_cli_contract_tests.py
@@ -394,6 +403,7 @@ tests/dxf_mline_source_dependency_tests.cpp
 tests/dxf_no_raw_sections_tests.cpp
 tests/dxf_symbol_output_tests.cpp
 tests/dxf_whole_source_tests.cpp
+tests/dxf_xdata_int16_tests.cpp
 tests/effective_ownership_controls.h
 tests/entities_compound_controls.h
 tests/entities_delivery_controls.h
@@ -609,11 +619,15 @@ tools/check_target_advisory_differential.py
 tools/check_version_surfaces.py
 tools/compare_dwg_3d_consumer_oracle.py
 tools/create_acis218_mesh_witness.py
+tools/dbcolor_fallback_differential.py
+tools/dbcolor_palette_probe.py
 tools/emit_native_qualification_receipt.py
 tools/extract_parity_source_routes.py
 tools/generate_build_inventory.py
 tools/generate_iso8859_4.py
 tools/generate_symbol_casefold.py
+tools/geodata_physical_v3_probe.py
+tools/mutate_r2004_header_suffix_probe.py
 tools/normalize_drawing_result.py
 tools/normalize_oracle.py
 tools/qualify_material_source_order.py

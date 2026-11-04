@@ -1106,6 +1106,10 @@ qualify DWG/AcDs ownership. See the [preflight receipt](docs/research/p7-cad-ass
 
 ## P8 — consumer, platform, packaging and release gates
 
+The SAB minimum-header helper is included in the canonical CMake and generated
+source-release inventories; the inventory check and refusal self-tests pass.
+Native source-release builds and platform qualification remain open.
+
 - Preserve LibreCAD/LibreCAD_3 callback/default behavior; new callbacks remain
   non-pure. The compile-only LibreCAD_3 facade guard and generated ASCII/Binary
   3D-consumer probe pass; see the [local API and 3D probe receipt](docs/research/p8-local-compat-and-generated-3d-probe-2026-11-02.json).

@@ -112,6 +112,7 @@ set(LIBDXFRW_PRIVATE_HEADERS
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/dxfwriter.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/proxygraphicdecoder.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/rscodec.h"
+    "${CMAKE_CURRENT_LIST_DIR}/src/intern/sabheader.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/main_doc.h"
 )
 

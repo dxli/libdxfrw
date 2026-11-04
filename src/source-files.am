@@ -124,4 +124,5 @@ dist_noinst_HEADERS = \
     intern/dxfwriter.h \
     intern/proxygraphicdecoder.h \
     intern/rscodec.h \
+    intern/sabheader.h \
     main_doc.h
