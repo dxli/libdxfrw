@@ -21478,6 +21478,7 @@ bool DRW_Image::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
 
 bool DRW_Image::hasValidClipBoundary() const {
     if (clipPath.size() > kMaxClipVertices || m_clipPathHasOpenVertex
+        || m_declaredClipVertexCount == kIncompleteDxfClipBoundary
         || (m_declaredClipVertexCount >= 0
             && static_cast<std::size_t>(m_declaredClipVertexCount) != clipPath.size())) {
         return false;
@@ -21495,6 +21496,8 @@ bool DRW_Image::hasValidClipBoundary() const {
 }
 
 bool DRW_Image::hasValidDxfOutputClipBoundary() const {
+    if (m_declaredClipVertexCount == kIncompleteDxfClipBoundary)
+        return false;
     // An omitted rectangle uses DXF's default opposite corners.
     if (m_clipBoundaryType == 1 && clipPath.empty()
         && m_declaredClipVertexCount < 0 && !m_clipPathHasOpenVertex)

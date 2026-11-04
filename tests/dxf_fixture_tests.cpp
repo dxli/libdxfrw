@@ -18562,6 +18562,121 @@ void testImageBoundaryAdmission(TestContext& t) {
     t.expect(defaultRectangle.hasValidDxfOutputClipBoundary(),
              "IMAGE output accepts omitted default rectangle coordinates");
     for (bool binary : {false, true}) {
+        // Exercise count mismatch, explicit type/cardinality mismatch and
+        // an unfinished vertex through tolerant import and callback copies.
+        for (int malformedProfile = 0; malformedProfile < 3; ++malformedProfile) {
+            std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+            if (binary) stream.write("AutoCAD Binary DXF\r\n\x1a\0", 22);
+            std::unique_ptr<dxfWriter> tags = binary
+                ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&stream))
+                : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&stream));
+            tags->setVersion("AC1024", true);
+            bool written = tags->writeString(0, "SECTION")
+                && tags->writeString(2, "HEADER")
+                && tags->writeString(9, "$ACADVER")
+                && tags->writeString(1, "AC1024")
+                && tags->writeString(0, "ENDSEC")
+                && tags->writeString(0, "SECTION")
+                && tags->writeString(2, "ENTITIES")
+                && tags->writeString(0, "IMAGE")
+                && tags->writeString(5, "B100")
+                && tags->writeString(8, "0")
+                && tags->writeString(100, "AcDbRasterImage")
+                && tags->writeDouble(13, 8) && tags->writeDouble(23, 6)
+                && tags->writeInt16(71, 1)
+                && tags->writeInt32(91, malformedProfile == 2 ? 2 : 3)
+                && tags->writeDouble(14, 1) && tags->writeDouble(24, 2)
+                && tags->writeDouble(14, 3);
+            if (malformedProfile != 2) written = written && tags->writeDouble(24, 4);
+            if (malformedProfile == 1) written = written
+                && tags->writeDouble(14, 5) && tags->writeDouble(24, 6);
+            written = written && tags->writeString(0, "ENDSEC")
+                && tags->writeString(0, "EOF");
+            tags.reset(); stream.close();
+            t.expect(written && stream.good(), "malformed IMAGE input is authored");
+            ImageReader reader; dx_data decoded;
+            const bool loaded = reader.fileImport(path.string(), &decoded, false);
+            t.expect(loaded && reader.images.size() == 1,
+                     "tolerant IMAGE import still delivers malformed boundary");
+            if (loaded && reader.images.size() == 1) {
+                DRW_Image copied(reader.images.front());
+                t.expect(!copied.hasValidDxfOutputClipBoundary(),
+                         "incomplete IMAGE source marker survives callback copies");
+                dx_data data; ImageWriter adapter;
+                adapter.cData = &data; adapter.currentBlock = data.mBlock;
+                static_cast<DRW_Image&>(adapter.image) = copied;
+                { std::ofstream seed(path, std::ios::binary | std::ios::trunc);
+                  seed << "malformed source sentinel\n"; }
+                const std::string filename = path.string();
+                dxfRW writer(filename.c_str()); adapter.dxfW = &writer;
+                const bool refused = !writer.write(&adapter, DRW::AC1024, binary);
+                std::ifstream preserved(path, std::ios::binary);
+                const std::string bytes{std::istreambuf_iterator<char>(preserved), {}};
+                t.expect(refused && !adapter.accepted && bytes == "malformed source sentinel\n",
+                         "incomplete imported IMAGE refuses output atomically");
+                preserved.close();
+                adapter.image.clipPath = {{1, 2}, {3, 4}};
+                adapter.image.acceptCorrectedDxfClipBoundary();
+                t.expect(writer.write(&adapter, DRW::AC1024, binary) && adapter.accepted,
+                         "explicit IMAGE boundary correction allows same-writer retry");
+                ImageReader checked; dx_data checkedData;
+                const bool reloaded = checked.fileImport(filename, &checkedData, false);
+                t.expect(reloaded && checked.images.size() == 1
+                             && checked.images.front().hasValidClipBoundary()
+                             && checked.images.front().clipPath.size() == 2,
+                         "corrected imported IMAGE boundary reads back completely");
+            }
+        }
+        // Preserve tolerant handling of omitted default fields and of a
+        // producer omitting group 71 while supplying two rectangle points.
+        for (int omittedProfile = 0; omittedProfile < 3; ++omittedProfile) {
+            std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+            if (binary) stream.write("AutoCAD Binary DXF\r\n\x1a\0", 22);
+            std::unique_ptr<dxfWriter> tags = binary
+                ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&stream))
+                : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&stream));
+            tags->setVersion("AC1024", true);
+            bool written = tags->writeString(0, "SECTION")
+                && tags->writeString(2, "HEADER")
+                && tags->writeString(9, "$ACADVER")
+                && tags->writeString(1, "AC1024")
+                && tags->writeString(0, "ENDSEC")
+                && tags->writeString(0, "SECTION")
+                && tags->writeString(2, "ENTITIES")
+                && tags->writeString(0, "IMAGE")
+                && tags->writeString(5, "B100")
+                && tags->writeString(8, "0")
+                && tags->writeString(100, "AcDbRasterImage")
+                && tags->writeDouble(13, 8) && tags->writeDouble(23, 6);
+            if (omittedProfile == 1) written = written && tags->writeInt16(71, 1);
+            if (omittedProfile == 2)
+                written = written && tags->writeInt32(91, 2)
+                    && tags->writeDouble(14, 1) && tags->writeDouble(24, 2)
+                    && tags->writeDouble(14, 3) && tags->writeDouble(24, 4);
+            written = written && tags->writeString(0, "ENDSEC")
+                && tags->writeString(0, "EOF");
+            tags.reset(); stream.close();
+            ImageReader reader; dx_data decoded;
+            const bool loaded = written && stream.good()
+                && reader.fileImport(path.string(), &decoded, false);
+            t.expect(loaded && reader.images.size() == 1,
+                     "IMAGE input tolerates omitted default clipping fields");
+            if (!loaded || reader.images.size() != 1) continue;
+            dx_data data; ImageWriter adapter;
+            adapter.cData = &data; adapter.currentBlock = data.mBlock;
+            static_cast<DRW_Image&>(adapter.image) = reader.images.front();
+            const std::string filename = path.string();
+            dxfRW writer(filename.c_str()); adapter.dxfW = &writer;
+            const bool emitted = writer.write(&adapter, DRW::AC1024, binary);
+            ImageReader checked; dx_data checkedData;
+            const bool reloaded = emitted && checked.fileImport(filename, &checkedData, false);
+            t.expect(reloaded && adapter.accepted && checked.images.size() == 1
+                         && checked.images.front().m_clipBoundaryType == 1
+                         && checked.images.front().clipPath.size() == 2
+                         && checked.images.front().clipPath[0].x == (omittedProfile == 2 ? 1 : -0.5)
+                         && checked.images.front().clipPath[1].x == (omittedProfile == 2 ? 3 : 7.5),
+                     "IMAGE output retains tolerated or default rectangle vertices");
+        }
         {
             dx_data data;
             ImageWriter adapter;

@@ -21495,6 +21495,7 @@ bool dxfRW::processImage() {
             DRW_DBG(nextentity); DRW_DBG("\n");
             if (!acceptEntityCallbackBoundary())
                 return setError(DRW::BAD_READ_ENTITIES);
+            img.markIncompleteDxfClipBoundary();
             iface->addImage(&img);
             return true;  //found new entity or ENDSEC, terminate
         }

@@ -143,11 +143,12 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    qualified providers. Keep version-2 nonzero-seed registry layouts raw until
    their framing is proven. Keep investigation DWGs out of committed fixtures;
    bind regressions to eligible repository inputs or locally authored fixtures.
-   IMAGE output now rejects inconsistent explicit clipping boundaries and
-   counted paths without a type. Preserve tolerant input and resolve source
-   completeness across copied IMAGE callbacks: copying currently resets parser
-   count state, so an uncounted list does not establish authored provenance. See
-   the [IMAGE boundary receipt](docs/research/p4-image-clip-boundary-output-guard-2026-11-03.json).
+   IMAGE input retains unambiguous incomplete clipping boundaries through
+   recompiled callback copies; output refuses them until explicit caller repair.
+   Missing group 71 without another contradiction remains tolerated and needs
+   producer evidence. Older clients compiled with the former inline copy may
+   discard the marker. See the [IMAGE boundary receipt](docs/research/p4-image-clip-boundary-output-guard-2026-11-03.json)
+   and [copy-state receipt](docs/research/p4-image-incomplete-dxf-boundary-copy-guard-2026-11-03.json).
 2. **Graph and output admission:** for each reproduced source-required body,
    owner edge, extension-dictionary edge or descendant not already admitted,
    bind source identities and fields to planned records, emitted bytes and fresh

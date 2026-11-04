@@ -3937,6 +3937,8 @@ public:
         clipMode(o.clipMode) {
         eType = o.eType;
         resetDxfParserState();
+        if (o.m_declaredClipVertexCount == kIncompleteDxfClipBoundary)
+            m_declaredClipVertexCount = kIncompleteDxfClipBoundary;
     }
     DRW_Image& operator=(const DRW_Image& o) {
         if (this != &o) {
@@ -3958,6 +3960,8 @@ public:
             clipMode = o.clipMode;
             eType = o.eType;
             resetDxfParserState();
+            if (o.m_declaredClipVertexCount == kIncompleteDxfClipBoundary)
+                m_declaredClipVertexCount = kIncompleteDxfClipBoundary;
         }
         return *this;
     }
@@ -4011,11 +4015,34 @@ public:
     /// Explicit types and parsed vertex counts must match the payload.
     bool hasValidDxfOutputClipBoundary() const;
 
+    /// Clear an incomplete imported clipping marker after explicitly repairing
+    /// the boundary. Output still validates the corrected type and vertices.
+    void acceptCorrectedDxfClipBoundary() noexcept {
+        if (m_declaredClipVertexCount == kIncompleteDxfClipBoundary)
+            resetDxfParserState();
+    }
+
 protected:
+    static constexpr std::int32_t kIncompleteDxfClipBoundary = -2;
     std::int32_t m_declaredClipVertexCount {-1};
     bool m_clipPathHasOpenVertex {false};
 
 private:
+    // Preserve an unambiguously incomplete parsed boundary across callbacks
+    // and copies while leaving input tolerant. Missing type alone is not
+    // classified because real producers may rely on defaults.
+    void markIncompleteDxfClipBoundary() noexcept {
+        const bool wrongCount = m_declaredClipVertexCount >= 0
+            && static_cast<std::size_t>(m_declaredClipVertexCount) != clipPath.size();
+        const bool wrongRectangle = m_clipBoundaryType == 1
+            && (clipPath.empty() ? m_declaredClipVertexCount >= 0
+                                 : clipPath.size() != 2);
+        const bool wrongPolygon = m_clipBoundaryType == 2 && clipPath.size() < 3;
+        if (m_clipPathHasOpenVertex || wrongCount || wrongRectangle || wrongPolygon) {
+            m_declaredClipVertexCount = kIncompleteDxfClipBoundary;
+            m_clipPathHasOpenVertex = false;
+        }
+    }
     void resetDxfParserState() noexcept {
         m_declaredClipVertexCount = -1;
         m_clipPathHasOpenVertex = false;
