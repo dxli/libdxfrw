@@ -18789,6 +18789,10 @@ bool dxfRW::processClasses() {
     bool reading = false;
     DRW_Class cls;
     std::vector<DRW_Class> pendingClasses;
+    auto* classSource = dynamic_cast<DRW_DxfClassSourceHandler*>(iface);
+    if (classSource && !classSource->wantsDxfClassSource()) classSource = nullptr;
+    std::array<bool,3> pendingClassKnown{{false,false,false}};
+    bool classKnown = true;
     DxfReadRetainedReservation classTextReservation(
         reader->retainedByteBudget(), 0u);
     std::size_t classTextBytes = 0u;
@@ -18835,6 +18839,8 @@ bool dxfRW::processClasses() {
         // temporarily duplicate its three retained strings without charging
         // those bytes to the aggregate retained-text budget.
         pendingClasses.push_back(std::move(cls));
+        if (classSource && pendingClasses.size() <= pendingClassKnown.size())
+            pendingClassKnown[pendingClasses.size()-1u] = classKnown;
         cls = DRW_Class{};
         return true;
     };
@@ -18849,6 +18855,7 @@ bool dxfRW::processClasses() {
             if (dxfKeywordEquals(sectionstr, "CLASS")) {
                 reading = true;
                 cls = DRW_Class{};
+                classKnown = true;
                 hasRecName = false;
                 hasClassName = false;
                 hasAppName = false;
@@ -18859,8 +18866,11 @@ bool dxfRW::processClasses() {
                 continue;
             }
             if (dxfKeywordEquals(sectionstr, "ENDSEC")) {
-                for (const DRW_Class &pendingClass : pendingClasses)
-                    iface->addDxfClass(pendingClass);
+                for (std::size_t i = 0u; i < pendingClasses.size(); ++i) {
+                    if (classSource) classSource->addDxfClassSource(pendingClasses[i],
+                        i < pendingClassKnown.size() && pendingClassKnown[i]);
+                    iface->addDxfClass(pendingClasses[i]);
+                }
                 return true;
             }
 
@@ -18899,8 +18909,10 @@ bool dxfRW::processClasses() {
             hasProxyFlag = true;
             cls.proxyFlag = reader->getInt32();
             // LibreDWG sets the upper 16 bits even though this is a 16-bit mask.
-            if ((static_cast<std::uint32_t>(cls.proxyFlag) >> 16) == 0xFFFFu)
+            if ((static_cast<std::uint32_t>(cls.proxyFlag) >> 16) == 0xFFFFu) {
+                classKnown = false;
                 cls.proxyFlag &= 0xFFFF;
+            }
             if (cls.proxyFlag < 0)
                 return setError(DRW::BAD_CODE_PARSED);
             break;
@@ -18929,6 +18941,7 @@ bool dxfRW::processClasses() {
             hasEntityFlag = true;
             break;
         default:
+            classKnown = false;
             break;
         }
     }

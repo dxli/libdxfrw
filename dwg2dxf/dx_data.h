@@ -1528,6 +1528,9 @@ private:
     // Immutable-by-API import baselines, not editable drawing state or an
     // output certificate. Never reset these to launder an appended import.
     struct TableDxfSourceCapture {
+        std::array<bool,3> repeatClassSeen{{false,false,false}};
+        std::size_t repeatClassCount{0u};
+        bool repeatClassValid{true};
         struct Table {
             Table(const DRW_Table& model, const DRW_RawDxfObject& source)
                 : typed(model), raw(source) {}

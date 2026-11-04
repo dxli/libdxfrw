@@ -129,6 +129,10 @@ correlated and checked. The broader physical producer contains an additional
 layer and remains outside this admission; arbitrary materials, extra layers,
 other versions and native FreeCAD behavior remain open
 ([receipt](docs/research/p6-ac1027-default-graph-strict-dxf-2026-11-04.json)).
+Strict same-version DXF repeat is bounded to the selected one-layer graph and
+its source-bound CLASS and dictionary records; broader source shapes,
+cross-version output and generic plotstyle fallback remain unqualified
+([repeat receipt](docs/research/p4-ac1027-layer-plotstyle-dxf-repeat-2026-11-04.json)).
 
 An exact AC1027 compact raw-only MATERIAL profile now passes strict CLI replay
 for a selected producer-derived default-material graph, with source and graph

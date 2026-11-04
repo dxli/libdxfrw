@@ -41,7 +41,7 @@ namespace blockref_source_relation { struct Result; }
 class DxIfaceExtensionGraphTestAccess;
 class DxIfaceTableSourceTestAccess;
 
-class dx_iface : public DRW_Interface, public DRW_DwgHeaderMaterialSourceHandler, public DRW_UnmodeledDxfObjectHandler,
+class dx_iface : public DRW_Interface, public DRW_DxfClassSourceHandler, public DRW_DwgHeaderMaterialSourceHandler, public DRW_UnmodeledDxfObjectHandler,
                  public DRW_DwgDbColorEedSourceHandler,
                  public DRW_DwgClassSourceHandler, public DRW_DxfTableSourceHandler,
                  public DRW_DxfSymbolSourceHandler, public DRW_DxfRootDictionarySourceHandler,
@@ -588,6 +588,8 @@ public:
             cData->dxfReadOutcome.headerDelivered = true;
     }
     void addDxfClass(const DRW_Class& data) override;
+    bool wantsDxfClassSource() const noexcept override { return typeid(*this)==typeid(dx_iface) && tableSourceCaptureOpen(); }
+    void addDxfClassSource(const DRW_Class&, bool) noexcept override;
     void addDwgClassCoverageReport(const DRW_DwgClassCoverageReport& data) override;
     bool wantsDwgClassSource() const override { return true; }
     void addDwgClassSourceReport(const DRW_DwgClassSourceReport& data) noexcept override;
@@ -1491,6 +1493,12 @@ public:
         if (!hasUnchangedDxfLayerMaterials()) { dxfW->writeLayer(nullptr); return; }
         for (auto& layer : cData->layers) {
             if (!checkDxfLayerMaterial(layer)) { dxfW->writeLayer(nullptr); return; }
+            if (m_dxfLayerMaterialState.plotActive) {
+                if (!hasUnchangedDxfLayerPlot()) { dxfW->writeLayer(nullptr); return; }
+                DRW_Ac1027BoundLayer projection(layer, m_dxfLayerMaterialState.plotTarget);
+                if (!dxfW->writeLayer(&projection)) return;
+                continue;
+            }
             if (usesAc1027DefaultLayerProfile()) {
                 std::uint32_t plotStyle = 0u;
                 if (!validateAc1027DefaultLayer(layer, plotStyle)) {
@@ -3575,14 +3583,19 @@ private:
         DRW::Version version{DRW::UNKNOWNV};
         std::size_t bytes{0}, byteLimit{64u*1024u*1024u}, recordLimit{100000u};
         bool active{false}, inspected{false};
+        bool plotActive{false}, plotObjectsInspected{false};
+        std::uint32_t plotTarget{0u}, plotOwner{0u};
         void clear() noexcept {
             decltype(rows){}.swap(rows); decltype(layers){}.swap(layers);
             decltype(providers){}.swap(providers);
             owner=nullptr; generation=0u; version=DRW::UNKNOWNV;
-            bytes=0u; active=false; inspected=false;
+            bytes=0u; active=false; inspected=false; plotActive=false; plotObjectsInspected=false; plotTarget=plotOwner=0u;
         }
     } m_dxfLayerMaterialState;
     bool prepareDxfLayerMaterials(DRW::Version) noexcept;
+    bool prepareDxfLayerPlot(DRW::Version, bool) noexcept;
+    bool hasUnchangedDxfLayerPlot() const noexcept;
+    bool inspectDxfLayerPlotObjects(const dxfRW::DxfObjectsWriteView&) noexcept;
     bool hasUnchangedDxfLayerMaterials() const noexcept;
     bool checkDxfLayerMaterial(const DRW_Layer&) const noexcept;
     bool inspectDxfLayerMaterials(const dxfRW::DxfTablesWriteView&) noexcept;

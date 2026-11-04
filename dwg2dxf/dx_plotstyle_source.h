@@ -69,7 +69,7 @@ template<class Input> bool plotSourceProfile(const Input& input,std::vector<dx_t
         refs.push_back({role,i,code,static_cast<std::uint32_t>(handle)});
     }
     return application.empty()&&self==1u&&owner==1u&&pending.empty()
-        &&(!input.dictionary||(stage==2u&&hard==1u&&clone==1u&&def==1u&&entry==input.model->m_entries.size()));
+        &&(!input.dictionary||(stage==2u&&(hard==1u||(input.model->hardOwner==0&&std::none_of(refs.begin(),refs.end(),[](const dx_tableResourceReference& ref){return ref.kind==R::DictionaryHardOwner;})))&&clone==1u&&def==1u&&entry==input.model->m_entries.size()));
 }
 }
 

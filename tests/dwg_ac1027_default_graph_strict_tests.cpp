@@ -10,6 +10,11 @@
 #include <iostream>
 #include <string>
 #include <functional>
+class DxIfaceTableSourceTestAccess {
+public:
+ static auto& plots(dx_data& d) { return d.m_tableDxfSource.plotSourceAudit; }
+ static auto& origin(dx_data& d, unsigned h) { return d.m_tableDxfSource.resourceOriginAudits.at(h); }
+};
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
  static DRW_UnsupportedObject& frame(dx_data& data, unsigned handle) { return data.m_opaqueDwgSourceFrames.at({data.importGeneration,handle}); }
@@ -23,6 +28,29 @@ public:
  static bool& headerDuplicate(dx_data& data) { return data.m_ac1027HeaderMaterialDuplicate; }
  static std::uint64_t& headerGeneration(dx_data& data) { return data.m_ac1027HeaderMaterialGeneration; }
 };
+// Mutate literal staged DXF bytes without a producer fixture. Binary strings
+// include the two-byte group code and NUL terminator explicitly.
+static std::string rawTag(int code,const std::string& value,bool binary) {
+ if(!binary) { const std::string c=std::to_string(code);return std::string(3u-c.size(),' ')+c+"\n"+value+"\n"; }
+ std::string out;out.push_back(static_cast<char>(code&255));out.push_back(static_cast<char>((code>>8)&255));out+=value;out.push_back('\0');return out;
+}
+static bool mutateRepeatSource(std::string& data,bool binary,const std::string& name,int mode) {
+ const auto row=rawTag(0,"CLASS",binary);const auto endsec=rawTag(0,"ENDSEC",binary);
+ const auto marker=rawTag(1,name,binary);const auto at=data.find(marker);if(at==std::string::npos)return false;
+ const auto begin=data.rfind(row,at);const auto next=data.find(row,at);const auto last=data.find(endsec,at);
+ if(begin==std::string::npos||last==std::string::npos)return false;
+ const auto end=next==std::string::npos?last:std::min(next,last);if(end<=at)return false;
+ if(mode==0) {
+  const auto key=binary?std::string("\x5b\x00",2):std::string(" 91\n");
+  const auto pos=data.find(key,at);if(pos==std::string::npos||pos>=end)return false;
+  if(binary){if(pos+6u>end)return false;data[pos+2u]=char(99);data[pos+3u]=data[pos+4u]=data[pos+5u]=0;}
+  else {const auto lineEnd=data.find('\n',pos+key.size());if(lineEnd==std::string::npos||lineEnd>=end)return false;data.replace(pos+key.size(),lineEnd-pos-key.size(),"   99");}
+ } else if(mode==1) data.insert(end,rawTag(300,"unmodeled",binary));
+ else if(mode==2) data.erase(begin,end-begin);
+ else if(mode==3) data.insert(end,data.substr(begin,end-begin));
+ else return false;
+ return true;
+}
 static void flip(DRW_UnsupportedObject& frame,unsigned delta) { const auto bit=frame.m_rawBytes.size()*8u-frame.m_bodyBitSize+delta; frame.m_rawBytes.at(bit/8)^=static_cast<unsigned char>(1u<<(7u-bit%8)); }
 static std::string contents(const std::string& p){std::ifstream in(p,std::ios::binary);return std::string(std::istreambuf_iterator<char>(in),{});}
 class Provider final : public LC3CompatCheck, public DRW_DwgDefaultMaterialProvider, public DRW_DwgDefaultPlotStyleProvider {
@@ -129,6 +157,124 @@ int main(){
   if(!attempt("plot default role",[&]{flip(dictRaw,16+16+3);},[&]{flip(dictRaw,16+16+3);}))return 7;
   if(!attempt("placeholder owner role",[&]{flip(placeRaw,3);},[&]{flip(placeRaw,3);}))return 8;
   if(!attempt("plot scalar",[&]{dict.cloning=2;},[&]{dict.cloning=1;}))return 9;
+ }
+ // Repeat the exact strict output through the ordinary DXF input route. The
+ // prior graph test has already qualified these files; equality after each
+ // same-encoding pass also checks every HEADER/TABLES/OBJECTS field.
+ for (bool binary : {false, true}) {
+  const auto source=(base/(binary?"binary.dxf":"ascii.dxf")).string();
+  dx_iface in; dx_data repeat; if(!in.fileImport(source,&repeat,false))return 60;
+  if(repeat.layers.size()!=1u || repeat.dictionaryWithDefaults.size()!=1u
+     || repeat.rawPlaceholders.size()!=1u)return 61;
+  dx_iface out; const auto target=(base/(binary?"repeat-binary.dxf":"repeat-ascii.dxf")).string();
+  auto save=[&]{return out.fileExport(target,DRW::AC1027,binary,&repeat,false,true,
+     dx_dxfSourceTextPolicy::RequireValidSource,DRW::DxfTextWritePolicy::RequireLossless,
+     dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,dx_dwgReadCompletenessPolicy::RequireComplete);};
+  auto failRetry=[&](const auto& bad,const auto& fix){
+   {std::ofstream sentinel(target,std::ios::binary|std::ios::trunc);sentinel<<"sentinel";}
+   bad(); const bool failed=!save(), intact=contents(target)=="sentinel"; fix();
+   return failed&&intact&&save()&&contents(target)==contents(source);
+  };
+  if(!save()||contents(target)!=contents(source))return 62;
+  auto& layer=repeat.layers.front();const auto plot=layer.handlePlotS;
+  if(!failRetry([&]{layer.handlePlotS="7FFF";},[&]{layer.handlePlotS=plot;}))return 63;
+  if(!failRetry([&]{layer.handlePlotS="F";},[&]{layer.handlePlotS=plot;}))return 64;
+  auto& dict=repeat.dictionaryWithDefaults.front();const auto def=dict.m_defaultEntryHandle;
+  if(!failRetry([&]{dict.m_defaultEntryHandle=0x7FFF;},[&]{dict.m_defaultEntryHandle=def;}))return 65;
+  auto& root=repeat.namedObjectDictionary;const auto entries=root.m_entries;
+  if(!failRetry([&]{root.m_entries.clear();},[&]{root.m_entries=entries;}))return 66;
+  auto& placeholder=repeat.rawPlaceholders.front();const auto owner=placeholder.parentHandle;
+  if(!failRetry([&]{placeholder.parentHandle=0x7FFF;},[&]{placeholder.parentHandle=owner;}))return 67;
+  const auto savedClasses=repeat.dxfClasses;
+  for(std::size_t i=0;i<savedClasses.size();++i) {
+   if(!failRetry([&]{++repeat.dxfClasses[i].instanceCount;},[&]{repeat.dxfClasses=savedClasses;}))return 77;
+  }
+  if(!failRetry([&]{repeat.dxfClasses.clear();},[&]{repeat.dxfClasses=savedClasses;}))return 78;
+  auto& rawDict=repeat.rawDictionaryWithDefaults.front();const auto rawName=rawDict.name;
+  if(!failRetry([&]{rawDict.name="DICTIONARYWDFLT";},[&]{rawDict.name=rawName;}))return 79;
+  auto& plotProof=DxIfaceTableSourceTestAccess::plots(repeat);const auto originalPlotProof=plotProof;
+  if(!failRetry([&]{plotProof.reset();},[&]{plotProof=originalPlotProof;}))return 70;
+  auto& layerProof=DxIfaceTableSourceTestAccess::origin(repeat,layer.handle);const auto originalLayerProof=layerProof;
+  if(!failRetry([&]{layerProof.reset();},[&]{layerProof=originalLayerProof;}))return 71;
+  auto& liveMaterial=repeat.materials.front();const auto diffuse=liveMaterial.m_diffuseColorFactor;
+  if(!failRetry([&]{liveMaterial.m_diffuseColorFactor=.25;},[&]{liveMaterial.m_diffuseColorFactor=diffuse;}))return 100;
+  const auto material=layer.handleMaterialS;
+  if(!failRetry([&]{layer.handleMaterialS="7FFF";},[&]{layer.handleMaterialS=material;}))return 72;
+  {std::ofstream sentinel(target,std::ios::binary|std::ios::trunc);sentinel<<"sentinel";}
+  if(out.fileExport(target,DRW::AC1024,binary,&repeat,false,true,
+     dx_dxfSourceTextPolicy::RequireValidSource,DRW::DxfTextWritePolicy::RequireLossless,
+     dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,dx_dwgReadCompletenessPolicy::RequireComplete)
+     ||contents(target)!="sentinel"||!save())return 73;
+  const auto cross=(base/(binary?"cross-ascii.dxf":"cross-binary.dxf")).string();
+  if(!out.fileExport(cross,DRW::AC1027,!binary,&repeat,false,true,
+     dx_dxfSourceTextPolicy::RequireValidSource,DRW::DxfTextWritePolicy::RequireLossless,
+     dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,dx_dwgReadCompletenessPolicy::RequireComplete))return 74;
+  dx_iface crossReader;dx_data crossData;if(!crossReader.fileImport(cross,&crossData,false)
+     ||crossData.layers.size()!=1u||crossData.dictionaryWithDefaults.size()!=1u||crossData.rawPlaceholders.size()!=1u
+     ||crossData.layers.front().handlePlotS!=plot||crossData.layers.front().handleMaterialS!=material
+     ||crossData.dictionaryWithDefaults.front().m_defaultEntryHandle!=def
+     ||crossData.rawPlaceholders.front().parentHandle!=dict.handle)return 75;
+  std::uint32_t sourceMaterial=0,crossMaterial=0;bool sourcePresent=false,crossPresent=false;
+  if(!repeat.headerC.getDxfMaterialReferenceHandle(sourceMaterial,sourcePresent)
+     ||!crossData.headerC.getDxfMaterialReferenceHandle(crossMaterial,crossPresent)
+     ||!sourcePresent||!crossPresent||sourceMaterial!=crossMaterial)return 76;
+  // The historical non-strict facade path remains unchanged; its literal
+  // F fallback is not evidence of plot-style graph closure.
+  if(!out.fileExport(target,DRW::AC1027,binary,&repeat,false,false,
+     dx_dxfSourceTextPolicy::RequireValidSource,DRW::DxfTextWritePolicy::RequireLossless,
+     dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,dx_dwgReadCompletenessPolicy::RequireComplete))return 98;
+  dx_iface legacyReader;dx_data legacy;if(!legacyReader.fileImport(target,&legacy,false)
+      ||legacy.layers.size()!=1u||legacy.layers.front().handlePlotS!="F"||!save())return 99;
+  const auto malformedInput=(base/(binary?"bad-binary.dxf":"bad-ascii.dxf")).string();
+  auto physicalRefusal=[&](const std::string& bytes) {
+   {std::ofstream f(malformedInput,std::ios::binary|std::ios::trunc);f.write(bytes.data(),static_cast<std::streamsize>(bytes.size()));}
+   {std::ofstream sentinel(target,std::ios::binary|std::ios::trunc);sentinel<<"sentinel";}
+   dx_iface badReader;dx_data bad; const bool imported=badReader.fileImport(malformedInput,&bad,false);
+   const bool rejected=!imported||!out.fileExport(target,DRW::AC1027,binary,&bad,false,true,
+       dx_dxfSourceTextPolicy::RequireValidSource,DRW::DxfTextWritePolicy::RequireLossless,
+       dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,dx_dwgReadCompletenessPolicy::RequireComplete);
+   return rejected&&contents(target)=="sentinel"&&save()&&contents(target)==contents(source);
+  };
+  for(const std::string name:{"MATERIAL","ACDBDICTIONARYWDFLT","ACDBPLACEHOLDER"}) {
+   for(int mode=0;mode<4;++mode) {auto bad=contents(source);if(!mutateRepeatSource(bad,binary,name,mode)||!physicalRefusal(bad))return 80+mode;}
+  }
+  { auto bad=contents(source);const auto old=rawTag(390,plot,binary);
+    const auto pos=bad.find(old);if(pos==std::string::npos)return 88;
+    bad.replace(pos,old.size(),rawTag(390,"7FFF",binary));if(!physicalRefusal(bad))return 89; }
+  { auto bad=contents(source);const auto old=rawTag(350,plot,binary);
+    const auto pos=bad.find(old);if(pos==std::string::npos)return 92;
+    bad.replace(pos,old.size(),rawTag(360,plot,binary));if(!physicalRefusal(bad))return 93; }
+  { auto bad=contents(source);const auto object=rawTag(0,"ACDBDICTIONARYWDFLT",binary);
+    const auto subclass=rawTag(100,"AcDbDictionary",binary);const auto objectPos=bad.find(object);
+    const auto pos=objectPos==std::string::npos?objectPos:bad.find(subclass,objectPos);
+    if(pos==std::string::npos)return 101;
+    const std::string flag=binary?std::string("\x18\x01\x00\x00",4):std::string("280\n    0\n");
+    bad.insert(pos+subclass.size(),flag);if(!physicalRefusal(bad))return 102; }
+  { auto bad=contents(source);const auto old=rawTag(1,"ACDBDICTIONARYWDFLT",binary);
+    const auto pos=bad.find(old);if(pos==std::string::npos)return 90;
+    bad.replace(pos,old.size(),rawTag(1,"DICTIONARYWDFLT",binary));if(!physicalRefusal(bad))return 91; }
+  { auto bad=contents(source);const auto old=rawTag(0,"ACDBDICTIONARYWDFLT",binary);
+    const auto pos=bad.find(old);if(pos==std::string::npos)return 84;
+    bad.replace(pos,old.size(),rawTag(0,"DICTIONARYWDFLT",binary));if(!physicalRefusal(bad))return 85; }
+  for(unsigned occurrence=0u;occurrence<3u;++occurrence) {
+    auto bad=contents(source);const auto marker=rawTag(100,"AcDbMaterial",binary);
+    std::size_t pos=0u;for(unsigned i=0;i<=occurrence;++i) {pos=bad.find(marker,pos);if(pos==std::string::npos)return 94;if(i<occurrence)pos+=marker.size();}
+    bad.insert(pos+marker.size(),rawTag(300,"unmodeled",binary));if(!physicalRefusal(bad))return 95;
+  }
+  { auto bad=contents(source);const auto marker=rawTag(100,"AcDbLayerTableRecord",binary);
+    const auto pos=bad.find(marker);if(pos==std::string::npos)return 96;
+    bad.insert(pos+marker.size(),rawTag(300,"unmodeled",binary));if(!physicalRefusal(bad))return 97; }
+  for(unsigned occurrence=0u;occurrence<3u;++occurrence) {
+    auto bad=contents(source);const auto marker=rawTag(100,"AcDbDictionary",binary);
+    std::size_t pos=0u;for(unsigned i=0;i<=occurrence;++i) {pos=bad.find(marker,pos);if(pos==std::string::npos)return 86;if(i<occurrence)pos+=marker.size();}
+    bad.insert(pos+marker.size(),rawTag(300,"unmodeled",binary));if(!physicalRefusal(bad))return 87;
+  }
+  dx_iface secondReader;dx_data second;if(!secondReader.fileImport(target,&second,false))return 68;
+  dx_iface secondWriter;const auto target2=(base/(binary?"repeat2-binary.dxf":"repeat2-ascii.dxf")).string();
+  if(!secondWriter.fileExport(target2,DRW::AC1027,binary,&second,false,true,
+      dx_dxfSourceTextPolicy::RequireValidSource,DRW::DxfTextWritePolicy::RequireLossless,
+      dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,dx_dwgReadCompletenessPolicy::RequireComplete)
+      ||contents(target2)!=contents(source))return 69;
  }
  std::filesystem::remove_all(base);
 }

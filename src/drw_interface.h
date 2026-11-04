@@ -877,6 +877,16 @@ public:
                                 const DRW_RawDxfObject& source) = 0;
 };
 
+/** Optional, bounded source observation for accepted DXF CLASS rows.
+ * Reports the parsed row and whether every physical group was recognized;
+ * no DRW_Interface virtual slot is added. */
+class DRW_DxfClassSourceHandler {
+public:
+  virtual ~DRW_DxfClassSourceHandler() = default;
+  virtual bool wantsDxfClassSource() const noexcept { return false; }
+  virtual void addDxfClassSource(const DRW_Class&, bool allGroupsKnown) noexcept = 0;
+};
+
 /** Opt-in complete STYLE/LTYPE source rows. Separate from DRW_Interface's
  * established vtable. Selection is latched per symbol-table batch; default
  * false performs no raw copy or raw-variant charging. Rows are delivered only
