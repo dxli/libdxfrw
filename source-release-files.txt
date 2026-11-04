@@ -448,6 +448,7 @@ tests/dxf_hatch_boundary_payload_tests.cpp
 tests/dxf_legacy_extrusion_conversion_tests.cpp
 tests/dxf_legacy_extrusion_ezdxf.py
 tests/dxf_light_rgb_421_tests.cpp
+tests/dxf_lightlist_reference_tests.cpp
 tests/dxf_mline_source_dependency_tests.cpp
 tests/dxf_no_raw_sections_tests.cpp
 tests/dxf_symbol_output_tests.cpp
@@ -671,6 +672,7 @@ tools/audit_dxf_sparse_lwpolyline.py
 tools/audit_dxf_table_values.py
 tools/audit_librecad3_native_dxf.py
 tools/audit_light_dxf_421.py
+tools/audit_lightlist_dxf_reference.py
 tools/audit_modern_writer_rejection.py
 tools/audit_p9_rtext_native_history.py
 tools/audit_polyline_cross_scope_peer.py
@@ -787,6 +789,7 @@ tools/probe_dxf_sparse_lwpolyline.cpp
 tools/probe_geodata_physical_capture.cpp
 tools/probe_librecad3_native_dxf.cpp
 tools/probe_light_dxf_421.cpp
+tools/probe_lightlist_dxf_reference.cpp
 tools/probe_lightlist_physical_capture.cpp
 tools/probe_polyline_cross_scope.cpp
 tools/probe_polyline_cross_version.cpp

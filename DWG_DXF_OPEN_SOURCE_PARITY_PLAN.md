@@ -545,6 +545,9 @@ item, and byte bounds ([capture receipt](docs/research/p5-lightlist-callback-ret
 DXF-origin LIGHT group 421 true color now has bounded ASCII/Binary transport;
 DWG CMC mapping and complete LIGHTLIST graph output remain open
 ([color receipt](docs/research/p6-light-dxf-421-true-color-2026-11-04.json)).
+The DXF LIGHTLIST parser also distinguishes in-subclass LIGHT references from
+the record's own group-5 handle. Physical whole-source conversion and graph
+output remain open ([reference receipt](docs/research/p5-lightlist-dxf-reference-self-handle-2026-11-04.json)).
 the source-aware DXF parser now separates the first ACAD_REACTORS group-330
 ACAD_LIGHT dictionary pointer from actual reactors and exposes its typed role
 while retaining the original app-data group ([role receipt](docs/research/p5-lightlist-owner-dictionary-role-2026-11-03.json)).

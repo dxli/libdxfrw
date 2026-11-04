@@ -27204,18 +27204,43 @@ bool dxfRW::processLightList() {
     int code;
     DRW_LightList lightList;
     DRW_RawDxfObject raw;
+    bool inLightListSubclass = false;
+    bool sawLightReference = false;
     if (!copyRawDxfCarrierName(raw, nextentity))
         return setError(DRW::BAD_CODE_PARSED);
     while (reader->readRec(&code)) {
         if (code == 0) {
+            if (lightList.m_dxfPendingLightHandle != 0u
+                || (sawLightReference && (raw.handle == 0u || lightList.handle != raw.handle
+                    || lightList.m_dxfSeen90 != 2u
+                    || lightList.m_lightCount != lightList.m_lights.size())))
+                return setError(DRW::BAD_CODE_PARSED);
             if (!acceptObjectBoundary(code))
                 return setError(DRW::BAD_READ_OBJECTS);
             iface->addLightList(lightList);
             iface->addRawDxfObject(raw);
             return true;
         }
-        if (!captureAndParseRawDxfGroup(raw, code, lightList))
+        if (code == 100) {
+            if (lightList.m_dxfPendingLightHandle != 0u)
+                return setError(DRW::BAD_CODE_PARSED);
+            inLightListSubclass = reader->getStringView() == "AcDbLightList";
+        }
+        if (code == 1 && inLightListSubclass
+            && lightList.m_dxfPendingLightHandle == 0u)
             return setError(DRW::BAD_CODE_PARSED);
+        if (code == 5 && inLightListSubclass
+            && (lightList.m_dxfPendingLightHandle != 0u
+                || !reader->isValidHandleString() || reader->getHandleString() == 0u))
+            return setError(DRW::BAD_CODE_PARSED);
+        const bool parsed = code == 5 && inLightListSubclass
+            ? captureRawGroup(raw, code, /*validateHandles=*/true, /*selfHandle=*/false)
+                && lightList.parseCode(code, reader)
+            : captureAndParseRawDxfGroup(raw, code, lightList);
+        if (!parsed)
+            return setError(DRW::BAD_CODE_PARSED);
+        if (code == 5 && inLightListSubclass)
+            sawLightReference = true;
     }
     return setError(DRW::BAD_READ_OBJECTS);
 }
