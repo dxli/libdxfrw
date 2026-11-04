@@ -1,0 +1,52 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p6-ac1027-oda-header-suffix-mutation-2026-11-03",
+  "date": "2026-11-03",
+  "status": "TWO_SUFFIX_MUTATIONS_HAVE_IDENTICAL_OBSERVED_DXF",
+  "supportClaimEffect": "none",
+  "question": "Does changing the complete unclaimed HEADER suffix affect this ODA conversion of the AC1027 Cover resave?",
+  "source": {
+    "description": "ODA File Converter 27.1.0 same-revision AC1027 resave of the local Cover drawing, from the previous same-version resave receipt",
+    "dwgSha256": "e33c3509703bb3a47397bad98324163471c415d6458350d2592987c3f453f827",
+    "decodedHeaderSha256": "55551135612baa4deee22c2d740ca386f3e786c08d81f4a99dfec30401cba1f3",
+    "decodedSectionBytes": 1583,
+    "validatedTrailerEnd": 844,
+    "suffixBytes": 739,
+    "compressedPageOffset": "0x41e0",
+    "suffixLiteralFileOffset": "0x448f"
+  },
+  "method": {
+    "tool": "tools/mutate_r2004_header_suffix_probe.py",
+    "procedure": "The suffix is a unique contiguous literal in this compressed page. Make two scratch copies: replace all 739 bytes with zero or with byte (73*index+19) modulo 256. Recompute the compressed-page data and encrypted-header checksums, leaving all other physical bytes and the HEADER sentinel, declared length and CRC unchanged.",
+    "localDecode": "The existing dwgReader27 section probe reads both modified sections, verifies the page checksums, and shows that all 844 bytes through the HEADER ending sentinel are byte-identical to the source; the 739-byte suffix matches each replacement.",
+    "independentDecode": "LibreDWG 0.14 decompress_R2004_section independently reproduces all 1583 logical bytes for both modified pages; its remaining output-window bytes are outside this comparison.",
+    "controls": "The mutation tool reproduces both scratch DWG hashes, refuses an invalid original page checksum, and exclusively creates output rather than overwriting an existing file."
+  },
+  "mutations": [
+    {
+      "variant": "zero",
+      "dwgSha256": "88cac723933532aab70330072885c3bd00383be5ed48a603b481419b6b36ca3a",
+      "decodedHeaderSha256": "712db110d5b299b14a39ec0b863cdeb286d4e041d36e3498ed8f456a15ea13de",
+      "dxfSha256": "3627f9b9edfc9be74da44dfda82cfd8d187ab51fd45a131470440d256c1cea80"
+    },
+    {
+      "variant": "pattern",
+      "dwgSha256": "8c6083f28043f5e0daaab4994a0c6dd3b7f0f407539ea53eec837ca4b4564b94",
+      "decodedHeaderSha256": "f60810df648e28377f3937b258b3f84f1c1b2bdb7196c63c44519b23546cb13a",
+      "dxfSha256": "68ee9cdd0a08f4b6aedc90b1abc884a82af1a16ee419dbee5aacbcbbc37f90b9"
+    }
+  ],
+  "converter": {
+    "executable": "ODA File Converter 27.1.0 native macOS ARM64, verified outside sandbox",
+    "executableSha256": "21a8f029e7d41af64088f65492404d97ffec0d2f7886703b3b725f5ac4a55783",
+    "operation": "ACAD2013 DXF; recursion 0; audit 0; original and both copies in one input directory",
+    "originalDxfSha256": "a9d6df60e53003a327c9bf31b0b90f8e2e283bc686ddd926825a803e37af6865",
+    "result": "All three files yielded DXF without .err. The only line differences are the values following $TDUPDATE and $TDUUPDATE. Replacing just those values by a common marker produces the same 127131-byte SHA-256 6fed5d4bb382c358a5e6a7a051bc1667cb2ec41929d58e87a65adbacb61b2d52 for all three DXFs."
+  },
+  "limits": [
+    "This is a causal, single-file and single-converter-route comparison; it does not identify a suffix generator or prove suffixes are padding for other sources or consumers.",
+    "ODA's own DXF projection may omit information; equal DXF bytes after timestamp normalization are not native semantic equivalence or full drawing preservation.",
+    "Strict output continues to refuse unclaimed suffixes, and no support or parity claim is promoted. No drawing fixture is committed."
+  ],
+  "next": "Repeat on independent producer/version profiles and native semantic routes, and establish a source-backed admission rule before changing strict output."
+}

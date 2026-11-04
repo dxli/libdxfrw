@@ -814,6 +814,11 @@ The ODA-resaved AC1021 tablet now reads all observed frames with no entity,
 object, page-CRC or class-CRC failures while diagnosing its 739-byte HEADER
 suffix; strict output remains refused pending suffix and graph qualification.
 See the [AC1021 receipt](docs/research/p6-ac1021-oda-header-suffix-diagnostic-admission-2026-11-03.json).
+For a separate AC1027 ODA resave, replacing the entire 739-byte suffix with
+either zeros or a deterministic pattern leaves the ODA DXF output identical
+apart from update timestamps. This is one conversion route, not a general
+discard rule; extend the physical and native-consumer evidence before changing
+strict admission. See the [mutation receipt](docs/research/p6-ac1027-oda-header-suffix-mutation-2026-11-03.json).
 
 The R2007 writer now emits the required file-header pointer and repeated
 Reed–Solomon header blocks, and terminates section-map names as specified, but
