@@ -873,6 +873,10 @@ The reader now rejects truncated declared literal runs while retaining
 valid bounded and implicit-end streams; audit other malformed token profiles
 separately. See the [system-page receipt](docs/research/p6-r2004-system-page-termination-2026-11-03.json)
 and [literal-bounds receipt](docs/research/p6-r2004-decompress-literal-bounds-2026-11-03.json).
+The generated HEADER now points to its emitted ACAD_GROUP dictionary; independent
+LibreDWG readback confirms the relationship in six writer versions. ODA acceptance
+and the remaining dictionary recovery failure still require qualification. See the
+[GROUP pointer receipt](docs/research/p6-header-group-dictionary-reference-2026-11-04.json).
 HEADER table-control and pointer roles now use their specified handle codes,
 including typed hard-pointer nulls. The writer binds current layer, text style,
 linetype and dimension style to emitted records, and the reader resolves those

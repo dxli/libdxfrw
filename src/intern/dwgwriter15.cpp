@@ -832,7 +832,8 @@ bool dwgWriter15::writeDwgHeader() {
         if (!m_header->encodeDwgForWriter(
                 m_version, &m_buf, &m_buf, nullptr,
                 DRW::DwgNamedObjectsDictionaryHandle,
-                m_plotSettingsDictionaryHandle, &currentReferenceBits))
+                m_plotSettingsDictionaryHandle, &currentReferenceBits,
+                DRW::DwgAcadGroupDictionaryHandle))
             return false;
         if (!recordHeaderHandseedOffset(dataStartBit)
             || !recordHeaderCurrentReferenceOffsets(0u, currentReferenceBits))

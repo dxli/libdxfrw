@@ -15448,6 +15448,31 @@ void testHeaderWriterSealing(TestContext& t, const std::string& version) {
             continue;
         }
         const auto sectionSize = writer.buffer().size() - start;
+        if (version != "AC1015" && version != "AC1018") {
+            // ODA §9: independently walk the emitted HEADER handle stream to
+            // ACAD_GROUP and its two following dictionary fields.
+            const std::size_t sizeWord = start
+                + (version == "AC1027" || version == "AC1032" ? 24u : 20u);
+            const auto& source = writer.buffer();
+            dwgBuffer headerBytes(const_cast<std::uint8_t*>(source.data()), source.size());
+            const bool positioned = headerBytes.setPosition(sizeWord);
+            const std::uint64_t handlesBit = sizeWord * 8u + headerBytes.getRawLong32();
+            const bool handlePositioned = positioned && headerBytes.isGood()
+                && headerBytes.setPosition(handlesBit / 8u);
+            if (handlePositioned) headerBytes.setBitPos(handlesBit & 7u);
+            for (unsigned i = 0; i < 29u && headerBytes.isGood(); ++i)
+                (void)headerBytes.getHandle();
+            const dwgHandle group = headerBytes.getHandle();
+            const dwgHandle mline = headerBytes.getHandle();
+            const dwgHandle nod = headerBytes.getHandle();
+            t.expect(handlePositioned && headerBytes.isGood()
+                         && group.code == DRW::DwgHardPointer
+                         && group.ref == DRW::DwgAcadGroupDictionaryHandle
+                         && mline.code == DRW::DwgHardPointer && mline.ref == 0u
+                         && nod.code == DRW::DwgHardOwnership
+                         && nod.ref == DRW::DwgNamedObjectsDictionaryHandle,
+                     "HEADER links emitted GROUP dictionary with following handles aligned: " + label);
+        }
         const auto crcOffset = start + sectionSize - 18u;
         const auto storedCrc = [&writer, crcOffset]() {
             return std::uint16_t(writer.buffer()[crcOffset])

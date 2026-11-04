@@ -105,7 +105,8 @@ bool dwgWriter24::writeDwgHeader() {
         if (!m_header->encodeDwgForWriter(
                 m_version, &dataBuf, &handleBuf, &strBuf,
                 DRW::DwgNamedObjectsDictionaryHandle,
-                m_plotSettingsDictionaryHandle, &currentReferenceBits))
+                m_plotSettingsDictionaryHandle, &currentReferenceBits,
+                DRW::DwgAcadGroupDictionaryHandle))
             return false;
         dataBuf.alignToByte();
         strBuf.alignToByte();

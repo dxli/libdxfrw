@@ -4173,7 +4173,8 @@ bool DRW_Header::encodeDwgForWriter(
         DRW::Version version, dwgBufferW *buf, dwgBufferW *hBbuf,
         dwgBufferW *strBuf, std::uint32_t namedObjectDictionaryHandle,
         std::uint32_t plotSettingsDictionaryHandle,
-        std::array<std::uint64_t, 4>* currentReferenceBits) {
+        std::array<std::uint64_t, 4>* currentReferenceBits,
+        std::uint32_t groupDictionaryHandle) {
     if (version != DRW::AC1015 && version != DRW::AC1018 &&
         version != DRW::AC1021 && version != DRW::AC1024 &&
         version != DRW::AC1027 &&
@@ -4577,7 +4578,7 @@ bool DRW_Header::encodeDwgForWriter(
     if (version < DRW::AC1018) {                        // R2000 and earlier only
         hBbuf->putHandle(makeHardOwner(vpEntHeaderCtrl)); // VPORT_ENTITY_HEADER_CONTROL (0x0B)
     }
-    hBbuf->putHandle(makeHardPtr(0));                   // DICT ACAD_GROUP
+    hBbuf->putHandle(makeHardPtr(groupDictionaryHandle)); // DICT ACAD_GROUP
     hBbuf->putHandle(makeHardPtr(0));                   // DICT ACAD_MLINESTYLE
     hBbuf->putHandle(makeHardOwner(namedObjectDictionaryHandle)); // DICT NAMED OBJS
 

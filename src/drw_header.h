@@ -421,7 +421,8 @@ private:
         DRW::Version version, dwgBufferW *buf, dwgBufferW *hBbuf,
         dwgBufferW *strBuf, std::uint32_t namedObjectDictionaryHandle,
         std::uint32_t plotSettingsDictionaryHandle,
-        std::array<std::uint64_t, 4>* currentReferenceBits = nullptr);
+        std::array<std::uint64_t, 4>* currentReferenceBits = nullptr,
+        std::uint32_t groupDictionaryHandle = 0);
     bool parseCodeImpl(int code, const std::unique_ptr<dxfReader>& reader,
                        bool deferText);
     bool finalizeDxfHeader(const std::unique_ptr<dxfReader>& reader);
