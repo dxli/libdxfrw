@@ -556,6 +556,7 @@ bool dwgWriter18::objectBaseOffset(std::uint32_t& offset) const {
 }
 
 bool dwgWriter18::addRawDwgSection(const DRW_RawDwgSection& section) {
+    if (defaultDwgMaterialGraphActive()) { latchDefaultDwgMaterialConflict(); return false; }
     // Data-section payloads are encoded for their source DWG version. There
     // is no typed converter for either opaque section, so accepting a
     // mismatched (or unknown) source version would create invalid replay.

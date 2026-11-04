@@ -732,6 +732,32 @@ public:
   }
 };
 
+/** Explicit opt-in for the witnessed AC1024 default material graph.
+ * Callers with an existing ACAD_MATERIAL graph must omit this opt-in; an
+ * existing or later conflicting registration causes the output to fail.
+ * Only internally synthesized layer 0 is bound to Global. Caller layers
+ * retain their own material references. Opaque DWG replay is refused. The
+ * provider must also affirm that all other opaque caller payloads lack hidden
+ * references or ownership claims to the planned identities: those payloads
+ * cannot be validated by the writer's typed-handle ledger. Return true only
+ * when that statement is established. This opt-in is not a whole-document
+ * closure or complete-DWG interoperability guarantee.
+ */
+class DRW_DwgDefaultMaterialProvider {
+public:
+  virtual ~DRW_DwgDefaultMaterialProvider() = default;
+  virtual bool wantsDwgDefaultMaterialGraph() const { return true; }
+  virtual bool dwgDefaultMaterialOpaqueReferencesAbsent(
+      std::uint32_t dictionary, std::uint32_t byBlock,
+      std::uint32_t byLayer, std::uint32_t global) const {
+    (void)dictionary; (void)byBlock; (void)byLayer; (void)global; return false;
+  }
+  virtual void dwgDefaultMaterialGraphPlanned(std::uint32_t dictionary,
+      std::uint32_t byBlock, std::uint32_t byLayer, std::uint32_t global) {
+    (void)dictionary; (void)byBlock; (void)byLayer; (void)global;
+  }
+};
+
 /** Optional side-channel for consumers that need to refuse conversion after
  *  the generic OBJECTS fallback observes a record with no modeled adapter
  *  route. Kept separate from DRW_Interface so its established vtable is not

@@ -507,6 +507,8 @@ public:
         std::uint32_t defaultPlotStyleDictionaryHandle {0};
         std::uint32_t defaultPlotStylePlaceholderHandle {0};
         bool defaultPlotStyleGraphEmitted {false};
+        std::array<std::uint32_t, 4> defaultMaterialHandles {{0, 0, 0, 0}};
+        bool defaultMaterialGraphEmitted {false};
         bool deferredPlotSettingsDictionary {false};
         bool deferredPlotSettingsDictionaryEmitted {false};
         std::size_t deferredPlotSettingsEntryCount {0};
@@ -825,6 +827,8 @@ public:
 
     /// Reserve a specific handle so `next()` never returns it again.
     void reserveHandle(std::uint32_t h) { m_handles.reserve(h); }
+
+    virtual bool hasRawDwgSections() const { return false; }
 
     virtual bool addRawDwgSection(const DRW_RawDwgSection& section) {
         (void)section;

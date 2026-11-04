@@ -92,6 +92,17 @@ public:
     bool completeDeferredDwgObjects() override;
     // Called only for the explicit DRW_DwgDefaultPlotStyleProvider opt-in.
     bool stageDefaultDwgPlotStyleGraph();
+    bool stageDefaultDwgMaterialGraph();
+    bool emitDefaultDwgMaterial(std::size_t index);
+    const std::array<std::uint32_t, 4>& defaultDwgMaterialGraphHandles() const {
+        return m_defaultMaterialHandles;
+    }
+    bool defaultDwgMaterialGraphActive() const { return m_defaultMaterialHandles[0] != 0; }
+    bool rejectDefaultDwgMaterialFrameConflicts();
+    void latchDefaultDwgMaterialConflict() { m_defaultMaterialConflict = true; }
+    bool conflictsDefaultDwgMaterialDictionary(const DRW_Dictionary& dictionary,
+                                                std::uint32_t defaultEntry = 0) const noexcept;
+
     bool conflictsDefaultDwgPlotStyleDictionary(const DRW_Dictionary& dictionary,
         std::uint32_t defaultEntry = 0, bool withDefault = false) const noexcept;
     bool defaultDwgPlotStyleGraphHandles(std::uint32_t& dictionary,
@@ -697,6 +708,11 @@ protected:
     std::uint32_t m_defaultPlotStyleDictionaryHandle {0};
     std::uint32_t m_defaultPlotStylePlaceholderHandle {0};
     bool m_defaultPlotStyleGraphEmitted {false};
+    std::array<std::uint32_t, 4> m_defaultMaterialHandles {{0, 0, 0, 0}};
+    bool m_defaultMaterialGraphEmitted {false};
+    bool m_writingDefaultMaterialGraph {false};
+    bool m_defaultMaterialConflict {false}; // sticky even across object rollback
+
     bool m_writingDefaultPlotStyleGraph {false}; // scoped internal emission only
     bool m_deferredPlotSettingsDictionary {false};
     bool m_deferredPlotSettingsDictionaryEmitted {false};
@@ -768,6 +784,7 @@ protected:
     static constexpr std::uint8_t kBeforeEndBlockFrame = 3;
     static constexpr std::uint8_t kAfterEndBlockFrame = 4;
     static constexpr std::uint8_t kAfterDefaultPlotStyleDictionary = 5;
+    static constexpr std::uint8_t kAfterDefaultMaterialDictionary = 6;
     bool consumeWriteFailurePointForTest(std::uint8_t point) noexcept {
         if (m_writeFailurePointForTest != point)
             return false;

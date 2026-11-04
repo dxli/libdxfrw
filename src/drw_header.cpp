@@ -4176,6 +4176,18 @@ bool DRW_Header::encodeDwgForWriter(
         std::array<std::uint64_t, 4>* currentReferenceBits,
         std::uint32_t groupDictionaryHandle,
         std::uint32_t plotStyleDictionaryHandle) {
+    return encodeDwgForWriterMaterial(version, buf, hBbuf, strBuf,
+        namedObjectDictionaryHandle, plotSettingsDictionaryHandle, currentReferenceBits,
+        groupDictionaryHandle, plotStyleDictionaryHandle, 0, 0);
+}
+
+bool DRW_Header::encodeDwgForWriterMaterial(
+        DRW::Version version, dwgBufferW *buf, dwgBufferW *hBbuf,
+        dwgBufferW *strBuf, std::uint32_t namedObjectDictionaryHandle,
+        std::uint32_t plotSettingsDictionaryHandle,
+        std::array<std::uint64_t, 4>* currentReferenceBits,
+        std::uint32_t groupDictionaryHandle, std::uint32_t plotStyleDictionaryHandle,
+        std::uint32_t materialDictionaryHandle, std::uint32_t currentMaterialHandle) {
     if (version != DRW::AC1015 && version != DRW::AC1018 &&
         version != DRW::AC1021 && version != DRW::AC1024 &&
         version != DRW::AC1027 &&
@@ -4417,7 +4429,7 @@ bool DRW_Header::encodeDwgForWriter(
     putCurrentReference(1);           // TEXTSTYLE
     putCurrentReference(2);           // CELTYPE
     if (version > DRW::AC1018) {       // 2007+: CMATERIAL (parseDwg:1960-1963)
-        hBbuf->putHandle(makeHardPtr(0));
+        hBbuf->putHandle(makeHardPtr(currentMaterialHandle));
     }
     putCurrentReference(3);           // DIMSTYLE
     hBbuf->putHandle(makeHardPtr(0));  // CMLSTYLE
@@ -4595,7 +4607,7 @@ bool DRW_Header::encodeDwgForWriter(
                                                      // DICT PLOTSETTINGS
     hBbuf->putHandle(makeHardPtr(plotStyleDictionaryHandle)); // DICT PLOTSTYLES
     if (version > DRW::AC1015) {         // R2004+: 2 extra dict handles (parseDwg:2219-2223)
-        hBbuf->putHandle(makeHardPtr(0)); // DICT MATERIALS
+        hBbuf->putHandle(makeHardPtr(materialDictionaryHandle)); // DICT MATERIALS
         hBbuf->putHandle(makeHardPtr(0)); // DICT COLORS
     }
     if (version > DRW::AC1018) {         // 2007+: DICT VISUALSTYLE (parseDwg:2225-2228)

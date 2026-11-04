@@ -398,6 +398,8 @@ tests/dwg_class_evidence_tests.cpp
 tests/dwg_class_section_wire_tests.cpp
 tests/dwg_class_source_tests.cpp
 tests/dwg_class_wire_tests.cpp
+tests/dwg_default_material_libredwg.py
+tests/dwg_default_material_optin_tests.cpp
 tests/dwg_default_plotstyle_libredwg.py
 tests/dwg_default_plotstyle_optin_tests.cpp
 tests/dwg_ellipse_wcs_test.h

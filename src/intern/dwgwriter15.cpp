@@ -35,6 +35,7 @@
 #include "dwgbuffer.h"
 #include "dwgbufferw.h"
 #include "dwg_header_time.h"
+#include "dwg_default_material.h"
 #include "dwg_fixed_handles.h"
 #include "dwgobjectframe.h"
 #include "dwgreader.h"
@@ -1560,6 +1561,8 @@ dwgWriter::CompoundWriteCheckpoint dwgWriter15::checkpointCompoundWrite() const 
     checkpoint.defaultPlotStyleDictionaryHandle = m_defaultPlotStyleDictionaryHandle;
     checkpoint.defaultPlotStylePlaceholderHandle = m_defaultPlotStylePlaceholderHandle;
     checkpoint.defaultPlotStyleGraphEmitted = m_defaultPlotStyleGraphEmitted;
+    checkpoint.defaultMaterialHandles = m_defaultMaterialHandles;
+    checkpoint.defaultMaterialGraphEmitted = m_defaultMaterialGraphEmitted;
     checkpoint.deferredPlotSettingsDictionary =
         m_deferredPlotSettingsDictionary;
     checkpoint.deferredPlotSettingsDictionaryEmitted =
@@ -1746,6 +1749,8 @@ void dwgWriter15::rollbackCompoundWrite(
     m_defaultPlotStyleDictionaryHandle = checkpoint.defaultPlotStyleDictionaryHandle;
     m_defaultPlotStylePlaceholderHandle = checkpoint.defaultPlotStylePlaceholderHandle;
     m_defaultPlotStyleGraphEmitted = checkpoint.defaultPlotStyleGraphEmitted;
+    m_defaultMaterialHandles = checkpoint.defaultMaterialHandles;
+    m_defaultMaterialGraphEmitted = checkpoint.defaultMaterialGraphEmitted;
     m_deferredPlotSettingsDictionary =
         checkpoint.deferredPlotSettingsDictionary;
     m_deferredPlotSettingsDictionaryEmitted =
@@ -2533,6 +2538,14 @@ bool dwgWriter15::registerDwgNamedObjectDictionaryEntry(
     }
     const bool plotSettingsEntry = normalizedName == "ACAD_PLOTSETTINGS";
     const bool plotStyleEntry = isPlotStyleDictionaryKey(name);
+    const bool materialEntry = normalizedName == "ACAD_MATERIAL";
+    if (defaultDwgMaterialGraphActive()
+        && (materialEntry || std::find(m_defaultMaterialHandles.begin(),
+              m_defaultMaterialHandles.end(), childHandle) != m_defaultMaterialHandles.end())) {
+        m_defaultMaterialConflict = true;
+        return false;
+    }
+
     if (m_dwgTableRecordsComplete || name.empty() || childHandle == 0
         || (m_defaultPlotStylePlaceholderHandle != 0
             && childHandle == m_defaultPlotStylePlaceholderHandle)
@@ -2585,6 +2598,54 @@ bool dwgWriter15::registerDwgNamedObjectDictionaryEntry(
         return false;
     }
     return true;
+}
+
+bool dwgWriter15::stageDefaultDwgMaterialGraph() {
+    static_assert(std::is_nothrow_move_assignable<HandleAllocator>::value,
+                  "failed material admission must restore allocator state");
+    if (m_version != DRW::AC1024 || m_dwgClassesFrozen || m_dwgClassManifestPrepared
+        || m_sectionOffsets.count(recno::HEADER) || m_sectionOffsets.count(recno::CLASSES)
+        || m_dwgTableRecordsComplete || defaultDwgMaterialGraphActive()
+        || hasRawDwgSections() || !m_rawClassNumRemap.empty() || !m_rawObjectOverrides.empty())
+        return false;
+    for (const auto& definition : m_dwgClassDefinitions)
+        if (definition.m_className == "AcDbMaterial"
+            || definition.m_recordName == "MATERIAL") return false;
+    try {
+        for (const auto& entry : m_pendingDwgNamedObjectDictionaryEntries)
+            if (toUpperCase(entry.name) == "ACAD_MATERIAL") return false;
+
+        CompoundWriteCheckpoint checkpoint = checkpointPublicTransaction();
+        HandleAllocator allocator = m_handles;
+        const auto fail = [this, &checkpoint, &allocator] {
+            m_handles = std::move(allocator);
+            try { rollbackCompoundWrite(checkpoint); }
+            catch (...) { m_frameWriteError = true; }
+            return false;
+        };
+        try {
+            std::array<std::uint32_t, 4> handles{};
+            for (auto& handle : handles) {
+                handle = m_handles.next();
+                if (handle == 0 || handle == DRW::NoHandle) return fail();
+            }
+            if (!registerDwgNamedObjectDictionaryEntry("ACAD_MATERIAL", handles[0]))
+                return fail();
+            DwgClassDefinition definition;
+            definition.m_classNum = nextFreeCustomClassNum();
+            definition.m_proxyFlag = 0x481;
+            definition.m_appName = "ObjectDBX Classes";
+            definition.m_className = "AcDbMaterial";
+            definition.m_recordName = "MATERIAL";
+            definition.m_entityFlagRaw = 0x1f3;
+            definition.m_dwgVersion = 23;
+            definition.m_maintenanceVersion = 14;
+            for (std::size_t i = 1; i < handles.size(); ++i)
+                if (!registerTypedObjectClass(definition, handles[i])) return fail();
+            m_defaultMaterialHandles = handles;
+            return true;
+        } catch (...) { return fail(); }
+    } catch (...) { return false; }
 }
 
 bool dwgWriter15::stageDefaultDwgPlotStyleGraph() {
@@ -2675,6 +2736,13 @@ bool dwgWriter15::registerPlotSettingsObjectClass(std::uint32_t handle) {
 
 bool dwgWriter15::registerDwgGroupDictionaryEntry(
     const std::string& name, std::uint32_t groupHandle) {
+    if (defaultDwgMaterialGraphActive()
+        && std::find(m_defaultMaterialHandles.begin(), m_defaultMaterialHandles.end(),
+                     groupHandle) != m_defaultMaterialHandles.end()) {
+        m_defaultMaterialConflict = true;
+        return false;
+    }
+
     if (m_dwgTableRecordsComplete || name.empty() || groupHandle == 0
         || (m_defaultPlotStylePlaceholderHandle != 0
             && groupHandle == m_defaultPlotStylePlaceholderHandle)
@@ -2737,6 +2805,8 @@ bool dwgWriter15::validateDwgNamedObjectDictionaryEntries() const {
         || !m_dwgGroupDictionaryComplete
         || (m_deferredPlotSettingsDictionary
             && !m_deferredPlotSettingsDictionaryEmitted)
+        || m_defaultMaterialConflict
+        || (defaultDwgMaterialGraphActive() && !m_defaultMaterialGraphEmitted)
         || (m_defaultPlotStyleDictionaryHandle != 0
             && (!m_defaultPlotStyleGraphEmitted
                 || m_defaultPlotStylePlaceholderHandle == 0))
@@ -2759,6 +2829,16 @@ bool dwgWriter15::validateDwgNamedObjectDictionaryEntries() const {
                         && entry.childHandle == m_defaultPlotStyleDictionaryHandle;
                 }) != 1))
         return false;
+
+    if (defaultDwgMaterialGraphActive()) {
+        for (const auto handle : m_defaultMaterialHandles)
+            if (!hasSingleFrame(handle)) return false;
+        if (std::count_if(m_emittedDwgNamedObjectDictionaryEntries.begin(),
+              m_emittedDwgNamedObjectDictionaryEntries.end(), [this](const auto& entry) {
+                  return toUpperCase(entry.name) == "ACAD_MATERIAL"
+                      && entry.childHandle == m_defaultMaterialHandles[0];
+              }) != 1) return false;
+    }
 
     std::set<std::string> names;
     for (const auto& entry : m_emittedDwgNamedObjectDictionaryEntries) {
@@ -3760,6 +3840,7 @@ bool dwgWriter15::emitMaterialObject(
 }
 
 bool dwgWriter15::writeMaterial(const DRW_Material& material) {
+    if (defaultDwgMaterialGraphActive()) { m_defaultMaterialConflict = true; return false; }
     DRW_Material object = material;
     if (!prepareDwgCommonObjectState(object, m_version))
         return false;
@@ -3887,7 +3968,24 @@ bool dwgWriter15::conflictsDefaultDwgPlotStyleDictionary(
     return false;
 }
 
+bool dwgWriter15::conflictsDefaultDwgMaterialDictionary(
+    const DRW_Dictionary& dictionary, std::uint32_t defaultEntry) const noexcept {
+    if (!defaultDwgMaterialGraphActive()) return false;
+    if (m_writingDefaultMaterialGraph && dictionary.handle == m_defaultMaterialHandles[0])
+        return false;
+    const auto protectedHandle = [this](std::uint32_t h) {
+        return h != 0 && std::find(m_defaultMaterialHandles.begin(),
+            m_defaultMaterialHandles.end(), h) != m_defaultMaterialHandles.end();
+    };
+    if (protectedHandle(dictionary.handle) || protectedHandle(dictionary.parentHandle)
+        || protectedHandle(defaultEntry)) return true;
+    for (const auto& entry : dictionary.m_entries)
+        if (protectedHandle(entry.m_handle)) return true;
+    return false;
+}
+
 bool dwgWriter15::writeDictionary(const DRW_Dictionary& dictionary) {
+    if (conflictsDefaultDwgMaterialDictionary(dictionary)) { m_defaultMaterialConflict = true; return false; }
     if (conflictsDefaultDwgPlotStyleDictionary(dictionary))
         return false;
     if (dictionary.handle == DRW::DwgNamedObjectsDictionaryHandle
@@ -4110,7 +4208,115 @@ bool dwgWriter15::writePlotSettings(
     return true;
 }
 
+bool dwgWriter15::rejectDefaultDwgMaterialFrameConflicts() {
+    if (!defaultDwgMaterialGraphActive() || m_writingDefaultMaterialGraph) return false;
+    const auto protectedHandle = [this](std::uint64_t h) {
+        return h != 0 && std::find(m_defaultMaterialHandles.begin(),
+            m_defaultMaterialHandles.end(), h) != m_defaultMaterialHandles.end();
+    };
+    bool conflict = protectedHandle(m_currentHandle);
+    const auto check = [this, &protectedHandle, &conflict](const dwgBufferW& buffer) {
+        for (const auto& token : buffer.handleOccurrences()) {
+            std::uint64_t target = token.reference;
+            switch (token.code) {
+            case 6: target = static_cast<std::uint64_t>(m_currentHandle) + 1u; break;
+            case 8:
+                if (m_currentHandle == 0) { conflict = true; continue; }
+                target = m_currentHandle - 1u; break;
+            case 10:
+                if (target > std::numeric_limits<std::uint64_t>::max() - m_currentHandle) {
+                    conflict = true; continue;
+                }
+                target += m_currentHandle; break;
+            case 12:
+                if (target > m_currentHandle) { conflict = true; continue; }
+                target = m_currentHandle - target; break;
+            case 14: target = m_currentHandle; break;
+            case 9: case 11: case 13: case 15:
+                conflict = true; continue; // unknown relative role cannot be bounded
+            default: break;
+            }
+            if (!protectedHandle(target)) continue;
+            const bool nodEdge = m_currentHandle == DRW::DwgNamedObjectsDictionaryHandle
+                && token.reference == m_defaultMaterialHandles[0]
+                && token.code == DRW::DwgSoftOwnership;
+            const bool layerEdge = m_currentHandle == DRW::DwgLayer0Handle
+                && token.reference == m_defaultMaterialHandles[3]
+                && token.code == DRW::DwgHardPointer;
+            if (!nodEdge && !layerEdge) conflict = true;
+        }
+    };
+    check(m_objectBody); check(m_objectStrings); check(m_objectHandles);
+    if (conflict) m_defaultMaterialConflict = true;
+    return conflict;
+}
+
+bool dwgWriter15::emitDefaultDwgMaterial(std::size_t index) {
+    if (index < 1 || index > 3 || !defaultDwgMaterialGraphActive()) return false;
+    const std::array<drwDwgDefaultMaterial::Kind, 3> kinds{{
+        drwDwgDefaultMaterial::Kind::ByBlock, drwDwgDefaultMaterial::Kind::ByLayer,
+        drwDwgDefaultMaterial::Kind::Global}};
+    dwgBufferW fields, strings;
+    if (!drwDwgDefaultMaterial::build(m_version, kinds[index - 1], fields, strings))
+        return false;
+    dwgBufferW& body = beginObject(m_defaultMaterialHandles[index]);
+    dwgBufferW *sb, *hb;
+    if (!emitRecordPreamble(body, m_version,
+            typedDwgClassNum("AcDbMaterial", "MATERIAL", 0),
+            m_defaultMaterialHandles[index], m_objectStrings, m_objectHandles,
+            sb, hb, 1, 1, false)) return false;
+    const auto append = [](dwgBufferW& dst, const dwgBufferW& src) {
+        for (std::uint64_t i = 0; i < src.bitCount(); ++i)
+            dst.putBit((src.data()[static_cast<std::size_t>(i / 8u)]
+                >> (7u - i % 8u)) & 1u);
+    };
+    append(body, fields);
+    append(*sb, strings);
+    hb->putHandle(makeSoftPointer(m_defaultMaterialHandles[0]));
+    hb->putHandle(makeSoftPointer(m_defaultMaterialHandles[0]));
+    if (!body.isGood() || !sb->isGood() || !hb->isGood()) return false;
+    finishObject();
+    return !objectWriteFailed();
+}
+
 bool dwgWriter15::completeDeferredDwgObjects() {
+    if (defaultDwgMaterialGraphActive() && !m_defaultMaterialGraphEmitted) {
+        if (!m_dwgTableRecordsComplete || !m_dwgNamedObjectDictionaryComplete)
+            return false;
+        try {
+            const CompoundWriteCheckpoint checkpoint = checkpointCompoundWrite();
+            const auto fail = [this, &checkpoint] {
+                try { rollbackCompoundWrite(checkpoint); }
+                catch (...) { m_frameWriteError = true; }
+                return false;
+            };
+            try {
+                DRW_Dictionary dictionary;
+                dictionary.handle = m_defaultMaterialHandles[0];
+                dictionary.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+                dictionary.cloning = 1; dictionary.hardOwner = 0;
+                dictionary.setDwgCommonObjectState(0, 1, false);
+                dictionary.m_entries = {{"ByBlock", m_defaultMaterialHandles[1]},
+                    {"ByLayer", m_defaultMaterialHandles[2]},
+                    {"Global", m_defaultMaterialHandles[3]}};
+                struct ScopedWrite {
+                    bool& active;
+                    explicit ScopedWrite(bool& value) : active(value) { active = true; }
+                    ~ScopedWrite() { active = false; }
+                };
+                {
+                    ScopedWrite scope(m_writingDefaultMaterialGraph);
+                    if (!writeDictionary(dictionary)) return fail();
+                    if (consumeWriteFailurePointForTest(kAfterDefaultMaterialDictionary))
+                        throw std::bad_alloc();
+                    for (std::size_t i = 1; i < m_defaultMaterialHandles.size(); ++i)
+                        if (!emitDefaultDwgMaterial(i)) return fail();
+                }
+                m_defaultMaterialGraphEmitted = true;
+            } catch (...) { return fail(); }
+        } catch (...) { return false; }
+    }
+
     if (m_defaultPlotStyleDictionaryHandle != 0 && !m_defaultPlotStyleGraphEmitted) {
         if (!m_dwgTableRecordsComplete || !m_dwgNamedObjectDictionaryComplete
             || m_defaultPlotStylePlaceholderHandle == 0)
@@ -5262,6 +5468,7 @@ bool dwgWriter15::emitDictionaryWithDefaultObject(
 }
 
 bool dwgWriter15::writeDictionaryWithDefault(const DRW_DictionaryWithDefault& dictionary) {
+    if (conflictsDefaultDwgMaterialDictionary(dictionary, dictionary.m_defaultEntryHandle)) { m_defaultMaterialConflict = true; return false; }
     if (conflictsDefaultDwgPlotStyleDictionary(
             dictionary, dictionary.m_defaultEntryHandle, true))
         return false;
@@ -6702,6 +6909,8 @@ bool dwgWriter15::writeDwgObjects() {
                 layer0.xrefBlockHandle.code = DRW::DwgHardPointer;
             }
             layer0.name = "0";
+            if (defaultDwgMaterialGraphActive())
+                layer0.materialHandle.ref = m_defaultMaterialHandles[3];
             if (m_defaultPlotStyleDictionaryHandle != 0)
                 layer0.plotStyleHandle.ref = m_defaultPlotStylePlaceholderHandle;
             if (!emitLayerRecord(DRW::DwgLayer0Handle, layer0))
@@ -7214,6 +7423,7 @@ bool patchRawEntityOwner(const std::vector<std::uint8_t>& raw,
 bool dwgWriter15::replayRawObject(
     const DRW_UnsupportedObject& object,
     const DRW_ModelerGeometry* typedModeler) {
+    if (defaultDwgMaterialGraphActive()) { m_defaultMaterialConflict = true; return false; }
     m_lastDwgObjectFrame = {};
     m_lastDwgObjectFrameValid = false;
     m_currentDwgObjectFrameProvenance =

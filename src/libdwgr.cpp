@@ -1760,6 +1760,22 @@ bool dwgRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
         }
     }
 
+    auto* materialProvider = dynamic_cast<DRW_DwgDefaultMaterialProvider*>(iface);
+    if (!m_requiredWriteFailure && materialProvider
+        && materialProvider->wantsDwgDefaultMaterialGraph()) {
+        auto* native = dynamic_cast<dwgWriter15*>(writer.get());
+        if (native == nullptr || !native->stageDefaultDwgMaterialGraph()) {
+            markDwgWriteFailure();
+        } else {
+            const auto& h = native->defaultDwgMaterialGraphHandles();
+            if (!materialProvider->dwgDefaultMaterialOpaqueReferencesAbsent(
+                    h[0], h[1], h[2], h[3]))
+                markDwgWriteFailure();
+            else
+                materialProvider->dwgDefaultMaterialGraphPlanned(h[0], h[1], h[2], h[3]);
+        }
+    }
+
     // Section emit order (mirror of dxfRW::write).  Per-section helpers
     // emit framing; the iface callbacks drive caller-side enumeration
     // of entities/blocks/objects into the object stream between
@@ -3538,6 +3554,10 @@ bool dwgRW::writeTableStyleCellStyleMapGraph(
 }
 
 bool dwgRW::registerMaterialObjectClass(DRW_Material *object) {
+    if (auto* w = asWriter15(writer); w && w->defaultDwgMaterialGraphActive()) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::ClassRegistration, false);
+    }
     if (object == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::ClassRegistration, false);
     if (object->handle != 0)
@@ -3548,6 +3568,10 @@ bool dwgRW::registerMaterialObjectClass(DRW_Material *object) {
 }
 
 bool dwgRW::writeMaterial(DRW_Material *object) {
+    if (auto* w = asWriter15(writer); w && w->defaultDwgMaterialGraphActive()) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::Object, false);
+    }
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     auto *w = asWriter15(writer);
@@ -3775,7 +3799,8 @@ bool dwgRW::writeDictionary(DRW_Dictionary *object) {
     auto *w = asWriter15(writer);
     if (w == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
-    if (w->conflictsDefaultDwgPlotStyleDictionary(*object)) {
+    if (w->conflictsDefaultDwgPlotStyleDictionary(*object)
+        || w->conflictsDefaultDwgMaterialDictionary(*object)) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::Object, false);
     }
@@ -4055,7 +4080,8 @@ bool dwgRW::writeDictionaryWithDefault(DRW_DictionaryWithDefault *object) {
     if (w == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
     if (w->conflictsDefaultDwgPlotStyleDictionary(
-            *object, object->m_defaultEntryHandle, true)) {
+            *object, object->m_defaultEntryHandle, true)
+        || w->conflictsDefaultDwgMaterialDictionary(*object, object->m_defaultEntryHandle)) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::Object, false);
     }
@@ -4158,6 +4184,10 @@ bool dwgRW::registerRawDwgObjectClass(const DRW_UnsupportedObject *object) {
 }
 
 bool dwgRW::writeRawDwgObject(DRW_UnsupportedObject *object) {
+    if (auto* w = asWriter15(writer); w && w->defaultDwgMaterialGraphActive()) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::RawObject, false);
+    }
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::RawObject, false);
     auto *w = asWriter15(writer);
@@ -4172,6 +4202,10 @@ bool dwgRW::writeRawDwgObject(DRW_UnsupportedObject *object) {
 bool dwgRW::writeRawDwgObject(
     DRW_UnsupportedObject *object,
     const DRW_ModelerGeometry *typedModeler) {
+    if (auto* w = asWriter15(writer); w && w->defaultDwgMaterialGraphActive()) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::RawObject, false);
+    }
     if (object == nullptr || typedModeler == nullptr)
         return recordWriteResult(WriteSkipKind::RawObject, false);
     auto *w = asWriter15(writer);
@@ -4184,6 +4218,10 @@ bool dwgRW::writeRawDwgObject(
 }
 
 bool dwgRW::writeRawDwgSection(const DRW_RawDwgSection *section) {
+    if (auto* w = asWriter15(writer); w && w->defaultDwgMaterialGraphActive()) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::RawSection, false);
+    }
     if (section == nullptr || writer == nullptr)
         return recordWriteResult(WriteSkipKind::RawSection, false);
     return recordWriteResult(WriteSkipKind::RawSection,

@@ -897,15 +897,14 @@ and [DIMSTYLE receipt](docs/research/p6-ac1015-synthetic-dimstyle-roles-2026-11-
 and [APPID receipt](docs/research/p6-ac1015-synthetic-appid-null-roles-2026-11-04.json)
 and [viewport receipt](docs/research/p6-ac1015-synthetic-vport-null-roles-2026-11-04.json)
 and [linetype receipt](docs/research/p6-ac1015-synthetic-ltype-null-roles-2026-11-04.json).
-For AC1024, independently qualify and implement the witnessed
-NOD→ACAD_MATERIAL→ByBlock/ByLayer/Global graph and generated layer binding,
-with early class admission, caller overrides, collision checks and rollback.
-A typed-null material alone merely moves the ODA fatal boundary and leaves
-a layer warning. See the [material control and subplan](docs/research/p6-ac1024-default-layer-material-control-2026-11-04.json).
-A private AC1024 constructor now reproduces the three witnessed MATERIAL
-body and detached-string spans exactly; it is not connected to production
-output. Complete graph admission and independent full-file validation next;
-see the [source-profile receipt](docs/research/p6-ac1024-default-material-source-profile-2026-11-04.json).
+An explicit AC1024 opt-in now emits the witnessed NOD→ACAD_MATERIAL→
+ByBlock/ByLayer/Global graph, HEADER references and generated layer binding,
+with source-profile payloads, collision checks and transactional retry.
+LibreDWG reads the complete selected graph; ODA still reports a layer warning
+and fails at VPORT. Resolve those failures and qualify other producers,
+versions and native semantics before broader claims. See the [material
+opt-in receipt](docs/research/p6-ac1024-default-material-optin-2026-11-04.json)
+and [source-profile receipt](docs/research/p6-ac1024-default-material-source-profile-2026-11-04.json).
 Audit generic DWG MATERIAL replay separately: opaque body replay currently
 does not emit the detached map filename strings; establish source order
 and immutable bindings or refuse output before any data can be lost.

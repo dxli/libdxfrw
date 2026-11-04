@@ -57,6 +57,7 @@ public:
     bool objectBaseOffset(std::uint32_t& offset) const override;
 
     bool addRawDwgSection(const DRW_RawDwgSection& section) override;
+    bool hasRawDwgSections() const override { return !m_rawDwgSections.empty(); }
 
     /// Re-packages m_buf sections into R2004 container pages,
     /// builds the encrypted variable header, and flushes to disk.

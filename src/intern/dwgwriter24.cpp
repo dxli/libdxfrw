@@ -101,13 +101,23 @@ bool dwgWriter24::writeDwgHeader() {
         dwgBufferW handleBuf;
         dwgBufferW strBuf;
         std::array<std::uint64_t, 4> currentReferenceBits{};
-        // Propagate encode failure: writeDwgHeader reports success as a bool.
-        if (!m_header->encodeDwgForWriter(
+        std::uint32_t currentMaterial = 0;
+        if (defaultDwgMaterialGraphActive()) {
+            bool supplied = false;
+            if (!m_header->getDxfMaterialReferenceHandle(currentMaterial, supplied)) return false;
+            if (!supplied) currentMaterial = m_defaultMaterialHandles[2];
+            else if (std::find(m_defaultMaterialHandles.begin()+1, m_defaultMaterialHandles.end(),
+                               currentMaterial) == m_defaultMaterialHandles.end()) return false;
+        }
+        // Preserve the legacy writer entry point and bind the two witnessed
+        // material header references only for the explicit opt-in graph.
+        if (!m_header->encodeDwgForWriterMaterial(
                 m_version, &dataBuf, &handleBuf, &strBuf,
                 DRW::DwgNamedObjectsDictionaryHandle,
                 m_plotSettingsDictionaryHandle, &currentReferenceBits,
                 DRW::DwgAcadGroupDictionaryHandle,
-                m_defaultPlotStyleDictionaryHandle))
+                m_defaultPlotStyleDictionaryHandle,
+                m_defaultMaterialHandles[0], currentMaterial))
             return false;
         dataBuf.alignToByte();
         strBuf.alignToByte();
@@ -395,6 +405,7 @@ bool dwgWriter24::encodeEntity(DRW_Entity *ent) {
 // handleBits (= bs) = handleSectionBytes * 8.
 
 void dwgWriter24::finishObject() {
+    if (rejectDefaultDwgMaterialFrameConflicts()) { m_writeError = true; return; }
     // Keep the R2010+ three-stream writer consistent with the legacy frame
     // assembler: reject duplicate handles before appending a second frame.
     if (hasEmittedDwgObjectHandle(m_currentHandle)) {
