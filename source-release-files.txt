@@ -544,6 +544,7 @@ tests/rendering_publication_controls.h
 tests/rendering_source_controls.h
 tests/resource_origin_controls.h
 tests/root_adapter_build_context_tests.py
+tests/run_ac1018_minimal_dictionary_test.cmake
 tests/run_block_owner_rejection_test.cmake
 tests/run_dwg2dxf_image_path_test.cmake
 tests/run_dwg2dxf_raw_dxf_section_test.cmake
@@ -622,6 +623,7 @@ tools/audit_ac1015_compound_entity_chains.py
 tools/audit_ac1015_empty_attributed_insert.py
 tools/audit_ac1015_insert_scale.py
 tools/audit_ac1015_insert_tilted.py
+tools/audit_ac1018_dictionary_wire.py
 tools/audit_ac1024_rastervariables_source.py
 tools/audit_ac1024_tilted_geometry.py
 tools/audit_ac1024_vport_null_roles.py

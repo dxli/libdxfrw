@@ -41425,7 +41425,10 @@ bool dx_iface::inspectStandardDwgOutput(const dxfRW::DxfObjectsWriteView& view) 
                 || !frame.hasNoObservedTextDecodeIssues()
                 || (!drwDwgCommonLinkEvidenceValidated(
                         frame.raw.m_commonLinkEvidence)
-                    && !completeLegacyDictionaryPayload)
+                    && !completeLegacyDictionaryPayload
+                    && !(frame.raw.m_commonLinkEvidence == DRW_DwgCommonLinkEvidence::Unknown
+                         && frame.publication.m_commonLinkEvidence == DRW_DwgCommonLinkEvidence::Unknown
+                         && cData->hasAc1018MinimalRootGroupSource(frame.raw.m_handle)))
                 || (frame.sourceCodePageFieldPresent && !frame.sourceCodePageRecognized)
                 || !hasQualifiedStandardDwgOutputNames(frame.generation, frame.raw.m_handle, false)) continue;
             const auto found = context->sourceHandleToWrittenObjectMap.find(source.first.second);
@@ -61951,6 +61954,89 @@ bool dx_data::hasCompleteDwgDictionaryEntry(
     return matched;
 }
 
+namespace {
+// ODA v5.4.1 §§20.1 and 20.4.44, restricted to the complete minimal
+// AC1018 NOD/empty ACAD_GROUP pair. This observes the immutable body
+// independently of DRW_Dictionary's typed parser; CRC/frame capture is a
+// separate prerequisite. No generic common-link publication is upgraded.
+bool matchesAc1018MinimalDictionaryWire(const DRW_UnsupportedObject& raw,
+                                        std::uint32_t owner,
+                                        std::uint32_t child) noexcept {
+    using namespace dx_raster_wire::detail;
+    if (raw.m_version != DRW::AC1018 || raw.m_objectType != dwgObjType::DICTIONARY
+        || raw.m_handle == 0u || raw.m_rawBytes.empty()
+        || raw.m_rawBytes.size() > (std::numeric_limits<std::uint32_t>::max)() / 8u)
+        return false;
+    const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
+    Bits body{raw.m_rawBytes.data(), 0u, total};
+    if (body.shortValue() != dwgObjType::DICTIONARY) return false;
+    const auto end = static_cast<std::uint32_t>(body.little(4u));
+    if (!body.good || end > total || end <= body.pos) return false;
+    body.end = end;
+    const auto self = handle(body, 0u, 0u, true);
+    if (!body.good || self.value != raw.m_handle || body.shortValue() != 0u
+        || body.longValue() != 0u || body.take(1u) != 1u
+        || body.longValue() != (child != 0u ? 1u : 0u)
+        || body.shortValue() != 1u || body.take(8u) != 0u)
+        return false;
+    if (child != 0u) {
+        constexpr char name[] = "ACAD_GROUP";
+        if (body.shortValue() != sizeof(name)) return false;
+        for (std::size_t i = 0; i < sizeof(name); ++i)
+            if (body.take(8u) != static_cast<unsigned char>(name[i])) return false;
+    }
+    if (!body.good || body.pos != end) return false;
+    Bits handles{raw.m_rawBytes.data(), end, total};
+    const auto parent = handle(handles, 4u, raw.m_handle);
+    if (!handles.good || parent.role != 4u || parent.value != owner) return false;
+    if (child != 0u) {
+        const auto item = handle(handles, 2u, raw.m_handle);
+        if (!handles.good || item.role != 2u || item.value != child) return false;
+    }
+    const auto remaining = handles.end - handles.pos;
+    return remaining < 8u && handles.take(remaining) == 0u && handles.good;
+}
+}
+
+bool dx_data::hasAc1018MinimalRootGroupSource(std::uint32_t requested) const noexcept {
+    if (sourceFormat != dx_source_format::DWG || sourceVersion != DRW::AC1018
+        || !dwgReadOutcome.attempted || !dwgReadOutcome.operationSucceeded
+        || dwgReadOutcome.sourceVersion != sourceVersion || importGeneration == 0u
+        || m_standardDwgObjectCaptureFailed || m_standardDwgObjectPayloadFailed
+        || !hasNamedObjectDictionary)
+        return false;
+    const auto headerRoot = headerC.dwgNamedObjectDictionaryReference();
+    const auto root = namedObjectDictionary.handle;
+    if (!headerRoot || !DRW_Header::isUsableDwgNamedObjectDictionaryReference(*headerRoot)
+        || headerRoot->ref64 != root || root == 0u || root == DRW::NoHandle) {
+        return false;
+    }
+    const auto rootFrame = m_standardDwgObjectFrames.find({importGeneration, root});
+    if (rootFrame == m_standardDwgObjectFrames.end()) return false;
+    const auto* rootModel = dynamic_cast<const DRW_Dictionary*>(rootFrame->second.typedBaseline.get());
+    if (!rootModel || rootModel->parentHandle != 0u || rootModel->m_entries.size() != 1u
+        || rootModel->m_entries[0].m_name != "ACAD_GROUP") return false;
+    const auto child = rootModel->m_entries[0].m_handle;
+    if (child == 0u || child == DRW::NoHandle || child == root
+        || (requested != root && requested != child)) return false;
+    const auto childFrame = m_standardDwgObjectFrames.find({importGeneration, child});
+    if (childFrame == m_standardDwgObjectFrames.end()) return false;
+    const auto* childModel = dynamic_cast<const DRW_Dictionary*>(childFrame->second.typedBaseline.get());
+    const auto valid = [this](const StandardDwgObjectFrame& frame, std::uint32_t handleValue) {
+        return frame.generation == importGeneration && frame.raw.m_handle == handleValue
+            && frame.publicationSeen && frame.membershipSeen && frame.sourceProfileBound
+            && frame.payloadMatched && !frame.opaquePayload && frame.hasNoObservedTextDecodeIssues()
+            && frame.dictionaryMembership.m_complete
+            && frame.dictionaryMembership.m_version == DRW::AC1018
+            && frame.dictionaryMembership.m_dictionaryHandle == handleValue
+            && frame.dictionaryMembership.m_hasSourceLocation;
+    };
+    return childModel && childModel->parentHandle == root && childModel->m_entries.empty()
+        && valid(rootFrame->second, root) && valid(childFrame->second, child)
+        && matchesAc1018MinimalDictionaryWire(rootFrame->second.raw, 0u, child)
+        && matchesAc1018MinimalDictionaryWire(childFrame->second.raw, root, 0u);
+}
+
 bool dx_data::getCompleteDwgDictionaryOwner(
         std::uint32_t dictionaryHandle,
         std::uint32_t& ownerHandle) const noexcept {
@@ -61979,9 +62065,11 @@ bool dx_data::getCompleteDwgDictionaryOwner(
         || !frame.publicationSeen || !frame.membershipSeen
         || !frame.sourceProfileBound || !frame.payloadMatched
         || dictionary == nullptr || dictionary->handle != dictionaryHandle
-        || !drwDwgCommonLinkEvidenceValidated(
-            frame.publication.m_commonLinkEvidence)
-        || dictionary->parentHandle != frame.publication.m_parentHandle
+        || ((!drwDwgCommonLinkEvidenceValidated(frame.publication.m_commonLinkEvidence)
+             || dictionary->parentHandle != frame.publication.m_parentHandle)
+            && !(frame.raw.m_commonLinkEvidence == DRW_DwgCommonLinkEvidence::Unknown
+                 && frame.publication.m_commonLinkEvidence == DRW_DwgCommonLinkEvidence::Unknown
+                 && hasAc1018MinimalRootGroupSource(dictionaryHandle)))
         || !frame.dictionaryMembership.m_complete
         || frame.dictionaryMembership.m_version
             != dwgReadOutcome.sourceVersion

@@ -179,49 +179,32 @@ def check_default_dwg_output_versions(converter, root, writer,
         if original[:6] != revision:
             raise AssertionError(f"generated DWG source has wrong revision: {source}")
         if revision == b"AC1018":
-            for target_args in ((), ("-v2010",)):
-                for binary in (False, True):
-                    output = root / (
-                        f"default-version-dwg-refusal-{revision.decode()}-"
-                        f"{'default' if not target_args else 'AC1024'}-"
-                        f"{'binary' if binary else 'ascii'}.dxf")
-                    output.write_bytes(SENTINEL)
-                    arguments = [str(converter), str(source), "-o", str(output),
-                                 *target_args, "-y", "-d"]
-                    if binary:
-                        arguments.append("-b")
-                    result = run_bounded(
-                        arguments, 10, 2 * 1024 * 1024, cwd=root)
-                    required = (
-                        b"strict-complete conversion requires output qualification "
-                        b"for every opaque DWG callback (qualified=0/2)")
-                    projection_target = (b"AC1024" if target_args
-                                         else b"AC1018")
-                    projection_selection = (b"explicit" if target_args
-                                            else b"source-default")
-                    projection_encoding = b"Binary" if binary else b"ASCII"
-                    projection = (
-                        b"CLI conversion projection: schema=1 sourceFormat=DWG "
-                        b"sourceVersion=AC1018 targetVersion=" + projection_target
-                        + b" targetSelection=" + projection_selection
-                        + b" outputEncoding=" + projection_encoding
-                        + b" readCompleteness=strict stage=before-output-preflight")
-                    if (result.returncode != 1 or output.read_bytes() != SENTINEL
-                            or source.read_bytes() != original
-                            or required not in result.stderr
-                            or projection not in result.stderr):
-                        raise AssertionError(
-                            f"AC1018 unqualified output was not refused atomically "
-                            f"for target {target_args!r}/{binary}: {result!r}")
-                    checked += 1
-            continue
+            for binary in (False, True):
+                output = root / f"ac1018-explicit-ac1024-{'binary' if binary else 'ascii'}.dxf"
+                output.write_bytes(SENTINEL)
+                args = [str(converter), str(source), "-o", str(output), "-v2010", "-y", "-d"]
+                if binary:
+                    args.append("-b")
+                result = run_bounded(args, 10, 2 * 1024 * 1024, cwd=root)
+                payload = output.read_bytes()
+                projection = (b"CLI conversion projection: schema=1 sourceFormat=DWG "
+                    b"sourceVersion=AC1018 targetVersion=AC1024 targetSelection=explicit outputEncoding="
+                    + (b"Binary" if binary else b"ASCII")
+                    + b" readCompleteness=strict stage=before-output-preflight")
+                if result.returncode != 0 or source.read_bytes() != original or not output_has_revision(payload, b"AC1024", binary) or projection not in result.stderr:
+                    raise AssertionError(f"AC1018 explicit AC1024 export failed: {result!r}")
+                readback = root / f"ac1018-explicit-readback-{'binary' if binary else 'ascii'}.dxf"
+                result = run_bounded([str(converter), str(output), "-o", str(readback)], 10, 2 * 1024 * 1024, cwd=root)
+                if result.returncode != 0 or not readback.is_file() or not output_has_revision(readback.read_bytes(), b"AC1024", False):
+                    raise AssertionError(f"AC1018 explicit AC1024 readback failed: {result!r}")
+                checked += 1
 
         for binary in (False, True):
             output = root / (
                 f"default-version-dwg-output-{revision.decode()}-"
                 f"{'binary' if binary else 'ascii'}.dxf")
             arguments = [str(converter), str(source), "-o", str(output)]
-            inspect_projection = revision == b"AC1021" and not binary
+            inspect_projection = revision == b"AC1018" or (revision == b"AC1021" and not binary)
             if inspect_projection:
                 arguments.append("-d")
             if binary:
@@ -236,9 +219,10 @@ def check_default_dwg_output_versions(converter, root, writer,
             if inspect_projection:
                 required_projection = (
                     b"CLI conversion projection: schema=1 sourceFormat=DWG "
-                    b"sourceVersion=AC1021 targetVersion=AC1021 "
-                    b"targetSelection=source-default outputEncoding=ASCII "
-                    b"readCompleteness=strict stage=before-output-preflight")
+                    b"sourceVersion=" + revision + b" targetVersion=" + revision
+                    + b" targetSelection=source-default outputEncoding="
+                    + (b"Binary" if binary else b"ASCII")
+                    + b" readCompleteness=strict stage=before-output-preflight")
                 if required_projection not in result.stderr:
                     raise AssertionError(
                         "successful default DWG conversion omitted its target "

@@ -3,6 +3,7 @@
 #include "intern/dxfwriter.h"
 #include "intern/dxflayout.h"
 #include "intern/dwgbufferw.h"
+#include "intern/dwgobjectframe.h"
 #include "intern/dwg_fixed_handles.h"
 #include "libdxfrw.h"
 #include "libdwgr.h"
@@ -130,6 +131,9 @@ public:
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
+    static DRW_UnsupportedObject& mutableStandardRaw(dx_data& data, std::uint32_t handle) {
+        return data.m_standardDwgObjectFrames.at({data.importGeneration, handle}).raw;
+    }
     static std::size_t geoDataSourceRoleCount(const dx_data& data) {
         return data.m_dwgGeoDataSourceRoles.size();
     }
@@ -69588,7 +69592,107 @@ static bool dbColorExternalEvidenceGate() {
     return true;
 }
 
+bool ac1018MinimalRootGroupSource(const std::string& source) {
+    const auto fail = [](const char* reason) { std::cerr << reason << '\n'; return false; };
+    dx_data data; dx_iface importer;
+    if (!importer.fileImport(source, &data, false) || data.sourceVersion != DRW::AC1018
+        || !data.hasNamedObjectDictionary || data.namedObjectDictionary.m_entries.size() != 1u)
+        return fail("minimal AC1018 source import failed");
+    const auto root = data.namedObjectDictionary.handle;
+    const auto child = data.namedObjectDictionary.m_entries.front().m_handle;
+    auto& rootRaw = DxIfaceStandardDwgCaptureTestAccess::mutableStandardRaw(data, root);
+    auto& childRaw = DxIfaceStandardDwgCaptureTestAccess::mutableStandardRaw(data, child);
+    const auto rootBytes = rootRaw.m_rawBytes;
+    const auto childBytes = childRaw.m_rawBytes;
+    for (const auto* body : {&rootBytes, &childBytes}) {
+        // Reconstruct an uncompressed frame from the exact captured body.
+        // Corruption is deliberately not CRC-resealed; this is not a
+        // corrupted compressed whole-file import.
+        dwgBufferW framed;
+        framed.putModularShort(static_cast<std::int32_t>(body->size()));
+        framed.putBytes(body->data(), body->size());
+        framed.putRawShort16(framed.crc16(0xC0C1u, 0u, framed.size()));
+        auto bytes = framed.data();
+        if (bytes.size() != body->size() + 4u) return fail("unexpected object-frame envelope");
+        dwgBuffer buffer(bytes.data(), bytes.size(), nullptr);
+        DwgObjectFrame frame;
+        if (!frame.readAt(buffer, DRW::AC1018, 0u) || frame.body() != *body)
+            return fail("reconstructed dictionary frame did not read");
+        bytes[2] ^= 0x01u;
+        if (frame.readAt(buffer, DRW::AC1018, 0u) || !frame.body().empty())
+            return fail("unsealed corrupt dictionary frame accepted");
+        bytes[2] ^= 0x01u;
+        if (!frame.readAt(buffer, DRW::AC1018, 0u) || frame.body() != *body)
+            return fail("dictionary frame retry failed");
+    }
+    std::uint32_t owner = DRW::NoHandle;
+    if (!data.getCompleteDwgDictionaryOwner(root, owner) || owner != 0u
+        || !data.getCompleteDwgDictionaryOwner(child, owner) || owner != root)
+        return fail("minimal AC1018 source owner proof failed");
+    const auto output = std::filesystem::temp_directory_path() /
+        ("libdxfrw-ac1018-dictionary-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".dxf");
+    struct Cleanup { std::filesystem::path path; ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); } } cleanup{output};
+    dx_iface exporter;
+    const auto write = [&](bool binary) { return exporter.fileExport(output.string(), DRW::AC1018, binary, &data, false, true,
+        dx_dxfSourceTextPolicy::Compatible, DRW::DxfTextWritePolicy::Compatible,
+        dx_dxfProxyGraphicsPolicy::Compatible, dx_dwgReadCompletenessPolicy::RequireComplete); };
+    const auto readback = [&]() {
+        dx_data actual; dx_iface reader;
+        if (!reader.fileImport(output.string(), &actual, false) || !actual.hasNamedObjectDictionary
+            || actual.namedObjectDictionary.m_entries.size() != 1u
+            || actual.namedObjectDictionary.m_entries.front().m_name != "ACAD_GROUP") return false;
+        const auto target = actual.namedObjectDictionary.m_entries.front().m_handle;
+        return std::count_if(actual.dictionaries.begin(), actual.dictionaries.end(), [&](const DRW_Dictionary& value) {
+            return value.handle == target && value.parentHandle == actual.namedObjectDictionary.handle && value.m_entries.empty();
+        }) == 1;
+    };
+    for (const bool binary : {false, true}) {
+        if (!write(binary) || !readback()) return fail("minimal AC1018 source output/readback failed");
+        // The scratch producer's source spans are independently checked in the
+        // companion receipt; flip one bit in each role/boundary/padding field.
+        for (unsigned fault = 0; fault < 6u; ++fault) {
+            const std::string sentinel = "prior destination";
+            { std::ofstream stream(output, std::ios::binary); stream << sentinel; }
+            auto& raw = fault == 1u || fault == 4u ? childRaw : rootRaw;
+            const std::size_t bit = fault == 0u ? 189u : fault == 1u ? 83u
+                : fault == 2u ? 197u : fault == 3u ? 2u
+                : fault == 4u ? 103u : 215u;
+            if (bit >= raw.m_rawBytes.size() * 8u) return fail("test source span changed");
+            raw.m_rawBytes[bit / 8u] ^= static_cast<std::uint8_t>(0x80u >> (bit % 8u));
+            const bool accepted = write(binary);
+            std::ifstream prior(output, std::ios::binary);
+            const std::string actual((std::istreambuf_iterator<char>(prior)), {});
+            rootRaw.m_rawBytes = rootBytes; childRaw.m_rawBytes = childBytes;
+            if (accepted || actual != sentinel || !write(binary) || !readback())
+                return fail("AC1018 source corruption was published or retry failed");
+        }
+        const auto entries = data.namedObjectDictionary.m_entries;
+        const auto dictionaries = data.dictionaries;
+        for (unsigned fault = 0; fault < 4u; ++fault) {
+            const auto it = std::find_if(data.dictionaries.begin(), data.dictionaries.end(),
+                [child](const DRW_Dictionary& value) { return value.handle == child; });
+            if (it == data.dictionaries.end()) return fail("AC1018 group dictionary missing from source");
+            if (fault == 0u) data.namedObjectDictionary.m_entries.clear();
+            if (fault == 1u) data.dictionaries.erase(it);
+            if (fault == 2u) it->m_entries.push_back({"EXTRA", root});
+            if (fault == 3u) it->parentHandle = 0u;
+            { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }
+            const bool accepted = write(binary);
+            std::ifstream prior(output, std::ios::binary);
+            const std::string actual((std::istreambuf_iterator<char>(prior)), {});
+            data.namedObjectDictionary.m_entries = entries;
+            data.dictionaries = dictionaries;
+            if (accepted || actual != "prior destination" || !write(binary) || !readback())
+                return fail("edited AC1018 graph was published or retry failed");
+        }
+    }
+    std::cout << "AC1018 minimal NOD/group wire and transaction controls PASS\n";
+    return true;
+}
+
 int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--ac1018-minimal-root-group")
+        return ac1018MinimalRootGroupSource(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--dbcolor-physical-eed-source")
         return dbColorPhysicalEedSource(argv[2]) ? 0 : 1;

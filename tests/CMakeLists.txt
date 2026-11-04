@@ -1211,6 +1211,14 @@ target_include_directories(libdxfrw_dwg2dxf_adapter_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
 )
 target_link_libraries(libdxfrw_dwg2dxf_adapter_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_ac1018_minimal_dictionary_source
+    COMMAND ${CMAKE_COMMAND}
+        "-DADAPTER_TEST=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"
+        "-DWRITER=$<TARGET_FILE:libdxfrw_dwg_local_roundtrip>"
+        "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_ac1018_minimal_dictionary_test.cmake)
+set_tests_properties(libdxfrw_ac1018_minimal_dictionary_source PROPERTIES
+    LABELS "fast;dwg;dxf;graph;adapter;transaction" TIMEOUT 45)
 add_test(NAME libdxfrw_ucs_base_name_target_closure
     COMMAND libdxfrw_dwg2dxf_adapter_tests --ucs-base-name-target-closure)
 set_tests_properties(libdxfrw_ucs_base_name_target_closure PROPERTIES
