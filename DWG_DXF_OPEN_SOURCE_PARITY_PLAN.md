@@ -832,6 +832,9 @@ and versions. Seven same-producer saves, including controls authored separately
 from Cover, each have a 739-byte suffix with a position-wise matching or inverted
 lowest-bit pattern; this is not proof of padding or safe omission. Keep strict
 output refused; see the [cross-source receipt](docs/research/p6-ac1027-oda-header-suffix-cross-source-2026-11-04.json).
+A suffix-free AC1027 source acquired the same 739-byte form after an ODA
+resave, narrowing its origin to that observed save process without explaining
+its contents; see the [controlled receipt](docs/research/p6-ac1027-oda-header-suffix-controlled-producer-2026-11-04.json).
 
 SOLID, TRACE and 3DFACE input now refuse a fourth Z without fourth X/Y
 instead of silently replacing it. Valid triangle and default-Z inputs
