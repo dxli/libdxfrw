@@ -1082,10 +1082,23 @@ public:
         DRW::Version version{DRW::UNKNOWNV};
         std::vector<DRW_TableEntry::PendingHandleRef> appIds;
         std::vector<DRW_TableEntry::PendingHandleRef> layers;
+    private:
+        friend class dx_iface;
+        // Resolved typed callback as delivered; immutable even if caller
+        // later edits the live DBCOLOR model. Never expose the pointer:
+        // const DRW_TableEntry still contains mutable variant pointees.
+        std::shared_ptr<const DRW_DbColor> typedBaseline;
     };
-    std::map<DwgDbColorKey, DwgDbColorEedSource> dwgDbColorEedSources;
-    std::size_t dwgDbColorEedRetainedBytes{0u};
-    bool dwgDbColorEedCaptureFailed{false};
+    const std::map<DwgDbColorKey, DwgDbColorEedSource>&
+    dwgDbColorEedSourceRecords() const noexcept {
+        return dwgDbColorEedSources;
+    }
+    std::size_t dwgDbColorEedSourceBytes() const noexcept {
+        return dwgDbColorEedRetainedBytes;
+    }
+    bool dwgDbColorEedSourceCaptureFailed() const noexcept {
+        return dwgDbColorEedCaptureFailed;
+    }
     std::multimap<DwgDbColorKey, DRW_Entity*> dwgDbColorEntityReferences;
     std::size_t dwgDbColorRetainedRecords{0u};
     std::size_t dwgDbColorRetainedBytes{0u};
@@ -1425,6 +1438,11 @@ public:
     bool hasUnchangedRawSectionRecords() const noexcept;
 
 private:
+    // Immutable-to-consumers source evidence: unlike the live color model,
+    // handles and callback snapshots cannot be edited into a false proof.
+    std::map<DwgDbColorKey, DwgDbColorEedSource> dwgDbColorEedSources;
+    std::size_t dwgDbColorEedRetainedBytes{0u};
+    bool dwgDbColorEedCaptureFailed{false};
     // Original DXF scalar-resource bodies for represented three-way edits. Retention
     // has a private lifetime allowance independent of mutable import receipts.
     struct NamedResourceBodyBaseline final : DRW_RawDxfObject {

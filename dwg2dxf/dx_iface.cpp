@@ -8469,6 +8469,9 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         if (color != data->dwgDbColorObjects.end()
             && color->first.first == data->importGeneration) {
             inventoryFamily = "DBCOLOR source/output qualification";
+            if (!hasUnchangedDwgDbColorEedDependencies(*data))
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "DWG DBCOLOR source EED, APPID, or LAYER dependency is missing, ambiguous, or modified");
             return reject(ExtensionGraphFailure::InvalidGraph,
                 "DWG DBCOLOR export remains refused pending an independent producer source profile, exact ACAD_COLOR entry semantics, and fresh DXF readback evidence");
         }
@@ -61041,7 +61044,10 @@ void dx_iface::addDwgDbColorEedSource(
     }
     try {
         const dx_data::DwgDbColorKey key{cData->importGeneration, objectHandle};
-        dx_data::DwgDbColorEedSource source{version, appIds, layers};
+        dx_data::DwgDbColorEedSource source;
+        source.version = version;
+        source.appIds = appIds;
+        source.layers = layers;
         if (!cData->dwgDbColorEedSources.emplace(key, std::move(source)).second) {
             reject();
             return;
@@ -61116,6 +61122,31 @@ void dx_iface::addDbColor(const DRW_DbColor& data) {
             != cData->dwgDbColorObjects.end()) {
         reject();
         return;
+    }
+
+    std::shared_ptr<const DRW_DbColor> eedBaseline;
+    std::size_t eedBaselineBytes = 0u;
+    auto eedSource = cData->dwgDbColorEedSources.find(key);
+    if (eedSource != cData->dwgDbColorEedSources.end()
+        && !cData->dwgDbColorEedCaptureFailed) {
+        constexpr std::size_t sharedOverhead = 2u * sizeof(void*);
+        if (eedSource->second.typedBaseline
+            || typedObjectBytes > DwgDbColorCaptureMaxRetainedBytes
+                - sharedOverhead
+            || cData->dwgDbColorEedRetainedBytes
+                > DwgDbColorCaptureMaxRetainedBytes
+            || typedObjectBytes + sharedOverhead
+                > DwgDbColorCaptureMaxRetainedBytes
+                    - cData->dwgDbColorEedRetainedBytes) {
+            cData->dwgDbColorEedCaptureFailed = true;
+        } else {
+            try {
+                eedBaseline = std::make_shared<const DRW_DbColor>(data);
+                eedBaselineBytes = typedObjectBytes + sharedOverhead;
+            } catch (...) {
+                cData->dwgDbColorEedCaptureFailed = true;
+            }
+        }
     }
 
     dx_data::DwgDbColorAppearance appearance;
@@ -61203,6 +61234,11 @@ void dx_iface::addDbColor(const DRW_DbColor& data) {
         return;
     }
 
+    if (eedBaseline) {
+        eedSource->second.typedBaseline = std::move(eedBaseline);
+        cData->dwgDbColorEedRetainedBytes += eedBaselineBytes;
+    }
+
     for (Patch& patch : patches) {
         if (patch.setRgb)
             patch.entity->color24 = patch.rgb;
@@ -61213,6 +61249,181 @@ void dx_iface::addDbColor(const DRW_DbColor& data) {
     cData->dwgDbColorRetainedBytes += appearanceBaseBytes + displayNameBytes;
     ++cData->dwgDbColorObjectRetainedRecords;
     cData->dwgDbColorObjectRetainedBytes += typedObjectBytes;
+}
+
+bool dx_iface::hasUnchangedDwgDbColorEedDependencies(
+        const dx_data& data) const noexcept {
+    if (data.sourceFormat != dx_source_format::DWG
+        || data.importGeneration == 0u || !data.dwgReadOutcome.attempted
+        || !data.dwgReadOutcome.operationSucceeded
+        || data.dwgReadOutcome.sourceVersion != data.sourceVersion
+        || data.dwgDbColorCaptureFailed || data.dwgDbColorEedCaptureFailed
+        || data.m_standardDwgObjectCaptureFailed
+        || data.m_standardDwgNamesClosedThrough < data.importGeneration
+        || data.appIds.size() > DwgDbColorCaptureMaxRecords
+        || data.layers.size() > DwgDbColorCaptureMaxRecords)
+        return false;
+    try {
+        std::map<std::uint32_t, const DRW_AppId*> apps;
+        std::map<std::uint32_t, const DRW_Layer*> layers;
+        std::map<std::string, const DRW_AppId*> appsByName;
+        std::map<std::string, const DRW_Layer*> layersByName;
+        std::size_t indexBytes = 0u;
+        constexpr std::size_t rowOverhead = 16u * sizeof(void*)
+            + sizeof(std::uint32_t) + sizeof(std::string);
+        const auto indexRows = [&indexBytes](
+                const auto& rows, auto& byHandle, auto& byName) {
+            for (const auto& row : rows) {
+                // Live rows are caller-mutable; bound their normalized name
+                // copies and both temporary indexes before allocating them.
+                if (indexBytes > DwgDbColorCaptureMaxRetainedBytes
+                    || rowOverhead > DwgDbColorCaptureMaxRetainedBytes - indexBytes
+                    || row.name.size() > DwgDbColorCaptureMaxRetainedBytes
+                        - indexBytes - rowOverhead)
+                    return false;
+                indexBytes += rowOverhead + row.name.size();
+                const auto handle = byHandle.emplace(row.handle, &row);
+                if (!handle.second)
+                    handle.first->second = nullptr;
+                std::string key;
+                if (!dx_symbol_output::nameKey(row.name, key))
+                    continue;
+                const auto named = byName.emplace(std::move(key), &row);
+                if (!named.second)
+                    named.first->second = nullptr;
+            }
+            return true;
+        };
+        if (!indexRows(data.appIds, apps, appsByName)
+            || !indexRows(data.layers, layers, layersByName))
+            return false;
+        const char* page = data.sourceVersion > DRW::AC1018 ? "UTF-16"
+            : data.dwgReadOutcome.sourceCodePageFieldPresent
+                && data.dwgReadOutcome.sourceCodePageRecognized
+                ? dwgCodePageName(data.dwgReadOutcome.sourceCodePageId)
+                : nullptr;
+        if (page == nullptr)
+            return false;
+        const auto firstEvidence = data.dwgDbColorEedSources.lower_bound(
+            {data.importGeneration, 0u});
+        for (auto evidence = firstEvidence;
+             evidence != data.dwgDbColorEedSources.end()
+                 && evidence->first.first == data.importGeneration;
+             ++evidence) {
+            if (data.dwgDbColorObjects.count(evidence->first) != 1u)
+                return false;
+        }
+        const auto sourceRecord = data.dwgDbColorObjects.lower_bound(
+            {data.importGeneration, 0u});
+        for (auto current = sourceRecord;
+             current != data.dwgDbColorObjects.end()
+                 && current->first.first == data.importGeneration;
+             ++current) {
+            const auto evidence = data.dwgDbColorEedSources.find(current->first);
+            const auto raw = data.m_opaqueDwgSourceFrames.find(current->first);
+            if (evidence == data.dwgDbColorEedSources.end()
+                || raw == data.m_opaqueDwgSourceFrames.end()
+                || evidence->second.version != data.sourceVersion
+                || !evidence->second.typedBaseline
+                || raw->second.m_version != data.sourceVersion
+                || raw->second.m_handle != current->first.second
+                || !raw->second.m_isCustomClass || raw->second.m_isEntity
+                || !sameAsciiName(raw->second.m_className, "AcDbColor")
+                || !sameAsciiName(raw->second.m_recordName, "DBCOLOR")
+                || !raw->second.m_commonHandleDataValidated
+                || !drwDwgCommonLinkEvidenceValidated(
+                    raw->second.m_commonLinkEvidence))
+                return false;
+            const DRW_DbColor& baseline = *evidence->second.typedBaseline;
+            const DRW_DbColor& live = current->second;
+            if (live.handle != current->first.second
+                || raw->second.m_parentHandle != baseline.parentHandle
+                || raw->second.m_reactorHandles != baseline.reactorHandles
+                || raw->second.m_xDictHandle != baseline.xDictHandle
+                || raw->second.m_numReactors != baseline.reactorCount()
+                || raw->second.m_xDictFlag != baseline.extensionDictionaryFlag()
+                || !standardDwgCommonEqual(baseline, live, data.sourceVersion, true)
+                || baseline.rgb != live.rgb || baseline.bookName != live.bookName
+                || baseline.colorIndex != live.colorIndex
+                || baseline.colorMethod != live.colorMethod
+                || baseline.colorDwgFlags != live.colorDwgFlags
+                || baseline.colorDwgIndex != live.colorDwgIndex
+                || baseline.colorDwgMetadataPresent != live.colorDwgMetadataPresent
+                || baseline.hasDxfColorIndex() != live.hasDxfColorIndex())
+                return false;
+            std::vector<std::uint8_t> indexed(baseline.extData.size(), 0u);
+            for (const auto& reference : evidence->second.appIds) {
+                if (reference.indexInExtData >= indexed.size()
+                    || indexed[reference.indexInExtData] != 0u
+                    || reference.handleRef == 0u
+                    || reference.handleRef == DRW::NoHandle
+                    || reference.useRawHandleRef || reference.rawHandleRef != 0u)
+                    return false;
+                const DRW_Variant* value = baseline.extData[reference.indexInExtData];
+                const auto immutable = data.m_standardDwgAppIdSources.find(
+                    {data.importGeneration, reference.handleRef});
+                const auto row = apps.find(reference.handleRef);
+                std::string nameKey;
+                if (value == nullptr || value->code() != 1001
+                    || value->type() != DRW_Variant::STRING || !value->content.s
+                    || immutable == data.m_standardDwgAppIdSources.end()
+                    || !immutable->second || row == apps.end() || !row->second
+                    || !immutable->second->hasUnchangedDwgSourceName()
+                    || !immutable->second->hasBoundDwgNameProfile(data.sourceVersion, page)
+                    || immutable->second->dwgNameDecodeIssues() != 0u
+                    || *value->content.s != immutable->second->name
+                    || row->second->name != immutable->second->name
+                    || !row->second->sameDwgNameSource(*immutable->second)
+                    || !dx_symbol_output::nameKey(row->second->name, nameKey))
+                    return false;
+                const auto byName = appsByName.find(nameKey);
+                if (byName == appsByName.end() || byName->second != row->second)
+                    return false;
+                indexed[reference.indexInExtData] = 1u;
+            }
+            for (const auto& reference : evidence->second.layers) {
+                if (reference.indexInExtData >= indexed.size()
+                    || indexed[reference.indexInExtData] != 0u
+                    || reference.handleRef == 0u
+                    || reference.handleRef == DRW::NoHandle
+                    || reference.useRawHandleRef || reference.rawHandleRef != 0u)
+                    return false;
+                const DRW_Variant* value = baseline.extData[reference.indexInExtData];
+                const auto immutable = data.m_standardDwgLayerSources.find(
+                    {data.importGeneration, reference.handleRef});
+                const auto row = layers.find(reference.handleRef);
+                std::string nameKey;
+                if (value == nullptr || value->code() != 1003
+                    || value->type() != DRW_Variant::STRING || !value->content.s
+                    || !value->isLayerRef()
+                    || value->rawDwgLayerReference() != reference.handleRef
+                    || immutable == data.m_standardDwgLayerSources.end()
+                    || !immutable->second || row == layers.end() || !row->second
+                    || !immutable->second->hasUnchangedDwgSourceName()
+                    || !immutable->second->hasBoundDwgNameProfile(data.sourceVersion, page)
+                    || immutable->second->dwgNameDecodeIssues() != 0u
+                    || *value->content.s != immutable->second->name
+                    || row->second->name != immutable->second->name
+                    || !row->second->sameDwgNameSource(*immutable->second)
+                    || !dx_symbol_output::nameKey(row->second->name, nameKey))
+                    return false;
+                const auto byName = layersByName.find(nameKey);
+                if (byName == layersByName.end() || byName->second != row->second)
+                    return false;
+                indexed[reference.indexInExtData] = 2u;
+            }
+            for (std::size_t index = 0; index < baseline.extData.size(); ++index) {
+                const DRW_Variant* value = baseline.extData[index];
+                if (value == nullptr
+                    || (value->code() == 1001 && indexed[index] != 1u)
+                    || (value->code() == 1003 && indexed[index] != 2u))
+                    return false;
+            }
+        }
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 void dx_iface::addGeoData(const DRW_GeoData& data) {

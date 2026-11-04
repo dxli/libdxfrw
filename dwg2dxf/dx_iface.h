@@ -3103,6 +3103,7 @@ private:
     }
     bool prepareExtensionObjectGraph(dx_data* data,
                                      bool includeNamedObjectRoot);
+    bool hasUnchangedDwgDbColorEedDependencies(const dx_data& data) const noexcept;
     bool preparePointCloudExOutputGraph(dx_data& data,
                                         DRW::Version targetVersion,
                                         bool debug);

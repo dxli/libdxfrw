@@ -231,11 +231,11 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    codec now retains an explicitly present ACI fallback alongside RGB; retain
    the original EED and qualify whole-graph output/readback and native color-book
    meaning before admission. See the [physical graph receipt](docs/research/p4-dbcolor-ac1021-physical-oda-graph-and-precedence-2026-11-03.json).
-   A bounded optional side channel now preserves the source APPID/LAYER handle
-   roles before name resolution. Bind each captured target to its emitted table
-   row and verify the complete EED graph and readback; the physical witness
-   retains all 13 source tuples but does not prove native behavior. See the [EED
-   source receipt](docs/research/p4-dbcolor-ac1021-eed-source-reference-capture-2026-11-03.json).
+   A bounded optional side channel preserves the source APPID/LAYER handle roles
+   before name resolution. The physical witness now passes source-dependency
+   checks and selected ASCII/Binary graph readback with all 13 original EED
+   tuples; bind every emitted source target in the complete drawing and qualify
+   fallback and native behavior before admission. See the [dependency receipt](docs/research/p4-dbcolor-eed-dependencies-selected-graph-2026-11-03.json).
    The `DICTIONARYWDFLT` default edge is checked as a hard pointer before it can
    become a typed reference; the generated wrong-role, rollback, and cursor
    alignment control is in the [default-handle role receipt](docs/research/p4-dictionary-default-handle-role-guard-2026-11-02.json).
