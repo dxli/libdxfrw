@@ -1179,15 +1179,13 @@ rendering semantics remain open.
 Research a new reader only for a named missing semantic operation; wrapping the
 same parser is not an independent oracle.
 
-**Independent reader preflight:** The user-selected official CAD Assistant
-macOS ARM64 DMG mounted read-only outside the sandbox. The mounted bundle passed
-strict deep signature verification and Gatekeeper accepted it as notarized; the
-previous sandboxed signature failure was not a reliable integrity result. An
-attempt to open a locally authored SAB displayed its name in the window title,
-but the visible screen was the file browser, so import and geometry measurements
-remain unconfirmed. Repeat with observable import and exact measured invariants.
-CAD Assistant shares the OCCT kernel family with FreeCAD and cannot independently
-qualify DWG/AcDs ownership. See the [preflight receipt](docs/research/p7-cad-assistant-arm64-integrity-preflight-2026-11-01.json).
+The user-selected official CAD Assistant ARM64 build visibly imports all
+three source-bound SABs. Its solid topology, area, volume and centroid agree
+with cq-acis/OCCT to displayed precision; the two REGION measurements lack
+a second oracle. Both routes share OCCT, validation is not reported and
+DWG placement/history remain unqualified. Obtain independent-kernel and
+source-native evidence before support claims; see the [CAD Assistant
+observation](docs/research/p7-ac1027-source-sab-cad-assistant-observation-2026-11-04.json).
 
 ## P8 — consumer, platform, packaging and release gates
 
