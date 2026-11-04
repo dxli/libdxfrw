@@ -969,6 +969,8 @@ rendering semantics remain open.
   profile and rejects incomplete or mismatched schema/index/handle joins;
   other producer permutations and whole-DWG/native qualification remain open
   ([receipt](docs/research/p7-acds-search-index-modeler-output-2026-11-03.json)).
+  Raw modeler replay also requires the ODA-specified SAB prefix at payload
+  offset zero; full SAB framing and semantics remain open ([receipt](docs/research/p7-acds-modeler-sab-prefix-2026-11-03.json)).
 - Complete source placement, units/transforms, topology, trims, periodicity and
   spline geometry beyond locally verified analytic helpers. A local wireframe or
   repaired/count-only graph is not B-rep support evidence.

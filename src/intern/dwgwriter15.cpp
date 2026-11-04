@@ -6906,6 +6906,8 @@ bool dwgWriter15::replayRawObject(
             && typedModeler->hasDataStoragePayloadMarker
             && typedModeler->dataStoragePayloadMarkerSection == "datastore"
             && typedModeler->dataStoragePayloadMarkerLength == sabMarkerLength
+            // ODA 24.2.2.3 prefixes the SAB stream with this marker.
+            && typedModeler->dataStoragePayloadMarkerOffset == 0u
             && typedModeler->dataStoragePayloadMarkerOffset
                    <= typedModeler->dataStorageData.size()
             && sabMarkerLength
@@ -7529,6 +7531,7 @@ bool dwgWriter15::validatePendingModelerDataStorageReplay(
             || !pending.hasPayloadMarker
             || pending.payloadMarkerSection != "datastore"
             || pending.payloadMarkerLength != sabMarkerLength
+            || pending.payloadMarkerOffset != 0u
             || pending.payloadMarkerOffset > pending.payload.size()
             || sabMarkerLength
                    > pending.payload.size() - pending.payloadMarkerOffset

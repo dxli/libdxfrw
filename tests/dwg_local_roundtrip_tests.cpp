@@ -21885,8 +21885,7 @@ bool runRawModelerDataStorageBlobReplayContract() {
             std::filesystem::remove(path, error);
         }
     } cleanup{output};
-    std::error_code removeError;
-    std::filesystem::remove(output, removeError);
+    { std::ofstream sentinel(output, std::ios::binary); sentinel << "prior destination"; }
 
     dwgRW writer(output.string().c_str());
     if (!writer.reserveHandle(0x708u))
@@ -21894,6 +21893,24 @@ bool runRawModelerDataStorageBlobReplayContract() {
     LocalRawReplayInterface writeIface(
         &writer, false, fixture.bytes, true, blobPayload, {}, false,
         markerOffset);
+    // The cross-page marker is valid opaque payload data but is not a SAB
+    // prefix. Reject that modeler association before publishing its frame.
+    if (writer.write(&writeIface, DRW::AC1027, true))
+        return false;
+    { std::ifstream previous(output, std::ios::binary);
+      if (std::string(std::istreambuf_iterator<char>{previous}, {}) != "prior destination")
+          return false; }
+    if (blobRecord->blobPages.empty()) return false;
+    const auto& firstPage = metadata.segments.at(blobRecord->blobPages.front().segmentIndex);
+    const std::size_t firstByte = static_cast<std::size_t>(firstPage.offset)
+        + SEGMENT_HEADER_SIZE + DATA_BLOB_PAGE_HEADER_SIZE;
+    if (firstByte > fixture.bytes.size() || fixture.bytes.size() - firstByte < sizeof(marker) - 1u)
+        return false;
+    std::copy(marker, marker + sizeof(marker) - 1u, blobPayload.begin());
+    std::copy(marker, marker + sizeof(marker) - 1u, fixture.bytes.begin() + firstByte);
+    writeIface.acdsSection_.m_data = fixture.bytes;
+    writeIface.modelerTyped_.dataStorageData = blobPayload;
+    writeIface.modelerTyped_.dataStoragePayloadMarkerOffset = 0u;
     if (!writer.write(&writeIface, DRW::AC1027, true)
         || !writeIface.replayedModeler_ || !writeIface.replayedAcdsSection_) {
         std::cerr << "AcDs blob writer failure: error=" << writer.getError()
@@ -21935,7 +21952,7 @@ bool runRawModelerDataStorageBlobReplayContract() {
         && readRecord->blobPages.size() == 2u
         && readRecord->payload == blobPayload
         && readRecord->hasPayloadMarker
-        && readRecord->payloadMarkerOffset == markerOffset
+        && readRecord->payloadMarkerOffset == 0u
         && modeler != nullptr && modeler->hasDataStorageRecord
         && modeler->dataStorageHandle == 0x708u
         && modeler->dataStorageData == blobPayload
