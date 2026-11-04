@@ -50,7 +50,7 @@ def main():
     classes = [item for item in document["CLASSES"] if item.get("dxfname") == "MATERIAL"]
     assert len(classes) == 1 and classes[0]["cppname"] == "AcDbMaterial"
     assert classes[0]["proxyflag"] == 0x481 and classes[0]["num_instances"] == 3
-    print("LibreDWG AC1024 default material graph PASS")
+    print("LibreDWG default material graph PASS")
 
 
 if __name__ == "__main__":

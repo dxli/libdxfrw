@@ -345,6 +345,7 @@ tests/ac1021_field_acadsharp_probe.cs
 tests/ac1021_field_acadsharp_probe.csproj
 tests/ac1021_field_source_raw_probe.cpp
 tests/ac1021_field_source_span_probe.py
+tests/ac1021_material_peer_audit_tests.py
 tests/ac1024_candidate_fields_v2_live.py
 tests/ac1024_candidate_self_test.py
 tests/ac1027_acds_source_compare.py
@@ -627,6 +628,7 @@ tools/audit_ac1015_empty_attributed_insert.py
 tools/audit_ac1015_insert_scale.py
 tools/audit_ac1015_insert_tilted.py
 tools/audit_ac1018_dictionary_wire.py
+tools/audit_ac1021_material_peer.py
 tools/audit_ac1024_rastervariables_source.py
 tools/audit_ac1024_tilted_geometry.py
 tools/audit_ac1024_vport_null_roles.py
@@ -686,6 +688,7 @@ tools/dbcolor_fallback_differential.py
 tools/dbcolor_palette_probe.py
 tools/dwg_ac1024_default_material_source_probe.cpp
 tools/emit_native_qualification_receipt.py
+tools/extract_ac1021_material_page.cpp
 tools/extract_parity_source_routes.py
 tools/generate_build_inventory.py
 tools/generate_iso8859_4.py
@@ -707,6 +710,7 @@ tools/normalize_drawing_result.py
 tools/normalize_oracle.py
 tools/probe_ac1014_imagedef_zero_size.py
 tools/probe_ac1021_control_frames.cpp
+tools/probe_ac1021_default_material_source.cpp
 tools/probe_ac1021_envelope_variant.cpp
 tools/probe_ac1021_header_variant.cpp
 tools/probe_ac1021_imagedef_owner_tokens.cpp

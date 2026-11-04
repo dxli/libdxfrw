@@ -900,6 +900,10 @@ std::vector<std::uint8_t> buildFileHeaderPage(
 } // namespace
 
 void dwgWriter21::finishObject() {
+    if (rejectDefaultDwgMaterialFrameConflicts()) {
+        m_writeError = true;
+        return;
+    }
     // AC1021 keeps the R2007 data, string, and handle streams inside one
     // object frame. The object-size RL marks the end of the data/string
     // stream; handles follow it and there is no AC1024 UMC prefix.
@@ -942,7 +946,18 @@ void dwgWriter21::finishObject() {
     // immediately follow those bits, without rounding the string buffer.
     // Keep the existing TU contents (including the writer's terminator).
     const bool exactLayerBoundary = objectType == DRW::DwgLayerObjectType;
-    const bool mergedHandleBoundary = exactControlBoundary || exactLayerBoundary;
+    // The three internally synthesized AC1021 MATERIAL records have the
+    // same exact-bit string trailer and handle boundary in the source graph.
+    // Limit this path to the active graph's planned material identities.
+    const bool materialHandle = m_writingDefaultMaterialGraph
+        && std::find(m_defaultMaterialHandles.begin() + 1, m_defaultMaterialHandles.end(),
+                     m_currentHandle) != m_defaultMaterialHandles.end();
+    if (materialHandle && objectType != typedDwgClassNum("AcDbMaterial", "MATERIAL", 0)) {
+        m_writeError = true;
+        return;
+    }
+    const bool exactStringBoundary = exactLayerBoundary || materialHandle;
+    const bool mergedHandleBoundary = exactControlBoundary || exactStringBoundary;
     if (exactControlBoundary) {
         if (m_objectHandles.data().empty()
             || !m_objectStrings.data().empty()
@@ -951,7 +966,7 @@ void dwgWriter21::finishObject() {
             return;
         }
     }
-    if (exactLayerBoundary && (m_objectStrings.data().empty()
+    if (exactStringBoundary && (m_objectStrings.data().empty()
                                || m_objectHandles.data().empty())) {
         m_writeError = true;
         return;
@@ -971,7 +986,7 @@ void dwgWriter21::finishObject() {
         return;
     }
     const std::uint64_t mergedStringBaseBit = m_objectBody.bitCount();
-    if (exactLayerBoundary) {
+    if (exactStringBoundary) {
         const auto stringBits = m_objectStrings.bitCount();
         if (stringBits == 0u || stringBits > 0x7fffffffu) {
             m_writeError = true;

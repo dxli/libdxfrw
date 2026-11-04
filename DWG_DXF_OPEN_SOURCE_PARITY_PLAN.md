@@ -919,8 +919,12 @@ and the remaining graph warnings before claiming complete interoperability
 ([receipt](docs/research/p6-ac1021-generic-control-boundaries-2026-11-04.json)).
 The AC1021 LAYER string and handle boundary is now emitted without byte padding;
 with a diagnostic typed-null material, ODA no longer reports that LAYER as
-improperly read, but the actual material graph and full-file acceptance remain
+improperly read, but broader material graphs and full-file acceptance remain
 open ([receipt](docs/research/p6-ac1021-layer-bit-boundary-2026-11-04.json)).
+An explicit AC1021 default MATERIAL graph now binds the producer-witnessed
+defaults; its generated source advances ODA to a VPORT failure. Native AC1021
+material semantic decoding, other graphs and complete output remain open
+([receipt](docs/research/p6-ac1021-default-material-optin-2026-11-04.json)).
 
 Generated LTYPE_CONTROL output has a consumer-visible built-in linetype
 ordering risk: six ODA-produced files conflict with the PDF’s stated order.

@@ -163,7 +163,7 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
         }
         if (mode == Mode::EarlyRawSection) {
             DRW_RawDwgSection section; section.m_name="AcDb:OpaqueProbe";
-            section.m_version=DRW::AC1024; section.m_data={1,2,3};
+            section.m_version=version; section.m_data={1,2,3};
             (void)output.writeRawDwgSection(&section);
         }
     }
@@ -174,7 +174,7 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
         }
         if (mode == Mode::LateRawSection) {
             DRW_RawDwgSection section; section.m_name="AcDb:OpaqueProbe";
-            section.m_version=DRW::AC1024; section.m_data={1,2,3};
+            section.m_version=version; section.m_data={1,2,3};
             rejected=!output.writeRawDwgSection(&section);
         }
         if (mode == Mode::LateRoot)
@@ -220,6 +220,7 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
         }
     }
     dwgRW& output; DRW_Header* header=nullptr;
+    DRW::Version version=DRW::AC1024;
     bool enabled=true, opaqueAbsent=true, rejected=false, supplied=false;
     Mode mode=Mode::Normal; std::size_t slot=0;
     std::array<std::uint32_t,4> handles{};
@@ -238,9 +239,13 @@ struct Capture : LC3CompatCheck {
         }
     }
     void addMaterial(const DRW_Material& m) override {
-        if (!m.hasCompleteDwgSemanticFields() || m.parentHandle!=dictionary
+        if (m.parentHandle!=dictionary
             || m.reactorHandles!=std::vector<std::uint32_t>{dictionary}
-            || m.m_diffuseColorValue!=0xc2ffffffu || m.m_channelFlags!=63) valid=false;
+            || (requireSemantic && (!m.hasCompleteDwgSemanticFields()
+                || m.m_diffuseColorValue!=0xc2ffffffu || m.m_channelFlags!=63))
+            || (!requireSemantic && (m.hasCompleteDwgSemanticFields()
+                || !m.hasDwgRawData() || m.dwgRawDataVersion()!=DRW::AC1021
+                || m.dwgRawDataBitSize()!=550u))) valid=false;
         materials.push_back({m.m_name,m.handle});
     }
     void addLayer(const DRW_Layer& layer) override {
@@ -258,10 +263,14 @@ struct Capture : LC3CompatCheck {
     std::uint32_t root=0,dictionary=0,owner=0,layerMaterial=0;
     std::array<std::uint32_t,3> children{};
     std::vector<std::pair<std::string,std::uint32_t>> materials;
-    bool valid=true;
+    bool valid=true, requireSemantic=true;
 };
-bool inspect(const std::string& path,const std::array<std::uint32_t,4>& h,bool supplied) {
+bool inspect(const std::string& path,const std::array<std::uint32_t,4>& h,bool supplied,
+             DRW::Version version) {
     dwgRW reader(path.c_str()); Capture capture;
+    // AC1021 retains MATERIAL semantic fields as opaque data; peer readback
+    // separately checks those fields for the bounded source-derived profile.
+    capture.requireSemantic = version != DRW::AC1021;
     return reader.read(&capture,false) && capture.matches(h,supplied);
 }
 }
@@ -272,52 +281,58 @@ int main(int argc,char**argv) {
         ("libdxfrw-material-graph-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     if (!std::filesystem::create_directory(dir)) return 1;
     struct Cleanup {std::filesystem::path p; bool keep; ~Cleanup(){if(!keep){std::error_code e;std::filesystem::remove_all(p,e);}}} cleanup{dir,keep};
-    const auto path=(dir/"graph.dwg").string(); dwgRW output(path.c_str());
-    if(!output.reserveHandle(0x30u)||!output.reserveHandle(0x31u)||!output.reserveHandle(0xB200u)) return 1;
-    Adapter adapter(output);
-    if(!output.write(&adapter,DRW::AC1024,true)||!inspect(path,adapter.handles,false)) {std::cerr<<"normal failed\n";return 1;}
-    for(auto h:adapter.handles) if(h==0x30u||h==0x31u||h==0xB200u) return 1;
-    adapter.mode=Mode::SuppliedLayer;
-    if(!output.write(&adapter,DRW::AC1024,true)||!adapter.supplied||!inspect(path,adapter.handles,true)) {std::cerr<<"supplied layer failed\n";return 1;}
-    adapter.mode=Mode::HeaderGlobal;
-    if(!output.write(&adapter,DRW::AC1024,true)||!inspect(path,adapter.handles,false))return 1;
-    if(keep) std::filesystem::copy_file(path,dir/"graph-global.dwg");
-    for(Mode mode:{Mode::EarlyRoot,Mode::HeaderInvalid,Mode::EarlyMaterialClass,Mode::LateMaterialClass,
-         Mode::EarlyRawSection,Mode::LateRawSection,Mode::LateRoot,Mode::NodAlias,Mode::GroupAlias,
-         Mode::DictionaryOwner,Mode::DictionaryChild,Mode::DictionaryHandle,Mode::XrecordOwner,
-         Mode::RawObject,Mode::CallerMaterial,Mode::LateEntityHandle}) {
-        const bool slots=mode==Mode::NodAlias||mode==Mode::GroupAlias||mode==Mode::DictionaryOwner
-            ||mode==Mode::DictionaryChild||mode==Mode::DictionaryHandle||mode==Mode::XrecordOwner
-            ||mode==Mode::LateEntityHandle;
-        for(std::size_t slot=0;slot<(slots?4u:1u);++slot) {
-            {std::ofstream f(path,std::ios::binary);f<<"prior destination";}
-            adapter.mode=mode;adapter.slot=slot;adapter.rejected=false;
-            if(output.write(&adapter,DRW::AC1024,true)) {std::cerr<<"collision published mode="<<int(mode)<<" slot="<<slot<<"\n";return 1;}
-            std::ifstream f(path,std::ios::binary);if(std::string(std::istreambuf_iterator<char>(f),{})!="prior destination") return 1;
-            adapter.mode=Mode::Normal;
-            if(!output.write(&adapter,DRW::AC1024,true)||!inspect(path,adapter.handles,false)) {std::cerr<<"retry failed mode="<<int(mode)<<" slot="<<slot<<"\n";return 1;}
+    for (const auto version : {DRW::AC1021, DRW::AC1024}) {
+        const auto path=(dir/(version == DRW::AC1021 ? "graph-ac1021.dwg" : "graph-ac1024.dwg")).string(); dwgRW output(path.c_str());
+        if(!output.reserveHandle(0x30u)||!output.reserveHandle(0x31u)||!output.reserveHandle(0xB200u)) return 1;
+        Adapter adapter(output);
+        adapter.version=version;
+        if(!output.write(&adapter,version,true)||!inspect(path,adapter.handles,false,version)) {std::cerr<<"normal failed\n";return 1;}
+        for(auto h:adapter.handles) if(h==0x30u||h==0x31u||h==0xB200u) return 1;
+        adapter.mode=Mode::SuppliedLayer;
+        if(!output.write(&adapter,version,true)||!adapter.supplied||!inspect(path,adapter.handles,true,version)) {std::cerr<<"supplied layer failed\n";return 1;}
+        adapter.mode=Mode::HeaderGlobal;
+        if(!output.write(&adapter,version,true)||!inspect(path,adapter.handles,false,version))return 1;
+        if(keep) std::filesystem::copy_file(path,dir/(version == DRW::AC1021 ? "graph-global-ac1021.dwg" : "graph-global-ac1024.dwg"));
+        for(Mode mode:{Mode::EarlyRoot,Mode::HeaderInvalid,Mode::EarlyMaterialClass,Mode::LateMaterialClass,
+             Mode::EarlyRawSection,Mode::LateRawSection,Mode::LateRoot,Mode::NodAlias,Mode::GroupAlias,
+             Mode::DictionaryOwner,Mode::DictionaryChild,Mode::DictionaryHandle,Mode::XrecordOwner,
+             Mode::RawObject,Mode::CallerMaterial,Mode::LateEntityHandle}) {
+            const bool slots=mode==Mode::NodAlias||mode==Mode::GroupAlias||mode==Mode::DictionaryOwner
+                ||mode==Mode::DictionaryChild||mode==Mode::DictionaryHandle||mode==Mode::XrecordOwner
+                ||mode==Mode::LateEntityHandle;
+            for(std::size_t slot=0;slot<(slots?4u:1u);++slot) {
+                {std::ofstream f(path,std::ios::binary);f<<"prior destination";}
+                adapter.mode=mode;adapter.slot=slot;adapter.rejected=false;
+                if(output.write(&adapter,version,true)) {std::cerr<<"collision published mode="<<int(mode)<<" slot="<<slot<<"\n";return 1;}
+                std::ifstream f(path,std::ios::binary);if(std::string(std::istreambuf_iterator<char>(f),{})!="prior destination") return 1;
+                adapter.mode=Mode::Normal;
+                if(!output.write(&adapter,version,true)||!inspect(path,adapter.handles,false,version)) {std::cerr<<"retry failed mode="<<int(mode)<<" slot="<<slot<<"\n";return 1;}
+            }
         }
+        adapter.mode=Mode::Normal;
+        adapter.opaqueAbsent=false;
+        {std::ofstream f(path,std::ios::binary);f<<"prior destination";}
+        if(output.write(&adapter,version,true)) return 1;
+        {std::ifstream f(path,std::ios::binary);if(std::string(std::istreambuf_iterator<char>(f),{})!="prior destination")return 1;}
+        adapter.opaqueAbsent=true;
+        if(!output.write(&adapter,version,true)||!inspect(path,adapter.handles,false,version))return 1;
+        for (const auto unsupported : {DRW::AC1015, DRW::AC1018, DRW::AC1027, DRW::AC1032}) {
+            {std::ofstream f(path,std::ios::binary);f<<"prior destination";}
+            if(output.write(&adapter,unsupported,true)) return 1;
+            std::ifstream f(path,std::ios::binary);
+            if(std::string(std::istreambuf_iterator<char>(f),{})!="prior destination")return 1;
+        }
+        adapter.enabled=false;
+        if(!output.write(&adapter,version,true))return 1;
+        dwgRW reader(path.c_str());Capture capture;
+        if(!reader.read(&capture,false)||capture.root!=0||!capture.materials.empty())return 1;
+        adapter.mode=Mode::SourceRoot;
+        if(!output.write(&adapter,version,true))return 1;
+        {dwgRW sourceReader(path.c_str()); Capture source;
+         if(!sourceReader.read(&source,false)||source.root!=0xB100u||!source.materials.empty())return 1;}
+        adapter.mode=Mode::Normal; adapter.enabled=true;
+        if(!output.write(&adapter,version,true)||!inspect(path,adapter.handles,false,version))return 1;
+        if(keep)std::cout<<"OUTPUT "<<path<<'\n';
     }
-    adapter.mode=Mode::Normal;
-    adapter.opaqueAbsent=false;
-    {std::ofstream f(path,std::ios::binary);f<<"prior destination";}
-    if(output.write(&adapter,DRW::AC1024,true)) return 1;
-    {std::ifstream f(path,std::ios::binary);if(std::string(std::istreambuf_iterator<char>(f),{})!="prior destination")return 1;}
-    adapter.opaqueAbsent=true;
-    if(!output.write(&adapter,DRW::AC1024,true)||!inspect(path,adapter.handles,false))return 1;
-    {std::ofstream f(path,std::ios::binary);f<<"prior destination";}
-    if(output.write(&adapter,DRW::AC1027,true)) return 1;
-    std::ifstream f(path,std::ios::binary);if(std::string(std::istreambuf_iterator<char>(f),{})!="prior destination")return 1;
-    adapter.enabled=false;
-    if(!output.write(&adapter,DRW::AC1024,true))return 1;
-    dwgRW reader(path.c_str());Capture capture;
-    if(!reader.read(&capture,false)||capture.root!=0||!capture.materials.empty())return 1;
-    adapter.mode=Mode::SourceRoot;
-    if(!output.write(&adapter,DRW::AC1024,true))return 1;
-    {dwgRW sourceReader(path.c_str()); Capture source;
-     if(!sourceReader.read(&source,false)||source.root!=0xB100u||!source.materials.empty())return 1;}
-    adapter.mode=Mode::Normal; adapter.enabled=true;
-    if(!output.write(&adapter,DRW::AC1024,true)||!inspect(path,adapter.handles,false))return 1;
-    if(keep)std::cout<<"OUTPUT "<<path<<'\n';
     std::cout<<"DWG default material opt-in PASS\n";return 0;
 }

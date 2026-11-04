@@ -2893,7 +2893,8 @@ bool dwgWriter15::registerDwgNamedObjectDictionaryEntry(
 bool dwgWriter15::stageDefaultDwgMaterialGraph() {
     static_assert(std::is_nothrow_move_assignable<HandleAllocator>::value,
                   "failed material admission must restore allocator state");
-    if (m_version != DRW::AC1024 || m_dwgClassesFrozen || m_dwgClassManifestPrepared
+    if ((m_version != DRW::AC1021 && m_version != DRW::AC1024)
+        || m_dwgClassesFrozen || m_dwgClassManifestPrepared
         || m_sectionOffsets.count(recno::HEADER) || m_sectionOffsets.count(recno::CLASSES)
         || m_dwgTableRecordsComplete || defaultDwgMaterialGraphActive()
         || hasRawDwgSections() || !m_rawClassNumRemap.empty() || !m_rawObjectOverrides.empty())

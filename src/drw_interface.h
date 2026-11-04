@@ -819,7 +819,7 @@ public:
   }
 };
 
-/** Explicit opt-in for the witnessed AC1024 default material graph.
+/** Explicit opt-in for the witnessed AC1021 and AC1024 default material graphs.
  * Callers with an existing ACAD_MATERIAL graph must omit this opt-in; an
  * existing or later conflicting registration causes the output to fail.
  * Only internally synthesized layer 0 is bound to Global. Caller layers
