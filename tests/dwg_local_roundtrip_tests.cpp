@@ -314,6 +314,69 @@ public:
         return true;
     }
 
+    static bool checkBlockControlBoundary(dwgWriter15& writer) {
+        const DRW::Version version = writer.m_version;
+        if (!writer.prepareDwgClassManifest() || !writer.writeFileHeaderStub()
+            || !writer.writeDwgHeader() || !writer.writeDwgClasses()
+            || !writer.writeDwgObjects())
+            return false;
+        DRW_Line line;
+        line.basePoint = DRW_Coord(1, 2, 3);
+        line.secPoint = DRW_Coord(4, 5, 6);
+        if (!writer.encodeEntity(&line) || !writer.emitDeferredBlockControl())
+            return false;
+        const auto before = writer.buffer();
+        if (!writer.emitDeferredBlockControl() || writer.buffer() != before)
+            return false;
+        CapturedObjectFrame captured;
+        if (!captureObjectFrame(writer, DRW::DwgBlockControlHandle, captured))
+            return false;
+        dwgBuffer frame(captured.bytes.data(), captured.bytes.size());
+        const std::int32_t bodyLength = frame.getModularShort();
+        const std::uint64_t handleBits = version >= DRW::AC1024
+            ? frame.getUModularChar() : 0u;
+        const std::size_t bodyOffset = frame.getPosition();
+        if (!frame.isGood() || bodyLength <= 0
+            || bodyOffset + static_cast<std::size_t>(bodyLength) + 2u != captured.bytes.size()
+            || handleBits > static_cast<std::uint64_t>(bodyLength) * 8u)
+            return false;
+        dwgBuffer body(captured.bytes.data() + bodyOffset,
+                       static_cast<std::size_t>(bodyLength));
+        if (body.getObjType(version) != DRW::DwgBlockControlObjectType)
+            return false;
+        const std::uint64_t start = version < DRW::AC1024
+            ? body.getRawLong32() : static_cast<std::uint64_t>(bodyLength) * 8u - handleBits;
+        const dwgHandle own = body.getHandle();
+        if (own.ref != DRW::DwgBlockControlHandle || body.getBitShort() != 0u
+            || body.getBitLong() != 0)
+            return false;
+        if (version >= DRW::AC1018 && body.getBit() != 0u)
+            return false;
+        if (version > DRW::AC1024 && body.getBit() != 0u)
+            return false;
+        if (body.getBitLong() != 0)
+            return false;
+        if (version > DRW::AC1018 && body.getBit() != 0u)
+            return false;
+        const std::uint64_t afterBody = body.getPosition() * 8u + body.getBitPos();
+        if (!body.isGood() || start > static_cast<std::uint64_t>(bodyLength) * 8u
+            || (version < DRW::AC1021 && start != afterBody)
+            || (version >= DRW::AC1024 && start < afterBody)
+            || !body.setPosition(start / 8u))
+            return false;
+        body.setBitPos(start & 7u);
+        const auto owner = body.getHandle();
+        const auto xdict = body.getHandle();
+        const auto model = body.getHandle();
+        const auto paper = body.getHandle();
+        return body.isGood() && owner.code == DRW::DwgSoftPointer && owner.ref == 0u
+            && xdict.code == DRW::DwgHardOwnership && xdict.ref == 0u
+            && model.code == DRW::DwgHardOwnership
+            && model.ref == DRW::DwgModelSpaceBlockRecordHandle
+            && paper.code == DRW::DwgHardOwnership
+            && paper.ref == DRW::DwgPaperSpaceBlockRecordHandle;
+    }
+
     static bool emitLayoutDictionaryFrameProbe(
             dwgWriter15& writer, const DRW_Dictionary& dictionary,
             LayoutDictionaryFrameProbe& probe) {
@@ -35784,6 +35847,22 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--image-compound-transaction") {
         const bool passed = DwgBlockRecordXrefWireTestAccess::imageCompoundWriteVerifiesReactorReceipt();
         std::cout << "DWG IMAGE compound transaction rollback/retry controls: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    } else if (argc == 2
+        && std::string(argv[1]) == "--block-control-handle-boundary") {
+        DRW_Header h15, h18, h24, h27, h32;
+        dwgWriter15 w15(nullptr, &h15);
+        dwgWriter18 w18(nullptr, &h18);
+        dwgWriter24 w24(nullptr, &h24);
+        dwgWriter27 w27(nullptr, &h27);
+        dwgWriter32 w32(nullptr, &h32);
+        const bool passed = DwgBlockRecordXrefWireTestAccess::checkBlockControlBoundary(w15)
+            && DwgBlockRecordXrefWireTestAccess::checkBlockControlBoundary(w18)
+            && DwgBlockRecordXrefWireTestAccess::checkBlockControlBoundary(w24)
+            && DwgBlockRecordXrefWireTestAccess::checkBlockControlBoundary(w27)
+            && DwgBlockRecordXrefWireTestAccess::checkBlockControlBoundary(w32);
+        std::cout << "DWG BLOCK_CONTROL handle boundary: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 2
