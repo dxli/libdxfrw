@@ -5023,3 +5023,12 @@ add_test(NAME libdxfrw_dwg_ac1027_empty_view_ucs_controls COMMAND libdxfrw_dwg_a
 set_tests_properties(libdxfrw_dwg_ac1027_empty_view_ucs_controls PROPERTIES LABELS "dwg;fast;transaction;AC1027" TIMEOUT 30)
 add_test(NAME libdxfrw_ac1027_empty_view_ucs_peer COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/ac1027_empty_view_ucs_peer_tests.py)
 set_tests_properties(libdxfrw_ac1027_empty_view_ucs_peer PROPERTIES LABELS "dwg;fast;AC1027;peer" TIMEOUT 30)
+
+add_executable(libdxfrw_dxf_viewport_ambient_color_order_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dxf_viewport_ambient_color_order_tests.cpp)
+target_compile_features(libdxfrw_dxf_viewport_ambient_color_order_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dxf_viewport_ambient_color_order_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dxf_viewport_ambient_color_order_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dxf_viewport_ambient_color_order_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dxf_viewport_ambient_color_order COMMAND libdxfrw_dxf_viewport_ambient_color_order_tests)
+set_tests_properties(libdxfrw_dxf_viewport_ambient_color_order PROPERTIES LABELS "fast;dxf;viewport;color" TIMEOUT 30)

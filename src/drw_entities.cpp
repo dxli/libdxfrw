@@ -28964,12 +28964,9 @@ bool DRW_Viewport::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         majorGridLines = reader->getInt32();
         break;
     case 63:
-        if (!releaseDxfRetainedStringBytes(
-                m_dxfRetainedAmbientColorNameBytes))
-            return false;
-        ambientColorName.clear();
+        // Groups 63, 421 and 431 are independent ambient color fields;
+        // their order in a DXF record is not fixed.
         ambientColor = static_cast<std::uint32_t>(reader->getInt32());
-        m_dxfRetainedAmbientColorNameBytes = 0u;
         ambientColorMethod = 0u;
         ambientColorDwgFlags = 0u;
         ambientColorDwgIndex = 0u;
@@ -29034,12 +29031,7 @@ bool DRW_Viewport::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         contrast = reader->getDouble();
         break;
     case 421:
-        if (!releaseDxfRetainedStringBytes(
-                m_dxfRetainedAmbientColorNameBytes))
-            return false;
-        ambientColorName.clear();
         ambientColorRgb = reader->getInt32();
-        m_dxfRetainedAmbientColorNameBytes = 0u;
         ambientColorMethod = 0u;
         ambientColorDwgFlags = 0u;
         ambientColorDwgIndex = 0u;

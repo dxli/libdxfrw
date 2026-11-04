@@ -875,6 +875,12 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+DXF VIEWPORT ambient color index, RGB and color-book name now survive any
+ordering of their independent groups. Producer-derived selected records and
+generated ASCII/Binary controls cover the fields; full-source and native
+rendering qualification remain open
+([receipt](docs/research/p6-dxf-viewport-ambient-color-order-2026-11-04.json)).
+
 DWG 2D POLYLINE vertex tangent directions now convert radians to the existing
 DXF/LibreCAD degree-valued API and back. Consumers that compensated for the
 previous raw-radian DWG callback must remove that compensation. The separate

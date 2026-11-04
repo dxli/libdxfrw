@@ -468,6 +468,7 @@ tests/dxf_no_raw_sections_tests.cpp
 tests/dxf_r12_ellipse_wrap_tests.cpp
 tests/dxf_sparse_material_raw_tests.cpp
 tests/dxf_symbol_output_tests.cpp
+tests/dxf_viewport_ambient_color_order_tests.cpp
 tests/dxf_whole_source_tests.cpp
 tests/dxf_xdata_int16_tests.cpp
 tests/effective_ownership_controls.h
@@ -713,6 +714,7 @@ tools/audit_rastervariables_ac1032_frame1_source.py
 tools/audit_solid_trace_triangle_elevation.py
 tools/audit_sparse_material_source.py
 tools/audit_sunstudy_dxf_graph.py
+tools/audit_viewport_ambient_color_order.py
 tools/audit_wipeout_ac1018_frame1_source.py
 tools/audit_wipeout_ac1018_source.py
 tools/audit_wipeout_ac1024_frame1_source.py
@@ -736,6 +738,7 @@ tools/author_r12_ellipse_wrap_source.py
 tools/author_selected_ac1027_light.py
 tools/author_selected_ac1027_lightlist.py
 tools/author_selected_layer_color.py
+tools/author_selected_viewport_color.py
 tools/author_wipeout_ac1024_frame1.py
 tools/author_wipeout_direct_nod.py
 tools/bounded_process.py
