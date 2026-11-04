@@ -729,6 +729,22 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_ac1021_field_source_span_self_test PROPERTIES
         LABELS "fast;dwg;field;generated")
 
+    # Optional physical modeler/AcDs probe; no drawing is bundled as a test.
+    add_executable(libdxfrw_ac1027_acds_source_probe EXCLUDE_FROM_ALL
+        tests/ac1027_acds_source_probe.cpp
+        ${_libdxfrw_reader_test_adapter_source})
+    target_compile_features(libdxfrw_ac1027_acds_source_probe PRIVATE cxx_std_17)
+    target_include_directories(libdxfrw_ac1027_acds_source_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/intern
+        ${CMAKE_CURRENT_SOURCE_DIR}/dwg2dxf)
+    target_link_libraries(libdxfrw_ac1027_acds_source_probe PRIVATE dxfrw)
+    add_test(NAME libdxfrw_ac1027_acds_source_compare_self_test
+        COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/ac1027_acds_source_compare.py --self-test)
+    set_tests_properties(libdxfrw_ac1027_acds_source_compare_self_test PROPERTIES
+        LABELS "fast;dwg;acds;generated")
+
     add_executable(libdxfrw_wave1_tests
         tests/wave1_tests.cpp
         ${_libdxfrw_wave1_adapter_source})

@@ -1029,6 +1029,11 @@ rendering semantics remain open.
   ([receipt](docs/research/p7-acds-search-index-modeler-output-2026-11-03.json)).
   Raw modeler replay also requires the ODA-specified SAB prefix at payload
   offset zero; full SAB framing and semantics remain open ([receipt](docs/research/p7-acds-modeler-sab-prefix-2026-11-03.json)).
+  A physical AC1027 source now independently matches three modeler-to-AcDs
+  associations and complete SAB payloads against ODA DXF; model-space
+  ownership is established by the source entmode and unique block record.
+  Other source/producer profiles, complete output and semantics remain open;
+  see the [physical join receipt](docs/research/p7-ac1027-physical-modeler-acds-sab-oda-byte-join-2026-11-03.json).
 - Complete source placement, units/transforms, topology, trims, periodicity and
   spline geometry beyond locally verified analytic helpers. A local wireframe or
   repaired/count-only graph is not B-rep support evidence.
