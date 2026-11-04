@@ -6819,7 +6819,8 @@ void testViewportReferenceRemapping(TestContext& t) {
 void testVportReferenceRemapping(TestContext& t) {
     const std::map<std::uint32_t, std::uint32_t> sourceToRemapped = {
         {0xA100u, 0xAA00u}, {0x911u, 0xA11u}, {0x912u, 0xA12u},
-        {0x913u, 0xA13u}, {0x914u, 0xA14u}, {0x915u, 0xA15u}};
+        {0x913u, 0xA13u}, {0x914u, 0xA14u}, {0x915u, 0xA15u},
+        {0x916u, 0xA16u}};
     const auto resolverValue = [](std::uint32_t source) {
         switch (source) {
         case 0x911u: return std::uint32_t{0xB11u};
@@ -6827,6 +6828,7 @@ void testVportReferenceRemapping(TestContext& t) {
         case 0x913u: return std::uint32_t{0xB13u};
         case 0x914u: return std::uint32_t{0xB14u};
         case 0x915u: return std::uint32_t{0xB15u};
+        case 0x916u: return std::uint32_t{0xB16u};
         default: return source;
         }
     };
@@ -6856,6 +6858,7 @@ void testVportReferenceRemapping(TestContext& t) {
             vport.ucsOrthoType = 1;
             vport.visualStyleHandle = 0x914u;
             vport.m_sunHandle = 0x915u;
+            vport.shadePlotHandle = 0x916u;
             const bool wrote = owner.writeVport(&vport)
                 && owner.writer->writeString(0, "WIRE_END");
             t.expect(wrote, "VPORT references serialize");
@@ -6883,7 +6886,7 @@ void testVportReferenceRemapping(TestContext& t) {
                 } else if (recordName == "VPORT" && code == 5) {
                     emittedRowHandle = reader->getHandleString();
                 } else if (recordName == "VPORT"
-                           && (code == 332 || code == 345 || code == 346
+                           && (code == 332 || code == 333 || code == 345 || code == 346
                                || code == 348 || code == 361)) {
                     observed.emplace_back(code, reader->getHandleString());
                 }
@@ -6892,10 +6895,10 @@ void testVportReferenceRemapping(TestContext& t) {
                 useResolver
                     ? std::vector<std::pair<int, std::uint32_t>>{
                           {345, 0xB12u}, {346, 0xB13u}, {332, 0xB11u},
-                          {348, 0xB14u}, {361, 0xB15u}}
+                          {333, 0xB16u}, {348, 0xB14u}, {361, 0xB15u}}
                     : std::vector<std::pair<int, std::uint32_t>>{
                           {345, 0xA12u}, {346, 0xA13u}, {332, 0xA11u},
-                          {348, 0xA14u}, {361, 0xA15u}};
+                          {333, 0xA16u}, {348, 0xA14u}, {361, 0xA15u}};
             t.expect(ended && emittedRowHandle == 0xAA00u
                          && observed == expected,
                      useResolver
@@ -6906,7 +6909,7 @@ void testVportReferenceRemapping(TestContext& t) {
 
     for (const bool binary : {false, true}) {
         for (const std::uint32_t unresolved : {
-                 0x911u, 0x912u, 0x913u, 0x914u, 0x915u}) {
+                 0x911u, 0x912u, 0x913u, 0x914u, 0x915u, 0x916u}) {
             std::ostringstream failedOutput;
             dxfRW failedOwner("");
             failedOwner.version = DRW::AC1032;
@@ -6931,6 +6934,7 @@ void testVportReferenceRemapping(TestContext& t) {
             failedVport.ucsOrthoType = 1;
             failedVport.visualStyleHandle = 0x914u;
             failedVport.m_sunHandle = 0x915u;
+            failedVport.shadePlotHandle = 0x916u;
             t.expect(!failedOwner.writeVport(&failedVport)
                          && failedOutput.str().empty(),
                      "unresolved VPORT reference preserves destination");
@@ -6956,6 +6960,7 @@ void testVportReferenceRemapping(TestContext& t) {
             correctedVport.ucsOrthoType = 1;
             correctedVport.visualStyleHandle = 0x914u;
             correctedVport.m_sunHandle = 0x915u;
+            correctedVport.shadePlotHandle = 0x916u;
             t.expect(retryOwner.writeVport(&correctedVport),
                      "VPORT accepts corrected fresh-writer retry");
         }

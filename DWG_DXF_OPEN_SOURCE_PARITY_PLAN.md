@@ -593,8 +593,10 @@ fallback, retaining the existing source-registration checks for Background and
 SUN. Emitted nonzero targets now fail closed on zero/NoHandle identities.
 Generated ASCII/Binary controls verify exact values, per-edge refusal, retry,
 and the VPORT row's remapped identity; see the [VPORT reference receipt](docs/research/p5-vport-reference-remapping-2026-11-03.json).
-This is serializer transport only. The nonzero VPORT shade-plot handle remains
-refused, and physical target/owner closure and native rendering are open.
+The direct writer also maps nonzero VPORT shade-plot group 333 through the
+resolver or remap, with atomic refusal for unresolved IDs; the adapter still
+refuses unclosed targets. This is serializer transport only; physical target/
+owner closure and native rendering remain open. See the [shade-plot receipt](docs/research/p5-vport-shadeplot-reference-transport-2026-11-03.json).
 
 The ACAD_TABLE writer now resolves both modeled hard pointers—TABLESTYLE group
 342 and owner BLOCK_RECORD group 343—to final output IDs, with source-handle

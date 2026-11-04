@@ -5875,7 +5875,78 @@ void testVportShadePlotRetention(TestContext& t) {
         }
     } cleanup{directory};
 
+    class DirectShadeVportWriter final : public dx_iface {
+    public:
+        DRW_Vport vport;
+        bool emitted = false;
+        void writeVports() override { emitted = dxfW->writeVport(&vport); }
+    };
+
     for (const bool binary : {false, true}) {
+        // Low-level writer transport is qualified independently of adapter
+        // target-graph admission. The caller owns the emitted target.
+        const auto directPath = directory / (binary ? "direct-binary.dxf"
+                                                     : "direct-ascii.dxf");
+        const std::string directFile = directPath.string();
+        { std::ofstream seed(directPath, std::ios::binary); seed << "shade-sentinel"; }
+        dx_data directData;
+        DirectShadeVportWriter direct;
+        direct.cData = &directData;
+        direct.currentBlock = directData.mBlock;
+        direct.vport.name = "*ACTIVE";
+        direct.vport.hasDxfShadePlotMode = true;
+        direct.vport.shadePlotMode = 2;
+        direct.vport.hasDxfShadePlotHandle = true;
+        direct.vport.shadePlotHandle = 0x916u;
+        bool targetResolved = false;
+        dxfRW codec(directFile.c_str());
+        direct.dxfW = &codec;
+        codec.setReferenceResolver([&targetResolved](std::uint32_t source) {
+            return source == 0x916u ? (targetResolved ? 0xB16u : 0u) : source;
+        });
+        const bool refused = !codec.write(&direct, DRW::AC1027, binary);
+        std::ifstream previous(directPath, std::ios::binary);
+        const std::string prior{std::istreambuf_iterator<char>(previous), {}};
+        previous.close();
+        t.expect(refused && !direct.emitted && prior == "shade-sentinel",
+                 "unresolved direct VPORT shade reference preserves destination");
+        targetResolved = true;
+        const bool retried = codec.write(&direct, DRW::AC1027, binary);
+        dx_data directReadback;
+        dx_iface directReader;
+        const bool loaded = retried && directReader.fileImport(
+            directFile, &directReadback, false);
+        t.expect(loaded && direct.emitted && directReadback.VPorts.size() == 1u
+                     && directReadback.VPorts.front().hasDxfShadePlotHandle
+                     && directReadback.VPorts.front().shadePlotHandle == 0xB16u
+                     && directReadback.VPorts.front().hasDxfShadePlotMode
+                     && directReadback.VPorts.front().shadePlotMode == 2,
+                 "direct VPORT shade reference retries and reads mapped identity");
+
+        // The no-resolver path has its own handle map. An explicit zero
+        // result for a nonzero target must fail and allow the map to be fixed.
+        codec.setReferenceResolver({});
+        codec.setHandleRemap({{0x916u, 0u}});
+        { std::ofstream seed(directPath, std::ios::binary | std::ios::trunc);
+          seed << "shade-remap-sentinel"; }
+        direct.emitted = false;
+        const bool zeroRemapRefused = !codec.write(&direct, DRW::AC1027, binary);
+        std::ifstream remapPrevious(directPath, std::ios::binary);
+        const std::string remapPrior{std::istreambuf_iterator<char>(remapPrevious), {}};
+        remapPrevious.close();
+        t.expect(zeroRemapRefused && !direct.emitted
+                     && remapPrior == "shade-remap-sentinel",
+                 "zero VPORT shade handle remap preserves destination");
+        codec.setHandleRemap({{0x916u, 0xA16u}});
+        const bool remapRetried = codec.write(&direct, DRW::AC1027, binary);
+        dx_data remapReadback;
+        dx_iface remapReader;
+        const bool remapLoaded = remapRetried && remapReader.fileImport(
+            directFile, &remapReadback, false);
+        t.expect(remapLoaded && direct.emitted && remapReadback.VPorts.size() == 1u
+                     && remapReadback.VPorts.front().shadePlotHandle == 0xA16u,
+                 "corrected VPORT shade handle remap retries on same codec");
+
         for (int mode = 0; mode <= 3; ++mode) {
             const std::string suffix = (binary ? "binary" : "ascii")
                 + std::string("-mode-") + std::to_string(mode);

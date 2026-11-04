@@ -7532,7 +7532,7 @@ bool dxfRW::writeVport(DRW_Vport *ent){
         && ent->ucsOrthoType <= 6
         && (ent->baseUcsHandle == 0 || ent->ucsOrthoType != 0);
     const bool shadeTargetValid = ent != nullptr
-        && ent->shadePlotMode <= 3 && ent->shadePlotHandle == 0;
+        && ent->shadePlotMode <= 3;
     const bool backgroundTargetValid = ent != nullptr
         && (ent->backgroundHandle == 0
             || std::find(m_resolvedBackgroundHandles.begin(),
@@ -7569,6 +7569,9 @@ bool dxfRW::writeVport(DRW_Vport *ent){
     const std::uint32_t emittedVisualStyleHandle =
         version > DRW::AC1018 && ent->visualStyleHandle != 0u
             ? emittedReference(ent->visualStyleHandle) : 0u;
+    const std::uint32_t emittedShadePlotHandle =
+        version > DRW::AC1018 && ent->shadePlotHandle != 0u
+            ? emittedReference(ent->shadePlotHandle) : 0u;
     const std::uint32_t emittedSunHandle =
         version > DRW::AC1018 && ent->m_sunHandle != 0u
             ? emittedReference(ent->m_sunHandle) : 0u;
@@ -7588,6 +7591,8 @@ bool dxfRW::writeVport(DRW_Vport *ent){
                                     emittedBackgroundHandle)
                 || !isResolvedOptional(ent->visualStyleHandle,
                                        emittedVisualStyleHandle)
+                || !isResolvedOptional(ent->shadePlotHandle,
+                                       emittedShadePlotHandle)
                 || !isResolvedOptional(ent->m_sunHandle, emittedSunHandle))))
         return failDxfWrite();
     RecordStateScope state(*this, ent);
@@ -7700,8 +7705,7 @@ bool dxfRW::writeVport(DRW_Vport *ent){
             if (ent->hasDxfShadePlotMode || ent->shadePlotMode != 0)
                 writer->writeInt16(170, ent->shadePlotMode);
             if (ent->hasDxfShadePlotHandle || ent->shadePlotHandle != 0)
-                writer->writeString(333, toHexStr(
-                    remapObjectHandle(ent->shadePlotHandle)));
+                writer->writeString(333, toHexStr(emittedShadePlotHandle));
             if (ent->visualStyleHandle != 0)
                 writer->writeString(348, toHexStr(emittedVisualStyleHandle));
             if (ent->m_sunHandle != 0)
