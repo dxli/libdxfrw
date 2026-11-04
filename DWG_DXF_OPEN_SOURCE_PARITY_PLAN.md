@@ -173,8 +173,10 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    `DRW::NoHandle` sources and outputs. Generated ASCII/Binary controls cover
    mapped IDs, invalid remaps, rollback, and refusal before publishing a
    boundary record ([receipt](docs/research/p4-hatch-mpolygon-boundary-output-id-guard-2026-11-03.json)).
-   This validates ID representation only; target existence, target kind,
-   boundary association and native fill semantics remain open.
+   Named-block HATCH/MPOLYGON graph admission also checks that each selected
+   explicit owner matches the containing BLOCK; broader physical target,
+   boundary geometry and native fill semantics remain open. See the [containment
+   receipt](docs/research/p4-hatch-named-block-owner-containment-2026-11-03.json).
    The shared typed common-metadata writer validates reactor and
    extension-dictionary source IDs and rejects zero IDs from the direct remap
    path before emitting those groups ([receipt](docs/research/p4-common-object-reference-output-id-guard-2026-11-03.json)).

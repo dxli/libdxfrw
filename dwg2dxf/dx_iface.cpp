@@ -67538,6 +67538,13 @@ bool dx_iface::validateHatchBoundaryGraph(const dx_data& data) {
                         const auto owner = owners.find(entity->parentHandle);
                         if (owner == owners.end() || emittedBlocks.count(owner->second) == 0)
                             return reject();
+                        // A named BLOCK entity must be physically emitted in
+                        // the same block whose BLOCK_RECORD it names. Merely
+                        // matching another entity's explicit owner does not
+                        // prove the enclosing BLOCK/ENDBLK pair is correct.
+                        if (!mainContainer && !isFixedSpaceBlock(&block)
+                            && owner->second != layoutSymbolKey(block.name))
+                            return reject();
                         candidate.owner = owner->second;
                     } else if (!mainContainer && !isFixedSpaceBlock(&block)) {
                         candidate.owner = layoutSymbolKey(block.name);

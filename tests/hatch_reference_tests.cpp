@@ -110,7 +110,9 @@ public:
         dxfW = &output;
         cData = &data;
     }
-    void writeHeader(DRW_Header& header) override {
+    void writeBlockRecords() override {
+        // The resolver returns final entity identities. Reserve them before
+        // BLOCK_RECORD/table planning can allocate the same output handles.
         if (preplan) {
             for (const char* layer : {"HATCH_CONTROL", "BOUNDARY_1", "BOUNDARY_2", "BOUNDARY_3"}) {
                 for (const DRW_Entity* entity : cData->mBlock->ent) {
@@ -119,7 +121,7 @@ public:
                 }
             }
         }
-        dx_iface::writeHeader(header);
+        dx_iface::writeBlockRecords();
     }
     bool planned = true;
 private:
@@ -1287,6 +1289,89 @@ bool runHatchAdmissionTests(const std::filesystem::path& parent) {
             block->ent.splice(block->ent.end(), data->mBlock->ent);
             data->blocks.push_back(block);
             accept(*data);
+        }
+        // A shared parent handle must not make entities in different named
+        // BLOCK bodies into a valid boundary graph.
+        for (bool asMpolygon : {false, true}) {
+          for (bool misplacedHatch : {false, true}) {
+            auto data = drawing(false, false, false, asMpolygon);
+            DRW_Entity* misplaced = find(*data,
+                misplacedHatch ? "HATCH_CONTROL" : "BOUNDARY_1");
+            auto* firstBlock = new dx_ifaceBlock();
+            firstBlock->name = "HatchOwnerA"; firstBlock->handle = 0x80;
+            firstBlock->parentHandle = 0xA0;
+            auto* secondBlock = new dx_ifaceBlock();
+            secondBlock->name = "HatchOwnerB"; secondBlock->handle = 0x81;
+            secondBlock->parentHandle = 0xA1;
+            DRW_Block_Record firstRecord; firstRecord.handle = 0xA0;
+            firstRecord.name = firstBlock->name;
+            DRW_Block_Record secondRecord; secondRecord.handle = 0xA1;
+            secondRecord.name = secondBlock->name;
+            data->blockRecords.push_back(firstRecord);
+            data->blockRecords.push_back(secondRecord);
+            for (DRW_Entity* entity : data->mBlock->ent)
+                entity->parentHandle = firstRecord.handle;
+            firstBlock->ent.splice(firstBlock->ent.end(), data->mBlock->ent);
+            firstBlock->ent.remove(misplaced);
+            secondBlock->ent.push_back(misplaced);
+            data->blocks.push_back(firstBlock);
+            data->blocks.push_back(secondBlock);
+            const std::string sentinel = "HATCH cross-block destination\n";
+            { std::ofstream stream(path, std::ios::binary); stream << sentinel; }
+            const bool refused = !iface.fileExport(path.string(), DRW::AC1027,
+                                                   binary, data.get(), false);
+            std::ifstream input(path, std::ios::binary);
+            const std::string bytes((std::istreambuf_iterator<char>(input)), {});
+            input.close();
+            const bool rejectedCrossBlock = refused && bytes == sentinel
+                && iface.hatchGraphFailure() == dx_iface::ExtensionGraphFailure::InvalidGraph;
+            if (!rejectedCrossBlock)
+                std::cerr << "HATCH cross-block owner mismatch: binary=" << binary
+                          << " mpolygon=" << asMpolygon << " hatch=" << misplacedHatch
+                          << " refused=" << refused
+                          << " graph=" << static_cast<int>(iface.hatchGraphFailure()) << '\n';
+            if (rejectedCrossBlock) ++rejected;
+            passed = rejectedCrossBlock && passed;
+            secondBlock->ent.remove(misplaced);
+            firstBlock->ent.push_back(misplaced);
+            const bool retried = iface.fileExport(path.string(), DRW::AC1027,
+                                                  binary, data.get(), false);
+            std::map<std::string, Record> records;
+            bool readback = retried && readRecords(path, records)
+                && records.size() == 5
+                && records.at("HATCH_CONTROL").owner == records.at("BOUNDARY_1").owner;
+            if (readback) {
+                dx_data reread;
+                dx_iface reader;
+                readback = reader.fileImport(path.string(), &reread, false);
+                const dx_ifaceBlock* ownerBlock = nullptr;
+                for (const dx_ifaceBlock* block : reread.blocks)
+                    if (block && block->name == "HatchOwnerA") {
+                        if (ownerBlock != nullptr) readback = false;
+                        ownerBlock = block;
+                    }
+                const DRW_Hatch* outputHatch = nullptr;
+                std::set<std::uint32_t> outputBoundaries;
+                if (ownerBlock) for (const DRW_Entity* entity : ownerBlock->ent) {
+                    if (entity->layer == "HATCH_CONTROL")
+                        outputHatch = dynamic_cast<const DRW_Hatch*>(entity);
+                    if (entity->layer.rfind("BOUNDARY_", 0) == 0)
+                        outputBoundaries.insert(entity->handle);
+                }
+                std::set<std::uint32_t> outputReferences;
+                if (outputHatch) for (const auto& loop : outputHatch->looplist)
+                    if (loop) outputReferences.insert(loop->m_boundaryHandles.begin(),
+                                                      loop->m_boundaryHandles.end());
+                readback = readback && ownerBlock && outputHatch
+                    && outputBoundaries.size() == 3 && outputReferences == outputBoundaries;
+            }
+            if (!readback)
+                std::cerr << "HATCH corrected cross-block retry failed: binary="
+                          << binary << " mpolygon=" << asMpolygon
+                          << " hatch=" << misplacedHatch << '\n';
+            if (readback) ++accepted;
+            passed = readback && passed;
+          }
         }
         const auto reject = [&](dx_data& data, dx_iface::ExtensionGraphFailure reason) {
             const std::string sentinel = "HATCH admission destination\n";
