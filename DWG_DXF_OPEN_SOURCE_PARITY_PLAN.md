@@ -860,6 +860,9 @@ freshly generated single-LINE AC1021 file. Identify the remaining cause before
 qualifying this writer profile; see the [second-header receipt](docs/research/p6-ac1021-second-file-header-offset-2026-11-03.json),
 the [AppInfo locator receipt](docs/research/p6-ac1021-appinfo-physical-metadata-address-2026-11-03.json)
 and earlier [framing receipt](docs/research/p6-ac1021-fixed-metadata-header-pointer-2026-11-03.json).
+The R2004+ CLASSES writer now emits its specified true header bit; the ODA
+rejection and any class-manifest ordinal issues remain open. See the [CLASSES
+bit receipt](docs/research/p6-dwg-classes-true-header-bit-2026-11-03.json).
 HEADER table-control and pointer roles now use their specified handle codes,
 including typed hard-pointer nulls. The writer binds current layer, text style,
 linetype and dimension style to emitted records, and the reader resolves those

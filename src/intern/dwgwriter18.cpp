@@ -604,7 +604,7 @@ bool dwgWriter18::writeDwgClasses() {
     m_buf.putBitShort(maxDwgClassNumber());
     m_buf.putRawChar8(0);  // rc1
     m_buf.putRawChar8(0);  // rc2
-    m_buf.putBit(0);       // flag
+    m_buf.putBit(1);       // ODA 10.2: CLASSES header flag is true
 
     if (!emitDwgClassDefinitions(
             [this](const DwgClassDefinition& definition) {

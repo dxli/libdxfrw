@@ -16777,7 +16777,82 @@ void testSectionNameUtf16Framing(TestContext& t) {
              "section-name framing rejects an odd byte length");
 }
 
+template<class Reader>
+class ClassHeaderPhysicalProbe final : public Reader {
+public:
+    ClassHeaderPhysicalProbe(std::vector<std::uint8_t>& bytes, DRW::Version v)
+        : Reader(std::make_unique<dwgBuffer>(bytes.data(), bytes.size()), nullptr) {
+        this->version = v;
+        this->decoder.setVersion(v, false);
+        this->appMaintenanceVersion = bytes.size() > 18u ? bytes[18u] : 0u;
+    }
+    bool decode(std::vector<std::uint8_t>& logical) {
+        if (!this->readFileHeader()) return false;
+        const auto found = this->sections.find(secEnum::CLASSES);
+        if (found == this->sections.end()
+            || found->second.size > std::numeric_limits<std::size_t>::max())
+            return false;
+        const auto size = static_cast<std::size_t>(found->second.size);
+        if constexpr (std::is_base_of<dwgReader21, Reader>::value) {
+            logical.assign(size, 0u);
+            return !logical.empty() && this->parseDataPage(found->second, logical.data());
+        } else {
+            std::unique_ptr<std::uint8_t[]> data;
+            std::uint64_t decodedSize = 0u;
+            if (!this->parseDataPage(found->second, data, decodedSize)
+                || !data || decodedSize < size)
+                return false;
+            logical.assign(data.get(), data.get() + size);
+            return true;
+        }
+    }
+};
+
+template<class Writer, class Reader>
+void testClassHeaderTrueFlag(TestContext& t, DRW::Version version,
+                             std::size_t prefixBytes, const char* label) {
+    std::stringbuf output(std::ios::out | std::ios::binary);
+    std::ofstream stream;
+    static_cast<std::ostream&>(stream).rdbuf(&output);
+    DRW_Header header;
+    Writer writer(&stream, &header);
+    const bool generated = writer.prepareDwgClassManifest()
+        && writer.writeFileHeaderStub() && writer.writeDwgHeader()
+        && writer.writeDwgClasses() && writer.writeDwgObjects()
+        && writer.emitDeferredBlockControl() && writer.finalizeHeaderHandseed()
+        && writer.writeDwgHandles() && writer.writeSecondHeader() && writer.finalize();
+    t.expect(generated, std::string(label) + " CLASSES physical file generated");
+    if (!generated) return;
+    const std::string raw = output.str();
+    std::vector<std::uint8_t> bytes(raw.begin(), raw.end());
+    ClassHeaderPhysicalProbe<Reader> reader(bytes, version);
+    std::vector<std::uint8_t> classes;
+    const bool decoded = reader.decode(classes) && classes.size() > prefixBytes;
+    t.expect(decoded, std::string(label) + " physical CLASSES section decoded");
+    if (!decoded) return;
+    dwgBuffer body(classes.data() + prefixBytes, classes.size() - prefixBytes);
+    const auto maximum = body.getBitShort();
+    const auto firstRc = body.getRawChar8();
+    const auto secondRc = body.getRawChar8();
+    const auto flag = body.getBit();
+    const auto firstClass = body.getBitShort();
+    t.expect(body.isGood() && maximum >= 500u && firstRc == 0u && secondRc == 0u
+                 && flag == 1u && firstClass == 500u,
+             std::string(label) + " physical CLASSES true bit and following class are aligned");
+    t.expect(reader.readDwgClasses(),
+             std::string(label) + " existing reader accepts the corrected physical section");
+}
+
+void testClassHeaderTrueFlags(TestContext& t) {
+    testClassHeaderTrueFlag<dwgWriter18, dwgReader18>(t, DRW::AC1018, 20u, "AC1018");
+    testClassHeaderTrueFlag<dwgWriter21, dwgReader21>(t, DRW::AC1021, 24u, "AC1021");
+    testClassHeaderTrueFlag<dwgWriter24, dwgReader24>(t, DRW::AC1024, 24u, "AC1024");
+    testClassHeaderTrueFlag<dwgWriter27, dwgReader27>(t, DRW::AC1027, 28u, "AC1027");
+    testClassHeaderTrueFlag<dwgWriter32, dwgReader32>(t, DRW::AC1032, 28u, "AC1032");
+}
+
 void testR2007ClassStringFooter(TestContext& t) {
+    testClassHeaderTrueFlags(t);
     // The AC1024 RTM class footer uses the high-bit extension when the UTF-16
     // string stream exceeds 0x7fff bits. Keep this vector local and synthetic:
     // it exercises the wire arithmetic without retaining a drawing fixture.
