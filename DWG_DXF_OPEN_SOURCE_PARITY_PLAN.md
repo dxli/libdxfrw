@@ -821,12 +821,12 @@ ET Border resave shows the same result. This is one converter, not a general
 discard rule; extend the independent and native-consumer evidence before changing
 strict admission. See the [mutation receipt](docs/research/p6-ac1027-oda-header-suffix-mutation-2026-11-03.json).
 
-The R2007 writer now emits the required file-header pointer and repeated
-Reed–Solomon header blocks, and terminates section-map names as specified, but
-ODA still rejects the freshly generated single-LINE AC1021 file. Identify the
-remaining cause before qualifying this writer profile; see the [writer framing
-receipt](docs/research/p6-ac1021-fixed-metadata-header-pointer-2026-11-03.json)
-and [section-name receipt](docs/research/p6-ac1021-utf16-section-name-terminators-2026-11-03.json).
+The R2007 writer now emits the required file-header pointer, repeated
+Reed–Solomon header blocks, terminated section names, section capacities and
+AppInfo encoding, but ODA still rejects a freshly generated single-LINE AC1021
+file. Identify the remaining cause before qualifying this writer profile; see
+the [section-profile receipt](docs/research/p6-ac1021-section-capacity-appinfo-profile-2026-11-03.json)
+and earlier [framing receipt](docs/research/p6-ac1021-fixed-metadata-header-pointer-2026-11-03.json).
 
 The ELLIPSE-to-polyline work bound now covers derived segment counts and R12
 refusal/retry; other geometry and caller-state profiles below remain open. See the

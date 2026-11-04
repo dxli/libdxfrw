@@ -9803,7 +9803,7 @@ struct R2007SectionExtentMutation {
 };
 
 // Inspect the actual emitted section-map bytes, not the writer's snapshot.
-// ODA 5.2 requires a terminating UTF-16 NUL on each named descriptor.
+// ODA 5.2 defines UTF-16 name termination, capacities, and AppInfo encoding.
 bool hasTerminatedR2007SectionNames(std::vector<std::uint8_t>& file) {
     R2007TestMapHeader header;
     if (!decodeR2007TestMapHeader(file, header)
@@ -9837,6 +9837,12 @@ bool hasTerminatedR2007SectionNames(std::vector<std::uint8_t>& file) {
         return false;
     std::size_t offset = 0u;
     std::size_t named = 0u;
+    std::unordered_map<std::string, std::uint64_t> expectedCaps{
+        {"AcDb:AppInfo", 0x300u}, {"AcDb:RevHistory", 0x1000u},
+        {"AcDb:AcDbObjects", 0xf800u}, {"AcDb:ObjFreeSpace", 0xf800u},
+        {"AcDb:Template", 0x400u}, {"AcDb:Handles", 0xf800u},
+        {"AcDb:Classes", 0xf800u}, {"AcDb:AuxHeader", 0x800u},
+        {"AcDb:Header", 0x800u}};
     while (offset <= sectionMap.size() && sectionMap.size() - offset >= 64u) {
         std::uint64_t nameBytes = 0u;
         std::uint64_t pageCount = 0u;
@@ -9846,21 +9852,45 @@ bool hasTerminatedR2007SectionNames(std::vector<std::uint8_t>& file) {
             return false;
         if (nameBytes == 0u)
             return named != 0u && pageCount == 0u
-                && offset + 64u == sectionMap.size();
+                && expectedCaps.empty() && offset + 64u == sectionMap.size();
         if (nameBytes < 4u || (nameBytes & 1u) != 0u)
             return false;
         const std::size_t nameStart = offset + 64u;
         const std::size_t nameEnd = nameStart + static_cast<std::size_t>(nameBytes);
         if (sectionMap[nameEnd - 2u] != 0u || sectionMap[nameEnd - 1u] != 0u)
             return false;
+        std::string name;
         for (std::size_t i = nameStart; i < nameEnd - 2u; i += 2u) {
             if (sectionMap[i] == 0u && sectionMap[i + 1u] == 0u)
                 return false;
+            if (sectionMap[i + 1u] != 0u)
+                return false;
+            name.push_back(static_cast<char>(sectionMap[i]));
         }
         std::uint64_t pagesSize = 0u;
         if (!dwgSafety::multiply(pageCount, 56u, pagesSize)
             || pagesSize > sectionMap.size() - nameEnd)
             return false;
+        const auto expected = expectedCaps.find(name);
+        if (expected != expectedCaps.end()) {
+            std::uint64_t capacity = 0u;
+            std::uint64_t encoding = 0u;
+            if (!readR2007TestU64(sectionMap, offset + 8u, capacity)
+                || !readR2007TestU64(sectionMap, offset + 48u, encoding)
+                || capacity != expected->second || pageCount == 0u
+                || encoding != (name == "AcDb:AppInfo" ? 1u : 4u))
+                return false;
+            if (name == "AcDb:AppInfo") {
+                std::uint64_t uncompressed = 0u;
+                std::uint64_t compressed = 0u;
+                if (pageCount != 1u
+                    || !readR2007TestU64(sectionMap, nameEnd + 24u, uncompressed)
+                    || !readR2007TestU64(sectionMap, nameEnd + 32u, compressed)
+                    || compressed != uncompressed)
+                    return false;
+            }
+            expectedCaps.erase(expected);
+        }
         offset = nameEnd + static_cast<std::size_t>(pagesSize);
         ++named;
     }
@@ -10000,7 +10030,7 @@ void testR2007SectionMapPageExtent(TestContext& t) {
     const std::string encoded = streamBuffer.str();
     std::vector<std::uint8_t> valid(encoded.begin(), encoded.end());
     t.expect(hasTerminatedR2007SectionNames(valid),
-             "AC1021 physical section-map names end in UTF-16 NUL");
+             "AC1021 physical section map has terminated names and specified capacities/encoding");
     R21DataPageDecodeProbe validReader(valid);
     t.expect(validReader.readSections(),
              "generated AC1021 witness has a valid file header and section map");

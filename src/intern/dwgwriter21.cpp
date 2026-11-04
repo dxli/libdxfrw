@@ -44,7 +44,8 @@ constexpr std::size_t kR2007FileHeaderPageSize =
 constexpr std::size_t kR2007FileHeaderCheckDataOffset = 0x3D8;
 constexpr std::size_t kR2007FileHeaderCheckDataSize = 0x28;
 constexpr std::uint32_t kR2007PageAlignment = 0x20;
-constexpr std::uint32_t kR2007DataPageCapacity = 0x7400;
+// R2007 section-map capacities differ from R2004's 0x7400 default.
+constexpr std::uint32_t kR2007DataPageCapacity = 0xf800;
 // The empty section is present in the section map but has no data pages.
 // R2007 files use the file-header page-size sentinel for this descriptor.
 constexpr std::uint32_t kR2007EmptySectionMaxSize = 0xf800;
@@ -107,12 +108,18 @@ std::size_t sectionOrderRank(
 }
 
 std::uint32_t dataPageCapacityFor(const char* name) {
-    // R2007 uses the normal 0x7400 page size for structural sections.  The
-    // optional metadata sections have smaller documented limits.
+    // ODA 5.2 gives section-specific R2007 decompressed page capacities.
     if (std::strcmp(name, "AcDb:AppInfoHistory") == 0)
         return kR2007AppInfoHistoryPageCapacity;
     if (std::strcmp(name, "AcDb:AppInfo") == 0)
         return kR2007AppInfoPageCapacity;
+    if (std::strcmp(name, "AcDb:RevHistory") == 0)
+        return 0x1000;
+    if (std::strcmp(name, "AcDb:Template") == 0)
+        return 0x400;
+    if (std::strcmp(name, "AcDb:AuxHeader") == 0
+        || std::strcmp(name, "AcDb:Header") == 0)
+        return 0x800;
     return kR2007DataPageCapacity;
 }
 
@@ -1073,7 +1080,11 @@ bool dwgWriter21::finalize() {
                 return false;
             const std::size_t chunk = static_cast<std::size_t>(std::min<std::uint64_t>(
                 section.maxSize, static_cast<std::uint64_t>(size) - start));
-            const auto compressed = compressDataPage(data + start, chunk);
+            // AcDb:AppInfo is the uncompressed encoding-1 metadata profile
+            // specified in ODA 5.2. Other sections retain normal compression.
+            const auto compressed = sectionName == "AcDb:AppInfo"
+                ? std::vector<std::uint8_t>{}
+                : compressDataPage(data + start, chunk);
             const bool isCompressed = !compressed.empty();
             const std::uint8_t* pageData = isCompressed
                 ? compressed.data() : data + start;
@@ -1136,7 +1147,7 @@ bool dwgWriter21::finalize() {
     }
 
     if (!appendSection("AcDb:AppInfo", appInfo.data(),
-                          static_cast<std::uint32_t>(appInfo.size()), 4, 0, 0)
+                          static_cast<std::uint32_t>(appInfo.size()), 1, 0, 0)
         || !appendSection("AcDb:AppInfoHistory", appInfoHistory.data(),
                           static_cast<std::uint32_t>(appInfoHistory.size()), 4, 0, 0)
         || !appendSection("AcDb:AuxHeader", auxHeader.data(),
