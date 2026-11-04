@@ -1,6 +1,6 @@
 # -*- Makefile -*-
 AM_CPPFLAGS = ${my_CPPFLAGS}
-AM_CXXFLAGS = -Wall -Wextra -pedantic -Werror -Woverloaded-virtual $(PTHREAD_CFLAGS)
+AM_CXXFLAGS = -Wall -Wextra -pedantic -Werror $(LIBDXFRW_OVERLOADED_VIRTUAL_FLAG) $(PTHREAD_CFLAGS)
 ACLOCAL_AMFLAGS = -I m4
 
 library_includedir = $(includedir)/libdxfrw

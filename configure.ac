@@ -24,6 +24,20 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#if !defined(__GNUC__) || defined(__clang__
 #error not the GNU C++ compiler
 #endif]], [[]])], [LIBDXFRW_ENTITY_WARNING_FLAGS=-Wno-extra])
 AC_SUBST([LIBDXFRW_ENTITY_WARNING_FLAGS])
+# GCC 13's bare -Woverloaded-virtual selects level 2, which warns when a
+# derived class intentionally overrides only one of several virtual overloads.
+# Exposing those overloads changes existing protected-source overload lookup.
+# Prefer level 1 where supported: it still diagnoses complete hiding, with
+# -Werror retained. Other compilers keep the original bare warning flag.
+LIBDXFRW_OVERLOADED_VIRTUAL_FLAG=-Woverloaded-virtual
+libdxfrw_saved_warning_probe_flags=$CXXFLAGS
+CXXFLAGS="$CXXFLAGS -Werror -Woverloaded-virtual=1"
+AC_MSG_CHECKING([whether $CXX supports -Woverloaded-virtual=1])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [])],
+    [LIBDXFRW_OVERLOADED_VIRTUAL_FLAG=-Woverloaded-virtual=1
+     AC_MSG_RESULT([yes])], [AC_MSG_RESULT([no])])
+CXXFLAGS=$libdxfrw_saved_warning_probe_flags
+AC_SUBST([LIBDXFRW_OVERLOADED_VIRTUAL_FLAG])
 CXXFLAGS="$CXXFLAGS -std=c++17"
 AC_MSG_CHECKING([for C++17 and the filesystem library])
 AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <filesystem>

@@ -497,6 +497,7 @@ tests/freecad_dwg2dxf_feature_audit.FCMacro
 tests/freecad_dwg2dxf_import_check.FCMacro
 tests/freecad_dwg2dxf_oblique_arc_circle_check.FCMacro
 tests/gbk_codepage_tests.cpp
+tests/gcc_overloaded_virtual_probe.py
 tests/generated_raw_dwg_object.h
 tests/graph_preservation_tests.cpp
 tests/hardening_tests.cpp

@@ -1613,9 +1613,12 @@ Native source-release builds and platform qualification remain open.
 - Complete native Linux/Windows FreeCAD qualification and bind the actual loaded
   library/converter child. Verify Windows UTF-8/Qt paths, filesystem collisions,
   MSVC/DLL/shared/static/relocated consumers and package/toolchain contracts.
-- Run the pending native Linux GCC source-release job. Complete ABI/API and native
-  application checks, controlled RSS/performance/work-cap measurements and any
-  required older-CMake/Conan/PIC/export gates.
+- Qualify the Linux x86-64 source-release CI job at integration. The GCC 13
+  source-release `distcheck` now passes as an unprivileged user in a Linux
+  ARM64 container; this does not qualify native desktop applications or other
+  architectures ([receipt](docs/research/p8-gcc13-source-release-overload-warning-policy-2026-11-04.json)).
+  Complete ABI/API and native application checks, controlled RSS/performance/
+  work-cap measurements and required older-CMake/Conan/PIC/export gates.
 - At integration, pin origin/master and LibreCAD target revisions, refresh only
   invalidated evidence, run required CI/release gates and check claims against the
   exact receipts. Packaging success does not establish format support.

@@ -34,6 +34,7 @@ jobs:
       - name: Check inventories and bootstrap source release
         run: |
           python3 -B tools/generate_build_inventory.py --check
+          python3 -B tests/gcc_overloaded_virtual_probe.py "$CXX"
           ./autogen.sh
           ./configure --disable-static
       - name: Check extracted source, install, uninstall and regeneration
