@@ -158,6 +158,17 @@ add_test(NAME libdxfrw_polyline_cross_version_membership_audit
 set_tests_properties(libdxfrw_polyline_cross_version_membership_audit PROPERTIES
     LABELS "dwg;fast;polyline;tools;AC1018;AC1024" TIMEOUT 15)
 
+add_executable(libdxfrw_dwg_modern_header_defaults_tests ${CMAKE_CURRENT_SOURCE_DIR}/dwg_modern_header_default_tests.cpp)
+target_compile_features(libdxfrw_dwg_modern_header_defaults_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_modern_header_defaults_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_modern_header_defaults_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_modern_header_defaults_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_modern_header_defaults COMMAND libdxfrw_dwg_modern_header_defaults_tests)
+set_tests_properties(libdxfrw_dwg_modern_header_defaults PROPERTIES LABELS "dwg;fast;header;AC1027;AC1032" TIMEOUT 30)
+add_test(NAME libdxfrw_modern_header_default_peer
+    COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/modern_header_default_peer_tests.py)
+set_tests_properties(libdxfrw_modern_header_default_peer PROPERTIES LABELS "dwg;fast;header;tools;AC1027;AC1032" TIMEOUT 15)
+
 add_test(NAME libdxfrw_modern_writer_rejection_audit
     COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B
         ${CMAKE_CURRENT_SOURCE_DIR}/modern_writer_rejection_audit_tests.py)

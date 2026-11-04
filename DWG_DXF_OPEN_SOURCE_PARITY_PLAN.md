@@ -956,6 +956,10 @@ when matching producer controls convert successfully. A fixed-header byte
 factorial and a scratch default-material graph did not resolve the failures;
 trace their container and object boundaries without assuming either error names
 the failing section ([diagnostic receipt](docs/research/p6-ac1027-1032-oda-writer-rejection-2026-11-04.json)).
+The AC1027/AC1032 writer now uses the specified opening HEADER defaults seen
+in the producer controls; ODA still rejects the sampled outputs, and arbitrary
+source values for these unmodeled fields are not retained
+([defaults receipt](docs/research/p6-modern-header-opening-defaults-2026-11-04.json)).
 The AC1021 LAYER string and handle boundary is now emitted without byte padding;
 with a diagnostic typed-null material, ODA no longer reports that LAYER as
 improperly read, but broader material graphs and full-file acceptance remain

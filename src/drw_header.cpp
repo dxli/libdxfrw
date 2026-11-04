@@ -4262,11 +4262,13 @@ bool DRW_Header::encodeDwgForWriterMaterial(
         buf->putBitLongLong(0);  // REQUIREDVERSIONS (AC1027+)
     }
 
-    // -------- Unknown 4 BDs (parseDwg:1789-1792) ----------------------------
-    buf->putBitDouble(0.0);
-    buf->putBitDouble(0.0);
-    buf->putBitDouble(0.0);
-    buf->putBitDouble(0.0);
+    // ODA v5.4.1 section 9 specifies these opening defaults. Keep the
+    // existing legacy wire profile; R2013/R2018 producer controls use them.
+    const bool useModernDefaults = version >= DRW::AC1027;
+    buf->putBitDouble(useModernDefaults ? 412148564080.0 : 0.0);
+    buf->putBitDouble(useModernDefaults ? 1.0 : 0.0);
+    buf->putBitDouble(useModernDefaults ? 1.0 : 0.0);
+    buf->putBitDouble(useModernDefaults ? 1.0 : 0.0);
 
     // -------- 4 CP8 string unknowns (parseDwg:1793-1798) --------------------
     // Gated on `version < AC1021` (2007-).  R2000/R2004 hits this branch.
