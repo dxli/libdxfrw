@@ -24,7 +24,7 @@
 // from the inner HEADER envelope. Writer-authored sections include the optional
 // word in RL. A decoded R2010 profile excludes it; admit that narrow form only
 // with a matching CRC, exact sentinel and exact logical length.
-// Witnessed AC1018/AC1021 app-maintenance-55 profiles, AC1027
+// Witnessed AC1018/AC1021/AC1024 app-maintenance-55 profiles, AC1027
 // app-maintenance-4 and tracked AC1032 profiles may contain a diagnosed suffix
 // after the validated HEADER envelope. The suffix is not interpreted as padding.
 enum class DwgHeaderEnvelopeError { None, Bounds, BeginSentinel, EndSentinel };
@@ -61,6 +61,8 @@ inline bool dwgHeaderMayHaveUnclaimedSuffix(
     bool excludesHighSizeWord) noexcept {
     return ((version == DRW::AC1018 || version == DRW::AC1021)
             && appMaintenanceVersion == 55u && !excludesHighSizeWord)
+        || (version == DRW::AC1024 && appMaintenanceVersion == 55u
+            && excludesHighSizeWord)
         || (version == DRW::AC1027 && appMaintenanceVersion > 3u
             && excludesHighSizeWord)
         || (version == DRW::AC1032 && excludesHighSizeWord);

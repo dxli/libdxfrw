@@ -396,6 +396,7 @@ EXTRA_DIST = \
     tests/dwg2dxf_cli_contract_tests.py \
     tests/dwg2dxf_version_tests.cpp \
     tests/dwg_ac1024_default_material_tests.cpp \
+    tests/dwg_ac1024_header_suffix_tests.cpp \
     tests/dwg_class_evidence_tests.cpp \
     tests/dwg_class_section_wire_tests.cpp \
     tests/dwg_class_source_tests.cpp \

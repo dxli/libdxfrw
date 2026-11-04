@@ -835,6 +835,10 @@ output refused; see the [cross-source receipt](docs/research/p6-ac1027-oda-heade
 A suffix-free AC1027 source acquired the same 739-byte form after an ODA
 resave, narrowing its origin to that observed save process without explaining
 its contents; see the [controlled receipt](docs/research/p6-ac1027-oda-header-suffix-controlled-producer-2026-11-04.json).
+An AC1024 maintenance-55 source now reaches its raster and NOD callbacks under
+the same diagnostic policy. Its strict export first fails on IMAGEDEF/reactor
+capture or correlation; resolve that graph while retaining the separate HEADER
+warnings and unclaimed suffix refusal. See the [AC1024 HEADER receipt](docs/research/p6-ac1024-header-unclaimed-suffix-diagnostic-2026-11-04.json).
 
 SOLID, TRACE and 3DFACE input now refuse a fourth Z without fourth X/Y
 instead of silently replacing it. Valid triangle and default-Z inputs
