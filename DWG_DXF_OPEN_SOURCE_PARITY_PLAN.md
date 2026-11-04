@@ -871,6 +871,13 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 Audit only a current failing source/profile; do not revive historical defects whose
 receipt and code path already agree.
 
+For the exact empty AC1027 BLOCK_CONTROL profile, emit the absent-string and
+handle boundary at the observed bit position. ODA no longer reports that record
+as improperly read, but still rejects the complete generated drawing on later
+records. Preserve the distinction and investigate the next individual frame;
+AC1032 and other control profiles remain unqualified
+([boundary receipt](docs/research/p6-ac1027-empty-block-control-boundary-2026-11-04.json)).
+
 Investigate the ODA AC1027 HEADER suffix generator across unrelated producers
 and versions. Seven same-producer saves, including controls authored separately
 from Cover, each have a 739-byte suffix with a position-wise matching or inverted

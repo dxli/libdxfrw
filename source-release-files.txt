@@ -356,6 +356,7 @@ tests/ac1024_candidate_fields_v2_live.py
 tests/ac1024_candidate_self_test.py
 tests/ac1027_acds_source_compare.py
 tests/ac1027_acds_source_probe.cpp
+tests/ac1027_block_control_peer_audit_tests.py
 tests/ac1027_modeler_uid_span.py
 tests/acds_delivery_tests.cpp
 tests/adapter_build_context_tests.py
@@ -406,6 +407,7 @@ tests/dwg_ac1021_polyline_group_targets_tests.cpp
 tests/dwg_ac1021_solid_trace_footer_tests.cpp
 tests/dwg_ac1024_default_material_tests.cpp
 tests/dwg_ac1024_header_suffix_tests.cpp
+tests/dwg_ac1027_block_control_boundary_tests.cpp
 tests/dwg_class_evidence_tests.cpp
 tests/dwg_class_section_wire_tests.cpp
 tests/dwg_class_source_tests.cpp
@@ -675,6 +677,7 @@ tools/audit_ac1024_rastervariables_frame1_source.py
 tools/audit_ac1024_rastervariables_source.py
 tools/audit_ac1024_tilted_geometry.py
 tools/audit_ac1024_vport_null_roles.py
+tools/audit_ac1027_block_control_peer.py
 tools/audit_ac1027_header_suffix_compare.py
 tools/audit_ac1027_light_preview.py
 tools/audit_ac1027_planar_sab_geometry.py

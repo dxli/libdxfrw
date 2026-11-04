@@ -4974,3 +4974,14 @@ target_include_directories(libdxfrw_light_dxf_proxy_replay_tests PRIVATE ${CMAKE
 target_link_libraries(libdxfrw_light_dxf_proxy_replay_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_light_dxf_proxy_replay COMMAND libdxfrw_light_dxf_proxy_replay_tests)
 set_tests_properties(libdxfrw_light_dxf_proxy_replay PROPERTIES LABELS "fast;dxf;light;transaction" TIMEOUT 30)
+
+add_executable(libdxfrw_dwg_ac1027_block_control_boundary_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_ac1027_block_control_boundary_tests.cpp)
+target_compile_features(libdxfrw_dwg_ac1027_block_control_boundary_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_ac1027_block_control_boundary_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_ac1027_block_control_boundary_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_ac1027_block_control_boundary_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_ac1027_block_control_boundary COMMAND libdxfrw_dwg_ac1027_block_control_boundary_tests)
+set_tests_properties(libdxfrw_dwg_ac1027_block_control_boundary PROPERTIES LABELS "dwg;fast;transaction;AC1027" TIMEOUT 30)
+add_test(NAME libdxfrw_ac1027_block_control_peer_audit COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/ac1027_block_control_peer_audit_tests.py)
+set_tests_properties(libdxfrw_ac1027_block_control_peer_audit PROPERTIES LABELS "dwg;fast;AC1027;peer" TIMEOUT 30)
