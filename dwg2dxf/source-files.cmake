@@ -39,6 +39,7 @@ set(LIBDXFRW_CLI_HEADERS
     "${CMAKE_CURRENT_LIST_DIR}/dx_rendering_sources.h"
     "${CMAKE_CURRENT_LIST_DIR}/dx_rendersettings_source_profile.h"
     "${CMAKE_CURRENT_LIST_DIR}/dx_standard_output.h"
+    "${CMAKE_CURRENT_LIST_DIR}/dx_sunstudy_dxf_profile.h"
     "${CMAKE_CURRENT_LIST_DIR}/dx_symbol_name_key.h"
     "${CMAKE_CURRENT_LIST_DIR}/dx_symbol_output.h"
     "${CMAKE_CURRENT_LIST_DIR}/dx_table_source_profile.h"

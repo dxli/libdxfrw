@@ -72,6 +72,7 @@ dwg2dxf/dx_rendering_roots.h
 dwg2dxf/dx_rendering_sources.h
 dwg2dxf/dx_rendersettings_source_profile.h
 dwg2dxf/dx_standard_output.h
+dwg2dxf/dx_sunstudy_dxf_profile.h
 dwg2dxf/dx_symbol_name_key.h
 dwg2dxf/dx_symbol_output.h
 dwg2dxf/dx_table_source_profile.h
@@ -580,6 +581,7 @@ tests/run_freecad_sat_v1_external_cli_test.cmake.in
 tests/run_freecad_sat_v1_runtime_test.cmake.in
 tests/run_freecad_shared_installed_3d_line_test.cmake
 tests/run_r11_paper_space_cli_test.cmake.in
+tests/run_sunstudy_dxf_graph_test.cmake
 tests/samples/README.md
 tests/semantic_differential_adapter.cpp
 tests/structural_source_controls.h
@@ -636,6 +638,7 @@ tools/audit_dxf_sparse_lwpolyline.py
 tools/audit_dxf_table_values.py
 tools/audit_p9_rtext_native_history.py
 tools/audit_rastervariables_ac1018_source.py
+tools/audit_sunstudy_dxf_graph.py
 tools/audit_wipeout_ac1018_source.py
 tools/audit_wipeout_ac1024_source.py
 tools/audit_wipeout_ac1032_source.py

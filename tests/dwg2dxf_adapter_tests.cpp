@@ -69788,7 +69788,153 @@ bool ac1018MinimalRootGroupSource(const std::string& source) {
     return true;
 }
 
+bool sunStudyDxfGraph(const std::string& source) {
+    dx_data data; dx_iface importer;
+    if (!importer.enableWholeDxfSourceObservation()
+        || !importer.fileImport(source, &data, false) || data.sunStudies.size() != 1u
+        || data.rawSunStudies.size() != 1u || data.dictionaries.empty())
+        return fail("SUNSTUDY typed/raw import failed");
+    const auto output = std::filesystem::temp_directory_path() /
+        ("libdxfrw-sunstudy-graph-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".dxf");
+    struct Cleanup { std::filesystem::path path; ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); } } cleanup{output};
+    struct Exporter : dx_iface {
+        std::function<void()> afterObjects;
+        void writeObjects() override { dx_iface::writeObjects(); if (afterObjects) afterObjects(); }
+    } exporter;
+    const auto write = [&](bool binary) { return exporter.fileExport(output.string(), DRW::AC1027, binary,
+        &data, false, true, dx_dxfSourceTextPolicy::Compatible, DRW::DxfTextWritePolicy::Compatible,
+        dx_dxfProxyGraphicsPolicy::Compatible, dx_dwgReadCompletenessPolicy::RequireComplete); };
+    const auto check = [&]() {
+        dx_data actual; dx_iface reader;
+        if (!reader.fileImport(output.string(), &actual, false) || actual.sunStudies.size() != 1u
+            || !actual.hasNamedObjectDictionary) return false;
+        const auto& study = actual.sunStudies.front();
+        const auto owner = std::find_if(actual.dictionaries.begin(), actual.dictionaries.end(),
+            [&](const DRW_Dictionary& dictionary) { return dictionary.handle == study.parentHandle; });
+        return owner != actual.dictionaries.end() && owner->parentHandle == actual.namedObjectDictionary.handle
+            && study.reactorHandles == std::vector<std::uint32_t>{owner->handle}
+            && owner->m_entries.size() == 1u && owner->m_entries.front().m_handle == study.handle
+            && study.m_setupName == "Morning" && study.m_dates.size() == 1u
+            && study.m_dates[0].m_julianDay == 2460000 && study.m_dates[0].m_milliseconds == 3600000
+            && study.m_hours == std::vector<bool>({true, false});
+    };
+    const auto savedStudies = data.sunStudies;
+    const auto savedRoot = data.namedObjectDictionary;
+    const auto savedDictionaries = data.dictionaries;
+    const auto savedRaw = data.rawSunStudies.front();
+    const auto savedClasses = data.dxfClasses;
+    for (const bool binary : {false, true}) {
+        if (!write(binary) || !check()) return fail("SUNSTUDY graph output/readback failed");
+        for (unsigned fault = 0u; fault < 15u; ++fault) {
+            { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }
+            if (fault == 0u) data.sunStudies.front().m_viewHandle = 0x100u;
+            if (fault == 1u) data.sunStudies.front().m_dates.front().m_milliseconds += 1;
+            if (fault == 2u) data.sunStudies.front().reactorHandles.clear();
+            if (fault == 3u) data.sunStudies.front().m_setupName = "changed";
+            if (fault == 4u) data.dictionaries.front().parentHandle = 0u;
+            if (fault == 5u) data.dictionaries.front().m_entries.clear();
+            if (fault == 6u) data.namedObjectDictionary.m_entries.clear();
+            if (fault == 7u) data.rawSunStudies.front().groups.emplace_back(999, std::string("unmodeled"));
+            if (fault == 8u) data.sunStudies.clear();
+            if (fault == 9u) data.sunStudies.front().handle = data.namedObjectDictionary.handle;
+            if (fault == 10u) data.sunStudies.front().handle = data.dictionaries.front().handle;
+            if (fault == 11u) data.dictionaries.push_back(data.dictionaries.front());
+            if (fault == 12u) data.sunStudies.push_back(data.sunStudies.front());
+            if (fault == 13u) data.dxfClasses.front().instanceCount = 2;
+            if (fault == 14u) data.dxfClasses.push_back(data.dxfClasses.front());
+            const bool accepted = write(binary);
+            std::ifstream prior(output, std::ios::binary);
+            const std::string actual((std::istreambuf_iterator<char>(prior)), {});
+            data.sunStudies = savedStudies; data.namedObjectDictionary = savedRoot;
+            data.dictionaries = savedDictionaries; data.rawSunStudies.front() = savedRaw;
+            data.dxfClasses = savedClasses;
+            if (accepted || actual != "prior destination" || !write(binary) || !check())
+                return fail("SUNSTUDY input mutation was published or retry failed");
+        }
+        { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }
+        exporter.afterObjects = [&]() { data.dictionaries.front().m_entries.clear(); };
+        const bool accepted = write(binary); exporter.afterObjects = {};
+        std::ifstream prior(output, std::ios::binary);
+        const std::string actual((std::istreambuf_iterator<char>(prior)), {});
+        data.dictionaries = savedDictionaries;
+        if (accepted || actual != "prior destination" || !write(binary) || !check())
+            return fail("late SUNSTUDY owner mutation was published or retry failed");
+    }
+    for (const bool binary : {false, true}) {
+        { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }
+        const bool accepted = exporter.fileExport(output.string(), DRW::AC1024, binary,
+            &data, false, true);
+        std::ifstream prior(output, std::ios::binary);
+        const std::string actual((std::istreambuf_iterator<char>(prior)), {});
+        if (accepted || actual != "prior destination" || !write(binary) || !check())
+            return fail("SUNSTUDY neighboring target was published or retry failed");
+    }
+    {
+        dx_data unobserved; dx_iface unobservedReader;
+        if (!unobservedReader.fileImport(source, &unobserved, false))
+            return fail("SUNSTUDY unobserved source import failed");
+        { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }
+        const bool accepted = exporter.fileExport(output.string(), DRW::AC1027, false,
+            &unobserved, false, true);
+        std::ifstream prior(output, std::ios::binary);
+        const std::string actual((std::istreambuf_iterator<char>(prior)), {});
+        if (accepted || actual != "prior destination" || !write(false) || !check())
+            return fail("SUNSTUDY unobserved source was published or retry failed");
+    }
+    const auto unsupported = output.string() + ".input.dxf";
+    struct InputCleanup { std::string path; ~InputCleanup() { std::error_code error; std::filesystem::remove(path, error); } } inputCleanup{unsupported};
+    for (unsigned fault = 0u; fault < 8u; ++fault) {
+        std::ifstream input(source, std::ios::binary);
+        std::string text((std::istreambuf_iterator<char>(input)), {});
+        if (fault == 0u) {
+            const std::string marker = "294\n0\n  0\nENDSEC";
+            const auto position = text.find(marker);
+            if (position == std::string::npos) return fail("SUNSTUDY unknown-tag marker missing");
+            text.insert(position + std::string("294\n0\n").size(), "300\nunmodeled\n");
+        } else if (fault < 3u) {
+            const std::string marker = "100\nAcDbDictionary\n";
+            auto position = text.find(marker);
+            if (fault == 2u && position != std::string::npos) position = text.find(marker, position + marker.size());
+            if (position == std::string::npos) return fail("dictionary unknown-tag marker missing");
+            text.insert(position + marker.size(), "300\nunmodeled\n");
+        } else if (fault < 5u) {
+            const std::string marker = fault == 3u ? "350\nE0\n" : "350\nF0\n";
+            const auto position = text.find(marker);
+            if (position == std::string::npos) return fail("dictionary role marker missing");
+            text.replace(position, 3u, "360");
+        } else if (fault == 5u) {
+            const auto position = text.find(" 90\n1153\n");
+            if (position == std::string::npos) return fail("CLASS extra-field marker missing");
+            text.insert(position, "300\nunmodeled-class-field\n");
+        } else if (fault == 6u) {
+            const auto position = text.find(" 91\n1\n");
+            if (position == std::string::npos) return fail("CLASS count marker missing");
+            text.replace(position, std::string(" 91\n1\n").size(), " 91\n2\n");
+        } else {
+            const auto position = text.find("AC1027");
+            if (position == std::string::npos) return fail("SUNSTUDY version marker missing");
+            text.replace(position, 6u, "AC1021");
+        }
+        { std::ofstream outputSource(unsupported, std::ios::binary); outputSource << text; }
+        dx_data bad; dx_iface badReader;
+        if (!badReader.enableWholeDxfSourceObservation()
+            || !badReader.fileImport(unsupported, &bad, false) || bad.sunStudies.size() != 1u)
+            return fail("unmodeled SUNSTUDY source did not import tolerantly");
+        { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }
+        const bool unsupportedAccepted = exporter.fileExport(output.string(),
+            fault == 7u ? DRW::AC1021 : DRW::AC1027, false, &bad, false, true);
+        std::ifstream prior(output, std::ios::binary);
+        const std::string actual((std::istreambuf_iterator<char>(prior)), {});
+        if (unsupportedAccepted || actual != "prior destination" || !write(false) || !check())
+            return fail("unmodeled SUNSTUDY source was published or valid retry failed");
+    }
+    std::cout << "SUNSTUDY DXF graph output and transaction controls PASS\n";
+    return true;
+}
+
 int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--sunstudy-dxf-graph")
+        return sunStudyDxfGraph(argv[2]) ? 0 : 1;
     if (argc == 3 && std::string(argv[1]) == "--ac1018-minimal-root-group")
         return ac1018MinimalRootGroupSource(argv[2]) ? 0 : 1;
     if (argc == 3

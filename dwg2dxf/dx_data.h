@@ -704,6 +704,7 @@ public:
     // SUNSTUDY callbacks are retained separately from generated rendering
     // transport evidence; their references and native meaning stay gated.
     std::list<DRW_SunStudy> sunStudies;
+    std::list<DRW_RawDxfObject> rawSunStudies;
     std::size_t sunStudyRetainedRecords{0};
     std::size_t sunStudyRetainedBytes{0};
     bool sunStudyCaptureFailed{false};
@@ -1438,6 +1439,10 @@ public:
     bool hasUnchangedRawSectionRecords() const noexcept;
 
 private:
+    bool hasBoundDxfSunStudyGraph() const noexcept;
+    std::list<DRW_RawDxfObject> m_sunStudyRawBaselines;
+    std::list<DRW_SunStudy> m_sunStudyTypedBaselines;
+    std::uint64_t m_sunStudyRawGeneration{0};
     // Source-bound proof for the exact AC1018 minimal NOD/ACAD_GROUP pair.
     bool hasAc1018MinimalRootGroupSource(std::uint32_t handle) const noexcept;
     bool hasAc1018WipeoutRootGroupSource(std::uint32_t handle) const noexcept;

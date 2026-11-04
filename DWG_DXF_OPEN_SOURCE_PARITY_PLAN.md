@@ -502,10 +502,12 @@ cases and pre-AC1021 targets remain atomic refusals. Physical producer/source-
 owner evidence and native live-section behavior remain open; see the [LiveSection
 receipt](docs/research/p5-view-live-section-graph-closure-2026-11-03.json) and
 [SECTION_SETTINGS graph receipt](docs/research/p4-section-settings-adapter-graph-closure-2026-11-03.json).
-The concrete adapter now retains typed SUNSTUDY callbacks under aggregate
-record, byte, and vector bounds ([capture receipt](docs/research/p5-sunstudy-callback-retention-2026-11-03.json));
-physical source-span/owner binding, adapter output, and native rendering remain
-unqualified. SUNSTUDY/MOTIONPATH/CURVEPATH/POINTPATH/OBJECTPTR physical
+The concrete adapter retains typed SUNSTUDY callbacks under aggregate
+record, byte, and vector bounds ([capture receipt](docs/research/p5-sunstudy-callback-retention-2026-11-03.json)).
+The bounded AC1027 DXF source-observed owner graph has ASCII/Binary output and
+readback evidence; other graph shapes, native DWG and rendering remain open
+([graph receipt](docs/research/p5-sunstudy-dxf-owned-graph-2026-11-04.json)).
+SUNSTUDY/MOTIONPATH/CURVEPATH/POINTPATH/OBJECTPTR physical
 producer coverage and native plotting/scene semantics remain open; generated
 record-identity and reference round-trips are transport evidence only (see the [SUNSTUDY receipt](docs/research/p5-sunstudy-record-identity-remapping-2026-11-03.json),
 [scene-path receipt](docs/research/p5-scene-path-record-identity-remapping-2026-11-03.json),
@@ -516,13 +518,12 @@ between whole seconds in DXF and milliseconds in the DWG model. Output refuses
 subsecond times that DXF cannot preserve. Generated ASCII/Binary controls cover
 exact counts, typed readback, atomic lossy-value refusal, and corrected
 fresh-writer retry ([wire receipt](docs/research/p5-sunstudy-dxf-date-hour-wire-2026-11-03.json)).
-Physical source-span/owner binding, adapter output, producer breadth, and native
-rendering remain unqualified. Incomplete declared DXF arrays now refuse typed
+Broader source-span/owner binding, producer breadth, and native rendering remain
+unqualified. Incomplete declared DXF arrays now refuse typed
 output until explicitly repaired; consumers using older inline copy operators
 must rebuild to preserve that guard across copies. See the [array guard receipt](docs/research/p5-sunstudy-incomplete-dxf-array-guard-2026-11-03.json).
-The adapter now explicitly refuses output when any retained SUNSTUDY record is
-present until source and reference closure are qualified, preventing silent
-loss; see the [callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json).
+The adapter refuses SUNSTUDY output outside the bounded source-observed graph,
+including unobserved imports and unqualified references.
 The adapter also retains typed LIGHTLIST callbacks within aggregate record,
 item, and byte bounds ([capture receipt](docs/research/p5-lightlist-callback-retention-2026-11-03.json));
 the source-aware DXF parser now separates the first ACAD_REACTORS group-330
@@ -1601,8 +1602,9 @@ Native source-release builds and platform qualification remain open.
   with a specific diagnostic until a source- and graph-qualified output route
   exists; this prevents successful conversion from silently dropping these
   records. The focused capture-limit selector now checks that refusal and
-  destination preservation. SUNSTUDY, LIGHTLIST and GEOMAPIMAGE retention uses
-  the same fail-closed rule ([callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json)).
+  destination preservation. LIGHTLIST and GEOMAPIMAGE retention uses the same
+  fail-closed rule; SUNSTUDY remains refused outside its bounded observed DXF
+  graph ([callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json)).
   This guard is not output support and does not reduce the remaining
   qualification work.
   Keep unsupported DWG profiles refused until those gates pass.

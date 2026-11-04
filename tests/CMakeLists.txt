@@ -1211,6 +1211,14 @@ target_include_directories(libdxfrw_dwg2dxf_adapter_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
 )
 target_link_libraries(libdxfrw_dwg2dxf_adapter_tests PRIVATE dxfrw)
+add_test(NAME dwg2dxf_sunstudy_dxf_graph
+    COMMAND ${CMAKE_COMMAND}
+        "-DADAPTER_TEST=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"
+        "-DPYTHON=${LIBDXFRW_PYTHON_EXECUTABLE}"
+        "-DAUTHOR=${CMAKE_SOURCE_DIR}/tools/audit_sunstudy_dxf_graph.py"
+        "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_sunstudy_dxf_graph_test.cmake)
+set_tests_properties(dwg2dxf_sunstudy_dxf_graph PROPERTIES LABELS "fast;dxf;graph;adapter;transaction" TIMEOUT 30)
 add_test(NAME libdxfrw_ac1018_minimal_dictionary_source
     COMMAND ${CMAKE_COMMAND}
         "-DADAPTER_TEST=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"

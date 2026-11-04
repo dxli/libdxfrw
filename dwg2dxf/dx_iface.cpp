@@ -32,6 +32,7 @@
 #include <unordered_set>
 #include "dx_iface.h"
 #include "dx_mline_dictionary_source_live.h"
+#include "dx_sunstudy_dxf_profile.h"
 #include "dx_mline_layer_source_live.h"
 #include "dx_mline_ltype_source_live.h"
 #include "dx_legacy_blockref_source_relation.h"
@@ -8310,6 +8311,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
     m_extensionPlotSettingsHandles.clear();
     m_extensionRasterVariablesHandles.clear();
     m_extensionWipeoutVariablesHandles.clear();
+    m_extensionSunStudyHandles.clear();
     m_extensionRenderSettingsHandles.clear();
     m_extensionGraphStats = {};
     m_extensionGraphFailure = ExtensionGraphFailure::None;
@@ -8401,6 +8403,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         m_extensionPlotSettingsHandles.clear();
         m_extensionRasterVariablesHandles.clear();
         m_extensionWipeoutVariablesHandles.clear();
+        m_extensionSunStudyHandles.clear();
         m_extensionRenderSettingsHandles.clear();
         if (m_extensionGraphFailure == ExtensionGraphFailure::None) {
             m_extensionGraphFailure = reason;
@@ -8556,6 +8559,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             rasterVariables;
         std::unordered_map<std::uint32_t, const DRW_WipeoutVariables*>
             wipeoutVariables;
+        std::unordered_map<std::uint32_t, const DRW_SunStudy*> sunStudies;
         std::unordered_map<std::uint32_t, const DRW_RenderSettings*> renderSettings;
         std::unordered_map<std::uint32_t, const DRW_RawDxfObject*> rawRenderSettings;
         std::unordered_map<std::uint32_t,
@@ -9435,6 +9439,16 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         "invalid, duplicate, or colliding WIPEOUTVARIABLES identity");
             }
         }
+        inventoryFamily = "SUNSTUDY records";
+        if (!data->sunStudies.empty()) {
+            if (!data->hasBoundDxfSunStudyGraph())
+                return reject(ExtensionGraphFailure::InvalidGraph, "unqualified SUNSTUDY source graph");
+            for (const auto& study : data->sunStudies) {
+                if (!examineSourceRecord() || !sourceHandles.insert(study.handle).second
+                    || !sunStudies.emplace(study.handle, &study).second)
+                    return reject(ExtensionGraphFailure::InvalidGraph, "duplicate SUNSTUDY identity");
+            }
+        }
         inventoryFamily = "standalone RenderSettings records";
         for (const DRW_RenderSettings& settings : data->renderSettings) {
             if (!examineSourceRecord())
@@ -9783,6 +9797,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         std::unordered_set<std::uint32_t> visitedPlotSettings;
         std::unordered_set<std::uint32_t> visitedRasterVariables;
         std::unordered_set<std::uint32_t> visitedWipeoutVariables;
+        std::unordered_set<std::uint32_t> visitedSunStudies;
         std::unordered_set<std::uint32_t> visitedRenderSettings;
         std::unordered_set<std::uint32_t> visitedMaterials;
         std::unordered_set<std::uint32_t> visitedUnderlayDefinitions;
@@ -9812,6 +9827,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             const DRW_PlotSettings* plotSettings{nullptr};
             const DRW_RasterVariables* rasterVariables{nullptr};
             const DRW_WipeoutVariables* wipeoutVariables{nullptr};
+            const DRW_SunStudy* sunStudy{nullptr};
             const DRW_RenderSettings* renderSettings{nullptr};
             const DRW_DictionaryWithDefault* dictionaryWithDefault{nullptr};
             const DRW_DetailViewStyle* detailViewStyle{nullptr};
@@ -9961,6 +9977,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     frames.push_back(frame);
                     return true;
                 }
+                const auto sunStudyTarget = sunStudies.find(handle);
+                if (sunStudyTarget != sunStudies.end()) {
+                    Frame frame{handle}; frame.sunStudy = sunStudyTarget->second;
+                    frames.push_back(frame);
+                    return true;
+                }
                 const auto renderSettingsTarget = renderSettings.find(handle);
                 if (renderSettingsTarget != renderSettings.end()) {
                     Frame frame{handle, nullptr, nullptr, nullptr, nullptr,
@@ -10001,6 +10023,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 addOwner(plotSettings);
                 addOwner(rasterVariables);
                 addOwner(wipeoutVariables);
+                addOwner(sunStudies);
                 addOwner(renderSettings);
                 addOwner(materials);
                 addOwner(associativeRecords);
@@ -10063,6 +10086,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     entryPointer = frame.rasterVariables;
                 else if (frame.wipeoutVariables != nullptr)
                     entryPointer = frame.wipeoutVariables;
+                else if (frame.sunStudy != nullptr)
+                    entryPointer = frame.sunStudy;
                 else if (frame.mlineStyle != nullptr)
                     entryPointer = frame.mlineStyle;
                 else if (frame.mleaderStyle != nullptr)
@@ -10111,6 +10136,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                             ? visitedRasterVariables.count(frame.handle) != 0
                                         : frame.wipeoutVariables != nullptr
                                             ? visitedWipeoutVariables.count(frame.handle) != 0
+                                        : frame.sunStudy != nullptr
+                                            ? visitedSunStudies.count(frame.handle) != 0
                                         : frame.material != nullptr
                                             ? visitedMaterials.count(frame.handle) != 0
                                         : frame.underlayDefinition != nullptr
@@ -11666,6 +11693,9 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             || !variables.extData.empty())
                             return reject(ExtensionGraphFailure::InvalidGraph,
                                 "WIPEOUTVARIABLES is outside the bounded AC1018/AC1024/AC1027/AC1032 dictionary-owned profile");
+                    } else if (frame.sunStudy != nullptr) {
+                        if (!data->hasBoundDxfSunStudyGraph())
+                            return reject(ExtensionGraphFailure::InvalidGraph, "SUNSTUDY source graph changed");
                     } else if (frame.material != nullptr) {
                         if (data->sourceFormat == dx_source_format::DWG) {
                             if (data->sourceVersion != DRW::AC1024
@@ -11764,6 +11794,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     else if (frame.wipeoutVariables != nullptr)
                         m_extensionWipeoutVariablesHandles.push_back(
                             frame.handle);
+                    else if (frame.sunStudy != nullptr)
+                        m_extensionSunStudyHandles.push_back(frame.handle);
                     else if (frame.renderSettings != nullptr)
                         m_extensionRenderSettingsHandles.push_back(frame.handle);
                     else if (frame.associative != nullptr)
@@ -12465,6 +12497,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         visitedRasterVariables.insert(frame.handle);
                     else if (frame.wipeoutVariables != nullptr)
                         visitedWipeoutVariables.insert(frame.handle);
+                    else if (frame.sunStudy != nullptr)
+                        visitedSunStudies.insert(frame.handle);
                     else if (frame.renderSettings != nullptr)
                         visitedRenderSettings.insert(frame.handle);
                     else if (frame.associative != nullptr)
@@ -12721,6 +12755,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                 &visitedPlotSettings,
                                 &visitedRasterVariables,
                                 &visitedWipeoutVariables,
+                                &visitedSunStudies,
                                 &visitedRenderSettings, &visitedMaterials,
                                 &visitedAssociatives,
                                 &linetypeHandles, &backgroundHandles,
@@ -12768,6 +12803,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 || visitedPlotSettings.count(parent) != 0
                 || visitedRasterVariables.count(parent) != 0
                 || visitedWipeoutVariables.count(parent) != 0
+                || visitedSunStudies.count(parent) != 0
                 || visitedRenderSettings.count(parent) != 0
                 || visitedMaterials.count(parent) != 0
                 || visitedAssociatives.count(parent) != 0;
@@ -41229,6 +41265,76 @@ bool dx_iface::finalizeRasterOutputProofs() noexcept {
     } catch (...) { return false; }
 }
 
+bool dx_iface::inspectDxfSunStudyOutput(const dxfRW::DxfObjectsWriteView& view) noexcept {
+    if (!cData || !dxfW || m_sunStudyOutputInspected || !hasUnchangedSunStudyOutputGraph()
+        || m_extensionSunStudyHandles.size() != 1u) return false;
+    try {
+        const auto& source = cData->sunStudies.front();
+        const auto emitted = dxfW->remapHandle(source.handle);
+        const auto owner = dxfW->remapHandle(source.parentHandle);
+        const auto root = dxfW->remapHandle(cData->namedObjectDictionary.handle);
+        if (emitted == 0u || emitted == DRW::NoHandle || owner == 0u || owner == DRW::NoHandle
+            || root == 0u || root == DRW::NoHandle || emitted == owner || owner == root || emitted == root)
+            return false;
+        const auto rootEntry = std::find_if(m_sunStudyRootSnapshot->m_entries.begin(),
+            m_sunStudyRootSnapshot->m_entries.end(), [&](const auto& entry) { return entry.m_handle == source.parentHandle; });
+        if (rootEntry == m_sunStudyRootSnapshot->m_entries.end() || m_sunStudyOwnerSnapshot->m_entries.size() != 1u)
+            return false;
+        dx_standard_output::Decoder decoder(view);
+        if (!decoder.good()) return false;
+        std::size_t seen = 0u, rootSeen = 0u, ownerSeen = 0u;
+        bool recordNameMatches = false;
+        const bool inspected = dx_standard_output::inspectSelected(view,
+            [emitted, owner, root, &recordNameMatches](std::string_view name, std::uint32_t handle) {
+                if (handle != emitted && handle != owner && handle != root) return false;
+                recordNameMatches = handle == emitted ? name == "SUNSTUDY" : name == "DICTIONARY";
+                return true;
+            },
+            [&](const dx_standard_output::Shape& shape, std::string_view body) {
+                if (!recordNameMatches) return false;
+                if (shape.handle == owner || shape.handle == root) {
+                    if (!shape.complete() || shape.kind != dx_standard_output::Family::Dictionary) return false;
+                    const bool isRoot = shape.handle == root;
+                    if ((isRoot ? ++rootSeen : ++ownerSeen) != 1u) return false;
+                    return decoder.decodeRecord<DRW_Dictionary>(body, [&](const DRW_Dictionary& actual) {
+                        const auto& expectedName = isRoot ? rootEntry->m_name : m_sunStudyOwnerSnapshot->m_entries.front().m_name;
+                        const auto expectedTarget = isRoot ? owner : emitted;
+                        return actual.handle == shape.handle && actual.parentHandle == (isRoot ? 0u : root)
+                            && actual.hardOwner == 0 && actual.cloning == 1
+                            && std::count_if(actual.m_entries.begin(), actual.m_entries.end(),
+                                [&](const auto& entry) { return entry.m_name == expectedName && entry.m_handle == expectedTarget
+                                    && entry.m_dxfHandleCode == DRW_Dictionary::Entry::DxfHandleCode::SoftOwner; }) == 1;
+                    });
+                }
+                if (++seen != 1u || shape.kind != dx_standard_output::Family::Other) return false;
+                return decoder.decodeRecord<DRW_SunStudy>(body, [&](const DRW_SunStudy& actual) {
+                    return actual.handle == emitted && actual.parentHandle == owner
+                        && actual.reactorHandles.size() == 1u && actual.reactorHandles.front() == owner
+                        && actual.hasCompleteDxfArrays()
+                        && dx_sunstudy_dxf_profile::samePayload(source, actual);
+                });
+            });
+        m_sunStudyOutputInspected = inspected && seen == 1u && rootSeen == 1u && ownerSeen == 1u;
+        return m_sunStudyOutputInspected;
+    } catch (...) { return false; }
+}
+
+bool dx_iface::hasUnchangedSunStudyOutputGraph() const noexcept {
+    if (!cData || !m_sunStudyRootSnapshot || !m_sunStudyOwnerSnapshot
+        || !cData->hasBoundDxfSunStudyGraph()
+        || !standardDwgModelsEqual(cData->namedObjectDictionary, *m_sunStudyRootSnapshot,
+                                   cData->sourceVersion, dwgObjType::DICTIONARY)) return false;
+    const auto& study = cData->sunStudies.front();
+    const DRW_Dictionary* owner = nullptr;
+    for (const auto& dictionary : cData->dictionaries)
+        if (dictionary.handle == study.parentHandle) {
+            if (owner) return false;
+            owner = &dictionary;
+        }
+    return owner && standardDwgModelsEqual(*owner, *m_sunStudyOwnerSnapshot,
+                                            cData->sourceVersion, dwgObjType::DICTIONARY);
+}
+
 bool dx_iface::inspectStandardDwgOutput(const dxfRW::DxfObjectsWriteView& view) noexcept {
     if (cData == nullptr || dxfW == nullptr || m_standardDwgOutputInspected) return false;
     m_standardDwgOutputInspected = true;
@@ -56110,6 +56216,20 @@ void dx_iface::addObjectPtr(const DRW_ObjectPtr& data) {
 
 void dx_iface::addSunStudy(const DRW_SunStudy& data) {
     retainSunStudy(cData, data);
+    if (!cData || cData->sourceFormat != dx_source_format::DXF || cData->sunStudyCaptureFailed)
+        return;
+    std::size_t bytes = 0u;
+    if (!estimateSunStudyTypedRetainedBytes(data, bytes)
+        || bytes > SunStudyCaptureMaxRetainedBytes - SunStudyListNodeBytes
+        || cData->sunStudyRetainedBytes > SunStudyCaptureMaxRetainedBytes
+        || bytes + SunStudyListNodeBytes > SunStudyCaptureMaxRetainedBytes - cData->sunStudyRetainedBytes) {
+        cData->sunStudyCaptureFailed = true;
+        return;
+    }
+    try {
+        cData->m_sunStudyTypedBaselines.push_back(data);
+        cData->sunStudyRetainedBytes += bytes + SunStudyListNodeBytes;
+    } catch (...) { cData->sunStudyCaptureFailed = true; }
 }
 
 void dx_iface::addLightList(const DRW_LightList& data) {
@@ -62559,6 +62679,125 @@ bool dx_data::hasUnchangedAcdsRawDxfSections() const noexcept {
     return true;
 }
 
+bool dx_data::hasBoundDxfSunStudyGraph() const noexcept {
+    try {
+        if (sourceFormat != dx_source_format::DXF || sourceVersion != DRW::AC1027
+            || importGeneration != 1u || !dxfReadOutcome.operationSucceeded
+            || dxfReadOutcome.sourceVersion != sourceVersion || sunStudyCaptureFailed
+            || m_sunStudyRawGeneration != importGeneration || sunStudies.size() != 1u
+            || sunStudyRetainedRecords != 1u || rawSunStudies.size() != 1u
+            || m_sunStudyRawBaselines.size() != 1u || m_sunStudyTypedBaselines.size() != 1u
+            || !hasNamedObjectDictionary || namedObjectDictionary.handle == 0u
+            || namedObjectDictionary.handle == DRW::NoHandle
+            || namedObjectDictionary.parentHandle != 0u || namedObjectDictionary.m_entries.size() != 1u
+            || !namedObjectDictionary.name.empty() || namedObjectDictionary.flags != 0u
+            || namedObjectDictionary.hardOwner != 0 || namedObjectDictionary.cloning != 1
+            || namedObjectDictionary.xDictHandle != 0u || !namedObjectDictionary.reactorHandles.empty()
+            || !namedObjectDictionary.appData.empty() || !namedObjectDictionary.extData.empty())
+            return false;
+        const auto& study = sunStudies.front();
+        const auto& baseline = m_sunStudyTypedBaselines.front();
+        const auto& raw = rawSunStudies.front();
+        if (raw.m_version != sourceVersion || !retainedRawDxfObjectsEqual(raw, m_sunStudyRawBaselines.front())
+            || !standardDwgCommonEqual(study, baseline, sourceVersion)
+            || !dx_sunstudy_dxf_profile::matches(raw, study)
+            || !dx_sunstudy_dxf_profile::matches(m_sunStudyRawBaselines.front(), baseline))
+            return false;
+        const DRW_Dictionary* owner = nullptr;
+        for (const auto& dictionary : dictionaries) {
+            if (dictionary.handle != study.parentHandle) continue;
+            if (owner) return false;
+            owner = &dictionary;
+        }
+        if (!owner || owner->parentHandle != namedObjectDictionary.handle
+            || owner->handle == namedObjectDictionary.handle || owner->m_entries.size() != 1u
+            || !owner->name.empty() || owner->flags != 0u
+            || owner->hardOwner != 0 || owner->cloning != 1 || owner->xDictHandle != 0u
+            || !owner->reactorHandles.empty() || !owner->appData.empty() || !owner->extData.empty()
+            || owner->m_entries.front().m_handle != study.handle
+            || owner->m_entries.front().m_dxfHandleCode != DRW_Dictionary::Entry::DxfHandleCode::SoftOwner
+            || owner->m_entries.front().m_name.empty() || owner->m_entries.front().m_name.size() > 128u)
+            return false;
+        const auto& capture = m_tableDxfSource;
+        if (capture.generation != importGeneration || !capture.closed || !capture.successful
+            || capture.failed || capture.contextFailed || capture.structuralCaptureFailed
+            || capture.resourceProofCaptureFailed || !capture.structuralPending.empty()) return false;
+        // CLASS callbacks omit unknown fields. Require the authenticated,
+        // opt-in whole-source observation for this profile so canonicalizing
+        // the output class cannot silently discard source metadata.
+        const auto sameOwner = [](const auto& a, const auto& b) noexcept {
+            return a.get() == b.get() && !a.owner_before(b) && !b.owner_before(a);
+        };
+        const auto& wholeInput = capture.wholeInput;
+        if (!capture.wholeSelected || !capture.wholePending || capture.wholeFailed
+            || !capture.wholeFinished || !wholeInput || !sameOwner(wholeInput, capture.wholeInputOwner)
+            || wholeInput->container != this || wholeInput->generation != importGeneration
+            || wholeInput->containerId != m_entitiesContainerIdentity.value
+            || !wholeInput->source || !sameOwner(wholeInput->source, capture.wholeSourceOwner)
+            || !wholeInput->context.captured || wholeInput->context.sourceVersion != sourceVersion
+            || wholeInput->context.codecVersion != dxfReadOutcome.codecVersion
+            || wholeInput->context.codePagePolicy != dxfReadOutcome.requestedCodePagePolicy
+            || wholeInput->source->state() != WholeSourceV2::State::ThroughEof
+            || wholeInput->source->version() != sourceVersion
+            || wholeInput->source->binary() != wholeInput->context.binary
+            || wholeInput->source->fieldCount() > 1000000u || dxfClassCaptureFailed
+            || dxfClassRetainedRecords != 1u || dxfClasses.size() != 1u) return false;
+        const auto& cls = dxfClasses.front();
+        if (cls.recName != "SUNSTUDY" || cls.className != "AcDbSunStudy"
+            || cls.appName != "SCENEOE" || cls.proxyFlag != 1153
+            || cls.instanceCount != 1 || cls.wasaProxyFlag != 0 || cls.entityFlag != 0)
+            return false;
+        const auto& whole = *wholeInput->source;
+        const auto textField = [&](std::size_t index, int code, std::string_view value) {
+            if (index >= whole.fieldCount()) return false;
+            const auto f = whole.field(index);
+            return whole.bounds(f) && !f.ignored && f.code == code
+                && f.kind == DxfReadRecordView::Text && whole.value(f) == value;
+        };
+        const auto intField = [&](std::size_t index, int code, int value) {
+            if (index >= whole.fieldCount()) return false;
+            const auto f = whole.field(index);
+            return whole.bounds(f) && !f.ignored && f.code == code
+                && f.kind == DxfReadRecordView::Integer && f.integer == value;
+        };
+        std::size_t classSections = 0u;
+        for (std::size_t i = 0u; i < whole.fieldCount(); ++i) {
+            if (!textField(i, 0, "SECTION") || !textField(i + 1u, 2, "CLASSES")) continue;
+            ++classSections;
+            if (!textField(i + 2u, 0, "CLASS") || !textField(i + 3u, 1, "SUNSTUDY")
+                || !textField(i + 4u, 2, "AcDbSunStudy") || !textField(i + 5u, 3, "SCENEOE")
+                || !intField(i + 6u, 90, 1153) || !intField(i + 7u, 91, 1)
+                || !intField(i + 8u, 280, 0) || !intField(i + 9u, 281, 0)
+                || !textField(i + 10u, 0, "ENDSEC")) return false;
+        }
+        if (classSections != 1u) return false;
+        const auto sourceMatches = [&](const DRW_Dictionary& live, bool root) {
+            const auto found = capture.structuralInputs.find(live.handle);
+            if (found == capture.structuralInputs.end() || !found->second) return false;
+            const auto& input = found->second;
+            if (input->container != this || input->generation != importGeneration
+                || input->containerId != m_entitiesContainerIdentity.value || !input->paired
+                || !input->context || !input->context->captured || input->context->sourceVersion != sourceVersion
+                || !input->raw || !input->model || input->index >= capture.structuralInputOwners.size()
+                || input.get() != capture.structuralInputOwners[input->index].get()
+                || input.owner_before(capture.structuralInputOwners[input->index])
+                || capture.structuralInputOwners[input->index].owner_before(input)
+                || input->kind != (root ? dxfRW::DxfStructuralSourceView::Kind::RootDictionary
+                                       : dxfRW::DxfStructuralSourceView::Kind::Dictionary)) return false;
+            const auto* original = dynamic_cast<const DRW_Dictionary*>(input->model.get());
+            return original && input->raw->m_version == sourceVersion
+                && standardDwgModelsEqual(live, *original, sourceVersion, dwgObjType::DICTIONARY)
+                && dx_sunstudy_dxf_profile::matchesDictionary(*input->raw, *original);
+        };
+        if (!sourceMatches(namedObjectDictionary, true) || !sourceMatches(*owner, false)) return false;
+        std::size_t roots = 0u;
+        for (const auto& entry : namedObjectDictionary.m_entries)
+            if (entry.m_handle == owner->handle && !entry.m_name.empty() && entry.m_name.size() <= 128u
+                && entry.m_dxfHandleCode == DRW_Dictionary::Entry::DxfHandleCode::SoftOwner) ++roots;
+        return roots == 1u;
+    } catch (...) { return false; }
+}
+
 bool dx_data::hasUnchangedRawSectionRecords() const noexcept {
     if (rawSectionRecordsCaptureFailed
         || m_rawSectionRecordBaselines.size()
@@ -62577,6 +62816,28 @@ bool dx_data::hasUnchangedRawSectionRecords() const noexcept {
 void dx_iface::addRawDxfObject(const DRW_RawDxfObject& data) {
     if (cData == nullptr)
         return;
+    if (data.name == "SUNSTUDY") {
+        std::size_t bytes = 0u;
+        if (cData->sunStudyCaptureFailed || cData->importGeneration == 0u
+            || (cData->m_sunStudyRawGeneration != 0u
+                && cData->m_sunStudyRawGeneration != cData->importGeneration)
+            || cData->rawSunStudies.size() >= SunStudyCaptureMaxRecords
+            || !estimateRawDxfObjectListNodeBytes(data, bytes)
+            || bytes > SunStudyCaptureMaxRetainedBytes / 2u
+            || cData->sunStudyRetainedBytes > SunStudyCaptureMaxRetainedBytes
+            || bytes * 2u > SunStudyCaptureMaxRetainedBytes - cData->sunStudyRetainedBytes) {
+            cData->sunStudyCaptureFailed = true;
+            return;
+        }
+        try {
+            cData->rawSunStudies.push_back(data);
+            try { cData->m_sunStudyRawBaselines.push_back(data); }
+            catch (...) { cData->rawSunStudies.pop_back(); throw; }
+            cData->m_sunStudyRawGeneration = cData->importGeneration;
+            cData->sunStudyRetainedBytes += bytes * 2u;
+        } catch (...) { cData->sunStudyCaptureFailed = true; }
+        return;
+    }
     const std::string_view normalizedName(data.name);
     retainTableResourceSource(data);
     observeResourceOrigin(nullptr,&data);
@@ -68687,6 +68948,16 @@ void dx_iface::recordHatchBlockPublication(const std::string& name, bool written
 
 bool dx_iface::finalizeDxfWrite() {
     const bool mlineGeometryTransaction=needsDxfMLineNoRawSectionsGuard();
+    if (cData != nullptr && (!cData->sunStudies.empty() || !m_extensionSunStudyHandles.empty())) {
+        if (!dxfW || !m_sunStudyOutputInspected || m_extensionSunStudyHandles.size() != 1u
+            || !hasUnchangedSunStudyOutputGraph()) return false;
+        const auto& study = cData->sunStudies.front();
+        const auto emitted = dxfW->remapHandle(study.handle);
+        const auto owner = dxfW->remapHandle(study.parentHandle);
+        if (!dxfW->dxfWriteSourceObjectHasIdentity(study.handle, emitted, "SUNSTUDY", "OBJECTS", owner)
+            || dxfW->dxfWriteRecordHandleCount(owner) != 1u
+            || !dxfW->dxfWriteRecordHasIdentity(owner, "DICTIONARY", "OBJECTS")) return false;
+    }
     if (!validateDxfBlockRecordInsertReferences(true)
         || (mlineGeometryTransaction
             && (!dxfW || !dxfW->dxfWriteNoRawSectionsObserved()))
@@ -72537,6 +72808,9 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                           DRW::DxfTextWritePolicy targetTextPolicy,
                           dx_dxfProxyGraphicsPolicy proxyGraphicsPolicy,
                           dx_dwgReadCompletenessPolicy readCompletenessPolicy){
+    m_sunStudyOutputInspected = false;
+    m_sunStudyRootSnapshot.reset();
+    m_sunStudyOwnerSnapshot.reset();
     const char* exportStage = "output preparation";
     bool exportComplete = false;
     const struct ExportStageDiagnostic {
@@ -73773,12 +74047,16 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             "MotionPath/CurvePath/PointPath/ObjectPtr records are retained, but no source- and graph-qualified adapter output path is available");
         return false;
     }
-    if (cData->sunStudyCaptureFailed) {
+    if (cData->sunStudyCaptureFailed
+        || cData->sunStudyRetainedRecords != cData->sunStudies.size()
+        || (cData->sourceFormat == dx_source_format::DXF
+            && cData->rawSunStudies.size() != cData->sunStudies.size())) {
         reportPreflightFailure(
             "SUNSTUDY callback capture incomplete, malformed, or over record/byte limit");
         return false;
     }
-    if (!cData->sunStudies.empty()) {
+    if (!cData->sunStudies.empty() && (v != cData->sourceVersion
+        || !cData->hasBoundDxfSunStudyGraph())) {
         reportPreflightFailure(
             "SUNSTUDY records are retained, but no source- and graph-qualified adapter output path is available");
         return false;
@@ -74186,6 +74464,20 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                       << " detail=" << extensionGraphFailureDetail() << '\n';
         }
         return false;
+    }
+    if (!cData->sunStudies.empty() && (m_extensionSunStudyHandles.size() != 1u
+        || !cData->hasBoundDxfSunStudyGraph())) {
+        reportPreflightFailure("SUNSTUDY source graph was not staged exactly once");
+        return false;
+    }
+    if (!cData->sunStudies.empty()) {
+        try {
+            m_sunStudyRootSnapshot = std::make_unique<DRW_Dictionary>(cData->namedObjectDictionary);
+            const auto owner = std::find_if(cData->dictionaries.begin(), cData->dictionaries.end(),
+                [this](const DRW_Dictionary& value) { return value.handle == cData->sunStudies.front().parentHandle; });
+            if (owner == cData->dictionaries.end()) return false;
+            m_sunStudyOwnerSnapshot = std::make_unique<DRW_Dictionary>(*owner);
+        } catch (...) { return false; }
     }
     // prepareExtensionObjectGraph resets and rebuilds the extension handle
     // queue. Reattach the dedicated classic point-cloud dictionary after that
@@ -75450,6 +75742,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
 
         return registerClass("MATERIAL", "AcDbMaterial",
                              materialHandles.size())
+            && registerClass("SUNSTUDY", "AcDbSunStudy",
+                             m_extensionSunStudyHandles.size())
             && registerClass("SCALE", "AcDbScale",
                              m_extensionScaleHandles.size())
             && registerClass("DICTIONARYVAR", "AcDbDictionaryVar",
@@ -76443,6 +76737,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             return false;
         }
     }
+    for (const std::uint32_t handle : m_extensionSunStudyHandles) {
+        if (!dxfW->reserveHandle(handle)) {
+            delete dxfW; dxfW = nullptr; return false;
+        }
+    }
     for (const std::uint32_t handle : m_pointCloudExDefinitionHandles) {
         if (!dxfW->reserveHandle(handle)) {
             delete dxfW;
@@ -77172,7 +77471,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     const bool needsDxfDynamicReplay = m_dxfDynamicReplayPrepared;
     const bool needsDxfAssociativeReplay =
         m_dxfAssociativeReplayPrepared;
-    if ((!cData->m_standardDwgObjectFrames.empty() || needsRasterOutput || needsGeneratedRoots || needsRenderingOutput || needsShadeOutput || !m_extensionDictionaryHandles.empty() || !m_acdsDxfHistoryObjects.empty()
+    if ((!cData->m_standardDwgObjectFrames.empty() || needsRasterOutput || needsGeneratedRoots || needsRenderingOutput || needsShadeOutput || !m_extensionDictionaryHandles.empty() || !m_extensionSunStudyHandles.empty() || !m_acdsDxfHistoryObjects.empty()
             || !m_dxfScales.empty() || !m_dxfDictionaryVars.empty()
             || needsDwgDictionaryVarOutput
             || needsDwgScaleOutput
@@ -77241,6 +77540,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 return reject("DICTIONARYVAR");
             if (!inspectDxfScales(view))
                 return reject("SCALE");
+            if (!m_extensionSunStudyHandles.empty() && !inspectDxfSunStudyOutput(view))
+                return reject("SUNSTUDY source/output graph");
             if (needsDwgDictionaryVarOutput
                 && !inspectDwgDictionaryVars(view, debug))
                 return reject("DICTIONARYVAR DWG physical source/output binding");

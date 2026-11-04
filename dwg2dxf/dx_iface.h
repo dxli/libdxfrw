@@ -1779,6 +1779,15 @@ public:
                 return;
             }
         }
+        objectWritePhase = "SUNSTUDY";
+        for (const std::uint32_t handle : m_extensionSunStudyHandles) {
+            if (!hasUnchangedSunStudyOutputGraph()) { dxfW->writeRawDxfObject(nullptr); return; }
+            auto found = std::find_if(cData->sunStudies.begin(), cData->sunStudies.end(),
+                [handle](const DRW_SunStudy& study) { return study.handle == handle; });
+            if (found == cData->sunStudies.end() || !dxfW->writeSunStudy(&*found)) {
+                dxfW->writeRawDxfObject(nullptr); return;
+            }
+        }
         objectWritePhase = "underlay definitions";
         std::unordered_set<std::uint32_t> underlayHandles;
         for (const dx_data::UnderlayDefinitionKey& key :
@@ -2978,6 +2987,8 @@ private:
     bool finalizeRasterOutputProofs() noexcept;
     void resetStandardDwgOutputProofs() noexcept;
     bool inspectStandardDwgOutput(const dxfRW::DxfObjectsWriteView& view) noexcept;
+    bool inspectDxfSunStudyOutput(const dxfRW::DxfObjectsWriteView& view) noexcept;
+    bool hasUnchangedSunStudyOutputGraph() const noexcept;
     bool inspectStandardDwgTablesOutput(const dxfRW::DxfTablesWriteView& view) noexcept;
     bool retainDwgPlotSettingsPublication(
         const DRW_DwgFramePublication& publication) noexcept;
@@ -3758,6 +3769,10 @@ private:
     bool inspectDwgGeoDataObjects(const dxfRW::DxfObjectsWriteView& view) noexcept;
     std::vector<std::uint32_t> m_extensionRasterVariablesHandles;
     std::vector<std::uint32_t> m_extensionWipeoutVariablesHandles;
+    std::vector<std::uint32_t> m_extensionSunStudyHandles;
+    bool m_sunStudyOutputInspected{false};
+    std::unique_ptr<DRW_Dictionary> m_sunStudyRootSnapshot;
+    std::unique_ptr<DRW_Dictionary> m_sunStudyOwnerSnapshot;
     std::uint32_t m_pointCloudExDictionaryHandle{0u};
     std::vector<std::uint32_t> m_pointCloudExDefinitionHandles;
     std::vector<std::uint32_t> m_pointCloudExReactorHandles;
