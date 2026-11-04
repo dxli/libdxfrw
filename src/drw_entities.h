@@ -400,9 +400,11 @@ public:
         m_proxyGraphicsProvenance.replayAuthorized = true;
         return true;
     }
-    //! Authorize an unchanged DWG ACAD_PROXY_ENTITY cache for same-revision
-    //! DXF transport. DWG proxy graphics are a byte stream, so they have no
-    //! source DXF code page or DXF count group to bind here.
+    //! Authorize an unchanged DWG ACAD_PROXY_ENTITY cache, or the bounded
+    //! AC1024/AC1027 WIPEOUT preview profile, for same-revision DXF transport.
+    //! The caller must revoke and re-authorize after any cache or associated
+    //! geometry edit; the writer does not automatically detect such edits.
+    //! DWG proxy bytes have no source DXF code page or DXF count group here.
     bool authorizeParsedDwgProxyGraphicsReplay() noexcept {
         const DRW_ProxyGraphicsProvenance& provenance =
             m_proxyGraphicsProvenance;

@@ -606,6 +606,7 @@ tests/viewport_source_controls.h
 tests/viewucs_source_controls.h
 tests/visual_style_property_controls.h
 tests/wave1_tests.cpp
+tests/wipeout_dwg_proxy_replay_tests.cpp
 tests/writer_primitives_tests.cpp
 tests/writer_version_matrix_tests.cpp
 tests/xrecord_payload_identity_controls.h

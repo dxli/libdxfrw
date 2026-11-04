@@ -22,6 +22,7 @@
 #include <functional>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <cstdlib>
 #include <limits>
 #include <new>
@@ -726,9 +727,58 @@ bool hasTypedProxyGraphics(const DRW_Entity& entity) noexcept {
     return entity.numProxyGraph != 0 || !entity.proxyGraphics.empty();
 }
 
+struct WipeoutPreviewContext {
+    const dxfRW* writer;
+    const DRW_Wipeout* entity;
+    bool armed;
+};
+thread_local WipeoutPreviewContext wipeoutPreviewContext{nullptr, nullptr, false};
+
+class WipeoutPreviewWriteScope final {
+public:
+    WipeoutPreviewWriteScope(const dxfRW* writer, const DRW_Wipeout* entity) noexcept
+        : previous(wipeoutPreviewContext) { wipeoutPreviewContext = {writer, entity, true}; }
+    ~WipeoutPreviewWriteScope() noexcept { wipeoutPreviewContext = previous; }
+    WipeoutPreviewWriteScope(const WipeoutPreviewWriteScope&) = delete;
+    WipeoutPreviewWriteScope& operator=(const WipeoutPreviewWriteScope&) = delete;
+private:
+    WipeoutPreviewContext previous;
+};
+
+// This exact resource-free WIPEOUT preview shape was independently observed
+// in AC1024/AC1027 DWG and same-version ODA DXF. Source authority remains the
+// caller's explicit replay acknowledgement, which must be revoked before
+// editing either the cache or its associated geometry.
+bool isQualifiedDwgWipeoutPreview(const std::string& bytes) noexcept {
+    if (bytes.size() != 152u) return false;
+    const auto* p = reinterpret_cast<const unsigned char*>(bytes.data());
+    const auto word = [p](std::size_t offset) noexcept {
+        return static_cast<std::uint32_t>(p[offset])
+            | (static_cast<std::uint32_t>(p[offset + 1u]) << 8u)
+            | (static_cast<std::uint32_t>(p[offset + 2u]) << 16u)
+            | (static_cast<std::uint32_t>(p[offset + 3u]) << 24u);
+    };
+    if (word(0u) != 152u || word(4u) != 4u
+        || word(8u) != 12u || word(12u) != 14u || word(16u) != 18u
+        || word(20u) != 12u || word(24u) != 22u || word(28u) != 0xC2000000u
+        || word(32u) != 12u || word(36u) != 20u || word(40u) != 1u
+        || word(44u) != 108u || word(48u) != 7u || word(52u) != 4u)
+        return false;
+    for (std::size_t pos = 56u; pos < bytes.size(); pos += 8u) {
+        const std::uint64_t bits = word(pos)
+            | (static_cast<std::uint64_t>(word(pos + 4u)) << 32u);
+        double value = 0.0;
+        static_assert(sizeof(value) == sizeof(bits), "proxy doubles need 64-bit storage");
+        std::memcpy(&value, &bits, sizeof(value));
+        if (!std::isfinite(value)) return false;
+    }
+    return true;
+}
+
 bool canReplayTypedProxyGraphics(const DRW_Entity& entity,
                                  DRW::Version targetVersion,
-                                 const std::string& targetCodePage) {
+                                 const std::string& targetCodePage,
+                                 const dxfRW* activeWriter) {
     const DRW_ProxyGraphicsProvenance& provenance =
         entity.proxyGraphicsProvenance();
     if (!hasTypedProxyGraphics(entity) || !provenance.replayAuthorized
@@ -743,6 +793,23 @@ bool canReplayTypedProxyGraphics(const DRW_Entity& entity,
         return false;
     }
 
+    if (provenance.origin == DRW_ProxyGraphicsOrigin::ParsedDwg
+        && (entity.eType == DRW::WIPEOUT
+            || dynamic_cast<const DRW_Wipeout*>(&entity) != nullptr)) {
+        const auto* wipeout = dynamic_cast<const DRW_Wipeout*>(&entity);
+        if (entity.eType != DRW::WIPEOUT || wipeout == nullptr
+            || wipeoutPreviewContext.writer != activeWriter
+            || wipeoutPreviewContext.entity != wipeout
+            || !wipeoutPreviewContext.armed) return false;
+        // This permit belongs only to the outer WIPEOUT preflight. A nested
+        // writer callback must never inherit it, even for the same object.
+        wipeoutPreviewContext.armed = false;
+        return provenance.encoding == DRW_ProxyGraphicsEncoding::DwgBitStream
+            && (provenance.sourceVersion == DRW::AC1024
+                || provenance.sourceVersion == DRW::AC1027)
+            && provenance.sourceCodePage.empty() && provenance.countCode == 0
+            && isQualifiedDwgWipeoutPreview(entity.proxyGraphics);
+    }
     if (entity.eType == DRW::PROXYENTITY) {
         return provenance.origin == DRW_ProxyGraphicsOrigin::ParsedDwg
             && provenance.encoding == DRW_ProxyGraphicsEncoding::DwgBitStream
@@ -5715,7 +5782,7 @@ bool dxfRW::preflightEntity(const DRW_Entity *ent) {
     if (hasTypedProxyGraphics(*ent)
         && ent->proxyGraphicsProvenance().replayAuthorized
         && !canReplayTypedProxyGraphics(
-            *ent, version, writer->getCodePage())) {
+            *ent, version, writer->getCodePage(), this)) {
         m_writeError = true;
         recordOperationDiagnostic(
             DRW::OperationPhase::Validation,
@@ -14836,6 +14903,7 @@ bool dxfRW::writeWipeout(DRW_Wipeout *ent) {
     const std::uint32_t definitionHandle = emittedReference(ent->ref);
     const std::uint32_t reactorHandle =
         emittedReference(ent->m_imageDefReactorHandle);
+    WipeoutPreviewWriteScope previewScope(this, ent);
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "WIPEOUT");
     if (!writeEntity(ent))

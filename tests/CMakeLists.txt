@@ -1192,6 +1192,17 @@ add_executable(libdxfrw_dwg2dxf_adapter_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dwg2dxf_adapter_tests.cpp
     ${_libdxfrw_test_adapter_source}
 )
+add_executable(libdxfrw_wipeout_dwg_proxy_replay_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/wipeout_dwg_proxy_replay_tests.cpp
+    ${_libdxfrw_test_adapter_source}
+)
+target_compile_features(libdxfrw_wipeout_dwg_proxy_replay_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_wipeout_dwg_proxy_replay_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_wipeout_dwg_proxy_replay_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/dwg2dxf ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_wipeout_dwg_proxy_replay_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_wipeout_dwg_proxy_replay COMMAND libdxfrw_wipeout_dwg_proxy_replay_tests)
+set_tests_properties(libdxfrw_wipeout_dwg_proxy_replay PROPERTIES LABELS "fast;dwg;dxf;wipeout;transaction" TIMEOUT 30)
 target_compile_features(libdxfrw_dwg2dxf_adapter_tests PRIVATE cxx_std_17)
 target_compile_options(libdxfrw_dwg2dxf_adapter_tests
     PRIVATE ${LIBDXFRW_WARNING_FLAGS})
