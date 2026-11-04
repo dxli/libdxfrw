@@ -3,7 +3,7 @@
   "id": "p7-cad-assistant-arm64-integrity-preflight-2026-11-01",
   "date": "2026-11-01",
   "title": "Official CAD Assistant ARM64 package integrity preflight",
-  "status": "NO_LAUNCH_SIGNATURE_NOT_VERIFIED",
+  "status": "NATIVE_SIGNATURE_AND_GATEKEEPER_VERIFIED_SEMANTIC_OBSERVATION_UNCONFIRMED",
   "supportClaimEffect": "none",
   "scope": "Preflight the previously selected official macOS ARM64 ACIS reader without launching it, and determine whether this host can safely produce independent P7 semantics evidence.",
   "officialSources": [
@@ -42,6 +42,17 @@
     "Because the disk image could not be mounted natively, the 7-Zip extraction may have altered HFS metadata or links; the extracted signature failure cannot be attributed conclusively to the published DMG contents.",
     "The app was not launched, and no SAT/SAB semantic observation was made."
   ],
-  "disposition": "Candidate remains unqualified. Do not bypass codesign or Gatekeeper. Recheck using a native verified mount or another eligible reader, then bind exact source/output bytes, executable/modules, settings, and before-repair semantic results.",
-  "fixturePolicy": "No DWG/DXF fixtures or application files were added to the repository; the package and extracted files remain under /private/tmp."
+  "disposition": "Native mounted app integrity is verified. Repeat with observable import and exact geometry measurements; no ACIS semantic or support claim follows from the launch.",
+  "fixturePolicy": "No DWG/DXF fixtures or application files were added to the repository; the package and extracted files remain under /private/tmp.",
+  "nativeRecheck20261103": {
+    "diskImageSha256": "a1a21d2b3294ca556b7a0172df8ed1a8046450894033147be09a9fd1549f2b2d",
+    "method": "Read-only native hdiutil mount outside sandbox; strict deep codesign verification and spctl execute assessment outside sandbox",
+    "bundle": "/Volumes/CAD Assistant [arm64]/CAD Assistant.app",
+    "executableSha256": "aeb1cb18e53193dbf502e34986e7e2047cedf61cf0895fb237caed1be63b91aa",
+    "codesign": "PASS: valid on disk, satisfies designated requirement",
+    "spctl": "PASS: accepted, Notarized Developer ID",
+    "correction": "Sandboxed codesign and spctl reports in the original preflight were not reliable for artifact integrity. The original extracted bundle has not been requalified; this result applies to the native mounted bundle.",
+    "launch": "The native mounted app was launched via macOS open with a locally authored SAB. Its window title showed the input filename, but its visible screen showed the file browser. Import and geometry measurements remain unconfirmed. The app was closed and the image unmounted.",
+    "witness": "Locally generated ezdxf 1.4.5 box; SAB SHA-256 f41a0094ae98e6d31e7d55142f233c90dad14140744be628fef9fcceefe73d5b; authored dimensions 5 x 7 x 11, expected volume 385 and area 334 in model units. No producer or AcDs evidence follows."
+  }
 }

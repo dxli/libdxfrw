@@ -55,7 +55,7 @@
     "No output DXF inspection, native CAD display check, or source-to-output semantic join was performed.",
     "A post-unlock shell retry found the currently installed ODA File Converter bundle fails strict codesign verification and aborts on PasteBoard/XPC errors; no new resave was produced."
   ],
-  "next": "Find producer-backed or normative evidence for the AC1027 Cover suffix; otherwise retain the strict output refusal. Separately qualify the AC1032 reader before using the converter output to adjudicate any R2018 behavior.",
+  "next": "Compare original and same-revision resave decoded HEADER suffixes and obtain producer-backed or normative evidence before changing strict output admission.",
   "currentRetest": {
     "date": "2026-11-02",
     "userStateUpdate": "User reported unlocking the Mac session; a fresh retry at 2026-11-02 09:55:14 EST produced the same failure.",
@@ -155,5 +155,10 @@
     "signatureCheckResult": "FAIL: invalid signature (code or signature have been modified), arm64.",
     "converterInvocation": "Not run because strict signature verification failed.",
     "qualificationEffect": "No conversion attempted; no support claim changed. The AC1027 suffix remains unresolved."
+  },
+  "nativeVerificationCorrection20261103": {
+    "finding": "The installed 27.1 bundle passed strict deep signature verification outside the sandbox; the prior sandboxed failures do not establish an invalid signature. The verified CLI ran successfully outside the sandbox on a scratch source.",
+    "receipt": "docs/research/p6-ac1027-cover-oda-same-version-resave-2026-11-03.json",
+    "effect": "Prior sandboxed invocation and signature failures remain historical observations; the converter is available outside that sandbox. The original and resaved HEADER suffixes remain unclaimed."
   }
 }
