@@ -900,13 +900,13 @@ and [linetype receipt](docs/research/p6-ac1015-synthetic-ltype-null-roles-2026-1
 Explicit AC1015 opt-ins now emit predeclared model-space LINE/CIRCLE/ARC and
 bounded 2D/3D POLYLINE chains with final parent, child and SEQEND links in
 frame receipts. Independent ODA and LibreDWG controls pass for tested
-two- and three-vertex profiles. Singleton polylines, INSERT, named blocks,
-paper space, unsupported fields and raw replay remain refused; extend only
-with source-backed graph and rollback evidence. See the [POLYLINE receipt](docs/research/p6-ac1015-predeclared-polyline-chain-2026-11-04.json)
+two- and three-vertex profiles. A separate bounded opt-in also handles
+one empty named block and one- or two-attribute INSERTs, with independent
+normal and rotated readback. Singleton polylines, block contents, broader
+INSERT fields, paper space and raw replay remain refused; extend only with
+source-backed graph and rollback evidence. See the [INSERT receipt](docs/research/p6-ac1015-predeclared-attributed-insert-chain-2026-11-04.json),
+[POLYLINE receipt](docs/research/p6-ac1015-predeclared-polyline-chain-2026-11-04.json)
 and [compound witness](docs/research/p6-ac1015-compound-entity-chain-witness-2026-11-04.json).
-A separately authored ODA witness establishes an empty named-block graph
-with one- and two-attribute INSERT chains; use it to implement and verify
-that bounded profile. See the [INSERT source receipt](docs/research/p6-ac1015-empty-attributed-insert-source-2026-11-04.json).
 An explicit AC1024 opt-in now emits the witnessed NOD→ACAD_MATERIAL→
 ByBlock/ByLayer/Global graph, HEADER references and generated layer binding,
 with source-profile payloads, collision checks and transactional retry.

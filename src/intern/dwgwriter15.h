@@ -96,7 +96,12 @@ public:
     bool stageLegacyModelChain(const std::vector<DRW_DwgLegacyModelChainEntry>& plan);
     bool stageLegacyModelChain(const std::vector<DRW_DwgLegacyModelChainEntry>& plan,
                                const std::vector<DRW_DwgLegacyPolylineChain>& polylines);
+    bool stageLegacyModelChain(const std::vector<DRW_DwgLegacyModelChainEntry>& plan,
+                               const std::vector<DRW_DwgLegacyPolylineChain>& polylines,
+                               const DRW_DwgLegacyEmptyBlock& block,
+                               const std::vector<DRW_DwgLegacyInsertChain>& inserts);
     const DRW_DwgLegacyPolylineChain* legacyPolylinePlan(std::uint32_t parent) const noexcept;
+    const DRW_DwgLegacyInsertChain* legacyInsertPlan(std::uint32_t parent) const noexcept;
     bool legacyModelChainActive() const noexcept { return m_legacyModelChainActive; }
     bool conflictsLegacyModelChainDictionary(const DRW_Dictionary& dictionary) const noexcept;
     bool isLegacyModelChainHandle(std::uint32_t handle) const noexcept {
@@ -892,12 +897,17 @@ private:
     // use entmode 2/1 (no owner handle) on their entities.  Their owned-handle
     // lists are emitted only after writeEntities() has supplied all members.
     std::vector<DRW_DwgLegacyModelChainEntry> m_legacyModelChain;
+    DRW_DwgLegacyEmptyBlock m_legacyEmptyBlock;
+    bool m_legacyEmptyBlockActive {false};
+    std::map<std::uint32_t, DRW_DwgLegacyInsertChain> m_legacyInsertChains;
+    std::map<std::uint32_t, std::pair<std::uint32_t, std::size_t>> m_legacyInsertChildOwners;
     std::map<std::uint32_t, DRW_DwgLegacyPolylineChain> m_legacyPolylineChains;
     std::map<std::uint32_t, std::pair<std::uint32_t, std::size_t>> m_legacyPolylineChildOwners;
     std::set<std::uint32_t> m_legacyModelChainHandles;
     bool m_legacyModelChainActive {false};
     bool m_legacyModelChainConflict {false};
     bool m_legacyPolylineWriting {false};
+    bool m_legacyInsertWriting {false};
     bool m_legacyPlannedFrameWriting {false};
     std::vector<std::uint32_t> m_modelSpaceEntityHandles;
     std::vector<std::uint32_t> m_paperSpaceEntityHandles;

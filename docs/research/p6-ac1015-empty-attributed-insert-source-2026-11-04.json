@@ -64,5 +64,12 @@
   "limits": [
     "This witnesses one empty ordinary named block and one/two attributed INSERT chains, not ATTDEF content, nested blocks, MINSERT, paper space, arbitrary block metadata, or all ATTRIB fields.",
     "Source-produced and roundtripped bytes do not qualify generated libdxfrw output. Require separate independent generated-output role, semantic and ODA acceptance checks plus negative ownership, collision, caller-state and transaction tests."
-  ]
+  ],
+  "rotatedSourceControl": {
+    "description": "Locally authored 30-degree parent INSERT with the same two explicit attributes; ODA converted DXF to AC1015 DWG and back to DXF without .err. LibreDWG decoded pi/6 radians and ezdxf read back 30 degrees; attribute text and positions retained.",
+    "inputDxfSha256": "3b60227f35be9b0507e3b5a0455d693569437b7ba26d5471e0d5eb7edc8d921e",
+    "sourceDwgSha256": "53a54924fb29281f362d84243b39c8cd02137fe829a0b9653fe94b5d38eed61f",
+    "roundtripDxfSha256": "a203ebae5c5519787f75cda84498b10f19cb3765c5ade2d4cc91b3965dbcee26",
+    "reproduction": "Use author-rotated and verify-rotated modes of the source tool and the same ODA commands as the default control."
+  }
 }

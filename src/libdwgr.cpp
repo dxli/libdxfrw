@@ -14,6 +14,8 @@
 
 #include "libdwgr.h"
 #include <cstdio>
+#include <cmath>
+#include <typeinfo>
 #include <filesystem>
 #include <fstream>
 #include <algorithm>
@@ -21,6 +23,7 @@
 #include <exception>
 #include <limits>
 #include <sstream>
+#include <set>
 #include <type_traits>
 #include <unordered_set>
 #include <utility>
@@ -53,10 +56,14 @@
 namespace {
 thread_local bool g_throwNextLegacyPolylineForTest = false;
 thread_local bool g_throwNextLegacyPolylineLateForTest = false;
+thread_local bool g_throwNextLegacyInsertForTest = false;
+thread_local bool g_throwNextLegacyInsertLateForTest = false;
 }
 // Internal test seams: no dwgRW or consumer class layout changes.
 void drwThrowNextLegacyPolylineForTest() { g_throwNextLegacyPolylineForTest = true; }
 void drwThrowNextLegacyPolylineLateForTest() { g_throwNextLegacyPolylineLateForTest = true; }
+void drwThrowNextLegacyInsertForTest() { g_throwNextLegacyInsertForTest = true; }
+void drwThrowNextLegacyInsertLateForTest() { g_throwNextLegacyInsertLateForTest = true; }
 
 namespace {
 
@@ -1754,15 +1761,20 @@ bool dwgRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
     // Plan legacy entity neighbors before any graph allocates output handles.
     auto* legacyChainProvider = dynamic_cast<DRW_DwgLegacyModelChainProvider*>(iface);
     auto* legacyPolylineProvider = dynamic_cast<DRW_DwgLegacyPolylineChainProvider*>(iface);
-    if (!m_requiredWriteFailure && legacyPolylineProvider && !legacyChainProvider)
+    auto* legacyInsertProvider = dynamic_cast<DRW_DwgLegacyInsertChainProvider*>(iface);
+    if (!m_requiredWriteFailure && (legacyPolylineProvider || legacyInsertProvider) && !legacyChainProvider)
         markDwgWriteFailure();
     if (!m_requiredWriteFailure && legacyChainProvider) {
         auto* native = dynamic_cast<dwgWriter15*>(writer.get());
         const auto polylines = legacyPolylineProvider
             ? legacyPolylineProvider->dwgLegacyPolylineChains()
             : std::vector<DRW_DwgLegacyPolylineChain>{};
+        const auto block = legacyInsertProvider
+            ? legacyInsertProvider->dwgLegacyEmptyBlock() : DRW_DwgLegacyEmptyBlock{};
+        const auto inserts = legacyInsertProvider
+            ? legacyInsertProvider->dwgLegacyInsertChains() : std::vector<DRW_DwgLegacyInsertChain>{};
         if (native == nullptr || !native->stageLegacyModelChain(
-                legacyChainProvider->dwgLegacyModelChain(), polylines))
+                legacyChainProvider->dwgLegacyModelChain(), polylines, block, inserts))
             markDwgWriteFailure();
     }
 
@@ -2154,6 +2166,85 @@ bool dwgRW::writeInsert(DRW_Insert *ent) {
     if (writer == nullptr || ent == nullptr)
         return recordWriteResult(WriteSkipKind::Entity, false);
 
+    auto* legacyWriter = dynamic_cast<dwgWriter15*>(writer.get());
+    const bool legacyChain = legacyWriter != nullptr && legacyWriter->legacyModelChainActive();
+    const auto* legacyPlan = legacyChain ? legacyWriter->legacyInsertPlan(ent->handle) : nullptr;
+    if (legacyChain) {
+        const auto& block = legacyWriter->m_legacyEmptyBlock;
+        const auto finiteCoord = [](const DRW_Coord& p) {
+            return std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
+        };
+        const auto plainAscii = [](const std::string& value) {
+            return std::all_of(value.begin(), value.end(), [](unsigned char c) {
+                return c >= 0x20u && c <= 0x7eu;
+            });
+        };
+        if (legacyPlan == nullptr || !legacyWriter->m_legacyEmptyBlockActive
+            || legacyWriter->findUserBlock(block.blockRecordHandle) == nullptr
+            || ent->name != block.name || ent->space != DRW::ModelSpace
+            || ent->parentHandle != DRW::NoHandle || ent->seqEndEntity != nullptr
+            || !ent->attribHandles.empty() || ent->attlist.size() != legacyPlan->attributeHandles.size()
+            || (ent->blockRecH.ref != 0u && ent->blockRecH.ref != block.blockRecordHandle)
+            || (ent->blockRecH.ref64 != 0u && ent->blockRecH.ref64 != block.blockRecordHandle)
+            || (ent->seqendH.ref != 0u && ent->seqendH.ref != legacyPlan->seqendHandle)
+            || (ent->seqendH.ref64 != 0u && ent->seqendH.ref64 != legacyPlan->seqendHandle)
+            || ent->colcount != 1 || ent->rowcount != 1 || ent->colspace != 0.0 || ent->rowspace != 0.0
+            || ent->xscale != 1.0 || ent->yscale != 1.0 || ent->zscale != 1.0
+            || ent->extPoint.x != 0.0 || ent->extPoint.y != 0.0 || ent->extPoint.z != 1.0
+            || !finiteCoord(ent->basePoint) || ent->basePoint.z != 0.0 || !std::isfinite(ent->angle))
+            return recordWriteResult(WriteSkipKind::Entity, false);
+        const auto plainTag = [](const std::string& value) {
+            return !value.empty() && std::all_of(value.begin(), value.end(), [](unsigned char c) {
+                return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+                    || c == '_' || c == '-' || c == '$';
+            });
+        };
+        std::set<std::string> tags;
+        for (std::size_t i = 0; i < ent->attlist.size(); ++i) {
+            const auto& attrib = ent->attlist[i];
+            const DRW_Attrib* attribPtr = attrib.get();
+            if (!attribPtr || typeid(*attribPtr) != typeid(DRW_Attrib)
+                || attrib->handle != legacyPlan->attributeHandles[i]
+                || (attrib->parentHandle != DRW::NoHandle && attrib->parentHandle != ent->handle)
+                || attrib->space != DRW::ModelSpace || !plainTag(attrib->tag)
+                || !plainAscii(attrib->text)
+                || attrib->style != "STANDARD"
+                || (attrib->styleH.ref != 0u && attrib->styleH.ref != DRW::DwgStandardTextStyleHandle)
+                || (attrib->styleH.ref64 != 0u && attrib->styleH.ref64 != DRW::DwgStandardTextStyleHandle)
+                || attrib->lockPosition || attrib->attVersion != 0u || attrib->m_attributeType != 1u
+                || attrib->attribFlags != 0u || attrib->m_fieldLength != 0 || attrib->textgen != 0
+                || attrib->alignH != DRW_Text::HLeft || attrib->alignV != DRW_Text::VBaseLine
+                || attrib->mtext != nullptr || !attrib->m_r2018OuterAnnotativeData.empty()
+                || attrib->m_r2018OuterAnnotativeUnknown != 0u
+                || attrib->m_r2018OuterAnnotativeAppHandle != 0u
+                || !attrib->m_r2018OuterAnnotativeAppIdName.empty()
+                || attrib->keepDuplicateRecords != 0u || attrib->hasDxfXrecord
+                || !finiteCoord(attrib->basePoint) || !finiteCoord(attrib->secPoint)
+                || attrib->basePoint.z != 0.0
+                || attrib->secPoint.x != attrib->basePoint.x
+                || attrib->secPoint.y != attrib->basePoint.y
+                || attrib->secPoint.z != attrib->basePoint.z
+                || attrib->extPoint.x != 0.0 || attrib->extPoint.y != 0.0 || attrib->extPoint.z != 1.0
+                || !std::isfinite(attrib->height) || attrib->height <= 0.0
+                || attrib->widthscale != 1.0 || !std::isfinite(attrib->angle)
+                || attrib->oblique != 0.0 || attrib->thickness != 0.0)
+                return recordWriteResult(WriteSkipKind::Entity, false);
+            std::string upper = attrib->tag;
+            std::transform(upper.begin(), upper.end(), upper.begin(), [](unsigned char c) {
+                return static_cast<char>(c >= 'a' && c <= 'z' ? c - ('a' - 'A') : c);
+            });
+            if (!tags.insert(std::move(upper)).second)
+                return recordWriteResult(WriteSkipKind::Entity, false);
+        }
+        if (legacyWriter->m_legacyInsertWriting)
+            return recordWriteResult(WriteSkipKind::Entity, false);
+    }
+    struct LegacyInsertScope {
+        bool* active;
+        ~LegacyInsertScope() { if (active != nullptr) *active = false; }
+    } legacyScope{legacyChain ? &legacyWriter->m_legacyInsertWriting : nullptr};
+    if (legacyScope.active != nullptr) *legacyScope.active = true;
+
     const bool hasCallerAttributes = !ent->attlist.empty();
     const bool hasEmptyLegacySequence =
         !hasCallerAttributes && ent->attribHandles.size() == 2u
@@ -2205,7 +2296,7 @@ bool dwgRW::writeInsert(DRW_Insert *ent) {
     }
     auto *objectWriter = dynamic_cast<dwgWriter15 *>(writer.get());
     bool useEntityFrameBatchRollback =
-        (hasCallerAttributes || preserveEmptyLegacy)
+        !legacyChain && (hasCallerAttributes || preserveEmptyLegacy)
         && objectWriter != nullptr
         && writer->supportsLastEntityWriteRollback();
     std::vector<dwgWriter15::EntityFrameCheckpoint> frameCheckpoints;
@@ -2218,6 +2309,44 @@ bool dwgRW::writeInsert(DRW_Insert *ent) {
         checkpoint = writer->checkpointCompoundWrite();
         hasCheckpoint = true;
     }
+    const bool tracksMutations = legacyChain && !m_dwgWriteTransactions.empty()
+        && m_dwgWriteTransactions.back()->trackCallerMutations;
+    const std::size_t originalMutationCount = tracksMutations
+        ? m_dwgWriteTransactions.back()->entityMutations.size() : 0u;
+    const auto undoLegacyException = [&]() noexcept {
+        try { writer->rollbackCompoundWrite(checkpoint); }
+        catch (...) { writer->markObjectWriteFailure(); }
+        for (auto it = mutations.rbegin(); it != mutations.rend(); ++it) {
+            auto appRefs = std::move(it->eedAppIdRefs);
+            auto layerRefs = std::move(it->eedLayerRefs);
+            auto attribHandles = std::move(it->insertAttributeHandles);
+            try { restoreEntityWriteState(*it); }
+            catch (...) { writer->markObjectWriteFailure(); }
+            if (it->entity != nullptr) {
+                it->entity->dwgEedAppIdWriteRefs.swap(appRefs);
+                it->entity->dwgEedLayerWriteRefs.swap(layerRefs);
+                if (it->hasInsertState) {
+                    auto* insert = dynamic_cast<DRW_Insert*>(it->entity);
+                    if (insert != nullptr) insert->attribHandles.swap(attribHandles);
+                }
+            }
+        }
+        if (tracksMutations && !m_dwgWriteTransactions.empty()) {
+            auto& tracked = m_dwgWriteTransactions.back()->entityMutations;
+            if (tracked.size() >= originalMutationCount) tracked.resize(originalMutationCount);
+        }
+        m_lastWriteTransaction.reset();
+        m_lastDwgObjectFrame = {};
+        m_lastDwgObjectFrameValid = false;
+        m_lastDwgCompoundEntityWriteReceipt = {};
+        markDwgWriteFailure();
+    };
+    struct LegacyExceptionGuard {
+        const decltype(undoLegacyException)& undo; bool enabled; int depth;
+        ~LegacyExceptionGuard() noexcept {
+            if (enabled && std::uncaught_exceptions() > depth) undo();
+        }
+    } exceptionGuard{undoLegacyException, legacyChain, std::uncaught_exceptions()};
     const auto fail = [&]() {
         if (useEntityFrameBatchRollback) {
             if (!frameCheckpoints.empty()
@@ -2278,7 +2407,7 @@ bool dwgRW::writeInsert(DRW_Insert *ent) {
         }
 
         if (ent->seqendH.ref == DRW::NoHandle)
-            ent->seqendH.ref = writer->allocNextHandle();
+            ent->seqendH.ref = legacyChain ? legacyPlan->seqendHandle : writer->allocNextHandle();
         else
             writer->reserveHandle(ent->seqendH.ref);
         if (ent->seqendH.ref == ent->handle
@@ -2368,6 +2497,10 @@ bool dwgRW::writeInsert(DRW_Insert *ent) {
                             attributeFrame, attrib->handle))
             return fail();
     }
+    if (legacyChain && g_throwNextLegacyInsertForTest) {
+        g_throwNextLegacyInsertForTest = false;
+        throw std::bad_alloc();
+    }
     if (hasCallerAttributes || preserveEmptyLegacy) {
         DRW_SeqEnd seqEnd;
         seqEnd.handle = ent->seqendH.ref;
@@ -2385,6 +2518,29 @@ bool dwgRW::writeInsert(DRW_Insert *ent) {
             return fail();
     }
     receipt.valid = true;
+    if (legacyChain) {
+        auto transaction = std::make_unique<DwgWriteTransaction>();
+        transaction->entityMutations = mutations;
+        rememberCallerMutations(mutations);
+        if (g_throwNextLegacyInsertLateForTest) {
+            g_throwNextLegacyInsertLateForTest = false;
+            throw std::bad_alloc();
+        }
+        static_assert(std::is_nothrow_move_assignable<dwgWriter::CompoundWriteCheckpoint>::value,
+                      "legacy INSERT transaction commit must not throw");
+        static_assert(std::is_nothrow_move_assignable<DRW::DwgObjectFrameReceipt>::value,
+                      "legacy INSERT frame receipt commit must not throw");
+        static_assert(std::is_nothrow_move_assignable<DRW::DwgCompoundEntityWriteReceipt>::value,
+                      "legacy INSERT compound receipt commit must not throw");
+        transaction->checkpoint = std::move(checkpoint);
+        m_lastDwgObjectFrame = std::move(parentFrame);
+        m_lastDwgObjectFrameValid = true;
+        m_lastDwgCompoundEntityWriteReceipt = std::move(receipt);
+        m_lastWriteTransaction = std::move(transaction);
+        ++m_successfulEntityWrites;
+        m_lastSuccessfulEntityHandle = ent->handle;
+        return recordWriteResult(WriteSkipKind::Entity, true);
+    }
     ++m_successfulEntityWrites;
     m_lastSuccessfulEntityHandle = ent->handle;
     m_lastDwgObjectFrame = std::move(parentFrame);

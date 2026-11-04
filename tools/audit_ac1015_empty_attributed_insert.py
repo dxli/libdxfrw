@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 
 
-def author(path):
+def author(path, rotated=False):
     import ezdxf
     if ezdxf.__version__ != "1.4.5":
         raise SystemExit("author requires ezdxf 1.4.5")
@@ -23,6 +23,7 @@ def author(path):
     model=drawing.modelspace()
     model.add_line((1,2,3),(4,5,6))
     first=model.add_blockref("EMPTY_CHAIN",(3,4,0))
+    if rotated: first.dxf.rotation=30.
     first.add_attrib("FIRST","ONE",(3,4,0),dxfattribs={"height":.5,"rotation":15})
     first.add_attrib("SECOND","TWO",(4,5,0),dxfattribs={"height":.75,"rotation":25})
     model.add_circle((7,8),2.5)
@@ -33,7 +34,7 @@ def author(path):
     print("Authored",path)
 
 
-def verify(source, output, dwgread):
+def verify(source, output, dwgread, rotated=False):
     import ezdxf
     if ezdxf.__version__ != "1.4.5":
         raise SystemExit("verify requires ezdxf 1.4.5")
@@ -68,6 +69,8 @@ def verify(source, output, dwgread):
         assert obj["next_entity"][3]==(model[i+1][0] if i+1<len(model) else 0)
     for parent,children,footer in ((0x8E,[0x90,0x91],0x8F),(0x93,[0x95],0x94)):
         insert=by_handle[parent]
+        expected_rotation=math.radians(30.) if rotated and parent==0x8E else 0.
+        assert math.isclose(insert.get("rotation",0.),expected_rotation,abs_tol=1e-9)
         assert insert["has_attribs"]==1
         ref(insert["block_header"],5,0x8A)
         ref(insert["first_attrib"],4,children[0]);ref(insert["last_attrib"],4,children[-1])
@@ -82,6 +85,7 @@ def verify(source, output, dwgread):
     assert len(result.blocks.get("EMPTY_CHAIN"))==0
     inserts=[e for e in result.modelspace() if e.dxftype()=="INSERT"]
     assert len(inserts)==2 and all(e.dxf.name=="EMPTY_CHAIN" for e in inserts)
+    assert math.isclose(inserts[0].dxf.rotation,30. if rotated else 0.,abs_tol=1e-9)
     expected=[[('FIRST','ONE',(3.,4.,0.),.5,15.),('SECOND','TWO',(4.,5.,0.),.75,25.)],
               [('SINGLE','THREE',(9.,10.,0.),.6,0.)]]
     for insert, wanted in zip(inserts,expected):
@@ -95,9 +99,11 @@ def verify(source, output, dwgread):
 
 
 def main():
-    if len(sys.argv)==3 and sys.argv[1]=="author":author(sys.argv[2])
-    elif len(sys.argv) in (4,5) and sys.argv[1]=="verify":verify(sys.argv[2],sys.argv[3],sys.argv[4] if len(sys.argv)==5 else "dwgread")
-    else:raise SystemExit("usage: audit_ac1015_empty_attributed_insert.py author <input.dxf> | verify <source.dwg> <output.dxf> [dwgread]")
+    if len(sys.argv)==3 and sys.argv[1] in ("author","author-rotated"):
+        author(sys.argv[2],sys.argv[1]=="author-rotated")
+    elif len(sys.argv) in (4,5) and sys.argv[1] in ("verify","verify-rotated"):
+        verify(sys.argv[2],sys.argv[3],sys.argv[4] if len(sys.argv)==5 else "dwgread",sys.argv[1]=="verify-rotated")
+    else:raise SystemExit("usage: audit_ac1015_empty_attributed_insert.py author|author-rotated <input.dxf> | verify|verify-rotated <source.dwg> <output.dxf> [dwgread]")
 
 
 if __name__=="__main__":main()

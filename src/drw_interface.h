@@ -719,10 +719,11 @@ struct DRW_DwgLegacyModelChainEntry {
 };
 
 /** Opt in to bounded AC1015 model-space entity link emission. The plan must
- * name every concrete LINE, CIRCLE, ARC and separately planned POLYLINE in exact callback order. Handles
+ * name every concrete LINE, CIRCLE, ARC and separately planned POLYLINE or
+ * attributed INSERT in exact callback order. Handles
  * must be unique, at least 0x30, below UINT32_MAX and not previously reserved;
  * the plan reserves them before other generated objects. An empty plan,
- * unplanned compounds, blocks, paper space, raw replay and unplanned entities
+ * unplanned compounds or blocks, paper space, raw replay and unplanned entities
  * fail the output transaction. Neighbor references are fixed before each
  * frame is emitted so frame receipts remain accurate. The default plot-style
  * provider is a separate opt-in needed for the independently tested profile.
@@ -743,12 +744,43 @@ struct DRW_DwgLegacyPolylineChain {
 /** Separate extension to DRW_DwgLegacyModelChainProvider. Every planned
  * POLYLINE must have exactly one child chain with at least two vertices and a
  * SEQEND identity. Only unsplined 2D and 3D polylines with representable
- * AC1015 fields are accepted; mesh, polyface, INSERT, named blocks,
- * paper-space and opaque replay remain outside this bounded profile. */
+ * AC1015 fields are accepted; mesh and polyface remain outside this bounded
+ * profile. INSERT and its empty block require a separate provider; paper-space
+ * and opaque replay remain unsupported. */
 class DRW_DwgLegacyPolylineChainProvider {
 public:
   virtual ~DRW_DwgLegacyPolylineChainProvider() = default;
   virtual std::vector<DRW_DwgLegacyPolylineChain> dwgLegacyPolylineChains() const = 0;
+};
+
+/** Exact identities for one ordinary empty block in an AC1015 INSERT plan. */
+struct DRW_DwgLegacyEmptyBlock {
+  std::string name;
+  std::uint32_t blockRecordHandle {0};
+  std::uint32_t blockHandle {0};
+  std::uint32_t endBlockHandle {0};
+};
+
+/** Exact parent, target block, attribute sequence and SEQEND identities. */
+struct DRW_DwgLegacyInsertChain {
+  std::uint32_t parentHandle {0};
+  std::uint32_t blockRecordHandle {0};
+  std::vector<std::uint32_t> attributeHandles;
+  std::uint32_t seqendHandle {0};
+};
+
+/** Separate bounded AC1015 attributed-INSERT extension. Exactly one ordinary
+ * empty named block is predeclared and defined with zero base point/units.
+ * Each INSERT has at least one planned ATTRIB and its own SEQEND. Block names
+ * and attribute tags use uppercase ASCII letters, digits, '_', '$' or '-';
+ * attributes use printable ASCII text and a bounded default 2D text profile.
+ * INSERT uses unit scaling and the default extrusion. ATTDEF, block contents,
+ * MINSERT, paper space and opaque replay remain unsupported. */
+class DRW_DwgLegacyInsertChainProvider {
+public:
+  virtual ~DRW_DwgLegacyInsertChainProvider() = default;
+  virtual DRW_DwgLegacyEmptyBlock dwgLegacyEmptyBlock() const = 0;
+  virtual std::vector<DRW_DwgLegacyInsertChain> dwgLegacyInsertChains() const = 0;
 };
 
 /** Separate opt-in for synthesizing a default DWG plot-style graph. Existing
