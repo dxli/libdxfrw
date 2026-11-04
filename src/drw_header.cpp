@@ -4108,25 +4108,11 @@ namespace {
         }
         return UTF8STRING(it->second->c_str());
     }
-    /// Build a hard-pointer handle (code 5) referring to `ref`.  Returns
-    /// the null handle when ref==0, which matches what parseDwg sees in
-    /// an empty document.
+    /// Build a hard-pointer handle (code 5), including a typed null when the
+    /// referenced object is absent (ODA 2.13 and 9).
     dwgHandle makeHardPtr(std::uint32_t ref) {
         dwgHandle h;
-        h.code = (ref == 0) ? 0 : 5;
-        h.ref  = ref;
-        h.size = 0;
-        if (ref != 0) {
-            std::uint32_t t = ref;
-            while (t != 0) { t >>= 8; ++h.size; }
-        }
-        return h;
-    }
-    /// Build a soft-owner handle (code 3) — used for the XDic-style
-    /// owner references in the HEADER's control-handle block.
-    dwgHandle makeSoftOwner(std::uint32_t ref) {
-        dwgHandle h;
-        h.code = (ref == 0) ? 0 : 3;
+        h.code = 5;
         h.ref  = ref;
         h.size = 0;
         if (ref != 0) {
@@ -4551,8 +4537,8 @@ bool DRW_Header::encodeDwgForWriter(
     if (version < DRW::AC1018) {                        // R2000 and earlier only
         hBbuf->putHandle(makeHardOwner(vpEntHeaderCtrl)); // VPORT_ENTITY_HEADER_CONTROL (0x0B)
     }
-    hBbuf->putHandle(makeSoftOwner(0));                 // DICT ACAD_GROUP (Phase 3.5: 0x0D)
-    hBbuf->putHandle(makeSoftOwner(0));                 // DICT ACAD_MLINESTYLE (Phase 3.5: 0x0E)
+    hBbuf->putHandle(makeHardPtr(0));                   // DICT ACAD_GROUP
+    hBbuf->putHandle(makeHardPtr(0));                   // DICT ACAD_MLINESTYLE
     hBbuf->putHandle(makeHardOwner(namedObjectDictionaryHandle)); // DICT NAMED OBJS
 
     // -------- Post-control TSTACKALIGN/TSTACKSIZE + 3 NOD-related dict handles
@@ -4562,19 +4548,19 @@ bool DRW_Header::encodeDwgForWriter(
         buf->putCP8Text(strVar(*this, "HYPERLINKBASE"));
         buf->putCP8Text(strVar(*this, "STYLESHEET"));
     }
-    hBbuf->putHandle(makeSoftOwner(0));  // DICT LAYOUTS    (Phase 3.5)
+    hBbuf->putHandle(makeHardPtr(0));    // DICT LAYOUTS
     hBbuf->putHandle(makeHardPtr(plotSettingsDictionaryHandle));
                                                      // DICT PLOTSETTINGS
-    hBbuf->putHandle(makeSoftOwner(0));  // DICT PLOTSTYLES   (Phase 3.5)
+    hBbuf->putHandle(makeHardPtr(0));    // DICT PLOTSTYLES
     if (version > DRW::AC1015) {         // R2004+: 2 extra dict handles (parseDwg:2219-2223)
-        hBbuf->putHandle(makeSoftOwner(0)); // DICT MATERIALS
-        hBbuf->putHandle(makeSoftOwner(0)); // DICT COLORS
+        hBbuf->putHandle(makeHardPtr(0)); // DICT MATERIALS
+        hBbuf->putHandle(makeHardPtr(0)); // DICT COLORS
     }
     if (version > DRW::AC1018) {         // 2007+: DICT VISUALSTYLE (parseDwg:2225-2228)
-        hBbuf->putHandle(makeSoftOwner(0)); // DICT VISUALSTYLE
+        hBbuf->putHandle(makeHardPtr(0)); // DICT VISUALSTYLE
     }
     if (version > DRW::AC1024) {         // 2013+: unknown handle (parseDwg:2229-2232)
-        hBbuf->putHandle(makeSoftOwner(0));
+        hBbuf->putHandle(makeHardPtr(0));
     }
 
     // -------- Flags (BL) + INSUNITS (BS) + CEPSNTYPE (BS) -------------------

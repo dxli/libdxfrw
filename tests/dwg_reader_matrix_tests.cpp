@@ -10718,6 +10718,42 @@ void testHeaderReferenceRoles(TestContext& t) {
         for (const std::uint64_t ref : {0x18u, 0x17u, 0x10u, 0x0fu, 0x11u})
             t.expect(tokenMatches(ref, 5u),
                      "HEADER model/paper space and standard linetypes are hard pointers");
+
+        // ODA 9 gives hard-pointer roles to current settings, UCS, DIM and
+        // optional dictionary links. The NULL token retains that role (5.0).
+        const auto& occurrences = handles.handleOccurrences();
+        const auto typedNullAt = [&occurrences, &bytes](std::size_t index) {
+            if (index >= occurrences.size())
+                return false;
+            const auto& occurrence = occurrences[index];
+            if (occurrence.reference != 0u
+                || occurrence.startBit + 8u > bytes.size() * 8u)
+                return false;
+            std::uint8_t raw = 0u;
+            for (std::uint64_t bit = occurrence.startBit;
+                 bit < occurrence.startBit + 8u; ++bit) {
+                raw = static_cast<std::uint8_t>((raw << 1u)
+                    | ((bytes[bit / 8u] >> (7u - bit % 8u)) & 1u));
+            }
+            return raw == 0x50u;
+        };
+        const std::size_t prefix = (version == DRW::AC1015 ? 1u : 0u)
+            + (version > DRW::AC1018 ? 6u : 5u) // current references
+            + 6u // paper/model UCS references
+            + (version > DRW::AC1018 ? 8u : 5u); // DIM references
+        for (std::size_t i = 0u; i < prefix; ++i)
+            t.expect(typedNullAt(i),
+                     "HEADER current/UCS/DIM typed hard-pointer NULL");
+        std::size_t next = prefix + (version == DRW::AC1015 ? 10u : 9u);
+        t.expect(typedNullAt(next++) && typedNullAt(next++),
+                 "HEADER group and mline dictionary typed hard-pointer NULLs");
+        ++next; // NOD is a distinct hard-owner reference.
+        const std::size_t dictionaries = 3u + (version > DRW::AC1015 ? 2u : 0u)
+            + (version > DRW::AC1018 ? 1u : 0u)
+            + (version > DRW::AC1024 ? 1u : 0u);
+        for (std::size_t i = 0u; i < dictionaries; ++i)
+            t.expect(typedNullAt(next++),
+                     "HEADER optional dictionary typed hard-pointer NULL");
     }
 }
 
