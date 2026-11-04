@@ -523,6 +523,9 @@ Physical DWG source binding, LIGHT target resolution, emitted graph closure,
 and native lighting semantics remain open. The adapter refuses output for a
 retained LIGHTLIST until those gates pass, rather than dropping it silently
 (see the [callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json)).
+An AC1027 source uses an inline role-0 LIGHT reference; the current writer
+uses role 5 and the peer reader does not resolve the source reference. Establish
+its role and target independently before enabling adapter output ([receipt](docs/research/p5-ac1027-lightlist-physical-inline-role-conflict-2026-11-04.json)).
 The low-level AC1021+ DXF writer now emits the documented LIGHTLIST group order
 and remaps the mandatory ACAD_LIGHT dictionary pointer, actual reactors, owner,
 and named LIGHT references. Generated ASCII/Binary exact-field and typed

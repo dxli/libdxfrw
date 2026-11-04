@@ -681,6 +681,7 @@ EXTRA_DIST = \
     tools/j268_scratch_baseline.patch \
     tools/j268_three_fixture_successor.py \
     tools/j284_mpolygon_peer_probe.py \
+    tools/lightlist_physical_graph_probe.py \
     tools/make_ac1021_block_control_reactor_witness.py \
     tools/make_p9_rtext_oda_input.py \
     tools/mutate_r2004_header_suffix_probe.py \
@@ -694,6 +695,7 @@ EXTRA_DIST = \
     tools/probe_dxf_lwpolyline_missing_y.cpp \
     tools/probe_dxf_sparse_lwpolyline.cpp \
     tools/probe_geodata_physical_capture.cpp \
+    tools/probe_lightlist_physical_capture.cpp \
     tools/qualify_material_source_order.py \
     tools/run_external_advisory.py \
     tools/run_fast_baseline.py \
