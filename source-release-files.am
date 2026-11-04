@@ -631,6 +631,7 @@ EXTRA_DIST = \
     tools/audit_ac1015_insert_tilted.py \
     tools/audit_ac1018_dictionary_wire.py \
     tools/audit_ac1021_material_peer.py \
+    tools/audit_ac1021_vport_roles.py \
     tools/audit_ac1024_rastervariables_source.py \
     tools/audit_ac1024_tilted_geometry.py \
     tools/audit_ac1024_vport_null_roles.py \

@@ -16065,7 +16065,7 @@ void testActiveVportDefaults(TestContext& t, DRW::Version version,
             ? std::vector<std::uint8_t>{0x41u, 0x08u, 0x30u, 0x50u, 0x50u, 0x50u}
             : version == DRW::AC1018
                 ? std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x50u, 0x50u}
-                : version == DRW::AC1024
+                : (version == DRW::AC1021 || version == DRW::AC1024)
                     ? std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x40u, 0x50u,
                                                 0x30u, 0x50u, 0x50u}
                     : std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x00u, 0x00u,
