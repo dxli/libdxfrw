@@ -410,6 +410,8 @@ owner, source-text, completeness, or supported-profile checks.
 Installed consumers can use either `find_package(libdxfrw CONFIG REQUIRED)` and
 `libdxfrw::libdxfrw`, or `pkg-config --cflags --libs libdxfrw`. The package is
 relocatable and selects compatible package versions with `SameMajorVersion`.
+The CMake target propagates the required C++17 feature level. Consumers using a
+custom finder or pkg-config must enable C++17 for code including these headers.
 For static linking, use `pkg-config --static --cflags --libs libdxfrw` to include
 private platform thread dependencies. CONFIG/MODULE targets propagate Threads.
 `--static` requests dependency closure; it does not force archive selection.
