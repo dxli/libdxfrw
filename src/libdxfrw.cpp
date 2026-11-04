@@ -9498,6 +9498,16 @@ bool dxfRW::writeEllipse(DRW_Ellipse *ent){
         return false;
     //verify axis/ratio and params for full ellipse
     DRW_Ellipse normalized = *ent;
+    // An explicit adapter opt-in resolves the ambiguity between ordinary
+    // DXF CCW wrap and a legacy authored clockwise negative sweep. Do this
+    // before axis normalization so the resulting sweep remains positive.
+    if (version == DRW::AC1009 && typeid(*ent) == typeid(DRW_Ellipse)
+        && ent->isccw == 1
+        && dynamic_cast<const DRW_DxfR12CcwEllipseOptIn*>(iface) != nullptr
+        && normalized.staparam >= 0.0 && normalized.staparam <= M_PIx2
+        && normalized.endparam >= 0.0 && normalized.endparam <= M_PIx2
+        && normalized.endparam < normalized.staparam)
+        normalized.endparam += M_PIx2;
     normalized.correctAxis();
     // A failed or nonrepresentable normalization must not be emitted as a
     // superficially valid but geometrically different ellipse.

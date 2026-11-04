@@ -458,6 +458,7 @@ tests/dxf_lightlist_reference_tests.cpp
 tests/dxf_lwpoly_wcs_vertices_tests.cpp
 tests/dxf_mline_source_dependency_tests.cpp
 tests/dxf_no_raw_sections_tests.cpp
+tests/dxf_r12_ellipse_wrap_tests.cpp
 tests/dxf_sparse_material_raw_tests.cpp
 tests/dxf_symbol_output_tests.cpp
 tests/dxf_whole_source_tests.cpp
@@ -693,6 +694,7 @@ tools/audit_p9_rtext_native_history.py
 tools/audit_polyline_cross_scope_peer.py
 tools/audit_polyline_cross_version_membership.py
 tools/audit_polyline_owner_census.py
+tools/audit_r12_ellipse_wrap.py
 tools/audit_rastervariables_ac1018_frame1_source.py
 tools/audit_rastervariables_ac1018_source.py
 tools/audit_rastervariables_ac1032_frame1_source.py
@@ -717,6 +719,7 @@ tools/author_ac1021_varied_geometry.py
 tools/author_ac1027_1032_writer_control.py
 tools/author_dwg_legacy_extrusion.py
 tools/author_light_dxf_421.py
+tools/author_r12_ellipse_wrap_source.py
 tools/author_selected_ac1027_light.py
 tools/author_wipeout_ac1024_frame1.py
 tools/author_wipeout_direct_nod.py
@@ -817,6 +820,7 @@ tools/probe_lightlist_physical_capture.cpp
 tools/probe_modern_header_source.cpp
 tools/probe_polyline_cross_scope.cpp
 tools/probe_polyline_cross_version.cpp
+tools/probe_r12_ellipse_wrap_consumer.cpp
 tools/probe_rastervariables_ac1018_frame1_source.cpp
 tools/probe_rastervariables_ac1018_source.cpp
 tools/probe_rastervariables_ac1032_frame1_source.cpp
@@ -841,6 +845,7 @@ tools/run_native_qualification.py
 tools/run_parity_differential.py
 tools/run_qualified_differential_v2.py
 tools/run_target_differential_advisory.py
+tools/select_r12_ellipse_wrap_source.py
 tools/update_upgrade_plan.py
 tools/verify_acis218_sab_cqacis.py
 tools/verify_acis218_sab_freecad.FCMacro

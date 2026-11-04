@@ -1051,6 +1051,19 @@ struct DRW_DxfObjectPhysicalSource {
 struct DRW_DxfObjectPhysicalSourceLimits {
   std::size_t fields{4000000u},bytes{64u*1024u*1024u},work{128u*1024u*1024u};
 };
+/** Explicit document-wide opt-in for standalone R12 ELLIPSE derivation.
+ * For an exact DRW_Ellipse with canonical parameters in [0,2pi], a smaller
+ * end parameter is interpreted as a counterclockwise wrap through zero.
+ * Inherit this independent marker only when the caller knows those inputs
+ * use ordinary DXF ELLIPSE semantics; legacy authored negative sweeps may
+ * intentionally mean clockwise. HATCH edge output and other DXF revisions
+ * are unaffected. This adds no DRW_Interface slots or existing class fields.
+ */
+class DRW_DxfR12CcwEllipseOptIn {
+public:
+  virtual ~DRW_DxfR12CcwEllipseOptIn() = default;
+};
+
 /** Optional, explicit opt-in for the exact sparse DXF MATERIAL profile.
  * The typed callback is incomplete: the consumer must retain the accompanying
  * raw object and honor DRW_Material::requiresRawDxfMaterialReplay(). Kept
