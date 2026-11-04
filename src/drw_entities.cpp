@@ -6778,6 +6778,24 @@ bool DRW_MText::encodeDwg(DRW::Version version, dwgBufferW *buf,
   (void)bs;
   if (version > DRW::AC1018 && !std::isfinite(m_definedHeight))
     return false;
+  DRW_Coord outputXAxis = secPoint;
+  const auto orientation = dxfOrientationForOutput();
+  const bool hasDirection = secPoint.x != 0.0 || secPoint.y != 0.0
+      || secPoint.z != 0.0;
+  if (orientation == DxfOrientationMode::Rotation
+      || (orientation == DxfOrientationMode::LegacyApi && !hasDirection)) {
+    if (!std::isfinite(angle) || !std::isfinite(extPoint.x)
+        || !std::isfinite(extPoint.y) || !std::isfinite(extPoint.z)
+        || (extPoint.x == 0.0 && extPoint.y == 0.0 && extPoint.z == 0.0))
+      return false;
+    DRW_Coord axisX, axisY;
+    calculateOcsAxes(extPoint, axisX, axisY);
+    const double radians = angle / ARAD;
+    const double c = std::cos(radians), s = std::sin(radians);
+    outputXAxis = DRW_Coord(axisX.x*c + axisY.x*s,
+                            axisX.y*c + axisY.y*s,
+                            axisX.z*c + axisY.z*s);
+  }
   const bool hasBackground =
       version > DRW::AC1015 &&
       ((m_backgroundFlags & 0x01) ||
@@ -6800,7 +6818,7 @@ bool DRW_MText::encodeDwg(DRW::Version version, dwgBufferW *buf,
   // R2000/R2004/R2010 MTEXT body — mirror of DRW_MText::parseDwg.
   buf->put3BitDouble(basePoint); // insertion
   buf->put3BitDouble(extPoint);  // extrusion
-  buf->put3BitDouble(secPoint);  // X-axis dir
+  buf->put3BitDouble(outputXAxis); // X-axis direction in WCS
   buf->putBitDouble(widthscale); // rect width
   if (version > DRW::AC1018) {
     buf->putBitDouble(m_definedHeight); // main reference rectangle height

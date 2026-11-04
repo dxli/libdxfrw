@@ -431,6 +431,7 @@ tests/dwg_local_roundtrip_tests.cpp
 tests/dwg_ltype_ac1021_count_tests.cpp
 tests/dwg_ltype_multiversion_count_tests.cpp
 tests/dwg_material_replay_refusal_tests.cpp
+tests/dwg_mtext_rotation_direction_tests.cpp
 tests/dwg_object_vectors_tests.cpp
 tests/dwg_plotstyle_nod_admission_tests.cpp
 tests/dwg_polyline_1018_1024_membership_tests.cpp
@@ -653,6 +654,7 @@ tools/audit_ac1021_curve_geometry_peer.py
 tools/audit_ac1021_geometry_peer.py
 tools/audit_ac1021_lwpolyline_footer.py
 tools/audit_ac1021_material_peer.py
+tools/audit_ac1021_mtext_rotation_peer.py
 tools/audit_ac1021_polyline_group_peer.py
 tools/audit_ac1021_polyline_owners_peer.py
 tools/audit_ac1021_text_style_peer.py
@@ -692,6 +694,7 @@ tools/author_ac1021_curve_geometry.py
 tools/author_ac1021_geometry_matrix.py
 tools/author_ac1021_hatch_edge_source.py
 tools/author_ac1021_lwpolyline_footer.py
+tools/author_ac1021_mtext_rotation.py
 tools/author_ac1021_polyline_owner_scopes.py
 tools/author_ac1021_text_style_source.py
 tools/author_ac1021_varied_geometry.py
@@ -774,6 +777,7 @@ tools/probe_ac1021_header_variant.cpp
 tools/probe_ac1021_imagedef_owner_tokens.cpp
 tools/probe_ac1021_line_writer.cpp
 tools/probe_ac1021_lwpolyline_footer.cpp
+tools/probe_ac1021_mtext_rotation.cpp
 tools/probe_ac1021_polyline_owner_scopes.cpp
 tools/probe_ac1021_text_style.cpp
 tools/probe_ac1021_varied_geometry.cpp

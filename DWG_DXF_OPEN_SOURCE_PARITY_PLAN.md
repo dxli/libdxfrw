@@ -923,6 +923,9 @@ DWG TEXT now resolves a registered style name when no handle is supplied; the
 sampled AC1021 output passes ODA only when the caller supplies the witnessed
 STYLE common metadata. Qualify default STYLE metadata and other text-derived
 entities separately ([receipt](docs/research/p6-dwg-text-style-name-resolution-2026-11-04.json)).
+DWG MTEXT now converts rotation-only inputs to a WCS direction while retaining
+the existing DXF precedence and caller fields. Broader producers and native
+rendering remain open ([orientation receipt](docs/research/p6-dwg-mtext-rotation-direction-2026-11-04.json)).
 Qualify attributed INSERT scale semantics beyond the explicit AC1015
 positive-finite chain profile, including external near-unit precision and native
 rendering ([receipt](docs/research/p6-ac1015-attributed-insert-positive-scale-2026-11-04.json)).
