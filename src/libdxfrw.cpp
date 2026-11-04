@@ -845,6 +845,16 @@ bool isValidDxfEntityFields(const DRW_Entity& entity) {
     if (const auto *ellipse = dynamic_cast<const DRW_Ellipse*>(&entity)) {
         if (!isValidDxfEllipseGeometry(*ellipse))
             return false;
+        if (ellipse->ratio > 1.0) {
+            const double major = std::hypot(std::hypot(ellipse->secPoint.x,
+                                                       ellipse->secPoint.y),
+                                            ellipse->secPoint.z);
+            // Axis normalization must be representable before any record is
+            // emitted; otherwise inverting only the ratio changes geometry.
+            if (!std::isfinite(major * ellipse->ratio)
+                || !std::isfinite(ellipse->endparam - ellipse->staparam))
+                return false;
+        }
     }
     if (const auto *text = dynamic_cast<const DRW_Text*>(&entity)) {
         const auto* mtext = dynamic_cast<const DRW_MText*>(text);
@@ -6140,8 +6150,17 @@ bool dxfRW::validateHatchPayload(const DRW_Hatch *ent) const {
             return dynamic_cast<const DRW_Line*>(value.get()) != nullptr;
         case DRW::ARC:
             return dynamic_cast<const DRW_Arc*>(value.get()) != nullptr;
-        case DRW::ELLIPSE:
-            return dynamic_cast<const DRW_Ellipse*>(value.get()) != nullptr;
+        case DRW::ELLIPSE: {
+            const auto* ellipse = dynamic_cast<const DRW_Ellipse*>(value.get());
+            if (ellipse == nullptr)
+                return false;
+            DRW_Ellipse normalized = *ellipse;
+            normalized.correctAxis();
+            return normalized.ratio <= 1.0
+                && isValidDxfEllipseGeometry(normalized)
+                && std::isfinite(normalized.staparam * ARAD)
+                && std::isfinite(normalized.endparam * ARAD);
+        }
         case DRW::SPLINE: {
             const auto *spline = dynamic_cast<const DRW_Spline*>(value.get());
             return spline != nullptr
@@ -9299,6 +9318,10 @@ bool dxfRW::writeEllipse(DRW_Ellipse *ent){
     //verify axis/ratio and params for full ellipse
     DRW_Ellipse normalized = *ent;
     normalized.correctAxis();
+    // A failed or nonrepresentable normalization must not be emitted as a
+    // superficially valid but geometrically different ellipse.
+    if (normalized.ratio > 1.0 || !isValidDxfEllipseGeometry(normalized))
+        return failDxfWrite();
     if (version > DRW::AC1009) {
         EntityRecordScope scope(*this, ent);
         writer->writeString(0, "ELLIPSE");

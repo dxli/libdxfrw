@@ -7589,47 +7589,45 @@ void DRW_Ellipse::applyExtrusion(){
 
 //if ratio > 1 minor axis are greather than major axis, correct it
 void DRW_Ellipse::correctAxis(){
-    double sweep = endparam - staparam;
-    if (staparam == endparam) {
-        staparam = 0.0;
-        endparam = M_PIx2; //2*M_PI;
-        sweep = M_PIx2;
-    }
+    const bool full = staparam == endparam;
+    const double start = full ? 0.0 : staparam;
+    const double sweep = full ? M_PIx2 : endparam - staparam;
     if (ratio > 1){
-        const double normalLength = std::sqrt(
-            extPoint.x * extPoint.x + extPoint.y * extPoint.y
-            + extPoint.z * extPoint.z);
-        const double majorLength = std::sqrt(
-            secPoint.x * secPoint.x + secPoint.y * secPoint.y
-            + secPoint.z * secPoint.z);
-        if (std::isfinite(normalLength) && normalLength > 0.0
-            && std::isfinite(majorLength) && majorLength > 0.0) {
-            const double nx = extPoint.x / normalLength;
-            const double ny = extPoint.y / normalLength;
-            const double nz = extPoint.z / normalLength;
-            const double minorX = ny * secPoint.z - nz * secPoint.y;
-            const double minorY = nz * secPoint.x - nx * secPoint.z;
-            const double minorZ = nx * secPoint.y - ny * secPoint.x;
-            const double minorLength = std::sqrt(
-                minorX * minorX + minorY * minorY + minorZ * minorZ);
-            const double targetLength = majorLength * ratio;
-            if (std::isfinite(minorLength) && minorLength > 0.0
-                && std::isfinite(targetLength)) {
-                const double axisScale = targetLength / minorLength;
-                secPoint.x = minorX * axisScale;
-                secPoint.y = minorY * axisScale;
-                secPoint.z = minorZ * axisScale;
-            }
-        }
-        ratio = 1/ratio;
+        const double normalLength = std::hypot(std::hypot(extPoint.x, extPoint.y), extPoint.z);
+        const double majorLength = std::hypot(std::hypot(secPoint.x, secPoint.y), secPoint.z);
+        const double targetLength = majorLength * ratio;
+        if (!std::isfinite(normalLength) || normalLength <= 0.0
+            || !std::isfinite(majorLength) || majorLength <= 0.0
+            || !std::isfinite(targetLength) || targetLength <= 0.0
+            || !std::isfinite(sweep))
+            return;
+        const double nx = extPoint.x / normalLength, ny = extPoint.y / normalLength, nz = extPoint.z / normalLength;
+        const double ax = secPoint.x / majorLength, ay = secPoint.y / majorLength, az = secPoint.z / majorLength;
+        const double minorX = ny * az - nz * ay, minorY = nz * ax - nx * az, minorZ = nx * ay - ny * ax;
+        const double minorLength = std::hypot(std::hypot(minorX, minorY), minorZ);
+        if (!std::isfinite(minorLength) || minorLength <= 0.0)
+            return;
+        const DRW_Coord axis{(minorX / minorLength) * targetLength,
+                             (minorY / minorLength) * targetLength,
+                             (minorZ / minorLength) * targetLength};
         // Swapping the major/minor axes changes the parameter origin by
         // -PI/2. Normalize only the start and preserve the signed sweep; the
         // end may legitimately wrap past 2PI (or be less than the start for
         // a clockwise partial ellipse).
-        staparam = std::fmod(staparam - M_PI_2, M_PIx2);
-        if (staparam < 0.0)
-            staparam += M_PIx2;
-        endparam = staparam + sweep;
+        double normalizedStart = std::fmod(start - M_PI_2, M_PIx2);
+        if (normalizedStart < 0.0)
+            normalizedStart += M_PIx2;
+        const double normalizedEnd = normalizedStart + sweep;
+        if (!std::isfinite(axis.x) || !std::isfinite(axis.y) || !std::isfinite(axis.z)
+            || !std::isfinite(normalizedStart) || !std::isfinite(normalizedEnd))
+            return;
+        secPoint = axis;
+        ratio = 1/ratio;
+        staparam = normalizedStart;
+        endparam = normalizedEnd;
+    } else if (full) {
+        staparam = 0.0;
+        endparam = M_PIx2;
     }
 }
 

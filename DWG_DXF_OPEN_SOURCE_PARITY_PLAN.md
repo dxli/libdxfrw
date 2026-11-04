@@ -837,6 +837,11 @@ SOLID, TRACE and 3DFACE input now refuse a fourth Z without fourth X/Y
 instead of silently replacing it. Valid triangle and default-Z inputs
 remain supported; see the [corner receipt](docs/research/p6-dxf-incomplete-fourth-corner-2026-11-04.json).
 
+For ELLIPSE and HATCH/MPOLYGON ellipse edges, continue source and native
+qualification beyond the bounded extreme-axis normalization fix. In particular,
+establish the applicable coordinate rules before changing nonzero edge Z handling;
+see the [normalization receipt](docs/research/p6-dxf-ellipse-extreme-axis-normalization-2026-11-04.json).
+
 Generated LTYPE_CONTROL output has a consumer-visible built-in linetype
 ordering risk: six ODA-produced files conflict with the PDF’s stated order.
 Keep the PDF authoritative and seek clarification before changing that order.

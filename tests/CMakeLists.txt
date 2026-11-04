@@ -161,6 +161,15 @@ target_link_libraries(libdxfrw_dxf_fourth_corner_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dxf_fourth_corner COMMAND libdxfrw_dxf_fourth_corner_tests)
 set_tests_properties(libdxfrw_dxf_fourth_corner PROPERTIES LABELS "dxf;fast;geometry" TIMEOUT 30)
 
+add_executable(libdxfrw_dxf_ellipse_extreme_axis_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dxf_ellipse_extreme_axis_tests.cpp)
+target_compile_features(libdxfrw_dxf_ellipse_extreme_axis_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dxf_ellipse_extreme_axis_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dxf_ellipse_extreme_axis_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dxf_ellipse_extreme_axis_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dxf_ellipse_extreme_axis COMMAND libdxfrw_dxf_ellipse_extreme_axis_tests)
+set_tests_properties(libdxfrw_dxf_ellipse_extreme_axis PROPERTIES LABELS "dxf;fast;geometry" TIMEOUT 30)
+
 add_executable(libdxfrw_dwg_ltype_multiversion_count_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dwg_ltype_multiversion_count_tests.cpp)
 target_compile_features(libdxfrw_dwg_ltype_multiversion_count_tests PRIVATE cxx_std_17)
