@@ -380,6 +380,22 @@ bool controlEntryCountUsesBitShort(std::uint16_t objectType) {
     }
 }
 
+bool hasR2007DetachedControlHandles(std::uint16_t type) noexcept {
+    switch (type) {
+    case DRW::DwgLayerControlObjectType:
+    case DRW::DwgStyleControlObjectType:
+    case DRW::DwgLTypeControlObjectType:
+    case DRW::DwgViewControlObjectType:
+    case DRW::DwgUcsControlObjectType:
+    case DRW::DwgVPortControlObjectType:
+    case DRW::DwgAppIdControlObjectType:
+    case DRW::DwgDimStyleControlObjectType:
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool writeControlEntryCount(dwgBufferW& body, std::uint16_t objectType,
                             std::uint32_t count, DRW::Version version) {
     // ODA v5.4.1 §20.4.57 specifies BL for LTYPE_CONTROL.
@@ -950,7 +966,7 @@ bool dwgWriter15::emitControlObject(
     dwgBufferW *hdlBuf = &body;
     const bool useControlHandleScratch =
         (m_version > DRW::AC1014 && m_version < DRW::AC1021) ||
-        (m_version == DRW::AC1021 && typeCode == DRW::DwgLTypeControlObjectType) ||
+        (m_version == DRW::AC1021 && hasR2007DetachedControlHandles(typeCode)) ||
         m_version > DRW::AC1021;
     if (useControlHandleScratch) {
         m_objectHandles.reset();
@@ -996,7 +1012,7 @@ bool dwgWriter15::emitControlObject(
     dwgBufferW *hdlBuf = &body;
     const bool useControlHandleScratch =
         (m_version > DRW::AC1014 && m_version < DRW::AC1021) ||
-        (m_version == DRW::AC1021 && typeCode == DRW::DwgLTypeControlObjectType) ||
+        (m_version == DRW::AC1021 && hasR2007DetachedControlHandles(typeCode)) ||
         m_version > DRW::AC1021;
     if (useControlHandleScratch) {
         m_objectHandles.reset();

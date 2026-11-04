@@ -1235,6 +1235,10 @@ if(LIBDXFRW_BUILD_TESTS)
         PROPERTIES LABELS "fast;dwg;blocks;ownership;generated" TIMEOUT 15)
     add_test(NAME libdxfrw_dwg_block_control_handle_boundary
         COMMAND libdxfrw_dwg_local_roundtrip --block-control-handle-boundary)
+    add_test(NAME libdxfrw_dwg_r2007_generic_control_boundaries
+        COMMAND libdxfrw_dwg_local_roundtrip --r2007-generic-control-boundaries)
+    set_tests_properties(libdxfrw_dwg_r2007_generic_control_boundaries PROPERTIES
+        LABELS "fast;dwg;AC1021;generated;transaction")
     set_tests_properties(libdxfrw_dwg_block_control_handle_boundary
         PROPERTIES LABELS "fast;dwg;blocks;framing;generated" TIMEOUT 15)
     add_test(NAME libdxfrw_dwg_group_dictionary_controls

@@ -31,6 +31,8 @@
 #include <vector>
 
 #include "drw_reserve.h"
+#include "dwg_fixed_handles.h"
+#include "dwgbuffer.h"
 #include "dwgsafety.h"
 #include "dwgutil.h"
 #include "dwgwriterlayoutvalidation.h"
@@ -910,10 +912,36 @@ void dwgWriter21::finishObject() {
         m_writeError = true;
         return;
     }
+    // These seven generic table controls carry an absent-string bit followed
+    // immediately by their handle tail. ODA-produced AC1021 frames declare
+    // that exact (potentially unaligned) boundary. BLOCK and LTYPE retain
+    // their existing independently qualified framing.
+    std::int16_t expectedControlType = 0;
+    switch (m_currentHandle) {
+    case DRW::DwgLayerControlHandle: expectedControlType = DRW::DwgLayerControlObjectType; break;
+    case DRW::DwgStyleControlHandle: expectedControlType = DRW::DwgStyleControlObjectType; break;
+    case DRW::DwgViewControlHandle: expectedControlType = DRW::DwgViewControlObjectType; break;
+    case DRW::DwgUcsControlHandle: expectedControlType = DRW::DwgUcsControlObjectType; break;
+    case DRW::DwgVportControlHandle: expectedControlType = DRW::DwgVPortControlObjectType; break;
+    case DRW::DwgAppIdControlHandle: expectedControlType = DRW::DwgAppIdControlObjectType; break;
+    case DRW::DwgDimstyleControlHandle: expectedControlType = DRW::DwgDimStyleControlObjectType; break;
+    default: break;
+    }
+    const bool exactControlBoundary = expectedControlType != 0;
+    if (exactControlBoundary) {
+        dwgBuffer typeReader(m_objectBody.data().data(), m_objectBody.size());
+        if (m_objectBody.data().empty() || m_objectHandles.data().empty()
+            || !m_objectStrings.data().empty()
+            || typeReader.getObjType(m_version) != expectedControlType
+            || !typeReader.isGood()) {
+            m_writeError = true;
+            return;
+        }
+    }
     // R2007 strings follow the scalar data at its bit boundary. Padding
     // before the strings makes a contiguous TV array (e.g. DICTIONARY)
     // decode the padding as its length. Put alignment in the trailer instead.
-    if (m_objectStrings.data().empty())
+    if (m_objectStrings.data().empty() && !exactControlBoundary)
         m_objectBody.alignToByte();
     if (m_objectStrings.data().size() > std::numeric_limits<std::uint32_t>::max()
         || m_objectBody.size() > std::numeric_limits<std::uint32_t>::max()
@@ -932,12 +960,20 @@ void dwgWriter21::finishObject() {
         return;
     }
 
+    const std::uint64_t handleBaseBit = m_objectBody.bitCount();
+    if (exactControlBoundary) {
+        if (handleBaseBit > std::numeric_limits<std::uint32_t>::max()) {
+            m_writeError = true;
+            return;
+        }
+        m_objectBody.putBytes(m_objectHandles.data().data(), m_objectHandles.data().size());
+    }
     m_objectBody.alignToByte();
     m_objectHandles.alignToByte();
     const std::uint32_t dataBytes =
         static_cast<std::uint32_t>(m_objectBody.size());
     const std::uint32_t handleBytes =
-        static_cast<std::uint32_t>(m_objectHandles.size());
+        static_cast<std::uint32_t>(exactControlBoundary ? 0u : m_objectHandles.size());
     const std::uint64_t totalBytes64 =
         static_cast<std::uint64_t>(dataBytes) + handleBytes;
     if (dataBytes > std::numeric_limits<std::uint32_t>::max() / 8u
@@ -948,7 +984,8 @@ void dwgWriter21::finishObject() {
         return;
     }
 
-    std::uint32_t bitCount = dataBytes * 8u;
+    std::uint32_t bitCount = exactControlBoundary
+        ? static_cast<std::uint32_t>(handleBaseBit) : dataBytes * 8u;
     if (!m_objectBody.data().empty()) {
         const std::uint8_t bsCode = (m_objectBody.data()[0] >> 6) & 0x03;
         const std::size_t rlBitOffset =
@@ -972,8 +1009,8 @@ void dwgWriter21::finishObject() {
     const std::uint16_t crc = m_buf.crc16(
         0xC0C1, frameStart, bodyStart + static_cast<std::size_t>(totalBytes64));
     m_buf.putRawShort16(crc);
-    if (!captureLastDwgObjectHandleOccurrences(mergedStringBaseBit, 0, true,
-                                               false)) {
+    if (!captureLastDwgObjectHandleOccurrences(mergedStringBaseBit, handleBaseBit, true,
+                                               exactControlBoundary)) {
         m_buf.truncate(frameStart);
         m_writeError = true;
         m_currentHandle = 0;

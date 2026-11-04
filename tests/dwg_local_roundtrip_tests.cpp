@@ -349,6 +349,117 @@ public:
         return true;
     }
 
+    static bool checkR2007GenericControlBoundaries(dwgWriter21& writer) {
+        if (!writer.prepareDwgClassManifest() || !writer.writeFileHeaderStub()
+            || !writer.writeDwgHeader() || !writer.writeDwgClasses()
+            || !writer.writeDwgObjects()) return false;
+        struct Profile { std::uint32_t handle; std::int16_t type; std::uint32_t child;
+                         bool shortCount; bool dimStyle; };
+        const std::array<Profile, 7> profiles{{
+            {DRW::DwgLayerControlHandle, DRW::DwgLayerControlObjectType, DRW::DwgLayer0Handle, false, false},
+            {DRW::DwgStyleControlHandle, DRW::DwgStyleControlObjectType, DRW::DwgStandardTextStyleHandle, false, false},
+            {DRW::DwgViewControlHandle, DRW::DwgViewControlObjectType, 0u, false, false},
+            {DRW::DwgUcsControlHandle, DRW::DwgUcsControlObjectType, 0u, true, false},
+            {DRW::DwgVportControlHandle, DRW::DwgVPortControlObjectType, DRW::DwgActiveVportHandle, true, false},
+            {DRW::DwgAppIdControlHandle, DRW::DwgAppIdControlObjectType, DRW::DwgAcadAppIdHandle, true, false},
+            {DRW::DwgDimstyleControlHandle, DRW::DwgDimStyleControlObjectType, DRW::DwgStandardDimstyleHandle, true, true}
+        }};
+        for (const auto& p : profiles) {
+            CapturedObjectFrame captured;
+            if (!captureObjectFrame(writer, p.handle, captured)) return false;
+            dwgBuffer frame(captured.bytes.data(), captured.bytes.size());
+            const auto length = frame.getModularShort();
+            const auto offset = frame.getPosition();
+            if (!frame.isGood() || length <= 0 || offset + length + 2u != captured.bytes.size()) return false;
+            std::vector<std::uint8_t> body(captured.bytes.begin() + static_cast<std::ptrdiff_t>(offset),
+                captured.bytes.begin() + static_cast<std::ptrdiff_t>(offset + length));
+            dwgBuffer input(body.data(), body.size());
+            if (input.getObjType(DRW::AC1021) != p.type) return false;
+            const auto boundary = input.getRawLong32();
+            const auto own = input.getHandle();
+            if (own.ref != p.handle || input.getBitShort() != 0u || input.getBitLong() != 0
+                || input.getBit() != 0u) return false;
+            const auto count = p.shortCount ? input.getBitShort() : input.getBitLong();
+            if (count != (p.child ? 1 : 0) || (p.dimStyle && input.getRawChar8() != 0u)
+                || input.getBit() != 0u || !input.isGood()
+                || boundary != input.getPosition() * 8u + input.getBitPos()
+                || boundary != (p.dimStyle ? 82u : p.child ? 74u : 66u)) return false;
+            const auto owner = input.getHandle();
+            const auto xdict = input.getHandle();
+            if (owner.code != DRW::DwgSoftPointer || owner.ref != 0u
+                || xdict.code != DRW::DwgHardOwnership || xdict.ref != 0u) return false;
+            if (p.child) {
+                const auto child = input.getHandle();
+                if (child.code != DRW::DwgSoftOwnership || child.ref != p.child) return false;
+            }
+            if (!input.isGood()) return false;
+            DRW_ObjControl control;
+            const auto parse = [&control](std::vector<std::uint8_t>& bytes) {
+                dwgBuffer buffer(bytes.data(), bytes.size());
+                return control.parseDwg(DRW::AC1021, &buffer, 0u) && buffer.isGood();
+            };
+            const std::vector<std::uint32_t> expected = p.child
+                ? std::vector<std::uint32_t>{p.child} : std::vector<std::uint32_t>{};
+            if (!parse(body) || control.orderedHandleSlots != expected) return false;
+            // The previous local writer used the same inline handle bits but
+            // patched RL to the padded frame end. Preserve that read profile.
+            auto legacy = body;
+            const std::uint32_t oldSize = static_cast<std::uint32_t>(legacy.size() * 8u);
+            for (std::size_t i = 0; i < 32u; ++i) {
+                const std::size_t pos = 10u + i;
+                const auto mask = static_cast<std::uint8_t>(1u << (7u - pos % 8u));
+                const unsigned source = static_cast<unsigned>((i / 8u) * 8u + 7u - i % 8u);
+                if ((oldSize >> source) & 1u) legacy[pos / 8u] |= mask;
+                else legacy[pos / 8u] &= static_cast<std::uint8_t>(~mask);
+            }
+            if (!parse(legacy) || control.orderedHandleSlots != expected) return false;
+            auto truncated = body;
+            truncated.pop_back();
+            if (parse(truncated) || !control.orderedHandleSlots.empty()
+                || !parse(body) || control.orderedHandleSlots != expected) return false;
+            const auto next = std::find_if(writer.m_objectMap.cbegin(), writer.m_objectMap.cend(),
+                [&](const auto& entry) { return entry.second == captured.endOffset; });
+            CapturedObjectFrame following;
+            if (next == writer.m_objectMap.cend() || !captureObjectFrame(writer, next->first, following)) return false;
+        }
+        // Match the producer's two-entry LAYER_CONTROL shape and verify that
+        // the immutable write receipt locates the unaligned merged tokens.
+        DRW_Header secondHeader;
+        dwgWriter21 second(nullptr, &secondHeader);
+        if (!second.emitControlObject(DRW::DwgLayerControlObjectType,
+                DRW::DwgLayerControlHandle, 2u, {DRW::DwgLayer0Handle, 0x30u})) return false;
+        DRW::DwgObjectFrameReceipt receipt;
+        if (!second.getLastDwgObjectFrame(receipt) || !receipt.valid
+            || receipt.objectHandle != DRW::DwgLayerControlHandle || receipt.handleBitSize != 0u)
+            return false;
+        std::vector<DRW::DwgHandleWriteOccurrence> tokens;
+        for (const auto& occurrence : receipt.occurrences)
+            if (occurrence.stream == DRW::DwgObjectHandleStream::Handles) {
+                if (occurrence.serializedSegment != DRW::DwgObjectSerializedSegment::Data) return false;
+                tokens.push_back(occurrence.token);
+            }
+        if (tokens.size() != 4u || tokens.front().startBit != 74u
+            || tokens[0].code != DRW::DwgSoftPointer || tokens[0].reference != 0u
+            || tokens[1].code != DRW::DwgHardOwnership || tokens[1].reference != 0u
+            || tokens[2].code != DRW::DwgSoftOwnership || tokens[2].reference != DRW::DwgLayer0Handle
+            || tokens[3].code != DRW::DwgSoftOwnership || tokens[3].reference != 0x30u)
+            return false;
+        for (std::size_t i = 1; i < tokens.size(); ++i)
+            if (tokens[i - 1u].endBit != tokens[i].startBit) return false;
+        CapturedObjectFrame secondFrame;
+        if (!captureObjectFrame(second, DRW::DwgLayerControlHandle, secondFrame)) return false;
+        dwgBuffer secondBuffer(secondFrame.bytes.data(), secondFrame.bytes.size());
+        const auto secondLength = secondBuffer.getModularShort();
+        const auto secondOffset = secondBuffer.getPosition();
+        if (!secondBuffer.isGood() || secondLength <= 0) return false;
+        dwgBuffer secondBody(secondFrame.bytes.data() + secondOffset, static_cast<std::size_t>(secondLength));
+        DRW_ObjControl secondControl;
+        if (!secondControl.parseDwg(DRW::AC1021, &secondBody, 0u)
+            || secondControl.orderedHandleSlots != std::vector<std::uint32_t>{DRW::DwgLayer0Handle, 0x30u})
+            return false;
+        return true;
+    }
+
     static bool checkBlockControlBoundary(dwgWriter15& writer, bool withUser = false) {
         const DRW::Version version = writer.m_version;
         if (withUser && version != DRW::AC1021) return false;
@@ -36052,6 +36163,11 @@ int main(int argc, char** argv) {
             && DwgBlockRecordXrefWireTestAccess::checkBuiltInBlockModes(w32);
         std::cout << "DWG built-in block owner modes: "
                   << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    } else if (argc == 2 && std::string(argv[1]) == "--r2007-generic-control-boundaries") {
+        DRW_Header header; dwgWriter21 writer(nullptr, &header);
+        const bool passed = DwgBlockRecordXrefWireTestAccess::checkR2007GenericControlBoundaries(writer);
+        std::cout << "DWG R2007 generic control boundaries: " << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 2
         && std::string(argv[1]) == "--block-control-handle-boundary") {
