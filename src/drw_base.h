@@ -1033,11 +1033,18 @@ public:
     ~dwgHandle() = default;
     std::uint8_t code{0};
     std::uint8_t size{0};
+    // Original four-bit wire code. getOffsetHandle() normalizes offset
+    // encodings in `code`; retain the source role for integrity checks.
+    std::uint8_t rawCode{0};
     // Legacy callers and object maps use the low 32 bits.
     std::uint32_t ref{0};
     // Exact low-64-bit encoded reference retained for custom/wide handles.
     std::uint64_t ref64{0};
 };
+static_assert(offsetof(dwgHandle, ref) == 4,
+              "dwgHandle legacy ref offset must remain ABI-stable");
+static_assert(offsetof(dwgHandle, ref64) == 8,
+              "dwgHandle ref64 offset must remain ABI-stable");
 
 //! Class to convert between line width and integer
 /*!

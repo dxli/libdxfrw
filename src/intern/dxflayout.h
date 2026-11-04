@@ -21,7 +21,7 @@ class Decoder {
     DRW_Layout& value;
     static bool real(double a,double b) noexcept {return std::memcmp(&a,&b,sizeof(a))==0;}
     static bool point(const DRW_Coord& a,const DRW_Coord& b) noexcept {return real(a.x,b.x)&&real(a.y,b.y)&&real(a.z,b.z);}
-    static bool handle(const dwgHandle& a,const dwgHandle& b) noexcept {return std::tie(a.code,a.size,a.ref,a.ref64)==std::tie(b.code,b.size,b.ref,b.ref64);}
+    static bool handle(const dwgHandle& a,const dwgHandle& b) noexcept {return std::tie(a.code,a.size,a.rawCode,a.ref,a.ref64)==std::tie(b.code,b.size,b.rawCode,b.ref,b.ref64);}
 public:
     explicit Decoder(DRW_Layout& target):value(target){}
     bool parseCode(int code,const std::unique_ptr<dxfReader>& reader) {return value.parseCode(code,reader);}

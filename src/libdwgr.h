@@ -186,7 +186,13 @@ enum class DwgIntegrityCheckKind : std::uint8_t {
     /// A non-null explicit entity linetype handle does not resolve to LTYPE.
     EntityLineTypeReference,
     /// A non-null LAYER linetype handle does not resolve to LTYPE.
-    LayerLineTypeReference
+    LayerLineTypeReference,
+    /// An entity LAYER handle does not use a hard-pointer source role.
+    EntityLayerHandleRole,
+    /// An explicit entity LTYPE handle does not use a hard-pointer source role.
+    EntityLineTypeHandleRole,
+    /// A LAYER LTYPE handle does not use a hard-pointer source role.
+    LayerLineTypeHandleRole
 };
 
 /// Version of the field and enum contract carried by DwgIntegrityDiagnostic.

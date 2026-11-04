@@ -14,7 +14,7 @@ class Decoder {
     DRW_UCSOrthoPoint pending;bool hasPending=false;unsigned mask=0u;
     static bool real(double a,double b) noexcept {return std::memcmp(&a,&b,sizeof(a))==0;}
     static bool point(const DRW_Coord& a,const DRW_Coord& b) noexcept {return real(a.x,b.x)&&real(a.y,b.y)&&real(a.z,b.z);}
-    static bool handle(const dwgHandle& a,const dwgHandle& b) noexcept {return std::tie(a.code,a.size,a.ref,a.ref64)==std::tie(b.code,b.size,b.ref,b.ref64);}
+    static bool handle(const dwgHandle& a,const dwgHandle& b) noexcept {return std::tie(a.code,a.size,a.rawCode,a.ref,a.ref64)==std::tie(b.code,b.size,b.rawCode,b.ref,b.ref64);}
     static bool color(const DRW_DwgCmcColorMetadata& a,const DRW_DwgCmcColorMetadata& b) noexcept {
         return std::tie(a.present,a.method,a.flags,a.rawIndex,a.rgb24,a.hasRgb,a.colorName,a.bookName)
             ==std::tie(b.present,b.method,b.flags,b.rawIndex,b.rgb24,b.hasRgb,b.colorName,b.bookName);

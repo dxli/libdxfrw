@@ -25,17 +25,25 @@ struct Reader final : dwgReader27 {
 template<class T> struct Entity : T {
  void setup(std::uint32_t layer,std::uint32_t ltype,unsigned flags) {
   this->handle=0x44;this->layerH.ref=layer;this->layerH.ref64=layer;
-  this->lTypeH.ref=ltype;this->lTypeH.ref64=ltype;this->ltFlags=static_cast<std::uint8_t>(flags);
+  this->layerH.rawCode=5;this->lTypeH.ref=ltype;this->lTypeH.ref64=ltype;
+  this->lTypeH.rawCode=5;this->ltFlags=static_cast<std::uint8_t>(flags);
  }
  void wideLayer(std::uint64_t value) {this->layerH.ref64=value;this->layerH.ref=static_cast<std::uint32_t>(value);}
  void wideLtype(std::uint64_t value) {this->lTypeH.ref64=value;this->lTypeH.ref=static_cast<std::uint32_t>(value);}
- void relative() {this->layerH.code=7;this->lTypeH.code=7;}
+ void roles(std::uint8_t layer,std::uint8_t ltype) {this->layerH.rawCode=layer;this->lTypeH.rawCode=ltype;}
+ void relative() {this->layerH.code=7;this->layerH.rawCode=0x0a;this->lTypeH.code=7;this->lTypeH.rawCode=0x0a;}
 };
 static bool checkRow(const Reader& r,DwgIntegrityCheckKind kind,std::uint64_t target,DRW::Version version);
+static bool checkRole(const Reader& r,DwgIntegrityCheckKind kind,std::uint8_t observed,DRW::Version version) {
+ if(r.m_integrityDiagnostics.size()!=1u)return false;const auto& d=r.m_integrityDiagnostics.front();
+ return d.kind==kind && d.severity==DwgIntegritySeverity::Error && d.phase==DwgIntegrityPhase::SectionParser
+     && d.version==version && d.hasLogicalHandle && d.logicalHandle==0x44
+     && d.hasExpected && d.expected==DRW::DwgHardPointer && d.hasObserved && d.observed==observed;
+}
 static bool layerControls(DRW::Version version) {
  Reader r(version);
  auto* ltype=new DRW_LType;ltype->name="Continuous";r.ltypemap.emplace(0x22,ltype);
- DRW_Layer layer;layer.handle=0x44;layer.lTypeH.ref=0x22;layer.lTypeH.ref64=0x22;
+ DRW_Layer layer;layer.handle=0x44;layer.lTypeH.ref=0x22;layer.lTypeH.ref64=0x22;layer.lTypeH.rawCode=5;
  r.resolveLayerLineTypeReference(&layer);
  if(!r.m_integrityDiagnostics.empty()||layer.lineType!="Continuous")return false;
  layer.lTypeH.ref=0x7e;layer.lTypeH.ref64=0x7e;r.resolveLayerLineTypeReference(&layer);
@@ -45,7 +53,10 @@ static bool layerControls(DRW::Version version) {
  if(!checkRow(r,DwgIntegrityCheckKind::LayerLineTypeReference,0x100000022ull,version))return false;
  r.m_integrityDiagnostics.clear();layer.lTypeH.ref=0;layer.lTypeH.ref64=0x100000000ull;
  r.resolveLayerLineTypeReference(&layer);
- return checkRow(r,DwgIntegrityCheckKind::LayerLineTypeReference,0x100000000ull,version);
+ if(!checkRow(r,DwgIntegrityCheckKind::LayerLineTypeReference,0x100000000ull,version))return false;
+ r.m_integrityDiagnostics.clear();layer.lTypeH.ref=0x22;layer.lTypeH.ref64=0x22;layer.lTypeH.rawCode=4;
+ r.resolveLayerLineTypeReference(&layer);
+ return checkRole(r,DwgIntegrityCheckKind::LayerLineTypeHandleRole,4,version);
 }
 static bool checkRow(const Reader& r,DwgIntegrityCheckKind kind,std::uint64_t target,DRW::Version version) {
  if(r.m_integrityDiagnostics.size()!=1u)return false;const auto& d=r.m_integrityDiagnostics.front();
@@ -66,7 +77,15 @@ template<class T> bool controls(DRW::Version version) {
  e.setup(0,0x22,3);e.wideLayer(0x100000000ull);r.parseAttribs(&e);if(!checkRow(r,DwgIntegrityCheckKind::EntityLayerReference,0x100000000ull,version))return false;r.m_integrityDiagnostics.clear();
  e.setup(0x11,0x22,3);e.wideLtype(0x100000022ull);r.parseAttribs(&e);if(!checkRow(r,DwgIntegrityCheckKind::EntityLineTypeReference,0x100000022ull,version))return false;r.m_integrityDiagnostics.clear();
  e.setup(0x11,0,3);e.wideLtype(0x100000000ull);r.parseAttribs(&e);if(!checkRow(r,DwgIntegrityCheckKind::EntityLineTypeReference,0x100000000ull,version))return false;r.m_integrityDiagnostics.clear();
- e.setup(0x11,0x22,3);e.relative();r.parseAttribs(&e);if(!r.m_integrityDiagnostics.empty())return false;
+ e.setup(0x11,0x22,3);e.relative();r.parseAttribs(&e);
+ if(r.m_integrityDiagnostics.size()!=2u)return false;
+ if(r.m_integrityDiagnostics[0].kind!=DwgIntegrityCheckKind::EntityLineTypeHandleRole
+    ||r.m_integrityDiagnostics[1].kind!=DwgIntegrityCheckKind::EntityLayerHandleRole)return false;
+ r.m_integrityDiagnostics.clear();e.setup(0x11,0x22,3);e.roles(4,4);r.parseAttribs(&e);
+ if(r.m_integrityDiagnostics.size()!=2u
+    ||r.m_integrityDiagnostics[0].kind!=DwgIntegrityCheckKind::EntityLineTypeHandleRole
+    ||r.m_integrityDiagnostics[1].kind!=DwgIntegrityCheckKind::EntityLayerHandleRole)return false;
+ r.m_integrityDiagnostics.clear();
  for(unsigned flag : {0u,1u,2u}) { e.setup(0x11,0x7e,flag);e.wideLtype(0x100000022ull);r.parseAttribs(&e);if(!r.m_integrityDiagnostics.empty())return false; }
  e.setup(0,0,3);r.parseAttribs(&e);return r.m_integrityDiagnostics.empty();
 }

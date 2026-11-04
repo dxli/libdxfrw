@@ -736,6 +736,7 @@ dwgHandle dwgBuffer::getHandle(){ //H
     if (!isGood())
         return hl;
     hl.code = (data >> 4) & 0x0F;
+    hl.rawCode = hl.code;
     hl.size = data & 0x0F;
     // The object-map API remains uint32_t, but custom/common fields can carry
     // wider handles. Keep the complete low-64-bit payload while preserving

@@ -7152,6 +7152,14 @@ void dwgReader::resolveLayerLineTypeReference(DRW_Layer *layer) noexcept {
         false, 0u, false, layer->handle, layer->handle != DRW::NoHandle,
         layer->lTypeH.ref64, 0u, true);
   }
+  if (reference != 0u && layer->lTypeH.rawCode != DRW::DwgHardPointer) {
+    recordIntegrityDiagnostic(
+        DwgIntegritySeverity::Error, DwgIntegrityAddressSpace::None,
+        DwgIntegrityPhase::SectionParser,
+        DwgIntegrityCheckKind::LayerLineTypeHandleRole, -1, -1, nullptr, 0u,
+        false, 0u, false, layer->handle, layer->handle != DRW::NoHandle,
+        DRW::DwgHardPointer, layer->lTypeH.rawCode, true);
+  }
 }
 
 void dwgReader::parseAttribs(DRW_Entity *e) {
@@ -7175,6 +7183,15 @@ void dwgReader::parseAttribs(DRW_Entity *e) {
         0u, false, 0u, false, e->handle, e->handle != DRW::NoHandle,
         e->lTypeH.ref64, 0u, true);
   }
+  if (e->ltFlags == 3u && ltref != 0u &&
+      e->lTypeH.rawCode != DRW::DwgHardPointer) {
+    recordIntegrityDiagnostic(
+        DwgIntegritySeverity::Error, DwgIntegrityAddressSpace::None,
+        DwgIntegrityPhase::SectionParser,
+        DwgIntegrityCheckKind::EntityLineTypeHandleRole, -1, -1, nullptr,
+        0u, false, 0u, false, e->handle, e->handle != DRW::NoHandle,
+        DRW::DwgHardPointer, e->lTypeH.rawCode, true);
+  }
   auto ly_it = layermap.find(lyref);
   if (ly_it != layermap.end() && ly_it->second != nullptr)
     e->layer = (ly_it->second)->name;
@@ -7185,6 +7202,14 @@ void dwgReader::parseAttribs(DRW_Entity *e) {
         DwgIntegrityCheckKind::EntityLayerReference, -1, -1, nullptr,
         0u, false, 0u, false, e->handle, e->handle != DRW::NoHandle,
         e->layerH.ref64, 0u, true);
+  }
+  if (lyref != 0u && e->layerH.rawCode != DRW::DwgHardPointer) {
+    recordIntegrityDiagnostic(
+        DwgIntegritySeverity::Error, DwgIntegrityAddressSpace::None,
+        DwgIntegrityPhase::SectionParser,
+        DwgIntegrityCheckKind::EntityLayerHandleRole, -1, -1, nullptr, 0u,
+        false, 0u, false, e->handle, e->handle != DRW::NoHandle,
+        DRW::DwgHardPointer, e->layerH.rawCode, true);
   }
 
   // Drain any deferred EED handle lookups now that the symbol tables

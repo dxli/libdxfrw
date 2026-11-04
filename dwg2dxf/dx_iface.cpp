@@ -48542,7 +48542,8 @@ bool auxiliarySourceReferences(const DRW_RawDxfObject& raw,bool field,std::vecto
 }
 
 bool symbolHandleEqual(const dwgHandle& a,const dwgHandle& b) noexcept {
-    return a.code==b.code && a.size==b.size && a.ref==b.ref && a.ref64==b.ref64;
+    return a.code==b.code && a.size==b.size && a.rawCode==b.rawCode
+        && a.ref==b.ref && a.ref64==b.ref64;
 }
 
 bool textStyleSourceEqual(const DRW_Textstyle& a,const DRW_Textstyle& b,DRW::Version version) {

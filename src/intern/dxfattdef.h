@@ -159,7 +159,7 @@ private:
         return real(a.x,b.x)&&real(a.y,b.y)&&real(a.z,b.z);
     }
     static bool handle(const dwgHandle& a,const dwgHandle& b) noexcept {
-        return std::tie(a.code,a.size,a.ref,a.ref64)==std::tie(b.code,b.size,b.ref,b.ref64);
+        return std::tie(a.code,a.size,a.rawCode,a.ref,a.ref64)==std::tie(b.code,b.size,b.rawCode,b.ref,b.ref64);
     }
     static bool refs(const std::vector<DRW_Entity::PendingHandleRef>& a,
                      const std::vector<DRW_Entity::PendingHandleRef>& b) noexcept {
