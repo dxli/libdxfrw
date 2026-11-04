@@ -475,6 +475,7 @@ EXTRA_DIST = \
     tests/dxf_no_raw_sections_tests.cpp \
     tests/dxf_r12_ellipse_wrap_tests.cpp \
     tests/dxf_sectionobject_411_tests.cpp \
+    tests/dxf_sectionobject_vertices_tests.cpp \
     tests/dxf_sparse_material_raw_tests.cpp \
     tests/dxf_sun_color_order_tests.cpp \
     tests/dxf_symbol_output_tests.cpp \
@@ -728,6 +729,7 @@ EXTRA_DIST = \
     tools/audit_rastervariables_ac1018_source.py \
     tools/audit_rastervariables_ac1032_frame1_source.py \
     tools/audit_sectionobject_411.py \
+    tools/audit_sectionobject_late_counts.py \
     tools/audit_solid_trace_triangle_elevation.py \
     tools/audit_sparse_material_source.py \
     tools/audit_sun_color_order.py \
@@ -763,6 +765,9 @@ EXTRA_DIST = \
     tools/author_r12_ellipse_wrap_source.py \
     tools/author_sectionobject_411.py \
     tools/author_sectionobject_411_source.cpp \
+    tools/author_sectionobject_count_variants.py \
+    tools/author_sectionobject_counts.cpp \
+    tools/author_sectionobject_late_counts.py \
     tools/author_selected_ac1027_light.py \
     tools/author_selected_ac1027_lightlist.py \
     tools/author_selected_layer_color.py \
@@ -879,6 +884,7 @@ EXTRA_DIST = \
     tools/probe_rastervariables_ac1032_frame1_source.cpp \
     tools/probe_sectionobject_411_legacy.cpp \
     tools/probe_sectionobject_411_loss.cpp \
+    tools/probe_sectionobject_counts.cpp \
     tools/probe_solid_trace_triangle_elevation.cpp \
     tools/probe_sparse_material_adapter.cpp \
     tools/probe_sparse_material_source.cpp \

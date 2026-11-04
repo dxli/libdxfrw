@@ -122,6 +122,12 @@ and [original receipt](docs/research/p4-ac1018-empty-style-dwg-bit-order-differe
 
 ## P4 — original bodies and complete document closure
 
+SECTIONOBJECT contour parsing now retains complete vertices when their count
+groups appear later and rejects mismatched or ambiguous arrays before record
+callbacks. Omitted counts remain accepted for compatibility, though the sampled
+ODA reader drops those arrays; native rendering remains unqualified
+([receipt](docs/research/p4-dxf-sectionobject-vertex-count-order-2026-11-04.json)).
+
 SECTIONOBJECT AcDbSection group 411 no longer disappears through a typed
 projection: default consumers refuse the record, while an explicit raw-only
 policy delivers it for caller-managed same-version replay. Its color semantics,

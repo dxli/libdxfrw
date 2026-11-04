@@ -21756,6 +21756,33 @@ bool dxfRW::processSectionObject() {
     DRW_RawDxfObject raw;
     bool inSectionBody = false;
     bool hasRawOnlyColor = false;
+    struct VertexCursor {
+        std::size_t count = 0u;
+        int expected = 0;
+        unsigned mask = 0u;
+        bool countSeen = false;
+    } vertices, backVertices;
+    const auto complete = [](const VertexCursor& cursor) {
+        return (cursor.mask == 0u || (cursor.mask & 2u) != 0u)
+            && (!cursor.countSeen
+                || cursor.count == static_cast<std::size_t>(cursor.expected));
+    };
+    const auto coordinate = [this](VertexCursor& cursor, unsigned component) {
+        if (!std::isfinite(reader->getDouble()))
+            return false;
+        if (component == 1u) {
+            if ((cursor.mask != 0u && (cursor.mask & 2u) == 0u)
+                || cursor.count >= DRW_SectionObject::kMaxVertices)
+                return false;
+            ++cursor.count;
+            cursor.mask = 1u;
+            return true;
+        }
+        if ((cursor.mask & 1u) == 0u || (cursor.mask & component) != 0u)
+            return false;
+        cursor.mask |= component;
+        return true;
+    };
     if (!copyRawDxfCarrierName(raw, nextentity))
         return setError(DRW::BAD_CODE_PARSED);
     while (reader->readRec(&code)) {
@@ -21765,7 +21792,10 @@ bool dxfRW::processSectionObject() {
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!acceptEntityCallbackBoundary())
                 return setError(DRW::BAD_READ_ENTITIES);
-            if (section.m_verts.size() > DRW_SectionObject::kMaxVertices
+            if (!complete(vertices) || !complete(backVertices)
+                || section.m_verts.size() != vertices.count
+                || section.m_blVerts.size() != backVertices.count
+                || section.m_verts.size() > DRW_SectionObject::kMaxVertices
                 || section.m_blVerts.size() > DRW_SectionObject::kMaxVertices)
                 return setError(DRW::BAD_CODE_PARSED);
             if (!validateCapturedRawDxfObject(raw, binFile, reader->classifierProfile()))
@@ -21792,6 +21822,30 @@ bool dxfRW::processSectionObject() {
             inSectionBody = reader->getStringView() == "AcDbSection";
         if (code == 411 && inSectionBody)
             hasRawOnlyColor = true;
+        if (inSectionBody && (code == 92 || code == 93)) {
+            VertexCursor& cursor = code == 92 ? vertices : backVertices;
+            const int count = reader->getInt32();
+            if (cursor.countSeen || count < 0
+                || static_cast<std::size_t>(count) > DRW_SectionObject::kMaxVertices
+                || !captureRawGroup(raw, code, /*validateHandles=*/true))
+                return setError(DRW::BAD_CODE_PARSED);
+            cursor.expected = count;
+            cursor.countSeen = true;
+            continue;
+        }
+        if (inSectionBody) {
+            VertexCursor* cursor = nullptr;
+            unsigned component = 0u;
+            if (code == 11 || code == 21 || code == 31) {
+                cursor = &vertices;
+                component = code == 11 ? 1u : code == 21 ? 2u : 4u;
+            } else if (code == 12 || code == 22 || code == 32) {
+                cursor = &backVertices;
+                component = code == 12 ? 1u : code == 22 ? 2u : 4u;
+            }
+            if (cursor != nullptr && !coordinate(*cursor, component))
+                return setError(DRW::BAD_CODE_PARSED);
+        }
         if (!captureAndParseRawDxfGroup(raw, code, section))
             return setError(DRW::BAD_CODE_PARSED);
     }
