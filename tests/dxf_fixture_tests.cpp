@@ -33529,6 +33529,241 @@ void testCustomDictionaryVarOwners(TestContext& t) {
     if(passed){std::error_code error;std::filesystem::remove_all(dir,error);}else std::cerr<<"Custom DICTIONARYVAR evidence: "<<dir<<'\n';
 }
 
+void testDictionaryVarObjectsAllocationRetry(TestContext& t) {
+    class DictionaryVarAllocationWriter final : public dx_iface {
+    public:
+        void writeObjects() override {
+            objectsCallbackReached = true;
+            if (!armAllocationFailure) {
+                dx_iface::writeObjects();
+                return;
+            }
+            materialAllocationCountdown = allocationOffset;
+            dx_iface::writeObjects();
+            remainingAllocationCountdown = materialAllocationCountdown;
+            materialAllocationCountdown = -1;
+        }
+
+        bool armAllocationFailure{false};
+        bool objectsCallbackReached{false};
+        long allocationOffset{0L};
+        long remainingAllocationCountdown{-1L};
+    };
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-dictionaryvar-objects-allocation-"
+           + std::to_string(nonce));
+    std::error_code error;
+    if (!std::filesystem::create_directory(directory, error) || error) {
+        t.expect(false,
+                 "temporary DICTIONARYVAR OBJECTS allocation directory is available");
+        return;
+    }
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+
+    const auto inputPath = directory / "source.dxf";
+    const auto outputPath = directory / "dictionaryvar-objects.dxf";
+    const std::string inputFilename = inputPath.string();
+    const std::string outputFilename = outputPath.string();
+    const auto outputBytes = [&outputPath]() {
+        std::ifstream input(outputPath, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input), {});
+    };
+    if (!materialConsumerControls::write(
+            inputPath,
+            customDictionaryVarControls::recipe(
+                "AC1027", true, false, false),
+            false, "AC1027")) {
+        t.expect(false, "generated DICTIONARYVAR source profile is writable");
+        return;
+    }
+    const auto importSource = [&inputFilename](
+            DictionaryVarAllocationWriter& adapter, dx_data& data) {
+        return adapter.fileImport(inputFilename, &data, false)
+            && data.hasNamedObjectDictionary
+            && data.dictionaryVars.size() == 2u;
+    };
+    const auto sourceUnchanged = [](const dx_data& data) {
+        if (!data.hasNamedObjectDictionary
+            || data.namedObjectDictionary.handle != 0xCu
+            || data.namedObjectDictionary.m_entries.size() != 1u
+            || data.namedObjectDictionary.m_entries.front().m_name
+                != "CUSTOM_META"
+            || data.namedObjectDictionary.m_entries.front().m_handle != 0xAu
+            || data.namedObjectDictionary.m_entries.front().m_dxfHandleCode
+                != DRW_Dictionary::Entry::DxfHandleCode::SoftOwner
+            || data.dictionaryVars.size() != 2u
+            || data.dictionaries.size() != 2u
+            || data.rawNamedResourceObjects.size() != 2u)
+            return false;
+        const auto custom = std::find_if(
+            data.dictionaryVars.begin(), data.dictionaryVars.end(),
+            [](const DRW_DictionaryVar& value) {
+                return value.handle == 0xDu;
+            });
+        const auto second = std::find_if(
+            data.dictionaryVars.begin(), data.dictionaryVars.end(),
+            [](const DRW_DictionaryVar& value) {
+                return value.handle == 0xEu;
+            });
+        const auto firstDictionary = std::find_if(
+            data.dictionaries.begin(), data.dictionaries.end(),
+            [](const DRW_Dictionary& value) {
+                return value.handle == 0xAu;
+            });
+        const auto nestedDictionary = std::find_if(
+            data.dictionaries.begin(), data.dictionaries.end(),
+            [](const DRW_Dictionary& value) {
+                return value.handle == 0xBu;
+            });
+        const auto rawCustom = std::find_if(
+            data.rawNamedResourceObjects.begin(),
+            data.rawNamedResourceObjects.end(),
+            [](const DRW_RawDxfObject& value) {
+                return value.handle == 0xDu;
+            });
+        const auto rawSecond = std::find_if(
+            data.rawNamedResourceObjects.begin(),
+            data.rawNamedResourceObjects.end(),
+            [](const DRW_RawDxfObject& value) {
+                return value.handle == 0xEu;
+            });
+        return custom != data.dictionaryVars.end()
+            && custom->parentHandle == 0xBu && custom->m_schema == 0
+            && custom->m_value == "custom-Ω"
+            && rawCustom != data.rawNamedResourceObjects.end()
+            && rawCustom->name == "DICTIONARYVAR"
+            && rawCustom->parentHandle == 0xBu
+            && second != data.dictionaryVars.end()
+            && second->parentHandle == 0xBu && second->m_schema == 0
+            && second->m_value == "second"
+            && rawSecond != data.rawNamedResourceObjects.end()
+            && rawSecond->name == "DICTIONARYVAR"
+            && rawSecond->parentHandle == 0xBu
+            && firstDictionary != data.dictionaries.end()
+            && firstDictionary->parentHandle == 0xCu
+            && firstDictionary->m_entries.size() == 1u
+            && firstDictionary->m_entries.front().m_name == "SUBMETA"
+            && firstDictionary->m_entries.front().m_handle == 0xBu
+            && nestedDictionary != data.dictionaries.end()
+            && nestedDictionary->parentHandle == 0xAu
+            && nestedDictionary->m_entries.size() == 2u;
+    };
+    const auto readbackMatches = [&outputFilename](bool binary) {
+        return customDictionaryVarControls::proof(
+                   outputFilename, binary, true, false, false)
+            && customDictionaryVarControls::readback(
+                   outputFilename, false);
+    };
+
+    for (const bool binary : {false, true}) {
+        constexpr long allocationProbe = 1000000L;
+        DictionaryVarAllocationWriter measureAdapter;
+        dx_data measureData;
+        const bool imported = importSource(measureAdapter, measureData);
+        measureAdapter.armAllocationFailure = true;
+        measureAdapter.allocationOffset = allocationProbe;
+        const bool measuredWrite = imported && measureAdapter.fileExport(
+            outputFilename, DRW::AC1027, binary, &measureData, false, true);
+        const long objectAllocations = allocationProbe
+            - measureAdapter.remainingAllocationCountdown;
+        const bool calibrated = measuredWrite
+            && measureAdapter.objectsCallbackReached
+            && measureAdapter.remainingAllocationCountdown > 0L
+            && measureAdapter.remainingAllocationCountdown < allocationProbe
+            && objectAllocations > 0L
+            && sourceUnchanged(measureData)
+            && readbackMatches(binary);
+        if (!calibrated) {
+            std::cerr << "DICTIONARYVAR OBJECTS allocation calibration binary="
+                      << binary << " imported=" << imported
+                      << " written=" << measuredWrite
+                      << " callback=" << measureAdapter.objectsCallbackReached
+                      << " remaining="
+                      << measureAdapter.remainingAllocationCountdown
+                      << " allocations=" << objectAllocations << '\n';
+        }
+
+        bool everyOffsetRolledBack = calibrated;
+        bool everyOffsetRetried = calibrated;
+        long injectedFailures = 0L;
+        long firstRollbackFailure = -1L;
+        long firstRetryFailure = -1L;
+        for (long offset = 0L; calibrated && offset < objectAllocations;
+             ++offset) {
+            const std::string sentinel =
+                "DICTIONARYVAR OBJECTS allocation sentinel\n";
+            {
+                std::ofstream seed(outputPath,
+                                   std::ios::binary | std::ios::trunc);
+                seed << sentinel;
+            }
+
+            DictionaryVarAllocationWriter adapter;
+            dx_data data;
+            const bool sourceImported = importSource(adapter, data);
+            adapter.armAllocationFailure = true;
+            adapter.allocationOffset = offset;
+            const std::size_t failuresBefore = materialFailedAllocations;
+            const bool failed = sourceImported && !adapter.fileExport(
+                outputFilename, DRW::AC1027, binary, &data, false, true);
+            materialAllocationCountdown = -1;
+            const bool rolledBack = failed
+                && adapter.objectsCallbackReached
+                && materialFailedAllocations == failuresBefore + 1u
+                && outputBytes() == sentinel
+                && sourceUnchanged(data);
+            everyOffsetRolledBack = everyOffsetRolledBack && rolledBack;
+            if (rolledBack)
+                ++injectedFailures;
+            else if (firstRollbackFailure < 0L)
+                firstRollbackFailure = offset;
+
+            adapter.armAllocationFailure = false;
+            adapter.objectsCallbackReached = false;
+            const bool retried = rolledBack && adapter.fileExport(
+                outputFilename, DRW::AC1027, binary, &data, false, true);
+            const bool retryReadback = retried
+                && adapter.objectsCallbackReached
+                && sourceUnchanged(data)
+                && readbackMatches(binary);
+            everyOffsetRetried = everyOffsetRetried && retryReadback;
+            if (rolledBack && !retryReadback && firstRetryFailure < 0L)
+                firstRetryFailure = offset;
+        }
+
+        if (!everyOffsetRolledBack || !everyOffsetRetried) {
+            std::cerr << "DICTIONARYVAR OBJECTS allocation summary binary="
+                      << binary << " calibrated=" << calibrated
+                      << " allocations=" << objectAllocations
+                      << " injectedFailures=" << injectedFailures
+                      << " firstRollbackFailure=" << firstRollbackFailure
+                      << " firstRetryFailure=" << firstRetryFailure << '\n';
+        }
+        t.expect(calibrated && everyOffsetRolledBack
+                     && injectedFailures == objectAllocations,
+                 binary
+                     ? "binary DICTIONARYVAR OBJECTS sweep rolls back every measured allocation"
+                     : "ASCII DICTIONARYVAR OBJECTS sweep rolls back every measured allocation");
+        t.expect(everyOffsetRetried,
+                 binary
+                     ? "binary DICTIONARYVAR OBJECTS sweep retries on the same adapter and reads back the owner graph"
+                     : "ASCII DICTIONARYVAR OBJECTS sweep retries on the same adapter and reads back the owner graph");
+        std::cout << "DICTIONARYVAR OBJECTS allocation profile binary="
+                  << binary << " measured=" << objectAllocations
+                  << " rolledBack=" << injectedFailures
+                  << " retry=" << everyOffsetRetried << '\n';
+    }
+}
+
 namespace dictionaryVarTransactionControls {
 using namespace customDictionaryVarControls;
 Tags recipe(const std::string& version,bool custom,bool hard) {
@@ -66735,6 +66970,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testXRecordObjectsAllocationRetry(context);
         std::cout << "XRECORD OBJECTS allocation rollback/retry: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--dictionaryvar-objects-allocation-retry") {
+        TestContext context;
+        testDictionaryVarObjectsAllocationRetry(context);
+        std::cout << "DICTIONARYVAR OBJECTS allocation rollback/retry: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
