@@ -816,9 +816,9 @@ suffix; strict output remains refused pending suffix and graph qualification.
 See the [AC1021 receipt](docs/research/p6-ac1021-oda-header-suffix-diagnostic-admission-2026-11-03.json).
 For the AC1027 Cover original and its ODA resave, replacing each complete
 731- or 739-byte suffix with either zeros or a deterministic pattern leaves
-that source's ODA DXF output identical apart from update timestamps. This is
-one conversion route, not a general
-discard rule; extend the physical and native-consumer evidence before changing
+that source's ODA DXF output identical apart from update timestamps. An AC1018
+ET Border resave shows the same result. This is one converter, not a general
+discard rule; extend the independent and native-consumer evidence before changing
 strict admission. See the [mutation receipt](docs/research/p6-ac1027-oda-header-suffix-mutation-2026-11-03.json).
 
 The R2007 writer now emits the required file-header pointer and repeated
