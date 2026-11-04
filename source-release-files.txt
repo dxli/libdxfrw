@@ -462,6 +462,7 @@ tests/dwg_viewport_angle_units_tests.cpp
 tests/dwg_vport_angle_units_tests.cpp
 tests/dxf_compact_material_graph_tests.cpp
 tests/dxf_dictionary_late_hardowner_tests.cpp
+tests/dxf_dimension_oblique_tests.cpp
 tests/dxf_ellipse_extreme_axis_tests.cpp
 tests/dxf_entity_identity_test_helpers.h
 tests/dxf_fixture_tests.cpp
@@ -711,6 +712,7 @@ tools/audit_ac1027_planar_sab_geometry.py
 tools/audit_ac1027_sab_brlcad_rays.py
 tools/audit_compact_material_graph.py
 tools/audit_dictionary_late_hardowner.py
+tools/audit_dimension_oblique.py
 tools/audit_dwg_hatch_ellipse_edge.py
 tools/audit_dwg_hatch_pattern_angles.py
 tools/audit_dwg_ltype_control.py
@@ -762,6 +764,7 @@ tools/author_ac1021_varied_geometry.py
 tools/author_ac1027_1032_writer_control.py
 tools/author_compact_material_graph.py
 tools/author_dictionary_late_hardowner.py
+tools/author_dimension_oblique.py
 tools/author_dwg_hatch_pattern.cpp
 tools/author_dwg_hatch_pattern_source.py
 tools/author_dwg_legacy_extrusion.py
@@ -874,6 +877,7 @@ tools/probe_ac1027_1032_writer_rejection.cpp
 tools/probe_ac1027_header_geometry.cpp
 tools/probe_ac1027_maintenance_native.cpp
 tools/probe_ac1027_source_sab_cqacis.py
+tools/probe_dimension_oblique.cpp
 tools/probe_dwg_hatch_pattern.cpp
 tools/probe_dwg_hatch_unsupported_edges.cpp
 tools/probe_dwg_vertex_tangent.cpp

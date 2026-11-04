@@ -11188,6 +11188,11 @@ bool dxfRW::writeDimension(DRW_Dimension *ent) {
     if (!preflightDimensionStyle(ent)
         || !preflightDimensionPictureBlock(ent))
         return false;
+    // ALIGNED now emits this field; reject a nonfinite value before a record
+    // starts so ignored callback returns cannot publish an incomplete file.
+    if (version > DRW::AC1009 && ent->eType == DRW::DIMALIGNED
+        && !std::isfinite(ent->getOb52()))
+        return failDxfWrite();
     if (version > DRW::AC1009) {
         std::vector<std::shared_ptr<DRW_Variant>> dimensionXdata;
         if (!buildDimensionDstyleXdata(*ent, dimensionXdata))
@@ -11278,6 +11283,11 @@ bool dxfRW::writeDimension(DRW_Dimension *ent) {
             case DRW::DIMLINEAR: {
             DRW_DimAligned * dd = (DRW_DimAligned*)ent;
             writer->writeString(100, "AcDbAlignedDimension");
+            // ALIGNED carries the same extension-line rotation as LINEAR.
+            // Keep group 52 in the documented AcDbAlignedDimension subclass.
+            if (ent->eType == DRW::DIMALIGNED && ent->getOb52() != 0) {
+                writer->writeDouble(52, ent->getOb52());
+            }
                 DRW_Coord crd = ent->getDxfClonePoint();
                 if (crd.x != 0 || crd.y != 0 || crd.z != 0) {
                 writer->writeDouble(12, crd.x);

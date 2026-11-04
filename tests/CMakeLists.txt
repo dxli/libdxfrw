@@ -5127,3 +5127,11 @@ target_include_directories(libdxfrw_dxf_compact_material_graph_tests PRIVATE ${C
 target_link_libraries(libdxfrw_dxf_compact_material_graph_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dxf_compact_material_graph COMMAND libdxfrw_dxf_compact_material_graph_tests)
 set_tests_properties(libdxfrw_dxf_compact_material_graph PROPERTIES LABELS "fast;dxf;material;graph;transaction" TIMEOUT 60)
+
+add_executable(libdxfrw_dxf_dimension_oblique_tests ${CMAKE_CURRENT_SOURCE_DIR}/dxf_dimension_oblique_tests.cpp)
+target_compile_features(libdxfrw_dxf_dimension_oblique_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dxf_dimension_oblique_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dxf_dimension_oblique_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dxf_dimension_oblique_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dxf_dimension_oblique COMMAND libdxfrw_dxf_dimension_oblique_tests)
+set_tests_properties(libdxfrw_dxf_dimension_oblique PROPERTIES LABELS "fast;dxf;dimension;transaction" TIMEOUT 30)

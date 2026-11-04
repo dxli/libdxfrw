@@ -903,6 +903,12 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+DXF ALIGNED DIMENSION now emits its extension-line rotation in the documented
+AcDbAlignedDimension subclass; existing LINEAR placement stays unchanged.
+ODA retains both selected values, while ezdxf 1.4.5 reads this subclass field
+as zero directly. Wider consumer and rendering qualification remain open
+([receipt](docs/research/p6-dxf-aligned-dimension-oblique-2026-11-04.json)).
+
 New AC1027 files now use a source-witnessed maintenance release and matching
 AuxHeader copies. Nine selected opt-in generated drawings converted through ODA
 and passed independent geometry, graph and checksum checks. The complete
