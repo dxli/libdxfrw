@@ -349,6 +349,7 @@ EXTRA_DIST = \
     tests/ac1021_field_source_raw_probe.cpp \
     tests/ac1021_field_source_span_probe.py \
     tests/ac1021_geometry_peer_audit_tests.py \
+    tests/ac1021_lwpolyline_footer_peer_audit_tests.py \
     tests/ac1021_material_peer_audit_tests.py \
     tests/ac1021_polyline_group_peer_audit_tests.py \
     tests/ac1021_polyline_owners_peer_audit_tests.py \
@@ -643,6 +644,7 @@ EXTRA_DIST = \
     tools/audit_ac1018_dictionary_wire.py \
     tools/audit_ac1021_curve_geometry_peer.py \
     tools/audit_ac1021_geometry_peer.py \
+    tools/audit_ac1021_lwpolyline_footer.py \
     tools/audit_ac1021_material_peer.py \
     tools/audit_ac1021_polyline_group_peer.py \
     tools/audit_ac1021_polyline_owners_peer.py \
@@ -672,6 +674,7 @@ EXTRA_DIST = \
     tools/audit_wipeout_ac1032_source.py \
     tools/author_ac1021_curve_geometry.py \
     tools/author_ac1021_geometry_matrix.py \
+    tools/author_ac1021_lwpolyline_footer.py \
     tools/author_ac1021_polyline_owner_scopes.py \
     tools/author_ac1021_varied_geometry.py \
     tools/author_dwg_legacy_extrusion.py \
@@ -747,6 +750,7 @@ EXTRA_DIST = \
     tools/probe_ac1021_header_variant.cpp \
     tools/probe_ac1021_imagedef_owner_tokens.cpp \
     tools/probe_ac1021_line_writer.cpp \
+    tools/probe_ac1021_lwpolyline_footer.cpp \
     tools/probe_ac1021_polyline_owner_scopes.cpp \
     tools/probe_ac1021_varied_geometry.cpp \
     tools/probe_ac1024_rastervariables_frame1_source.cpp \

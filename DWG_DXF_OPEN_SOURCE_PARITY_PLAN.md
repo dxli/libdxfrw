@@ -947,6 +947,9 @@ Additional opt-in AC1021 LINE, ELLIPSE, LWPOLYLINE and TEXT samples, including a
 mixed drawing, passed ODA conversion to AC1027 DXF and independent field checks;
 other values, graph profiles and native rendering remain open
 ([matrix receipt](docs/research/p6-ac1021-varied-entity-matrix-2026-11-04.json)).
+An AC1021 LWPOLYLINE absence-bit correction also preserves the sampled variable
+widths through ODA; qualify additional fields, producers and native rendering
+([footer receipt](docs/research/p6-ac1021-lwpolyline-footer-2026-11-04.json)).
 AC1018–AC1032 2D/3D POLYLINE child and SEQEND references use the
 producer-witnessed hard-owner role. The bounded AC1021 model-space, paper-space
 and ordinary named-block membership and 3D footer fixes preserve the sampled vertices

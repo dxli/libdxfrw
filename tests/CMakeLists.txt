@@ -140,6 +140,12 @@ add_test(NAME libdxfrw_ac1021_curve_geometry_peer_audit
 set_tests_properties(libdxfrw_ac1021_curve_geometry_peer_audit PROPERTIES
     LABELS "dwg;fast;geometry;tools" TIMEOUT 15)
 
+add_test(NAME libdxfrw_ac1021_lwpolyline_footer_peer_audit
+    COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B
+        ${CMAKE_CURRENT_SOURCE_DIR}/ac1021_lwpolyline_footer_peer_audit_tests.py)
+set_tests_properties(libdxfrw_ac1021_lwpolyline_footer_peer_audit PROPERTIES
+    LABELS "dwg;fast;geometry;tools;AC1021" TIMEOUT 15)
+
 add_test(NAME libdxfrw_ac1021_polyline_owners_peer_audit
     COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B
         ${CMAKE_CURRENT_SOURCE_DIR}/ac1021_polyline_owners_peer_audit_tests.py)
