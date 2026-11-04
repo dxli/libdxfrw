@@ -1873,6 +1873,10 @@ if(LIBDXFRW_BUILD_TESTS)
             --field-oversized-child-value-count)
     set_tests_properties(libdxfrw_field_oversized_child_value_count PROPERTIES
         LABELS "fast;dwg;object-vectors;field" TIMEOUT 10)
+    add_test(NAME libdxfrw_field_unit12_dwg_strings
+        COMMAND libdxfrw_dwg_object_vectors_tests --field-unit12-dwg-strings)
+    set_tests_properties(libdxfrw_field_unit12_dwg_strings PROPERTIES
+        LABELS "fast;dwg;field;generated")
     add_test(NAME libdxfrw_field_cadvalue_general_format_flag
         COMMAND libdxfrw_dwg_object_vectors_tests
             --field-cadvalue-general-format-flag)

@@ -4974,7 +4974,9 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
                     bool appendOpaqueBodyTail = false,
                     std::int32_t childFormatFlagsOverride = -1,
                     bool append34BitBodyTail = false,
-                    const char* childKeyOverride = nullptr) {
+                    const char* childKeyOverride = nullptr,
+                    bool literalUnit12Strings = false,
+                    bool omitUnit12CachedString = false) {
     constexpr std::uint32_t fieldHandle = 0xA100u;
 
     DRW_TextCodec codec;
@@ -5151,6 +5153,20 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
         || encodedBody.bitCount() < 2u)
         return false;
 
+    if (literalUnit12Strings) {
+        // Hand-build the FIELD text stream from the ODA §20.4.76/.99
+        // sequence; this does not use the FIELD codec under test.
+        if (version <= DRW::AC1018 || typedChildValueType != 1)
+            return false;
+        strings.reset();
+        for (const char* text : {"ACAD", "GENERATED_FIELD", "", ""})
+            strings.putVariableText(version, text);
+        if (!omitUnit12CachedString)
+            strings.putVariableText(version, "ROOT_CAD");
+        for (const char* text : {"42", "TYPED_CHILD", "integer", "43"})
+            strings.putVariableText(version, text);
+    }
+
     dwgBufferW unsupportedRootBody(&codec);
     dwgBufferW unsupportedFormatFlagsBody(&codec);
     const dwgBufferW *bodySource = &encodedBody;
@@ -5248,8 +5264,9 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
             body.putBitLong(unknownChildValueType);
             if (unknownChildValueType == 0) {
                 body.putBitLong(43); // kUnknown BL transport value
-                body.putBitLong(12); // suppress detached value string
+                body.putBitLong(12); // unit value does not suppress DWG TV
                 strings.putVariableText(version, ""); // format string
+                strings.putVariableText(version, ""); // value string
             }
         } else if (unsupportedChildValueType == 128
                    || unsupportedChildValueType == 256) {
@@ -5329,6 +5346,71 @@ bool makeFieldFrame(bool oversizedChildValueCount, bool omitChildValueCount,
     object.putBytes(handles.data().data(), handles.size());
     frame.bytes = object.data();
     return object.isGood();
+}
+
+void testFieldUnit12DwgStringFraming(TestContext& t) {
+    for (const DRW::Version version : {DRW::AC1021, DRW::AC1024}) {
+        FieldFrame frame;
+        const bool built = makeFieldFrame(
+            false, false, frame, false, false, false, false, version,
+            false, false, false, 0, 1, 0, -1, 1024, false, false, -1,
+            false, nullptr, true);
+        t.expect(built, "hand-authored unit-12 FIELD text stream builds");
+        if (!built)
+            continue;
+        DRW_TextCodec codec;
+        codec.setVersion(version, false);
+        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+        FieldCodecProbe parsed;
+        const bool read = parsed.parseDwg(version, &input, frame.handleBits);
+        t.expect(read && input.isGood() && parsed.hasCompleteDwgPayload()
+                     && parsed.m_value.m_unitType == 12
+                     && parsed.m_value.m_valueString == "ROOT_CAD"
+                     && parsed.m_valueString == "42"
+                     && parsed.m_childValues.size() == 1u
+                     && parsed.m_childValues[0].m_key == "TYPED_CHILD"
+                     && parsed.m_childValues[0].m_value.m_valueString == "43",
+                 "FIELD unit-12 value string and following values stay aligned");
+
+        FieldFrame truncated;
+        const bool truncatedBuilt = makeFieldFrame(
+            false, false, truncated, false, false, false, false, version,
+            false, false, false, 0, 1, 0, -1, 1024, false, false, -1,
+            false, nullptr, true, true);
+        dwgBuffer bad(truncated.bytes.data(), truncated.bytes.size(), &codec);
+        const bool badRead = truncatedBuilt
+            && parsed.parseDwg(version, &bad, truncated.handleBits);
+        const bool rejected = !badRead || !parsed.hasCompleteDwgPayload();
+        dwgBuffer retry(frame.bytes.data(), frame.bytes.size(), &codec);
+        const bool retried = parsed.parseDwg(version, &retry, frame.handleBits);
+        t.expect(rejected && retried && retry.isGood()
+                     && parsed.hasCompleteDwgPayload()
+                     && parsed.m_value.m_valueString == "ROOT_CAD"
+                     && parsed.m_childValues.size() == 1u
+                     && parsed.m_childValues[0].m_key == "TYPED_CHILD",
+                 "truncated unit-12 FIELD string is refused and retry succeeds");
+
+        FieldCodecProbe source;
+        source.parentHandle = 0xA200u;
+        source.setDwgCommonObjectState(0, 1, false);
+        source.m_evaluatorId = "ACAD";
+        source.m_fieldCode = "GENERATED_FIELD";
+        source.m_value.m_dataType = 1;
+        source.m_value.m_value.addInt(91, 42);
+        source.m_value.m_unitType = 12;
+        source.m_value.m_valueString = "ROOT_CAD";
+        source.m_valueString = "42";
+        source.m_valueStringLength = 2;
+        dwgBufferW body(&codec), strings(&codec), handles(&codec);
+        const bool encoded = source.encodeDwg(version, &body, &strings, &handles);
+        dwgBuffer wire(strings.data().data(), strings.size(), &codec);
+        bool exact = encoded;
+        for (const char* text : {"ACAD", "GENERATED_FIELD", "", "",
+                                 "ROOT_CAD", "42"})
+            exact = (wire.getVariableText(version, false) == text) && exact;
+        t.expect(exact && wire.isGood(),
+                 "FIELD writer emits the unit-12 value string in ODA order");
+    }
 }
 
 void testFieldCadValueGeneralFormatFlag(TestContext& t) {
@@ -19863,6 +19945,13 @@ int main(int argc, char** argv) {
         TestContext context;
         testPersistentManagerExactFooter(context);
         std::cout << "Persistent manager source-prefix and footer boundary: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--field-unit12-dwg-strings") {
+        TestContext context;
+        testFieldUnit12DwgStringFraming(context);
+        std::cout << "FIELD unit-12 DWG text framing: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

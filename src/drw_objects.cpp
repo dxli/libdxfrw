@@ -2752,10 +2752,11 @@ CadValueReadResult readCadValue(
     }
 
     if (detachedStrings) {
+        // ODA §20.4.99 places both TVs after every R2007+ unit value.
+        // The current DXF writer's unit-12 suppression is not a DWG rule.
         if (!readLong(value.m_unitType)
             || !readText(value.m_formatString)
-            || (value.m_unitType != 12
-                && !readText(value.m_valueString)))
+            || !readText(value.m_valueString))
             return CadValueReadResult::Error;
     }
 
@@ -21574,8 +21575,8 @@ bool writeCadValue(DRW::Version version, dwgBufferW *buf, dwgBufferW *strBuf,
     if (version > DRW::AC1018) {
         buf->putBitLong(value.m_unitType);
         textBuf->putVariableText(version, value.m_formatString);
-        if (value.m_unitType != 12)
-            textBuf->putVariableText(version, value.m_valueString);
+        // DWG carries this TV even when our DXF writer suppresses group 302.
+        textBuf->putVariableText(version, value.m_valueString);
     }
     return true;
 }

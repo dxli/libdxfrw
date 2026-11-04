@@ -673,6 +673,11 @@ Strict output still fails, and no support claim is promoted.
 
 1. **Nested FIELD graphs:** qualify physical producer/version profiles and
    source gaps; do not infer native FIELD evaluation from generated values.
+   The R2007+ unit-12 DWG value string now follows the ODA field order, while
+   a conflicting LibreDWG omission and real-producer boundaries remain
+   unresolved. Older libdxfrw-generated FIELD records that omitted the string
+   may no longer parse as complete; establish physical compatibility without
+   guessing between ambiguous layouts. See the [FIELD framing receipt](docs/research/p5-field-unit12-dwg-value-string-framing-2026-11-03.json).
    Use the existing `p5-ac1027-*` receipts, both type-0 transport receipts,
    the [AC1021 flags=4/type=8 receipt](docs/research/p5-ac1021-field-format-flag4-root-type4-8-transport-2026-11-01.json)
    and the [AC1021 flags=4/type=2 census receipt](docs/research/p5-ac1021-field-flags4-type2-root-census-2026-11-01.json)

@@ -13117,6 +13117,38 @@ void testFieldCadValueEmissionPreflight(TestContext& t) {
     };
 
     for (const bool binary : {false, true}) {
+        for (const bool child : {false, true}) {
+            DRW_Field field;
+            field.handle = 0xA613u;
+            field.m_evaluatorId = "ACAD";
+            field.m_fieldCode = "UNIT12_CACHE";
+            DRW_CadValue* value = &field.m_value;
+            if (child) {
+                field.m_childValues.emplace_back();
+                field.m_childValues.back().m_key = "CHILD";
+                value = &field.m_childValues.back().m_value;
+            }
+            value->m_dataType = 1;
+            value->m_value.addInt(91, 42);
+            value->m_unitType = 12;
+            value->m_valueString = "DWG cache";
+            std::ostringstream output;
+            dxfRW writer("");
+            writer.version = DRW::AC1027;
+            writer.binFile = binary;
+            writer.writer = binary
+                ? std::unique_ptr<dxfWriter>(std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(std::make_unique<dxfWriterAscii>(&output));
+            const bool refused = !writer.writeField(&field) && output.str().empty();
+            value->m_valueString.clear();
+            const bool retried = writer.writeField(&field)
+                && writer.writer->writeString(0, "WIRE_END");
+            bool ended = false;
+            const auto tags = numericWireProjection(output.str(), binary, ended);
+            t.expect(refused && retried && ended
+                         && std::find(tags.begin(), tags.end(), "94:12") != tags.end(),
+                     "FIELD unit-12 cache loss refuses atomically and retries");
+        }
         for (const InvalidPayload& control : invalid) {
             DRW_Field field;
             field.handle = 0xA600u;

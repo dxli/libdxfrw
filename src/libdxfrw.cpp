@@ -1362,6 +1362,11 @@ const std::vector<std::uint8_t>* dxfFieldBinaryData(
 
 bool canWriteDxfFieldValue(
     DRW::Version version, const DRW_CadValue& value) {
+    // This DXF profile suppresses group 302 for unit 12, whereas DWG
+    // carries the value string. Do not silently discard a nonempty cache.
+    if (version > DRW::AC1018 && value.m_unitType == 12
+        && !value.m_valueString.empty())
+        return false;
     if ((value.m_dataType == 0 || value.m_dataType == 1 || value.m_dataType == 2
          || value.m_dataType == 4 || value.m_dataType == 64)
         && (value.m_dataSize != 0u || !value.m_rawData.empty()))
