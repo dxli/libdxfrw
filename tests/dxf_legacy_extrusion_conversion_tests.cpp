@@ -326,6 +326,122 @@ bool directControls() {
         || !same(unchanged, before)) return false;
     return true;
 }
+
+bool sameTrace(const DRW_Trace& a, const DRW_Trace& b) {
+    return same(a.basePoint, b.basePoint) && same(a.secPoint, b.secPoint)
+        && same(a.thirdPoint, b.thirdPoint) && same(a.fourPoint, b.fourPoint)
+        && same(a.extPoint, b.extPoint) && near(a.thickness, b.thickness)
+        && a.haveExtrusion == b.haveExtrusion && a.layer == b.layer;
+}
+
+struct TraceAdapter final : LC3CompatCheck {
+    std::vector<DRW_Trace> traces;
+    std::vector<DRW_Solid> solids;
+    dxfRW* writer = nullptr;
+    bool convert = false;
+    bool failed = false;
+    void addTrace(const DRW_Trace& e) override { traces.push_back(e); }
+    void addSolid(const DRW_Solid& e) override { solids.push_back(e); }
+    void writeEntities() override {
+        failed = false;
+        for (const auto& e : traces) {
+            DRW_Trace out = e;
+            if ((convert && !DRW_DxfLegacyExtrusion::toNativeOcs(e, out))
+                || !writer->writeTrace(&out)) { failed = true; return; }
+        }
+        for (const auto& e : solids) {
+            DRW_Solid out = e;
+            if ((convert && !DRW_DxfLegacyExtrusion::toNativeOcs(e, out))
+                || !writer->writeSolid(&out)) { failed = true; return; }
+        }
+    }
+    bool finalizeDxfWrite() override { return !failed; }
+};
+
+template<class T> T authoredTrace(const DRW_Coord& normal) {
+    T e;
+    e.basePoint = {1., 2., 3.}; e.secPoint = {4., 2., 3.};
+    e.thirdPoint = {1., 5., 3.}; e.fourPoint = {4., 5., 3.};
+    e.extPoint = normal; e.haveExtrusion = true; e.thickness = 0.5;
+    e.layer = "TRACE_TEST";
+    return e;
+}
+
+bool traceControls(const std::filesystem::path& dir, bool binary) {
+    TraceAdapter input;
+    for (const DRW_Coord normal : {DRW_Coord{0.,1.,0.}, DRW_Coord{0.,0.,-1.},
+                                   DRW_Coord{0.015625,0.,1.}, DRW_Coord{0.0158,0.,1.}}) {
+        input.traces.push_back(authoredTrace<DRW_Trace>(normal));
+        input.solids.push_back(authoredTrace<DRW_Solid>(normal));
+    }
+    const auto initial = dir / (binary ? "trace-original-binary.dxf" : "trace-original-ascii.dxf");
+    const auto converted = dir / (binary ? "trace-converted-binary.dxf" : "trace-converted-ascii.dxf");
+    dxfRW first(initial.string().c_str()); input.writer = &first;
+    if (!first.write(&input, DRW::AC1027, binary)) return false;
+    TraceAdapter raw, applied;
+    dxfRW rawReader(initial.string().c_str());
+    dxfRW appliedReader(initial.string().c_str());
+    if (!rawReader.read(&raw, false) || !appliedReader.read(&applied, true)
+        || raw.traces.size() != 4u || raw.solids.size() != 4u
+        || applied.traces.size() != 4u || applied.solids.size() != 4u) return false;
+    dxfRW second(converted.string().c_str()); applied.writer = &second; applied.convert = true;
+    if (!second.write(&applied, DRW::AC1027, binary)) return false;
+    TraceAdapter result; dxfRW finalReader(converted.string().c_str());
+    if (!finalReader.read(&result, false) || result.traces.size() != 4u
+        || result.solids.size() != 4u) return false;
+    for (std::size_t i = 0; i < 4; ++i)
+        if (!sameTrace(raw.traces[i], result.traces[i])
+            || !sameTrace(raw.solids[i], result.solids[i])) return false;
+
+    DRW_Trace trace = authoredTrace<DRW_Trace>({0.6, 0., 0.8});
+    const DRW_Trace original = trace; trace.applyExtrusion();
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(trace, trace) || !sameTrace(trace, original)) return false;
+    DRW_Trace noExtrusion = authoredTrace<DRW_Trace>({3., 4., -5.});
+    noExtrusion.haveExtrusion = false;
+    const DRW_Trace noExtrusionBefore = noExtrusion;
+    noExtrusion.applyExtrusion();
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(noExtrusion, noExtrusion)
+        || !sameTrace(noExtrusion, noExtrusionBefore)) return false;
+    DRW_Trace scaled = authoredTrace<DRW_Trace>({3., 4., -5.});
+    const DRW_Trace scaledBefore = scaled; scaled.applyExtrusion();
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(scaled, scaled)
+        || !sameTrace(scaled, scaledBefore)) return false;
+    DRW_Solid solid = authoredTrace<DRW_Solid>({0., 0., -1.});
+    const DRW_Solid originalSolid = solid; solid.applyExtrusion();
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(solid, solid) || !sameTrace(solid, originalSolid)) return false;
+    DRW_Trace unchanged = original;
+    DRW_Trace invalid = original; invalid.extPoint = {0., 0., 0.};
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid, unchanged) || !sameTrace(unchanged, original)) return false;
+    const DRW_Trace invalidBefore = invalid;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid, invalid)
+        || !sameTrace(invalid, invalidBefore)) return false;
+    invalid = original; invalid.fourPoint.x = std::numeric_limits<double>::infinity();
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid, unchanged) || !sameTrace(unchanged, original)) return false;
+    invalid = original; invalid.eType = DRW::SOLID;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid, unchanged) || !sameTrace(unchanged, original)) return false;
+    DRW_3Dface face; const DRW_Trace& faceAsTrace = face;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(faceAsTrace, unchanged) || !sameTrace(unchanged, original)) return false;
+    DRW_Trace& outputFace = face;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(original, outputFace)) return false;
+    struct DerivedTrace : DRW_Trace {} derivedTrace;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(derivedTrace, unchanged)
+        || !sameTrace(unchanged, original)
+        || DRW_DxfLegacyExtrusion::toNativeOcs(original, derivedTrace)) return false;
+    struct DerivedSolid : DRW_Solid {} derivedSolid;
+    DRW_Solid unchangedSolid = originalSolid;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(derivedSolid, unchangedSolid)
+        || !sameTrace(unchangedSolid, originalSolid)
+        || DRW_DxfLegacyExtrusion::toNativeOcs(originalSolid, derivedSolid)) return false;
+
+    const auto retry = dir / (binary ? "trace-retry-binary.dxf" : "trace-retry-ascii.dxf");
+    { std::ofstream out(retry, std::ios::binary); out << "unchanged"; }
+    TraceAdapter retryInput; retryInput.traces = {original, invalid}; retryInput.convert = true;
+    dxfRW retryWriter(retry.string().c_str()); retryInput.writer = &retryWriter;
+    if (retryWriter.write(&retryInput, DRW::AC1027, binary)) return false;
+    { std::ifstream in(retry, std::ios::binary); if (std::string((std::istreambuf_iterator<char>(in)), {}) != "unchanged") return false; }
+    retryInput.traces[1] = original;
+    return retryWriter.write(&retryInput, DRW::AC1027, binary);
+}
 } // namespace
 
 int main(int argc, char** argv) {
@@ -339,6 +455,7 @@ int main(int argc, char** argv) {
     for (bool binary : {false, true}) {
         pass = roundTrip(dir, binary) && pass;
         pass = refusalAndRetry(dir / (binary ? "retry-binary.dxf" : "retry-ascii.dxf"), binary) && pass;
+        pass = traceControls(dir, binary) && pass;
     }
     pass = dwgRoundTrip(dir) && pass;
     pass = dwgRefusalAndRetry(dir / "ac1024-retry.dwg") && pass;

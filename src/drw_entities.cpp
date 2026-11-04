@@ -7308,6 +7308,10 @@ static_assert(std::is_nothrow_move_assignable<DRW_Circle>::value,
               "conversion publication must not throw");
 static_assert(std::is_nothrow_move_assignable<DRW_Arc>::value,
               "conversion publication must not throw");
+static_assert(std::is_nothrow_move_assignable<DRW_Trace>::value,
+              "conversion publication must not throw");
+static_assert(std::is_nothrow_move_assignable<DRW_Solid>::value,
+              "conversion publication must not throw");
 bool validLegacyDxfExtrusion(const DRW_Circle& value) noexcept {
     const DRW_Coord& normal = value.extPoint;
     const DRW_Coord& center = value.basePoint;
@@ -7326,6 +7330,25 @@ bool restoreLegacyDxfCenter(DRW_Circle& value) noexcept {
     if (!std::isfinite(center.x) || !std::isfinite(center.y)
         || !std::isfinite(center.z)) return false;
     value.basePoint = center;
+    return true;
+}
+
+bool restoreLegacyDxfTrace(DRW_Trace& value) noexcept {
+    const auto finite = [](const DRW_Coord& p) noexcept {
+        return std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
+    };
+    if (!finite(value.extPoint) || !finite(value.basePoint)
+        || !finite(value.secPoint) || !finite(value.thirdPoint)
+        || !finite(value.fourPoint) || !std::isfinite(value.thickness)
+        || (value.extPoint.x == 0.0 && value.extPoint.y == 0.0
+            && value.extPoint.z == 0.0)) return false;
+    if (!value.haveExtrusion) return true;
+    DRW_Coord* const points[] = {&value.basePoint, &value.secPoint,
+                                 &value.thirdPoint, &value.fourPoint};
+    for (DRW_Coord* point : points) {
+        *point = inverseTransformOcsCoordinate(value.extPoint, *point);
+        if (!finite(*point)) return false;
+    }
     return true;
 }
 } // namespace
@@ -7363,6 +7386,30 @@ bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Arc& input,
                 candidate.endangle = end;
             }
         }
+        output = std::move(candidate);
+        return true;
+    } catch (...) { return false; }
+}
+
+bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Trace& input,
+                                         DRW_Trace& output) noexcept {
+    if (typeid(input) != typeid(DRW_Trace) || typeid(output) != typeid(DRW_Trace)
+        || input.eType != DRW::DXF_TRACE) return false;
+    try {
+        DRW_Trace candidate(input);
+        if (!restoreLegacyDxfTrace(candidate)) return false;
+        output = std::move(candidate);
+        return true;
+    } catch (...) { return false; }
+}
+
+bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Solid& input,
+                                         DRW_Solid& output) noexcept {
+    if (typeid(input) != typeid(DRW_Solid) || typeid(output) != typeid(DRW_Solid)
+        || input.eType != DRW::SOLID) return false;
+    try {
+        DRW_Solid candidate(input);
+        if (!restoreLegacyDxfTrace(candidate)) return false;
         output = std::move(candidate);
         return true;
     } catch (...) { return false; }

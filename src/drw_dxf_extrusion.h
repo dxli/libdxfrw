@@ -25,6 +25,12 @@
 namespace DRW_DxfLegacyExtrusion {
 [[nodiscard]] bool toNativeOcs(const DRW_Circle& input, DRW_Circle& output) noexcept;
 [[nodiscard]] bool toNativeOcs(const DRW_Arc& input, DRW_Arc& output) noexcept;
+// Recover all four OCS corners after exactly one legacy TRACE/SOLID extrusion
+// application. The same caller preconditions and atomicity apply. These
+// overloads are for DXF output; DWG output is not yet qualified. A 3DFACE is
+// excluded even though it derives from DRW_Trace, because its points use WCS.
+[[nodiscard]] bool toNativeOcs(const DRW_Trace& input, DRW_Trace& output) noexcept;
+[[nodiscard]] bool toNativeOcs(const DRW_Solid& input, DRW_Solid& output) noexcept;
 }
 
 #endif
