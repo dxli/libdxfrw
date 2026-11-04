@@ -1562,6 +1562,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_mesh_dwg_crease_count_guard PROPERTIES
         LABELS "fast;dwg;object-vectors;mesh;generated"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_dictionary_item_wire_role
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --dictionary-item-wire-role)
+    set_tests_properties(libdxfrw_dictionary_item_wire_role PROPERTIES
+        LABELS "fast;dwg;object-vectors;dictionary;generated"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_plotsettings_dwg_decode_roundtrip
         COMMAND libdxfrw_dwg_object_vectors_tests
             --plotsettings-dwg-decode-roundtrip)

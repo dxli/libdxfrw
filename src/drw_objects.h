@@ -3618,6 +3618,8 @@ public:
         && m_dxfRetainedEntryNameBytes == other.m_dxfRetainedEntryNameBytes;
   }
   [[nodiscard]] bool isDwgPayloadValid(DRW::Version version) const noexcept;
+  //! DWG DICTIONARY itemhandles are always encoded as soft-owner references;
+  //! hardOwner controls the DXF entry ownership policy, not the DWG wire code.
   [[nodiscard]] std::uint8_t dwgItemHandleCode() const noexcept;
 
 private:

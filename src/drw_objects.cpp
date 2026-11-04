@@ -20874,7 +20874,8 @@ bool DRW_Layout::encodeDwg(DRW::Version version, dwgBufferW *buf,
 // DICTIONARY (AcDbDictionary) encoder — ODA §20.4.44.  Inverts parseDwg
 // above.  Body: numItems BL + (AC1014 RC=0 OR AC1015+ cloning BS +
 // hardOwner RC) + per-entry name TV.  Handle stream: common prefix
-// (parent + reactors + xdic) + per-entry handle.
+// (parent + reactors + xdic) + per-entry soft-owner handle.  hardOwner
+// affects DXF entry groups, not the DWG item-handle code.
 bool DRW_Dictionary::encodeDwg(DRW::Version version, dwgBufferW *buf,
                                 dwgBufferW *strBuf,
                                 dwgBufferW *handleBuf) const {
@@ -20902,7 +20903,10 @@ bool DRW_Dictionary::isDwgPayloadValid(DRW::Version version) const noexcept {
 }
 
 std::uint8_t DRW_Dictionary::dwgItemHandleCode() const noexcept {
-    return hardOwner == 1 ? DRW::DwgHardOwnership : DRW::DwgSoftOwnership;
+    // ODA §20.4.44 defines DICTIONARY itemhandles as soft-owner handles.
+    // hardOwner controls the DXF entry ownership policy (350/360), not this
+    // DWG handle-stream field's wire code.
+    return DRW::DwgSoftOwnership;
 }
 
 bool DRW_Dictionary::encodeDwgImpl(DRW::Version version, dwgBufferW *buf,

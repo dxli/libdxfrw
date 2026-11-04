@@ -1,7 +1,20 @@
 {
   "id": "p4-ac1024-acad-sun-dictionary-soft-owner-output-2026-11-03",
+  "status": "PARTIALLY_SUPERSEDED_FOR_GENERAL_DWG_ITEM_WIRE_ROLE",
   "scope": "One AC1024 DWG-origin ACAD_SUN dictionary profile, with same-revision typed DXF output and fresh readback",
   "claim_effect": "Closes this bounded source/graph/output profile only. It does not qualify strict whole-file output from the physical sample, other producer/version profiles, or native lighting semantics.",
+  "supersession": {
+    "replacementReceipt": "docs/research/p4-dictionary-item-wire-code-independent-of-hardowner-2026-11-03.json",
+    "supersededConclusions": [
+      "The DWG item-handle wire code follows hardOwner.",
+      "A code-3 DWG item handle is valid when hardOwner is 1, and code 2 is invalid in that case."
+    ],
+    "retainedEvidence": [
+      "The physical AC1024 ACAD_SUN source has hardOwner=0 and item wire code 2.",
+      "The bounded DXF output profile emits and reads the ACAD_SUN item as group 350."
+    ],
+    "reason": "ODA v5.4.1 §20.4.44 labels DICTIONARY itemhandles as soft owner; LibreDWG's DWG schema writes all DICTIONARY itemhandles with wire code 2. The hardOwner flag controls DXF entry ownership and does not change the DWG item field's wire code."
+  },
   "authority": {
     "document": "Open Design Specification for .dwg files, v5.4.1",
     "sections": [
@@ -15,7 +28,7 @@
       },
       {
         "section": "20.4.44",
-        "finding": "A DICTIONARY has a soft-pointer parent; item-handle ownership follows its hardOwner flag."
+        "finding": "A DICTIONARY has a soft-pointer parent and its DWG itemhandles are soft-owner references. The hardOwner flag controls DXF entry ownership; it does not change the DWG item's wire code."
       }
     ],
     "local_extract": "/private/tmp/libdxfrw-oda-spec-2026-11-03.txt",
@@ -68,7 +81,7 @@
       "tests/dwg2dxf_adapter_tests.cpp"
     ],
     "behavior": [
-      "DICTIONARY DWG parsing rejects each non-null item handle whose wire role disagrees with the parsed hardOwner flag, and clears typed state on failure.",
+      "Historical behavior before the correction receipt: DICTIONARY DWG parsing required the item wire code to match hardOwner. This was incorrect and is no longer the current implementation.",
       "The generic extension graph admits the canonical 360 edge only when it is rooted at the NOD ACAD_SUN dictionary and the typed SUN has a reciprocal parent handle.",
       "The dedicated SUN owner validator requires one unaliased ACAD_SUN root, a complete one-entry 360 dictionary with hardOwner=0, and a unique typed SUN whose parentHandle names that dictionary.",
       "The dictionary route is limited to same-revision AC1024 DWG input/output; VIEW, VPORT, and VIEWPORT hard-owner routes retain their existing gates."
@@ -89,12 +102,11 @@
   "dictionary_role_vector": {
     "version": "AC1024",
     "valid_cases": [
-      "A code-2 item under hardOwner=0 parses and leaves the following sentinel handle aligned.",
-      "A code-3 item under hardOwner=1 parses."
+      "Historical vector: a code-2 item under hardOwner=0 parses and leaves the following sentinel handle aligned.",
+      "Historical code-3/hardOwner=1 case is superseded; it encoded the incorrect assumption and is not normative evidence."
     ],
     "invalid_cases": [
-      "Changing the item handle to code 3 under hardOwner=0 is rejected and typed entries reset.",
-      "Changing the item handle to code 2 under hardOwner=1 is rejected and typed entries reset."
+      "Historical mismatch cases are superseded by the correction receipt, which accepts code 2 for either hardOwner value and rejects code 3 for both."
     ],
     "selector": "libdxfrw_dwg_object_vectors_tests"
   },

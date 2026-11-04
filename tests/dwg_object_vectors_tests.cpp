@@ -11824,14 +11824,15 @@ void testDictionaryVectors(TestContext& t) {
              "DICTIONARY preserves a valid null DWG child reference");
 }
 
-struct DictionaryHandleRoleFrame {
+struct DictionaryItemWireFrame {
     std::vector<std::uint8_t> bytes;
     std::uint32_t handleBits = 0u;
+    std::uint8_t itemWireCode = 0u;
 };
 
-bool makeDictionaryHandleRoleFrame(std::uint8_t hardOwner,
-                                   bool mismatchEntryRole,
-                                   DictionaryHandleRoleFrame& frame) {
+bool makeDictionaryItemWireFrame(std::uint8_t hardOwner,
+                                 bool encodeHardOwnerItem,
+                                 DictionaryItemWireFrame& frame) {
     constexpr DRW::Version version = DRW::AC1024;
     constexpr std::uint32_t dictionaryHandle = 0x35Fu;
     constexpr std::uint32_t parentHandle = 0x35Eu;
@@ -11851,7 +11852,8 @@ bool makeDictionaryHandleRoleFrame(std::uint8_t hardOwner,
     if (!source.encodeDwg(version, &body, &strings, &handles)
         || handles.handleOccurrences().size() != 2u)
         return false;
-    if (mismatchEntryRole) {
+    frame.itemWireCode = handles.handleOccurrences()[1].code;
+    if (encodeHardOwnerItem) {
         const auto occurrence = handles.handleOccurrences()[1];
         const std::size_t headerOffset = static_cast<std::size_t>(
             occurrence.startBit / 8u);
@@ -11859,8 +11861,7 @@ bool makeDictionaryHandleRoleFrame(std::uint8_t hardOwner,
             return false;
         const std::uint8_t encodedSize = static_cast<std::uint8_t>(
             handles.data()[headerOffset] & 0x0Fu);
-        const std::uint8_t wrongCode = hardOwner == 0u
-            ? DRW::DwgHardOwnership : DRW::DwgSoftOwnership;
+        const std::uint8_t wrongCode = DRW::DwgHardOwnership;
         handles.data()[headerOffset] = static_cast<std::uint8_t>(
             (wrongCode << 4u) | encodedSize);
     }
@@ -11912,11 +11913,35 @@ bool makeDictionaryHandleRoleFrame(std::uint8_t hardOwner,
     return true;
 }
 
-void testDictionaryHandleRole(TestContext& t) {
-    DictionaryHandleRoleFrame validFrame;
-    const bool validBuilt = makeDictionaryHandleRoleFrame(
+void testDictionaryItemWireRole(TestContext& t) {
+    for (const DRW::Version version : kVersions) {
+        for (int hardOwnerValue = 0; hardOwnerValue <= 1; ++hardOwnerValue) {
+            DictionaryEncodeProbe encoded;
+            encoded.hardOwner = static_cast<std::uint8_t>(hardOwnerValue);
+            encoded.cloning = 1;
+            encoded.handle = 0x35Fu;
+            encoded.parentHandle = 0x35Eu;
+            encoded.m_entries = {{"WIRE_ROLE", 0x360u}};
+            encoded.setDwgCommonObjectState(0, 1, false);
+            dwgBufferW body;
+            dwgBufferW strings;
+            dwgBufferW handles;
+            const bool wrote = encoded.encodeDwg(
+                version, &body, &strings, &handles);
+            t.expect(wrote && handles.handleOccurrences().size() == 2u
+                         && handles.handleOccurrences()[1].code
+                             == DRW::DwgSoftOwnership,
+                     "DICTIONARY writer uses DWG soft-owner item code for version "
+                         + std::to_string(version) + " with hardOwner="
+                         + std::to_string(hardOwnerValue));
+        }
+    }
+
+    DictionaryItemWireFrame validFrame;
+    const bool validBuilt = makeDictionaryItemWireFrame(
         0u, false, validFrame);
-    t.expect(validBuilt, "DICTIONARY soft-owner role control frame builds");
+    t.expect(validBuilt && validFrame.itemWireCode == DRW::DwgSoftOwnership,
+             "DICTIONARY hardOwner=0 control emits the soft-owner wire code");
     if (validBuilt) {
         DRW_TextCodec codec;
         codec.setVersion(DRW::AC1024, false);
@@ -11937,30 +11962,31 @@ void testDictionaryHandleRole(TestContext& t) {
                  "DICTIONARY accepts soft-owned items and preserves following-handle alignment");
     }
 
-    DictionaryHandleRoleFrame wrongRoleFrame;
-    const bool wrongRoleBuilt =
-        makeDictionaryHandleRoleFrame(0u, true, wrongRoleFrame);
-    t.expect(wrongRoleBuilt,
-             "DICTIONARY mismatched hard-owner role control frame builds");
-    if (wrongRoleBuilt) {
+    DictionaryItemWireFrame code3Frame;
+    const bool code3Built =
+        makeDictionaryItemWireFrame(0u, true, code3Frame);
+    t.expect(code3Built,
+             "DICTIONARY hard-owner-wire-code rejection frame builds");
+    if (code3Built) {
         DRW_TextCodec codec;
         codec.setVersion(DRW::AC1024, false);
-        dwgBuffer input(wrongRoleFrame.bytes.data(),
-                        wrongRoleFrame.bytes.size(), &codec);
+        dwgBuffer input(code3Frame.bytes.data(),
+                        code3Frame.bytes.size(), &codec);
         DictionaryEncodeProbe parsed;
         parsed.m_entries = {{"stale", 0xDEADu}};
         const bool read = parsed.parseDwg(
-            DRW::AC1024, &input, wrongRoleFrame.handleBits);
+            DRW::AC1024, &input, code3Frame.handleBits);
         t.expect(!read && !input.isGood() && parsed.m_entries.empty()
                      && !parsed.hasCompleteDwgEntries(),
-                 "DICTIONARY rejects item ownership inconsistent with hardOwner and resets typed state");
+                 "DICTIONARY rejects a hard-owner item wire code and resets typed state");
     }
 
-    DictionaryHandleRoleFrame hardOwnerFrame;
-    const bool hardOwnerBuilt = makeDictionaryHandleRoleFrame(
+    DictionaryItemWireFrame hardOwnerFrame;
+    const bool hardOwnerBuilt = makeDictionaryItemWireFrame(
         1u, false, hardOwnerFrame);
-    t.expect(hardOwnerBuilt,
-             "DICTIONARY hard-owner role control frame builds");
+    t.expect(hardOwnerBuilt && hardOwnerFrame.itemWireCode
+                 == DRW::DwgSoftOwnership,
+             "DICTIONARY hardOwner=1 control still emits the soft-owner wire code");
     if (hardOwnerBuilt) {
         DRW_TextCodec codec;
         codec.setVersion(DRW::AC1024, false);
@@ -11969,14 +11995,17 @@ void testDictionaryHandleRole(TestContext& t) {
         DictionaryEncodeProbe parsed;
         const bool read = parsed.parseDwg(
             DRW::AC1024, &input, hardOwnerFrame.handleBits);
+        const dwgHandle sentinel = input.getHandle();
         t.expect(read && input.isGood() && parsed.hardOwner == 1
                      && parsed.m_entries.size() == 1u
-                     && parsed.m_entries.front().m_handle == 0x360u,
-                 "DICTIONARY accepts code-3 items when hardOwner is set");
+                     && parsed.m_entries.front().m_handle == 0x360u
+                     && sentinel.code == DRW::DwgSoftPointer
+                     && sentinel.ref == 0xCAFEu,
+                 "DICTIONARY accepts code-2 items under hardOwner and preserves following-handle alignment");
     }
 
-    DictionaryHandleRoleFrame wrongHardOwnerFrame;
-    const bool wrongHardOwnerBuilt = makeDictionaryHandleRoleFrame(
+    DictionaryItemWireFrame wrongHardOwnerFrame;
+    const bool wrongHardOwnerBuilt = makeDictionaryItemWireFrame(
         1u, true, wrongHardOwnerFrame);
     t.expect(wrongHardOwnerBuilt,
              "DICTIONARY hard-owner mismatch control frame builds");
@@ -11991,7 +12020,7 @@ void testDictionaryHandleRole(TestContext& t) {
             DRW::AC1024, &input, wrongHardOwnerFrame.handleBits);
         t.expect(!read && !input.isGood() && parsed.m_entries.empty()
                      && !parsed.hasCompleteDwgEntries(),
-                 "DICTIONARY rejects code-2 items when hardOwner is set");
+                 "DICTIONARY rejects code-3 items under hardOwner and resets typed state");
     }
 }
 
@@ -19504,6 +19533,14 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--dictionary-item-wire-role") {
+        TestContext context;
+        testDictionaryItemWireRole(context);
+        std::cout << "DICTIONARY item wire-handle role: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--scale-dwg-unit-domains") {
         TestContext context;
         testScaleDwgPositiveUnitDomain(context);
@@ -20175,7 +20212,7 @@ int main(int argc, char** argv) {
     testScaleDwgPositiveUnitDomain(context);
     testGroupVectors(context);
     testDictionaryVectors(context);
-    testDictionaryHandleRole(context);
+    testDictionaryItemWireRole(context);
     testXRecordVectors(context);
     testOpaqueXRecordReplayGuards(context);
     testPlotSettingsVectors(context);
