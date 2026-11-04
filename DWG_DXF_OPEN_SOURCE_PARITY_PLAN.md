@@ -799,6 +799,10 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 Audit only a current failing source/profile; do not revive historical defects whose
 receipt and code path already agree.
 
+The generated SURFACE/VIEWPORT round-trip controls now exercise refusal and
+corrected retry for the unmapped DWG loft path and invalid lighting type. Native
+rendering, source profiles and graph semantics remain open; see the [receipt](docs/research/p6-roundtrip-stale-surface-viewport-controls-2026-11-03.json).
+
 The witnessed AC1018 maintenance-55 HEADER profile now parses its CRC- and
 sentinel-validated envelope and diagnoses its unclaimed suffix. Strict output
 remains refused; classify the suffix and resolve the remaining CELLSTYLEMAP

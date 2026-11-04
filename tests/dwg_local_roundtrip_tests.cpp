@@ -18934,6 +18934,19 @@ bool runDxfViewportLightingRoundTrip(
     source.mBlock->ent.push_back(viewport);
 
     dx_iface exporter;
+    // Group 282 permits only 0 or 1 (Autodesk VIEWPORT DXF reference).
+    // Preserve the destination and retry on the same exporter after repair.
+    { std::ofstream sentinel(output, std::ios::binary); sentinel << "prior viewport destination"; }
+    const bool invalidAccepted = exporter.fileExport(
+        output.string(), DRW::AC1027, binary, &source, false);
+    std::ifstream prior(output, std::ios::binary);
+    const std::string priorContents{std::istreambuf_iterator<char>{prior}, {}};
+    prior.close();
+    if (invalidAccepted || priorContents != "prior viewport destination") {
+        std::filesystem::remove(output, ec);
+        return false;
+    }
+    viewport->defaultLightingType = 1;
     const bool exportOk = exporter.fileExport(
         output.string(), DRW::AC1027, binary, &source, false);
     dx_data imported;
@@ -18955,7 +18968,7 @@ bool runDxfViewportLightingRoundTrip(
         && roundTripped->basePoint.z == 30.0
         && roundTripped->vpID == 7
         && !roundTripped->useDefaultLighting
-        && roundTripped->defaultLightingType == 2
+        && roundTripped->defaultLightingType == 1
         && roundTripped->brightness == 0.25
         && roundTripped->contrast == 0.75;
     std::filesystem::remove(output, ec);
@@ -22472,7 +22485,9 @@ bool runDxfSurfaceRoundTrip(bool binary,
     lofted->solid = true;
     lofted->ruledSurface = true;
     lofted->virtualGuide = true;
-    lofted->pathCurveHandle = 0x1234u;
+    // A DWG path handle has no qualified DXF token mapping. The valid
+    // round-trip profile carries only the explicitly supplied DXF tokens.
+    lofted->pathCurveHandle = 0u;
     lofted->loftEntityTransform[3] = 0.25;
     lofted->loftEntityTransform[7] = 0.5;
     lofted->loftEntityTransform[11] = 0.75;
@@ -22640,6 +22655,21 @@ bool runDxfSurfaceRoundTrip(bool binary,
         return false;
     }
     shape->m_styleName = "BLOCK_GLYPH";
+    lofted->pathCurveHandle = 0x1234u;
+    const bool unmappedPathAccepted = exporter.fileExport(
+        output.string(), DRW::AC1027, binary, &source, false);
+    std::ifstream pathPriorInput(output, std::ios::binary);
+    const std::string pathPriorContents(
+        std::istreambuf_iterator<char>{pathPriorInput},
+        std::istreambuf_iterator<char>{});
+    pathPriorInput.close();
+    if (unmappedPathAccepted || pathPriorContents != rejectedDestination) {
+        std::cerr << "Unmapped DWG loft path was emitted or changed the destination ("
+                  << encoding << ")\n";
+        if (!keepOutput) std::filesystem::remove(output, ec);
+        return false;
+    }
+    lofted->pathCurveHandle = 0u;
     if (!exporter.fileExport(output.string(), DRW::AC1027, binary, &source,
                              false)) {
         std::cerr << "DXF surface/shape export or corrected retry failed ("
@@ -35717,6 +35747,16 @@ int main(int argc, char** argv) {
         const bool passed = runDxfMPolygonMetadata(false, directory, false)
             && runDxfMPolygonMetadata(true, directory, false);
         std::cout << "MPOLYGON metadata ASCII/Binary boundary round-trip: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    } else if (argc == 2
+        && std::string(argv[1]) == "--surface-viewport-roundtrip") {
+        const bool surfaceAscii = runDxfSurfaceRoundTrip(false, directory, false);
+        const bool surfaceBinary = runDxfSurfaceRoundTrip(true, directory, false);
+        const bool viewportAscii = runDxfViewportLightingRoundTrip(false, directory);
+        const bool viewportBinary = runDxfViewportLightingRoundTrip(true, directory);
+        const bool passed = surfaceAscii && surfaceBinary && viewportAscii && viewportBinary;
+        std::cout << "SURFACE/VIEWPORT refusal and corrected round trips: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 2
