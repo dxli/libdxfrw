@@ -2825,8 +2825,15 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
     const bool ac1021ChildProfile = ac1021ModelChildProfile
         || (version == DRW::AC1021 && objectWriter != nullptr && !legacyChain
             && (ent->flags & (16 | 64)) == 0 && (paperScope || namedScope));
+    const bool modernModelChildProfile = (version == DRW::AC1018 || version == DRW::AC1024)
+        && objectWriter != nullptr && !legacyChain
+        && objectWriter->m_activeUserBlockRecordHandle == 0u
+        && ent->space == DRW::ModelSpace && (ent->flags & (16 | 64)) == 0
+        && (ent->parentHandle == DRW::NoHandle
+            || ent->parentHandle == DRW::DwgModelSpaceBlockRecordHandle);
+    const bool guardedChildProfile = ac1021ChildProfile || modernModelChildProfile;
     bool useEntityFrameBatchRollback = !legacyChain && objectWriter != nullptr
-        && writer->supportsLastEntityWriteRollback() && !ac1021ChildProfile;
+        && writer->supportsLastEntityWriteRollback() && !guardedChildProfile;
     dwgWriter::CompoundWriteCheckpoint checkpoint;
     if (legacyChain) checkpoint = writer->checkpointCompoundWrite();
     bool checkpointSet = legacyChain;
@@ -2834,7 +2841,7 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         checkpoint = writer->checkpointCompoundWrite();
         checkpointSet = true;
     }
-    const bool guardedPolyline = legacyChain || ac1021ChildProfile;
+    const bool guardedPolyline = legacyChain || guardedChildProfile;
     const bool tracksMutations = guardedPolyline && !m_dwgWriteTransactions.empty()
         && m_dwgWriteTransactions.back()->trackCallerMutations;
     const std::size_t originalMutationCount = tracksMutations
@@ -3034,7 +3041,7 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
             DRW_Entity* previous;
             ~ScopedChildPermit() { slot = previous; }
         };
-        if (!ac1021ChildProfile)
+        if (!guardedChildProfile)
             return writer->encodeEntity(child);
         ScopedChildPermit permit{objectWriter->m_ac1021PolylineChildPermit,
                                  objectWriter->m_ac1021PolylineChildPermit};
@@ -3091,7 +3098,7 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         g_throwNextLegacyPolylineForTest = false;
         throw std::bad_alloc();
     }
-    if (ac1021ChildProfile && g_throwNextAc1021PolylineForTest) {
+    if (guardedChildProfile && g_throwNextAc1021PolylineForTest) {
         g_throwNextAc1021PolylineForTest = false;
         throw std::bad_alloc();
     }
@@ -3125,7 +3132,7 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
             g_throwNextLegacyPolylineLateForTest = false;
             throw std::bad_alloc();
         }
-        if (ac1021ChildProfile && g_throwNextAc1021PolylineLateForTest) {
+        if (guardedChildProfile && g_throwNextAc1021PolylineLateForTest) {
             g_throwNextAc1021PolylineLateForTest = false;
             throw std::bad_alloc();
         }

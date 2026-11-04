@@ -432,6 +432,7 @@ EXTRA_DIST = \
     tests/dwg_material_replay_refusal_tests.cpp \
     tests/dwg_object_vectors_tests.cpp \
     tests/dwg_plotstyle_nod_admission_tests.cpp \
+    tests/dwg_polyline_1018_1024_membership_tests.cpp \
     tests/dwg_polyline_owned_handle_roles_tests.cpp \
     tests/dwg_polyline_owner_facade_tests.cpp \
     tests/dwg_reader_matrix_tests.cpp \
@@ -542,6 +543,7 @@ EXTRA_DIST = \
     tests/object_physical_controls.h \
     tests/persistent_manager_test_helpers.h \
     tests/plotstyle_source_controls.h \
+    tests/polyline_cross_version_membership_audit_tests.py \
     tests/public_header_hygiene_tests.py \
     tests/qualified_format_support_numeric_tests.py \
     tests/qualify_modeler_dxf_syntax.py \
@@ -659,6 +661,7 @@ EXTRA_DIST = \
     tools/audit_dxf_table_values.py \
     tools/audit_librecad3_native_dxf.py \
     tools/audit_p9_rtext_native_history.py \
+    tools/audit_polyline_cross_version_membership.py \
     tools/audit_polyline_owner_census.py \
     tools/audit_rastervariables_ac1018_source.py \
     tools/audit_sunstudy_dxf_graph.py \
@@ -733,6 +736,7 @@ EXTRA_DIST = \
     tools/mutate_r2004_header_suffix_probe.py \
     tools/normalize_drawing_result.py \
     tools/normalize_oracle.py \
+    tools/prepare_polyline_cross_membership_scratch.py \
     tools/probe_ac1014_imagedef_zero_size.py \
     tools/probe_ac1021_control_frames.cpp \
     tools/probe_ac1021_curve_geometry.cpp \
@@ -754,6 +758,7 @@ EXTRA_DIST = \
     tools/probe_geodata_physical_capture.cpp \
     tools/probe_librecad3_native_dxf.cpp \
     tools/probe_lightlist_physical_capture.cpp \
+    tools/probe_polyline_cross_version.cpp \
     tools/probe_rastervariables_ac1018_source.cpp \
     tools/probe_wipeout_ac1018_source.cpp \
     tools/probe_wipeout_ac1024_frame1_source.cpp \

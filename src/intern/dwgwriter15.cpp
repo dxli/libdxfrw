@@ -6984,6 +6984,12 @@ bool dwgWriter15::recordRawBlockOwnedEntity(
 }
 
 bool dwgWriter15::encodeEntity(DRW_Entity *ent) {
+    const bool modernPolylineChild = m_version == DRW::AC1018 && ent != nullptr
+        && m_ac1021PolylineChildPermit == ent
+        && (dynamic_cast<DRW_Vertex*>(ent) != nullptr
+            || dynamic_cast<DRW_SeqEnd*>(ent) != nullptr);
+    if (modernPolylineChild)
+        m_ac1021PolylineChildPermit = nullptr;
     if (m_legacyModelChainActive && ent != nullptr && m_blockControlEmitted) {
         m_legacyModelChainConflict = true;
         return false;
@@ -7201,10 +7207,10 @@ bool dwgWriter15::encodeEntity(DRW_Entity *ent) {
     if (objectWriteFailed())
         return fail();
 
-    if (!plannedChild && !recordBlockOwnedEntity(*ent, &checkpoint.blockOwnerHandle))
+    if (!plannedChild && !modernPolylineChild && !recordBlockOwnedEntity(*ent, &checkpoint.blockOwnerHandle))
         return fail();
     checkpoint.entityHandle = ent->handle;
-    checkpoint.blockOwnedEntityRecorded = !plannedChild;
+    checkpoint.blockOwnedEntityRecorded = !plannedChild && !modernPolylineChild;
     if (!recordBlockInsertReference(*ent))
         return fail();
     if (const auto* insert = dynamic_cast<const DRW_Insert*>(ent)) {

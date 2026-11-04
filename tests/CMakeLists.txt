@@ -146,6 +146,23 @@ add_test(NAME libdxfrw_ac1021_polyline_owners_peer_audit
 set_tests_properties(libdxfrw_ac1021_polyline_owners_peer_audit PROPERTIES
     LABELS "dwg;fast;polyline;tools;AC1021" TIMEOUT 15)
 
+add_test(NAME libdxfrw_polyline_cross_version_membership_audit
+    COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B
+        ${CMAKE_CURRENT_SOURCE_DIR}/polyline_cross_version_membership_audit_tests.py)
+set_tests_properties(libdxfrw_polyline_cross_version_membership_audit PROPERTIES
+    LABELS "dwg;fast;polyline;tools;AC1018;AC1024" TIMEOUT 15)
+
+add_executable(libdxfrw_dwg_polyline_1018_1024_membership_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_polyline_1018_1024_membership_tests.cpp)
+target_compile_features(libdxfrw_dwg_polyline_1018_1024_membership_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_polyline_1018_1024_membership_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_polyline_1018_1024_membership_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_polyline_1018_1024_membership_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_polyline_1018_1024_membership
+    COMMAND libdxfrw_dwg_polyline_1018_1024_membership_tests)
+set_tests_properties(libdxfrw_dwg_polyline_1018_1024_membership PROPERTIES
+    LABELS "dwg;fast;polyline;transaction;AC1018;AC1024" TIMEOUT 30)
+
 add_executable(libdxfrw_dwg_polyline_owned_handle_roles_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dwg_polyline_owned_handle_roles_tests.cpp)
 target_compile_features(libdxfrw_dwg_polyline_owned_handle_roles_tests PRIVATE cxx_std_17)

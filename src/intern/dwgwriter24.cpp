@@ -256,7 +256,7 @@ bool dwgWriter24::writeDwgClasses() {
 // finishObject() assembles these into the AC1024 wire format.
 
 bool dwgWriter24::encodeEntity(DRW_Entity *ent) {
-    const bool polylineChild = m_version == DRW::AC1021 && ent != nullptr
+    const bool polylineChild = (m_version == DRW::AC1021 || m_version == DRW::AC1024) && ent != nullptr
         && m_ac1021PolylineChildPermit == ent
         && (dynamic_cast<DRW_Vertex*>(ent) != nullptr
             || dynamic_cast<DRW_SeqEnd*>(ent) != nullptr);
