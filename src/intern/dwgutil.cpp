@@ -590,9 +590,11 @@ const std::array<std::uint64_t, 256>& crc64NormalTable() {
 
 const std::array<std::uint64_t, 256>& crc64MirroredTable() {
     static const auto table = makeCrc64Table([](std::uint64_t value) {
+        // ODA v5.4.1 §5.12.2 uses a different reflected polynomial from
+        // the normal CRC's ECMA-182 polynomial.
         for (int bit = 0; bit < 8; ++bit)
             value = (value & 1U)
-                ? (value >> 1) ^ 0xc96c5795d7870f42ULL
+                ? (value >> 1) ^ 0x95ac9329ac4bc9b5ULL
                 : value >> 1;
         return value;
     });
@@ -621,20 +623,22 @@ std::uint64_t calculateCrc64(std::uint64_t seed, const std::uint8_t* data,
         sz -= 8;
     }
 
+    // The initial four bytes of a 5–7 byte remainder are a four-byte
+    // block and follow the same [2,3,0,1] order as the four-byte case.
     switch (sz) {
     case 7:
-        updateByte(data[0]); updateByte(data[1]);
         updateByte(data[2]); updateByte(data[3]);
+        updateByte(data[0]); updateByte(data[1]);
         updateByte(data[4]); updateByte(data[5]); updateByte(data[6]);
         break;
     case 6:
-        updateByte(data[0]); updateByte(data[1]);
         updateByte(data[2]); updateByte(data[3]);
+        updateByte(data[0]); updateByte(data[1]);
         updateByte(data[4]); updateByte(data[5]);
         break;
     case 5:
-        updateByte(data[0]); updateByte(data[1]);
-        updateByte(data[2]); updateByte(data[3]); updateByte(data[4]);
+        updateByte(data[2]); updateByte(data[3]);
+        updateByte(data[0]); updateByte(data[1]); updateByte(data[4]);
         break;
     case 4:
         updateByte(data[2]); updateByte(data[3]);

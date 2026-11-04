@@ -2,7 +2,7 @@
   "schema": "libdxfrw.research-receipt.v1",
   "date": "2026-11-03",
   "title": "AC1021 system and data page CRC independent retrace",
-  "status": "FIELDS_AND_PAYLOADS_RETRACED_CRC_MISMATCH_UNRESOLVED",
+  "status": "SUPERSEDED_BY_ODA_TABLE_AND_REMAINDER_CORRECTION",
   "scope": "Re-run the existing test-local, bitwise ODA CRC diagnostic on one AC1021 data page and its page-map system page; compare the extracted fields with the current reader and a local open-source peer without changing parser behavior.",
   "sample": {
     "path": "tests/samples/AC1021/tablet.dwg",
@@ -46,7 +46,12 @@
   "normativeSource": {
     "title": "Open Design Specification for .dwg files v5.4.1",
     "source": "/Users/dli/doc/dwg/OpenDesign_Specification_for_.dwg_files (1).pdf",
-    "sections": ["5.2", "5.3", "5.4", "5.12"],
+    "sections": [
+      "5.2",
+      "5.3",
+      "5.4",
+      "5.12"
+    ],
     "finding": "The file-header fields identify the page-map CRCs, seed and correction factor; ODA specifies mirrored CRC over the compressed-or-raw system payload and over data-page compressed/encrypted payload, with UpdateSeed1 and size-dependent inputs. The source retrace used the corresponding independently implemented bitwise CRC and seed recurrence already pinned by literal vectors."
   },
   "peerCheck": {
@@ -67,5 +72,9 @@
     "supportClaimsPromoted": 0,
     "strictIntegrityPolicyChanged": false,
     "nextAction": "Compare exact seed/field extraction and CRC inputs on a second provenance-qualified AC1021 source or a verified producer resave; do not change CRC handling unless an independently sourced payload matches the stored field under the normative profile."
+  },
+  "correction": {
+    "receipt": "docs/research/p6-ac1021-oda-crc-table-and-remainders-2026-11-03.json",
+    "finding": "The earlier test-local bitwise reference copied the wrong reflected polynomial and repeated the same remainder-order mistake as production. It was independent code, but not independent of those assumptions. ODA v5.4.1 table values and ordering, plus the original and ODA-resaved page checks, identify both errors. The historical mismatch values above are pre-fix observations."
   }
 }

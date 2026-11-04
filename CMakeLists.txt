@@ -1169,6 +1169,11 @@ if(LIBDXFRW_BUILD_TESTS)
     target_link_libraries(libdxfrw_dwg_local_roundtrip PRIVATE dxfrw)
     add_test(NAME libdxfrw_dwg_local_roundtrip
         COMMAND libdxfrw_dwg_local_roundtrip)
+    add_test(NAME libdxfrw_surface_viewport_roundtrip
+        COMMAND libdxfrw_dwg_local_roundtrip --surface-viewport-roundtrip)
+    set_tests_properties(libdxfrw_surface_viewport_roundtrip PROPERTIES
+        LABELS "fast;dxf;geometry;generated"
+        TIMEOUT 30)
     add_test(NAME libdxfrw_dxf_spline_helix_source_identities
         COMMAND libdxfrw_dwg_local_roundtrip --dxf-spline-helix-source-identities)
     set_tests_properties(libdxfrw_dxf_spline_helix_source_identities PROPERTIES
@@ -1418,6 +1423,16 @@ if(LIBDXFRW_BUILD_TESTS)
             --acdb-placeholder-class-dispatch)
     set_tests_properties(libdxfrw_dwg_acdb_placeholder_class_dispatch PROPERTIES
         LABELS "fast;dwg;objects;generated"
+        TIMEOUT 30)
+    add_test(NAME libdxfrw_dwg_r2007_crc_spec_vectors
+        COMMAND libdxfrw_dwg_reader_matrix_tests --r2007-crc-literal-vectors)
+    set_tests_properties(libdxfrw_dwg_r2007_crc_spec_vectors PROPERTIES
+        LABELS "fast;dwg;crc;generated;AC1021"
+        TIMEOUT 30)
+    add_test(NAME libdxfrw_dwg_r2007_data_page_crc_profiles
+        COMMAND libdxfrw_dwg_reader_matrix_tests --r2007-data-page-profiles)
+    set_tests_properties(libdxfrw_dwg_r2007_data_page_crc_profiles PROPERTIES
+        LABELS "fast;dwg;crc;generated;AC1021"
         TIMEOUT 30)
     add_test(NAME libdxfrw_dwg_r2007_section_map_page_extent
         COMMAND libdxfrw_dwg_reader_matrix_tests
