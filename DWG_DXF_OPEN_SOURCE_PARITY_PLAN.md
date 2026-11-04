@@ -904,6 +904,9 @@ two- and three-vertex profiles. Singleton polylines, INSERT, named blocks,
 paper space, unsupported fields and raw replay remain refused; extend only
 with source-backed graph and rollback evidence. See the [POLYLINE receipt](docs/research/p6-ac1015-predeclared-polyline-chain-2026-11-04.json)
 and [compound witness](docs/research/p6-ac1015-compound-entity-chain-witness-2026-11-04.json).
+A separately authored ODA witness establishes an empty named-block graph
+with one- and two-attribute INSERT chains; use it to implement and verify
+that bounded profile. See the [INSERT source receipt](docs/research/p6-ac1015-empty-attributed-insert-source-2026-11-04.json).
 An explicit AC1024 opt-in now emits the witnessed NOD→ACAD_MATERIAL→
 ByBlock/ByLayer/Global graph, HEADER references and generated layer binding,
 with source-profile payloads, collision checks and transactional retry.

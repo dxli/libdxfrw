@@ -605,6 +605,7 @@ tools/acadsharp_rtext_probe.cs
 tools/acis218_autocad_witness.lsp
 tools/acis218_autocad_witness.md
 tools/audit_ac1015_compound_entity_chains.py
+tools/audit_ac1015_empty_attributed_insert.py
 tools/audit_dxf_table_values.py
 tools/audit_p9_rtext_native_history.py
 tools/bounded_process.py
