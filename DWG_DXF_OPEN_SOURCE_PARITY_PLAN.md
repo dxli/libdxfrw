@@ -94,8 +94,12 @@ rename the row. Keep strict output refused until the physical bit order and
 the source/consumer disposition are resolved. Also qualify the AC1021+ bit order:
 ODA lists the bits in a common section without a version reversal, LibreDWG uses
 the opposite order across R13+, and the current parser and writer reverse their
-order at AC1021. Paired local round trips cannot settle the disagreement; see the
-[STYLE bit-order receipt](docs/research/p4-ac1018-empty-style-dwg-bit-order-differential-2026-11-03.json).
+order at AC1021. Producer-authored controls now show swapped local flags at
+AC1015/AC1018 and matching flags at AC1021/24/27/32; an ODA conversion of ET
+Border emits STYLE `0xDF` as a shape in both AC1018 and AC1027 DXF. This conflicts
+with the required ODA DWG specification, so obtain an authoritative correction
+before changing the bit order. See the [producer differential](docs/research/p4-oda-style-bit-order-ac1015-ac1032-2026-11-03.json)
+and [original receipt](docs/research/p4-ac1018-empty-style-dwg-bit-order-differential-2026-11-03.json).
 
 ## P4 — original bodies and complete document closure
 
