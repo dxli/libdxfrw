@@ -1489,6 +1489,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dwg_reader_matrix_tests --header-writer-sealing)
     set_tests_properties(libdxfrw_dwg_header_writer_sealing PROPERTIES
         LABELS "fast;dwg;header;generated;transaction" TIMEOUT 30)
+    add_test(NAME libdxfrw_dwg_r2004_system_terminators
+        COMMAND libdxfrw_dwg_reader_matrix_tests --r2004-system-terminators)
+    set_tests_properties(libdxfrw_dwg_r2004_system_terminators PROPERTIES
+        LABELS "fast;dwg;system-pages;generated;framing" TIMEOUT 30)
     set_tests_properties(libdxfrw_dwg_r2007_section_map_page_extent PROPERTIES
         LABELS "fast;dwg;section-map;generated;AC1021"
         TIMEOUT 30)

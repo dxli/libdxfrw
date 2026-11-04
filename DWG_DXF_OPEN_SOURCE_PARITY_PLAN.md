@@ -863,6 +863,11 @@ and earlier [framing receipt](docs/research/p6-ac1021-fixed-metadata-header-poin
 The R2004+ CLASSES writer now emits its specified true header bit; the ODA
 rejection and any class-manifest ordinal issues remain open. See the [CLASSES
 bit receipt](docs/research/p6-dwg-classes-true-header-bit-2026-11-03.json).
+R2004-family system pages now carry their required compressed-stream terminator.
+ODA advances past its prior invalid-input failure on a generated AC1018 drawing
+and reports an AcDbDictionary recovery error; resolve that object/graph failure
+next. Investigate the separate truncated-literal reader behavior. See the
+[system-page receipt](docs/research/p6-r2004-system-page-termination-2026-11-03.json).
 HEADER table-control and pointer roles now use their specified handle codes,
 including typed hard-pointer nulls. The writer binds current layer, text style,
 linetype and dimension style to emitted records, and the reader resolves those

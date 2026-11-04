@@ -187,10 +187,9 @@ static std::uint32_t litLen18Bytes(std::uint32_t n) {
 }
 
 // Compress a system section as an R2004-LZ77 *literal-only* stream: one initial
-// literal run covering the whole input, no back-references. The decompressor's
-// output window fills on that run, so its opcode loop never executes and no
-// terminator is needed (matches dwgCompressor::decompress18 and libreDWG's
-// decompress_R2004_section, which both loop while output < decompSize).
+// literal run followed by the required 0x11 end-of-stream opcode (ODA 4.7).
+// Existing tolerant readers may stop once their output window is full, but
+// other readers consume the terminating opcode before accepting the page.
 // Conformant readers UNCONDITIONALLY decompress the Section/Data Page Map
 // (libreDWG decode.c:1453); a store-mode page (compType 1) therefore decoded to
 // garbage -> wrong section addresses -> every R2004+ file libdxfrw wrote was
@@ -198,9 +197,10 @@ static std::uint32_t litLen18Bytes(std::uint32_t n) {
 static std::vector<std::uint8_t> compressSysSection(const std::uint8_t* data,
                                                     std::uint32_t n) {
     std::vector<std::uint8_t> out;
-    out.reserve(n + 6);
+    out.reserve(n + 7);
     putLitLen18(out, n);
     out.insert(out.end(), data, data + n);
+    out.push_back(0x11u);
     return out;
 }
 
@@ -965,7 +965,8 @@ bool dwgWriter18::finalize() {
     // left the file undecodable past the page map. (write-review pass-2 #3 / plan 3.2)
     // The SPM size is self-referential; compute it analytically — the self-entry
     // grows the content by exactly one 8-byte (number,size) pair and the
-    // compressed sys-page size is deterministic (20-byte header + lit-len + content).
+    // compressed sys-page size is deterministic (20-byte header + lit-len +
+    // content + end opcode).
     std::vector<std::uint32_t> pageSizes;
     pageSizes.reserve(dataPages.size() + 2);
     for (const std::vector<std::uint8_t>& page : dataPages)
@@ -974,7 +975,7 @@ bool dwgWriter18::finalize() {
     const std::uint32_t spmContentSize =
         static_cast<std::uint32_t>((pageSizes.size() + 1) * 8);  // +1: SPM self-entry
     const std::uint32_t spmPageSizePredicted =
-        20 + litLen18Bytes(spmContentSize) + spmContentSize;
+        20 + litLen18Bytes(spmContentSize) + spmContentSize + 1u;
     pageSizes.push_back(spmPageSizePredicted);                        // SPM self-page
     auto spmData = buildSectionPageMapContent(pageSizes);
     auto spmPage = buildSysPage(0x41630e3b, spmData.data(),

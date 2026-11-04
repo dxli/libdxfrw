@@ -10218,6 +10218,150 @@ void testR2018AuxHeaderTrailer(TestContext& t) {
              "R2018 AuxHeader appends exactly three zero int16 values after the AC1027 payload");
 }
 
+bool checkR2004TerminatedSystemPage(
+        const std::vector<std::uint8_t>& file, std::size_t address,
+        std::uint32_t expectedType, std::vector<std::uint8_t>& content,
+        bool& oldReaderCompatible) {
+    std::uint32_t type = 0u, logicalSize = 0u, compressedSize = 0u;
+    std::uint32_t compression = 0u, checksum = 0u;
+    if (address > file.size() || file.size() - address < 20u
+        || !readLe32(file, address, type) || !readLe32(file, address + 4u, logicalSize)
+        || !readLe32(file, address + 8u, compressedSize)
+        || !readLe32(file, address + 12u, compression)
+        || !readLe32(file, address + 16u, checksum)
+        || type != expectedType || compression != 2u || logicalSize == 0u
+        || logicalSize > dwgSafety::MaxBufferSize
+        || compressedSize < 3u || compressedSize > file.size() - address - 20u
+        || file[address + 20u + compressedSize - 1u] != 0x11u)
+        return false;
+    std::array<std::uint8_t, 20> header{};
+    std::copy_n(file.begin() + static_cast<std::ptrdiff_t>(address), 20u,
+                header.begin());
+    std::fill(header.begin() + 16, header.end(), 0u);
+    const auto seed = r2004PageChecksumReference(0u, header.data(), header.size());
+    const auto actual = r2004PageChecksumReference(
+        seed, file.data() + address + 20u, compressedSize);
+    if (checksum != actual)
+        return false;
+    content.assign(logicalSize, 0u);
+    dwgCompressor decoder;
+    if (!decoder.decompress18(file.data() + address + 20u, content.data(),
+                              compressedSize, logicalSize)
+        || decoder.decompressedBytes() != logicalSize)
+        return false;
+    std::vector<std::uint8_t> restored(logicalSize, 0u);
+    dwgCompressor oldReader;
+    oldReaderCompatible = oldReader.decompress18(
+        file.data() + address + 20u, restored.data(), compressedSize - 1u, logicalSize)
+        && oldReader.decompressedBytes() == logicalSize && restored == content;
+    return true;
+}
+
+template<class Writer>
+void testR2004SystemTerminatorsForVersion(TestContext& t, const char* label) {
+    std::stringbuf output(std::ios::out | std::ios::binary);
+    std::ofstream stream;
+    static_cast<std::ostream&>(stream).rdbuf(&output);
+    DRW_Header header;
+    Writer writer(&stream, &header);
+    const bool generated = writer.prepareDwgClassManifest()
+        && writer.writeFileHeaderStub() && writer.writeDwgHeader()
+        && writer.writeDwgClasses() && writer.writeDwgObjects()
+        && writer.emitDeferredBlockControl() && writer.finalizeHeaderHandseed()
+        && writer.writeDwgHandles() && writer.writeSecondHeader() && writer.finalize();
+    t.expect(generated, std::string(label) + " system-page witness generated");
+    if (!generated) return;
+    const std::string raw = output.str();
+    const std::vector<std::uint8_t> file(raw.begin(), raw.end());
+    if (file.size() < 0x100u) {
+        t.expect(false, std::string(label) + " file-header bounds");
+        return;
+    }
+    std::array<std::uint8_t, 0x6c> variableHeader{};
+    for (std::size_t i = 0; i < variableHeader.size(); ++i)
+        variableHeader[i] = file[0x80u + i] ^ static_cast<std::uint8_t>(DRW_magicNum18[i]);
+    const auto read32 = [&variableHeader](std::size_t offset) {
+        return static_cast<std::uint32_t>(variableHeader[offset])
+            | (static_cast<std::uint32_t>(variableHeader[offset + 1u]) << 8u)
+            | (static_cast<std::uint32_t>(variableHeader[offset + 2u]) << 16u)
+            | (static_cast<std::uint32_t>(variableHeader[offset + 3u]) << 24u);
+    };
+    const std::uint64_t pageMapAddress = 0x100u + read32(0x54u)
+        + (static_cast<std::uint64_t>(read32(0x58u)) << 32u);
+    const std::uint32_t pageMapId = read32(0x50u);
+    const std::uint32_t sectionMapId = read32(0x5cu);
+    std::uint32_t physicalCompressedSize = 0u;
+    if (pageMapAddress > file.size() || file.size() - pageMapAddress < 20u
+        || !readLe32(file, static_cast<std::size_t>(pageMapAddress) + 8u,
+                     physicalCompressedSize)) {
+        t.expect(false, std::string(label) + " page-map header bounded");
+        return;
+    }
+    std::vector<std::uint8_t> pageMap;
+    bool oldReader = false;
+    const bool pageMapValid = checkR2004TerminatedSystemPage(
+        file, static_cast<std::size_t>(pageMapAddress), 0x41630e3bu,
+        pageMap, oldReader);
+    t.expect(pageMapValid, std::string(label) + " physical page map terminator, checksum and decode");
+    t.expect(oldReader, std::string(label) + " page map legacy stream tolerance");
+    std::vector<std::uint8_t> clipped(file.begin(), file.begin()
+        + static_cast<std::ptrdiff_t>(pageMapAddress + 20u + physicalCompressedSize - 1u));
+    std::vector<std::uint8_t> ignored;
+    bool ignoredOldReader = false;
+    t.expect(!checkR2004TerminatedSystemPage(
+                 clipped, static_cast<std::size_t>(pageMapAddress), 0x41630e3bu,
+                 ignored, ignoredOldReader),
+             std::string(label) + " clipped page map rejected by physical bounds");
+    if (!pageMapValid || pageMap.size() % 8u != 0u) return;
+    std::uint64_t address = 0x100u;
+    std::uint64_t sectionMapAddress = 0u;
+    bool sawSelf = false;
+    for (std::size_t i = 0; i < pageMap.size(); i += 8u) {
+        std::uint32_t id = 0u, size = 0u;
+        if (!readLe32(pageMap, i, id) || !readLe32(pageMap, i + 4u, size)
+            || size > file.size() - address) {
+            t.expect(false, std::string(label) + " page-map entries bounded");
+            return;
+        }
+        if (id == pageMapId)
+            sawSelf = address == pageMapAddress
+                && size == 20u + physicalCompressedSize;
+        if (id == sectionMapId)
+            sectionMapAddress = address;
+        address += size;
+    }
+    t.expect(sawSelf && sectionMapAddress != 0u,
+             std::string(label) + " self-referential page map matches emitted page size");
+    if (!sectionMapAddress) return;
+    std::vector<std::uint8_t> sectionMap;
+    oldReader = false;
+    const bool sectionMapValid = checkR2004TerminatedSystemPage(
+        file, static_cast<std::size_t>(sectionMapAddress), 0x4163003bu,
+        sectionMap, oldReader);
+    t.expect(sectionMapValid, std::string(label) + " physical section map terminator, checksum and decode");
+    t.expect(oldReader, std::string(label) + " section map legacy stream tolerance");
+    std::uint32_t sectionCompressedSize = 0u;
+    if (!readLe32(file, static_cast<std::size_t>(sectionMapAddress) + 8u,
+                  sectionCompressedSize) || sectionCompressedSize == 0u
+        || sectionMapAddress + 20u + sectionCompressedSize > file.size()) {
+        t.expect(false, std::string(label) + " section map physical size bounded");
+        return;
+    }
+    clipped.assign(file.begin(), file.begin() + static_cast<std::ptrdiff_t>(
+        sectionMapAddress + 20u + sectionCompressedSize - 1u));
+    t.expect(!checkR2004TerminatedSystemPage(
+                 clipped, static_cast<std::size_t>(sectionMapAddress), 0x4163003bu,
+                 ignored, ignoredOldReader),
+             std::string(label) + " clipped section map rejected by physical bounds");
+}
+
+void testR2004SystemTerminators(TestContext& t) {
+    testR2004SystemTerminatorsForVersion<dwgWriter18>(t, "AC1018");
+    testR2004SystemTerminatorsForVersion<dwgWriter24>(t, "AC1024");
+    testR2004SystemTerminatorsForVersion<dwgWriter27>(t, "AC1027");
+    testR2004SystemTerminatorsForVersion<dwgWriter32>(t, "AC1032");
+}
+
 void testR2004SectionMapPublication(TestContext& t) {
     std::stringbuf streamBuffer(std::ios::out | std::ios::binary);
     std::ofstream output;
@@ -18211,6 +18355,12 @@ int main(int argc, char** argv) {
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
+    if (argc == 2 && std::string(argv[1]) == "--r2004-system-terminators") {
+        TestContext focused;
+        testR2004SystemTerminators(focused);
+        std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--header-writer-sealing") {
         TestContext focused;
         testHeaderWriters(focused);
@@ -18416,6 +18566,7 @@ int main(int argc, char** argv) {
     testR2007DataPageProfiles(context);
     testR2007SectionMapPageExtent(context);
     testR2004SectionMapPublication(context);
+    testR2004SystemTerminators(context);
     testModelerBlockRecordDispatch(context);
     testBlockRecordXrefIndexRetention(context);
     testLegacyLayoutBlockChains(context);
