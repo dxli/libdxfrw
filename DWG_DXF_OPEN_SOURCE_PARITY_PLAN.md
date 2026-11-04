@@ -891,6 +891,11 @@ and [plot-style graph research](docs/research/p6-default-plotstyle-graph-researc
 For AC1015 the synthetic layer and text style now use witnessed typed-null
 roles; the controlled ODA case advances to a linetype failure. See the
 [legacy layer/style receipt](docs/research/p6-ac1015-synthetic-layer-style-null-roles-2026-11-04.json).
+For AC1024, independently qualify and implement the witnessed
+NOD→ACAD_MATERIAL→ByBlock/ByLayer/Global graph and generated layer binding,
+with early class admission, caller overrides, collision checks and rollback.
+A typed-null material alone merely moves the ODA fatal boundary and leaves
+a layer warning. See the [material control and subplan](docs/research/p6-ac1024-default-layer-material-control-2026-11-04.json).
 AC1021 BLOCK_CONTROL now stages handles at its declared boundary; the reader
 also supports the witnessed historical inline profile under narrow checks.
 LibreDWG and an ODA-produced source confirm model/paper references, but ODA
