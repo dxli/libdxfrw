@@ -43,8 +43,16 @@
     "originalDxfSha256": "a9d6df60e53003a327c9bf31b0b90f8e2e283bc686ddd926825a803e37af6865",
     "result": "All three files yielded DXF without .err. The only line differences are the values following $TDUPDATE and $TDUUPDATE. Replacing just those values by a common marker produces the same 127131-byte SHA-256 6fed5d4bb382c358a5e6a7a051bc1667cb2ec41929d58e87a65adbacb61b2d52 for all three DXFs."
   },
+  "originalCoverRepeat": {
+    "source": "Original AC1027 Cover.dwg, SHA-256 3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42; producer provenance is not independently established.",
+    "framing": "The 731-byte suffix starts after the validated HEADER trailer at decoded offset 844 and occurs as one literal at physical offset 0x434f in the compressed page beginning at 0x40a0.",
+    "zeroDwgSha256": "846667a4073936d4ceb623137aeb1c13b77366ad065201d17c13e13fa151783e",
+    "patternDwgSha256": "c2e476a549a2b453b330f2eb53cb3077a00b6ff0a069ab65ce85658f42c34ee2",
+    "verification": "Both checksum-valid mutations decode with the same first 844 HEADER bytes, and LibreDWG independently matches both full 1575-byte logical sections.",
+    "odaResult": "The same ODA ACAD2013 DXF route converts original and both variants without .err. With only $TDUPDATE and $TDUUPDATE values normalized, all three DXFs have 127131 bytes and SHA-256 721bce02dec30f9cc78d2c20b6dee2671b9329b904ee8d191e9d4ac33680dc1a."
+  },
   "limits": [
-    "This is a causal, single-file and single-converter-route comparison; it does not identify a suffix generator or prove suffixes are padding for other sources or consumers.",
+    "This is a causal comparison of an original file and its ODA resave through one converter route; it does not identify a suffix generator or prove suffixes are padding for other sources or consumers.",
     "ODA's own DXF projection may omit information; equal DXF bytes after timestamp normalization are not native semantic equivalence or full drawing preservation.",
     "Strict output continues to refuse unclaimed suffixes, and no support or parity claim is promoted. No drawing fixture is committed."
   ],
