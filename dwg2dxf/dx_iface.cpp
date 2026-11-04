@@ -66658,6 +66658,12 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
         finishRasterDwgSources(success, standardObjectRange.appIdBegin, standardObjectRange.layerBegin);
         if (success) {
             fData->sourceVersion = dwg.getVersion();
+            for (dx_ifaceUnderlay* underlay : fData->underlays) {
+                if (underlay != nullptr
+                    && underlay->sourceImportGeneration == fData->importGeneration
+                    && underlay->sourceDwgPdfRotationRadians)
+                    underlay->sourceDwgPdfVersion = dwg.getVersion();
+            }
             fData->resolveDwgModelDocViewStyleNames();
             if (!resolveGroupNames(*fData, groupBegin))
                 fData->groupNameResolutionFailed = true;
@@ -79537,6 +79543,17 @@ void dx_iface::writeEntity(DRW_Entity* e){
                     || definition->second.handle
                         != underlay->definitionHandle) {
                     dxfW->writeRawDxfEntity(nullptr);
+                } else if (underlay->sourceDwgPdfRotationRadians
+                           && underlay->sourceDwgPdfVersion == DRW::AC1024
+                           && underlay->kind == DRW_Underlay::PDF) {
+                    const double degrees = underlay->rotation * ARAD;
+                    if (!std::isfinite(degrees)) {
+                        dxfW->writeRawDxfEntity(nullptr);
+                    } else {
+                        DRW_Underlay output(*underlay);
+                        output.rotation = degrees;
+                        written = dxfW->writeUnderlay(&output);
+                    }
                 } else {
                     written = dxfW->writeUnderlay(underlay);
                 }

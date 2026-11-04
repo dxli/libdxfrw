@@ -193,6 +193,8 @@ public:
     dx_ifaceUnderlay() = default;
     dx_ifaceUnderlay(const DRW_Underlay& source) : DRW_Underlay(source) {}
     std::uint64_t sourceImportGeneration{0};
+    bool sourceDwgPdfRotationRadians{false};
+    DRW::Version sourceDwgPdfVersion{DRW::UNKNOWNV};
 };
 
 struct dx_ifaceRawEntityEvent {

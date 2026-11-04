@@ -721,6 +721,7 @@ tools/audit_lwpolyline_wcs_physical.py
 tools/audit_modern_header_default.py
 tools/audit_modern_writer_rejection.py
 tools/audit_p9_rtext_native_history.py
+tools/audit_pdf_underlay_rotation.py
 tools/audit_polyline_cross_scope_peer.py
 tools/audit_polyline_cross_version_membership.py
 tools/audit_polyline_owner_census.py
@@ -877,6 +878,7 @@ tools/probe_light_dxf_preview.cpp
 tools/probe_lightlist_dxf_reference.cpp
 tools/probe_lightlist_physical_capture.cpp
 tools/probe_modern_header_source.cpp
+tools/probe_pdf_underlay_rotation.cpp
 tools/probe_polyline_cross_scope.cpp
 tools/probe_polyline_cross_version.cpp
 tools/probe_r12_ellipse_wrap_consumer.cpp

@@ -1023,6 +1023,9 @@ public:
         if (underlay == nullptr)
             return;
         underlay->sourceImportGeneration = cData->importGeneration;
+        underlay->sourceDwgPdfRotationRadians =
+            cData->sourceFormat == dx_source_format::DWG
+            && data->kind == DRW_Underlay::PDF;
         try {
             cData->underlays.push_back(underlay);
             cData->typedEntityRetainedBytes += underlayIndexNodeBytes;

@@ -897,6 +897,12 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+The dwg2dxf adapter converts per-record AC1024 DWG PDF underlay rotation to
+DXF degrees while retaining the public callback's documented radians and
+source identity. DGN/DWF and other revisions remain unqualified; original
+physical files still encounter unrelated strict HEADER refusal
+([receipt](docs/research/p6-ac1024-pdf-underlay-rotation-adapter-2026-11-04.json)).
+
 DWG VIEWPORT entity snap and twist angles now convert radians to the existing
 degree-valued DXF API and back for AC1015 and newer. Consumers compensating
 for the former raw-radian callback must remove that workaround. Broader source

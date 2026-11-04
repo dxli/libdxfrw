@@ -67226,6 +67226,109 @@ bool underlayDefinitionGraphRoundTrip() {
         }
     }
 
+    // DWG callbacks retain radians; the adapter must emit DXF degrees without
+    // changing the retained carrier or other underlay kinds.
+    {
+        dx_data provenance;
+        dx_iface capture;
+        capture.cData = &provenance;
+        capture.currentBlock = provenance.mBlock;
+        provenance.sourceFormat = dx_source_format::DWG;
+        DRW_Underlay observed;
+        capture.addUnderlay(&observed);
+        if (provenance.underlays.size() != 1u
+            || !provenance.underlays.front()->sourceDwgPdfRotationRadians)
+            return fail("DWG underlay callback did not capture rotation provenance");
+        observed.kind = DRW_Underlay::DGN;
+        capture.addUnderlay(&observed);
+        if (provenance.underlays.size() != 2u
+            || provenance.underlays.back()->sourceDwgPdfRotationRadians)
+            return fail("DGN callback acquired PDF angle provenance");
+    }
+    data.sourceVersion = DRW::AC1024;
+    dx_ifaceUnderlay* pdf = data.underlays.front();
+    pdf->sourceDwgPdfRotationRadians = true;
+    pdf->sourceDwgPdfVersion = DRW::AC1024;
+    pdf->rotation = std::acos(-1.0) / 4.0;
+    pdf->extPoint = DRW_Coord(1.0, 2.0, 3.0);
+    for (const bool binary : {false, true}) {
+        constexpr std::uint32_t sourceHandle = 0xCB20u;
+        pdf->handle = sourceHandle;
+        if (!author.fileExport(path.string(), DRW::AC1024, binary, &data,
+                               false, true))
+            return fail("DWG PDF rotation export failed");
+        dx_data check;
+        dx_iface reader;
+        if (!reader.fileImport(path.string(), &check, false)
+            || check.underlays.size() != 3u
+            || pdf->handle != sourceHandle
+            || check.underlays.front()->handle == sourceHandle
+            || check.underlays.front()->extPoint.x != 1.0
+            || check.underlays.front()->extPoint.y != 2.0
+            || check.underlays.front()->extPoint.z != 3.0
+            || std::abs(check.underlays.front()->rotation - 45.0) > 1e-10
+            || (*std::next(check.underlays.begin(), 1))->rotation != 16.0
+            || (*std::next(check.underlays.begin(), 2))->rotation != 17.0
+            || pdf->rotation != std::acos(-1.0) / 4.0)
+            return fail("DWG PDF radians were not emitted as degrees");
+    }
+    const std::string angleSentinel = "PDF_ROTATION_SENTINEL\n";
+    // A later record failure preserves the retained source identity and the
+    // destination, including after the earlier PDF record was emitted.
+    dx_ifaceUnderlay* later = *std::next(data.underlays.begin());
+    const double savedLaterRotation = later->rotation;
+    later->rotation = std::numeric_limits<double>::quiet_NaN();
+    constexpr std::uint32_t beforeLaterFailure = 0xCB21u;
+    pdf->handle = beforeLaterFailure;
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output << angleSentinel;
+    }
+    const bool lateRejected = !author.fileExport(path.string(), DRW::AC1024, false, &data, false, true);
+    std::ifstream lateInput(path, std::ios::binary);
+    const std::string afterLateFailure{std::istreambuf_iterator<char>(lateInput),
+                                       std::istreambuf_iterator<char>()};
+    if (!lateRejected || afterLateFailure != angleSentinel || pdf->handle != beforeLaterFailure)
+        return fail("later failure did not preserve PDF source handle");
+    later->rotation = savedLaterRotation;
+    if (!author.fileExport(path.string(), DRW::AC1024, false, &data, false, true))
+        return fail("PDF retry after later failure failed");
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output << angleSentinel;
+    }
+    pdf->rotation = std::numeric_limits<double>::max();
+    const bool rejected = !author.fileExport(path.string(), DRW::AC1024, false, &data, false, true);
+    std::ifstream input(path, std::ios::binary);
+    const std::string afterFailure{std::istreambuf_iterator<char>(input),
+                                   std::istreambuf_iterator<char>()};
+    if (!rejected || afterFailure != angleSentinel)
+        return fail("overflowed PDF angle did not preserve destination");
+    pdf->rotation = std::numeric_limits<double>::quiet_NaN();
+    if (author.fileExport(path.string(), DRW::AC1024, false, &data, false, true))
+        return fail("nonfinite PDF angle was admitted");
+    pdf->rotation = std::acos(-1.0) / 4.0;
+    if (!author.fileExport(path.string(), DRW::AC1024, false, &data, false, true))
+        return fail("PDF angle retry failed");
+    data.sourceVersion = DRW::AC1021;
+    if (!author.fileExport(path.string(), DRW::AC1024, false, &data, false, true))
+        return fail("aggregate metadata change prevented PDF angle export");
+    dx_data retainedVersion;
+    dx_iface retainedReader;
+    if (!retainedReader.fileImport(path.string(), &retainedVersion, false)
+        || retainedVersion.underlays.empty()
+        || std::abs(retainedVersion.underlays.front()->rotation - 45.0) > 1e-10)
+        return fail("PDF angle followed aggregate rather than captured version");
+    pdf->sourceDwgPdfVersion = DRW::AC1021;
+    if (!author.fileExport(path.string(), DRW::AC1024, false, &data, false, true))
+        return fail("unqualified revision changed existing export");
+    dx_data neighbor;
+    dx_iface neighborReader;
+    if (!neighborReader.fileImport(path.string(), &neighbor, false)
+        || neighbor.underlays.empty()
+        || neighbor.underlays.front()->rotation != pdf->rotation)
+        return fail("unqualified revision unexpectedly converted PDF angle");
+
     struct VersionGateCase {
         DRW_Underlay::Kind kind;
         const char* rootName;
