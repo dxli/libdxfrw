@@ -3062,7 +3062,10 @@ bool dwgWriter15::emitAcDbPlaceholderObject(
         return false;
     }
     DRW_UNUSED(sb);
-    if (!placeholder.encodeDwg(m_version, &body, hb))
+    const bool syntheticLegacy = m_version == DRW::AC1015
+        && m_writingDefaultPlotStyleGraph
+        && handle == m_defaultPlotStylePlaceholderHandle;
+    if (!placeholder.encodeDwgForWriter(m_version, &body, hb, syntheticLegacy))
         return false;
 
     finishObject();
@@ -4143,10 +4146,10 @@ bool dwgWriter15::completeDeferredDwgObjects() {
                         ~ScopedDefaultGraphWrite() { active = false; }
                     } scope(m_writingDefaultPlotStyleGraph);
                     if (!writeDictionaryWithDefault(dictionary)) return fail();
+                    if (consumeWriteFailurePointForTest(kAfterDefaultPlotStyleDictionary))
+                        throw std::bad_alloc();
+                    if (!writeAcDbPlaceholder(placeholder)) return fail();
                 }
-                if (consumeWriteFailurePointForTest(kAfterDefaultPlotStyleDictionary))
-                    throw std::bad_alloc();
-                if (!writeAcDbPlaceholder(placeholder)) return fail();
                 m_defaultPlotStyleGraphEmitted = true;
             } catch (...) {
                 return fail();

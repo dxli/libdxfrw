@@ -23,6 +23,11 @@
 
 class DrwObjectEncodeTestAccess {
 public:
+    static bool encodePlaceholder(DRW_AcDbPlaceholder& placeholder,
+                                  DRW::Version version, dwgBufferW& data,
+                                  dwgBufferW& handles, bool typedLegacy) {
+        return placeholder.encodeDwgForWriter(version, &data, &handles, typedLegacy);
+    }
     static bool encodeDefaultDictionary(DRW_DictionaryWithDefault& dictionary,
                                         DRW::Version version, dwgBufferW& data,
                                         dwgBufferW& strings, dwgBufferW& handles,
@@ -73,6 +78,21 @@ bool defaultDictionaryNullRoles() {
                 0x41u, 0x0cu, static_cast<std::uint8_t>(typed ? 0x30u : 0x00u),
                 0x21u, 0x31u, 0x51u, 0x31u};
             if (handles.data() != expected) return false;
+            DRW_AcDbPlaceholder placeholder;
+            placeholder.parentHandle = 0x30u;
+            dwgBufferW placeholderBody, placeholderHandles;
+            if (!DrwObjectEncodeTestAccess::encodePlaceholder(
+                    placeholder, version, placeholderBody, placeholderHandles, synthetic)
+                || placeholderHandles.data() != std::vector<std::uint8_t>(
+                    {0x41u, 0x30u, static_cast<std::uint8_t>(typed ? 0x30u : 0x00u)}))
+                return false;
+            placeholder.xDictHandle = 0x71u;
+            dwgBufferW nonNullBody, nonNullHandles;
+            if (!DrwObjectEncodeTestAccess::encodePlaceholder(
+                    placeholder, version, nonNullBody, nonNullHandles, synthetic)
+                || nonNullHandles.data() != std::vector<std::uint8_t>(
+                    {0x41u, 0x30u, 0x31u, 0x71u}))
+                return false;
         }
     }
     return true;

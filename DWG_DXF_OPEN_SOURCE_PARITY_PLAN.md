@@ -890,8 +890,10 @@ claims. See the [opt-in receipt](docs/research/p6-default-plotstyle-optin-2026-1
 and [plot-style graph research](docs/research/p6-default-plotstyle-graph-research-2026-11-04.json).
 For AC1015 the synthetic layer, text style, default linetypes and active
 viewport and ACAD APPID now use witnessed typed-null roles. Synthetic
-DIMSTYLE also points to the emitted STANDARD text style; the controlled ODA
-case advances to a placeholder failure. See the [legacy DIMSTYLE receipt](docs/research/p6-ac1015-synthetic-dimstyle-roles-2026-11-04.json)
+DIMSTYLE also points to the emitted STANDARD text style, and the opt-in
+placeholder now emits the witnessed legacy null role. ODA advances to an
+object-type error that still needs diagnosis. See the [placeholder receipt](docs/research/p6-ac1015-synthetic-placeholder-null-role-2026-11-04.json)
+and [DIMSTYLE receipt](docs/research/p6-ac1015-synthetic-dimstyle-roles-2026-11-04.json)
 and [APPID receipt](docs/research/p6-ac1015-synthetic-appid-null-roles-2026-11-04.json)
 and [viewport receipt](docs/research/p6-ac1015-synthetic-vport-null-roles-2026-11-04.json)
 and [linetype receipt](docs/research/p6-ac1015-synthetic-ltype-null-roles-2026-11-04.json).

@@ -26492,6 +26492,12 @@ bool DRW_AcDbPlaceholder::parseDwg(DRW::Version version, dwgBuffer *buf, std::ui
 
 bool DRW_AcDbPlaceholder::encodeDwg(DRW::Version version, dwgBufferW *buf,
                                     dwgBufferW *handleBuf) const {
+    return encodeDwgForWriter(version, buf, handleBuf, false);
+}
+
+bool DRW_AcDbPlaceholder::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                             dwgBufferW *handleBuf,
+                                             bool typedLegacyNull) const {
     if (buf == nullptr || !dwgSafety::validReactorCount(reactorCount())
         || reactorHandles.size() > dwgSafety::MaxReactorCount
         || extensionDictionaryFlag() > 1)
@@ -26502,7 +26508,9 @@ bool DRW_AcDbPlaceholder::encodeDwg(DRW::Version version, dwgBufferW *buf,
         : buf;
     putCommonObjectHandlePrefix(
         hb, static_cast<std::uint32_t>(parentHandle), reactorCount(),
-        extensionDictionaryFlag(), &reactorHandles, xDictHandle);
+        extensionDictionaryFlag(), &reactorHandles, xDictHandle,
+        DRW::DwgSoftPointer, false,
+        version == DRW::AC1015 && typedLegacyNull);
     return buf->isGood() && hb->isGood();
 }
 

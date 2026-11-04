@@ -7075,6 +7075,9 @@ public:
   }
 
 protected:
+  [[nodiscard]] bool encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                        dwgBufferW *handleBuf,
+                                        bool typedLegacyNull) const;
   bool parseDwg(DRW::Version version, dwgBuffer *buf,
                 std::uint32_t bs = 0) override;
 
