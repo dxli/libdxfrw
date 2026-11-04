@@ -2160,7 +2160,8 @@ bool readTableStyleContentFormat(DRW::Version version, dwgBuffer *buf,
                                  DRW_TableStyleContentFormat& format,
                                  std::vector<DRW_DwgSubrecordRange> *ranges = nullptr,
                                  std::uint64_t handleEndBit =
-                                     std::numeric_limits<std::uint64_t>::max()) {
+                                     std::numeric_limits<std::uint64_t>::max(),
+                                 bool legacyCellStyleMap = false) {
     const std::uint64_t startBit = currentObjectDwgBit(buf);
     dwgBuffer *textBuf = strBuf ? strBuf : buf;
     const auto readLong = [buf, version, bodySize](std::uint32_t& value) {
@@ -2214,11 +2215,13 @@ bool readTableStyleContentFormat(DRW::Version version, dwgBuffer *buf,
         || !readLong(format.m_propertyFlags)
         || (format.m_propertyFlags & ~std::uint32_t{0x100u}) != 0u
         || !readInt(format.m_valueDataType)
-        || !validTableStyleValueDataType(
-            version, format.m_valueDataType)
+        || !(legacyCellStyleMap
+                ? format.m_valueDataType == 4
+                : validTableStyleValueDataType(version, format.m_valueDataType))
         || !readInt(format.m_valueUnitType)
-        || !validTableStyleValueUnitType(
-            version, format.m_valueUnitType))
+        || !(legacyCellStyleMap
+                ? format.m_valueUnitType == 0
+                : validTableStyleValueUnitType(version, format.m_valueUnitType)))
         return false;
     if (!readVariableTextWithinBounds(buf, textBuf, version, bodySize,
                                       stringSize, format.m_valueFormatString))
@@ -2253,7 +2256,8 @@ bool readTableStyleCellStyle(DRW::Version version, dwgBuffer *buf,
                              DRW_TableStyleCellStyle& style,
                              std::vector<DRW_DwgSubrecordRange> *ranges = nullptr,
                              std::uint64_t handleEndBit =
-                                 std::numeric_limits<std::uint64_t>::max()) {
+                                 std::numeric_limits<std::uint64_t>::max(),
+                             bool legacyCellStyleMap = false) {
     const std::uint64_t startBit = currentObjectDwgBit(buf);
     const auto readLong = [buf, version, bodySize](std::uint32_t& value) {
         std::int32_t parsed = 0;
@@ -2342,7 +2346,7 @@ bool readTableStyleCellStyle(DRW::Version version, dwgBuffer *buf,
     if (!readTableStyleContentFormat(version, buf, strBuf, hdlBuf,
                                      bodySize, stringSize,
                                      style.m_contentFormat, ranges,
-                                     handleEndBit)) {
+                                     handleEndBit, legacyCellStyleMap)) {
         DRW_DBG("TABLESTYLE cell-style content format invalid\n");
         return false;
     }
@@ -18718,11 +18722,15 @@ bool DRW_CellStyleMap::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
         return fail();
     for (std::uint32_t i = 0; i < cellStyleCount; ++i) {
         DRW_TableStyleCellStyle style;
+        // ODA 27.1 AC1018 back-saves retain a CELLSTYLEMAP containing
+        // string-valued content formats with no units. Keep this compatibility
+        // profile local to this class; later-format fields remain gated.
         if (!readTableStyleCellStyle(
                 version, bodyBuf, bodySBuf,
                 version > DRW::AC1018 ? hBuf : nullptr,
                 bodyEnd, stringEnd,
-                style, &subrecordRanges, handleEndBit)) {
+                style, &subrecordRanges, handleEndBit,
+                version == DRW::AC1018)) {
             DRW_DBG("CELLSTYLEMAP cell style parse incomplete\n");
             return fail();
         }
@@ -18751,6 +18759,10 @@ bool DRW_CellStyleMap::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
         cellStyles.push_back(std::move(style));
     }
 
+    // In AC1018 the body and handle streams share a cursor. Capture the
+    // end of each body stream before consuming common and style handles.
+    const std::uint64_t bodyBitOffset = currentObjectDwgBit(bodyBuf);
+    const std::uint64_t stringBitOffset = currentObjectDwgBit(bodySBuf);
     if (version <= DRW::AC1018) {
         if (!this->readDwgObjectCommonHandles(version, bodyBuf, &parsedParentHandle, &parsedReactors, &parsedXDictHandle))
             return fail();
@@ -18760,11 +18772,9 @@ bool DRW_CellStyleMap::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint3
         }
     }
 
-    const std::uint64_t bodyBitOffset =
-        bodyBuf->getPosition() * 8u + bodyBuf->getBitPos();
     if (!bodyBuf->isGood() || !bodySBuf->isGood() || !hBuf->isGood()
         || !objectBodyFitsSize(bodyBitOffset, bodyEnd)
-        || !objectBodyFitsSize(currentObjectDwgBit(bodySBuf), stringEnd))
+        || !objectBodyFitsSize(stringBitOffset, stringEnd))
         return fail();
 
     m_cellStyles = std::move(cellStyles);

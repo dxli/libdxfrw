@@ -107,6 +107,11 @@ P4 supplies source/context/role providers and composes them with the existing
 local record providers and P5 output. Do not create parallel capture or graph
 engines.
 
+Two ODA back-saved AC1018 drawings now read their bounded type-4/unit-0
+CELLSTYLEMAP records with correct inline handle boundaries; whole-file output
+remains refused by the HEADER suffix and unqualified graphs. Broader producer,
+type/unit and rendering profiles remain open ([receipt](docs/research/p4-ac1018-cellstylemap-oda-roundtrip-read-2026-11-03.json)).
+
 **DICTIONARY DWG item-wire role:** ODA v5.4.1 §20.4.44 and LibreDWG's DWG
 schema define each item handle as a soft-owner wire reference (code 2),
 independent of the `hardOwner` flag. The flag remains relevant to DXF entry

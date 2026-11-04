@@ -3283,6 +3283,127 @@ void testTableStyleIdentityDomains(TestContext& t) {
     }
 }
 
+bool makeAc1018CellStyleMapFrame(TableStyleFrame& frame,
+                                 std::int32_t valueType = 4,
+                                 std::int32_t unitType = 0) {
+    constexpr DRW::Version version = DRW::AC1018;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    dwgBufferW object(&codec);
+    object.putObjType(version, DRW_TableStyle::kDwgClassNum);
+    const std::size_t sizeBit = object.bitCount();
+    object.putRawLong32(0);
+    const auto putHandle = [&object](std::uint8_t code, std::uint32_t ref) {
+        dwgHandle h; h.code = code; h.ref = ref; h.ref64 = ref;
+        h.size = ref > 0xffu ? 2u : ref != 0u ? 1u : 0u;
+        object.putHandle(h);
+    };
+    const auto putColor = [&object]() {
+        object.putBitShort(0);
+        object.putBitLong(static_cast<std::int32_t>(0xC0000000u));
+        object.putRawChar8(0);
+    };
+    putHandle(0, 0xA100u); // object identity
+    object.putBitShort(0); // EED
+    object.putBitLong(1); // reactors
+    object.putBit(1); // extension dictionary missing
+    object.putBitLong(1); // one cell style
+    object.putBitLong(5); // table style
+    object.putBitShort(1); // data present
+    object.putBitLong(0); // overrides
+    object.putBitLong(0); // merge
+    putColor();
+    object.putBitLong(1); // content layout
+    object.putBitLong(0); // content overrides
+    object.putBitLong(0); // content flags
+    object.putBitLong(valueType);
+    object.putBitLong(unitType);
+    object.putVariableText(version, "");
+    object.putBitDouble(0); // rotation
+    object.putBitDouble(1); // scale
+    object.putBitLong(2); // alignment
+    putColor();
+    object.putBitDouble(4.5); // text height
+    object.putBitShort(0); // no margin overrides
+    object.putBitLong(1); // one border
+    object.putBitLong(1); // top edge
+    object.putBitLong(0); // border overrides
+    object.putBitLong(1); // border type
+    putColor();
+    object.putBitLong(-2); // lineweight
+    object.putBitLong(0); // visible
+    object.putBitDouble(0.25);
+    object.putBitLong(3); // style ID
+    object.putBitLong(2); // label style
+    object.putVariableText(version, "_DATA");
+    if (!object.isGood() || object.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    object.patchRawLong32AtBit(sizeBit, static_cast<std::uint32_t>(object.bitCount()));
+    putHandle(DRW::DwgSoftPointer, 0xA200u); // owner
+    putHandle(DRW::DwgSoftPointer, 0xA210u); // reactor
+    putHandle(DRW::DwgHardPointer, 0xA300u); // content text style
+    putHandle(DRW::DwgHardPointer, 0xA400u); // border line type
+    object.alignToByte();
+    if (!object.isGood()) return false;
+    frame.bytes = object.data();
+    frame.handleBits = 0;
+    return true;
+}
+
+void testCellStyleMapAc1018ObservedProfile(TestContext& t) {
+    TableStyleFrame valid;
+    t.expect(makeAc1018CellStyleMapFrame(valid), "AC1018 CELLSTYLEMAP frame builds");
+    if (valid.bytes.empty()) return;
+    DRW_TextCodec codec;
+    codec.setVersion(DRW::AC1018, false);
+    const auto verify = [&](CellStyleMapCodecProbe& parsed) {
+        if (parsed.handle != 0xA100u || parsed.parentHandle != 0xA200u
+            || parsed.reactorHandles != std::vector<std::uint32_t>{0xA210u}
+            || parsed.m_cellStyles.size() != 1u) return false;
+        const auto& s = parsed.m_cellStyles.front();
+        return s.m_type == 5 && s.m_hasData && s.m_id == 3
+            && s.m_styleClass == 2 && s.m_name == "_DATA"
+            && s.m_contentFormat.m_valueDataType == 4
+            && s.m_contentFormat.m_valueUnitType == 0
+            && s.m_contentFormat.m_cellAlignment == 2
+            && s.m_contentFormat.m_textHeight == 4.5
+            && s.m_contentFormat.m_textStyleHandle == 0xA300u
+            && s.m_borders.size() == 1u
+            && s.m_borders.front().m_lineTypeHandle == 0xA400u
+            && s.m_borders.front().m_doubleLineSpacing == 0.25;
+    };
+    CellStyleMapCodecProbe parsed;
+    dwgBuffer input(valid.bytes.data(), valid.bytes.size(), &codec);
+    t.expect(parsed.parseDwg(DRW::AC1018, &input, valid.handleBits)
+                 && input.isGood() && verify(parsed),
+             "AC1018 CELLSTYLEMAP preserves fields and inline handle roles");
+    t.expect(!parsed.validateDwgPayload(DRW::AC1018),
+             "AC1018 CELLSTYLEMAP reading does not enable DWG emission");
+    for (const auto& invalid : {std::pair<int,int>{2,0}, {4,1}}) {
+        TableStyleFrame bad;
+        if (!makeAc1018CellStyleMapFrame(bad, invalid.first, invalid.second)) {
+            t.expect(false, "AC1018 CELLSTYLEMAP invalid frame builds");
+            continue;
+        }
+        dwgBuffer malformed(bad.bytes.data(), bad.bytes.size(), &codec);
+        t.expect(!parsed.parseDwg(DRW::AC1018, &malformed, bad.handleBits)
+                     && !malformed.isGood() && parsed.m_cellStyles.empty(),
+                 "AC1018 CELLSTYLEMAP refuses unqualified type or unit and clears state");
+        dwgBuffer retry(valid.bytes.data(), valid.bytes.size(), &codec);
+        t.expect(parsed.parseDwg(DRW::AC1018, &retry, valid.handleBits)
+                     && retry.isGood() && verify(parsed),
+                 "AC1018 CELLSTYLEMAP retries same object after refusal");
+    }
+    dwgBuffer truncated(valid.bytes.data(), valid.bytes.size() - 3u, &codec);
+    t.expect(!parsed.parseDwg(DRW::AC1018, &truncated, valid.handleBits)
+                 && !truncated.isGood() && parsed.m_cellStyles.empty(),
+             "AC1018 CELLSTYLEMAP rejects truncated handle stream and resets state");
+    dwgBuffer retry(valid.bytes.data(), valid.bytes.size(), &codec);
+    t.expect(parsed.parseDwg(DRW::AC1018, &retry, valid.handleBits)
+                 && retry.isGood() && verify(parsed),
+             "AC1018 CELLSTYLEMAP retries after truncated handles");
+}
+
 void testCellStyleMapIdentityDomains(TestContext& t) {
     struct Case {
         DRW::Version version;
@@ -20202,6 +20323,7 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--cellstylemap-identity-domains") {
         TestContext context;
         testCellStyleMapIdentityDomains(context);
+        testCellStyleMapAc1018ObservedProfile(context);
         std::cout << "AC1021/AC1024/AC1027/AC1032 CELLSTYLEMAP style ID/class domains: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
@@ -20310,6 +20432,7 @@ int main(int argc, char** argv) {
     testTableStyleDataFlagRange(context);
     testTableStyleTypeDomain(context);
     testCellStyleMapIdentityDomains(context);
+    testCellStyleMapAc1018ObservedProfile(context);
     testCellStyleMapDwgEncodeRoundTrip(context);
     testTableStyleMarginOverrideFlagDomain(context);
     testR2010MergedRangeProjectionVector(context);
