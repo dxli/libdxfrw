@@ -1,0 +1,96 @@
+{
+  "schema": "libdxfrw-evidence-v1",
+  "id": "p6-dwg-entity-table-reference-diagnostics-2026-11-04",
+  "base_commit": "d6bb9b50",
+  "base_note": "The scratch source was archived from 9f08bbbb; d6bb9b50 changes only the plan, so the candidate applies on that later commit.",
+  "scope": "Generic DWG entity name-resolution diagnostics for unresolved non-null layer and explicitly encoded non-null linetype handles, plus 64-bit truncation aliases. An ordinary tolerant reader still reports success and delivers its prior fallback names. Existing strict-complete and bounded-partial gates reject integrity errors and incomplete/dropped diagnostic ledgers. This diagnostic does not prove source handle role, mandatory-null semantics, immutable post-import identity, emitted-name closure, or general entity support.",
+  "authority": "Open Design Specification v5.4.1 section 20.4.2, p.111, specifies entity common layer and conditional explicit linetype handle dependencies; generic parser hooks the existing shared name-resolution function after version-specific decoding. Relative handle normalization remains accepted when the resolved full value is representable.",
+  "change": "After preserving existing lookup behavior, parseAttribs(DRW_Entity*) records EntityLayerReference or EntityLineTypeReference integrity errors when a non-null resolved handle is absent from its expected record-kind map, or its 64-bit value cannot be represented by the historical 32-bit map key. An linetype handle is checked only for ltFlags=3; implicit modes 0/1/2 remain untouched. Two enum values are appended without changing existing values or interface layout. Construction exceptions now increment the existing dropped-diagnostic ledger, preserving read softness while preventing strict completeness from treating lost errors as complete.",
+  "validation": {
+    "focused": "Normal 2/2 fixture-free CTests. The subtype matrix exercises 22 representative common entity families including BLOCK, ATTRIB, VERTEX and SEQEND through the shared resolver across AC1015/1018/1021/1024/1027/1032, implicit linetype modes, normalized relative handles, high-64-bit aliases with valid and zero low words, and missing/wrong-kind targets. A warning-filled integrity cap followed by a missing edge increments the dropped count; injected vector allocation and diagnostic-construction failures also increment it. The strict graph test injects a lost ledger entry and an entity error and requires destination sentinel preservation and same-adapter retry in ASCII and binary.",
+    "physical": "For the selected generated AC1027 one-layer LINE, source frame at decoded object-page offset 960 has body 66 bytes, handle-stream 40 bits, entity handle 0x36, original layer\u21920x12 and explicit linetype\u21920x10. Four inputs modify one target to missing 0x7e or a wrong-kind existing handle, and reseal object CRC and outer uncompressed page checksums. For each, `dwgRW::read` succeeds and calls addLine once with the legacy fallback; a kind-specific integrity Error records source entity and 64-bit target. The strict CLI refuses and preserves an existing sentinel. The unmodified input still converts strictly and produces byte-identical prior output. These are source mutations, distinct from in-memory diagnostic ledger tests.",
+    "asan": "Isolated AddressSanitizer build passes libdxfrw_dwg_entity_table_ref_diagnostic and libdxfrw_dwg_ac1027_default_graph_strict 2/2."
+  },
+  "limitations": "This does not reject null mandatory fields or role-4/valid-target tokens; both require separate source-profile qualification. The generic diagnostics do not authenticate mutable adapter state or inspect output and therefore do not claim whole-graph closure. The subtype test covers representative instances of the common resolver, not all possible dispatched DWG types or native consumers.",
+  "commands": {
+    "configure": "cmake -S . -B /private/tmp/dwg-entity-ref-guard/build -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DLIBDXFRW_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release \"-DCMAKE_CXX_FLAGS_RELEASE=-O0 -DNDEBUG\"",
+    "ctest": "ctest --test-dir /private/tmp/dwg-entity-ref-guard/build -R '^libdxfrw_dwg_(entity_table_ref_diagnostic|ac1027_default_graph_strict)$' --output-on-failure",
+    "asan_ctest": "ctest --test-dir /private/tmp/dwg-entity-ref-guard/asan-build -R '^libdxfrw_dwg_(entity_table_ref_diagnostic|ac1027_default_graph_strict)$' --output-on-failure",
+    "mutate": "python3 -B tools/mutate_ac1027_line_table_ref.py /private/tmp/ac1027-header-profile/production-in/line.dwg bc0b76f71565532763c635172b765cf41e4ba20cf86a7f412ba8329d3d4486cc OUTPUT 960 FIELD TARGET_HEX (layer:7e, layer:10, ltype:7e, ltype:12)",
+    "probe_compile": "c++ -std=c++17 -Wall -Wextra -pedantic -Werror -I src -I src/intern -I tests tools/probe_dwg_entity_table_references.cpp /private/tmp/dwg-entity-ref-guard/build/libdxfrw.a -o /private/tmp/dwg-entity-ref-guard/probe",
+    "probe": "/private/tmp/dwg-entity-ref-guard/probe INPUT FIELD TARGET_HEX 36",
+    "strict_cli": "/private/tmp/dwg-entity-ref-guard/build/dwg2dxf/dwg2dxf INPUT -y -v2013 OUTPUT"
+  },
+  "files": {
+    "src/libdwgr.h": "3c854d3a64524ea21decfeed8928a15b1ae4b86347b7fee7bb43ed3d77a89f73",
+    "src/intern/dwgreader.cpp": "dbae0694efaa732709bcca946c9bdb85b7ce0431a90bb584c4892ad5af87ff00",
+    "tests/CMakeLists.txt": "1efc6ec1ff1f2f7c7c7dd618dfe4e4323775befa75e2e8140d80b22c4d803274",
+    "tests/dwg_entity_table_ref_diagnostic_tests.cpp": "8a250bb9c476b4c646f9cb990608ec9f1d33417381ff5ee8ce234e623f57bddc",
+    "tests/dwg_ac1027_default_graph_strict_tests.cpp": "711f702cbf9d3d4dd1a779f80a3bbcfe4871657278f4288741153deb87241716",
+    "tools/probe_dwg_entity_table_references.cpp": "bfdba4a050346b76ed116710df87195ff94098a9a603b2312a5afff41ae43577",
+    "tools/mutate_ac1027_line_table_ref.py": "5249db8f9c7b452735ba6f7c5380af6a2ff1ade1ba03a4467b5479fdd9d32ad3"
+  },
+  "artifacts": {
+    "source": {
+      "path": "/private/tmp/ac1027-header-profile/production-in/line.dwg",
+      "sha256": "bc0b76f71565532763c635172b765cf41e4ba20cf86a7f412ba8329d3d4486cc"
+    },
+    "source_trace": {
+      "path": "/private/tmp/dwg-entity-ref-guard/one-v9.log",
+      "sha256": "8e026c011f2973095aa9f30f303a8ba1e438b6525b538dc18f48adba513411ca"
+    },
+    "valid_dxf": {
+      "path": "/private/tmp/dwg-entity-ref-guard/valid.dxf",
+      "sha256": "1d2814932f1038194eb6b0c20a0da0fcc8baccf2b2ce7e55c1eaffaa75a72d90"
+    },
+    "valid_log": {
+      "path": "/private/tmp/dwg-entity-ref-guard/valid.log",
+      "sha256": "486bef9348295b95f04b294da99ff725258f21c4b55ba3e416764309f5da27fb"
+    },
+    "ctest_log": {
+      "path": "/private/tmp/dwg-entity-ref-guard/ctest.log",
+      "sha256": "1eb95ee7f92b7dfdf84994fa2588de47c585e630dbcd9294a1039bef23622274"
+    },
+    "asan_ctest_log": {
+      "path": "/private/tmp/dwg-entity-ref-guard/asan-ctest.log",
+      "sha256": "55f83208678ae62623654d0462fc25fd2204c8f6a2d5cfbebfce6e9746b8ad94"
+    },
+    "probe_log": {
+      "path": "/private/tmp/dwg-entity-ref-guard/probe.log",
+      "sha256": "b65df11ae3bfd7d1efc1103eb86f98634b2301a8ced8e7c208a5133f4d4bcc65"
+    },
+    "layer-7e_dwg": {
+      "path": "/private/tmp/dwg-entity-ref-guard/controls/layer-7e.dwg",
+      "sha256": "5fe943987c1898f7ca2ae50772c9c052bc60e41856b2694ab1cefad700fa4cde"
+    },
+    "layer-7e_log": {
+      "path": "/private/tmp/dwg-entity-ref-guard/controls/layer-7e.log",
+      "sha256": "921ad6b54356f6fea9867361c97273c64a898bc51f3c3956f6b8501f27b1ee4e"
+    },
+    "layer-10_dwg": {
+      "path": "/private/tmp/dwg-entity-ref-guard/controls/layer-10.dwg",
+      "sha256": "d7d0d42127e8c814933024db1645c23c3332ede2fa977ea7c110f65e44ba33f9"
+    },
+    "layer-10_log": {
+      "path": "/private/tmp/dwg-entity-ref-guard/controls/layer-10.log",
+      "sha256": "9b31cc9d13c6c29b639d6bb7d2f0223f0537beeadec0ef533029d7da82ba37ec"
+    },
+    "ltype-7e_dwg": {
+      "path": "/private/tmp/dwg-entity-ref-guard/controls/ltype-7e.dwg",
+      "sha256": "c38da60209e307a465be6c5fe5321892d6b49d55b686485e2714771ba9aa982d"
+    },
+    "ltype-7e_log": {
+      "path": "/private/tmp/dwg-entity-ref-guard/controls/ltype-7e.log",
+      "sha256": "83da1b91357bfd0837cbb2252c6e1645924c3898dbd907c601395c57a462835f"
+    },
+    "ltype-12_dwg": {
+      "path": "/private/tmp/dwg-entity-ref-guard/controls/ltype-12.dwg",
+      "sha256": "23964a0baac41076c4383f6b60658a8049ef09145a1b97e9dc946cddecc0b5e0"
+    },
+    "ltype-12_log": {
+      "path": "/private/tmp/dwg-entity-ref-guard/controls/ltype-12.log",
+      "sha256": "c5d0990749db9c8de45976819c8c833795202f03ebd0159e7e5993a79fb18ca8"
+    }
+  },
+  "integrated_validation": "Main workspace on d6bb9b50: both focused CTests passed 2/2 after rebuild."
+}

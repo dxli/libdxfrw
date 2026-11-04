@@ -433,6 +433,7 @@ EXTRA_DIST = \
     tests/dwg_default_plotstyle_libredwg.py \
     tests/dwg_default_plotstyle_optin_tests.cpp \
     tests/dwg_ellipse_wcs_test.h \
+    tests/dwg_entity_table_ref_diagnostic_tests.cpp \
     tests/dwg_fixture_tests.cpp \
     tests/dwg_hatch_edge_subtype_tests.cpp \
     tests/dwg_hatch_ellipse_edge_dwg_tests.cpp \
@@ -863,6 +864,7 @@ EXTRA_DIST = \
     tools/make_ac1021_block_control_reactor_witness.py \
     tools/make_p9_rtext_oda_input.py \
     tools/mutate_ac1027_default_graph_crc.py \
+    tools/mutate_ac1027_line_table_ref.py \
     tools/mutate_r2004_header_suffix_probe.py \
     tools/normalize_drawing_result.py \
     tools/normalize_oracle.py \
@@ -896,6 +898,7 @@ EXTRA_DIST = \
     tools/probe_ac1027_source_sab_cqacis.py \
     tools/probe_dim_source_output.cpp \
     tools/probe_dimension_oblique.cpp \
+    tools/probe_dwg_entity_table_references.cpp \
     tools/probe_dwg_hatch_pattern.cpp \
     tools/probe_dwg_hatch_unsupported_edges.cpp \
     tools/probe_dwg_vertex_tangent.cpp \

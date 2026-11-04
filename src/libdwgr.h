@@ -180,7 +180,11 @@ enum class DwgIntegrityCheckKind : std::uint8_t {
     HeaderCurrentLayerReference,
     HeaderCurrentTextStyleReference,
     HeaderCurrentLineTypeReference,
-    HeaderCurrentDimensionStyleReference
+    HeaderCurrentDimensionStyleReference,
+    /// A non-null entity layer handle does not resolve to a LAYER record.
+    EntityLayerReference,
+    /// A non-null explicit entity linetype handle does not resolve to LTYPE.
+    EntityLineTypeReference
 };
 
 /// Version of the field and enum contract carried by DwgIntegrityDiagnostic.

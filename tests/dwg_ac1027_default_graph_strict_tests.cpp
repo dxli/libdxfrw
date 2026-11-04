@@ -93,6 +93,9 @@ int main(){
    std::cerr << (bin?"binary ":"ascii ") << label << " accepted="<<accepted<<" kept="<<kept<<" retry="<<retry<<'\n'; return !accepted && kept && retry;
   };
   if(!write() || DxIfaceStandardDwgCaptureTestAccess::qualified(data)!=8u)return 10;
+  auto& integrity=data.dwgReadOutcome.observations.integrity;const auto savedIntegrity=integrity;
+  if(!attempt("dropped integrity row",[&]{integrity.reportedUpstreamDropped=1u;},[&]{integrity=savedIntegrity;}))return 67;
+  if(!attempt("unresolved entity reference",[&]{integrity.retained=1u;integrity.rows[0].severity=DwgIntegritySeverity::Error;integrity.rows[0].kind=DwgIntegrityCheckKind::EntityLayerReference;},[&]{integrity=savedIntegrity;}))return 68;
   {std::ofstream out(path,std::ios::binary|std::ios::trunc);out<<"sentinel";}
   if(writer.fileExport(path,DRW::AC1024,bin,&data,false,true,dx_dxfSourceTextPolicy::RequireValidSource,DRW::DxfTextWritePolicy::RequireLossless,dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,dx_dwgReadCompletenessPolicy::RequireComplete) || contents(path)!="sentinel" || !write())return 27;
   for (auto& item:data.materials) {

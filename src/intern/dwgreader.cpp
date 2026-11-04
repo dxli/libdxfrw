@@ -806,7 +806,11 @@ void dwgReader::recordIntegrityDiagnostic(
     diagnostic.hasObserved = hasValues;
     addIntegrityDiagnostic(std::move(diagnostic));
   } catch (...) {
-    // Integrity reporting is optional and must never alter parsing.
+    // Construction can fail before addIntegrityDiagnostic() has a chance to
+    // account for the missing row. Preserve tolerant reads while ensuring a
+    // strict consumer cannot mistake a truncated ledger for complete evidence.
+    if (m_integrityDiagnosticsDropped != std::numeric_limits<std::size_t>::max())
+      ++m_integrityDiagnosticsDropped;
   }
 }
 
@@ -7138,12 +7142,29 @@ void dwgReader::parseAttribs(DRW_Entity *e) {
   std::uint32_t ltref = e->lTypeH.ref;
   std::uint32_t lyref = e->layerH.ref;
   auto lt_it = ltypemap.find(ltref);
-  if (lt_it != ltypemap.end()) {
+  if (lt_it != ltypemap.end() && lt_it->second != nullptr)
     e->lineType = (lt_it->second)->name;
+  const bool ltWide = e->lTypeH.ref64 != static_cast<std::uint64_t>(ltref);
+  if (e->ltFlags == 3u && (ltWide || (ltref != 0u &&
+      (lt_it == ltypemap.end() || lt_it->second == nullptr)))) {
+    // Preserve tolerant callback names, but report an unresolved or truncated
+    // explicit edge. No section-name allocation precedes the bounded ledger.
+    recordIntegrityDiagnostic(DwgIntegritySeverity::Error,
+        DwgIntegrityAddressSpace::None, DwgIntegrityPhase::SectionParser,
+        DwgIntegrityCheckKind::EntityLineTypeReference, -1, -1, nullptr,
+        0u, false, 0u, false, e->handle, e->handle != DRW::NoHandle,
+        e->lTypeH.ref64, 0u, true);
   }
   auto ly_it = layermap.find(lyref);
-  if (ly_it != layermap.end()) {
+  if (ly_it != layermap.end() && ly_it->second != nullptr)
     e->layer = (ly_it->second)->name;
+  const bool lyWide = e->layerH.ref64 != static_cast<std::uint64_t>(lyref);
+  if (lyWide || (lyref != 0u && (ly_it == layermap.end() || ly_it->second == nullptr))) {
+    recordIntegrityDiagnostic(DwgIntegritySeverity::Error,
+        DwgIntegrityAddressSpace::None, DwgIntegrityPhase::SectionParser,
+        DwgIntegrityCheckKind::EntityLayerReference, -1, -1, nullptr,
+        0u, false, 0u, false, e->handle, e->handle != DRW::NoHandle,
+        e->layerH.ref64, 0u, true);
   }
 
   // Drain any deferred EED handle lookups now that the symbol tables
