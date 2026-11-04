@@ -5248,7 +5248,8 @@ bool dwgWriter15::writeBackground(const DRW_Background& background) {
 }
 
 bool dwgWriter15::writeSunStudy(const DRW_SunStudy& study) {
-    if (m_version < DRW::AC1015 || study.hasDataStorageBinaryData())
+    if (m_version < DRW::AC1015 || study.hasDataStorageBinaryData()
+        || !study.hasCompleteDxfArrays())
         return false;
 
     DRW_SunStudy object = study;

@@ -30,6 +30,7 @@
 #include "intern/dwg_fixed_handles.h"
 #include "intern/dwgbuffer.h"
 #include "intern/dwgbufferw.h"
+#include "intern/dwgwriter15.h"
 #include "intern/dxfcode.h"
 #include "intern/dwgreaderR11.h"
 #include "intern/dwgutil.h"
@@ -4948,6 +4949,10 @@ void testSceneObjectReferenceRemapping(TestContext& t) {
 }
 
 void testSunStudyDxfHourCount(TestContext& t) {
+    class SunStudyCodecProbe : public DRW_SunStudy {
+    public:
+        using DRW_SunStudy::encodeDwg;
+    };
     for (const bool binary : {false, true}) {
         std::ostringstream output;
         if (binary)
@@ -5084,7 +5089,8 @@ void testSunStudyDxfHourCount(TestContext& t) {
                     == study.m_dates[1].m_julianDay
                 && parsed.m_dates[1].m_milliseconds
                     == study.m_dates[1].m_milliseconds;
-            t.expect(datesMatch && parsed.m_hours == study.m_hours,
+            t.expect(datesMatch && parsed.m_hours == study.m_hours
+                         && parsed.hasCompleteDxfArrays(),
                      "SUNSTUDY parser restores date and hour arrays");
         }
 
@@ -5116,6 +5122,179 @@ void testSunStudyDxfHourCount(TestContext& t) {
         const bool retried = retryOwner.writeSunStudy(&invalid);
         t.expect(refusedSubsecond && preserved && retried,
                  "SUNSTUDY refuses lossy subsecond output and retries corrected data");
+
+        // Counted lists are independently truncated without making the
+        // enclosing DXF malformed. Missing counts remain a tolerated default.
+        for (int profile = 0; profile != 6; ++profile) {
+            std::ostringstream source;
+            if (binary)
+                source << "AutoCAD Binary DXF\r\n" << static_cast<char>(26)
+                       << '\0';
+            std::unique_ptr<dxfWriter> sourceWriter = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&source))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&source));
+            sourceWriter->setVersion("AC1021", true);
+            sourceWriter->writeString(0, "SECTION");
+            sourceWriter->writeString(2, "HEADER");
+            sourceWriter->writeString(9, "$ACADVER");
+            sourceWriter->writeString(1, "AC1021");
+            sourceWriter->writeString(0, "ENDSEC");
+            sourceWriter->writeString(0, "SECTION");
+            sourceWriter->writeString(2, "OBJECTS");
+            sourceWriter->writeString(0, "SUNSTUDY");
+            sourceWriter->writeString(5, "100");
+            sourceWriter->writeString(100, "AcDbSunStudy");
+            sourceWriter->writeInt32(90, 1);
+            if (profile != 0) {
+                sourceWriter->writeInt32(91, profile == 1 ? 0
+                                                : profile == 2 ? 2 : 1);
+                if (profile >= 2) {
+                    sourceWriter->writeInt32(90, 2450000);
+                    if (profile != 3)
+                        sourceWriter->writeInt32(90, 100);
+                }
+                sourceWriter->writeInt16(73, profile == 4 ? 2
+                                               : profile == 5 ? 1 : 0);
+                if (profile == 4 || profile == 5)
+                    sourceWriter->writeBool(290, true);
+            }
+            sourceWriter->writeString(0, "ENDSEC");
+            sourceWriter->writeString(0, "EOF");
+            ProfileProbeInterface incompleteProbe;
+            bool parsed = false;
+            if (binary) {
+                const auto path = std::filesystem::temp_directory_path()
+                    / ("libdxfrw-sunstudy-incomplete-"
+                       + std::to_string(std::chrono::steady_clock::now()
+                           .time_since_epoch().count()) + ".dxf");
+                {
+                    std::ofstream file(path, std::ios::binary);
+                    const std::string bytes = source.str();
+                    file.write(bytes.data(),
+                               static_cast<std::streamsize>(bytes.size()));
+                    parsed = file.good();
+                }
+                if (parsed) {
+                    const std::string pathString = path.string();
+                    dxfRW reader(pathString.c_str());
+                    parsed = reader.read(&incompleteProbe, true);
+                }
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            } else {
+                std::string ascii = source.str();
+                dxfRW reader("generated-sunstudy-incomplete");
+                parsed = reader.readAscii(&incompleteProbe, true, ascii);
+            }
+            const bool incomplete = profile >= 2 && profile <= 4;
+            t.expect(parsed && incompleteProbe.storage.sunStudies.size() == 1u
+                         && incompleteProbe.objects.size() == 1u
+                         && incompleteProbe.objects[0].name == "SUNSTUDY",
+                     "SUNSTUDY tolerant typed and raw callbacks survive incomplete arrays");
+            if (incompleteProbe.objects.size() == 1u) {
+                const auto& groups = incompleteProbe.objects[0].groups;
+                const auto countCode = [&groups](int codeToCount) {
+                    return std::count_if(groups.begin(), groups.end(),
+                        [codeToCount](const DRW_Variant& value) {
+                            return value.code() == codeToCount;
+                        });
+                };
+                t.expect(countCode(91) == (profile == 0 ? 0 : 1)
+                             && countCode(73) == (profile == 0 ? 0 : 1)
+                             && countCode(90) == (profile < 2 ? 1
+                                                       : profile == 3 ? 2 : 3)
+                             && countCode(290) == (profile >= 4 ? 1 : 0),
+                         "SUNSTUDY raw callback retains original array groups");
+            }
+            if (incompleteProbe.storage.sunStudies.size() != 1u)
+                continue;
+            DRW_SunStudy copied(incompleteProbe.storage.sunStudies.front());
+            DRW_SunStudy assigned;
+            assigned = copied;
+            t.expect(copied.hasCompleteDxfArrays() == !incomplete
+                         && assigned.hasCompleteDxfArrays() == !incomplete,
+                     "SUNSTUDY array completeness survives copies and assignment");
+            SunStudyCodecProbe codecProbe;
+            static_cast<DRW_SunStudy&>(codecProbe) = assigned;
+            dwgBufferW body;
+            dwgBufferW strings;
+            dwgBufferW handles;
+            const bool dwgEncoded = codecProbe.encodeDwg(
+                DRW::AC1021, &body, &strings, &handles);
+            t.expect(dwgEncoded == !incomplete
+                         && (!incomplete || (body.size() == 0u
+                             && strings.size() == 0u && handles.size() == 0u)),
+                     "SUNSTUDY DWG codec refuses incomplete arrays before output");
+            if (incomplete) {
+                DRW_Header dwgHeader;
+                dwgWriter15 dwgWriter(nullptr, &dwgHeader);
+                const auto initialHighWater = dwgWriter.highWaterHandle();
+                const bool dwgRefused = !dwgWriter.writeSunStudy(assigned);
+                const bool handlePreserved =
+                    dwgWriter.highWaterHandle() == initialHighWater;
+                DRW_SunStudy dwgCorrected = assigned;
+                dwgCorrected.acceptCorrectedDxfArrays();
+                const bool dwgRetried = dwgWriter.writeSunStudy(dwgCorrected);
+                t.expect(dwgRefused && handlePreserved && dwgRetried,
+                         "SUNSTUDY DWG writer refuses without allocation and retries repair");
+            }
+            std::ostringstream guardedBytes;
+            dxfRW guarded("");
+            guarded.version = DRW::AC1021;
+            guarded.binFile = binary;
+            guarded.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&guardedBytes))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&guardedBytes));
+            const bool accepted = guarded.writeSunStudy(&assigned);
+            t.expect(accepted == !incomplete
+                         && (!incomplete || guardedBytes.str().empty()),
+                     "SUNSTUDY incomplete arrays are refused before output");
+            if (incomplete) {
+                assigned.acceptCorrectedDxfArrays();
+                std::ostringstream repairedBytes;
+                dxfRW repaired("");
+                repaired.version = DRW::AC1021;
+                repaired.binFile = binary;
+                repaired.writer = binary
+                    ? std::unique_ptr<dxfWriter>(
+                          std::make_unique<dxfWriterBinary>(&repairedBytes))
+                    : std::unique_ptr<dxfWriter>(
+                          std::make_unique<dxfWriterAscii>(&repairedBytes));
+                t.expect(assigned.hasCompleteDxfArrays()
+                             && repaired.writeSunStudy(&assigned),
+                         "SUNSTUDY explicit array repair permits retry");
+                std::istringstream repairedInput(repairedBytes.str());
+                std::unique_ptr<dxfReader> repairedReader = binary
+                    ? std::unique_ptr<dxfReader>(
+                          std::make_unique<dxfReaderBinary>(&repairedInput))
+                    : std::unique_ptr<dxfReader>(
+                          std::make_unique<dxfReaderAscii>(&repairedInput));
+                int repairedCode = 0;
+                int dateCount = -1;
+                int hourCount = -1;
+                int dateValues = 0;
+                int hourValues = 0;
+                while (repairedReader->readRec(&repairedCode)) {
+                    if (repairedCode == 91)
+                        dateCount = repairedReader->getInt32();
+                    else if (repairedCode == 73)
+                        hourCount = repairedReader->getInt32();
+                    else if (repairedCode == 90)
+                        ++dateValues;
+                    else if (repairedCode == 290)
+                        ++hourValues;
+                }
+                t.expect(dateCount == static_cast<int>(assigned.m_dates.size())
+                             && hourCount == static_cast<int>(assigned.m_hours.size())
+                             && dateValues == 1 + 2 * dateCount
+                             && hourValues == 1 + hourCount,
+                         "SUNSTUDY repaired output declares exactly the represented arrays");
+            }
+        }
     }
 }
 

@@ -15036,6 +15036,7 @@ bool DRW_SunStudy::encodeDwg(DRW::Version version, dwgBufferW *buf,
                              dwgBufferW *strBuf,
                              dwgBufferW *handleBuf) const {
     if (buf == nullptr || version < DRW::AC1015
+        || !hasCompleteDxfArrays()
         || m_dates.size() > static_cast<std::size_t>(kMaxDateCount)
         || m_hours.size() > static_cast<std::size_t>(kMaxHourCount)
         || !std::isfinite(m_spacing)

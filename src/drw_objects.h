@@ -5062,7 +5062,8 @@ public:
       m_dxfRetainedTextBytes(o.m_dxfRetainedTextBytes),
       m_seen90(0), m_seen290(0),
       m_dxfDateCountSeen(false), m_dxfHourCountSeen(false),
-      m_dxfDateValuesRemaining(0), m_dxfHourValuesRemaining(0),
+      m_dxfDateValuesRemaining(o.hasCompleteDxfArrays() ? 0 : -1),
+      m_dxfHourValuesRemaining(0),
       m_dxfDateValue(0),
       m_dxfHasPendingDateValue(false) {
     tType = DRW::SUNSTUDY;
@@ -5099,7 +5100,7 @@ public:
       m_seen290 = 0;
       m_dxfDateCountSeen = false;
       m_dxfHourCountSeen = false;
-      m_dxfDateValuesRemaining = 0;
+      m_dxfDateValuesRemaining = o.hasCompleteDxfArrays() ? 0 : -1;
       m_dxfHourValuesRemaining = 0;
       m_dxfDateValue = 0;
       m_dxfHasPendingDateValue = false;
@@ -5110,6 +5111,20 @@ public:
   }
 
   void reset();
+
+  /// A declared DXF date/hour array must be complete before typed output.
+  /// Missing counts remain accepted for compatibility with default objects.
+  [[nodiscard]] bool hasCompleteDxfArrays() const noexcept {
+    return m_dxfDateValuesRemaining == 0 && m_dxfHourValuesRemaining == 0
+        && !m_dxfHasPendingDateValue;
+  }
+
+  /// Accept the represented vectors after repairing an incomplete import.
+  void acceptCorrectedDxfArrays() noexcept {
+    m_dxfDateValuesRemaining = 0;
+    m_dxfHourValuesRemaining = 0;
+    m_dxfHasPendingDateValue = false;
+  }
 
   std::int32_t m_classVersion = 0;        /*!< code 90 (first) */
   UTF8STRING m_setupName;                 /*!< code 1 */

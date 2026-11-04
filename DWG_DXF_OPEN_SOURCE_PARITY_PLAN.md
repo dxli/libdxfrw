@@ -493,7 +493,9 @@ subsecond times that DXF cannot preserve. Generated ASCII/Binary controls cover
 exact counts, typed readback, atomic lossy-value refusal, and corrected
 fresh-writer retry ([wire receipt](docs/research/p5-sunstudy-dxf-date-hour-wire-2026-11-03.json)).
 Physical source-span/owner binding, adapter output, producer breadth, and native
-rendering remain unqualified.
+rendering remain unqualified. Incomplete declared DXF arrays now refuse typed
+output until explicitly repaired; consumers using older inline copy operators
+must rebuild to preserve that guard across copies. See the [array guard receipt](docs/research/p5-sunstudy-incomplete-dxf-array-guard-2026-11-03.json).
 The adapter now explicitly refuses output when any retained SUNSTUDY record is
 present until source and reference closure are qualified, preventing silent
 loss; see the [callback-loss refusal receipt](docs/research/p8-unqualified-object-callback-loss-refusal-2026-11-03.json).

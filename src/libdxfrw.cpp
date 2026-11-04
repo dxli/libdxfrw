@@ -35012,7 +35012,8 @@ bool dxfRW::writeLightList(DRW_LightList *ent) {
 bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {
     if (!preflightTableEntry(ent) || writer == nullptr)
         return false;
-    if (ent->m_dates.size() > DRW_SunStudy::kMaxDateCount
+    if (!ent->hasCompleteDxfArrays()
+        || ent->m_dates.size() > DRW_SunStudy::kMaxDateCount
         || ent->m_hours.size() > DRW_SunStudy::kMaxHourCount
         || ent->m_outputType < std::numeric_limits<std::int16_t>::min()
         || ent->m_outputType > std::numeric_limits<std::int16_t>::max()
