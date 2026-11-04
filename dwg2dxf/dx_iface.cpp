@@ -26806,10 +26806,8 @@ bool dx_iface::isDxfXRecordCompatibilityReplaySource(
 
 bool dx_iface::prepareDxfMaterialSources(DRW::Version version,bool binary) {
     if (!cData || cData->sourceFormat != dx_source_format::DXF) return true;
-    // The sparse producer profile preserves an ambiguous value only in the
-    // raw source; adapter replay needs separate source/graph qualification.
-    for (const auto& material : cData->materials)
-        if (material.requiresRawDxfMaterialReplay()) return false;
+    // Sparse bodies require exact immutable source and graph reconciliation;
+    // unsupported sparse profiles remain refused by the body reconciler.
     m_dxfMaterialWriteRequired = true;
     if (cData->materials.empty() && cData->rawMaterialObjects.empty()) return true;
     if (cData->m_materialBodyBaselines.size()!=cData->rawMaterialObjects.size()) return false;

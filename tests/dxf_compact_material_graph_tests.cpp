@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+#include "lc3_compat_check.cpp"
+#include "dwg2dxf/dx_iface.h"
+#include "dwg2dxf/dx_material_body.h"
+#include "intern/dxfwriter.h"
+#include "libdwgr.h"
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+struct Old : LC3CompatCheck {int typed=0,raw=0;DRW_Material last;void addMaterial(const DRW_Material& m)override{last=m;++typed;}void addRawDxfObject(const DRW_RawDxfObject& o)override{if(o.name=="MATERIAL")++raw;}};
+struct Facet : Old, DRW_DxfSparseMaterialRawPolicy {bool enabled=true;bool wantsDxfSparseMaterialRawCapture()const noexcept override{return enabled;}};
+struct DirectWriter:LC3CompatCheck {dxfRW& writer;DRW_Material material;bool ok=false;explicit DirectWriter(dxfRW& w):writer(w){}void writeObjects()override{ok=writer.writeMaterial(&material);}bool finalizeDxfWrite()override{return ok;}};
+struct DirectDwgWriter:LC3CompatCheck {dwgRW& writer;DRW_Material material;bool registered=false,ok=false;explicit DirectDwgWriter(dwgRW& w):writer(w){}void writeDwgClasses()override{registered=writer.registerMaterialObjectClass(&material);}void writeObjects()override{ok=writer.writeMaterial(&material);}bool finalizeDwgWrite()override{return true;}};
+struct Unaware : dx_iface {};
+struct Exporter : dx_iface {bool wantsDxfSparseMaterialRawCapture()const noexcept override{return true;}std::function<void()> late;void writeObjects()override{dx_iface::writeObjects();if(late)late();}};
+static std::string bytes(const std::filesystem::path& p){std::ifstream f(p,std::ios::binary);return {std::istreambuf_iterator<char>(f),{}};}
+static bool source(const std::filesystem::path& p,bool binary,int mode=0){
+ std::ofstream f(p,std::ios::binary|std::ios::trunc);if(binary)f<<"AutoCAD Binary DXF\r\n"<<char(26)<<'\0';std::unique_ptr<dxfWriter>w=binary?std::unique_ptr<dxfWriter>(new dxfWriterBinary(&f)):std::unique_ptr<dxfWriter>(new dxfWriterAscii(&f));w->setVersion(mode==7?"AC1024":"AC1027",true);
+ const auto s=[&](int c,const char*v){return w->writeString(c,v);};const auto h=[&](int c,int v){return w->writeInt16(c,v);};const auto i=[&](int c,int v){return w->writeInt32(c,v);};
+ if(!s(0,"SECTION")||!s(2,"HEADER")||!s(9,"$ACADVER")||!s(1,mode==7?"AC1024":"AC1027")||!s(0,"ENDSEC")||!s(0,"SECTION")||!s(2,"OBJECTS")||!s(0,"DICTIONARY")||!s(5,"C")||!s(330,"0")||!s(100,"AcDbDictionary")||!h(280,0)||!h(281,1)||!s(3,"ACAD_MATERIAL")||!s(350,"67")||!s(0,"DICTIONARY")||!s(5,"67")||!s(102,"{ACAD_REACTORS")||!s(330,"C")||!s(102,"}")||!s(330,"C")||!s(100,"AcDbDictionary")||!h(281,1))return false;
+ for(const auto& x:std::vector<std::pair<const char*,const char*>>{{"ByBlock","69"},{"ByLayer","68"},{"Global","6A"}})if(!s(3,x.first)||!s(350,x.second))return false;
+ for(const auto& x:std::vector<std::pair<const char*,const char*>>{{"ByBlock","69"},{"ByLayer","68"},{"Global","6A"}}){if(!s(0,"MATERIAL")||!s(5,x.second)||!s(102,"{ACAD_REACTORS")||!s(330,mode==4?"66":"67")||!s(102,"}")||!s(330,"67")||!s(100,"AcDbMaterial")||!s(1,mode==5?"Other":x.first))return false;if(mode==8&&(!h(71,1)||!i(91,-1023410177)))return false;if(!h(72,mode==2?0:1))return false;if(mode==8&&!h(273,1))return false;if(mode==6&&!s(2,"extra"))return false;if(!i(94,mode==1?126:mode==8?63:127))return false;if(mode==3&&!i(94,127))return false;}
+ return s(0,"ENDSEC")&&s(0,"EOF")&&!w->hasWriteError();}
+static bool graph(const dx_data& d){if(!d.hasNamedObjectDictionary||d.materials.size()!=3||d.rawMaterialObjects.size()!=3)return false;const auto root=d.namedObjectDictionary.handle;const DRW_Dictionary* dict=nullptr;for(const auto& x:d.dictionaries)if(x.handle==0x67)dict=&x;if(!dict||dict->parentHandle!=root||dict->m_entries.size()!=3)return false;for(const auto& m:d.materials){if(!m.requiresRawDxfMaterialReplay()||m.m_hasDiffuseMapSource||m.m_channelFlags!=127||m.parentHandle!=dict->handle||m.reactorHandles.size()!=1||m.reactorHandles[0]!=dict->handle)return false;bool found=false;for(const auto& e:dict->m_entries)if(e.m_handle==m.handle&&e.m_name==m.m_name)found=true;if(!found)return false;}for(const auto& r:d.rawMaterialObjects){if(r.groups.size()!=9||r.groups[7].code()!=72||r.groups[7].i_val()!=1||r.groups[8].code()!=94||r.groups[8].i_val()!=127||r.parentHandle!=dict->handle)return false;}return true;}
+int main(int argc,char**argv){auto dir=std::filesystem::temp_directory_path()/("compact-material-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));std::filesystem::create_directories(dir);struct Cleanup{std::filesystem::path p;~Cleanup(){std::error_code e;std::filesystem::remove_all(p,e);}}cleanup{dir};auto in=dir/"in.dxf",out=dir/"out.dxf";
+ for(bool binary:{false,true}){if(argc==2){std::filesystem::copy_file(argv[1],in,std::filesystem::copy_options::overwrite_existing);}else if(argc!=1||!source(in,binary))return 1;
+  dxfRW direct(in.string().c_str());Old old;if(direct.read(&old,false)||old.typed||old.raw)return 2;Facet f;f.enabled=false;if(direct.read(&f,false)||f.typed||f.raw)return 3;f.enabled=true;if(!direct.read(&f,false)||f.typed!=3||f.raw!=3)return 4;
+  DRW_Material copied=f.last;DRW_Material moved=std::move(copied);if(!moved.requiresRawDxfMaterialReplay())return 20;std::ofstream(out,std::ios::trunc)<<"sentinel";dxfRW standalone(out.string().c_str());DirectWriter typed(standalone);typed.material=moved;if(standalone.write(&typed,DRW::AC1027,binary)||typed.ok||bytes(out)!="sentinel")return 21;dwgRW dwg(out.string().c_str());DirectDwgWriter typedDwg(dwg);typedDwg.material=moved;if(dwg.write(&typedDwg,DRW::AC1027,true)||!typedDwg.registered||typedDwg.ok||bytes(out)!="sentinel")return 22;
+  dx_data unavailable;Unaware unaware;if(unaware.fileImport(in.string(),&unavailable,false)||!unavailable.materials.empty()||!unavailable.rawMaterialObjects.empty())return 23;
+  dx_data data;Exporter io;if(!io.fileImport(in.string(),&data,false)||!graph(data)){std::cerr<<"import failed "<<binary<<" materials="<<data.materials.size()<<" raw="<<data.rawMaterialObjects.size()<<" dict="<<data.dictionaries.size()<<"\n";return 5;}
+  const auto exportFile=[&](){return io.fileExport(out.string(),DRW::AC1027,binary,&data,false,true);};const auto verify=[&](){dx_data check;dx_iface reader;return reader.fileImport(out.string(),&check,false)&&graph(check);};
+  if(!exportFile()||!verify())return 6;
+  {auto malformed=data.rawMaterialObjects.front();malformed.hasRawValues=true;malformed.rawValues.clear();DRW_RawDxfObject output;UTF8STRING name;const auto match=[](const DRW_Material&,const DRW_Material&,DRW::Version){return true;};if(dx_material_body::reconcile(malformed,malformed,data.materials.front(),output,name,binary,match))return 32;}
+  const auto reject=[&](const std::function<void()>& mutate,const std::function<void()>& restore){std::ofstream(out,std::ios::trunc)<<"sentinel";mutate();const bool refused=!exportFile();restore();return refused&&bytes(out)=="sentinel"&&exportFile()&&verify();};
+  for(auto& m:data.materials){auto owner=m.parentHandle;if(!reject([&](){m.parentHandle=0x66;},[&](){m.parentHandle=owner;}))return 7;auto reactor=m.reactorHandles;if(!reject([&](){m.reactorHandles[0]=0x66;},[&](){m.reactorHandles=reactor;}))return 8;auto flags=m.m_channelFlags;if(!reject([&](){m.m_channelFlags=63;},[&](){m.m_channelFlags=flags;}))return 9;if(!reject([&](){m.m_hasDiffuseMapSource=true;},[&](){m.m_hasDiffuseMapSource=false;}))return 31;}
+  for(auto& raw:data.rawMaterialObjects){auto original=raw;if(!reject([&](){raw.groups.back()=DRW_Variant(94,126);},[&](){raw=original;}))return 10;for(std::size_t slot:{2u,4u})if(!reject([&](){raw.groups[slot]=DRW_Variant(340,std::string("67"));},[&](){raw=original;}))return 17;}
+  auto removedRaw=data.rawMaterialObjects.back();if(!reject([&](){data.rawMaterialObjects.pop_back();},[&](){data.rawMaterialObjects.push_back(removedRaw);}))return 18;
+  auto removed=data.materials.back();if(!reject([&](){data.materials.pop_back();},[&](){data.materials.push_back(removed);} ))return 11;
+  auto& dict=data.dictionaries.front();auto edges=dict.m_entries;if(!reject([&](){dict.m_entries.pop_back();},[&](){dict.m_entries=edges;}))return 12;
+  if(!reject([&](){dict.m_entries[1].m_handle=dict.m_entries[0].m_handle;},[&](){dict.m_entries=edges;}))return 24;
+  if(!reject([&](){dict.m_entries[1].m_name=dict.m_entries[0].m_name;},[&](){dict.m_entries=edges;}))return 25;
+  auto rootEdges=data.namedObjectDictionary.m_entries;if(!reject([&](){data.namedObjectDictionary.m_entries.clear();},[&](){data.namedObjectDictionary.m_entries=rootEdges;}))return 26;
+  if(!reject([&](){data.namedObjectDictionary.m_entries.push_back({"ALIAS",0x67});},[&](){data.namedObjectDictionary.m_entries=rootEdges;}))return 27;
+  auto saved=data.rawMaterialObjects.front();io.late=[&](){data.rawMaterialObjects.front().groups.back()=DRW_Variant(94,126);};std::ofstream(out,std::ios::trunc)<<"sentinel";const bool failed=!exportFile();io.late={};data.rawMaterialObjects.front()=saved;if(!failed||bytes(out)!="sentinel"||!exportFile()||!verify())return 13;
+  auto savedFlags=data.materials.front().m_channelFlags;io.late=[&](){data.materials.front().m_channelFlags=126;};std::ofstream(out,std::ios::trunc)<<"sentinel";const bool typedFailed=!exportFile();io.late={};data.materials.front().m_channelFlags=savedFlags;if(!typedFailed||bytes(out)!="sentinel"||!exportFile()||!verify())return 19;
+  std::ofstream(out,std::ios::trunc)<<"sentinel";if(io.fileExport(out.string(),DRW::AC1024,binary,&data,false,true)||bytes(out)!="sentinel"||!exportFile()||!verify())return 14;
+  if(argc==1){if(!source(in,binary,8))return 28;dx_data prior;Exporter priorIo;if(!priorIo.fileImport(in.string(),&prior,false)||prior.materials.size()!=3)return 29;std::ofstream(out,std::ios::trunc)<<"sentinel";if(priorIo.fileExport(out.string(),DRW::AC1027,binary,&prior,false,true)||bytes(out)!="sentinel")return 30;for(int mode:{1,2,3,4,5,6,7}){if(!source(in,binary,mode))return 15;dx_data rejected;dx_iface rd;if(rd.fileImport(in.string(),&rejected,false))return 16;}}
+ }
+ return 0;}

@@ -5119,3 +5119,11 @@ add_test(NAME libdxfrw_ac1027_maintenance_header_audit COMMAND ${LIBDXFRW_PYTHON
 set_tests_properties(libdxfrw_ac1027_maintenance_header_audit PROPERTIES LABELS "dwg;fast;AC1027;peer" TIMEOUT 30)
 add_test(NAME libdxfrw_ac1027_header_geometry_peer COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/ac1027_header_geometry_peer_tests.py)
 set_tests_properties(libdxfrw_ac1027_header_geometry_peer PROPERTIES LABELS "dwg;fast;AC1027;peer" TIMEOUT 30)
+
+add_executable(libdxfrw_dxf_compact_material_graph_tests ${CMAKE_CURRENT_SOURCE_DIR}/dxf_compact_material_graph_tests.cpp $<TARGET_OBJECTS:libdxfrw_test_adapter>)
+target_compile_features(libdxfrw_dxf_compact_material_graph_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dxf_compact_material_graph_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dxf_compact_material_graph_tests PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/dwg2dxf)
+target_link_libraries(libdxfrw_dxf_compact_material_graph_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dxf_compact_material_graph COMMAND libdxfrw_dxf_compact_material_graph_tests)
+set_tests_properties(libdxfrw_dxf_compact_material_graph PROPERTIES LABELS "fast;dxf;material;graph;transaction" TIMEOUT 60)

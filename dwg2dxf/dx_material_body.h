@@ -337,6 +337,31 @@ inline bool reconcile(const DRW_RawDxfObject& baseline,const DRW_RawDxfObject& r
         const DRW_Material& typed,DRW_RawDxfObject& output,UTF8STRING& name,bool binary,
         const CommonEqual& commonEqual) {
     const bool sourceBinary=!baseline.hasRawValues;
+    if (typed.requiresRawDxfMaterialReplay()) {
+        constexpr int codes[]={5,102,330,102,330,100,1,72,94};
+        if (baseline.m_version!=DRW::AC1027 || baseline.groups.size()!=9u
+            || (baseline.hasRawValues && baseline.rawValues.size()!=baseline.groups.size())
+            || raw.name!=baseline.name || raw.handle!=baseline.handle
+            || raw.parentHandle!=baseline.parentHandle || raw.m_version!=baseline.m_version
+            || raw.hasRawValues!=baseline.hasRawValues || raw.rawValues!=baseline.rawValues
+            || raw.groups.size()!=baseline.groups.size()) return false;
+        for (std::size_t i=0;i<9;++i)
+            if (baseline.groups[i].code()!=codes[i] || !equal(raw.groups[i],baseline.groups[i])) return false;
+        const auto text=[&](std::size_t i,const char* value) {
+            return raw.groups[i].type()==DRW_Variant::STRING && raw.groups[i].content.s
+                && *raw.groups[i].content.s==value;
+        };
+        if (!text(1,"{ACAD_REACTORS") || !text(3,"}") || !text(5,"AcDbMaterial")
+            || (typed.m_name!="ByBlock" && typed.m_name!="ByLayer" && typed.m_name!="Global")
+            || raw.groups[7].type()!=DRW_Variant::INTEGER || raw.groups[7].i_val()!=1
+            || raw.groups[8].type()!=DRW_Variant::INTEGER || raw.groups[8].i_val()!=127) return false;
+        DRW_RawDxfObject prefix=baseline;prefix.groups.pop_back();if(prefix.hasRawValues)prefix.rawValues.pop_back();
+        DRW_Material original;if(!decode(prefix,original,sourceBinary))return false;
+        original.m_channelFlags=127;original.m_hasChannelFlags=true;
+        original.m_hasDiffuseMapSource=false;
+        if(!commonEqual(original,typed,baseline.m_version) || !dxfMaterial::sameBodyState(original,typed))return false;
+        output=raw;if(binary){output.hasRawValues=false;output.rawValues.clear();}name=typed.m_name;return true;
+    }
     DRW_Material original,parsed;
     if(!decode(baseline,original,sourceBinary)||!decode(raw,parsed,sourceBinary)
         ||!commonEqual(original,typed,baseline.m_version))return false;
