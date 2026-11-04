@@ -9906,10 +9906,20 @@ bool hasTerminatedR2007SectionNames(std::vector<std::uint8_t>& file) {
             if (name == "AcDb:AppInfo") {
                 std::uint64_t uncompressed = 0u;
                 std::uint64_t compressed = 0u;
+                std::uint64_t pageId = 0u;
                 if (pageCount != 1u
+                    || file.size() < 0x30u
+                    || !readR2007TestU64(sectionMap, nameEnd + 16u, pageId)
                     || !readR2007TestU64(sectionMap, nameEnd + 24u, uncompressed)
                     || !readR2007TestU64(sectionMap, nameEnd + 32u, compressed)
                     || compressed != uncompressed)
+                    return false;
+                const auto page = pageMap.find(pageId);
+                const std::uint32_t locator = static_cast<std::uint32_t>(file[0x2cu])
+                    | (static_cast<std::uint32_t>(file[0x2du]) << 8u)
+                    | (static_cast<std::uint32_t>(file[0x2eu]) << 16u)
+                    | (static_cast<std::uint32_t>(file[0x2fu]) << 24u);
+                if (page == pageMap.end() || locator != page->second.address)
                     return false;
             }
             expectedCaps.erase(expected);
@@ -10054,6 +10064,40 @@ void testR2007SectionMapPageExtent(TestContext& t) {
     std::vector<std::uint8_t> valid(encoded.begin(), encoded.end());
     t.expect(hasTerminatedR2007SectionNames(valid),
              "AC1021 physical section map has terminated names and specified capacities/encoding");
+    {
+        // VBA is an allowed locally generated raw section placed before
+        // AppInfo. Its addition moves AppInfo, so the locator must follow
+        // the actual page map instead of using a hardcoded address.
+        std::stringbuf shiftedBuffer(std::ios::out | std::ios::binary);
+        std::ofstream shiftedOutput;
+        static_cast<std::ostream&>(shiftedOutput).rdbuf(&shiftedBuffer);
+        DRW_Header shiftedHeader;
+        dwgWriter21 shiftedWriter(&shiftedOutput, &shiftedHeader);
+        DRW_RawDwgSection extra;
+        extra.m_name = "AcDb:VBAProject";
+        extra.m_version = DRW::AC1021;
+        extra.m_encoding = 4u;
+        extra.m_data = {1u, 2u, 3u, 4u};
+        const bool shifted = shiftedWriter.prepareDwgClassManifest()
+            && shiftedWriter.writeFileHeaderStub() && shiftedWriter.writeDwgHeader()
+            && shiftedWriter.writeDwgClasses() && shiftedWriter.writeDwgObjects()
+            && shiftedWriter.addRawDwgSection(extra)
+            && shiftedWriter.emitDeferredBlockControl()
+            && shiftedWriter.finalizeHeaderHandseed() && shiftedWriter.writeDwgHandles()
+            && shiftedWriter.writeSecondHeader() && shiftedWriter.finalize();
+        const std::string shiftedBytes = shiftedBuffer.str();
+        std::vector<std::uint8_t> shiftedFile(shiftedBytes.begin(), shiftedBytes.end());
+        const auto appInfoLocator = [](const std::vector<std::uint8_t>& file) {
+            return static_cast<std::uint32_t>(file[0x2cu])
+                | (static_cast<std::uint32_t>(file[0x2du]) << 8u)
+                | (static_cast<std::uint32_t>(file[0x2eu]) << 16u)
+                | (static_cast<std::uint32_t>(file[0x2fu]) << 24u);
+        };
+        t.expect(shifted && shiftedFile.size() >= 0x30u
+                     && hasTerminatedR2007SectionNames(shiftedFile)
+                     && appInfoLocator(shiftedFile) > appInfoLocator(valid),
+                 "AC1021 AppInfo locator follows a shifted physical page");
+    }
     R21DataPageDecodeProbe validReader(valid);
     t.expect(validReader.readSections(),
              "generated AC1021 witness has a valid file header and section map");

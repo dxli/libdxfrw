@@ -813,6 +813,17 @@ ValidationResult validateR2007(const R2007Snapshot& snapshot) {
 
         if (receipt.pages[1].address < receipt.dataStart)
             return fail(ValidationCategory::Topology);
+        const auto appInfoPage = std::find_if(
+            receipt.pages.cbegin(), receipt.pages.cend(),
+            [](const R2007PhysicalPage& page) {
+                return page.kind == R2007PhysicalPage::Kind::Data
+                    && page.sectionName == "AcDb:AppInfo"
+                    && page.logicalOffset == 0u;
+            });
+        if (appInfoPage == receipt.pages.cend()
+            || appInfoPage->address > std::numeric_limits<std::uint32_t>::max()
+            || getRL(snapshot.metadata.data() + 0x2cu) != appInfoPage->address)
+            return fail(ValidationCategory::Header);
         const std::uint64_t pageMap2Offset =
             receipt.pages[1].address - receipt.dataStart;
         std::uint64_t expectedFileSize = 0;

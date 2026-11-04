@@ -1253,6 +1253,31 @@ bool dwgWriter21::finalize() {
     metadata[0x12] = 0xFF;
     // ODA 5.2: little-endian offset of the R2007 file header page.
     metadata[0x28] = static_cast<std::uint8_t>(kR2007FileHeaderOffset);
+    // ODA 5.2: the application-info locator is the physical stream address
+    // of the first AppInfo page, not its logical offset or page number.
+    const auto appInfoSection = std::find_if(
+        sections.cbegin(), sections.cend(), [](const Section& section) {
+            return section.name == "AcDb:AppInfo";
+        });
+    if (appInfoSection == sections.cend() || appInfoSection->pages.empty()
+        || appInfoSection->pages.front().startOffset != 0u)
+        return false;
+    const auto appInfoPageId = appInfoSection->pages.front().pageId;
+    std::uint64_t physicalAddress = kR2007DataStart;
+    bool foundAppInfoPage = false;
+    for (const Page& page : pages) {
+        if (page.id == appInfoPageId) {
+            foundAppInfoPage = true;
+            break;
+        }
+        if (!dwgSafety::add(physicalAddress, page.bytes.size(), physicalAddress))
+            return false;
+    }
+    if (!foundAppInfoPage
+        || physicalAddress > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    for (unsigned i = 0; i < 4u; ++i)
+        metadata[0x2cu + i] = static_cast<std::uint8_t>(physicalAddress >> (8u * i));
     const std::uint16_t codePage = fileCodePageId();
     metadata[0x13] = static_cast<std::uint8_t>(codePage);
     metadata[0x14] = static_cast<std::uint8_t>(codePage >> 8);

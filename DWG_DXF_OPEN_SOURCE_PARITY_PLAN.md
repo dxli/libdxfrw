@@ -851,11 +851,11 @@ converter, not a general discard rule; extend independent and native-consumer ev
 strict admission. See the [mutation receipt](docs/research/p6-ac1027-oda-header-suffix-mutation-2026-11-03.json).
 
 The R2007 writer now emits the required file-header pointer, repeated
-Reed–Solomon header blocks, terminated section names, section capacities and
-AppInfo encoding, and a valid trailing-header offset, but ODA still rejects a
+Reed–Solomon header blocks, terminated section names, section capacities,
+AppInfo encoding and physical locator, and a valid trailing-header offset, but ODA still rejects a
 freshly generated single-LINE AC1021 file. Identify the remaining cause before
 qualifying this writer profile; see the [second-header receipt](docs/research/p6-ac1021-second-file-header-offset-2026-11-03.json),
-the [section-profile receipt](docs/research/p6-ac1021-section-capacity-appinfo-profile-2026-11-03.json)
+the [AppInfo locator receipt](docs/research/p6-ac1021-appinfo-physical-metadata-address-2026-11-03.json)
 and earlier [framing receipt](docs/research/p6-ac1021-fixed-metadata-header-pointer-2026-11-03.json).
 HEADER table-control and pointer roles now use their specified handle codes,
 including typed hard-pointer nulls. The writer binds current layer, text style,
