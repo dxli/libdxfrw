@@ -425,6 +425,7 @@ EXTRA_DIST = \
     tests/dxf_entity_identity_test_helpers.h \
     tests/dxf_fixture_tests.cpp \
     tests/dxf_fourth_corner_tests.cpp \
+    tests/dxf_hatch_boundary_payload_tests.cpp \
     tests/dxf_legacy_extrusion_conversion_tests.cpp \
     tests/dxf_legacy_extrusion_ezdxf.py \
     tests/dxf_mline_source_dependency_tests.cpp \

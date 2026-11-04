@@ -6146,25 +6146,54 @@ bool dxfRW::validateHatchPayload(const DRW_Hatch *ent) const {
         if (!value || !isValidDxfEntityFields(*value))
             return false;
         switch (value->eType) {
-        case DRW::LINE:
-            return dynamic_cast<const DRW_Line*>(value.get()) != nullptr;
-        case DRW::ARC:
-            return dynamic_cast<const DRW_Arc*>(value.get()) != nullptr;
+        case DRW::LINE: {
+            const auto* line = dynamic_cast<const DRW_Line*>(value.get());
+            return line != nullptr && line->basePoint.z == 0.0
+                && line->secPoint.z == 0.0;
+        }
+        case DRW::ARC: {
+            const auto* arc = dynamic_cast<const DRW_Arc*>(value.get());
+            return arc != nullptr && arc->basePoint.z == 0.0;
+        }
         case DRW::ELLIPSE: {
             const auto* ellipse = dynamic_cast<const DRW_Ellipse*>(value.get());
-            if (ellipse == nullptr)
+            // HATCH/MPOLYGON ellipse edges encode a 2D OCS center and
+            // major-axis vector; their elevation belongs to the parent.
+            // Refuse Z components that have no edge-group representation,
+            // including any introduced by normalization.
+            if (ellipse == nullptr || ellipse->basePoint.z != 0.0
+                || ellipse->secPoint.z != 0.0)
                 return false;
             DRW_Ellipse normalized = *ellipse;
             normalized.correctAxis();
             return normalized.ratio <= 1.0
+                && normalized.secPoint.z == 0.0
                 && isValidDxfEllipseGeometry(normalized)
                 && std::isfinite(normalized.staparam * ARAD)
                 && std::isfinite(normalized.endparam * ARAD);
         }
         case DRW::SPLINE: {
             const auto *spline = dynamic_cast<const DRW_Spline*>(value.get());
-            return spline != nullptr
-                && spline->validateHatchBoundaryDxf();
+            if (spline == nullptr || !spline->validateHatchBoundaryDxf()
+                || spline->tgStart.z != 0.0 || spline->tgEnd.z != 0.0
+                || std::any_of(spline->fitlist.cbegin(), spline->fitlist.cend(),
+                    [](const auto& p) { return !p || p->z != 0.0; }))
+                return false;
+            // DWG HATCH stores a 2D control and, for rational curves, a
+            // separate weight; the reader mirrors that weight into legacy Z.
+            // Accept that exact mirror (or an implicit unit weight) while
+            // refusing geometric Z that the DXF edge cannot carry.
+            for (std::size_t i = 0; i < spline->controllist.size(); ++i) {
+                const auto& p = spline->controllist[i];
+                if (!p) return false;
+                if (p->z == 0.0) continue;
+                if (!spline->weightlist.empty()
+                    && p->z == spline->weightlist[i]) continue;
+                if ((spline->flags & 4) != 0 && spline->weightlist.empty()
+                    && p->z == 1.0) continue;
+                return false;
+            }
+            return true;
         }
         default:
             return false;
@@ -6188,7 +6217,11 @@ bool dxfRW::validateHatchPayload(const DRW_Hatch *ent) const {
                 return false;
             const auto *polyline =
                 dynamic_cast<const DRW_LWPolyline*>(loop->objlist.front().get());
-            if (polyline == nullptr || !polyline->validatePayloadFields())
+            if (polyline == nullptr || !polyline->validatePayloadFields()
+                || (polyline->flags & ~1) != 0 || polyline->width != 0.0
+                || std::any_of(polyline->vertlist.cbegin(), polyline->vertlist.cend(),
+                    [](const auto& v) { return !v || v->stawidth != 0.0
+                        || v->endwidth != 0.0 || v->identifier != 0; }))
                 return false;
             continue;
         }
