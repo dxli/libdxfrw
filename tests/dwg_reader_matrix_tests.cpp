@@ -15930,8 +15930,11 @@ void testActiveVportDefaults(TestContext& t, DRW::Version version,
             ? std::vector<std::uint8_t>{0x41u, 0x08u, 0x30u, 0x50u, 0x50u, 0x50u}
             : version == DRW::AC1018
                 ? std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x50u, 0x50u}
-                : std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x00u, 0x00u,
-                                            0x00u, 0x50u, 0x50u};
+                : version == DRW::AC1024
+                    ? std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x40u, 0x50u,
+                                                0x30u, 0x50u, 0x50u}
+                    : std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x00u, 0x00u,
+                                                0x00u, 0x50u, 0x50u};
         t.expect(encoded && handles.data() == expected,
                  "*ACTIVE typed null handle bytes and ordering: " + label);
         if (version == DRW::AC1015) {
@@ -15940,6 +15943,30 @@ void testActiveVportDefaults(TestContext& t, DRW::Version version,
                          && publicHandles.data() == std::vector<std::uint8_t>(
                              {0x41u, 0x08u, 0x00u, 0x00u, 0x00u, 0x00u}),
                      "caller VPORT public encoder retains legacy null slots: " + label);
+        }
+        if (version > DRW::AC1018) {
+            dwgBufferW publicBody, publicStrings, publicHandles;
+            t.expect(probe.encodeDwg(version, &publicBody, &publicStrings, &publicHandles)
+                         && publicHandles.data() == std::vector<std::uint8_t>(
+                             {0x41u,0x08u,0x00u,0x00u,0x00u,0x00u,0x00u,0x00u}),
+                     "caller VPORT public encoder retains modern null slots: " + label);
+            DRW_Vport referenced = probe;
+            referenced.backgroundHandle = 0x21u;
+            referenced.visualStyleHandle = 0x22u;
+            referenced.m_sunHandle = 0x23u;
+            dwgBufferW refBody, refStrings, refHandles;
+            t.expect(DrwObjectEncodeTestAccess::encodeVport(
+                         referenced, version, refBody, refStrings, refHandles, true)
+                         && refHandles.data() == std::vector<std::uint8_t>(
+                             {0x41u,0x08u,0x50u,0x41u,0x21u,0x51u,0x22u,
+                              0x31u,0x23u,0x50u,0x50u}),
+                     "typed VPORT preserves nonzero roles and following UCS slots: " + label);
+            dwgBufferW ordinaryBody, ordinaryStrings, ordinaryHandles;
+            t.expect(referenced.encodeDwg(version, &ordinaryBody, &ordinaryStrings, &ordinaryHandles)
+                         && ordinaryHandles.data() == std::vector<std::uint8_t>(
+                             {0x41u,0x08u,0x00u,0x41u,0x21u,0x51u,0x22u,
+                              0x31u,0x23u,0x00u,0x00u}),
+                     "caller VPORT preserves nonzero roles and following UCS slots: " + label);
         }
     }
 }

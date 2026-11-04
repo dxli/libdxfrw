@@ -911,11 +911,12 @@ and [POLYLINE receipt](docs/research/p6-ac1015-predeclared-polyline-chain-2026-1
 An explicit AC1024 opt-in now emits the witnessed NOD→ACAD_MATERIAL→
 ByBlock/ByLayer/Global graph, HEADER references and generated layer binding,
 with source-profile payloads, collision checks and transactional retry.
-LibreDWG reads the complete selected graph; ODA still reports a layer warning
-and fails at VPORT. Resolve those failures and qualify other producers,
-versions and native semantics before broader claims. See the [material
-opt-in receipt](docs/research/p6-ac1024-default-material-optin-2026-11-04.json)
-and [source-profile receipt](docs/research/p6-ac1024-default-material-source-profile-2026-11-04.json).
+LibreDWG reads the complete selected graph. Corrected synthetic VPORT null
+roles also allow two generated AC1024 drawings to convert through ODA in
+audit-on and audit-off modes with no logged warnings; qualify broader
+producer, geometry, consumer and version profiles before support claims.
+See the [VPORT receipt](docs/research/p6-ac1024-synthetic-vport-null-roles-2026-11-04.json)
+and [material graph receipt](docs/research/p6-ac1024-default-material-optin-2026-11-04.json).
 Modern retained DWG MATERIAL bodies now refuse replay when detached map
 strings cannot be proven, including facade calls whose failure is ignored.
 Complete replay still needs immutable source strings, selector binding and

@@ -8875,9 +8875,19 @@ bool DRW_Vport::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
     };
     hb->putHandle(hardReference(xrefBlockHandle.ref));
     if (version > DRW::AC1018) {
-        hb->putHandle(makeRefW(backgroundHandle, DRW::DwgSoftPointer));
-        hb->putHandle(makeRefW(visualStyleHandle, DRW::DwgHardPointer));
-        hb->putHandle(makeRefW(m_sunHandle, DRW::DwgHardOwnership));
+        const auto reference = [version, typedNullReferences](std::uint32_t ref,
+                                                              std::uint8_t role) {
+            dwgHandle value = makeRefW(ref, role);
+            // An ODA-produced AC1024 *ACTIVE VPORT stores typed nulls for
+            // these three slots. Limit this to the synthetic writer profile;
+            // caller records and other versions keep their previous bytes.
+            if (version == DRW::AC1024 && typedNullReferences && ref == 0u)
+                value.code = role;
+            return value;
+        };
+        hb->putHandle(reference(backgroundHandle, DRW::DwgSoftPointer));
+        hb->putHandle(reference(visualStyleHandle, DRW::DwgHardPointer));
+        hb->putHandle(reference(m_sunHandle, DRW::DwgHardOwnership));
     }
     if (version > DRW::AC1014) {
         hb->putHandle(hardReference(namedUcsHandle));
