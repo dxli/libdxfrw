@@ -949,12 +949,12 @@ public:
         raw.m_rawBytes[bit / 8u] ^= static_cast<std::uint8_t>(1u << (7u - bit % 8u));
         return true;
     }
-    static bool toggleRetainedAc1024RasterFrame(dx_data& data, std::uint32_t handle) {
+    static bool toggleRetainedModernRasterFrame(dx_data& data, std::uint32_t handle) {
         const auto found = data.m_opaqueDwgSourceFrames.find({data.importGeneration, handle});
         if (found == data.m_opaqueDwgSourceFrames.end()) return false;
         auto& raw = found->second;
         const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
-        if (raw.m_version != DRW::AC1024 || !raw.m_bodyBitSize
+        if ((raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1032) || !raw.m_bodyBitSize
             || raw.m_bodyBitSize >= total) return false;
         dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u, total - raw.m_bodyBitSize};
         const auto tag = body.take(2u);
@@ -963,7 +963,9 @@ public:
         if (tag == 3u || type != static_cast<std::uint32_t>(raw.m_objectType)
             || dx_raster_wire::detail::handle(body, 0u, 0u, true).value != handle
             || body.shortValue() != 0u || body.longValue() != 1u
-            || body.take(1u) != 1u || body.longValue() != 0u
+            || body.take(1u) != 1u
+            || (raw.m_version >= DRW::AC1027 && body.take(1u) != 0u)
+            || body.longValue() != 0u
             || !body.good || body.end - body.pos < 2u) return false;
         const auto bit = body.pos;
         const auto frameTag = body.take(2u);
@@ -68815,15 +68817,25 @@ bool rasterVariablesDwgAdapterTransport(
                 const bool reactorRoleRefused = refusedWithSentinel(revision);
                 if (!Access::toggleRetainedReactorRole(imported, expectedHandle) || !reactorRoleRefused)
                     return fail("AC1032 altered raster reactor role was accepted");
-                if (frameOne && revision == DRW::AC1024) {
-                    if (!Access::toggleRetainedAc1024RasterFrame(imported, expectedHandle))
+                if (frameOne && (revision == DRW::AC1024 || revision == DRW::AC1032)) {
+                    if (!Access::toggleRetainedModernRasterFrame(imported, expectedHandle))
                         return fail("could not mutate AC1024 raster wire frame");
                     const bool frameRefused = refusedWithSentinel(revision);
-                    if (!Access::toggleRetainedAc1024RasterFrame(imported, expectedHandle)
+                    if (!Access::toggleRetainedModernRasterFrame(imported, expectedHandle)
                         || !frameRefused)
                         return fail("changed AC1024 raster wire frame was accepted");
-                    if (!Access::setRetainedFrameVersion(imported, expectedHandle, DRW::AC1032))
-                        return fail("could not mutate AC1024 raster wire revision");
+                    if (revision == DRW::AC1032) {
+                        auto& raw = Access::mutableOpaqueRaw(imported, expectedHandle);
+                        const auto originalRaw = raw.m_rawBytes;
+                        if (!Access::makeRasterFrameOneLongBitShort(imported, expectedHandle))
+                            return fail("could not construct noncanonical raster frame BS");
+                        const bool refused = refusedWithSentinel(revision);
+                        raw.m_rawBytes = originalRaw;
+                        if (!refused) return fail("noncanonical AC1032 raster frame was accepted");
+                    }
+                    if (!Access::setRetainedFrameVersion(imported, expectedHandle,
+                            revision == DRW::AC1032 ? DRW::AC1024 : DRW::AC1032))
+                        return fail("could not mutate raster wire revision");
                     const bool revisionRefused = refusedWithSentinel(revision);
                     if (!Access::setRetainedFrameVersion(imported, expectedHandle, revision)
                         || !revisionRefused)
@@ -70497,6 +70509,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--rastervariables-dwg-adapter-transport-ac1018-frame1")
         return rasterVariablesDwgAdapterTransport({}, true, DRW::AC1018, true) ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--rastervariables-dwg-adapter-transport-ac1032-frame1")
+        return rasterVariablesDwgAdapterTransport({}, true, DRW::AC1032, true) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1])
             == "--rastervariables-dwg-adapter-transport-ac1024-frame1")

@@ -11657,7 +11657,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                 && (!exactDirectNodReactor
                                     || variables.extensionDictionaryFlag() != 1u
                                     || (variables.m_imageFrame != 0
-                                        && ((data->sourceVersion != DRW::AC1018 && data->sourceVersion != DRW::AC1024)
+                                        && ((data->sourceVersion != DRW::AC1018 && data->sourceVersion != DRW::AC1024 && data->sourceVersion != DRW::AC1032)
                                             || variables.m_imageFrame != 1))
                                     || variables.m_imageQuality != 1
                                     || variables.m_units != 3))
@@ -72290,13 +72290,13 @@ bool dx_iface::preparePointCloudExOutputGraph(
 }
 
 // Verify the independently witnessed direct-NOD scalar and handle profiles.
-// The physical AC1024 witnesses cover frames 0 and 1; AC1032 covers frame 0.
+// The physical AC1024 and AC1032 witnesses cover frames 0 and 1.
 static bool matchesDirectNodRasterWire(const DRW_UnsupportedObject& raw,
                                        std::uint32_t parent,
                                        std::int32_t frame) noexcept {
     using namespace dx_raster_wire;
     if ((raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1032)
-        || (frame != 0 && (raw.m_version != DRW::AC1024 || frame != 1))
+        || (frame != 0 && frame != 1)
         || raw.m_rawBytes.empty()
         || raw.m_rawBytes.size() > 64u * 1024u * 1024u) return false;
     const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
@@ -72311,7 +72311,10 @@ static bool matchesDirectNodRasterWire(const DRW_UnsupportedObject& raw,
         || body.shortValue() != 0u || body.longValue() != 1u
         || body.take(1u) != 1u
         || (raw.m_version >= DRW::AC1027 && body.take(1u) != 0u)
-        || body.longValue() != 0u || body.shortValue() != static_cast<std::uint32_t>(frame)
+        || body.longValue() != 0u) return false;
+    const auto frameStart = body.pos;
+    if (body.shortValue() != static_cast<std::uint32_t>(frame)
+        || (raw.m_version == DRW::AC1032 && frame == 1 && body.pos - frameStart != 10u)
         || body.shortValue() != 1u || body.shortValue() != 3u
         || !body.good || body.pos >= end || end - body.pos > 32u) return false;
     while (body.pos < end) if (body.take(1u) != 0u) return false;
@@ -72479,7 +72482,7 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                     && (!exactDirectNodReactor
                         || variables.extensionDictionaryFlag() != 1u
                         || (variables.m_imageFrame != 0
-                            && ((cData->sourceVersion != DRW::AC1018 && cData->sourceVersion != DRW::AC1024)
+                            && ((cData->sourceVersion != DRW::AC1018 && cData->sourceVersion != DRW::AC1024 && cData->sourceVersion != DRW::AC1032)
                                 || variables.m_imageFrame != 1))
                         || variables.m_imageQuality != 1
                         || variables.m_units != 3))
