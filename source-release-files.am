@@ -408,6 +408,7 @@ EXTRA_DIST = \
     tests/dimstyle_optional_handle_tests.cpp \
     tests/dwg2dxf_adapter_tests.cpp \
     tests/dwg2dxf_cli_contract_tests.py \
+    tests/dwg2dxf_dimension_angle_tests.cpp \
     tests/dwg2dxf_version_tests.cpp \
     tests/dwg_ac1021_polyline_block_membership_tests.cpp \
     tests/dwg_ac1021_polyline_group_targets_tests.cpp \
@@ -714,6 +715,7 @@ EXTRA_DIST = \
     tools/audit_ac1027_sab_brlcad_rays.py \
     tools/audit_compact_material_graph.py \
     tools/audit_dictionary_late_hardowner.py \
+    tools/audit_dimension_common_angles.py \
     tools/audit_dimension_oblique.py \
     tools/audit_dwg_hatch_ellipse_edge.py \
     tools/audit_dwg_hatch_pattern_angles.py \
@@ -766,6 +768,7 @@ EXTRA_DIST = \
     tools/author_ac1027_1032_writer_control.py \
     tools/author_compact_material_graph.py \
     tools/author_dictionary_late_hardowner.py \
+    tools/author_dimension_common_angles.py \
     tools/author_dimension_oblique.py \
     tools/author_dwg_hatch_pattern.cpp \
     tools/author_dwg_hatch_pattern_source.py \
@@ -879,6 +882,7 @@ EXTRA_DIST = \
     tools/probe_ac1027_header_geometry.cpp \
     tools/probe_ac1027_maintenance_native.cpp \
     tools/probe_ac1027_source_sab_cqacis.py \
+    tools/probe_dim_source_output.cpp \
     tools/probe_dimension_oblique.cpp \
     tools/probe_dwg_hatch_pattern.cpp \
     tools/probe_dwg_hatch_unsupported_edges.cpp \

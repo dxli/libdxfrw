@@ -903,6 +903,13 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+The dwg2dxf adapter converts AC1024 DWG common DIMENSION rotation/direction
+fields to DXF degrees for seven standard subtypes while preserving the public
+radian callbacks. Selected graphs pass ASCII/Binary checks; original full-source
+export, group-52 peer interpretation and other versions remain unqualified.
+Internal adapter dynamic types/layout change; direct binary users must rebuild
+([receipt](docs/research/p6-ac1024-dimension-common-angle-adapter-2026-11-04.json)).
+
 DXF ALIGNED DIMENSION now emits its extension-line rotation in the documented
 AcDbAlignedDimension subclass; existing LINEAR placement stays unchanged.
 ODA retains both selected values, while ezdxf 1.4.5 reads this subclass field

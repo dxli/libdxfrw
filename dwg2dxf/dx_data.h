@@ -197,6 +197,34 @@ public:
     DRW::Version sourceDwgPdfVersion{DRW::UNKNOWNV};
 };
 
+// Converter-only provenance travels with the retained dimension, so removing
+// or replacing a block entity cannot leave a dangling pointer-key association.
+class dx_dwgDimensionImport {
+    friend class dx_iface;
+    friend class DxIfaceDimensionAngleTestAccess;
+    std::uint64_t generation{0};
+    DRW::Version version{DRW::UNKNOWNV};
+    DRW::Version sealedVersion{DRW::UNKNOWNV};
+    bool accepted{false};
+};
+class dx_ifaceDwgDimensionOrigin {
+    friend class dx_iface;
+    friend class DxIfaceDimensionAngleTestAccess;
+    std::shared_ptr<dx_dwgDimensionImport> source;
+    std::weak_ptr<dx_dwgDimensionImport> capturedSource;
+    std::uint64_t sourceGeneration{0};
+public:
+    virtual ~dx_ifaceDwgDimensionOrigin() = default;
+};
+template<class Dimension>
+class dx_ifaceDwgDimension final : public Dimension, public dx_ifaceDwgDimensionOrigin {
+public:
+    explicit dx_ifaceDwgDimension(const DRW_Dimension& value) : Dimension(value) {}
+    dx_ifaceDwgDimension(const dx_ifaceDwgDimension& value)
+        : Dimension(static_cast<const DRW_Dimension&>(value)),
+          dx_ifaceDwgDimensionOrigin(value) {}
+};
+
 struct dx_ifaceRawEntityEvent {
     std::size_t typedEntityIndex {0};
     DRW_RawDxfObject record;

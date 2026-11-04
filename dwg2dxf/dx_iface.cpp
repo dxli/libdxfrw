@@ -77,6 +77,17 @@ EntityT* exactEntityForDxfWrite(DRW_Entity* entity,
     return dynamic_cast<EntityT*>(entity);
 }
 
+template<class Dimension>
+Dimension* exactDwgDimensionForDxfWrite(DRW_Entity* entity,
+                                       DRW::ETYPE expected) noexcept {
+    if (auto* plain = exactEntityForDxfWrite<Dimension>(entity, expected))
+        return plain;
+    if (entity && entity->eType == expected
+        && typeid(*entity) == typeid(dx_ifaceDwgDimension<Dimension>))
+        return dynamic_cast<Dimension*>(entity);
+    return nullptr;
+}
+
 dx_raster_output::Profile rasterOutputProfile(dxfRW::DxfCompatibilityProfile profile) noexcept {
     switch (profile) {
     case dxfRW::DxfCompatibilityProfile::StandaloneSafe: return dx_raster_output::Profile::StandaloneSafe;
@@ -66640,7 +66651,22 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
             dx_iface& owner;
             ~ClassEvidenceReadScope() { owner.abortDwgClassEvidenceRead(); }
         } classEvidenceScope{*this};
+        m_dwgDimensionImport.reset();
+        m_collectDwgDimensionImport = true;
+        struct DimensionImportScope {
+            dx_iface& owner;
+            ~DimensionImportScope() {
+                owner.m_collectDwgDimensionImport = false;
+                owner.m_dwgDimensionImport.reset();
+            }
+        } dimensionImportScope{*this};
         const bool success = dwg.read(this, false);
+        m_collectDwgDimensionImport = false;
+        if (m_dwgDimensionImport) {
+            m_dwgDimensionImport->version = dwg.getVersion();
+            m_dwgDimensionImport->sealedVersion = dwg.getVersion();
+            m_dwgDimensionImport->accepted = success && dwg.getError() == DRW::BAD_NONE;
+        }
         finishDwgClassEvidenceRead(success && dwg.getError() == DRW::BAD_NONE, dwg.getVersion(),
             dwg.getSourceCodePageId(), dwg.hasSourceCodePageField(), dwg.hasRecognizedSourceCodePage());
         fData->dwgReadOutcome.operationSucceeded = success;
@@ -79419,28 +79445,28 @@ void dx_iface::writeEntity(DRW_Entity* e){
         DRW_Dimension* dimension = nullptr;
         switch (e->eType) {
         case DRW::DIMLINEAR:
-            dimension = exactEntityForDxfWrite<DRW_DimLinear>(e, DRW::DIMLINEAR);
+            dimension = exactDwgDimensionForDxfWrite<DRW_DimLinear>(e, DRW::DIMLINEAR);
             break;
         case DRW::DIMALIGNED:
-            dimension = exactEntityForDxfWrite<DRW_DimAligned>(e, DRW::DIMALIGNED);
+            dimension = exactDwgDimensionForDxfWrite<DRW_DimAligned>(e, DRW::DIMALIGNED);
             break;
         case DRW::DIMANGULAR:
-            dimension = exactEntityForDxfWrite<DRW_DimAngular>(e, DRW::DIMANGULAR);
+            dimension = exactDwgDimensionForDxfWrite<DRW_DimAngular>(e, DRW::DIMANGULAR);
             break;
         case DRW::DIMANGULAR3P:
-            dimension = exactEntityForDxfWrite<DRW_DimAngular3p>(e, DRW::DIMANGULAR3P);
+            dimension = exactDwgDimensionForDxfWrite<DRW_DimAngular3p>(e, DRW::DIMANGULAR3P);
             break;
         case DRW::DIMRADIAL:
             if (typeid(*e) == typeid(DRW_DimLargeRadial))
                 dimension = dynamic_cast<DRW_DimLargeRadial*>(e);
             else
-                dimension = exactEntityForDxfWrite<DRW_DimRadial>(e, DRW::DIMRADIAL);
+                dimension = exactDwgDimensionForDxfWrite<DRW_DimRadial>(e, DRW::DIMRADIAL);
             break;
         case DRW::DIMDIAMETRIC:
-            dimension = exactEntityForDxfWrite<DRW_DimDiametric>(e, DRW::DIMDIAMETRIC);
+            dimension = exactDwgDimensionForDxfWrite<DRW_DimDiametric>(e, DRW::DIMDIAMETRIC);
             break;
         case DRW::DIMORDINATE:
-            dimension = exactEntityForDxfWrite<DRW_DimOrdinate>(e, DRW::DIMORDINATE);
+            dimension = exactDwgDimensionForDxfWrite<DRW_DimOrdinate>(e, DRW::DIMORDINATE);
             break;
         case DRW::DIMARC:
             dimension = exactEntityForDxfWrite<DRW_DimArc>(e, DRW::DIMARC);
@@ -79448,10 +79474,46 @@ void dx_iface::writeEntity(DRW_Entity* e){
         default:
             break;
         }
-        if (dimension != nullptr)
-            written = dxfW->writeDimension(dimension);
-        else
+        const auto* origin = dynamic_cast<const dx_ifaceDwgDimensionOrigin*>(e);
+        if (origin != nullptr && (cData == nullptr || !origin->source
+            || !origin->source->accepted
+            || origin->source != origin->capturedSource.lock()
+            || origin->source->version != origin->source->sealedVersion
+            || origin->sourceGeneration != origin->source->generation)) {
             dxfW->writeRawDxfEntity(nullptr);
+            break;
+        }
+        if (dimension != nullptr && origin != nullptr
+            && origin->source->version == DRW::AC1024) {
+            const double rotation = dimension->getDir() * ARAD;
+            const double horizontal = dimension->getHDir() * ARAD;
+            if (!std::isfinite(rotation) || !std::isfinite(horizontal)) {
+                dxfW->writeRawDxfEntity(nullptr);
+                break;
+            }
+            std::unique_ptr<DRW_Dimension> output;
+            switch (e->eType) {
+            case DRW::DIMLINEAR: output.reset(new DRW_DimLinear(*dimension)); break;
+            case DRW::DIMALIGNED: output.reset(new DRW_DimAligned(*dimension)); break;
+            case DRW::DIMANGULAR: output.reset(new DRW_DimAngular(*dimension)); break;
+            case DRW::DIMANGULAR3P: output.reset(new DRW_DimAngular3p(*dimension)); break;
+            case DRW::DIMRADIAL: output.reset(new DRW_DimRadial(*dimension)); break;
+            case DRW::DIMDIAMETRIC: output.reset(new DRW_DimDiametric(*dimension)); break;
+            case DRW::DIMORDINATE: output.reset(new DRW_DimOrdinate(*dimension)); break;
+            default: break;
+            }
+            if (output) {
+                output->setDir(rotation);
+                output->setHDir(horizontal);
+                written = dxfW->writeDimension(output.get());
+            } else {
+                dxfW->writeRawDxfEntity(nullptr);
+            }
+        } else if (dimension != nullptr) {
+            written = dxfW->writeDimension(dimension);
+        } else {
+            dxfW->writeRawDxfEntity(nullptr);
+        }
         break;
     }
     case DRW::LEADER:

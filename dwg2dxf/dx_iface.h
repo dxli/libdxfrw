@@ -902,12 +902,12 @@ public:
     }
     virtual void addDimAlign(const DRW_DimAligned *data) override{
         if (data != nullptr)
-            retainTypedEntity<DRW_DimAligned>(
+            retainDimension<DRW_DimAligned>(
                 static_cast<const DRW_Dimension&>(*data));
     }
     virtual void addDimLinear(const DRW_DimLinear *data) override{
         if (data != nullptr)
-            retainTypedEntity<DRW_DimLinear>(
+            retainDimension<DRW_DimLinear>(
                 static_cast<const DRW_Dimension&>(*data));
     }
     virtual void addDimRadial(const DRW_DimRadial *data) override{
@@ -916,27 +916,27 @@ public:
         if (const auto* large = dynamic_cast<const DRW_DimLargeRadial*>(data))
             retainTypedEntity<DRW_DimLargeRadial>(*large);
         else
-            retainTypedEntity<DRW_DimRadial>(
+            retainDimension<DRW_DimRadial>(
                 static_cast<const DRW_Dimension&>(*data));
     }
     virtual void addDimDiametric(const DRW_DimDiametric *data) override{
         if (data != nullptr)
-            retainTypedEntity<DRW_DimDiametric>(
+            retainDimension<DRW_DimDiametric>(
                 static_cast<const DRW_Dimension&>(*data));
     }
     virtual void addDimAngular(const DRW_DimAngular *data) override{
         if (data != nullptr)
-            retainTypedEntity<DRW_DimAngular>(
+            retainDimension<DRW_DimAngular>(
                 static_cast<const DRW_Dimension&>(*data));
     }
     virtual void addDimAngular3P(const DRW_DimAngular3p *data) override{
         if (data != nullptr)
-            retainTypedEntity<DRW_DimAngular3p>(
+            retainDimension<DRW_DimAngular3p>(
                 static_cast<const DRW_Dimension&>(*data));
     }
     virtual void addDimOrdinate(const DRW_DimOrdinate *data) override{
         if (data != nullptr)
-            retainTypedEntity<DRW_DimOrdinate>(
+            retainDimension<DRW_DimOrdinate>(
                 static_cast<const DRW_Dimension&>(*data));
     }
     void addDimArc(const DRW_DimArc *data) override{
@@ -3120,6 +3120,39 @@ private:
             delete entity;
             cData->typedEntityCaptureFailed = true;
             return nullptr;
+        }
+    }
+    std::shared_ptr<dx_dwgDimensionImport> m_dwgDimensionImport;
+    bool m_collectDwgDimensionImport{false};
+    template<class Dimension>
+    void retainDimension(const DRW_Dimension& value) noexcept {
+        if (!m_collectDwgDimensionImport || cData == nullptr
+            || cData->sourceFormat != dx_source_format::DWG) {
+            retainTypedEntity<Dimension>(value);
+            return;
+        }
+        try {
+            if (!m_dwgDimensionImport) {
+                constexpr std::size_t originBytes =
+                    sizeof(dx_dwgDimensionImport) + 2u * sizeof(void*);
+                if (cData->typedEntityRetainedBytes > TypedEntityCaptureMaxRetainedBytes
+                    || originBytes > TypedEntityCaptureMaxRetainedBytes
+                        - cData->typedEntityRetainedBytes) {
+                    cData->typedEntityCaptureFailed = true;
+                    return;
+                }
+                m_dwgDimensionImport = std::make_shared<dx_dwgDimensionImport>();
+                m_dwgDimensionImport->generation = cData->importGeneration;
+                cData->typedEntityRetainedBytes += originBytes;
+            }
+            auto* entity = retainTypedEntity<dx_ifaceDwgDimension<Dimension>>(value);
+            if (entity != nullptr) {
+                entity->source = m_dwgDimensionImport;
+                entity->capturedSource = m_dwgDimensionImport;
+                entity->sourceGeneration = cData->importGeneration;
+            }
+        } catch (...) {
+            cData->typedEntityCaptureFailed = true;
         }
     }
     bool prepareExtensionObjectGraph(dx_data* data,
