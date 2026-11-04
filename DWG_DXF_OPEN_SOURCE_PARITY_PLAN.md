@@ -832,12 +832,13 @@ both extrusion modes. Generated six-version controls and an ODA-produced
 AC1015 witness pass; other producer profiles and the separate CIRCLE/ARC
 applied-extrusion state problem remain open. See the [ELLIPSE receipt](docs/research/p6-dwg-ellipse-wcs-dispatch-2026-11-04.json).
 
-CIRCLE and ARC applied-extrusion callbacks lose coordinate-frame meaning when
-written back; a scratch-only ASCII/Binary reproducer records both failures.
-Preserve legacy authored-field behavior and ABI, then add an explicit opt-in
-frame conversion with inverse-axis/negative-Z controls, atomic failure and
-independent readback. Do not infer the frame from `haveExtrusion` or cached
-axes; qualify DWG separately. See the [reproduction and design receipt](docs/research/p6-circle-arc-applied-extrusion-roundtrip-2026-11-04.json).
+CIRCLE and ARC applied-extrusion callbacks lose coordinate-frame meaning with
+the legacy default writer; an explicit opt-in DXF conversion now reverses
+the witnessed single legacy transform without changing authored-field or ABI
+behavior. ASCII/Binary tests and independent ezdxf readback pass. Consumers
+must track the frame themselves; automatic inference and DWG qualification
+remain open. See the [opt-in receipt](docs/research/p6-dxf-legacy-extrusion-opt-in-2026-11-04.json)
+and [reproducer](docs/research/p6-circle-arc-applied-extrusion-roundtrip-2026-11-04.json).
 
 The generated SURFACE/VIEWPORT round-trip controls now exercise refusal and
 corrected retry for the unmapped DWG loft path and invalid lighting type. Native

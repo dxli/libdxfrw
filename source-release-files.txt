@@ -218,6 +218,7 @@ src/drw_classes.cpp
 src/drw_classes.h
 src/drw_datastorage.cpp
 src/drw_datastorage.h
+src/drw_dxf_extrusion.h
 src/drw_entities.cpp
 src/drw_entities.h
 src/drw_header.cpp
@@ -400,6 +401,8 @@ tests/dwg_object_vectors_tests.cpp
 tests/dwg_reader_matrix_tests.cpp
 tests/dxf_entity_identity_test_helpers.h
 tests/dxf_fixture_tests.cpp
+tests/dxf_legacy_extrusion_conversion_tests.cpp
+tests/dxf_legacy_extrusion_ezdxf.py
 tests/dxf_mline_source_dependency_tests.cpp
 tests/dxf_no_raw_sections_tests.cpp
 tests/dxf_symbol_output_tests.cpp

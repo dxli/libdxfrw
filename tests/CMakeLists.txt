@@ -65,6 +65,18 @@ if(LIBDXFRW_ENABLE_EXTERNAL_SAT_V1_CLI_CONTROL)
         TIMEOUT 120)
 endif()
 
+# Explicit legacy-applied CIRCLE/ARC recovery is opt-in and leaves legacy
+# reader/writer and public entity layouts unchanged.
+add_executable(libdxfrw_dxf_legacy_extrusion_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dxf_legacy_extrusion_conversion_tests.cpp)
+target_compile_features(libdxfrw_dxf_legacy_extrusion_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dxf_legacy_extrusion_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dxf_legacy_extrusion_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dxf_legacy_extrusion_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dxf_legacy_extrusion
+    COMMAND libdxfrw_dxf_legacy_extrusion_tests)
+set_tests_properties(libdxfrw_dxf_legacy_extrusion PROPERTIES LABELS "dxf;fast;extrusion" TIMEOUT 30)
+
 # Keep the no-version FreeCAD CLI revision policy independently tested from
 # full DWG input availability. The source-version mapping is pure policy.
 add_executable(libdxfrw_dwg2dxf_version_tests

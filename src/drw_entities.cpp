@@ -24,8 +24,11 @@
 #include <stdexcept>
 #include <string_view>
 #include <typeinfo>
+#include <type_traits>
+#include <utility>
 #include <vector>
 #include "drw_entities.h"
+#include "drw_dxf_extrusion.h"
 #include "intern/dxfreader.h"
 #include "intern/dxfnumber.h"
 #include "intern/dxfparserlimits.h"
@@ -7254,6 +7257,71 @@ bool DRW_Ray::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
     secPoint = parsedDirection;
     *sourceBuf = handleProbe;
     return true;
+}
+
+namespace {
+static_assert(std::is_nothrow_move_assignable<DRW_Circle>::value,
+              "conversion publication must not throw");
+static_assert(std::is_nothrow_move_assignable<DRW_Arc>::value,
+              "conversion publication must not throw");
+bool validLegacyDxfExtrusion(const DRW_Circle& value) noexcept {
+    const DRW_Coord& normal = value.extPoint;
+    const DRW_Coord& center = value.basePoint;
+    return std::isfinite(normal.x) && std::isfinite(normal.y)
+        && std::isfinite(normal.z)
+        && (normal.x != 0.0 || normal.y != 0.0 || normal.z != 0.0)
+        && std::isfinite(center.x) && std::isfinite(center.y)
+        && std::isfinite(center.z) && std::isfinite(value.radious)
+        && std::isfinite(value.thickness);
+}
+
+bool restoreLegacyDxfCenter(DRW_Circle& value) noexcept {
+    if (!value.haveExtrusion) return true;
+    const DRW_Coord center = inverseTransformOcsCoordinate(value.extPoint,
+                                                            value.basePoint);
+    if (!std::isfinite(center.x) || !std::isfinite(center.y)
+        || !std::isfinite(center.z)) return false;
+    value.basePoint = center;
+    return true;
+}
+} // namespace
+
+bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Circle& input,
+                                         DRW_Circle& output) noexcept {
+    if (typeid(input) != typeid(DRW_Circle) || typeid(output) != typeid(DRW_Circle)
+        || input.eType != DRW::CIRCLE
+        || !validLegacyDxfExtrusion(input)) return false;
+    try {
+        DRW_Circle candidate(input);
+        if (!restoreLegacyDxfCenter(candidate)) return false;
+        output = std::move(candidate);
+        return true;
+    } catch (...) { return false; }
+}
+
+bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Arc& input,
+                                         DRW_Arc& output) noexcept {
+    if (typeid(input) != typeid(DRW_Arc) || typeid(output) != typeid(DRW_Arc)
+        || input.eType != DRW::ARC
+        || !validLegacyDxfExtrusion(input) || !std::isfinite(input.staangle)
+        || !std::isfinite(input.endangle)) return false;
+    try {
+        DRW_Arc candidate(input);
+        if (!restoreLegacyDxfCenter(candidate)) return false;
+        if (candidate.haveExtrusion) {
+            const DRW_Coord normal = extrusionUnitVector(candidate.extPoint);
+            if (std::fabs(normal.x) < 0.015625
+                && std::fabs(normal.y) < 0.015625 && normal.z < 0.0) {
+                const double start = M_PI - candidate.endangle;
+                const double end = M_PI - candidate.staangle;
+                if (!std::isfinite(start) || !std::isfinite(end)) return false;
+                candidate.staangle = start;
+                candidate.endangle = end;
+            }
+        }
+        output = std::move(candidate);
+        return true;
+    } catch (...) { return false; }
 }
 
 void DRW_Circle::applyExtrusion(){

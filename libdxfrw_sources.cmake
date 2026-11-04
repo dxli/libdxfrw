@@ -122,6 +122,7 @@ set(LIBDXFRW_PUBLIC_HEADERS
     "${CMAKE_CURRENT_LIST_DIR}/src/drw_classes.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/drw_datastorage.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/drw_entities.h"
+    "${CMAKE_CURRENT_LIST_DIR}/src/drw_dxf_extrusion.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/drw_header.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/drw_interface.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/drw_objects.h"
