@@ -741,13 +741,21 @@ public:
         if (found == data.m_opaqueDwgSourceFrames.end()) return false;
         auto& raw = found->second;
         const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
-        if ((raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1027
-             && raw.m_version != DRW::AC1032) || !raw.m_bodyBitSize || raw.m_bodyBitSize >= total)
+        const bool inline2004 = raw.m_version == DRW::AC1018;
+        if ((!inline2004 && raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1027
+             && raw.m_version != DRW::AC1032)
+            || (!inline2004 && (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total)))
             return false;
-        dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u, total - raw.m_bodyBitSize};
-        const auto tag = body.take(2u);
-        const auto type = tag == 0u ? body.take(8u)
+        dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u,
+            inline2004 ? total : total - raw.m_bodyBitSize};
+        const auto tag = inline2004 ? 0u : body.take(2u);
+        const auto type = inline2004 ? body.shortValue() : tag == 0u ? body.take(8u)
             : tag == 1u ? body.take(8u) + 0x1F0u : body.little(2u);
+        if (inline2004) {
+            const auto end = static_cast<std::uint32_t>(body.little(4u));
+            if (!body.good || end > total || end <= body.pos) return false;
+            body.end = end;
+        }
         if (tag == 3u || type != static_cast<std::uint32_t>(raw.m_objectType)
             || dx_raster_wire::detail::handle(body, 0u, 0u, true).value != handle
             || body.shortValue() != 0u || body.longValue() != 1u || body.take(1u) != 1u
@@ -764,13 +772,22 @@ public:
         if (found == data.m_opaqueDwgSourceFrames.end()) return false;
         auto& raw = found->second;
         const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
-        if ((raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1027
-             && raw.m_version != DRW::AC1032) || !raw.m_bodyBitSize || raw.m_bodyBitSize >= total)
+        const bool inline2004 = raw.m_version == DRW::AC1018;
+        if ((!inline2004 && raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1027
+             && raw.m_version != DRW::AC1032)
+            || (!inline2004 && (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total)))
             return false;
-        dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u, total - raw.m_bodyBitSize};
-        const auto tag = body.take(2u);
-        const auto type = tag == 0u ? body.take(8u)
+        dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u,
+            inline2004 ? total : total - raw.m_bodyBitSize};
+        const auto tag = inline2004 ? 0u : body.take(2u);
+        const auto type = inline2004 ? body.shortValue() : tag == 0u ? body.take(8u)
             : tag == 1u ? body.take(8u) + 0x1F0u : body.little(2u);
+        const auto lengthStart = body.pos;
+        if (inline2004) {
+            const auto end = static_cast<std::uint32_t>(body.little(4u));
+            if (!body.good || end > total || end <= body.pos) return false;
+            body.end = end;
+        }
         if (tag == 3u || type != static_cast<std::uint32_t>(raw.m_objectType)
             || dx_raster_wire::detail::handle(body, 0u, 0u, true).value != handle
             || body.shortValue() != 0u || body.longValue() != 1u || body.take(1u) != 1u
@@ -794,16 +811,26 @@ public:
         for (unsigned bit = 0; bit != 8u; ++bit) put(0u);
         copy(start + 10u, total);
         if (output != total + 8u) return false;
-        const auto handleStart = total + 8u - raw.m_bodyBitSize;
+        const auto handleStart = inline2004 ? body.end + 8u : total + 8u - raw.m_bodyBitSize;
+        if (inline2004) {
+            for (unsigned byte = 0; byte != 4u; ++byte)
+                for (unsigned bit = 0; bit != 8u; ++bit) {
+                    const auto position = lengthStart + byte * 8u + bit;
+                    const auto mask = static_cast<std::uint8_t>(1u << (7u - position % 8u));
+                    if ((handleStart >> (byte * 8u + 7u - bit)) & 1u) result[position / 8u] |= mask;
+                    else result[position / 8u] &= static_cast<std::uint8_t>(~mask);
+                }
+        }
         dx_raster_wire::detail::Bits scalar{result.data(), start, handleStart};
         if (scalar.shortValue() != 1u || !scalar.good || scalar.pos != start + 18u
-            || scalar.pos >= handleStart) return false;
+            || (inline2004 ? scalar.pos != handleStart : scalar.pos >= handleStart)) return false;
         while (scalar.pos < handleStart) if (scalar.take(1u) != 0u) return false;
         dx_raster_wire::detail::Bits handles{result.data(), handleStart, total + 8u};
         const auto owner = dx_raster_wire::detail::handle(handles, 4u, handle);
         const auto reactor = dx_raster_wire::detail::handle(handles, 4u, handle);
+        const auto expectedParent = inline2004 ? data.namedObjectDictionary.handle : raw.m_parentHandle;
         if (!handles.good || owner.role != 4u || reactor.role != 4u
-            || owner.value != raw.m_parentHandle || reactor.value != raw.m_parentHandle
+            || owner.value != expectedParent || reactor.value != expectedParent
             || handles.end - handles.pos > 7u) return false;
         while (handles.pos < handles.end) if (handles.take(1u) != 0u) return false;
         raw.m_rawBytes.swap(result);
@@ -69039,9 +69066,13 @@ bool wipeoutVariablesDwgAdapterTransport(bool directNod = false,
                 const auto originalRaw = raw.m_rawBytes;
                 if (!Access::makeWipeoutFrameOneLongBitShort(imported, saved.handle))
                     return fail("could not construct noncanonical wipeout frame BS");
-                const bool rejectedLong = rejectsWithoutPublication();
+                std::uint32_t owner = DRW::NoHandle;
+                const bool rejectedLong = rejectsWithoutPublication()
+                    && (revision != DRW::AC1018
+                        || !imported.getCompleteDwgDictionaryOwner(imported.namedObjectDictionary.handle, owner));
                 raw.m_rawBytes = originalRaw;
-                if (!rejectedLong)
+                if (!rejectedLong || (revision == DRW::AC1018
+                    && !imported.getCompleteDwgDictionaryOwner(imported.namedObjectDictionary.handle, owner)))
                     return fail("unwitnessed long-form wipeout frame BS was accepted");
             }
             imported.namedObjectDictionary.m_entries.push_back({"DUPLICATE_WIPEOUT", saved.handle});
@@ -70398,6 +70429,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-ac1018-direct-nod")
         return wipeoutVariablesDwgAdapterTransport(true, DRW::AC1018) ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--wipeoutvariables-dwg-ac1018-frame1")
+        return wipeoutVariablesDwgAdapterTransport(true, DRW::AC1018, true) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-ac1024-nested-refusal")
         return wipeoutVariablesDwgAdapterTransport(false, DRW::AC1024) ? 0 : 1;

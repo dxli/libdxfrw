@@ -11678,7 +11678,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             && variables.reactorHandles.front() == variables.parentHandle
                             && variables.extensionDictionaryFlag() == 1u
                             && (variables.m_displayFrame == 0u
-                                || ((data->sourceVersion == DRW::AC1024
+                                || ((data->sourceVersion == DRW::AC1018
+                                     || data->sourceVersion == DRW::AC1024
                                      || data->sourceVersion == DRW::AC1027
                                      || data->sourceVersion == DRW::AC1032)
                                     && variables.m_displayFrame == 1u));
@@ -62167,10 +62168,11 @@ bool matchesAc1018MinimalDictionaryWire(const DRW_UnsupportedObject& raw,
 // R2004 has an inline RL pre-handle bit boundary and BS class type; unlike
 // R2010+ it has neither a handle-size prefix nor a detached string marker.
 bool matchesAc1018DirectWipeoutWire(const DRW_UnsupportedObject& raw,
-                                    std::uint32_t parent) noexcept {
+                                    std::uint32_t parent,
+                                    std::uint16_t frame) noexcept {
     using namespace dx_raster_wire::detail;
     if (raw.m_version != DRW::AC1018 || raw.m_objectType < 500
-        || raw.m_handle == 0u || raw.m_bodyBitSize != 0u || raw.m_rawBytes.empty()
+        || frame > 1u || raw.m_handle == 0u || raw.m_bodyBitSize != 0u || raw.m_rawBytes.empty()
         || raw.m_rawBytes.size() > (std::numeric_limits<std::uint32_t>::max)() / 8u)
         return false;
     const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
@@ -62181,8 +62183,11 @@ bool matchesAc1018DirectWipeoutWire(const DRW_UnsupportedObject& raw,
     body.end = end;
     const auto self = handle(body, 0u, 0u, true);
     if (!body.good || self.value != raw.m_handle || body.shortValue() != 0u
-        || body.longValue() != 1u || body.take(1u) != 1u
-        || body.shortValue() != 0u || !body.good || body.pos != end)
+        || body.longValue() != 1u || body.take(1u) != 1u)
+        return false;
+    const auto frameStart = body.pos;
+    if (body.shortValue() != frame || !body.good || body.pos != end
+        || (frame == 1u && body.pos - frameStart != 10u))
         return false;
     Bits handles{raw.m_rawBytes.data(), end, total};
     const auto owner = handle(handles, 4u, raw.m_handle);
@@ -62344,7 +62349,7 @@ bool dx_data::hasAc1018WipeoutRootGroupSource(std::uint32_t requested) const noe
     return childModel && childModel->parentHandle == root && childModel->m_entries.empty()
         && valid(rootFrame->second, root) && valid(childFrame->second, child)
         && variables.handle == wipeout && variables.parentHandle == root
-        && variables.m_displayFrame == 0u && variables.reactorCount() == 1
+        && variables.m_displayFrame <= 1u && variables.reactorCount() == 1
         && variables.reactorHandles.size() == 1u && variables.reactorHandles.front() == root
         && variables.extensionDictionaryFlag() == 1u && variables.xDictHandle == 0u
         && !variables.hasDataStorageBinaryData() && variables.extData.empty() && variables.appData.empty()
@@ -62355,7 +62360,7 @@ bool dx_data::hasAc1018WipeoutRootGroupSource(std::uint32_t requested) const noe
         && sameAsciiName(wire.m_recordName, "WIPEOUTVARIABLES")
         && matchesAc1018MinimalDictionaryWire(rootFrame->second.raw, 0u, child, wipeout)
         && matchesAc1018MinimalDictionaryWire(childFrame->second.raw, root, 0u)
-        && matchesAc1018DirectWipeoutWire(wire, root);
+        && matchesAc1018DirectWipeoutWire(wire, root, variables.m_displayFrame);
     } catch (...) {
         return false;
     }
@@ -72596,7 +72601,7 @@ static bool matchesDirectNodWipeoutWire(const DRW_UnsupportedObject& raw,
                                        std::uint16_t frame) noexcept {
     using namespace dx_raster_wire;
     if (raw.m_version == DRW::AC1018)
-        return frame == 0u && matchesAc1018DirectWipeoutWire(raw, parent);
+        return matchesAc1018DirectWipeoutWire(raw, parent, frame);
     if ((raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1027
          && raw.m_version != DRW::AC1032)
         || frame > 1u
@@ -72747,7 +72752,8 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                 && variables.reactorHandles.front() == variables.parentHandle
                 && variables.extensionDictionaryFlag() == 1u
                 && (variables.m_displayFrame == 0u
-                    || ((cData->sourceVersion == DRW::AC1024
+                    || ((cData->sourceVersion == DRW::AC1018
+                         || cData->sourceVersion == DRW::AC1024
                          || cData->sourceVersion == DRW::AC1027
                          || cData->sourceVersion == DRW::AC1032)
                         && variables.m_displayFrame == 1u));
@@ -72788,7 +72794,8 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                 && sourceFrame.m_commonLinkEvidence == DRW_DwgCommonLinkEvidence::Unknown
                 && !sourceFrame.m_commonHandleDataValidated
                 && cData->hasAc1018WipeoutRootGroupSource(cData->namedObjectDictionary.handle)
-                && matchesAc1018DirectWipeoutWire(sourceFrame, variables.parentHandle);
+                && matchesAc1018DirectWipeoutWire(sourceFrame, variables.parentHandle,
+                                                   variables.m_displayFrame);
             if (!inlineWitness && (!sourceFrame.m_commonHandleDataValidated
                 || !drwDwgCommonLinkEvidenceValidated(sourceFrame.m_commonLinkEvidence)))
                 return fail("source frame common-link evidence is unvalidated");
