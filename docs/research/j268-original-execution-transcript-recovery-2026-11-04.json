@@ -2,7 +2,7 @@
   "advisory": true,
   "historicalSetDigestSha256": null,
   "interpretation": "The later snapshot has 24 DWG-magic streams and four DXF-magic .dwg aliases; the historical sweep input bytes are not proven identical to that snapshot. Status rows alone establish no semantic parity.",
-  "joinLimit": "All 28 basenames match the later snapshot exactly, but that inventory ran 7h 36m 24.232s after the sweep. No source hashes were recorded at the sweep, so the later hashes are candidate aliases, not proven historical byte identities.",
+  "joinLimit": "All 28 basenames match the later snapshot; six selected source hashes also match a second snapshot taken 52m31.041s before the original sweep. The later full inventory ran 7h36m24.232s after the sweep. No at-sweep byte hashes or immutable file snapshot were recovered, so even matching bracketing hashes do not prove the bytes used by the sweep.",
   "kind": "j268-original-execution-transcript-recovery-v1",
   "laterSnapshotMagicCounts": {
     "999\\ndx": 4,
@@ -15,8 +15,17 @@
   "originalCommand": "Sort the local *.dwg paths; for each run baseline then upgraded dwg2dxf SOURCE -y -v2010 OUTPUT with four-second timeout; remove temporary output; classify by exit status only.",
   "originalMembershipBasis": "28 path basenames and exit statuses recovered from the execution transcript; original run did not print source hashes",
   "promotesSupportClaims": false,
-  "provenance": "Both execution records are in the local Codex session 01a09a72-4aa5-7562-a791-9cf6d27e32af; record hashes are SHA-256 over the UTF-8 JSONL record excluding its line terminator. The transcript is local and is not included in this repository.",
+  "provenance": "All three execution records are in the local Codex session 01a09a72-4aa5-7562-a791-9cf6d27e32af; record hashes are SHA-256 over the UTF-8 JSONL record excluding its line terminator. The transcript is local and is not included in this repository.",
   "records": {
+    "earlierSelectedHashInventory": {
+      "allMatchLaterSnapshot": true,
+      "executionRecordSha256": "198827ab400ebec7983fee79b9feea89d47d54c225cb83aeebf6b02b75853842",
+      "exitStatus": 0,
+      "minutesBeforeSweep": 52.51735,
+      "outputSha256": "fe2e5e0b480d9d8d75376273a467e8d02f1e24f654aa3754588cd384396133d1",
+      "selectedRows": 6,
+      "timestamp": "2026-09-16T00:37:25.843Z"
+    },
     "laterIndependentHashInventory": {
       "executionRecordSha256": "556644b97a1a257ca7564dc3c44c69e1e1799acdd2547949d024ea5223e4270d",
       "exitStatus": 0,
@@ -30,7 +39,7 @@
       "timestamp": "2026-09-16T01:29:56.884Z"
     }
   },
-  "remaining": "Recover at-sweep content hashes or equivalent immutable provenance before asserting a historical set digest; independent semantic and current-platform qualification remain separate. J268 stays DEFERRED_EXTERNAL.",
+  "remaining": "Recover at-sweep content hashes or an immutable source snapshot with matching contemporaneous provenance before asserting a historical set digest; independent semantic and current-platform qualification remain separate. J268 stays DEFERRED_EXTERNAL.",
   "rows": [
     {
       "baselineExit": 1,
@@ -117,6 +126,10 @@
       "classification": "neither",
       "currentExit": 1,
       "currentTimeout": false,
+      "earlierSnapshot": {
+        "magic": "AC1018",
+        "sha256": "fa44ada15684eecf46acc4ef095be2ed4793f438da6d570be46c828279aed21c"
+      },
       "laterSnapshot": {
         "laterMagic": "AC1018",
         "laterSize": 2856002,
@@ -169,6 +182,10 @@
       "classification": "neither",
       "currentExit": 0,
       "currentTimeout": false,
+      "earlierSnapshot": {
+        "magic": "AC1021",
+        "sha256": "3c95e8a82d5c8c251483fabc61efa8ca904f4e4bc8c2fce4786d74e812284d07"
+      },
       "laterSnapshot": {
         "laterMagic": "AC1021",
         "laterSize": 227008,
@@ -182,6 +199,10 @@
       "classification": "neither",
       "currentExit": 0,
       "currentTimeout": false,
+      "earlierSnapshot": {
+        "magic": "AC1021",
+        "sha256": "7d5507da05fb70ba55875d99e676524ca2caa0ed7a5582ad130c3c06e8d925f1"
+      },
       "laterSnapshot": {
         "laterMagic": "AC1021",
         "laterSize": 258848,
@@ -221,6 +242,10 @@
       "classification": "neither",
       "currentExit": null,
       "currentTimeout": true,
+      "earlierSnapshot": {
+        "magic": "AC1021",
+        "sha256": "7c70a76ce00647770b5026727fd0156a94a11d456db47db97d0bdf5a81acc344"
+      },
       "laterSnapshot": {
         "laterMagic": "AC1021",
         "laterSize": 1786976,
@@ -234,6 +259,10 @@
       "classification": "neither",
       "currentExit": 1,
       "currentTimeout": false,
+      "earlierSnapshot": {
+        "magic": "AC1021",
+        "sha256": "21b49e383cc43171fd13e2bbcd1c235bc1a57804be97f63a0d581fb944e743ff"
+      },
       "laterSnapshot": {
         "laterMagic": "AC1021",
         "laterSize": 522,
@@ -286,6 +315,10 @@
       "classification": "neither",
       "currentExit": 1,
       "currentTimeout": false,
+      "earlierSnapshot": {
+        "magic": "AC1015",
+        "sha256": "6702705ed765af035761a77170ea1486d01f513690b3fd8dc8295957ddc89e58"
+      },
       "laterSnapshot": {
         "laterMagic": "AC1015",
         "laterSize": 12117,
