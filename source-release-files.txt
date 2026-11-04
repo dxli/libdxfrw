@@ -462,6 +462,7 @@ tests/dwg_polyline_owned_handle_roles_tests.cpp
 tests/dwg_polyline_owner_facade_tests.cpp
 tests/dwg_reader_matrix_tests.cpp
 tests/dwg_solid_trace_elevation_tests.cpp
+tests/dwg_text_alignment_elevation_tests.cpp
 tests/dwg_text_style_resolution_tests.cpp
 tests/dwg_vertex_tangent_units_tests.cpp
 tests/dwg_view_angle_units_tests.cpp
@@ -754,6 +755,7 @@ tools/audit_solid_trace_triangle_elevation.py
 tools/audit_sparse_material_source.py
 tools/audit_sun_color_order.py
 tools/audit_sunstudy_dxf_graph.py
+tools/audit_text_alignment_elevation.py
 tools/audit_viewport_ambient_color_order.py
 tools/audit_wipeout_ac1018_frame1_source.py
 tools/audit_wipeout_ac1018_source.py
@@ -797,6 +799,7 @@ tools/author_selected_ac1027_lightlist.py
 tools/author_selected_layer_color.py
 tools/author_selected_sun_color.py
 tools/author_selected_viewport_color.py
+tools/author_text_alignment_elevation.py
 tools/author_wipeout_ac1024_frame1.py
 tools/author_wipeout_direct_nod.py
 tools/bounded_process.py
@@ -920,6 +923,7 @@ tools/probe_solid_trace_triangle_elevation.cpp
 tools/probe_sparse_material_adapter.cpp
 tools/probe_sparse_material_source.cpp
 tools/probe_sun_color_loss.cpp
+tools/probe_text_alignment_elevation.cpp
 tools/probe_wipeout_ac1018_frame1_source.cpp
 tools/probe_wipeout_ac1018_source.cpp
 tools/probe_wipeout_ac1024_frame1_source.cpp

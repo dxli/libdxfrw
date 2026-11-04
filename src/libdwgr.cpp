@@ -53,6 +53,7 @@
 
 // Internal shared preflight, also enforced by the SOLID/TRACE DWG codecs.
 bool drwHasDwgSingleElevation(const DRW_Trace& entity) noexcept;
+bool drwHasDwgTextAlignmentElevation(const DRW_Text& text) noexcept;
 bool drwHasEncodableDwgViewportAngles(const DRW_Viewport& entity) noexcept;
 bool drwHasEncodableDwgHatchPatternAngles(const DRW_Hatch& entity) noexcept;
 
@@ -1645,6 +1646,15 @@ bool dwgRW::encodeEntityForWrite(DRW_Entity *ent,
     // disappear from the document when a legacy callback ignores false.
     if ((typeid(*ent) == typeid(DRW_Trace) || typeid(*ent) == typeid(DRW_Solid))
         && !drwHasDwgSingleElevation(static_cast<const DRW_Trace&>(*ent))) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::Entity, false);
+    }
+
+    // TEXT's active alignment point shares the encoded elevation.  Preserve
+    // custom subclass codecs while latching refusal for the built-in codec,
+    // including calls through the inherited point and line facade entries.
+    if (typeid(*ent) == typeid(DRW_Text)
+        && !drwHasDwgTextAlignmentElevation(static_cast<const DRW_Text&>(*ent))) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::Entity, false);
     }

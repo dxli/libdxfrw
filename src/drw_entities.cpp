@@ -7128,7 +7128,21 @@ bool DRW_Block::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t b
     return encodeDwgEntHandle(version, buf, handleBuf);
 }
 
+// TEXT's DWG body stores only one elevation for its two OCS points.  The
+// legacy 2D API commonly leaves the second point's Z at zero even when the
+// shared elevation is nonzero; treat that value as unspecified.  Consequently
+// an intentionally distinct zero cannot be distinguished from that default.
+bool drwHasDwgTextAlignmentElevation(const DRW_Text& text) noexcept {
+    if (text.alignH == DRW_Text::HLeft && text.alignV == DRW_Text::VBaseLine)
+        return true; // The alignment point does not determine placement.
+    const double elevation = text.basePoint.z;
+    const double alignment = text.secPoint.z;
+    return std::isfinite(elevation) && std::isfinite(alignment)
+        && (alignment == 0.0 || alignment == elevation);
+}
+
 bool DRW_Text::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
+    if (!drwHasDwgTextAlignmentElevation(*this)) return false;
     (void)bs;
     oType = 1;  // TEXT class id — see dwgreader.cpp:1208
     if (!encodeDwgCommon(version, buf)) return false;

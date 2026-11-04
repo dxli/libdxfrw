@@ -911,6 +911,12 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+DWG TEXT now refuses conflicting nonzero alignment elevations for active
+alignment before writing; a zero alignment Z retains the existing unspecified
+convention. Distinct intentional zero and inactive alignment remain ambiguous,
+and broader text/native placement qualification remains open
+([receipt](docs/research/p6-dwg-text-active-alignment-elevation-2026-11-04.json)).
+
 The dwg2dxf adapter converts AC1024 DWG common DIMENSION rotation/direction
 fields to DXF degrees for seven standard subtypes while preserving the public
 radian callbacks. Selected graphs pass ASCII/Binary checks; original full-source
