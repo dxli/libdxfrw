@@ -21096,6 +21096,13 @@ public:
             mismatchedDataStorage.dataStorageHandleKey = "709";
             rejectedModelerDataStorage_ = !writer_->writeRawDwgObject(
                 &modelerRaw_, &mismatchedDataStorage);
+            // A self-consistent handle/key for another object must not bind
+            // its AcDs data to this modeler frame.
+            LocalModelerGeometry otherObjectStorage = modelerTyped_;
+            otherObjectStorage.dataStorageHandle = 0x709u;
+            otherObjectStorage.dataStorageHandleKey = "709";
+            rejectedModelerCrossIdentity_ = !writer_->writeRawDwgObject(
+                &modelerRaw_, &otherObjectStorage);
         } else {
             LocalModelerGeometry externalDataStorage = modelerTyped_;
             externalDataStorage.setHasDataStorageBinaryData(true);
@@ -21294,6 +21301,7 @@ public:
     bool rejectedModelerHistoryLink_ {false};
     bool rejectedModelerOwnerEdit_ {false};
     bool rejectedModelerDataStorage_ {false};
+    bool rejectedModelerCrossIdentity_ {false};
     bool replayedModeler_ {false};
     bool replayedSecondModeler_ {false};
     DRW::DwgObjectFrameReceipt firstFrame_;
@@ -21480,7 +21488,8 @@ bool runRawModelerDataStorageReplayContract() {
             writeIface.secondModelerRaw_.m_parentHandle, true)
         || writeIface.secondModelerOwnerHandle_ == DRW::NoHandle
         || !writeIface.replayedAcdsSection_
-        || !writeIface.rejectedModelerDataStorage_) {
+        || !writeIface.rejectedModelerDataStorage_
+        || !writeIface.rejectedModelerCrossIdentity_) {
         std::cerr << "AcDs paired-write detail: required-modeler="
                   << writeIface.replayedModeler_
                   << " user-block-modeler="

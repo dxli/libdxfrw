@@ -6794,6 +6794,10 @@ bool dwgWriter15::replayRawObject(
             && typedModeler->hasDataStorageRecord
             && isSupportedAcdsModeler
             && typedModeler->dataStorageHandle != DRW::NoHandle
+            // The retained DWG frame carries the presence bit, not an
+            // alternate AcDs record identity. On reread the record is
+            // looked up by this entity's handle.
+            && typedModeler->dataStorageHandle == object.m_handle
             && typedModeler->dataStorageHandleKey
                    == expectedStorageHandleKey
             && !typedModeler->dataStorageData.empty()
@@ -7390,6 +7394,7 @@ bool dwgWriter15::validatePendingModelerDataStorageReplay(
     for (const PendingModelerDataStorageReplay& pending :
          m_pendingModelerDataStorageReplay) {
         if (pending.modelerHandle == 0 || pending.recordHandle == 0
+            || pending.recordHandle != pending.modelerHandle
             || pending.recordHandleKey.empty() || pending.payload.empty()
             || pending.payload.size()
                    > DRW_DataStorageConst::PAYLOAD_BLOB_SECTION_CAP

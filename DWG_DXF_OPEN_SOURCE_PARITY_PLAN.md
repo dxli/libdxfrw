@@ -973,6 +973,9 @@ rendering semantics remain open.
 
 - Complete the original DWG entity → owner/key → AcDs segment → SAT/SAB join,
   versioned framing/index/suffix/prototype assembly and exact output association.
+  Raw modeler replay now checks the entity/record identity before publication
+  and at finalization; physical source breadth and general output association
+  remain open ([receipt](docs/research/p7-dwg-raw-modeler-acds-identity-binding-2026-11-03.json)).
 - Complete source placement, units/transforms, topology, trims, periodicity and
   spline geometry beyond locally verified analytic helpers. A local wireframe or
   repaired/count-only graph is not B-rep support evidence.
