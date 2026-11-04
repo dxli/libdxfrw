@@ -16273,7 +16273,10 @@ bool estimateGeoDataTypedBytes(
         const DRW_GeoData& data, std::size_t& estimate) noexcept {
     using GeoDataMapValue =
         std::pair<const dx_data::GeoDataKey, DRW_GeoData>;
-    estimate = sizeof(GeoDataMapValue) + 4u * sizeof(void*);
+    using GeoDataSourceRoleValue = std::pair<const dx_data::GeoDataKey,
+        std::pair<std::int32_t, std::uint32_t>>;
+    estimate = sizeof(GeoDataMapValue) + sizeof(GeoDataSourceRoleValue)
+        + 8u * sizeof(void*);
     if (data.m_points.size() > DRW_GeoData::kMaxMeshItems
         || data.m_faces.size() > DRW_GeoData::kMaxMeshItems
         || !addTableEntryRetainedBytes(data, estimate)
@@ -61471,15 +61474,26 @@ void dx_iface::addGeoData(const DRW_GeoData& data) {
         return;
     }
     const dx_data::GeoDataKey key{cData->importGeneration, data.handle};
+    bool insertedSourceRole = false;
     try {
+        const auto sourceRole = cData->m_dwgGeoDataSourceRoles.emplace(
+            key, std::make_pair(data.m_version, data.m_hostBlockHandle));
+        if (!sourceRole.second) {
+            reject();
+            return;
+        }
+        insertedSourceRole = true;
         const auto inserted = cData->geoDataObjects.emplace(key, data);
         if (!inserted.second) {
+            cData->m_dwgGeoDataSourceRoles.erase(key);
             reject();
             return;
         }
         ++cData->geoDataRetainedRecords;
         cData->geoDataRetainedBytes += estimatedBytes;
     } catch (...) {
+        if (insertedSourceRole)
+            cData->m_dwgGeoDataSourceRoles.erase(key);
         reject();
     }
 }
@@ -69847,10 +69861,31 @@ bool dx_iface::isClosedDwgGeoDataGraph(const DRW_GeoData& geo) const noexcept {
 }
 
 bool dx_iface::hasUnchangedDwgGeoDataGraphs() const noexcept {
-    if (m_dwgGeoDataGraphs.empty())
-        return true;
-    if (cData == nullptr || cData->importGeneration == 0u)
+    if (m_extensionGeoDataHandles.empty())
+        return m_dwgGeoDataGraphs.empty();
+    if (cData == nullptr || cData != m_dwgGeoDataSourceOwner
+        || cData->importGeneration == 0u
+        || cData->importGeneration != m_dwgGeoDataSourceGeneration)
         return false;
+    for (const std::uint32_t handle : m_extensionGeoDataHandles) {
+        const dx_data::GeoDataKey key{cData->importGeneration, handle};
+        const auto geo = cData->geoDataObjects.find(key);
+        const auto role = cData->m_dwgGeoDataSourceRoles.find(key);
+        const auto source = cData->m_opaqueDwgSourceFrames.find(key);
+        if (geo == cData->geoDataObjects.end()
+            || role == cData->m_dwgGeoDataSourceRoles.end()
+            || source == cData->m_opaqueDwgSourceFrames.end()
+            || geo->second.handle != handle
+            || role->second.first != geo->second.m_version
+            || role->second.second != geo->second.m_hostBlockHandle
+            || source->second.m_parentHandle != geo->second.parentHandle
+            || source->second.m_numReactors != geo->second.reactorCount()
+            || source->second.m_reactorHandles != geo->second.reactorHandles
+            || source->second.m_xDictHandle != geo->second.xDictHandle
+            || source->second.m_xDictFlag != geo->second.extensionDictionaryFlag()
+            || source->second.m_hasDataStorage != geo->second.hasDataStorageBinaryData())
+            return false;
+    }
     for (const DwgGeoDataGraphBinding& binding : m_dwgGeoDataGraphs) {
         const auto geo = cData->geoDataObjects.find(
             {cData->importGeneration, binding.object});
@@ -69979,6 +70014,8 @@ bool dx_iface::inspectDwgGeoDataObjects(
 
 bool dx_iface::prepareDwgGeoDataOutput(bool debug) {
     m_extensionGeoDataHandles.clear();
+    m_dwgGeoDataSourceOwner = nullptr;
+    m_dwgGeoDataSourceGeneration = 0u;
     m_dwgGeoDataGraphs.clear();
     m_dwgGeoDataTablesInspected = false;
     m_dwgGeoDataObjectsInspected = false;
@@ -70069,6 +70106,8 @@ bool dx_iface::prepareDwgGeoDataOutput(bool debug) {
         return true;
     if (generation == 0u || cData->blockRecords.empty())
         return fail("missing import generation or BLOCK_RECORD table");
+    m_dwgGeoDataSourceOwner = cData;
+    m_dwgGeoDataSourceGeneration = generation;
 
     std::unordered_set<std::uint32_t> outputHandles;
     try {
@@ -70080,9 +70119,13 @@ bool dx_iface::prepareDwgGeoDataOutput(bool debug) {
              ++current) {
             const DRW_GeoData& geoData = current->second;
             const bool dictionaryGraph = isClosedDwgGeoDataGraph(geoData);
+            const auto sourceRole = cData->m_dwgGeoDataSourceRoles.find(current->first);
             if (current->first.second == 0u
                 || current->first.second == DRW::NoHandle
                 || geoData.handle != current->first.second
+                || sourceRole == cData->m_dwgGeoDataSourceRoles.end()
+                || sourceRole->second.first != geoData.m_version
+                || sourceRole->second.second != geoData.m_hostBlockHandle
                 || geoData.m_version < 1 || geoData.m_version > 3
                 || geoData.parentHandle == 0u
                 || geoData.parentHandle == DRW::NoHandle
@@ -70119,6 +70162,12 @@ bool dx_iface::prepareDwgGeoDataOutput(bool debug) {
                 return fail("source frame common-link evidence is unvalidated");
             if (sourceFrame->m_parentHandle != geoData.parentHandle)
                 return fail("source frame owner differs from typed GEODATA owner");
+            if (sourceFrame->m_numReactors != geoData.reactorCount()
+                || sourceFrame->m_reactorHandles != geoData.reactorHandles
+                || sourceFrame->m_xDictHandle != geoData.xDictHandle
+                || sourceFrame->m_xDictFlag != geoData.extensionDictionaryFlag()
+                || sourceFrame->m_hasDataStorage != geoData.hasDataStorageBinaryData())
+                return fail("source frame common links differ from typed GEODATA");
 
             std::size_t hostMatches = 0u;
             for (const DRW_Block_Record& block : cData->blockRecords) {

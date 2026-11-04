@@ -1438,6 +1438,10 @@ public:
     bool hasUnchangedRawSectionRecords() const noexcept;
 
 private:
+    // Immutable import-time version and host roles for DWG GEODATA. The
+    // editable callback model must not be able to change the source profile.
+    std::map<GeoDataKey, std::pair<std::int32_t, std::uint32_t>>
+        m_dwgGeoDataSourceRoles;
     // Immutable-to-consumers source evidence: unlike the live color model,
     // handles and callback snapshots cannot be edited into a false proof.
     std::map<DwgDbColorKey, DwgDbColorEedSource> dwgDbColorEedSources;

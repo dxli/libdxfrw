@@ -3744,6 +3744,8 @@ private:
 
     std::vector<std::uint32_t> m_extensionDictionaryHandles;
     std::vector<std::uint32_t> m_extensionGeoDataHandles;
+    const dx_data* m_dwgGeoDataSourceOwner{nullptr};
+    std::uint64_t m_dwgGeoDataSourceGeneration{0u};
     struct DwgGeoDataGraphBinding {
         std::uint32_t object{0u}, dictionary{0u}, host{0u};
     };

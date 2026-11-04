@@ -1066,6 +1066,13 @@ The original whole file remains refused at the VISUALSTYLE gate, and other
 producer profiles and native coordinate semantics remain open. See the
 [selected-graph receipt](docs/research/p4-geodata-v3-block-extension-graph-2026-11-04.json)
 and [physical source receipt](docs/research/p4-geodata-v3-oda-source-selected-output-2026-11-04.json).
+A follow-up binds source version, host and common links privately to prevent
+a mutated v3 graph entering the older v2 route; modern DXF also refuses
+north-direction Z that its wire format cannot represent. One nondefault
+ODA AC1027 frame shows two raw north doubles and matching following fields,
+while ODA §20.4.78 labels the field 3RD. Preserve the current parser for
+that witness and qualify other producers and versions before generalizing.
+See the [binding and span audit](docs/research/p4-geodata-graph-binding-audit-2026-11-04.json).
 See the [adapter transport receipt](docs/research/p6-geodata-dwg-adapter-transport-2026-11-02.json)
 and [host-block remap receipt](docs/research/p6-geodata-host-block-reference-remap-2026-11-02.json).
 The low-level GEODATA writer also remaps or allocates its own group-5 identity,

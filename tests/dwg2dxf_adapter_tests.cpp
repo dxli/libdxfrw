@@ -54,6 +54,13 @@ static_assert(!std::is_assignable<decltype((std::declval<dx_data&>()
 
 class DxIfaceExtensionGraphTestAccess {
 public:
+    static bool prepareGeoData(dx_iface& interface_, dx_data& data) {
+        interface_.cData = &data;
+        return interface_.prepareDwgGeoDataOutput(false);
+    }
+    static bool unchangedGeoData(dx_iface& interface_) {
+        return interface_.hasUnchangedDwgGeoDataGraphs();
+    }
     static bool dbColorEedDependencies(const dx_iface& interface_,
                                        const dx_data& data) {
         return interface_.hasUnchangedDwgDbColorEedDependencies(data);
@@ -123,6 +130,16 @@ public:
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
+    static std::size_t geoDataSourceRoleCount(const dx_data& data) {
+        return data.m_dwgGeoDataSourceRoles.size();
+    }
+    static bool geoDataSourceRoleMatches(const dx_data& data,
+            const dx_data::GeoDataKey& key, std::int32_t version,
+            std::uint32_t host) {
+        const auto found = data.m_dwgGeoDataSourceRoles.find(key);
+        return found != data.m_dwgGeoDataSourceRoles.end()
+            && found->second.first == version && found->second.second == host;
+    }
     static void setGeoHostSourceProfile(dx_data& data, bool eligible) {
         data.m_dwgGeoHostProfile = eligible;
     }
@@ -67478,6 +67495,53 @@ bool leaderDimstyleReferenceBinding() {
 }
 
 bool geodataDwgAdapterTransport() {
+    {
+        dx_data captured;
+        dx_iface sink;
+        sink.cData = &captured;
+        captured.sourceFormat = dx_source_format::DWG;
+        captured.dwgReadOutcome.attempted = true;
+        captured.importGeneration = 1u;
+        DRW_GeoData geo;
+        geo.handle = 0xBEEFu; geo.m_version = 2; geo.m_hostBlockHandle = 0x17u;
+        sink.addGeoData(geo);
+        geo.m_version = 3; geo.m_hostBlockHandle = 0x18u;
+        if (captured.geoDataCaptureFailed
+            || !DxIfaceStandardDwgCaptureTestAccess::geoDataSourceRoleMatches(
+                captured, {1u, 0xBEEFu}, 2, 0x17u))
+            return fail("GEODATA source role was not privately copied");
+        captured.importGeneration = 2u;
+        sink.addGeoData(geo);
+        if (captured.geoDataCaptureFailed
+            || !DxIfaceStandardDwgCaptureTestAccess::geoDataSourceRoleMatches(
+                captured, {2u, 0xBEEFu}, 3, 0x18u)
+            || DxIfaceStandardDwgCaptureTestAccess::geoDataSourceRoleCount(captured) != 2u)
+            return fail("GEODATA source roles did not isolate import generations");
+        sink.addGeoData(geo);
+        if (!captured.geoDataCaptureFailed || captured.geoDataObjects.size() != 2u
+            || DxIfaceStandardDwgCaptureTestAccess::geoDataSourceRoleCount(captured) != 2u)
+            return fail("duplicate GEODATA source role did not fail closed");
+        dx_data limited;
+        limited.sourceFormat = dx_source_format::DWG;
+        limited.dwgReadOutcome.attempted = true;
+        limited.importGeneration = 1u;
+        limited.geoDataRetainedBytes = (std::numeric_limits<std::size_t>::max)();
+        sink.cData = &limited;
+        sink.addGeoData(geo);
+        if (!limited.geoDataCaptureFailed || !limited.geoDataObjects.empty()
+            || DxIfaceStandardDwgCaptureTestAccess::geoDataSourceRoleCount(limited) != 0u)
+            return fail("GEODATA source role budget failure retained partial data");
+        dx_data fresh;
+        fresh.sourceFormat = dx_source_format::DWG;
+        fresh.dwgReadOutcome.attempted = true;
+        fresh.importGeneration = 1u;
+        sink.cData = &fresh;
+        sink.addGeoData(geo);
+        if (fresh.geoDataCaptureFailed
+            || !DxIfaceStandardDwgCaptureTestAccess::geoDataSourceRoleMatches(
+                fresh, {1u, 0xBEEFu}, 3, 0x18u))
+            return fail("fresh data did not recover after GEODATA capture failure");
+    }
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch()
                            .count();
@@ -67590,6 +67654,25 @@ bool geodataDwgAdapterTransport() {
         || source->second.m_coordinateSystemDefinition
             != "LOCAL_GRID_PROFILE")
         return fail("generated GEODATA typed source/owner fields changed on read");
+    {
+        dx_iface proof;
+        if (!DxIfaceExtensionGraphTestAccess::prepareGeoData(proof, imported)
+            || !DxIfaceExtensionGraphTestAccess::unchangedGeoData(proof))
+            return fail("generated direct-owner source binding did not prepare");
+        DRW_GeoData& current = imported.geoDataObjects.find(key)->second;
+        const DRW_GeoData saved = current;
+        current.m_version = 1;
+        const bool rejectedVersion =
+            !DxIfaceExtensionGraphTestAccess::unchangedGeoData(proof);
+        current = saved;
+        current.setDwgCommonObjectState(1, 0, false);
+        const bool rejectedReactorCount =
+            !DxIfaceExtensionGraphTestAccess::unchangedGeoData(proof);
+        current = saved;
+        if (!rejectedVersion || !rejectedReactorCount
+            || !DxIfaceExtensionGraphTestAccess::unchangedGeoData(proof))
+            return fail("direct-owner version or common source binding changed after preparation");
+    }
 
     class Readback final : public dx_iface {
     public:
@@ -67733,6 +67816,15 @@ bool physicalGeoDataDictionaryGraph(const std::filesystem::path& sourcePath,
         void addGeoData(const DRW_GeoData& value) override { rows.push_back(value); }
         std::vector<DRW_GeoData> rows;
     } readback;
+    class MutatingExporter final : public dx_iface {
+    public:
+        bool mutate{true};
+        void writeObjects() override {
+            if (mutate && cData != nullptr && !cData->geoDataObjects.empty())
+                cData->geoDataObjects.begin()->second.m_version = 2;
+            dx_iface::writeObjects();
+        }
+    } mutatingExporter;
     dx_iface exporter;
     for (std::size_t index = 0u; index < paths.size(); ++index) {
         const bool binary = index != 0u;
@@ -67754,6 +67846,7 @@ bool physicalGeoDataDictionaryGraph(const std::filesystem::path& sourcePath,
             || !refuses([&] { host->reactorHandles.push_back(0xFFFFu); })
             || !refuses([&] { host->canExplode = false; })
             || !refuses([&] { geo.m_hostBlockHandle = 0xFFFFu; })
+            || !refuses([&] { geo.m_northDirection.z = 1.0; })
             || !refuses([&] { geo.parentHandle = 0xFFFFu; })
             || !refuses([&] { geo.reactorHandles[0] = 0xFFFFu; })
             || !refuses([&] { dictionary.m_entries.front().m_name = "OTHER"; })
@@ -67761,11 +67854,33 @@ bool physicalGeoDataDictionaryGraph(const std::filesystem::path& sourcePath,
             || !refuses([&] { geo.m_version = 4; })
             || !refuses([] {}, DRW::AC1024))
             return fail("invalid graph or target was not refused atomically");
+        bool bypassedPrepare = false;
+        if (!refuses([&] {
+                host->handle = static_cast<std::uint32_t>(geo.parentHandle);
+                geo.m_hostBlockHandle = static_cast<std::uint32_t>(geo.parentHandle);
+                geo.m_version = 2;
+                geo.reactorHandles.clear();
+                geo.setDwgCommonObjectState(0, 0, false);
+                bypassedPrepare = DxIfaceExtensionGraphTestAccess::prepareGeoData(exporter, data);
+            }) || bypassedPrepare)
+            return fail("mutated v3 source bypassed direct-owner preflight or rollback");
         DxIfaceStandardDwgCaptureTestAccess::setGeoHostSourceProfile(data, false);
         const bool rejectedMissingSourceProfile = refuses([] {});
         DxIfaceStandardDwgCaptureTestAccess::setGeoHostSourceProfile(data, true);
         if (!rejectedMissingSourceProfile)
             return fail("unsupported original block metadata could be edited into admission");
+        { std::ofstream out(paths[index], std::ios::binary); out << sentinel; }
+        mutatingExporter.mutate = true;
+        const bool mutatedWrite = mutatingExporter.fileExport(
+            paths[index].string(), DRW::AC1027, binary, &data, false, false);
+        std::ifstream mutationOutput(paths[index], std::ios::binary);
+        const std::string mutationBytes{std::istreambuf_iterator<char>{mutationOutput}, {}};
+        geo = original;
+        mutatingExporter.mutate = false;
+        if (mutatedWrite || mutationBytes != sentinel
+            || !mutatingExporter.fileExport(paths[index].string(), DRW::AC1027,
+                                            binary, &data, false, false))
+            return fail("mid-write source mutation did not roll back and retry");
         if (!exporter.fileExport(paths[index].string(), DRW::AC1027,
                                  binary, &data, false, false))
             return fail("corrected selected graph failed same-adapter retry");
@@ -67799,6 +67914,62 @@ bool physicalGeoDataDictionaryGraph(const std::filesystem::path& sourcePath,
             return fail("selected BLOCK_RECORD/dictionary/GEODATA graph changed on readback");
     }
     cleanup.keep = !outputDirectory.empty();
+    return true;
+}
+
+bool physicalGeoDataNorthSpan(const std::filesystem::path& path) {
+    dx_data data;
+    dx_iface importer;
+    if (!std::numeric_limits<double>::is_iec559 || sizeof(double) != 8u
+        || !importer.fileImport(path.string(), &data, false)
+        || data.sourceVersion != DRW::AC1027 || data.geoDataObjects.size() != 1u)
+        return false;
+    const auto& row = *data.geoDataObjects.begin();
+    const DRW_GeoData& geo = row.second;
+    const auto* frame = DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+        data, row.first.first, row.first.second);
+    if (geo.m_version != 3 || geo.m_northDirection.x != 0.6
+        || geo.m_northDirection.y != 0.8 || geo.m_northDirection.z != 0.0
+        || geo.m_scaleEstimationMethod != 2
+        || geo.m_userSpecifiedScaleFactor != 1.23456789
+        || !geo.m_enableSeaLevelCorrection || geo.m_seaLevelElevation != 42.75
+        || geo.m_coordinateProjectionRadius != 6371000.0 || frame == nullptr
+        || frame->m_version != DRW::AC1027 || frame->m_recordName != "GEODATA"
+        || frame->m_rawBytes.size() > 1024u * 1024u)
+        return false;
+    std::vector<std::uint8_t> bits;
+    bits.reserve(frame->m_rawBytes.size() * 8u);
+    for (std::uint8_t byte : frame->m_rawBytes)
+        for (int bit = 7; bit >= 0; --bit)
+            bits.push_back(static_cast<std::uint8_t>((byte >> bit) & 1u));
+    std::vector<std::uint8_t> expected;
+    const auto appendBits = [&expected](std::uint64_t value, int width) {
+        for (int bit = width - 1; bit >= 0; --bit)
+            expected.push_back(static_cast<std::uint8_t>((value >> bit) & 1u));
+    };
+    const auto appendRawDouble = [&appendBits](double value) {
+        std::uint64_t raw = 0u;
+        std::memcpy(&raw, &value, sizeof(raw));
+        for (unsigned byte = 0u; byte < 8u; ++byte)
+            appendBits((raw >> (byte * 8u)) & 0xffu, 8);
+    };
+    appendRawDouble(0.6); appendRawDouble(0.8);
+    const std::size_t northBits = expected.size();
+    appendBits(1u, 2); appendBits(2u, 8); // BL scale method = 2.
+    appendBits(0u, 2); appendRawDouble(1.23456789);
+    appendBits(1u, 1); // Sea-level correction.
+    appendBits(0u, 2); appendRawDouble(42.75);
+    appendBits(0u, 2); appendRawDouble(6371000.0);
+    const auto first = std::search(bits.begin(), bits.end(),
+                                   expected.begin(), expected.end());
+    if (first == bits.end()
+        || std::search(first + 1, bits.end(), expected.begin(), expected.end())
+            != bits.end())
+        return false;
+    const auto offset = static_cast<std::size_t>(first - bits.begin());
+    std::cout << "GEODATA physical north pair bits " << offset << ".."
+              << offset + northBits << "; following fields through bit "
+              << offset + expected.size() << " match\n";
     return true;
 }
 
@@ -69200,6 +69371,8 @@ int main(int argc, char** argv) {
     if ((argc == 3 || argc == 4)
         && std::string(argv[1]) == "--physical-geodata-dictionary-graph")
         return physicalGeoDataDictionaryGraph(argv[2], argc == 4 ? argv[3] : "") ? 0 : 1;
+    if (argc == 3 && std::string(argv[1]) == "--physical-geodata-north-span")
+        return physicalGeoDataNorthSpan(argv[2]) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--rastervariables-dwg-adapter-transport")
         return rasterVariablesDwgAdapterTransport() ? 0 : 1;

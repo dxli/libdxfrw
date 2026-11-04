@@ -33800,6 +33800,9 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
             || !finitePoint(ent->m_referencePoint)
             || !finitePoint(ent->m_upDirection)
             || !finitePoint(ent->m_northDirection)
+            // Modern GEODATA DXF has only groups 12 and 22 for north;
+            // a nonzero Z cannot be represented by this record.
+            || ent->m_northDirection.z != 0.0
             || !finite(ent->m_horizontalUnitScale)
             || !finite(ent->m_verticalUnitScale)
             || !finite(ent->m_userSpecifiedScaleFactor)

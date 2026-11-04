@@ -15513,6 +15513,37 @@ void testGeoDataVersionedWriter(TestContext& t) {
         }
     }
 
+    for (const std::int32_t objectVersion : {2, 3}) {
+        for (const bool binary : {false, true}) {
+            for (const double z : {1.0, -1.0,
+                                   std::numeric_limits<double>::quiet_NaN()}) {
+                std::ostringstream output;
+                dxfRW owner("");
+                owner.version = DRW::AC1027;
+                owner.binFile = binary;
+                if (binary)
+                    owner.writer = std::make_unique<dxfWriterBinary>(&output);
+                else
+                    owner.writer = std::make_unique<dxfWriterAscii>(&output);
+                t.expect(owner.writer->writeString(1, "PRESERVED_PREFIX"),
+                         "GEODATA north-Z preflight prefix");
+                const std::string prefix = output.str();
+                DRW_GeoData geo;
+                geo.handle = 0x723u;
+                geo.m_version = objectVersion;
+                geo.m_northDirection.z = z;
+                const bool rejected = !owner.writeGeoData(&geo)
+                    && output.str() == prefix && geo.handle == 0x723u
+                    && (std::isnan(z) ? std::isnan(geo.m_northDirection.z)
+                                      : geo.m_northDirection.z == z)
+                    && !owner.m_writeError && !owner.writer->hasWriteError();
+                geo.m_northDirection.z = 0.0;
+                t.expect(rejected && owner.writeGeoData(&geo),
+                         "modern GEODATA nonzero or nonfinite north Z refuses and retries");
+            }
+        }
+    }
+
     for (const bool binary : {false, true}) {
         std::ostringstream output;
         dxfRW owner("");
