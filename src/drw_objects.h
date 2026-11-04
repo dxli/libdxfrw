@@ -3516,6 +3516,9 @@ public:
                                dwgBufferW *strBuf = nullptr,
                                dwgBufferW *hdlBuf = nullptr) const;
 private:
+  [[nodiscard]] bool encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                        dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                        bool typedNullReference) const;
   std::shared_ptr<const DRW_DwgTableNameSource> m_dwgNameSource;
 };
 

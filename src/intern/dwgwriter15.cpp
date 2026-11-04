@@ -2849,7 +2849,25 @@ bool dwgWriter15::emitViewportEntityHeaderRecord(
 }
 
 bool dwgWriter15::emitAppIdRecord(std::uint32_t handle, const DRW_AppId& ai) {
-    return emitTableRecord(handle, ai, DRW::DwgAppIdObjectType);
+    if (handle != DRW::DwgAcadAppIdHandle || m_version < DRW::AC1018)
+        return emitTableRecord(handle, ai, DRW::DwgAppIdObjectType);
+    DRW_AppId object = ai;
+    if (!prepareDwgCommonObjectState(object, m_version))
+        return false;
+    std::vector<DRW_Entity::PendingHandleRef> appIdRefs;
+    std::vector<DRW_Entity::PendingHandleRef> layerRefs;
+    if (!prepareTableEntryEed(object, appIdRefs, layerRefs))
+        return false;
+    dwgBufferW& body = beginObject(handle);
+    dwgBufferW *sb = nullptr, *hb = nullptr;
+    if (!emitRecordPreamble(body, m_version, DRW::DwgAppIdObjectType, handle,
+                            m_objectStrings, m_objectHandles, sb, hb,
+                            object.reactorCount(), object.extensionDictionaryFlag(),
+                            object.hasDataStorageBinaryData(), &object.extData,
+                            &appIdRefs, &layerRefs, fileCodePageId())
+        || !object.encodeDwgForWriter(m_version, &body, sb, hb, true))
+        return false;
+    return finishTableRecord(handle);
 }
 
 bool dwgWriter15::emitDimstyleRecord(std::uint32_t handle, const DRW_Dimstyle& ds) {
@@ -6525,6 +6543,8 @@ bool dwgWriter15::writeDwgObjects() {
                 appidChildren))
             return false;
         DRW_AppId acadAppId;
+        if (m_version >= DRW::AC1018)
+            acadAppId.setDwgCommonObjectState(0, 1, false);
         acadAppId.name = "ACAD";
         if (!emitAppIdRecord(DRW::DwgAcadAppIdHandle, acadAppId))
             return false;

@@ -9744,6 +9744,12 @@ bool DRW_View::encodeDwg(DRW::Version version, dwgBufferW *buf,
 
 bool DRW_AppId::encodeDwg(DRW::Version version, dwgBufferW *buf,
                            dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
+    return encodeDwgForWriter(version, buf, strBuf, hdlBuf, false);
+}
+
+bool DRW_AppId::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                    dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                    bool typedNullReference) const {
     if (buf == nullptr || !validatePayloadFields())
         return false;
     dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
@@ -9756,7 +9762,10 @@ bool DRW_AppId::encodeDwg(DRW::Version version, dwgBufferW *buf,
 
     putCommonObjectHandlePrefix(hb, kAppIdControl, reactorCount,
                                 xDictFlag, &reactorHandles, xDictHandle);
-    hb->putHandle(makeNullHandleW());  // XRef null
+    dwgHandle xref = makeNullHandleW();
+    if (typedNullReference)
+        xref.code = DRW::DwgHardPointer;
+    hb->putHandle(xref);
     return buf->isGood() && sb->isGood() && hb->isGood();
 }
 

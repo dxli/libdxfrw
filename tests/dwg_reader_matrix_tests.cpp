@@ -63,6 +63,12 @@ public:
 
 class DrwObjectEncodeTestAccess {
 public:
+    static bool encodeAppId(DRW_AppId& appId, DRW::Version version,
+                            dwgBufferW& data, dwgBufferW& strings,
+                            dwgBufferW& handles, bool typedNull) {
+        return appId.encodeDwgForWriter(version, &data, &strings, &handles,
+                                        typedNull);
+    }
     static bool encodeVport(DRW_Vport& viewport, DRW::Version version,
                             dwgBufferW& data, dwgBufferW& strings,
                             dwgBufferW& handles, bool typedNulls) {
@@ -15170,6 +15176,21 @@ public:
         ++lines;
         lineEnd = line.secPoint;
     }
+    void addAppId(const DRW_AppId& appId) override {
+        if (appId.name == "ACAD") {
+            ++acadAppIds;
+            acadAppIdFlag = appId.extensionDictionaryFlag();
+        } else if (appId.name == "CUSTOM_APP") {
+            ++customAppIds;
+            customAppIdFlag = appId.extensionDictionaryFlag();
+            customAppIdUnknown = appId.unknown71;
+        }
+    }
+    std::size_t acadAppIds{0};
+    std::size_t customAppIds{0};
+    std::uint8_t acadAppIdFlag{0};
+    std::uint8_t customAppIdFlag{0};
+    std::uint8_t customAppIdUnknown{0};
     void addVport(const DRW_Vport& vport) override {
         if (vport.name == "*ACTIVE") {
             ++activeVports;
@@ -15848,7 +15869,83 @@ void testActiveVportDefaults(TestContext& t, DRW::Version version,
     }
 }
 
+template<class Writer>
+void testAcadAppIdDefaults(TestContext& t, DRW::Version version,
+                           const std::string& label) {
+    for (int mode = 0; mode < 2; ++mode) {
+        std::stringbuf output(std::ios::out | std::ios::binary);
+        std::ofstream stream;
+        static_cast<std::ostream&>(stream).rdbuf(&output);
+        DRW_Header header;
+        Writer writer(&stream, &header);
+        const bool prepared = writer.prepareDwgClassManifest()
+            && writer.writeFileHeaderStub() && writer.writeDwgHeader()
+            && writer.writeDwgClasses();
+        t.expect(prepared, "ACAD APPID preparation: " + label);
+        if (!prepared) continue;
+        DRW_AppId caller;
+        caller.name = "CUSTOM_APP";
+        caller.unknown71 = 7u;
+        caller.setDwgCommonObjectState(0, 0, false);
+        t.expect(writer.addAppId(caller) != 0u, "caller APPID registered: " + label);
+        if (mode == 1) {
+            DRW_Textstyle invalid;
+            invalid.name = "STANDARD";
+            invalid.width = std::numeric_limits<double>::quiet_NaN();
+            t.expect(writer.addTextstyle(invalid) == DRW::DwgStandardTextStyleHandle,
+                     "invalid retry style registered: " + label);
+            const auto before = writer.buffer();
+            t.expect(!writer.writeDwgObjects() && writer.buffer() == before
+                         && output.str().empty(),
+                     "APPID phase failure rolls back without output: " + label);
+            invalid.width = 1.0;
+            t.expect(writer.addTextstyle(invalid) == DRW::DwgStandardTextStyleHandle,
+                     "corrected retry style registered: " + label);
+        }
+        DRW_Line line;
+        line.basePoint = DRW_Coord(1, 2, 3);
+        line.secPoint = DRW_Coord(4, 5, 6);
+        const bool published = writer.writeDwgObjects() && writer.encodeEntity(&line)
+            && writer.emitDeferredBlockControl() && writer.finalizeHeaderHandseed()
+            && writer.writeDwgHandles() && writer.writeSecondHeader() && writer.finalize();
+        t.expect(published, "ACAD APPID complete publication: " + label);
+        if (!published) continue;
+        const auto file = output.str();
+        std::vector<std::uint8_t> bytes(file.begin(), file.end());
+        HeaderPublicationSink sink;
+        dwgRW reader("");
+        const bool read = reader.readBuffer(bytes.data(), bytes.size(), &sink, false);
+        t.expect(read && sink.acadAppIds == 1u && sink.customAppIds == 1u
+                     && sink.acadAppIdFlag == (version >= DRW::AC1018 ? 1u : 0u)
+                     && sink.customAppIdFlag == 0u && sink.customAppIdUnknown == 7u
+                     && sink.lines == 1u,
+                 "synthetic and caller APPID state with following LINE: " + label);
+    }
+    if (version >= DRW::AC1018) {
+        DRW_AppId probe;
+        probe.name = "ACAD";
+        probe.setDwgCommonObjectState(0, 1, false);
+        dwgBufferW body, strings, handles;
+        const bool encoded = DrwObjectEncodeTestAccess::encodeAppId(
+            probe, version, body, strings, handles, true);
+        t.expect(encoded && handles.data() == std::vector<std::uint8_t>({0x41u,0x09u,0x50u}),
+                 "synthetic ACAD APPID typed xref bytes: " + label);
+        DRW_AppId ordinary;
+        ordinary.name = "CUSTOM_APP";
+        dwgBufferW otherBody, otherStrings, otherHandles;
+        t.expect(ordinary.encodeDwg(version, &otherBody, &otherStrings, &otherHandles)
+                     && otherHandles.data() == std::vector<std::uint8_t>({0x41u,0x09u,0x00u,0x00u}),
+                 "caller APPID public encoder retains legacy null bytes: " + label);
+    }
+}
+
 void testHeaderWriters(TestContext& t) {
+    testAcadAppIdDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
+    testAcadAppIdDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
+    testAcadAppIdDefaults<dwgWriter21>(t, DRW::AC1021, "AC1021");
+    testAcadAppIdDefaults<dwgWriter24>(t, DRW::AC1024, "AC1024");
+    testAcadAppIdDefaults<dwgWriter27>(t, DRW::AC1027, "AC1027");
+    testAcadAppIdDefaults<dwgWriter32>(t, DRW::AC1032, "AC1032");
     testActiveVportDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
     testActiveVportDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
     testActiveVportDefaults<dwgWriter21>(t, DRW::AC1021, "AC1021");
