@@ -53,6 +53,7 @@
 
 // Internal shared preflight, also enforced by the SOLID/TRACE DWG codecs.
 bool drwHasDwgSingleElevation(const DRW_Trace& entity) noexcept;
+bool drwHasEncodableDwgViewportAngles(const DRW_Viewport& entity) noexcept;
 bool drwHasEncodableDwgHatchPatternAngles(const DRW_Hatch& entity) noexcept;
 
 #define FIRSTHANDLE 48
@@ -1653,6 +1654,14 @@ bool dwgRW::encodeEntityForWrite(DRW_Entity *ent,
     // silently omit a pattern whose angle cannot be represented.
     if (typeid(*ent) == typeid(DRW_Hatch)
         && !drwHasEncodableDwgHatchPatternAngles(static_cast<const DRW_Hatch&>(*ent))) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::Entity, false);
+    }
+
+    // VIEWPORT has a separate virtual codec, also reachable via writePoint.
+    // Preserve custom derived codecs while latching the built-in refusal.
+    if (version > DRW::AC1014 && typeid(*ent) == typeid(DRW_Viewport)
+        && !drwHasEncodableDwgViewportAngles(static_cast<const DRW_Viewport&>(*ent))) {
         markDwgWriteFailure();
         return recordWriteResult(WriteSkipKind::Entity, false);
     }

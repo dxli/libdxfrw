@@ -29216,6 +29216,18 @@ void DRW_Viewport::resetDwgState() {
     frozenLyCount = 0;
 }
 
+// VIEWPORT DXF groups 50/51 use degrees; selected DWG BDs are radians.
+// Shared with facade admission so ignored failed writes do not omit it.
+bool drwHasEncodableDwgViewportAngles(const DRW_Viewport& viewport) noexcept {
+    const auto encodable = [](double degrees) noexcept {
+        if (!std::isfinite(degrees)) return false;
+        const double radians = degrees / ARAD;
+        return degrees == 0.0 || (radians != 0.0
+            && std::fpclassify(radians) != FP_SUBNORMAL);
+    };
+    return encodable(viewport.snapAngle) && encodable(viewport.twistAngle);
+}
+
 bool DRW_Viewport::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
     resetDwgState();
     dwgBuffer *sourceBuf = buf;
@@ -29272,6 +29284,8 @@ bool DRW_Viewport::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
             || !readBoundedRawDouble(*buf, bodyEndBit, gridSpX)
             || !readBoundedRawDouble(*buf, bodyEndBit, gridSpY))
             return fail();
+        snapAngle *= ARAD;
+        twistAngle *= ARAD;
         DRW_DBG("view Target "); DRW_DBGPT(viewTarget.x, viewTarget.y, viewTarget.z);
         DRW_DBG("\nview direction "); DRW_DBGPT(viewDir.x, viewDir.y, viewDir.z);
         DRW_DBG("\nView twist Angle: "); DRW_DBG(twistAngle);
@@ -29895,7 +29909,8 @@ void writeViewportAmbientCmc(DRW::Version version, dwgBufferW *body,
 bool DRW_Viewport::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
                                dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
-    if (buf == nullptr || !validatePayloadFields())
+    if (buf == nullptr || !validatePayloadFields()
+        || (version > DRW::AC1014 && !drwHasEncodableDwgViewportAngles(*this)))
         return false;
     ViewportAmbientCmc ambientCmc;
     if (!prepareViewportAmbientCmc(version, *this, buf, strBuf, ambientCmc))
@@ -29918,12 +29933,12 @@ bool DRW_Viewport::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_
         buf->putBitDouble(viewDir.x);
         buf->putBitDouble(viewDir.y);
         buf->putBitDouble(viewDir.z);
-        buf->putBitDouble(twistAngle);
+        buf->putBitDouble(twistAngle / ARAD);
         buf->putBitDouble(viewHeight);
         buf->putBitDouble(viewLength);    // lens length
         buf->putBitDouble(frontClip);
         buf->putBitDouble(backClip);
-        buf->putBitDouble(snapAngle);
+        buf->putBitDouble(snapAngle / ARAD);
         buf->putRawDouble(centerPX);
         buf->putRawDouble(centerPY);
         buf->putRawDouble(snapPX);

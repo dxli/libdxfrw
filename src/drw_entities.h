@@ -5878,8 +5878,8 @@ public:
     double frontClip = 0.0;   /*!< Front clip plane Z value, code 43 */
     double backClip = 0.0;    /*!< Back clip plane Z value, code 44 */
     double viewHeight = 0.0;  /*!< View height in model space units, code 45 */
-    double snapAngle = 0.0;   /*!< Snap angle, code 50 */
-    double twistAngle = 0.0;  /*!< view twist angle, code 51 */
+    double snapAngle = 0.0;   /*!< Snap angle in degrees, DXF code 50 */
+    double twistAngle = 0.0;  /*!< view twist angle in degrees, DXF code 51 */
     std::uint32_t m_sunHandle = 0;    /*!< R2007+ SUN reference, DXF code 361 */
 
     double gridSpX = 0.0;        /*!< Grid spacing X, code 15 */
