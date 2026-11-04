@@ -613,6 +613,7 @@ EXTRA_DIST = \
     tools/audit_ac1015_attributed_insert_block_contents.py \
     tools/audit_ac1015_compound_entity_chains.py \
     tools/audit_ac1015_empty_attributed_insert.py \
+    tools/audit_ac1024_tilted_geometry.py \
     tools/audit_ac1024_vport_null_roles.py \
     tools/audit_dxf_table_values.py \
     tools/audit_p9_rtext_native_history.py \
@@ -670,6 +671,7 @@ EXTRA_DIST = \
     tools/mutate_r2004_header_suffix_probe.py \
     tools/normalize_drawing_result.py \
     tools/normalize_oracle.py \
+    tools/probe_ac1024_tilted_geometry.cpp \
     tools/qualify_material_source_order.py \
     tools/run_external_advisory.py \
     tools/run_fast_baseline.py \

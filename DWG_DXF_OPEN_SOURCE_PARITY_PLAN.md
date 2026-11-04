@@ -917,6 +917,10 @@ audit-on and audit-off modes with no logged warnings; qualify broader
 producer, geometry, consumer and version profiles before support claims.
 See the [VPORT receipt](docs/research/p6-ac1024-synthetic-vport-null-roles-2026-11-04.json)
 and [material graph receipt](docs/research/p6-ac1024-default-material-optin-2026-11-04.json).
+One additional generated AC1024 LINE/CIRCLE/ARC control with tilted normal
+matches an ODA-produced source and ODA DXF fields and derived WCS geometry;
+other normals, producer profiles and native semantics remain open. See the
+[tilted-geometry receipt](docs/research/p6-ac1024-material-plotstyle-tilted-geometry-2026-11-04.json).
 Modern retained DWG MATERIAL bodies now refuse replay when detached map
 strings cannot be proven, including facade calls whose failure is ignored.
 Complete replay still needs immutable source strings, selector binding and
