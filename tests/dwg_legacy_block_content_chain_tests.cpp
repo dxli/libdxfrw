@@ -30,7 +30,7 @@ constexpr std::uint32_t kRecord=0xD00, kBlock=0xD10, kEnd=0xD01;
 constexpr std::uint32_t kLine=0x901, kCircle=0x550, kArc=0xA22;
 constexpr std::uint32_t kModelLine=0x130, kInsert=0x451, kModelCircle=0x999;
 constexpr std::uint32_t kAttribute=0xA10, kSeqend=0xA50;
-enum class Mode { Normal, Singleton, MatchingOwner, NoScope, NoEnd, WrongScope, DuplicateScope,
+enum class Mode { Normal, Singleton, Scaled, MatchingOwner, NoScope, NoEnd, WrongScope, DuplicateScope,
     Missing, Extra, WrongOrder, WrongType, WrongOwner, WrongSpace, DuplicateHandle,
     ModelCollision, BlockCollision, AttributeCollision, Zero, Reserved, EarlyModel, Exception, LateException,
     EarlyNodAlias, EarlyGroupAlias, LateNodAlias, LateGroupAlias, DictionaryAlias, XrecordOwnerAlias };
@@ -116,6 +116,7 @@ struct Adapter : LC3CompatCheck, DRW_DwgLegacyModelChainProvider,
             rejectedAlias=!output.writeXRecord(&x);}
         DRW_Line line;line.handle=kModelLine;line.basePoint={11,12,13};line.secPoint={14,15,16};
         DRW_Insert insert;insert.handle=kInsert;insert.name="CONTENT_CHAIN";insert.basePoint={3,4,0};
+        if(mode==Mode::Scaled){insert.xscale=2.;insert.yscale=3.;insert.zscale=4.;insert.angle=0.5235987755982988;}
         auto attr=std::make_shared<DRW_Attrib>();attr->handle=kAttribute;attr->tag="FIRST";attr->text="ONE";
         attr->basePoint={3,4,0};attr->secPoint=attr->basePoint;attr->height=.5;insert.attlist={attr};
         DRW_Circle circle;circle.handle=kModelCircle;circle.basePoint={17,18,0};circle.radious=3.5;
@@ -154,6 +155,8 @@ int main(int argc,char** argv) {
     if(keep)std::filesystem::copy_file(path,dir/"block-contents.dwg");
     if(!success(Mode::Singleton)){std::cerr<<"singleton contents failed\n";return 1;}
     if(keep)std::filesystem::copy_file(path,dir/"singleton-block.dwg");
+    if(!success(Mode::Scaled)){std::cerr<<"scaled block contents failed\n";return 1;}
+    if(keep)std::filesystem::copy_file(path,dir/"scaled-block.dwg");
     if(!success(Mode::MatchingOwner)){std::cerr<<"matching owner failed\n";return 1;}
     for(auto mode:{Mode::NoScope,Mode::NoEnd,Mode::WrongScope,Mode::DuplicateScope,Mode::Missing,
                    Mode::Extra,Mode::WrongOrder,Mode::WrongType,Mode::WrongOwner,Mode::WrongSpace,

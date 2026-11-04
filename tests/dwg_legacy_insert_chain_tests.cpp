@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -36,7 +37,8 @@ namespace {
 constexpr std::uint32_t kLine=0x130u,kFirst=0x451u,kCircle=0x999u,kSecond=0x777u,kLast=0xB00u;
 constexpr std::uint32_t kRecord=0xD00u,kBlock=0xD10u,kEnd=0xD01u;
 constexpr std::uint32_t kAttr1=0xA10u,kAttr2=0xA02u,kSeq1=0xA50u,kAttr3=0xC10u,kSeq2=0xC50u;
-enum class Mode { Normal, Rotated, MatchingReferences, NoBlock, WrongBlockName, WrongBlockBase,
+enum class Mode { Normal, Rotated, ScaleUniform, ScaleXUnit, ScaleNonuniform, ScaleFractional, ScaleNearUnit,
+                  MatchingReferences, NoBlock, WrongBlockName, WrongBlockBase,
                   WrongBlockUnits, ExtraBlock, BlockContent, WrongBlockReference,
                   MInsert, WrongSeqend, RetainedFooter, EmptyAttributes, WrongAttribute,
                   DuplicateAttribute, ExtraAttribute, NullAttribute, WrongAttrOwner,
@@ -44,7 +46,7 @@ enum class Mode { Normal, Rotated, MatchingReferences, NoBlock, WrongBlockName, 
                   MissingBlockPlan, DuplicateModel, WrongPlanParent, WrongPlanBlock,
                   DuplicatePlanAttr, PlanOwnerCollision, PlanSeqCollision, ZeroPlanAttr,
                   ZeroPlanSeq, ReservedPlanAttr, ReservedPlanSeq, InjectedSeqend,
-                  InjectedException, InjectedLateException, BadXScale, BadYScale, BadZScale,
+                  InjectedException, InjectedLateException, BadXScale, BadYScale, BadZScale, BadScaleNan,
                   BadExtrusion, BadPosition, BadRotation, BadRowSpacing, BadColSpacing,
                   BadStyle, BadMText, BadAttVersion, BadAttributeType, BadLock,
                   BadXRecord, BadAnnotative, BadAlignmentZ, BadUnicodeText, BadUnicodeTag,
@@ -158,9 +160,15 @@ struct Adapter : LC3CompatCheck, DRW_DwgLegacyModelChainProvider,
         if(mode==Mode::WrongAttrSpace)first.attlist[0]->space=DRW::PaperSpace;
         if(mode==Mode::Paper)first.space=DRW::PaperSpace;
         if(mode==Mode::OtherOwner)first.parentHandle=0xB200u;
-        if(mode==Mode::BadXScale)first.xscale=2.;
-        if(mode==Mode::BadYScale)first.yscale=2.;
-        if(mode==Mode::BadZScale)first.zscale=2.;
+        if(mode==Mode::ScaleUniform)first.xscale=first.yscale=first.zscale=2.;
+        if(mode==Mode::ScaleXUnit){first.yscale=2.;first.zscale=3.;}
+        if(mode==Mode::ScaleNonuniform){first.xscale=2.;first.yscale=3.;first.zscale=4.;}
+        if(mode==Mode::ScaleFractional){first.xscale=.5;first.yscale=1.25;first.zscale=2.75;}
+        if(mode==Mode::ScaleNearUnit){first.xscale=std::nextafter(1.,2.);first.yscale=1.;first.zscale=std::nextafter(1.,0.);}
+        if(mode==Mode::BadXScale)first.xscale=0.;
+        if(mode==Mode::BadYScale)first.yscale=-1.;
+        if(mode==Mode::BadZScale)first.zscale=std::numeric_limits<double>::infinity();
+        if(mode==Mode::BadScaleNan)first.xscale=std::numeric_limits<double>::quiet_NaN();
         if(mode==Mode::BadExtrusion)first.extPoint={0.,1.,0.};
         if(mode==Mode::BadPosition)first.basePoint.x=std::numeric_limits<double>::quiet_NaN();
         if(mode==Mode::Rotated)first.angle=0.5235987755982988;
@@ -277,6 +285,12 @@ struct Adapter : LC3CompatCheck, DRW_DwgLegacyModelChainProvider,
     bool rejectedAlias=false,groupRegistered=false,groupWritten=false;std::size_t aliasSlot=0;
     Receipt firstReceipt,secondReceipt;
 };
+struct ScaleReadback : LC3CompatCheck {
+    std::vector<std::array<double,3>> values;
+    void addInsert(const DRW_Insert& value) override {
+        if(value.handle==kFirst)values.push_back({{value.xscale,value.yscale,value.zscale}});
+    }
+};
 }
 int main(int argc,char**argv){
     const bool keep=argc==2&&std::string(argv[1])=="--keep";
@@ -291,6 +305,23 @@ int main(int argc,char**argv){
     if(keep)std::filesystem::copy_file(path,dir/"two-inserts.dwg");
     if(!success(Mode::Rotated)){std::cerr<<"rotated insert failed\n";return 1;}
     if(keep)std::filesystem::copy_file(path,dir/"rotated-insert.dwg");
+    for(const auto& item:{std::make_pair(Mode::ScaleUniform,"scale-uniform.dwg"),
+                          std::make_pair(Mode::ScaleXUnit,"scale-xunit.dwg"),
+                          std::make_pair(Mode::ScaleNonuniform,"scale-nonuniform.dwg"),
+                          std::make_pair(Mode::ScaleFractional,"scale-fractional.dwg"),
+                          std::make_pair(Mode::ScaleNearUnit,"scale-nearunit.dwg")}) {
+        if(!success(item.first)){std::cerr<<"scaled insert failed\n";return 1;}
+        const std::array<double,3> expected = item.first==Mode::ScaleUniform ? std::array<double,3>{{2.,2.,2.}}
+            : item.first==Mode::ScaleXUnit ? std::array<double,3>{{1.,2.,3.}}
+            : item.first==Mode::ScaleNonuniform ? std::array<double,3>{{2.,3.,4.}}
+            : item.first==Mode::ScaleFractional ? std::array<double,3>{{.5,1.25,2.75}}
+            : std::array<double,3>{{std::nextafter(1.,2.),1.,std::nextafter(1.,0.)}};
+        ScaleReadback readback;dwgR reader(path.c_str());
+        if(!reader.read(&readback,false)||readback.values!=std::vector<std::array<double,3>>{expected}) {
+            std::cerr<<"scaled INSERT exact typed readback failed\n";return 1;
+        }
+        if(keep)std::filesystem::copy_file(path,dir/item.second);
+    }
     if(!success(Mode::MatchingReferences)){std::cerr<<"matching references failed\n";return 1;}
     adapter.mode=Mode::GroupMember;
     if(!output.write(&adapter,DRW::AC1015,true)||!adapter.receiptValid()
@@ -304,7 +335,7 @@ int main(int argc,char**argv){
         Mode::DuplicateModel,Mode::WrongPlanParent,Mode::WrongPlanBlock,Mode::DuplicatePlanAttr,
         Mode::PlanOwnerCollision,Mode::PlanSeqCollision,Mode::ZeroPlanAttr,Mode::ZeroPlanSeq,
         Mode::ReservedPlanAttr,Mode::ReservedPlanSeq,Mode::InjectedSeqend,Mode::InjectedException,
-        Mode::InjectedLateException,Mode::BadXScale,Mode::BadYScale,Mode::BadZScale,
+        Mode::InjectedLateException,Mode::BadXScale,Mode::BadYScale,Mode::BadZScale,Mode::BadScaleNan,
         Mode::BadExtrusion,Mode::BadPosition,Mode::BadRotation,Mode::BadRowSpacing,Mode::BadColSpacing,
         Mode::BadStyle,Mode::BadMText,Mode::BadAttVersion,Mode::BadAttributeType,Mode::BadLock,
         Mode::BadXRecord,Mode::BadAnnotative,Mode::BadAlignmentZ,Mode::BadUnicodeText,Mode::BadUnicodeTag,

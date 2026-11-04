@@ -2245,7 +2245,9 @@ bool dwgRW::writeInsert(DRW_Insert *ent) {
             || (ent->seqendH.ref != 0u && ent->seqendH.ref != legacyPlan->seqendHandle)
             || (ent->seqendH.ref64 != 0u && ent->seqendH.ref64 != legacyPlan->seqendHandle)
             || ent->colcount != 1 || ent->rowcount != 1 || ent->colspace != 0.0 || ent->rowspace != 0.0
-            || ent->xscale != 1.0 || ent->yscale != 1.0 || ent->zscale != 1.0
+            || !std::isfinite(ent->xscale) || ent->xscale <= 0.0
+            || !std::isfinite(ent->yscale) || ent->yscale <= 0.0
+            || !std::isfinite(ent->zscale) || ent->zscale <= 0.0
             || ent->extPoint.x != 0.0 || ent->extPoint.y != 0.0 || ent->extPoint.z != 1.0
             || !finiteCoord(ent->basePoint) || ent->basePoint.z != 0.0 || !std::isfinite(ent->angle))
             return recordWriteResult(WriteSkipKind::Entity, false);

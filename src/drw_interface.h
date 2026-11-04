@@ -776,7 +776,7 @@ struct DRW_DwgLegacyInsertChain {
  * Each INSERT has at least one planned ATTRIB and its own SEQEND. Block names
  * and attribute tags use uppercase ASCII letters, digits, '_', '$' or '-';
  * attributes use printable ASCII text and a bounded default 2D text profile.
- * INSERT uses unit scaling and the default extrusion. ATTDEF, unplanned block
+ * INSERT uses positive finite scaling and the default extrusion. ATTDEF, unplanned block
  * contents, MINSERT, paper space and opaque replay remain unsupported. */
 class DRW_DwgLegacyInsertChainProvider {
 public:

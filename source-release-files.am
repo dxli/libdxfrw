@@ -412,6 +412,7 @@ EXTRA_DIST = \
     tests/dwg_legacy_extrusion_oda_ezdxf.py \
     tests/dwg_legacy_insert_chain_libredwg.py \
     tests/dwg_legacy_insert_chain_tests.cpp \
+    tests/dwg_legacy_insert_scale_oda.py \
     tests/dwg_legacy_model_chain_libredwg.py \
     tests/dwg_legacy_model_chain_optin_tests.cpp \
     tests/dwg_legacy_polyline_chain_libredwg.py \
@@ -621,6 +622,7 @@ EXTRA_DIST = \
     tools/audit_ac1015_attributed_insert_block_contents.py \
     tools/audit_ac1015_compound_entity_chains.py \
     tools/audit_ac1015_empty_attributed_insert.py \
+    tools/audit_ac1015_insert_scale.py \
     tools/audit_ac1024_rastervariables_source.py \
     tools/audit_ac1024_tilted_geometry.py \
     tools/audit_ac1024_vport_null_roles.py \

@@ -9,9 +9,10 @@ from pathlib import Path
 
 
 def main():
-    if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != "singleton"):
-        raise SystemExit("usage: dwg_legacy_block_content_chain_libredwg.py <dwgread> <file.dwg> [singleton]")
-    singleton = len(sys.argv) == 4
+    if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] not in ("singleton", "scaled")):
+        raise SystemExit("usage: dwg_legacy_block_content_chain_libredwg.py <dwgread> <file.dwg> [singleton|scaled]")
+    singleton = len(sys.argv) == 4 and sys.argv[3] == "singleton"
+    scaled = len(sys.argv) == 4 and sys.argv[3] == "scaled"
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "out.json"
         subprocess.run([sys.argv[1], "-O", "JSON", "-o", str(path), sys.argv[2]], check=True)
@@ -55,6 +56,8 @@ def main():
         assert math.isclose(arc["end_angle"], math.radians(110), abs_tol=1e-9)
     insert = by_handle[0x451]
     assert insert["entity"] == "INSERT" and insert["has_attribs"] == 1
+    assert insert["scale"] == ([2., 3., 4.] if scaled else [1., 1., 1.])
+    assert math.isclose(insert.get("rotation", 0.), math.pi/6 if scaled else 0., abs_tol=1e-9)
     ref(insert["block_header"], 5, 0xD00)
     ref(insert["first_attrib"], 4, 0xA10); ref(insert["last_attrib"], 4, 0xA10)
     ref(insert["seqend"], 3, 0xA50)
@@ -65,6 +68,7 @@ def main():
         ref(obj["prev_entity"], 4, 0); ref(obj["next_entity"], 4, 0)
     attr = by_handle[0xA10]
     assert attr["tag"] == "FIRST" and attr["text_value"] == "ONE" and attr["height"] == .5
+    assert attr["ins_pt"] == [3., 4.] and math.isclose(attr.get("rotation", 0.), 0., abs_tol=1e-9)
     print("LibreDWG AC1015 named-block content chain PASS")
 
 

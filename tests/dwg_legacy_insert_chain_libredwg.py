@@ -9,10 +9,12 @@ from pathlib import Path
 
 
 def main():
-    if len(sys.argv) not in (3,4) or (len(sys.argv)==4 and sys.argv[3] not in ("rotated", "group")):
-        raise SystemExit("usage: dwg_legacy_insert_chain_libredwg.py <dwgread> <generated.dwg> [rotated|group]")
+    if len(sys.argv) not in (3,4) or (len(sys.argv)==4 and sys.argv[3] not in ("rotated", "group", "uniform", "xunit", "nonuniform", "fractional")):
+        raise SystemExit("usage: dwg_legacy_insert_chain_libredwg.py <dwgread> <generated.dwg> [rotated|group|uniform|xunit|nonuniform|fractional]")
     rotated=len(sys.argv)==4 and sys.argv[3]=="rotated"
     group=len(sys.argv)==4 and sys.argv[3]=="group"
+    scales={"uniform":[2.,2.,2.],"xunit":[1.,2.,3.],"nonuniform":[2.,3.,4.],"fractional":[.5,1.25,2.75]}
+    expected_scale=scales.get(sys.argv[3],[1.,1.,1.]) if len(sys.argv)==4 else [1.,1.,1.]
     with tempfile.TemporaryDirectory() as tmp:
         output=Path(tmp)/"out.json"
         subprocess.run([sys.argv[1],"-O","JSON","-o",str(output),sys.argv[2]],check=True)
@@ -46,6 +48,7 @@ def main():
         ref(obj["next_entity"],4,model[i+1][0] if i+1<len(model) else 0)
     for parent,attrs,seq in ((0x451,[0xA10,0xA02],0xA50),(0x777,[0xC10],0xC50)):
         obj=by_handle[parent];assert obj["has_attribs"]==1
+        assert obj["scale"] == (expected_scale if parent==0x451 else [1.,1.,1.])
         assert math.isclose(obj.get("rotation",0.),math.pi/6 if rotated and parent==0x451 else 0.,abs_tol=1e-9)
         ref(obj["block_header"],5,0xD00);ref(obj["first_attrib"],4,attrs[0])
         ref(obj["last_attrib"],4,attrs[-1]);ref(obj["seqend"],3,seq)
