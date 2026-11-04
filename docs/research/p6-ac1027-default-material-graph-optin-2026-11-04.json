@@ -72,5 +72,6 @@
     "tests/CMakeLists.txt": "3708cb6a11ccfbbc1b325a4812e8689e7fdbd879a117a1634ae9a330360f83cc",
     "tests/ac1027_material_peer_audit_tests.py": "7c5662998112da479b044956802b3235c047e8253a678befbe89c88c9302050c",
     "tools/audit_ac1027_material_peer.py": "0f031e8670a368a39088dc29472f2b4cc55bfc84b09155274ba5ac47cd3c98a0"
-  }
+  },
+  "synthetic_null_regression_followup": "The existing six-version libdxfrw_dwg_header_writer_sealing selector had a stale AC1027 internal synthetic LAYER visualstyle null expectation. Updated only that profile to role 5 (0x50); public-caller and AC1032 null expectations remain unchanged. It failed before the expectation correction and passed afterward."
 }

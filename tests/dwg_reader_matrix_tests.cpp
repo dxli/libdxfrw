@@ -16349,7 +16349,8 @@ void testLegacySyntheticTableNullRoles(TestContext& t) {
                 static_cast<std::uint8_t>(typed ? 0x50u : 0x00u),0x51u,0x71u};
             if (version > DRW::AC1018) layerExpected.push_back(0x00u);
             layerExpected.push_back(0x51u); layerExpected.push_back(0x72u);
-            if (version >= DRW::AC1027) layerExpected.push_back(0x00u);
+            if (version >= DRW::AC1027)
+                layerExpected.push_back(version == DRW::AC1027 && synthetic ? 0x50u : 0x00u);
             t.expect(layerEncoded && layerHandles.data() == layerExpected,
                      "legacy synthetic/caller LAYER nulls and following refs");
             DRW_Textstyle style;

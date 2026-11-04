@@ -892,6 +892,8 @@ verify selected fields and reference roles; ODA still stops at VPORT and the
 native material payload remains opaque. Other layers, native material meaning
 and whole-file support remain open
 ([receipt](docs/research/p6-ac1027-default-material-graph-optin-2026-11-04.json)).
+The existing six-version synthetic null-role control now matches the bounded
+AC1027 profile; caller and AC1032 expectations remain unchanged.
 
 DWG HATCH patterned-fill and definition-line angles now convert radians to the
 existing degree-valued DXF API and back. Consumers compensating for the old
