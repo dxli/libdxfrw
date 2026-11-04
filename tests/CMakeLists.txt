@@ -232,6 +232,15 @@ add_test(NAME libdxfrw_dwg_solid_trace_elevation COMMAND libdxfrw_dwg_solid_trac
 set_tests_properties(libdxfrw_dwg_solid_trace_elevation PROPERTIES
     LABELS "dwg;fast;AC1021;transaction" TIMEOUT 30)
 
+add_executable(libdxfrw_dxf_lwpoly_wcs_vertices_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dxf_lwpoly_wcs_vertices_tests.cpp)
+target_compile_features(libdxfrw_dxf_lwpoly_wcs_vertices_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dxf_lwpoly_wcs_vertices_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dxf_lwpoly_wcs_vertices_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dxf_lwpoly_wcs_vertices_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dxf_lwpoly_wcs_vertices COMMAND libdxfrw_dxf_lwpoly_wcs_vertices_tests)
+set_tests_properties(libdxfrw_dxf_lwpoly_wcs_vertices PROPERTIES LABELS "dxf;fast;geometry" TIMEOUT 30)
+
 add_executable(libdxfrw_dwg_mtext_rotation_direction_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dwg_mtext_rotation_direction_tests.cpp)
 target_compile_features(libdxfrw_dwg_mtext_rotation_direction_tests PRIVATE cxx_std_17)

@@ -1056,6 +1056,13 @@ coordinates refuse rather than guess. Explicit zero Y and manual entities
 remain supported. See the [sparse-field receipt](docs/research/p6-dxf-lwpolyline-sparse-vertex-fields-2026-11-04.json)
 and [missing-Y receipt](docs/research/p6-dxf-lwpolyline-missing-y-2026-11-04.json).
 
+An opt-in helper exposes full 3D WCS vertex positions from untouched native
+OCS LWPOLYLINE data without changing LibreCAD's existing projected callback.
+Callers must establish the input frame; bulges, widths and curves remain in
+OCS. A physical source confirms the selected callback only: its complete read
+still fails. Broader producer and native consumer qualification remain open;
+see the [WCS vertex receipt](docs/research/p6-lwpolyline-native-ocs-wcs-vertices-2026-11-04.json).
+
 DWG ELLIPSE dispatch now retains the specified WCS center and major axis in
 both extrusion modes. Generated six-version controls and an ODA-produced
 AC1015 witness pass; other producer profiles and the separate CIRCLE/ARC

@@ -455,6 +455,7 @@ tests/dxf_legacy_extrusion_conversion_tests.cpp
 tests/dxf_legacy_extrusion_ezdxf.py
 tests/dxf_light_rgb_421_tests.cpp
 tests/dxf_lightlist_reference_tests.cpp
+tests/dxf_lwpoly_wcs_vertices_tests.cpp
 tests/dxf_mline_source_dependency_tests.cpp
 tests/dxf_no_raw_sections_tests.cpp
 tests/dxf_sparse_material_raw_tests.cpp
@@ -685,6 +686,7 @@ tools/audit_dxf_table_values.py
 tools/audit_librecad3_native_dxf.py
 tools/audit_light_dxf_421.py
 tools/audit_lightlist_dxf_reference.py
+tools/audit_lwpolyline_wcs_physical.py
 tools/audit_modern_header_default.py
 tools/audit_modern_writer_rejection.py
 tools/audit_p9_rtext_native_history.py

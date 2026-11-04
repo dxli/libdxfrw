@@ -44,4 +44,18 @@ namespace DRW_DxfLegacyExtrusion {
 [[nodiscard]] bool toNativeOcs(const DRW_Insert& input, DRW_Insert& output) noexcept;
 }
 
+// Nonmutating extraction of LWPOLYLINE vertex positions in WCS. Input must
+// still be in its native OCS, such as the value delivered by DXF read(ext=false):
+// the entity does not record whether legacy applyExtrusion() already projected
+// its vertices, so that state cannot be detected here. This returns vertex
+// positions only; bulges, widths, thickness, and intervening curved segments
+// retain their original OCS meanings and are not transformed or tessellated.
+// Reject invalid normals, directions or bases with lost/subnormal components,
+// null vertices, nonfinite values or unrepresentable coordinates without
+// changing output. On success output is replaced.
+namespace DRW_DxfGeometry {
+[[nodiscard]] bool lwPolylineVerticesToWcs(const DRW_LWPolyline& input,
+                                          std::vector<DRW_Coord>& output) noexcept;
+}
+
 #endif

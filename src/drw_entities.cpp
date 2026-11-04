@@ -13268,6 +13268,68 @@ bool DRW_TableContentObject::parseDwg(DRW::Version version, dwgBuffer *buf, std:
     return true;
 }
 
+bool DRW_DxfGeometry::lwPolylineVerticesToWcs(
+        const DRW_LWPolyline& input, std::vector<DRW_Coord>& output) noexcept {
+    const DRW_Coord& n = input.extPoint;
+    if (input.eType != DRW::LWPOLYLINE || !std::isfinite(input.elevation)
+        || !std::isfinite(n.x) || !std::isfinite(n.y) || !std::isfinite(n.z)
+        || (n.x == 0.0 && n.y == 0.0 && n.z == 0.0))
+        return false;
+    // A tiny direction component or basis product can lose precision before
+    // multiplication by a large coordinate would make its contribution
+    // significant. Fail closed for those extremes; do not change the shared
+    // axis calculation used by legacy 2D consumers.
+    const auto lostOrSubnormal = [](double original, double normalized) {
+        return original != 0.0 && (normalized == 0.0
+            || std::fpclassify(normalized) == FP_SUBNORMAL);
+    };
+    const DRW_Coord normal = extrusionUnitVector(n);
+    if (lostOrSubnormal(n.x, normal.x) || lostOrSubnormal(n.y, normal.y)
+        || lostOrSubnormal(n.z, normal.z)) return false;
+    try {
+        DRW_Coord axisX, axisY;
+        calculateOcsAxes(n, axisX, axisY);
+        const DRW_Coord axisZ(
+            axisX.y * axisY.z - axisX.z * axisY.y,
+            axisX.z * axisY.x - axisX.x * axisY.z,
+            axisX.x * axisY.y - axisX.y * axisY.x);
+        for (const double component : {axisX.x, axisX.y, axisX.z,
+                                       axisY.x, axisY.y, axisY.z,
+                                       axisZ.x, axisZ.y, axisZ.z}) {
+            if (!std::isfinite(component) || std::fpclassify(component) == FP_SUBNORMAL)
+                return false;
+        }
+        if (lostOrSubnormal(normal.x, axisZ.x)
+            || lostOrSubnormal(normal.y, axisZ.y)
+            || lostOrSubnormal(normal.z, axisZ.z)) return false;
+        const bool polar = std::fabs(normal.x) < 0.015625
+            && std::fabs(normal.y) < 0.015625;
+        if ((polar && ((normal.x != 0.0 && normal.y != 0.0 && axisY.x == 0.0)
+                       || (normal.y != 0.0 && normal.z != 0.0 && axisY.z == 0.0)))
+            || (!polar && ((normal.x != 0.0 && normal.z != 0.0 && axisY.x == 0.0)
+                           || (normal.y != 0.0 && normal.z != 0.0 && axisY.y == 0.0))))
+            return false;
+        std::vector<DRW_Coord> converted;
+        converted.reserve(input.vertlist.size());
+        for (const auto& vertex : input.vertlist) {
+            if (!vertex || !std::isfinite(vertex->x) || !std::isfinite(vertex->y))
+                return false;
+            const DRW_Coord point(
+                axisX.x * vertex->x + axisY.x * vertex->y + axisZ.x * input.elevation,
+                axisX.y * vertex->x + axisY.y * vertex->y + axisZ.y * input.elevation,
+                axisX.z * vertex->x + axisY.z * vertex->y + axisZ.z * input.elevation);
+            if (!std::isfinite(point.x) || !std::isfinite(point.y)
+                || !std::isfinite(point.z))
+                return false;
+            converted.push_back(point);
+        }
+        output.swap(converted);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 void DRW_LWPolyline::applyExtrusion(){
     if (haveExtrusion) {
         calculateAxis(extPoint);
