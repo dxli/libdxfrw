@@ -1231,6 +1231,18 @@ add_test(NAME dwg2dxf_sunstudy_dxf_graph
         "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/run_sunstudy_dxf_graph_test.cmake)
 set_tests_properties(dwg2dxf_sunstudy_dxf_graph PROPERTIES LABELS "fast;dxf;graph;adapter;transaction" TIMEOUT 30)
+foreach(_sunstudy_version IN ITEMS AC1024 AC1032)
+    add_test(NAME dwg2dxf_sunstudy_dxf_graph_${_sunstudy_version}
+        COMMAND ${CMAKE_COMMAND}
+            "-DADAPTER_TEST=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"
+            "-DPYTHON=${LIBDXFRW_PYTHON_EXECUTABLE}"
+            "-DAUTHOR=${CMAKE_SOURCE_DIR}/tools/audit_sunstudy_dxf_graph.py"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            "-DVERSION=${_sunstudy_version}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/run_sunstudy_dxf_graph_test.cmake)
+    set_tests_properties(dwg2dxf_sunstudy_dxf_graph_${_sunstudy_version} PROPERTIES
+        LABELS "fast;dxf;graph;adapter;transaction" TIMEOUT 30)
+endforeach()
 add_test(NAME libdxfrw_ac1018_minimal_dictionary_source
     COMMAND ${CMAKE_COMMAND}
         "-DADAPTER_TEST=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"

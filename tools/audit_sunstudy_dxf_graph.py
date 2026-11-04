@@ -5,11 +5,11 @@ import re
 from pathlib import Path
 
 
-def author(path):
+def author(path, version="AC1027"):
     if path.exists():
         raise ValueError("refusing to replace an existing source")
     tags = [
-        (0, "SECTION"), (2, "HEADER"), (9, "$ACADVER"), (1, "AC1027"), (0, "ENDSEC"),
+        (0, "SECTION"), (2, "HEADER"), (9, "$ACADVER"), (1, version), (0, "ENDSEC"),
         (0, "SECTION"), (2, "CLASSES"), (0, "CLASS"), (1, "SUNSTUDY"),
         (2, "AcDbSunStudy"), (3, "SCENEOE"), (90, 1153), (91, 1), (280, 0), (281, 0),
         (0, "ENDSEC"), (0, "SECTION"), (2, "TABLES"), (0, "ENDSEC"),
@@ -32,7 +32,7 @@ def author(path):
     print("authored", path)
 
 
-def author_oda(path):
+def author_oda(path, version="AC1027"):
     import ezdxf
     from ezdxf.entities import DXFClass
     if ezdxf.__version__ != "1.4.5":
@@ -40,7 +40,7 @@ def author_oda(path):
     if path.exists():
         raise ValueError("refusing to replace an existing source")
     path.parent.mkdir(parents=True, exist_ok=True)
-    document = ezdxf.new("R2013")
+    document = ezdxf.new({"AC1024": "R2010", "AC1027": "R2013", "AC1032": "R2018"}[version])
     document.modelspace().add_line((1, 2, 3), (4, 5, 6))
     owner = document.rootdict.add_new_dict("MY_SUNSTUDIES")
     placeholder = document.objects.new_entity("ACDBPLACEHOLDER", dxfattribs={"owner": owner.dxf.handle})
@@ -69,12 +69,20 @@ def author_oda(path):
 
 
 def records(path):
-    lines = path.read_text(encoding="utf-8").splitlines()
-    if len(lines) % 2:
-        raise ValueError("unpaired DXF group")
+    raw = path.read_bytes()
+    if raw.startswith(b"AutoCAD Binary DXF\r\n\x1a\x00"):
+        import ezdxf
+        from ezdxf.lldxf.tagger import binary_tags_loader
+        if ezdxf.__version__ != "1.4.5":
+            raise ValueError("binary inspection requires ezdxf 1.4.5")
+        pairs = ((tag.code, str(tag.value).strip()) for tag in binary_tags_loader(raw))
+    else:
+        lines = raw.decode("utf-8").splitlines()
+        if len(lines) % 2:
+            raise ValueError("unpaired DXF group")
+        pairs = ((int(lines[i].strip()), lines[i + 1].strip()) for i in range(0, len(lines), 2))
     current = None
-    for i in range(0, len(lines), 2):
-        code, value = int(lines[i].strip()), lines[i + 1].strip()
+    for code, value in pairs:
         if code == 0:
             if current is not None:
                 yield current
@@ -121,8 +129,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("author", "author-oda", "inspect"))
     parser.add_argument("path", type=Path)
+    parser.add_argument("--version", choices=("AC1024", "AC1027", "AC1032"), default="AC1027",
+                        help="revision for author or author-oda")
     args = parser.parse_args()
-    {"author": author, "author-oda": author_oda, "inspect": inspect}[args.action](args.path)
+    if args.action == "author":
+        author(args.path, args.version)
+    elif args.action == "author-oda":
+        author_oda(args.path, args.version)
+    else:
+        inspect(args.path)
 
 
 if __name__ == "__main__":

@@ -125,9 +125,28 @@ def check_sunstudy_observation_cli(converter, root):
         raise AssertionError("batch without observation replaced destination")
     convert([listing, "-B", "-y", "-v2013", flag, batch], True)
     inspect_sunstudy(batch / source.name)
+    # Other witnessed source revisions are separate same-revision profiles.
+    for revision in ("AC1024", "AC1032"):
+        versioned_source = root / f"sun-{revision}.dxf"
+        author_sunstudy(versioned_source, revision)
+        for binary in (False, True):
+            versioned_output = root / f"sun-{revision}-output.dxf"
+            convert([versioned_source, "-o", versioned_output, "-y", flag,
+                     *(["-b"] if binary else [])], True)
+            if not output_has_revision(versioned_output.read_bytes(), revision.encode(), binary):
+                raise AssertionError("wrong SUNSTUDY output revision or encoding")
+            versioned_readback = root / f"sun-{revision}-readback.dxf"
+            convert([versioned_output, "-o", versioned_readback, "-y", flag], True)
+            inspect_sunstudy(versioned_readback)
+            versioned_output.write_bytes(SENTINEL)
+            convert([versioned_source, "-o", versioned_output, "-y", flag, "-v2013"], False)
+            if versioned_output.read_bytes() != SENTINEL:
+                raise AssertionError("cross-revision SUNSTUDY output replaced destination")
+            convert([versioned_source, "-o", versioned_output, "-y", flag], True)
+            inspect_sunstudy(versioned_output)
     if source.read_bytes() != source_bytes:
         raise AssertionError("source was modified")
-    return 26
+    return 42
 PRE_R13_MARKERS = (
     (5, b"unsupported-r11-repeat"),
     (6, b"unsupported-r11-endrep"),

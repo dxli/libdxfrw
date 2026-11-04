@@ -69794,6 +69794,9 @@ bool sunStudyDxfGraph(const std::string& source) {
         || !importer.fileImport(source, &data, false) || data.sunStudies.size() != 1u
         || data.rawSunStudies.size() != 1u || data.dictionaries.empty())
         return fail("SUNSTUDY typed/raw import failed");
+    const auto version = data.sourceVersion;
+    if (version != DRW::AC1024 && version != DRW::AC1027 && version != DRW::AC1032)
+        return fail("unexpected SUNSTUDY test source revision");
     const auto output = std::filesystem::temp_directory_path() /
         ("libdxfrw-sunstudy-graph-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".dxf");
     struct Cleanup { std::filesystem::path path; ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); } } cleanup{output};
@@ -69801,7 +69804,7 @@ bool sunStudyDxfGraph(const std::string& source) {
         std::function<void()> afterObjects;
         void writeObjects() override { dx_iface::writeObjects(); if (afterObjects) afterObjects(); }
     } exporter;
-    const auto write = [&](bool binary) { return exporter.fileExport(output.string(), DRW::AC1027, binary,
+    const auto write = [&](bool binary) { return exporter.fileExport(output.string(), version, binary,
         &data, false, true, dx_dxfSourceTextPolicy::Compatible, DRW::DxfTextWritePolicy::Compatible,
         dx_dxfProxyGraphicsPolicy::Compatible, dx_dwgReadCompletenessPolicy::RequireComplete); };
     const auto check = [&]() {
@@ -69885,7 +69888,7 @@ bool sunStudyDxfGraph(const std::string& source) {
         const auto repeatRoot = repeated.namedObjectDictionary;
         const auto repeatDictionaries = repeated.dictionaries;
         const auto groupHandle = repeatRoot.m_entries[1].m_handle;
-        const auto repeatWrite = [&]() { return exporter.fileExport(output.string(), DRW::AC1027, binary,
+        const auto repeatWrite = [&]() { return exporter.fileExport(output.string(), version, binary,
             &repeated, false, true, dx_dxfSourceTextPolicy::Compatible, DRW::DxfTextWritePolicy::Compatible,
             dx_dxfProxyGraphicsPolicy::Compatible, dx_dwgReadCompletenessPolicy::RequireComplete); };
         for (unsigned fault = 0u; fault < 8u; ++fault) {
@@ -69918,20 +69921,23 @@ bool sunStudyDxfGraph(const std::string& source) {
             return fail("late SUNSTUDY repeat graph edit was published or retry failed");
     }
     for (const bool binary : {false, true}) {
-        { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }
-        const bool accepted = exporter.fileExport(output.string(), DRW::AC1024, binary,
-            &data, false, true);
-        std::ifstream prior(output, std::ios::binary);
-        const std::string actual((std::istreambuf_iterator<char>(prior)), {});
-        if (accepted || actual != "prior destination" || !write(binary) || !check())
-            return fail("SUNSTUDY neighboring target was published or retry failed");
+        for (const auto target : {DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+            if (target == version) continue;
+            { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }
+            const bool accepted = exporter.fileExport(output.string(), target, binary,
+                &data, false, true);
+            std::ifstream prior(output, std::ios::binary);
+            const std::string actual((std::istreambuf_iterator<char>(prior)), {});
+            if (accepted || actual != "prior destination" || !write(binary) || !check())
+                return fail("SUNSTUDY neighboring target was published or retry failed");
+        }
     }
     {
         dx_data unobserved; dx_iface unobservedReader;
         if (!unobservedReader.fileImport(source, &unobserved, false))
             return fail("SUNSTUDY unobserved source import failed");
         { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }
-        const bool accepted = exporter.fileExport(output.string(), DRW::AC1027, false,
+        const bool accepted = exporter.fileExport(output.string(), version, false,
             &unobserved, false, true);
         std::ifstream prior(output, std::ios::binary);
         const std::string actual((std::istreambuf_iterator<char>(prior)), {});
@@ -69968,7 +69974,9 @@ bool sunStudyDxfGraph(const std::string& source) {
             if (position == std::string::npos) return fail("CLASS count marker missing");
             text.replace(position, std::string(" 91\n1\n").size(), " 91\n2\n");
         } else {
-            const auto position = text.find("AC1027");
+            const char* sourceVersion = version == DRW::AC1024 ? "AC1024"
+                : version == DRW::AC1027 ? "AC1027" : "AC1032";
+            const auto position = text.find(sourceVersion);
             if (position == std::string::npos) return fail("SUNSTUDY version marker missing");
             text.replace(position, 6u, "AC1021");
         }
@@ -69979,7 +69987,7 @@ bool sunStudyDxfGraph(const std::string& source) {
             return fail("unmodeled SUNSTUDY source did not import tolerantly");
         { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }
         const bool unsupportedAccepted = exporter.fileExport(output.string(),
-            fault == 7u ? DRW::AC1021 : DRW::AC1027, false, &bad, false, true);
+            fault == 7u ? DRW::AC1021 : version, false, &bad, false, true);
         std::ifstream prior(output, std::ios::binary);
         const std::string actual((std::istreambuf_iterator<char>(prior)), {});
         if (unsupportedAccepted || actual != "prior destination" || !write(false) || !check())

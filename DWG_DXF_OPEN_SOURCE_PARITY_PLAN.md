@@ -504,9 +504,10 @@ receipt](docs/research/p5-view-live-section-graph-closure-2026-11-03.json) and
 [SECTION_SETTINGS graph receipt](docs/research/p4-section-settings-adapter-graph-closure-2026-11-03.json).
 The concrete adapter retains typed SUNSTUDY callbacks under aggregate
 record, byte, and vector bounds ([capture receipt](docs/research/p5-sunstudy-callback-retention-2026-11-03.json)).
-The bounded AC1027 DXF source-observed owner graph has ASCII/Binary output and
-readback evidence; other graph shapes, native DWG and rendering remain open
-([graph receipt](docs/research/p5-sunstudy-dxf-owned-graph-2026-11-04.json)).
+The bounded AC1024, AC1027 and AC1032 DXF source-observed owner graphs have
+ASCII/Binary output and readback evidence; other graph shapes, native DWG and
+rendering remain open
+([version receipt](docs/research/p5-sunstudy-dxf-ac1024-ac1032-2026-11-04.json)).
 SUNSTUDY/MOTIONPATH/CURVEPATH/POINTPATH/OBJECTPTR physical
 producer coverage and native plotting/scene semantics remain open; generated
 record-identity and reference round-trips are transport evidence only (see the [SUNSTUDY receipt](docs/research/p5-sunstudy-record-identity-remapping-2026-11-03.json),
@@ -524,10 +525,11 @@ output until explicitly repaired; consumers using older inline copy operators
 must rebuild to preserve that guard across copies. See the [array guard receipt](docs/research/p5-sunstudy-incomplete-dxf-array-guard-2026-11-03.json).
 The adapter refuses SUNSTUDY output outside the bounded source-observed graph,
 including unobserved imports and unqualified references.
-The CLI exposes the opt-in as `--observe-whole-dxf-source`. Bounded AC1027
-repeat conversion now verifies the additional empty `ACAD_GROUP` dictionary and
-both root edges. Other dictionary graphs, source versions and native rendering
-remain open ([repeat receipt](docs/research/p5-sunstudy-repeat-graph-2026-11-04.json)).
+The CLI exposes the opt-in as `--observe-whole-dxf-source`. Bounded same-revision
+repeat conversion verifies the additional empty `ACAD_GROUP` dictionary and
+both root edges for AC1024, AC1027 and AC1032. Other dictionary graphs, source
+versions and native rendering remain open
+([version receipt](docs/research/p5-sunstudy-dxf-ac1024-ac1032-2026-11-04.json)).
 The adapter also retains typed LIGHTLIST callbacks within aggregate record,
 item, and byte bounds ([capture receipt](docs/research/p5-lightlist-callback-retention-2026-11-03.json));
 the source-aware DXF parser now separates the first ACAD_REACTORS group-330

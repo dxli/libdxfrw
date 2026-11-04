@@ -62701,7 +62701,9 @@ bool dx_data::hasUnchangedAcdsRawDxfSections() const noexcept {
 
 bool dx_data::hasBoundDxfSunStudyGraph() const noexcept {
     try {
-        if (sourceFormat != dx_source_format::DXF || sourceVersion != DRW::AC1027
+        if (sourceFormat != dx_source_format::DXF
+            || (sourceVersion != DRW::AC1024 && sourceVersion != DRW::AC1027
+                && sourceVersion != DRW::AC1032)
             || importGeneration != 1u || !dxfReadOutcome.operationSucceeded
             || dxfReadOutcome.sourceVersion != sourceVersion || sunStudyCaptureFailed
             || m_sunStudyRawGeneration != importGeneration || sunStudies.size() != 1u
