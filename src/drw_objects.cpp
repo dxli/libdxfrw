@@ -25707,9 +25707,21 @@ bool DRW_TableGeometry::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint
         return fail();
 
     for (DRW_TableGeometryCell& cell : cells) {
-        cell.m_unknownHandle = readObjectHandleRef(&hBuff, handleEndBit);
-        if (!hBuff.isGood())
+        // ODA 20.4.103 defines a soft pointer. ODA 2.13 also permits
+        // relative soft pointers, resolved against the containing object.
+        dwgHandle rawHandle;
+        dwgHandle resolvedHandle;
+        if (!readBoundedObjectId(hBuff, handleEndBit, handle,
+                                 rawHandle, resolvedHandle))
             return fail();
+        const bool relative = rawHandle.code == 0x06 || rawHandle.code == 0x08
+            || rawHandle.code == 0x0A || rawHandle.code == 0x0C;
+        if ((rawHandle.code != DRW::DwgSoftPointer && !relative)
+            || ((rawHandle.code == 0x06 || rawHandle.code == 0x08)
+                && rawHandle.size != 0)
+            || resolvedHandle.ref64 > std::numeric_limits<std::uint32_t>::max())
+            return fail();
+        cell.m_unknownHandle = resolvedHandle.ref;
     }
 
     const std::uint64_t bodyBitOffset =

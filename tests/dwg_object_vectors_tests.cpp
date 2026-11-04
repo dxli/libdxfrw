@@ -8488,7 +8488,9 @@ struct TableGeometryFrame {
 };
 
 bool makeTableGeometryNonzeroFlagsFrame(TableGeometryFrame& frame,
-                                        std::int32_t flags) {
+                                        std::int32_t flags,
+                                        int handleCode = DRW::DwgSoftPointer,
+                                        std::uint32_t handleRef = 0xA720u) {
     constexpr DRW::Version version = DRW::AC1021;
     DRW_TextCodec codec;
     codec.setVersion(version, false);
@@ -8540,9 +8542,9 @@ bool makeTableGeometryNonzeroFlagsFrame(TableGeometryFrame& frame,
     parentHandle.code = DRW::DwgNullReference;
     handles.putHandle(parentHandle);
     dwgHandle contentHandle;
-    contentHandle.code = DRW::DwgHardPointer;
-    contentHandle.size = 2u;
-    contentHandle.ref = 0xA720u;
+    contentHandle.code = handleCode;
+    contentHandle.size = handleRef == 0u ? 0u : (handleRef <= 0xFFu ? 1u : 2u);
+    contentHandle.ref = handleRef;
     contentHandle.ref64 = contentHandle.ref;
     handles.putHandle(contentHandle);
     if (!object.isGood() || !handles.isGood()
@@ -8591,6 +8593,61 @@ void testTableGeometryNonzeroFlags(TestContext& t) {
                      && content.m_width == 10.5
                      && content.m_height == 11.75,
                  "TABLEGEOMETRY preserves nonzero BL value and preceding geometry fields");
+    }
+
+    TableGeometryFrame wrongRole;
+    const bool wrongBuilt = makeTableGeometryNonzeroFlagsFrame(
+        wrongRole, flags, DRW::DwgHardPointer);
+    t.expect(wrongBuilt, "TABLEGEOMETRY wrong-role vector builds");
+    if (wrongBuilt) {
+        dwgBuffer wrong(wrongRole.bytes.data(), wrongRole.bytes.size());
+        t.expect(!parsed.parseDwg(DRW::AC1021, &wrong, wrongRole.handleBits)
+                     && !wrong.isGood() && parsed.m_cells.empty(),
+                 "TABLEGEOMETRY rejects a hard-pointer cell reference and clears prior state");
+        dwgBuffer retry(frame.bytes.data(), frame.bytes.size());
+        t.expect(parsed.parseDwg(DRW::AC1021, &retry, frame.handleBits)
+                     && parsed.m_cells.size() == 1u
+                     && parsed.m_cells[0].m_unknownHandle == 0xA720u,
+                 "TABLEGEOMETRY accepts corrected soft-pointer role on same-object retry");
+    }
+    for (const auto& relative : std::array<std::array<std::uint32_t, 3>, 4>{{
+             {{0x06u, 0u, 0xA501u}}, {{0x08u, 0u, 0xA4FFu}},
+             {{0x0Au, 0x20u, 0xA520u}}, {{0x0Cu, 0x20u, 0xA4E0u}}}}) {
+        TableGeometryFrame relativeFrame;
+        const bool relativeBuilt = makeTableGeometryNonzeroFlagsFrame(
+            relativeFrame, flags, static_cast<int>(relative[0]), relative[1]);
+        t.expect(relativeBuilt, "TABLEGEOMETRY relative soft-pointer vector builds");
+        if (relativeBuilt) {
+            dwgBuffer inputRelative(relativeFrame.bytes.data(), relativeFrame.bytes.size());
+            t.expect(parsed.parseDwg(DRW::AC1021, &inputRelative, relativeFrame.handleBits)
+                         && parsed.m_cells.size() == 1u
+                         && parsed.m_cells[0].m_unknownHandle == relative[2],
+                     "TABLEGEOMETRY resolves relative cell pointers against object handle");
+        }
+    }
+    for (const auto& invalid : std::array<std::array<std::uint32_t, 2>, 3>{{
+             {{0x06u, 1u}}, {{0x0Au, 0xFFFFFFFFu}}, {{0x0Cu, 0xFFFFu}}}}) {
+        TableGeometryFrame invalidFrame;
+        const bool invalidBuilt = makeTableGeometryNonzeroFlagsFrame(
+            invalidFrame, flags, static_cast<int>(invalid[0]), invalid[1]);
+        t.expect(invalidBuilt, "TABLEGEOMETRY invalid relative pointer vector builds");
+        if (invalidBuilt) {
+            dwgBuffer inputInvalid(invalidFrame.bytes.data(), invalidFrame.bytes.size());
+            t.expect(!parsed.parseDwg(DRW::AC1021, &inputInvalid, invalidFrame.handleBits)
+                         && parsed.m_cells.empty(),
+                     "TABLEGEOMETRY rejects malformed or out-of-range relative pointers");
+        }
+    }
+    TableGeometryFrame nullHandle;
+    const bool nullBuilt = makeTableGeometryNonzeroFlagsFrame(
+        nullHandle, flags, DRW::DwgSoftPointer, 0u);
+    t.expect(nullBuilt, "TABLEGEOMETRY null soft-pointer vector builds");
+    if (nullBuilt) {
+        dwgBuffer inputNull(nullHandle.bytes.data(), nullHandle.bytes.size());
+        t.expect(parsed.parseDwg(DRW::AC1021, &inputNull, nullHandle.handleBits)
+                     && parsed.m_cells.size() == 1u
+                     && parsed.m_cells[0].m_unknownHandle == 0u,
+                 "TABLEGEOMETRY retains null soft pointers");
     }
 }
 
