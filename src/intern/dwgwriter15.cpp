@@ -3740,7 +3740,8 @@ bool dwgWriter15::emitDictionaryObject(
             &appIdRefs, &layerRefs, fileCodePageId())) {
         return false;
     }
-    if (!dictionary.encodeDwg(m_version, &body, sb, hb))
+    if (!dictionary.encodeDwgImpl(m_version, &body, sb, hb, false,
+                                  typedLegacyNulls))
         return false;
 
     finishObject();
@@ -3859,7 +3860,8 @@ bool dwgWriter15::writeXRecord(const DRW_XRecord& xrecord) {
 bool dwgWriter15::emitPlotSettingsObject(
     std::uint32_t handle, const DRW_PlotSettings& plotSettings,
     const std::vector<DRW_Entity::PendingHandleRef>& appIdRefs,
-    const std::vector<DRW_Entity::PendingHandleRef>& layerRefs) {
+    const std::vector<DRW_Entity::PendingHandleRef>& layerRefs,
+    bool typedLegacyNulls) {
     const std::uint16_t classNum = typedDwgClassNum(
         "AcDbPlotSettings", "PLOTSETTINGS", 0);
     if (classNum < 500)
@@ -6696,9 +6698,9 @@ bool dwgWriter15::writeDwgObjects() {
         acadGroup.m_entries.push_back({entry.name, entry.childHandle});
     const std::vector<DRW_Entity::PendingHandleRef> noEedRefs;
     if (!emitDictionaryObject(namedObjects.handle, namedObjects, noEedRefs,
-                              noEedRefs)
+                              noEedRefs, true)
         || !emitDictionaryObject(acadGroup.handle, acadGroup, noEedRefs,
-                                 noEedRefs)) {
+                                 noEedRefs, true)) {
         return false;
     }
     m_emittedDwgNamedObjectDictionaryEntries.push_back(

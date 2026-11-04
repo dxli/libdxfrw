@@ -891,6 +891,9 @@ The AC1015/AC1018 BLOCK_CONTROL now records its handle boundary before
 the handle stream. Correcting synthetic paper BLOCK/ENDBLK ownership removes
 the ODA block-owner warning; the layer-table error remains. See the
 [paper-space receipt](docs/research/p6-synthetic-paper-block-owner-mode-2026-11-04.json).
+Synthetic AC1015 NOD and GROUP now emit their witnessed typed-null parent and
+extension roles; the opt-in plot-style dictionary requires a separate
+matching legacy slot correction. See the [root receipt](docs/research/p6-ac1015-synthetic-root-dictionary-null-roles-2026-11-04.json).
 Synthetic R2004+ layer 0 now retains the source-backed absent-extension and
 typed-null xref state; ODA still requires the layer plot-style graph.
 Implement its early class admission, collision-safe identities, HEADER/NOD

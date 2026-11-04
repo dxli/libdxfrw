@@ -567,7 +567,8 @@ void putCommonObjectHandlePrefix(dwgBufferW* hb, std::uint32_t ownerRef,
                                  const std::vector<std::uint32_t>* reactors = nullptr,
                                  std::uint32_t xDictRef = 0,
                                  std::uint8_t ownerRole = DRW::DwgSoftPointer,
-                                 bool typedNullOwner = false) {
+                                 bool typedNullOwner = false,
+                                 bool typedNullXdict = false) {
     dwgHandle owner = makeRefW(ownerRef, ownerRole);
     if (typedNullOwner && ownerRef == 0)
         owner.code = ownerRole;
@@ -578,8 +579,12 @@ void putCommonObjectHandlePrefix(dwgBufferW* hb, std::uint32_t ownerRef,
             ? (*reactors)[static_cast<std::size_t>(i)] : 0;
         hb->putHandle(makeRefW(ref, DRW::DwgSoftPointer));
     }
-    if (xDictFlag != 1)
-        hb->putHandle(makeRefW(xDictRef, DRW::DwgHardOwnership));
+    if (xDictFlag != 1) {
+        dwgHandle xdict = makeRefW(xDictRef, DRW::DwgHardOwnership);
+        if (typedNullXdict && xDictRef == 0)
+            xdict.code = DRW::DwgHardOwnership;
+        hb->putHandle(xdict);
+    }
 }
 dwgHandle writeHandleWithCode(const dwgHandle& handle, std::uint8_t code) {
     return makeRefW(handle.ref, code);
@@ -20993,7 +20998,8 @@ std::uint8_t DRW_Dictionary::dwgItemHandleCode() const noexcept {
 bool DRW_Dictionary::encodeDwgImpl(DRW::Version version, dwgBufferW *buf,
                                    dwgBufferW *strBuf,
                                    dwgBufferW *handleBuf,
-                                   bool withDefaultHandle) const {
+                                   bool withDefaultHandle,
+                                   bool typedLegacyNulls) const {
     if (buf == nullptr || !isDwgPayloadValidImpl(version, withDefaultHandle))
         return false;
     dwgBufferW *sb = (strBuf != nullptr && version > DRW::AC1018) ? strBuf : buf;
@@ -21017,7 +21023,8 @@ bool DRW_Dictionary::encodeDwgImpl(DRW::Version version, dwgBufferW *buf,
     putCommonObjectHandlePrefix(
         hb, static_cast<std::uint32_t>(parentHandle), numReactors, xDictFlag,
         &reactorHandles, xDictHandle, DRW::DwgSoftPointer,
-        version >= DRW::AC1018);
+        version >= DRW::AC1018 || (version == DRW::AC1015 && typedLegacyNulls),
+        version == DRW::AC1015 && typedLegacyNulls);
     for (const auto& e : m_entries) {
         hb->putHandle(makeRefW(e.m_handle, dwgItemHandleCode()));
     }

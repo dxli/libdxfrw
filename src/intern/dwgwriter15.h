@@ -428,7 +428,8 @@ protected:
     bool emitDictionaryObject(
         std::uint32_t handle, const DRW_Dictionary& dictionary,
         const std::vector<DRW_Entity::PendingHandleRef>& appIdRefs,
-        const std::vector<DRW_Entity::PendingHandleRef>& layerRefs);
+        const std::vector<DRW_Entity::PendingHandleRef>& layerRefs,
+        bool typedLegacyNulls = false);
     bool emitXRecordObject(
         std::uint32_t handle, const DRW_XRecord& xrecord,
         const std::vector<DRW_Entity::PendingHandleRef>& appIdRefs,

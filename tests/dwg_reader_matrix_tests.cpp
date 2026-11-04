@@ -63,6 +63,12 @@ public:
 
 class DrwObjectEncodeTestAccess {
 public:
+    static bool encodeDictionary(DRW_Dictionary& dictionary, DRW::Version version,
+                                 dwgBufferW& data, dwgBufferW& strings,
+                                 dwgBufferW& handles, bool typedLegacy) {
+        return dictionary.encodeDwgImpl(version, &data, &strings, &handles,
+                                        false, typedLegacy);
+    }
     static bool encodeDimstyle(DRW_Dimstyle& style, DRW::Version version,
                                dwgBufferW& data, dwgBufferW& strings,
                                dwgBufferW& handles, bool typedNulls) {
@@ -16055,7 +16061,30 @@ void testStandardDimstyleDefaults(TestContext& t, DRW::Version version,
     }
 }
 
+void testSyntheticRootDictionaryNullRoles(TestContext& t) {
+    for (const auto version : {DRW::AC1015, DRW::AC1018, DRW::AC1021,
+                               DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+        for (const bool synthetic : {false, true}) {
+            DRW_Dictionary root;
+            root.parentHandle = 0u;
+            root.setDwgCommonObjectState(0, 0, false);
+            root.m_entries = {{"ACAD_GROUP", DRW::DwgAcadGroupDictionaryHandle}};
+            dwgBufferW body, strings, handles;
+            const bool encoded = DrwObjectEncodeTestAccess::encodeDictionary(
+                root, version, body, strings, handles, synthetic);
+            const bool legacyTyped = version == DRW::AC1015 && synthetic;
+            const std::vector<std::uint8_t> expected{
+                static_cast<std::uint8_t>(version >= DRW::AC1018 || legacyTyped ? 0x40u : 0x00u),
+                static_cast<std::uint8_t>(legacyTyped ? 0x30u : 0x00u),
+                0x21u, 0x0du};
+            t.expect(encoded && handles.data() == expected,
+                     "DICTIONARY root synthetic/caller null roles and following entry");
+        }
+    }
+}
+
 void testHeaderWriters(TestContext& t) {
+    testSyntheticRootDictionaryNullRoles(t);
     testStandardDimstyleDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
     testStandardDimstyleDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
     testStandardDimstyleDefaults<dwgWriter21>(t, DRW::AC1021, "AC1021");

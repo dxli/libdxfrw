@@ -3587,7 +3587,8 @@ protected:
                                dwgBufferW *handleBuf = nullptr) const;
   [[nodiscard]] bool encodeDwgImpl(DRW::Version version, dwgBufferW *buf,
                                    dwgBufferW *strBuf, dwgBufferW *handleBuf,
-                                   bool withDefaultHandle) const;
+                                   bool withDefaultHandle,
+                                   bool typedLegacyNulls = false) const;
   [[nodiscard]] bool
   isDwgPayloadValidImpl(DRW::Version version,
                         bool withDefaultHandle) const noexcept;
