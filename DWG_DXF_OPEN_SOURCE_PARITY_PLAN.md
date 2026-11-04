@@ -65,6 +65,9 @@ The bounded AC1018 direct-NOD 0/0/1/3 RASTERVARIABLES graph has selected-source
 and generated ASCII/Binary output evidence; broader graphs, physical
 whole-document output and native image behavior remain open
 ([receipt](docs/research/p4-ac1018-rastervariables-direct-nod-2026-11-04.json)).
+The AC1024 direct-NOD profile additionally covers source-witnessed frame=1;
+other scalar values, graph shapes and native image behavior remain open
+([receipt](docs/research/p4-ac1024-rastervariables-frame1-direct-nod-2026-11-04.json)).
 
 **SORTENTSTABLE owner-scope restriction:** Autodesk's DXF definition limits the
 owner reference to `*MODEL_SPACE` or `*PAPER_SPACE`. Physical AC1024 testing

@@ -11656,7 +11656,9 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                  || data->sourceVersion == DRW::AC1032)
                                 && (!exactDirectNodReactor
                                     || variables.extensionDictionaryFlag() != 1u
-                                    || variables.m_imageFrame != 0
+                                    || (variables.m_imageFrame != 0
+                                        && (data->sourceVersion != DRW::AC1024
+                                            || variables.m_imageFrame != 1))
                                     || variables.m_imageQuality != 1
                                     || variables.m_units != 3))
                             || variables.xDictHandle != 0u
@@ -72275,12 +72277,15 @@ bool dx_iface::preparePointCloudExOutputGraph(
         && !m_pointCloudExReactorHandles.empty();
 }
 
-// AC1032 direct-NOD admission is limited to the independently witnessed
-// physical 0/1/3 profile and exact owner/reactor wire roles.
-static bool matchesDirectNodRaster1032Wire(const DRW_UnsupportedObject& raw,
-                                          std::uint32_t parent) noexcept {
+// Verify the independently witnessed direct-NOD scalar and handle profiles.
+// The physical AC1024 witnesses cover frames 0 and 1; AC1032 covers frame 0.
+static bool matchesDirectNodRasterWire(const DRW_UnsupportedObject& raw,
+                                       std::uint32_t parent,
+                                       std::int32_t frame) noexcept {
     using namespace dx_raster_wire;
-    if (raw.m_version != DRW::AC1032 || raw.m_rawBytes.empty()
+    if ((raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1032)
+        || (frame != 0 && (raw.m_version != DRW::AC1024 || frame != 1))
+        || raw.m_rawBytes.empty()
         || raw.m_rawBytes.size() > 64u * 1024u * 1024u) return false;
     const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
     if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
@@ -72292,8 +72297,9 @@ static bool matchesDirectNodRaster1032Wire(const DRW_UnsupportedObject& raw,
     if (tag == 3u || type != static_cast<std::uint32_t>(raw.m_objectType)
         || detail::handle(body, 0u, 0u, true).value != raw.m_handle
         || body.shortValue() != 0u || body.longValue() != 1u
-        || body.take(1u) != 1u || body.take(1u) != 0u
-        || body.longValue() != 0u || body.shortValue() != 0u
+        || body.take(1u) != 1u
+        || (raw.m_version >= DRW::AC1027 && body.take(1u) != 0u)
+        || body.longValue() != 0u || body.shortValue() != static_cast<std::uint32_t>(frame)
         || body.shortValue() != 1u || body.shortValue() != 3u
         || !body.good || body.pos >= end || end - body.pos > 32u) return false;
     while (body.pos < end) if (body.take(1u) != 0u) return false;
@@ -72460,7 +72466,9 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                      || cData->sourceVersion == DRW::AC1032)
                     && (!exactDirectNodReactor
                         || variables.extensionDictionaryFlag() != 1u
-                        || variables.m_imageFrame != 0
+                        || (variables.m_imageFrame != 0
+                            && (cData->sourceVersion != DRW::AC1024
+                                || variables.m_imageFrame != 1))
                         || variables.m_imageQuality != 1
                         || variables.m_units != 3))
                 || variables.xDictHandle != 0u
@@ -72501,9 +72509,12 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                 || sourceFrame.m_xDictHandle != 0u
                 || sourceFrame.m_xDictFlag
                     != variables.extensionDictionaryFlag()))
-                || (cData->sourceVersion == DRW::AC1032
-                    && !matchesDirectNodRaster1032Wire(
-                        sourceFrame, cData->namedObjectDictionary.handle)))
+                || ((cData->sourceVersion == DRW::AC1024
+                     || cData->sourceVersion == DRW::AC1032)
+                    && (sourceFrame.m_version != cData->sourceVersion
+                        || !matchesDirectNodRasterWire(
+                            sourceFrame, cData->namedObjectDictionary.handle,
+                            variables.m_imageFrame))))
                 return fail("source frame common metadata differs from typed record");
 
             const DRW_Dictionary* owner = nullptr;
