@@ -598,6 +598,7 @@ EXTRA_DIST = \
     tests/xrecord_payload_identity_controls.h \
     tests/xrecord_test_helpers.h \
     tools/ac1024_rtext_successor_v3.cpp \
+    tools/acadsharp_rtext_probe.cs \
     tools/acis218_autocad_witness.lsp \
     tools/acis218_autocad_witness.md \
     tools/audit_ac1015_compound_entity_chains.py \
@@ -650,6 +651,7 @@ EXTRA_DIST = \
     tools/geodata_north_witness.py \
     tools/geodata_physical_v3_probe.py \
     tools/make_ac1021_block_control_reactor_witness.py \
+    tools/make_p9_rtext_oda_input.py \
     tools/mutate_r2004_header_suffix_probe.py \
     tools/normalize_drawing_result.py \
     tools/normalize_oracle.py \
