@@ -21480,6 +21480,60 @@ void testDecompressor(TestContext& t) {
         copied = copied && output[literalCount + i] == static_cast<std::uint8_t>(i);
     t.expect(copied, "R2004 decompressor back-reference bytes");
 
+    // A literal's declared length must be present in the input, unless only
+    // a prefix is requested by the caller's output window (ODA v5.4.1 4.7).
+    const std::array<std::uint8_t, 4> missingFirst{{0x01u, 'A', 'B', 'C'}};
+    const std::array<std::uint8_t, 5> completeFirst{{0x01u, 'A', 'B', 'C', 'D'}};
+    const std::array<std::uint8_t, 6> terminatedFirst{{0x01u, 'A', 'B', 'C', 'D', 0x11u}};
+    std::array<std::uint8_t, 8> literalOutput{};
+    literalOutput.fill(0xccu);
+    t.expect(!compressor.decompress18(missingFirst.data(), literalOutput.data(),
+                                      missingFirst.size(), 4u)
+                 && compressor.decompressedBytes() == 0u,
+             "R2004 incomplete initial literal is rejected before zero fill");
+    t.expect(compressor.decompress18(completeFirst.data(), literalOutput.data(),
+                                     completeFirst.size(), literalOutput.size())
+                 && compressor.decompressedBytes() == 4u
+                 && std::equal(literalOutput.begin(), literalOutput.begin() + 4,
+                               completeFirst.begin() + 1),
+             "R2004 decoder retries successfully and accepts a complete implicit input end");
+    t.expect(compressor.decompress18(terminatedFirst.data(), literalOutput.data(),
+                                     terminatedFirst.size(), literalOutput.size())
+                 && compressor.decompressedBytes() == 4u,
+             "R2004 decoder accepts an explicit terminator after a literal run");
+    const std::array<std::uint8_t, 3> prefix{{0x01u, 'A', 'B'}};
+    t.expect(compressor.decompress18(prefix.data(), literalOutput.data(), prefix.size(), 2u)
+                 && compressor.decompressedBytes() == 2u
+                 && literalOutput[0] == 'A' && literalOutput[1] == 'B',
+             "R2004 decoder accepts an output-bounded literal prefix");
+    const std::array<std::uint8_t, 6> missingOffset{{0x01u, 'A', 'B', 'C', 'D', 0x40u}};
+    t.expect(!compressor.decompress18(missingOffset.data(), literalOutput.data(),
+                                      missingOffset.size(), literalOutput.size()),
+             "R2004 incomplete backreference offset is rejected");
+    const std::array<std::uint8_t, 7> terminalReference{{0x01u, 'A', 'B', 'C', 'D', 0x40u, 0x00u}};
+    const std::array<std::uint8_t, 7> expectedReference{{'A', 'B', 'C', 'D', 'D', 'D', 'D'}};
+    t.expect(compressor.decompress18(terminalReference.data(), literalOutput.data(),
+                                     terminalReference.size(), expectedReference.size())
+                 && compressor.decompressedBytes() == expectedReference.size()
+                 && std::equal(expectedReference.begin(), expectedReference.end(),
+                               literalOutput.begin()),
+             "R2004 reference ending at offset bytes may fill the output window");
+    t.expect(compressor.decompress18(terminalReference.data(), literalOutput.data(),
+                                     terminalReference.size(), literalOutput.size())
+                 && compressor.decompressedBytes() == expectedReference.size(),
+             "R2004 reference ending at offset bytes may be an implicit input end");
+    const std::array<std::uint8_t, 7> missingTrailing{{0x01u, 'A', 'B', 'C', 'D', 0x41u, 0x00u}};
+    const std::array<std::uint8_t, 8> completeTrailing{{0x01u, 'A', 'B', 'C', 'D', 0x41u, 0x00u, 'E'}};
+    t.expect(!compressor.decompress18(missingTrailing.data(), literalOutput.data(),
+                                      missingTrailing.size(), literalOutput.size()),
+             "R2004 incomplete post-backreference literal is rejected");
+    const std::array<std::uint8_t, 8> expectedTrailing{{'A', 'B', 'C', 'D', 'D', 'D', 'D', 'E'}};
+    t.expect(compressor.decompress18(completeTrailing.data(), literalOutput.data(),
+                                     completeTrailing.size(), literalOutput.size())
+                 && compressor.decompressedBytes() == literalOutput.size()
+                 && literalOutput == expectedTrailing,
+             "R2004 post-backreference literal succeeds on retry");
+
     std::uint8_t oneByte = 0;
     t.expect(!compressor.decompress18(&oneByte, output.data(), 1, output.size()),
              "R2004 decompressor rejects short input");

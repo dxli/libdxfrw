@@ -333,10 +333,16 @@ bool dwgCompressor::decompress18(const std::uint8_t *cbuf, std::uint8_t *dbuf, s
     std::uint32_t compOffset {0};
     std::uint64_t litCount {litLength18()};
 
-    //copy first literal length
-    for (std::uint64_t i = 0; i < litCount && buffersGood(); ++i) {
-        decompSet( compressedByte());
-    }
+    // Only the portion which fits the output window is required: callers may
+    // intentionally decode a prefix. Never synthesize a zero byte when that
+    // portion of a declared literal run is absent from the compressed input.
+    const std::uint64_t firstNeeded = std::min<std::uint64_t>(litCount, decompSize);
+    if (!compressedGood || firstNeeded > compressedSize - compressedPos)
+        return false;
+    for (std::uint64_t i = 0; i < firstNeeded; ++i)
+        decompSet(compressedByte());
+    if (compressedPos == compressedSize)
+        return true; // legacy input-bounded stream after a complete literal run
 
     // Stop once the output buffer is full: the decompressed page is padded to
     // a page-size boundary, so the compressed stream is followed by padding
@@ -348,7 +354,7 @@ bool dwgCompressor::decompress18(const std::uint8_t *cbuf, std::uint8_t *dbuf, s
         if (oc == 0x10){
             compBytes = longCompressionOffset()+ 9;
             compOffset = twoByteOffset(&litCount) + 0x3FFF;
-            if (litCount == 0)
+            if (litCount == 0 && compressedPos < compressedSize)
                 litCount= litLength18();
         } else if (oc > 0x11 && oc< 0x20){
             // Copy length = libreDWG read_compressed_bytes(oc, 7): the LOW 3
@@ -366,25 +372,25 @@ bool dwgCompressor::decompress18(const std::uint8_t *cbuf, std::uint8_t *dbuf, s
             // The +0x3FFF (vs libreDWG's 0x4000) is balanced by the -1 in the
             // copy index below, matching libreDWG two_byte_offset(..., 0x4000).
             compOffset = twoByteOffset(&litCount) + 0x3FFF + ((oc & 0x08) << 11);
-            if (litCount == 0)
+            if (litCount == 0 && compressedPos < compressedSize)
                 litCount= litLength18();
         } else if (oc == 0x20){
             compBytes = longCompressionOffset() + 0x21;
             compOffset = twoByteOffset(&litCount);
-            if (litCount == 0)
+            if (litCount == 0 && compressedPos < compressedSize)
                 litCount= litLength18();
         } else if (oc > 0x20 && oc< 0x40){
             compBytes = oc - 0x1E;
             compOffset = twoByteOffset(&litCount);
-            if (litCount == 0)
+            if (litCount == 0 && compressedPos < compressedSize)
                 litCount= litLength18();
         } else if ( oc > 0x3F){
             compBytes = ((oc & 0xF0) >> 4) - 1;
             std::uint8_t ll2 = compressedByte();
             compOffset =  (ll2 << 2) | ((oc & 0x0C) >> 2);
             litCount = oc & 0x03;
-            if (litCount < 1){
-                litCount= litLength18();}
+            if (litCount == 0 && compressedPos < compressedSize)
+                litCount = litLength18();
         } else if (oc == 0x11){
             DRW_DBG("dwgCompressor::decompress, end of input stream, Cpos: ");
             DRW_DBG(compressedPos);DRW_DBG(", Dpos: ");DRW_DBG(decompPos);DRW_DBG("\n");
@@ -395,6 +401,11 @@ bool dwgCompressor::decompress18(const std::uint8_t *cbuf, std::uint8_t *dbuf, s
             DRW_DBG(", Dpos: "); DRW_DBG(decompPos); DRW_DBG("\n");
             return false; //fails, not valid
         }
+
+        // A failed offset/length read is different from a complete reference
+        // whose last offset byte is the end of a legacy bounded stream.
+        if (!compressedGood)
+            return false;
 
         // A back-reference pointing before the start of the output window is
         // structurally invalid (libreDWG hard-errors on `pos < comp_offset`).
@@ -426,9 +437,12 @@ bool dwgCompressor::decompress18(const std::uint8_t *cbuf, std::uint8_t *dbuf, s
             // only copy what we can fit
             litCount = availableLiteralBytes;
         }
-        for (std::uint64_t i=0; i < litCount && buffersGood(); i++) {
-            decompSet( compressedByte());
-        }
+        if (!compressedGood || litCount > compressedSize - compressedPos)
+            return false;
+        for (std::uint64_t i = 0; i < litCount; ++i)
+            decompSet(compressedByte());
+        if (compressedPos == compressedSize)
+            return true; // implicit end after a complete literal run
     }
 
     // Loop exited because the output window is full or the input ran out.
