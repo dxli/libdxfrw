@@ -2999,7 +2999,7 @@ bool dwgWriter15::emitViewportEntityHeaderRecord(
 }
 
 bool dwgWriter15::emitAppIdRecord(std::uint32_t handle, const DRW_AppId& ai) {
-    if (handle != DRW::DwgAcadAppIdHandle || m_version < DRW::AC1018)
+    if (handle != DRW::DwgAcadAppIdHandle || m_version < DRW::AC1015)
         return emitTableRecord(handle, ai, DRW::DwgAppIdObjectType);
     DRW_AppId object = ai;
     if (!prepareDwgCommonObjectState(object, m_version))

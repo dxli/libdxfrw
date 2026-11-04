@@ -15994,15 +15994,18 @@ void testAcadAppIdDefaults(TestContext& t, DRW::Version version,
                      && sink.lines == 1u,
                  "synthetic and caller APPID state with following LINE: " + label);
     }
-    if (version >= DRW::AC1018) {
+    if (version >= DRW::AC1015) {
         DRW_AppId probe;
         probe.name = "ACAD";
-        probe.setDwgCommonObjectState(0, 1, false);
+        probe.setDwgCommonObjectState(0, version == DRW::AC1015 ? 0 : 1, false);
         dwgBufferW body, strings, handles;
         const bool encoded = DrwObjectEncodeTestAccess::encodeAppId(
             probe, version, body, strings, handles, true);
-        t.expect(encoded && handles.data() == std::vector<std::uint8_t>({0x41u,0x09u,0x50u}),
-                 "synthetic ACAD APPID typed xref bytes: " + label);
+        const std::vector<std::uint8_t> expected = version == DRW::AC1015
+            ? std::vector<std::uint8_t>{0x41u, 0x09u, 0x30u, 0x50u}
+            : std::vector<std::uint8_t>{0x41u, 0x09u, 0x50u};
+        t.expect(encoded && handles.data() == expected,
+                 "synthetic ACAD APPID typed xdictionary and xref bytes: " + label);
         DRW_AppId ordinary;
         ordinary.name = "CUSTOM_APP";
         dwgBufferW otherBody, otherStrings, otherHandles;

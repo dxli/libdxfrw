@@ -889,8 +889,9 @@ claims. See the [opt-in receipt](docs/research/p6-default-plotstyle-optin-2026-1
 [AC1018 geometry receipt](docs/research/p6-oda-optin-ac1018-generated-geometry-2026-11-04.json),
 and [plot-style graph research](docs/research/p6-default-plotstyle-graph-research-2026-11-04.json).
 For AC1015 the synthetic layer, text style, default linetypes and active
-viewport now use witnessed typed-null roles; the controlled ODA case
-advances to an APPID failure. See the [legacy viewport receipt](docs/research/p6-ac1015-synthetic-vport-null-roles-2026-11-04.json)
+viewport and ACAD APPID now use witnessed typed-null roles; the controlled
+ODA case advances to a DIMSTYLE failure. See the [legacy APPID receipt](docs/research/p6-ac1015-synthetic-appid-null-roles-2026-11-04.json)
+and [viewport receipt](docs/research/p6-ac1015-synthetic-vport-null-roles-2026-11-04.json)
 and [linetype receipt](docs/research/p6-ac1015-synthetic-ltype-null-roles-2026-11-04.json).
 For AC1024, independently qualify and implement the witnessed
 NOD→ACAD_MATERIAL→ByBlock/ByLayer/Global graph and generated layer binding,

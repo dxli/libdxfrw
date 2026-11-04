@@ -9817,7 +9817,9 @@ bool DRW_AppId::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
     buf->putRawChar8(unknown71);
 
     putCommonObjectHandlePrefix(hb, kAppIdControl, reactorCount,
-                                xDictFlag, &reactorHandles, xDictHandle);
+                                xDictFlag, &reactorHandles, xDictHandle,
+                                DRW::DwgSoftPointer, false,
+                                version == DRW::AC1015 && typedNullReference);
     dwgHandle xref = makeNullHandleW();
     if (typedNullReference)
         xref.code = DRW::DwgHardPointer;
