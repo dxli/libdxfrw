@@ -433,6 +433,7 @@ tests/dwg_ltype_ac1021_count_tests.cpp
 tests/dwg_ltype_multiversion_count_tests.cpp
 tests/dwg_material_replay_refusal_tests.cpp
 tests/dwg_modern_header_default_tests.cpp
+tests/dwg_modern_header_section_size_tests.cpp
 tests/dwg_modern_repeated_header_tests.cpp
 tests/dwg_mtext_rotation_direction_tests.cpp
 tests/dwg_object_vectors_tests.cpp
@@ -811,6 +812,7 @@ tools/probe_light_dxf_421.cpp
 tools/probe_light_dxf_preview.cpp
 tools/probe_lightlist_dxf_reference.cpp
 tools/probe_lightlist_physical_capture.cpp
+tools/probe_modern_header_source.cpp
 tools/probe_polyline_cross_scope.cpp
 tools/probe_polyline_cross_version.cpp
 tools/probe_rastervariables_ac1018_frame1_source.cpp

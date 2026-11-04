@@ -979,6 +979,10 @@ source values for these unmodeled fields are not retained
 It also writes the specified repeated encrypted file-header data at EOF and
 validates its address and CRC before publication. The same ODA failures persist
 ([repeated-header receipt](docs/research/p6-ac1027-1032-repeated-file-header-2026-11-04.json)).
+The AC1027/AC1032 HEADER size now excludes the observed high word while the CRC
+covers it; the reader retains its existing compatibility warning and the sampled
+strict exports still stop at separate opaque-object qualification
+([HEADER size receipt](docs/research/p6-ac1027-1032-header-size-crc-2026-11-04.json)).
 The AC1021 LAYER string and handle boundary is now emitted without byte padding;
 with a diagnostic typed-null material, ODA no longer reports that LAYER as
 improperly read, but broader material graphs and full-file acceptance remain

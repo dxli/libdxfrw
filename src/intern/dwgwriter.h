@@ -1814,7 +1814,7 @@ protected:
         return true;
     }
 
-    /// ODA v5.4.1 section 9: HEADER CRC covers RL and all declared data,
+    /// ODA v5.4.1 section 9: HEADER CRC covers RL and all data,
     /// including any optional maintenance word, and precedes the end sentinel.
     /// Use the writer's existing locator-0 range, not the accumulator's end:
     /// CLASSES and object frames have already been appended at this stage.
@@ -1832,6 +1832,10 @@ protected:
         if (!dwgSafety::add(offset->second, 16u, start)
             || !dwgSafety::add(start, 4u, payloadStart)
             || !dwgSafety::add(offset->second, size->second, sectionEnd))
+            return false;
+        // The R2013/R2018 declared size excludes the optional high-size word.
+        if (m_version >= DRW::AC1027
+            && !dwgSafety::add(payloadStart, 4u, payloadStart))
             return false;
         const std::uint32_t declared = std::uint32_t(data[start])
             | (std::uint32_t(data[start + 1u]) << 8u)

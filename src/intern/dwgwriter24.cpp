@@ -145,7 +145,23 @@ bool dwgWriter24::writeDwgHeader() {
             m_buf.putBytes(handleBuf.data().data(), handleBuf.size());
     }
 
-    endSentinelSection(sectionStart, sizeOffset, dwgSentinels::HEADER_END);
+    if (m_version >= DRW::AC1027) {
+        // In the observed R2013/R2018 HEADER profile, the low size excludes
+        // the optional high-size word.  The CRC still covers both words and
+        // the complete payload, beginning immediately after the sentinel.
+        m_buf.alignToByte();
+        if (m_buf.size() < sizeOffset + 8u
+            || m_buf.size() - (sizeOffset + 8u)
+                   > std::numeric_limits<std::uint32_t>::max())
+            return false;
+        m_buf.patchRawLong32(sizeOffset, static_cast<std::uint32_t>(
+            m_buf.size() - (sizeOffset + 8u)));
+        const auto crc = m_buf.crc16(0xC0C1, sectionStart + 16u, m_buf.size());
+        m_buf.putRawShort16(crc);
+        m_buf.putBytes(dwgSentinels::HEADER_END, 16);
+    } else {
+        endSentinelSection(sectionStart, sizeOffset, dwgSentinels::HEADER_END);
+    }
 
     m_sectionSizes[recno::HEADER] =
         static_cast<std::uint32_t>(m_buf.size() - sectionStart);
