@@ -3022,10 +3022,12 @@ bool dwgWriter15::emitAppIdRecord(std::uint32_t handle, const DRW_AppId& ai) {
 
 bool dwgWriter15::emitDimstyleRecord(std::uint32_t handle, const DRW_Dimstyle& ds) {
     const bool synthetic = handle == DRW::DwgStandardDimstyleHandle
-        && !m_haveStandardDimstyle && m_version >= DRW::AC1018;
+        && !m_haveStandardDimstyle && m_version >= DRW::AC1015;
     if (!synthetic)
         return emitTableRecord(handle, ds, DRW::DwgDimStyleObjectType);
     DRW_Dimstyle object = ds;
+    if (m_version == DRW::AC1015)
+        object.dimtxstyH.ref = DRW::DwgStandardTextStyleHandle;
     if (!prepareDwgCommonObjectState(object, m_version))
         return false;
     std::vector<DRW_Entity::PendingHandleRef> appIdRefs;

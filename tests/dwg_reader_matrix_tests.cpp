@@ -15284,8 +15284,10 @@ public:
             standardStyleXrefCode = style.xrefBlockHandle.code;
             standardStyleXrefRef = style.xrefBlockHandle.ref;
             standardStyleFont = style.font;
+            standardStyleHandle = style.handle;
         }
     }
+    std::uint32_t standardStyleHandle{0};
     std::size_t standardStyles{0};
     std::uint8_t standardStyleFlag{0};
     std::uint8_t standardStyleXrefCode{0};
@@ -16018,11 +16020,12 @@ void testAcadAppIdDefaults(TestContext& t, DRW::Version version,
 template<class Writer>
 void testStandardDimstyleDefaults(TestContext& t, DRW::Version version,
                                   const std::string& label) {
-    for (int mode = 0; mode < 5; ++mode) {
+    for (int mode = 0; mode < 8; ++mode) {
         std::stringbuf output(std::ios::out | std::ios::binary);
         std::ofstream stream;
         static_cast<std::ostream&>(stream).rdbuf(&output);
         DRW_Header header;
+        if (mode == 6) header.addStr("$TEXTSTYLE", "CUSTOM", 7);
         Writer writer(&stream, &header);
         const bool prepared = writer.prepareDwgClassManifest()
             && writer.writeFileHeaderStub() && writer.writeDwgHeader()
@@ -16032,15 +16035,39 @@ void testStandardDimstyleDefaults(TestContext& t, DRW::Version version,
         DRW_Dimstyle caller;
         caller.name = "STANDARD";
         caller.setDwgCommonObjectState(0, mode == 2 ? 1u : 0u, false);
-        caller.dimtxstyH.ref = DRW::DwgStandardTextStyleHandle;
+        caller.dimtxstyH.ref = mode == 5 ? 0u : DRW::DwgStandardTextStyleHandle;
+        if (mode == 6) {
+            DRW_Textstyle standard;
+            standard.name = "STANDARD";
+            standard.font = "caller-standard.shx";
+            DRW_Textstyle custom;
+            custom.name = "CUSTOM";
+            t.expect(writer.addTextstyle(standard) == DRW::DwgStandardTextStyleHandle
+                         && writer.addTextstyle(custom) != 0u,
+                     "caller styles registered for synthetic DIMSTYLE: " + label);
+        }
         if (mode == 4) {
             caller.reactorHandles.push_back(DRW::DwgLayer0Handle);
             caller.xDictHandle = DRW::DwgAcadGroupDictionaryHandle;
         }
         if (mode == 3) caller.dimscale = std::numeric_limits<double>::quiet_NaN();
-        if (mode != 0)
+        if (mode != 0 && mode != 6 && mode != 7)
             t.expect(writer.addDimstyle(caller) == DRW::DwgStandardDimstyleHandle,
                      "caller STANDARD DIMSTYLE registered: " + label);
+        if (mode == 7) {
+            DRW_Textstyle invalid;
+            invalid.name = "STANDARD";
+            invalid.width = std::numeric_limits<double>::quiet_NaN();
+            t.expect(writer.addTextstyle(invalid) == DRW::DwgStandardTextStyleHandle,
+                     "invalid target style registered: " + label);
+            const auto before = writer.buffer();
+            t.expect(!writer.writeDwgObjects() && writer.buffer() == before
+                         && output.str().empty(),
+                     "invalid target style rolls back without output: " + label);
+            invalid.width = 1.0;
+            t.expect(writer.addTextstyle(invalid) == DRW::DwgStandardTextStyleHandle,
+                     "corrected target style registered on same writer: " + label);
+        }
         if (mode == 3) {
             const auto before = writer.buffer();
             t.expect(!writer.writeDwgObjects() && writer.buffer() == before
@@ -16063,12 +16090,20 @@ void testStandardDimstyleDefaults(TestContext& t, DRW::Version version,
         HeaderPublicationSink sink;
         dwgRW reader("");
         const bool read = reader.readBuffer(bytes.data(), bytes.size(), &sink, false);
-        const bool synthesized = mode == 0 && version >= DRW::AC1018;
-        const auto expectedFlag = version >= DRW::AC1018 && (mode == 0 || mode == 2) ? 1u : 0u;
+        const bool syntheticRecord = mode == 0 || mode == 6 || mode == 7;
+        const bool synthesized = syntheticRecord && version >= DRW::AC1015;
+        const auto expectedFlag = version >= DRW::AC1018 && (syntheticRecord || mode == 2) ? 1u : 0u;
+        const auto expectedStyle = mode == 5 || (syntheticRecord && version != DRW::AC1015)
+            ? 0u : DRW::DwgStandardTextStyleHandle;
         t.expect(read && sink.standardDimstyles == 1u && sink.lines == 1u
                      && sink.standardDimFlag == expectedFlag
-                     && sink.standardDimTextStyle == (mode == 0 ? 0u : DRW::DwgStandardTextStyleHandle)
-                     && sink.standardDimTextCode == ((mode != 0 || synthesized) ? DRW::DwgHardPointer : 0u)
+                     && sink.standardDimTextStyle == expectedStyle
+                     && sink.standardDimTextCode == ((expectedStyle != 0 || synthesized) ? DRW::DwgHardPointer : 0u)
+                     && (mode != 6 || (sink.currentNames[1] == "CUSTOM"
+                                          && sink.standardStyleFont == "caller-standard.shx"))
+                     && (version != DRW::AC1015 || !syntheticRecord
+                         || (sink.standardStyles == 1u
+                             && sink.standardStyleHandle == sink.standardDimTextStyle))
                      && sink.standardDimArrowCode == (synthesized ? DRW::DwgHardPointer : 0u)
                      && sink.standardDimReactors == (mode == 4
                             ? std::vector<std::uint32_t>{DRW::DwgLayer0Handle}
@@ -16076,14 +16111,20 @@ void testStandardDimstyleDefaults(TestContext& t, DRW::Version version,
                      && sink.standardDimXdict == (mode == 4 ? DRW::DwgAcadGroupDictionaryHandle : 0u),
                  "STANDARD DIMSTYLE common state and following LINE: " + label);
     }
-    if (version >= DRW::AC1018) {
+    if (version >= DRW::AC1015) {
         DRW_Dimstyle probe;
-        probe.setDwgCommonObjectState(0, 1, false);
+        probe.setDwgCommonObjectState(0, version == DRW::AC1015 ? 0 : 1, false);
+        if (version == DRW::AC1015) probe.dimtxstyH.ref = DRW::DwgStandardTextStyleHandle;
         dwgBufferW body, strings, handles;
         const bool encoded = DrwObjectEncodeTestAccess::encodeDimstyle(
             probe, version, body, strings, handles, true);
         std::vector<std::uint8_t> expected{0x41u,0x0au};
-        expected.insert(expected.end(), version >= DRW::AC1021 ? 9u : 6u, 0x50u);
+        if (version == DRW::AC1015) {
+            expected.insert(expected.end(), {0x30u, 0x50u, 0x51u, 0x13u,
+                                             0x50u, 0x50u, 0x50u, 0x50u});
+        } else {
+            expected.insert(expected.end(), version >= DRW::AC1021 ? 9u : 6u, 0x50u);
+        }
         t.expect(encoded && handles.data() == expected,
                  "synthetic DIMSTYLE exact typed null handles: " + label);
     }

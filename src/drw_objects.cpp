@@ -8700,7 +8700,9 @@ bool DRW_Dimstyle::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
 
     const std::uint8_t effectiveXDictFlag = version > DRW::AC1015 ? xDictFlag : 0u;
     putCommonObjectHandlePrefix(hb, kDimstyleControl, numReactors,
-                                effectiveXDictFlag, &reactorHandles, xDictHandle);
+                                effectiveXDictFlag, &reactorHandles, xDictHandle,
+                                DRW::DwgSoftPointer, false,
+                                version == DRW::AC1015 && typedNullReferences);
     const auto hardReference = [typedNullReferences](std::uint32_t ref) {
         dwgHandle value = makeRefW(ref, DRW::DwgHardPointer);
         if (typedNullReferences && ref == 0u)
