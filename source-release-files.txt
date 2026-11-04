@@ -347,6 +347,7 @@ tests/ac1021_field_source_raw_probe.cpp
 tests/ac1021_field_source_span_probe.py
 tests/ac1021_geometry_peer_audit_tests.py
 tests/ac1021_material_peer_audit_tests.py
+tests/ac1021_varied_geometry_peer_audit_tests.py
 tests/ac1024_candidate_fields_v2_live.py
 tests/ac1024_candidate_self_test.py
 tests/ac1027_acds_source_compare.py
@@ -631,6 +632,7 @@ tools/audit_ac1015_insert_tilted.py
 tools/audit_ac1018_dictionary_wire.py
 tools/audit_ac1021_geometry_peer.py
 tools/audit_ac1021_material_peer.py
+tools/audit_ac1021_varied_geometry_peer.py
 tools/audit_ac1021_vport_roles.py
 tools/audit_ac1024_rastervariables_source.py
 tools/audit_ac1024_tilted_geometry.py
@@ -650,6 +652,7 @@ tools/audit_wipeout_ac1018_source.py
 tools/audit_wipeout_ac1024_source.py
 tools/audit_wipeout_ac1032_source.py
 tools/author_ac1021_geometry_matrix.py
+tools/author_ac1021_varied_geometry.py
 tools/author_dwg_legacy_extrusion.py
 tools/author_wipeout_direct_nod.py
 tools/bounded_process.py
@@ -720,6 +723,7 @@ tools/probe_ac1021_geometry_matrix.cpp
 tools/probe_ac1021_header_variant.cpp
 tools/probe_ac1021_imagedef_owner_tokens.cpp
 tools/probe_ac1021_line_writer.cpp
+tools/probe_ac1021_varied_geometry.cpp
 tools/probe_ac1024_rastervariables_source.cpp
 tools/probe_ac1024_tilted_geometry.cpp
 tools/probe_ac1027_source_sab_cqacis.py

@@ -935,6 +935,10 @@ independent geometry checks, alongside the previously passing LINE and ARC
 controls. Broader entities, producer versions, graph defaults and native
 rendering remain open
 ([footer receipt](docs/research/p6-ac1021-point-circle-absent-string-footer-2026-11-04.json)).
+Additional opt-in AC1021 LINE, ELLIPSE, LWPOLYLINE and TEXT samples, including a
+mixed drawing, passed ODA conversion to AC1027 DXF and independent field checks;
+other values, graph profiles and native rendering remain open
+([matrix receipt](docs/research/p6-ac1021-varied-entity-matrix-2026-11-04.json)).
 
 Generated LTYPE_CONTROL output has a consumer-visible built-in linetype
 ordering risk: six ODA-produced files conflict with the PDF’s stated order.
