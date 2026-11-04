@@ -417,6 +417,7 @@ EXTRA_DIST = \
     tests/dwg_default_plotstyle_optin_tests.cpp \
     tests/dwg_ellipse_wcs_test.h \
     tests/dwg_fixture_tests.cpp \
+    tests/dwg_hatch_edge_subtype_tests.cpp \
     tests/dwg_hatch_ellipse_edge_dwg_tests.cpp \
     tests/dwg_legacy_block_content_chain_libredwg.py \
     tests/dwg_legacy_block_content_chain_tests.cpp \
@@ -768,6 +769,7 @@ EXTRA_DIST = \
     tools/probe_ac1024_rastervariables_source.cpp \
     tools/probe_ac1024_tilted_geometry.cpp \
     tools/probe_ac1027_source_sab_cqacis.py \
+    tools/probe_dwg_hatch_unsupported_edges.cpp \
     tools/probe_dxf_lwpolyline_missing_y.cpp \
     tools/probe_dxf_sparse_lwpolyline.cpp \
     tools/probe_geodata_physical_capture.cpp \

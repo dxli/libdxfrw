@@ -901,6 +901,10 @@ The shared DWG HATCH/MPOLYGON edge writer now dispatches ellipse edges before
 their LINE base class. Producer-backed HATCH output and generated MPOLYGON body
 checks cover the selected fields; broader physical and native behavior remains
 open ([dispatch receipt](docs/research/p6-dwg-hatch-ellipse-edge-dispatch-2026-11-04.json)).
+The DWG writer now refuses unsupported HATCH/MPOLYGON edge type tags such as
+RAY and HELIX before writing instead of silently projecting them to LINE or
+SPLINE; callers can correct the edge and retry
+([refusal receipt](docs/research/p6-dwg-hatch-unsupported-edge-subtypes-2026-11-04.json)).
 Qualify CIRCLE/ARC DWG extrusion writeback beyond the explicit AC1024 helper
 profile and its selected geometry checks ([receipt](docs/research/p6-ac1024-dwg-legacy-extrusion-opt-in-2026-11-04.json)).
 Qualify SOLID/TRACE DWG writeback and broader producer/normal coverage beyond

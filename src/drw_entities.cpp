@@ -19969,10 +19969,32 @@ bool validateDwgHatchData(const DRW_Hatch& hatch, DRW::Version version) {
         }
 
         for (const auto& entity : loop->objlist) {
-          if (dynamic_cast<const DRW_Line *>(entity.get()) ||
-              dynamic_cast<const DRW_Arc *>(entity.get()) ||
-              dynamic_cast<const DRW_Ellipse *>(entity.get())) {
+          if (!entity)
+            return false;
+          // HATCH edge records have four wire types. A derived entity such as
+          // RAY or HELIX must not be silently reduced to its base payload.
+          switch (entity->eType) {
+          case DRW::LINE:
+            if (!dynamic_cast<const DRW_Line *>(entity.get())
+                || dynamic_cast<const DRW_Ellipse *>(entity.get())
+                || dynamic_cast<const DRW_3DLine *>(entity.get())
+                || dynamic_cast<const DRW_Ray *>(entity.get())
+                || dynamic_cast<const DRW_Trace *>(entity.get())
+                || dynamic_cast<const DRW_Text *>(entity.get())
+                || dynamic_cast<const DRW_Image *>(entity.get()))
+              return false;
             continue;
+          case DRW::ARC:
+            if (!dynamic_cast<const DRW_Arc *>(entity.get())) return false;
+            continue;
+          case DRW::ELLIPSE:
+            if (!dynamic_cast<const DRW_Ellipse *>(entity.get())) return false;
+            continue;
+          case DRW::SPLINE:
+            if (dynamic_cast<const DRW_Helix *>(entity.get())) return false;
+            break;
+          default:
+            return false;
           }
           const auto *spline = dynamic_cast<const DRW_Spline *>(entity.get());
           if (!spline ||
@@ -20728,7 +20750,8 @@ bool DRW_Hatch::encodeDwgBoundaryData(DRW::Version version, dwgBufferW *buf,
       for (const auto &seg : lp->objlist) {
         // DRW_Ellipse derives from DRW_Line; preserve its edge type and fields.
         if (const auto *el =
-                       dynamic_cast<const DRW_Ellipse *>(seg.get())) {
+                       (seg && seg->eType == DRW::ELLIPSE
+                            ? dynamic_cast<const DRW_Ellipse *>(seg.get()) : nullptr)) {
           buf->putRawChar8(3); // ellipse arc
           buf->put2RawDouble(el->basePoint);
           buf->put2RawDouble(el->secPoint);
@@ -20736,11 +20759,13 @@ bool DRW_Hatch::encodeDwgBoundaryData(DRW::Version version, dwgBufferW *buf,
           buf->putBitDouble(el->staparam);
           buf->putBitDouble(el->endparam);
           buf->putBit(static_cast<std::uint8_t>(el->isccw));
-        } else if (const auto *ln = dynamic_cast<const DRW_Line *>(seg.get())) {
+        } else if (const auto *ln = seg && seg->eType == DRW::LINE
+                              ? dynamic_cast<const DRW_Line *>(seg.get()) : nullptr) {
           buf->putRawChar8(1); // line
           buf->put2RawDouble(ln->basePoint);
           buf->put2RawDouble(ln->secPoint);
-        } else if (const auto *arc = dynamic_cast<const DRW_Arc *>(seg.get())) {
+        } else if (const auto *arc = seg && seg->eType == DRW::ARC
+                               ? dynamic_cast<const DRW_Arc *>(seg.get()) : nullptr) {
           buf->putRawChar8(2); // circular arc
           buf->put2RawDouble(arc->basePoint);
           buf->putBitDouble(arc->radious);
@@ -20748,7 +20773,8 @@ bool DRW_Hatch::encodeDwgBoundaryData(DRW::Version version, dwgBufferW *buf,
           buf->putBitDouble(arc->endangle);
           buf->putBit(static_cast<std::uint8_t>(arc->isccw));
         } else if (const auto *sp =
-                       dynamic_cast<const DRW_Spline *>(seg.get())) {
+                       (seg && seg->eType == DRW::SPLINE
+                            ? dynamic_cast<const DRW_Spline *>(seg.get()) : nullptr)) {
           buf->putRawChar8(4); // spline
           buf->putBitLong(sp->degree);
           const bool hasCanonicalWeights = !sp->weightlist.empty();
