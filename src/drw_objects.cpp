@@ -16681,7 +16681,8 @@ bool DRW_Material::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
 bool DRW_Material::encodeDwg(DRW::Version version, dwgBufferW *buf,
                              dwgBufferW *strBuf,
                              dwgBufferW *handleBuf) const {
-    if (buf == nullptr || !dwgSafety::validReactorCount(reactorCount())
+    if (buf == nullptr || requiresRawDxfMaterialReplay()
+        || !dwgSafety::validReactorCount(reactorCount())
         || extensionDictionaryFlag() > 1)
         return false;
     if (m_rawDataValid && m_rawDataVersion != DRW::UNKNOWNV

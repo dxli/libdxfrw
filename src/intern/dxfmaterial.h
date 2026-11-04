@@ -12,6 +12,7 @@
 namespace dxfMaterial {
 inline bool validBody(const DRW_Material& value) {
     const auto* ent = &value;
+    if (ent->requiresRawDxfMaterialReplay()) return false;
     // The reused codes cannot be emitted without their actual boundary field.
     // Never invent a luminance/default value to disambiguate an incomplete model.
     const bool normalBoundary=ent->m_hasLuminance||ent->m_hasNormalMapStrength;
@@ -545,6 +546,7 @@ inline bool sameBodyState(const DRW_Material& a,
 
 inline bool sameState(const DRW_Material& a, const DRW_Material& b) noexcept {
     return sameBodyState(a, b)
+        && a.requiresRawDxfMaterialReplay() == b.requiresRawDxfMaterialReplay()
         && a.hasCompleteDwgSemanticFields()
             == b.hasCompleteDwgSemanticFields()
         && a.hasDxfMaterialImplicitTail() == b.hasDxfMaterialImplicitTail()

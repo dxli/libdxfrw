@@ -26394,6 +26394,29 @@ bool dxfRW::processMaterial() {
     int code;
     DRW_Material data;
     DRW_RawDxfObject raw;
+    bool pendingSparseTail = false;
+    const auto isSparseProducerPrefix = [&]() {
+        constexpr int codes[] = {5,102,330,102,330,100,1,71,91,72,273};
+        if (reader->getSourceVersion() != DRW::AC1027 || raw.groups.size() != 11u
+            || raw.handle == 0u || raw.parentHandle == 0u
+            || data.handle != raw.handle || data.parentHandle != raw.parentHandle
+            || data.reactorHandles.size() != 1u || data.reactorHandles[0] != raw.parentHandle
+            || data.xDictHandle != 0u
+            || (data.m_name != "ByBlock" && data.m_name != "ByLayer" && data.m_name != "Global")
+            || !data.m_hasDiffuseColorMethod || data.m_diffuseColorMethod != 1u
+            || !data.m_hasDiffuseColorValue || data.m_diffuseColorValue != 0xC2FFFFFFu
+            || !data.m_hasDiffuseMapSource || data.m_diffuseMapSource != 1u
+            || !data.m_hasRefractionMapSource || data.m_refractionMapSource != 1u)
+            return false;
+        for (std::size_t i = 0; i != 11u; ++i)
+            if (raw.groups[i].code() != codes[i]) return false;
+        const auto text = [&raw](std::size_t i, const char* value) {
+            return raw.groups[i].type() == DRW_Variant::STRING
+                && raw.groups[i].c_str() != nullptr && *raw.groups[i].content.s == value;
+        };
+        return text(1u, "{ACAD_REACTORS") && text(3u, "}")
+            && text(5u, "AcDbMaterial");
+    };
     if (!copyRawDxfCarrierName(raw, nextentity))
         return setError(DRW::BAD_CODE_PARSED);
     struct UnsignedColorModeRestore {
@@ -26413,10 +26436,33 @@ bool dxfRW::processMaterial() {
                 || ((!data.m_hasLuminance && !data.m_hasNormalMapStrength)
                     && (data.m_hasLuminanceMode || data.m_hasNormalMapMethod)))
                 return setError(DRW::BAD_CODE_PARSED);
+            if (pendingSparseTail) {
+                // The 273 role is ambiguous in this abbreviated body. Keep
+                // it only in the retained raw carrier, never as a typed field.
+                data.m_hasRefractionMapSource = false;
+                // This combination is unreachable in ordinary parsing: 300
+                // and 292 refuse an implicit tail, while implicit-tail paths
+                // require that the procedural table has not started.
+                data.m_dxfMaterialGenProcTableStarted = true;
+                data.m_dxfMaterialImplicitTail = true;
+            }
             DRW_DBG(nextentity); DRW_DBG("\n");
             iface->addMaterial(data);
             iface->addRawDxfObject(raw);  // no typed writer: raw re-emits on DXF->DXF
             return true;
+        }
+        if (pendingSparseTail)
+            return setError(DRW::BAD_CODE_PARSED);
+        if (code == 94 && reader->getInt32() == 63 && isSparseProducerPrefix()) {
+            const auto* policy = dynamic_cast<const DRW_DxfSparseMaterialRawPolicy*>(iface);
+            if (policy != nullptr && policy->wantsDxfSparseMaterialRawCapture()) {
+                if (!captureRawGroup(raw, code, /*validateHandles=*/true))
+                    return setError(DRW::BAD_CODE_PARSED);
+                data.m_channelFlags = 63;
+                data.m_hasChannelFlags = true;
+                pendingSparseTail = true;
+                continue;
+            }
         }
         if (!captureAndParseRawDxfGroup(raw, code, data))
             return setError(DRW::BAD_CODE_PARSED);

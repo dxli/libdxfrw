@@ -53,9 +53,15 @@ class dx_iface : public DRW_Interface, public DRW_UnmodeledDxfObjectHandler,
                  public DRW_DxfLayerTableControlHandler,
                  public DRW_DxfViewUcsSourceHandler,
                  public DRW_DxfObjectPhysicalSourcePolicy,
+                 public DRW_DxfSparseMaterialRawPolicy,
                  public DRW_DxfPointCloudDefinitionSourceHandler,
                  public WholeSourceV2::Handler {
 public:
+    bool wantsDxfSparseMaterialRawCapture() const noexcept override {
+        // Old subclasses may override callbacks without retaining raw records.
+        // They must explicitly opt in instead of inheriting this policy.
+        return typeid(*this) == typeid(dx_iface);
+    }
     // Internal-only groundwork; opting in captures decoded physical scalars,
     // not source bytes, graph completeness or write/semantic eligibility.
     bool enableWholeDxfSourceObservation(bool enabled=true) noexcept {

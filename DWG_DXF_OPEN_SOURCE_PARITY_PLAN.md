@@ -542,6 +542,11 @@ versions and native rendering remain open
 ([version receipt](docs/research/p5-sunstudy-dxf-ac1024-ac1032-2026-11-04.json)).
 The adapter also retains typed LIGHTLIST callbacks within aggregate record,
 item, and byte bounds ([capture receipt](docs/research/p5-lightlist-callback-retention-2026-11-03.json));
+An explicit consumer opt-in can retain the exact sparse AC1027 default MATERIAL
+profile as incomplete typed data plus its raw record. Typed output and adapter
+replay remain refused until the ambiguous field and graph are qualified; older
+consumers keep the prior input refusal
+([sparse MATERIAL receipt](docs/research/p6-ac1027-sparse-default-material-raw-only-2026-11-04.json)).
 DXF-origin LIGHT group 421 true color now has bounded ASCII/Binary transport;
 DWG CMC mapping and complete LIGHTLIST graph output remain open
 ([color receipt](docs/research/p6-light-dxf-421-true-color-2026-11-04.json)).

@@ -455,6 +455,7 @@ EXTRA_DIST = \
     tests/dxf_lightlist_reference_tests.cpp \
     tests/dxf_mline_source_dependency_tests.cpp \
     tests/dxf_no_raw_sections_tests.cpp \
+    tests/dxf_sparse_material_raw_tests.cpp \
     tests/dxf_symbol_output_tests.cpp \
     tests/dxf_whole_source_tests.cpp \
     tests/dxf_xdata_int16_tests.cpp \
@@ -688,6 +689,7 @@ EXTRA_DIST = \
     tools/audit_rastervariables_ac1018_frame1_source.py \
     tools/audit_rastervariables_ac1018_source.py \
     tools/audit_rastervariables_ac1032_frame1_source.py \
+    tools/audit_sparse_material_source.py \
     tools/audit_sunstudy_dxf_graph.py \
     tools/audit_wipeout_ac1018_frame1_source.py \
     tools/audit_wipeout_ac1018_source.py \
@@ -805,6 +807,8 @@ EXTRA_DIST = \
     tools/probe_rastervariables_ac1018_frame1_source.cpp \
     tools/probe_rastervariables_ac1018_source.cpp \
     tools/probe_rastervariables_ac1032_frame1_source.cpp \
+    tools/probe_sparse_material_adapter.cpp \
+    tools/probe_sparse_material_source.cpp \
     tools/probe_wipeout_ac1018_frame1_source.cpp \
     tools/probe_wipeout_ac1018_source.cpp \
     tools/probe_wipeout_ac1024_frame1_source.cpp \

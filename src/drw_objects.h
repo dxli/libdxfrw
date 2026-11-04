@@ -4706,7 +4706,12 @@ public:
   //! True when DXF tail fields were parsed after a complete nonprocedural map
   //! tuple, without the optional procedural-table group 292 marker.
   [[nodiscard]] bool hasDxfMaterialImplicitTail() const noexcept {
-    return m_dxfMaterialImplicitTail;
+    return m_dxfMaterialImplicitTail && !m_dxfMaterialGenProcTableStarted;
+  }
+  //! The sparse source profile contains an ambiguous field retained only in
+  //! its raw DXF record. Both typed encoders must refuse this state.
+  [[nodiscard]] bool requiresRawDxfMaterialReplay() const noexcept {
+    return m_dxfMaterialImplicitTail && m_dxfMaterialGenProcTableStarted;
   }
   [[nodiscard]] DRW::Version dwgRawDataVersion() const noexcept {
     return m_rawDataVersion;

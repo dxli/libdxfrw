@@ -1051,6 +1051,16 @@ struct DRW_DxfObjectPhysicalSource {
 struct DRW_DxfObjectPhysicalSourceLimits {
   std::size_t fields{4000000u},bytes{64u*1024u*1024u},work{128u*1024u*1024u};
 };
+/** Optional, explicit opt-in for the exact sparse DXF MATERIAL profile.
+ * The typed callback is incomplete: the consumer must retain the accompanying
+ * raw object and honor DRW_Material::requiresRawDxfMaterialReplay(). Kept
+ * outside DRW_Interface to preserve existing consumer vtables. */
+class DRW_DxfSparseMaterialRawPolicy {
+public:
+  virtual ~DRW_DxfSparseMaterialRawPolicy() = default;
+  virtual bool wantsDxfSparseMaterialRawCapture() const noexcept { return false; }
+};
+
 /** Optional independent limit policy; collection uses the existing rendering/
  * dictionary source opt-ins. Adds no DRW_Interface or existing facet slot.
  * Own limits/allocation leave ordinary reads intact; shared read limits still

@@ -4052,6 +4052,10 @@ bool dwgRW::writeMaterial(DRW_Material *object) {
     }
     if (object == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
+    if (object->requiresRawDxfMaterialReplay()) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::Object, false);
+    }
     if (object->hasDwgRawData()
         && (version > DRW::AC1018
             || object->dwgRawDataVersion() > DRW::AC1018)) {
