@@ -16,17 +16,37 @@
 
 namespace {
 #ifdef DWG_LAYOUT_VALIDATION_TESTS
+std::uint32_t crc32(const std::uint8_t* p, std::size_t n);
 int mutation = 0;
 void corrupt(dwgWriterLayoutValidation::Snapshot& snapshot) {
     auto* state = std::get_if<dwgWriterLayoutValidation::R2004Snapshot>(&snapshot);
     if (!state || state->receipt.version < DRW::AC1027) return;
     if (mutation == 1) state->assembled.back() ^= 1;
-    if (mutation == 2) {
-        state->assembled[0x80 + 0x34] ^= 1;
-        state->fileHeader[0x80 + 0x34] ^= 1;
-        state->assembled[state->receipt.declaredFileSize + 0x34] ^= 1;
-    }
     if (mutation == 3) state->assembled.pop_back();
+    if (mutation == 2 || mutation == 4) {
+        std::array<std::uint8_t, 0x6c> raw{}, mask{};
+        std::uint32_t seed = 1;
+        for (std::size_t i = 0; i < raw.size(); ++i) {
+            seed = seed * 0x343fdu + 0x269ec3u;
+            mask[i] = static_cast<std::uint8_t>(seed >> 16);
+            raw[i] = state->fileHeader[0x80 + i] ^ mask[i];
+        }
+        if (mutation == 2) {
+            raw[0x34] ^= 1;
+            raw[0x68] = raw[0x69] = raw[0x6a] = raw[0x6b] = 0;
+            const auto crc = crc32(raw.data(), raw.size());
+            for (unsigned i = 0; i < 4; ++i)
+                raw[0x68 + i] = static_cast<std::uint8_t>(crc >> (8 * i));
+        } else {
+            raw[0x68] ^= 1;
+        }
+        for (std::size_t i = 0; i < raw.size(); ++i) {
+            const auto encrypted = raw[i] ^ mask[i];
+            state->fileHeader[0x80 + i] = encrypted;
+            state->assembled[0x80 + i] = encrypted;
+            state->assembled[state->receipt.declaredFileSize + i] = encrypted;
+        }
+    }
 }
 #endif
 std::uint32_t get32(const std::uint8_t* p) {
@@ -106,7 +126,7 @@ int main() {
         writer.fail = false;
 #ifdef DWG_LAYOUT_VALIDATION_TESTS
         if (version >= DRW::AC1027) {
-            for (mutation = 1; mutation <= 3; ++mutation) {
+            for (mutation = 1; mutation <= 4; ++mutation) {
                 dwgWriterLayoutValidation::setTestSnapshotObserver(corrupt);
                 const bool written = output.write(&writer, version, true);
                 dwgWriterLayoutValidation::setTestSnapshotObserver(nullptr);

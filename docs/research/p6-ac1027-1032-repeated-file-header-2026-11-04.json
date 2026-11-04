@@ -39,13 +39,13 @@
   "peer_check": "LibreDWG 0.14 dwgread -O JSON reads each generated output with one LINE from (1,2,3) to (4,5,6). This is a narrow peer observation, not ODA acceptance or warning-free qualification.",
   "tests": [
     "libdxfrw_dwg_modern_repeated_header: source-independent first/copy equality, EOF address, independent CRC, four-version behavior, invalid entity sentinel preservation and same-facade retry; copy/address/truncation negative verifier controls.",
-    "libdxfrw_dwg_modern_repeated_header_fault compiles writer18 and the layout validator with the existing DWG_LAYOUT_VALIDATION_TESTS hook; corrupted copy, corrupted matching address/CRC, and truncation each refuse publication, preserve the destination, and permit same-facade retry."
+    "libdxfrw_dwg_modern_repeated_header_fault compiles writer18 and the layout validator with the existing DWG_LAYOUT_VALIDATION_TESTS hook; corrupted copy, independently resealed wrong address with equal copies, equal copies with bad CRC, and truncation each refuse publication, preserve the destination, and permit same-facade retry."
   ],
   "limits": "Only an omitted required container copy is corrected. ODA rejects both tested files, so the cause of its rejection remains unknown. This does not establish broader writer support or change AC1018/AC1024.",
   "files": {
     "src/intern/dwgwriter18.cpp": "9e2378c5261986b6fb28141cc9fd8a0cebb493f9b05a206132a11214253ace91",
     "src/intern/dwgwriterlayoutvalidation.cpp": "b9e341948bc7458185e437802d3c1f77dab4003b72205be61bfe9386c0dc5f1a",
-    "tests/dwg_modern_repeated_header_tests.cpp": "d78d2d025e5d75400b99aadf703f99d5a06420dd8e9e01d837731e202e56ec0e"
+    "tests/dwg_modern_repeated_header_tests.cpp": "23faf751b88eb1ea4e8a1b1fea2cca5a4754855e74daa5bf13a913997c5f51e9"
   },
   "schema": "libdxfrw.research-receipt.v1",
   "date": "2026-11-04",
