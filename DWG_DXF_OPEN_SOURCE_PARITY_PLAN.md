@@ -1335,6 +1335,13 @@ Native source-release builds and platform qualification remain open.
   These checks cover API shape and generated record delivery only, not native
   application behavior. Qualify intended 3D consumers and remaining FreeCAD
   `dwg2dxf` profiles without dropping required geometry.
+  A dirty local LibreCAD_3 snapshot's native persistence target passes three
+  existing DXF export tests and a planar LINE/CIRCLE open/save/reopen probe
+  against a pinned libdxfrw build. Its custom CMake finder needs a downstream
+  C++17 propagation fix, its full test target has an unrelated Kaguya C++17
+  failure, and a nonplanar LINE triggers its 2D geometry exception. Qualify a
+  clean consumer revision and full application separately
+  ([receipt](docs/research/p8-librecad3-macos-native-dxf-2026-11-04.json)).
   A bounded generated CAMERA reference profile now binds source VIEW handles
   to emitted VIEW table rows. CAMERA code 340 is emitted only for a VIEW row
   serialized in the current attempt, and uses its remapped handle; missing,

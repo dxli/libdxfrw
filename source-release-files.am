@@ -639,6 +639,7 @@ EXTRA_DIST = \
     tools/audit_dxf_lwpolyline_missing_y.py \
     tools/audit_dxf_sparse_lwpolyline.py \
     tools/audit_dxf_table_values.py \
+    tools/audit_librecad3_native_dxf.py \
     tools/audit_p9_rtext_native_history.py \
     tools/audit_rastervariables_ac1018_source.py \
     tools/audit_sunstudy_dxf_graph.py \
@@ -718,6 +719,7 @@ EXTRA_DIST = \
     tools/probe_dxf_lwpolyline_missing_y.cpp \
     tools/probe_dxf_sparse_lwpolyline.cpp \
     tools/probe_geodata_physical_capture.cpp \
+    tools/probe_librecad3_native_dxf.cpp \
     tools/probe_lightlist_physical_capture.cpp \
     tools/probe_rastervariables_ac1018_source.cpp \
     tools/probe_wipeout_ac1018_source.cpp \
