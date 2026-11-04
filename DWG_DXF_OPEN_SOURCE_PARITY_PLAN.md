@@ -854,6 +854,9 @@ its provenance and the absence of a located erratum do not resolve the conflict
 
 For GEODATA, qualify whole-source output and native geospatial meaning beyond
 the AC1027 selected graph with a nonempty mesh ([receipt](docs/research/p4-ac1027-geodata-mesh-selected-graph-2026-11-04.json)).
+The selected graph now transports ASCII definitions containing both literal
+caret-J and line feeds, but this does not qualify CRS semantics or whole-source
+output ([receipt](docs/research/p4-geodata-ascii-mixed-caret-newline-output-2026-11-04.json)).
 Resolve the AC1024 CIVIL-tail version contradiction with authoritative guidance
 and an independently produced AutoCAD 2010 witness before changing the parser
 or output gate ([receipt](docs/research/p4-ac1024-geodata-v2-civil-tail-conflict-2026-11-04.json)).

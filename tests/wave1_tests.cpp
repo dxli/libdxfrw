@@ -15718,15 +15718,14 @@ void testGeoDataDefinitionControlRoundTrip(TestContext& t) {
                 geo.handle = 0x731u;
                 geo.m_version = version;
                 geo.m_coordinateSystemDefinition = source;
-                if (!binary && source == "Alpha^J\nBeta") {
+                if (source == "Alpha^J\nBeta") {
+                    geo.m_version = 4;
                     const bool rejected = !writer.writeGeoData(&geo)
                         && output.str() == prefix && geo.handle == 0x731u
+                        && geo.m_coordinateSystemDefinition == source
                         && !writer.m_writeError && !writer.writer->hasWriteError();
-                    geo.m_coordinateSystemDefinition = "Alpha^JBeta";
-                    const bool retried = writer.writeGeoData(&geo);
-                    t.expect(rejected && retried && geo.handle == 0x731u,
-                             "mixed LF and literal caret-J refuse atomically and retry");
-                    continue;
+                    geo.m_version = version;
+                    t.expect(rejected, "mixed GEODATA text survives refusal and same-writer retry");
                 }
                 const bool wrote = writer.writeGeoData(&geo)
                     && writer.writer->writeString(0, "WIRE_END");
@@ -15760,12 +15759,59 @@ void testGeoDataDefinitionControlRoundTrip(TestContext& t) {
                     }
                 }
                 const std::string expectedWire = binary ? source
-                    : source == "Alpha\nBeta" ? "Alpha^JBeta" : "Alpha^ JBeta";
+                    : source == "Alpha\nBeta" ? "Alpha^JBeta"
+                    : source == "Alpha^J\nBeta" ? "Alpha^ J^JBeta" : "Alpha^ JBeta";
                 t.expect(wrote && reading && parsed && wire == expectedWire
                              && decoded.m_coordinateSystemDefinition == source,
                          "GEODATA v1/v2/v3 text bytes and typed value round trip");
             }
         }
+    }
+    for (const auto policy : {DRW::DxfTextWritePolicy::Compatible,
+                              DRW::DxfTextWritePolicy::RequireLossless}) {
+        std::ostringstream output;
+        dxfRW writer("");
+        writer.version = DRW::AC1027;
+        writer.writer = std::make_unique<dxfWriterAscii>(&output);
+        writer.writer->setVersion("AC1027", true);
+        writer.writer->setTextWritePolicy(policy);
+        writer.writer->writeString(1, "PREFIX");
+        const std::string prefix = output.str();
+        DRW_GeoData geo;
+        geo.handle = 0x732u;
+        geo.m_version = 1;
+        geo.m_coordinateSystemDefinition = std::string(254u, 'A') + "\n";
+        const bool rejected = !writer.writeGeoData(&geo)
+            && output.str() == prefix && geo.handle == 0x732u
+            && !writer.m_writeError && !writer.writer->hasWriteError();
+        geo.m_coordinateSystemDefinition = std::string(253u, 'A') + "\n";
+        const bool retried = writer.writeGeoData(&geo);
+        t.expect(rejected && retried
+                     && output.str().find(std::string(253u, 'A') + "^J") != std::string::npos,
+                 "v1 ASCII definition measures actual LF escape at the 255-byte boundary");
+    }
+    {
+        std::ostringstream output(std::ios::out | std::ios::binary);
+        dxfRW writer("");
+        writer.version = DRW::AC1027;
+        writer.binFile = true;
+        writer.writer = std::make_unique<dxfWriterBinary>(&output);
+        writer.writer->setVersion("AC1027", true);
+        writer.writer->setTextWritePolicy(DRW::DxfTextWritePolicy::Compatible);
+        writer.writer->writeString(1, "PREFIX");
+        const std::string prefix = output.str();
+        DRW_GeoData geo;
+        geo.handle = 0x733u;
+        geo.m_version = 1;
+        geo.m_coordinateSystemDefinition = std::string(255u, 'A') + char(0xFF);
+        const bool rejected = !writer.writeGeoData(&geo)
+            && output.str() == prefix && geo.handle == 0x733u
+            && !writer.m_writeError && !writer.writer->hasWriteError();
+        geo.m_coordinateSystemDefinition = std::string(254u, 'A') + char(0xFF);
+        const std::string expected = geo.m_coordinateSystemDefinition;
+        const bool retried = writer.writeGeoData(&geo);
+        t.expect(rejected && retried && output.str().find(expected) != std::string::npos,
+                 "v1 compatible Binary definition preserves byte boundary and malformed UTF-8");
     }
 }
 

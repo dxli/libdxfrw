@@ -18902,6 +18902,17 @@ void testDxfGeoDataModernTextPreflightView(TestContext& t) {
                             {303, std::string(254u, 'A')},
                             {301, "^J" + std::string(20u, 'B')}},
                     (newlineLabel + " at the 255-byte boundary").c_str());
+                checkDefinitionChunks(
+                    version, binary, policy,
+                    std::string(254u, 'A') + "^J\n" + std::string(20u, 'B'),
+                    binary
+                        ? std::vector<std::pair<int, std::string>>{
+                            {303, std::string(254u, 'A') + "^"},
+                            {301, "J\n" + std::string(20u, 'B')}}
+                        : std::vector<std::pair<int, std::string>>{
+                            {303, std::string(254u, 'A')},
+                            {301, "^ J^J" + std::string(20u, 'B')}},
+                    (newlineLabel + " with literal caret-J at the chunk boundary").c_str());
             }
         }
     }

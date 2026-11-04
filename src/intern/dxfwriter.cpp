@@ -731,8 +731,13 @@ bool dxfWriter::encodeTextPreservingCaretJ(
         std::vector<EncodedTextChunk>& chunks) {
     if (maxBytes == 0u)
         return recordWriteResult(false);
-    if (requiresLosslessText() && !validateStrictText(text))
-        return false;
+    if (requiresLosslessText()) {
+        // Newlines are emitted as the two-byte DXF control spelling below;
+        // validate the remaining UTF-8 and record-safety constraints normally.
+        std::string validationText(text);
+        std::replace(validationText.begin(), validationText.end(), '\n', ' ');
+        if (!validateStrictText(validationText)) return false;
+    }
 
     encoded.clear();
     chunks.clear();
@@ -740,10 +745,10 @@ bool dxfWriter::encodeTextPreservingCaretJ(
     for (std::size_t offset = 0u; offset < text.size();) {
         std::size_t sourceBytes = 0u;
         std::string encodedScalar;
-        if (text.substr(offset, 2u) == "^J") {
-            // GEODATA's writer has already mapped a source LF to this DXF
-            // control spelling. Do not quote the caret a second time.
-            sourceBytes = 2u;
+        if (text[offset] == '\n') {
+            // Keep the LF escape atomic; literal carets take the ordinary
+            // ASCII control-escaping path and become caret-space.
+            sourceBytes = 1u;
             encodedScalar = "^J";
         } else if (requiresLosslessText()) {
             if (!encodeStrictTextScalar(text, offset, sourceBytes,

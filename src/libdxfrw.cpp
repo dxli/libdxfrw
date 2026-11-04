@@ -33710,11 +33710,6 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
     const bool hasDefinitionLineBreak =
         definition.find('\n') != std::string_view::npos;
     const bool binaryLineBreak = binFile && hasDefinitionLineBreak;
-    // The ASCII newline spelling cannot distinguish a literal ^J from a
-    // normalized LF in the existing chunk encoder. Refuse that combination.
-    if (!binFile && hasDefinitionLineBreak
-        && definition.find("^J") != std::string_view::npos)
-        return false;
     if (hasDefinitionLineBreak && !binaryLineBreak) {
         normalizedDefinition.assign(definition);
         for (std::string::size_type pos = normalizedDefinition.find('\n');
@@ -33797,6 +33792,27 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
                         ? value.size() <= 255u
                         : writer->fromUtf8String(value).size() <= 255u);
         };
+        const auto representableDefinition = [&]() {
+            if (binaryLineBreak)
+                return definition.find('\0') == std::string_view::npos
+                    && definition.find('\r') == std::string_view::npos
+                    && (writer->usesCompatibleModernDxfUtf8()
+                            ? definition.size() <= 255u
+                            : writer->fromUtf8String(definition).size() <= 255u);
+            if (!hasDefinitionLineBreak)
+                return representableText(definition);
+            if (!isSafeDxfRecordText(definition))
+                return false;
+            const std::size_t encodedBytes = writer->fromUtf8String(definition).size();
+            // The validation view maps each LF to ^J. Generic ASCII text
+            // encoding quotes that caret, while the dedicated writer emits
+            // only the two-byte LF escape; subtract that extra byte per LF.
+            const std::size_t newlineCount = hasDefinitionLineBreak
+                ? static_cast<std::size_t>(std::count(
+                    ent->m_coordinateSystemDefinition.begin(),
+                    ent->m_coordinateSystemDefinition.end(), '\n')) : 0u;
+            return encodedBytes >= newlineCount && encodedBytes - newlineCount <= 255u;
+        };
 
         // Reject rather than silently discard values that belong to the
         // modern field map, the distinct DWG CIVIL tail, or an unsupported
@@ -33819,13 +33835,7 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
             || !finite(civil.m_ambiguous141Value)
             || !finite(civil.m_seaLevelElevation)
             || !finite(civil.m_coordinateProjectionRadius)
-            || !(binaryLineBreak
-                     ? definition.find('\0') == std::string_view::npos
-                         && definition.find('\r') == std::string_view::npos
-                         && (writer->usesCompatibleModernDxfUtf8()
-                                 ? definition.size() <= 255u
-                                 : writer->fromUtf8String(definition).size() <= 255u)
-                     : representableText(definition))
+            || !representableDefinition()
             || !representableText(ent->m_geoRssTag)
             || !representableText(ent->m_legacy.m_coordinateSystemDescription)
             || !representableText(ent->m_legacy.m_coordinateSystemDatum)
@@ -33957,7 +33967,7 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
         if (binaryLineBreak)
             writer->writeUtf8StringBounded(301, definition, 255u);
         else if (hasDefinitionLineBreak)
-            writer->writeUtf8StringPreservingCaretJ(301, definition);
+            writer->writeUtf8StringPreservingCaretJ(301, ent->m_coordinateSystemDefinition);
         else
             writer->writeUtf8String(301, definition);
         writer->writeUtf8String(302, ent->m_geoRssTag);
@@ -34035,7 +34045,7 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
                 return false;
         } else if (hasDefinitionLineBreak) {
             if (!writer->writeUtf8ChunksPreservingCaretJ(
-                    definition, 303, 301, 255u))
+                    ent->m_coordinateSystemDefinition, 303, 301, 255u))
                 return false;
         } else if (writer->requiresLosslessText()) {
             if (!writer->writeUtf8Chunks(definition, 303, 301, 255u)) return false;
