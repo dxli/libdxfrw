@@ -44,6 +44,37 @@
 #include "intern/dwgsafety.h"
 
 namespace {
+thread_local const ScopedDwgLegacyEntityLinks* g_legacyEntityLinks = nullptr;
+}
+
+ScopedDwgLegacyEntityLinks::ScopedDwgLegacyEntityLinks(
+    const dwgBufferW* body, const dwgBufferW* handles,
+    std::uint32_t previous, std::uint32_t next) noexcept
+    : m_body(body), m_handles(handles), m_previous(previous), m_next(next),
+      m_enclosing(g_legacyEntityLinks) {
+    g_legacyEntityLinks = this;
+}
+
+ScopedDwgLegacyEntityLinks::~ScopedDwgLegacyEntityLinks() {
+    g_legacyEntityLinks = m_enclosing;
+}
+
+bool ScopedDwgLegacyEntityLinks::lookup(const dwgBufferW* buffer,
+                                       std::uint32_t& previous,
+                                       std::uint32_t& next) noexcept {
+    if (buffer == nullptr) return false;
+    for (auto* context = g_legacyEntityLinks; context != nullptr;
+         context = context->m_enclosing) {
+        if (context->m_body == buffer || context->m_handles == buffer) {
+            previous = context->m_previous;
+            next = context->m_next;
+            return true;
+        }
+    }
+    return false;
+}
+
+namespace {
 
 std::shared_ptr<DRW_Vertex2D> makeVertex2DNoThrow() noexcept {
     try {
@@ -5942,7 +5973,10 @@ bool DRW_Entity::encodeDwgCommon(DRW::Version version, dwgBufferW *buf,
     // reads an xdic handle — same emit rule applies.
     // R2013+ (AC1027+): reader reads xDictFlag then reads haveNextLinks (bit restored).
     if (version == DRW::AC1015) {
-        buf->putBit(1);  // nolinks=1 (R2000: no prev/next chain)
+        // R2000 nolinks=1 implies handle -1/+1. An explicit opt-in supplies
+        // known neighbors before frame emission, preserving receipt accuracy.
+        std::uint32_t previous = 0, next = 0;
+        buf->putBit(ScopedDwgLegacyEntityLinks::lookup(buf, previous, next) ? 0 : 1);
     } else {
         buf->putBit(0);  // xDictFlag=0 (xdic present; real-or-null handle follows)
         if (version > DRW::AC1024) {
@@ -6089,6 +6123,16 @@ bool DRW_Entity::encodeDwgEntHandle(DRW::Version version, dwgBufferW *buf,
     xDic.size = 0;
 #endif
     hb->putHandle(xDic);
+    std::uint32_t legacyPrevious = 0, legacyNext = 0;
+    if (version == DRW::AC1015
+        && ScopedDwgLegacyEntityLinks::lookup(hb, legacyPrevious, legacyNext)) {
+        for (std::uint32_t ref : {legacyPrevious, legacyNext}) {
+            dwgHandle link;
+            link.code = DRW::DwgSoftPointer;
+            link.ref = ref;
+            hb->putHandle(link);
+        }
+    }
 
     // R2004+ stores the optional AcDbColor reference after the common owner,
     // reactor, and xdictionary handles. Keep this order aligned with the

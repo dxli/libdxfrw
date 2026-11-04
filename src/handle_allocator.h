@@ -142,6 +142,9 @@ public:
         return m_next < plannedNext ? plannedNext : m_next;
     }
 
+    /// True for any caller reservation or handle already minted/planned.
+    bool isUnavailable(std::uint32_t h) const { return isReserved(h); }
+
     /// Explicit reserve() calls only; handles minted by next() are excluded.
     bool isExplicitlyReserved(std::uint32_t h) const {
         return m_explicitReserved.count(h) != 0;

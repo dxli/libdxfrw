@@ -897,10 +897,12 @@ and [DIMSTYLE receipt](docs/research/p6-ac1015-synthetic-dimstyle-roles-2026-11-
 and [APPID receipt](docs/research/p6-ac1015-synthetic-appid-null-roles-2026-11-04.json)
 and [viewport receipt](docs/research/p6-ac1015-synthetic-vport-null-roles-2026-11-04.json)
 and [linetype receipt](docs/research/p6-ac1015-synthetic-ltype-null-roles-2026-11-04.json).
-AC1015 entity output also needs separate top-level and compound-child
-predecessor/successor chains, with isolated SEQENDs. A locally authored
-ODA witness confirms INSERT attributes and 2D/3D POLYLINE ownership; see
-the [chain receipt](docs/research/p6-ac1015-compound-entity-chain-witness-2026-11-04.json).
+An explicit AC1015 opt-in now emits a predeclared model-space LINE/CIRCLE/ARC
+chain with final links in each frame receipt; independent ODA and LibreDWG
+controls pass. Compounds, named blocks, paper space and raw replay remain
+refused in that profile. Implement separate parent/child chains and isolated
+SEQENDs using the [simple-chain receipt](docs/research/p6-ac1015-predeclared-model-chain-2026-11-04.json)
+and [compound witness](docs/research/p6-ac1015-compound-entity-chain-witness-2026-11-04.json).
 An explicit AC1024 opt-in now emits the witnessed NOD→ACAD_MATERIAL→
 ByBlock/ByLayer/Global graph, HEADER references and generated layer binding,
 with source-profile payloads, collision checks and transactional retry.

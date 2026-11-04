@@ -24,6 +24,7 @@
 #include <map>
 #include <new>
 #include <type_traits>
+#include <typeinfo>
 #include <set>
 
 #include "../drw_base.h"
@@ -1003,11 +1004,13 @@ bool dwgWriter15::emitControlObject(
 std::uint32_t dwgWriter15::defineBlock(const std::string& name,
                                  const DRW_Coord& basePoint,
                                  int insUnits) {
+    if (m_legacyModelChainActive) { m_legacyModelChainConflict = true; return 0; }
     return defineBlockImpl(name, basePoint, insUnits, nullptr);
 }
 
 std::uint32_t dwgWriter15::defineBlock(
     const DRW_Block_Record& record) {
+    if (m_legacyModelChainActive) { m_legacyModelChainConflict = true; return 0; }
     if (record.flags < 0 || (record.flags & ~kDwgBlockRecordFlagsMask) != 0
         || record.xrefIndex < -1 || record.xrefIndex > 65534
         || (m_version > DRW::AC1018 && record.xrefIndex != -1)
@@ -1815,7 +1818,43 @@ void dwgWriter15::rollbackCompoundWrite(
     clearLastEntityWriteCheckpoint();
 }
 
+bool dwgWriter15::stageLegacyModelChain(
+    const std::vector<DRW_DwgLegacyModelChainEntry>& plan) {
+    if (m_version != DRW::AC1015 || m_legacyModelChainActive
+        || m_dwgTableRecordsComplete || !m_buf.data().empty() || plan.empty()
+        || plan.size() > dwgSafety::MaxOwnedObjectCount)
+        return false;
+    try {
+        std::set<std::uint32_t> seen;
+        for (const auto& entry : plan) {
+            if (entry.handle < 0x30u
+                || entry.handle == std::numeric_limits<std::uint32_t>::max()
+                || m_handles.isUnavailable(entry.handle)
+                || !seen.insert(entry.handle).second
+                || (entry.type != DRW::LINE && entry.type != DRW::CIRCLE
+                    && entry.type != DRW::ARC))
+                return false;
+        }
+        auto savedHandles = m_handles;
+        try {
+            for (const auto& entry : plan) m_handles.reserveForWrite(entry.handle);
+            m_legacyModelChain = plan;
+            m_legacyModelChainHandles = std::move(seen);
+        } catch (...) {
+            m_handles = std::move(savedHandles);
+            return false;
+        }
+    } catch (...) { return false; }
+    m_legacyModelChainActive = true;
+    return true;
+}
+
 bool dwgWriter15::emitDeferredBlockControl() {
+    if (m_legacyModelChainActive
+        && (m_legacyModelChainConflict
+            || m_modelSpaceEntityHandles.size() != m_legacyModelChain.size()
+            || !m_paperSpaceEntityHandles.empty() || !m_userBlocks.empty()))
+        return false;
     if (m_blockControlEmitted)
         return true;
     if (m_activeUserBlockRecordHandle != 0)
@@ -1852,7 +1891,7 @@ bool dwgWriter15::emitDeferredBlockControl() {
             return true;
         };
 
-    if (m_version <= DRW::AC1015) {
+    if (m_version <= DRW::AC1015 && !m_legacyModelChainActive) {
         // Optional custom entities are valid in the legacy object map but may
         // carry preserved high handles; do not let those frames make the
         // mandatory built-in entity chain appear non-contiguous. Keep this
@@ -1979,7 +2018,7 @@ bool dwgWriter15::emitDeferredBlockControl() {
     // entities use ownerless entmode 2/1; the BLOCK_RECORD list is the
     // authoritative reachability graph.
     const DRW_Coord origin{0.0, 0.0, 0.0};
-    if (m_version <= DRW::AC1015) {
+    if (m_version <= DRW::AC1015 && !m_legacyModelChainActive) {
         if (!copyEntityHandlesToScratch(m_modelSpaceEntityHandles))
             return fail();
         std::sort(entityHandleScratch.begin(), entityHandleScratch.end());
@@ -2089,6 +2128,9 @@ bool dwgWriter15::emitBlockEntity(std::uint32_t handle,
         }
     } else if (m_version > DRW::AC1014) {
         m_objectHandles.reset();
+        ScopedDwgLegacyEntityLinks links(
+            m_legacyModelChainActive ? &body : nullptr,
+            m_legacyModelChainActive ? &m_objectHandles : nullptr, 0, 0);
         if (!bk.encodeDwg(m_version, &body, 0, nullptr, &m_objectHandles)) {
             m_frameWriteError = true;
             return false;
@@ -2530,6 +2572,10 @@ void dwgWriter15::invalidateEmittedDwgGroupFrameIndex() noexcept {
 
 bool dwgWriter15::registerDwgNamedObjectDictionaryEntry(
     const std::string& name, std::uint32_t childHandle) {
+    if (isLegacyModelChainHandle(childHandle)) {
+        m_legacyModelChainConflict = true;
+        return false;
+    }
     std::string normalizedName;
     try {
         normalizedName = toUpperCase(name);
@@ -2736,6 +2782,10 @@ bool dwgWriter15::registerPlotSettingsObjectClass(std::uint32_t handle) {
 
 bool dwgWriter15::registerDwgGroupDictionaryEntry(
     const std::string& name, std::uint32_t groupHandle) {
+    if (isLegacyModelChainHandle(groupHandle)) {
+        m_legacyModelChainConflict = true;
+        return false;
+    }
     if (defaultDwgMaterialGraphActive()
         && std::find(m_defaultMaterialHandles.begin(), m_defaultMaterialHandles.end(),
                      groupHandle) != m_defaultMaterialHandles.end()) {
@@ -3984,7 +4034,19 @@ bool dwgWriter15::conflictsDefaultDwgMaterialDictionary(
     return false;
 }
 
+bool dwgWriter15::conflictsLegacyModelChainDictionary(
+    const DRW_Dictionary& dictionary) const noexcept {
+    if (!m_legacyModelChainActive) return false;
+    if (isLegacyModelChainHandle(dictionary.handle)
+        || isLegacyModelChainHandle(static_cast<std::uint32_t>(dictionary.parentHandle)))
+        return true;
+    for (const auto& entry : dictionary.m_entries)
+        if (isLegacyModelChainHandle(entry.m_handle)) return true;
+    return false;
+}
+
 bool dwgWriter15::writeDictionary(const DRW_Dictionary& dictionary) {
+    if (conflictsLegacyModelChainDictionary(dictionary)) { m_legacyModelChainConflict = true; return false; }
     if (conflictsDefaultDwgMaterialDictionary(dictionary)) { m_defaultMaterialConflict = true; return false; }
     if (conflictsDefaultDwgPlotStyleDictionary(dictionary))
         return false;
@@ -5468,6 +5530,7 @@ bool dwgWriter15::emitDictionaryWithDefaultObject(
 }
 
 bool dwgWriter15::writeDictionaryWithDefault(const DRW_DictionaryWithDefault& dictionary) {
+    if (conflictsLegacyModelChainDictionary(dictionary)) { m_legacyModelChainConflict = true; return false; }
     if (conflictsDefaultDwgMaterialDictionary(dictionary, dictionary.m_defaultEntryHandle)) { m_defaultMaterialConflict = true; return false; }
     if (conflictsDefaultDwgPlotStyleDictionary(
             dictionary, dictionary.m_defaultEntryHandle, true))
@@ -6650,8 +6713,30 @@ bool dwgWriter15::recordRawBlockOwnedEntity(
 }
 
 bool dwgWriter15::encodeEntity(DRW_Entity *ent) {
+    if (m_legacyModelChainActive && ent != nullptr && m_blockControlEmitted) {
+        m_legacyModelChainConflict = true;
+        return false;
+    }
     if (ent == nullptr || objectWriteFailed() || m_blockControlEmitted)
         return false;
+    std::uint32_t legacyPrevious = 0, legacyNext = 0;
+    if (m_legacyModelChainActive) {
+        const std::size_t index = m_modelSpaceEntityHandles.size();
+        const bool supportedConcreteType =
+            (ent->eType == DRW::LINE && typeid(*ent) == typeid(DRW_Line))
+            || (ent->eType == DRW::CIRCLE && typeid(*ent) == typeid(DRW_Circle))
+            || (ent->eType == DRW::ARC && typeid(*ent) == typeid(DRW_Arc));
+        if (m_legacyModelChainConflict || index >= m_legacyModelChain.size()
+            || ent->handle != m_legacyModelChain[index].handle
+            || ent->eType != m_legacyModelChain[index].type
+            || !supportedConcreteType
+            || ent->parentHandle != DRW::NoHandle || ent->space != DRW::ModelSpace) {
+            m_legacyModelChainConflict = true;
+            return false;
+        }
+        if (index != 0u) legacyPrevious = m_legacyModelChain[index - 1u].handle;
+        if (index + 1u < m_legacyModelChain.size()) legacyNext = m_legacyModelChain[index + 1u].handle;
+    }
 
     m_lastEntityWriteCheckpointValid = false;
     m_lastEntityWriteUsesCompoundCheckpoint = false;
@@ -6751,6 +6836,10 @@ bool dwgWriter15::encodeEntity(DRW_Entity *ent) {
                              &m_objectStrings, &m_objectHandles);
     } else if (m_version > DRW::AC1014) {
         m_objectHandles.reset();
+        ScopedDwgLegacyEntityLinks links(
+            m_legacyModelChainActive ? &body : nullptr,
+            m_legacyModelChainActive ? &m_objectHandles : nullptr,
+            legacyPrevious, legacyNext);
         ok = ent->encodeDwg(m_version, &body, /*bs=*/0,
                              nullptr, &m_objectHandles);
     } else {
@@ -7423,6 +7512,7 @@ bool patchRawEntityOwner(const std::vector<std::uint8_t>& raw,
 bool dwgWriter15::replayRawObject(
     const DRW_UnsupportedObject& object,
     const DRW_ModelerGeometry* typedModeler) {
+    if (m_legacyModelChainActive) { m_legacyModelChainConflict = true; return false; }
     if (defaultDwgMaterialGraphActive()) { m_defaultMaterialConflict = true; return false; }
     m_lastDwgObjectFrame = {};
     m_lastDwgObjectFrameValid = false;
@@ -8410,6 +8500,23 @@ std::uint16_t dwgWriter15::fileCodePageId() const {
 }
 
 void dwgWriter15::finishObject() {
+    // For AC1015 non-entity objects the first handle-stream token is the
+    // common owner (§20.1); some object codecs use hard ownership there.
+    // A planned model-space entity cannot also own an unrelated object in
+    // this bounded profile. Inspect only this owner role:
+    // later GROUP member and other pointer roles remain valid.
+    if (m_legacyModelChainActive && !isLegacyModelChainHandle(m_currentHandle)
+        && !m_objectHandles.handleOccurrences().empty()) {
+        const auto& owner = m_objectHandles.handleOccurrences().front();
+        if ((owner.code == DRW::DwgSoftPointer
+             || owner.code == DRW::DwgHardOwnership)
+            && owner.reference <= std::numeric_limits<std::uint32_t>::max()
+            && isLegacyModelChainHandle(static_cast<std::uint32_t>(owner.reference))) {
+            m_legacyModelChainConflict = true;
+            m_frameWriteError = true;
+            return;
+        }
+    }
     // Reject a duplicate before writing another frame. The final HANDLES pass
     // retains its independent uniqueness validation as a defense-in-depth
     // check on the serialized object map.
@@ -8553,6 +8660,10 @@ void dwgWriter15::finishObject() {
 }
 
 bool dwgWriter15::writeDwgHandles() {
+    if (m_legacyModelChainActive
+        && (m_legacyModelChainConflict || !m_blockControlEmitted
+            || m_modelSpaceEntityHandles.size() != m_legacyModelChain.size()))
+        return false;
     if (!m_buf.isGood())
         return false;
 
@@ -8739,6 +8850,10 @@ bool dwgWriter15::writeSecondHeader() {
 }
 
 bool dwgWriter15::finalize() {
+    if (m_legacyModelChainActive
+        && (m_legacyModelChainConflict || !m_blockControlEmitted
+            || m_modelSpaceEntityHandles.size() != m_legacyModelChain.size()))
+        return false;
     if (objectWriteFailed())
         return false;
 

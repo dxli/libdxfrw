@@ -321,4 +321,24 @@ private:
     bool m_good {true};
 };
 
+// Ephemeral encoding context; neither buffer nor public entity layout changes.
+// The scope is thread-local and restores any enclosing encoding on unwind.
+class ScopedDwgLegacyEntityLinks {
+public:
+    ScopedDwgLegacyEntityLinks(const dwgBufferW* body, const dwgBufferW* handles,
+                               std::uint32_t previous, std::uint32_t next) noexcept;
+    ~ScopedDwgLegacyEntityLinks();
+    ScopedDwgLegacyEntityLinks(const ScopedDwgLegacyEntityLinks&) = delete;
+    ScopedDwgLegacyEntityLinks& operator=(const ScopedDwgLegacyEntityLinks&) = delete;
+    static bool lookup(const dwgBufferW* buffer, std::uint32_t& previous,
+                       std::uint32_t& next) noexcept;
+private:
+    const dwgBufferW* m_body;
+    const dwgBufferW* m_handles;
+    std::uint32_t m_previous;
+    std::uint32_t m_next;
+    const ScopedDwgLegacyEntityLinks* m_enclosing;
+};
+
+
 #endif // DWGBUFFERW_H

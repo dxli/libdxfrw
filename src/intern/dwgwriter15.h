@@ -24,6 +24,7 @@
 
 #include "dwgwriter.h"
 #include "../drw_objects.h"
+#include "../drw_interface.h"
 #include "drw_textcodec.h"
 
 class DRW_Entity;
@@ -92,6 +93,12 @@ public:
     bool completeDeferredDwgObjects() override;
     // Called only for the explicit DRW_DwgDefaultPlotStyleProvider opt-in.
     bool stageDefaultDwgPlotStyleGraph();
+    bool stageLegacyModelChain(const std::vector<DRW_DwgLegacyModelChainEntry>& plan);
+    bool legacyModelChainActive() const noexcept { return m_legacyModelChainActive; }
+    bool conflictsLegacyModelChainDictionary(const DRW_Dictionary& dictionary) const noexcept;
+    bool isLegacyModelChainHandle(std::uint32_t handle) const noexcept {
+        return m_legacyModelChainActive && m_legacyModelChainHandles.count(handle) != 0;
+    }
     bool stageDefaultDwgMaterialGraph();
     bool emitDefaultDwgMaterial(std::size_t index);
     const std::array<std::uint32_t, 4>& defaultDwgMaterialGraphHandles() const {
@@ -881,6 +888,10 @@ private:
     // Modelspace and paperspace are real BLOCK_RECORD owners in R2004+ and
     // use entmode 2/1 (no owner handle) on their entities.  Their owned-handle
     // lists are emitted only after writeEntities() has supplied all members.
+    std::vector<DRW_DwgLegacyModelChainEntry> m_legacyModelChain;
+    std::set<std::uint32_t> m_legacyModelChainHandles;
+    bool m_legacyModelChainActive {false};
+    bool m_legacyModelChainConflict {false};
     std::vector<std::uint32_t> m_modelSpaceEntityHandles;
     std::vector<std::uint32_t> m_paperSpaceEntityHandles;
     std::vector<std::uint32_t> m_modelSpaceInsertHandles;

@@ -712,6 +712,27 @@ public:
 
 };
 
+/** One entity in an explicitly predeclared AC1015 model-space chain. */
+struct DRW_DwgLegacyModelChainEntry {
+  std::uint32_t handle {0};
+  DRW::ETYPE type {DRW::UNKNOWN};
+};
+
+/** Opt in to bounded AC1015 model-space entity link emission. The plan must
+ * name every concrete LINE, CIRCLE and ARC in exact callback order. Handles
+ * must be unique, at least 0x30, below UINT32_MAX and not previously reserved;
+ * the plan reserves them before other generated objects. An empty plan,
+ * compounds, blocks, paper space, raw replay and unplanned entities fail the
+ * output transaction. Neighbor references are fixed before each
+ * frame is emitted so frame receipts remain accurate. The default plot-style
+ * provider is a separate opt-in needed for the independently tested profile.
+ */
+class DRW_DwgLegacyModelChainProvider {
+public:
+  virtual ~DRW_DwgLegacyModelChainProvider() = default;
+  virtual std::vector<DRW_DwgLegacyModelChainEntry> dwgLegacyModelChain() const = 0;
+};
+
 /** Separate opt-in for synthesizing a default DWG plot-style graph. Existing
  * DRW_Interface implementations are unaffected. The opt-in is consulted
  * after writeDwgClasses() and before HEADER/CLASSES emission; an existing or

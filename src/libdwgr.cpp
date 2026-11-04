@@ -1478,6 +1478,12 @@ bool dwgRW::recordWriteResult(WriteSkipKind kind, bool ok) {
     if (ok)
         return true;
 
+    // The bounded legacy chain cannot tolerate skipped callbacks, including
+    // malformed compounds rejected before they reach encodeEntity().
+    const auto* native = dynamic_cast<const dwgWriter15*>(writer.get());
+    if (native != nullptr && native->legacyModelChainActive())
+        markDwgWriteFailure();
+
     switch (kind) {
     case WriteSkipKind::Entity:
         ++m_writeSkipCounters.entityWrites;
@@ -1744,6 +1750,15 @@ bool dwgRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
         writer->reserveHandle(h);
 
     iface->writeDwgClasses();
+    // Plan legacy entity neighbors before any graph allocates output handles.
+    auto* legacyChainProvider = dynamic_cast<DRW_DwgLegacyModelChainProvider*>(iface);
+    if (!m_requiredWriteFailure && legacyChainProvider) {
+        auto* native = dynamic_cast<dwgWriter15*>(writer.get());
+        if (native == nullptr || !native->stageLegacyModelChain(
+                legacyChainProvider->dwgLegacyModelChain()))
+            markDwgWriteFailure();
+    }
+
     // A separate provider interface makes synthesis explicit and preserves
     // existing consumers' class/NOD registration timing and default output.
     auto* plotStyleProvider =
