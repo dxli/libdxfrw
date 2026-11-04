@@ -304,15 +304,26 @@ void dwgReader::DwgEntityOutput::appendModelerGeometry(
   append(std::make_unique<MoveEvent>(std::move(value), m_activeSource));
 }
 
-bool dwgReader::DwgEntityOutput::appendEndBlock() {
+bool dwgReader::DwgEntityOutput::appendEndBlock(const DRW_Block &data) {
   class EndBlockEvent final : public Event {
   public:
-    explicit EndBlockEvent(const std::optional<DwgSourceFrameId> &source)
-        : m_source(source) {}
+    EndBlockEvent(const DRW_Block &data,
+                  const std::optional<DwgSourceFrameId> &source)
+        : m_data(data), m_source(source) {}
 
     bool replay(dwgReader &, DRW_Interface &target) const override {
-      target.endBlock();
-      return true;
+      bool success = true;
+      try {
+        target.addBlockEnd(m_data);
+      } catch (...) {
+        success = false;
+      }
+      try {
+        target.endBlock();
+      } catch (...) {
+        success = false;
+      }
+      return success;
     }
 
     bool hasSource() const noexcept override { return m_source.has_value(); }
@@ -324,9 +335,10 @@ bool dwgReader::DwgEntityOutput::appendEndBlock() {
     bool completesSource() const noexcept override { return false; }
 
   private:
+    DRW_Block m_data;
     std::optional<DwgSourceFrameId> m_source;
   };
-  return append(std::make_unique<EndBlockEvent>(m_activeSource));
+  return append(std::make_unique<EndBlockEvent>(data, m_activeSource));
 }
 
 bool dwgReader::DwgEntityOutput::appendFramePublication(
@@ -9237,7 +9249,7 @@ bool dwgReader::readDwgBlocks(DRW_Interface &intfa, dwgBuffer *dbuf,
         }
         if (journalled && deferredEntityWalk) {
           auto endBlockScope = transaction.output().bindSource(endBlockSource);
-          journalled = transaction.output().appendEndBlock();
+          journalled = transaction.output().appendEndBlock(end);
         }
         if (journalled) {
           journalled = walkJournalledBlockRecordEntities(
@@ -9250,7 +9262,7 @@ bool dwgReader::readDwgBlocks(DRW_Interface &intfa, dwgBuffer *dbuf,
         }
         if (journalled && !deferredEntityWalk) {
           auto endBlockScope = transaction.output().bindSource(endBlockSource);
-          journalled = transaction.output().appendEndBlock();
+          journalled = transaction.output().appendEndBlock(end);
         }
         std::optional<DRW_DwgBlockReachability> reachability;
         if (journalled) {
@@ -9418,6 +9430,12 @@ bool dwgReader::readDwgBlocks(DRW_Interface &intfa, dwgBuffer *dbuf,
     }
 
     if (blockScopeOpened) {
+      try {
+        intfa.addBlockEnd(end);
+      } catch (...) {
+        ret = false;
+        blockScopeFailure = true;
+      }
       try {
         intfa.endBlock();
       } catch (...) {

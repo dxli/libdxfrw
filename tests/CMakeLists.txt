@@ -1588,6 +1588,16 @@ set_tests_properties(dwg2dxf_insert_block_record_source_handle_binding PROPERTIE
     TIMEOUT 30
 )
 
+add_test(
+    NAME dwg2dxf_ownerless_fixed_space_insert_output
+    COMMAND libdxfrw_dwg2dxf_adapter_tests
+        --ownerless-fixed-space-insert-output
+)
+set_tests_properties(dwg2dxf_ownerless_fixed_space_insert_output PROPERTIES
+    LABELS "fast;dwg;adapter;ownership;generated"
+    TIMEOUT 30
+)
+
 # File-format dispatch folds only ASCII extension letters; non-ASCII suffix
 # bytes must be preserved and rejected without locale-dependent ctype calls.
 add_test(

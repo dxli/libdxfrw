@@ -10003,6 +10003,117 @@ bool insertBlockRecordSourceHandleBinding() {
     return true;
 }
 
+bool ownerlessFixedSpaceInsertOutput() {
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch()
+                           .count();
+    for (const bool binary : {false, true}) {
+        const std::string encoding = binary ? "binary" : "ascii";
+        const std::filesystem::path output =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-ownerless-fixed-space-insert-" + encoding + "-"
+               + std::to_string(nonce) + ".dxf");
+        const std::string sentinel = "existing destination survives\n";
+        {
+            std::ofstream existing(output, std::ios::binary | std::ios::trunc);
+            if (!existing || !(existing << sentinel))
+                return fail("could not create ownerless INSERT destination sentinel");
+        }
+
+        dx_data source;
+        source.sourceFormat = dx_source_format::DWG;
+        source.sourceVersion = DRW::AC1024;
+        source.importGeneration = 1u;
+        constexpr std::uint32_t blockRecordHandle = 0xA001u;
+        constexpr std::uint32_t blockHandle = 0xA002u;
+        constexpr std::uint32_t insertHandle = 0xA003u;
+        constexpr std::uint32_t endBlockHandle = 0xA004u;
+        constexpr const char* blockName = "OWNERLESS_INSERT_TARGET";
+
+        DRW_Block_Record record;
+        record.handle = blockRecordHandle;
+        record.name = blockName;
+        record.insertCount = 1u;
+        record.insertHandles = {insertHandle};
+        source.blockRecords.push_back(record);
+
+        auto* definition = new dx_ifaceBlock();
+        definition->name = blockName;
+        definition->handle = blockHandle;
+        definition->parentHandle = blockRecordHandle;
+        definition->hasEndBlockData = true;
+        definition->endBlockData.handle = endBlockHandle;
+        definition->endBlockData.parentHandle = blockRecordHandle;
+        definition->endBlockData.setIsEnd(true);
+        source.blocks.push_back(definition);
+
+        auto* insert = new DRW_Insert();
+        insert->handle = insertHandle;
+        insert->parentHandle = 0xDEADu;
+        insert->space = DRW::ModelSpace;
+        insert->name = blockName;
+        insert->blockRecH.ref = blockRecordHandle;
+        source.mBlock->ent.push_back(insert);
+
+        dx_iface exporter;
+        const bool refusedBadOwner = !exporter.fileExport(
+            output.string(), DRW::AC1024, binary, &source, false, true);
+        std::ifstream refusedInput(output, std::ios::binary);
+        const std::string preserved{
+            std::istreambuf_iterator<char>(refusedInput),
+            std::istreambuf_iterator<char>()};
+        if (!refusedBadOwner || preserved != sentinel) {
+            std::error_code ignored;
+            std::filesystem::remove(output, ignored);
+            return fail("unknown INSERT owner was emitted or replaced the destination");
+        }
+
+        insert->parentHandle = DRW::NoHandle;
+        if (!exporter.fileExport(output.string(), DRW::AC1024, binary,
+                                 &source, false, true)) {
+            std::error_code ignored;
+            std::filesystem::remove(output, ignored);
+            return fail("ownerless modelspace INSERT failed same-writer retry");
+        }
+        dx_iface outputReader;
+        dx_data readback;
+        const bool imported = outputReader.fileImport(
+            output.string(), &readback, false);
+        const DRW_Block_Record* outputRecord = nullptr;
+        std::size_t outputRecordMatches = 0u;
+        for (const DRW_Block_Record& candidate : readback.blockRecords) {
+            if (candidate.name == blockName) {
+                outputRecord = &candidate;
+                ++outputRecordMatches;
+            }
+        }
+        const DRW_Insert* outputInsert = nullptr;
+        std::size_t outputInsertMatches = 0u;
+        if (readback.mBlock != nullptr) {
+            for (const DRW_Entity* entity : readback.mBlock->ent) {
+                const auto* candidate = dynamic_cast<const DRW_Insert*>(entity);
+                if (candidate != nullptr && candidate->name == blockName) {
+                    outputInsert = candidate;
+                    ++outputInsertMatches;
+                }
+            }
+        }
+        const bool readbackMatches = imported && outputRecordMatches == 1u
+            && outputRecord != nullptr
+            && outputRecord->insertHandles.size() == 1u
+            && outputInsertMatches == 1u && outputInsert != nullptr
+            && outputRecord->insertHandles.front() == outputInsert->handle
+            && outputInsert->space == DRW::ModelSpace
+            && outputInsert->parentHandle
+                == DRW::DxfModelSpaceBlockRecordHandle;
+        std::error_code ignored;
+        std::filesystem::remove(output, ignored);
+        if (!readbackMatches)
+            return fail("ownerless modelspace INSERT target changed on typed readback");
+    }
+    return true;
+}
+
 bool readDxfDynamicBlockVisibilityParameterWireGroups(
         const std::filesystem::path& path, bool binary,
         std::vector<std::pair<int, std::string>>& groups) {
@@ -68384,6 +68495,9 @@ int main(int argc, char** argv) {
         && std::string(argv[1])
             == "--insert-block-record-source-handle-binding")
         return insertBlockRecordSourceHandleBinding() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--ownerless-fixed-space-insert-output")
+        return ownerlessFixedSpaceInsertOutput() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--object-context-data-loss-refusal")
         return objectContextDataLossRefusesExport() ? 0 : 1;

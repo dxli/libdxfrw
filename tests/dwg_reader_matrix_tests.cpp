@@ -4603,6 +4603,11 @@ public:
         ModelerDispatchSink::addBlock(value);
     }
 
+    void addBlockEnd(const DRW_Block& value) override {
+        blockEnds.push_back(value);
+        dx_iface::addBlockEnd(value);
+    }
+
     void endBlock() override {
         ++endBlocks;
         ModelerDispatchSink::endBlock();
@@ -4621,6 +4626,7 @@ public:
     std::vector<LineMembership> lines;
     std::vector<std::uint32_t> blockRecords;
     std::vector<std::string> blocks;
+    std::vector<DRW_Block> blockEnds;
     std::size_t endBlocks{0};
 };
 
@@ -4646,6 +4652,10 @@ public:
         blocks.push_back(value.name);
         dx_iface::addBlock(value);
     }
+    void addBlockEnd(const DRW_Block& value) override {
+        blockEnds.push_back(value);
+        dx_iface::addBlockEnd(value);
+    }
     void endBlock() override {
         ++endBlocks;
         dx_iface::endBlock();
@@ -4657,6 +4667,7 @@ public:
 
     std::vector<std::uint32_t> blockRecords;
     std::vector<std::string> blocks;
+    std::vector<DRW_Block> blockEnds;
     std::vector<std::uint32_t> lines;
     std::size_t endBlocks{0};
 };
@@ -6595,6 +6606,19 @@ void testLegacyLayoutBlockChains(TestContext& t) {
             const std::vector<std::uint32_t> expectedRecords{
                 integratedDefaultRecord, integratedSheetARecord,
                 integratedSheetBRecord};
+            std::vector<std::uint32_t> integratedEndHandles;
+            integratedEndHandles.reserve(integratedSink.blockEnds.size());
+            for (const DRW_Block& footer : integratedSink.blockEnds)
+                integratedEndHandles.push_back(footer.handle);
+            std::sort(integratedEndHandles.begin(),
+                      integratedEndHandles.end());
+            const std::vector<std::uint32_t> expectedEndHandles{
+                integratedDefaultEnd, integratedSheetAEnd,
+                integratedSheetBEnd};
+            std::vector<std::uint32_t> sortedExpectedEndHandles =
+                expectedEndHandles;
+            std::sort(sortedExpectedEndHandles.begin(),
+                      sortedExpectedEndHandles.end());
             const std::vector<std::string> expectedBlocks{
                 "*PAPER_SPACE", "*PAPER_SPACE0", "*PAPER_SPACE1"};
             const std::array<std::uint32_t, 3> expectedIntegratedRecords{{
@@ -6624,7 +6648,10 @@ void testLegacyLayoutBlockChains(TestContext& t) {
                      "readDwgBlocks accepts generated AC1015 paper-space scopes");
             t.expect(integratedSink.blockRecords == expectedRecords
                          && integratedSink.blocks == expectedBlocks
-                         && integratedSink.endBlocks == 3u,
+                         && integratedSink.endBlocks == 3u
+                         && integratedSink.blockEnds.size() == 3u
+                         && integratedEndHandles
+                             == sortedExpectedEndHandles,
                      "readDwgBlocks emits each generated BLOCK_RECORD/BLOCK/ENDBLK scope");
             t.expect(integratedManifestMatches,
                      "readDwgBlocks preserves exact AC1015 line/layout identity within each paper-space scope");
@@ -6969,8 +6996,10 @@ void testSpaceBlockDelimiterOwner(TestContext& t) {
              "readDwgBlocks accepts a paper-space delimiter owned by its BLOCK_RECORD");
     t.expect(sink.blockRecords == std::vector<std::uint32_t>{blockRecordHandle}
                  && sink.blocks == std::vector<std::string>{blockName}
-                 && sink.endBlocks == 1u,
-             "owner-bearing paper-space delimiters publish one complete scope");
+                 && sink.endBlocks == 1u && sink.blockEnds.size() == 1u
+                 && sink.blockEnds.front().handle == endBlockHandle
+                 && sink.blockEnds.front().parentHandle == blockRecordHandle,
+             "owner-bearing paper-space delimiters publish their exact ENDBLK callback before scope close");
 }
 
 void testEntitySpaceFromBlockRecord(TestContext& t) {
@@ -17450,6 +17479,7 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--space-block-delimiter-owner") {
         TestContext focused;
+        testLegacyLayoutBlockChains(focused);
         testSpaceBlockDelimiterOwner(focused);
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;

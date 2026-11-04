@@ -67766,6 +67766,10 @@ bool dx_iface::validateDxfBlockRecordInsertReferences(
             const std::uint32_t fixedHandle = fixedName == "*PAPER_SPACE"
                 ? DRW::DxfPaperSpaceBlockRecordHandle
                 : DRW::DxfModelSpaceBlockRecordHandle;
+            const DRW::Space fixedSpace = fixedName == "*PAPER_SPACE"
+                ? DRW::PaperSpace : DRW::ModelSpace;
+            if (entity.parentHandle == DRW::NoHandle)
+                return entity.space == fixedSpace;
             if (!validHandle(entity.parentHandle))
                 return false;
             const DRW_Block_Record* owner = nullptr;
@@ -75859,6 +75863,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     for (const dx_ifaceBlock* block : cData->blocks)
         rawXdataHandleInventory = rawXdataHandleInventory
             || hasRawXdataHandle(block);
+    const bool blockRecordInsertInventory = std::any_of(
+        cData->blockRecords.cbegin(), cData->blockRecords.cend(),
+        [](const DRW_Block_Record& record) {
+            return !record.insertHandles.empty();
+        });
     const bool needsShadeOutput = m_dxfShadeConsumerEntities
         || std::any_of(m_dxfShadeConsumers.begin(), m_dxfShadeConsumers.end(),
             [](const auto& source) { return source.kind != DxfShadeConsumerSource::Viewport; });
@@ -75871,7 +75880,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     }
     exportStage = "DXF output inspector setup";
     dxfW->setDxfWriteRecordInventoryEnabled(
-        !m_hatchTargets.empty() || rawXdataHandleInventory || !m_acdsDxfHistoryObjects.empty()
+        !m_hatchTargets.empty() || rawXdataHandleInventory
+        || blockRecordInsertInventory || !m_acdsDxfHistoryObjects.empty()
         || !cData->m_standardDwgObjectFrames.empty()
         || !m_dwgLayoutOutputSources.empty()
         || m_dwgDynamicBlockOutputPrepared

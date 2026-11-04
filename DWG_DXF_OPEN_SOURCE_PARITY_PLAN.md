@@ -81,8 +81,17 @@ behavior and reachable geometry. The available FreeCAD, ODA converter and
 LibreDWG paths do not currently supply that evaluator.
 
 Separate unresolved gates remain: AC1021 proxy-graphics refusal belongs to P6.
-For the AC1018 source, do not bypass the invalid empty-name STYLE refusal by
-omitting, renaming or replaying the row without source and consumer evidence.
+The physical AC1018 ET Border source contains empty-name STYLE `0xDF` with font
+`ltypeshp.shx`. The current libdxfrw parse gives flags 68 (xref-reference plus
+vertical; shape false); LibreDWG 0.14 decodes the same bytes as shape true,
+vertical false, and omits this row from its DXF output. ODA v5.4.1 §20.4.56
+orders the AC1018 bits vertical then shape, matching the current parser branch,
+while LibreDWG's schema reads shape then vertical. Autodesk's DXF reference
+defines bit 1 as a shape record and says only group 3 is meaningful for a
+shape-file LOAD request ([STYLE reference](https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-EF68AF7C-13EF-45A1-8175-ED6CE66C8FC9.htm)).
+This is an unresolved source-layout disagreement, not permission to omit or
+rename the row. Keep strict output refused until the physical bit order and
+the source/consumer disposition are resolved; see the [STYLE bit-order receipt](docs/research/p4-ac1018-empty-style-dwg-bit-order-differential-2026-11-03.json).
 
 ## P4 — original bodies and complete document closure
 
@@ -98,6 +107,19 @@ vector were incorrect; the parser and writer now use code 2, with a focused
 cross-version encoder control and AC1018 physical-source parse proof. This does
 not close dictionary graph output or named-block SORTENTSTABLE owner scope; see
 the [correction receipt](docs/research/p4-dictionary-item-wire-code-independent-of-hardowner-2026-11-03.json).
+
+**BLOCK_RECORD INSERT references and ENDBLK callbacks:** DWG block-footer
+publication now carries the parsed `DRW_Block` through both the journalled
+event route and direct fallback, so `dx_iface` receives exact ENDBLK identity
+and owner fields. Strict output accepts a missing INSERT owner only when the
+source fixed-space context proves ModelSpace or PaperSpace; unknown owners
+remain atomic refusals. The BLKREFS path now keeps emitted-record identity
+inventory enabled through write setup. Generated AC1015/AC1027 footer controls
+and an ASCII/Binary adapter control cover invalid-owner refusal, destination
+preservation, same-adapter corrected retry, exact BLKREFS-to-INSERT handle
+readback and fixed-space ownership. The physical ET Border conversion now
+passes BLOCK_RECORD planning but remains refused in the STYLE table before
+reaching its named-block SORTENTSTABLE. See the [BLOCK/ENDBLK receipt](docs/research/p4-dwg-endblk-capture-ownerless-fixedspace-insert-2026-11-03.json).
 
 **DIMENSION and LEADER DIMSTYLE binding:** Generated controls prove the bounded
 group-3 projection and fail-closed behavior. Resolved hard pointers map to the

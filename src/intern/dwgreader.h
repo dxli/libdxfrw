@@ -1264,7 +1264,7 @@ protected:
     void appendModelerGeometry(DRW_ModelerGeometry &&value);
     [[nodiscard]] SourceScope
     bindSource(const DwgSourceFrameId &source) noexcept;
-    [[nodiscard]] bool appendEndBlock();
+    [[nodiscard]] bool appendEndBlock(const DRW_Block &data);
     [[nodiscard]] bool
     appendFramePublication(dwgReader &reader,
                            const DRW_DwgFramePublication &publication,
