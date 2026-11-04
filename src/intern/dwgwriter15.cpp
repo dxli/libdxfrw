@@ -925,6 +925,11 @@ bool dwgWriter15::emitControlObject(
                          std::numeric_limits<std::int32_t>::max()))
         return false;
 
+    const bool scopedEmptyControl = m_version == DRW::AC1027 && numEntries == 0u
+        && childHandles.size() == 0u
+        && ((handle == DRW::DwgViewControlHandle && typeCode == DRW::DwgViewControlObjectType)
+            || (handle == DRW::DwgUcsControlHandle && typeCode == DRW::DwgUcsControlObjectType));
+    const auto emit = [&]() -> bool {
     dwgBufferW& body = beginObject(handle);
 
     // Common preamble (mirrors DRW_TableEntry::parseDwg):
@@ -982,6 +987,33 @@ bool dwgWriter15::emitControlObject(
         return false;
     m_emittedDwgTableControlHandles.insert(handle);
     return true;
+    };
+    if (!scopedEmptyControl)
+        return emit();
+    CompoundWriteCheckpoint checkpoint;
+    const auto previousGeneration = m_nextDwgObjectFrameGeneration;
+    try {
+        checkpoint = checkpointCompoundWrite();
+    } catch (...) {
+        markObjectWriteFailure();
+        return false;
+    }
+    try {
+        if (emit())
+            return true;
+    } catch (...) {
+        // Preserve the pre-emission transaction on a late allocation failure.
+    }
+    try {
+        rollbackCompoundWrite(checkpoint);
+    } catch (...) {
+        m_nextDwgObjectFrameGeneration = previousGeneration;
+        markObjectWriteFailure();
+        return false;
+    }
+    m_nextDwgObjectFrameGeneration = previousGeneration;
+    markObjectWriteFailure();
+    return false;
 }
 
 bool dwgWriter15::emitControlObject(
@@ -992,6 +1024,11 @@ bool dwgWriter15::emitControlObject(
                          std::numeric_limits<std::int32_t>::max()))
         return false;
 
+    const bool scopedEmptyControl = m_version == DRW::AC1027 && numEntries == 0u
+        && childHandles.size() == 0u
+        && ((handle == DRW::DwgViewControlHandle && typeCode == DRW::DwgViewControlObjectType)
+            || (handle == DRW::DwgUcsControlHandle && typeCode == DRW::DwgUcsControlObjectType));
+    const auto emit = [&]() -> bool {
     dwgBufferW& body = beginObject(handle);
     body.putObjType(m_version, typeCode);
     if (m_version > DRW::AC1014 && m_version < DRW::AC1024)
@@ -1027,6 +1064,33 @@ bool dwgWriter15::emitControlObject(
         return false;
     m_emittedDwgTableControlHandles.insert(handle);
     return true;
+    };
+    if (!scopedEmptyControl)
+        return emit();
+    CompoundWriteCheckpoint checkpoint;
+    const auto previousGeneration = m_nextDwgObjectFrameGeneration;
+    try {
+        checkpoint = checkpointCompoundWrite();
+    } catch (...) {
+        markObjectWriteFailure();
+        return false;
+    }
+    try {
+        if (emit())
+            return true;
+    } catch (...) {
+        // Preserve the pre-emission transaction on a late allocation failure.
+    }
+    try {
+        rollbackCompoundWrite(checkpoint);
+    } catch (...) {
+        m_nextDwgObjectFrameGeneration = previousGeneration;
+        markObjectWriteFailure();
+        return false;
+    }
+    m_nextDwgObjectFrameGeneration = previousGeneration;
+    markObjectWriteFailure();
+    return false;
 }
 
 std::uint32_t dwgWriter15::defineBlock(const std::string& name,

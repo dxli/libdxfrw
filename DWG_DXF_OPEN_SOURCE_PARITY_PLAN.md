@@ -896,6 +896,11 @@ as improperly read, but still rejects the complete generated drawing on later
 records. Preserve the distinction and investigate the next individual frame;
 AC1032 and other control profiles remain unqualified
 ([boundary receipt](docs/research/p6-ac1027-empty-block-control-boundary-2026-11-04.json)).
+The bounded empty AC1027 VIEW and UCS controls now use their observed bit
+boundary too; ODA no longer reports those two records as improperly read but
+still rejects the whole file at LAYER. Transaction controls cover one-shot
+allocation failures; persistent allocation failure during rollback remains a
+limit ([VIEW/UCS receipt](docs/research/p6-ac1027-empty-view-ucs-controls-2026-11-04.json)).
 
 Investigate the ODA AC1027 HEADER suffix generator across unrelated producers
 and versions. Seven same-producer saves, including controls authored separately

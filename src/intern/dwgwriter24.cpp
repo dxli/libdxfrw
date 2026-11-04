@@ -480,18 +480,21 @@ void dwgWriter24::finishObject() {
     // Keep strings contiguous with the scalar data. The footer accounts for
     // trailing alignment; its low size word carries 0x8000 when the preceding
     // word supplies the upper 16 bits. Preserve the no-strings framing.
-    // The empty synthetic R2013 BLOCK_CONTROL already ends with its
-    // codec-owned absent-string bit. Its hard-owner tail begins immediately
-    // afterward; the UMC handle size includes the terminal padding bits.
-    const bool exactBlockControl = m_version == DRW::AC1027
-        && m_currentHandle == DRW::DwgBlockControlHandle
+    // These source-backed empty R2013 controls already end with a codec-owned
+    // absent-string bit. Their handles follow it without intervening padding;
+    // the UMC handle size includes the terminal padding bits.
+    const bool profileView = m_currentHandle == DRW::DwgViewControlHandle;
+    const bool profileUcs = m_currentHandle == DRW::DwgUcsControlHandle;
+    const bool profileBlock = m_currentHandle == DRW::DwgBlockControlHandle;
+    const bool exactEmptyControl = m_version == DRW::AC1027
+        && (profileBlock || profileView || profileUcs)
         && m_objectStrings.data().empty()
         && m_objectBody.bitCount() == 35u
-        && m_objectHandles.bitCount() == 48u;
+        && m_objectHandles.bitCount() == (profileBlock ? 48u : 16u);
     const auto exactFrameStart = m_buf.size();
     const auto exactObjectMapSize = m_objectMap.size();
     const auto exactGeneration = m_nextDwgObjectFrameGeneration;
-    const auto failExactBlockControl = [&]() noexcept {
+    const auto failExactEmptyControl = [&]() noexcept {
         m_buf.truncate(exactFrameStart);
         while (m_objectMap.size() > exactObjectMapSize) {
             m_emittedDwgObjectHandles.erase(m_objectMap.back().first);
@@ -508,7 +511,7 @@ void dwgWriter24::finishObject() {
         m_writeError = true;
     };
     try {
-    if (exactBlockControl) {
+    if (exactEmptyControl) {
             dwgBuffer data(m_objectBody.data().data(), m_objectBody.size());
             dwgBuffer handles(m_objectHandles.data().data(), m_objectHandles.size());
             const auto type = data.getObjType(m_version);
@@ -521,36 +524,41 @@ void dwgWriter24::finishObject() {
             const auto stringsPresent = data.getBit();
             const auto owner = handles.getHandle();
             const auto xdict = handles.getHandle();
-            const auto model = handles.getHandle();
-            const auto paper = handles.getHandle();
+            dwgHandle model, paper;
+            if (profileBlock) {
+                model = handles.getHandle();
+                paper = handles.getHandle();
+            }
             if (!data.isGood() || !handles.isGood()
                 || m_dwgClassInstanceHandleOwners.find(m_currentHandle)
                        != m_dwgClassInstanceHandleOwners.end()
-                || type != DRW::DwgBlockControlObjectType
-                || own.code != 0u || own.ref != DRW::DwgBlockControlHandle
+                || type != (profileBlock ? DRW::DwgBlockControlObjectType
+                           : profileView ? DRW::DwgViewControlObjectType
+                                            : DRW::DwgUcsControlObjectType)
+                || own.code != 0u || own.ref != m_currentHandle
                 || eed != 0 || reactors != 0 || missingXdict != 0
                 || hasDataStorage != 0 || entries != 0 || stringsPresent != 0
                 || data.getPosition() * 8u + data.getBitPos() != 35u
                 || owner.code != DRW::DwgSoftPointer || owner.ref != 0u
                 || xdict.code != DRW::DwgHardOwnership || xdict.ref != 0u
-                || model.code != DRW::DwgHardOwnership
+                || (profileBlock && (model.code != DRW::DwgHardOwnership
                 || model.ref != DRW::DwgModelSpaceBlockRecordHandle
                 || paper.code != DRW::DwgHardOwnership
-                || paper.ref != DRW::DwgPaperSpaceBlockRecordHandle) {
-                failExactBlockControl();
+                || paper.ref != DRW::DwgPaperSpaceBlockRecordHandle))) {
+                failExactEmptyControl();
                 return;
             }
     }
-    if (m_objectStrings.data().empty() && !exactBlockControl)
+    if (m_objectStrings.data().empty() && !exactEmptyControl)
         m_objectBody.alignToByte();
     const std::uint64_t mergedStringBaseBit = m_objectBody.bitCount();
     std::uint64_t mergedHandleBaseBit = 0;
-    if (exactBlockControl) {
+    if (exactEmptyControl) {
         mergedHandleBaseBit = m_objectBody.bitCount();
         m_objectBody.putBytes(m_objectHandles.data().data(), m_objectHandles.size());
         m_objectBody.alignToByte();
         if (!m_objectBody.isGood()) {
-            failExactBlockControl();
+            failExactEmptyControl();
             return;
         }
     } else if (!appendR2007StringStream(m_objectBody, m_objectStrings, true)) {
@@ -567,26 +575,26 @@ void dwgWriter24::finishObject() {
     if (m_objectBody.size() > std::numeric_limits<std::uint32_t>::max()
         || m_objectHandles.size() > std::numeric_limits<std::uint32_t>::max()
         || m_buf.size() > std::numeric_limits<std::uint32_t>::max()) {
-        if (exactBlockControl) { failExactBlockControl(); return; }
+        if (exactEmptyControl) { failExactEmptyControl(); return; }
         m_writeError = true;
         m_objectStrings.reset();
         m_objectHandles.reset();
         return;
     }
     const auto dataBytes = static_cast<std::uint32_t>(m_objectBody.size());
-    const auto handleBytes = exactBlockControl ? 0u : static_cast<std::uint32_t>(m_objectHandles.size());
+    const auto handleBytes = exactEmptyControl ? 0u : static_cast<std::uint32_t>(m_objectHandles.size());
     const std::uint64_t totalBytes64 =
         static_cast<std::uint64_t>(dataBytes) + handleBytes;
     if (handleBytes > std::numeric_limits<std::uint32_t>::max() / 8u
         || totalBytes64 > std::numeric_limits<std::int32_t>::max()) {
-        if (exactBlockControl) { failExactBlockControl(); return; }
+        if (exactEmptyControl) { failExactEmptyControl(); return; }
         m_writeError = true;
         m_objectStrings.reset();
         m_objectHandles.reset();
         return;
     }
     const auto totalBytes = static_cast<std::uint32_t>(totalBytes64);
-    const auto bs = exactBlockControl
+    const auto bs = exactEmptyControl
         ? static_cast<std::uint32_t>(std::uint64_t(dataBytes) * 8u - mergedHandleBaseBit)
         : handleBytes * 8u;  // includes terminal padding
 
@@ -595,7 +603,7 @@ void dwgWriter24::finishObject() {
     // MS totalBodyBytes + UMC bs + body bytes.
     m_buf.putModularShort(static_cast<std::int32_t>(totalBytes));
     if (!m_buf.isGood()) {
-        if (exactBlockControl) { failExactBlockControl(); return; }
+        if (exactEmptyControl) { failExactEmptyControl(); return; }
         m_writeError = true;
         m_objectStrings.reset();
         m_objectHandles.reset();
@@ -603,7 +611,7 @@ void dwgWriter24::finishObject() {
     }
     m_buf.putUModularChar(bs);
     if (!m_buf.isGood()) {
-        if (exactBlockControl) { failExactBlockControl(); return; }
+        if (exactEmptyControl) { failExactEmptyControl(); return; }
         m_writeError = true;
         m_objectStrings.reset();
         m_objectHandles.reset();
@@ -617,14 +625,14 @@ void dwgWriter24::finishObject() {
     // CRC covers MS prefix + UMC bs + body bytes.
     std::uint16_t crc = m_buf.crc16(0xC0C1, frameStart, bodyStart + totalBytes);
     m_buf.putRawShort16(crc);
-    if (exactBlockControl && !m_buf.isGood()) {
-        failExactBlockControl();
+    if (exactEmptyControl && !m_buf.isGood()) {
+        failExactEmptyControl();
         return;
     }
 
     if (!captureLastDwgObjectHandleOccurrences(mergedStringBaseBit, mergedHandleBaseBit, true,
-                                               exactBlockControl)) {
-        if (exactBlockControl) { failExactBlockControl(); return; }
+                                               exactEmptyControl)) {
+        if (exactEmptyControl) { failExactEmptyControl(); return; }
         m_buf.truncate(frameStart);
         m_writeError = true;
         m_currentHandle = 0;
@@ -633,7 +641,7 @@ void dwgWriter24::finishObject() {
         return;
     }
     if (!publishDwgObjectMapEntry(m_currentHandle, frameStart)) {
-        if (exactBlockControl) { failExactBlockControl(); return; }
+        if (exactEmptyControl) { failExactEmptyControl(); return; }
         m_buf.truncate(frameStart);
         m_writeError = true;
         m_currentHandle = 0;
@@ -647,9 +655,9 @@ void dwgWriter24::finishObject() {
     markDwgClassInstanceEmitted(m_currentHandle);
     m_currentHandle = 0;
     } catch (...) {
-        if (!exactBlockControl)
+        if (!exactEmptyControl)
             throw;
-        failExactBlockControl();
+        failExactEmptyControl();
     }
 }
 
