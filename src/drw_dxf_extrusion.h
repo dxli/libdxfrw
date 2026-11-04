@@ -31,6 +31,11 @@ namespace DRW_DxfLegacyExtrusion {
 // excluded even though it derives from DRW_Trace, because its points use WCS.
 [[nodiscard]] bool toNativeOcs(const DRW_Trace& input, DRW_Trace& output) noexcept;
 [[nodiscard]] bool toNativeOcs(const DRW_Solid& input, DRW_Solid& output) noexcept;
+// Recover a TEXT insertion and alignment point after exactly one actual legacy
+// extrusion application, as performed by the DXF reader when requested. This
+// is for DXF output; the DWG reader does not currently apply that transform to
+// TEXT. Exact runtime types exclude ATTRIB, ATTDEF, MTEXT and other subclasses.
+[[nodiscard]] bool toNativeOcs(const DRW_Text& input, DRW_Text& output) noexcept;
 }
 
 #endif

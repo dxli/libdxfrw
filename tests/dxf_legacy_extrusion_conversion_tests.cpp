@@ -442,6 +442,103 @@ bool traceControls(const std::filesystem::path& dir, bool binary) {
     retryInput.traces[1] = original;
     return retryWriter.write(&retryInput, DRW::AC1027, binary);
 }
+
+bool sameText(const DRW_Text& a, const DRW_Text& b) {
+    return same(a.basePoint, b.basePoint) && same(a.secPoint, b.secPoint)
+        && same(a.extPoint, b.extPoint) && near(a.thickness, b.thickness)
+        && near(a.height, b.height) && near(a.angle, b.angle)
+        && near(a.widthscale, b.widthscale) && near(a.oblique, b.oblique)
+        && a.text == b.text && a.style == b.style && a.layer == b.layer
+        && a.textgen == b.textgen && a.alignH == b.alignH && a.alignV == b.alignV
+        && a.haveExtrusion == b.haveExtrusion;
+}
+struct TextAdapter final : LC3CompatCheck {
+    std::vector<DRW_Text> texts;
+    dxfRW* writer = nullptr;
+    bool convert = false, failed = false;
+    void addText(const DRW_Text& e) override { texts.push_back(e); }
+    void writeEntities() override {
+        failed = false;
+        for (const auto& e : texts) {
+            DRW_Text out = e;
+            if ((convert && !DRW_DxfLegacyExtrusion::toNativeOcs(e, out))
+                || !writer->writeText(&out)) { failed = true; return; }
+        }
+    }
+    bool finalizeDxfWrite() override { return !failed; }
+};
+DRW_Text authoredText(const DRW_Coord& normal) {
+    DRW_Text e;
+    e.basePoint = {1.,2.,3.}; e.secPoint = {3.,4.,3.};
+    e.extPoint = normal; e.haveExtrusion = true; e.thickness = 0.3;
+    e.height = 1.5; e.text = "aligned"; e.angle = 25.; e.oblique = 8.;
+    e.widthscale = 1.2; e.textgen = 2; e.layer = "TEXT_TEST";
+    e.alignH = DRW_Text::HCenter; e.alignV = DRW_Text::VMiddle;
+    return e;
+}
+bool textControls(const std::filesystem::path& dir, bool binary) {
+    TextAdapter input;
+    for (const DRW_Coord normal : {DRW_Coord{0.,1.,0.}, DRW_Coord{0.,0.,-1.},
+                                   DRW_Coord{0.015625,0.,1.}, DRW_Coord{0.0158,0.,1.}})
+        input.texts.push_back(authoredText(normal));
+    const auto initial = dir / (binary ? "text-original-binary.dxf" : "text-original-ascii.dxf");
+    const auto converted = dir / (binary ? "text-converted-binary.dxf" : "text-converted-ascii.dxf");
+    dxfRW first(initial.string().c_str()); input.writer = &first;
+    if (!first.write(&input, DRW::AC1027, binary)) return false;
+    TextAdapter raw, applied;
+    dxfRW rawReader(initial.string().c_str()), appliedReader(initial.string().c_str());
+    if (!rawReader.read(&raw, false) || !appliedReader.read(&applied, true)
+        || raw.texts.size() != 4u || applied.texts.size() != 4u) return false;
+    dxfRW second(converted.string().c_str()); applied.writer = &second; applied.convert = true;
+    if (!second.write(&applied, DRW::AC1027, binary)) return false;
+    TextAdapter result; dxfRW finalReader(converted.string().c_str());
+    if (!finalReader.read(&result, false) || result.texts.size() != 4u) return false;
+    for (std::size_t i = 0; i < 4; ++i)
+        if (!sameText(raw.texts[i], result.texts[i])) return false;
+
+    DRW_Text text = authoredText({3.,4.,-5.}); const DRW_Text original = text;
+    text.applyExtrusion();
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(text, text) || !sameText(text, original)) return false;
+    text = original; text.haveExtrusion = false; const DRW_Text noOp = text;
+    text.applyExtrusion();
+    if (!DRW_DxfLegacyExtrusion::toNativeOcs(text, text) || !sameText(text, noOp)) return false;
+    DRW_Text unchanged = original, invalid = original;
+    invalid.extPoint = {0.,0.,0.}; const DRW_Text invalidBefore = invalid;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid, unchanged)
+        || !sameText(unchanged, original)
+        || DRW_DxfLegacyExtrusion::toNativeOcs(invalid, invalid)
+        || !sameText(invalid, invalidBefore)) return false;
+    invalid = original; invalid.secPoint.x = std::numeric_limits<double>::infinity();
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid, unchanged) || !sameText(unchanged, original)) return false;
+    invalid = original; invalid.extPoint = {1.,1.,0.};
+    invalid.basePoint = {std::numeric_limits<double>::max(),
+                         -std::numeric_limits<double>::max(), 0.};
+    const DRW_Text overflowBefore = invalid;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid, unchanged)
+        || !sameText(unchanged, original)
+        || DRW_DxfLegacyExtrusion::toNativeOcs(invalid, invalid)
+        || !sameText(invalid, overflowBefore)) return false;
+    invalid = original; invalid.eType = DRW::MTEXT;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(invalid, unchanged) || !sameText(unchanged, original)) return false;
+    DRW_Attrib attrib; DRW_Attdef attdef; DRW_MText mtext;
+    for (const DRW_Text* derived : {static_cast<const DRW_Text*>(&attrib),
+                                    static_cast<const DRW_Text*>(&attdef),
+                                    static_cast<const DRW_Text*>(&mtext)})
+        if (DRW_DxfLegacyExtrusion::toNativeOcs(*derived, unchanged)
+            || !sameText(unchanged, original)) return false;
+    if (DRW_DxfLegacyExtrusion::toNativeOcs(original, attrib)
+        || DRW_DxfLegacyExtrusion::toNativeOcs(original, attdef)
+        || DRW_DxfLegacyExtrusion::toNativeOcs(original, mtext)) return false;
+
+    const auto retry = dir / (binary ? "text-retry-binary.dxf" : "text-retry-ascii.dxf");
+    { std::ofstream out(retry, std::ios::binary); out << "unchanged"; }
+    TextAdapter retryInput; retryInput.texts = {original, invalid}; retryInput.convert = true;
+    dxfRW retryWriter(retry.string().c_str()); retryInput.writer = &retryWriter;
+    if (retryWriter.write(&retryInput, DRW::AC1027, binary)) return false;
+    { std::ifstream in(retry, std::ios::binary); if (std::string((std::istreambuf_iterator<char>(in)), {}) != "unchanged") return false; }
+    retryInput.texts[1] = original;
+    return retryWriter.write(&retryInput, DRW::AC1027, binary);
+}
 } // namespace
 
 int main(int argc, char** argv) {
@@ -456,6 +553,7 @@ int main(int argc, char** argv) {
         pass = roundTrip(dir, binary) && pass;
         pass = refusalAndRetry(dir / (binary ? "retry-binary.dxf" : "retry-ascii.dxf"), binary) && pass;
         pass = traceControls(dir, binary) && pass;
+        pass = textControls(dir, binary) && pass;
     }
     pass = dwgRoundTrip(dir) && pass;
     pass = dwgRefusalAndRetry(dir / "ac1024-retry.dwg") && pass;

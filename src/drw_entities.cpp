@@ -7312,6 +7312,8 @@ static_assert(std::is_nothrow_move_assignable<DRW_Trace>::value,
               "conversion publication must not throw");
 static_assert(std::is_nothrow_move_assignable<DRW_Solid>::value,
               "conversion publication must not throw");
+static_assert(std::is_nothrow_move_assignable<DRW_Text>::value,
+              "conversion publication must not throw");
 bool validLegacyDxfExtrusion(const DRW_Circle& value) noexcept {
     const DRW_Coord& normal = value.extPoint;
     const DRW_Coord& center = value.basePoint;
@@ -7410,6 +7412,34 @@ bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Solid& input,
     try {
         DRW_Solid candidate(input);
         if (!restoreLegacyDxfTrace(candidate)) return false;
+        output = std::move(candidate);
+        return true;
+    } catch (...) { return false; }
+}
+
+bool DRW_DxfLegacyExtrusion::toNativeOcs(const DRW_Text& input,
+                                         DRW_Text& output) noexcept {
+    if (typeid(input) != typeid(DRW_Text) || typeid(output) != typeid(DRW_Text)
+        || input.eType != DRW::TEXT) return false;
+    const auto finite = [](const DRW_Coord& p) noexcept {
+        return std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
+    };
+    if (!finite(input.basePoint) || !finite(input.secPoint)
+        || !finite(input.extPoint) || !std::isfinite(input.thickness)
+        || !std::isfinite(input.height) || !std::isfinite(input.angle)
+        || !std::isfinite(input.widthscale) || !std::isfinite(input.oblique)
+        || (input.extPoint.x == 0.0 && input.extPoint.y == 0.0
+            && input.extPoint.z == 0.0)) return false;
+    try {
+        DRW_Text candidate(input);
+        if (candidate.haveExtrusion) {
+            candidate.basePoint = inverseTransformOcsCoordinate(
+                candidate.extPoint, candidate.basePoint);
+            candidate.secPoint = inverseTransformOcsCoordinate(
+                candidate.extPoint, candidate.secPoint);
+            if (!finite(candidate.basePoint) || !finite(candidate.secPoint))
+                return false;
+        }
         output = std::move(candidate);
         return true;
     } catch (...) { return false; }

@@ -876,6 +876,9 @@ Qualify CIRCLE/ARC DWG extrusion writeback beyond the explicit AC1024 helper
 profile and its selected geometry checks ([receipt](docs/research/p6-ac1024-dwg-legacy-extrusion-opt-in-2026-11-04.json)).
 Qualify SOLID/TRACE DWG writeback and broader producer/normal coverage beyond
 the explicit DXF inverse-extrusion helper ([receipt](docs/research/p6-ac1024-trace-solid-legacy-extrusion-opt-in-2026-11-04.json)).
+Qualify additional text-derived entities and producer/normal profiles beyond
+the explicit TEXT DXF inverse-extrusion helper; current DWG TEXT reads do not
+apply that transform ([receipt](docs/research/p6-text-legacy-extrusion-opt-in-2026-11-04.json)).
 Qualify attributed INSERT scale semantics beyond the explicit AC1015
 positive-finite chain profile, including external near-unit precision and native
 rendering ([receipt](docs/research/p6-ac1015-attributed-insert-positive-scale-2026-11-04.json)).
