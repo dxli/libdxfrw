@@ -24,9 +24,9 @@
 // from the inner HEADER envelope. Writer-authored sections include the optional
 // word in RL. A decoded R2010 profile excludes it; admit that narrow form only
 // with a matching CRC, exact sentinel and exact logical length.
-// AC1027 app-maintenance-4 and tracked AC1032 profiles may contain a bounded,
-// diagnosed suffix after the validated HEADER envelope. The suffix is never
-// folded into the envelope or treated as padding.
+// A witnessed AC1018 app-maintenance-55 profile, AC1027 app-maintenance-4
+// and tracked AC1032 profiles may contain a diagnosed suffix after the
+// validated HEADER envelope. The suffix is not interpreted as padding.
 enum class DwgHeaderEnvelopeError { None, Bounds, BeginSentinel, EndSentinel };
 
 struct DwgHeaderEnvelope {
@@ -59,7 +59,9 @@ inline bool dwgHeaderMayExcludeHighSizeWord(
 inline bool dwgHeaderMayHaveUnclaimedSuffix(
     DRW::Version version, std::uint8_t appMaintenanceVersion,
     bool excludesHighSizeWord) noexcept {
-    return (version == DRW::AC1027 && appMaintenanceVersion > 3u
+    return (version == DRW::AC1018 && appMaintenanceVersion == 55u
+            && !excludesHighSizeWord)
+        || (version == DRW::AC1027 && appMaintenanceVersion > 3u
             && excludesHighSizeWord)
         || (version == DRW::AC1032 && excludesHighSizeWord);
 }
@@ -139,9 +141,10 @@ inline DwgHeaderEnvelope inspectDwgHeaderEnvelopeCandidate(
         if (!probe.isGood() || (excludesHighSizeWord && result.highSizeWord != 0u))
             return result;
     }
-    if (excludesHighSizeWord) {
-        // Do not choose a different layout merely to tolerate a bad CRC.
-        // The canonical profile retains its existing warn-only CRC contract.
+    if (excludesHighSizeWord
+        || (suffixAllowed && result.trailerEnd != input.size())) {
+        // Do not admit an alternative profile or a suffix around a bad CRC.
+        // Exact canonical envelopes retain their existing warn-only contract.
         const auto crc = probe.crc8(0xC0C1u,
             static_cast<std::int32_t>(result.start),
             static_cast<std::int32_t>(result.payloadEnd));

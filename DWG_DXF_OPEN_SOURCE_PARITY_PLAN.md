@@ -812,6 +812,11 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 Audit only a current failing source/profile; do not revive historical defects whose
 receipt and code path already agree.
 
+The witnessed AC1018 maintenance-55 HEADER profile now parses its CRC- and
+sentinel-validated envelope and diagnoses its unclaimed suffix. Strict output
+remains refused; classify the suffix and resolve the remaining CELLSTYLEMAP
+failure before claiming whole-file conversion. See the [receipt](docs/research/p6-ac1018-oda-header-suffix-diagnostic-admission-2026-11-03.json).
+
 The ELLIPSE-to-polyline work bound now covers derived segment counts and R12
 refusal/retry; other geometry and caller-state profiles below remain open. See the
 [ellipse receipt](docs/research/p6-ellipse-polyline-work-bound-2026-11-03.json).

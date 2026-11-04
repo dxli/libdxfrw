@@ -14162,6 +14162,49 @@ void testHeaderVersionEnvelopes(TestContext& t) {
         makeHeaderSection<dwgWriter21>(t, "AC1021"), DRW::AC1021, 0u, false,
         "AC1021");
 
+    // Two distinct ODA-authored AC1018 drawings with app maintenance 55
+    // carry an exact CRC/sentinel envelope followed by 739 unknown bytes.
+    // The suffix is diagnosed, not interpreted or admitted for strict output.
+    auto ac1018Suffix = makeHeaderSection<dwgWriter18>(t, "AC1018 suffix");
+    const std::size_t ac1018TrailerEnd = ac1018Suffix.size();
+    for (std::size_t i = 0; i < 739u; ++i)
+        ac1018Suffix.push_back(static_cast<std::uint8_t>(i * 31u + 7u));
+    const auto ac1018Original = ac1018Suffix;
+    HeaderSectionReader ac1018SuffixReader(
+        ac1018Suffix, 0u, DRW::AC1018, 55u);
+    DRW_Header ac1018SuffixHeader;
+    t.expect(ac1018SuffixReader.readDwgHeader(ac1018SuffixHeader)
+                 && ac1018SuffixHeader.vars.count("LUNITS") == 1u
+                 && ac1018SuffixReader.diagnostics().size() == 1u
+                 && ac1018SuffixReader.diagnostics()[0].kind
+                        == DwgIntegrityCheckKind::HeaderSectionUnclaimedData
+                 && ac1018SuffixReader.diagnostics()[0].expected == ac1018TrailerEnd
+                 && ac1018SuffixReader.diagnostics()[0].observed == ac1018Suffix.size()
+                 && ac1018Suffix == ac1018Original,
+             "AC1018 maintenance-55 parses a validated HEADER and diagnoses the suffix");
+    HeaderSectionReader ac1018OtherMaintenance(
+        ac1018Suffix, 0u, DRW::AC1018, 54u);
+    DRW_Header ac1018OtherHeader;
+    t.expect(!ac1018OtherMaintenance.readDwgHeader(ac1018OtherHeader)
+                 && ac1018OtherHeader.vars.empty(),
+             "AC1018 suffix profile remains gated to witnessed maintenance");
+    auto ac1018BadCrc = ac1018Suffix;
+    ac1018BadCrc[ac1018TrailerEnd - 18u] ^= 1u;
+    HeaderSectionReader ac1018BadCrcReader(
+        ac1018BadCrc, 0u, DRW::AC1018, 55u);
+    DRW_Header ac1018BadCrcHeader;
+    t.expect(!ac1018BadCrcReader.readDwgHeader(ac1018BadCrcHeader)
+                 && ac1018BadCrcHeader.vars.empty(),
+             "AC1018 suffix profile refuses a mismatched envelope CRC");
+    auto ac1018BadEnd = ac1018Suffix;
+    ac1018BadEnd[ac1018TrailerEnd - 16u] ^= 1u;
+    HeaderSectionReader ac1018BadEndReader(
+        ac1018BadEnd, 0u, DRW::AC1018, 55u);
+    DRW_Header ac1018BadEndHeader;
+    t.expect(!ac1018BadEndReader.readDwgHeader(ac1018BadEndHeader)
+                 && ac1018BadEndHeader.vars.empty(),
+             "AC1018 suffix profile refuses an invalid end sentinel");
+
     auto ac1021 = makeHeaderSection<dwgWriter21>(t, "AC1021");
     checkHeaderVersionProfile(t, ac1021, DRW::AC1021, 6u, false,
                               "AC1021 app maintenance does not add a high-size word");
