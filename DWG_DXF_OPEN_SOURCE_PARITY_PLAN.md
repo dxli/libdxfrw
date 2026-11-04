@@ -896,6 +896,10 @@ remain supported; see the [corner receipt](docs/research/p6-dxf-incomplete-fourt
 For ELLIPSE and HATCH/MPOLYGON ellipse edges, continue source and native
 qualification beyond the bounded extreme-axis normalization fix; see the
 [normalization receipt](docs/research/p6-dxf-ellipse-extreme-axis-normalization-2026-11-04.json).
+The shared DWG HATCH/MPOLYGON edge writer now dispatches ellipse edges before
+their LINE base class. Producer-backed HATCH output and generated MPOLYGON body
+checks cover the selected fields; broader physical and native behavior remains
+open ([dispatch receipt](docs/research/p6-dwg-hatch-ellipse-edge-dispatch-2026-11-04.json)).
 Qualify CIRCLE/ARC DWG extrusion writeback beyond the explicit AC1024 helper
 profile and its selected geometry checks ([receipt](docs/research/p6-ac1024-dwg-legacy-extrusion-opt-in-2026-11-04.json)).
 Qualify SOLID/TRACE DWG writeback and broader producer/normal coverage beyond

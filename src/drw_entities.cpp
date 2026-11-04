@@ -20726,7 +20726,17 @@ bool DRW_Hatch::encodeDwgBoundaryData(DRW::Version version, dwgBufferW *buf,
     if (!(lp->type & 2)) {
       buf->putBitLong(static_cast<std::int32_t>(lp->objlist.size()));
       for (const auto &seg : lp->objlist) {
-        if (const auto *ln = dynamic_cast<const DRW_Line *>(seg.get())) {
+        // DRW_Ellipse derives from DRW_Line; preserve its edge type and fields.
+        if (const auto *el =
+                       dynamic_cast<const DRW_Ellipse *>(seg.get())) {
+          buf->putRawChar8(3); // ellipse arc
+          buf->put2RawDouble(el->basePoint);
+          buf->put2RawDouble(el->secPoint);
+          buf->putBitDouble(el->ratio);
+          buf->putBitDouble(el->staparam);
+          buf->putBitDouble(el->endparam);
+          buf->putBit(static_cast<std::uint8_t>(el->isccw));
+        } else if (const auto *ln = dynamic_cast<const DRW_Line *>(seg.get())) {
           buf->putRawChar8(1); // line
           buf->put2RawDouble(ln->basePoint);
           buf->put2RawDouble(ln->secPoint);
@@ -20737,15 +20747,6 @@ bool DRW_Hatch::encodeDwgBoundaryData(DRW::Version version, dwgBufferW *buf,
           buf->putBitDouble(arc->staangle);
           buf->putBitDouble(arc->endangle);
           buf->putBit(static_cast<std::uint8_t>(arc->isccw));
-        } else if (const auto *el =
-                       dynamic_cast<const DRW_Ellipse *>(seg.get())) {
-          buf->putRawChar8(3); // ellipse arc
-          buf->put2RawDouble(el->basePoint);
-          buf->put2RawDouble(el->secPoint);
-          buf->putBitDouble(el->ratio);
-          buf->putBitDouble(el->staparam);
-          buf->putBitDouble(el->endparam);
-          buf->putBit(static_cast<std::uint8_t>(el->isccw));
         } else if (const auto *sp =
                        dynamic_cast<const DRW_Spline *>(seg.get())) {
           buf->putRawChar8(4); // spline
