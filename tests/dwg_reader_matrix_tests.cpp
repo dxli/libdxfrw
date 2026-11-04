@@ -63,6 +63,10 @@ public:
 
 class DrwObjectEncodeTestAccess {
 public:
+    static bool encodeLtype(DRW_LType& type, DRW::Version version, dwgBufferW& data,
+                            dwgBufferW& strings, dwgBufferW& handles, bool typedLegacy) {
+        return type.encodeDwgForWriter(version, &data, &strings, &handles, typedLegacy);
+    }
     static bool encodeLayer(DRW_Layer& layer, DRW::Version version, dwgBufferW& data,
                             dwgBufferW& strings, dwgBufferW& handles, bool typedLegacy) {
         return layer.encodeDwgForWriter(version, &data, &strings, &handles, typedLegacy);
@@ -15834,14 +15838,35 @@ void testBuiltinLtypeDefaults(TestContext& t, DRW::Version version,
         const bool read = reader.readBuffer(bytes.data(), bytes.size(), &sink, false);
         bool exact = read && sink.lines == 1u;
         for (std::size_t i = 0; i < 3; ++i) {
-            const bool synthesized = (i != 0u || mode == 0) && version >= DRW::AC1018;
+            const bool synthesized = i != 0u || mode == 0;
             const bool typedCaller = i == 0u && mode == 3 && version >= DRW::AC1018;
             exact = exact && sink.ltypeCounts[i] == 1u
-                && sink.ltypeFlags[i] == (synthesized ? 1u : 0u)
+                && sink.ltypeFlags[i] == ((synthesized && version >= DRW::AC1018) ? 1u : 0u)
                 && sink.ltypeXrefCodes[i] == ((synthesized || typedCaller) ? DRW::DwgHardPointer : 0u)
                 && sink.ltypeXrefRefs[i] == 0u;
         }
         t.expect(exact, "builtin LTYPE source state and following LINE survive readback: " + label);
+    }
+    if (version == DRW::AC1015) {
+        DRW_LType probe;
+        dwgBufferW body, strings, handles;
+        t.expect(DrwObjectEncodeTestAccess::encodeLtype(
+                     probe, version, body, strings, handles, true)
+                     && handles.data() == std::vector<std::uint8_t>({0x41u, 0x05u, 0x30u, 0x50u}),
+                 "synthetic legacy LTYPE typed xdictionary and xref bytes: " + label);
+        DRW_LType dash;
+        dash.updateValues("TEST", "", 1, 1.0, {1.0});
+        dash.shapeHandles.push_back(0x51u);
+        dwgBufferW dashBody, dashStrings, dashHandles;
+        t.expect(DrwObjectEncodeTestAccess::encodeLtype(
+                     dash, version, dashBody, dashStrings, dashHandles, true)
+                     && dashHandles.data() == std::vector<std::uint8_t>(
+                         {0x41u, 0x05u, 0x30u, 0x50u, 0x51u, 0x51u}),
+                 "legacy LTYPE typed slots preserve following dash handle: " + label);
+        dwgBufferW publicBody, publicStrings, publicHandles;
+        t.expect(probe.encodeDwg(version, &publicBody, &publicStrings, &publicHandles)
+                     && publicHandles.data() == std::vector<std::uint8_t>({0x41u, 0x05u, 0x00u, 0x00u}),
+                 "caller legacy LTYPE null bytes remain unchanged: " + label);
     }
 }
 

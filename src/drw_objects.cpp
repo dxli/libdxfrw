@@ -8062,17 +8062,29 @@ namespace {
 
 bool DRW_LType::encodeDwg(DRW::Version version, dwgBufferW *buf,
                            dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
+    return encodeDwgForWriter(version, buf, strBuf, hdlBuf, false);
+}
+
+bool DRW_LType::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                    dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                    bool typedLegacyNulls) const {
     if (buf == nullptr)
         return false;
     DRW_LType resolved = *this;
     if (!resolved.update() || !resolved.validatePayloadFields())
         return false;
-    return resolved.encodeDwgResolved(version, buf, strBuf, hdlBuf);
+    return resolved.encodeDwgResolved(version, buf, strBuf, hdlBuf,
+                                      typedLegacyNulls);
 }
 
 bool DRW_LType::encodeDwgResolved(DRW::Version version, dwgBufferW *buf,
-                                  dwgBufferW *strBuf,
-                                  dwgBufferW *hdlBuf) const {
+                                  dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
+    return encodeDwgResolved(version, buf, strBuf, hdlBuf, false);
+}
+
+bool DRW_LType::encodeDwgResolved(DRW::Version version, dwgBufferW *buf,
+                                  dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                  bool typedLegacyNulls) const {
     if (buf == nullptr || !validatePayloadFields())
         return false;
     dwgBufferW *sb = (strBuf && version > DRW::AC1018) ? strBuf : buf;
@@ -8160,11 +8172,13 @@ bool DRW_LType::encodeDwgResolved(DRW::Version version, dwgBufferW *buf,
     putCommonObjectHandlePrefix(
         hb, kLtypeControl,
         static_cast<std::int32_t>(reactorHandles.size()), xDictFlag,
-        &reactorHandles, xDictHandle);
+        &reactorHandles, xDictHandle, DRW::DwgSoftPointer, false,
+        version == DRW::AC1015 && typedLegacyNulls);
     dwgHandle xref = makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer);
     // Preserve an explicitly typed null; legacy untyped nulls stay unchanged.
-    if (version >= DRW::AC1018 && xrefBlockHandle.ref == 0u
-        && xrefBlockHandle.code == DRW::DwgHardPointer)
+    if (xrefBlockHandle.ref == 0u
+        && ((version >= DRW::AC1018 && xrefBlockHandle.code == DRW::DwgHardPointer)
+            || (version == DRW::AC1015 && typedLegacyNulls)))
         xref.code = DRW::DwgHardPointer;
     hb->putHandle(xref);
     for (int i = 0; i < size; ++i) {

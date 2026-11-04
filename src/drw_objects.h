@@ -2397,8 +2397,14 @@ protected:
   [[nodiscard]] bool validatePayloadFields() const;
   [[nodiscard]] bool validateDxf() const;
   [[nodiscard]] bool update();
+  bool encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                          dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                          bool typedLegacyNulls) const;
   bool encodeDwgResolved(DRW::Version version, dwgBufferW *buf,
-                        dwgBufferW *strBuf, dwgBufferW *hdlBuf) const;
+                         dwgBufferW *strBuf, dwgBufferW *hdlBuf) const;
+  bool encodeDwgResolved(DRW::Version version, dwgBufferW *buf,
+                         dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                         bool typedLegacyNulls) const;
 
 public:
   [[nodiscard]] bool encodeDwg(DRW::Version version, dwgBufferW *buf,
