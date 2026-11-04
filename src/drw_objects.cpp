@@ -8372,7 +8372,12 @@ bool DRW_Layer::encodeDwg(DRW::Version version, dwgBufferW *buf,
     putCommonObjectHandlePrefix(
         hb, kLayerControl, static_cast<std::int32_t>(reactorHandles.size()),
         xDictFlag, &reactorHandles, xDictHandle);
-    hb->putHandle(makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer));
+    dwgHandle xref = makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer);
+    // Preserve an explicitly typed null; legacy untyped nulls stay unchanged.
+    if (version >= DRW::AC1018 && xrefBlockHandle.ref == 0u
+        && xrefBlockHandle.code == DRW::DwgHardPointer)
+        xref.code = DRW::DwgHardPointer;
+    hb->putHandle(xref);
     if (version > DRW::AC1014)
         hb->putHandle(makeRefW(plotStyleHandle.ref, DRW::DwgHardPointer));
     if (version > DRW::AC1018)

@@ -891,6 +891,11 @@ The AC1015/AC1018 BLOCK_CONTROL now records its handle boundary before
 the handle stream. Correcting synthetic paper BLOCK/ENDBLK ownership removes
 the ODA block-owner warning; the layer-table error remains. See the
 [paper-space receipt](docs/research/p6-synthetic-paper-block-owner-mode-2026-11-04.json).
+Synthetic R2004+ layer 0 now retains the source-backed absent-extension and
+typed-null xref state; ODA still requires the layer plot-style graph.
+Implement its early class admission, collision-safe identities, HEADER/NOD
+and placeholder edges, caller override and rollback using the six-version
+[graph subplan](docs/research/p6-default-plotstyle-graph-research-2026-11-04.json).
 AC1021 has a separate source-observed framing and
 model/paper-reference discrepancy requiring its own producer witness and
 string/footer investigation. See the [boundary receipt](docs/research/p6-block-control-handle-boundary-2026-11-04.json).

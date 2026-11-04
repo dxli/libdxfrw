@@ -6396,6 +6396,12 @@ bool dwgWriter15::writeDwgObjects() {
                 return false;
         } else {
             DRW_Layer layer0;
+            if (m_version >= DRW::AC1018) {
+                // A synthesized layer 0 has neither extension nor xref.
+                // Keep a supplied layer's common state untouched.
+                layer0.setDwgCommonObjectState(0, 1, false);
+                layer0.xrefBlockHandle.code = DRW::DwgHardPointer;
+            }
             layer0.name = "0";
             if (!emitLayerRecord(DRW::DwgLayer0Handle, layer0))
                 return false;

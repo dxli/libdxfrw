@@ -15160,6 +15160,20 @@ public:
         ++lines;
         lineEnd = line.secPoint;
     }
+    void addLayer(const DRW_Layer& layer) override {
+        if (layer.name == "0") {
+            ++layerZeroCount;
+            layerZeroFlag = layer.extensionDictionaryFlag();
+            layerZeroXrefCode = layer.xrefBlockHandle.code;
+            layerZeroXrefRef = layer.xrefBlockHandle.ref;
+            layerZeroPlotRef = layer.plotStyleHandle.ref;
+        }
+    }
+    std::size_t layerZeroCount{0};
+    std::uint8_t layerZeroFlag{0};
+    std::uint8_t layerZeroXrefCode{0};
+    std::uint32_t layerZeroXrefRef{0};
+    std::uint32_t layerZeroPlotRef{0};
     void addTextStyle(const DRW_Textstyle& style) override {
         if (style.name == "STANDARD") {
             ++standardStyles;
@@ -15620,7 +15634,68 @@ void testStandardStyleDefaults(TestContext& t, DRW::Version version,
     }
 }
 
+template<class Writer>
+void testLayerZeroDefaults(TestContext& t, DRW::Version version,
+                           const std::string& label) {
+    for (int mode = 0; mode < 4; ++mode) {
+        std::stringbuf output(std::ios::out | std::ios::binary);
+        std::ofstream stream;
+        static_cast<std::ostream&>(stream).rdbuf(&output);
+        DRW_Header header;
+        Writer writer(&stream, &header);
+        const bool prepared = writer.prepareDwgClassManifest()
+            && writer.writeFileHeaderStub() && writer.writeDwgHeader()
+            && writer.writeDwgClasses();
+        t.expect(prepared, "layer 0 preparation: " + label);
+        if (!prepared) continue;
+        DRW_Layer caller;
+        caller.name = "0";
+        caller.setDwgCommonObjectState(0, 0, false);
+        if (mode == 2) caller.color = 300;
+        if (mode == 3) caller.xrefBlockHandle.code = DRW::DwgHardPointer;
+        if (mode != 0)
+            t.expect(writer.addLayer(caller) == DRW::DwgLayer0Handle,
+                     "caller layer 0 registered: " + label);
+        if (mode == 2) {
+            const auto before = writer.buffer();
+            t.expect(!writer.writeDwgObjects() && writer.buffer() == before
+                         && output.str().empty(),
+                     "invalid layer 0 rolls back without output: " + label);
+            caller.color = 7;
+            t.expect(writer.addLayer(caller) == DRW::DwgLayer0Handle,
+                     "corrected layer 0 registered on same writer: " + label);
+        }
+        DRW_Line line;
+        line.basePoint = DRW_Coord(1, 2, 3);
+        line.secPoint = DRW_Coord(4, 5, 6);
+        const bool published = writer.writeDwgObjects() && writer.encodeEntity(&line)
+            && writer.emitDeferredBlockControl() && writer.finalizeHeaderHandseed()
+            && writer.writeDwgHandles() && writer.writeSecondHeader() && writer.finalize();
+        t.expect(published, "layer 0 complete publication: " + label);
+        if (!published) continue;
+        const auto file = output.str();
+        std::vector<std::uint8_t> bytes(file.begin(), file.end());
+        HeaderPublicationSink sink;
+        dwgRW reader("");
+        const bool read = reader.readBuffer(bytes.data(), bytes.size(), &sink, false);
+        const bool synthesized = mode == 0 && version >= DRW::AC1018;
+        t.expect(read && sink.layerZeroCount == 1u && sink.lines == 1u
+                     && sink.layerZeroFlag == (synthesized ? 1u : 0u)
+                     && sink.layerZeroXrefCode
+                         == ((synthesized || (mode == 3 && version >= DRW::AC1018))
+                                 ? DRW::DwgHardPointer : 0u)
+                     && sink.layerZeroXrefRef == 0u && sink.layerZeroPlotRef == 0u,
+                 "layer 0 source state and following LINE survive readback: " + label);
+    }
+}
+
 void testHeaderWriters(TestContext& t) {
+    testLayerZeroDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
+    testLayerZeroDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
+    testLayerZeroDefaults<dwgWriter21>(t, DRW::AC1021, "AC1021");
+    testLayerZeroDefaults<dwgWriter24>(t, DRW::AC1024, "AC1024");
+    testLayerZeroDefaults<dwgWriter27>(t, DRW::AC1027, "AC1027");
+    testLayerZeroDefaults<dwgWriter32>(t, DRW::AC1032, "AC1032");
     testStandardStyleDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
     testStandardStyleDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
     testStandardStyleDefaults<dwgWriter21>(t, DRW::AC1021, "AC1021");
