@@ -7612,6 +7612,15 @@ bool DRW_View::validateDxf(DRW::Version version) const {
                   m_ambientColorName));
 }
 
+// VIEW DXF group 50 uses degrees; ODA 20.4.60 specifies DWG radians.
+// Shared with writer admission so rejected selected records fail atomically.
+bool drwHasEncodableDwgViewTwist(const DRW_View& view) noexcept {
+    if (!std::isfinite(view.twistAngle)) return false;
+    const double radians = view.twistAngle / ARAD;
+    return view.twistAngle == 0.0 || (radians != 0.0
+        && std::fpclassify(radians) != FP_SUBNORMAL);
+}
+
 bool DRW_View::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
     reset();
     const auto fail = [this, buf]() {
@@ -7862,6 +7871,8 @@ bool DRW_View::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs){
     parsed.center = parsedCenter;
     parsed.targetPoint = parsedTargetPoint;
     parsed.viewDirectionFromTarget = parsedViewDirection;
+    parsedTwistAngle *= ARAD;
+    if (!std::isfinite(parsedTwistAngle)) return fail();
     parsed.twistAngle = parsedTwistAngle;
     parsed.lensLen = parsedLensLen;
     parsed.frontClippingPlaneOffset = parsedFrontClip;
@@ -9746,7 +9757,8 @@ bool DRW_ContextDataManager::parseDwg(DRW::Version version,
 
 bool DRW_View::encodeDwg(DRW::Version version, dwgBufferW *buf,
                           dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
-    if (buf == nullptr || !validatePayloadFields())
+    if (buf == nullptr || !validatePayloadFields()
+        || !drwHasEncodableDwgViewTwist(*this))
         return false;
     std::uint8_t ambientMethod = 0u;
     std::uint8_t ambientFlags = 0u;
@@ -9777,7 +9789,7 @@ bool DRW_View::encodeDwg(DRW::Version version, dwgBufferW *buf,
     buf->put2RawDouble(center);
     buf->put3BitDouble(targetPoint);
     buf->put3BitDouble(viewDirectionFromTarget);
-    buf->putBitDouble(twistAngle);
+    buf->putBitDouble(twistAngle / ARAD);
     buf->putBitDouble(lensLen);
     buf->putBitDouble(frontClippingPlaneOffset);
     buf->putBitDouble(backClippingPlaneOffset);

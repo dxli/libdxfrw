@@ -880,6 +880,12 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+DWG VIEW table twist angles now convert radians to the existing degree-valued
+DXF API and back. Consumers compensating for the former raw-radian callback
+must remove that workaround. VIEWPORT entity angles, broader producer coverage
+and generated ODA acceptance remain open
+([receipt](docs/research/p6-dwg-view-angle-units-2026-11-04.json)).
+
 DWG VPORT table snap and twist angles now convert radians to the existing
 degree-valued DXF API and back. Consumers compensating for the former
 raw-radian callback must remove that workaround. VIEW and VIEWPORT entity

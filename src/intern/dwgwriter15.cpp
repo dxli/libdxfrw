@@ -45,6 +45,7 @@
 #include "sabheader.h"
 
 bool drwHasEncodableDwgVportAngles(const DRW_Vport& entity) noexcept;
+bool drwHasEncodableDwgViewTwist(const DRW_View& entity) noexcept;
 
 namespace {
 
@@ -6674,6 +6675,12 @@ bool dwgWriter15::addView(DRW_View& view) {
     if (existing != m_writingCtx.viewMap.end()) {
         view.handle = existing->second;
         return true;
+    }
+    // Duplicate names are discarded above; check selected records before
+    // changing the caller's handle or staging the base-type copy.
+    if (!drwHasEncodableDwgViewTwist(view)) {
+        markObjectWriteFailure();
+        return false;
     }
     std::uint32_t h = m_handles.next();
     view.handle = h;

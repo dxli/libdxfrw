@@ -3435,7 +3435,7 @@ public:
                                       code 43 */
   double backClippingPlaneOffset;  /*!< Back clipping plane offset from target,
                                       code 44 */
-  double twistAngle;               /*!< Twist angle, code 50 */
+  double twistAngle;               /*!< Twist angle in degrees, DXF code 50 */
   int viewMode;                    /*!< View mode, code 71 */
   unsigned int renderMode;         /*!< Render mode, code 281 */
   bool hasUCS;                     /*!< 1 if a UCS is associated, code 72 */
