@@ -26613,6 +26613,71 @@ bool runDxfLegacyEllipseDowngrade(const std::filesystem::path& directory,
         && tiltedArcValid && tiltedReverseArcValid && invalidRejected;
 }
 
+bool runEllipsePolylineWorkBound(const std::filesystem::path& directory) {
+    DRW_Ellipse ellipse;
+    ellipse.basePoint = DRW_Coord(1.0, 2.0, 0.0);
+    ellipse.secPoint = DRW_Coord(3.0, 0.0, 0.0);
+    ellipse.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    ellipse.ratio = 0.5;
+    ellipse.staparam = 0.0;
+    ellipse.endparam = M_PIx2 - 1.0e-8;
+    DRW_Polyline output;
+    output.addVertex(DRW_Vertex(99.0, 99.0, 0.0, 0.0));
+    output.vertexcount = 1;
+    ellipse.toPolyline(&output, std::numeric_limits<int>::max());
+    if (!output.vertlist.empty() || output.vertexcount != 0 || output.flags != 0)
+        return false;
+    ellipse.toPolyline(&output, 4);
+    if (output.vertlist.size() != 5 || output.vertexcount != 5)
+        return false;
+    ellipse.endparam = M_PIx2;
+    ellipse.toPolyline(&output, std::numeric_limits<int>::max());
+    if (!output.vertlist.empty() || output.vertexcount != 0 || output.flags != 0)
+        return false;
+    ellipse.toPolyline(&output, 4);
+    if (output.vertlist.size() != 4 || output.vertexcount != 4
+        || (output.flags & 1) == 0)
+        return false;
+
+    // Exercise the public work setting through the R12 output transaction.
+    for (bool binary : {false, true}) {
+        const auto path = directory / (binary ? "ellipse-bound-binary.dxf"
+                                              : "ellipse-bound-ascii.dxf");
+        const std::string filename = path.string();
+        { std::ofstream sentinel(path, std::ios::binary); sentinel << "previous destination"; }
+        dx_data source;
+        source.mBlock->ent.push_back(new DRW_Ellipse(ellipse));
+        dx_iface adapter;
+        adapter.cData = &source;
+        adapter.currentBlock = source.mBlock;
+        dxfRW codec(filename.c_str());
+        adapter.dxfW = &codec;
+        codec.setEllipseParts(std::numeric_limits<int>::max());
+        const bool rejected = !codec.write(&adapter, DRW::AC1009, binary);
+        std::ifstream previous(path, std::ios::binary);
+        const std::string contents((std::istreambuf_iterator<char>(previous)), {});
+        previous.close();
+        codec.setEllipseParts(4);
+        const bool retried = codec.write(&adapter, DRW::AC1009, binary);
+        adapter.dxfW = nullptr;
+        dx_data imported;
+        dx_iface reader;
+        bool readback = retried && reader.fileImport(filename, &imported, false)
+            && imported.mBlock->ent.size() == 1;
+        if (readback) {
+            const auto* poly = dynamic_cast<const DRW_Polyline*>(imported.mBlock->ent.front());
+            readback = poly && poly->vertlist.size() == 4 && (poly->flags & 1) != 0
+                && poly->vertlist.front() && poly->vertlist.front()->basePoint.x == 4.0
+                && poly->vertlist.front()->basePoint.y == 2.0;
+        }
+        std::error_code error;
+        std::filesystem::remove(path, error);
+        if (!rejected || contents != "previous destination" || !readback)
+            return false;
+    }
+    return true;
+}
+
 bool runDxfEllipseRejectsInvalidGeometry(
         const std::filesystem::path& directory) {
     const std::filesystem::path validPath = directory /
@@ -35326,7 +35391,8 @@ int main(int argc, char** argv) {
             runDxfNonUnitExtrusionPolicy(false, directory, false);
         const bool binaryOcs =
             runDxfNonUnitExtrusionPolicy(true, directory, false);
-        const bool passed = ellipseModes && asciiOcs && binaryOcs;
+        const bool passed = ellipseModes && asciiOcs && binaryOcs
+            && runEllipsePolylineWorkBound(directory);
         std::cout << "DXF ELLIPSE modes and non-unit OCS extrusion, "
                      "ASCII/binary: "
                   << (passed ? "PASS" : "FAIL") << '\n';

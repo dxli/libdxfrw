@@ -7597,6 +7597,7 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
     if (pol == nullptr)
         return;
     pol->vertlist.clear();
+    pol->vertexcount = 0;
     pol->flags = 0;
     pol->basePoint = DRW_Coord(0.0, 0.0, 0.0);
     pol->extPoint = DRW_Coord(0.0, 0.0, 1.0);
@@ -7661,9 +7662,17 @@ void DRW_Ellipse::toPolyline(DRW_Polyline *pol, int parts){
 
     const double scaledSegments = static_cast<double>(parts)
         * std::abs(actualSweep) / fullTurn;
-    const int segments = closed
-        ? std::max(3, parts)
-        : std::max(1, static_cast<int>(std::ceil(scaledSegments)));
+    // Bound work before converting to int or adding the open-curve endpoint.
+    // This is an internal resource limit, not a DXF format maximum.
+    const double requiredSegments = closed
+        ? static_cast<double>(std::max(3, parts))
+        : std::max(1.0, std::ceil(scaledSegments));
+    const int maxSegments = kMaxLWPolylineVertices - (closed ? 0 : 1);
+    if (!std::isfinite(requiredSegments) || requiredSegments > maxSegments) {
+        pol->flags = 0;
+        return;
+    }
+    const int segments = static_cast<int>(requiredSegments);
     const int vertexCount = closed ? segments : segments + 1;
     for (int i = 0; i < vertexCount; ++i) {
         const double fraction = static_cast<double>(i) / segments;
