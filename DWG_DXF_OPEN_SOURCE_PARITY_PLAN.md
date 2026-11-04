@@ -847,6 +847,12 @@ An attributed AC1021 source also uses relative soft-pointer IMAGEDEF owners;
 its provenance and the absence of a located erratum do not resolve the conflict
 ([receipt](docs/research/p4-imagedef-owner-role-ac1021-independent-source-2026-11-04.json)).
 
+For GEODATA, qualify whole-source output and native geospatial meaning beyond
+the AC1027 selected graph with a nonempty mesh ([receipt](docs/research/p4-ac1027-geodata-mesh-selected-graph-2026-11-04.json)).
+Resolve the AC1024 CIVIL-tail version contradiction with authoritative guidance
+and an independently produced AutoCAD 2010 witness before changing the parser
+or output gate ([receipt](docs/research/p4-ac1024-geodata-v2-civil-tail-conflict-2026-11-04.json)).
+
 SOLID, TRACE and 3DFACE input now refuse a fourth Z without fourth X/Y
 instead of silently replacing it. Valid triangle and default-Z inputs
 remain supported; see the [corner receipt](docs/research/p6-dxf-incomplete-fourth-corner-2026-11-04.json).

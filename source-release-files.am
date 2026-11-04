@@ -673,6 +673,7 @@ EXTRA_DIST = \
     tools/generate_build_inventory.py \
     tools/generate_iso8859_4.py \
     tools/generate_symbol_casefold.py \
+    tools/geodata_mesh_physical_probe.py \
     tools/geodata_north_witness.py \
     tools/geodata_physical_v3_probe.py \
     tools/j256_external_line_peer_probe.py \
@@ -691,6 +692,7 @@ EXTRA_DIST = \
     tools/probe_ac1027_source_sab_cqacis.py \
     tools/probe_dxf_lwpolyline_missing_y.cpp \
     tools/probe_dxf_sparse_lwpolyline.cpp \
+    tools/probe_geodata_physical_capture.cpp \
     tools/qualify_material_source_order.py \
     tools/run_external_advisory.py \
     tools/run_fast_baseline.py \

@@ -1,0 +1,30 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "date": "2026-11-04",
+  "title": "AC1024 GEODATA version-2 CIVIL tail specification conflict",
+  "status": "DEFERRED_AUTHORITY_CONFLICT_NO_PARSER_ADMISSION",
+  "supportClaimEffect": "none",
+  "provenance": {
+    "author": "Locally authored from scratch with ezdxf 1.4.5; same mesh author tool as p4-ac1027-geodata-mesh-selected-graph-2026-11-04.json. ODA File Converter 27.1.0 wrote the ACAD2010 DWG and DXF pair. No fixture added.",
+    "inputDxfSha256": "8c67198d05bc24377c15bcaef414b8d55241e1f495a54c5ed9e200d5abfe139b",
+    "dwgSha256": "ffd2467a34165a2bc6ccbe438a81073a780f082079790e24dd959c8fb1302a2c",
+    "odaDxfSha256": "fa06cffeb77779a85c4bcbcdf1e533090558f2e644cb712d726ecb96bd7ed1d3",
+    "libreDwgVersion": "0.14",
+    "verboseTraceSha256": "ab8a53505be2d07be55d2229876839a488a4269afd82009df655cefd9ed9c656"
+  },
+  "authority": "ODA v5.4.1 section 20.4.78 describes the CIVIL block under the condition DWG version R21 or lower but also says AutoCAD 2010 always writes civil data. AutoCAD 2010 is AC1024/R24 and is excluded by the first statement but included by the second. The source shows the former profile; this evidence alone cannot choose authoritative semantics. The same section calls north direction 3RD while LibreDWG reports 2RD for this source; that discrepancy is not resolved here.",
+  "observedPhysicalFrame": {
+    "graph": "BLOCK_RECORD 0x17 owns extension dictionary 0x2F; dictionary entry ACAD_GEOGRAPHICDATA points to GEODATA 0x30; GEODATA owner and reactor point to 0x2F, and host soft pointer to 0x17. LibreDWG, ODA DXF and ezdxf agree on class version 2 and the three-point, one-face mesh.",
+    "frame": "LibreDWG verbose trace: GEODATA body 5392 bytes, 53 handle bits, handle boundary bit 43083; extended split-string payload length 41738 bits with 33-bit length/presence footer, giving start bit 1312 (byte 164 bit 0).",
+    "meshBoundary": "The peer reports the mesh count ending at byte 64 bit 0, followed by three source/destination point pairs, each four raw 64-bit coordinates; their 96-byte span therefore ends at byte 160 bit 0. The peer displays unsigned-wrapped individual point offsets, so that endpoint is a derivation, not a directly printed point offset. The face count BL ends at byte 161 bit 2; face indices end at byte 161 bit 4, byte 162 bit 6, and byte 164 bit 0. Thus the peer-observed scalar end meets the calculated split-string start at bit 1312, leaving no scalar span for the documented CIVIL tail. Trace offsets are peer observations, not a separate certified bit parser."
+  },
+  "currentLibrary": "The production parser currently requires the CIVIL tail for AC1024. Hash-bound read-only capture probe reports successful outer import, zero GEODATA callbacks and one object parse failure; the independent AC1027 v3 control reports one GEODATA callback and zero object parse failures. Output and graph admission remain closed for this source.",
+  "reproduce": [
+    "build/rpp5gh-evidence/peer/bin/python tools/geodata_mesh_physical_probe.py <scratch>/in/mesh.dxf",
+    "ODAFileConverter <scratch>/in <scratch>/dwg ACAD2010 DWG 0 0 '*.dxf'",
+    "/opt/homebrew/bin/dwgread -v5 -O JSON -o <scratch>/decoded.json <scratch>/dwg/mesh.dwg > <scratch>/trace.log 2>&1",
+    "g++ -std=c++17 -I. -Isrc -Idwg2dxf tools/probe_geodata_physical_capture.cpp build-gcc/tests/CMakeFiles/libdxfrw_test_adapter.dir/__/dwg2dxf/dx_iface.cpp.o build-gcc/libdxfrw.a -o <scratch>/probe",
+    "<scratch>/probe <scratch>/dwg/mesh.dwg; verify the input SHA-256 before and after the probe."
+  ],
+  "next": "Seek an authoritative ODA erratum or clarification distinguishing the R21 release gate and AutoCAD 2010 exception, plus an independently produced actual AutoCAD 2010 GEODATA witness with exact tail and following handle evidence. Until then, retain failed typed capture and strict-output refusal; do not remove the AC1024 tail requirement or promote support."
+}
