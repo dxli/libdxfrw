@@ -349,6 +349,98 @@ public:
         return true;
     }
 
+    static bool checkR2007PrimitiveFooters() {
+        DRW_Header header; dwgWriter21 writer(nullptr, &header);
+        if (!writer.prepareDwgClassManifest() || !writer.writeFileHeaderStub()
+            || !writer.writeDwgHeader() || !writer.writeDwgClasses()
+            || !writer.writeDwgObjects()) return false;
+        struct CommonPoint : DRW_Point {
+            bool common(dwgBuffer& b) { return DRW_Entity::parseDwgCommon(DRW::AC1021, &b, 0u); }
+            using DRW_Point::parseDwg;
+        };
+        struct CommonCircle : DRW_Circle {
+            bool common(dwgBuffer& b) { return DRW_Entity::parseDwgCommon(DRW::AC1021, &b, 0u); }
+            using DRW_Circle::parseDwg;
+        };
+        std::vector<std::uint32_t> handles;
+        bool sawAlignedBody = false;
+        for (unsigned index = 0u; index < 4u; ++index) {
+            DRW_Point point; point.basePoint = {3., 4., 5.};
+            DRW_Circle circle; circle.basePoint = {7., 8., 2.}; circle.radious = 2.5;
+            if (index == 2u) { circle.extPoint = {0., 1., 0.}; circle.thickness = 1.25; }
+            if (index == 3u) { circle.extPoint = {0., 0., -1.}; circle.thickness = 1.25; }
+            DRW_Entity* entity = index == 0u ? static_cast<DRW_Entity*>(&point)
+                                             : static_cast<DRW_Entity*>(&circle);
+            if (!writer.encodeEntity(entity)) return false;
+            handles.push_back(entity->handle);
+            DRW::DwgObjectFrameReceipt receipt;
+            if (!writer.getLastDwgObjectFrame(receipt) || !receipt.valid
+                || receipt.objectHandle != entity->handle) return false;
+            CapturedObjectFrame captured;
+            if (!captureObjectFrame(writer, entity->handle, captured)) return false;
+            dwgBuffer frame(captured.bytes.data(), captured.bytes.size());
+            const auto length = frame.getModularShort(); const auto offset = frame.getPosition();
+            if (!frame.isGood() || length <= 0 || offset + length + 2u != captured.bytes.size()) return false;
+            std::vector<std::uint8_t> body(captured.bytes.begin() + static_cast<std::ptrdiff_t>(offset),
+                captured.bytes.begin() + static_cast<std::ptrdiff_t>(offset + length));
+            dwgBuffer raw(body.data(), body.size());
+            if (raw.getObjType(DRW::AC1021) != (index == 0u ? dwgType::POINT : dwgType::CIRCLE)) return false;
+            const std::uint32_t boundary = raw.getRawLong32();
+            CommonPoint pointProbe; CommonCircle circleProbe;
+            dwgBuffer scalar(body.data(), body.size());
+            if (!(index == 0u ? pointProbe.common(scalar) : circleProbe.common(scalar))) return false;
+            const DRW_Coord center{scalar.getBitDouble(), scalar.getBitDouble(), scalar.getBitDouble()};
+            if (index != 0u && scalar.getBitDouble() != 2.5) return false;
+            const double thickness = scalar.getThickness(true);
+            const DRW_Coord normal = scalar.getExtrusion(true);
+            if (index == 0u && scalar.getBitDouble() != 0.) return false;
+            const auto end = scalar.getPosition() * 8u + scalar.getBitPos();
+            if (!scalar.isGood() || center.x != (index == 0u ? 3. : 7.)
+                || center.y != (index == 0u ? 4. : 8.) || center.z != (index == 0u ? 5. : 2.)
+                || thickness != (index >= 2u ? 1.25 : 0.)
+                || normal.x != 0. || normal.y != (index == 2u ? 1. : 0.)
+                || normal.z != (index == 2u ? 0. : index == 3u ? -1. : 1.)
+                || boundary != ((end + 8u) & ~std::uint64_t{7u})) return false;
+            if ((end & 7u) == 0u) sawAlignedBody = true;
+            for (auto bit = end; bit < boundary; ++bit)
+                if ((body[bit / 8u] >> (7u - bit % 8u)) & 1u) return false;
+            const auto parse = [&body, &pointProbe, &circleProbe, index](std::vector<std::uint8_t>& bytes) {
+                (void)body; dwgBuffer input(bytes.data(), bytes.size());
+                return (index == 0u ? pointProbe.parseDwg(DRW::AC1021, &input, 0u)
+                                    : circleProbe.parseDwg(DRW::AC1021, &input, 0u)) && input.isGood();
+            };
+            if (!parse(body)) return false;
+            auto truncated = body; truncated.pop_back();
+            if (parse(truncated) || !parse(body)) return false;
+            if ((end & 7u) == 0u) {
+                // Actual historical local framing omitted the absent bit on
+                // aligned bodies; reconstruct it by removing the zero byte.
+                auto legacy = body;
+                legacy.erase(legacy.begin() + static_cast<std::ptrdiff_t>(end / 8u));
+                const auto oldSize = static_cast<std::uint32_t>(end);
+                for (std::size_t i = 0; i < 32u; ++i) {
+                    const std::size_t pos = 10u + i;
+                    const auto mask = static_cast<std::uint8_t>(1u << (7u - pos % 8u));
+                    const auto source = static_cast<unsigned>((i / 8u) * 8u + 7u - i % 8u);
+                    if ((oldSize >> source) & 1u) legacy[pos / 8u] |= mask;
+                    else legacy[pos / 8u] &= static_cast<std::uint8_t>(~mask);
+                }
+                if (!parse(legacy) || !parse(body)) return false;
+            }
+        }
+        DRW_Line line; line.basePoint = {1., 2., 3.}; line.secPoint = {4., 5., 6.};
+        if (!writer.encodeEntity(&line)) return false;
+        CapturedObjectFrame following;
+        if (!captureObjectFrame(writer, line.handle, following) || !sawAlignedBody) return false;
+        // A failed entity admission does not publish a partial frame; the
+        // same writer remains usable for a corrected retry.
+        DRW_Point invalid; invalid.extData.push_back(std::make_shared<DRW_Variant>(1000, "missing appid"));
+        const auto before = writer.buffer();
+        if (writer.encodeEntity(&invalid) || writer.buffer() != before) return false;
+        invalid.extData.clear();
+        return writer.encodeEntity(&invalid);
+    }
+
     static bool checkR2007LayerStringBoundaries() {
         DRW_Header header; dwgWriter21 writer(nullptr, &header);
         DRW_TextCodec codec; codec.setVersion(DRW::AC1021, false);
@@ -36251,6 +36343,10 @@ int main(int argc, char** argv) {
             && DwgBlockRecordXrefWireTestAccess::checkBuiltInBlockModes(w32);
         std::cout << "DWG built-in block owner modes: "
                   << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    } else if (argc == 2 && std::string(argv[1]) == "--r2007-primitive-footers") {
+        const bool passed = DwgBlockRecordXrefWireTestAccess::checkR2007PrimitiveFooters();
+        std::cout << "DWG R2007 POINT/CIRCLE footers: " << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 2 && std::string(argv[1]) == "--r2007-layer-string-boundaries") {
         const bool passed = DwgBlockRecordXrefWireTestAccess::checkR2007LayerStringBoundaries();

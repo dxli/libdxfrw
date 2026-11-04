@@ -928,10 +928,11 @@ warnings. Native AC1021 material semantic decoding, other graphs, native renderi
 and complete interoperability remain open
 ([material receipt](docs/research/p6-ac1021-default-material-optin-2026-11-04.json),
 [VPORT receipt](docs/research/p6-ac1021-synthetic-vport-null-roles-2026-11-04.json)).
-The pre-footer-fix geometry matrix also admitted three ARC variants in ODA but
-refused sampled POINT, CIRCLE and mixed files; resolve and recheck those
-framing profiles with independent output semantics
-([matrix receipt](docs/research/p6-ac1021-geometry-matrix-2026-11-04.json)).
+The corrected AC1021 POINT/CIRCLE footer now passes the sampled ODA and
+independent geometry checks, alongside the previously passing LINE and ARC
+controls. Broader entities, producer versions, graph defaults and native
+rendering remain open
+([footer receipt](docs/research/p6-ac1021-point-circle-absent-string-footer-2026-11-04.json)).
 
 Generated LTYPE_CONTROL output has a consumer-visible built-in linetype
 ordering risk: six ODA-produced files conflict with the PDF’s stated order.
