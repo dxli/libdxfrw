@@ -662,6 +662,7 @@ tools/generate_symbol_casefold.py
 tools/geodata_north_witness.py
 tools/geodata_physical_v3_probe.py
 tools/j256_external_line_peer_probe.py
+tools/j260_shared_corpus_successor.py
 tools/j268_scratch_baseline.patch
 tools/j268_three_fixture_successor.py
 tools/j284_mpolygon_peer_probe.py
