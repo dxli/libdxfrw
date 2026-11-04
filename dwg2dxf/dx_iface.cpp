@@ -60956,6 +60956,30 @@ void dx_iface::addBlockRecord(const DRW_Block_Record& data) {
     observeStructuralSource(data,false);
     if (cData == nullptr)
         return;
+    if (cData->sourceFormat == dx_source_format::DWG
+        && cData->importGeneration != 0u
+        && sameAsciiName(data.name, "*Model_Space")) {
+        if (cData->m_dwgGeoHostSeen) {
+            cData->m_dwgGeoHostCaptureFailed = true;
+        } else {
+            cData->m_dwgGeoHostSeen = true;
+            cData->m_dwgGeoHostGeneration = cData->importGeneration;
+            cData->m_dwgGeoHostHandle = data.handle;
+            cData->m_dwgGeoHostParent = static_cast<std::uint32_t>(data.parentHandle);
+            cData->m_dwgGeoHostDictionary = data.xDictHandle;
+            cData->m_dwgGeoHostProfile = data.flags == 64 && !data.xrefUnloaded
+                && data.insUnits == 0 && data.canExplode && data.blockScaling == 0
+                && data.basePoint.x == 0.0 && data.basePoint.y == 0.0
+                && data.basePoint.z == 0.0 && data.xrefIndex == -1
+                && data.xrefBlockHandle.ref == 0u && data.xrefPath.empty()
+                && data.description.empty() && data.previewData.empty()
+                && data.insertCount == 0u && data.insertHandles.empty()
+                && data.reactorCount() == 0 && data.reactorHandles.empty()
+                && data.extensionDictionaryFlag() == 0u
+                && !data.hasDataStorageBinaryData() && data.appData.empty()
+                && data.extData.empty();
+        }
+    }
     retainBasicTableTyped(cData, cData->blockRecords, data,
         estimateBlockRecordTypedBytes);
 }
@@ -65586,6 +65610,13 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
     fData->associativeDwgImport.captureFailed =
         fData->dwgAssociativeCaptureFailed;
     fData->m_dwgBlockControlPublication = {};
+    fData->m_dwgGeoHostGeneration = 0u;
+    fData->m_dwgGeoHostHandle = 0u;
+    fData->m_dwgGeoHostParent = 0u;
+    fData->m_dwgGeoHostDictionary = 0u;
+    fData->m_dwgGeoHostSeen = false;
+    fData->m_dwgGeoHostCaptureFailed = false;
+    fData->m_dwgGeoHostProfile = false;
     fData->m_dwgBlockControlGeneration = 0u;
     fData->m_dwgBlockControlPublicationSeen = false;
     fData->m_dwgBlockControlCaptureFailed = false;
@@ -68540,6 +68571,9 @@ bool dx_iface::finalizeDxfWrite() {
     if (m_hatchPlanningFailed
         || !hasUnchangedXrecordWriteSources()
         || !hasUnchangedExtensionDictionaryOwnerSources()
+        || !hasUnchangedDwgGeoDataGraphs()
+        || (!m_dwgGeoDataGraphs.empty()
+            && (!m_dwgGeoDataTablesInspected || !m_dwgGeoDataObjectsInspected))
         || (cData != nullptr && !hasUnchangedStandardDwgObjectSources())
         || (cData != nullptr && !hasUnchangedRasterDwgSources())
         || !finalizeStandardDwgOutputProofs()
@@ -68551,6 +68585,25 @@ bool dx_iface::finalizeDxfWrite() {
         || !finalizeDwgAssociativeDimensionDependencies()
         || !finalizeGeneratedRootOutput())
         return false;
+    for (const DwgGeoDataGraphBinding& graph : m_dwgGeoDataGraphs) {
+        if (dxfW == nullptr)
+            return false;
+        const std::uint32_t geo = dxfW->remapHandle(graph.object);
+        const std::uint32_t dictionary = dxfW->remapHandle(graph.dictionary);
+        const std::uint32_t host = DRW::DxfModelSpaceBlockRecordHandle;
+        if (geo == 0u || dictionary == 0u || host == 0u
+            || geo == DRW::NoHandle || dictionary == DRW::NoHandle
+            || host == DRW::NoHandle
+            || dxfW->dxfWriteRecordHandleCount(geo) != 1u
+            || dxfW->dxfWriteRecordHandleCount(dictionary) != 1u
+            || dxfW->dxfWriteRecordHandleCount(host) != 1u
+            || !dxfW->dxfWriteRecordHasIdentity(geo, "GEODATA", "OBJECTS")
+            || !dxfW->dxfWriteRecordHasIdentity(dictionary, "DICTIONARY", "OBJECTS")
+            || !dxfW->dxfWriteRecordHasIdentity(host, "BLOCK_RECORD", "TABLES")
+            || !dxfW->dxfWriteRecordHasOwner(geo, dictionary)
+            || !dxfW->dxfWriteRecordHasOwner(dictionary, host))
+            return false;
+    }
     for (const auto& table : m_tableFallbacks) {
         if (m_emittedTableHandles.count(table.first) != 1u)
             return false;
@@ -69670,8 +69723,265 @@ bool dx_iface::preallocateDxfMLineLinetypeXdataEntityHandles() {
     return true;
 }
 
+bool dx_iface::isClosedDwgGeoDataGraph(const DRW_GeoData& geo) const noexcept {
+    if (cData == nullptr || cData->sourceFormat != dx_source_format::DWG
+        || cData->sourceVersion != DRW::AC1027 || cData->importGeneration == 0u
+        || cData->dictionaryCaptureFailed || geo.m_version != 3
+        || geo.handle == 0u || geo.handle == DRW::NoHandle
+        || geo.parentHandle == 0u || geo.parentHandle == DRW::NoHandle
+        || geo.m_hostBlockHandle == 0u || geo.m_hostBlockHandle == DRW::NoHandle
+        || geo.parentHandle == geo.m_hostBlockHandle
+        || geo.reactorCount() != 1 || geo.reactorHandles.size() != 1u
+        || geo.reactorHandles.front() != geo.parentHandle
+        || geo.xDictHandle != 0u || geo.extensionDictionaryFlag() != 1u
+        || geo.hasDataStorageBinaryData() || !geo.appData.empty()
+        || !geo.extData.empty())
+        return false;
+    try {
+        const DRW_Block_Record* host = nullptr;
+        std::size_t hostCount = 0u, hostNames = 0u, hostDictionaryOwners = 0u;
+        for (const DRW_Block_Record& block : cData->blockRecords) {
+            if (sameAsciiName(block.name, "*Model_Space"))
+                ++hostNames;
+            if (block.xDictHandle == geo.parentHandle)
+                ++hostDictionaryOwners;
+            if (block.handle == geo.m_hostBlockHandle) {
+                host = &block;
+                ++hostCount;
+            }
+        }
+        if (!cData->hasCompleteDwgBlockRecordControlMembership()
+            || hostCount != 1u || hostNames != 1u || hostDictionaryOwners != 1u
+            || host == nullptr || !sameAsciiName(host->name, "*Model_Space")
+            || host->xDictHandle != geo.parentHandle
+            || host->flags != 64 || host->xrefUnloaded
+            || host->insUnits != 0 || !host->canExplode || host->blockScaling != 0
+            || host->basePoint.x != 0.0 || host->basePoint.y != 0.0
+            || host->basePoint.z != 0.0 || host->xrefIndex != -1
+            || host->xrefBlockHandle.ref != 0u || !host->xrefPath.empty()
+            || !host->description.empty() || !host->previewData.empty()
+            || host->insertCount != 0u || !host->insertHandles.empty()
+            || host->reactorCount() != 0 || !host->reactorHandles.empty()
+            || host->extensionDictionaryFlag() != 0u
+            || host->hasDataStorageBinaryData() || !host->appData.empty()
+            || !host->extData.empty()
+            || !cData->m_dwgGeoHostSeen || cData->m_dwgGeoHostCaptureFailed
+            || !cData->m_dwgGeoHostProfile
+            || cData->m_dwgGeoHostGeneration != cData->importGeneration
+            || cData->m_dwgGeoHostHandle != host->handle
+            || cData->m_dwgGeoHostParent != host->parentHandle
+            || cData->m_dwgGeoHostDictionary != host->xDictHandle)
+            return false;
+        const DRW_Dictionary* owner = nullptr;
+        std::size_t owners = 0u, targetEntries = 0u, dictionaryAliases = 0u;
+        const auto countEntries = [&targetEntries, &dictionaryAliases, &geo](const auto& dictionary) {
+            for (const DRW_Dictionary::Entry& entry : dictionary.m_entries) {
+                if (entry.m_handle == geo.handle)
+                    ++targetEntries;
+                else if (entry.m_handle == geo.parentHandle)
+                    ++dictionaryAliases;
+            }
+        };
+        if (cData->hasNamedObjectDictionary)
+            countEntries(cData->namedObjectDictionary);
+        for (const DRW_Dictionary& dictionary : cData->dictionaries) {
+            countEntries(dictionary);
+            if (dictionary.handle == geo.parentHandle) {
+                owner = &dictionary;
+                ++owners;
+            }
+        }
+        for (const DRW_DictionaryWithDefault& dictionary : cData->dictionaryWithDefaults)
+            countEntries(dictionary);
+        if (owners != 1u || owner == nullptr || targetEntries != 1u
+            || dictionaryAliases != 0u
+            || owner->parentHandle != host->handle || owner->flags != 0
+            || owner->hardOwner != 1 || owner->cloning != 1
+            || !owner->hasCompleteDwgEntries() || owner->countCap
+            || owner->m_entries.size() != 1u
+            || owner->m_entries.front().m_name != "ACAD_GEOGRAPHICDATA"
+            || owner->m_entries.front().m_handle != geo.handle
+            || owner->m_entries.front().m_dxfHandleCode
+                != DRW_Dictionary::Entry::DxfHandleCode::Unspecified
+            || owner->xDictHandle != 0u || owner->extensionDictionaryFlag() != 1u
+            || owner->reactorCount() != 0 || !owner->reactorHandles.empty()
+            || owner->hasDataStorageBinaryData() || !owner->appData.empty()
+            || !owner->extData.empty())
+            return false;
+        const dx_data::StandardDwgFrameKey dictionaryKey{
+            cData->importGeneration, owner->handle};
+        const auto dictionaryFrame = cData->m_standardDwgObjectFrames.find(dictionaryKey);
+        std::uint32_t sourceOwner = DRW::NoHandle;
+        if (cData->m_opaqueDwgSourceFrameIdentities.count(dictionaryKey) != 1u
+            || !cData->getCompleteDwgDictionaryOwner(owner->handle, sourceOwner)
+            || sourceOwner != host->handle
+            || dictionaryFrame == cData->m_standardDwgObjectFrames.end()
+            || dictionaryFrame->second.raw.m_objectType != dwgObjType::DICTIONARY
+            || dictionaryFrame->second.raw.m_handle != owner->handle
+            || dictionaryFrame->second.raw.m_version != cData->sourceVersion
+            || dictionaryFrame->second.raw.m_isEntity
+            || dictionaryFrame->second.raw.m_hasDataStorage
+            || !dictionaryFrame->second.publicationSeen
+            || !dictionaryFrame->second.membershipSeen
+            || !dictionaryFrame->second.payloadMatched
+            || !dictionaryFrame->second.typedBaseline
+            || dictionaryFrame->second.opaquePayload
+            || !standardDwgModelsEqual(*owner, *dictionaryFrame->second.typedBaseline,
+                                       cData->sourceVersion, dwgObjType::DICTIONARY))
+            return false;
+        const auto source = cData->m_opaqueDwgSourceFrames.find(
+            {cData->importGeneration, geo.handle});
+        return source != cData->m_opaqueDwgSourceFrames.end()
+            && source->second.m_version == cData->sourceVersion
+            && source->second.m_handle == geo.handle
+            && source->second.m_commonHandleDataValidated
+            && drwDwgCommonLinkEvidenceValidated(source->second.m_commonLinkEvidence)
+            && source->second.m_parentHandle == owner->handle
+            && source->second.m_numReactors == 1
+            && source->second.m_reactorHandles == geo.reactorHandles
+            && source->second.m_xDictHandle == 0u
+            && source->second.m_xDictFlag == 1u;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool dx_iface::hasUnchangedDwgGeoDataGraphs() const noexcept {
+    if (m_dwgGeoDataGraphs.empty())
+        return true;
+    if (cData == nullptr || cData->importGeneration == 0u)
+        return false;
+    for (const DwgGeoDataGraphBinding& binding : m_dwgGeoDataGraphs) {
+        const auto geo = cData->geoDataObjects.find(
+            {cData->importGeneration, binding.object});
+        if (geo == cData->geoDataObjects.end()
+            || geo->second.parentHandle != binding.dictionary
+            || geo->second.m_hostBlockHandle != binding.host
+            || !isClosedDwgGeoDataGraph(geo->second))
+            return false;
+    }
+    return true;
+}
+
+bool dx_iface::inspectDwgGeoDataTables(
+        const dxfRW::DxfTablesWriteView& view) noexcept {
+    m_dwgGeoDataTablesInspected = false;
+    if (m_dwgGeoDataGraphs.empty()) return true;
+    if (m_dwgGeoDataGraphs.size() != 1u || dxfW == nullptr
+        || view.version != DRW::AC1027 || !hasUnchangedDwgGeoDataGraphs()) return false;
+    try {
+        const std::uint32_t dictionary = dxfW->remapHandle(
+            m_dwgGeoDataGraphs.front().dictionary);
+        std::size_t seen = 0u;
+        const bool inspected = dx_standard_output::inspectSelected(view,
+            [](std::string_view name, std::uint32_t handle) {
+                return name == "BLOCK_RECORD"
+                    && handle == DRW::DxfModelSpaceBlockRecordHandle;
+            }, [&](const auto& shape, std::string_view body) {
+                if (++seen != 1u) return false;
+                dx_standard_output::RecordCursor cursor(body, view);
+                dx_standard_output::RecordCursor::Token token;
+                bool inExtension = false, sawSubclass = false;
+                unsigned groups = 0u, targets = 0u;
+                while (!cursor.done()) {
+                    if (!cursor.next(token)) return false;
+                    if (token.code == 100) sawSubclass = true;
+                    if (token.code == 102 && token.text == "{ACAD_XDICTIONARY") {
+                        if (sawSubclass || inExtension || ++groups != 1u) return false;
+                        inExtension = true;
+                    } else if (token.code == 102 && token.text == "}" && inExtension) {
+                        inExtension = false;
+                    } else if (inExtension && token.code == 360) {
+                        std::uint32_t value = 0u;
+                        const auto parsed = std::from_chars(token.text.data(),
+                            token.text.data() + token.text.size(), value, 16);
+                        if (parsed.ec != std::errc{}
+                            || parsed.ptr != token.text.data() + token.text.size()
+                            || value != dictionary || ++targets != 1u) return false;
+                    }
+                }
+                if (inExtension || groups != 1u || targets != 1u) return false;
+                dx_standard_output::Decoder decoder(view);
+                return decoder.decodeBlockRecord(body, [&](const DRW_Block_Record& actual) {
+                    return actual.handle == shape.handle
+                        && sameAsciiName(actual.name, "*Model_Space")
+                        && actual.xDictHandle == dictionary;
+                });
+            });
+        m_dwgGeoDataTablesInspected = inspected && seen == 1u;
+        return m_dwgGeoDataTablesInspected;
+    } catch (...) { return false; }
+}
+
+bool dx_iface::inspectDwgGeoDataObjects(
+        const dxfRW::DxfObjectsWriteView& view) noexcept {
+    m_dwgGeoDataObjectsInspected = false;
+    if (m_dwgGeoDataGraphs.empty()) return true;
+    if (m_dwgGeoDataGraphs.size() != 1u || dxfW == nullptr
+        || !m_dwgGeoDataTablesInspected || view.version != DRW::AC1027
+        || !hasUnchangedDwgGeoDataGraphs()) return false;
+    try {
+        const auto& graph = m_dwgGeoDataGraphs.front();
+        const DRW_GeoData& source = cData->geoDataObjects.at(
+            {cData->importGeneration, graph.object});
+        const std::uint32_t object = dxfW->remapHandle(graph.object);
+        const std::uint32_t dictionary = dxfW->remapHandle(graph.dictionary);
+        std::size_t seen = 0u;
+        const bool inspected = dx_standard_output::inspectSelected(view,
+            [object](std::string_view name, std::uint32_t handle) {
+                return name == "GEODATA" && handle == object;
+            }, [&](const auto&, std::string_view body) {
+                if (++seen != 1u) return false;
+                dx_standard_output::Decoder decoder(view);
+                return decoder.decodeRecord<DRW_GeoData>(body, [&](const DRW_GeoData& actual) {
+                    const auto point = [](const DRW_Coord& a, const DRW_Coord& b) {
+                        return a.x == b.x && a.y == b.y && a.z == b.z;
+                    };
+                    if (actual.handle != object || actual.parentHandle != dictionary
+                        || actual.m_hostBlockHandle != DRW::DxfModelSpaceBlockRecordHandle
+                        || actual.reactorHandles != std::vector<std::uint32_t>{dictionary}
+                        || actual.m_version != source.m_version
+                        || actual.m_coordinatesType != source.m_coordinatesType
+                        || !point(actual.m_designPoint, source.m_designPoint)
+                        || !point(actual.m_referencePoint, source.m_referencePoint)
+                        || !point(actual.m_upDirection, source.m_upDirection)
+                        || !point(actual.m_northDirection, source.m_northDirection)
+                        || actual.m_horizontalUnitScale != source.m_horizontalUnitScale
+                        || actual.m_verticalUnitScale != source.m_verticalUnitScale
+                        || actual.m_horizontalUnits != source.m_horizontalUnits
+                        || actual.m_verticalUnits != source.m_verticalUnits
+                        || actual.m_scaleEstimationMethod != source.m_scaleEstimationMethod
+                        || actual.m_userSpecifiedScaleFactor != source.m_userSpecifiedScaleFactor
+                        || actual.m_enableSeaLevelCorrection != source.m_enableSeaLevelCorrection
+                        || actual.m_seaLevelElevation != source.m_seaLevelElevation
+                        || actual.m_coordinateProjectionRadius != source.m_coordinateProjectionRadius
+                        || actual.m_coordinateSystemDefinition != source.m_coordinateSystemDefinition
+                        || actual.m_geoRssTag != source.m_geoRssTag
+                        || actual.m_observationFromTag != source.m_observationFromTag
+                        || actual.m_observationToTag != source.m_observationToTag
+                        || actual.m_observationCoverageTag != source.m_observationCoverageTag
+                        || actual.m_points.size() != source.m_points.size()
+                        || actual.m_faces.size() != source.m_faces.size()) return false;
+                    for (std::size_t i = 0u; i < source.m_points.size(); ++i)
+                        if (!point(actual.m_points[i].m_source, source.m_points[i].m_source)
+                            || !point(actual.m_points[i].m_destination, source.m_points[i].m_destination)) return false;
+                    for (std::size_t i = 0u; i < source.m_faces.size(); ++i)
+                        if (actual.m_faces[i].m_index1 != source.m_faces[i].m_index1
+                            || actual.m_faces[i].m_index2 != source.m_faces[i].m_index2
+                            || actual.m_faces[i].m_index3 != source.m_faces[i].m_index3) return false;
+                    return true;
+                });
+            });
+        m_dwgGeoDataObjectsInspected = inspected && seen == 1u;
+        return m_dwgGeoDataObjectsInspected;
+    } catch (...) { return false; }
+}
+
 bool dx_iface::prepareDwgGeoDataOutput(bool debug) {
     m_extensionGeoDataHandles.clear();
+    m_dwgGeoDataGraphs.clear();
+    m_dwgGeoDataTablesInspected = false;
+    m_dwgGeoDataObjectsInspected = false;
     const auto fail = [debug](const char* reason) {
         if (debug)
             std::cerr << "GEODATA output profile failed: " << reason << '\n';
@@ -69769,17 +70079,20 @@ bool dx_iface::prepareDwgGeoDataOutput(bool debug) {
                  && current->first.first == generation;
              ++current) {
             const DRW_GeoData& geoData = current->second;
+            const bool dictionaryGraph = isClosedDwgGeoDataGraph(geoData);
             if (current->first.second == 0u
                 || current->first.second == DRW::NoHandle
                 || geoData.handle != current->first.second
-                || geoData.m_version < 1 || geoData.m_version > 2
+                || geoData.m_version < 1 || geoData.m_version > 3
                 || geoData.parentHandle == 0u
                 || geoData.parentHandle == DRW::NoHandle
-                || geoData.m_hostBlockHandle != geoData.parentHandle
-                || !geoData.reactorHandles.empty()
-                || geoData.reactorCount() != 0
+                || (!dictionaryGraph
+                    && (geoData.m_version > 2
+                        || geoData.m_hostBlockHandle != geoData.parentHandle
+                        || !geoData.reactorHandles.empty()
+                        || geoData.reactorCount() != 0
+                        || geoData.extensionDictionaryFlag() != 0u))
                 || geoData.xDictHandle != 0u
-                || geoData.extensionDictionaryFlag() != 0u
                 || geoData.hasDataStorageBinaryData()
                 || !geoData.appData.empty() || !geoData.extData.empty()
                 || !outputHandles.insert(geoData.handle).second)
@@ -69818,9 +70131,14 @@ bool dx_iface::prepareDwgGeoDataOutput(bool debug) {
             if (hostMatches != 1u)
                 return fail("host pointer does not resolve to one model-space BLOCK_RECORD");
             m_extensionGeoDataHandles.push_back(geoData.handle);
+            if (dictionaryGraph)
+                m_dwgGeoDataGraphs.push_back({geoData.handle,
+                    static_cast<std::uint32_t>(geoData.parentHandle),
+                    geoData.m_hostBlockHandle});
         }
     } catch (...) {
         m_extensionGeoDataHandles.clear();
+        m_dwgGeoDataGraphs.clear();
         return fail("allocation failure while preparing output bindings");
     }
     return m_extensionGeoDataHandles.size() == typedCount;
@@ -73292,6 +73610,29 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             "GEODATA source CLASS, owner, host-block, or body profile");
         return false;
     }
+    // The witnessed model-space extension dictionary contains exactly one
+    // ACAD_GEOGRAPHICDATA object; this does not admit arbitrary block graphs.
+    try {
+    for (const DwgGeoDataGraphBinding& graph : m_dwgGeoDataGraphs) {
+        if (v != DRW::AC1027 || !hasUnchangedDwgGeoDataGraphs()) {
+            reportPreflightFailure("GEODATA extension graph target version or source changed");
+            return false;
+        }
+        const auto inserted = selectedBlockRecordXdicts.emplace(
+            graph.host, graph.dictionary);
+        if ((!inserted.second && inserted.first->second != graph.dictionary)
+            || std::find(m_extensionDictionaryHandles.begin(),
+                         m_extensionDictionaryHandles.end(), graph.dictionary)
+                != m_extensionDictionaryHandles.end()) {
+            reportPreflightFailure("GEODATA extension dictionary is already claimed or ambiguous");
+            return false;
+        }
+        m_extensionDictionaryHandles.push_back(graph.dictionary);
+    }
+    } catch (...) {
+        reportPreflightFailure("GEODATA extension graph staging allocation");
+        return false;
+    }
     if (!prepareDwgRasterVariablesOutput(v,
                                          debug || requireResolvedOwners)) {
         reportPreflightFailure(
@@ -76194,7 +76535,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         m_dwgLayerStateOutputPrepared;
     if ((needsStandardNames || needsLayerControlOutput
             || m_dxfLayerMaterialState.active || !m_dxfMLineLinetypes.empty()
-            || needsDwgLayoutsOutput) && !dxfW->setDxfTablesWriteInspector([this, needsStandardNames, needsLayerControlOutput, needsDwgLayoutsOutput, debug, requireResolvedOwners](const auto& view) {
+            || needsDwgLayoutsOutput || !m_dwgGeoDataGraphs.empty()) && !dxfW->setDxfTablesWriteInspector([this, needsStandardNames, needsLayerControlOutput, needsDwgLayoutsOutput, debug, requireResolvedOwners](const auto& view) {
+            if (!inspectDwgGeoDataTables(view)) return false;
             if (!inspectDxfLayerMaterials(view)) {
                 return false;
             }
@@ -76262,6 +76604,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             };
             if (!hasUnchangedExtensionDictionaryOwnerSources())
                 return reject("extension DICTIONARY owner source snapshot");
+            if (!inspectDwgGeoDataObjects(view))
+                return reject("GEODATA graph and fields");
             if (!hasUnchangedXrecordWriteSources())
                 return reject("XRECORD source snapshot");
             if (needsShadeOutput

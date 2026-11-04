@@ -123,6 +123,58 @@ public:
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
+    static void setGeoHostSourceProfile(dx_data& data, bool eligible) {
+        data.m_dwgGeoHostProfile = eligible;
+    }
+    // Test-only projection: retain the physical GEODATA graph and its
+    // original private receipts, but omit unrelated source object families.
+    // It is not a claim that the original whole drawing can be exported.
+    static bool selectPhysicalGeoDataGraph(dx_data& data,
+                                           std::uint32_t dictionary,
+                                           std::uint32_t object) {
+        if (data.sourceFormat != dx_source_format::DWG
+            || data.sourceVersion != DRW::AC1027
+            || data.geoDataObjects.size() != 1u || !data.m_dwgGeoHostSeen
+            || data.m_dwgGeoHostDictionary != dictionary)
+            return false;
+        data.layouts.clear(); data.VPorts.clear(); data.views.clear();
+        data.visualStyles.clear(); data.rawVisualStyleObjects.clear();
+        data.materials.clear(); data.backgrounds.clear();
+        data.rawBackgroundObjects.clear(); data.renderSettings.clear();
+        data.rawRenderSettingsObjects.clear();
+        data.dictionaryWithDefaults.clear();
+        data.rawDictionaryWithDefaults.clear();
+        data.placeholders.clear(); data.rawPlaceholders.clear();
+        data.detailViewStyles.clear(); data.sectionViewStyles.clear();
+        data.rawDetailViewStyles.clear(); data.rawSectionViewStyles.clear();
+        data.tableStyles.clear(); data.cellStyleMaps.clear();
+        data.rawCellStyleMaps.clear(); data.plotSettings.clear();
+        data.scales.clear(); data.dictionaryVars.clear();
+        data.rawNamedResourceObjects.clear(); data.mLineStyles.clear();
+        data.mLeaderStyles.clear(); data.dwgRasterVariables.clear();
+        data.dwgWipeoutVariables.clear();
+        data.hasNamedObjectDictionary = false;
+        data.dictionaries.remove_if([dictionary](const DRW_Dictionary& row) {
+            return row.handle != dictionary;
+        });
+        for (auto it = data.m_standardDwgObjectFrames.begin();
+             it != data.m_standardDwgObjectFrames.end();) {
+            if (it->first.second != dictionary) it = data.m_standardDwgObjectFrames.erase(it);
+            else ++it;
+        }
+        for (auto it = data.m_opaqueDwgSourceFrames.begin();
+             it != data.m_opaqueDwgSourceFrames.end();) {
+            if (it->first.second != object) it = data.m_opaqueDwgSourceFrames.erase(it);
+            else ++it;
+        }
+        for (auto it = data.m_opaqueDwgSourceFrameIdentities.begin();
+             it != data.m_opaqueDwgSourceFrameIdentities.end();) {
+            if (it->second != dictionary && it->second != object)
+                it = data.m_opaqueDwgSourceFrameIdentities.erase(it);
+            else ++it;
+        }
+        return data.dictionaries.size() == 1u;
+    }
     static void setDbColorEedSourceBytes(dx_data& data, std::size_t bytes) {
         data.dwgDbColorEedRetainedBytes = bytes;
     }
@@ -67633,6 +67685,123 @@ bool geodataDwgAdapterTransport() {
     return true;
 }
 
+bool physicalGeoDataDictionaryGraph(const std::filesystem::path& sourcePath,
+                                    const std::filesystem::path& outputDirectory = {}) {
+    const auto fail = [](const char* message) {
+        std::cerr << "physical GEODATA graph: " << message << '\n';
+        return false;
+    };
+    dx_data data;
+    dx_iface importer;
+    if (!importer.fileImport(sourcePath.string(), &data, false)
+        || data.sourceVersion != DRW::AC1027 || data.geoDataObjects.size() != 1u)
+        return fail("source import or callback failed");
+    const DRW_GeoData original = data.geoDataObjects.begin()->second;
+    if (original.handle != 0x30u || original.parentHandle != 0x2Fu
+        || original.m_hostBlockHandle != 0x17u || original.m_version != 3
+        || original.reactorHandles != std::vector<std::uint32_t>{0x2Fu})
+        return fail("source owner, reactor, host, or version differs from witness");
+    if (!DxIfaceStandardDwgCaptureTestAccess::selectPhysicalGeoDataGraph(
+            data, 0x2Fu, 0x30u))
+        return fail("source-bound selected graph projection failed");
+    auto host = std::find_if(data.blockRecords.begin(), data.blockRecords.end(),
+        [](const DRW_Block_Record& row) { return row.handle == 0x17u; });
+    if (host == data.blockRecords.end() || data.dictionaries.size() != 1u)
+        return fail("source graph rows missing");
+    DRW_GeoData& geo = data.geoDataObjects.begin()->second;
+    DRW_Dictionary& dictionary = data.dictionaries.front();
+    const DRW_Dictionary originalDictionary = dictionary;
+    const DRW_Block_Record originalHost = *host;
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    if (!outputDirectory.empty() && !std::filesystem::is_directory(outputDirectory))
+        return fail("requested output directory does not exist");
+    const auto base = outputDirectory.empty()
+        ? std::filesystem::temp_directory_path()
+            / ("libdxfrw-physical-geodata-graph-" + std::to_string(nonce))
+        : outputDirectory / "geodata-selected";
+    const std::array<std::filesystem::path, 2> paths{
+        base.string() + "-ascii.dxf", base.string() + "-binary.dxf"};
+    if (std::filesystem::exists(paths[0]) || std::filesystem::exists(paths[1]))
+        return fail("selected output already exists");
+    struct Cleanup { const std::array<std::filesystem::path, 2>& paths; bool keep{false};
+        ~Cleanup() { if (keep) return; for (const auto& path : paths) {
+            std::error_code ignored; std::filesystem::remove(path, ignored);
+        } }
+    } cleanup{paths};
+    class Readback final : public dx_iface {
+    public:
+        void addGeoData(const DRW_GeoData& value) override { rows.push_back(value); }
+        std::vector<DRW_GeoData> rows;
+    } readback;
+    dx_iface exporter;
+    for (std::size_t index = 0u; index < paths.size(); ++index) {
+        const bool binary = index != 0u;
+        const std::string sentinel = "GEODATA_GRAPH_ATOMIC_DESTINATION";
+        const auto refuses = [&](const std::function<void()>& corrupt,
+                                 DRW::Version version = DRW::AC1027) {
+            { std::ofstream out(paths[index], std::ios::binary); out << sentinel; }
+            corrupt();
+            const bool wrote = exporter.fileExport(paths[index].string(), version,
+                binary, &data, false, false);
+            std::ifstream in(paths[index], std::ios::binary);
+            const std::string after{std::istreambuf_iterator<char>{in}, {}};
+            geo = original; dictionary = originalDictionary; *host = originalHost;
+            return !wrote && after == sentinel;
+        };
+        if (!refuses([&] { host->xDictHandle = 0u; })
+            || !refuses([&] { host->insUnits = 1; })
+            || !refuses([&] { host->previewData.push_back(0x12u); })
+            || !refuses([&] { host->reactorHandles.push_back(0xFFFFu); })
+            || !refuses([&] { host->canExplode = false; })
+            || !refuses([&] { geo.m_hostBlockHandle = 0xFFFFu; })
+            || !refuses([&] { geo.parentHandle = 0xFFFFu; })
+            || !refuses([&] { geo.reactorHandles[0] = 0xFFFFu; })
+            || !refuses([&] { dictionary.m_entries.front().m_name = "OTHER"; })
+            || !refuses([&] { dictionary.m_entries.push_back({"EXTRA", 0xFFFFu}); })
+            || !refuses([&] { geo.m_version = 4; })
+            || !refuses([] {}, DRW::AC1024))
+            return fail("invalid graph or target was not refused atomically");
+        DxIfaceStandardDwgCaptureTestAccess::setGeoHostSourceProfile(data, false);
+        const bool rejectedMissingSourceProfile = refuses([] {});
+        DxIfaceStandardDwgCaptureTestAccess::setGeoHostSourceProfile(data, true);
+        if (!rejectedMissingSourceProfile)
+            return fail("unsupported original block metadata could be edited into admission");
+        if (!exporter.fileExport(paths[index].string(), DRW::AC1027,
+                                 binary, &data, false, false))
+            return fail("corrected selected graph failed same-adapter retry");
+        dx_data decoded;
+        readback.rows.clear();
+        if (!readback.fileImport(paths[index].string(), &decoded, false)
+            || readback.rows.size() != 1u)
+            return fail("fresh DXF typed readback failed");
+        const auto model = std::find_if(decoded.blockRecords.begin(),
+            decoded.blockRecords.end(), [](const DRW_Block_Record& value) {
+                return value.name == "*Model_Space";
+            });
+        const DRW_GeoData& actual = readback.rows.front();
+        const auto owner = std::find_if(decoded.dictionaries.begin(),
+            decoded.dictionaries.end(), [&actual](const DRW_Dictionary& value) {
+                return value.handle == actual.parentHandle;
+            });
+        if (model == decoded.blockRecords.end() || owner == decoded.dictionaries.end()
+            || model->xDictHandle != owner->handle || owner->parentHandle != model->handle
+            || owner->m_entries.size() != 1u
+            || owner->m_entries.front().m_name != "ACAD_GEOGRAPHICDATA"
+            || owner->m_entries.front().m_handle != actual.handle
+            || actual.m_hostBlockHandle != model->handle
+            || actual.reactorHandles != std::vector<std::uint32_t>{owner->handle}
+            || actual.m_version != original.m_version
+            || actual.m_designPoint.x != original.m_designPoint.x
+            || actual.m_designPoint.y != original.m_designPoint.y
+            || actual.m_referencePoint.x != original.m_referencePoint.x
+            || actual.m_referencePoint.y != original.m_referencePoint.y
+            || actual.m_coordinateSystemDefinition != original.m_coordinateSystemDefinition)
+            return fail("selected BLOCK_RECORD/dictionary/GEODATA graph changed on readback");
+    }
+    cleanup.keep = !outputDirectory.empty();
+    return true;
+}
+
 bool rasterVariablesDwgAdapterTransport(
         const std::filesystem::path& physicalSourcePath = {},
         bool directNodOwner = false,
@@ -69028,6 +69197,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--geodata-dwg-adapter-transport")
         return geodataDwgAdapterTransport() ? 0 : 1;
+    if ((argc == 3 || argc == 4)
+        && std::string(argv[1]) == "--physical-geodata-dictionary-graph")
+        return physicalGeoDataDictionaryGraph(argv[2], argc == 4 ? argv[3] : "") ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--rastervariables-dwg-adapter-transport")
         return rasterVariablesDwgAdapterTransport() ? 0 : 1;

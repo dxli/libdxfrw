@@ -16054,13 +16054,13 @@ bool dxfRW::emitBlockRecord(const PendingDxfBlockRecord& record) {
     }
     writer->writeString(0, "BLOCK_RECORD");
     writer->writeString(5, toHexStr(record.handle));
+    if (!writeSourceBlockRecordExtensionDictionary(record.handle))
+        return false;
     if (version > DRW::AC1014)
         writer->writeString(330, "1");
     writer->writeString(100, "AcDbSymbolTableRecord");
     writer->writeString(100, "AcDbBlockTableRecord");
     writer->writeUtf8String(2, record.name);
-    if (!writeSourceBlockRecordExtensionDictionary(record.handle))
-        return false;
     if (version >= DRW::AC1015
         && !writeSourceBlockRecordLayoutLink(record.handle))
         return false;
@@ -16862,15 +16862,15 @@ bool dxfRW::writeTables() {
             70, static_cast<int>(2 + m_pendingBlockRecords.size()));
         writer->writeString(0, "BLOCK_RECORD");
         writer->writeString(5, "1F");
+        if (!writeSourceBlockRecordExtensionDictionary(
+                DRW::DxfModelSpaceBlockRecordHandle))
+            return false;
         if (version > DRW::AC1014) {
             writer->writeString(330, "1");
         }
         writer->writeString(100, "AcDbSymbolTableRecord");
         writer->writeString(100, "AcDbBlockTableRecord");
         writer->writeString(2, "*Model_Space");
-        if (!writeSourceBlockRecordExtensionDictionary(
-                DRW::DxfModelSpaceBlockRecordHandle))
-            return false;
         if (version >= DRW::AC1015
             && !writeSourceBlockRecordLayoutLink(
                 DRW::DxfModelSpaceBlockRecordHandle))
@@ -16883,15 +16883,15 @@ bool dxfRW::writeTables() {
         }
         writer->writeString(0, "BLOCK_RECORD");
         writer->writeString(5, "1E");
+        if (!writeSourceBlockRecordExtensionDictionary(
+                DRW::DxfPaperSpaceBlockRecordHandle))
+            return false;
         if (version > DRW::AC1014) {
             writer->writeString(330, "1");
         }
         writer->writeString(100, "AcDbSymbolTableRecord");
         writer->writeString(100, "AcDbBlockTableRecord");
         writer->writeString(2, "*Paper_Space");
-        if (!writeSourceBlockRecordExtensionDictionary(
-                DRW::DxfPaperSpaceBlockRecordHandle))
-            return false;
         if (version >= DRW::AC1015
             && !writeSourceBlockRecordLayoutLink(
                 DRW::DxfPaperSpaceBlockRecordHandle))

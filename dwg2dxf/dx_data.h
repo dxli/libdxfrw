@@ -2439,6 +2439,15 @@ private:
     bool m_standardDwgObjectCaptureFailed{false};
     bool m_standardDwgObjectPayloadFailed{false};
     DRW_DwgFramePublication m_dwgBlockControlPublication;
+    // Import-time model-space BLOCK_RECORD extension link. Keep this private
+    // so an editable table row cannot manufacture a source graph edge.
+    std::uint64_t m_dwgGeoHostGeneration{0u};
+    std::uint32_t m_dwgGeoHostHandle{0u};
+    std::uint32_t m_dwgGeoHostParent{0u};
+    std::uint32_t m_dwgGeoHostDictionary{0u};
+    bool m_dwgGeoHostSeen{false};
+    bool m_dwgGeoHostCaptureFailed{false};
+    bool m_dwgGeoHostProfile{false};
     std::uint64_t m_dwgBlockControlGeneration{0u};
     bool m_dwgBlockControlPublicationSeen{false};
     bool m_dwgBlockControlCaptureFailed{false};

@@ -3,6 +3,7 @@
 #include "intern/dxfwriter.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -1598,6 +1599,87 @@ bool testQueuedBlockCallbacks(const std::filesystem::path& directory) {
     return true;
 }
 
+bool testBlockRecordExtensionGroupOrder(const std::filesystem::path& directory) {
+    class Author final : public dx_iface {
+    public:
+        Author() { cData = &storage; currentBlock = storage.mBlock; }
+        void writeHeader(DRW_Header& header) override { header.vars.clear(); }
+        void writeBlockRecords() override { (void)dxfW->writeBlockRecord("Named"); }
+        void writeBlocks() override {
+            DRW_Block block; block.name = "Named";
+            block.handle = 0xA020u; block.parentHandle = 0xA003u;
+            (void)dxfW->writeBlock(&block); (void)dxfW->writeBlockEnd(nullptr);
+        }
+        void writeEntities() override {}
+        void writeObjects() override {
+            for (std::uint32_t i = 0u; i < 3u; ++i) {
+                DRW_Dictionary dictionary;
+                dictionary.handle = 0xB001u + i;
+                dictionary.parentHandle = 0xA001u + i;
+                if (!dxfW->writeDictionary(&dictionary)) return;
+            }
+        }
+        bool finalizeDxfWrite() override { return true; }
+        dx_data storage;
+    };
+    for (const bool binary : {false, true}) {
+        const auto path = directory / (binary ? "block-xdict-binary.dxf"
+                                              : "block-xdict-ascii.dxf");
+        std::vector<DRW_Block_Record> rows(3);
+        rows[0].name = "*Model_Space"; rows[1].name = "*Paper_Space";
+        rows[2].name = "Named";
+        for (std::uint32_t i = 0u; i < rows.size(); ++i) {
+            rows[i].handle = 0xA001u + i;
+            rows[i].xDictHandle = 0xB001u + i;
+        }
+        Author author;
+        dxfRW writer(path.string().c_str());
+        author.dxfW = &writer;
+        writer.setSourceBlockRecords(rows, true);
+        if (!writer.write(&author, DRW::AC1027, binary))
+            return fail("BLOCK_RECORD XDICTIONARY wire control failed to write");
+        std::ifstream input(path, std::ios::binary);
+        if (binary) input.seekg(22);
+        std::unique_ptr<dxfReader> reader = binary
+            ? std::unique_ptr<dxfReader>(new dxfReaderBinary(&input))
+            : std::unique_ptr<dxfReader>(new dxfReaderAscii(&input));
+        reader->setVersion("AC1027", true);
+        std::map<std::string, std::vector<std::pair<int, std::string>>> found;
+        std::vector<std::pair<int, std::string>> record;
+        bool inRecord = false;
+        const auto finish = [&]() {
+            if (!inRecord) return;
+            const auto name = std::find_if(record.begin(), record.end(),
+                [](const auto& group) { return group.first == 2; });
+            if (name != record.end()) found.emplace(name->second, record);
+            record.clear();
+        };
+        int code = 0;
+        while (reader->readRec(&code)) {
+            if (code == 0) {
+                const std::string name = reader->getString();
+                finish();
+                inRecord = name == "BLOCK_RECORD";
+            } else if (inRecord) {
+                record.emplace_back(code, reader->getRawValue());
+            }
+        }
+        finish();
+        for (const auto& expected : std::array<std::pair<const char*, const char*>, 3>{{
+                {"*Model_Space", "B001"}, {"*Paper_Space", "B002"}, {"Named", "B003"}}}) {
+            const auto row = found.find(expected.first);
+            if (row == found.end() || row->second.size() < 6u
+                || row->second[0].first != 5
+                || row->second[1] != std::make_pair(102, std::string("{ACAD_XDICTIONARY"))
+                || row->second[2] != std::make_pair(360, std::string(expected.second))
+                || row->second[3] != std::make_pair(102, std::string("}"))
+                || row->second[4].first != 330 || row->second[5].first != 100)
+                return fail("BLOCK_RECORD extension group did not precede owner/subclass");
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -1619,6 +1701,7 @@ int main(int argc, char** argv) {
         / ("libdxfrw-block-owners-" + std::to_string(nonce));
     std::filesystem::create_directory(directory);
     const bool success = runLocal(directory) && testMetadataCopy()
+        && testBlockRecordExtensionGroupOrder(directory)
         && testRawEntityAdapterRoundTrip(directory)
         && testRawXdataReferenceRejections(directory)
         && testStrictRejection(directory) && testAnonymousBlockChildOwnership(directory)

@@ -1496,6 +1496,7 @@ public:
             || !hasUnchangedDxfAssociativeGeometrySources()
             || !hasUnchangedDxfAssociativeValueSources()
             || !hasUnchangedExtensionDictionaryOwnerSources()
+            || !hasUnchangedDwgGeoDataGraphs()
             || !hasUnchangedDynamicBlockOutputProfile()
             || !hasUnchangedExtensionMaterialSources()
             || !hasUnchangedDxfDictionaryVars() || !hasUnchangedDxfScales()
@@ -3743,6 +3744,16 @@ private:
 
     std::vector<std::uint32_t> m_extensionDictionaryHandles;
     std::vector<std::uint32_t> m_extensionGeoDataHandles;
+    struct DwgGeoDataGraphBinding {
+        std::uint32_t object{0u}, dictionary{0u}, host{0u};
+    };
+    std::vector<DwgGeoDataGraphBinding> m_dwgGeoDataGraphs;
+    bool m_dwgGeoDataTablesInspected{false};
+    bool m_dwgGeoDataObjectsInspected{false};
+    bool isClosedDwgGeoDataGraph(const DRW_GeoData& geo) const noexcept;
+    bool hasUnchangedDwgGeoDataGraphs() const noexcept;
+    bool inspectDwgGeoDataTables(const dxfRW::DxfTablesWriteView& view) noexcept;
+    bool inspectDwgGeoDataObjects(const dxfRW::DxfObjectsWriteView& view) noexcept;
     std::vector<std::uint32_t> m_extensionRasterVariablesHandles;
     std::vector<std::uint32_t> m_extensionWipeoutVariablesHandles;
     std::uint32_t m_pointCloudExDictionaryHandle{0u};

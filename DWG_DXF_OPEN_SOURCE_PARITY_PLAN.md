@@ -1047,11 +1047,13 @@ atomic refusal and corrected retry. Do not repeat adapter-retention or output
 work without a new failing witness. Physical producer breadth, independent
 source-span/target-role evidence for other profiles, native coordinate and
 projection semantics, and composed whole-document qualification remain open.
-The direct writer now handles an ODA-witnessed AC1027 version-3 record and
-preserves Binary DXF definition newlines. The observed source owns GEODATA
-through a model-space extension dictionary, while its separate host pointer
-targets the block record; add that adapter graph before whole-file output. See
-the [physical v3 receipt](docs/research/p4-geodata-v3-oda-source-selected-output-2026-11-04.json).
+The AC1027 version-3 adapter now closes the witnessed model-space extension
+dictionary, GEODATA owner/reactor and separate host pointer, with staged
+field/reference checks and independent ASCII/Binary selected-graph readback.
+The original whole file remains refused at the VISUALSTYLE gate, and other
+producer profiles and native coordinate semantics remain open. See the
+[selected-graph receipt](docs/research/p4-geodata-v3-block-extension-graph-2026-11-04.json)
+and [physical source receipt](docs/research/p4-geodata-v3-oda-source-selected-output-2026-11-04.json).
 See the [adapter transport receipt](docs/research/p6-geodata-dwg-adapter-transport-2026-11-02.json)
 and [host-block remap receipt](docs/research/p6-geodata-host-block-reference-remap-2026-11-02.json).
 The low-level GEODATA writer also remaps or allocates its own group-5 identity,
