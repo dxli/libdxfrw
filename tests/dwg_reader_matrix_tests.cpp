@@ -14226,6 +14226,83 @@ void testHeaderVersionEnvelopes(TestContext& t) {
     checkHeaderVersionProfile(t, ac1021, DRW::AC1021, 6u, false,
                               "AC1021 app maintenance does not add a high-size word");
 
+    // The ODA AC1021 maintenance-55 back-save has a verified HEADER trailer
+    // followed by opaque bytes. Admit only that envelope and diagnose every
+    // trailing byte; the parser must never consume the suffix as body data.
+    auto ac1021Suffix = ac1021;
+    const std::size_t ac1021TrailerEnd = ac1021Suffix.size();
+    for (std::size_t i = 0; i < 739u; ++i)
+        ac1021Suffix.push_back(static_cast<std::uint8_t>(i * 43u + 11u));
+    const auto ac1021Original = ac1021Suffix;
+    HeaderSectionReader ac1021SuffixReader(
+        ac1021Suffix, 0u, DRW::AC1021, 55u);
+    DRW_Header ac1021SuffixHeader;
+    t.expect(ac1021SuffixReader.readDwgHeader(ac1021SuffixHeader)
+                 && ac1021SuffixHeader.vars.count("LUNITS") == 1u
+                 && ac1021SuffixReader.diagnostics().size() == 1u
+                 && ac1021SuffixReader.diagnostics()[0].kind
+                        == DwgIntegrityCheckKind::HeaderSectionUnclaimedData
+                 && ac1021SuffixReader.diagnostics()[0].severity
+                        == DwgIntegritySeverity::Warning
+                 && ac1021SuffixReader.diagnostics()[0].hasExpected
+                 && ac1021SuffixReader.diagnostics()[0].expected == ac1021TrailerEnd
+                 && ac1021SuffixReader.diagnostics()[0].hasObserved
+                 && ac1021SuffixReader.diagnostics()[0].observed == ac1021Suffix.size()
+                 && ac1021Suffix == ac1021Original,
+             "AC1021 maintenance-55 reads validated HEADER and diagnoses every suffix byte");
+    for (const std::uint8_t otherMaintenance : {std::uint8_t{54}, std::uint8_t{56}}) {
+        HeaderSectionReader reader(ac1021Suffix, 0u, DRW::AC1021, otherMaintenance);
+        DRW_Header header; header.addInt("stale", 99, 70);
+        t.expect(!reader.readDwgHeader(header) && header.vars.empty(),
+                 "AC1021 suffix admission is restricted to witnessed maintenance 55");
+    }
+    auto ac1021BadCrc = ac1021Suffix;
+    ac1021BadCrc[ac1021TrailerEnd - 18u] ^= 1u;
+    HeaderSectionReader ac1021BadCrcReader(
+        ac1021BadCrc, 0u, DRW::AC1021, 55u);
+    DRW_Header ac1021BadCrcHeader;
+    t.expect(!ac1021BadCrcReader.readDwgHeader(ac1021BadCrcHeader)
+                 && ac1021BadCrcHeader.vars.empty(),
+             "AC1021 suffix profile refuses mismatched envelope CRC");
+    auto ac1021BadEnd = ac1021Suffix;
+    ac1021BadEnd[ac1021TrailerEnd - 16u] ^= 1u;
+    HeaderSectionReader ac1021BadEndReader(
+        ac1021BadEnd, 0u, DRW::AC1021, 55u);
+    DRW_Header ac1021BadEndHeader;
+    t.expect(!ac1021BadEndReader.readDwgHeader(ac1021BadEndHeader)
+                 && ac1021BadEndHeader.vars.empty(),
+             "AC1021 suffix profile refuses invalid end sentinel");
+    auto ac1021BadBegin = ac1021Suffix;
+    ac1021BadBegin[0] ^= 1u;
+    HeaderSectionReader ac1021BadBeginReader(
+        ac1021BadBegin, 0u, DRW::AC1021, 55u);
+    DRW_Header ac1021BadBeginHeader;
+    t.expect(!ac1021BadBeginReader.readDwgHeader(ac1021BadBeginHeader)
+                 && ac1021BadBeginHeader.vars.empty(),
+             "AC1021 suffix profile refuses invalid begin sentinel");
+    auto ac1021BadBitSize = ac1021Suffix;
+    for (std::size_t i = 20u; i < 24u; ++i)
+        ac1021BadBitSize[i] = 0xFFu;
+    const std::size_t ac1021CrcOffset = ac1021TrailerEnd - 18u;
+    const auto badBitSizeCrc = headerTestCrc(ac1021BadBitSize, 16u, ac1021CrcOffset);
+    ac1021BadBitSize[ac1021CrcOffset] = static_cast<std::uint8_t>(badBitSizeCrc);
+    ac1021BadBitSize[ac1021CrcOffset + 1u] = static_cast<std::uint8_t>(badBitSizeCrc >> 8u);
+    HeaderSectionReader ac1021BadBitSizeReader(
+        ac1021BadBitSize, 0u, DRW::AC1021, 55u);
+    DRW_Header ac1021BadBitSizeHeader;
+    t.expect(!ac1021BadBitSizeReader.readDwgHeader(ac1021BadBitSizeHeader)
+                 && ac1021BadBitSizeHeader.vars.empty(),
+             "CRC-valid AC1021 bad body-bit length cannot consume suffix bytes");
+
+    auto ac1021Truncated = ac1021;
+    ac1021Truncated.resize(ac1021TrailerEnd - 1u);
+    HeaderSectionReader ac1021TruncatedReader(
+        ac1021Truncated, 0u, DRW::AC1021, 55u);
+    DRW_Header ac1021TruncatedHeader;
+    t.expect(!ac1021TruncatedReader.readDwgHeader(ac1021TruncatedHeader)
+                 && ac1021TruncatedHeader.vars.empty(),
+             "AC1021 suffix profile rejects a truncated trailer");
+
     auto ac1024Low = makeHeaderSection<dwgWriter24>(t, "AC1024 MV<=3");
     checkHeaderVersionProfile(t, ac1024Low, DRW::AC1024, 3u,
                                            false, "AC1024 MV<=3");

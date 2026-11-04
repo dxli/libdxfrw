@@ -808,6 +808,11 @@ sentinel-validated envelope and diagnoses its unclaimed suffix. The witnessed
 CELLSTYLEMAP records now read; strict output remains refused until the suffix,
 STYLE bit order and remaining graphs are qualified. See the [receipt](docs/research/p6-ac1018-oda-header-suffix-diagnostic-admission-2026-11-03.json).
 
+The ODA-resaved AC1021 tablet now reads all observed frames with no entity,
+object, page-CRC or class-CRC failures while diagnosing its 739-byte HEADER
+suffix; strict output remains refused pending suffix and graph qualification.
+See the [AC1021 receipt](docs/research/p6-ac1021-oda-header-suffix-diagnostic-admission-2026-11-03.json).
+
 The ELLIPSE-to-polyline work bound now covers derived segment counts and R12
 refusal/retry; other geometry and caller-state profiles below remain open. See the
 [ellipse receipt](docs/research/p6-ellipse-polyline-work-bound-2026-11-03.json).
