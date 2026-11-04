@@ -4007,6 +4007,10 @@ public:
     /// polygon with at least three vertices; type 0 carries no payload.
     bool hasValidClipBoundary() const;
 
+    /// Accept an unset type with an uncounted two-point or polygon boundary.
+    /// Explicit types and parsed vertex counts must match the payload.
+    bool hasValidDxfOutputClipBoundary() const;
+
 protected:
     std::int32_t m_declaredClipVertexCount {-1};
     bool m_clipPathHasOpenVertex {false};

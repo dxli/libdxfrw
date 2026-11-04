@@ -21494,6 +21494,19 @@ bool DRW_Image::hasValidClipBoundary() const {
     }
 }
 
+bool DRW_Image::hasValidDxfOutputClipBoundary() const {
+    // An omitted rectangle uses DXF's default opposite corners.
+    if (m_clipBoundaryType == 1 && clipPath.empty()
+        && m_declaredClipVertexCount < 0 && !m_clipPathHasOpenVertex)
+        return true;
+    if (m_clipBoundaryType != 0 || clipPath.empty())
+        return hasValidClipBoundary();
+    // Preserve direct callers' type inference only when no parsed count is
+    // present. This does not establish the provenance of the vertex list.
+    return m_declaredClipVertexCount < 0 && !m_clipPathHasOpenVertex
+        && clipPath.size() >= 2 && clipPath.size() <= kMaxClipVertices;
+}
+
 bool DRW_Image::validatePayloadFields() const {
     const auto finite = [](const DRW_Coord& point) {
         return std::isfinite(point.x) && std::isfinite(point.y)

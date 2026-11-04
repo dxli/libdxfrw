@@ -18530,6 +18530,104 @@ void testImageAdjustmentAdmission(TestContext& t,
     }
 }
 
+void testImageBoundaryAdmission(TestContext& t) {
+    class ImageWithParsedBoundary final : public DRW_Image {
+    public:
+        void setParsedCount(std::int32_t count) { m_declaredClipVertexCount = count; }
+    };
+    class ImageWriter final : public dx_iface {
+    public:
+        void writeEntities() override {
+            accepted = dxfW->writeImage(&image, "boundary.png") != nullptr;
+        }
+        ImageWithParsedBoundary image;
+        bool accepted = false;
+    };
+    class ImageReader final : public dx_iface {
+    public:
+        void addImage(const DRW_Image* image) override {
+            if (image) images.push_back(*image);
+        }
+        std::vector<DRW_Image> images;
+    };
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto path = std::filesystem::temp_directory_path()
+        / ("libdxfrw-image-boundary-" + std::to_string(nonce) + ".dxf");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); }
+    } cleanup{path};
+    DRW_Image defaultRectangle;
+    defaultRectangle.m_clipBoundaryType = 1;
+    t.expect(defaultRectangle.hasValidDxfOutputClipBoundary(),
+             "IMAGE output accepts omitted default rectangle coordinates");
+    for (bool binary : {false, true}) {
+        {
+            dx_data data;
+            ImageWriter adapter;
+            adapter.cData = &data; adapter.currentBlock = data.mBlock;
+            adapter.image.handle = 0xB100u;
+            adapter.image.secPoint = {1, 0, 0}; adapter.image.vVector = {0, 1, 0};
+            adapter.image.sizeu = 8; adapter.image.sizev = 6;
+            adapter.image.m_clipBoundaryType = 1;
+            const std::string filename = path.string();
+            dxfRW writer(filename.c_str()); adapter.dxfW = &writer;
+            const bool emitted = writer.write(&adapter, DRW::AC1024, binary);
+            ImageReader reader; dx_data decoded;
+            const bool loaded = emitted && reader.fileImport(filename, &decoded, false);
+            t.expect(loaded && adapter.accepted && reader.images.size() == 1
+                         && reader.images[0].m_clipBoundaryType == 1
+                         && reader.images[0].clipPath.size() == 2
+                         && reader.images[0].clipPath[0].x == -0.5
+                         && reader.images[0].clipPath[1].x == 7.5
+                         && reader.images[0].clipPath[1].y == 5.5,
+                     "IMAGE output applies documented default rectangle corners");
+        }
+        for (int profile = 0; profile < 4; ++profile) {
+            dx_data data;
+            ImageWriter adapter;
+            adapter.cData = &data; adapter.currentBlock = data.mBlock;
+            adapter.image.handle = 0xB100u;
+            adapter.image.secPoint = {1, 0, 0}; adapter.image.vVector = {0, 1, 0};
+            adapter.image.sizeu = 8; adapter.image.sizev = 6;
+            adapter.image.m_clipBoundaryType = profile == 0 || profile == 3 ? 0 : profile;
+            adapter.image.clipPath = profile == 0
+                ? std::vector<DRW_Coord>{{1, 2}}
+                : profile == 1 ? std::vector<DRW_Coord>{{1, 2}, {3, 4}, {5, 6}}
+                               : std::vector<DRW_Coord>{{1, 2}, {3, 4}};
+            if (profile == 3) adapter.image.setParsedCount(2);
+            { std::ofstream seed(path, std::ios::binary); seed << "boundary sentinel\n"; }
+            const std::string filename = path.string();
+            dxfRW writer(filename.c_str()); adapter.dxfW = &writer;
+            const bool refused = !writer.write(&adapter, DRW::AC1024, binary);
+            std::ifstream preserved(path, std::ios::binary);
+            const std::string bytes{std::istreambuf_iterator<char>(preserved), {}};
+            t.expect(refused && !adapter.accepted && bytes == "boundary sentinel\n"
+                         && adapter.image.handle == 0xB100u,
+                     "invalid IMAGE boundary refuses atomically without changing its source");
+            preserved.close();
+            adapter.image.m_clipBoundaryType = profile == 2 ? 2 : profile == 3 ? 1 : 0;
+            adapter.image.clipPath = profile == 2
+                ? std::vector<DRW_Coord>{{1, 2}, {3, 4}, {5, 6}}
+                : std::vector<DRW_Coord>{{1, 2}, {3, 4}};
+            t.expect(writer.write(&adapter, DRW::AC1024, binary) && adapter.accepted,
+                     "corrected IMAGE boundary retries with the same writer");
+            ImageReader reader; dx_data decoded;
+            const bool loaded = reader.fileImport(filename, &decoded, false);
+            t.expect(loaded && reader.images.size() == 1
+                         && reader.images[0].m_clipBoundaryType == (profile == 2 ? 2 : 1)
+                         && reader.images[0].clipPath.size() == adapter.image.clipPath.size()
+                         && std::equal(reader.images[0].clipPath.begin(),
+                                       reader.images[0].clipPath.end(),
+                                       adapter.image.clipPath.begin(),
+                                       [](const DRW_Coord& a, const DRW_Coord& b) {
+                                           return a.x == b.x && a.y == b.y;
+                                       }),
+                     "corrected IMAGE boundary retains its type and vertices on readback");
+        }
+    }
+}
+
 std::vector<DRW_Wipeout> wipeoutPayloadControls() {
     std::vector<DRW_Wipeout> masks;
     for (const bool polygon : {false, true}) for (const bool inverted : {false, true}) {
@@ -66759,6 +66857,7 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--image-adjustment-admission") {
         TestContext context;
         testImageAdjustmentAdmission(context);
+        testImageBoundaryAdmission(context);
         std::cout << "IMAGE/WIPEOUT adjustment admission: " << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
@@ -67260,6 +67359,7 @@ int main(int argc, char** argv) {
     testImageDefPixelSizeCodeForms(context);
     testImageDefinitionPlanFailureRetry(context);
     testImageAdjustmentAdmission(context);
+    testImageBoundaryAdmission(context);
     testWipeoutSubclassPayload(context);
     testAsciiOnlySymbolCasing(context);
     testDxfConsumerFinalization(context);

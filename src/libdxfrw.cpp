@@ -14200,6 +14200,7 @@ DRW_ImageDef* dxfRW::writeImageRecord(
     if (!preflightEntity(ent))
         return nullptr;
     if (ent == nullptr || writer == nullptr || !ent->validatePayloadFields()
+        || !ent->hasValidDxfOutputClipBoundary()
         || !isValidDxfRasterAdjustments(*ent)) {
         m_writeError = true;
         return nullptr;
