@@ -2013,11 +2013,10 @@ bool dwgWriter15::emitDeferredBlockControl() {
         body.putBit(0);   // stringBit = 0 (R2007+)
     }
     dwgBufferW *hdlBuf = &body;
-    // R2000/R2004 store a handle-start bit offset in the object header.
-    // Stage these handles so finishObject patches that boundary before the
-    // handles are appended, as it does for the other control records.
-    if ((m_version > DRW::AC1014 && m_version < DRW::AC1021)
-        || m_version > DRW::AC1021) {
+    // R2000-R2007 store a handle-start bit offset in the object header;
+    // R2010+ uses a separate handle stream size. Stage these handles so each
+    // version's finishObject assembles and records its boundary correctly.
+    if (m_version > DRW::AC1014) {
         m_objectHandles.reset();
         hdlBuf = &m_objectHandles;
     }

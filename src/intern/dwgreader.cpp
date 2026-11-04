@@ -14470,6 +14470,14 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
     return fail();
   dwgBuffer hBuff = *buf;
   dwgBuffer *hBuf = buf;
+  const std::uint64_t totalBits = static_cast<std::uint64_t>(buf->size()) * 8u;
+  // Older libdxfrw R2007 BLOCK_CONTROL frames put handles inline and patched
+  // objSize to the full padded frame. Recognize only that exact old profile;
+  // the role, fixed handle identities and trailing padding are checked below.
+  const bool legacyR2007InlineBlockControl =
+      version == DRW::AC1021 && oType == DRW::DwgBlockControlObjectType
+      && handle == DRW::DwgBlockControlHandle && objSize == totalBits
+      && xDictFlag == 0 && numReactors == 0 && extData.empty();
   if (version > DRW::AC1021) {
     const std::uint64_t totalBits =
         static_cast<std::uint64_t>(buf->size()) * 8u;
@@ -14480,8 +14488,16 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
       return fail();
     hBuff.setBitPos(static_cast<std::uint8_t>(objectBits & 7u));
     hBuf = &hBuff;
+  } else if (version == DRW::AC1021
+             && oType == DRW::DwgBlockControlObjectType
+             && !legacyR2007InlineBlockControl) {
+    // R2007 BLOCK_CONTROL normally uses the declared pre-handles boundary.
+    if (objSize == 0 || objSize >= totalBits
+        || !hBuff.setPosition(objSize >> 3))
+      return fail();
+    hBuff.setBitPos(static_cast<std::uint8_t>(objSize & 7u));
+    hBuf = &hBuff;
   }
-  const std::uint64_t totalBits = static_cast<std::uint64_t>(buf->size()) * 8u;
   const std::uint64_t bodyEndBit = objSize != 0 ? objSize : totalBits;
   if (bodyEndBit > totalBits)
     return fail();
@@ -14522,7 +14538,8 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   if (version > DRW::AC1018) { // from v2007+ have a bit for strings follows
                                // (ObjControl do not have)
     bool stringBit = false;
-    if (!readControlBit(*buf, bodyEndBit, stringBit))
+    if (!readControlBit(*buf, bodyEndBit, stringBit)
+        || (legacyR2007InlineBlockControl && stringBit))
       return fail();
     DRW_DBG(" string bit for  v2007+: ");
     DRW_DBG(stringBit);
@@ -14530,9 +14547,23 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   }
   if (!buf->isGood())
     return fail();
+  if (version == DRW::AC1021 && oType == DRW::DwgBlockControlObjectType
+      && !legacyR2007InlineBlockControl) {
+    // BLOCK_CONTROL has no detached strings. The last bit immediately
+    // before the declared handle boundary must therefore be the absent flag.
+    dwgBuffer footer = *buf;
+    if (objSize == 0 || !footer.setPosition((objSize - 1u) >> 3))
+      return fail();
+    footer.setBitPos(static_cast<std::uint8_t>((objSize - 1u) & 7u));
+    if (footer.getBit() != 0 || !footer.isGood())
+      return fail();
+  }
 
   dwgHandle objectH;
-  if (!readDwgHandleChecked(*hBuf, 0, false, objectH))
+  if (!readDwgHandleChecked(*hBuf, 0, false, objectH)
+      || (legacyR2007InlineBlockControl
+          && (objectH.code != DRW::DwgSoftPointer || objectH.size != 0
+              || objectH.ref != 0)))
     return fail();
   DRW_DBG(" NULL Handle: ");
   DRW_DBGHL(objectH.code, objectH.size, objectH.ref);
@@ -14546,7 +14577,10 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   if (xDictFlag !=
       1) { // linetype in 2004 seems not have XDicObjH or NULL handle
     dwgHandle XDicObjH;
-    if (!readDwgHandleChecked(*hBuf, 0, false, XDicObjH))
+    if (!readDwgHandleChecked(*hBuf, 0, false, XDicObjH)
+        || (legacyR2007InlineBlockControl
+            && (XDicObjH.code != DRW::DwgHardOwnership || XDicObjH.size != 0
+                || XDicObjH.ref != 0)))
       return fail();
     xDictHandle = XDicObjH.ref;
     DRW_DBG(" XDicObj control Handle: ");
@@ -14578,6 +14612,16 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   for (std::uint64_t i = 0; i < childHandleCount; i++) {
     if (!readDwgHandleChecked(*hBuf, handle, true, objectH))
       return fail();
+    if (legacyR2007InlineBlockControl) {
+      const bool phantom = i >= numEntries;
+      const std::uint32_t expected = i == numEntries
+          ? DRW::DwgModelSpaceBlockRecordHandle
+          : DRW::DwgPaperSpaceBlockRecordHandle;
+      if (objectH.code != (phantom ? DRW::DwgHardOwnership
+                                  : DRW::DwgSoftOwnership)
+          || objectH.ref == 0 || (phantom && objectH.ref != expected))
+        return fail();
+    }
     parsedHandleSlots.push_back(objectH.ref);
     if (objectH.ref != 0) { // in vports R14  I found some NULL handles
       if (!seenHandles.insert(objectH.ref).second)
@@ -14603,6 +14647,21 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
     DRW_DBG("Remaining bytes: ");
     DRW_DBG(buf->numRemainingBytes());
     DRW_DBG("\n");
+  }
+  if (version == DRW::AC1021 && oType == DRW::DwgBlockControlObjectType) {
+    const std::uint64_t position =
+        static_cast<std::uint64_t>(hBuf->getPosition()) * 8u + hBuf->getBitPos();
+    if (position > totalBits || totalBits - position > 7u)
+      return fail();
+  }
+  if (legacyR2007InlineBlockControl) {
+    while (static_cast<std::uint64_t>(hBuf->getPosition()) * 8u
+               + hBuf->getBitPos() < totalBits) {
+      if (hBuf->getBit() != 0)
+        return fail();
+    }
+    if (!hBuf->isGood())
+      return fail();
   }
   handlesList = std::move(parsedHandles);
   phantomHandles = std::move(parsedPhantoms);

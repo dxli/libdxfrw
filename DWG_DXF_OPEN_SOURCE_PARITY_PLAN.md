@@ -900,9 +900,12 @@ Synthetic R2004+ BYBLOCK, BYLAYER and CONTINUOUS linetypes now preserve their
 witnessed missing-extension and typed-null xref states. With the separately
 probed plot-style graph, ODA advances to a VIEWPORT error; the graph is not
 yet integrated. See the [linetype receipt](docs/research/p6-synthetic-ltype-xdict-xref-2026-11-04.json).
-AC1021 has a separate source-observed framing and
-model/paper-reference discrepancy requiring its own producer witness and
-string/footer investigation. See the [boundary receipt](docs/research/p6-block-control-handle-boundary-2026-11-04.json).
+AC1021 BLOCK_CONTROL now stages handles at its declared boundary; the reader
+also supports the witnessed historical inline profile under narrow checks.
+LibreDWG and an ODA-produced source confirm model/paper references, but ODA
+still rejects generated whole files and general R2007 alignment and other
+controls remain open. See the [AC1021 receipt](docs/research/p6-ac1021-block-control-handle-boundary-2026-11-04.json)
+and [legacy boundary receipt](docs/research/p6-block-control-handle-boundary-2026-11-04.json).
 R2004-family object-section prefixes now roll back on failed writes and retry
 without duplication ([rollback receipt](docs/research/p6-r2004-object-section-prefix-rollback-2026-11-04.json)).
 The reader now rejects truncated declared literal runs while retaining

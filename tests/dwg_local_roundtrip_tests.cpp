@@ -36,6 +36,7 @@
 #include "intern/dwgbufferw.h"
 #include "intern/dwgutil.h"
 #include "intern/dwg_fixed_handles.h"
+#include "intern/dwgreader.h"
 #include "intern/dwghatchboundary.h"
 #include "intern/dwgwriter15.h"
 #include "intern/dwgwriter21.h"
@@ -347,12 +348,16 @@ public:
         return true;
     }
 
-    static bool checkBlockControlBoundary(dwgWriter15& writer) {
+    static bool checkBlockControlBoundary(dwgWriter15& writer, bool withUser = false) {
         const DRW::Version version = writer.m_version;
+        if (withUser && version != DRW::AC1021) return false;
         if (!writer.prepareDwgClassManifest() || !writer.writeFileHeaderStub()
             || !writer.writeDwgHeader() || !writer.writeDwgClasses()
             || !writer.writeDwgObjects())
             return false;
+        const std::uint32_t user = withUser
+            ? writer.defineBlock("CONTROL_USER", DRW_Coord(0, 0, 0)) : 0u;
+        if (withUser && user == 0u) return false;
         DRW_Line line;
         line.basePoint = DRW_Coord(1, 2, 3);
         line.secPoint = DRW_Coord(4, 5, 6);
@@ -387,27 +392,121 @@ public:
             return false;
         if (version > DRW::AC1024 && body.getBit() != 0u)
             return false;
-        if (body.getBitLong() != 0)
+        if (body.getBitLong() != (withUser ? 1 : 0))
             return false;
         if (version > DRW::AC1018 && body.getBit() != 0u)
             return false;
         const std::uint64_t afterBody = body.getPosition() * 8u + body.getBitPos();
         if (!body.isGood() || start > static_cast<std::uint64_t>(bodyLength) * 8u
             || (version < DRW::AC1021 && start != afterBody)
-            || (version >= DRW::AC1024 && start < afterBody)
+            || (version >= DRW::AC1021 && start < afterBody)
             || !body.setPosition(start / 8u))
             return false;
         body.setBitPos(start & 7u);
         const auto owner = body.getHandle();
         const auto xdict = body.getHandle();
+        const auto userHandle = withUser ? body.getHandle() : dwgHandle{};
         const auto model = body.getHandle();
         const auto paper = body.getHandle();
-        return body.isGood() && owner.code == DRW::DwgSoftPointer && owner.ref == 0u
+        const bool handlesValid = body.isGood()
+            && owner.code == DRW::DwgSoftPointer && owner.ref == 0u
             && xdict.code == DRW::DwgHardOwnership && xdict.ref == 0u
+            && (!withUser || (userHandle.code == DRW::DwgSoftOwnership
+                               && userHandle.ref == user))
             && model.code == DRW::DwgHardOwnership
             && model.ref == DRW::DwgModelSpaceBlockRecordHandle
             && paper.code == DRW::DwgHardOwnership
             && paper.ref == DRW::DwgPaperSpaceBlockRecordHandle;
+        if (!handlesValid || version != DRW::AC1021)
+            return handlesValid;
+
+        // The typed reader must use RL, reject corrupt boundaries, and be
+        // reusable after refusal. The generated frame excludes CRC here.
+        std::vector<std::uint8_t> valid(
+            captured.bytes.begin() + static_cast<std::ptrdiff_t>(bodyOffset),
+            captured.bytes.begin() + static_cast<std::ptrdiff_t>(bodyOffset + bodyLength));
+        DRW_ObjControl control;
+        const auto parse = [&control](std::vector<std::uint8_t>& bytes) {
+            dwgBuffer input(bytes.data(), bytes.size());
+            return control.parseDwg(DRW::AC1021, &input, 0u) && input.isGood();
+        };
+        const auto expectedSlots = [withUser, user] (const DRW_ObjControl& value) {
+            std::vector<std::uint32_t> expected;
+            if (withUser) expected.push_back(user);
+            expected.push_back(DRW::DwgModelSpaceBlockRecordHandle);
+            expected.push_back(DRW::DwgPaperSpaceBlockRecordHandle);
+            return value.orderedHandleSlots == expected;
+        };
+        if (!parse(valid) || !expectedSlots(control)) return false;
+        const auto patchSize = [](std::vector<std::uint8_t>& bytes,
+                                  std::uint32_t value) {
+            constexpr std::size_t sizeBit = 10u; // BS type 48 uses 10 bits.
+            for (std::size_t i = 0; i < 32u; ++i) {
+                const std::size_t pos = sizeBit + i;
+                const auto mask = static_cast<std::uint8_t>(1u << (7u - pos % 8u));
+                const unsigned source = static_cast<unsigned>((i / 8u) * 8u
+                                                               + 7u - i % 8u);
+                if ((value >> source) & 1u) bytes[pos / 8u] |= mask;
+                else bytes[pos / 8u] &= static_cast<std::uint8_t>(~mask);
+            }
+        };
+        auto corrupt = valid;
+        patchSize(corrupt, static_cast<std::uint32_t>(afterBody - 1u));
+        if (parse(corrupt) || !control.orderedHandleSlots.empty()
+            || !parse(valid) || !expectedSlots(control)) return false;
+        corrupt = valid;
+        patchSize(corrupt, static_cast<std::uint32_t>(valid.size() * 8u - 8u));
+        if (parse(corrupt) || !control.orderedHandleSlots.empty()
+            || !parse(valid) || !expectedSlots(control)) return false;
+        corrupt = valid;
+        patchSize(corrupt, static_cast<std::uint32_t>(valid.size() * 8u));
+        if (parse(corrupt) || !control.orderedHandleSlots.empty()
+            || !parse(valid) || !expectedSlots(control)) return false;
+        corrupt = valid;
+        corrupt[(start - 1u) / 8u] |=
+            static_cast<std::uint8_t>(1u << (7u - (start - 1u) % 8u));
+        if (parse(corrupt) || !control.orderedHandleSlots.empty()
+            || !parse(valid) || !expectedSlots(control)) return false;
+
+        if (withUser) return true;
+
+        // Hand-encode the historical local writer's exact inline signature:
+        // full-frame RL, null roles, fixed model/paper handles and zero padding.
+        dwgBufferW legacy;
+        legacy.putObjType(DRW::AC1021, DRW::DwgBlockControlObjectType);
+        legacy.putRawLong32(0u);
+        const auto put = [&legacy](std::uint8_t role, std::uint32_t reference) {
+            dwgHandle token; token.code = role; token.ref = reference;
+            legacy.putHandle(token);
+        };
+        put(0u, DRW::DwgBlockControlHandle);
+        legacy.putBitShort(0); legacy.putBitLong(0); legacy.putBit(0);
+        legacy.putBitLong(0); legacy.putBit(0);
+        const std::uint64_t oldOwnerBit = legacy.bitCount();
+        put(DRW::DwgSoftPointer, 0); put(DRW::DwgHardOwnership, 0);
+        put(DRW::DwgHardOwnership, DRW::DwgModelSpaceBlockRecordHandle);
+        put(DRW::DwgHardOwnership, DRW::DwgPaperSpaceBlockRecordHandle);
+        legacy.alignToByte();
+        legacy.patchRawLong32AtBit(10u, static_cast<std::uint32_t>(legacy.size() * 8u));
+        std::vector<std::uint8_t> old = legacy.data();
+        if (!parse(old) || !expectedSlots(control)) return false;
+        // A truncated last handle and nonzero padding cannot masquerade as the
+        // old profile, and a valid parse still works after each failed attempt.
+        auto badOld = old;
+        badOld.pop_back();
+        patchSize(badOld, static_cast<std::uint32_t>(badOld.size() * 8u));
+        if (parse(badOld) || !control.orderedHandleSlots.empty()
+            || !parse(old) || !expectedSlots(control)) return false;
+        badOld = old;
+        badOld.back() |= 1u;
+        if (parse(badOld) || !control.orderedHandleSlots.empty()
+            || !parse(old) || !expectedSlots(control)) return false;
+        badOld = old;
+        badOld[oldOwnerBit / 8u] ^= static_cast<std::uint8_t>(
+            1u << (7u - oldOwnerBit % 8u));
+        if (parse(badOld) || !control.orderedHandleSlots.empty()
+            || !parse(old) || !expectedSlots(control)) return false;
+        return true;
     }
 
     static bool emitLayoutDictionaryFrameProbe(
@@ -35902,14 +36001,18 @@ int main(int argc, char** argv) {
         return passed ? 0 : 1;
     } else if (argc == 2
         && std::string(argv[1]) == "--block-control-handle-boundary") {
-        DRW_Header h15, h18, h24, h27, h32;
+        DRW_Header h15, h18, h21, h21User, h24, h27, h32;
         dwgWriter15 w15(nullptr, &h15);
         dwgWriter18 w18(nullptr, &h18);
+        dwgWriter21 w21(nullptr, &h21);
+        dwgWriter21 w21User(nullptr, &h21User);
         dwgWriter24 w24(nullptr, &h24);
         dwgWriter27 w27(nullptr, &h27);
         dwgWriter32 w32(nullptr, &h32);
         const bool passed = DwgBlockRecordXrefWireTestAccess::checkBlockControlBoundary(w15)
             && DwgBlockRecordXrefWireTestAccess::checkBlockControlBoundary(w18)
+            && DwgBlockRecordXrefWireTestAccess::checkBlockControlBoundary(w21)
+            && DwgBlockRecordXrefWireTestAccess::checkBlockControlBoundary(w21User, true)
             && DwgBlockRecordXrefWireTestAccess::checkBlockControlBoundary(w24)
             && DwgBlockRecordXrefWireTestAccess::checkBlockControlBoundary(w27)
             && DwgBlockRecordXrefWireTestAccess::checkBlockControlBoundary(w32);
