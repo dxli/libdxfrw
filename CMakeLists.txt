@@ -712,6 +712,23 @@ if(LIBDXFRW_BUILD_TESTS)
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/run_fast_focus.py
             --build-dir ${CMAKE_BINARY_DIR})
 
+    # Opt-in source-span research tool. It accepts a user-supplied AC1021
+    # drawing and is intentionally not registered as a fixture-based test.
+    add_executable(libdxfrw_ac1021_field_source_raw_probe EXCLUDE_FROM_ALL
+        tests/ac1021_field_source_raw_probe.cpp
+        ${_libdxfrw_reader_test_adapter_source})
+    target_compile_features(libdxfrw_ac1021_field_source_raw_probe PRIVATE cxx_std_17)
+    target_include_directories(libdxfrw_ac1021_field_source_raw_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/intern
+        ${CMAKE_CURRENT_SOURCE_DIR}/dwg2dxf)
+    target_link_libraries(libdxfrw_ac1021_field_source_raw_probe PRIVATE dxfrw)
+    add_test(NAME libdxfrw_ac1021_field_source_span_self_test
+        COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/ac1021_field_source_span_probe.py --self-test)
+    set_tests_properties(libdxfrw_ac1021_field_source_span_self_test PROPERTIES
+        LABELS "fast;dwg;field;generated")
+
     add_executable(libdxfrw_wave1_tests
         tests/wave1_tests.cpp
         ${_libdxfrw_wave1_adapter_source})

@@ -682,6 +682,12 @@ Strict output still fails, and no support claim is promoted.
    unresolved. Older libdxfrw-generated FIELD records that omitted the string
    may no longer parse as complete; establish physical compatibility without
    guessing between ambiguous layouts. See the [FIELD framing receipt](docs/research/p5-field-unit12-dwg-value-string-framing-2026-11-03.json).
+   Forty-two physical AC1021 AcObjProp FIELDs expose in-body UTF-16 property
+   values and two soft-pointer roles matching ODA DXF and ACadSharp, but their
+   observed framing conflicts with the authoritative detached-TV specification.
+   Resolve that conflict before admitting the profile; the [source-span harness
+   and receipt](docs/research/p5-ac1021-acobjprop-inline-string-physical-source-spans-2026-11-03.json)
+   allow the comparison to be repeated without bundling a drawing.
    Use the existing `p5-ac1027-*` receipts, both type-0 transport receipts,
    the [AC1021 flags=4/type=8 receipt](docs/research/p5-ac1021-field-format-flag4-root-type4-8-transport-2026-11-01.json)
    and the [AC1021 flags=4/type=2 census receipt](docs/research/p5-ac1021-field-flags4-type2-root-census-2026-11-01.json)
