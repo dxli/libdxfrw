@@ -671,6 +671,7 @@ tools/mutate_r2004_header_suffix_probe.py
 tools/normalize_drawing_result.py
 tools/normalize_oracle.py
 tools/probe_ac1024_tilted_geometry.cpp
+tools/probe_ac1027_source_sab_cqacis.py
 tools/qualify_material_source_order.py
 tools/run_external_advisory.py
 tools/run_fast_baseline.py

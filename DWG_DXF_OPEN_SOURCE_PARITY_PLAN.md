@@ -1147,6 +1147,10 @@ rendering semantics remain open.
   ownership is established by the source entmode and unique block record.
   Other source/producer profiles, complete output and semantics remain open;
   see the [physical join receipt](docs/research/p7-ac1027-physical-modeler-acds-sab-oda-byte-join-2026-11-03.json).
+  A separate cq-acis/OCCT attempt measured one solid but left history
+  records undecoded and could not convert the two REGIONs. Independent
+  placement, measurements and a different kernel remain open; see the
+  [advisory observation](docs/research/p7-ac1027-source-sab-cqacis-observation-2026-11-04.json).
   Map the DWG modeler flag and revision UID to the DXF shell before automatic
   replay. A source-backed REGION experiment preserved SAB bytes but produced
   different shell values after ODA reimport; DWG-associated SAB output now
