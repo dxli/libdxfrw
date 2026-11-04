@@ -443,6 +443,7 @@ tests/dwg_polyline_cross_scope_tests.cpp
 tests/dwg_polyline_owned_handle_roles_tests.cpp
 tests/dwg_polyline_owner_facade_tests.cpp
 tests/dwg_reader_matrix_tests.cpp
+tests/dwg_solid_trace_elevation_tests.cpp
 tests/dwg_text_style_resolution_tests.cpp
 tests/dxf_ellipse_extreme_axis_tests.cpp
 tests/dxf_entity_identity_test_helpers.h
@@ -692,6 +693,7 @@ tools/audit_polyline_owner_census.py
 tools/audit_rastervariables_ac1018_frame1_source.py
 tools/audit_rastervariables_ac1018_source.py
 tools/audit_rastervariables_ac1032_frame1_source.py
+tools/audit_solid_trace_triangle_elevation.py
 tools/audit_sparse_material_source.py
 tools/audit_sunstudy_dxf_graph.py
 tools/audit_wipeout_ac1018_frame1_source.py
@@ -814,6 +816,7 @@ tools/probe_polyline_cross_version.cpp
 tools/probe_rastervariables_ac1018_frame1_source.cpp
 tools/probe_rastervariables_ac1018_source.cpp
 tools/probe_rastervariables_ac1032_frame1_source.cpp
+tools/probe_solid_trace_triangle_elevation.cpp
 tools/probe_sparse_material_adapter.cpp
 tools/probe_sparse_material_source.cpp
 tools/probe_wipeout_ac1018_frame1_source.cpp

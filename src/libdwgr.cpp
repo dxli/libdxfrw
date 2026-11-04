@@ -51,6 +51,9 @@
 #include "intern/drw_reserve.h"
 #include "intern/dwgutil.h"
 
+// Internal shared preflight, also enforced by the SOLID/TRACE DWG codecs.
+bool drwHasDwgSingleElevation(const DRW_Trace& entity) noexcept;
+
 #define FIRSTHANDLE 48
 
 namespace {
@@ -1635,6 +1638,14 @@ bool dwgRW::encodeEntityForWrite(DRW_Entity *ent,
     m_lastWriteTransaction.reset();
     if (writer == nullptr || ent == nullptr)
         return recordWriteResult(WriteSkipKind::Entity, false);
+
+    // SOLID/TRACE encode only one elevation. A rejected mismatch must not
+    // disappear from the document when a legacy callback ignores false.
+    if ((typeid(*ent) == typeid(DRW_Trace) || typeid(*ent) == typeid(DRW_Solid))
+        && !drwHasDwgSingleElevation(static_cast<const DRW_Trace&>(*ent))) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::Entity, false);
+    }
 
     if (mutationTarget == nullptr)
         mutationTarget = ent;

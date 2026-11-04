@@ -6428,7 +6428,22 @@ bool DRW_Ray::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs,
     return encodeDwgEntHandle(version, buf, handleBuf);
 }
 
+// SOLID and TRACE expose 2D corners and a single OCS elevation. Historically,
+// callers have left the unused Z fields at their default zero; accept those as
+// unspecified as well as an explicitly repeated elevation. A distinct zero Z
+// cannot be distinguished from the legacy unspecified convention.
+bool drwHasDwgSingleElevation(const DRW_Trace& entity) noexcept {
+    const double elevation = entity.basePoint.z;
+    if (!std::isfinite(elevation)) return false;
+    for (const double z : {entity.secPoint.z, entity.thirdPoint.z,
+                           entity.fourPoint.z}) {
+        if (!std::isfinite(z) || (z != 0.0 && z != elevation)) return false;
+    }
+    return true;
+}
+
 bool DRW_Trace::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
+    if (!drwHasDwgSingleElevation(*this)) return false;
     (void)bs; (void)strBuf;
     oType = 32;  // TRACE = 32 — see dwgreader.cpp:1317
     if (!encodeDwgCommon(version, buf)) return false;
@@ -7001,6 +7016,7 @@ bool DRW_3Dface::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t 
 }
 
 bool DRW_Solid::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs, dwgBufferW *strBuf, dwgBufferW *handleBuf) {
+    if (!drwHasDwgSingleElevation(*this)) return false;
     (void)bs; (void)strBuf;
     oType = 31;  // SOLID class id — see dwgreader.cpp:1305
     if (!encodeDwgCommon(version, buf)) return false;

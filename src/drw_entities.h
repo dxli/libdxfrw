@@ -852,6 +852,10 @@ protected:
     [[nodiscard]] virtual bool encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs=0, dwgBufferW *strBuf=nullptr, dwgBufferW *handleBuf=nullptr) override;
 
 public:
+    // DWG SOLID/TRACE uses basePoint.z as a shared native OCS elevation.
+    // Other corner Z values must be zero (legacy unspecified) or that
+    // elevation; a distinct nonplanar zero cannot be represented. This
+    // contract does not apply to the WCS corners of DRW_3Dface.
     DRW_Coord thirdPoint;        /*!< third point, code 12, 22 & 32 */
     DRW_Coord fourPoint;        /*!< four point, code 13, 23 & 33 */
 };

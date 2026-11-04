@@ -928,6 +928,10 @@ the explicit DXF inverse-extrusion helper ([receipt](docs/research/p6-ac1024-tra
 The AC1021 SOLID/TRACE absent-string boundary now passes the sampled tilted and
 default-normal ODA cases; broader profiles and native rendering remain open
 ([boundary receipt](docs/research/p6-ac1021-solid-trace-absent-string-2026-11-04.json)).
+DWG SOLID/TRACE now reject nonzero corner Z values inconsistent with their
+shared elevation. Zero remains the legacy unspecified 2D-corner convention;
+derived codecs and the generic ignored-failure policy retain their prior scope
+([elevation receipt](docs/research/p6-dwg-solid-trace-elevation-guard-2026-11-04.json)).
 Qualify additional text-derived entities and producer/normal profiles beyond
 the explicit TEXT DXF inverse-extrusion helper; current DWG TEXT reads do not
 apply that transform ([receipt](docs/research/p6-text-legacy-extrusion-opt-in-2026-11-04.json)).
