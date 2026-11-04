@@ -442,6 +442,31 @@ bool run() {
     auto wrongType = make(2010u, wire::Kind::Definition, true);
     wrongType.bytes.patch(wrongType.spans[static_cast<std::size_t>(wire::Field::Owner)].begin, 4u, 4u);
     if (scan(wrongType).status != wire::Status::Malformed) return false;
+    // R13/R14 IMAGEDEF must not downgrade an impossible zero object size
+    // to generic Unsupported before the owner-role proof. Native parsing is
+    // deliberately unchanged; this validates the source-correlation gate.
+    for (unsigned revision : {13u, 14u}) {
+        const auto authored = eed(revision);
+        const auto valid = make(revision, wire::Kind::Definition, false, false,
+                                2u, 514u, false, &authored.bytes, true);
+        if (scan(valid).status != wire::Status::Proven) return false;
+        for (unsigned role : {3u, 4u}) {
+            auto bad = valid;
+            bad.bytes.patch(bad.spans[static_cast<std::size_t>(wire::Field::Owner)].begin, role, 4u);
+            bad.bytes.patchLittle(bad.spans[static_cast<std::size_t>(wire::Field::DataEnd)].begin, 0u);
+            if (scan(bad).status != wire::Status::Malformed
+                || scan(valid).status != wire::Status::Proven) return false;
+        }
+        // Preserve the pre-existing separate reactor route.
+        auto reactor = make(revision, wire::Kind::Reactor);
+        const auto sizeStart = reactor.spans[static_cast<std::size_t>(wire::Field::DataEnd)].begin;
+        const auto truncatedSize = sizeStart / 8u + 1u;
+        if (wire::observe(reactor.bytes.bytes.data(), truncatedSize, reactor.revision,
+                          reactor.kind, reactor.handles).status != wire::Status::Unsupported)
+            return false;
+        reactor.bytes.patchLittle(reactor.spans[static_cast<std::size_t>(wire::Field::DataEnd)].begin, 0u);
+        if (scan(reactor).status != wire::Status::Unsupported) return false;
+    }
     auto unsupported = make(2018u, wire::Kind::Definition);
     auto proof = scan(unsupported);
     unsupported.bytes.patch(proof.at(wire::Field::EedSize).begin, 1u, 2u);

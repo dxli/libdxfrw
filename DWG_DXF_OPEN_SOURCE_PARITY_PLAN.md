@@ -841,7 +841,9 @@ but export refuses the IMAGEDEF's unqualified role-4 owner because ODA's common
 and record-specific descriptions conflict. Resolve that role with authoritative
 evidence and close the image/proxy graph while retaining the separate HEADER
 warnings and unclaimed suffix refusal. Audit other revisions' generic Unsupported
-paths separately. See the [HEADER receipt](docs/research/p6-ac1024-header-unclaimed-suffix-diagnostic-2026-11-04.json)
+paths separately; the reproduced R13/R14 zero-size IMAGEDEF correlation gap is
+closed ([receipt](docs/research/p4-ac1014-imagedef-zero-size-correlation-2026-11-04.json)).
+See the [HEADER receipt](docs/research/p6-ac1024-header-unclaimed-suffix-diagnostic-2026-11-04.json)
 and [IMAGEDEF receipt](docs/research/p4-ac1024-imagedef-owner-role-diagnostic-2026-11-04.json).
 An attributed AC1021 source also uses relative soft-pointer IMAGEDEF owners;
 its provenance and the absence of a located erratum do not resolve the conflict

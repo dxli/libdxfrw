@@ -331,7 +331,16 @@ Proof observe(const std::uint8_t* bytes, std::size_t size, unsigned revision,
         begin = body.pos;
         result.dataEnd = static_cast<std::uint32_t>(body.little(4u));
         detail::span(result, Field::DataEnd, begin, body.pos);
-        if (!body.good || result.dataEnd == 0u) { result.status = Status::Unsupported; return result; }
+        if (!body.good) {
+            if (kind != Kind::Definition) result.status = Status::Unsupported;
+            return result;
+        }
+        if (result.dataEnd == 0u) {
+            // ODA §20.4.81 requires a nonzero IMAGEDEF object size even in
+            // R13/R14. Do not let zero bypass the owner-role proof.
+            if (kind != Kind::Definition) result.status = Status::Unsupported;
+            return result;
+        }
         if (result.dataEnd <= body.pos || result.dataEnd >= total) return result;
         body.end = result.dataEnd;
     }

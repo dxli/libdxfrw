@@ -684,6 +684,7 @@ tools/make_p9_rtext_oda_input.py
 tools/mutate_r2004_header_suffix_probe.py
 tools/normalize_drawing_result.py
 tools/normalize_oracle.py
+tools/probe_ac1014_imagedef_zero_size.py
 tools/probe_ac1021_imagedef_owner_tokens.cpp
 tools/probe_ac1024_rastervariables_source.cpp
 tools/probe_ac1024_tilted_geometry.cpp
