@@ -2270,8 +2270,10 @@ public:
 
 private:
     bool m_dxfVertexCountSeen = false;
-    // Per-group-code occurrence ordinals for DXF repeated vertex arrays:
-    // 10, 20, 40, 41, 42, and 91. Keep these parser-only and reset on copy.
+    // DXF parser-only state for 10, 20, 40, 41, 42 and 91. X's unused high
+    // bits mark grouped/optional mode; optional slots hold occurrence ordinals
+    // in grouped mode and one-based last vertex indices in interleaved mode.
+    // Reset on copy, assignment and DWG parse; no data member is added.
     std::array<std::uint32_t, 6> m_dxfVertexFieldCounts{};
 };
 

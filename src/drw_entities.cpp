@@ -13140,11 +13140,36 @@ void DRW_LWPolyline::applyExtrusion(){
 }
 
 bool DRW_LWPolyline::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
+    // Store parser-only mode bits in unused high bits of the existing X-count
+    // slot, keeping DRW_LWPolyline's public layout unchanged. Ordinary DXF
+    // vertex records bind optional fields to the most recent group 10. Retain
+    // the historical ordinal-array route for grouped coordinates detected
+    // before any optional vertex field has been seen.
+    constexpr std::uint32_t countMask = 0x3FFFFFFFu;
+    constexpr std::uint32_t grouped = 0x80000000u;
+    constexpr std::uint32_t sawOptional = 0x40000000u;
+    auto& xState = m_dxfVertexFieldCounts[0];
+    const auto xCount = [&]() { return xState & countMask; };
+    const auto yCount = m_dxfVertexFieldCounts[1];
+    const bool groupedCoordinates = (code == 10 && xCount() > yCount)
+        || (code == 20 && yCount >= xCount());
+    if ((xState & sawOptional) == 0u) {
+        if (groupedCoordinates)
+            xState |= grouped;
+        if ((code == 40 || code == 41 || code == 42 || code == 91)
+            && xCount() == 0u)
+            xState |= grouped;
+    } else if ((xState & grouped) == 0u && groupedCoordinates) {
+        // The stream has already committed to interleaved vertex values;
+        // a later grouped coordinate sequence has no unambiguous binding.
+        return false;
+    }
     const auto vertexForField = [this](std::size_t field)
             -> std::shared_ptr<DRW_Vertex2D> {
         if (field >= m_dxfVertexFieldCounts.size())
             return nullptr;
-        std::uint32_t& occurrence = m_dxfVertexFieldCounts[field];
+        std::uint32_t& state = m_dxfVertexFieldCounts[field];
+        const std::uint32_t occurrence = field == 0u ? state & countMask : state;
         if (occurrence >= static_cast<std::uint32_t>(kMaxLWPolylineVertices)
             || (m_dxfVertexCountSeen
                 && occurrence >= static_cast<std::uint32_t>(vertexnum)))
@@ -13156,7 +13181,14 @@ bool DRW_LWPolyline::parseCode(int code, const std::unique_ptr<dxfReader>& reade
             && vertlist.size()
                 >= static_cast<std::size_t>(kMaxLWPolylineVertices))
             return nullptr;
-        const std::size_t index = occurrence;
+        const std::uint32_t xCount = m_dxfVertexFieldCounts[0] & countMask;
+        const bool ordinal = (m_dxfVertexFieldCounts[0] & grouped) != 0u;
+        if (field >= 2u && !ordinal && xCount != 0u && state == xCount)
+            return nullptr; // Duplicate optional field on this vertex.
+        const std::size_t index = field >= 2u && !ordinal && xCount != 0u
+            ? xCount - 1u : occurrence;
+        if (m_dxfVertexCountSeen && index >= static_cast<std::size_t>(vertexnum))
+            return nullptr;
         if (index >= vertlist.size()) {
             const std::size_t required = index + 1u;
             if (!DRW::reserve(vertlist, required))
@@ -13168,7 +13200,14 @@ bool DRW_LWPolyline::parseCode(int code, const std::unique_ptr<dxfReader>& reade
                 vertlist.push_back(std::move(parsedVertex));
             }
         }
-        ++occurrence;
+        if (field == 0u)
+            state = (state & ~countMask) | (occurrence + 1u);
+        else if (field >= 2u && !ordinal && xCount != 0u)
+            state = xCount; // One-based index of the last bound vertex.
+        else
+            ++state;
+        if (field >= 2u)
+            m_dxfVertexFieldCounts[0] |= sawOptional;
         vertex = vertlist[index];
         return vertex;
     };
@@ -13231,7 +13270,7 @@ bool DRW_LWPolyline::parseCode(int code, const std::unique_ptr<dxfReader>& reade
             || std::any_of(m_dxfVertexFieldCounts.cbegin(),
                            m_dxfVertexFieldCounts.cend(),
                            [this](std::uint32_t count) {
-                               return count > static_cast<std::uint32_t>(vertexnum);
+                               return (count & countMask) > static_cast<std::uint32_t>(vertexnum);
                            }))
             return false;
         m_dxfVertexCountSeen = true;
@@ -13254,15 +13293,26 @@ bool DRW_LWPolyline::parseCode(int code, const std::unique_ptr<dxfReader>& reade
 }
 
 bool DRW_LWPolyline::validateDxf() const {
+    constexpr std::uint32_t countMask = 0x3FFFFFFFu;
+    constexpr std::uint32_t grouped = 0x80000000u;
+    const std::uint32_t xCount = m_dxfVertexFieldCounts[0] & countMask;
+    // A grouped stream supplies no per-vertex delimiter for optional fields;
+    // a partially populated field array cannot be mapped without guessing.
+    if ((m_dxfVertexFieldCounts[0] & grouped) != 0u
+        && std::any_of(m_dxfVertexFieldCounts.cbegin() + 2,
+                       m_dxfVertexFieldCounts.cend(),
+                       [xCount](std::uint32_t count) {
+                           return count != 0u && count != xCount;
+                       }))
+        return false;
     const bool parsedVertexFields = std::any_of(
         m_dxfVertexFieldCounts.cbegin(), m_dxfVertexFieldCounts.cend(),
         [](std::uint32_t count) { return count != 0; });
     return (!parsedVertexFields
-            || m_dxfVertexFieldCounts[0] == vertlist.size())
+            || xCount == vertlist.size())
         && (!m_dxfVertexCountSeen
             || (vertlist.size() == static_cast<std::size_t>(vertexnum)
-                && m_dxfVertexFieldCounts[0]
-                    == static_cast<std::uint32_t>(vertexnum)))
+                && xCount == static_cast<std::uint32_t>(vertexnum)))
         && validatePayloadFields();
 }
 

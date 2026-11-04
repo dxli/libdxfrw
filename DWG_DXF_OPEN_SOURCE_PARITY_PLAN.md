@@ -846,6 +846,9 @@ keep strict refusal until a lossless qualified route exists. See the
 Older DXF output now refuses nonzero LWPOLYLINE vertex identifiers rather
 than silently dropping them; the earliest valid group-91 revision remains
 unqualified. See the [identifier receipt](docs/research/p6-lwpolyline-older-dxf-vertex-id-loss-2026-11-04.json).
+Sparse interleaved LWPOLYLINE optional fields now bind to their actual
+vertices; ambiguous grouped sparse arrays refuse rather than guess. Audit
+missing-Y handling separately. See the [sparse-field receipt](docs/research/p6-dxf-lwpolyline-sparse-vertex-fields-2026-11-04.json).
 
 DWG ELLIPSE dispatch now retains the specified WCS center and major axis in
 both extrusion modes. Generated six-version controls and an ODA-produced

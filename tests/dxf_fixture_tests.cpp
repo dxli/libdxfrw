@@ -25682,6 +25682,39 @@ void testMeshRawFieldTags(TestContext& t) {
     }
 }
 
+bool generateAmbiguousLwPolyline(const std::filesystem::path& path, bool binary, int mode) {
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    if (binary) stream.write("AutoCAD Binary DXF\r\n\032\0", 22);
+    std::unique_ptr<dxfWriter> tags = binary
+        ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&stream))
+        : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&stream));
+    tags->setVersion("AC1027", true);
+    tags->writeString(0, "SECTION"); tags->writeString(2, "HEADER");
+    tags->writeString(9, "$ACADVER"); tags->writeString(1, "AC1027");
+    tags->writeString(0, "ENDSEC"); tags->writeString(0, "SECTION");
+    tags->writeString(2, "ENTITIES"); tags->writeString(0, "LWPOLYLINE");
+    tags->writeString(100, "AcDbEntity"); tags->writeString(8, "0");
+    tags->writeString(100, "AcDbPolyline");
+    if (mode != 3) tags->writeInt32(90, 3);
+    if (mode == 0) { // Grouped coordinates with a sparse, unbound width array.
+        for (int i = 0; i < 3; ++i) tags->writeDouble(20, i + 2.);
+        for (int i = 0; i < 3; ++i) tags->writeDouble(10, i + 1.);
+        tags->writeDouble(40, .5);
+    } else if (mode == 3) { // Count follows fully interleaved vertices and optional fields.
+        for (int i = 0; i < 3; ++i) {
+            tags->writeDouble(10, i + 1.);tags->writeDouble(20, i + 2.);
+            if (i == 1) tags->writeDouble(42, .5);
+        }
+        tags->writeInt32(90, 3);
+    } else { // An interleaved record then a contradictory coordinate or duplicate field.
+        tags->writeDouble(10, 1.); tags->writeDouble(20, 2.); tags->writeDouble(40, .5);
+        if (mode == 1) {tags->writeDouble(10, 2.); tags->writeDouble(10, 3.);}
+        else {tags->writeDouble(40, .75); tags->writeDouble(10, 2.); tags->writeDouble(20, 3.);}
+    }
+    tags->writeString(0, "ENDSEC"); tags->writeString(0, "EOF");
+    return !tags->hasWriteError() && stream.good();
+}
+
 void testLwPolylinePointComponentOrder(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
@@ -25849,6 +25882,87 @@ void testLwPolylinePointComponentOrder(TestContext& t) {
         t.expect(diagnosticWriter.write(&diagnosticAdapter, DRW::AC1021, binary)
                      && diagnosticAdapter.accepted && diagnosticWriter.leftOut().empty(),
                  (format + " corrected same-writer retry clears the identifier diagnostic").c_str());
+        dx_data sparse;
+        auto sparsePolyline = std::make_unique<DRW_LWPolyline>();
+        for (const auto& point : vertices) sparsePolyline->addVertex(point);
+        for (const auto& vertex : sparsePolyline->vertlist) vertex->bulge = 0.;
+        sparsePolyline->vertlist[0]->stawidth = .1;
+        sparsePolyline->vertlist[2]->stawidth = .7;
+        sparsePolyline->vertlist[1]->endwidth = .8;
+        sparsePolyline->vertlist[1]->bulge = -.5;
+        sparsePolyline->vertlist[2]->identifier = 303;
+        sparse.mBlock->ent.push_back(sparsePolyline.release());
+        auto* sparseFollowing = new DRW_Line;
+        sparseFollowing->basePoint = {21.,22.,23.};sparseFollowing->secPoint = {24.,25.,26.};
+        sparse.mBlock->ent.push_back(sparseFollowing);
+        const auto* expectedSparse = static_cast<const DRW_LWPolyline*>(sparse.mBlock->ent.front());
+        dx_data sparseRead; dx_iface sparseWriter, sparseReader;
+        const bool sparseRoundtrip = sparseWriter.fileExport(reorderedPath.string(), DRW::AC1027, binary, &sparse, false)
+            && sparseReader.fileImport(reorderedPath.string(), &sparseRead, false);
+        const auto* actualSparse = sparseRoundtrip && sparseRead.mBlock != nullptr && !sparseRead.mBlock->ent.empty()
+            ? dynamic_cast<const DRW_LWPolyline*>(sparseRead.mBlock->ent.front()) : nullptr;
+        t.expect(actualSparse != nullptr && sameLwPolylinePayload(*actualSparse, *expectedSparse)
+                     && sparseRead.mBlock->ent.size() == 2u
+                     && sparseRead.mBlock->ent.back()->eType == DRW::LINE,
+                 (format + " sparse LWPOLYLINE optional fields remain attached to their vertices").c_str());
+        if (actualSparse != nullptr && decodedPolyline != nullptr) {
+            auto copied = std::make_unique<DRW_LWPolyline>(*actualSparse);
+            auto assigned = std::make_unique<DRW_LWPolyline>();
+            *assigned = *decodedPolyline;
+            copied->handle = DRW::NoHandle;assigned->handle = DRW::NoHandle;
+            dx_data copiedData;
+            copiedData.mBlock->ent.push_back(copied.release());
+            copiedData.mBlock->ent.push_back(assigned.release());
+            dx_iface copyWriter, copyReader;dx_data copyRead;
+            const bool copiedRoundtrip = copyWriter.fileExport(malformedPath.string(), DRW::AC1027, binary, &copiedData, false)
+                && copyReader.fileImport(malformedPath.string(), &copyRead, false);
+            const auto* first = copiedRoundtrip && copyRead.mBlock->ent.size() == 2u
+                ? dynamic_cast<const DRW_LWPolyline*>(copyRead.mBlock->ent.front()) : nullptr;
+            const auto* second = copiedRoundtrip && copyRead.mBlock->ent.size() == 2u
+                ? dynamic_cast<const DRW_LWPolyline*>(copyRead.mBlock->ent.back()) : nullptr;
+            t.expect(first != nullptr && second != nullptr && sameLwPolylinePayload(*first, *actualSparse)
+                         && sameLwPolylinePayload(*second, *decodedPolyline),
+                     (format + " copied and assigned parsed LWPOLYLINEs reset parser-only flags").c_str());
+        }
+        auto* editableSparse = static_cast<DRW_LWPolyline*>(sparse.mBlock->ent.front());
+        editableSparse->vertlist[1]->bulge = std::numeric_limits<double>::quiet_NaN();
+        {std::ofstream sentinel(malformedPath, std::ios::binary | std::ios::trunc);sentinel << "unchanged";}
+        const bool badSparseRefused = !sparseWriter.fileExport(malformedPath.string(), DRW::AC1027, binary, &sparse, false);
+        std::ifstream sparseSentinel(malformedPath, std::ios::binary);
+        t.expect(badSparseRefused
+                     && std::string(std::istreambuf_iterator<char>(sparseSentinel), {}) == "unchanged"
+                     && std::isnan(editableSparse->vertlist[1]->bulge)
+                     && editableSparse->vertlist[2]->identifier == 303,
+                 (format + " invalid sparse LWPOLYLINE leaves destination and caller intact").c_str());
+        editableSparse->vertlist[1]->bulge = -.5;
+        dx_data sparseRetry;dx_iface sparseRetryReader;
+        const bool sparseRetried = sparseWriter.fileExport(malformedPath.string(), DRW::AC1027, binary, &sparse, false)
+            && sparseRetryReader.fileImport(malformedPath.string(), &sparseRetry, false);
+        const auto* sparseRetryPolyline = sparseRetried && sparseRetry.mBlock != nullptr && !sparseRetry.mBlock->ent.empty()
+            ? dynamic_cast<const DRW_LWPolyline*>(sparseRetry.mBlock->ent.front()) : nullptr;
+        t.expect(sparseRetryPolyline != nullptr && sameLwPolylinePayload(*sparseRetryPolyline, *editableSparse),
+                 (format + " corrected same-writer sparse LWPOLYLINE retry retains each vertex").c_str());
+        for (int mode = 0; mode < 3; ++mode) {
+            PolylineCallbackProbe strictReader; dx_data rejectedData;
+            const bool made = generateAmbiguousLwPolyline(malformedPath, binary, mode);
+            const bool refused = made && !strictReader.fileImport(malformedPath.string(), &rejectedData, false);
+            t.expect(refused && strictReader.callbacks == 0u,
+                     (format + " ambiguous grouped, mixed or duplicate LWPOLYLINE fields refuse before callback").c_str());
+            dx_data recovered;
+            t.expect(strictReader.fileImport(sourcePath.string(), &recovered, false)
+                         && strictReader.callbacks == 1u,
+                     (format + " same-reader retry succeeds after ambiguous LWPOLYLINE refusal").c_str());
+        }
+        dx_data lateCountData;dx_iface lateCountReader;
+        const bool lateCount = generateAmbiguousLwPolyline(malformedPath, binary, 3)
+            && lateCountReader.fileImport(malformedPath.string(), &lateCountData, false);
+        const auto* latePolyline = lateCount && lateCountData.mBlock != nullptr && !lateCountData.mBlock->ent.empty()
+            ? dynamic_cast<const DRW_LWPolyline*>(lateCountData.mBlock->ent.front()) : nullptr;
+        t.expect(latePolyline != nullptr && latePolyline->vertlist.size() == 3u
+                     && latePolyline->vertlist[0]->bulge == 0.
+                     && latePolyline->vertlist[1]->bulge == .5
+                     && latePolyline->vertlist[2]->bulge == 0.,
+                 (format + " LWPOLYLINE group 90 after vertices preserves sparse binding").c_str());
         std::filesystem::remove(sourcePath, error);
         std::filesystem::remove(reorderedPath, error);
         std::filesystem::remove(malformedPath, error);
