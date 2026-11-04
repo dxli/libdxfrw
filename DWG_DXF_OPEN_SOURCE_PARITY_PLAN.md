@@ -134,6 +134,10 @@ Common entity LAYER and explicit LTYPE lookups now report unresolved or
 truncated non-null handles to the integrity ledger while preserving tolerant
 reads; null values, wire roles and output bindings still need proof
 ([receipt](docs/research/p6-dwg-entity-table-reference-diagnostics-2026-11-04.json)).
+The deferred table pass now applies the same missing-target and 64-bit alias
+diagnostic to LAYER→LTYPE resolution while retaining tolerant fallback names;
+wire-role and staged-output checks remain separate
+([receipt](docs/research/p4-dwg-layer-linetype-resolution-diagnostic-2026-11-04.json)).
 The proposed two-layer extension has the same issue and also accepts an
 unresolved or wrong-kind LINE layer handle while substituting layer 0. It must
 remain uncommitted until both reference paths are closed. Invalid explicit LINE

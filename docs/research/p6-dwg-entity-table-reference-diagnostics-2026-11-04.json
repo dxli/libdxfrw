@@ -25,7 +25,7 @@
     "src/libdwgr.h": "3c854d3a64524ea21decfeed8928a15b1ae4b86347b7fee7bb43ed3d77a89f73",
     "src/intern/dwgreader.cpp": "dbae0694efaa732709bcca946c9bdb85b7ce0431a90bb584c4892ad5af87ff00",
     "tests/CMakeLists.txt": "1efc6ec1ff1f2f7c7c7dd618dfe4e4323775befa75e2e8140d80b22c4d803274",
-    "tests/dwg_entity_table_ref_diagnostic_tests.cpp": "8a250bb9c476b4c646f9cb990608ec9f1d33417381ff5ee8ce234e623f57bddc",
+    "tests/dwg_entity_table_ref_diagnostic_tests.cpp": "41c874668986a2c04f1a068406a0b4a768ccf9b86506f3cdb296361f4b1f0685",
     "tests/dwg_ac1027_default_graph_strict_tests.cpp": "711f702cbf9d3d4dd1a779f80a3bbcfe4871657278f4288741153deb87241716",
     "tools/probe_dwg_entity_table_references.cpp": "bfdba4a050346b76ed116710df87195ff94098a9a603b2312a5afff41ae43577",
     "tools/mutate_ac1027_line_table_ref.py": "5249db8f9c7b452735ba6f7c5380af6a2ff1ade1ba03a4467b5479fdd9d32ad3"
@@ -92,5 +92,5 @@
       "sha256": "c5d0990749db9c8de45976819c8c833795202f03ebd0159e7e5993a79fb18ca8"
     }
   },
-  "integrated_validation": "Main workspace on d6bb9b50: both focused CTests passed 2/2 after rebuild."
+  "integrated_validation": "Main workspace on d6bb9b50: both focused CTests passed 2/2 after rebuild. The selector was extended with the table LAYER\u2192LTYPE helper across the same six versions; updated test-source SHA-256 is recorded."
 }

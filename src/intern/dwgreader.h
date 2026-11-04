@@ -1528,6 +1528,7 @@ protected:
                                   bool hasOffset = false) noexcept;
   void parseAttribs(DRW_Entity *e);
   void parseAttribs(DRW_TableEntry *e);
+  void resolveLayerLineTypeReference(DRW_Layer *layer) noexcept;
   std::string findTableName(DRW::TTYPE table, std::int32_t handle);
   void resolveDimensionTableReferences(DRW_Dimension &dimension);
   std::string findAppIdName(std::uint32_t handle) const;

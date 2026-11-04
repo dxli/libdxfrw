@@ -7134,6 +7134,26 @@ bool dwgReader::publishDwgClasses(std::vector<DwgStagedClass> &stagedClasses) {
   return true;
 }
 
+void dwgReader::resolveLayerLineTypeReference(DRW_Layer *layer) noexcept {
+  if (layer == nullptr)
+    return;
+  const std::uint32_t reference = layer->lTypeH.ref;
+  const auto target = ltypemap.find(reference);
+  if (target != ltypemap.end() && target->second != nullptr)
+    layer->lineType = target->second->name;
+
+  const bool truncated = layer->lTypeH.ref64 != reference;
+  if (truncated || (reference != 0u &&
+                    (target == ltypemap.end() || target->second == nullptr))) {
+    recordIntegrityDiagnostic(
+        DwgIntegritySeverity::Error, DwgIntegrityAddressSpace::None,
+        DwgIntegrityPhase::SectionParser,
+        DwgIntegrityCheckKind::LayerLineTypeReference, -1, -1, nullptr, 0u,
+        false, 0u, false, layer->handle, layer->handle != DRW::NoHandle,
+        layer->lTypeH.ref64, 0u, true);
+  }
+}
+
 void dwgReader::parseAttribs(DRW_Entity *e) {
   if (nullptr == e) {
     return;
@@ -8482,14 +8502,11 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
   if (!ret)
     return abortTablePhase();
 
-  // set linetype in layer
+  // Resolve LAYER linetype names after the LTYPE map is complete. A missing
+  // non-null reference keeps tolerant read behavior but makes strict
+  // completeness fail instead of silently retaining the default name.
   for (auto it = layermap.begin(); it != layermap.end(); ++it) {
-    DRW_Layer *ly = it->second;
-    std::uint32_t ref = ly->lTypeH.ref;
-    auto lt_it = ltypemap.find(ref);
-    if (lt_it != ltypemap.end()) {
-      ly->lineType = (lt_it->second)->name;
-    }
+    resolveLayerLineTypeReference(it->second);
   }
 
   // parse text styles, start with style Control

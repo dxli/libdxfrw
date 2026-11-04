@@ -1,0 +1,11 @@
+{
+  "schema": "libdxfrw-evidence-v1",
+  "id": "p4-dwg-layer-linetype-resolution-diagnostic-2026-11-04",
+  "base_commit": "3bce2f36",
+  "change": "After DWG table maps are loaded, LAYER linetype-name resolution now records an integrity Error for nonzero missing/wrong-kind targets and for 64-bit handles that alias through the 32-bit map key. Tolerant lookup and fallback behavior is retained.",
+  "validation": {
+    "command": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_entity_table_ref_diagnostic$' --output-on-failure",
+    "result": "1/1 passed; fixture-free controls cover valid, missing/wrong-kind, high-bit valid-low and high-bit zero-low handles across AC1015/1018/1021/1024/1027/1032."
+  },
+  "limits": "This validates the resolution diagnostic helper with real table maps; it does not prove original DWG handle role, owner membership, source-to-output identity, or native consumer behavior. Null-handle semantics remain unchanged."
+}

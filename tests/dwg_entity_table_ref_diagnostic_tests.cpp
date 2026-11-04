@@ -16,6 +16,7 @@ void operator delete(void* p,std::size_t) noexcept {std::free(p);}
 struct Reader final : dwgReader27 {
  explicit Reader(DRW::Version v=DRW::AC1027) : dwgReader27(std::unique_ptr<dwgBuffer>{},nullptr) {version=v;}
  using dwgReader::parseAttribs;
+ using dwgReader::resolveLayerLineTypeReference;
  void addRow(DwgIntegritySeverity severity,const char* section=nullptr) {
   recordIntegrityDiagnostic(severity,DwgIntegrityAddressSpace::None,DwgIntegrityPhase::SectionParser,
     DwgIntegrityCheckKind::EntityLayerReference,-1,-1,section);
@@ -30,6 +31,22 @@ template<class T> struct Entity : T {
  void wideLtype(std::uint64_t value) {this->lTypeH.ref64=value;this->lTypeH.ref=static_cast<std::uint32_t>(value);}
  void relative() {this->layerH.code=7;this->lTypeH.code=7;}
 };
+static bool checkRow(const Reader& r,DwgIntegrityCheckKind kind,std::uint64_t target,DRW::Version version);
+static bool layerControls(DRW::Version version) {
+ Reader r(version);
+ auto* ltype=new DRW_LType;ltype->name="Continuous";r.ltypemap.emplace(0x22,ltype);
+ DRW_Layer layer;layer.handle=0x44;layer.lTypeH.ref=0x22;layer.lTypeH.ref64=0x22;
+ r.resolveLayerLineTypeReference(&layer);
+ if(!r.m_integrityDiagnostics.empty()||layer.lineType!="Continuous")return false;
+ layer.lTypeH.ref=0x7e;layer.lTypeH.ref64=0x7e;r.resolveLayerLineTypeReference(&layer);
+ if(!checkRow(r,DwgIntegrityCheckKind::LayerLineTypeReference,0x7e,version))return false;
+ r.m_integrityDiagnostics.clear();layer.lTypeH.ref=0x22u;layer.lTypeH.ref64=0x100000022ull;
+ r.resolveLayerLineTypeReference(&layer);
+ if(!checkRow(r,DwgIntegrityCheckKind::LayerLineTypeReference,0x100000022ull,version))return false;
+ r.m_integrityDiagnostics.clear();layer.lTypeH.ref=0;layer.lTypeH.ref64=0x100000000ull;
+ r.resolveLayerLineTypeReference(&layer);
+ return checkRow(r,DwgIntegrityCheckKind::LayerLineTypeReference,0x100000000ull,version);
+}
 static bool checkRow(const Reader& r,DwgIntegrityCheckKind kind,std::uint64_t target,DRW::Version version) {
  if(r.m_integrityDiagnostics.size()!=1u)return false;const auto& d=r.m_integrityDiagnostics.front();
  return d.kind==kind && d.severity==DwgIntegritySeverity::Error && d.phase==DwgIntegrityPhase::SectionParser
@@ -60,7 +77,8 @@ int main(){
     || !controls<DRW_Block>(version) || !controls<DRW_Insert>(version) || !controls<DRW_Attrib>(version) || !controls<DRW_Attdef>(version)
     || !controls<DRW_Vertex>(version) || !controls<DRW_SeqEnd>(version) || !controls<DRW_Polyline>(version)
     || !controls<DRW_LWPolyline>(version) || !controls<DRW_Spline>(version) || !controls<DRW_Hatch>(version)
-    || !controls<DRW_Text>(version) || !controls<DRW_MText>(version) || !controls<DRW_DimLinear>(version) || !controls<DRW_DimRadial>(version))return 1;
+    || !controls<DRW_Text>(version) || !controls<DRW_MText>(version) || !controls<DRW_DimLinear>(version) || !controls<DRW_DimRadial>(version)
+    || !layerControls(version))return 1;
  }
 
  Reader reader;Entity<DRW_Line> line;line.setup(0x7e,0,0);
