@@ -654,6 +654,8 @@ tools/generate_iso8859_4.py
 tools/generate_symbol_casefold.py
 tools/geodata_north_witness.py
 tools/geodata_physical_v3_probe.py
+tools/j268_scratch_baseline.patch
+tools/j268_three_fixture_successor.py
 tools/make_ac1021_block_control_reactor_witness.py
 tools/make_p9_rtext_oda_input.py
 tools/mutate_r2004_header_suffix_probe.py
