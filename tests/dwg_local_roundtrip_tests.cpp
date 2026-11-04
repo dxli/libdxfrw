@@ -14145,6 +14145,15 @@ void addLocalAcdsHistoryClosure(dx_data& source,
     }
 }
 
+void setLocallyAuthoredModelerShell(DRW_ModelerGeometry& modeler) {
+    // These explicit shell values are part of generated test inputs; they
+    // are not inferred from a physical DWG's undecoded revision metadata.
+    modeler.m_hasDxfModelerFlag = true;
+    modeler.m_dxfModelerFlag = false;
+    modeler.m_hasDxfModelerUid = true;
+    modeler.m_dxfModelerUid = "{00000000-0000-0000-0000-000000000000}";
+}
+
 DRW_ModelerGeometry* addLocalAcdsDataStorageModeler(
     dx_data& source, std::uint32_t handle,
     const std::vector<std::uint8_t>& payload,
@@ -14155,6 +14164,8 @@ DRW_ModelerGeometry* addLocalAcdsDataStorageModeler(
     modeler->handle = handle;
     modeler->m_modelerVersion = 2;
     modeler->m_dwgSourceVersion = sourceVersion;
+    if (sourceVersion >= DRW::AC1027)
+        setLocallyAuthoredModelerShell(*modeler);
     modeler->m_hasModelerData = true;
     modeler->setHasDataStorageBinaryData(true);
     modeler->hasDataStorageRecord = true;
@@ -14495,6 +14506,7 @@ bool runDxfAcdsMultipleDataStorageProjection(
         modeler->handle = handle;
         modeler->m_modelerVersion = 2;
         modeler->m_dwgSourceVersion = DRW::AC1027;
+        setLocallyAuthoredModelerShell(*modeler);
         modeler->m_hasModelerData = true;
         modeler->setHasDataStorageBinaryData(true);
         modeler->hasDataStorageRecord = true;
@@ -15459,6 +15471,7 @@ bool runDxfTypedAcdsBoxRoundTrip(
     modeler->handle = modelerHandle;
     modeler->m_modelerVersion = 2;
     modeler->m_dwgSourceVersion = targetVersion;
+    setLocallyAuthoredModelerShell(*modeler);
     modeler->m_hasModelerData = true;
     modeler->m_historyHandle = historyHandle;
     modeler->setHasDataStorageBinaryData(true);
@@ -18716,30 +18729,54 @@ bool runDxfAcdsSchemaFingerprintRejectsMismatch(
     const std::vector<std::uint8_t> payload {
         'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
         0x01u, 0x02u, 0x03u, 0x04u};
-    for (int mismatch = 0; mismatch < 3; ++mismatch) {
+    for (bool binary : {false, true}) for (int mismatch = 0; mismatch < 6; ++mismatch) {
         const std::filesystem::path output = directory /
             ("libdxfrw-ac1027-acds-schema-mismatch-"
-             + std::to_string(mismatch) + ".dxf");
+             + std::to_string(mismatch) + (binary ? "-binary.dxf" : "-ascii.dxf"));
         std::error_code ec;
         std::filesystem::remove(output, ec);
         dx_data source;
-        addLocalAcdsDataStorageModeler(source, 0xFC20u, payload);
+        auto* modeler = addLocalAcdsDataStorageModeler(source, 0xFC20u, payload);
         DRW_DataStorageSection& storage = source.dataStorageSections.front();
+        const DRW_DataStorageSection valid = storage;
+        const DRW_ModelerGeometry validModeler = *modeler;
         if (mismatch == 0) {
             storage.schemaPropertyNames[2] = "Unqualified_Property";
         } else if (mismatch == 1) {
             storage.schemas[1].properties[1].type = 14u;
-        } else {
+        } else if (mismatch == 2) {
             storage.schemas[0].indexes[0] = 5u;
+        } else if (mismatch == 3) {
+            modeler->m_hasDxfModelerFlag = false;
+        } else if (mismatch == 4) {
+            modeler->m_hasDxfModelerUid = false;
+        } else {
+            modeler->m_dxfModelerUid.clear();
         }
 
         dx_iface exporter;
+        { std::ofstream sentinel(output, std::ios::binary); sentinel << "preserved"; }
         const bool exportOk = exporter.fileExport(
-            output.string(), DRW::AC1027, false, &source, false);
-        const bool rejectedWithoutPublication = !exportOk
-            && !std::filesystem::exists(output);
+            output.string(), DRW::AC1027, binary, &source, false);
+        std::ifstream prior(output, std::ios::binary);
+        const std::string previous{std::istreambuf_iterator<char>(prior), {}};
+        const bool rejectedWithoutPublication = !exportOk && previous == "preserved";
+        prior.close();
+        storage = valid;
+        *modeler = validModeler;
+        const bool repaired = rejectedWithoutPublication && exporter.fileExport(
+            output.string(), DRW::AC1027, binary, &source, false);
+        dx_data imported;
+        dx_iface reader;
+        const bool readback = repaired && reader.fileImport(output.string(), &imported, false)
+            && imported.rawDxfSections.size() == 1u;
+        std::string key;
+        std::vector<std::uint8_t> bytes;
+        const bool payloadPreserved = readback
+            && findAcdsRecordPayload(imported.rawDxfSections.front(), "ASM_Data", key, bytes)
+            && bytes == payload;
         std::filesystem::remove(output, ec);
-        if (!rejectedWithoutPublication)
+        if (!rejectedWithoutPublication || !payloadPreserved)
             return false;
     }
     return true;
@@ -20585,6 +20622,9 @@ bool nativePagedDataStorageProjection(bool faults = false,
             }
             if (!outputModeler || outputModeler->handle == 0x708u || outputModeler->m_historyHandle != 0u
                 || outputModeler->parentHandle != DRW::DxfModelSpaceBlockRecordHandle || outputModeler->layer != "0"
+                || !outputModeler->m_hasDxfModelerFlag || outputModeler->m_dxfModelerFlag
+                || !outputModeler->m_hasDxfModelerUid
+                || outputModeler->m_dxfModelerUid != "{00000000-0000-0000-0000-000000000000}"
                 || !imported.acshHistoryObjects.empty() || !imported.evaluationGraphs.empty()
                 || !imported.rawProxyObjects.empty()) return false;
             char key[16]{}; std::snprintf(key, sizeof(key), "%X", outputModeler->handle);
@@ -20614,6 +20654,22 @@ bool nativePagedDataStorageProjection(bool faults = false,
                 return std::string(std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}) == sentinel; };
             if (!saveSentinel() || publish(dx_dwgReadCompletenessPolicy::RequireComplete) || !preserved()) return false;
             ++strictRefusals;
+            // The generated DWG frame does not itself qualify the DXF shell
+            // flag or revision UID. Supply those explicitly for this local
+            // authoring control only after each missing-field refusal.
+            modeler->m_dxfModelerFlag = false;
+            modeler->m_dxfModelerUid = "{00000000-0000-0000-0000-000000000000}";
+            for (unsigned missing = 0; missing < 3u; ++missing) {
+                modeler->m_hasDxfModelerFlag = missing != 0u;
+                modeler->m_hasDxfModelerUid = missing != 1u;
+                modeler->m_dxfModelerUid = missing == 2u ? ""
+                    : "{00000000-0000-0000-0000-000000000000}";
+                if (!saveSentinel() || publish(dx_dwgReadCompletenessPolicy::AllowPartial)
+                    || !preserved()) return false;
+            }
+            modeler->m_hasDxfModelerFlag = true;
+            modeler->m_hasDxfModelerUid = true;
+            modeler->m_dxfModelerUid = "{00000000-0000-0000-0000-000000000000}";
             const unsigned lastFault = entityType == DRW::E3DSOLID ? 11u : 8u;
             for (unsigned fault = faults ? 1u : 0u; fault <= (faults ? lastFault : 0u); ++fault) {
                 auto& record = storage.records[recordIndex];
@@ -35867,6 +35923,11 @@ int main(int argc, char** argv) {
         return writeHatchReferenceFile(argv[2], std::string(argv[1]) == "--generate-hatch-references-binary") ? 0 : 1;
     } else if (argc == 3 && std::string(argv[1]) == "--verify-hatch-references") {
         return verifyHatchReferenceFile(argv[2]) ? 0 : 1;
+    } else if (argc == 2 && std::string(argv[1]) == "--acds-schema-shell-guards") {
+        const bool passed = runDxfAcdsSchemaFingerprintRejectsMismatch(directory);
+        std::cout << "ACDS schema and modeler shell refusal/retry: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
     } else if (argc == 2 && std::string(argv[1]) == "--acds-record-wire-controls") {
         return acdsRecordWireControls() ? 0 : 1;
     } else if (argc == 2 && std::string(argv[1]) == "--acds-raw-scalar-wire-controls") {

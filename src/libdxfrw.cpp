@@ -15732,6 +15732,16 @@ bool dxfRW::writeModelerGeometry(DRW_ModelerGeometry *ent) {
     const bool writeR2013PlusSab = isAcdsDxfVersion(version)
         && hasQualifiedR2013PlusAcdsRecord(
             *ent, m_rawDxfSections, version);
+    // A DWG-associated modeler currently does not decode the R2013+ DXF
+    // shell's flag and revision identifier from its source frame.
+    // Omitting them can cause consumers to synthesize different values even
+    // when the linked SAB bytes are exact. Require an explicit caller-provided
+    // shell until that source mapping is qualified.
+    if (writeR2013PlusSab
+        && (!ent->m_hasDxfModelerFlag || !ent->m_hasDxfModelerUid
+            || ent->m_dxfModelerUid.empty()))
+        return rejectDxfWriteWithReason(
+            "3DSOLID/REGION/BODY", "DWG modeler shell fields are not available");
     DRW_DBG("dxfRW::writeModelerGeometry R2013+ ACDSDATA SAB qualified: ");
     DRW_DBG(writeR2013PlusSab);
     DRW_DBG("\n");

@@ -19183,6 +19183,12 @@ void testDxfAcdsQualificationHexView(TestContext& t) {
             modeler.dataStorageHandle = modeler.handle;
             modeler.dataStorageHandleKey = "A01";
             modeler.dataStorageData = payload;
+            // This fixture authors the DXF shell explicitly; physical DWG
+            // shell values still require independent source qualification.
+            modeler.m_hasDxfModelerFlag = true;
+            modeler.m_dxfModelerFlag = false;
+            modeler.m_hasDxfModelerUid = true;
+            modeler.m_dxfModelerUid = "{00000000-0000-0000-0000-000000000000}";
 
             const bool wroteModeler = codec.writeModelerGeometry(&modeler);
             const bool wroteSentinel = wroteModeler

@@ -1284,6 +1284,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dwg_local_roundtrip --native-paged-datastorage-faults)
     set_tests_properties(dwg2dxf_native_paged_datastorage_faults PROPERTIES
         LABELS "fast;dwg;dxf;modeler;acds;blob;transaction;generated" TIMEOUT 60)
+    add_test(NAME libdxfrw_acds_schema_shell_guards
+        COMMAND libdxfrw_dwg_local_roundtrip --acds-schema-shell-guards)
+    set_tests_properties(libdxfrw_acds_schema_shell_guards PROPERTIES
+        LABELS "fast;dwg;dxf;modeler;acds;generated;transaction" TIMEOUT 30)
     add_test(NAME libdxfrw_acds_exact_record_wire_controls
         COMMAND libdxfrw_dwg_local_roundtrip --acds-record-wire-controls)
     set_tests_properties(libdxfrw_acds_exact_record_wire_controls PROPERTIES

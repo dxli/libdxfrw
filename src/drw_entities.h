@@ -1019,7 +1019,10 @@ public:
     std::uint16_t m_modelerVersion = 0;
     //! Presence/value of the R2013+ AcDbModelerGeometry group-290 field.
     //! Retained as a DXF shell field only; its producer-specific meaning is
-    //! intentionally not inferred here.
+    //! intentionally not inferred here. The DWG reader does not populate
+    //! this field or the UID below; output of a DWG-associated SAB requires
+    //! the caller to supply both explicitly until their source mapping is
+    //! qualified.
     bool m_hasDxfModelerFlag = false;
     bool m_dxfModelerFlag = false;
     //! Presence/value of the R2013+ AcDbModelerGeometry group-2 identifier.

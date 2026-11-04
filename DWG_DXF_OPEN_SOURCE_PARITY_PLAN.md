@@ -1045,6 +1045,11 @@ rendering semantics remain open.
   ownership is established by the source entmode and unique block record.
   Other source/producer profiles, complete output and semantics remain open;
   see the [physical join receipt](docs/research/p7-ac1027-physical-modeler-acds-sab-oda-byte-join-2026-11-03.json).
+  Map the DWG modeler flag and revision UID to the DXF shell before automatic
+  replay. A source-backed REGION experiment preserved SAB bytes but produced
+  different shell values after ODA reimport; DWG-associated SAB output now
+  requires explicitly supplied shell fields. The physical eight-name schema
+  remains gated. See the [shell-loss receipt](docs/research/p7-dwg-modeler-shell-loss-guard-2026-11-03.json).
 - Complete source placement, units/transforms, topology, trims, periodicity and
   spline geometry beyond locally verified analytic helpers. A local wireframe or
   repaired/count-only graph is not B-rep support evidence.
