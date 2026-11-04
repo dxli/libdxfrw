@@ -35,6 +35,7 @@
 #include <unordered_set>
 #include "handle_allocator.h"
 #include "intern/drw_textcodec.h"
+#include "intern/sabheader.h"
 #include "intern/dxfparserlimits.h"
 #include "intern/dxfreader.h"
 #include "intern/dxfstylefont.h"
@@ -1748,12 +1749,7 @@ bool hasQualifiedAc1015SatV1Payload(const DRW_ModelerGeometry& entity) {
 }
 
 bool hasSabBinaryFileSignature(const std::vector<std::uint8_t>& payload) {
-    static constexpr char signature[] = "ACIS BinaryFile";
-    return payload.size() >= sizeof(signature) - 1u
-        && std::equal(std::begin(signature), std::end(signature) - 1,
-                      payload.begin(), [](char expected, std::uint8_t actual) {
-                          return static_cast<std::uint8_t>(expected) == actual;
-                      });
+    return drw_hasSabMinimumHeader(payload);
 }
 
 bool isAcdsDxfVersion(DRW::Version version) {

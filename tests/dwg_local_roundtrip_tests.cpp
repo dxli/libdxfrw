@@ -13945,13 +13945,16 @@ bool runDataStorageThresholdBlobControls() {
                              vector.firstPageReferenceOffset, 1u);
 }
 
-std::vector<std::uint8_t> makeLocalSabCarrierToken() {
+std::vector<std::uint8_t> makeLocalSabCarrierToken(std::uint8_t suffix = 0u) {
     static constexpr char marker[] = "ACIS BinaryFile";
     std::vector<std::uint8_t> payload(marker, marker + sizeof(marker) - 1u);
-    payload.push_back(0u);
-    const std::array<std::uint8_t, 8> token = {
-        'L', 'O', 'C', 'A', 'L', 'T', 'E', 'S'};
-    payload.insert(payload.end(), token.begin(), token.end());
+    // Version 21800 followed by record count, entity count and flags, all
+    // little-endian 32-bit values. This is still only a framing control.
+    payload.insert(payload.end(), {0x28u, 0x55u, 0u, 0u,
+                                   0u, 0u, 0u, 0u,
+                                   0u, 0u, 0u, 0u,
+                                   0u, 0u, 0u, 0u});
+    payload.push_back(suffix);
     return payload;
 }
 
@@ -14474,14 +14477,11 @@ bool runDxfAcdsMultipleDataStorageProjection(
     std::filesystem::remove(reorderedChunkOutput, ec);
 
     const auto sab = [](std::uint8_t suffix) {
-        return std::vector<std::uint8_t>{
-            'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-            suffix, static_cast<std::uint8_t>(suffix + 1u),
-            static_cast<std::uint8_t>(suffix + 2u)};
+        return makeLocalSabCarrierToken(suffix);
     };
     std::vector<std::uint8_t> boxPayload = sab(0x21u);
     boxPayload.resize(256u);
-    for (std::size_t index = 18u; index < boxPayload.size(); ++index) {
+    for (std::size_t index = 32u; index < boxPayload.size(); ++index) {
         boxPayload[index] = static_cast<std::uint8_t>(
             (index * 37u + 0x5Bu) & 0xFFu);
     }
@@ -15462,9 +15462,7 @@ bool runDxfTypedAcdsBoxRoundTrip(
     constexpr std::uint32_t graphHandle = 0xFC22u;
     constexpr std::uint32_t boxHandle = 0xFC23u;
     constexpr std::uint32_t materialHandle = 0x96u;
-    const std::vector<std::uint8_t> payload{
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0x21u, 0x22u, 0x23u};
+    const std::vector<std::uint8_t> payload = makeLocalSabCarrierToken(0x21u);
 
     dx_data source;
     auto* modeler = new DRW_ModelerGeometry(DRW::E3DSOLID);
@@ -17296,12 +17294,11 @@ bool runDxfAcdsDataStorageProjection(
     std::filesystem::remove(output, ec);
 
     const std::uint32_t sourceHandle = pagedPayload ? 0x701u : 0xFC20u;
-    std::vector<std::uint8_t> payload {
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0x01u, 0x02u, 0x03u, 0x04u};
+    std::vector<std::uint8_t> payload = makeLocalSabCarrierToken(0x01u);
+    if (!pagedPayload) payload.resize(31u);
     if (pagedPayload) {
         payload.resize(DRW_DataStorageConst::DATA_RECORD_INLINE_MAX_SIZE + 1u);
-        for (std::size_t index = 19u; index < payload.size(); ++index)
+        for (std::size_t index = 32u; index < payload.size(); ++index)
             payload[index] = static_cast<std::uint8_t>(index * 37u);
     }
     const auto exactPagedWire = [&](const DRW_RawDxfSection& section) {
@@ -17382,6 +17379,37 @@ bool runDxfAcdsDataStorageProjection(
 
     dx_iface exporter;
     const bool blobVersionMismatch = pagedPayload && targetVersion != sourceVersion;
+    if (!binary && !pagedPayload && !reverseCallbackCollections
+        && !reverseEntityOrder && !reassignedClassIds && !paperSpaceModeler
+        && targetVersion == DRW::AC1027 && sourceVersion == DRW::AC1027) {
+        auto& record = source.dataStorageSections.front().records.front();
+        const auto saved = record;
+        auto shortHeader = payload;
+        shortHeader.pop_back();
+        record.payload = shortHeader;
+        record.dataByteLength = static_cast<std::uint32_t>(shortHeader.size());
+        sourceModeler->dataStorageData = shortHeader;
+        const std::string sentinel = "prior destination at SAB header boundary";
+        { std::ofstream stream(output, std::ios::binary | std::ios::trunc); stream << sentinel; }
+        const bool refused = !exporter.fileExport(output.string(), targetVersion,
+                                                 binary, &source, false);
+        std::ifstream stream(output, std::ios::binary);
+        const std::string after(std::istreambuf_iterator<char>{stream}, {});
+        stream.close();
+        record = saved;
+        sourceModeler->dataStorageData = payload;
+        if (!refused || after != sentinel) return false;
+        std::vector<std::uint8_t> dxfText(30u, 'A');
+        const std::string marker = "ACIS BinaryFile";
+        std::copy(marker.begin(), marker.end(), dxfText.begin());
+        if (!runDxfModelerCarrierRoundTrip(DRW::AC1021, dxfText,
+                                         "short-dxf-origin-ascii", false)
+            || !runDxfModelerCarrierRoundTrip(DRW::AC1021, dxfText,
+                                             "short-dxf-origin-binary", true))
+            return false;
+        // The regular successful path below retries on this same facade and
+        // verifies 31-byte carrier readback and DXF-origin AcDs replay.
+    }
     if (pagedPayload && (blobFault || blobVersionMismatch)) {
         auto& record = source.dataStorageSections.front().records.front();
         const auto saved = record;
@@ -17423,6 +17451,72 @@ bool runDxfAcdsDataStorageProjection(
         if (!keepOutput)
             std::filesystem::remove(output, ec);
         return false;
+    }
+
+    if (!binary && !pagedPayload && !reverseCallbackCollections
+        && !reverseEntityOrder && !reassignedClassIds && !paperSpaceModeler
+        && targetVersion == DRW::AC1027 && sourceVersion == DRW::AC1027) {
+        // A DXF-origin opaque ACDSDATA section remains replayable even when
+        // its carrier is too short to qualify a DWG-associated projection.
+        auto shortSource = output;
+        shortSource += ".short-source.dxf";
+        auto shortReplay = output;
+        shortReplay += ".short-replay.dxf";
+        struct CleanupShortDxf {
+            std::filesystem::path first, second;
+            ~CleanupShortDxf() { std::error_code error;
+                std::filesystem::remove(first, error);
+                std::filesystem::remove(second, error); }
+        } cleanupShort{shortSource, shortReplay};
+        std::ifstream input(output);
+        std::vector<std::string> lines;
+        for (std::string line; std::getline(input, line);) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            lines.push_back(std::move(line));
+        }
+        bool asmData = false, changedLength = false, changedBytes = false;
+        for (std::size_t i = 0; i + 1u < lines.size(); i += 2u) {
+            const int code = std::stoi(lines[i]);
+            if (code == 2 && lines[i + 1u] == "ASM_Data") asmData = true;
+            else if (asmData && code == 94 && !changedLength) {
+                if (std::stoi(lines[i + 1u]) != 31) return false;
+                lines[i + 1u] = "30";
+                changedLength = true;
+            } else if (asmData && code == 310 && changedLength && !changedBytes) {
+                if (lines[i + 1u].size() != 62u) return false;
+                lines[i + 1u].resize(60u);
+                changedBytes = true;
+                break;
+            }
+        }
+        if (!changedLength || !changedBytes) return false;
+        { std::ofstream authored(shortSource);
+          for (const auto& line : lines) authored << line << '\n';
+          if (!authored) return false; }
+        dx_data fromDxf;
+        dx_iface dxfImporter, dxfExporter;
+        if (!dxfImporter.fileImport(shortSource.string(), &fromDxf, false)
+            || fromDxf.sourceFormat != dx_source_format::DXF
+            || !dxfExporter.fileExport(shortReplay.string(), targetVersion,
+                                       false, &fromDxf, false)) return false;
+        dx_data replayed;
+        dx_iface readReplay;
+        if (!readReplay.fileImport(shortReplay.string(), &replayed, false)
+            || replayed.rawDxfSections.size() != fromDxf.rawDxfSections.size())
+            return false;
+        const auto acds = [](const dx_data& value) -> const DRW_RawDxfSection* {
+            for (const auto& section : value.rawDxfSections)
+                if (section.m_name == "ACDSDATA") return &section;
+            return nullptr;
+        };
+        const auto* originalAcds = acds(fromDxf);
+        const auto* replayedAcds = acds(replayed);
+        std::vector<LocalAcdsRecordPayload> before, after;
+        if (!originalAcds || !replayedAcds
+            || !collectAcdsRecordPayloads(*originalAcds, "ASM_Data", before)
+            || !collectAcdsRecordPayloads(*replayedAcds, "ASM_Data", after)
+            || before.size() != 1u || before.front().second.size() != 30u
+            || before != after) return false;
     }
 
     dx_data imported;
@@ -17711,14 +17805,10 @@ bool runDxfAcdsBlockModelerProjection(
     const std::string outerBlockName = "LOCAL_ACDS_OUTER_BLOCK";
     // This locally authored marker payload tests carrier association and
     // owner remapping only; it is not a valid or semantically decoded SAB.
-    const std::vector<std::uint8_t> payload {
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0x01u, 0x02u, 0x03u, 0x04u};
-    std::vector<std::uint8_t> regionPayload {
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0xA1u, 0xB2u, 0xC3u, 0xD4u};
+    const std::vector<std::uint8_t> payload = makeLocalSabCarrierToken(0x01u);
+    std::vector<std::uint8_t> regionPayload = makeLocalSabCarrierToken(0xA1u);
     regionPayload.resize(256u);
-    for (std::size_t index = 19u; index < regionPayload.size(); ++index) {
+    for (std::size_t index = 32u; index < regionPayload.size(); ++index) {
         regionPayload[index] = static_cast<std::uint8_t>(
             (index * 37u + 0xA1u) & 0xFFu);
     }
@@ -18258,12 +18348,8 @@ bool runDxfAcdsBlockMultiBodyRejectsMutation(
     constexpr std::uint32_t solidHandle = 0xFC20u;
     constexpr std::uint32_t regionHandle = 0xFC10u;
     constexpr std::uint32_t foreignHandle = 0xFC99u;
-    const std::vector<std::uint8_t> solidPayload {
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0x11u, 0x22u, 0x33u, 0x44u};
-    const std::vector<std::uint8_t> regionPayload {
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0xA1u, 0xB2u, 0xC3u, 0xD4u};
+    const std::vector<std::uint8_t> solidPayload = makeLocalSabCarrierToken(0x11u);
+    const std::vector<std::uint8_t> regionPayload = makeLocalSabCarrierToken(0xA1u);
 
     dx_data source;
     DRW_Block_Record blockRecord;
@@ -18366,9 +18452,7 @@ bool runDxfAcdsBlockModelerRejectsOrphanAssociation(
     constexpr std::uint32_t blockHandle = 0xFC31u;
     constexpr std::uint32_t orphanHandle = 0xFC99u;
     const std::string blockName = "LOCAL_ACDS_ORPHAN_MODEL_BLOCK";
-    const std::vector<std::uint8_t> payload {
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0x01u, 0x02u, 0x03u, 0x04u};
+    const std::vector<std::uint8_t> payload = makeLocalSabCarrierToken(0x01u);
 
     dx_data source;
     DRW_Block_Record blockRecord;
@@ -18437,9 +18521,7 @@ bool runDxfAcdsBlockModelerRejectsMismatchedOwner(
     constexpr std::uint32_t wrongBlockHandle = 0xFC33u;
     const std::string blockName = "LOCAL_ACDS_OWNER_MODEL_BLOCK";
     const std::string wrongBlockName = "LOCAL_ACDS_DIFFERENT_OWNER_BLOCK";
-    const std::vector<std::uint8_t> payload {
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0x01u, 0x02u, 0x03u, 0x04u};
+    const std::vector<std::uint8_t> payload = makeLocalSabCarrierToken(0x01u);
 
     dx_data source;
     DRW_Block_Record blockRecord;
@@ -18516,9 +18598,7 @@ bool runDxfAcdsRegionWithoutHistoryProjection(
     constexpr std::uint32_t sourceHandle = 0xFC20u;
     // Deliberately opaque marker bytes: this regression checks the REGION /
     // ACDSDATA transport and owner key only, not ACIS validity or geometry.
-    const std::vector<std::uint8_t> payload {
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0x01u, 0x02u, 0x03u, 0x04u};
+    const std::vector<std::uint8_t> payload = makeLocalSabCarrierToken(0x01u);
     dx_data source;
     DRW_ModelerGeometry* sourceRegion = addLocalAcdsDataStorageModeler(
         source, sourceHandle, payload, DRW::REGION, false);
@@ -18674,9 +18754,7 @@ bool runDxfAcdsHistoryClosureRejectsAmbiguity(
         ("libdxfrw-ac1027-acds-" + suffix + ".dxf");
     std::error_code ec;
     std::filesystem::remove(output, ec);
-    const std::vector<std::uint8_t> payload {
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0x01u, 0x02u, 0x03u, 0x04u};
+    const std::vector<std::uint8_t> payload = makeLocalSabCarrierToken(0x01u);
     dx_data source;
     addLocalAcdsDataStorageModeler(source, 0xFC20u, payload);
     if (duplicateHistoryProxy) {
@@ -18698,9 +18776,7 @@ bool runDxfAcdsHistoryClosureRejectsAmbiguity(
 
 bool runDxfAcdsHistoryClosureRejectsMixedClasses(
     const std::filesystem::path& directory) {
-    const std::vector<std::uint8_t> payload {
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0x01u, 0x02u, 0x03u, 0x04u};
+    const std::vector<std::uint8_t> payload = makeLocalSabCarrierToken(0x01u);
     for (int mixed = 0; mixed < 2; ++mixed) {
         const std::filesystem::path output = directory /
             (mixed == 0 ? "libdxfrw-acds-mixed-raw-proxy.dxf"
@@ -18726,9 +18802,7 @@ bool runDxfAcdsHistoryClosureRejectsMixedClasses(
 
 bool runDxfAcdsSchemaFingerprintRejectsMismatch(
     const std::filesystem::path& directory) {
-    const std::vector<std::uint8_t> payload {
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0x01u, 0x02u, 0x03u, 0x04u};
+    const std::vector<std::uint8_t> payload = makeLocalSabCarrierToken(0x01u);
     for (bool binary : {false, true}) for (int mismatch = 0; mismatch < 6; ++mismatch) {
         const std::filesystem::path output = directory /
             ("libdxfrw-ac1027-acds-schema-mismatch-"
@@ -18789,9 +18863,7 @@ bool runDxfAcdsHistoryClosureRejectsMalformedEdges(
         "missing-material", "wrong-subclass", "proxy-bit-size",
         "proxy-padding", "missing-class-report", "duplicate-class-binding",
         "wrong-class-name", "history-cycle"};
-    const std::vector<std::uint8_t> payload {
-        'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i', 'l', 'e',
-        0x01u, 0x02u, 0x03u, 0x04u};
+    const std::vector<std::uint8_t> payload = makeLocalSabCarrierToken(0x01u);
     for (std::size_t index = 0; index < cases.size(); ++index) {
         const std::filesystem::path output = directory /
             (std::string("libdxfrw-ac1027-acds-edge-") + cases[index]
@@ -21865,12 +21937,49 @@ bool runRawModelerDataStorageReplayContract() {
         "acds-duplicate-handle", duplicateHandleSection, payload, true);
     const bool decoyMarkerRejected = rejectsWrite(
         "acds-decoy-marker", decoyMarkerSection, payload, true);
+    // A source-bound carrier cannot contain only a truncated fixed SAB
+    // header. The same writer must succeed after explicit 31-byte repair.
+    auto header31 = makeLocalSabCarrierToken();
+    header31.resize(31u);
+    auto header30 = header31;
+    header30.pop_back();
+    const auto shortSection = withLocalDataStorageSearch(
+        makeLocalDataStorageRecordAcDsBytes(0x708u, 7u, header30));
+    const auto repairedSection = withLocalDataStorageSearch(
+        makeLocalDataStorageRecordAcDsBytes(0x708u, 7u, header31));
+    const auto boundaryPath = makeOutputPath("acds-sab-header-boundary");
+    struct BoundaryCleanup { std::filesystem::path path; ~BoundaryCleanup() {
+        std::error_code error; std::filesystem::remove(path, error);
+    }} boundaryCleanup{boundaryPath};
+    { std::ofstream sentinel(boundaryPath, std::ios::binary); sentinel << "prior destination"; }
+    dwgRW boundaryWriter(boundaryPath.string().c_str());
+    LocalRawReplayInterface boundaryAdapter(
+        &boundaryWriter, false, shortSection, true, header30);
+    bool headerBoundary = !boundaryWriter.write(&boundaryAdapter, DRW::AC1027, true);
+    { std::ifstream before(boundaryPath, std::ios::binary);
+      headerBoundary = headerBoundary
+          && std::string(std::istreambuf_iterator<char>{before}, {}) == "prior destination"; }
+    boundaryAdapter.acdsSection_.m_data = repairedSection;
+    boundaryAdapter.modelerTyped_.dataStorageData = header31;
+    headerBoundary = headerBoundary
+        && boundaryWriter.write(&boundaryAdapter, DRW::AC1027, true);
+    if (headerBoundary) {
+        dwgRW boundaryReader(boundaryPath.string().c_str());
+        LocalRawReplayInterface boundaryRead;
+        headerBoundary = boundaryReader.read(&boundaryRead, true)
+            && boundaryRead.data_.dataStorageSections.size() == 1u;
+        if (headerBoundary) {
+            const auto* record = boundaryRead.data_.dataStorageSections.front()
+                .findRecordByHandle(0x708u);
+            headerBoundary = record && record->payload == header31;
+        }
+    }
     if (!missingSearchRejected || !wrongSearchHandleRejected || !wrongSearchIndexRejected
         || !swappedSearchRejected || !duplicatedSearchRejected || !reorderedDataIndexRejected
         || !malformedSearchRejected || !missingSectionRejected || !wrongPayloadRejected
         || !wrongHandleRejected || !wrongSchemaRejected
         || !orphanMarkerRejected || !duplicateHandleRejected
-        || !decoyMarkerRejected)
+        || !decoyMarkerRejected || !headerBoundary)
         std::cerr << "AcDs negatives: missing=" << missingSectionRejected
                   << " payload=" << wrongPayloadRejected
                   << " handle=" << wrongHandleRejected
@@ -21883,7 +21992,7 @@ bool runRawModelerDataStorageReplayContract() {
         && malformedSearchRejected && missingSectionRejected && wrongPayloadRejected
         && wrongHandleRejected && wrongSchemaRejected
         && orphanMarkerRejected && duplicateHandleRejected
-        && decoyMarkerRejected
+        && decoyMarkerRejected && headerBoundary
         ? true : fail("negative binding controls");
 }
 

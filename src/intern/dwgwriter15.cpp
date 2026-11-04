@@ -38,6 +38,7 @@
 #include "dwgreader.h"
 #include "dwgsafety.h"
 #include "dwgutil.h"
+#include "sabheader.h"
 
 namespace {
 
@@ -6961,6 +6962,7 @@ bool dwgWriter15::replayRawObject(
                               typedModeler->dataStorageHandle));
         }
         const bool hasExactStorageMarker = typedModeler != nullptr
+            && drw_hasSabMinimumHeader(typedModeler->dataStorageData)
             && typedModeler->hasDataStoragePayloadMarker
             && typedModeler->dataStoragePayloadMarkerSection == "datastore"
             && typedModeler->dataStoragePayloadMarkerLength == sabMarkerLength
@@ -7586,6 +7588,7 @@ bool dwgWriter15::validatePendingModelerDataStorageReplay(
             || pending.recordHandleKey.empty() || pending.payload.empty()
             || pending.payload.size()
                    > DRW_DataStorageConst::PAYLOAD_BLOB_SECTION_CAP
+            || !drw_hasSabMinimumHeader(pending.payload)
             || !pending.hasPayloadMarker
             || pending.payloadMarkerSection != "datastore"
             || pending.payloadMarkerLength != sabMarkerLength

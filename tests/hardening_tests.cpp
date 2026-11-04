@@ -19143,7 +19143,8 @@ void testDxfAcdsQualificationHexView(TestContext& t) {
     static constexpr char hexDigits[] = "0123456789ABCDEF";
     const std::vector<std::uint8_t> payload = {
         'A', 'C', 'I', 'S', ' ', 'B', 'i', 'n', 'a', 'r', 'y', 'F', 'i',
-        'l', 'e', 0xFCu, 0x53u, 0x00u, 0x00u};
+        'l', 'e', 0x28u, 0x55u, 0x00u, 0x00u,
+        0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
     std::string hex;
     for (const std::uint8_t byte : payload) {
         hex.push_back(hexDigits[byte >> 4u]);
@@ -19164,9 +19165,15 @@ void testDxfAcdsQualificationHexView(TestContext& t) {
     DRW_RawDxfSection malformed = qualified;
     malformed.m_groups.back() = DRW_Variant(310, hex.substr(0, hex.size() - 1u)
         + "G");
+    auto shortPayload = payload;
+    shortPayload.pop_back();
+    DRW_RawDxfSection shortSection = qualified;
+    shortSection.m_groups[5] = DRW_Variant(94, static_cast<int>(shortPayload.size()));
+    shortSection.m_groups[6] = DRW_Variant(310, hex.substr(0, hex.size() - 2u));
 
     for (const bool binary : {false, true}) {
         const auto writeQualified = [&](const DRW_RawDxfSection& section,
+                                        const std::vector<std::uint8_t>& carrier,
                                         bool expected) {
             std::ostringstream output(std::ios::out | std::ios::binary);
             dxfRW codec(nullptr);
@@ -19188,7 +19195,7 @@ void testDxfAcdsQualificationHexView(TestContext& t) {
             modeler.hasDataStorageRecord = true;
             modeler.dataStorageHandle = modeler.handle;
             modeler.dataStorageHandleKey = "A01";
-            modeler.dataStorageData = payload;
+            modeler.dataStorageData = carrier;
             // This fixture authors the DXF shell explicitly; physical DWG
             // shell values still require independent source qualification.
             modeler.m_hasDxfModelerFlag = true;
@@ -19202,14 +19209,15 @@ void testDxfAcdsQualificationHexView(TestContext& t) {
             t.expect(wroteModeler == expected
                          && codec.m_writeError != expected
                          && (expected ? wroteSentinel : output.str().empty())
-                         && modeler.dataStorageData == payload,
+                         && modeler.dataStorageData == carrier,
                      expected
                          ? "ACDS group-310 string view qualifies exact SAB bytes"
                          : "malformed ACDS group-310 hex fails before publication");
         };
 
-        writeQualified(qualified, true);
-        writeQualified(malformed, false);
+        writeQualified(qualified, payload, true);
+        writeQualified(malformed, payload, false);
+        writeQualified(shortSection, shortPayload, false);
     }
 }
 

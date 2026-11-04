@@ -1062,6 +1062,9 @@ rendering semantics remain open.
   ([receipt](docs/research/p7-acds-search-index-modeler-output-2026-11-03.json)).
   Raw modeler replay also requires the ODA-specified SAB prefix at payload
   offset zero; full SAB framing and semantics remain open ([receipt](docs/research/p7-acds-modeler-sab-prefix-2026-11-03.json)).
+  DWG-associated replay additionally requires the four fixed 32-bit header
+  words to be present (31 bytes total); their values and the remaining body
+  are not validated by this guard. See the [minimum-header receipt](docs/research/p7-dwg-modeler-sab-fixed-header-minimum-2026-11-04.json).
   A physical AC1027 source now independently matches three modeler-to-AcDs
   associations and complete SAB payloads against ODA DXF; model-space
   ownership is established by the source entmode and unique block record.

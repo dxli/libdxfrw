@@ -53,6 +53,7 @@
 #include "intern/dwgutil.h"
 #include "intern/dwgbuffer.h"
 #include "intern/dwgbufferw.h"
+#include "intern/sabheader.h"
 #include "intern/dwgreader.h"
 #include "intern/dwg_fixed_handles.h"
 #include "intern/dxftablecontent.h"
@@ -5747,12 +5748,7 @@ void addAcdsMarkerSchema(DRW_RawDxfSection& section, int index,
 }
 
 bool hasSabSignature(const std::vector<std::uint8_t>& payload) {
-    static constexpr char signature[] = "ACIS BinaryFile";
-    return payload.size() >= sizeof(signature) - 1u
-        && std::equal(std::begin(signature), std::end(signature) - 1,
-                      payload.begin(), [](char expected, std::uint8_t actual) {
-                          return static_cast<std::uint8_t>(expected) == actual;
-                      });
+    return drw_hasSabMinimumHeader(payload);
 }
 
 bool hasPngSignature(const std::vector<std::uint8_t>& payload) {
