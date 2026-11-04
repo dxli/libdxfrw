@@ -727,6 +727,53 @@ bool hasTypedProxyGraphics(const DRW_Entity& entity) noexcept {
     return entity.numProxyGraph != 0 || !entity.proxyGraphics.empty();
 }
 
+struct LightPreviewContext {
+    const dxfRW* writer;
+    const DRW_Light* entity;
+    bool armed;
+    bool approved;
+    bool resolving;
+    LightPreviewContext* previous;
+};
+thread_local LightPreviewContext* lightPreviewContext = nullptr;
+class LightPreviewWriteScope final {
+public:
+    LightPreviewWriteScope(const dxfRW* writer, const DRW_Light* entity) noexcept
+        : current{writer, entity, entity != nullptr
+              && hasTypedProxyGraphics(*entity)
+              && entity->proxyGraphicsProvenance().replayAuthorized,
+              false, false, lightPreviewContext} { lightPreviewContext = &current; }
+    ~LightPreviewWriteScope() noexcept { lightPreviewContext = current.previous; }
+    LightPreviewWriteScope(const LightPreviewWriteScope&) = delete;
+    LightPreviewWriteScope& operator=(const LightPreviewWriteScope&) = delete;
+private:
+    LightPreviewContext current;
+};
+bool lightPreviewResolverActive(const dxfRW* writer) noexcept {
+    for (auto* scope = lightPreviewContext; scope != nullptr; scope = scope->previous)
+        if (scope->writer == writer && scope->resolving) return true;
+    return false;
+}
+class LightPreviewResolverScope final {
+public:
+    explicit LightPreviewResolverScope(const dxfRW* writer) noexcept {
+        for (auto* scope = lightPreviewContext; scope != nullptr; scope = scope->previous) {
+            if (scope->writer == writer && scope->approved) {
+                selected = scope;
+                previous = scope->resolving;
+                scope->resolving = true;
+                break;
+            }
+        }
+    }
+    ~LightPreviewResolverScope() noexcept { if (selected) selected->resolving = previous; }
+    LightPreviewResolverScope(const LightPreviewResolverScope&) = delete;
+    LightPreviewResolverScope& operator=(const LightPreviewResolverScope&) = delete;
+private:
+    LightPreviewContext* selected = nullptr;
+    bool previous = false;
+};
+
 struct WipeoutPreviewContext {
     const dxfRW* writer;
     const DRW_Wipeout* entity;
@@ -775,6 +822,21 @@ bool isQualifiedDwgWipeoutPreview(const std::string& bytes) noexcept {
     return true;
 }
 
+bool matchesLightPreview(const DRW_Entity& entity, DRW::Version targetVersion,
+                         const std::string& targetCodePage) {
+    const auto& p = entity.proxyGraphicsProvenance();
+    static constexpr char expected[] = {8,0,0,0,0,0,0,0};
+    return entity.eType == DRW::LIGHT && typeid(entity) == typeid(DRW_Light)
+        && p.replayAuthorized && p.origin == DRW_ProxyGraphicsOrigin::ParsedDxf
+        && (p.encoding == DRW_ProxyGraphicsEncoding::DxfAscii
+            || p.encoding == DRW_ProxyGraphicsEncoding::DxfBinary)
+        && p.sourceVersion == DRW::AC1027 && targetVersion == DRW::AC1027
+        && p.countCode == 160 && !p.sourceCodePage.empty() && p.sourceCodePage == targetCodePage
+        && p.declaredByteCount == sizeof(expected) && entity.numProxyGraph == sizeof(expected)
+        && entity.proxyGraphics.size() == sizeof(expected)
+        && std::memcmp(entity.proxyGraphics.data(), expected, sizeof(expected)) == 0;
+}
+
 bool canReplayTypedProxyGraphics(const DRW_Entity& entity,
                                  DRW::Version targetVersion,
                                  const std::string& targetCodePage,
@@ -793,6 +855,15 @@ bool canReplayTypedProxyGraphics(const DRW_Entity& entity,
         return false;
     }
 
+    if (entity.eType == DRW::LIGHT || dynamic_cast<const DRW_Light*>(&entity) != nullptr) {
+        const auto* light = dynamic_cast<const DRW_Light*>(&entity);
+        if (entity.eType != DRW::LIGHT || light == nullptr || typeid(entity) != typeid(DRW_Light)
+            || lightPreviewContext == nullptr || lightPreviewContext->writer != activeWriter
+            || lightPreviewContext->entity != light || !lightPreviewContext->armed) return false;
+        lightPreviewContext->armed = false;
+        lightPreviewContext->approved = matchesLightPreview(entity, targetVersion, targetCodePage);
+        return lightPreviewContext->approved;
+    }
     if (provenance.origin == DRW_ProxyGraphicsOrigin::ParsedDwg
         && (entity.eType == DRW::WIPEOUT
             || dynamic_cast<const DRW_Wipeout*>(&entity) != nullptr)) {
@@ -5756,7 +5827,7 @@ bool dxfRW::writeRequiredString(int code, const std::string& value) {
 }
 
 bool dxfRW::preflightDxfWrite() noexcept {
-    if (m_dxfWriteInspecting || m_dxfWriteFinalizing || m_writeError || writer == nullptr || writer->hasWriteError()) {
+    if (lightPreviewResolverActive(this) || m_dxfWriteInspecting || m_dxfWriteFinalizing || m_writeError || writer == nullptr || writer->hasWriteError()) {
         m_writeError = true;
         return false;
     }
@@ -6651,6 +6722,14 @@ bool dxfRW::writeEntity(DRW_Entity *ent, bool captureSourceHandle,
     }
     if (version > DRW::AC1015 && ent->transparency != DRW::Opaque) {
         writer->writeInt32(440, ent->transparency);
+    }
+    if (const auto* light = dynamic_cast<const DRW_Light*>(ent)) {
+        if (((lightPreviewContext && lightPreviewContext->approved) || (hasTypedProxyGraphics(*ent)
+                && ent->proxyGraphicsProvenance().replayAuthorized))
+            && (!lightPreviewContext || !lightPreviewContext->approved || lightPreviewContext->writer != this
+                || lightPreviewContext->entity != light
+                || !matchesLightPreview(*ent, version, writer->getCodePage())))
+            return failDxfWrite();
     }
     if (hasTypedProxyGraphics(*ent)
         && ent->proxyGraphicsProvenance().replayAuthorized) {
@@ -9036,6 +9115,7 @@ std::uint32_t dxfRW::remapObjectHandle(std::uint32_t handle) const noexcept {
 std::uint32_t dxfRW::resolveReference(std::uint32_t handle) const {
     if (handle == 0 || !m_referenceResolver)
         return handle;
+    LightPreviewResolverScope lightScope(this);
     return m_referenceResolver(handle);
 }
 
@@ -13728,11 +13808,14 @@ bool dxfRW::writeLight(DRW_Light *ent) {
     // dropped on DWG->DXF export; this re-emits them (D4 write-path preservation).
     if (version < DRW::AC1021)
         return rejectUnsupportedDxfWrite("LIGHT");
-    if (!preflightEntity(ent))
+    if (!preflightDxfWrite() || ent == nullptr) {
+        m_writeError = true;
         return false;
+    }
     if (!ent->validateDxf())
         return rejectDxfWriteWithReason(
             "LIGHT", "contains unsupported or unrepresented fields");
+    LightPreviewWriteScope previewScope(this, ent);
     EntityRecordScope scope(*this, ent);
     writer->writeString(0, "LIGHT");
     if (!writeEntity(ent))

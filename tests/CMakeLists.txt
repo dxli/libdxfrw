@@ -4926,3 +4926,12 @@ target_include_directories(libdxfrw_dxf_sparse_material_raw_tests PRIVATE ${CMAK
 target_link_libraries(libdxfrw_dxf_sparse_material_raw_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dxf_sparse_material_raw COMMAND libdxfrw_dxf_sparse_material_raw_tests)
 set_tests_properties(libdxfrw_dxf_sparse_material_raw PROPERTIES LABELS "dxf;dwg;fast;material;transaction" TIMEOUT 30)
+
+add_executable(libdxfrw_light_dxf_proxy_replay_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/light_dxf_proxy_replay_tests.cpp)
+target_compile_features(libdxfrw_light_dxf_proxy_replay_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_light_dxf_proxy_replay_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_light_dxf_proxy_replay_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_light_dxf_proxy_replay_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_light_dxf_proxy_replay COMMAND libdxfrw_light_dxf_proxy_replay_tests)
+set_tests_properties(libdxfrw_light_dxf_proxy_replay PROPERTIES LABELS "fast;dxf;light;transaction" TIMEOUT 30)

@@ -550,6 +550,10 @@ consumers keep the prior input refusal
 DXF-origin LIGHT group 421 true color now has bounded ASCII/Binary transport;
 DWG CMC mapping and complete LIGHTLIST graph output remain open
 ([color receipt](docs/research/p6-light-dxf-421-true-color-2026-11-04.json)).
+An explicitly authorized low-level LIGHT preview route retains one observed
+AC1027 cache with matching revision and codepage; the caller remains responsible
+for cache freshness, and automatic adapter replay remains refused
+([preview receipt](docs/research/p5-ac1027-light-preview-explicit-2026-11-04.json)).
 The DXF LIGHTLIST parser also distinguishes in-subclass LIGHT references from
 the record's own group-5 handle. Physical whole-source conversion and graph
 output remain open ([reference receipt](docs/research/p5-lightlist-dxf-reference-self-handle-2026-11-04.json)).

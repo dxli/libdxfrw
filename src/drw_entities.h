@@ -353,7 +353,9 @@ public:
     //! Explicitly acknowledge that the current public cache bytes are fresh,
     //! complete, and appropriate for replay. Revoke before editing; after an
     //! edit, re-authorize only after checking the cache again. Writers never
-    //! replay this cache without explicit authorization.
+    //! replay this cache without explicit authorization. The bounded LIGHT
+    //! DXF preview route requires parsed AC1027 provenance and same-revision
+    //! output; authorization does not detect later geometry or cache changes.
     bool authorizeProxyGraphicsReplay() {
         return authorizeProxyGraphicsReplay(
             m_proxyGraphicsProvenance.sourceVersion,

@@ -543,6 +543,7 @@ tests/legacy_attdef_scope_controls.h
 tests/legacy_blockref_relation_tests.cpp
 tests/legacy_entities_compound_join_tests.cpp
 tests/legacy_identity_controls.h
+tests/light_dxf_proxy_replay_tests.cpp
 tests/ltype_string_area_test_helpers.h
 tests/material_dwg_test_helpers.h
 tests/material_normal_role_tests.cpp
@@ -671,6 +672,7 @@ tools/audit_ac1024_rastervariables_source.py
 tools/audit_ac1024_tilted_geometry.py
 tools/audit_ac1024_vport_null_roles.py
 tools/audit_ac1027_header_suffix_compare.py
+tools/audit_ac1027_light_preview.py
 tools/audit_ac1027_planar_sab_geometry.py
 tools/audit_ac1027_sab_brlcad_rays.py
 tools/audit_dwg_hatch_ellipse_edge.py
@@ -710,6 +712,7 @@ tools/author_ac1021_varied_geometry.py
 tools/author_ac1027_1032_writer_control.py
 tools/author_dwg_legacy_extrusion.py
 tools/author_light_dxf_421.py
+tools/author_selected_ac1027_light.py
 tools/author_wipeout_ac1024_frame1.py
 tools/author_wipeout_direct_nod.py
 tools/bounded_process.py
@@ -803,6 +806,7 @@ tools/probe_dxf_sparse_lwpolyline.cpp
 tools/probe_geodata_physical_capture.cpp
 tools/probe_librecad3_native_dxf.cpp
 tools/probe_light_dxf_421.cpp
+tools/probe_light_dxf_preview.cpp
 tools/probe_lightlist_dxf_reference.cpp
 tools/probe_lightlist_physical_capture.cpp
 tools/probe_polyline_cross_scope.cpp
