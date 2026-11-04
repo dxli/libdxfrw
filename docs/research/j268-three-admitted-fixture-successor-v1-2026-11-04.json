@@ -8,7 +8,9 @@
     "targetDxfVersion": "AC1024",
     "timeoutSeconds": 4
   },
+  "historicalJ268ContentHashesRecovered": false,
   "historicalJ268MembershipRecovered": false,
+  "historicalJ268PathRowsRecovered": true,
   "kind": "j268-three-admitted-fixture-successor-v1",
   "promotesSupportClaims": false,
   "research": {
@@ -27,10 +29,10 @@
       "date": "2026-09-15",
       "githubCheck": "Authenticated connector fetch_commit_workflow_runs returned zero pull-request-triggered runs for the historical commit in both LibreCAD/libdxfrw and dxli/libdxfrw; that endpoint filters to PR-triggered runs and first page, so this is not proof that all historical artifacts are absent.",
       "retainedSummary": "28 available paths; four seconds per input; five upgraded improvements; zero baseline-success/current-failure results; colorwh.dwg timed out in upgraded run and baseline failed.",
-      "unresolved": "No per-row membership or set digest in this commit. No inference that these three successor fixtures were members of J268."
+      "unresolved": "The commit did not contain per-row results. A later review recovered all 28 path basenames and exit-status rows from the original local execution transcript; see j268-original-execution-transcript-recovery-2026-11-04.json. Source-byte hashes at sweep time and the historical set digest remain unproven. No inference that these three successor fixtures were members of J268."
     },
     "nextSteps": [
-      "Locate the original S292 28-row hash/status report from a durable private or local execution record, if one exists; verify independent historical provenance and original source/tool identities before asserting membership.",
+      "Recover the original S292 sweep input bytes or contemporaneous per-file hashes, proving immutable association with the recovered 28 row basenames before asserting any historical set digest.",
       "Run a separately versioned successor with exact target/standalone source and tool dependency closure, semantic preservation and error-disposition checks; extend the eligible fixture cohort only with documented provenance.",
       "Keep J268 DEFERRED_EXTERNAL and non-promoting; never substitute this successor set digest for the unknown historical set digest."
     ],
