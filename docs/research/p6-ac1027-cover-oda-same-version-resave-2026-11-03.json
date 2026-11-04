@@ -67,5 +67,25 @@
       "status": "both returned 0; all 1575/1583 logical section bytes match the local decoder",
       "window": "Each peer output is 29696 bytes with zeros beyond the logical section length; these buffer contents do not establish suffix semantics."
     }
+  },
+  "repeatResave": {
+    "inputSha256": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42",
+    "tool": "ODA File Converter 27.1.0.0 verified native binary",
+    "settings": "ACAD2013 DWG; recursion 0; audit 0; separate processes and output directories",
+    "outputs": [
+      {
+        "dwgSha256": "933aa934d2926be419207d2e3c4801c23b0dfa8b8b6e0be5dbb77d091f2f6b78",
+        "decodedHeaderSha256": "dd7307e9181a24b0dcea31d396ea2c9c2f8786d28420c9c17c2e37c8e64fa7fd",
+        "suffixSha256": "56f76f165e93638b82f1bd6eb5d80cd6a4e4da252415853cf21582f1cb3bc326"
+      },
+      {
+        "dwgSha256": "9eb8b77cae07230f11604a9a8f75cd46af1a7e34653f6c6f9b086c757f84f8b7",
+        "decodedHeaderSha256": "3e8860cdc0dd57f9365ea475337614636ff8563e1eac000bfa620516182307f0",
+        "suffixSha256": "d38cc7a280cd4496b1192043d72fab0c61cb2f466677330cd939c4942d99b973"
+      }
+    ],
+    "method": "The existing scratch dwgReader27-based section extractor uses the libdxfrw parseDataPage to write the exact 1583-byte logical HEADER for each output; no independent decoder was rerun on these two additional files.",
+    "observation": "Both repeat saves carry 739 bytes after offset 844, but each suffix and each full DWG differ from the prior resave and from each other. Prior versus repeat 1 has no identical positions; XOR of each paired suffix byte is either 0x40 or 0xC0 (the lower seven bits of the XOR are always 0x40). Prior versus repeat 2 also has no identical positions and every paired XOR has low bit 1.",
+    "interpretation": "The runs reveal structured variation across saves of the same source. These observations do not identify the generator, establish semantic equivalence or prove padding; the suffix remains unclaimed and strict output is refused."
   }
 }
