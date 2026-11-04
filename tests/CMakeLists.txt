@@ -2504,6 +2504,10 @@ add_test(NAME libdxfrw_section_objects_allocation_retry
     COMMAND libdxfrw_dxf_fixture_tests --section-objects-allocation-retry)
 set_tests_properties(libdxfrw_section_objects_allocation_retry PROPERTIES
     LABELS "fast;dxf;section;graph;allocation;transaction" TIMEOUT 120)
+add_test(NAME libdxfrw_xrecord_objects_allocation_retry
+    COMMAND libdxfrw_dxf_fixture_tests --xrecord-objects-allocation-retry)
+set_tests_properties(libdxfrw_xrecord_objects_allocation_retry PROPERTIES
+    LABELS "fast;dxf;xrecord;graph;allocation;transaction" TIMEOUT 120)
 add_test(NAME libdxfrw_pointcloud_objects_allocation_retry
     COMMAND libdxfrw_dxf_fixture_tests --pointcloud-objects-allocation-retry)
 set_tests_properties(libdxfrw_pointcloud_objects_allocation_retry PROPERTIES

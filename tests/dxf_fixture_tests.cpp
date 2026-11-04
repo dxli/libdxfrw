@@ -7701,6 +7701,226 @@ void testViewLiveSectionReferenceClosure(TestContext& t) {
     }
 }
 
+void testXRecordObjectsAllocationRetry(TestContext& t) {
+    class XRecordAllocationWriter final : public dx_iface {
+    public:
+        void writeObjects() override {
+            objectsCallbackReached = true;
+            if (!armAllocationFailure) {
+                dx_iface::writeObjects();
+                return;
+            }
+            materialAllocationCountdown = allocationOffset;
+            dx_iface::writeObjects();
+            remainingAllocationCountdown = materialAllocationCountdown;
+            materialAllocationCountdown = -1;
+        }
+
+        bool armAllocationFailure{false};
+        bool objectsCallbackReached{false};
+        long allocationOffset{0L};
+        long remainingAllocationCountdown{-1L};
+    };
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-xrecord-objects-allocation-"
+           + std::to_string(nonce));
+    std::error_code error;
+    if (!std::filesystem::create_directory(directory, error) || error) {
+        t.expect(false,
+                 "temporary XRECORD OBJECTS allocation directory is available");
+        return;
+    }
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{directory};
+
+    const auto outputPath = directory / "xrecord-objects.dxf";
+    const std::string outputFilename = outputPath.string();
+    const auto outputBytes = [&outputPath]() {
+        std::ifstream input(outputPath, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input), {});
+    };
+    const auto sourceWithRecord = []() {
+        dx_data source;
+        source.hasNamedObjectDictionary = true;
+        source.namedObjectDictionary.handle = 0xB0u;
+        source.namedObjectDictionary.hardOwner = 1;
+        source.namedObjectDictionary.m_entries.push_back(
+            {"NOD_XRECORD", 0x5u,
+             DRW_Dictionary::Entry::DxfHandleCode::HardOwner});
+        DRW_XRecord record;
+        record.handle = 0x5u;
+        record.parentHandle = 0xB0u;
+        record.m_dataEntries.emplace_back(1, UTF8STRING("allocation-payload"));
+        source.xRecords.push_back(std::move(record));
+        return source;
+    };
+    const auto readbackMatches = [&outputFilename]() {
+        dx_data decoded;
+        dx_iface reader;
+        if (!reader.fileImport(outputFilename, &decoded, false)
+            || !decoded.hasNamedObjectDictionary
+            || decoded.namedObjectDictionary.handle == 0u
+            || decoded.namedObjectDictionary.handle == DRW::NoHandle)
+            return false;
+        const auto entry = std::find_if(
+            decoded.namedObjectDictionary.m_entries.begin(),
+            decoded.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& value) {
+                return value.m_name == "NOD_XRECORD";
+            });
+        if (entry == decoded.namedObjectDictionary.m_entries.end()
+            || entry->m_handle == 0u || entry->m_handle == DRW::NoHandle
+            || entry->m_dxfHandleCode
+                != DRW_Dictionary::Entry::DxfHandleCode::HardOwner
+            || std::count_if(
+                   decoded.namedObjectDictionary.m_entries.begin(),
+                   decoded.namedObjectDictionary.m_entries.end(),
+                   [](const DRW_Dictionary::Entry& value) {
+                       return value.m_name == "NOD_XRECORD";
+                   }) != 1)
+            return false;
+        if (std::count_if(
+                decoded.xRecords.begin(), decoded.xRecords.end(),
+                [&entry](const DRW_XRecord& value) {
+                    return value.handle == entry->m_handle;
+                }) != 1)
+            return false;
+        const auto record = std::find_if(
+            decoded.xRecords.begin(), decoded.xRecords.end(),
+            [&entry](const DRW_XRecord& value) {
+                return value.handle == entry->m_handle;
+            });
+        return record != decoded.xRecords.end()
+            && record->parentHandle == decoded.namedObjectDictionary.handle
+            && record->m_dataEntries.size() == 1u
+            && record->m_dataEntries.front().code() == 1
+            && record->m_dataEntries.front().content.s != nullptr
+            && *record->m_dataEntries.front().content.s
+                == "allocation-payload";
+    };
+    const auto sourceUnchanged = [](const dx_data& source) {
+        return source.hasNamedObjectDictionary
+            && source.namedObjectDictionary.handle == 0xB0u
+            && source.namedObjectDictionary.hardOwner == 1
+            && source.namedObjectDictionary.m_entries.size() == 1u
+            && source.namedObjectDictionary.m_entries.front().m_name
+                == "NOD_XRECORD"
+            && source.namedObjectDictionary.m_entries.front().m_handle == 0x5u
+            && source.namedObjectDictionary.m_entries.front().m_dxfHandleCode
+                == DRW_Dictionary::Entry::DxfHandleCode::HardOwner
+            && source.xRecords.size() == 1u
+            && source.xRecords.front().handle == 0x5u
+            && source.xRecords.front().parentHandle == 0xB0u
+            && source.xRecords.front().m_dataEntries.size() == 1u
+            && source.xRecords.front().m_dataEntries.front().content.s != nullptr
+            && *source.xRecords.front().m_dataEntries.front().content.s
+                == "allocation-payload";
+    };
+
+    for (const bool binary : {false, true}) {
+        constexpr long allocationProbe = 1000000L;
+        XRecordAllocationWriter measureAdapter;
+        dx_data measureData = sourceWithRecord();
+        measureAdapter.armAllocationFailure = true;
+        measureAdapter.allocationOffset = allocationProbe;
+        const bool measuredWrite = measureAdapter.fileExport(
+            outputFilename, DRW::AC1027, binary, &measureData, false, true);
+        const long objectAllocations = allocationProbe
+            - measureAdapter.remainingAllocationCountdown;
+        const bool calibrated = measuredWrite
+            && measureAdapter.objectsCallbackReached
+            && measureAdapter.remainingAllocationCountdown > 0L
+            && measureAdapter.remainingAllocationCountdown < allocationProbe
+            && objectAllocations > 0L
+            && readbackMatches();
+        if (!calibrated) {
+            std::cerr << "XRECORD OBJECTS allocation calibration binary="
+                      << binary << " written=" << measuredWrite
+                      << " callback=" << measureAdapter.objectsCallbackReached
+                      << " remaining="
+                      << measureAdapter.remainingAllocationCountdown
+                      << " allocations=" << objectAllocations << '\n';
+        }
+
+        bool everyOffsetRolledBack = calibrated;
+        bool everyOffsetRetried = calibrated;
+        long injectedFailures = 0L;
+        long firstRollbackFailure = -1L;
+        long firstRetryFailure = -1L;
+        for (long offset = 0L; calibrated && offset < objectAllocations;
+             ++offset) {
+            const std::string sentinel =
+                "XRECORD OBJECTS allocation sentinel\n";
+            {
+                std::ofstream seed(outputPath,
+                                   std::ios::binary | std::ios::trunc);
+                seed << sentinel;
+            }
+
+            XRecordAllocationWriter adapter;
+            dx_data source = sourceWithRecord();
+            adapter.armAllocationFailure = true;
+            adapter.allocationOffset = offset;
+            const std::size_t failuresBefore = materialFailedAllocations;
+            const bool failed = !adapter.fileExport(
+                outputFilename, DRW::AC1027, binary, &source, false, true);
+            materialAllocationCountdown = -1;
+            const bool rolledBack = failed
+                && adapter.objectsCallbackReached
+                && materialFailedAllocations == failuresBefore + 1u
+                && outputBytes() == sentinel
+                && sourceUnchanged(source);
+            everyOffsetRolledBack = everyOffsetRolledBack && rolledBack;
+            if (rolledBack)
+                ++injectedFailures;
+            else if (firstRollbackFailure < 0L)
+                firstRollbackFailure = offset;
+
+            adapter.armAllocationFailure = false;
+            adapter.objectsCallbackReached = false;
+            const bool retried = rolledBack && adapter.fileExport(
+                outputFilename, DRW::AC1027, binary, &source, false, true);
+            const bool retryReadback = retried
+                && adapter.objectsCallbackReached
+                && sourceUnchanged(source)
+                && readbackMatches();
+            everyOffsetRetried = everyOffsetRetried && retryReadback;
+            if (rolledBack && !retryReadback && firstRetryFailure < 0L)
+                firstRetryFailure = offset;
+        }
+
+        if (!everyOffsetRolledBack || !everyOffsetRetried) {
+            std::cerr << "XRECORD OBJECTS allocation summary binary="
+                      << binary << " calibrated=" << calibrated
+                      << " allocations=" << objectAllocations
+                      << " injectedFailures=" << injectedFailures
+                      << " firstRollbackFailure=" << firstRollbackFailure
+                      << " firstRetryFailure=" << firstRetryFailure << '\n';
+        }
+        t.expect(calibrated && everyOffsetRolledBack
+                     && injectedFailures == objectAllocations,
+                 binary
+                     ? "binary XRECORD OBJECTS sweep rolls back every measured allocation"
+                     : "ASCII XRECORD OBJECTS sweep rolls back every measured allocation");
+        t.expect(everyOffsetRetried,
+                 binary
+                     ? "binary XRECORD OBJECTS sweep retries on the same adapter and reads back its graph"
+                     : "ASCII XRECORD OBJECTS sweep retries on the same adapter and reads back its graph");
+        std::cout << "XRECORD OBJECTS allocation profile binary=" << binary
+                  << " measured=" << objectAllocations
+                  << " rolledBack=" << injectedFailures
+                  << " retry=" << everyOffsetRetried << '\n';
+    }
+}
+
 void testSectionObjectsAllocationRetry(TestContext& t) {
     class SectionAllocationWriter final : public dx_iface {
     public:
@@ -66507,6 +66727,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testSectionObjectsAllocationRetry(context);
         std::cout << "SECTION OBJECTS allocation rollback/retry: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--xrecord-objects-allocation-retry") {
+        TestContext context;
+        testXRecordObjectsAllocationRetry(context);
+        std::cout << "XRECORD OBJECTS allocation rollback/retry: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
