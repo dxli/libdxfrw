@@ -35525,7 +35525,12 @@ bool runBlockRecordXrefMetadataRoundTrip(
 
 } // namespace
 
+#include "dwg_ellipse_wcs_test.h"
+
 int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--dwg-ellipse-wcs-oda-source") {
+        return runDwgEllipseWcsOdaSource(argv[2]) ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--dwg-fixed-metadata-pointer") {
         const bool passed = runDwgFixedMetadataPointerControls(std::filesystem::temp_directory_path());
         std::cout << "DWG fixed metadata header pointer: " << (passed ? "PASS" : "FAIL") << '\n';
@@ -35900,6 +35905,12 @@ int main(int argc, char** argv) {
         const bool passed = runDxfNonUnitExtrusionPolicy(false, directory, false)
             && runDxfNonUnitExtrusionPolicy(true, directory, false);
         std::cout << "DXF OCS arbitrary-axis cutoff, ASCII/binary: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    } else if (argc == 2
+        && std::string(argv[1]) == "--dwg-ellipse-wcs-extrusion") {
+        const bool passed = runDwgEllipseWcsExtrusion(directory);
+        std::cout << "DWG ELLIPSE WCS coordinates in both read modes: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 2

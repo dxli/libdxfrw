@@ -11839,7 +11839,9 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
       case dwgType::ELLIPSE: {
         DRW_Ellipse e;
         if (entryParse(e, buff, bs, ret)) {
-          emitWithExtrusion(e, output, &DRW_Interface::addEllipse);
+          // ODA v5.4.1 section 20.4.39: the center and semi-major axis
+          // are already WCS, even when the plane normal is non-default.
+          output.appendValue(e, &DRW_Interface::addEllipse);
         }
         break;
       }

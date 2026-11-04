@@ -2958,6 +2958,11 @@ if(TARGET dwg2dxf)
     endforeach()
 endif()
 
+add_test(NAME dwg_ellipse_wcs_extrusion
+    COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip> --dwg-ellipse-wcs-extrusion)
+set_tests_properties(dwg_ellipse_wcs_extrusion PROPERTIES
+    LABELS "fast;dwg;ellipse;extrusion" TIMEOUT 30)
+
 add_test(
     NAME dxf_mpolygon_metadata_boundary_roundtrip
     COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip> --mpolygon-metadata
