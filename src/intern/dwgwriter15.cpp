@@ -6369,6 +6369,15 @@ bool dwgWriter15::writeDwgObjects() {
         DRW_LType byLayer = m_haveLtypeByLayer ? m_ltypeByLayer : DRW_LType{};
         DRW_LType continuous = m_haveLtypeContinuous ? m_ltypeContinuous
                                                       : DRW_LType{};
+        const auto setSyntheticLtypeCommon = [this](DRW_LType& value, bool supplied) {
+            if (!supplied && m_version >= DRW::AC1018) {
+                value.setDwgCommonObjectState(0, 1, false);
+                value.xrefBlockHandle.code = DRW::DwgHardPointer;
+            }
+        };
+        setSyntheticLtypeCommon(byBlock, m_haveLtypeByBlock);
+        setSyntheticLtypeCommon(byLayer, m_haveLtypeByLayer);
+        setSyntheticLtypeCommon(continuous, m_haveLtypeContinuous);
         byBlock.name = "BYBLOCK";
         byLayer.name = "BYLAYER";
         continuous.name = "CONTINUOUS";

@@ -8156,7 +8156,12 @@ bool DRW_LType::encodeDwgResolved(DRW::Version version, dwgBufferW *buf,
         hb, kLtypeControl,
         static_cast<std::int32_t>(reactorHandles.size()), xDictFlag,
         &reactorHandles, xDictHandle);
-    hb->putHandle(makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer));
+    dwgHandle xref = makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer);
+    // Preserve an explicitly typed null; legacy untyped nulls stay unchanged.
+    if (version >= DRW::AC1018 && xrefBlockHandle.ref == 0u
+        && xrefBlockHandle.code == DRW::DwgHardPointer)
+        xref.code = DRW::DwgHardPointer;
+    hb->putHandle(xref);
     for (int i = 0; i < size; ++i) {
         const std::size_t index = static_cast<std::size_t>(i);
         std::uint32_t ref = 0;

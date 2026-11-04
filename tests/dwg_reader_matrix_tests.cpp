@@ -15160,6 +15160,21 @@ public:
         ++lines;
         lineEnd = line.secPoint;
     }
+    void addLType(const DRW_LType& ltype) override {
+        const std::array<std::string, 3> names{{"BYBLOCK", "BYLAYER", "CONTINUOUS"}};
+        for (std::size_t i = 0; i < names.size(); ++i) {
+            if (ltype.name == names[i]) {
+                ++ltypeCounts[i];
+                ltypeFlags[i] = ltype.extensionDictionaryFlag();
+                ltypeXrefCodes[i] = ltype.xrefBlockHandle.code;
+                ltypeXrefRefs[i] = ltype.xrefBlockHandle.ref;
+            }
+        }
+    }
+    std::array<std::size_t, 3> ltypeCounts{};
+    std::array<std::uint8_t, 3> ltypeFlags{};
+    std::array<std::uint8_t, 3> ltypeXrefCodes{};
+    std::array<std::uint32_t, 3> ltypeXrefRefs{};
     void addLayer(const DRW_Layer& layer) override {
         if (layer.name == "0") {
             ++layerZeroCount;
@@ -15689,7 +15704,70 @@ void testLayerZeroDefaults(TestContext& t, DRW::Version version,
     }
 }
 
+template<class Writer>
+void testBuiltinLtypeDefaults(TestContext& t, DRW::Version version,
+                              const std::string& label) {
+    for (int mode = 0; mode < 4; ++mode) {
+        std::stringbuf output(std::ios::out | std::ios::binary);
+        std::ofstream stream;
+        static_cast<std::ostream&>(stream).rdbuf(&output);
+        DRW_Header header;
+        Writer writer(&stream, &header);
+        const bool prepared = writer.prepareDwgClassManifest()
+            && writer.writeFileHeaderStub() && writer.writeDwgHeader()
+            && writer.writeDwgClasses();
+        t.expect(prepared, "builtin LTYPE preparation: " + label);
+        if (!prepared) continue;
+        DRW_LType caller;
+        caller.name = "BYBLOCK";
+        caller.setDwgCommonObjectState(0, 0, false);
+        if (mode == 2) caller.alignment = 256;
+        if (mode == 3) caller.xrefBlockHandle.code = DRW::DwgHardPointer;
+        if (mode != 0)
+            t.expect(writer.addLType(caller) == DRW::DwgLtypeByBlockHandle,
+                     "caller BYBLOCK registered: " + label);
+        if (mode == 2) {
+            const auto before = writer.buffer();
+            t.expect(!writer.writeDwgObjects() && writer.buffer() == before
+                         && output.str().empty(),
+                     "invalid BYBLOCK rolls back without output: " + label);
+            caller.alignment = 65;
+            t.expect(writer.addLType(caller) == DRW::DwgLtypeByBlockHandle,
+                     "corrected BYBLOCK registered on same writer: " + label);
+        }
+        DRW_Line line;
+        line.basePoint = DRW_Coord(1, 2, 3);
+        line.secPoint = DRW_Coord(4, 5, 6);
+        const bool published = writer.writeDwgObjects() && writer.encodeEntity(&line)
+            && writer.emitDeferredBlockControl() && writer.finalizeHeaderHandseed()
+            && writer.writeDwgHandles() && writer.writeSecondHeader() && writer.finalize();
+        t.expect(published, "builtin LTYPE complete publication: " + label);
+        if (!published) continue;
+        const auto file = output.str();
+        std::vector<std::uint8_t> bytes(file.begin(), file.end());
+        HeaderPublicationSink sink;
+        dwgRW reader("");
+        const bool read = reader.readBuffer(bytes.data(), bytes.size(), &sink, false);
+        bool exact = read && sink.lines == 1u;
+        for (std::size_t i = 0; i < 3; ++i) {
+            const bool synthesized = (i != 0u || mode == 0) && version >= DRW::AC1018;
+            const bool typedCaller = i == 0u && mode == 3 && version >= DRW::AC1018;
+            exact = exact && sink.ltypeCounts[i] == 1u
+                && sink.ltypeFlags[i] == (synthesized ? 1u : 0u)
+                && sink.ltypeXrefCodes[i] == ((synthesized || typedCaller) ? DRW::DwgHardPointer : 0u)
+                && sink.ltypeXrefRefs[i] == 0u;
+        }
+        t.expect(exact, "builtin LTYPE source state and following LINE survive readback: " + label);
+    }
+}
+
 void testHeaderWriters(TestContext& t) {
+    testBuiltinLtypeDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
+    testBuiltinLtypeDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
+    testBuiltinLtypeDefaults<dwgWriter21>(t, DRW::AC1021, "AC1021");
+    testBuiltinLtypeDefaults<dwgWriter24>(t, DRW::AC1024, "AC1024");
+    testBuiltinLtypeDefaults<dwgWriter27>(t, DRW::AC1027, "AC1027");
+    testBuiltinLtypeDefaults<dwgWriter32>(t, DRW::AC1032, "AC1032");
     testLayerZeroDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
     testLayerZeroDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
     testLayerZeroDefaults<dwgWriter21>(t, DRW::AC1021, "AC1021");

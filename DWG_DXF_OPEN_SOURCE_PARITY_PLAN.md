@@ -896,6 +896,10 @@ typed-null xref state; ODA still requires the layer plot-style graph.
 Implement its early class admission, collision-safe identities, HEADER/NOD
 and placeholder edges, caller override and rollback using the six-version
 [graph subplan](docs/research/p6-default-plotstyle-graph-research-2026-11-04.json).
+Synthetic R2004+ BYBLOCK, BYLAYER and CONTINUOUS linetypes now preserve their
+witnessed missing-extension and typed-null xref states. With the separately
+probed plot-style graph, ODA advances to a VIEWPORT error; the graph is not
+yet integrated. See the [linetype receipt](docs/research/p6-synthetic-ltype-xdict-xref-2026-11-04.json).
 AC1021 has a separate source-observed framing and
 model/paper-reference discrepancy requiring its own producer witness and
 string/footer investigation. See the [boundary receipt](docs/research/p6-block-control-handle-boundary-2026-11-04.json).
