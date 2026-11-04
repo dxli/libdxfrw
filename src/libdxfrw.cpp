@@ -35729,6 +35729,10 @@ bool dxfRW::writeDbColor(DRW_DbColor *ent, const char *recordName) {
         return false;
     if (recordName == nullptr || *recordName == '\0')
         return failDxfWrite();
+    const bool writeColorIndex = ent->rgb < 0 || ent->hasDxfColorIndex();
+    if (writeColorIndex && ent->colorIndex > static_cast<std::uint16_t>(
+            std::numeric_limits<std::int16_t>::max()))
+        return failDxfWrite();
     const std::uint32_t sourceHandle = ent->handle;
     std::uint32_t emittedHandle = sourceHandle == 0u
         ? 0u : remapObjectHandle(sourceHandle);
@@ -35750,10 +35754,10 @@ bool dxfRW::writeDbColor(DRW_DbColor *ent, const char *recordName) {
         return false;
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
     writer->writeString(100, "AcDbColor");
+    if (writeColorIndex)
+        writer->writeInt16(62, static_cast<int>(ent->colorIndex));
     if (ent->rgb >= 0)
         writer->writeInt32(420, ent->rgb);
-    else
-        writer->writeInt16(62, static_cast<int>(ent->colorIndex));
     if (!ent->bookName.empty() || !ent->name.empty()) {
         const UTF8STRING value = ent->bookName.empty()
             ? ent->name

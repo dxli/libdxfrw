@@ -6349,6 +6349,7 @@ std::string generatedDbColorBookNameOwnerBudgetWire(
         ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&stream))
         : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&stream));
     const bool ok = writer->writeString(430, "Old$Prev")
+        && writer->writeInt16(62, 0)
         && writer->writeString(430, finalValue);
     writer.reset();
     return ok ? stream.str() : std::string{};
@@ -16256,6 +16257,7 @@ void testDxfDbColorBookNameOwnerBudget(TestContext& t) {
                 &edgeBudget);
             t.expect(edgeParsed && edgeColor.bookName == splitCase.second.first
                          && edgeColor.name == splitCase.second.second
+                         && edgeColor.hasDxfColorIndex()
                          && edgeBudget != nullptr
                          && edgeBudget->used() == expectedBytes,
                      "DBCOLOR in-place group-430 split preserves separator edge semantics and exact owner bytes");
@@ -16282,6 +16284,7 @@ void testDxfDbColorBookNameOwnerBudget(TestContext& t) {
         const bool retained = exact && admittedBudget != nullptr
             && admitted.bookName == finalBook
             && admitted.name == finalName
+            && admitted.hasDxfColorIndex()
             && admittedBudget->used() == expectedOwnerBytes;
         t.expect(retained,
                  "DBCOLOR accounts both strings split from group 430");
@@ -16294,8 +16297,11 @@ void testDxfDbColorBookNameOwnerBudget(TestContext& t) {
             t.expect(admittedBudget->used() == expectedOwnerBytes
                          && copied.bookName == finalBook
                          && copied.name == finalName
+                         && copied.hasDxfColorIndex()
                          && assigned.bookName == finalBook
-                         && assigned.name == finalName,
+                         && assigned.name == finalName
+                         && assigned.hasDxfColorIndex()
+                         && !admitted.hasDxfColorIndex(),
                      "DBCOLOR split-string lease survives copy/assignment and source reset");
             copied.reset();
             t.expect(admittedBudget->used() == expectedOwnerBytes,
@@ -16311,7 +16317,8 @@ void testDxfDbColorBookNameOwnerBudget(TestContext& t) {
             && !parseRecords(records, exactCap - 1u, &underBudget,
                              &underBudgetLedger);
         const bool preserved = underBudget.bookName == previousBook
-            && underBudget.name == previousName;
+            && underBudget.name == previousName
+            && underBudget.hasDxfColorIndex();
         t.expect(underCap,
                  "one-byte-under DBCOLOR budget refuses the replacement");
         t.expect(preserved,

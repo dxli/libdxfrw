@@ -3359,8 +3359,129 @@ void testDbColorIdentityRemapping(TestContext& t) {
         return value.rgb == 0x123456 && value.bookName == "Acme"
             && value.name == "Warm Gray";
     };
+    const auto writeTyped = [](DRW_DbColor& value, bool binary,
+                               std::string& bytes) {
+        std::ostringstream output;
+        dxfRW writer("");
+        writer.version = DRW::AC1032;
+        writer.binFile = binary;
+        writer.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+        const bool ok = writer.writeDbColor(&value, "DBCOLOR")
+            && writer.writer->writeString(0, "WIRE_END");
+        bytes = output.str();
+        return ok;
+    };
 
     for (const bool binary : {false, true}) {
+        // The ODA-produced color-book witness carries both the ACI fallback
+        // and true color. DXF group order is not guaranteed; the true-color
+        // method must survive either order, including an explicit ACI zero.
+        for (const int fallback : {0, 254}) {
+            for (const bool aciFirst : {false, true}) {
+                std::ostringstream sourceBytes;
+                std::unique_ptr<dxfWriter> sourceWriter = binary
+                    ? std::unique_ptr<dxfWriter>(
+                          std::make_unique<dxfWriterBinary>(&sourceBytes))
+                    : std::unique_ptr<dxfWriter>(
+                          std::make_unique<dxfWriterAscii>(&sourceBytes));
+                bool authored = sourceWriter->writeString(0, "DBCOLOR")
+                    && sourceWriter->writeString(5, "A91")
+                    && sourceWriter->writeString(100, "AcDbColor");
+                if (aciFirst) {
+                    authored = authored && sourceWriter->writeInt16(62, fallback)
+                        && sourceWriter->writeInt32(420, 0xCFD0CF);
+                } else {
+                    authored = authored && sourceWriter->writeInt32(420, 0xCFD0CF)
+                        && sourceWriter->writeInt16(62, fallback);
+                }
+                authored = authored && sourceWriter->writeUtf8String(
+                    430, "RAL CLASSIC$RAL 7047")
+                    && sourceWriter->writeString(0, "WIRE_END");
+                DRW_DbColor parsed;
+                const bool read = authored
+                    && readTyped(sourceBytes.str(), binary, parsed);
+                t.expect(read && parsed.colorMethod == 0xC2u
+                             && parsed.colorIndex == fallback
+                             && parsed.hasDxfColorIndex()
+                             && parsed.rgb == 0xCFD0CF
+                             && parsed.bookName == "RAL CLASSIC"
+                             && parsed.name == "RAL 7047",
+                         "DBCOLOR true color takes precedence in either DXF group order");
+                DRW_DbColor copied(parsed);
+                DRW_DbColor assigned;
+                assigned = parsed;
+                parsed.reset();
+                t.expect(read && !parsed.hasDxfColorIndex()
+                             && copied.hasDxfColorIndex()
+                             && assigned.hasDxfColorIndex(),
+                         "DBCOLOR explicit ACI presence survives copies and reset");
+                copied.clearDxfColorIndexPresence();
+                std::string clearedBytes;
+                DRW_DbColor clearedReadback;
+                t.expect(!copied.hasDxfColorIndex()
+                             && assigned.hasDxfColorIndex()
+                             && writeTyped(copied, binary, clearedBytes)
+                             && readTyped(clearedBytes, binary, clearedReadback)
+                             && !clearedReadback.hasDxfColorIndex(),
+                         "DBCOLOR explicit presence can be cleared without changing its copy");
+                std::string encoded;
+                DRW_DbColor readback;
+                const bool wrote = read && writeTyped(assigned, binary, encoded);
+                const bool reread = wrote && readTyped(encoded, binary, readback);
+                t.expect(reread && readback.hasDxfColorIndex()
+                             && readback.colorIndex == fallback
+                             && readback.colorMethod == 0xC2u
+                             && readback.rgb == 0xCFD0CF
+                             && readback.bookName == "RAL CLASSIC"
+                             && readback.name == "RAL 7047",
+                         "DBCOLOR explicit zero/nonzero ACI fallback survives output and readback");
+            }
+        }
+        std::ostringstream aciBytes;
+        std::unique_ptr<dxfWriter> aciWriter = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&aciBytes))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&aciBytes));
+        const bool aciAuthored = aciWriter->writeString(0, "DBCOLOR")
+            && aciWriter->writeString(5, "A91")
+            && aciWriter->writeString(100, "AcDbColor")
+            && aciWriter->writeInt16(62, 254)
+            && aciWriter->writeString(0, "WIRE_END");
+        DRW_DbColor aciOnly;
+        t.expect(aciAuthored && readTyped(aciBytes.str(), binary, aciOnly)
+                     && aciOnly.colorMethod == 0xC3u
+                     && aciOnly.hasDxfColorIndex()
+                     && aciOnly.colorIndex == 254u && aciOnly.rgb == -1,
+                 "DBCOLOR ACI-only input retains the index color method");
+        DRW_DbColor absent = makeColor();
+        absent.handle = source;
+        std::string absentBytes;
+        DRW_DbColor absentReadback;
+        t.expect(!absent.hasDxfColorIndex()
+                     && writeTyped(absent, binary, absentBytes)
+                     && readTyped(absentBytes, binary, absentReadback)
+                     && !absentReadback.hasDxfColorIndex(),
+                 "DBCOLOR RGB output does not invent an absent ACI fallback");
+        DRW_DbColor invalidIndex = makeColor();
+        invalidIndex.handle = source;
+        invalidIndex.setDxfColorIndex(0xFFFFu);
+        std::string rejectedBytes;
+        const bool rejectedIndex = !writeTyped(invalidIndex, binary, rejectedBytes)
+            && rejectedBytes.empty() && invalidIndex.hasDxfColorIndex()
+            && invalidIndex.colorIndex == 0xFFFFu;
+        invalidIndex.setDxfColorIndex(254u);
+        std::string retriedBytes;
+        DRW_DbColor retriedIndex;
+        t.expect(rejectedIndex && writeTyped(invalidIndex, binary, retriedBytes)
+                     && readTyped(retriedBytes, binary, retriedIndex)
+                     && retriedIndex.hasDxfColorIndex()
+                     && retriedIndex.colorIndex == 254u,
+                 "DBCOLOR unrepresentable ACI refusal preserves caller state for corrected retry");
         std::ostringstream output;
         dxfRW owner("");
         owner.version = DRW::AC1032;

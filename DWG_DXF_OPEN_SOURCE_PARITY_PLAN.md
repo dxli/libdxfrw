@@ -214,8 +214,8 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    receipts). A generated AC1027 DWG authored and read by this same library now
    provides a fast self-consistency control for typed capture and the NOD's
    `ACAD_COLOR` root. It is not independent source evidence. A preflight gate
-   refuses DBCOLOR output until an independent producer profile, exact
-   `ACAD_COLOR` entry semantics, and fresh DXF readback are evidenced (see the
+   refuses DBCOLOR output until the physical source, exact `ACAD_COLOR` entry
+   semantics, EED/APPID dependencies, and fresh DXF readback are qualified (see the
    [external-evidence gate receipt](docs/research/p4-dbcolor-external-evidence-gate-2026-11-03.json)).
    Research confirms that Autodesk exposes a color dictionary containing
    `AcDbColor` entries and that the root drawing dictionary uses the
@@ -223,10 +223,14 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    color references but does not specify the complete DBCOLOR object body or
    dictionary-key serialization. LibreDWG's object schema independently
    models DBCOLOR as common parent plus CMC color; this corroborates the field
-   family, not producer interoperability. The DBCOLOR physical field span,
-   actual dictionary key/value relation, cross-producer output semantics, and
-   native color-book behavior therefore remain unqualified. No fixture is
-   committed; the authored DWG exists only during the generated test.
+   family, not producer interoperability. An existing AC1021 source and ODA
+   resave now expose a physical color-book dictionary, owner/reactor edges and
+   matching RGB/name; the source provenance and exact field span remain open.
+   ODA resave and DXF projection each drop one repeated EED group, so do not
+   assume those conversions preserve the original graph. The low-level DXF
+   codec now retains an explicitly present ACI fallback alongside RGB; retain
+   the original EED and qualify whole-graph output/readback and native color-book
+   meaning before admission. See the [physical graph receipt](docs/research/p4-dbcolor-ac1021-physical-oda-graph-and-precedence-2026-11-03.json).
    The `DICTIONARYWDFLT` default edge is checked as a hard pointer before it can
    become a typed reference; the generated wrong-role, rollback, and cursor
    alignment control is in the [default-handle role receipt](docs/research/p4-dictionary-default-handle-role-guard-2026-11-02.json).

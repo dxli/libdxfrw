@@ -14797,8 +14797,11 @@ bool DRW_DbColor::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         const int value = reader->getInt32();
         if (value < 0 || value > std::numeric_limits<std::uint16_t>::max())
             return false;
-        colorIndex = static_cast<std::uint16_t>(value);
-        colorMethod = 0xC3;
+        setDxfColorIndex(static_cast<std::uint16_t>(value));
+        // True color takes precedence over the ACI fallback regardless of the
+        // order in which an OBJECTS record supplies groups 62 and 420.
+        if (rgb < 0)
+            colorMethod = 0xC3;
         colorDwgFlags = 0u;
         colorDwgIndex = 0u;
         colorDwgMetadataPresent = false;
@@ -14823,10 +14826,19 @@ bool DRW_DbColor::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             value.erase(0, separator + 1);
             parsedName = std::move(value);
         }
+        // The high bit of the private byte counter represents group-62
+        // presence; the shared budget must see only the retained byte count.
+        if (parsedBookName.size() >= kDxfColorIndexPresent)
+            return false;
+        const std::size_t presence = m_dxfRetainedBookNameBytes
+            & kDxfColorIndexPresent;
+        std::size_t bookNameBytes = m_dxfRetainedBookNameBytes
+            & ~kDxfColorIndexPresent;
         if (!replaceDxfRetainedNameAndStringField(
-                reader, m_dxfRetainedBookNameBytes, bookName,
+                reader, bookNameBytes, bookName,
                 std::move(parsedName), std::move(parsedBookName)))
             return false;
+        m_dxfRetainedBookNameBytes = bookNameBytes | presence;
         colorDwgFlags = 0u;
         colorDwgIndex = 0u;
         colorDwgMetadataPresent = false;

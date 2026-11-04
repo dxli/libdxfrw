@@ -6579,7 +6579,25 @@ public:
   std::uint16_t colorDwgIndex = 0u;
   bool colorDwgMetadataPresent = false;
 
+  // Group 62 can accompany true color, and zero is a meaningful explicit
+  // fallback. DWG CMC indices do not imply that a DXF group 62 was present.
+  [[nodiscard]] bool hasDxfColorIndex() const noexcept {
+    return (m_dxfRetainedBookNameBytes & kDxfColorIndexPresent) != 0u;
+  }
+  void setDxfColorIndex(std::uint16_t value) noexcept {
+    colorIndex = value;
+    m_dxfRetainedBookNameBytes |= kDxfColorIndexPresent;
+  }
+  void clearDxfColorIndexPresence() noexcept {
+    m_dxfRetainedBookNameBytes &= ~kDxfColorIndexPresent;
+  }
+
 private:
+  // This unused high bit stores group-62 presence without changing the public
+  // class layout. It is masked before passing the low-bit byte count to the
+  // shared retained-string budget; copy/move/reset preserve the two parts.
+  static constexpr std::size_t kDxfColorIndexPresent = std::size_t{1}
+      << (std::numeric_limits<std::size_t>::digits - 1u);
   std::size_t m_dxfRetainedBookNameBytes{0u};
 };
 
