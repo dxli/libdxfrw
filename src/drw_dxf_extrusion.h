@@ -6,7 +6,8 @@
 
 // Explicit recovery of the representation produced by exactly one legacy
 // DRW_Circle/DRW_Arc::applyExtrusion() call. This is an opt-in conversion for
-// DXF writers: it does not alter the semantics of existing readers or writers.
+// DXF writers and the bounded AC1024 DWG writer route: it does not alter the
+// semantics of existing readers or writers.
 //
 // The caller must know that the input was transformed exactly once and that
 // subsequent edits have not invalidated its coordinate/normal interpretation.
@@ -20,7 +21,7 @@
 // payloads. A zero/nonfinite normal,
 // nonfinite fields, type mismatch or unrepresentable result fails without
 // changing the output; the input and output may alias. The returned copy is for
-// native DXF OCS output only; DWG interpretation has not been qualified.
+// native DXF OCS or AC1024 DWG output. Other DWG revisions are unqualified.
 namespace DRW_DxfLegacyExtrusion {
 [[nodiscard]] bool toNativeOcs(const DRW_Circle& input, DRW_Circle& output) noexcept;
 [[nodiscard]] bool toNativeOcs(const DRW_Arc& input, DRW_Arc& output) noexcept;

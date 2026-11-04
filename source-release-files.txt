@@ -407,6 +407,7 @@ tests/dwg_ellipse_wcs_test.h
 tests/dwg_fixture_tests.cpp
 tests/dwg_legacy_block_content_chain_libredwg.py
 tests/dwg_legacy_block_content_chain_tests.cpp
+tests/dwg_legacy_extrusion_oda_ezdxf.py
 tests/dwg_legacy_insert_chain_libredwg.py
 tests/dwg_legacy_insert_chain_tests.cpp
 tests/dwg_legacy_model_chain_libredwg.py
@@ -630,6 +631,7 @@ tools/audit_dxf_table_values.py
 tools/audit_p9_rtext_native_history.py
 tools/audit_wipeout_ac1024_source.py
 tools/audit_wipeout_ac1032_source.py
+tools/author_dwg_legacy_extrusion.py
 tools/author_wipeout_direct_nod.py
 tools/bounded_process.py
 tools/build_semantic_adapter.py
@@ -702,6 +704,7 @@ tools/probe_lightlist_physical_capture.cpp
 tools/probe_wipeout_ac1024_source.cpp
 tools/probe_wipeout_ac1032_source.cpp
 tools/qualify_material_source_order.py
+tools/replay_dwg_legacy_extrusion.cpp
 tools/run_external_advisory.py
 tools/run_fast_baseline.py
 tools/run_fast_focus.py

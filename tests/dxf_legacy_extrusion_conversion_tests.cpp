@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "lc3_compat_check.cpp"
 #include "drw_dxf_extrusion.h"
+#include "libdwgr.h"
 
 #include <array>
 #include <chrono>
@@ -89,6 +90,49 @@ bool writeDxf(const std::filesystem::path& path, Adapter& data, bool binary) {
     data.writer = &writer;
     return writer.write(&data, DRW::AC1027, binary) && !data.failed;
 }
+struct DwgAdapter final : Adapter, DRW_DwgDefaultMaterialProvider,
+                          DRW_DwgDefaultPlotStyleProvider {
+    dwgRW* dwgWriter = nullptr;
+    bool wantsDwgDefaultMaterialGraph() const override { return true; }
+    bool wantsDwgDefaultPlotStyleGraph() const override { return true; }
+    bool dwgDefaultMaterialOpaqueReferencesAbsent(std::uint32_t a, std::uint32_t b,
+            std::uint32_t c, std::uint32_t d) const override { return a && b && c && d; }
+    void dwgDefaultMaterialGraphPlanned(std::uint32_t, std::uint32_t,
+                                       std::uint32_t, std::uint32_t) override {}
+    void writeHeader(DRW_Header& header) override {
+        for (const char* key : {"$CMATERIAL", "CMATERIAL"}) {
+            const auto found = header.vars.find(key);
+            if (found != header.vars.end()) { delete found->second; header.vars.erase(found); }
+        }
+    }
+    void writeEntities() override {
+        failed = false;
+        for (const auto& value : circles) {
+            DRW_Circle output;
+            if (convert && !DRW_DxfLegacyExtrusion::toNativeOcs(value, output)) { failed = true; return; }
+            if (!convert) output = value;
+            output.handle = 0u;
+            if (!dwgWriter || !dwgWriter->writeCircle(&output)) { failed = true; return; }
+        }
+        for (const auto& value : arcs) {
+            DRW_Arc output;
+            if (convert && !DRW_DxfLegacyExtrusion::toNativeOcs(value, output)) { failed = true; return; }
+            if (!convert) output = value;
+            output.handle = 0u;
+            if (!dwgWriter || !dwgWriter->writeArc(&output)) { failed = true; return; }
+        }
+    }
+    bool finalizeDwgWrite() override { return !failed; }
+};
+bool writeDwg(dwgRW& writer, DwgAdapter& data) {
+    data.dwgWriter = &writer;
+    return writer.write(&data, DRW::AC1024, true) && !data.failed;
+}
+bool readDwg(const std::filesystem::path& path, Adapter& data, bool apply) {
+    const std::string name = path.string();
+    dwgR reader(name.c_str());
+    return reader.read(&data, apply);
+}
 bool readDxf(const std::filesystem::path& path, Adapter& data, bool apply) {
     const std::string name = path.string();
     dxfRW reader(name.c_str());
@@ -124,6 +168,40 @@ bool roundTrip(const std::filesystem::path& dir, bool binary) {
     if (!readDxf(converted, gotRaw, false) || !readDxf(converted, gotTransformed, true))
         return false;
     return sameGeometry(raw, gotRaw) && sameGeometry(sourceSnapshot, gotTransformed);
+}
+bool dwgRoundTrip(const std::filesystem::path& dir) {
+    const auto original = dir / "ac1024-original.dwg";
+    const auto converted = dir / "ac1024-converted.dwg";
+    DwgAdapter source;
+    static_cast<Adapter&>(source) = authored();
+    dwgRW first(original.string().c_str());
+    if (!writeDwg(first, source)) return false;
+    Adapter raw, applied;
+    if (!readDwg(original, raw, false) || !readDwg(original, applied, true)) return false;
+    const Adapter before = applied;
+    DwgAdapter output;
+    static_cast<Adapter&>(output) = applied;
+    output.convert = true;
+    dwgRW second(converted.string().c_str());
+    if (!writeDwg(second, output) || !sameGeometry(before, output)) return false;
+    Adapter resultRaw, resultApplied;
+    if (!readDwg(converted, resultRaw, false) || !readDwg(converted, resultApplied, true)) return false;
+    return sameGeometry(raw, resultRaw) && sameGeometry(before, resultApplied);
+}
+bool dwgRefusalAndRetry(const std::filesystem::path& path) {
+    DwgAdapter input;
+    static_cast<Adapter&>(input) = authored();
+    input.circles[1].extPoint = {0., 0., 0.};
+    input.circles[1].haveExtrusion = true;
+    input.convert = true;
+    { std::ofstream destination(path, std::ios::binary); destination << "unchanged"; }
+    dwgRW writer(path.string().c_str());
+    if (writeDwg(writer, input)) return false;
+    std::ifstream previous(path, std::ios::binary);
+    if (std::string((std::istreambuf_iterator<char>(previous)), {}) != "unchanged") return false;
+    previous.close();
+    input.circles[1].extPoint = {0., 0., -1.};
+    return writeDwg(writer, input);
 }
 bool refusalAndRetry(const std::filesystem::path& path, bool binary) {
     Adapter input = authored();
@@ -262,6 +340,8 @@ int main(int argc, char** argv) {
         pass = roundTrip(dir, binary) && pass;
         pass = refusalAndRetry(dir / (binary ? "retry-binary.dxf" : "retry-ascii.dxf"), binary) && pass;
     }
+    pass = dwgRoundTrip(dir) && pass;
+    pass = dwgRefusalAndRetry(dir / "ac1024-retry.dwg") && pass;
     if (keep) std::cout << "OUTPUT " << dir.string() << '\n';
     else { std::error_code error; std::filesystem::remove_all(dir, error); }
     std::cout << "DXF explicit legacy extrusion conversion " << (pass ? "PASS" : "FAIL") << '\n';

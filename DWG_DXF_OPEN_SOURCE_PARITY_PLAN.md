@@ -872,6 +872,8 @@ remain supported; see the [corner receipt](docs/research/p6-dxf-incomplete-fourt
 For ELLIPSE and HATCH/MPOLYGON ellipse edges, continue source and native
 qualification beyond the bounded extreme-axis normalization fix; see the
 [normalization receipt](docs/research/p6-dxf-ellipse-extreme-axis-normalization-2026-11-04.json).
+Qualify CIRCLE/ARC DWG extrusion writeback beyond the explicit AC1024 helper
+profile and its selected geometry checks ([receipt](docs/research/p6-ac1024-dwg-legacy-extrusion-opt-in-2026-11-04.json)).
 Resolve the observed AC1024 VIEWPORT ambient CMC index discrepancy against
 the ODA CMC wording, including safe handling after caller edits; do not infer
 a rendering difference from the index alone ([receipt](docs/research/p6-ac1024-viewport-ambient-cmc-index-differential-2026-11-04.json)).
