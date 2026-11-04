@@ -8862,7 +8862,9 @@ bool DRW_Vport::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
 
     putCommonObjectHandlePrefix(hb, kVportControl, reactorCount,
                                 effectiveXDictFlag,
-                                &reactorHandles, xDictHandle);
+                                &reactorHandles, xDictHandle,
+                                DRW::DwgSoftPointer, false,
+                                version == DRW::AC1015 && typedNullReferences);
     const auto hardReference = [typedNullReferences](std::uint32_t ref) {
         dwgHandle value = makeRefW(ref, DRW::DwgHardPointer);
         if (typedNullReferences && ref == 0u)

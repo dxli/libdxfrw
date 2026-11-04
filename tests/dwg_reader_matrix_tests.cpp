@@ -15911,25 +15911,34 @@ void testActiveVportDefaults(TestContext& t, DRW::Version version,
         HeaderPublicationSink sink;
         dwgRW reader("");
         const bool read = reader.readBuffer(bytes.data(), bytes.size(), &sink, false);
-        const bool synthesized = mode == 0 && version >= DRW::AC1018;
+        const bool synthesized = mode == 0 && version >= DRW::AC1015;
         t.expect(read && sink.activeVports == 1u && sink.lines == 1u
-                     && sink.activeVportFlag == (synthesized ? 1u : 0u)
+                     && sink.activeVportFlag == ((synthesized && version >= DRW::AC1018) ? 1u : 0u)
                      && sink.activeVportXrefCode == (synthesized ? DRW::DwgHardPointer : 0u)
                      && sink.activeVportNamed == 0u && sink.activeVportBase == 0u,
                  "*ACTIVE caller state and following LINE survive readback: " + label);
     }
-    if (version >= DRW::AC1018) {
+    if (version >= DRW::AC1015) {
         DRW_Vport probe;
-        probe.setDwgCommonObjectState(0, 1, false);
+        probe.setDwgCommonObjectState(0, version == DRW::AC1015 ? 0 : 1, false);
         dwgBufferW body, strings, handles;
         const bool encoded = DrwObjectEncodeTestAccess::encodeVport(
             probe, version, body, strings, handles, true);
-        const std::vector<std::uint8_t> expected = version == DRW::AC1018
-            ? std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x50u, 0x50u}
-            : std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x00u, 0x00u,
-                                        0x00u, 0x50u, 0x50u};
+        const std::vector<std::uint8_t> expected = version == DRW::AC1015
+            ? std::vector<std::uint8_t>{0x41u, 0x08u, 0x30u, 0x50u, 0x50u, 0x50u}
+            : version == DRW::AC1018
+                ? std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x50u, 0x50u}
+                : std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x00u, 0x00u,
+                                            0x00u, 0x50u, 0x50u};
         t.expect(encoded && handles.data() == expected,
                  "*ACTIVE typed null handle bytes and ordering: " + label);
+        if (version == DRW::AC1015) {
+            dwgBufferW publicBody, publicStrings, publicHandles;
+            t.expect(probe.encodeDwg(version, &publicBody, &publicStrings, &publicHandles)
+                         && publicHandles.data() == std::vector<std::uint8_t>(
+                             {0x41u, 0x08u, 0x00u, 0x00u, 0x00u, 0x00u}),
+                     "caller VPORT public encoder retains legacy null slots: " + label);
+        }
     }
 }
 

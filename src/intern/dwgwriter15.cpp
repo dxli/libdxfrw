@@ -2943,7 +2943,7 @@ bool dwgWriter15::emitViewRecord(std::uint32_t handle, const DRW_View& view) {
 
 bool dwgWriter15::emitVportRecord(std::uint32_t handle, const DRW_Vport& vp) {
     const bool synthetic = handle == DRW::DwgActiveVportHandle
-        && !m_haveActiveVport && m_version >= DRW::AC1018;
+        && !m_haveActiveVport && m_version >= DRW::AC1015;
     if (!synthetic)
         return emitTableRecord(handle, vp, DRW::DwgVPortObjectType);
     DRW_Vport object = vp;
