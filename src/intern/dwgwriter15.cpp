@@ -605,6 +605,20 @@ static std::string toUpperCase(const std::string& s) {
     return r;
 }
 
+// ACAD_PLOTSTYLENAME is an ASCII-reserved NOD key. Do not change the
+// collation policy for other (possibly Unicode) caller dictionary keys.
+static bool isPlotStyleDictionaryKey(const std::string& name) noexcept {
+    static constexpr char expected[] = "ACAD_PLOTSTYLENAME";
+    if (name.size() != sizeof(expected) - 1u) return false;
+    for (std::size_t i = 0; i < name.size(); ++i) {
+        const unsigned char c = static_cast<unsigned char>(name[i]);
+        const unsigned char folded = c >= 'a' && c <= 'z'
+            ? static_cast<unsigned char>(c - ('a' - 'A')) : c;
+        if (folded != static_cast<unsigned char>(expected[i])) return false;
+    }
+    return true;
+}
+
 } // namespace
 
 bool dwgWriter15::canWriteDwgDataStorageOperation(
@@ -2381,11 +2395,19 @@ bool dwgWriter15::ensurePendingDwgDictionaryIndexes() const {
             m_pendingDwgNamedObjectDictionaryEntries.size());
         groupNames.reserve(m_pendingDwgGroupDictionaryEntries.size());
         groupHandles.reserve(m_pendingDwgGroupDictionaryEntries.size());
+        std::uint32_t plotStyleHandle = 0;
         for (const auto& entry : m_pendingDwgNamedObjectDictionaryEntries) {
+            const bool isPlotStyle = isPlotStyleDictionaryKey(entry.name);
             if (entry.name.empty() || entry.childHandle == 0
-                || !namedObjectNames.insert(entry.name).second)
+                || !namedObjectNames.insert(entry.name).second
+                || (isPlotStyle && (entry.childHandle == DRW::NoHandle
+                                    || plotStyleHandle != 0
+                                    || namedObjectChildHandles.count(entry.childHandle) != 0))
+                || (!isPlotStyle && plotStyleHandle != 0
+                    && entry.childHandle == plotStyleHandle))
                 return false;
             namedObjectChildHandles.insert(entry.childHandle);
+            if (isPlotStyle) plotStyleHandle = entry.childHandle;
         }
         for (const auto& entry : m_pendingDwgGroupDictionaryEntries) {
             const std::string key = toUpperCase(entry.name);
@@ -2501,7 +2523,9 @@ bool dwgWriter15::registerDwgNamedObjectDictionaryEntry(
         return false;
     }
     const bool plotSettingsEntry = normalizedName == "ACAD_PLOTSETTINGS";
+    const bool plotStyleEntry = isPlotStyleDictionaryKey(name);
     if (m_dwgTableRecordsComplete || name.empty() || childHandle == 0
+        || (plotStyleEntry && childHandle == DRW::NoHandle)
         || childHandle == DRW::DwgNamedObjectsDictionaryHandle
         || childHandle == DRW::DwgAcadGroupDictionaryHandle
         || normalizedName == "ACAD_GROUP"
@@ -2512,6 +2536,19 @@ bool dwgWriter15::registerDwgNamedObjectDictionaryEntry(
         || m_pendingDwgNamedObjectDictionaryNames.find(name)
             != m_pendingDwgNamedObjectDictionaryNames.end()) {
         return false;
+    }
+    // Only this reserved root key is case-folded here. A plotstyle dictionary
+    // must have one unambiguous NOD key and cannot alias another root child.
+    // Preserve every unrelated key's existing admission behavior.
+    if (plotStyleEntry
+        || m_pendingDwgNamedObjectDictionaryChildHandles.count(childHandle) != 0) {
+        for (const auto& entry : m_pendingDwgNamedObjectDictionaryEntries) {
+            const bool existingPlotStyle = isPlotStyleDictionaryKey(entry.name);
+            if ((plotStyleEntry && existingPlotStyle)
+                || ((plotStyleEntry || existingPlotStyle)
+                    && entry.childHandle == childHandle))
+                return false;
+        }
     }
     try {
         m_handles.reserve(childHandle);

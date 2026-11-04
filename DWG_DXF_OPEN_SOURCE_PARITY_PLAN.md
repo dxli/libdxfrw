@@ -896,6 +896,9 @@ typed-null xref state; ODA still requires the layer plot-style graph.
 Implement its early class admission, collision-safe identities, HEADER/NOD
 and placeholder edges, caller override and rollback using the six-version
 [graph subplan](docs/research/p6-default-plotstyle-graph-research-2026-11-04.json).
+The reserved plot-style NOD key now rejects ASCII case variants and target
+aliases while retaining caller spelling and late registration; automatic
+synthesis and HEADER binding remain open. See the [admission receipt](docs/research/p6-plotstyle-nod-identity-admission-2026-11-04.json).
 Synthetic R2004+ BYBLOCK, BYLAYER and CONTINUOUS linetypes now preserve their
 witnessed missing-extension and typed-null xref states. With the separately
 probed plot-style graph, ODA advances to a VIEWPORT error; the graph is not
