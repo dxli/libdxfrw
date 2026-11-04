@@ -5049,3 +5049,6 @@ target_include_directories(libdxfrw_dxf_sun_color_order_tests PRIVATE ${CMAKE_SO
 target_link_libraries(libdxfrw_dxf_sun_color_order_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dxf_sun_color_order COMMAND libdxfrw_dxf_sun_color_order_tests)
 set_tests_properties(libdxfrw_dxf_sun_color_order PROPERTIES LABELS "fast;dxf;sun;color" TIMEOUT 30)
+
+add_test(NAME libdxfrw_ac1027_material_peer_audit COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/ac1027_material_peer_audit_tests.py)
+set_tests_properties(libdxfrw_ac1027_material_peer_audit PROPERTIES LABELS "dwg;fast;AC1027;peer" TIMEOUT 30)

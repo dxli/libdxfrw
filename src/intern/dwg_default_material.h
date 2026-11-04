@@ -11,8 +11,8 @@ namespace drwDwgDefaultMaterial {
 
 enum class Kind { ByBlock, ByLayer, Global };
 
-// Exact nonprocedural default profile witnessed in ODA-produced AC1021 and
-// AC1024 drawings; no other version or material profile is admitted. On success the
+// Exact nonprocedural default profile witnessed in ODA-produced AC1021, AC1024 and AC1027
+// drawings; no other version or material profile is admitted. On success the
 // two destination buffers are replaced with the body and detached strings.
 // The body deliberately excludes the common preamble and handle stream.
 inline bool build(DRW::Version version, Kind kind,
@@ -23,7 +23,7 @@ inline bool build(DRW::Version version, Kind kind,
     case Kind::ByLayer: name = "ByLayer"; break;
     case Kind::Global: name = "Global"; break;
     }
-    if ((version != DRW::AC1021 && version != DRW::AC1024)
+    if ((version != DRW::AC1021 && version != DRW::AC1024 && version != DRW::AC1027)
         || name == nullptr || &bodyOut == &stringsOut)
         return false;
     dwgBufferW body, strings;

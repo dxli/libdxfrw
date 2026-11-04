@@ -880,6 +880,13 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+The explicit default-material and plotstyle opt-ins now cover the bounded
+AC1027 synthetic layer-0 graph and exact material frames. Source/peer controls
+verify selected fields and reference roles; ODA still stops at VPORT and the
+native material payload remains opaque. Other layers, native material meaning
+and whole-file support remain open
+([receipt](docs/research/p6-ac1027-default-material-graph-optin-2026-11-04.json)).
+
 DWG HATCH patterned-fill and definition-line angles now convert radians to the
 existing degree-valued DXF API and back. Consumers compensating for the old
 raw-radian callbacks must remove that workaround. MPOLYGON remains unchanged

@@ -38,6 +38,10 @@ bool run() {
         if (!drwDwgDefaultMaterial::build(DRW::AC1024, kinds[i], body, strings)
             || body.bitCount() != 550u || strings.bitCount() != (i == 2u ? 120u : 136u))
             return false;
+        dwgBufferW body27, strings27;
+        if (!drwDwgDefaultMaterial::build(DRW::AC1027, kinds[i], body27, strings27)
+            || body27.bitCount()!=body.bitCount() || body27.data()!=body.data()
+            || strings27.bitCount()!=strings.bitCount() || strings27.data()!=strings.data()) return false;
         material_dwg_test::Frame built;
         material_dwg_test::CodecProbe parsed;
         if (!frame(kinds[i], static_cast<std::uint32_t>(0x1Fu + i), built)
@@ -56,7 +60,7 @@ bool run() {
     }
     dwgBufferW body, strings;
     body.putRawChar8(0xA5); strings.putRawChar8(0x5A);
-    if (drwDwgDefaultMaterial::build(DRW::AC1027, Kind::Global, body, strings)
+    if (drwDwgDefaultMaterial::build(DRW::AC1032, Kind::Global, body, strings)
         || drwDwgDefaultMaterial::build(DRW::AC1024, static_cast<Kind>(99), body, strings)
         || drwDwgDefaultMaterial::build(DRW::AC1024, Kind::Global, body, body)
         || body.data() != std::vector<std::uint8_t>{0xA5}

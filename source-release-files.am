@@ -360,6 +360,7 @@ EXTRA_DIST = \
     tests/ac1027_acds_source_probe.cpp \
     tests/ac1027_block_control_peer_audit_tests.py \
     tests/ac1027_empty_view_ucs_peer_tests.py \
+    tests/ac1027_material_peer_audit_tests.py \
     tests/ac1027_modeler_uid_span.py \
     tests/acds_delivery_tests.cpp \
     tests/adapter_build_context_tests.py \
@@ -692,6 +693,7 @@ EXTRA_DIST = \
     tools/audit_ac1027_header_suffix_compare.py \
     tools/audit_ac1027_light_preview.py \
     tools/audit_ac1027_lightlist_snapshot.py \
+    tools/audit_ac1027_material_peer.py \
     tools/audit_ac1027_planar_sab_geometry.py \
     tools/audit_ac1027_sab_brlcad_rays.py \
     tools/audit_dwg_hatch_ellipse_edge.py \

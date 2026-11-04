@@ -2,7 +2,11 @@
 #include "lc3_compat_check.cpp"
 #include "libdwgr.h"
 #include "intern/dwgwriter24.h"
+#include "intern/dwgwriter27.h"
+#include "intern/dwgobjectframe.h"
 #include <algorithm>
+#include <atomic>
+#include <cstdlib>
 #include <array>
 #include <chrono>
 #include <filesystem>
@@ -11,6 +15,15 @@
 #include <iterator>
 #include <new>
 #include <sstream>
+
+static std::atomic<int> failAfter{-1};
+void* operator new(std::size_t n) {
+    if (failAfter>=0 && failAfter--==0) throw std::bad_alloc();
+    if (void* p=std::malloc(n?n:1)) return p;
+    throw std::bad_alloc();
+}
+void operator delete(void* p) noexcept {std::free(p);}
+void operator delete(void* p,std::size_t) noexcept {std::free(p);}
 
 class DrwHeaderEncodeTestAccess {
 public:
@@ -25,8 +38,60 @@ public:
 
 class DwgBlockRecordXrefWireTestAccess {
 public:
+    static void markPlotGraphComplete(dwgWriter15& w) { w.m_defaultPlotStyleGraphEmitted=true; }
     static void failAfterDictionary(dwgWriter15& w) {
         w.setWriteFailurePointForTest(dwgWriter15::kAfterDefaultMaterialDictionary);
+    }
+    static std::uint64_t generation(const dwgWriter27& w) {return w.m_nextDwgObjectFrameGeneration;}
+    static bool cleanLayerFailure(dwgWriter27& w,const std::vector<std::uint8_t>& before,
+                                  std::size_t mapSize,std::uint64_t generation) {
+        DRW::DwgObjectFrameReceipt r;
+        return w.buffer()==before && w.m_objectMap.size()==mapSize
+            && w.m_emittedDwgObjectHandles.count(DRW::DwgLayer0Handle)==0u
+            && w.m_nextDwgObjectFrameGeneration==generation && w.m_currentHandle==0u
+            && !w.getLastDwgObjectFrame(r) && static_cast<dwgWriter15&>(w).objectWriteFailed();
+    }
+    static bool layerFrame(dwgWriter27& w) {
+        DRW_Layer layer; layer.name="0"; layer.setDwgCommonObjectState(0,1,false);
+        layer.xrefBlockHandle.code=DRW::DwgHardPointer;
+        layer.plotStyleHandle.ref=w.m_defaultPlotStylePlaceholderHandle;
+        layer.materialHandle.ref=w.m_defaultMaterialHandles[3];
+        if(!w.emitLayerRecord(DRW::DwgLayer0Handle,layer))return false;
+        DRW::DwgObjectFrameReceipt r;
+        if(!w.getLastDwgObjectFrame(r)||!r.valid||r.objectHandle!=DRW::DwgLayer0Handle||r.handleBitSize!=0u)return false;
+        const auto it=std::find_if(w.m_objectMap.begin(),w.m_objectMap.end(),[](const auto& e){return e.first==DRW::DwgLayer0Handle;});
+        if(it==w.m_objectMap.end())return false;
+        auto& bytes=w.m_buf.data();dwgBuffer buf(bytes.data(),bytes.size());DwgObjectFrame frame;
+        if(!frame.readAt(buf,DRW::AC1027,it->second)||frame.objectDataBitSize()!=155u)return false;
+        const std::uint32_t refs[]={DRW::DwgLayerControlHandle,0u,w.m_defaultPlotStylePlaceholderHandle,w.m_defaultMaterialHandles[3],DRW::DwgLtypeContinuousHandle,0u};
+        const unsigned roles[]={4u,5u,5u,5u,5u,5u}; std::size_t count=0;
+        for(const auto& o:r.occurrences)if(o.stream==DRW::DwgObjectHandleStream::Handles){
+            if(count>=6u || o.serializedSegment!=DRW::DwgObjectSerializedSegment::Data
+               || o.token.code!=roles[count] || o.token.reference!=refs[count] || o.token.startBit<155u)return false;
+            ++count;
+        }
+        return count==6u;
+    }
+    static bool globalFrame(dwgWriter27& w) {
+        w.m_writingDefaultMaterialGraph=true;
+        const bool ok=w.emitDefaultDwgMaterial(3);
+        w.m_writingDefaultMaterialGraph=false;
+        if(!ok) return false;
+        DRW::DwgObjectFrameReceipt r;
+        const auto handle=w.m_defaultMaterialHandles[3], dict=w.m_defaultMaterialHandles[0];
+        if(!w.getLastDwgObjectFrame(r)||!r.valid||r.objectHandle!=handle||r.handleBitSize!=0u) return false;
+        const auto it=std::find_if(w.m_objectMap.begin(),w.m_objectMap.end(),[&](const auto& e){return e.first==handle;});
+        if(it==w.m_objectMap.end())return false;
+        auto& bytes=w.m_buf.data();dwgBuffer buf(bytes.data(),bytes.size());DwgObjectFrame frame;
+        if(!frame.readAt(buf,DRW::AC1027,it->second))return false;
+        const auto expected=727u+(handle>0xffu?8u:0u);
+        if(frame.objectDataBitSize()!=expected || r.dataBitSize!=frame.body().size()*8u) return false;
+        std::size_t count=0;
+        for(const auto& o:r.occurrences)if(o.stream==DRW::DwgObjectHandleStream::Handles){
+            if(o.serializedSegment!=DRW::DwgObjectSerializedSegment::Data || o.token.code!=DRW::DwgSoftPointer || o.token.reference!=dict || o.token.startBit<expected) return false;
+            ++count;
+        }
+        return count==2u;
     }
     static bool tokenConflict(dwgWriter15& w, std::uint32_t owner,
                               std::uint8_t code, std::uint32_t reference) {
@@ -50,6 +115,98 @@ struct ThrowingWriter : dwgWriter24 {
     }
     bool failAdmission = false, failEmission = false;
 };
+struct MutatingAc1027Writer : dwgWriter27 {
+    using dwgWriter27::dwgWriter27;
+    int mutation=0;
+    void finishObject() override {
+        if (mutation && m_writingDefaultMaterialGraph
+            && m_currentHandle==m_defaultMaterialHandles[1]) {
+            if (mutation==1) m_objectStrings.data()[1] ^= 0x40u;
+            if (mutation==2) m_objectBody.data()[6] ^= 0x40u;
+            if (mutation==3) m_objectHandles.data()[0] ^= 0x10u;
+            if (mutation==4) { mutation=0; throw std::bad_alloc(); }
+            mutation=0;
+        }
+        dwgWriter27::finishObject();
+    }
+};
+bool directAc1027Controls() {
+    for (int phase : {0,1,2,3,4,5,6}) {
+        DRW_Header h; MutatingAc1027Writer w(nullptr,&h);
+        if (!w.stageDefaultDwgPlotStyleGraph() || !w.stageDefaultDwgMaterialGraph()
+            || !w.prepareDwgClassManifest() || !w.writeFileHeaderStub()
+            || !w.writeDwgHeader() || !w.writeDwgClasses()) return false;
+        w.freezeDwgClasses();
+        if(phase==2) { if(!DwgBlockRecordXrefWireTestAccess::layerFrame(w)) return false; continue; }
+        if(!w.writeDwgObjects()) return false;
+        if(phase==1) { if(!DwgBlockRecordXrefWireTestAccess::globalFrame(w)) return false; continue; }
+        const auto before=w.checkpointCompoundWrite(); const auto bytes=w.buffer();
+        if (phase==0) DwgBlockRecordXrefWireTestAccess::failAfterDictionary(w);
+        else w.mutation=phase-2;
+        if(w.completeDeferredDwgObjects()||w.buffer()!=bytes)return false;
+        const auto after=w.checkpointCompoundWrite();
+        if(before.objectMapSize!=after.objectMapSize || before.defaultMaterialHandles!=after.defaultMaterialHandles
+           || before.defaultMaterialGraphEmitted!=after.defaultMaterialGraphEmitted
+           || before.classInstanceEmittedHandles!=after.classInstanceEmittedHandles
+           || before.classInstanceEmissionCounts!=after.classInstanceEmissionCounts)return false;
+        if(!w.completeDeferredDwgObjects() || !w.validateDwgNamedObjectDictionaryEntries()
+            || !w.validateDwgClassInstanceCounts() || !w.validateDwgClassInstanceFrames())return false;
+    }
+    return true;
+}
+struct LayerFaultWriter : dwgWriter27 {
+    using dwgWriter27::dwgWriter27;
+    int fault=-1; bool triggered=false, escaped=false;
+    void finishObject() override {
+        if(m_currentHandle!=DRW::DwgLayer0Handle || fault<0) {dwgWriter27::finishObject();return;}
+        failAfter=fault;
+        try {dwgWriter27::finishObject();} catch(...) {escaped=true;}
+        triggered=failAfter<0;failAfter=-1;
+    }
+};
+bool ac1027LayerAllocationSweep() {
+    int success=-1;
+    for(int i=0;i<500;++i) {
+        DRW_Header h;LayerFaultWriter w(nullptr,&h);
+        if(!w.stageDefaultDwgPlotStyleGraph() || !w.stageDefaultDwgMaterialGraph()
+           || !w.prepareDwgClassManifest() || !w.writeFileHeaderStub()
+           || !w.writeDwgHeader() || !w.writeDwgClasses())return false;
+        w.freezeDwgClasses(); const auto checkpoint=w.checkpointCompoundWrite();
+        const auto before=w.buffer(); const auto generation=DwgBlockRecordXrefWireTestAccess::generation(w);
+        w.fault=i;const bool written=DwgBlockRecordXrefWireTestAccess::layerFrame(w);
+        if(w.escaped)return false;
+        if(!w.triggered) {if(!written)return false;success=i;break;}
+        if(written || !DwgBlockRecordXrefWireTestAccess::cleanLayerFailure(w,before,checkpoint.objectMapSize,generation)) {
+            std::cerr<<"layer frame allocation "<<i<<"\n";return false;
+        }
+    }
+    return success>0;
+}
+bool ac1027AllocationSweep() {
+    int success=-1;
+    for(int i=0;i<1500;++i) {
+        DRW_Header h; dwgWriter27 w(nullptr,&h);
+        if(!w.stageDefaultDwgPlotStyleGraph() || !w.stageDefaultDwgMaterialGraph()
+           || !w.prepareDwgClassManifest() || !w.writeFileHeaderStub()
+           || !w.writeDwgHeader() || !w.writeDwgClasses())return false;
+        w.freezeDwgClasses(); if(!w.writeDwgObjects())return false;
+        // Isolate the material transaction from the separately committed plotstyle transaction.
+        DwgBlockRecordXrefWireTestAccess::markPlotGraphComplete(w);
+        const auto before=w.checkpointCompoundWrite();const auto bytes=w.buffer();
+        failAfter=i;bool written=false;
+        try {written=w.completeDeferredDwgObjects();} catch(...) {failAfter=-1;std::cerr<<"escaped allocation "<<i<<"\n";return false;}
+        const bool triggered=failAfter<0;failAfter=-1;
+        if(!triggered) {if(!written)return false;success=i;break;}
+        if(written || w.buffer()!=bytes) {std::cerr<<"bytes after allocation "<<i<<"\n";return false;}
+        const auto after=w.checkpointCompoundWrite();
+        if(before.objectMapSize!=after.objectMapSize || before.defaultMaterialHandles!=after.defaultMaterialHandles
+           || before.defaultMaterialGraphEmitted!=after.defaultMaterialGraphEmitted
+           || before.classInstanceEmittedHandles!=after.classInstanceEmittedHandles
+           || before.classInstanceEmissionCounts!=after.classInstanceEmissionCounts
+           || !w.completeDeferredDwgObjects()) {std::cerr<<"state/retry after allocation "<<i<<"\n";return false;}
+    }
+    return success>0;
+}
 bool headerWireControls() {
     for (auto version : {DRW::AC1015, DRW::AC1018, DRW::AC1021,
                          DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
@@ -137,7 +294,7 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
             std::uint32_t c, std::uint32_t d) const override {
         return opaqueAbsent && a != 0 && b != 0 && c != 0 && d != 0;
     }
-    bool wantsDwgDefaultPlotStyleGraph() const override { return true; }
+    bool wantsDwgDefaultPlotStyleGraph() const override { return plotEnabled; }
     void dwgDefaultMaterialGraphPlanned(std::uint32_t a, std::uint32_t b,
                                         std::uint32_t c, std::uint32_t d) override {
         handles = {a,b,c,d};
@@ -221,7 +378,7 @@ struct Adapter : LC3CompatCheck, DRW_DwgDefaultMaterialProvider, DRW_DwgDefaultP
     }
     dwgRW& output; DRW_Header* header=nullptr;
     DRW::Version version=DRW::AC1024;
-    bool enabled=true, opaqueAbsent=true, rejected=false, supplied=false;
+    bool enabled=true, plotEnabled=true, opaqueAbsent=true, rejected=false, supplied=false;
     Mode mode=Mode::Normal; std::size_t slot=0;
     std::array<std::uint32_t,4> handles{};
 };
@@ -244,7 +401,7 @@ struct Capture : LC3CompatCheck {
             || (requireSemantic && (!m.hasCompleteDwgSemanticFields()
                 || m.m_diffuseColorValue!=0xc2ffffffu || m.m_channelFlags!=63))
             || (!requireSemantic && (m.hasCompleteDwgSemanticFields()
-                || !m.hasDwgRawData() || m.dwgRawDataVersion()!=DRW::AC1021
+                || !m.hasDwgRawData() || m.dwgRawDataVersion()!=rawVersion
                 || m.dwgRawDataBitSize()!=550u))) valid=false;
         materials.push_back({m.m_name,m.handle});
     }
@@ -264,32 +421,48 @@ struct Capture : LC3CompatCheck {
     std::array<std::uint32_t,3> children{};
     std::vector<std::pair<std::string,std::uint32_t>> materials;
     bool valid=true, requireSemantic=true;
+    DRW::Version rawVersion=DRW::AC1021;
 };
 bool inspect(const std::string& path,const std::array<std::uint32_t,4>& h,bool supplied,
              DRW::Version version) {
     dwgRW reader(path.c_str()); Capture capture;
-    // AC1021 retains MATERIAL semantic fields as opaque data; peer readback
-    // separately checks those fields for the bounded source-derived profile.
-    capture.requireSemantic = version != DRW::AC1021;
-    return reader.read(&capture,false) && capture.matches(h,supplied);
+    // AC1021 and AC1027 retain MATERIAL semantic fields as opaque data; peer
+    // readback checks the bounded source-derived profile independently.
+    capture.requireSemantic = version == DRW::AC1024;
+    capture.rawVersion = version;
+    const bool r = reader.read(&capture,false); const bool m = capture.matches(h,supplied); if (!r || !m) std::cerr << "inspect read=" << r << " match=" << m << " root=" << capture.root << " dict=" << capture.dictionary << " layer=" << capture.layerMaterial << " materials=" << capture.materials.size() << " valid=" << capture.valid << "\n"; return r && m;
 }
 }
 int main(int argc,char**argv) {
     const bool keep=argc==2 && std::string(argv[1])=="--keep";
-    if(argc>2 || (argc==2 && !keep) || !directControls()) return 1;
+    if(argc>2 || (argc==2 && !keep) || !directControls() || !directAc1027Controls() || !ac1027AllocationSweep() || !ac1027LayerAllocationSweep()) return 1;
     const auto dir=std::filesystem::temp_directory_path() /
         ("libdxfrw-material-graph-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     if (!std::filesystem::create_directory(dir)) return 1;
     struct Cleanup {std::filesystem::path p; bool keep; ~Cleanup(){if(!keep){std::error_code e;std::filesystem::remove_all(p,e);}}} cleanup{dir,keep};
-    for (const auto version : {DRW::AC1021, DRW::AC1024}) {
-        const auto path=(dir/(version == DRW::AC1021 ? "graph-ac1021.dwg" : "graph-ac1024.dwg")).string(); dwgRW output(path.c_str());
+    for (const auto version : {DRW::AC1021, DRW::AC1024, DRW::AC1027}) {
+        const auto path=(dir/(version == DRW::AC1021 ? "graph-ac1021.dwg" : version == DRW::AC1024 ? "graph-ac1024.dwg" : "graph-ac1027.dwg")).string(); dwgRW output(path.c_str());
         if(!output.reserveHandle(0x30u)||!output.reserveHandle(0x31u)||!output.reserveHandle(0xB200u)) return 1;
         Adapter adapter(output);
         adapter.version=version;
-        if(!output.write(&adapter,version,true)||!inspect(path,adapter.handles,false,version)) {std::cerr<<"normal failed\n";return 1;}
+        if(!output.write(&adapter,version,true)){std::cerr<<"normal write failed version="<<int(version)<<" path="<<path<<"\n";return 1;} if (!inspect(path,adapter.handles,false,version)) {std::cerr<<"normal read failed version="<<int(version)<<" path="<<path<<"\n";return 1;}
         for(auto h:adapter.handles) if(h==0x30u||h==0x31u||h==0xB200u) return 1;
         adapter.mode=Mode::SuppliedLayer;
-        if(!output.write(&adapter,version,true)||!adapter.supplied||!inspect(path,adapter.handles,true,version)) {std::cerr<<"supplied layer failed\n";return 1;}
+        if (version == DRW::AC1027) {
+            {std::ofstream f(path,std::ios::binary);f<<"prior destination";}
+            if (output.write(&adapter,version,true)) return 1;
+            {std::ifstream f(path,std::ios::binary);if(std::string(std::istreambuf_iterator<char>(f),{})!="prior destination")return 1;}
+            adapter.mode=Mode::Normal;
+            if (!output.write(&adapter,version,true)||!inspect(path,adapter.handles,false,version)) return 1;
+        } else if(!output.write(&adapter,version,true)||!adapter.supplied||!inspect(path,adapter.handles,true,version)) {std::cerr<<"supplied layer failed\n";return 1;}
+        if (version == DRW::AC1027) {
+            adapter.plotEnabled=false;
+            {std::ofstream f(path,std::ios::binary);f<<"prior destination";}
+            if (output.write(&adapter,version,true)) return 1;
+            {std::ifstream f(path,std::ios::binary);if(std::string(std::istreambuf_iterator<char>(f),{})!="prior destination")return 1;}
+            adapter.plotEnabled=true; adapter.mode=Mode::Normal;
+            if (!output.write(&adapter,version,true)||!inspect(path,adapter.handles,false,version)) return 1;
+        }
         adapter.mode=Mode::HeaderGlobal;
         if(!output.write(&adapter,version,true)||!inspect(path,adapter.handles,false,version))return 1;
         if(keep) std::filesystem::copy_file(path,dir/(version == DRW::AC1021 ? "graph-global-ac1021.dwg" : "graph-global-ac1024.dwg"));
@@ -316,7 +489,7 @@ int main(int argc,char**argv) {
         {std::ifstream f(path,std::ios::binary);if(std::string(std::istreambuf_iterator<char>(f),{})!="prior destination")return 1;}
         adapter.opaqueAbsent=true;
         if(!output.write(&adapter,version,true)||!inspect(path,adapter.handles,false,version))return 1;
-        for (const auto unsupported : {DRW::AC1015, DRW::AC1018, DRW::AC1027, DRW::AC1032}) {
+        for (const auto unsupported : {DRW::AC1015, DRW::AC1018, DRW::AC1032}) {
             {std::ofstream f(path,std::ios::binary);f<<"prior destination";}
             if(output.write(&adapter,unsupported,true)) return 1;
             std::ifstream f(path,std::ios::binary);

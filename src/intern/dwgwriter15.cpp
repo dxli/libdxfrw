@@ -2964,7 +2964,8 @@ bool dwgWriter15::registerDwgNamedObjectDictionaryEntry(
 bool dwgWriter15::stageDefaultDwgMaterialGraph() {
     static_assert(std::is_nothrow_move_assignable<HandleAllocator>::value,
                   "failed material admission must restore allocator state");
-    if ((m_version != DRW::AC1021 && m_version != DRW::AC1024)
+    if ((m_version != DRW::AC1021 && m_version != DRW::AC1024 && m_version != DRW::AC1027)
+        || (m_version == DRW::AC1027 && m_defaultPlotStylePlaceholderHandle == 0)
         || m_dwgClassesFrozen || m_dwgClassManifestPrepared
         || m_sectionOffsets.count(recno::HEADER) || m_sectionOffsets.count(recno::CLASSES)
         || m_dwgTableRecordsComplete || defaultDwgMaterialGraphActive()
@@ -3347,8 +3348,9 @@ bool dwgWriter15::emitLayerRecord(std::uint32_t handle, const DRW_Layer& lay) {
                             &layerCopy.extData, &appIdRefs, &layerRefs,
                             fileCodePageId()))
         return false;
-    const bool typedLegacyNulls = m_version == DRW::AC1015
-        && handle == DRW::DwgLayer0Handle && !m_haveLayer0;
+    const bool typedLegacyNulls = handle == DRW::DwgLayer0Handle && !m_haveLayer0
+        && (m_version == DRW::AC1015 || (m_version == DRW::AC1027
+            && defaultDwgMaterialGraphActive()));
     if (!layerCopy.encodeDwgForWriter(m_version, &body, sb, hb, typedLegacyNulls))
         return false;
 
@@ -7437,6 +7439,8 @@ bool dwgWriter15::writeDwgObjects() {
                 layerChildren))
             return false;
         if (m_haveLayer0) {
+            if (m_version == DRW::AC1027 && defaultDwgMaterialGraphActive())
+                return false;
             if (!emitLayerRecord(DRW::DwgLayer0Handle, m_layer0))
                 return false;
         } else {

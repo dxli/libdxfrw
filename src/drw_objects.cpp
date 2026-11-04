@@ -8413,8 +8413,12 @@ bool DRW_Layer::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
     if (version > DRW::AC1018)
         hb->putHandle(makeRefW(materialHandle.ref, DRW::DwgHardPointer));
     hb->putHandle(makeRefW(lTypeH.ref, DRW::DwgHardPointer));
-    if (version >= DRW::AC1027)
-        hb->putHandle(makeRefW(unknownHandle.ref, DRW::DwgHardPointer));
+    if (version >= DRW::AC1027) {
+        auto unknown = makeRefW(unknownHandle.ref, DRW::DwgHardPointer);
+        if (version == DRW::AC1027 && typedLegacyNulls && unknown.ref == 0u)
+            unknown.code = DRW::DwgHardPointer;
+        hb->putHandle(unknown);
+    }
     return buf->isGood() && sb->isGood() && hb->isGood();
 }
 
