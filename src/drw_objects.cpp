@@ -28,6 +28,7 @@
 #include "intern/dxfwriter.h"
 #include "intern/dwgbuffer.h"
 #include "intern/dwgbufferw.h"
+#include "intern/dwg_default_material.h"
 #include "intern/drw_textcodec.h"
 #include "intern/drw_dbg.h"
 #include "intern/drw_reserve.h"
@@ -16339,8 +16340,8 @@ bool DRW_Material::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
 
     std::uint32_t bodyEnd = objSize;
     std::uint32_t stringEnd = objSize;
+    std::uint64_t stringStartBit = objSize;
     if (version > DRW::AC1018 && objSize != 0) {
-        std::uint64_t stringStartBit = 0;
         std::uint64_t stringEndBit = 0;
         if (!sBuff.getR2007StringStreamBounds(
                 objSize, stringStartBit, stringEndBit)
@@ -16409,7 +16410,7 @@ bool DRW_Material::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
     // defines the fixed nonprocedural field order. Decode on independent
     // cursors so an unsupported procedural source or newer tail remains an
     // opaque same-version body and cannot poison the publishing cursor.
-    if (version == DRW::AC1024) {
+    if (version == DRW::AC1024 || version == DRW::AC1027) {
         dwgBuffer bodyProbe = buf->forkIndependent();
         dwgBuffer textProbe = sBuf->forkIndependent();
         const auto inBounds = [&]() {
@@ -16541,6 +16542,31 @@ bool DRW_Material::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
             && std::isfinite(refractionIndex)
             && std::isfinite(translucence)
             && std::isfinite(reflectivity);
+    }
+
+    if (version == DRW::AC1027 && parsedSemanticFields) {
+        // Only the three source-witnessed defaults are decoded for R2013.
+        // The detached strings are part of the profile, not implied by the
+        // raw tail or the material's name alone.
+        drwDwgDefaultMaterial::Kind kind = drwDwgDefaultMaterial::Kind::Global;
+        const bool known = parsedName == "Global" || parsedName == "ByBlock"
+            || parsedName == "ByLayer";
+        if (parsedName == "ByBlock") kind = drwDwgDefaultMaterial::Kind::ByBlock;
+        if (parsedName == "ByLayer") kind = drwDwgDefaultMaterial::Kind::ByLayer;
+        dwgBufferW expectedBody, expectedStrings;
+        std::vector<std::uint8_t> actualBody, actualStrings;
+        dwgBuffer bodyCopy = buf->forkIndependent();
+        dwgBuffer textCopy = sBuff.forkIndependent();
+        const auto bodyBegin = currentObjectDwgBit(buf);
+        parsedSemanticFields = known
+            && drwDwgDefaultMaterial::build(version, kind, expectedBody, expectedStrings)
+            && bodyBegin <= bodyEnd && stringStartBit <= stringEnd
+            && bodyEnd - bodyBegin == expectedBody.bitCount()
+            && stringEnd - stringStartBit == expectedStrings.bitCount()
+            && captureRawBits(&bodyCopy, bodyBegin, bodyEnd, actualBody)
+            && captureRawBits(&textCopy, stringStartBit, stringEnd, actualStrings)
+            && actualBody == expectedBody.data()
+            && actualStrings == expectedStrings.data();
     }
 
     if (!buf->isGood() || !sBuf->isGood()

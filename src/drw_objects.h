@@ -745,6 +745,14 @@ enum class DRW_DwgFrameOffsetSpace : std::uint8_t {
   DecodedBuffer
 };
 
+//! CRC-validated AC1027 layer-0 source frame and its object-map identity.
+struct DRW_DwgAc1027LayerSource {
+  DRW_UnsupportedObject m_raw;
+  std::uint32_t m_sourceOffset{0u};
+  std::uint64_t m_sourceMapOrdinal{0u};
+  DRW_DwgFrameOffsetSpace m_sourceOffsetSpace{DRW_DwgFrameOffsetSpace::Unknown};
+};
+
 //! Reader disposition of one HANDLE-map source frame.
 //!
 //! Pending, Deferred, and Staged are transient. Unresolved is assigned only by

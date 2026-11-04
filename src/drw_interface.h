@@ -808,6 +808,14 @@ public:
  * A provider must not supply opaque records that claim ownership of the
  * planned identities, since their hidden references cannot be validated here.
  */
+// Optional source evidence; this does not add a virtual to DRW_Interface.
+class DRW_DwgHeaderMaterialSourceHandler {
+public:
+  virtual ~DRW_DwgHeaderMaterialSourceHandler() = default;
+  virtual void addDwgHeaderMaterialSource(DRW::Version version, const dwgHandle& source) noexcept = 0;
+  virtual void addDwgAc1027DefaultLayerSource(const DRW_DwgAc1027LayerSource& source) noexcept = 0;
+};
+
 class DRW_DwgDefaultPlotStyleProvider {
 public:
   virtual ~DRW_DwgDefaultPlotStyleProvider() = default;

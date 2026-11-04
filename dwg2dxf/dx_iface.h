@@ -16,6 +16,7 @@
 #include "drw_interface.h"
 #include "libdxfrw.h"
 #include "dx_data.h"
+#include "intern/dxf_ac1027_bound_layer.h"
 #include "dx_mline_source_dependency.h"
 #include "intern/dxfcode.h"
 #include "intern/dxfparserlimits.h"
@@ -40,7 +41,7 @@ namespace blockref_source_relation { struct Result; }
 class DxIfaceExtensionGraphTestAccess;
 class DxIfaceTableSourceTestAccess;
 
-class dx_iface : public DRW_Interface, public DRW_UnmodeledDxfObjectHandler,
+class dx_iface : public DRW_Interface, public DRW_DwgHeaderMaterialSourceHandler, public DRW_UnmodeledDxfObjectHandler,
                  public DRW_DwgDbColorEedSourceHandler,
                  public DRW_DwgClassSourceHandler, public DRW_DxfTableSourceHandler,
                  public DRW_DxfSymbolSourceHandler, public DRW_DxfRootDictionarySourceHandler,
@@ -552,6 +553,35 @@ public:
 
 //reader part, stores all in class dx_data
     //header
+    void addDwgAc1027DefaultLayerSource(const DRW_DwgAc1027LayerSource& source) noexcept override {
+        if (!cData || typeid(*this) != typeid(dx_iface) || source.m_raw.m_version != DRW::AC1027
+            || cData->sourceFormat != dx_source_format::DWG
+            || m_classEvidenceReadData != cData || !m_classEvidenceReadAttempt
+            || cData->m_classEvidenceOwner != this
+            || cData->m_classEvidenceAttempt != m_classEvidenceReadAttempt
+            || cData->importGeneration != cData->m_classEvidenceGeneration) return;
+        if (cData->m_ac1027DefaultLayerDuplicate) return;
+        if (cData->m_ac1027DefaultLayerSource || source.m_raw.m_rawBytes.size() > 1024u) {
+            cData->m_ac1027DefaultLayerDuplicate = true; return;
+        }
+        try { cData->m_ac1027DefaultLayerSource = source;
+              cData->m_ac1027DefaultLayerGeneration = cData->importGeneration; }
+        catch (...) {
+            cData->m_ac1027DefaultLayerSource.reset();
+            cData->m_ac1027DefaultLayerDuplicate = true;
+        }
+    }
+    void addDwgHeaderMaterialSource(DRW::Version version, const dwgHandle& source) noexcept override {
+        if (!cData || typeid(*this) != typeid(dx_iface) || version != DRW::AC1027
+            || cData->sourceFormat != dx_source_format::DWG
+            || m_classEvidenceReadData != cData || !m_classEvidenceReadAttempt
+            || cData->m_classEvidenceOwner != this
+            || cData->m_classEvidenceAttempt != m_classEvidenceReadAttempt
+            || cData->importGeneration != cData->m_classEvidenceGeneration) return;
+        if (cData->m_ac1027HeaderMaterialSource) { cData->m_ac1027HeaderMaterialDuplicate = true; return; }
+        cData->m_ac1027HeaderMaterialSource = source;
+        cData->m_ac1027HeaderMaterialGeneration = cData->importGeneration;
+    }
     void addHeader(const DRW_Header* data) override{
         cData->headerC = *data;
         if (cData->dxfReadOutcome.attempted)
@@ -1249,6 +1279,14 @@ public:
         }
         //complete copy of header vars:
         data = cData->headerC;
+        if (usesAc1027DefaultLayerProfile()) {
+            std::uint32_t source = 0u;
+            if (!validateAc1027HeaderMaterial(source)) {
+                data.addStr("$CMATERIAL", "-1", 347);
+                return;
+            }
+            data.addStr("$CMATERIAL", DRW::toHexStr(source), 347);
+        }
         if (dxfW != nullptr) {
             static constexpr std::array<std::pair<const char*, int>, 3>
                 visualStyleReferences{{
@@ -1444,10 +1482,24 @@ public:
         for (std::list<DRW_LType>::iterator it=cData->lineTypes.begin(); it != cData->lineTypes.end(); ++it)
             dxfW->writeLineType(&(*it));
     }
+    bool validateAc1027HeaderMaterial(std::uint32_t&) const noexcept;
+    bool usesAc1027DefaultLayerProfile() const noexcept;
+    bool validateAc1027DefaultLayer(const DRW_Layer&, std::uint32_t&) const noexcept;
+    bool inspectAc1027DefaultLayerOutput(const dxfRW::DxfTablesWriteView&) noexcept;
+    bool finalizeAc1027DefaultLayerOutput() const noexcept;
     virtual void writeLayers() override {
         if (!hasUnchangedDxfLayerMaterials()) { dxfW->writeLayer(nullptr); return; }
         for (auto& layer : cData->layers) {
             if (!checkDxfLayerMaterial(layer)) { dxfW->writeLayer(nullptr); return; }
+            if (usesAc1027DefaultLayerProfile()) {
+                std::uint32_t plotStyle = 0u;
+                if (!validateAc1027DefaultLayer(layer, plotStyle)) {
+                    dxfW->writeLayer(nullptr); return;
+                }
+                DRW_Ac1027BoundLayer projection(layer, plotStyle);
+                if (!dxfW->writeLayer(&projection)) return;
+                continue;
+            }
             if (cData->sourceFormat != dx_source_format::DXF
                 && (!layer.handleMaterialS.empty() || layer.materialHandle.ref
                     || layer.materialHandle.ref64)) {
@@ -1669,9 +1721,11 @@ public:
                 return;
             }
             if (cData->sourceFormat == dx_source_format::DWG) {
-                if (rawMatches != 0u
-                    || !dxfW->writeDictionaryWithDefault(typed))
-                    return;
+                if (rawMatches != 0u) return;
+                if (usesAc1027DefaultLayerProfile()) {
+                    DRW_Ac1027BoundDictionary projection(*typed);
+                    if (!dxfW->writeDictionaryWithDefault(&projection)) return;
+                } else if (!dxfW->writeDictionaryWithDefault(typed)) return;
             } else if (rawMatches != 1u || raw == nullptr
                        || !dxfW->writeRawDxfObject(raw)) {
                 dxfW->writeRawDxfObject(nullptr);
@@ -4019,6 +4073,7 @@ private:
     const dx_data* m_dwgDictionaryDefaultOutputSourceOwner{nullptr};
     DRW::Version m_dwgDictionaryDefaultOutputSourceVersion{DRW::UNKNOWNV};
     std::uint64_t m_dwgDictionaryDefaultOutputGeneration{0u};
+    bool m_ac1027DefaultLayerInspected = false;
     bool m_dwgDictionaryDefaultOutputInspected{false};
     bool hasUnchangedDwgDictionaryDefaultOutputSources() const noexcept;
     bool inspectDwgDictionaryDefaultOutput(

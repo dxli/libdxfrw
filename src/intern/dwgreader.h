@@ -1563,6 +1563,14 @@ protected:
   /// Resolve the source HEADER current-table handles after all table maps
   /// have been loaded, before publishing the header to the consumer.
   void resolveDwgHeaderCurrentReferences(DRW_Header& hdr);
+  const DRW_DwgAc1027LayerSource* ac1027DefaultLayerSource() const noexcept {
+    return m_ac1027DefaultLayerSource ? &*m_ac1027DefaultLayerSource : nullptr;
+  }
+  std::optional<dwgHandle> ac1027HeaderMaterialSource() const noexcept {
+    if (version != DRW::AC1027 || !m_haveDwgHeaderCurrentReferences
+        || !m_ac1027HeaderMaterialCrcValidated) return std::nullopt;
+    return m_dwgHeaderCurrentReferences[4];
+  }
   [[nodiscard]] bool decodeDwgTemplate(DRW_Header& hdr,
                                        const std::uint8_t* data,
                                        std::size_t size,
@@ -2163,8 +2171,10 @@ public:
   std::unordered_map<std::string, size_t> m_skippedUnsupportedObjects;
   std::vector<DRW_RawDwgSection> m_rawDwgSections;
   std::optional<dwgHandle> m_dwgNodReference;
-  std::array<dwgHandle, 4> m_dwgHeaderCurrentReferences{};
+  std::array<dwgHandle, 5> m_dwgHeaderCurrentReferences{};
   bool m_haveDwgHeaderCurrentReferences{false};
+  bool m_ac1027HeaderMaterialCrcValidated{false};
+  std::optional<DRW_DwgAc1027LayerSource> m_ac1027DefaultLayerSource;
   bool m_dwgNodPublished{false};
   bool m_dwgNodFailureReported{false};
   //! Typed AcDb:AcDsPrototype_1b index (PR-2a). Parallel to raw section store.

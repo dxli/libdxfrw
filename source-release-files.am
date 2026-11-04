@@ -39,6 +39,9 @@ EXTRA_DIST = \
     dwg2dxf/CMakeLists.txt \
     dwg2dxf/Makefile.am \
     dwg2dxf/dwg2dxf.1 \
+    dwg2dxf/dx_ac1027_layer_wire.h \
+    dwg2dxf/dx_ac1027_material_wire.h \
+    dwg2dxf/dx_ac1027_plotstyle_wire.h \
     dwg2dxf/dx_attdef_source_profile.h \
     dwg2dxf/dx_batch_input.h \
     dwg2dxf/dx_batch_output_names.cpp \
@@ -295,6 +298,7 @@ EXTRA_DIST = \
     src/intern/dwgwriter32.h \
     src/intern/dwgwriterlayoutvalidation.cpp \
     src/intern/dwgwriterlayoutvalidation.h \
+    src/intern/dxf_ac1027_bound_layer.h \
     src/intern/dxfattdef.h \
     src/intern/dxfblock.h \
     src/intern/dxfblockchildren.h \
@@ -360,6 +364,7 @@ EXTRA_DIST = \
     tests/ac1027_acds_source_probe.cpp \
     tests/ac1027_active_vport_peer_tests.py \
     tests/ac1027_block_control_peer_audit_tests.py \
+    tests/ac1027_default_graph_dxf_peer_negatives.py \
     tests/ac1027_empty_view_ucs_peer_tests.py \
     tests/ac1027_header_geometry_peer_tests.py \
     tests/ac1027_maintenance_header_audit_tests.py \
@@ -416,6 +421,7 @@ EXTRA_DIST = \
     tests/dwg_ac1024_default_material_tests.cpp \
     tests/dwg_ac1024_header_suffix_tests.cpp \
     tests/dwg_ac1027_block_control_boundary_tests.cpp \
+    tests/dwg_ac1027_default_graph_strict_tests.cpp \
     tests/dwg_ac1027_empty_view_ucs_controls_tests.cpp \
     tests/dwg_ac1027_maintenance_header_tests.cpp \
     tests/dwg_class_evidence_tests.cpp \
@@ -703,6 +709,7 @@ EXTRA_DIST = \
     tools/audit_ac1024_vport_null_roles.py \
     tools/audit_ac1027_active_vport_peer.py \
     tools/audit_ac1027_block_control_peer.py \
+    tools/audit_ac1027_default_graph_dxf.py \
     tools/audit_ac1027_empty_view_ucs_peer.py \
     tools/audit_ac1027_header_geometry_peer.py \
     tools/audit_ac1027_header_suffix_compare.py \
@@ -852,6 +859,7 @@ EXTRA_DIST = \
     tools/lightlist_physical_graph_probe.py \
     tools/make_ac1021_block_control_reactor_witness.py \
     tools/make_p9_rtext_oda_input.py \
+    tools/mutate_ac1027_default_graph_crc.py \
     tools/mutate_r2004_header_suffix_probe.py \
     tools/normalize_drawing_result.py \
     tools/normalize_oracle.py \
@@ -879,6 +887,7 @@ EXTRA_DIST = \
     tools/probe_ac1024_rastervariables_source.cpp \
     tools/probe_ac1024_tilted_geometry.cpp \
     tools/probe_ac1027_1032_writer_rejection.cpp \
+    tools/probe_ac1027_default_graph_source.cpp \
     tools/probe_ac1027_header_geometry.cpp \
     tools/probe_ac1027_maintenance_native.cpp \
     tools/probe_ac1027_source_sab_cqacis.py \

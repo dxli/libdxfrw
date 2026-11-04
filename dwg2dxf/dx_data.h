@@ -2364,6 +2364,18 @@ private:
     // as a second owner to the existing raw-section groups/bytes budget.
     std::list<AcdsRawDxfSectionBaseline> m_acdsRawDxfSectionBaselines;
     bool m_acdsRawDxfSectionCaptureFailed{false};
+    std::optional<DRW_DwgAc1027LayerSource> m_ac1027DefaultLayerSource;
+    struct Ac1027LayerPublication {
+        std::uint32_t handle{0u}, offset{0u};
+        std::uint64_t ordinal{0u}, generation{0u};
+        DRW_DwgFrameOffsetSpace space{DRW_DwgFrameOffsetSpace::Unknown};
+        bool duplicate{false}, valid{false};
+    } m_ac1027LayerPublication;
+    std::uint64_t m_ac1027DefaultLayerGeneration{0u};
+    bool m_ac1027DefaultLayerDuplicate{false};
+    std::optional<dwgHandle> m_ac1027HeaderMaterialSource;
+    std::uint64_t m_ac1027HeaderMaterialGeneration{0u};
+    bool m_ac1027HeaderMaterialDuplicate{false};
     struct StandardDwgObjectFrame {
         DRW_UnsupportedObject raw;
         DRW_DwgFramePublication publication;

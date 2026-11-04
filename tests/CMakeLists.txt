@@ -5143,3 +5143,14 @@ target_include_directories(libdxfrw_dwg2dxf_dimension_angle_tests PRIVATE ${CMAK
 target_link_libraries(libdxfrw_dwg2dxf_dimension_angle_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dwg2dxf_dimension_angle COMMAND libdxfrw_dwg2dxf_dimension_angle_tests)
 set_tests_properties(libdxfrw_dwg2dxf_dimension_angle PROPERTIES LABELS "fast;dwg;dxf;dimension;adapter;transaction" TIMEOUT 30)
+
+add_executable(libdxfrw_dwg_ac1027_default_graph_strict_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_ac1027_default_graph_strict_tests.cpp
+    $<TARGET_OBJECTS:libdxfrw_test_adapter>)
+target_compile_features(libdxfrw_dwg_ac1027_default_graph_strict_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_ac1027_default_graph_strict_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_ac1027_default_graph_strict_tests PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/dwg2dxf ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(libdxfrw_dwg_ac1027_default_graph_strict_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_ac1027_default_graph_strict COMMAND libdxfrw_dwg_ac1027_default_graph_strict_tests)
+set_tests_properties(libdxfrw_dwg_ac1027_default_graph_strict PROPERTIES LABELS "dwg;fast;AC1027;graph;transaction" TIMEOUT 120)

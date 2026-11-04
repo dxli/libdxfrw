@@ -31,6 +31,9 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "dx_iface.h"
+#include "dx_ac1027_plotstyle_wire.h"
+#include "dx_ac1027_material_wire.h"
+#include "dx_ac1027_layer_wire.h"
 #include "dx_mline_dictionary_source_live.h"
 #include "dx_sunstudy_dxf_profile.h"
 #include "dx_mline_layer_source_live.h"
@@ -67,6 +70,82 @@
 #include "intern/dxfmleadercolor.h"
 
 namespace {
+
+bool standardDwgCommonEqual(const DRW_TableEntry&, const DRW_TableEntry&,
+                            DRW::Version, bool) noexcept;
+
+bool exactAc1027ClassSourceMatches(const dx_data& data, const DRW_UnsupportedObject& raw,
+                                   const char* recordName, const char* className,
+                                   int count) noexcept {
+    if (!data.hasCompleteOpaqueDwgSourceCapture() || !data.hasUnchangedDwgClassEvidence()
+        || !data.dwgClassCoverage.m_complete
+        || data.dwgClassCoverage.m_status != DRW_DwgClassCoverageStatus::FinalizedComplete
+        || !raw.m_hasClassDefinition || raw.m_version != DRW::AC1027
+        || raw.m_recordName != recordName || raw.m_className != className)
+        return false;
+    const DRW_DwgClassCoverageEntry* match = nullptr;
+    for (const auto& row : data.dwgClassCoverage.m_entries) {
+        if (row.m_classNumber != raw.m_objectType && row.m_recordName != recordName
+            && row.m_className != className) continue;
+        if (match != nullptr) return false;
+        match = &row;
+    }
+    return match && match->m_classNumber == raw.m_objectType
+        && match->m_recordName == recordName && match->m_className == className
+        && match->m_state == DRW_DwgClassCoverageState::Published
+        && match->m_reason == DRW_DwgClassCoverageReason::None
+        && match->m_instanceCount == count && match->m_wasAProxyFlag == 0
+        && match->m_entityFlag == 0 && raw.m_classAppName == match->m_appName
+        && raw.m_classProxyFlag == match->m_proxyFlag
+        && raw.m_classWasProxy == (match->m_wasAProxyFlag != 0)
+        && raw.m_classEntityFlagRaw == match->m_entityFlagRaw
+        && raw.m_classDwgVersion == match->m_dwgVersion
+        && raw.m_classMaintenanceVersion == match->m_maintenanceVersion
+        && raw.m_classUnknown1 == match->m_unknown1
+        && raw.m_classUnknown2 == match->m_unknown2;
+}
+
+template<class SourceFrames>
+bool exactAc1027ClassFrameCensus(const SourceFrames& frames, std::uint64_t generation,
+                                  const DRW_UnsupportedObject& raw, std::size_t expected) noexcept {
+    std::size_t count = 0u;
+    for (const auto& item : frames) {
+        if (item.first.first != generation) continue;
+        const auto& row = item.second;
+        if (row.m_objectType != raw.m_objectType && row.m_recordName != raw.m_recordName
+            && row.m_className != raw.m_className) continue;
+        if (row.m_objectType != raw.m_objectType || row.m_recordName != raw.m_recordName
+            || row.m_className != raw.m_className || !row.m_isCustomClass || row.m_isEntity
+            || ++count > expected) return false;
+    }
+    return count == expected;
+}
+
+class Ac1027MaterialSourceProbe final : public DRW_Material {
+public:
+    using DRW_Material::parseDwg;
+};
+
+bool exactAc1027MaterialSourceMatches(const DRW_UnsupportedObject& raw,
+                                      const DRW_Material& typed) noexcept {
+    if (!dx_ac1027_material_wire::matches(raw, typed)) return false;
+    try {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1027, false);
+        dwgBuffer buf(raw.m_rawBytes.data(), raw.m_rawBytes.size(), &codec);
+        dwgBuffer type = buf.forkIndependent();
+        if (type.getObjType(DRW::AC1027) != raw.m_objectType || !type.isGood())
+            return false;
+        Ac1027MaterialSourceProbe parsed;
+        return parsed.parseDwg(DRW::AC1027, &buf, raw.m_bodyBitSize)
+            && parsed.hasCompleteDwgSemanticFields()
+            && parsed.handle == typed.handle
+            && parsed.parentHandle == typed.parentHandle
+            && parsed.reactorHandles == typed.reactorHandles
+            && standardDwgCommonEqual(parsed, typed, DRW::AC1027, true)
+            && dxfMaterial::sameState(parsed, typed);
+    } catch (...) { return false; }
+}
 
 template <typename EntityT>
 EntityT* exactEntityForDxfWrite(DRW_Entity* entity,
@@ -8315,6 +8394,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
     m_dwgDictionaryDefaultOutputSourceVersion = DRW::UNKNOWNV;
     m_dwgDictionaryDefaultOutputGeneration = 0u;
     m_dwgDictionaryDefaultOutputInspected = false;
+    m_ac1027DefaultLayerInspected = false;
     m_extensionCellStyleMapHandles.clear();
     m_extensionTableStyleBaseIds.clear();
     m_extensionDetailViewStyleHandles.clear();
@@ -11716,7 +11796,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             return reject(ExtensionGraphFailure::InvalidGraph, "SUNSTUDY source graph changed");
                     } else if (frame.material != nullptr) {
                         if (data->sourceFormat == dx_source_format::DWG) {
-                            if (data->sourceVersion != DRW::AC1024
+                            if ((data->sourceVersion != DRW::AC1024 && data->sourceVersion != DRW::AC1027)
                                 || frame.material->parentHandle
                                     != entry.parentHandle
                                 || !frame.material->hasDwgRawData()
@@ -11724,10 +11804,20 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                     != data->sourceVersion
                                 || !frame.material
                                        ->hasCompleteDwgSemanticFields()
-                                || !dxfMaterial::validBody(*frame.material))
+                                || !dxfMaterial::validBody(*frame.material)
+                                || (data->sourceVersion == DRW::AC1027
+                                    && ([&]() {
+                                        const auto source = data->m_opaqueDwgSourceFrames.find(
+                                            {data->importGeneration, frame.handle});
+                                        return source == data->m_opaqueDwgSourceFrames.end()
+                                            || !exactAc1027ClassSourceMatches(*data, source->second, "MATERIAL", "AcDbMaterial", 3)
+                                            || !exactAc1027ClassFrameCensus(data->m_opaqueDwgSourceFrames,
+                                                data->importGeneration, source->second, 3u)
+                                            || !exactAc1027MaterialSourceMatches(source->second, *frame.material);
+                                    })()))
                                 return reject(
                                     ExtensionGraphFailure::InvalidGraph,
-                                    "DWG MATERIAL is outside the complete AC1024 nonprocedural typed profile or has a wrong owner");
+                                    "DWG MATERIAL is outside its source-qualified typed profile or has a wrong owner");
                         } else if (data->sourceFormat != dx_source_format::DXF
                                    || m_dxfMaterialWriteSources.empty()) {
                             return reject(ExtensionGraphFailure::InvalidGraph,
@@ -13790,6 +13880,16 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     == m_extensionDictionaryHandles.end())
                 return reject(ExtensionGraphFailure::InvalidGraph,
                     "ACAD_MATERIAL dictionary is incomplete, unowned, or does not cover every typed MATERIAL");
+            if (data->sourceVersion == DRW::AC1027) {
+                const auto source = data->m_standardDwgObjectFrames.find(
+                    {data->importGeneration, dictionary->second->handle});
+                if (source == data->m_standardDwgObjectFrames.end()
+                    || !source->second.payloadMatched || !source->second.sourceProfileBound
+                    || !dx_ac1027_material_wire::dictionary(source->second.raw,
+                        *dictionary->second, data->namedObjectDictionary.handle))
+                    return reject(ExtensionGraphFailure::InvalidGraph,
+                        "AC1027 default MATERIAL dictionary wire does not match the witnessed profile");
+            }
             std::unordered_set<std::uint32_t> materialTargets;
             std::unordered_set<std::string> materialNames;
             materialTargets.reserve(materials.size());
@@ -13812,7 +13912,10 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     return reject(ExtensionGraphFailure::InvalidGraph,
                         "ACAD_MATERIAL entry does not uniquely bind a closed typed MATERIAL name and owner");
             }
-            if (materialTargets.size() != materials.size()
+            if ((data->sourceVersion == DRW::AC1027
+                    && (materials.size() != 3u
+                        || materialNames != std::unordered_set<std::string>{"BYBLOCK", "BYLAYER", "GLOBAL"}))
+                || materialTargets.size() != materials.size()
                 || m_extensionMaterialHandles.size() != materials.size())
                 return reject(ExtensionGraphFailure::InvalidGraph,
                     "ACAD_MATERIAL dictionary does not cover each typed MATERIAL exactly once");
@@ -14186,7 +14289,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         if (data->sourceFormat == dx_source_format::DWG
             && (data->sourceVersion == DRW::AC1015
                 || data->sourceVersion == DRW::AC1018
-                || data->sourceVersion == DRW::AC1024)
+                || data->sourceVersion == DRW::AC1024
+                || data->sourceVersion == DRW::AC1027)
             && data->dwgReadOutcome.attempted
             && data->hasSingleSuccessfulDictionaryDefaultImport()
             && data->hasNamedObjectDictionary
@@ -14217,7 +14321,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             if (dictionary != dictionariesWithDefault.end()
                 && placeholder != placeholders.end()
                 && frame != data->m_opaqueDwgSourceFrames.end()
-                && frame->second.m_objectType == 500
+                && (frame->second.m_objectType == 500 || (data->sourceVersion == DRW::AC1027 && frame->second.m_objectType >= 500))
                 && frame->second.m_handle == dictionaryHandle
                 && frame->second.m_version == data->sourceVersion
                 && frame->second.m_isCustomClass
@@ -14248,18 +14352,26 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     == placeholderHandle
                 && dictionary->second->m_defaultEntryHandle
                     == placeholderHandle
-                && dictionary->second->reactorHandles
-                    == std::vector<std::uint32_t>{
-                        data->namedObjectDictionary.handle}
+                && (data->sourceVersion == DRW::AC1027 ? dictionary->second->reactorHandles.empty() : dictionary->second->reactorHandles == std::vector<std::uint32_t>{data->namedObjectDictionary.handle})
                 && dictionary->second->xDictHandle == 0u
                 && dictionary->second->appData.empty()
                 && dictionary->second->extData.empty()
                 && placeholder->second->parentHandle == dictionaryHandle
-                && placeholder->second->reactorHandles
-                    == std::vector<std::uint32_t>{dictionaryHandle}
+                && (data->sourceVersion == DRW::AC1027 ? placeholder->second->reactorHandles.empty() : placeholder->second->reactorHandles == std::vector<std::uint32_t>{dictionaryHandle})
                 && placeholder->second->xDictHandle == 0u
                 && placeholder->second->appData.empty()
-                && placeholder->second->extData.empty()) {
+                && placeholder->second->extData.empty()
+                && (data->sourceVersion != DRW::AC1027
+                    || (dictionary->second->cloning == 1
+                        && dictionary->second->hardOwner == 0
+                        && exactAc1027ClassSourceMatches(*data, frame->second,
+                            "ACDBDICTIONARYWDFLT", "AcDbDictionaryWithDefault", 1)
+                        && exactAc1027ClassFrameCensus(data->m_opaqueDwgSourceFrames,
+                            data->importGeneration, frame->second, 1u)
+                        && dx_ac1027_plotstyle_wire::matches(frame->second, true,
+                            data->namedObjectDictionary.handle, placeholderHandle)
+                        && dx_ac1027_plotstyle_wire::matches(placeholderFrame->second,
+                            false, dictionaryHandle, placeholderHandle)))) {
                 DwgDictionaryDefaultOutputSource source;
                 source.dictionary = *dictionary->second;
                 source.placeholder = *placeholder->second;
@@ -24942,6 +25054,21 @@ bool dx_iface::retainDwgPlotSettingsPublication(
 void dx_iface::addDwgFramePublication(const DRW_DwgFramePublication& data) {
     if (cData == nullptr || !cData->dwgReadOutcome.attempted)
         return;
+    if (typeid(*this) == typeid(dx_iface) && m_classEvidenceReadData == cData
+        && m_classEvidenceReadAttempt && cData->importGeneration == cData->m_classEvidenceGeneration
+        && data.m_version == DRW::AC1027 && data.m_encodedType == 51) {
+        auto& proof = cData->m_ac1027LayerPublication;
+        if (proof.valid) proof.duplicate = true;
+        else {
+            proof.handle = data.m_handle; proof.offset = data.m_sourceOffset;
+            proof.ordinal = data.m_sourceMapOrdinal; proof.space = data.m_sourceOffsetSpace;
+            proof.generation = cData->importGeneration;
+            proof.valid = data.m_hasSourceLocation && data.m_resolvedType == 51
+                && !data.m_isEntity && !data.m_isCustomClass && data.m_recordName == "layer"
+                && data.m_carrier == DRW_DwgFramePublication::Carrier::Typed;
+            if (!proof.valid) proof.duplicate = true;
+        }
+    }
     const auto index = static_cast<std::size_t>(data.m_carrier);
     if (index < cData->dwgReadOutcome.observedReceiptCarriers.size())
         countDwgReadCallback(cData->dwgReadOutcome.observedReceiptCarriers[index]);
@@ -35636,7 +35763,7 @@ bool dx_iface::hasUnchangedExtensionMaterialSources() const noexcept {
     if (cData != m_extensionMaterialSourceOwner || !cData
         || cData->sourceFormat != dx_source_format::DWG
         || cData->sourceVersion != m_extensionMaterialSourceVersion
-        || cData->sourceVersion != DRW::AC1024
+        || (cData->sourceVersion != DRW::AC1024 && cData->sourceVersion != DRW::AC1027)
         || cData->importGeneration != m_extensionMaterialSourceGeneration
         || m_extensionMaterialHandles.size()
             != m_extensionMaterialSources.size()
@@ -35661,12 +35788,22 @@ bool dx_iface::hasUnchangedExtensionMaterialSources() const noexcept {
             if (!selected.insert(handle).second || found == current.end()
                 || frozen.handle != handle
                 || !frozen.hasDwgRawData()
-                || frozen.dwgRawDataVersion() != DRW::AC1024
+                || frozen.dwgRawDataVersion() != cData->sourceVersion
                 || !frozen.hasCompleteDwgSemanticFields()
                 || !found->second->hasCompleteDwgSemanticFields()
                 || !dxfMaterial::sameState(*found->second, frozen)
                 || !standardDwgCommonEqual(*found->second, frozen,
-                                           DRW::AC1024))
+                                           cData->sourceVersion)
+                || (cData->sourceVersion == DRW::AC1027
+                    && ([&]() {
+                        const auto frame = cData->m_opaqueDwgSourceFrames.find(
+                            {cData->importGeneration, handle});
+                        return frame == cData->m_opaqueDwgSourceFrames.end()
+                            || !exactAc1027ClassSourceMatches(*cData, frame->second, "MATERIAL", "AcDbMaterial", 3)
+                            || !exactAc1027ClassFrameCensus(cData->m_opaqueDwgSourceFrames,
+                                cData->importGeneration, frame->second, 3u)
+                            || !exactAc1027MaterialSourceMatches(frame->second, *found->second);
+                    })()))
                 return false;
         }
         std::unordered_map<std::uint32_t, const DRW_Dictionary*> currentDictionaries;
@@ -35686,8 +35823,17 @@ bool dx_iface::hasUnchangedExtensionMaterialSources() const noexcept {
                 || !found->second->hasCompleteDwgEntries()
                 || !standardDwgModelsEqual(
                     m_extensionMaterialDictionaries[index], *found->second,
-                    DRW::AC1024, dwgObjType::DICTIONARY))
+                    cData->sourceVersion, dwgObjType::DICTIONARY))
                 return false;
+            if (cData->sourceVersion == DRW::AC1027) {
+                const auto frame = cData->m_standardDwgObjectFrames.find(
+                    {cData->importGeneration, handle});
+                if (frame == cData->m_standardDwgObjectFrames.end()
+                    || !frame->second.payloadMatched || !frame->second.sourceProfileBound
+                    || !dx_ac1027_material_wire::dictionary(frame->second.raw,
+                        *found->second, cData->namedObjectDictionary.handle))
+                    return false;
+            }
         }
         return true;
     } catch (...) { return false; }
@@ -35749,6 +35895,13 @@ bool dx_iface::prepareDxfHeaderMaterial(DRW::Version targetVersion) noexcept {
         ||!cData->headerC.getDxfMaterialReferenceHandle(state.target,state.present))return false;
     state.owner=cData;state.generation=cData->importGeneration;
     state.format=cData->sourceFormat;state.version=cData->sourceVersion;
+    if (usesAc1027DefaultLayerProfile()) {
+        if (state.present || !validateAc1027HeaderMaterial(state.target)) return false;
+        state.present = true; state.active = true;
+        for (const auto& material : m_extensionMaterialSources)
+            if (material.handle == state.target) { state.targetOwner = material.parentHandle; return true; }
+        return false;
+    }
     state.active=state.present||!m_dxfMaterialWriteSources.empty();
     if(state.target) {
         if(state.format!=dx_source_format::DXF)return false;
@@ -35767,6 +35920,10 @@ bool dx_iface::hasUnchangedDxfHeaderMaterial() const noexcept {
     const auto& state=m_dxfHeaderMaterialState;
     if(!state.owner)return true;
     std::uint32_t target=0u;bool present=false;
+    if (state.format == dx_source_format::DWG && state.version == DRW::AC1027
+        && usesAc1027DefaultLayerProfile())
+        return cData==state.owner && cData->importGeneration==state.generation
+            && validateAc1027HeaderMaterial(target) && target==state.target && state.present;
     return cData==state.owner&&cData->importGeneration==state.generation
         &&cData->sourceFormat==state.format&&cData->sourceVersion==state.version
         &&cData->headerC.getDxfMaterialReferenceHandle(target,present)
@@ -46947,7 +47104,8 @@ bool dx_iface::hasUnchangedDwgDictionaryDefaultOutputSources() const noexcept {
             != m_dwgDictionaryDefaultOutputSourceVersion
         || (m_dwgDictionaryDefaultOutputSourceVersion != DRW::AC1015
             && m_dwgDictionaryDefaultOutputSourceVersion != DRW::AC1018
-            && m_dwgDictionaryDefaultOutputSourceVersion != DRW::AC1024)
+            && m_dwgDictionaryDefaultOutputSourceVersion != DRW::AC1024
+            && m_dwgDictionaryDefaultOutputSourceVersion != DRW::AC1027)
         || !cData->hasSingleSuccessfulDictionaryDefaultImport()
         || !cData->hasNamedObjectDictionary
         || m_dwgDictionaryDefaultOutputSources.size() != 1u
@@ -47000,11 +47158,8 @@ bool dx_iface::hasUnchangedDwgDictionaryDefaultOutputSources() const noexcept {
             || proof.dictionary.m_entries.front().m_handle
                 != proof.placeholder.handle
             || proof.placeholder.parentHandle != proof.dictionary.handle
-            || proof.dictionary.reactorHandles
-                != std::vector<std::uint32_t>{
-                    proof.namedObjectDictionary.handle}
-            || proof.placeholder.reactorHandles
-                != std::vector<std::uint32_t>{proof.dictionary.handle})
+            || (m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027 ? !proof.dictionary.reactorHandles.empty() : proof.dictionary.reactorHandles != std::vector<std::uint32_t>{proof.namedObjectDictionary.handle})
+            || (m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027 ? !proof.placeholder.reactorHandles.empty() : proof.placeholder.reactorHandles != std::vector<std::uint32_t>{proof.dictionary.handle}))
             return false;
 
         const auto frameMatches = [this](
@@ -47023,7 +47178,25 @@ bool dx_iface::hasUnchangedDwgDictionaryDefaultOutputSources() const noexcept {
                 && found->second.m_recordName == recordName
                 && found->second.m_className == className;
         };
-        return proof.objectType == 500
+        if (m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027) {
+            const auto dictFrame = cData->m_opaqueDwgSourceFrames.find(
+                {cData->importGeneration, proof.dictionary.handle});
+            const auto placeFrame = cData->m_opaqueDwgSourceFrames.find(
+                {cData->importGeneration, proof.placeholder.handle});
+            if (dictFrame == cData->m_opaqueDwgSourceFrames.end()
+                || placeFrame == cData->m_opaqueDwgSourceFrames.end()
+                || proof.dictionary.cloning != 1 || proof.dictionary.hardOwner != 0
+                || !exactAc1027ClassSourceMatches(*cData, dictFrame->second,
+                    "ACDBDICTIONARYWDFLT", "AcDbDictionaryWithDefault", 1)
+                || !exactAc1027ClassFrameCensus(cData->m_opaqueDwgSourceFrames,
+                    cData->importGeneration, dictFrame->second, 1u)
+                || !dx_ac1027_plotstyle_wire::matches(dictFrame->second, true,
+                    proof.namedObjectDictionary.handle, proof.placeholder.handle)
+                || !dx_ac1027_plotstyle_wire::matches(placeFrame->second, false,
+                    proof.dictionary.handle, proof.placeholder.handle))
+                return false;
+        }
+        return (proof.objectType == 500 || (m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027 && proof.objectType >= 500))
             && asciiIdentifierEquals(proof.recordName,
                                      "ACDBDICTIONARYWDFLT")
             && proof.className == "AcDbDictionaryWithDefault"
@@ -47488,7 +47661,8 @@ bool dx_iface::inspectDwgDictionaryDefaultOutput(
     if (m_dwgDictionaryDefaultOutputSources.empty())
         return true;
     if (dxfW == nullptr || cData == nullptr
-        || view.version != DRW::AC1024
+        || (m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027
+            ? view.version != DRW::AC1027 : view.version != DRW::AC1024)
         || !hasUnchangedDwgDictionaryDefaultOutputSources())
         return false;
     try {
@@ -47531,7 +47705,8 @@ bool dx_iface::inspectDwgDictionaryDefaultOutput(
             || emittedDictionary == emittedNod
             || emittedPlaceholder == emittedNod
             || !dxfW->dxfWriteRecordHasIdentity(
-                emittedDictionary, "DICTIONARYWDFLT", "OBJECTS")
+                emittedDictionary, m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027
+                    ? "ACDBDICTIONARYWDFLT" : "DICTIONARYWDFLT", "OBJECTS")
             || !dxfW->dxfWriteRecordHasOwner(
                 emittedDictionary, emittedNod)
             || !dxfW->dxfWriteRecordHasIdentity(
@@ -47602,7 +47777,8 @@ bool dx_iface::inspectDwgDictionaryDefaultOutput(
             [&](std::string_view name, std::uint32_t handle) {
                 if ((handle == emittedDictionary
                         && !asciiIdentifierEquals(
-                            name, "DICTIONARYWDFLT"))
+                            name, m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027
+                                ? "ACDBDICTIONARYWDFLT" : "DICTIONARYWDFLT"))
                     || (handle == emittedPlaceholder
                         && !asciiIdentifierEquals(
                             name, "ACDBPLACEHOLDER"))
@@ -47677,6 +47853,16 @@ bool dx_iface::inspectDwgDictionaryDefaultOutput(
                     || shape.kind != dx_standard_output::Family::Other)
                     return false;
                 dx_standard_output::RecordCursor cursor(body, view);
+                if (m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027) {
+                    dx_standard_output::RecordCursor::Token self, owner;
+                    std::uint32_t selfHandle = 0u, ownerHandle = 0u;
+                    return cursor.next(self) && self.code == 5
+                        && parseHandle(self.text, selfHandle)
+                        && selfHandle == emittedPlaceholder
+                        && cursor.next(owner) && owner.code == 330
+                        && parseHandle(owner.text, ownerHandle)
+                        && ownerHandle == emittedDictionary && cursor.done();
+                }
                 const std::array<int, 5> expectedCodes{{
                     5, 102, 330, 102, 330}};
                 const std::array<std::string_view, 5> expectedMarkers{{
@@ -66393,6 +66579,13 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
     fData->m_dxfLayerControlCaptureFailed = false;
     fData->sourceFormat = dx_source_format::Unknown;
     fData->sourceVersion = DRW::UNKNOWNV;
+    fData->m_ac1027DefaultLayerSource.reset();
+    fData->m_ac1027LayerPublication = {};
+    fData->m_ac1027DefaultLayerGeneration = 0u;
+    fData->m_ac1027DefaultLayerDuplicate = false;
+    fData->m_ac1027HeaderMaterialSource.reset();
+    fData->m_ac1027HeaderMaterialGeneration = 0u;
+    fData->m_ac1027HeaderMaterialDuplicate = false;
     unsigned int found = fileI.find_last_of(".");
     std::string fileExt = fileI.substr(found+1);
     std::transform(fileExt.begin(), fileExt.end(), fileExt.begin(),
@@ -69255,7 +69448,7 @@ bool dx_iface::finalizeDxfWrite() {
         || !hasUnchangedDwgScales()
         || (!m_dwgScaleOutputSources.empty() && !m_dwgScalesInspected)) return false;
     if(!hasUnchangedDxfDictionaryVars()||(!m_dxfDictionaryVars.empty()&&!m_dxfDictionaryVarsInspected))return false;
-    if(!finalizeDxfHeaderMaterial()||!finalizeDxfLayerMaterials()||!finalizeDxfFullStyles()||!finalizeDxfCommonReferences(347,m_dxfMaterialReferenceState))return false;
+    if(!finalizeDxfHeaderMaterial()||!finalizeDxfLayerMaterials()||!finalizeAc1027DefaultLayerOutput()||!finalizeDxfFullStyles()||!finalizeDxfCommonReferences(347,m_dxfMaterialReferenceState))return false;
     if (!hasUnchangedDxfRenderPresetSources()
         || (!m_dxfRenderPresetSources.empty() && !m_dxfRenderPresetInspected)) return false;
     if (!hasUnchangedDxfVisualStyles()
@@ -73123,6 +73316,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     m_dwgDictionaryDefaultOutputSourceVersion = DRW::UNKNOWNV;
     m_dwgDictionaryDefaultOutputGeneration = 0u;
     m_dwgDictionaryDefaultOutputInspected = false;
+    m_ac1027DefaultLayerInspected = false;
     m_sortDictionaryHandles.clear();
     m_sortOwnerHandles.clear();
     m_sortEmissionTables.clear();
@@ -76131,9 +76325,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             classes.swap(normalized);
             return true;
         };
-        return registerClass("DICTIONARYWDFLT",
+        return registerClass(usesAc1027DefaultLayerProfile()
+                                 ? "ACDBDICTIONARYWDFLT" : "DICTIONARYWDFLT",
                              "ACDBDICTIONARYWITHDEFAULT",
-                             "ACDBDICTIONARYWDFLT",
+                             usesAc1027DefaultLayerProfile()
+                                 ? "DICTIONARYWDFLT" : "ACDBDICTIONARYWDFLT",
                              m_extensionDictionaryWithDefaultHandles.size())
             && registerClass("ACDBPLACEHOLDER", "ACDBPLACEHOLDER", nullptr,
                              m_extensionPlaceholderHandles.size());
@@ -77548,9 +77744,9 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         m_dwgLayerStateOutputPrepared;
     if ((needsStandardNames || needsLayerControlOutput
             || m_dxfLayerMaterialState.active || !m_dxfMLineLinetypes.empty()
-            || needsDwgLayoutsOutput || !m_dwgGeoDataGraphs.empty()) && !dxfW->setDxfTablesWriteInspector([this, needsStandardNames, needsLayerControlOutput, needsDwgLayoutsOutput, debug, requireResolvedOwners](const auto& view) {
+            || needsDwgLayoutsOutput || !m_dwgGeoDataGraphs.empty() || usesAc1027DefaultLayerProfile()) && !dxfW->setDxfTablesWriteInspector([this, needsStandardNames, needsLayerControlOutput, needsDwgLayoutsOutput, debug, requireResolvedOwners](const auto& view) {
             if (!inspectDwgGeoDataTables(view)) return false;
-            if (!inspectDxfLayerMaterials(view)) {
+            if (!inspectDxfLayerMaterials(view) || !inspectAc1027DefaultLayerOutput(view)) {
                 return false;
             }
             if (!inspectDxfMLineLinetypes(view)) return false;
@@ -79785,4 +79981,151 @@ void dx_iface::writeEntity(DRW_Entity* e){
         else
             selected->second.published = true;
     }
+}
+
+bool dx_iface::usesAc1027DefaultLayerProfile() const noexcept {
+    return cData && cData->sourceFormat == dx_source_format::DWG
+        && cData->sourceVersion == DRW::AC1027
+        && m_extensionMaterialSources.size() == 3u
+        && m_dwgDictionaryDefaultOutputSources.size() == 1u;
+}
+
+bool dx_iface::validateAc1027DefaultLayer(const DRW_Layer& layer,
+                                           std::uint32_t& plot) const noexcept {
+    plot = 0u;
+    if (!usesAc1027DefaultLayerProfile() || !cData || cData->layers.size() != 1u
+        || layer.name != "0" || layer.handle == 0u || layer.handle == DRW::NoHandle)
+        return false;
+    try {
+        const auto& publication = cData->m_ac1027LayerPublication;
+        const auto& source = cData->m_ac1027DefaultLayerSource;
+        if (!source || cData->m_ac1027DefaultLayerDuplicate
+            || cData->m_ac1027DefaultLayerGeneration != cData->importGeneration
+            || !publication.valid || publication.duplicate
+            || publication.generation != cData->importGeneration
+            || publication.handle != layer.handle || source->m_raw.m_handle != layer.handle
+            || publication.offset != source->m_sourceOffset
+            || source->m_raw.m_objectOffset != source->m_sourceOffset
+            || source->m_raw.m_objectSize != source->m_raw.m_rawBytes.size()
+            || publication.ordinal != source->m_sourceMapOrdinal
+            || publication.space != source->m_sourceOffsetSpace
+            || (publication.space != DRW_DwgFrameOffsetSpace::PhysicalFile
+                && publication.space != DRW_DwgFrameOffsetSpace::DecodedBuffer)) return false;
+        const auto original = cData->m_standardDwgLayerSources.find(
+            {cData->importGeneration, layer.handle});
+        if (original == cData->m_standardDwgLayerSources.end() || !original->second
+            || !layerSourceEqual(layer, *original->second, DRW::AC1027)
+            || !hasUnchangedExtensionMaterialSources()
+            || !hasUnchangedDwgDictionaryDefaultOutputSources()) return false;
+        const auto& proof = m_dwgDictionaryDefaultOutputSources.begin()->second;
+        const DRW_Material* global = nullptr;
+        for (const auto& material : m_extensionMaterialSources) {
+            if (material.m_name != "Global") continue;
+            if (global != nullptr) return false;
+            global = &material;
+        }
+        if (!global || !dx_ac1027_layer_wire::matches(source->m_raw, layer,
+                proof.placeholder.handle, global->handle)
+            || layer.plotStyleHandle.code != 5u
+            || layer.plotStyleHandle.ref != proof.placeholder.handle
+            || layer.plotStyleHandle.ref64 != layer.plotStyleHandle.ref
+            || layer.materialHandle.code != 5u || layer.materialHandle.ref != global->handle
+            || layer.materialHandle.ref64 != layer.materialHandle.ref
+            || layer.handlePlotS != DRW::toHexStr(layer.plotStyleHandle.ref)
+            || layer.handleMaterialS != DRW::toHexStr(layer.materialHandle.ref)) return false;
+        plot = proof.placeholder.handle;
+        return plot != 0u && plot != DRW::NoHandle;
+    } catch (...) { return false; }
+}
+
+bool dx_iface::inspectAc1027DefaultLayerOutput(const dxfRW::DxfTablesWriteView& view) noexcept {
+    if (!usesAc1027DefaultLayerProfile()) return true;
+    if (!cData || !dxfW || view.version != DRW::AC1027
+        || m_ac1027DefaultLayerInspected || cData->layers.size() != 1u) return false;
+    try {
+        const DRW_Layer& layer = cData->layers.front();
+        std::uint32_t plot = 0u;
+        if (!validateAc1027DefaultLayer(layer, plot)) return false;
+        const auto expectedLayer = dxfW->dxfWriteEmittedSourceTableHandle(layer.handle);
+        const auto expectedPlot = dxfW->remapHandle(plot);
+        const auto expectedMaterial = dxfW->remapHandle(layer.materialHandle.ref);
+        if (!expectedLayer || !expectedPlot || expectedPlot == DRW::NoHandle
+            || !expectedMaterial || expectedMaterial == DRW::NoHandle) return false;
+        std::size_t rows = 0u;
+        const bool inspected = dx_standard_output::inspectSelected(view,
+            [](std::string_view name, std::uint32_t) { return name == "LAYER"; },
+            [&](const auto& shape, std::string_view body) {
+                if (++rows != 1u || shape.handle != expectedLayer) return false;
+                dx_standard_output::RecordCursor cursor(body, view);
+                dx_standard_output::RecordCursor::Token token;
+                unsigned depth = 0u, materialCount = 0u, plotCount = 0u;
+                bool layerSubclass = false, xdata = false;
+                while (!cursor.done()) {
+                    if (!cursor.next(token)) return false;
+                    if (token.code == 102) {
+                        if (token.text == "}") { if (!depth) return false; --depth; }
+                        else if (!token.text.empty() && token.text.front() == '{') ++depth;
+                        else return false;
+                        continue;
+                    }
+                    if (depth) continue;
+                    if (token.code >= 1000) { xdata = true; continue; }
+                    if (xdata) return false;
+                    if (token.code == 100) layerSubclass = token.text == "AcDbLayerTableRecord";
+                    if (token.code != 347 && token.code != 390) continue;
+                    std::uint32_t actual = 0u;
+                    const auto parsed = std::from_chars(token.text.data(), token.text.data()+token.text.size(), actual, 16);
+                    if (!layerSubclass || token.text.empty() || parsed.ec != std::errc{}
+                        || parsed.ptr != token.text.data()+token.text.size()) return false;
+                    if (token.code == 347) { if (++materialCount != 1u || actual != expectedMaterial) return false; }
+                    else { if (++plotCount != 1u || actual != expectedPlot) return false; }
+                }
+                return depth == 0u && materialCount == 1u && plotCount == 1u;
+            });
+        if (!inspected || rows != 1u) return false;
+        m_ac1027DefaultLayerInspected = true;
+        return true;
+    } catch (...) { return false; }
+}
+
+bool dx_iface::finalizeAc1027DefaultLayerOutput() const noexcept {
+    if (!usesAc1027DefaultLayerProfile()) return true;
+    if (!m_ac1027DefaultLayerInspected || !dxfW || !cData || cData->layers.size() != 1u
+        || !m_dxfMaterialWriteInspected || !m_dwgDictionaryDefaultOutputInspected) return false;
+    std::uint32_t plot = 0u;
+    const auto& layer = cData->layers.front();
+    if (!validateAc1027DefaultLayer(layer, plot)) return false;
+    const auto& material = *std::find_if(m_extensionMaterialSources.begin(), m_extensionMaterialSources.end(),
+        [](const DRW_Material& item) { return item.m_name == "Global"; });
+    const auto emittedPlot = dxfW->remapHandle(plot);
+    const auto emittedMaterial = dxfW->remapHandle(material.handle);
+    return dxfW->dxfWriteSourceObjectHasIdentity(material.handle, emittedMaterial,
+               "MATERIAL", "OBJECTS", dxfW->remapHandle(material.parentHandle))
+        && dxfW->dxfWriteRecordHasIdentity(emittedPlot, "ACDBPLACEHOLDER", "OBJECTS")
+        && dxfW->dxfWriteRecordHasOwner(emittedPlot,
+               dxfW->remapHandle(m_dwgDictionaryDefaultOutputSources.begin()->second.dictionary.handle));
+}
+
+
+bool dx_iface::validateAc1027HeaderMaterial(std::uint32_t& target) const noexcept {
+    target = 0u;
+    if (!usesAc1027DefaultLayerProfile() || !cData || cData->m_ac1027HeaderMaterialDuplicate
+        || cData->m_ac1027HeaderMaterialGeneration != cData->importGeneration
+        || !cData->m_ac1027HeaderMaterialSource) return false;
+    const auto& source = *cData->m_ac1027HeaderMaterialSource;
+    if (source.code != 5u || source.size == 0u || source.size > 4u
+        || source.ref == 0u || source.ref == DRW::NoHandle || source.ref64 != source.ref
+        || (source.ref64 >> (source.size * 8u)) != 0u)
+        return false;
+    std::uint32_t existing = 0u; bool present = false;
+    if (!cData->headerC.getDxfMaterialReferenceHandle(existing, present) || present) return false;
+    const DRW_Material* byLayer = nullptr;
+    for (const auto& material : m_extensionMaterialSources) {
+        if (material.m_name != "ByLayer") continue;
+        if (byLayer) return false;
+        byLayer = &material;
+    }
+    if (!byLayer || source.ref != byLayer->handle) return false;
+    target = source.ref;
+    return true;
 }

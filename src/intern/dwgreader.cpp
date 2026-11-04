@@ -7288,6 +7288,7 @@ bool dwgReader::readDwgHeader(DRW_Header &hdr, dwgBuffer *buf,
                               std::uint64_t sectionOffset) {
   m_dwgNodReference.reset();
   m_haveDwgHeaderCurrentReferences = false;
+  m_ac1027HeaderMaterialCrcValidated = false;
   m_dwgHeaderCurrentReferences = {};
   m_dwgNodPublished = false;
   m_dwgNodFailureReported = false;
@@ -7355,7 +7356,7 @@ bool dwgReader::readDwgHeader(DRW_Header &hdr, dwgBuffer *buf,
              envelope.expected, envelope.observed, envelope.hasValues);
       return false;
     }
-    std::array<dwgHandle, 4> currentReferences{};
+    std::array<dwgHandle, 5> currentReferences{};
     const bool ret = hdr.parseDwgForReader(
         version, buf, hBuf, appMaintenanceVersion, &currentReferences);
     if (!ret) {
@@ -7391,6 +7392,8 @@ bool dwgReader::readDwgHeader(DRW_Header &hdr, dwgBuffer *buf,
                DwgIntegritySeverity::Error, envelope, 0u, 0u, false);
         return false;
       }
+      if (calculated == envelope.storedCrc)
+        m_ac1027HeaderMaterialCrcValidated = true;
       if (calculated != envelope.storedCrc) {
         auto crcEnvelope = envelope;
         crcEnvelope.offset = envelope.payloadEnd;
@@ -8364,6 +8367,8 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
     return abortTablePhase();
 
   // parse layers, start with layer Control
+  m_ac1027DefaultLayerSource.reset();
+  bool ac1027LayerZeroSeen = false;
   mit = ObjectMap.find(hdr.layerCtrl);
   if (mit == ObjectMap.end()) {
     DRW_DBG("\nWARNING: Layer control not found\n");
@@ -8400,6 +8405,37 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
         ret2 = parseTableRecord(oc, kLayerTable, la);
         ret = ret && ret2;
         if (ret2) {
+          // Optional bounded source evidence. readAt independently checks the
+          // entire frame CRC; failure leaves ordinary table decoding unchanged.
+          if (version == DRW::AC1027 && la->name == "0") {
+            if (ac1027LayerZeroSeen) m_ac1027DefaultLayerSource.reset();
+            else {
+              ac1027LayerZeroSeen = true;
+              try {
+                DwgObjectFrame evidence;
+                if (evidence.readAt(*dbuf, version, oc.loc)
+                    && evidence.body().size() <= 1024u) {
+                  DRW_UnsupportedObject raw;
+                  raw.m_objectType = kLayerTable.recordType;
+                  raw.m_handle = la->handle; raw.m_parentHandle = la->parentHandle;
+                  raw.m_bodyBitSize = evidence.bodyBitSize(); raw.m_version = version;
+                  raw.m_objectOffset = oc.loc;
+                  raw.m_objectSize = static_cast<std::uint32_t>(evidence.body().size());
+                  raw.m_numReactors = la->reactorCount();
+                  raw.m_reactorHandles = la->reactorHandles;
+                  raw.m_xDictFlag = la->extensionDictionaryFlag();
+                  raw.m_xDictHandle = la->xDictHandle;
+                  raw.m_hasDataStorage = la->hasDataStorageBinaryData();
+                  raw.m_rawBytes = evidence.body();
+                  DRW_DwgAc1027LayerSource receipt;
+                  receipt.m_raw = std::move(raw); receipt.m_sourceOffset = oc.loc;
+                  receipt.m_sourceMapOrdinal = oc.sourceOrdinal;
+                  receipt.m_sourceOffsetSpace = oc.sourceOffsetSpace;
+                  m_ac1027DefaultLayerSource = std::move(receipt);
+                }
+              } catch (...) { m_ac1027DefaultLayerSource.reset(); }
+            }
+          }
           (void)insertTableRecord(layermap, std::move(la), "layer", oc.handle,
                                   kLayerTable.recordType);
         } else {

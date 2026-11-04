@@ -5055,6 +5055,12 @@ bool dwgRW::processDwg() {
     }
     try {
     iface->addHeader(&hdr);
+    if (auto* sink = dynamic_cast<DRW_DwgHeaderMaterialSourceHandler*>(iface)) {
+        const auto source = reader->ac1027HeaderMaterialSource();
+        if (source) sink->addDwgHeaderMaterialSource(DRW::AC1027, *source);
+        if (const auto* layer = reader->ac1027DefaultLayerSource())
+            sink->addDwgAc1027DefaultLayerSource(*layer);
+    }
     } catch (...) {
         recordOperationDiagnostic(
             DRW::OperationPhase::Callback,

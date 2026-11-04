@@ -6,6 +6,9 @@ set(LIBDXFRW_CLI_SOURCES
 )
 
 set(LIBDXFRW_CLI_HEADERS
+    "${CMAKE_CURRENT_LIST_DIR}/dx_ac1027_layer_wire.h"
+    "${CMAKE_CURRENT_LIST_DIR}/dx_ac1027_material_wire.h"
+    "${CMAKE_CURRENT_LIST_DIR}/dx_ac1027_plotstyle_wire.h"
     "${CMAKE_CURRENT_LIST_DIR}/dx_attdef_source_profile.h"
     "${CMAKE_CURRENT_LIST_DIR}/dx_batch_input.h"
     "${CMAKE_CURRENT_LIST_DIR}/dx_batch_output_names.h"

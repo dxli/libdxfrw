@@ -44,6 +44,7 @@
 #include "intern/dxfcode.h"
 #include "intern/dxfwriter.h"
 #include "intern/dxfmaterial.h"
+#include "intern/dxf_ac1027_bound_layer.h"
 #include "intern/dxftablecapacity.h"
 #include "intern/dxftablecontent.h"
 #include "intern/dxffield.h"
@@ -7688,7 +7689,19 @@ bool dxfRW::writeLayer(DRW_Layer *ent){
             write(writer->writeBool(290, ent->plotF));
             write(writer->writeInt16(370,
                                      DRW_LW_Conv::lineWidth2dxfInt(ent->lWeight)));
-            write(writer->writeString(390, "F"));
+            const auto* sourceBound = dynamic_cast<const DRW_Ac1027BoundLayer*>(ent);
+            if (sourceBound != nullptr) {
+                if (version != DRW::AC1027 || !m_requireResolvedBlockOwners
+                    || sourceBound->sourcePlotStyle == 0u
+                    || sourceBound->sourcePlotStyle == DRW::NoHandle)
+                    return failDxfWrite();
+                const auto target = remapObjectHandle(sourceBound->sourcePlotStyle);
+                if (target == 0u || target == DRW::NoHandle)
+                    return failDxfWrite();
+                write(writer->writeString(390, toHexStr(target)));
+            } else {
+                write(writer->writeString(390, "F"));
+            }
         }
     } else
         write(writer->writeUtf8Caps(6, ent->lineType));
@@ -32027,7 +32040,10 @@ bool dxfRW::writeDictionaryWithDefault(DRW_DictionaryWithDefault *ent) {
 
     RecordStateScope state(*this, ent);
     DxfWriterRecordScope record(*writer);
-    if (!writer->writeString(0, "DICTIONARYWDFLT")
+    const bool canonicalAc1027 = dynamic_cast<const DRW_Ac1027BoundDictionary*>(ent) != nullptr;
+    if (canonicalAc1027 && (version != DRW::AC1027 || !m_requireResolvedBlockOwners))
+        return failDxfWrite();
+    if (!writer->writeString(0, canonicalAc1027 ? "ACDBDICTIONARYWDFLT" : "DICTIONARYWDFLT")
         || !writer->writeString(5, toHexStr(handle))
         || !writeTableEntryAppData(*ent))
         return false;
