@@ -40,6 +40,7 @@
 #include "intern/dwghatchboundary.h"
 #include "intern/dwgwriter15.h"
 #include "intern/dwgwriter21.h"
+#include "intern/dwgwriterlayoutvalidation.h"
 #include "intern/dwgwriter24.h"
 #include "intern/dwgwriter27.h"
 #include "intern/dwgwriter32.h"
@@ -24756,6 +24757,31 @@ private:
 bool runDwgFixedMetadataPointerControls(const std::filesystem::path& directory) {
     // ODA 4.1/5.2: the metadata's 32-bit field at 0x28 points to 0x80.
     // Check literal output bytes for the R2004 family and the R2007 writer.
+    // This is the complete 163-byte compressed file-header payload from the
+    // ODA-produced single-LINE witness (DWG SHA256 d1c06f7818e18d22...c6b95534).
+    // Its stored normal CRC is e5fc703350823e5b, not the seed1 result.
+    const std::array<std::uint8_t, 163> producerPayload = {{
+        0x20,0x00,0x00,0x02,0x00,0x70,0x60,0x02,0x6f,0x40,0x67,0x00,
+        0x01,0x03,0x53,0x24,0x57,0x9e,0xa3,0x26,0x09,0x5d,0x77,0x08,
+        0x02,0x04,0xc4,0x05,0x49,0xf2,0x2c,0x0b,0x43,0x00,0x48,0x60,
+        0x09,0x16,0x77,0x08,0x86,0x01,0x15,0x78,0x02,0x66,0xc0,0x68,
+        0x01,0x67,0x7f,0x02,0x01,0x20,0x68,0x01,0x12,0x7f,0x00,0x87,
+        0x19,0x20,0x7f,0x01,0x40,0x77,0x00,0x02,0xf8,0x40,0x0c,0xde,
+        0x3b,0xa7,0x20,0x5f,0x00,0xa3,0x60,0x08,0x76,0x31,0x00,0x7e,
+        0x1a,0x0d,0x00,0x77,0x10,0x02,0x03,0xc6,0x03,0x93,0x8b,0x17,
+        0x20,0xea,0x18,0x15,0x60,0x08,0x87,0x29,0x11,0x7f,0x0a,0x07,
+        0xb4,0x68,0x00,0x01,0x44,0xfa,0x43,0x5a,0xba,0xc0,0x0d,0x05,
+        0xd1,0x77,0x0e,0x68,0x90,0x4c,0xdb,0x14,0x9e,0x3d,0x5a,0x06,
+        0x01,0x71,0x08,0x66,0x00,0x0f,0x01,0x32,0x54,0x53,0x67,0x7b,
+        0xa8,0xa8,0x1d,0xee,0xc9,0xf1,0x7f,0x82,0xcd,0x77,0xbe,0x0a,
+        0x22,0x21,0x5a,0xe4,0x51,0x41,0xe7}};
+    const auto producerCrc = dwgUtil::crc64Normal(
+        dwgUtil::updateSeed2(0u, producerPayload.size()),
+        producerPayload.data(), producerPayload.size());
+    if (producerCrc != UINT64_C(0xe5fc703350823e5b)
+        || dwgUtil::crc64Normal(dwgUtil::updateSeed1(0u, producerPayload.size()),
+             producerPayload.data(), producerPayload.size()) == producerCrc)
+        return false;
     const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
     const auto root = directory / ("libdxfrw-fixed-metadata-" + std::to_string(nonce));
     std::error_code error;
@@ -24808,6 +24834,32 @@ bool runDwgFixedMetadataPointerControls(const std::filesystem::path& directory) 
             // The uncompressed header's Header2offset is relative to 0x480
             // and must point at the complete trailing 0x400-byte copy.
             if (signedSize != -272)
+                return false;
+            for (std::size_t i = 28u; i < 32u; ++i)
+                if (decoded[i] != 0xffu) return false;
+            std::uint64_t payloadCrc = 0u;
+            for (unsigned i = 0; i < 8u; ++i)
+                payloadCrc |= static_cast<std::uint64_t>(decoded[16u + i]) << (8u * i);
+            if (payloadCrc != dwgUtil::crc64Normal(dwgUtil::updateSeed2(0u, dataSize),
+                                                    decoded.data() + 32u, dataSize))
+                return false;
+            const auto validEnvelope = decoded;
+            if (!dwgWriterLayoutValidation::validateR2007HeaderEnvelope(decoded.data(), decoded.size())
+                || dwgWriterLayoutValidation::validateR2007HeaderEnvelope(decoded.data(), 31u))
+                return false;
+            decoded[28] = 0u; // Historical zero-extended negative length.
+            if (dwgWriterLayoutValidation::validateR2007HeaderEnvelope(decoded.data(), decoded.size()))
+                return false;
+            decoded = validEnvelope;
+            decoded[16] ^= 1u; // Stored checksum corruption.
+            if (dwgWriterLayoutValidation::validateR2007HeaderEnvelope(decoded.data(), decoded.size()))
+                return false;
+            decoded = validEnvelope;
+            decoded[32] ^= 1u; // Payload corruption with unchanged checksum.
+            if (dwgWriterLayoutValidation::validateR2007HeaderEnvelope(decoded.data(), decoded.size()))
+                return false;
+            decoded = validEnvelope;
+            if (!dwgWriterLayoutValidation::validateR2007HeaderEnvelope(decoded.data(), decoded.size()))
                 return false;
             std::uint64_t header2Offset = 0u;
             for (unsigned i = 0; i < 8; ++i)

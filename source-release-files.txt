@@ -704,6 +704,7 @@ tools/mutate_r2004_header_suffix_probe.py
 tools/normalize_drawing_result.py
 tools/normalize_oracle.py
 tools/probe_ac1014_imagedef_zero_size.py
+tools/probe_ac1021_envelope_variant.cpp
 tools/probe_ac1021_header_variant.cpp
 tools/probe_ac1021_imagedef_owner_tokens.cpp
 tools/probe_ac1021_line_writer.cpp

@@ -839,11 +839,13 @@ std::vector<std::uint8_t> buildEncodedFileHeader(
         sequence.data(), sequence.size()));
     patchRLL(decoded, 8, protection.sequenceFirst);
     patchRLL(decoded, 16, dwgUtil::crc64Normal(
-        dwgUtil::updateSeed1(kR2007CrcSeed, data.size()),
+        dwgUtil::updateSeed2(kR2007CrcSeed, data.size()),
         data.data(), data.size()));
-    const std::uint32_t dataSize = static_cast<std::uint32_t>(
-        -static_cast<std::int32_t>(data.size()));
-    for (unsigned int i = 0; i < 4; ++i)
+    // The eight-byte size is negative for a raw, uncompressed header.
+    // ODA 5.2.1.5 and the producer CRC profile use the full signed field.
+    const auto dataSize = static_cast<std::uint64_t>(
+        -static_cast<std::int64_t>(data.size()));
+    for (unsigned int i = 0; i < 8; ++i)
         decoded[24 + i] = static_cast<std::uint8_t>(dataSize >> (i * 8));
     std::copy(data.cbegin(), data.cend(), decoded.begin() + 32);
     // ODA 5.2.1.5 repeats the entire eight-byte-aligned block as often as

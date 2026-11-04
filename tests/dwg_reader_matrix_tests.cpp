@@ -9934,7 +9934,7 @@ bool resealR2007TestMapHeader(std::vector<std::uint8_t>& file,
               header.decodedRs.begin()
                   + static_cast<std::ptrdiff_t>(headerDataOffset));
     const std::uint64_t payloadCrc = dwgUtil::crc64Normal(
-        dwgUtil::updateSeed1(0u, header.data.size()), header.data.data(),
+        dwgUtil::updateSeed2(0u, header.data.size()), header.data.data(),
         header.data.size());
     if (!writeR2007TestU64(header.decodedRs, 16u, payloadCrc))
         return false;

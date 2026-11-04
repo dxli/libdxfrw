@@ -788,6 +788,8 @@ ValidationResult validateR2007(const R2007Snapshot& snapshot) {
                            snapshot.fileHeaderData.cend(),
                            decodedHeader.cbegin() + 32))
             return fail(ValidationCategory::ReedSolomon);
+        if (!validateR2007HeaderEnvelope(decodedHeader.data(), decodedHeader.size()))
+            return fail(ValidationCategory::Header);
 
         std::uint64_t address = receipt.dataStart;
         std::unordered_map<std::uint32_t, std::size_t> pageIndexes;
@@ -1093,6 +1095,20 @@ ValidationResult validate(const R2004Snapshot& snapshot) {
 
 ValidationResult validate(const R2007Snapshot& snapshot) {
     return validateR2007(snapshot);
+}
+
+bool validateR2007HeaderEnvelope(const std::uint8_t* data, std::size_t size) noexcept {
+    if (!data || size < 32u + kR2007FileHeaderDataSize) return false;
+    const auto getRLL = [](const std::uint8_t* p) {
+        return static_cast<std::uint64_t>(getRL(p))
+            | (static_cast<std::uint64_t>(getRL(p + 4u)) << 32);
+    };
+    const auto rawSize = static_cast<std::uint64_t>(
+        -static_cast<std::int64_t>(kR2007FileHeaderDataSize));
+    return getRLL(data + 24u) == rawSize
+        && getRLL(data + 16u) == dwgUtil::crc64Normal(
+            dwgUtil::updateSeed2(kR2007CrcSeed, kR2007FileHeaderDataSize),
+            data + 32u, kR2007FileHeaderDataSize);
 }
 
 #ifdef DWG_LAYOUT_VALIDATION_TESTS
