@@ -627,6 +627,30 @@ public:
     static bool rasterUnchanged(const dx_iface& iface) {
         return iface.hasUnchangedRasterDwgSources();
     }
+    static bool physicalDirectRaster1032Wire(const dx_data& data) {
+        const auto frame = data.m_opaqueDwgSourceFrames.find({data.importGeneration, 0x2Fu});
+        if (frame == data.m_opaqueDwgSourceFrames.end()
+            || data.namedObjectDictionary.handle != 0xAu) return false;
+        const auto& raw = frame->second;
+        if (raw.m_version != DRW::AC1032 || raw.m_rawBytes.size() != 13u
+            || raw.m_bodyBitSize != 39u) return false;
+        using namespace dx_raster_wire;
+        detail::Bits body{raw.m_rawBytes.data(), 0u, 65u};
+        if (body.take(2u) != 1u || body.take(8u) + 0x1F0u != 512u
+            || detail::handle(body, 0u, 0u, true).value != 0x2Fu
+            || body.shortValue() != 0u || body.longValue() != 1u
+            || body.take(1u) != 1u || body.take(1u) != 0u
+            || body.longValue() != 0u || body.shortValue() != 0u
+            || body.shortValue() != 1u || body.shortValue() != 3u
+            || body.pos != 64u || body.take(1u) != 0u || !body.good) return false;
+        detail::Bits handles{raw.m_rawBytes.data(), 65u, 104u};
+        const auto owner = detail::handle(handles, 4u, 0x2Fu);
+        const auto reactor = detail::handle(handles, 4u, 0x2Fu);
+        if (!handles.good || owner.role != 4u || reactor.role != 4u
+            || owner.value != 0xAu || reactor.value != 0xAu || handles.pos != 97u) return false;
+        while (handles.pos < handles.end) if (handles.take(1u) != 0u) return false;
+        return true;
+    }
     static bool physicalDirectWipeoutWire(const dx_data& data) {
         const auto frame = data.m_opaqueDwgSourceFrames.find({data.importGeneration, 0x30u});
         const auto typed = data.dwgWipeoutVariables.find({data.importGeneration, 0x30u});
@@ -654,7 +678,7 @@ public:
                 return e.m_name == "ACAD_WIPEOUT_VARS" && e.m_handle == 0x30u;
             }) == 1;
     }
-    static bool toggleWipeoutOwnerRole(dx_data& data, std::uint32_t handle) {
+    static bool toggleRetainedOwnerRole(dx_data& data, std::uint32_t handle) {
         const auto found = data.m_opaqueDwgSourceFrames.find({data.importGeneration, handle});
         if (found == data.m_opaqueDwgSourceFrames.end()) return false;
         auto& raw = found->second;
@@ -662,6 +686,20 @@ public:
         if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
         const auto bit = total - raw.m_bodyBitSize + 3u;
         if (bit >= total) return false;
+        raw.m_rawBytes[bit / 8u] ^= static_cast<std::uint8_t>(1u << (7u - bit % 8u));
+        return true;
+    }
+    static bool toggleRetainedReactorRole(dx_data& data, std::uint32_t handle) {
+        const auto found = data.m_opaqueDwgSourceFrames.find({data.importGeneration, handle});
+        if (found == data.m_opaqueDwgSourceFrames.end()) return false;
+        auto& raw = found->second;
+        const auto total = raw.m_rawBytes.size() * 8u;
+        if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
+        dx_raster_wire::detail::Bits cursor{raw.m_rawBytes.data(),
+            static_cast<std::uint32_t>(total - raw.m_bodyBitSize), static_cast<std::uint32_t>(total)};
+        (void)dx_raster_wire::detail::handle(cursor, 4u, handle);
+        const auto bit = static_cast<std::size_t>(cursor.pos) + 3u;
+        if (!cursor.good || bit >= total) return false;
         raw.m_rawBytes[bit / 8u] ^= static_cast<std::uint8_t>(1u << (7u - bit % 8u));
         return true;
     }
@@ -68131,11 +68169,12 @@ bool rasterVariablesDwgAdapterTransport(
             variables.m_imageFrame = directNodOwner
                 ? (revision == DRW::AC1021 ? 1 : 0) : 1;
             variables.m_imageQuality = directNodOwner ? 1 : 2;
-            variables.m_units = directNodOwner && revision != DRW::AC1024 ? 1 : 3;
+            variables.m_units = directNodOwner && revision != DRW::AC1024 && revision != DRW::AC1032 ? 1 : 3;
             if (directNodOwner
                 && (revision == DRW::AC1021
                     || revision == DRW::AC1024
-                    || revision == DRW::AC1027)) {
+                    || revision == DRW::AC1027
+                    || revision == DRW::AC1032)) {
                 variables.reactorHandles = {
                     DRW::DwgNamedObjectsDictionaryHandle};
                 variables.setDwgCommonObjectState(1, 1, false);
@@ -68187,9 +68226,9 @@ bool rasterVariablesDwgAdapterTransport(
     std::int32_t expectedFrame = directNodOwner
         ? (revision == DRW::AC1021 ? 1 : 0) : 1;
     std::int32_t expectedQuality = directNodOwner ? 1 : 2;
-    std::int32_t expectedUnits = directNodOwner && revision != DRW::AC1024 ? 1 : 3;
+    std::int32_t expectedUnits = directNodOwner && revision != DRW::AC1024 && revision != DRW::AC1032 ? 1 : 3;
     const bool expectedNodReactor = directNodOwner
-        && (revision == DRW::AC1021 || revision == DRW::AC1024 || revision == DRW::AC1027);
+        && (revision == DRW::AC1021 || revision == DRW::AC1024 || revision == DRW::AC1027 || revision == DRW::AC1032);
     std::uint8_t expectedXDictFlag = expectedNodReactor ? 1u : 0u;
     if (generatedSource) {
         dwgRW sourceWriter(sourcePath.string().c_str());
@@ -68200,7 +68239,7 @@ bool rasterVariablesDwgAdapterTransport(
         expectedRootKey = "ACAD_IMAGE_VARS";
         expectedFrame = revision == DRW::AC1021 ? 1 : 0;
         expectedQuality = 1;
-        expectedUnits = revision == DRW::AC1024 ? 3 : 1;
+        expectedUnits = (revision == DRW::AC1024 || revision == DRW::AC1032) ? 3 : 1;
     }
 
     dx_data imported;
@@ -68246,7 +68285,7 @@ bool rasterVariablesDwgAdapterTransport(
             || rootEntry->m_handle == DRW::NoHandle
             || directRootEntryCount != 1u
             || directRootTargetCount != 1u
-            || (revision != DRW::AC1024
+            || (revision != DRW::AC1024 && revision != DRW::AC1032
                 && imported.namedObjectDictionary.handle != 0xCu))
             return fail("physical AC1027 source lacks its ACAD_IMAGE_VARS NOD entry");
         expectedHandle = rootEntry->m_handle;
@@ -68279,6 +68318,9 @@ bool rasterVariablesDwgAdapterTransport(
         return fail("RASTERVARIABLES typed owner/field values changed on read");
     }
     if (!generatedSource) {
+        if (revision == DRW::AC1032
+            && !DxIfaceStandardDwgCaptureTestAccess::physicalDirectRaster1032Wire(imported))
+            return fail("physical AC1032 RASTERVARIABLES field/role span mismatch");
         if (revision == DRW::AC1024) {
             using Access = DxIfaceStandardDwgCaptureTestAccess;
             if (!Access::physicalRasterOwnerDiagnostic(imported)
@@ -68369,7 +68411,7 @@ bool rasterVariablesDwgAdapterTransport(
         DRW_RasterVariables& mutableSource =
             imported.dwgRasterVariables.find(key)->second;
         const bool debugExport = !generatedSource || directNodOwner;
-        if (revision == DRW::AC1024) {
+        if (revision == DRW::AC1024 || revision == DRW::AC1032) {
             const auto refusedWithSentinel = [&](DRW::Version targetRevision) {
                 if (exporter.fileExport(target.first.string(), targetRevision,
                                         target.second, &imported, debugExport,
@@ -68404,6 +68446,34 @@ bool rasterVariablesDwgAdapterTransport(
             imported.namedObjectDictionary.m_entries.pop_back();
             if (!aliasRefused)
                 return fail("AC1024 duplicate NOD target was not refused atomically");
+            if (revision == DRW::AC1032) {
+                const auto originalEntries = imported.namedObjectDictionary.m_entries;
+                if (originalEntries.empty()) return fail("AC1032 raster root is empty");
+                imported.namedObjectDictionary.m_entries.push_back(
+                    {"acad_image_vars", originalEntries.front().m_handle});
+                const bool duplicateRefused = refusedWithSentinel(revision);
+                imported.namedObjectDictionary.m_entries = originalEntries;
+                if (!duplicateRefused) return fail("AC1032 duplicate raster root key was accepted");
+                auto& rootEntries = imported.namedObjectDictionary.m_entries;
+                rootEntries.erase(std::remove_if(rootEntries.begin(), rootEntries.end(),
+                    [expectedHandle](const DRW_Dictionary::Entry& entry) {
+                        return entry.m_handle == expectedHandle;
+                    }), rootEntries.end());
+                const bool missingRootRefused = refusedWithSentinel(revision);
+                rootEntries = originalEntries;
+                if (!missingRootRefused) return fail("AC1032 missing raster root was accepted");
+                using Access = DxIfaceStandardDwgCaptureTestAccess;
+                if (!Access::toggleRetainedOwnerRole(imported, expectedHandle))
+                    return fail("could not mutate AC1032 raster owner role");
+                const bool roleRefused = refusedWithSentinel(revision);
+                if (!Access::toggleRetainedOwnerRole(imported, expectedHandle) || !roleRefused)
+                    return fail("AC1032 altered raster owner role was accepted");
+                if (!Access::toggleRetainedReactorRole(imported, expectedHandle))
+                    return fail("could not mutate AC1032 raster reactor role");
+                const bool reactorRoleRefused = refusedWithSentinel(revision);
+                if (!Access::toggleRetainedReactorRole(imported, expectedHandle) || !reactorRoleRefused)
+                    return fail("AC1032 altered raster reactor role was accepted");
+            }
             if (!refusedWithSentinel(DRW::AC1027))
                 return fail("AC1024 cross-revision output was not refused atomically");
         }
@@ -68702,10 +68772,10 @@ bool wipeoutVariablesDwgAdapterTransport(bool directNod = false) {
                 if (entry.m_handle == saved.handle) entry.m_name = "WRONG_WIPEOUT_KEY";
             if (!rejectsWithoutPublication()) return fail("wrong wipeout root key was accepted");
             imported.namedObjectDictionary.m_entries = savedEntries;
-            if (!DxIfaceStandardDwgCaptureTestAccess::toggleWipeoutOwnerRole(imported, saved.handle))
+            if (!DxIfaceStandardDwgCaptureTestAccess::toggleRetainedOwnerRole(imported, saved.handle))
                 return fail("could not mutate retained wipeout source role");
             const bool rejectedWireRole = rejectsWithoutPublication();
-            if (!DxIfaceStandardDwgCaptureTestAccess::toggleWipeoutOwnerRole(imported, saved.handle)
+            if (!DxIfaceStandardDwgCaptureTestAccess::toggleRetainedOwnerRole(imported, saved.handle)
                 || !rejectedWireRole) return fail("wrong retained wipeout source role was accepted");
         }
         const bool wrongRevisionWrite = exporter.fileExport(
@@ -69649,6 +69719,10 @@ int main(int argc, char** argv) {
             {}, true, DRW::AC1021) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1])
+            == "--rastervariables-dwg-adapter-transport-ac1032-direct-nod")
+        return rasterVariablesDwgAdapterTransport({}, true, DRW::AC1032) ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1])
             == "--rastervariables-dwg-adapter-transport-ac1024-direct-nod")
         return rasterVariablesDwgAdapterTransport(
             {}, true, DRW::AC1024) ? 0 : 1;
@@ -69662,6 +69736,10 @@ int main(int argc, char** argv) {
             == "--rastervariables-physical-ac1021-direct-nod")
         return rasterVariablesDwgAdapterTransport(
             argv[2], true, DRW::AC1021) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1])
+            == "--rastervariables-physical-ac1032-direct-nod")
+        return rasterVariablesDwgAdapterTransport(argv[2], true, DRW::AC1032) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1])
             == "--rastervariables-physical-ac1024-direct-nod")
