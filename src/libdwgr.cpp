@@ -56,6 +56,8 @@
 namespace {
 thread_local bool g_throwNextLegacyPolylineForTest = false;
 thread_local bool g_throwNextLegacyPolylineLateForTest = false;
+thread_local bool g_throwNextAc1021PolylineForTest = false;
+thread_local bool g_throwNextAc1021PolylineLateForTest = false;
 thread_local bool g_throwNextLegacyInsertForTest = false;
 thread_local bool g_throwNextLegacyInsertLateForTest = false;
 thread_local bool g_throwNextLegacyBlockEntityForTest = false;
@@ -64,6 +66,8 @@ thread_local bool g_throwNextLegacyBlockEntityLateForTest = false;
 // Internal test seams: no dwgRW or consumer class layout changes.
 void drwThrowNextLegacyPolylineForTest() { g_throwNextLegacyPolylineForTest = true; }
 void drwThrowNextLegacyPolylineLateForTest() { g_throwNextLegacyPolylineLateForTest = true; }
+void drwThrowNextAc1021PolylineForTest() { g_throwNextAc1021PolylineForTest = true; }
+void drwThrowNextAc1021PolylineLateForTest() { g_throwNextAc1021PolylineLateForTest = true; }
 void drwThrowNextLegacyInsertForTest() { g_throwNextLegacyInsertForTest = true; }
 void drwThrowNextLegacyInsertLateForTest() { g_throwNextLegacyInsertLateForTest = true; }
 void drwThrowNextLegacyBlockEntityForTest() { g_throwNextLegacyBlockEntityForTest = true; }
@@ -2799,15 +2803,28 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         ~LegacyPolylineScope() { if (active != nullptr) *active = false; }
     } legacyScope{legacyChain ? &objectWriter->m_legacyPolylineWriting : nullptr};
     if (legacyScope.active != nullptr) *legacyScope.active = true;
+    const bool ac1021ModelChildProfile = version == DRW::AC1021
+        && objectWriter != nullptr && !legacyChain
+        && objectWriter->m_activeUserBlockRecordHandle == 0u
+        && ent->space == DRW::ModelSpace
+        && (ent->flags & (16 | 64)) == 0
+        && (ent->parentHandle == DRW::NoHandle
+            || ent->parentHandle == DRW::DwgModelSpaceBlockRecordHandle);
     bool useEntityFrameBatchRollback = !legacyChain && objectWriter != nullptr
-        && writer->supportsLastEntityWriteRollback();
+        && writer->supportsLastEntityWriteRollback() && !ac1021ModelChildProfile;
     dwgWriter::CompoundWriteCheckpoint checkpoint;
     if (legacyChain) checkpoint = writer->checkpointCompoundWrite();
-    const bool tracksMutations = legacyChain && !m_dwgWriteTransactions.empty()
+    bool checkpointSet = legacyChain;
+    if (!useEntityFrameBatchRollback && !checkpointSet) {
+        checkpoint = writer->checkpointCompoundWrite();
+        checkpointSet = true;
+    }
+    const bool guardedPolyline = legacyChain || ac1021ModelChildProfile;
+    const bool tracksMutations = guardedPolyline && !m_dwgWriteTransactions.empty()
         && m_dwgWriteTransactions.back()->trackCallerMutations;
     const std::size_t originalMutationCount = tracksMutations
         ? m_dwgWriteTransactions.back()->entityMutations.size() : 0u;
-    const auto undoLegacyException = [&]() noexcept {
+    const auto undoPolylineException = [&]() noexcept {
         try { writer->rollbackCompoundWrite(checkpoint); }
         catch (...) { writer->markObjectWriteFailure(); }
         // POLYLINE/VERTEX snapshots contain no image or INSERT state. Move
@@ -2833,14 +2850,14 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         m_lastDwgCompoundEntityWriteReceipt = {};
         markDwgWriteFailure();
     };
-    struct LegacyExceptionGuard {
-        const decltype(undoLegacyException)& undo;
+    struct PolylineExceptionGuard {
+        const decltype(undoPolylineException)& undo;
         bool enabled;
         int depth;
-        ~LegacyExceptionGuard() noexcept {
+        ~PolylineExceptionGuard() noexcept {
             if (enabled && std::uncaught_exceptions() > depth) undo();
         }
-    } exceptionGuard{undoLegacyException, legacyChain, std::uncaught_exceptions()};
+    } exceptionGuard{undoPolylineException, guardedPolyline, std::uncaught_exceptions()};
     std::vector<dwgWriter15::EntityFrameCheckpoint> frameCheckpoints;
     if (useEntityFrameBatchRollback)
         frameCheckpoints.reserve(ent->vertlist.size() + 2u);
@@ -2932,7 +2949,7 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
     if (useEntityFrameBatchRollback
         && hasClassAssociatedFrame(seqEnd.handle))
         useEntityFrameBatchRollback = false;
-    if (!useEntityFrameBatchRollback && !legacyChain)
+    if (!useEntityFrameBatchRollback && !checkpointSet)
         checkpoint = writer->checkpointCompoundWrite();
 
     // The parent must be the first entry in a modern BLOCK_RECORD ownership
@@ -2965,8 +2982,25 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         || !appendFrame(DRW::DwgCompoundEntityFrameRole::Parent, parentFrame,
                         ent->handle))
         return fail();
+    const auto encodePolylineChild = [&](DRW_Entity* child) {
+        // Bind the permit to this writer and exact child, only for the
+        // duration of encoding. The modern writer consumes it before any
+        // callbacks so a reentrant write cannot inherit it.
+        struct ScopedChildPermit {
+            DRW_Entity*& slot;
+            DRW_Entity* previous;
+            ~ScopedChildPermit() { slot = previous; }
+        };
+        if (!ac1021ModelChildProfile || ent->space != DRW::ModelSpace
+            || ent->parentHandle != DRW::NoHandle)
+            return writer->encodeEntity(child);
+        ScopedChildPermit permit{objectWriter->m_ac1021PolylineChildPermit,
+                                 objectWriter->m_ac1021PolylineChildPermit};
+        permit.slot = child;
+        return writer->encodeEntity(child);
+    };
     for (auto& v : ent->vertlist) {
-        if (!writer->encodeEntity(v.get()))
+        if (!encodePolylineChild(v.get()))
             return fail();
         if (useEntityFrameBatchRollback)
             frameCheckpoints.push_back(objectWriter->m_lastEntityFrameCheckpoint);
@@ -2981,8 +3015,12 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         g_throwNextLegacyPolylineForTest = false;
         throw std::bad_alloc();
     }
+    if (ac1021ModelChildProfile && g_throwNextAc1021PolylineForTest) {
+        g_throwNextAc1021PolylineForTest = false;
+        throw std::bad_alloc();
+    }
     if (consumeCompoundSeqEndFailureForTest()
-        || !writer->encodeEntity(&seqEnd))
+        || !encodePolylineChild(&seqEnd))
         return fail();
     if (useEntityFrameBatchRollback)
         frameCheckpoints.push_back(objectWriter->m_lastEntityFrameCheckpoint);
@@ -2994,22 +3032,26 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         return fail();
     }
     receipt.valid = true;
-    if (legacyChain) {
+    if (guardedPolyline) {
         // All potentially throwing work precedes moving the rollback
         // checkpoint or publishing success/receipt state.
         auto transaction = std::make_unique<DwgWriteTransaction>();
         transaction->entityMutations = mutations;
         rememberCallerMutations(mutations);
-        if (g_throwNextLegacyPolylineLateForTest) {
+        if (legacyChain && g_throwNextLegacyPolylineLateForTest) {
             g_throwNextLegacyPolylineLateForTest = false;
             throw std::bad_alloc();
         }
+        if (ac1021ModelChildProfile && g_throwNextAc1021PolylineLateForTest) {
+            g_throwNextAc1021PolylineLateForTest = false;
+            throw std::bad_alloc();
+        }
         static_assert(std::is_nothrow_move_assignable<dwgWriter::CompoundWriteCheckpoint>::value,
-                      "legacy transaction commit must not throw");
+                      "polyline transaction commit must not throw");
         static_assert(std::is_nothrow_move_assignable<DRW::DwgObjectFrameReceipt>::value,
-                      "legacy frame receipt commit must not throw");
+                      "polyline frame receipt commit must not throw");
         static_assert(std::is_nothrow_move_assignable<DRW::DwgCompoundEntityWriteReceipt>::value,
-                      "legacy compound receipt commit must not throw");
+                      "polyline compound receipt commit must not throw");
         transaction->checkpoint = std::move(checkpoint);
         m_lastDwgObjectFrame = std::move(parentFrame);
         m_lastDwgObjectFrameValid = true;

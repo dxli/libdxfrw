@@ -256,6 +256,12 @@ bool dwgWriter24::writeDwgClasses() {
 // finishObject() assembles these into the AC1024 wire format.
 
 bool dwgWriter24::encodeEntity(DRW_Entity *ent) {
+    const bool polylineChild = m_version == DRW::AC1021 && ent != nullptr
+        && m_ac1021PolylineChildPermit == ent
+        && (dynamic_cast<DRW_Vertex*>(ent) != nullptr
+            || dynamic_cast<DRW_SeqEnd*>(ent) != nullptr);
+    if (polylineChild)
+        m_ac1021PolylineChildPermit = nullptr;
     if (ent == nullptr || objectWriteFailed() || blockControlEmitted())
         return false;
 
@@ -374,10 +380,10 @@ bool dwgWriter24::encodeEntity(DRW_Entity *ent) {
     finishObject();
     if (objectWriteFailed())
         return fail();
-    if (!recordBlockOwnedEntity(*ent, &checkpoint.blockOwnerHandle))
+    if (!polylineChild && !recordBlockOwnedEntity(*ent, &checkpoint.blockOwnerHandle))
         return fail();
     checkpoint.entityHandle = ent->handle;
-    checkpoint.blockOwnedEntityRecorded = true;
+    checkpoint.blockOwnedEntityRecorded = !polylineChild;
     if (!recordBlockInsertReference(*ent))
         return fail();
     if (const auto* insert = dynamic_cast<const DRW_Insert*>(ent)) {

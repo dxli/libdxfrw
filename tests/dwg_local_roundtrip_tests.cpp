@@ -441,6 +441,85 @@ public:
         return writer.encodeEntity(&invalid);
     }
 
+    static bool checkR2007Polyline3dFooter() {
+        DRW_Header header; dwgWriter21 writer(nullptr, &header);
+        if (!writer.prepareDwgClassManifest() || !writer.writeFileHeaderStub()
+            || !writer.writeDwgHeader() || !writer.writeDwgClasses()
+            || !writer.writeDwgObjects()) return false;
+        struct PolylineProbe : DRW_Polyline {
+            bool common(dwgBuffer& b) { return DRW_Entity::parseDwgCommon(DRW::AC1021, &b, 0u); }
+            using DRW_Polyline::parseDwg;
+        } probe;
+        DRW_Polyline polyline; polyline.flags = 8;
+        for (std::uint32_t handle : {0x90u, 0xA0u, 0xB0u}) {
+            DRW_Vertex vertex; vertex.handle = handle;
+            polyline.addVertex(vertex);
+        }
+        polyline.setDwgSeqEndHandle(0xC0u);
+        if (!writer.encodeEntity(&polyline)) return false;
+        DRW::DwgObjectFrameReceipt receipt;
+        if (!writer.getLastDwgObjectFrame(receipt) || !receipt.valid
+            || receipt.objectHandle != polyline.handle) return false;
+        CapturedObjectFrame captured;
+        if (!captureObjectFrame(writer, polyline.handle, captured)) return false;
+        dwgBuffer frame(captured.bytes.data(), captured.bytes.size());
+        const auto length = frame.getModularShort(); const auto offset = frame.getPosition();
+        if (!frame.isGood() || length <= 0 || offset + length + 2u != captured.bytes.size()) return false;
+        std::vector<std::uint8_t> body(captured.bytes.begin() + static_cast<std::ptrdiff_t>(offset),
+            captured.bytes.begin() + static_cast<std::ptrdiff_t>(offset + length));
+        dwgBuffer raw(body.data(), body.size());
+        if (raw.getObjType(DRW::AC1021) != dwgType::POLYLINE_3D) return false;
+        const std::uint32_t boundary = raw.getRawLong32();
+        dwgBuffer scalar(body.data(), body.size());
+        if (!probe.common(scalar) || scalar.getRawChar8() != 0u
+            || scalar.getRawChar8() != 0u || scalar.getBitLong() != 3) return false;
+        const auto end = scalar.getPosition() * 8u + scalar.getBitPos();
+        if (!scalar.isGood() || (end & 7u) != 0u || boundary != end + 8u) return false;
+        for (auto bit = end; bit < boundary; ++bit)
+            if ((body[bit / 8u] >> (7u - bit % 8u)) & 1u) return false;
+        const auto parse = [&probe](std::vector<std::uint8_t>& bytes) {
+            dwgBuffer input(bytes.data(), bytes.size());
+            return probe.parseDwg(DRW::AC1021, &input, 0u) && input.isGood();
+        };
+        if (!parse(body)) return false;
+        auto truncated = body; truncated.pop_back();
+        if (parse(truncated) || !parse(body)) return false;
+        // The old aligned frame omitted the explicit absent-string byte.
+        auto legacy = body;
+        legacy.erase(legacy.begin() + static_cast<std::ptrdiff_t>(end / 8u));
+        const auto oldSize = static_cast<std::uint32_t>(end);
+        for (std::size_t i = 0; i < 32u; ++i) {
+            const std::size_t pos = 10u + i;
+            const auto mask = static_cast<std::uint8_t>(1u << (7u - pos % 8u));
+            const auto source = static_cast<unsigned>((i / 8u) * 8u + 7u - i % 8u);
+            if ((oldSize >> source) & 1u) legacy[pos / 8u] |= mask;
+            else legacy[pos / 8u] &= static_cast<std::uint8_t>(~mask);
+        }
+        if (!parse(legacy) || !parse(body)) return false;
+        DRW_Line line; line.basePoint = {1., 2., 3.}; line.secPoint = {4., 5., 6.};
+        if (!writer.encodeEntity(&line)) return false;
+        CapturedObjectFrame following;
+        if (!captureObjectFrame(writer, line.handle, following)) return false;
+        dwgBuffer nextFrame(following.bytes.data(), following.bytes.size());
+        const auto nextLength = nextFrame.getModularShort();
+        const auto nextOffset = nextFrame.getPosition();
+        if (!nextFrame.isGood() || nextLength <= 0
+            || nextOffset + static_cast<std::size_t>(nextLength) + 2u != following.bytes.size())
+            return false;
+        struct LineProbe : DRW_Line { using DRW_Line::parseDwg; } next;
+        dwgBuffer nextBody(following.bytes.data() + nextOffset, static_cast<std::size_t>(nextLength));
+        if (!next.parseDwg(DRW::AC1021, &nextBody, 0u) || !nextBody.isGood()
+            || next.basePoint.x != 1. || next.basePoint.y != 2. || next.basePoint.z != 3.
+            || next.secPoint.x != 4. || next.secPoint.y != 5. || next.secPoint.z != 6.) return false;
+        DRW_Polyline invalid = polyline;
+        invalid.handle = 0u;
+        invalid.extData.push_back(std::make_shared<DRW_Variant>(1000, "missing appid"));
+        const auto before = writer.buffer();
+        if (writer.encodeEntity(&invalid) || writer.buffer() != before) return false;
+        invalid.extData.clear();
+        return writer.encodeEntity(&invalid);
+    }
+
     static bool checkR2007LayerStringBoundaries() {
         DRW_Header header; dwgWriter21 writer(nullptr, &header);
         DRW_TextCodec codec; codec.setVersion(DRW::AC1021, false);
@@ -36347,6 +36426,10 @@ int main(int argc, char** argv) {
     } else if (argc == 2 && std::string(argv[1]) == "--r2007-primitive-footers") {
         const bool passed = DwgBlockRecordXrefWireTestAccess::checkR2007PrimitiveFooters();
         std::cout << "DWG R2007 POINT/CIRCLE footers: " << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    } else if (argc == 2 && std::string(argv[1]) == "--r2007-polyline3d-footer") {
+        const bool passed = DwgBlockRecordXrefWireTestAccess::checkR2007Polyline3dFooter();
+        std::cout << "DWG R2007 POLYLINE_3D footer: " << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 2 && std::string(argv[1]) == "--r2007-layer-string-boundaries") {
         const bool passed = DwgBlockRecordXrefWireTestAccess::checkR2007LayerStringBoundaries();

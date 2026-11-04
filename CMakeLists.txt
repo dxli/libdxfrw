@@ -1243,6 +1243,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dwg_local_roundtrip --r2007-primitive-footers)
     set_tests_properties(libdxfrw_dwg_r2007_primitive_footers PROPERTIES
         LABELS "fast;dwg;AC1021;generated;transaction")
+    add_test(NAME libdxfrw_dwg_r2007_polyline3d_footer
+        COMMAND libdxfrw_dwg_local_roundtrip --r2007-polyline3d-footer)
+    set_tests_properties(libdxfrw_dwg_r2007_polyline3d_footer PROPERTIES
+        LABELS "fast;dwg;AC1021;generated;transaction")
     set_tests_properties(libdxfrw_dwg_r2007_layer_string_boundaries PROPERTIES
         LABELS "fast;dwg;AC1021;generated;transaction")
     set_tests_properties(libdxfrw_dwg_r2007_generic_control_boundaries PROPERTIES

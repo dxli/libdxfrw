@@ -974,10 +974,11 @@ void dwgWriter21::finishObject() {
     // R2007 strings follow the scalar data at its bit boundary. Padding
     // before the strings makes a contiguous TV array (e.g. DICTIONARY)
     // decode the padding as its length. Put alignment in the trailer instead.
-    // POINT and CIRCLE carry no string stream: the final pre-handle bit must
+    // These records carry no string stream: the final pre-handle bit must
     // still explicitly say so, including when their body was byte-aligned.
     if (m_objectStrings.data().empty()
-        && (objectType == dwgType::POINT || objectType == dwgType::CIRCLE))
+        && (objectType == dwgType::POINT || objectType == dwgType::CIRCLE
+            || objectType == dwgType::POLYLINE_3D))
         m_objectBody.putBit(0u);
     if (m_objectStrings.data().empty() && !exactControlBoundary)
         m_objectBody.alignToByte();

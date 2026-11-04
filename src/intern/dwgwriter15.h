@@ -816,6 +816,10 @@ protected:
     }
     std::uint8_t m_writeFailurePointForTest {0};
 
+    // One-shot permission for the exact child currently emitted by the
+    // AC1021 POLYLINE facade. Its owner is the polyline, not the block.
+    DRW_Entity* m_ac1021PolylineChildPermit {nullptr};
+
 private:
     /// Test-only fault injection used by the DWG transaction regressions.
     /// Normal writers leave this at zero.

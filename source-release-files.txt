@@ -398,6 +398,7 @@ tests/dimstyle_optional_handle_tests.cpp
 tests/dwg2dxf_adapter_tests.cpp
 tests/dwg2dxf_cli_contract_tests.py
 tests/dwg2dxf_version_tests.cpp
+tests/dwg_ac1021_polyline_block_membership_tests.cpp
 tests/dwg_ac1024_default_material_tests.cpp
 tests/dwg_ac1024_header_suffix_tests.cpp
 tests/dwg_class_evidence_tests.cpp
