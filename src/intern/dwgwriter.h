@@ -504,6 +504,9 @@ public:
             emittedDwgNamedObjectDictionaryEntries;
         bool dwgNamedObjectDictionaryComplete {false};
         std::uint32_t plotSettingsDictionaryHandle {0};
+        std::uint32_t defaultPlotStyleDictionaryHandle {0};
+        std::uint32_t defaultPlotStylePlaceholderHandle {0};
+        bool defaultPlotStyleGraphEmitted {false};
         bool deferredPlotSettingsDictionary {false};
         bool deferredPlotSettingsDictionaryEmitted {false};
         std::size_t deferredPlotSettingsEntryCount {0};

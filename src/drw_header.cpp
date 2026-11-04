@@ -4174,7 +4174,8 @@ bool DRW_Header::encodeDwgForWriter(
         dwgBufferW *strBuf, std::uint32_t namedObjectDictionaryHandle,
         std::uint32_t plotSettingsDictionaryHandle,
         std::array<std::uint64_t, 4>* currentReferenceBits,
-        std::uint32_t groupDictionaryHandle) {
+        std::uint32_t groupDictionaryHandle,
+        std::uint32_t plotStyleDictionaryHandle) {
     if (version != DRW::AC1015 && version != DRW::AC1018 &&
         version != DRW::AC1021 && version != DRW::AC1024 &&
         version != DRW::AC1027 &&
@@ -4592,7 +4593,7 @@ bool DRW_Header::encodeDwgForWriter(
     hBbuf->putHandle(makeHardPtr(0));    // DICT LAYOUTS
     hBbuf->putHandle(makeHardPtr(plotSettingsDictionaryHandle));
                                                      // DICT PLOTSETTINGS
-    hBbuf->putHandle(makeHardPtr(0));    // DICT PLOTSTYLES
+    hBbuf->putHandle(makeHardPtr(plotStyleDictionaryHandle)); // DICT PLOTSTYLES
     if (version > DRW::AC1015) {         // R2004+: 2 extra dict handles (parseDwg:2219-2223)
         hBbuf->putHandle(makeHardPtr(0)); // DICT MATERIALS
         hBbuf->putHandle(makeHardPtr(0)); // DICT COLORS

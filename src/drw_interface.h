@@ -712,6 +712,26 @@ public:
 
 };
 
+/** Separate opt-in for synthesizing a default DWG plot-style graph. Existing
+ * DRW_Interface implementations are unaffected. The opt-in is consulted
+ * after writeDwgClasses() and before HEADER/CLASSES emission; an existing or
+ * subsequently registered ACAD_PLOTSTYLENAME root conflicts and fails the
+ * output transaction. Only the internally synthesized layer 0 is bound to
+ * the generated default placeholder; caller-supplied layers are untouched.
+ * A provider must not supply opaque records that claim ownership of the
+ * planned identities, since their hidden references cannot be validated here.
+ */
+class DRW_DwgDefaultPlotStyleProvider {
+public:
+  virtual ~DRW_DwgDefaultPlotStyleProvider() = default;
+  virtual bool wantsDwgDefaultPlotStyleGraph() const { return true; }
+  // Planning notification only; output is still subject to later validation.
+  virtual void dwgDefaultPlotStyleGraphPlanned(std::uint32_t dictionary,
+                                               std::uint32_t placeholder) {
+    (void)dictionary; (void)placeholder;
+  }
+};
+
 /** Optional side-channel for consumers that need to refuse conversion after
  *  the generic OBJECTS fallback observes a record with no modeled adapter
  *  route. Kept separate from DRW_Interface so its established vtable is not

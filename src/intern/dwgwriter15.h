@@ -90,6 +90,16 @@ public:
     bool writeDwgClasses() override;
     bool writeDwgObjects() override;
     bool completeDeferredDwgObjects() override;
+    // Called only for the explicit DRW_DwgDefaultPlotStyleProvider opt-in.
+    bool stageDefaultDwgPlotStyleGraph();
+    bool conflictsDefaultDwgPlotStyleDictionary(const DRW_Dictionary& dictionary,
+        std::uint32_t defaultEntry = 0, bool withDefault = false) const noexcept;
+    bool defaultDwgPlotStyleGraphHandles(std::uint32_t& dictionary,
+                                        std::uint32_t& placeholder) const noexcept {
+        dictionary = m_defaultPlotStyleDictionaryHandle;
+        placeholder = m_defaultPlotStylePlaceholderHandle;
+        return dictionary != 0 && placeholder != 0;
+    }
     bool writeDwgHandles() override;
     bool writeSecondHeader() override;
     bool finalize() override;
@@ -684,6 +694,10 @@ protected:
         m_emittedDwgNamedObjectDictionaryEntries;
     bool m_dwgNamedObjectDictionaryComplete {false};
     std::uint32_t m_plotSettingsDictionaryHandle {0};
+    std::uint32_t m_defaultPlotStyleDictionaryHandle {0};
+    std::uint32_t m_defaultPlotStylePlaceholderHandle {0};
+    bool m_defaultPlotStyleGraphEmitted {false};
+    bool m_writingDefaultPlotStyleGraph {false}; // scoped internal emission only
     bool m_deferredPlotSettingsDictionary {false};
     bool m_deferredPlotSettingsDictionaryEmitted {false};
     std::vector<DRW_Dictionary::Entry> m_deferredPlotSettingsEntries;
@@ -753,6 +767,7 @@ protected:
     static constexpr std::uint8_t kAfterFirstBlockRecord = 2;
     static constexpr std::uint8_t kBeforeEndBlockFrame = 3;
     static constexpr std::uint8_t kAfterEndBlockFrame = 4;
+    static constexpr std::uint8_t kAfterDefaultPlotStyleDictionary = 5;
     bool consumeWriteFailurePointForTest(std::uint8_t point) noexcept {
         if (m_writeFailurePointForTest != point)
             return false;

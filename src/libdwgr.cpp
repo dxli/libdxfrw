@@ -1744,6 +1744,21 @@ bool dwgRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
         writer->reserveHandle(h);
 
     iface->writeDwgClasses();
+    // A separate provider interface makes synthesis explicit and preserves
+    // existing consumers' class/NOD registration timing and default output.
+    auto* plotStyleProvider =
+        dynamic_cast<DRW_DwgDefaultPlotStyleProvider*>(iface);
+    if (!m_requiredWriteFailure && plotStyleProvider
+        && plotStyleProvider->wantsDwgDefaultPlotStyleGraph()) {
+        auto* native = dynamic_cast<dwgWriter15*>(writer.get());
+        std::uint32_t dictionary = 0, placeholder = 0;
+        if (native == nullptr || !native->stageDefaultDwgPlotStyleGraph()
+            || !native->defaultDwgPlotStyleGraphHandles(dictionary, placeholder)) {
+            markDwgWriteFailure();
+        } else {
+            plotStyleProvider->dwgDefaultPlotStyleGraphPlanned(dictionary, placeholder);
+        }
+    }
 
     // Section emit order (mirror of dxfRW::write).  Per-section helpers
     // emit framing; the iface callbacks drive caller-side enumeration
@@ -3760,6 +3775,10 @@ bool dwgRW::writeDictionary(DRW_Dictionary *object) {
     auto *w = asWriter15(writer);
     if (w == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
+    if (w->conflictsDefaultDwgPlotStyleDictionary(*object)) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::Object, false);
+    }
     return writeFixedObjectFrameTransaction(
         WriteSkipKind::Object, w, object, nullptr,
         [w, object] { return w->writeDictionary(*object); });
@@ -4035,6 +4054,11 @@ bool dwgRW::writeDictionaryWithDefault(DRW_DictionaryWithDefault *object) {
     auto *w = asWriter15(writer);
     if (w == nullptr)
         return recordWriteResult(WriteSkipKind::Object, false);
+    if (w->conflictsDefaultDwgPlotStyleDictionary(
+            *object, object->m_defaultEntryHandle, true)) {
+        markDwgWriteFailure();
+        return recordWriteResult(WriteSkipKind::Object, false);
+    }
     return writeObjectTransaction(
         WriteSkipKind::Object,
         [w, object] { return w->writeDictionaryWithDefault(*object); });

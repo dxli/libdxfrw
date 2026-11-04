@@ -21388,8 +21388,15 @@ bool DRW_DictionaryVar::encodeDwg(DRW::Version version, dwgBufferW *buf,
 bool DRW_DictionaryWithDefault::encodeDwg(DRW::Version version, dwgBufferW *buf,
                                            dwgBufferW *strBuf,
                                            dwgBufferW *handleBuf) const {
+    return encodeDwgForWriter(version, buf, strBuf, handleBuf, false);
+}
+
+bool DRW_DictionaryWithDefault::encodeDwgForWriter(
+        DRW::Version version, dwgBufferW *buf, dwgBufferW *strBuf,
+        dwgBufferW *handleBuf, bool typedLegacyNulls) const {
     if (buf == nullptr || !isDwgPayloadValid(version)) return false;
-    if (!DRW_Dictionary::encodeDwgImpl(version, buf, strBuf, handleBuf, true))
+    if (!DRW_Dictionary::encodeDwgImpl(version, buf, strBuf, handleBuf, true,
+                                       typedLegacyNulls))
         return false;
     dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;
     hb->putHandle(makeRefW(m_defaultEntryHandle, DRW::DwgHardPointer));

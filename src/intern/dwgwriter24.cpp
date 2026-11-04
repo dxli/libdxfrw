@@ -106,7 +106,8 @@ bool dwgWriter24::writeDwgHeader() {
                 m_version, &dataBuf, &handleBuf, &strBuf,
                 DRW::DwgNamedObjectsDictionaryHandle,
                 m_plotSettingsDictionaryHandle, &currentReferenceBits,
-                DRW::DwgAcadGroupDictionaryHandle))
+                DRW::DwgAcadGroupDictionaryHandle,
+                m_defaultPlotStyleDictionaryHandle))
             return false;
         dataBuf.alignToByte();
         strBuf.alignToByte();

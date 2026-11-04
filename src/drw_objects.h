@@ -3686,6 +3686,9 @@ public:
   [[nodiscard]] bool isDwgPayloadValid(DRW::Version version) const noexcept;
 
 private:
+  [[nodiscard]] bool encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                        dwgBufferW *strBuf, dwgBufferW *handleBuf,
+                                        bool typedLegacyNulls) const;
   // Per-parse duplicate guard: never copy it into a new parser walk.
   bool m_dxfDefaultEntrySeen = false;
   // Persistent completeness evidence for the model, retained by value copies.

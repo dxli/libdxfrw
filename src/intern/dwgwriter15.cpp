@@ -22,6 +22,8 @@
 #include <cstring>
 #include <limits>
 #include <map>
+#include <new>
+#include <type_traits>
 #include <set>
 
 #include "../drw_base.h"
@@ -848,7 +850,8 @@ bool dwgWriter15::writeDwgHeader() {
                 m_version, &m_buf, &m_buf, nullptr,
                 DRW::DwgNamedObjectsDictionaryHandle,
                 m_plotSettingsDictionaryHandle, &currentReferenceBits,
-                DRW::DwgAcadGroupDictionaryHandle))
+                DRW::DwgAcadGroupDictionaryHandle,
+                m_defaultPlotStyleDictionaryHandle))
             return false;
         if (!recordHeaderHandseedOffset(dataStartBit)
             || !recordHeaderCurrentReferenceOffsets(0u, currentReferenceBits))
@@ -1554,6 +1557,9 @@ dwgWriter::CompoundWriteCheckpoint dwgWriter15::checkpointCompoundWrite() const 
         m_dwgNamedObjectDictionaryComplete;
     checkpoint.plotSettingsDictionaryHandle =
         m_plotSettingsDictionaryHandle;
+    checkpoint.defaultPlotStyleDictionaryHandle = m_defaultPlotStyleDictionaryHandle;
+    checkpoint.defaultPlotStylePlaceholderHandle = m_defaultPlotStylePlaceholderHandle;
+    checkpoint.defaultPlotStyleGraphEmitted = m_defaultPlotStyleGraphEmitted;
     checkpoint.deferredPlotSettingsDictionary =
         m_deferredPlotSettingsDictionary;
     checkpoint.deferredPlotSettingsDictionaryEmitted =
@@ -1737,6 +1743,9 @@ void dwgWriter15::rollbackCompoundWrite(
         checkpoint.dwgNamedObjectDictionaryComplete;
     m_plotSettingsDictionaryHandle =
         checkpoint.plotSettingsDictionaryHandle;
+    m_defaultPlotStyleDictionaryHandle = checkpoint.defaultPlotStyleDictionaryHandle;
+    m_defaultPlotStylePlaceholderHandle = checkpoint.defaultPlotStylePlaceholderHandle;
+    m_defaultPlotStyleGraphEmitted = checkpoint.defaultPlotStyleGraphEmitted;
     m_deferredPlotSettingsDictionary =
         checkpoint.deferredPlotSettingsDictionary;
     m_deferredPlotSettingsDictionaryEmitted =
@@ -2525,6 +2534,8 @@ bool dwgWriter15::registerDwgNamedObjectDictionaryEntry(
     const bool plotSettingsEntry = normalizedName == "ACAD_PLOTSETTINGS";
     const bool plotStyleEntry = isPlotStyleDictionaryKey(name);
     if (m_dwgTableRecordsComplete || name.empty() || childHandle == 0
+        || (m_defaultPlotStylePlaceholderHandle != 0
+            && childHandle == m_defaultPlotStylePlaceholderHandle)
         || (plotStyleEntry && childHandle == DRW::NoHandle)
         || childHandle == DRW::DwgNamedObjectsDictionaryHandle
         || childHandle == DRW::DwgAcadGroupDictionaryHandle
@@ -2576,6 +2587,50 @@ bool dwgWriter15::registerDwgNamedObjectDictionaryEntry(
     return true;
 }
 
+bool dwgWriter15::stageDefaultDwgPlotStyleGraph() {
+    static_assert(std::is_nothrow_move_assignable<HandleAllocator>::value,
+                  "failed graph admission must restore allocator state");
+    if (m_version < DRW::AC1015 || m_version > DRW::AC1032
+        || m_dwgClassesFrozen || m_dwgClassManifestPrepared
+        || m_sectionOffsets.find(recno::HEADER) != m_sectionOffsets.end()
+        || m_sectionOffsets.find(recno::CLASSES) != m_sectionOffsets.end()
+        || m_dwgTableRecordsComplete || m_defaultPlotStyleDictionaryHandle != 0)
+        return false;
+    // Unlike ordinary write rollback, failed admission must not retain these
+    // private identities: no caller has received the planning callback yet.
+    try {
+        CompoundWriteCheckpoint checkpoint = checkpointPublicTransaction();
+        HandleAllocator allocator = m_handles;
+        const auto fail = [this, &checkpoint, &allocator] {
+            m_handles = std::move(allocator);
+            try {
+                rollbackCompoundWrite(checkpoint);
+            } catch (...) {
+                m_frameWriteError = true;
+            }
+            return false;
+        };
+        try {
+            const std::uint32_t dictionaryHandle = m_handles.next();
+            const std::uint32_t placeholderHandle = m_handles.next();
+            if (dictionaryHandle == 0 || dictionaryHandle == DRW::NoHandle
+                || placeholderHandle == 0 || placeholderHandle == DRW::NoHandle
+                || dictionaryHandle == placeholderHandle
+                || !registerDwgNamedObjectDictionaryEntry("ACAD_PLOTSTYLENAME", dictionaryHandle)
+                || !registerDictionaryWithDefaultObjectClass(dictionaryHandle))
+                return fail();
+            m_defaultPlotStyleDictionaryHandle = dictionaryHandle;
+            m_defaultPlotStylePlaceholderHandle = placeholderHandle;
+            return true;
+        } catch (...) {
+            return fail();
+        }
+    } catch (...) {
+        // Copying the checkpoint or allocator happens before any mutation.
+        return false;
+    }
+}
+
 bool dwgWriter15::registerPlotSettingsObjectClass(std::uint32_t handle) {
     if (m_deferredPlotSettingsDictionary) {
         if (handle == 0)
@@ -2621,6 +2676,8 @@ bool dwgWriter15::registerPlotSettingsObjectClass(std::uint32_t handle) {
 bool dwgWriter15::registerDwgGroupDictionaryEntry(
     const std::string& name, std::uint32_t groupHandle) {
     if (m_dwgTableRecordsComplete || name.empty() || groupHandle == 0
+        || (m_defaultPlotStylePlaceholderHandle != 0
+            && groupHandle == m_defaultPlotStylePlaceholderHandle)
         || groupHandle == DRW::NoHandle
         || groupHandle == DRW::DwgNamedObjectsDictionaryHandle
         || groupHandle == DRW::DwgAcadGroupDictionaryHandle
@@ -2680,6 +2737,9 @@ bool dwgWriter15::validateDwgNamedObjectDictionaryEntries() const {
         || !m_dwgGroupDictionaryComplete
         || (m_deferredPlotSettingsDictionary
             && !m_deferredPlotSettingsDictionaryEmitted)
+        || (m_defaultPlotStyleDictionaryHandle != 0
+            && (!m_defaultPlotStyleGraphEmitted
+                || m_defaultPlotStylePlaceholderHandle == 0))
         || m_emittedDwgNamedObjectDictionaryEntries.empty()) {
         return false;
     }
@@ -2690,6 +2750,15 @@ bool dwgWriter15::validateDwgNamedObjectDictionaryEntries() const {
         || !hasSingleFrame(DRW::DwgAcadGroupDictionaryHandle)) {
         return false;
     }
+    if (m_defaultPlotStyleDictionaryHandle != 0
+        && (!hasSingleFrame(m_defaultPlotStyleDictionaryHandle)
+            || !hasSingleFrame(m_defaultPlotStylePlaceholderHandle)
+            || std::count_if(m_emittedDwgNamedObjectDictionaryEntries.cbegin(),
+                m_emittedDwgNamedObjectDictionaryEntries.cend(), [this](const auto& entry) {
+                    return isPlotStyleDictionaryKey(entry.name)
+                        && entry.childHandle == m_defaultPlotStyleDictionaryHandle;
+                }) != 1))
+        return false;
 
     std::set<std::string> names;
     for (const auto& entry : m_emittedDwgNamedObjectDictionaryEntries) {
@@ -3728,7 +3797,8 @@ bool dwgWriter15::writeLightList(const DRW_LightList& lightList) {
 bool dwgWriter15::emitDictionaryObject(
     std::uint32_t handle, const DRW_Dictionary& dictionary,
     const std::vector<DRW_Entity::PendingHandleRef>& appIdRefs,
-    const std::vector<DRW_Entity::PendingHandleRef>& layerRefs) {
+    const std::vector<DRW_Entity::PendingHandleRef>& layerRefs,
+    bool typedLegacyNulls) {
     dwgBufferW& body = beginObject(handle);
     dwgBufferW *sb, *hb;
     if (!emitRecordPreamble(
@@ -3748,7 +3818,29 @@ bool dwgWriter15::emitDictionaryObject(
     return !objectWriteFailed();
 }
 
+bool dwgWriter15::conflictsDefaultDwgPlotStyleDictionary(
+    const DRW_Dictionary& dictionary, std::uint32_t defaultEntry,
+    bool withDefault) const noexcept {
+    if (m_defaultPlotStyleDictionaryHandle == 0)
+        return false;
+    if (withDefault && m_writingDefaultPlotStyleGraph
+        && dictionary.handle == m_defaultPlotStyleDictionaryHandle)
+        return false;
+    if (dictionary.handle == m_defaultPlotStyleDictionaryHandle
+        || dictionary.handle == m_defaultPlotStylePlaceholderHandle
+        || defaultEntry == m_defaultPlotStyleDictionaryHandle
+        || defaultEntry == m_defaultPlotStylePlaceholderHandle)
+        return true;
+    for (const auto& entry : dictionary.m_entries)
+        if (entry.m_handle == m_defaultPlotStyleDictionaryHandle
+            || entry.m_handle == m_defaultPlotStylePlaceholderHandle)
+            return true;
+    return false;
+}
+
 bool dwgWriter15::writeDictionary(const DRW_Dictionary& dictionary) {
+    if (conflictsDefaultDwgPlotStyleDictionary(dictionary))
+        return false;
     if (dictionary.handle == DRW::DwgNamedObjectsDictionaryHandle
         || dictionary.handle == DRW::DwgAcadGroupDictionaryHandle) {
         return false;
@@ -3860,8 +3952,7 @@ bool dwgWriter15::writeXRecord(const DRW_XRecord& xrecord) {
 bool dwgWriter15::emitPlotSettingsObject(
     std::uint32_t handle, const DRW_PlotSettings& plotSettings,
     const std::vector<DRW_Entity::PendingHandleRef>& appIdRefs,
-    const std::vector<DRW_Entity::PendingHandleRef>& layerRefs,
-    bool typedLegacyNulls) {
+    const std::vector<DRW_Entity::PendingHandleRef>& layerRefs) {
     const std::uint16_t classNum = typedDwgClassNum(
         "AcDbPlotSettings", "PLOTSETTINGS", 0);
     if (classNum < 500)
@@ -3971,6 +4062,54 @@ bool dwgWriter15::writePlotSettings(
 }
 
 bool dwgWriter15::completeDeferredDwgObjects() {
+    if (m_defaultPlotStyleDictionaryHandle != 0 && !m_defaultPlotStyleGraphEmitted) {
+        if (!m_dwgTableRecordsComplete || !m_dwgNamedObjectDictionaryComplete
+            || m_defaultPlotStylePlaceholderHandle == 0)
+            return false;
+        try {
+            const CompoundWriteCheckpoint checkpoint = checkpointCompoundWrite();
+            const auto fail = [this, &checkpoint] {
+                try {
+                    rollbackCompoundWrite(checkpoint);
+                } catch (...) {
+                    // A rollback allocation failure cannot safely publish.
+                    m_frameWriteError = true;
+                }
+                return false;
+            };
+            try {
+                DRW_DictionaryWithDefault dictionary;
+                dictionary.handle = m_defaultPlotStyleDictionaryHandle;
+                dictionary.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+                dictionary.cloning = 1;
+                dictionary.hardOwner = 0;
+                dictionary.setDwgCommonObjectState(0, m_version >= DRW::AC1018 ? 1 : 0, false);
+                dictionary.m_entries.push_back({"Normal", m_defaultPlotStylePlaceholderHandle});
+                dictionary.m_defaultEntryHandle = m_defaultPlotStylePlaceholderHandle;
+                DRW_AcDbPlaceholder placeholder;
+                placeholder.handle = m_defaultPlotStylePlaceholderHandle;
+                placeholder.parentHandle = m_defaultPlotStyleDictionaryHandle;
+                placeholder.setDwgCommonObjectState(0, m_version >= DRW::AC1018 ? 1 : 0, false);
+                {
+                    struct ScopedDefaultGraphWrite {
+                        bool& active;
+                        explicit ScopedDefaultGraphWrite(bool& flag) : active(flag) { active = true; }
+                        ~ScopedDefaultGraphWrite() { active = false; }
+                    } scope(m_writingDefaultPlotStyleGraph);
+                    if (!writeDictionaryWithDefault(dictionary)) return fail();
+                }
+                if (consumeWriteFailurePointForTest(kAfterDefaultPlotStyleDictionary))
+                    throw std::bad_alloc();
+                if (!writeAcDbPlaceholder(placeholder)) return fail();
+                m_defaultPlotStyleGraphEmitted = true;
+            } catch (...) {
+                return fail();
+            }
+        } catch (...) {
+            // A checkpoint-copy failure occurs before graph frames are written.
+            return false;
+        }
+    }
     if (!m_deferredPlotSettingsDictionary)
         return true;
     if (m_deferredPlotSettingsDictionaryEmitted)
@@ -5063,7 +5202,10 @@ bool dwgWriter15::emitDictionaryWithDefaultObject(
             &appIdRefs, &layerRefs, fileCodePageId())) {
         return false;
     }
-    if (!dictionary.encodeDwg(m_version, &body, sb, hb))
+    const bool typedLegacyNulls = m_version == DRW::AC1015
+        && m_defaultPlotStyleDictionaryHandle != 0u
+        && handle == m_defaultPlotStyleDictionaryHandle;
+    if (!dictionary.encodeDwgForWriter(m_version, &body, sb, hb, typedLegacyNulls))
         return false;
 
     finishObject();
@@ -5071,6 +5213,9 @@ bool dwgWriter15::emitDictionaryWithDefaultObject(
 }
 
 bool dwgWriter15::writeDictionaryWithDefault(const DRW_DictionaryWithDefault& dictionary) {
+    if (conflictsDefaultDwgPlotStyleDictionary(
+            dictionary, dictionary.m_defaultEntryHandle, true))
+        return false;
     // PR 13h — broaden gate from AC1021+ to AC1015+.  Encoder is
     // version-clean (delegates to DRW_Dictionary::encodeDwg, then
     // appends a single default-entry hard pointer at the tail).
@@ -6508,6 +6653,8 @@ bool dwgWriter15::writeDwgObjects() {
                 layer0.xrefBlockHandle.code = DRW::DwgHardPointer;
             }
             layer0.name = "0";
+            if (m_defaultPlotStyleDictionaryHandle != 0)
+                layer0.plotStyleHandle.ref = m_defaultPlotStylePlaceholderHandle;
             if (!emitLayerRecord(DRW::DwgLayer0Handle, layer0))
                 return false;
         }

@@ -876,46 +876,18 @@ and earlier [framing receipt](docs/research/p6-ac1021-fixed-metadata-header-poin
 The R2004+ CLASSES writer now emits its specified true header bit; the ODA
 rejection and any class-manifest ordinal issues remain open. See the [CLASSES
 bit receipt](docs/research/p6-dwg-classes-true-header-bit-2026-11-03.json).
-R2004-family system pages now carry their required compressed-stream terminator.
-ODA advances past its prior invalid-input failure on a generated AC1018 drawing
-and initially reports an AcDbDictionary recovery error. Corrected root-owner
-and HEADER GROUP references alone did not resolve it. Setting the synthetic
-root dictionary's missing-extension flag advances the controlled ODA case to
-an AcDbTextStyleTableRecord recovery error. Correcting both the synthetic
-STANDARD STYLE missing-extension flag and typed-null xref advances that
-controlled case to an AcDbBlockTable error; resolve the latter next. Synthetic
-defaults now use these source-backed states without changing supplied metadata.
-See the [dictionary flag receipt](docs/research/p6-generated-dictionary-missing-xdict-2026-11-04.json)
-and [STYLE receipt](docs/research/p6-standard-style-synthetic-xdict-xref-2026-11-04.json).
-The AC1015/AC1018 BLOCK_CONTROL now records its handle boundary before
-the handle stream. Correcting synthetic paper BLOCK/ENDBLK ownership removes
-the ODA block-owner warning; the layer-table error remains. See the
-[paper-space receipt](docs/research/p6-synthetic-paper-block-owner-mode-2026-11-04.json).
-Synthetic AC1015 NOD and GROUP now emit their witnessed typed-null parent and
-extension roles; the opt-in plot-style dictionary requires a separate
-matching legacy slot correction. See the [root receipt](docs/research/p6-ac1015-synthetic-root-dictionary-null-roles-2026-11-04.json).
-Synthetic R2004+ layer 0 now retains the source-backed absent-extension and
-typed-null xref state; ODA still requires the layer plot-style graph.
-Implement its early class admission, collision-safe identities, HEADER/NOD
-and placeholder edges, caller override and rollback using the six-version
-[graph subplan](docs/research/p6-default-plotstyle-graph-research-2026-11-04.json).
-The reserved plot-style NOD key now rejects ASCII case variants and target
-aliases while retaining caller spelling and late registration; automatic
-synthesis and HEADER binding remain open. See the [admission receipt](docs/research/p6-plotstyle-nod-identity-admission-2026-11-04.json).
-Synthetic R2004+ BYBLOCK, BYLAYER and CONTINUOUS linetypes now preserve their
-witnessed missing-extension and typed-null xref states. With the separately
-probed plot-style graph, ODA advances to a VIEWPORT error; the graph is not
-yet integrated. See the [linetype receipt](docs/research/p6-synthetic-ltype-xdict-xref-2026-11-04.json).
-The synthetic R2004+ active VPORT now also uses witnessed missing-extension,
-xref and named/base UCS null roles through a private writer path. With the
-scratch plot-style graph, ODA reaches an APPID error; production graph
-integration and that later failure remain open. See the [VPORT receipt](docs/research/p6-synthetic-active-vport-null-roles-2026-11-04.json).
-Synthetic R2004+ ACAD APPID and STANDARD DIMSTYLE now use witnessed common
-handle roles; DIMSTYLE also preserves caller reactors and conditional
-extension slots. With an explicitly staged scratch plot-style graph, ODA
-successfully converts a generated AC1018 LINE. Automatic graph integration
-and broader profiles remain open. See the [DIMSTYLE receipt](docs/research/p6-dimstyle-common-handles-and-oda-line-2026-11-04.json)
-and [APPID receipt](docs/research/p6-synthetic-acad-appid-xdict-xref-2026-11-04.json).
+The R2004-family system-page terminator and synthetic root, table-record and
+paper-space reference corrections now permit an explicitly opted-in default
+plot-style graph. The graph binds HEADER, NOD, DICTIONARYWDFLT, placeholder
+and generated layer 0 with collision checks and transactional retry;
+caller registration and no-opt-in behavior remain unchanged. Independent
+LibreDWG readback verifies six generated versions; ODA converts the tested
+AC1018 LINE/CIRCLE/ARC controls, while AC1015 and AC1021–AC1032 still fail
+at separate stages. Implement the remaining version-specific fixes and
+qualify broader producers, geometry and consumer behavior before support
+claims. See the [opt-in receipt](docs/research/p6-default-plotstyle-optin-2026-11-04.json),
+[AC1018 geometry receipt](docs/research/p6-oda-optin-ac1018-generated-geometry-2026-11-04.json),
+and [plot-style graph research](docs/research/p6-default-plotstyle-graph-research-2026-11-04.json).
 AC1021 BLOCK_CONTROL now stages handles at its declared boundary; the reader
 also supports the witnessed historical inline profile under narrow checks.
 LibreDWG and an ODA-produced source confirm model/paper references, but ODA
