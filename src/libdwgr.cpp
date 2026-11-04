@@ -2982,6 +2982,34 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         || !appendFrame(DRW::DwgCompoundEntityFrameRole::Parent, parentFrame,
                         ent->handle))
         return fail();
+    const auto parentOwnsEmittedChildren = [&]() {
+        if (!ac1021ModelChildProfile || typeid(*ent) != typeid(DRW_Polyline)
+            || parentFrame.version != DRW::AC1021)
+            return false;
+        auto token = parentFrame.occurrences.crbegin();
+        const auto nextOwned = [&token, &parentFrame](std::uint32_t handle) {
+            while (token != parentFrame.occurrences.crend()
+                   && token->stream != DRW::DwgObjectHandleStream::Handles)
+                ++token;
+            if (token == parentFrame.occurrences.crend()
+                || token->token.code != 3u || token->token.reference != handle)
+                return false;
+            ++token;
+            return true;
+        };
+        if (!nextOwned(seqEnd.handle)) return false;
+        for (auto vertex = ent->vertlist.crbegin(); vertex != ent->vertlist.crend(); ++vertex) {
+            const DRW_Vertex* const entry = vertex->get();
+            if (!entry || typeid(*entry) != typeid(DRW_Vertex)
+                || !nextOwned(entry->handle)) return false;
+        }
+        return true;
+    };
+    const bool qualifyGroupVertices = parentOwnsEmittedChildren()
+        && !objectWriter->m_pendingDwgGroupDictionaryEntries.empty()
+        && objectWriter->ensurePendingDwgDictionaryIndexes()
+        && !objectWriter->m_pendingDwgGroupHandles.empty();
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> qualifiedGroupVertices;
     const auto encodePolylineChild = [&](DRW_Entity* child) {
         // Bind the permit to this writer and exact child, only for the
         // duration of encoding. The modern writer consumes it before any
@@ -3000,6 +3028,8 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         return writer->encodeEntity(child);
     };
     for (auto& v : ent->vertlist) {
+        const auto emittedReactors = qualifyGroupVertices && v->reactorHandles.size() == 1u
+            ? v->reactorHandles : std::vector<std::uint32_t>{};
         if (!encodePolylineChild(v.get()))
             return fail();
         if (useEntityFrameBatchRollback)
@@ -3009,6 +3039,38 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
             || !appendFrame(DRW::DwgCompoundEntityFrameRole::Vertex,
                             vertexFrame, v->handle)) {
             return fail();
+        }
+        if (qualifyGroupVertices && !emittedReactors.empty()
+            && v->reactorHandles == emittedReactors
+            && vertexFrame.version == DRW::AC1021) {
+            std::size_t ordinal = 0u;
+            bool exactCommonHandles = true;
+            for (const auto& occurrence : vertexFrame.occurrences) {
+                if (occurrence.stream != DRW::DwgObjectHandleStream::Handles)
+                    continue;
+                if (ordinal <= emittedReactors.size()) {
+                    const auto expected = ordinal == 0u ? ent->handle
+                        : emittedReactors[ordinal - 1u];
+                    if (occurrence.token.code != 4u
+                        || occurrence.token.reference != expected)
+                        exactCommonHandles = false;
+                }
+                ++ordinal;
+            }
+            if (exactCommonHandles && ordinal > emittedReactors.size()) {
+                const auto group = emittedReactors.front();
+                if (objectWriter->m_pendingDwgGroupHandles.count(group) == 1u
+                    && group != v->handle && group != ent->handle
+                    && objectWriter->m_pendingDwgGroupHandles.count(v->handle) == 0u) {
+                    if (objectWriter->m_ac1021PolylineGroupVertexLedger.size()
+                            >= dwgSafety::MaxDwgReadObjectCount
+                        || qualifiedGroupVertices.size()
+                        >= dwgSafety::MaxDwgReadObjectCount
+                            - objectWriter->m_ac1021PolylineGroupVertexLedger.size())
+                        return fail();
+                    qualifiedGroupVertices.emplace_back(v->handle, group);
+                }
+            }
         }
     }
     if (legacyChain && g_throwNextLegacyPolylineForTest) {
@@ -3032,6 +3094,13 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         return fail();
     }
     receipt.valid = true;
+    for (const auto& edge : qualifiedGroupVertices) {
+        objectWriter->m_ac1021PolylineGroupVertexLedger.push_back(edge);
+        if (!objectWriter->m_ac1021PolylineGroupVertexIndex.insert(edge).second) {
+            objectWriter->m_ac1021PolylineGroupVertexLedger.pop_back();
+            return fail();
+        }
+    }
     if (guardedPolyline) {
         // All potentially throwing work precedes moving the rollback
         // checkpoint or publishing success/receipt state.

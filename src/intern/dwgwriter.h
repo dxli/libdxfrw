@@ -468,6 +468,7 @@ public:
         std::uint64_t lastDwgObjectFrameGeneration {0};
         std::size_t objectMapSize {0};
         std::size_t modelSpaceEntityCount {0};
+        std::size_t ac1021PolylineGroupVertexCount {0};
         std::size_t paperSpaceEntityCount {0};
         std::size_t modelSpaceInsertCount {0};
         std::size_t paperSpaceInsertCount {0};

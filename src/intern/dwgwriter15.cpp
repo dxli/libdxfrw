@@ -1614,6 +1614,7 @@ dwgWriter::CompoundWriteCheckpoint dwgWriter15::checkpointCompoundWrite() const 
         ? m_lastDwgObjectFrame.generation : 0;
     checkpoint.objectMapSize = m_objectMap.size();
     checkpoint.modelSpaceEntityCount = m_modelSpaceEntityHandles.size();
+    checkpoint.ac1021PolylineGroupVertexCount = m_ac1021PolylineGroupVertexLedger.size();
     checkpoint.paperSpaceEntityCount = m_paperSpaceEntityHandles.size();
     checkpoint.modelSpaceInsertCount = m_modelSpaceInsertHandles.size();
     checkpoint.paperSpaceInsertCount = m_paperSpaceInsertHandles.size();
@@ -1716,6 +1717,12 @@ void dwgWriter15::rollbackCompoundWrite(
     invalidateEmittedDwgGroupFrameIndex();
     m_dwgGroupMemberTargetHandles.clear();
     m_dwgGroupMemberTargetIndexReady = false;
+    if (checkpoint.ac1021PolylineGroupVertexCount <= m_ac1021PolylineGroupVertexLedger.size()) {
+        for (std::size_t index = checkpoint.ac1021PolylineGroupVertexCount;
+             index < m_ac1021PolylineGroupVertexLedger.size(); ++index)
+            m_ac1021PolylineGroupVertexIndex.erase(m_ac1021PolylineGroupVertexLedger[index]);
+        m_ac1021PolylineGroupVertexLedger.resize(checkpoint.ac1021PolylineGroupVertexCount);
+    }
     dwgWriter::rollbackCompoundWrite(checkpoint);
     if (checkpoint.emittedLayoutAssociationCount
         <= m_emittedLayoutAssociations.size()) {
@@ -4980,15 +4987,28 @@ bool dwgWriter15::writeGroup(const DRW_Group& group) {
     if (!ensureDwgGroupMemberTargetIndex())
         return false;
     std::set<std::uint32_t> memberHandles;
+    bool usesQualifiedPolylineVertex = false;
     for (const std::uint32_t memberHandle : group.m_entityHandles) {
+        const bool blockOwned = std::binary_search(m_dwgGroupMemberTargetHandles.cbegin(),
+                                                   m_dwgGroupMemberTargetHandles.cend(),
+                                                   memberHandle);
+        const bool qualifiedVertex = !blockOwned && m_version == DRW::AC1021
+            && m_ac1021PolylineGroupVertexIndex.count({memberHandle, group.handle}) == 1u;
         if (memberHandle == 0 || memberHandle == DRW::NoHandle
             || !memberHandles.insert(memberHandle).second
-            || !std::binary_search(m_dwgGroupMemberTargetHandles.cbegin(),
-                                   m_dwgGroupMemberTargetHandles.cend(),
-                                   memberHandle)) {
+            || (!blockOwned && !qualifiedVertex)) {
             return false;
         }
+        usesQualifiedPolylineVertex = usesQualifiedPolylineVertex || qualifiedVertex;
     }
+    if (usesQualifiedPolylineVertex
+        && (group.m_entityHandles.size() != 1u || !group.m_description.empty()
+            || group.m_isUnnamed || !group.m_selectable || group.flags != 0
+            || group.reactorHandles != std::vector<std::uint32_t>{group.parentHandle}
+            || group.extensionDictionaryFlag() != 1u || group.xDictHandle != 0u
+            || group.hasDataStorageBinaryData() || !group.appData.empty()
+            || !group.extData.empty()))
+        return false;
 
     DRW_Group object = group;
     if (!prepareDwgCommonObjectState(object, m_version))
@@ -5013,6 +5033,12 @@ bool dwgWriter15::writeGroup(const DRW_Group& group) {
         m_emittedDwgGroupFrameHandles.erase(frameResult.first);
         return false;
     }
+    struct ScopedVertexGroup {
+        bool& slot;
+        bool previous;
+        ~ScopedVertexGroup() { slot = previous; }
+    } groupScope{m_writingAc1021PolylineVertexGroup, m_writingAc1021PolylineVertexGroup};
+    m_writingAc1021PolylineVertexGroup = usesQualifiedPolylineVertex;
     if (!emitGroupObject(object.handle, object, appIdRefs, layerRefs)) {
         m_emittedDwgGroupFrames.pop_back();
         m_emittedDwgGroupFrameHandles.erase(frameResult.first);

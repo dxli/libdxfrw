@@ -946,10 +946,12 @@ AC1018–AC1032 2D/3D POLYLINE child and SEQEND references use the
 producer-witnessed hard-owner role. The bounded AC1021 model-space membership
 and 3D footer fixes preserve the sampled vertices through ODA; qualify paper
 space, named blocks, mesh/polyface and other revisions separately. GROUP
-references to those AC1021 child identities now fail closed and need an
-independent target-closure route
+references to AC1021 model-space vertices now have one bounded reciprocal-reactor
+route; SEQEND, other GROUP shapes and unqualified spaces still need
+independent target closure
 ([membership receipt](docs/research/p6-ac1021-polyline-model-block-membership-2026-11-04.json),
-[footer receipt](docs/research/p6-ac1021-polyline3d-footer-2026-11-04.json)).
+[footer receipt](docs/research/p6-ac1021-polyline3d-footer-2026-11-04.json),
+[GROUP receipt](docs/research/p6-ac1021-polyline-group-vertex-closure-2026-11-04.json)).
 
 Generated LTYPE_CONTROL output has a consumer-visible built-in linetype
 ordering risk: six ODA-produced files conflict with the PDF’s stated order.

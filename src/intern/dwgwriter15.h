@@ -819,6 +819,7 @@ protected:
     // One-shot permission for the exact child currently emitted by the
     // AC1021 POLYLINE facade. Its owner is the polyline, not the block.
     DRW_Entity* m_ac1021PolylineChildPermit {nullptr};
+    bool m_writingAc1021PolylineVertexGroup {false};
 
 private:
     /// Test-only fault injection used by the DWG transaction regressions.
@@ -939,6 +940,11 @@ private:
     // owner vector for each group member.
     std::vector<std::uint32_t> m_dwgGroupMemberTargetHandles;
     bool m_dwgGroupMemberTargetIndexReady {false};
+    // (vertex, GROUP) edges backed by an emitted AC1021 model-space
+    // POLYLINE frame and an exactly emitted reciprocal reactor. The ledger
+    // preserves insertion order for compound and outer-transaction rollback.
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> m_ac1021PolylineGroupVertexLedger;
+    std::set<std::pair<std::uint32_t, std::uint32_t>> m_ac1021PolylineGroupVertexIndex;
 };
 
 #endif // DWGWRITER15_H

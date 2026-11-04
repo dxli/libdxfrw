@@ -956,7 +956,12 @@ void dwgWriter21::finishObject() {
         m_writeError = true;
         return;
     }
-    const bool exactStringBoundary = exactLayerBoundary || materialHandle;
+    const bool vertexGroup = m_writingAc1021PolylineVertexGroup;
+    if (vertexGroup && objectType != DRW_Group::kDwgFixedType) {
+        m_writeError = true;
+        return;
+    }
+    const bool exactStringBoundary = exactLayerBoundary || materialHandle || vertexGroup;
     const bool mergedHandleBoundary = exactControlBoundary || exactStringBoundary;
     if (exactControlBoundary) {
         if (m_objectHandles.data().empty()
