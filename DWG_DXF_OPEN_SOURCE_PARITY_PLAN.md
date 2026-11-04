@@ -1309,6 +1309,12 @@ DWG placement/history remain unqualified. Obtain independent-kernel and
 source-native evidence before support claims; see the [CAD Assistant
 observation](docs/research/p7-ac1027-source-sab-cad-assistant-observation-2026-11-04.json).
 
+A BRL-CAD STEPcode/openNURBS/librt probe independently checks selected
+topology and eight rays on the source-associated 2E1 solid. Its STEP bridge
+shares the existing SAB parser and OCCT, and source placement and volume remain
+unqualified; it cannot promote support claims
+([receipt](docs/research/p7-ac1027-sab-brlcad-ray-crosscheck-2026-11-04.json)).
+
 ## P8 — consumer, platform, packaging and release gates
 
 The plot-style provider passes the LibreCAD_3 facade compile guard and the

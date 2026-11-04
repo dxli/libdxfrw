@@ -632,6 +632,7 @@ tools/audit_ac1024_tilted_geometry.py
 tools/audit_ac1024_vport_null_roles.py
 tools/audit_ac1027_header_suffix_compare.py
 tools/audit_ac1027_planar_sab_geometry.py
+tools/audit_ac1027_sab_brlcad_rays.py
 tools/audit_dwg_ltype_control.py
 tools/audit_dxf_lwpolyline_missing_y.py
 tools/audit_dxf_sparse_lwpolyline.py
