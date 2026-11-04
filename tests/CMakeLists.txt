@@ -2361,6 +2361,14 @@ set_tests_properties(dwg2dxf_rastervariables_direct_nod_adapter_transport
     TIMEOUT 30
 )
 
+# AC1018 exact direct-NOD 0/0/1/3 profile; physical whole-file output remains
+# separately unqualified.
+add_test(NAME dwg2dxf_rastervariables_ac1018_direct_nod_adapter_transport
+    COMMAND libdxfrw_dwg2dxf_adapter_tests
+        --rastervariables-dwg-adapter-transport-ac1018-direct-nod)
+set_tests_properties(dwg2dxf_rastervariables_ac1018_direct_nod_adapter_transport
+    PROPERTIES LABELS "fast;dwg;dxf;raster;adapter;generated;transaction;AC1018" TIMEOUT 30)
+
 # Exercise the same bounded direct-owner path against a locally authored
 # AC1021 source and same-revision output; the physical AC1021 witness is a
 # separate manual selector and is not committed as a fixture.

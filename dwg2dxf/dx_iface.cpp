@@ -11602,7 +11602,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             *frame.rasterVariables;
                         const bool exactDirectNodReactor =
                             data->sourceFormat == dx_source_format::DWG
-                            && (data->sourceVersion == DRW::AC1021
+                            && (data->sourceVersion == DRW::AC1018
+                                || data->sourceVersion == DRW::AC1021
                                 || data->sourceVersion == DRW::AC1024
                                 || data->sourceVersion == DRW::AC1027
                                 || data->sourceVersion == DRW::AC1032)
@@ -11614,7 +11615,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             && variables.reactorHandles.front()
                                 == data->namedObjectDictionary.handle;
                         if (data->sourceFormat != dx_source_format::DWG
-                            || (data->sourceVersion != DRW::AC1021
+                            || (data->sourceVersion != DRW::AC1018
+                                && data->sourceVersion != DRW::AC1021
                                 && data->sourceVersion != DRW::AC1024
                                 && data->sourceVersion != DRW::AC1027
                                 && data->sourceVersion != DRW::AC1032)
@@ -11622,7 +11624,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             || ((!variables.reactorHandles.empty()
                                     || variables.reactorCount() != 0)
                                 && !exactDirectNodReactor)
-                            || ((data->sourceVersion == DRW::AC1024
+                            || ((data->sourceVersion == DRW::AC1018
+                                 || data->sourceVersion == DRW::AC1024
                                  || data->sourceVersion == DRW::AC1032)
                                 && (!exactDirectNodReactor
                                     || variables.extensionDictionaryFlag() != 1u
@@ -11798,7 +11801,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         const bool directRasterVariablesNodReactor =
                             frame.rasterVariables != nullptr
                             && data->sourceFormat == dx_source_format::DWG
-                            && (data->sourceVersion == DRW::AC1021
+                            && (data->sourceVersion == DRW::AC1018
+                                || data->sourceVersion == DRW::AC1021
                                 || data->sourceVersion == DRW::AC1024
                                 || data->sourceVersion == DRW::AC1027
                                 || data->sourceVersion == DRW::AC1032)
@@ -41431,7 +41435,8 @@ bool dx_iface::inspectStandardDwgOutput(const dxfRW::DxfObjectsWriteView& view) 
                     && !(frame.raw.m_commonLinkEvidence == DRW_DwgCommonLinkEvidence::Unknown
                          && frame.publication.m_commonLinkEvidence == DRW_DwgCommonLinkEvidence::Unknown
                          && (cData->hasAc1018MinimalRootGroupSource(frame.raw.m_handle)
-                             || cData->hasAc1018WipeoutRootGroupSource(frame.raw.m_handle))))
+                             || cData->hasAc1018WipeoutRootGroupSource(frame.raw.m_handle)
+                             || cData->hasAc1018RasterRootGroupSource(frame.raw.m_handle))))
                 || (frame.sourceCodePageFieldPresent && !frame.sourceCodePageRecognized)
                 || !hasQualifiedStandardDwgOutputNames(frame.generation, frame.raw.m_handle, false)) continue;
             const auto found = context->sourceHandleToWrittenObjectMap.find(source.first.second);
@@ -61965,7 +61970,8 @@ namespace {
 bool matchesAc1018MinimalDictionaryWire(const DRW_UnsupportedObject& raw,
                                         std::uint32_t owner,
                                         std::uint32_t child,
-                                        std::uint32_t wipeout = 0u) noexcept {
+                                        std::uint32_t wipeout = 0u,
+                                        bool raster = false) noexcept {
     using namespace dx_raster_wire::detail;
     if (raw.m_version != DRW::AC1018 || raw.m_objectType != dwgObjType::DICTIONARY
         || raw.m_handle == 0u || raw.m_rawBytes.empty()
@@ -61990,10 +61996,11 @@ bool matchesAc1018MinimalDictionaryWire(const DRW_UnsupportedObject& raw,
             if (body.take(8u) != static_cast<unsigned char>(name[i])) return false;
     }
     if (wipeout != 0u) {
-        constexpr char name[] = "ACAD_WIPEOUT_VARS";
-        if (child == 0u || body.shortValue() != sizeof(name)) return false;
-        for (std::size_t i = 0; i < sizeof(name); ++i)
-            if (body.take(8u) != static_cast<unsigned char>(name[i])) return false;
+        const std::string_view name = raster ? "ACAD_IMAGE_VARS" : "ACAD_WIPEOUT_VARS";
+        if (child == 0u || body.shortValue() != name.size() + 1u) return false;
+        for (const char c : name)
+            if (body.take(8u) != static_cast<unsigned char>(c)) return false;
+        if (body.take(8u) != 0u) return false;
     }
     if (!body.good || body.pos != end) return false;
     Bits handles{raw.m_rawBytes.data(), end, total};
@@ -62031,6 +62038,36 @@ bool matchesAc1018DirectWipeoutWire(const DRW_UnsupportedObject& raw,
         || body.longValue() != 1u || body.take(1u) != 1u
         || body.shortValue() != 0u || !body.good || body.pos != end)
         return false;
+    Bits handles{raw.m_rawBytes.data(), end, total};
+    const auto owner = handle(handles, 4u, raw.m_handle);
+    const auto reactor = handle(handles, 4u, raw.m_handle);
+    if (!handles.good || owner.role != 4u || reactor.role != 4u
+        || owner.value != parent || reactor.value != parent) return false;
+    const auto remaining = handles.end - handles.pos;
+    return remaining < 8u && handles.take(remaining) == 0u && handles.good;
+}
+
+// ODA v5.4.1 20.4.91 and the AC1018 producer witness: inline 2004 object
+// boundary and exact 0/0/1/3 scalar profile, with distinct owner/reactor roles.
+bool matchesAc1018DirectRasterWire(const DRW_UnsupportedObject& raw,
+                                   std::uint32_t parent) noexcept {
+    using namespace dx_raster_wire::detail;
+    if (raw.m_version != DRW::AC1018 || raw.m_objectType < 500
+        || raw.m_handle == 0u || raw.m_bodyBitSize != 0u || raw.m_rawBytes.empty()
+        || raw.m_rawBytes.size() > (std::numeric_limits<std::uint32_t>::max)() / 8u)
+        return false;
+    const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
+    Bits body{raw.m_rawBytes.data(), 0u, total};
+    if (body.shortValue() != static_cast<std::uint32_t>(raw.m_objectType)) return false;
+    const auto end = static_cast<std::uint32_t>(body.little(4u));
+    if (!body.good || end > total || end <= body.pos) return false;
+    body.end = end;
+    const auto self = handle(body, 0u, 0u, true);
+    if (!body.good || self.value != raw.m_handle || body.shortValue() != 0u
+        || body.longValue() != 1u || body.take(1u) != 1u
+        || body.longValue() != 0u || body.shortValue() != 0u
+        || body.shortValue() != 1u || body.shortValue() != 3u
+        || !body.good || body.pos != end) return false;
     Bits handles{raw.m_rawBytes.data(), end, total};
     const auto owner = handle(handles, 4u, raw.m_handle);
     const auto reactor = handle(handles, 4u, raw.m_handle);
@@ -62178,6 +62215,105 @@ bool dx_data::hasAc1018WipeoutRootGroupSource(std::uint32_t requested) const noe
     }
 }
 
+bool dx_data::hasAc1018RasterRootGroupSource(std::uint32_t requested) const noexcept {
+    try {
+    if (sourceFormat != dx_source_format::DWG || sourceVersion != DRW::AC1018
+        || !dwgReadOutcome.attempted || !dwgReadOutcome.operationSucceeded
+        || dwgReadOutcome.sourceVersion != sourceVersion || importGeneration == 0u
+        || m_standardDwgObjectCaptureFailed || m_standardDwgObjectPayloadFailed
+        || rasterVariablesCaptureFailed || !hasNamedObjectDictionary
+        || !dwgClassCoverage.m_complete
+        || dwgClassCoverage.m_status != DRW_DwgClassCoverageStatus::FinalizedComplete)
+        return false;
+    const auto headerRoot = headerC.dwgNamedObjectDictionaryReference();
+    const auto root = namedObjectDictionary.handle;
+    if (!headerRoot || !DRW_Header::isUsableDwgNamedObjectDictionaryReference(*headerRoot)
+        || headerRoot->ref64 != root || root == 0u || root == DRW::NoHandle)
+        return false;
+    const auto rootFrame = m_standardDwgObjectFrames.find({importGeneration, root});
+    if (rootFrame == m_standardDwgObjectFrames.end()) return false;
+    const auto* rootModel = dynamic_cast<const DRW_Dictionary*>(rootFrame->second.typedBaseline.get());
+    if (!rootModel || rootModel->parentHandle != 0u || rootModel->m_entries.size() != 2u
+        || rootModel->m_entries[0].m_name != "ACAD_GROUP"
+        || rootModel->m_entries[1].m_name != "ACAD_IMAGE_VARS") return false;
+    const auto child = rootModel->m_entries[0].m_handle;
+    const auto raster = rootModel->m_entries[1].m_handle;
+    if (child == 0u || child == DRW::NoHandle || raster == 0u || raster == DRW::NoHandle
+        || child == root || raster == root || child == raster
+        || (requested != root && requested != child)) return false;
+    if (!hasCompleteOpaqueDwgSourceCapture() || !hasUnchangedDwgClassEvidence()) return false;
+    const auto childFrame = m_standardDwgObjectFrames.find({importGeneration, child});
+    const auto raw = m_opaqueDwgSourceFrames.find({importGeneration, raster});
+    const auto typed = dwgRasterVariables.find({importGeneration, raster});
+    if (childFrame == m_standardDwgObjectFrames.end() || raw == m_opaqueDwgSourceFrames.end()
+        || typed == dwgRasterVariables.end()) return false;
+    const auto* childModel = dynamic_cast<const DRW_Dictionary*>(childFrame->second.typedBaseline.get());
+    const auto valid = [this](const StandardDwgObjectFrame& frame, std::uint32_t value) {
+        return frame.generation == importGeneration && frame.raw.m_handle == value
+            && frame.publicationSeen && frame.membershipSeen && frame.sourceProfileBound
+            && frame.payloadMatched && !frame.opaquePayload && frame.hasNoObservedTextDecodeIssues()
+            && frame.dictionaryMembership.m_complete && frame.dictionaryMembership.m_version == DRW::AC1018
+            && frame.dictionaryMembership.m_dictionaryHandle == value
+            && frame.dictionaryMembership.m_hasSourceLocation;
+    };
+    const auto& variables = typed->second;
+    const auto& wire = raw->second;
+    const DRW_DwgClassCoverageEntry* sourceClass = nullptr;
+    for (const auto& entry : dwgClassCoverage.m_entries) {
+        if (!sameAsciiName(entry.m_className, "AcDbRasterVariables")
+            && !sameAsciiName(entry.m_recordName, "RASTERVARIABLES")) continue;
+        if (sourceClass) return false;
+        sourceClass = &entry;
+    }
+    DRW_Class canonical;
+    if (!sourceClass || sourceClass->m_state != DRW_DwgClassCoverageState::Published
+        || sourceClass->m_reason != DRW_DwgClassCoverageReason::None
+        || sourceClass->m_instanceCount != 1 || sourceClass->m_wasAProxyFlag != 0
+        || sourceClass->m_entityFlag != 0 || sourceClass->m_classNumber != wire.m_objectType
+        || !dxfRW::dxfClassForRecordName("RASTERVARIABLES", canonical)
+        || !sameAsciiName(sourceClass->m_className, canonical.className)
+        || !sameAsciiName(sourceClass->m_recordName, "RASTERVARIABLES")
+        || !sameAsciiName(sourceClass->m_appName, canonical.appName)
+        || !sameAsciiName(wire.m_className, sourceClass->m_className)
+        || !sameAsciiName(wire.m_recordName, sourceClass->m_recordName)
+        || !sameAsciiName(wire.m_classAppName, sourceClass->m_appName)
+        || wire.m_classProxyFlag != sourceClass->m_proxyFlag
+        || wire.m_classWasProxy != (sourceClass->m_wasAProxyFlag != 0)
+        || wire.m_classEntityFlagRaw != sourceClass->m_entityFlagRaw
+        || wire.m_classDwgVersion != sourceClass->m_dwgVersion
+        || wire.m_classMaintenanceVersion != sourceClass->m_maintenanceVersion
+        || wire.m_classUnknown1 != sourceClass->m_unknown1
+        || wire.m_classUnknown2 != sourceClass->m_unknown2
+        || m_opaqueDwgSourceFrameIdentities.count({importGeneration, raster}) != 1u)
+        return false;
+    std::size_t frameCount = 0u;
+    for (const auto& frame : m_opaqueDwgSourceFrames)
+        if (frame.first.first == importGeneration
+            && sameAsciiName(frame.second.m_className, sourceClass->m_className)
+            && sameAsciiName(frame.second.m_recordName, sourceClass->m_recordName))
+            ++frameCount;
+    if (frameCount != 1u) return false;
+    return childModel && childModel->parentHandle == root && childModel->m_entries.empty()
+        && valid(rootFrame->second, root) && valid(childFrame->second, child)
+        && variables.handle == raster && variables.parentHandle == root
+        && variables.m_classVersion == 0 && variables.m_imageFrame == 0
+        && variables.m_imageQuality == 1 && variables.m_units == 3 && variables.reactorCount() == 1
+        && variables.reactorHandles.size() == 1u && variables.reactorHandles.front() == root
+        && variables.extensionDictionaryFlag() == 1u && variables.xDictHandle == 0u
+        && !variables.hasDataStorageBinaryData() && variables.extData.empty() && variables.appData.empty()
+        && wire.m_handle == raster && wire.m_isCustomClass && !wire.m_isEntity
+        && wire.m_hasClassDefinition && !wire.m_hasDataStorage
+        && wire.m_commonLinkEvidence == DRW_DwgCommonLinkEvidence::Unknown
+        && sameAsciiName(wire.m_className, "AcDbRasterVariables")
+        && sameAsciiName(wire.m_recordName, "RASTERVARIABLES")
+        && matchesAc1018MinimalDictionaryWire(rootFrame->second.raw, 0u, child, raster, true)
+        && matchesAc1018MinimalDictionaryWire(childFrame->second.raw, root, 0u)
+        && matchesAc1018DirectRasterWire(wire, root);
+    } catch (...) {
+        return false;
+    }
+}
+
 bool dx_data::getCompleteDwgDictionaryOwner(
         std::uint32_t dictionaryHandle,
         std::uint32_t& ownerHandle) const noexcept {
@@ -62211,7 +62347,8 @@ bool dx_data::getCompleteDwgDictionaryOwner(
             && !(frame.raw.m_commonLinkEvidence == DRW_DwgCommonLinkEvidence::Unknown
                  && frame.publication.m_commonLinkEvidence == DRW_DwgCommonLinkEvidence::Unknown
                  && (hasAc1018MinimalRootGroupSource(dictionaryHandle)
-                     || hasAc1018WipeoutRootGroupSource(dictionaryHandle))))
+                     || hasAc1018WipeoutRootGroupSource(dictionaryHandle)
+                     || hasAc1018RasterRootGroupSource(dictionaryHandle))))
         || !frame.dictionaryMembership.m_complete
         || frame.dictionaryMembership.m_version
             != dwgReadOutcome.sourceVersion
@@ -71879,7 +72016,8 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
              && current->first.first == generation;
          ++current)
         ++typedCount;
-    const bool supportedRevision = cData->sourceVersion == DRW::AC1021
+    const bool supportedRevision = cData->sourceVersion == DRW::AC1018
+        || cData->sourceVersion == DRW::AC1021
         || cData->sourceVersion == DRW::AC1024
         || cData->sourceVersion == DRW::AC1027
         || cData->sourceVersion == DRW::AC1032;
@@ -71972,7 +72110,8 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
             const bool noReactors = variables.reactorHandles.empty()
                 && variables.reactorCount() == 0;
             const bool exactDirectNodReactor =
-                (cData->sourceVersion == DRW::AC1021
+                (cData->sourceVersion == DRW::AC1018
+                    || cData->sourceVersion == DRW::AC1021
                     || cData->sourceVersion == DRW::AC1024
                     || cData->sourceVersion == DRW::AC1027
                     || cData->sourceVersion == DRW::AC1032)
@@ -72002,7 +72141,8 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                 || variables.parentHandle == 0u
                 || variables.parentHandle == DRW::NoHandle
                 || (!noReactors && !exactDirectNodReactor)
-                || ((cData->sourceVersion == DRW::AC1024
+                || ((cData->sourceVersion == DRW::AC1018
+                     || cData->sourceVersion == DRW::AC1024
                      || cData->sourceVersion == DRW::AC1032)
                     && (!exactDirectNodReactor
                         || variables.extensionDictionaryFlag() != 1u
@@ -72030,17 +72170,23 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                 || !sameAsciiName(sourceFrame.m_recordName,
                                   sourceClass->m_recordName))
                 return fail("source frame/class binding mismatch");
-            if (!sourceFrame.m_commonHandleDataValidated
+            const bool inlineWitness = cData->sourceVersion == DRW::AC1018
+                && exactDirectNodReactor
+                && sourceFrame.m_commonLinkEvidence == DRW_DwgCommonLinkEvidence::Unknown
+                && !sourceFrame.m_commonHandleDataValidated
+                && cData->hasAc1018RasterRootGroupSource(cData->namedObjectDictionary.handle)
+                && matchesAc1018DirectRasterWire(sourceFrame, variables.parentHandle);
+            if (!inlineWitness && (!sourceFrame.m_commonHandleDataValidated
                 || !drwDwgCommonLinkEvidenceValidated(
-                    sourceFrame.m_commonLinkEvidence))
+                    sourceFrame.m_commonLinkEvidence)))
                 return fail("source frame common-link evidence is unvalidated");
-            if (sourceFrame.m_parentHandle != variables.parentHandle
+            if ((!inlineWitness && (sourceFrame.m_parentHandle != variables.parentHandle
                 || sourceFrame.m_reactorHandles
                     != variables.reactorHandles
                 || sourceFrame.m_numReactors != variables.reactorCount()
                 || sourceFrame.m_xDictHandle != 0u
                 || sourceFrame.m_xDictFlag
-                    != variables.extensionDictionaryFlag()
+                    != variables.extensionDictionaryFlag()))
                 || (cData->sourceVersion == DRW::AC1032
                     && !matchesDirectNodRaster1032Wire(
                         sourceFrame, cData->namedObjectDictionary.handle)))
@@ -77605,7 +77751,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             const bool closedRasterVariables =
                 targetRasterVariables != nullptr
                 && cData->sourceFormat == dx_source_format::DWG
-                && (cData->sourceVersion == DRW::AC1021
+                && (cData->sourceVersion == DRW::AC1018
+                    || cData->sourceVersion == DRW::AC1021
                     || cData->sourceVersion == DRW::AC1024
                     || cData->sourceVersion == DRW::AC1027
                     || cData->sourceVersion == DRW::AC1032)

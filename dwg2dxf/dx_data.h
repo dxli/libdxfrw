@@ -1441,6 +1441,7 @@ private:
     // Source-bound proof for the exact AC1018 minimal NOD/ACAD_GROUP pair.
     bool hasAc1018MinimalRootGroupSource(std::uint32_t handle) const noexcept;
     bool hasAc1018WipeoutRootGroupSource(std::uint32_t handle) const noexcept;
+    bool hasAc1018RasterRootGroupSource(std::uint32_t handle) const noexcept;
     // Immutable import-time version and host roles for DWG GEODATA. The
     // editable callback model must not be able to change the source profile.
     std::map<GeoDataKey, std::pair<std::int32_t, std::uint32_t>>
