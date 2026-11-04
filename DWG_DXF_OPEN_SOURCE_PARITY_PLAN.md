@@ -236,6 +236,9 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    checks and selected ASCII/Binary graph readback with all 13 original EED
    tuples; bind every emitted source target in the complete drawing and qualify
    fallback and native behavior before admission. See the [dependency receipt](docs/research/p4-dbcolor-eed-dependencies-selected-graph-2026-11-03.json).
+   ODA counterexamples show the apparent match between an EED integer and
+   emitted ACI 254 is incidental; do not infer the fallback from that value.
+   See the [fallback differential](docs/research/p4-dbcolor-oda-fallback-eed-counterexamples-2026-11-03.json).
    The `DICTIONARYWDFLT` default edge is checked as a hard pointer before it can
    become a typed reference; the generated wrong-role, rollback, and cursor
    alignment control is in the [default-handle role receipt](docs/research/p4-dictionary-default-handle-role-guard-2026-11-02.json).
