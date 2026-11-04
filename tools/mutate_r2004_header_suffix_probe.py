@@ -2,10 +2,11 @@
 """Make a scratch DWG with a substituted literal HEADER suffix.
 
 This is an experiment tool, not a format repair or an output qualification.
-It only handles a suffix that occurs exactly once as a contiguous literal in
-the specified R2004-family compressed data page. It preserves the validated
-HEADER envelope and recomputes the page checksums. The caller supplies a
-decoded logical HEADER and the compressed page's physical offset.
+It only handles a suffix, or its trailing part, that occurs exactly once as a
+contiguous literal in the specified R2004-family compressed data page. It
+preserves the validated HEADER envelope and recomputes the page checksums. The
+caller supplies a decoded logical HEADER and the compressed page's physical
+offset; the caller must independently decompress and verify each result.
 """
 
 import argparse
@@ -32,7 +33,7 @@ def checksum(data, seed=0):
     return zlib.adler32(data, seed) & 0xFFFFFFFF
 
 
-def run(source, decoded, destination, payload_offset, variant):
+def run(source, decoded, destination, payload_offset, variant, preserve_prefix):
     drawing = bytearray(source.read_bytes())
     section = decoded.read_bytes()
     if len(section) < 38 or not section.startswith(BEGIN):
@@ -51,6 +52,9 @@ def run(source, decoded, destination, payload_offset, variant):
     suffix = section[end + len(END):]
     if not suffix:
         raise ValueError("HEADER has no suffix to test")
+    if preserve_prefix < 0 or preserve_prefix >= len(suffix):
+        raise ValueError("suffix prefix must leave at least one byte to replace")
+    literal = suffix[preserve_prefix:]
     page_offset = payload_offset - 32
     if page_offset < 0 or payload_offset > len(drawing):
         raise ValueError("page offset is outside the file")
@@ -71,13 +75,14 @@ def run(source, decoded, destination, payload_offset, variant):
     struct.pack_into("<I", header, 24, 0)
     if checksum(header, fields[7]) != fields[6]:
         raise ValueError("original page header checksum mismatch")
-    offset = payload.find(suffix)
-    if offset < 0 or payload.find(suffix, offset + 1) >= 0:
-        raise ValueError("suffix is not one unique contiguous literal")
-    replacement = (bytes(len(suffix)) if variant == "zero" else
-                   bytes((index * 73 + 19) & 0xFF for index in range(len(suffix))))
+    offset = payload.find(literal)
+    if offset < 0 or payload.find(literal, offset + 1) >= 0:
+        raise ValueError("chosen suffix portion is not one unique contiguous literal")
+    replacement = (bytes(len(literal)) if variant == "zero" else
+                   bytes((index * 73 + 19) & 0xFF
+                         for index in range(preserve_prefix, len(suffix))))
     start = payload_offset + offset
-    drawing[start:start + len(suffix)] = replacement
+    drawing[start:start + len(literal)] = replacement
     data_checksum = checksum(drawing[payload_offset:payload_offset + compressed_size])
     struct.pack_into("<I", header, 28, data_checksum)
     struct.pack_into("<I", header, 24, checksum(header, data_checksum))
@@ -87,7 +92,8 @@ def run(source, decoded, destination, payload_offset, variant):
     # Exclusive creation prevents replacing the source or an existing result.
     with destination.open("xb") as output:
         output.write(drawing)
-    print(f"suffix_length={len(suffix)} literal_offset=0x{start:x} "
+    print(f"suffix_length={len(suffix)} preserved_prefix={preserve_prefix} "
+          f"literal_offset=0x{start:x} "
           f"sha256={hashlib.sha256(drawing).hexdigest()}")
 
 
@@ -98,8 +104,10 @@ def main():
     parser.add_argument("destination", type=Path)
     parser.add_argument("--payload-offset", type=lambda value: int(value, 0), required=True)
     parser.add_argument("--variant", choices=("zero", "pattern"), required=True)
+    parser.add_argument("--preserve-suffix-prefix", type=int, default=0)
     args = parser.parse_args()
-    run(args.source, args.decoded_header, args.destination, args.payload_offset, args.variant)
+    run(args.source, args.decoded_header, args.destination, args.payload_offset,
+        args.variant, args.preserve_suffix_prefix)
 
 
 if __name__ == "__main__":
