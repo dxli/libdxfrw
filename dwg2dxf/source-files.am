@@ -37,6 +37,7 @@ dist_noinst_HEADERS = \
     dx_rendering_sources.h \
     dx_rendersettings_source_profile.h \
     dx_standard_output.h \
+    dx_sunstudy_dxf_profile.h \
     dx_symbol_name_key.h \
     dx_symbol_output.h \
     dx_table_source_profile.h \
