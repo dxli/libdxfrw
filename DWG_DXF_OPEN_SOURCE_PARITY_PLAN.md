@@ -902,6 +902,11 @@ absent DXF weight. Establish the nested polyline elevation, thickness and
 extrusion mapping to its parent plane before changing their output disposition;
 see the [boundary receipt](docs/research/p6-hatch-boundary-2d-carrier-loss-guard-2026-11-04.json).
 
+The current AC1021 LINE writer output still fails ODA conversion. Three
+checksum-resealed header-only controls also fail, so those observed header
+differences are not sufficient fixes; identify the actual rejection cause before
+changing the writer ([receipt](docs/research/p6-ac1021-current-writer-header-negative-controls-2026-11-04.json)).
+
 Generated LTYPE_CONTROL output has a consumer-visible built-in linetype
 ordering risk: six ODA-produced files conflict with the PDF’s stated order.
 Keep the PDF authoritative and seek clarification before changing that order.
