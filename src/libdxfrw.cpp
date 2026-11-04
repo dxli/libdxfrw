@@ -27764,6 +27764,8 @@ bool dxfRW::processDictionary() {
     DRW_DBG("dxfRW::processDictionary");
     int code;
     DRW_Dictionary dict;
+    bool inDictionarySubclass = false;
+    bool pendingEntryName = false;
     auto* rootSourceHandler=dynamic_cast<DRW_DxfRootDictionarySourceHandler*>(iface);
     const bool captureRootSource=!m_objectsRootPositionPassed && rootSourceHandler
         && rootSourceHandler->wantsDxfRootDictionarySource();
@@ -27828,9 +27830,24 @@ bool dxfRW::processDictionary() {
             return true;  //found new entity or ENDSEC, terminate
         }
 
+        if (code == 100)
+            inDictionarySubclass = reader->getUtf8String() == "AcDbDictionary";
+        if (code == 280 && inDictionarySubclass && !dict.m_entries.empty()) {
+            const int hardOwner = reader->getInt32();
+            if (pendingEntryName || hardOwner < 0 || hardOwner > 1
+                || !captureRawGroup(raw, code, /*validateHandles=*/true))
+                return setError(DRW::BAD_CODE_PARSED);
+            dict.hardOwner = hardOwner;
+            continue;
+        }
+
         if (!captureAndParseRawDxfGroup(raw, code, dict)) {
             return setError( DRW::BAD_CODE_PARSED);
         }
+        if (code == 3)
+            pendingEntryName = true;
+        else if (code == 350 || code == 360)
+            pendingEntryName = false;
     }
 
     return setError(DRW::BAD_READ_OBJECTS);

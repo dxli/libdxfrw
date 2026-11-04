@@ -122,6 +122,11 @@ and [original receipt](docs/research/p4-ac1018-empty-style-dwg-bit-order-differe
 
 ## P4 — original bodies and complete document closure
 
+DXF DICTIONARY now accepts its hard-owner flag after completed entries within
+the documented subclass, preserving each 350/360 role and rejecting a flag
+inside an incomplete pair. Broader graph and native consumer qualification
+remain open ([receipt](docs/research/p4-dxf-dictionary-late-hardowner-2026-11-04.json)).
+
 SECTIONOBJECT contour parsing now retains complete vertices when their count
 groups appear later and rejects mismatched or ambiguous arrays before record
 callbacks. Omitted counts remain accepted for compatibility, though the sampled

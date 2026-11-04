@@ -457,6 +457,7 @@ tests/dwg_vertex_tangent_units_tests.cpp
 tests/dwg_view_angle_units_tests.cpp
 tests/dwg_viewport_angle_units_tests.cpp
 tests/dwg_vport_angle_units_tests.cpp
+tests/dxf_dictionary_late_hardowner_tests.cpp
 tests/dxf_ellipse_extreme_axis_tests.cpp
 tests/dxf_entity_identity_test_helpers.h
 tests/dxf_fixture_tests.cpp
@@ -701,6 +702,7 @@ tools/audit_ac1027_lightlist_snapshot.py
 tools/audit_ac1027_material_peer.py
 tools/audit_ac1027_planar_sab_geometry.py
 tools/audit_ac1027_sab_brlcad_rays.py
+tools/audit_dictionary_late_hardowner.py
 tools/audit_dwg_hatch_ellipse_edge.py
 tools/audit_dwg_hatch_pattern_angles.py
 tools/audit_dwg_ltype_control.py
@@ -749,6 +751,7 @@ tools/author_ac1021_solid_trace.py
 tools/author_ac1021_text_style_source.py
 tools/author_ac1021_varied_geometry.py
 tools/author_ac1027_1032_writer_control.py
+tools/author_dictionary_late_hardowner.py
 tools/author_dwg_hatch_pattern.cpp
 tools/author_dwg_hatch_pattern_source.py
 tools/author_dwg_legacy_extrusion.py
