@@ -1546,8 +1546,9 @@ local implementation.
 | J295 | Freeze a current-source successor and resolve peer diagnostic admissibility; the native check now covers all four RTEXT position/rotation fields, but current-digest Linux/Windows/macOS receipts and independent semantic qualification remain open. The [v3 diagnostic](docs/research/p9-j295-rtext-successor-v3-2026-11-04.json) and [reader triage](docs/research/p9-j295-independent-reader-triage-2026-11-04.json) do not promote claims. |
 
 A [selected external LINE peer probe](docs/research/j256-j260-j293-external-line-peer-6034e221-2026-11-04.json)
-agrees on one J256/J260/J293 source, but its license and target, preservation
-and platform gates remain unresolved; it cannot promote those claims.
+agrees on one J256/J260/J293 source. The publisher now serves identical
+bytes, but the attached file’s license scope and target, preservation and
+platform gates remain unresolved; see the [publisher receipt](docs/research/j256-j260-j293-et-drawing-publisher-provenance-2026-11-04.json).
 
 An external process completing, an unavailable test being skipped, or advisory
 agreement never changes a support claim automatically.
