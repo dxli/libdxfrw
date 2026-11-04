@@ -11603,6 +11603,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         const bool exactDirectNodReactor =
                             data->sourceFormat == dx_source_format::DWG
                             && (data->sourceVersion == DRW::AC1021
+                                || data->sourceVersion == DRW::AC1024
                                 || data->sourceVersion == DRW::AC1027)
                             && data->hasNamedObjectDictionary
                             && variables.parentHandle
@@ -11613,18 +11614,25 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                 == data->namedObjectDictionary.handle;
                         if (data->sourceFormat != dx_source_format::DWG
                             || (data->sourceVersion != DRW::AC1021
+                                && data->sourceVersion != DRW::AC1024
                                 && data->sourceVersion != DRW::AC1027)
                             || variables.parentHandle != entry.parentHandle
                             || ((!variables.reactorHandles.empty()
                                     || variables.reactorCount() != 0)
                                 && !exactDirectNodReactor)
+                            || (data->sourceVersion == DRW::AC1024
+                                && (!exactDirectNodReactor
+                                    || variables.extensionDictionaryFlag() != 1u
+                                    || variables.m_imageFrame != 0
+                                    || variables.m_imageQuality != 1
+                                    || variables.m_units != 3))
                             || variables.xDictHandle != 0u
                             || variables.extensionDictionaryFlag() > 1u
                             || variables.hasDataStorageBinaryData()
                             || !variables.appData.empty()
                             || !variables.extData.empty())
                             return reject(ExtensionGraphFailure::InvalidGraph,
-                                "RASTERVARIABLES is outside the bounded AC1021/AC1027 DWG owner profile");
+                                "RASTERVARIABLES is outside the bounded AC1021/AC1024/AC1027 DWG owner profile");
                     } else if (frame.wipeoutVariables != nullptr) {
                         const DRW_WipeoutVariables& variables =
                             *frame.wipeoutVariables;
@@ -11777,6 +11785,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             frame.rasterVariables != nullptr
                             && data->sourceFormat == dx_source_format::DWG
                             && (data->sourceVersion == DRW::AC1021
+                                || data->sourceVersion == DRW::AC1024
                                 || data->sourceVersion == DRW::AC1027)
                             && data->hasNamedObjectDictionary
                             && entry.parentHandle
@@ -71572,11 +71581,12 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
          ++current)
         ++typedCount;
     const bool supportedRevision = cData->sourceVersion == DRW::AC1021
+        || cData->sourceVersion == DRW::AC1024
         || cData->sourceVersion == DRW::AC1027;
     if (typedCount != 0u
         && (!supportedRevision || targetVersion != cData->sourceVersion))
         return fail(
-            "output requires same-revision AC1021 or AC1027 source and target");
+            "output requires same-revision AC1021, AC1024 or AC1027 source and target");
 
     const bool completeClassReport = cData->dwgClassCoverage.m_complete
         && cData->dwgClassCoverage.m_status
@@ -71663,6 +71673,7 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                 && variables.reactorCount() == 0;
             const bool exactDirectNodReactor =
                 (cData->sourceVersion == DRW::AC1021
+                    || cData->sourceVersion == DRW::AC1024
                     || cData->sourceVersion == DRW::AC1027)
                 && cData->hasNamedObjectDictionary
                 && variables.parentHandle
@@ -71690,6 +71701,12 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
                 || variables.parentHandle == 0u
                 || variables.parentHandle == DRW::NoHandle
                 || (!noReactors && !exactDirectNodReactor)
+                || (cData->sourceVersion == DRW::AC1024
+                    && (!exactDirectNodReactor
+                        || variables.extensionDictionaryFlag() != 1u
+                        || variables.m_imageFrame != 0
+                        || variables.m_imageQuality != 1
+                        || variables.m_units != 3))
                 || variables.xDictHandle != 0u
                 || variables.extensionDictionaryFlag() > 1u
                 || variables.hasDataStorageBinaryData()
@@ -77201,6 +77218,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 targetRasterVariables != nullptr
                 && cData->sourceFormat == dx_source_format::DWG
                 && (cData->sourceVersion == DRW::AC1021
+                    || cData->sourceVersion == DRW::AC1024
                     || cData->sourceVersion == DRW::AC1027)
                 && key == "ACAD_IMAGE_VARS"
                 && targetRasterVariables->parentHandle

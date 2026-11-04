@@ -68065,9 +68065,10 @@ bool rasterVariablesDwgAdapterTransport(
             variables.m_imageFrame = directNodOwner
                 ? (revision == DRW::AC1021 ? 1 : 0) : 1;
             variables.m_imageQuality = directNodOwner ? 1 : 2;
-            variables.m_units = directNodOwner ? 1 : 3;
+            variables.m_units = directNodOwner && revision != DRW::AC1024 ? 1 : 3;
             if (directNodOwner
                 && (revision == DRW::AC1021
+                    || revision == DRW::AC1024
                     || revision == DRW::AC1027)) {
                 variables.reactorHandles = {
                     DRW::DwgNamedObjectsDictionaryHandle};
@@ -68120,9 +68121,9 @@ bool rasterVariablesDwgAdapterTransport(
     std::int32_t expectedFrame = directNodOwner
         ? (revision == DRW::AC1021 ? 1 : 0) : 1;
     std::int32_t expectedQuality = directNodOwner ? 1 : 2;
-    std::int32_t expectedUnits = directNodOwner ? 1 : 3;
+    std::int32_t expectedUnits = directNodOwner && revision != DRW::AC1024 ? 1 : 3;
     const bool expectedNodReactor = directNodOwner
-        && (revision == DRW::AC1021 || revision == DRW::AC1027);
+        && (revision == DRW::AC1021 || revision == DRW::AC1024 || revision == DRW::AC1027);
     std::uint8_t expectedXDictFlag = expectedNodReactor ? 1u : 0u;
     if (generatedSource) {
         dwgRW sourceWriter(sourcePath.string().c_str());
@@ -68133,7 +68134,7 @@ bool rasterVariablesDwgAdapterTransport(
         expectedRootKey = "ACAD_IMAGE_VARS";
         expectedFrame = revision == DRW::AC1021 ? 1 : 0;
         expectedQuality = 1;
-        expectedUnits = 1;
+        expectedUnits = revision == DRW::AC1024 ? 3 : 1;
     }
 
     dx_data imported;
@@ -68179,7 +68180,8 @@ bool rasterVariablesDwgAdapterTransport(
             || rootEntry->m_handle == DRW::NoHandle
             || directRootEntryCount != 1u
             || directRootTargetCount != 1u
-            || imported.namedObjectDictionary.handle != 0xCu)
+            || (revision != DRW::AC1024
+                && imported.namedObjectDictionary.handle != 0xCu))
             return fail("physical AC1027 source lacks its ACAD_IMAGE_VARS NOD entry");
         expectedHandle = rootEntry->m_handle;
         expectedParent = imported.namedObjectDictionary.handle;
@@ -68198,7 +68200,7 @@ bool rasterVariablesDwgAdapterTransport(
             ? source->second.reactorCount() != 1
                 || source->second.reactorHandles.size() != 1u
                 || source->second.reactorHandles.front()
-                    != DRW::DwgNamedObjectsDictionaryHandle
+                    != expectedParent
             : source->second.reactorCount() != 0
                 || !source->second.reactorHandles.empty())) {
         if (source != imported.dwgRasterVariables.end())
@@ -68252,6 +68254,44 @@ bool rasterVariablesDwgAdapterTransport(
         DRW_RasterVariables& mutableSource =
             imported.dwgRasterVariables.find(key)->second;
         const bool debugExport = !generatedSource || directNodOwner;
+        if (revision == DRW::AC1024) {
+            const auto refusedWithSentinel = [&](DRW::Version targetRevision) {
+                if (exporter.fileExport(target.first.string(), targetRevision,
+                                        target.second, &imported, debugExport,
+                                        requireResolvedOwners))
+                    return false;
+                std::ifstream file(target.first, std::ios::binary);
+                return std::string(std::istreambuf_iterator<char>(file), {}) == sentinel;
+            };
+            mutableSource.m_imageFrame = 1;
+            if (!refusedWithSentinel(revision))
+                return fail("AC1024 unobserved frame value was not refused atomically");
+            mutableSource.m_imageFrame = expectedFrame;
+            mutableSource.m_imageQuality = 0;
+            if (!refusedWithSentinel(revision))
+                return fail("AC1024 unobserved quality value was not refused atomically");
+            mutableSource.m_imageQuality = expectedQuality;
+            mutableSource.m_units = 1;
+            if (!refusedWithSentinel(revision))
+                return fail("AC1024 unobserved units were not refused atomically");
+            mutableSource.m_units = expectedUnits;
+            mutableSource.reactorHandles.clear();
+            mutableSource.setDwgCommonObjectState(0, 1, false);
+            if (!refusedWithSentinel(revision))
+                return fail("AC1024 missing NOD reactor was not refused atomically");
+            mutableSource.reactorHandles = {expectedParent};
+            mutableSource.setDwgCommonObjectState(1, 0, false);
+            if (!refusedWithSentinel(revision))
+                return fail("AC1024 unobserved XDictionary state was not refused atomically");
+            mutableSource.setDwgCommonObjectState(1, 1, false);
+            imported.namedObjectDictionary.m_entries.push_back({"ALIASED_RASTER", expectedHandle});
+            const bool aliasRefused = refusedWithSentinel(revision);
+            imported.namedObjectDictionary.m_entries.pop_back();
+            if (!aliasRefused)
+                return fail("AC1024 duplicate NOD target was not refused atomically");
+            if (!refusedWithSentinel(DRW::AC1027))
+                return fail("AC1024 cross-revision output was not refused atomically");
+        }
         mutableSource.m_classVersion = 1;
         const bool invalidClassVersionWrite = exporter.fileExport(
             target.first.string(), revision, target.second, &imported,
@@ -69422,6 +69462,11 @@ int main(int argc, char** argv) {
             == "--rastervariables-dwg-adapter-transport-ac1021-direct-nod")
         return rasterVariablesDwgAdapterTransport(
             {}, true, DRW::AC1021) ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1])
+            == "--rastervariables-dwg-adapter-transport-ac1024-direct-nod")
+        return rasterVariablesDwgAdapterTransport(
+            {}, true, DRW::AC1024) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1])
             == "--rastervariables-physical-ac1027-direct-nod")

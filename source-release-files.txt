@@ -616,6 +616,7 @@ tools/acis218_autocad_witness.md
 tools/audit_ac1015_attributed_insert_block_contents.py
 tools/audit_ac1015_compound_entity_chains.py
 tools/audit_ac1015_empty_attributed_insert.py
+tools/audit_ac1024_rastervariables_source.py
 tools/audit_ac1024_tilted_geometry.py
 tools/audit_ac1024_vport_null_roles.py
 tools/audit_ac1027_header_suffix_compare.py
@@ -681,6 +682,7 @@ tools/make_p9_rtext_oda_input.py
 tools/mutate_r2004_header_suffix_probe.py
 tools/normalize_drawing_result.py
 tools/normalize_oracle.py
+tools/probe_ac1024_rastervariables_source.cpp
 tools/probe_ac1024_tilted_geometry.cpp
 tools/probe_ac1027_source_sab_cqacis.py
 tools/probe_dxf_lwpolyline_missing_y.cpp

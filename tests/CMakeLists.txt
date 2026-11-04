@@ -2356,6 +2356,19 @@ set_tests_properties(dwg2dxf_rastervariables_ac1021_direct_nod_adapter_transport
     TIMEOUT 30
 )
 
+# AC1024 keeps the exact independently observed direct-NOD scalar/common-link
+# profile; this generated control is not a whole-source qualification.
+add_test(
+    NAME dwg2dxf_rastervariables_ac1024_direct_nod_adapter_transport
+    COMMAND libdxfrw_dwg2dxf_adapter_tests
+        --rastervariables-dwg-adapter-transport-ac1024-direct-nod
+)
+set_tests_properties(dwg2dxf_rastervariables_ac1024_direct_nod_adapter_transport
+    PROPERTIES
+    LABELS "fast;dwg;dxf;raster;adapter;generated;transaction;AC1024"
+    TIMEOUT 30
+)
+
 add_test(
     NAME dwg2dxf_wipeoutvariables_dwg_adapter_transport
     COMMAND libdxfrw_dwg2dxf_adapter_tests --wipeoutvariables-dwg-adapter-transport
