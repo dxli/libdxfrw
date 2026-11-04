@@ -256,6 +256,7 @@ bool dwgWriter24::writeDwgClasses() {
 // finishObject() assembles these into the AC1024 wire format.
 
 bool dwgWriter24::encodeEntity(DRW_Entity *ent) {
+
     const bool polylineChild = (m_version == DRW::AC1021 || m_version == DRW::AC1024) && ent != nullptr
         && m_ac1021PolylineChildPermit == ent
         && (dynamic_cast<DRW_Vertex*>(ent) != nullptr
@@ -264,6 +265,26 @@ bool dwgWriter24::encodeEntity(DRW_Entity *ent) {
         m_ac1021PolylineChildPermit = nullptr;
     if (ent == nullptr || objectWriteFailed() || blockControlEmitted())
         return false;
+
+    // The case-folding allocation must happen before writer or caller state
+    // changes so an allocation failure permits an unchanged retry.
+    DRW_Text* resolvedText = nullptr;
+    std::uint32_t resolvedTextStyle = 0u;
+    if (ent != nullptr && ent->eType == DRW::TEXT
+        && dynamic_cast<DRW_RText*>(ent) == nullptr
+        && dynamic_cast<DRW_ArcAlignedText*>(ent) == nullptr
+        && dynamic_cast<DRW_Attrib*>(ent) == nullptr
+        && dynamic_cast<DRW_MText*>(ent) == nullptr) {
+        auto* text = dynamic_cast<DRW_Text*>(ent);
+        if (text != nullptr && text->styleH.ref == 0u && text->styleH.ref64 == 0u
+            && !text->style.empty()) {
+            const auto styleIt = m_writingCtx.styleMap.find(toUpperCase(text->style));
+            if (styleIt != m_writingCtx.styleMap.end()) {
+                resolvedText = text;
+                resolvedTextStyle = styleIt->second;
+            }
+        }
+    }
 
     m_lastEntityWriteCheckpointValid = false;
     m_lastEntityWriteUsesCompoundCheckpoint = false;
@@ -315,6 +336,19 @@ bool dwgWriter24::encodeEntity(DRW_Entity *ent) {
                 styleIt != m_writingCtx.mlineStyleMap.end())
                 mline->styleHandle = styleIt->second;
         }
+    }
+    // Resolve a TEXT style name only when the caller did not supply a
+    // handle. The handle is drawing-local, so restore caller state on every
+    // return, including exceptions and failed staged writes.
+    struct ScopedTextStyleHandle {
+        DRW_Text* text{nullptr};
+        dwgHandle original{};
+        ~ScopedTextStyleHandle() { if (text != nullptr) text->styleH = original; }
+    } textStyleScope;
+    if (resolvedText != nullptr) {
+        textStyleScope.text = resolvedText;
+        textStyleScope.original = resolvedText->styleH;
+        resolvedText->styleH.ref = resolvedTextStyle;
     }
     prepareBlockOwnedEntity(*ent);
     if (!canRecordBlockOwnedEntity(*ent))

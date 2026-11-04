@@ -913,6 +913,10 @@ the explicit DXF inverse-extrusion helper ([receipt](docs/research/p6-ac1024-tra
 Qualify additional text-derived entities and producer/normal profiles beyond
 the explicit TEXT DXF inverse-extrusion helper; current DWG TEXT reads do not
 apply that transform ([receipt](docs/research/p6-text-legacy-extrusion-opt-in-2026-11-04.json)).
+DWG TEXT now resolves a registered style name when no handle is supplied; the
+sampled AC1021 output passes ODA only when the caller supplies the witnessed
+STYLE common metadata. Qualify default STYLE metadata and other text-derived
+entities separately ([receipt](docs/research/p6-dwg-text-style-name-resolution-2026-11-04.json)).
 Qualify attributed INSERT scale semantics beyond the explicit AC1015
 positive-finite chain profile, including external near-unit precision and native
 rendering ([receipt](docs/research/p6-ac1015-attributed-insert-positive-scale-2026-11-04.json)).

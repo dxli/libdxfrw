@@ -439,6 +439,7 @@ tests/dwg_polyline_cross_scope_tests.cpp
 tests/dwg_polyline_owned_handle_roles_tests.cpp
 tests/dwg_polyline_owner_facade_tests.cpp
 tests/dwg_reader_matrix_tests.cpp
+tests/dwg_text_style_resolution_tests.cpp
 tests/dxf_ellipse_extreme_axis_tests.cpp
 tests/dxf_entity_identity_test_helpers.h
 tests/dxf_fixture_tests.cpp
@@ -652,6 +653,7 @@ tools/audit_ac1021_lwpolyline_footer.py
 tools/audit_ac1021_material_peer.py
 tools/audit_ac1021_polyline_group_peer.py
 tools/audit_ac1021_polyline_owners_peer.py
+tools/audit_ac1021_text_style_peer.py
 tools/audit_ac1021_varied_geometry_peer.py
 tools/audit_ac1021_vport_roles.py
 tools/audit_ac1024_rastervariables_frame1_source.py
@@ -687,6 +689,7 @@ tools/author_ac1021_geometry_matrix.py
 tools/author_ac1021_hatch_edge_source.py
 tools/author_ac1021_lwpolyline_footer.py
 tools/author_ac1021_polyline_owner_scopes.py
+tools/author_ac1021_text_style_source.py
 tools/author_ac1021_varied_geometry.py
 tools/author_ac1027_1032_writer_control.py
 tools/author_dwg_legacy_extrusion.py
@@ -767,6 +770,7 @@ tools/probe_ac1021_imagedef_owner_tokens.cpp
 tools/probe_ac1021_line_writer.cpp
 tools/probe_ac1021_lwpolyline_footer.cpp
 tools/probe_ac1021_polyline_owner_scopes.cpp
+tools/probe_ac1021_text_style.cpp
 tools/probe_ac1021_varied_geometry.cpp
 tools/probe_ac1024_rastervariables_frame1_source.cpp
 tools/probe_ac1024_rastervariables_matcher.cpp
