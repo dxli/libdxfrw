@@ -61005,6 +61005,54 @@ void dx_iface::addMaterial(const DRW_Material& data) {
     retainMaterialTyped(cData, data);
 }
 
+void dx_iface::addDwgDbColorEedSource(
+        DRW::Version version, std::uint32_t objectHandle,
+        const std::vector<DRW_TableEntry::PendingHandleRef>& appIds,
+        const std::vector<DRW_TableEntry::PendingHandleRef>& layers) noexcept {
+    if (cData == nullptr || cData->sourceFormat != dx_source_format::DWG
+        || !cData->dwgReadOutcome.attempted
+        || cData->dwgDbColorEedCaptureFailed)
+        return;
+    const auto reject = [this]() noexcept {
+        cData->dwgDbColorEedCaptureFailed = true;
+    };
+    using MapValue = std::pair<const dx_data::DwgDbColorKey,
+                               dx_data::DwgDbColorEedSource>;
+    constexpr std::size_t maxBytes = DwgDbColorCaptureMaxRetainedBytes;
+    constexpr std::size_t overhead = sizeof(MapValue) + 4u * sizeof(void*);
+    constexpr std::size_t slot = sizeof(DRW_TableEntry::PendingHandleRef);
+    if (cData->importGeneration == 0u || version == DRW::UNKNOWNV
+        || objectHandle == 0u || objectHandle == DRW::NoHandle
+        || cData->dwgDbColorEedSources.size() >= DwgDbColorCaptureMaxRecords
+        || cData->dwgDbColorEedRetainedBytes > maxBytes
+        || overhead > maxBytes - cData->dwgDbColorEedRetainedBytes
+        || appIds.size() > DRW_TableEntry::kMaxExtendedDataItems
+        || layers.size() > DRW_TableEntry::kMaxExtendedDataItems
+        || appIds.size() > DRW_TableEntry::kMaxExtendedDataItems - layers.size()
+        || appIds.size() > (maxBytes - overhead) / slot
+        || layers.size() > (maxBytes - overhead - appIds.size() * slot) / slot) {
+        reject();
+        return;
+    }
+    const std::size_t bytes = overhead + (appIds.size() + layers.size()) * slot;
+    if (bytes > maxBytes - cData->dwgDbColorEedRetainedBytes) {
+        reject();
+        return;
+    }
+    try {
+        const dx_data::DwgDbColorKey key{cData->importGeneration, objectHandle};
+        dx_data::DwgDbColorEedSource source{version, appIds, layers};
+        if (!cData->dwgDbColorEedSources.emplace(key, std::move(source)).second) {
+            reject();
+            return;
+        }
+    } catch (...) {
+        reject();
+        return;
+    }
+    cData->dwgDbColorEedRetainedBytes += bytes;
+}
+
 void dx_iface::addDbColor(const DRW_DbColor& data) {
     if (cData == nullptr || cData->sourceFormat != dx_source_format::DWG
         || !cData->dwgReadOutcome.attempted

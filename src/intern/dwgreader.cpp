@@ -12920,7 +12920,7 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
     // OBJECTS are parsed only after the APPID and layer tables are complete.
     // Resolve EED's deferred references before any typed callback observes the
     // record, matching the table-record and entity publication contracts.
-    auto parseTableEntry = [this, &buff, bs](auto &entry) {
+    auto parseTableEntry = [this, &buff, &intfa, bs](auto &entry) {
       const bool parsed = entry.parseDwg(version, &buff, bs) && buff.isGood();
       if (parsed) {
         using Entry = typename std::decay<decltype(entry)>::type;
@@ -12930,6 +12930,16 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
           // for exact source-to-output dependency proof.
           entry.dwgEedAppIdReferences = entry.pendingAppIdResolutions;
           entry.dwgEedLayerReferences = entry.pendingLayerRefResolutions;
+        }
+        if constexpr (std::is_same<Entry, DRW_DbColor>::value) {
+          // The ordinary callback receives resolved names after parseAttribs
+          // clears these vectors. An opt-in observer can preserve the original
+          // source roles without changing DRW_Interface or DBCOLOR's layout.
+          auto *source = dynamic_cast<DRW_DwgDbColorEedSourceHandler*>(&intfa);
+          if (source != nullptr && source->wantsDwgDbColorEedSource())
+            source->addDwgDbColorEedSource(
+                version, entry.handle, entry.pendingAppIdResolutions,
+                entry.pendingLayerRefResolutions);
         }
         parseAttribs(&entry);
       }

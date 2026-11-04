@@ -1240,6 +1240,23 @@ public:
   }
 };
 
+/** Optional DBCOLOR EED source-reference side channel. The callback observes
+ * APPID/LAYER handle references after parser chunk coalescing and successful
+ * object-body validation, before public XDATA strings are resolved. References
+ * are borrowed only for the callback. Repeated source APPID chunks may already
+ * be coalesced; this is not a wire-chunk inventory or target/output closure.
+ * Existing DRW_Interface consumers need not implement this separate interface.
+ */
+class DRW_DwgDbColorEedSourceHandler {
+public:
+  virtual ~DRW_DwgDbColorEedSourceHandler() = default;
+  virtual bool wantsDwgDbColorEedSource() const noexcept { return false; }
+  virtual void addDwgDbColorEedSource(
+      DRW::Version version, std::uint32_t objectHandle,
+      const std::vector<DRW_TableEntry::PendingHandleRef>& appIds,
+      const std::vector<DRW_TableEntry::PendingHandleRef>& layers) noexcept = 0;
+};
+
 #ifdef LIBDXFRW_DRW_INTERFACE_RESTORE_NONE
 # pragma pop_macro("None")
 # undef LIBDXFRW_DRW_INTERFACE_RESTORE_NONE

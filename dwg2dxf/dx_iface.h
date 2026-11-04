@@ -41,6 +41,7 @@ class DxIfaceExtensionGraphTestAccess;
 class DxIfaceTableSourceTestAccess;
 
 class dx_iface : public DRW_Interface, public DRW_UnmodeledDxfObjectHandler,
+                 public DRW_DwgDbColorEedSourceHandler,
                  public DRW_DwgClassSourceHandler, public DRW_DxfTableSourceHandler,
                  public DRW_DxfSymbolSourceHandler, public DRW_DxfRootDictionarySourceHandler,
                  public DRW_DxfBlockRecordSourceHandler, public DRW_DxfAttdefSourceHandler,
@@ -604,6 +605,11 @@ public:
         const DRW_PointCloudColorMap& data) override;
     void addMaterial(const DRW_Material& data) override;
     void addDbColor(const DRW_DbColor& data) override;
+    bool wantsDwgDbColorEedSource() const noexcept override { return true; }
+    void addDwgDbColorEedSource(
+        DRW::Version version, std::uint32_t objectHandle,
+        const std::vector<DRW_TableEntry::PendingHandleRef>& appIds,
+        const std::vector<DRW_TableEntry::PendingHandleRef>& layers) noexcept override;
     void addGeoData(const DRW_GeoData& data) override;
     void addRasterVariables(const DRW_RasterVariables& data) override;
     void addWipeoutVariables(const DRW_WipeoutVariables& data) override;

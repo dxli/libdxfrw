@@ -68291,6 +68291,182 @@ static bool dbColorLateCallbackBinding() {
         ? true : fail("conflicting definition was not rejected atomically");
 }
 
+static bool dbColorPhysicalEedSource(const std::filesystem::path& path) {
+    const auto fail = [](const char* message) {
+        std::cerr << "DBCOLOR physical EED source: " << message << '\n';
+        return false;
+    };
+    dx_data data;
+    dx_iface importer;
+    if (!importer.fileImport(path.string(), &data, false)
+        || data.sourceFormat != dx_source_format::DWG
+        || data.sourceVersion != DRW::AC1021
+        || data.dwgDbColorEedCaptureFailed
+        || data.dwgDbColorCaptureFailed
+        || !data.hasNamedObjectDictionary
+        || data.namedObjectDictionary.handle != 0xCu)
+        return fail("physical source import or capture failed");
+    const dx_data::DwgDbColorKey key{data.importGeneration, 0x369B0u};
+    const auto source = data.dwgDbColorEedSources.find(key);
+    const auto color = data.dwgDbColorObjects.find(key);
+    const auto* raw = DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+        data, key.first, key.second);
+    if (source == data.dwgDbColorEedSources.end()
+        || color == data.dwgDbColorObjects.end()
+        || raw == nullptr
+        || source->second.version != DRW::AC1021
+        || raw->m_version != DRW::AC1021
+        || raw->m_handle != key.second
+        || raw->m_objectType != 551
+        || raw->m_className != "AcDbColor"
+        || raw->m_recordName != "DBCOLOR"
+        || !raw->m_commonHandleDataValidated
+        || raw->m_parentHandle != 0x6Bu
+        || raw->m_reactorHandles != std::vector<std::uint32_t>{0x6Bu}
+        || source->second.appIds.size() != 1u
+        || source->second.appIds.front().indexInExtData != 0u
+        || source->second.appIds.front().handleRef != 0x12u
+        || !source->second.layers.empty())
+        return fail("physical APPID role was not preserved");
+    const auto app = std::count_if(data.appIds.begin(), data.appIds.end(),
+        [](const DRW_AppId& value) {
+            return value.handle == 0x12u && value.parentHandle == 0x9u
+                && value.name == "ACAD";
+        });
+    const auto dictionary = std::find_if(data.dictionaries.begin(),
+        data.dictionaries.end(), [](const DRW_Dictionary& value) {
+            return value.handle == 0x6Bu;
+        });
+    if (app != 1 || dictionary == data.dictionaries.end()
+        || dictionary->parentHandle != 0xCu
+        || dictionary->reactorHandles != std::vector<std::uint32_t>{0xCu}
+        || std::count_if(data.namedObjectDictionary.m_entries.begin(),
+                         data.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_COLOR" && entry.m_handle == 0x6Bu;
+            }) != 1
+        || dictionary->m_entries.size() != 1u
+        || dictionary->m_entries.front().m_name != "RAL CLASSIC$RAL 7047"
+        || dictionary->m_entries.front().m_handle != key.second)
+        return fail("physical APPID or rooted dictionary source graph changed");
+    const DRW_DbColor& value = color->second;
+    if (value.handle != key.second || value.parentHandle != 0x6Bu
+        || value.reactorHandles != std::vector<std::uint32_t>{0x6Bu}
+        || value.reactorCount() != 1 || value.extensionDictionaryFlag() != 1u
+        || value.xDictHandle != 0u || value.rgb != 0xCFD0CF
+        || value.bookName != "RAL CLASSIC" || value.name != "RAL 7047"
+        || value.extData.size() != 53u || value.extData.front() == nullptr
+        || value.extData.front()->code() != 1001
+        || value.extData.front()->type() != DRW_Variant::STRING
+        || std::string(value.extData.front()->c_str()) != "ACAD"
+        || !value.pendingAppIdResolutions.empty())
+        return fail("physical typed color, common references, or APPID changed");
+    for (std::size_t index = 0; index < 13u; ++index) {
+        const std::size_t offset = 1u + index * 4u;
+        const auto* tag = value.extData[offset];
+        const auto* aci = value.extData[offset + 1u];
+        const auto* rgb = value.extData[offset + 2u];
+        const auto* name = value.extData[offset + 3u];
+        if (tag == nullptr || aci == nullptr || rgb == nullptr || name == nullptr
+            || tag->code() != 1000 || tag->type() != DRW_Variant::STRING
+            || std::string(tag->c_str()) != "DBColXD"
+            || aci->code() != 1070 || aci->type() != DRW_Variant::INTEGER
+            || aci->content.i != 254
+            || rgb->code() != 1071 || rgb->type() != DRW_Variant::INTEGER
+            || rgb->content.i != -1026567985
+            || name->code() != 1000 || name->type() != DRW_Variant::STRING
+            || std::string(name->c_str()) != "RAL CLASSIC$RAL 7047")
+            return fail("physical repeated EED tuple changed");
+    }
+    dx_iface graph;
+    if (DxIfaceExtensionGraphTestAccess::prepare(graph, data, true))
+        return fail("source capture alone incorrectly opened DBCOLOR graph output");
+    std::cout << "Physical DBCOLOR APPID, owner graph and 13 EED tuples retained; output remains gated\n";
+    return true;
+}
+
+static bool dbColorEedSourceCaptureControls() {
+    const auto fail = [](const char* message) {
+        std::cerr << "DBCOLOR EED source capture: " << message << '\n';
+        return false;
+    };
+    dx_data data;
+    dx_iface iface;
+    iface.cData = &data;
+    data.sourceFormat = dx_source_format::DWG;
+    data.dwgReadOutcome.attempted = true;
+    data.importGeneration = 1u;
+    std::vector<DRW_TableEntry::PendingHandleRef> appIds{{0u, 0x12u, 0u, false}};
+    std::vector<DRW_TableEntry::PendingHandleRef> layers{{3u, 0x22u, 0u, false}};
+    iface.addDwgDbColorEedSource(DRW::AC1021, 0x123u, appIds, layers);
+    const auto first = data.dwgDbColorEedSources.find({1u, 0x123u});
+    if (data.dwgDbColorEedCaptureFailed
+        || first == data.dwgDbColorEedSources.end()
+        || first->second.version != DRW::AC1021
+        || first->second.appIds.size() != 1u
+        || first->second.appIds.front().indexInExtData != 0u
+        || first->second.appIds.front().handleRef != 0x12u
+        || first->second.layers.size() != 1u
+        || first->second.layers.front().indexInExtData != 3u
+        || first->second.layers.front().handleRef != 0x22u)
+        return fail("source roles not retained");
+    appIds.front().handleRef = 0x99u;
+    layers.clear();
+    if (first->second.appIds.front().handleRef != 0x12u
+        || first->second.layers.size() != 1u)
+        return fail("borrowed callback input was not copied");
+    data.importGeneration = 2u;
+    iface.addDwgDbColorEedSource(DRW::AC1027, 0x123u, appIds, layers);
+    const auto second = data.dwgDbColorEedSources.find({2u, 0x123u});
+    if (data.dwgDbColorEedCaptureFailed
+        || second == data.dwgDbColorEedSources.end()
+        || second->second.version != DRW::AC1027
+        || second->second.appIds.front().handleRef != 0x99u
+        || first->second.appIds.front().handleRef != 0x12u)
+        return fail("source handle was not isolated by import generation");
+    const std::size_t bytes = data.dwgDbColorEedRetainedBytes;
+    iface.addDwgDbColorEedSource(DRW::AC1027, 0x123u, appIds, layers);
+    if (!data.dwgDbColorEedCaptureFailed
+        || data.dwgDbColorEedSources.size() != 2u
+        || data.dwgDbColorEedRetainedBytes != bytes
+        || second->second.appIds.front().handleRef != 0x99u)
+        return fail("duplicate source did not fail without changing prior capture");
+    // dx_data retains multiple import generations. A failed capture latches
+    // across later uses of that data object rather than silently treating the
+    // retained partial history as complete; a fresh data object is required.
+    data.importGeneration = 3u;
+    iface.addDwgDbColorEedSource(DRW::AC1021, 0x124u, appIds, layers);
+    if (!data.dwgDbColorEedCaptureFailed
+        || data.dwgDbColorEedSources.size() != 2u
+        || data.dwgDbColorEedRetainedBytes != bytes)
+        return fail("capture failure did not remain latched across generations");
+
+    dx_data limited;
+    iface.cData = &limited;
+    limited.sourceFormat = dx_source_format::DWG;
+    limited.dwgReadOutcome.attempted = true;
+    limited.importGeneration = 3u;
+    limited.dwgDbColorEedRetainedBytes =
+        dx_iface::DwgDbColorCaptureMaxRetainedBytes;
+    iface.addDwgDbColorEedSource(DRW::AC1021, 0x123u, appIds, layers);
+    if (!limited.dwgDbColorEedCaptureFailed
+        || !limited.dwgDbColorEedSources.empty()
+        || limited.dwgDbColorEedRetainedBytes
+            != dx_iface::DwgDbColorCaptureMaxRetainedBytes)
+        return fail("budget rejection published partial source evidence");
+
+    dx_data retry;
+    iface.cData = &retry;
+    retry.sourceFormat = dx_source_format::DWG;
+    retry.dwgReadOutcome.attempted = true;
+    retry.importGeneration = 4u;
+    iface.addDwgDbColorEedSource(DRW::AC1021, 0x123u, appIds, layers);
+    if (retry.dwgDbColorEedCaptureFailed
+        || retry.dwgDbColorEedSources.count({4u, 0x123u}) != 1u)
+        return fail("same adapter did not capture after retry with fresh data");
+    return true;
+}
+
 static bool dbColorExternalEvidenceGate() {
     const auto fail = [](const char* message) {
         std::cerr << "DBCOLOR ACAD_COLOR graph: " << message << '\n';
@@ -68330,6 +68506,13 @@ static bool dbColorExternalEvidenceGate() {
             color.colorDwgMetadataPresent = true;
             color.name = "ACCENT";
             color.bookName = "LOCAL";
+            eedReady = color.addExtData(std::make_unique<DRW_Variant>(
+                           1001, std::string("ACAD")))
+                && color.addExtData(std::make_unique<DRW_Variant>(
+                           1000, std::string("LOCAL_COLOR")))
+                && color.addExtData(std::make_unique<DRW_Variant>(1070, 254))
+                && color.addExtData(std::make_unique<DRW_Variant>(
+                           1003, std::string("0"), true));
             dictionary.m_entries = {{"LOCAL$ACCENT", color.handle}};
         }
 
@@ -68343,7 +68526,7 @@ static bool dbColorExternalEvidenceGate() {
             wrote = output.writeDictionary(&dictionary)
                 && output.writeDbColor(&color);
         }
-        bool finalizeDwgWrite() override { return registered && wrote; }
+        bool finalizeDwgWrite() override { return registered && wrote && eedReady; }
         bool finalizeDwgWriteStructure() override { return true; }
 
         dwgRW& output;
@@ -68352,6 +68535,7 @@ static bool dbColorExternalEvidenceGate() {
         DRW_DbColor color;
         bool registered{false};
         bool wrote{false};
+        bool eedReady{false};
     };
 
     dwgRW writer(inputPath.string().c_str());
@@ -68369,6 +68553,34 @@ static bool dbColorExternalEvidenceGate() {
         || !imported.hasCompleteDwgDbColorAppearanceBindings()
         || !imported.hasNamedObjectDictionary)
         return fail("typed callback or NOD root did not retain the authored record");
+
+    const dx_data::DwgDbColorKey sourceKey{
+        imported.importGeneration, author.color.handle};
+    const auto eedSource = imported.dwgDbColorEedSources.find(sourceKey);
+    const auto typedColor = imported.dwgDbColorObjects.find(sourceKey);
+    if (imported.dwgDbColorEedCaptureFailed
+        || eedSource == imported.dwgDbColorEedSources.end()
+        || typedColor == imported.dwgDbColorObjects.end()
+        || eedSource->second.version != DRW::AC1027
+        || eedSource->second.appIds.size() != 1u
+        || eedSource->second.appIds.front().indexInExtData != 0u
+        || eedSource->second.appIds.front().handleRef
+            != DRW::DwgAcadAppIdHandle
+        || eedSource->second.layers.size() != 1u
+        || eedSource->second.layers.front().indexInExtData != 3u
+        || eedSource->second.layers.front().handleRef != DRW::DwgLayer0Handle
+        || typedColor->second.extData.size() != 4u
+        || typedColor->second.extData.front() == nullptr
+        || typedColor->second.extData.front()->code() != 1001
+        || typedColor->second.extData.front()->type() != DRW_Variant::STRING
+        || std::string(typedColor->second.extData.front()->c_str()) != "ACAD"
+        || typedColor->second.extData.back() == nullptr
+        || typedColor->second.extData.back()->code() != 1003
+        || typedColor->second.extData.back()->type() != DRW_Variant::STRING
+        || std::string(typedColor->second.extData.back()->c_str()) != "0"
+        || !typedColor->second.pendingAppIdResolutions.empty()
+        || !typedColor->second.pendingLayerRefResolutions.empty())
+        return fail("DBCOLOR EED APPID/LAYER source handles and resolved callback were not retained separately");
 
     const auto findColorRoot = [&imported]() {
         return std::find_if(
@@ -68413,6 +68625,12 @@ static bool dbColorExternalEvidenceGate() {
 }
 
 int main(int argc, char** argv) {
+    if (argc == 3
+        && std::string(argv[1]) == "--dbcolor-physical-eed-source")
+        return dbColorPhysicalEedSource(argv[2]) ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--dbcolor-eed-source-capture")
+        return dbColorEedSourceCaptureControls() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--tolerance-dimstyle-reference-binding")
         return toleranceDimstyleReferenceBinding() ? 0 : 1;

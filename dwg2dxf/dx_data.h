@@ -1078,6 +1078,14 @@ public:
     };
     std::map<DwgDbColorKey, DwgDbColorAppearance> dwgDbColors;
     std::map<DwgDbColorKey, DRW_DbColor> dwgDbColorObjects;
+    struct DwgDbColorEedSource {
+        DRW::Version version{DRW::UNKNOWNV};
+        std::vector<DRW_TableEntry::PendingHandleRef> appIds;
+        std::vector<DRW_TableEntry::PendingHandleRef> layers;
+    };
+    std::map<DwgDbColorKey, DwgDbColorEedSource> dwgDbColorEedSources;
+    std::size_t dwgDbColorEedRetainedBytes{0u};
+    bool dwgDbColorEedCaptureFailed{false};
     std::multimap<DwgDbColorKey, DRW_Entity*> dwgDbColorEntityReferences;
     std::size_t dwgDbColorRetainedRecords{0u};
     std::size_t dwgDbColorRetainedBytes{0u};

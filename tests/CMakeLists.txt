@@ -2166,6 +2166,10 @@ add_test(
     NAME dwg2dxf_dbcolor_external_evidence_gate
     COMMAND libdxfrw_dwg2dxf_adapter_tests --dbcolor-external-evidence-gate
 )
+add_test(NAME dwg2dxf_dbcolor_eed_source_capture
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --dbcolor-eed-source-capture)
+set_tests_properties(dwg2dxf_dbcolor_eed_source_capture PROPERTIES
+    LABELS "fast;dwg;dbcolor;eed;transaction" TIMEOUT 15)
 set_tests_properties(dwg2dxf_dbcolor_external_evidence_gate PROPERTIES
     LABELS "fast;dwg;dxf;color;adapter;generated;transaction"
     TIMEOUT 60
