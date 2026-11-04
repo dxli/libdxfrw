@@ -25785,6 +25785,70 @@ void testLwPolylinePointComponentOrder(TestContext& t) {
                      && malformedReader.callbacks == 0u,
                  (format + " LWPOLYLINE excess repeated Y is rejected before callback publication")
                      .c_str());
+        auto* sourcePolyline = dynamic_cast<DRW_LWPolyline*>(source.mBlock->ent.front());
+        for (auto modern : {DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+            dx_data readback; dx_iface modernReader;
+            const bool roundtrip = writer.fileExport(reorderedPath.string(), modern, binary, &source, false)
+                && modernReader.fileImport(reorderedPath.string(), &readback, false);
+            const auto* readPolyline = roundtrip && readback.mBlock != nullptr && !readback.mBlock->ent.empty()
+                ? dynamic_cast<const DRW_LWPolyline*>(readback.mBlock->ent.front()) : nullptr;
+            t.expect(readPolyline != nullptr && sourcePolyline != nullptr
+                         && sameLwPolylinePayload(*readPolyline, *sourcePolyline)
+                         && readback.mBlock->ent.size() == 2u,
+                     (format + " modern LWPOLYLINE retains exact vertex IDs and following LINE").c_str());
+        }
+        for (auto older : {DRW::AC1014, DRW::AC1015, DRW::AC1018, DRW::AC1021}) {
+            { std::ofstream sentinel(reorderedPath, std::ios::binary | std::ios::trunc); sentinel << "unchanged"; }
+            const bool rejected = !writer.fileExport(reorderedPath.string(), older, binary, &source, false);
+            std::ifstream preserved(reorderedPath, std::ios::binary);
+            const std::string contents(std::istreambuf_iterator<char>(preserved), {});
+            bool idsPreserved = sourcePolyline != nullptr;
+            if (sourcePolyline != nullptr) {
+                for (std::size_t i = 0; i < identifiers.size(); ++i)
+                    idsPreserved &= sourcePolyline->vertlist[i]->identifier == identifiers[i];
+            }
+            t.expect(rejected && contents == "unchanged" && idsPreserved,
+                     (format + " older LWPOLYLINE rejects nonzero vertex IDs without mutating caller or destination").c_str());
+            if (sourcePolyline != nullptr)
+                for (const auto& vertex : sourcePolyline->vertlist) vertex->identifier = 0;
+            dx_data retried; dx_iface retryReader;
+            const bool retry = writer.fileExport(reorderedPath.string(), older, binary, &source, false)
+                && retryReader.fileImport(reorderedPath.string(), &retried, false);
+            const auto* retryPolyline = retry && retried.mBlock != nullptr && !retried.mBlock->ent.empty()
+                ? dynamic_cast<const DRW_LWPolyline*>(retried.mBlock->ent.front()) : nullptr;
+            t.expect(retryPolyline != nullptr && sourcePolyline != nullptr
+                         && sameLwPolylinePayload(*retryPolyline, *sourcePolyline)
+                         && retried.mBlock->ent.size() == 2u,
+                     (format + " older LWPOLYLINE corrected same-adapter retry preserves geometry and following LINE").c_str());
+            if (sourcePolyline != nullptr)
+                for (std::size_t i = 0; i < identifiers.size(); ++i)
+                    sourcePolyline->vertlist[i]->identifier = identifiers[i];
+        }
+        struct IdentifierDiagnosticProbe final : dx_iface {
+            DRW_LWPolyline* polyline = nullptr;
+            bool accepted = true;
+            void writeEntities() override { accepted = dxfW->writeLWPolyline(polyline); }
+        } diagnosticAdapter;
+        dx_data diagnosticData;
+        diagnosticAdapter.cData = &diagnosticData;
+        diagnosticAdapter.currentBlock = diagnosticData.mBlock;
+        diagnosticAdapter.polyline = sourcePolyline;
+        { std::ofstream sentinel(reorderedPath, std::ios::binary | std::ios::trunc); sentinel << "unchanged"; }
+        dxfRW diagnosticWriter(reorderedPath.string().c_str());
+        diagnosticAdapter.dxfW = &diagnosticWriter;
+        const bool refused = !diagnosticWriter.write(&diagnosticAdapter, DRW::AC1021, binary);
+        const auto& omissions = diagnosticWriter.leftOut();
+        const auto omission = omissions.find("LWPOLYLINE vertex identifiers (not qualified for this DXF version)");
+        std::ifstream diagnosticFile(reorderedPath, std::ios::binary);
+        t.expect(refused && !diagnosticAdapter.accepted && omissions.size() == 1u
+                     && omission != omissions.end() && omission->second == 1u
+                     && std::string(std::istreambuf_iterator<char>(diagnosticFile), {}) == "unchanged",
+                 (format + " older LWPOLYLINE refusal reports the unqualified identifier field").c_str());
+        if (sourcePolyline != nullptr)
+            for (const auto& vertex : sourcePolyline->vertlist) vertex->identifier = 0;
+        t.expect(diagnosticWriter.write(&diagnosticAdapter, DRW::AC1021, binary)
+                     && diagnosticAdapter.accepted && diagnosticWriter.leftOut().empty(),
+                 (format + " corrected same-writer retry clears the identifier diagnostic").c_str());
         std::filesystem::remove(sourcePath, error);
         std::filesystem::remove(reorderedPath, error);
         std::filesystem::remove(malformedPath, error);

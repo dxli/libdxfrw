@@ -827,6 +827,10 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 Audit only a current failing source/profile; do not revive historical defects whose
 receipt and code path already agree.
 
+Older DXF output now refuses nonzero LWPOLYLINE vertex identifiers rather
+than silently dropping them; the earliest valid group-91 revision remains
+unqualified. See the [identifier receipt](docs/research/p6-lwpolyline-older-dxf-vertex-id-loss-2026-11-04.json).
+
 DWG ELLIPSE dispatch now retains the specified WCS center and major axis in
 both extrusion modes. Generated six-version controls and an ODA-produced
 AC1015 witness pass; other producer profiles and the separate CIRCLE/ARC

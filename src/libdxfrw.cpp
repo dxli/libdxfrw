@@ -9481,6 +9481,13 @@ bool dxfRW::writeLWPolyline(DRW_LWPolyline *ent){
         m_writeError = true;
         return false;
     }
+    // As with classic VERTEX records, older LWPOLYLINE group-91 support is
+    // not qualified. Refuse before writing instead of silently dropping IDs.
+    if (version < DRW::AC1024
+        && std::any_of(ent->vertlist.cbegin(), ent->vertlist.cend(),
+                       [](const auto& vertex) { return vertex->identifier != 0; }))
+        return rejectDxfWriteWithReason("LWPOLYLINE vertex identifiers",
+                                        "not qualified for this DXF version");
 
     {
         EntityRecordScope scope(*this, ent);
