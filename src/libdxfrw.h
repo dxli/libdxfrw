@@ -1389,6 +1389,7 @@ private:
     void rejectDxfGroupsInput() noexcept;
     // Executable-local allocation instrumentation; no runtime/public test API.
     friend class DxIfaceStandardDwgCaptureTestAccess;
+    friend class DxfXdataInt16TestAccess;
     friend class DxfGroupSetterTestAccess;
     enum class DxfEntityBoundary {
         NextEntity,

@@ -17823,7 +17823,9 @@ bool dxfRW::writeExtDataRange(const Range& ed, GetPointer getPointer) {
             return value->type() == DRW_Variant::DOUBLE
                 && std::isfinite(value->content.d);
         case 1070:
-            return value->type() == DRW_Variant::INTEGER;
+            return value->type() == DRW_Variant::INTEGER
+                && value->content.i >= std::numeric_limits<std::int16_t>::min()
+                && value->content.i <= std::numeric_limits<std::uint16_t>::max();
         case 1071:
             if (value->type() == DRW_Variant::INTEGER)
                 return true;
@@ -17838,6 +17840,20 @@ bool dxfRW::writeExtDataRange(const Range& ed, GetPointer getPointer) {
     };
     for (const auto& storedValue : ed) {
         const DRW_Variant* value = getPointer(storedValue);
+        if (binFile && value != nullptr && value->code() == 1070
+            && value->type() == DRW_Variant::INTEGER
+            && value->content.i > std::numeric_limits<std::int16_t>::max()) {
+            // Binary DXF carries the bits but no signedness marker; typed
+            // readback canonicalizes them to int16_t. Preserve callers' exact
+            // numeric value by refusing this projection before any XDATA is
+            // written. Opaque/raw writers still transport the two-byte bits.
+            recordOperationDiagnostic(DRW::OperationPhase::Validation,
+                DRW::OperationCause::ValidationFailure,
+                "xdata-1070-binary-numeric-loss",
+                "a positive group-1070 value above 32767 cannot survive typed Binary DXF readback");
+            m_writeError = true;
+            return false;
+        }
         if (!isValid(value)) {
             m_writeError = true;
             return false;
@@ -31567,6 +31583,19 @@ bool dxfRW::writeXRecordInternal(
                 DRW::OperationCause::ValidationFailure,
                 "xrecord-dwg-compatibility-value-kind",
                 "the AC1021+ DWG XRECORD compatibility profile requires Int16 group 1070 and Int32 group 1071");
+            m_writeError = true;
+            return false;
+        }
+        // Binary DXF does not encode whether a 16-bit payload is signed.
+        // Our typed reader returns it as int16_t, so accepting a larger
+        // positive typed value would change its numeric value on readback.
+        if (binFile && value.code() == 1070
+            && value.type() == DRW_Variant::INTEGER
+            && value.i_val() > std::numeric_limits<std::int16_t>::max()) {
+            recordOperationDiagnostic(DRW::OperationPhase::Validation,
+                DRW::OperationCause::ValidationFailure,
+                "xrecord-1070-binary-numeric-loss",
+                "a positive group-1070 value above 32767 cannot survive typed Binary DXF readback");
             m_writeError = true;
             return false;
         }

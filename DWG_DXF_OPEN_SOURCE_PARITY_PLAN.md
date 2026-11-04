@@ -825,6 +825,11 @@ The generated SURFACE/VIEWPORT round-trip controls now exercise refusal and
 corrected retry for the unmapped DWG loft path and invalid lighting type. Native
 rendering, source profiles and graph semantics remain open; see the [receipt](docs/research/p6-roundtrip-stale-surface-viewport-controls-2026-11-03.json).
 
+Typed Binary DXF output now refuses group-1070 values whose positive numeric
+meaning would change on signed readback; ASCII and explicit raw-bit transport
+remain available. Application-level signedness interpretation remains open;
+see the [1070 receipt](docs/research/p6-xdata-1070-binary-exact-numeric-2026-11-03.json).
+
 The witnessed AC1018 maintenance-55 HEADER profile now parses its CRC- and
 sentinel-validated envelope and diagnoses its unclaimed suffix. The witnessed
 CELLSTYLEMAP records now read; strict output remains refused until the suffix,

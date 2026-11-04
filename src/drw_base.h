@@ -763,6 +763,12 @@ double x;                 /*!< x coordinate, code 10 */
 */
 namespace dxfEntitiesAuth { class VariantAccess; }
 
+//! Typed DXF value. Group 1070's Binary DXF representation is a 16-bit
+//! pattern without a signedness marker; Binary input exposes it as int16_t.
+//! Typed XDATA and DWG-compatible XRECORD output refuses positive 1070 values
+//! above 32767 for Binary DXF because numeric readback would change. ASCII
+//! output retains the supported unsigned spellings; raw/opaque transport can
+//! still carry the same 16-bit pattern without a signedness claim.
 class DRW_Variant {
 public:
     enum TYPE {
