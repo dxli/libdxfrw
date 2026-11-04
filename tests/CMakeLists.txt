@@ -2398,6 +2398,15 @@ set_tests_properties(dwg2dxf_wipeoutvariables_ac1027_direct_nod PROPERTIES
     TIMEOUT 30
 )
 
+add_test(NAME dwg2dxf_wipeoutvariables_ac1024_direct_nod
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --wipeoutvariables-dwg-ac1024-direct-nod)
+set_tests_properties(dwg2dxf_wipeoutvariables_ac1024_direct_nod PROPERTIES
+    LABELS "fast;dwg;dxf;wipeout;adapter;generated;transaction;AC1024" TIMEOUT 30)
+add_test(NAME dwg2dxf_wipeoutvariables_ac1024_nested_refusal
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --wipeoutvariables-dwg-ac1024-nested-refusal)
+set_tests_properties(dwg2dxf_wipeoutvariables_ac1024_nested_refusal PROPERTIES
+    LABELS "fast;dwg;dxf;wipeout;adapter;generated;transaction;AC1024" TIMEOUT 30)
+
 add_test(
     NAME dwg2dxf_standard_dwg_object_source_capture
     COMMAND libdxfrw_dwg2dxf_adapter_tests --standard-dwg-object-source-capture

@@ -11650,7 +11650,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             && variables.reactorHandles.empty()
                             && variables.extensionDictionaryFlag() == 0u;
                         if (data->sourceFormat != dx_source_format::DWG
-                            || data->sourceVersion != DRW::AC1027
+                            || (data->sourceVersion != DRW::AC1027
+                                && !(data->sourceVersion == DRW::AC1024 && directNod))
                             || variables.parentHandle != entry.parentHandle
                             || variables.m_displayFrame > 1u
                             || (!directNod && !nested)
@@ -11659,7 +11660,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             || !variables.appData.empty()
                             || !variables.extData.empty())
                             return reject(ExtensionGraphFailure::InvalidGraph,
-                                "WIPEOUTVARIABLES is outside the bounded AC1027, DXF display-mode 0-1 dictionary-owned profile");
+                                "WIPEOUTVARIABLES is outside the bounded AC1024/AC1027 dictionary-owned profile");
                     } else if (frame.material != nullptr) {
                         if (data->sourceFormat == dx_source_format::DWG) {
                             if (data->sourceVersion != DRW::AC1024
@@ -11808,7 +11809,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         const bool directWipeoutVariablesNodReactor =
                             frame.wipeoutVariables != nullptr
                             && data->sourceFormat == dx_source_format::DWG
-                            && data->sourceVersion == DRW::AC1027
+                            && (data->sourceVersion == DRW::AC1024
+                                || data->sourceVersion == DRW::AC1027)
                             && data->hasNamedObjectDictionary
                             && entry.parentHandle == data->namedObjectDictionary.handle
                             && reactor == entry.parentHandle
@@ -71879,13 +71881,14 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
     return m_extensionRasterVariablesHandles.size() == typedCount;
 }
 
-// Verify the independently witnessed AC1027 direct-NOD WIPEOUTVARIABLES
+// Verify independently witnessed AC1024/AC1027 direct-NOD WIPEOUTVARIABLES
 // frame before granting its graph profile. The DWG parent and reactor are
 // distinct typed references even when they have the same numeric target.
 static bool matchesDirectNodWipeoutWire(const DRW_UnsupportedObject& raw,
                                        std::uint32_t parent) noexcept {
     using namespace dx_raster_wire;
-    if (raw.m_version != DRW::AC1027 || raw.m_rawBytes.empty()
+    if ((raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1027)
+        || raw.m_rawBytes.empty()
         || raw.m_rawBytes.size() > 64u * 1024u * 1024u) return false;
     const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
     if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
@@ -71897,7 +71900,8 @@ static bool matchesDirectNodWipeoutWire(const DRW_UnsupportedObject& raw,
     if (tag == 3u || type != static_cast<std::uint32_t>(raw.m_objectType)
         || detail::handle(body, 0u, 0u, true).value != raw.m_handle
         || body.shortValue() != 0u || body.longValue() != 1u
-        || body.take(1u) != 1u || body.take(1u) != 0u
+        || body.take(1u) != 1u
+        || (raw.m_version >= DRW::AC1027 && body.take(1u) != 0u)
         || body.shortValue() != 0u || !body.good || body.pos >= end
         || end - body.pos > 32u) return false;
     while (body.pos < end) if (body.take(1u) != 0u) return false;
@@ -71936,9 +71940,10 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
          ++current)
         ++typedCount;
     if (typedCount != 0u
-        && (cData->sourceVersion != DRW::AC1027
+        && ((cData->sourceVersion != DRW::AC1024
+             && cData->sourceVersion != DRW::AC1027)
             || targetVersion != cData->sourceVersion))
-        return fail("output requires same-revision AC1027 source and target");
+        return fail("output requires same-revision AC1024 or AC1027 source and target");
 
     const bool completeClassReport = cData->dwgClassCoverage.m_complete
         && cData->dwgClassCoverage.m_status
@@ -72026,7 +72031,8 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                 && variables.reactorHandles.front() == variables.parentHandle
                 && variables.extensionDictionaryFlag() == 1u
                 && variables.m_displayFrame == 0u;
-            const bool nested = variables.reactorCount() == 0
+            const bool nested = cData->sourceVersion == DRW::AC1027
+                && variables.reactorCount() == 0
                 && variables.reactorHandles.empty()
                 && variables.extensionDictionaryFlag() == 0u;
             if (current->first.second == 0u
@@ -72056,6 +72062,8 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                 || !sameAsciiName(sourceFrame.m_recordName,
                                   sourceClass->m_recordName))
                 return fail("source frame/class binding mismatch");
+            if (sourceFrame.m_version != cData->sourceVersion)
+                return fail("WIPEOUTVARIABLES source frame version differs from drawing");
             if (!sourceFrame.m_commonHandleDataValidated
                 || !drwDwgCommonLinkEvidenceValidated(
                     sourceFrame.m_commonLinkEvidence))
@@ -72065,6 +72073,7 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                 || sourceFrame.m_numReactors != variables.reactorCount()
                 || sourceFrame.m_xDictHandle != 0u
                 || sourceFrame.m_xDictFlag != variables.extensionDictionaryFlag()
+                || sourceFrame.m_hasDataStorage != variables.hasDataStorageBinaryData()
                 || (directNod && !matchesDirectNodWipeoutWire(
                     sourceFrame, cData->namedObjectDictionary.handle)))
                 return fail("source frame common metadata differs from typed record");
@@ -77366,7 +77375,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             const bool closedWipeoutVariables =
                 targetWipeoutVariables != nullptr
                 && cData->sourceFormat == dx_source_format::DWG
-                && cData->sourceVersion == DRW::AC1027
+                && (cData->sourceVersion == DRW::AC1024
+                    || cData->sourceVersion == DRW::AC1027)
                 && key == "ACAD_WIPEOUT_VARS"
                 && targetWipeoutVariables->parentHandle == cData->namedObjectDictionary.handle
                 && wipeoutVariablesQueued;
