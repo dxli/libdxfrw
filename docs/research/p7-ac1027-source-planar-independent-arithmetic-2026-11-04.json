@@ -17,7 +17,7 @@
   },
   "validation": {
     "tool": "tools/audit_ac1027_planar_sab_geometry.py",
-    "tool_sha256": "a6711d683e368594692f28411d63244e297f10212c9096138f794105bcfd66b9",
+    "tool_sha256": "27b70dff3473318c57a9125086ae72b45fc79c77ca2f24187a817222c980374d",
     "report_sha256": "3f324c3a3952bf6a0f41d756349744ea999945d6d6015a3c0a0d8c17fa4b42ec",
     "self_test": "python3 -B tools/audit_ac1027_planar_sab_geometry.py --self-test passes unit cube and translated cube area, volume and centroid; polygon with hole area; and refusal of reversed hole, self-intersection, outside hole and nonplanar ring.",
     "actual": "Pinned cq-acis Python runs --sab-dir <scratch-dir> on all three exact inputs; one-byte-mutated input and a FIFO are rejected before parser use. Report is explicitly qualification_eligible=false. The byte bound is not an external-parser CPU/memory sandbox or a filesystem deadline."
