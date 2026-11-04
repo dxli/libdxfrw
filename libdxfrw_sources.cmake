@@ -51,6 +51,7 @@ set(LIBDXFRW_PRIVATE_HEADERS
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/drw_symbol_casefold_data.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/drw_textcodec.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/dwg_dxf_output_transaction.h"
+    "${CMAKE_CURRENT_LIST_DIR}/src/intern/dwg_default_material.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/dwg_fixed_handles.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/dwg_header_time.h"
     "${CMAKE_CURRENT_LIST_DIR}/src/intern/dwgbuffer.h"

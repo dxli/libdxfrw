@@ -240,6 +240,7 @@ src/intern/drw_reserve.h
 src/intern/drw_symbol_casefold_data.h
 src/intern/drw_textcodec.cpp
 src/intern/drw_textcodec.h
+src/intern/dwg_default_material.h
 src/intern/dwg_dxf_output_transaction.cpp
 src/intern/dwg_dxf_output_transaction.h
 src/intern/dwg_fixed_handles.h
@@ -391,6 +392,7 @@ tests/dimstyle_optional_handle_tests.cpp
 tests/dwg2dxf_adapter_tests.cpp
 tests/dwg2dxf_cli_contract_tests.py
 tests/dwg2dxf_version_tests.cpp
+tests/dwg_ac1024_default_material_tests.cpp
 tests/dwg_class_evidence_tests.cpp
 tests/dwg_class_section_wire_tests.cpp
 tests/dwg_class_source_tests.cpp
@@ -630,6 +632,7 @@ tools/compare_dwg_3d_consumer_oracle.py
 tools/create_acis218_mesh_witness.py
 tools/dbcolor_fallback_differential.py
 tools/dbcolor_palette_probe.py
+tools/dwg_ac1024_default_material_source_probe.cpp
 tools/emit_native_qualification_receipt.py
 tools/extract_parity_source_routes.py
 tools/generate_build_inventory.py

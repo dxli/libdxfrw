@@ -897,6 +897,13 @@ NOD→ACAD_MATERIAL→ByBlock/ByLayer/Global graph and generated layer binding,
 with early class admission, caller overrides, collision checks and rollback.
 A typed-null material alone merely moves the ODA fatal boundary and leaves
 a layer warning. See the [material control and subplan](docs/research/p6-ac1024-default-layer-material-control-2026-11-04.json).
+A private AC1024 constructor now reproduces the three witnessed MATERIAL
+body and detached-string spans exactly; it is not connected to production
+output. Complete graph admission and independent full-file validation next;
+see the [source-profile receipt](docs/research/p6-ac1024-default-material-source-profile-2026-11-04.json).
+Audit generic DWG MATERIAL replay separately: opaque body replay currently
+does not emit the detached map filename strings; establish source order
+and immutable bindings or refuse output before any data can be lost.
 AC1021 BLOCK_CONTROL now stages handles at its declared boundary; the reader
 also supports the witnessed historical inline profile under narrow checks.
 LibreDWG and an ODA-produced source confirm model/paper references, but ODA

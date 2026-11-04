@@ -97,6 +97,16 @@ target_link_libraries(libdxfrw_dwg_default_plotstyle_optin_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dwg_default_plotstyle_optin COMMAND libdxfrw_dwg_default_plotstyle_optin_tests)
 set_tests_properties(libdxfrw_dwg_default_plotstyle_optin PROPERTIES LABELS "dwg;fast;plotstyle" TIMEOUT 30)
 
+# AC1024 default MATERIAL source-profile constructor and following handles.
+add_executable(libdxfrw_dwg_ac1024_default_material_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_ac1024_default_material_tests.cpp)
+target_compile_features(libdxfrw_dwg_ac1024_default_material_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_ac1024_default_material_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_ac1024_default_material_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_ac1024_default_material_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_ac1024_default_material COMMAND libdxfrw_dwg_ac1024_default_material_tests)
+set_tests_properties(libdxfrw_dwg_ac1024_default_material PROPERTIES LABELS "dwg;fast;material" TIMEOUT 30)
+
 # Keep the no-version FreeCAD CLI revision policy independently tested from
 # full DWG input availability. The source-version mapping is pure policy.
 add_executable(libdxfrw_dwg2dxf_version_tests

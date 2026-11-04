@@ -68,6 +68,7 @@ dist_noinst_HEADERS = \
     intern/drw_symbol_casefold_data.h \
     intern/drw_textcodec.h \
     intern/dwg_dxf_output_transaction.h \
+    intern/dwg_default_material.h \
     intern/dwg_header_time.h \
     intern/dwgbuffer.h \
     intern/dwghatchboundary.h \
