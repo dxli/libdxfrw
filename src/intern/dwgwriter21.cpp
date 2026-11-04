@@ -658,14 +658,19 @@ void appendUtf16Name(std::vector<std::uint8_t>& bytes,
         bytes.push_back(c);
         bytes.push_back(0);
     }
+    // ODA 5.2: nonempty section names carry a UTF-16 NUL terminator.
+    bytes.push_back(0);
+    bytes.push_back(0);
 }
 
 std::vector<std::uint8_t> buildSectionMap(const std::vector<Section>& sections) {
     std::vector<std::uint8_t> bytes;
     try {
         for (const Section& section : sections) {
+            std::uint64_t nameUnits = 0;
             std::uint64_t nameByteLength = 0;
-            if (!dwgSafety::multiply(section.name.size(), 2,
+            if (!dwgSafety::add(section.name.size(), 1, nameUnits)
+                || !dwgSafety::multiply(nameUnits, 2,
                                      nameByteLength))
                 return {};
             putRLL(bytes, section.size);

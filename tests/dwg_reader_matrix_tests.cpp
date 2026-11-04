@@ -9802,6 +9802,71 @@ struct R2007SectionExtentMutation {
     std::uint64_t invalidUncompressedSize{0u};
 };
 
+// Inspect the actual emitted section-map bytes, not the writer's snapshot.
+// ODA 5.2 requires a terminating UTF-16 NUL on each named descriptor.
+bool hasTerminatedR2007SectionNames(std::vector<std::uint8_t>& file) {
+    R2007TestMapHeader header;
+    if (!decodeR2007TestMapHeader(file, header)
+        || header.fileSize != file.size())
+        return false;
+    R21DataPageDecodeProbe decoder(file);
+    std::vector<std::uint8_t> pageMapData;
+    std::uint64_t pageMapAddress = 0u;
+    if (!dwgSafety::add(0x480u, header.pageMapOffset, pageMapAddress)
+        || !decoder.decodePageMapSystemPage(
+            header.pageMapCompressedSize, header.pageMapUncompressedSize,
+            header.pageMapCorrectionFactor, pageMapAddress,
+            dwgUtil::decodeCrcSeed(header.pageMapCrcSeedEncoded),
+            header.pageMapCrcCompressed, header.pageMapCrcUncompressed,
+            pageMapData))
+        return false;
+    std::unordered_map<std::uint64_t, dwgPageInfo> pageMap;
+    if (!decoder.parsePageMapEntries(pageMapData.data(), pageMapData.size(),
+            header.pageMapCount, header.pageMapMaxId, header.fileSize, pageMap))
+        return false;
+    const auto mapPage = pageMap.find(header.sectionMapId);
+    if (mapPage == pageMap.end())
+        return false;
+    std::vector<std::uint8_t> sectionMap;
+    if (!decoder.decodePageMapSystemPage(
+            header.sectionMapCompressedSize, header.sectionMapUncompressedSize,
+            header.sectionMapCorrectionFactor, mapPage->second.address,
+            dwgUtil::decodeCrcSeed(header.sectionMapCrcSeedEncoded),
+            header.sectionMapCrcCompressed, header.sectionMapCrcUncompressed,
+            sectionMap, DwgIntegrityPhase::SectionMap))
+        return false;
+    std::size_t offset = 0u;
+    std::size_t named = 0u;
+    while (offset <= sectionMap.size() && sectionMap.size() - offset >= 64u) {
+        std::uint64_t nameBytes = 0u;
+        std::uint64_t pageCount = 0u;
+        if (!readR2007TestU64(sectionMap, offset + 32u, nameBytes)
+            || !readR2007TestU64(sectionMap, offset + 56u, pageCount)
+            || nameBytes > sectionMap.size() - offset - 64u)
+            return false;
+        if (nameBytes == 0u)
+            return named != 0u && pageCount == 0u
+                && offset + 64u == sectionMap.size();
+        if (nameBytes < 4u || (nameBytes & 1u) != 0u)
+            return false;
+        const std::size_t nameStart = offset + 64u;
+        const std::size_t nameEnd = nameStart + static_cast<std::size_t>(nameBytes);
+        if (sectionMap[nameEnd - 2u] != 0u || sectionMap[nameEnd - 1u] != 0u)
+            return false;
+        for (std::size_t i = nameStart; i < nameEnd - 2u; i += 2u) {
+            if (sectionMap[i] == 0u && sectionMap[i + 1u] == 0u)
+                return false;
+        }
+        std::uint64_t pagesSize = 0u;
+        if (!dwgSafety::multiply(pageCount, 56u, pagesSize)
+            || pagesSize > sectionMap.size() - nameEnd)
+            return false;
+        offset = nameEnd + static_cast<std::size_t>(pagesSize);
+        ++named;
+    }
+    return false;
+}
+
 bool makeOutOfRangeR2007SectionPageExtent(
     std::vector<std::uint8_t>& file, R2007SectionExtentMutation& mutation) {
     constexpr std::uint64_t pageMapBaseOffset = 0x480u;
@@ -9934,6 +9999,8 @@ void testR2007SectionMapPageExtent(TestContext& t) {
 
     const std::string encoded = streamBuffer.str();
     std::vector<std::uint8_t> valid(encoded.begin(), encoded.end());
+    t.expect(hasTerminatedR2007SectionNames(valid),
+             "AC1021 physical section-map names end in UTF-16 NUL");
     R21DataPageDecodeProbe validReader(valid);
     t.expect(validReader.readSections(),
              "generated AC1021 witness has a valid file header and section map");

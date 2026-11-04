@@ -78,6 +78,8 @@ void appendUtf16Name(std::vector<std::uint8_t>& bytes,
         bytes.push_back(character);
         bytes.push_back(0);
     }
+    bytes.push_back(0);
+    bytes.push_back(0);
 }
 
 std::vector<std::uint8_t> buildR2007PageMap(
@@ -104,8 +106,10 @@ std::vector<std::uint8_t> buildR2007SectionMap(
     std::vector<std::uint8_t> bytes;
     try {
         for (const R2007Section& section : sections) {
+            std::uint64_t nameUnits = 0;
             std::uint64_t nameByteLength = 0;
-            if (!dwgSafety::multiply(section.name.size(), 2,
+            if (!dwgSafety::add(section.name.size(), 1, nameUnits)
+                || !dwgSafety::multiply(nameUnits, 2,
                                      nameByteLength))
                 return {};
             putRLL(bytes, section.size);
@@ -203,8 +207,10 @@ bool matchesR2004Name(ByteCursor& cursor, const std::string& expected) {
 
 bool matchesR2007Name(ByteCursor& cursor, std::uint64_t byteLength,
                       const std::string& expected) {
+    std::uint64_t expectedUnits = 0;
     std::uint64_t expectedByteLength = 0;
-    if (!dwgSafety::multiply(expected.size(), 2, expectedByteLength)
+    if (!dwgSafety::add(expected.size(), 1, expectedUnits)
+        || !dwgSafety::multiply(expectedUnits, 2, expectedByteLength)
         || byteLength != expectedByteLength
         || byteLength > std::numeric_limits<std::size_t>::max())
         return false;
@@ -217,7 +223,7 @@ bool matchesR2007Name(ByteCursor& cursor, std::uint64_t byteLength,
             || bytes[index * 2 + 1] != 0)
             return false;
     }
-    return true;
+    return bytes[byteLength - 2] == 0 && bytes[byteLength - 1] == 0;
 }
 
 ValidationResult validateR2004SectionPageMap(

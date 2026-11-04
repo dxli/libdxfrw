@@ -816,9 +816,11 @@ suffix; strict output remains refused pending suffix and graph qualification.
 See the [AC1021 receipt](docs/research/p6-ac1021-oda-header-suffix-diagnostic-admission-2026-11-03.json).
 
 The R2007 writer now emits the required file-header pointer and repeated
-Reed–Solomon header blocks, but ODA still rejects the freshly generated
-single-LINE AC1021 file. Identify the remaining cause before qualifying this
-writer profile; see the [writer framing receipt](docs/research/p6-ac1021-fixed-metadata-header-pointer-2026-11-03.json).
+Reed–Solomon header blocks, and terminates section-map names as specified, but
+ODA still rejects the freshly generated single-LINE AC1021 file. Identify the
+remaining cause before qualifying this writer profile; see the [writer framing
+receipt](docs/research/p6-ac1021-fixed-metadata-header-pointer-2026-11-03.json)
+and [section-name receipt](docs/research/p6-ac1021-utf16-section-name-terminators-2026-11-03.json).
 
 The ELLIPSE-to-polyline work bound now covers derived segment counts and R12
 refusal/retry; other geometry and caller-state profiles below remain open. See the
