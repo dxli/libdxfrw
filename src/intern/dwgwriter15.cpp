@@ -2042,6 +2042,11 @@ bool dwgWriter15::emitBlockEntity(std::uint32_t handle,
                                   const std::string& name, bool isEnd) {
     DRW_Block bk;
     bk.handle = handle;
+    // These built-in paper-space boundary entities have no explicit owner;
+    // their common entity mode therefore identifies their paper-space owner.
+    if (handle == reservedHandle::BLOCK_PAPER_ENTITY
+        || handle == reservedHandle::BLOCK_PAPER_END)
+        bk.space = DRW::PaperSpace;
     bk.layerH.ref = DRW::DwgLayer0Handle;
     bk.color = 256;  // BYLAYER
     bk.name = name;

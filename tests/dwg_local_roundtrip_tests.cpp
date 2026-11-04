@@ -314,6 +314,39 @@ public:
         return true;
     }
 
+    static bool checkBuiltInBlockModes(dwgWriter15& writer) {
+        const DRW::Version version = writer.m_version;
+        if (!writer.prepareDwgClassManifest() || !writer.writeFileHeaderStub()
+            || !writer.writeDwgHeader() || !writer.writeDwgClasses()
+            || !writer.writeDwgObjects())
+            return false;
+        const std::array<std::uint32_t, 4> handles{{0x1bu, 0x1cu, 0x1du, 0x1eu}};
+        for (std::size_t i = 0; i < handles.size(); ++i) {
+            CapturedObjectFrame captured;
+            if (!captureObjectFrame(writer, handles[i], captured))
+                return false;
+            dwgBuffer frame(captured.bytes.data(), captured.bytes.size());
+            const std::int32_t bodyLength = frame.getModularShort();
+            if (version >= DRW::AC1024) (void)frame.getUModularChar();
+            const auto bodyOffset = frame.getPosition();
+            if (!frame.isGood() || bodyLength <= 0
+                || bodyOffset + static_cast<std::size_t>(bodyLength) + 2u != captured.bytes.size())
+                return false;
+            dwgBuffer body(captured.bytes.data() + bodyOffset, static_cast<std::size_t>(bodyLength));
+            const auto type = body.getObjType(version);
+            if (type != (i % 2u == 0u ? DRW::DwgBlockEntityType : DRW::DwgEndBlockEntityType))
+                return false;
+            if (version < DRW::AC1024) (void)body.getRawLong32();
+            const auto own = body.getHandle();
+            if (own.ref != handles[i] || body.getBitShort() != 0u || body.getBit() != 0u)
+                return false;
+            const auto mode = body.get2Bits();
+            if (!body.isGood() || mode != (i < 2u ? 2u : 1u))
+                return false;
+        }
+        return true;
+    }
+
     static bool checkBlockControlBoundary(dwgWriter15& writer) {
         const DRW::Version version = writer.m_version;
         if (!writer.prepareDwgClassManifest() || !writer.writeFileHeaderStub()
@@ -35847,6 +35880,24 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--image-compound-transaction") {
         const bool passed = DwgBlockRecordXrefWireTestAccess::imageCompoundWriteVerifiesReactorReceipt();
         std::cout << "DWG IMAGE compound transaction rollback/retry controls: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    } else if (argc == 2
+        && std::string(argv[1]) == "--built-in-block-owner-modes") {
+        DRW_Header h15, h18, h21, h24, h27, h32;
+        dwgWriter15 w15(nullptr, &h15);
+        dwgWriter18 w18(nullptr, &h18);
+        dwgWriter21 w21(nullptr, &h21);
+        dwgWriter24 w24(nullptr, &h24);
+        dwgWriter27 w27(nullptr, &h27);
+        dwgWriter32 w32(nullptr, &h32);
+        const bool passed = DwgBlockRecordXrefWireTestAccess::checkBuiltInBlockModes(w15)
+            && DwgBlockRecordXrefWireTestAccess::checkBuiltInBlockModes(w18)
+            && DwgBlockRecordXrefWireTestAccess::checkBuiltInBlockModes(w21)
+            && DwgBlockRecordXrefWireTestAccess::checkBuiltInBlockModes(w24)
+            && DwgBlockRecordXrefWireTestAccess::checkBuiltInBlockModes(w27)
+            && DwgBlockRecordXrefWireTestAccess::checkBuiltInBlockModes(w32);
+        std::cout << "DWG built-in block owner modes: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 2

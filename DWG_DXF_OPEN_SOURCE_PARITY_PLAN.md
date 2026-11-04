@@ -888,8 +888,10 @@ defaults now use these source-backed states without changing supplied metadata.
 See the [dictionary flag receipt](docs/research/p6-generated-dictionary-missing-xdict-2026-11-04.json)
 and [STYLE receipt](docs/research/p6-standard-style-synthetic-xdict-xref-2026-11-04.json).
 The AC1015/AC1018 BLOCK_CONTROL now records its handle boundary before
-the handle stream; ODA advances to a block-owner warning and a layer-table
-error, which remain open. AC1021 has a separate source-observed framing and
+the handle stream. Correcting synthetic paper BLOCK/ENDBLK ownership removes
+the ODA block-owner warning; the layer-table error remains. See the
+[paper-space receipt](docs/research/p6-synthetic-paper-block-owner-mode-2026-11-04.json).
+AC1021 has a separate source-observed framing and
 model/paper-reference discrepancy requiring its own producer witness and
 string/footer investigation. See the [boundary receipt](docs/research/p6-block-control-handle-boundary-2026-11-04.json).
 R2004-family object-section prefixes now roll back on failed writes and retry
