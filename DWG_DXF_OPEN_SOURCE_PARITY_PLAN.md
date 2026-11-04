@@ -954,9 +954,12 @@ widths through ODA; qualify additional fields, producers and native rendering
 AC1018–AC1032 2D/3D POLYLINE child and SEQEND references use the
 producer-witnessed hard-owner role. The bounded AC1021 model-space, paper-space
 and ordinary named-block membership and 3D footer fixes preserve the sampled vertices
-through ODA and independent readback. The same model-space membership fix now
-preserves sampled AC1018 and AC1024 2D/3D vertices; their unqualified GROUP
-child references fail closed. Qualify other ownership profiles, mesh/polyface
+through ODA and independent readback. The same membership fix now preserves
+sampled AC1018 and AC1024 2D/3D vertices in model space, paper space and
+ordinary named blocks; their unqualified GROUP child references fail closed.
+This narrows prior paper/named behavior, which could admit child targets because
+they were also indexed as block-owned entities.
+Qualify other ownership profiles, mesh/polyface
 and other revisions separately. GROUP references to AC1021
 model-space vertices have one bounded reciprocal-reactor route; paper-space
 and named-block child references are refused until independently qualified.
@@ -964,6 +967,7 @@ SEQEND and other GROUP shapes still need independent target closure
 ([membership receipt](docs/research/p6-ac1021-polyline-model-block-membership-2026-11-04.json),
 [paper and named-block receipt](docs/research/p6-ac1021-polyline-paper-named-membership-2026-11-04.json),
 [AC1018/AC1024 receipt](docs/research/p6-polyline-ac1018-ac1024-model-membership-2026-11-04.json),
+[AC1018/AC1024 paper and named-block receipt](docs/research/p6-polyline-ac1018-ac1024-paper-named-membership-2026-11-04.json),
 [footer receipt](docs/research/p6-ac1021-polyline3d-footer-2026-11-04.json),
 [GROUP receipt](docs/research/p6-ac1021-polyline-group-vertex-closure-2026-11-04.json)).
 

@@ -151,7 +151,7 @@ public:
         if (!facade.writePolyline(&poly)) return false;
         const auto& owned = blockEntities;
         const std::size_t expected = (version == DRW::AC1021
-            || ((version == DRW::AC1018 || version == DRW::AC1024) && !paper))
+            || version == DRW::AC1018 || version == DRW::AC1024)
             && otherPolylineFlags == 0 ? 2u : 5u;
         if (owned.size() != expected || owned[0] != line.handle
             || owned[1] != poly.handle || observed->m_objectMap.size() != beforeMap + 4u

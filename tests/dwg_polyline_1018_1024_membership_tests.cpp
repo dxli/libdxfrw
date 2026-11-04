@@ -124,7 +124,7 @@ public:
         return facade.writePolyline(&poly) && observed->m_modelSpaceEntityHandles.size()==1u;
     }
 
-    static bool unchanged(DRW::Version version, bool paper, bool named) {
+    static bool checkScope(DRW::Version version, bool paper, bool named) {
         DRW_Header header; dwgRW facade(nullptr); std::unique_ptr<dwgWriter15> writer;
         if (version == DRW::AC1018) writer=std::make_unique<dwgWriter18>(nullptr,&header);
         else if (version == DRW::AC1024) writer=std::make_unique<dwgWriter24>(nullptr,&header);
@@ -137,7 +137,9 @@ public:
         poly.addVertex(DRW_Vertex(0.,0.,0.,0.)); poly.addVertex(DRW_Vertex(5.,0.,0.,0.));
         if (!facade.writePolyline(&poly) || observed->m_ac1021PolylineChildPermit) return false;
         const auto& entities=named ? observed->findUserBlock(block)->entityHandles : (paper ? observed->m_paperSpaceEntityHandles : observed->m_modelSpaceEntityHandles);
-        return entities.size()==4u && entities.front()==poly.handle;
+        const auto expected = (version == DRW::AC1018 || version == DRW::AC1024)
+            && (paper || named) ? 1u : 4u;
+        return entities.size()==expected && entities.front()==poly.handle;
     }
 
     static bool run(DRW::Version version, bool is3d, bool paper, bool explicitModel,
@@ -184,7 +186,7 @@ public:
             return false;
         if (!facade.writePolyline(&poly)) return false;
         const auto& owned = blockEntities;
-        const std::size_t expected = (((version == DRW::AC1018 || version == DRW::AC1024) && !paper) || version == DRW::AC1021)
+        const std::size_t expected = (version == DRW::AC1018 || version == DRW::AC1024 || version == DRW::AC1021)
             && otherPolylineFlags == 0 ? 2u : 5u;
         if (owned.size() != expected || owned[0] != line.handle
             || owned[1] != poly.handle || observed->m_objectMap.size() != beforeMap + 4u
@@ -331,9 +333,9 @@ int main() {
     for (auto version : {DRW::AC1018,DRW::AC1024})
         if (!DwgBlockRecordXrefWireTestAccess::collision(version)) { std::cerr << "collision rollback failed " << int(version) << "\n"; return 1; }
     for (auto version : {DRW::AC1018,DRW::AC1024}) for (int scope : {1,2})
-        if (!DwgBlockRecordXrefWireTestAccess::unchanged(version,scope==1,scope==2)) { std::cerr << "unchanged scope failed " << int(version) << " " << scope << "\n"; return 1; }
+        if (!DwgBlockRecordXrefWireTestAccess::checkScope(version,scope==1,scope==2)) { std::cerr << "scope membership failed " << int(version) << " " << scope << "\n"; return 1; }
     for (auto version : {DRW::AC1027,DRW::AC1032})
-        if (!DwgBlockRecordXrefWireTestAccess::unchanged(version,false,false)) { std::cerr << "unchanged version failed " << int(version) << "\n"; return 1; }
+        if (!DwgBlockRecordXrefWireTestAccess::checkScope(version,false,false)) { std::cerr << "unchanged version failed " << int(version) << "\n"; return 1; }
     const auto path = std::filesystem::temp_directory_path()
         / ("polyline-modern-membership-" + std::to_string(
             std::chrono::steady_clock::now().time_since_epoch().count()) + ".dwg");

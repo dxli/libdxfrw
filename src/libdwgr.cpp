@@ -2825,13 +2825,13 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
     const bool ac1021ChildProfile = ac1021ModelChildProfile
         || (version == DRW::AC1021 && objectWriter != nullptr && !legacyChain
             && (ent->flags & (16 | 64)) == 0 && (paperScope || namedScope));
-    const bool modernModelChildProfile = (version == DRW::AC1018 || version == DRW::AC1024)
-        && objectWriter != nullptr && !legacyChain
-        && objectWriter->m_activeUserBlockRecordHandle == 0u
-        && ent->space == DRW::ModelSpace && (ent->flags & (16 | 64)) == 0
-        && (ent->parentHandle == DRW::NoHandle
-            || ent->parentHandle == DRW::DwgModelSpaceBlockRecordHandle);
-    const bool guardedChildProfile = ac1021ChildProfile || modernModelChildProfile;
+    const bool modernChildProfile = (version == DRW::AC1018 || version == DRW::AC1024)
+        && objectWriter != nullptr && !legacyChain && (ent->flags & (16 | 64)) == 0
+        && (paperScope || namedScope
+            || (activeBlock == 0u && ent->space == DRW::ModelSpace
+                && (ent->parentHandle == DRW::NoHandle
+                    || ent->parentHandle == DRW::DwgModelSpaceBlockRecordHandle)));
+    const bool guardedChildProfile = ac1021ChildProfile || modernChildProfile;
     bool useEntityFrameBatchRollback = !legacyChain && objectWriter != nullptr
         && writer->supportsLastEntityWriteRollback() && !guardedChildProfile;
     dwgWriter::CompoundWriteCheckpoint checkpoint;
