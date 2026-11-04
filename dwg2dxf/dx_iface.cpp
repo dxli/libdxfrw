@@ -11636,14 +11636,22 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     } else if (frame.wipeoutVariables != nullptr) {
                         const DRW_WipeoutVariables& variables =
                             *frame.wipeoutVariables;
+                        const bool directNod = data->hasNamedObjectDictionary
+                            && variables.parentHandle == data->namedObjectDictionary.handle
+                            && variables.reactorCount() == 1
+                            && variables.reactorHandles.size() == 1u
+                            && variables.reactorHandles.front() == variables.parentHandle
+                            && variables.extensionDictionaryFlag() == 1u
+                            && variables.m_displayFrame == 0u;
+                        const bool nested = variables.reactorCount() == 0
+                            && variables.reactorHandles.empty()
+                            && variables.extensionDictionaryFlag() == 0u;
                         if (data->sourceFormat != dx_source_format::DWG
                             || data->sourceVersion != DRW::AC1027
                             || variables.parentHandle != entry.parentHandle
                             || variables.m_displayFrame > 1u
-                            || !variables.reactorHandles.empty()
-                            || variables.reactorCount() != 0
+                            || (!directNod && !nested)
                             || variables.xDictHandle != 0u
-                            || variables.extensionDictionaryFlag() != 0u
                             || variables.hasDataStorageBinaryData()
                             || !variables.appData.empty()
                             || !variables.extData.empty())
@@ -11793,9 +11801,19 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             && reactor == entry.parentHandle
                             && frame.rasterVariables->reactorCount() == 1
                             && entry.reactorHandles.size() == 1u;
+                        const bool directWipeoutVariablesNodReactor =
+                            frame.wipeoutVariables != nullptr
+                            && data->sourceFormat == dx_source_format::DWG
+                            && data->sourceVersion == DRW::AC1027
+                            && data->hasNamedObjectDictionary
+                            && entry.parentHandle == data->namedObjectDictionary.handle
+                            && reactor == entry.parentHandle
+                            && frame.wipeoutVariables->reactorCount() == 1
+                            && entry.reactorHandles.size() == 1u;
                         // Non-owning back-edges may refer to gray containment
                         // nodes. Both soft/hard dictionary entries remain owning.
                         if (!directRasterVariablesNodReactor
+                            && !directWipeoutVariablesNodReactor
                             && linetypeHandles.count(reactor) == 0
                             && groupReferenceHandles.count(reactor) == 0
                             && imageDefinitionOwners.count(reactor) == 0
@@ -12887,6 +12905,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     ++matches;
                     targetOwner =
                         rasterVariablesTarget->second->parentHandle;
+                }
+                const auto wipeoutVariablesTarget =
+                    wipeoutVariables.find(entry.m_handle);
+                if (wipeoutVariablesTarget != wipeoutVariables.end()) {
+                    ++matches;
+                    targetOwner = wipeoutVariablesTarget->second->parentHandle;
                 }
                 if (matches != 1u)
                     return reject(ExtensionGraphFailure::InvalidGraph,
@@ -71813,6 +71837,38 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
     return m_extensionRasterVariablesHandles.size() == typedCount;
 }
 
+// Verify the independently witnessed AC1027 direct-NOD WIPEOUTVARIABLES
+// frame before granting its graph profile. The DWG parent and reactor are
+// distinct typed references even when they have the same numeric target.
+static bool matchesDirectNodWipeoutWire(const DRW_UnsupportedObject& raw,
+                                       std::uint32_t parent) noexcept {
+    using namespace dx_raster_wire;
+    if (raw.m_version != DRW::AC1027 || raw.m_rawBytes.empty()
+        || raw.m_rawBytes.size() > 64u * 1024u * 1024u) return false;
+    const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
+    if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
+    const auto end = total - raw.m_bodyBitSize;
+    detail::Bits body{raw.m_rawBytes.data(), 0u, end};
+    const auto tag = body.take(2u);
+    const auto type = tag == 0u ? body.take(8u)
+        : tag == 1u ? body.take(8u) + 0x1F0u : body.little(2u);
+    if (tag == 3u || type != static_cast<std::uint32_t>(raw.m_objectType)
+        || detail::handle(body, 0u, 0u, true).value != raw.m_handle
+        || body.shortValue() != 0u || body.longValue() != 1u
+        || body.take(1u) != 1u || body.take(1u) != 0u
+        || body.shortValue() != 0u || !body.good || body.pos >= end
+        || end - body.pos > 32u) return false;
+    while (body.pos < end) if (body.take(1u) != 0u) return false;
+    detail::Bits handles{raw.m_rawBytes.data(), end, total};
+    const auto owner = detail::handle(handles, 4u, raw.m_handle);
+    const auto reactor = detail::handle(handles, 4u, raw.m_handle);
+    if (!handles.good || owner.role != 4u || reactor.role != 4u
+        || owner.value != parent || reactor.value != parent
+        || handles.end - handles.pos > 7u) return false;
+    while (handles.pos < handles.end) if (handles.take(1u) != 0u) return false;
+    return handles.good;
+}
+
 bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                                                 bool debug) {
     const auto fail = [debug](const char* reason) {
@@ -71921,16 +71977,24 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                  && current->first.first == generation;
              ++current) {
             const DRW_WipeoutVariables& variables = current->second;
+            const bool directNod = variables.parentHandle
+                    == cData->namedObjectDictionary.handle
+                && variables.reactorCount() == 1
+                && variables.reactorHandles.size() == 1u
+                && variables.reactorHandles.front() == variables.parentHandle
+                && variables.extensionDictionaryFlag() == 1u
+                && variables.m_displayFrame == 0u;
+            const bool nested = variables.reactorCount() == 0
+                && variables.reactorHandles.empty()
+                && variables.extensionDictionaryFlag() == 0u;
             if (current->first.second == 0u
                 || current->first.second == DRW::NoHandle
                 || variables.handle != current->first.second
                 || variables.m_displayFrame > 1u
                 || variables.parentHandle == 0u
                 || variables.parentHandle == DRW::NoHandle
-                || !variables.reactorHandles.empty()
-                || variables.reactorCount() != 0
+                || (!directNod && !nested)
                 || variables.xDictHandle != 0u
-                || variables.extensionDictionaryFlag() != 0u
                 || variables.hasDataStorageBinaryData()
                 || !variables.appData.empty() || !variables.extData.empty()
                 || !outputHandles.insert(variables.handle).second)
@@ -71955,8 +72019,12 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                     sourceFrame.m_commonLinkEvidence))
                 return fail("source frame common-link evidence is unvalidated");
             if (sourceFrame.m_parentHandle != variables.parentHandle
-                || !sourceFrame.m_reactorHandles.empty()
-                || sourceFrame.m_xDictHandle != 0u)
+                || sourceFrame.m_reactorHandles != variables.reactorHandles
+                || sourceFrame.m_numReactors != variables.reactorCount()
+                || sourceFrame.m_xDictHandle != 0u
+                || sourceFrame.m_xDictFlag != variables.extensionDictionaryFlag()
+                || (directNod && !matchesDirectNodWipeoutWire(
+                    sourceFrame, cData->namedObjectDictionary.handle)))
                 return fail("source frame common metadata differs from typed record");
 
             const DRW_Dictionary* owner = nullptr;
@@ -71967,12 +72035,6 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                 owner = &dictionary;
                 ++ownerCount;
             }
-            if (ownerCount != 1u || owner == nullptr
-                || owner->parentHandle
-                    != cData->namedObjectDictionary.handle
-                || !owner->hasCompleteDwgEntries())
-                return fail("parent is not one complete NOD-owned DICTIONARY");
-
             const auto countHandle = [](
                     std::uint32_t target, const auto& entries) {
                 return std::count_if(entries.begin(), entries.end(),
@@ -71987,34 +72049,42 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                         || sameAsciiName(entry.m_name,
                                          "ACDBWIPEOUTVARIABLES"));
             };
-            const std::size_t ownerEntryCount = static_cast<std::size_t>(
-                std::count_if(owner->m_entries.begin(), owner->m_entries.end(),
-                              isVariablesEntry));
-            const std::size_t rootEntryCount = static_cast<std::size_t>(
+            const bool nestedOwner = nested && ownerCount == 1u && owner
+                && owner->parentHandle == cData->namedObjectDictionary.handle
+                && owner->hasCompleteDwgEntries()
+                && std::count_if(owner->m_entries.begin(), owner->m_entries.end(),
+                                 isVariablesEntry) == 1
+                && countHandle(owner->handle, cData->namedObjectDictionary.m_entries) == 1
+                && std::count_if(cData->namedObjectDictionary.m_entries.begin(),
+                    cData->namedObjectDictionary.m_entries.end(),
+                    [&owner](const DRW_Dictionary::Entry& entry) {
+                        return sameAsciiName(entry.m_name, "ACAD_IMAGE_VARS")
+                            && entry.m_handle == owner->handle;
+                    }) == 1;
+            const std::size_t directRootCount = static_cast<std::size_t>(
                 std::count_if(
                     cData->namedObjectDictionary.m_entries.begin(),
                     cData->namedObjectDictionary.m_entries.end(),
-                    [&owner](const DRW_Dictionary::Entry& entry) {
-                        return sameAsciiName(entry.m_name,
-                                             "ACAD_IMAGE_VARS")
-                            && entry.m_handle == owner->handle;
+                    [&variables](const DRW_Dictionary::Entry& entry) {
+                        return sameAsciiName(entry.m_name, "ACAD_WIPEOUT_VARS")
+                            && entry.m_handle == variables.handle;
                     }));
-            if (ownerEntryCount != 1u
-                || countHandle(owner->handle,
-                    cData->namedObjectDictionary.m_entries) != 1
-                || rootEntryCount != 1u)
-                return fail("ACAD_IMAGE_VARS root and WIPEOUTVARIABLES owner path are not unique");
+            const bool directOwner = directNod && ownerCount == 0u && !owner
+                && directRootCount == 1u
+                && countHandle(variables.handle, cData->namedObjectDictionary.m_entries) == 1;
+            if (!nestedOwner && !directOwner)
+                return fail("WIPEOUTVARIABLES root and owner path are not unique");
 
-            const std::size_t stagedDictionaryCount =
+            const std::size_t stagedDictionaryCount = nestedOwner ?
                 static_cast<std::size_t>(std::count(
                     m_extensionDictionaryHandles.begin(),
-                    m_extensionDictionaryHandles.end(), owner->handle));
+                    m_extensionDictionaryHandles.end(), owner->handle)) : 0u;
             const std::size_t stagedObjectCount =
                 static_cast<std::size_t>(std::count(
                     m_extensionWipeoutVariablesHandles.begin(),
                     m_extensionWipeoutVariablesHandles.end(),
                     variables.handle));
-            if (stagedDictionaryCount != 1u || stagedObjectCount != 1u)
+            if ((nestedOwner && stagedDictionaryCount != 1u) || stagedObjectCount != 1u)
                 return fail("owner dictionary and typed object are not staged exactly once by the graph");
         }
     } catch (...) {
@@ -77091,6 +77161,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             const DRW_MLeaderStyle* targetMLeaderStyle = nullptr;
             const DRW_FieldList* targetFieldList = nullptr;
             const DRW_RasterVariables* targetRasterVariables = nullptr;
+            const DRW_WipeoutVariables* targetWipeoutVariables = nullptr;
             std::size_t targetMatches = 0;
             for (const DRW_Dictionary& dictionary : cData->dictionaries) {
                 if (dictionary.handle == sourceEntry.m_handle) {
@@ -77148,6 +77219,15 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                     targetRasterVariables = &current->second;
                     ++targetMatches;
                 }
+                const auto firstWipeoutVariables =
+                    cData->dwgWipeoutVariables.lower_bound({cData->importGeneration, 0u});
+                for (auto current = firstWipeoutVariables;
+                     current != cData->dwgWipeoutVariables.end()
+                         && current->first.first == cData->importGeneration; ++current) {
+                    if (current->second.handle != sourceEntry.m_handle) continue;
+                    targetWipeoutVariables = &current->second;
+                    ++targetMatches;
+                }
             }
             const bool dictionaryQueued = std::find(
                 m_extensionDictionaryHandles.begin(),
@@ -77180,6 +77260,10 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 m_extensionRasterVariablesHandles.end(),
                 sourceEntry.m_handle)
                     != m_extensionRasterVariablesHandles.end();
+            const bool wipeoutVariablesQueued = std::find(
+                m_extensionWipeoutVariablesHandles.begin(),
+                m_extensionWipeoutVariablesHandles.end(), sourceEntry.m_handle)
+                    != m_extensionWipeoutVariablesHandles.end();
             const bool scaleQueued = std::find(
                 m_extensionScaleHandles.begin(),
                 m_extensionScaleHandles.end(), sourceEntry.m_handle)
@@ -77236,12 +77320,19 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 && targetRasterVariables->parentHandle
                     == cData->namedObjectDictionary.handle
                 && rasterVariablesQueued;
+            const bool closedWipeoutVariables =
+                targetWipeoutVariables != nullptr
+                && cData->sourceFormat == dx_source_format::DWG
+                && cData->sourceVersion == DRW::AC1027
+                && key == "ACAD_WIPEOUT_VARS"
+                && targetWipeoutVariables->parentHandle == cData->namedObjectDictionary.handle
+                && wipeoutVariablesQueued;
             if (targetMatches != 1u
                 || (!closedDictionary && !closedDictionaryWithDefault
                     && !closedXRecord
                     && !closedDictionaryVar && !closedScale
                     && !closedMLeaderStyle && !closedFieldList
-                    && !closedRasterVariables)) {
+                    && !closedRasterVariables && !closedWipeoutVariables)) {
                 if (requireResolvedOwners) {
                     delete dxfW;
                     dxfW = nullptr;

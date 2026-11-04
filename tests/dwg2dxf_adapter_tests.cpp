@@ -627,6 +627,44 @@ public:
     static bool rasterUnchanged(const dx_iface& iface) {
         return iface.hasUnchangedRasterDwgSources();
     }
+    static bool physicalDirectWipeoutWire(const dx_data& data) {
+        const auto frame = data.m_opaqueDwgSourceFrames.find({data.importGeneration, 0x30u});
+        const auto typed = data.dwgWipeoutVariables.find({data.importGeneration, 0x30u});
+        if (frame == data.m_opaqueDwgSourceFrames.end() || typed == data.dwgWipeoutVariables.end()
+            || data.namedObjectDictionary.handle != 0xAu || typed->second.parentHandle != 0xAu
+            || typed->second.m_displayFrame != 0u || typed->second.reactorHandles != std::vector<std::uint32_t>{0xAu}
+            || typed->second.extensionDictionaryFlag() != 1u) return false;
+        const auto& raw = frame->second;
+        if (raw.m_rawBytes.size() != 10u || raw.m_bodyBitSize != 37u) return false;
+        using namespace dx_raster_wire;
+        detail::Bits body{raw.m_rawBytes.data(), 0u, 43u};
+        if (body.take(2u) != 1u || body.take(8u) + 0x1F0u != 516u
+            || detail::handle(body, 0u, 0u, true).value != 0x30u
+            || body.shortValue() != 0u || body.longValue() != 1u
+            || body.take(1u) != 1u || body.take(1u) != 0u
+            || body.shortValue() != 0u || body.pos != 42u || body.take(1u) != 0u || !body.good) return false;
+        detail::Bits handles{raw.m_rawBytes.data(), 43u, 80u};
+        const auto parent = detail::handle(handles, 4u, 0x30u);
+        const auto reactor = detail::handle(handles, 4u, 0x30u);
+        if (!handles.good || parent.role != 4u || reactor.role != 4u
+            || parent.value != 0xAu || reactor.value != 0xAu || handles.pos != 75u) return false;
+        while (handles.pos < handles.end) if (handles.take(1u) != 0u) return false;
+        return std::count_if(data.namedObjectDictionary.m_entries.begin(),
+            data.namedObjectDictionary.m_entries.end(), [](const DRW_Dictionary::Entry& e) {
+                return e.m_name == "ACAD_WIPEOUT_VARS" && e.m_handle == 0x30u;
+            }) == 1;
+    }
+    static bool toggleWipeoutOwnerRole(dx_data& data, std::uint32_t handle) {
+        const auto found = data.m_opaqueDwgSourceFrames.find({data.importGeneration, handle});
+        if (found == data.m_opaqueDwgSourceFrames.end()) return false;
+        auto& raw = found->second;
+        const auto total = raw.m_rawBytes.size() * 8u;
+        if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
+        const auto bit = total - raw.m_bodyBitSize + 3u;
+        if (bit >= total) return false;
+        raw.m_rawBytes[bit / 8u] ^= static_cast<std::uint8_t>(1u << (7u - bit % 8u));
+        return true;
+    }
     static bool physicalRasterOwnerDiagnostic(const dx_data& data) {
         if (data.m_rasterDwgSourceFailed || data.m_rasterDwgSources.size() != 2u)
             return false;
@@ -68497,7 +68535,16 @@ bool rasterVariablesDwgAdapterTransport(
     return true;
 }
 
-bool wipeoutVariablesDwgAdapterTransport() {
+bool physicalDirectWipeoutVariables(const char* path) {
+    auto data = std::make_unique<dx_data>();
+    auto reader = std::make_unique<dx_iface>();
+    if (!reader->fileImport(path, data.get(), false)
+        || !DxIfaceStandardDwgCaptureTestAccess::physicalDirectWipeoutWire(*data))
+        return fail("physical direct-NOD WIPEOUTVARIABLES frame mismatch");
+    return true;
+}
+
+bool wipeoutVariablesDwgAdapterTransport(bool directNod = false) {
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch()
                            .count();
@@ -68523,7 +68570,7 @@ bool wipeoutVariablesDwgAdapterTransport() {
 
     class Author final : public dx_iface {
     public:
-        explicit Author(dwgRW& output) : output(output) {
+        explicit Author(dwgRW& output, bool directNod) : output(output), directNod(directNod) {
             cData = &storage;
             currentBlock = storage.mBlock;
             dictionary.handle = 0xA602u;
@@ -68531,8 +68578,12 @@ bool wipeoutVariablesDwgAdapterTransport() {
             dictionary.cloning = 1;
             dictionary.hardOwner = 1;
             variables.handle = 0xB600u;
-            variables.parentHandle = dictionary.handle;
-            variables.m_displayFrame = 2u;
+            variables.parentHandle = directNod ? DRW::DwgNamedObjectsDictionaryHandle : dictionary.handle;
+            variables.m_displayFrame = directNod ? 0u : 2u;
+            if (directNod) {
+                variables.reactorHandles = {DRW::DwgNamedObjectsDictionaryHandle};
+                variables.setDwgCommonObjectState(1, 1, false);
+            }
             dictionary.m_entries = {
                 {"WIPEOUTVARIABLES", variables.handle}};
         }
@@ -68543,12 +68594,13 @@ bool wipeoutVariablesDwgAdapterTransport() {
             DRW_WipeoutVariables registration;
             registration.handle = variables.handle;
             rootRegistered = output.registerDwgNamedObjectDictionaryEntry(
-                "ACAD_IMAGE_VARS", dictionary.handle);
+                directNod ? "ACAD_WIPEOUT_VARS" : "ACAD_IMAGE_VARS",
+                directNod ? variables.handle : dictionary.handle);
             classRegistered = output.registerWipeoutVariablesObjectClass(
                 &registration);
         }
         void writeObjects() override {
-            dictionaryWritten = output.writeDictionary(&dictionary);
+            dictionaryWritten = directNod || output.writeDictionary(&dictionary);
             variablesWritten = output.writeWipeoutVariables(&variables);
         }
         bool finalizeDwgWrite() override {
@@ -68558,6 +68610,7 @@ bool wipeoutVariablesDwgAdapterTransport() {
         bool finalizeDwgWriteStructure() override { return true; }
 
         dwgRW& output;
+        bool directNod;
         dx_data storage;
         DRW_Dictionary dictionary;
         DRW_WipeoutVariables variables;
@@ -68568,7 +68621,7 @@ bool wipeoutVariablesDwgAdapterTransport() {
     };
 
     dwgRW sourceWriter(sourcePath.string().c_str());
-    Author author(sourceWriter);
+    Author author(sourceWriter, directNod);
     if (!sourceWriter.write(&author, DRW::AC1027, true))
         return fail("generated WIPEOUTVARIABLES DWG source failed to write");
 
@@ -68589,8 +68642,8 @@ bool wipeoutVariablesDwgAdapterTransport() {
         imported.importGeneration, author.variables.handle};
     const auto source = imported.dwgWipeoutVariables.find(key);
     if (source == imported.dwgWipeoutVariables.end()
-        || source->second.parentHandle != author.dictionary.handle
-        || source->second.m_displayFrame != 2u)
+        || source->second.parentHandle != (directNod ? DRW::DwgNamedObjectsDictionaryHandle : author.dictionary.handle)
+        || source->second.m_displayFrame != (directNod ? 0u : 2u))
         return fail("generated WIPEOUTVARIABLES typed owner/field changed on read");
 
     class Readback final : public dx_iface {
@@ -68617,6 +68670,44 @@ bool wipeoutVariablesDwgAdapterTransport() {
         }
         DRW_WipeoutVariables& mutableSource =
             imported.dwgWipeoutVariables.find(key)->second;
+        if (directNod) {
+            const auto saved = mutableSource;
+            const auto savedEntries = imported.namedObjectDictionary.m_entries;
+            const auto rejectsWithoutPublication = [&]() {
+                if (exporter.fileExport(target.first.string(), DRW::AC1027,
+                        target.second, &imported, false, requireResolvedOwners)) return false;
+                std::ifstream file(target.first, std::ios::binary);
+                return std::string((std::istreambuf_iterator<char>(file)), {}) == sentinel;
+            };
+            mutableSource.reactorHandles.clear();
+            if (!rejectsWithoutPublication()) return fail("missing wipeout reactor was accepted");
+            mutableSource = saved;
+            mutableSource.reactorHandles.front() ^= 1u;
+            if (!rejectsWithoutPublication()) return fail("wrong wipeout reactor was accepted");
+            mutableSource = saved;
+            mutableSource.parentHandle ^= 1u;
+            if (!rejectsWithoutPublication()) return fail("wrong wipeout owner was accepted");
+            mutableSource = saved;
+            mutableSource.setDwgCommonObjectState(1, 0, false);
+            if (!rejectsWithoutPublication()) return fail("wrong wipeout extension flag was accepted");
+            mutableSource = saved;
+            imported.namedObjectDictionary.m_entries.push_back({"DUPLICATE_WIPEOUT", saved.handle});
+            if (!rejectsWithoutPublication()) return fail("aliased wipeout root target was accepted");
+            imported.namedObjectDictionary.m_entries = savedEntries;
+            if (savedEntries.empty()) return fail("direct wipeout test lacks another root target");
+            imported.namedObjectDictionary.m_entries.push_back({"acad_wipeout_vars", savedEntries.front().m_handle});
+            if (!rejectsWithoutPublication()) return fail("duplicate wipeout root key was accepted");
+            imported.namedObjectDictionary.m_entries = savedEntries;
+            for (auto& entry : imported.namedObjectDictionary.m_entries)
+                if (entry.m_handle == saved.handle) entry.m_name = "WRONG_WIPEOUT_KEY";
+            if (!rejectsWithoutPublication()) return fail("wrong wipeout root key was accepted");
+            imported.namedObjectDictionary.m_entries = savedEntries;
+            if (!DxIfaceStandardDwgCaptureTestAccess::toggleWipeoutOwnerRole(imported, saved.handle))
+                return fail("could not mutate retained wipeout source role");
+            const bool rejectedWireRole = rejectsWithoutPublication();
+            if (!DxIfaceStandardDwgCaptureTestAccess::toggleWipeoutOwnerRole(imported, saved.handle)
+                || !rejectedWireRole) return fail("wrong retained wipeout source role was accepted");
+        }
         const bool wrongRevisionWrite = exporter.fileExport(
             target.first.string(), DRW::AC1024, target.second, &imported,
             false, requireResolvedOwners);
@@ -68643,10 +68734,10 @@ bool wipeoutVariablesDwgAdapterTransport() {
                 return fail("undocumented WIPEOUTVARIABLES display mode was not refused atomically");
         }
         for (const std::uint16_t displayFrame :
-             std::array<std::uint16_t, 2>{1u, 0u}) {
+             std::array<std::uint16_t, 2>{static_cast<std::uint16_t>(directNod ? 0u : 1u), 0u}) {
             mutableSource.m_displayFrame = displayFrame;
             if (!exporter.fileExport(target.first.string(), DRW::AC1027,
-                                     target.second, &imported, false,
+                                     target.second, &imported, directNod,
                                      requireResolvedOwners))
                 return fail("corrected WIPEOUTVARIABLES profile failed same-adapter retry");
             if (!DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
@@ -68660,6 +68751,23 @@ bool wipeoutVariablesDwgAdapterTransport() {
                 || readback.records.size() != 1u)
                 return fail("WIPEOUTVARIABLES ASCII/Binary readback did not restore one typed object");
             const DRW_WipeoutVariables& actual = readback.records.front();
+            if (directNod) {
+                const auto& root = outputData.namedObjectDictionary;
+                if (actual.handle != author.variables.handle
+                    || actual.parentHandle != root.handle || actual.m_displayFrame != 0u
+                    || actual.reactorHandles.size() != 1u || actual.reactorHandles.front() != root.handle
+                    || std::count_if(root.m_entries.begin(), root.m_entries.end(),
+                        [&actual](const DRW_Dictionary::Entry& e) {
+                            return e.m_name == "ACAD_WIPEOUT_VARS" && e.m_handle == actual.handle;
+                        }) != 1) {
+                    std::cerr << "handle=" << actual.handle << " expected=" << author.variables.handle
+                              << " parent=" << actual.parentHandle << " root=" << root.handle
+                              << " frame=" << actual.m_displayFrame << " reactors=" << actual.reactorHandles.size()
+                              << " root-entries=" << root.m_entries.size() << '\n';
+                    return fail("direct-NOD WIPEOUTVARIABLES readback mismatch");
+                }
+                continue;
+            }
             const auto owner = std::find_if(
                 outputData.dictionaries.begin(), outputData.dictionaries.end(),
                 [&actual](const DRW_Dictionary& dictionary) {
@@ -69559,6 +69667,11 @@ int main(int argc, char** argv) {
             == "--rastervariables-physical-ac1024-direct-nod")
         return rasterVariablesDwgAdapterTransport(
             argv[2], true, DRW::AC1024) ? 0 : 1;
+    if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1027-direct-nod")
+        return physicalDirectWipeoutVariables(argv[2]) ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--wipeoutvariables-dwg-direct-nod")
+        return wipeoutVariablesDwgAdapterTransport(true) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-adapter-transport")
         return wipeoutVariablesDwgAdapterTransport() ? 0 : 1;

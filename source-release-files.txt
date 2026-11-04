@@ -627,6 +627,7 @@ tools/audit_dxf_lwpolyline_missing_y.py
 tools/audit_dxf_sparse_lwpolyline.py
 tools/audit_dxf_table_values.py
 tools/audit_p9_rtext_native_history.py
+tools/author_wipeout_direct_nod.py
 tools/bounded_process.py
 tools/build_semantic_adapter.py
 tools/check_ac1024_candidate_fields.py
