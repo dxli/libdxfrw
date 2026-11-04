@@ -854,8 +854,10 @@ passes for the installed 27.1 app and the downloaded 27.9 package and extracted
 app; earlier sandboxed signature failures were unreliable. The verified 27.1 CLI
 now completes an audit-disabled AC1027-to-AC1027 Cover resave. The output reads
 but has 739 unclaimed HEADER bytes after its validated trailer, versus 731 in
-the original; byte meaning and semantic preservation remain unresolved. See the
-[integrity correction](docs/research/p6-ac1027-cover-oda-arm64-package-integrity-2026-11-02.json)
+the original. Current local section extraction finds six equal same-position
+bytes and a maximum common contiguous run of three bytes. LibreDWG 0.14
+independently decompresses the same logical section bytes; determine suffix
+framing and meaning before changing admission. See the [integrity correction](docs/research/p6-ac1027-cover-oda-arm64-package-integrity-2026-11-02.json)
 and [same-version resave receipt](docs/research/p6-ac1027-cover-oda-same-version-resave-2026-11-03.json).
 
 **MESH DWG face-stream guards:** `DRW_Mesh::parseDwg` reserves the parsed-face vector to the validated face-stream item bound and rejects face records with fewer than three vertex indices, matching the typed geometry invariant and DXF reader. Generated AC1024 vectors cover triangle readback, two-index face refusal with cleared state and same-object retry, plus the existing malformed crease-count refusal/retry selector. These are bounded parsing and failure-state controls only; the ODA v5.4.1 PDF has no `AcDbSubDMesh` layout entry, and no DWG layout or native geometry support claim is inferred. See the [face-record reserve receipt](docs/research/p6-mesh-dwg-face-record-reserve-guard-2026-11-02.json) and [face-count domain receipt](docs/research/p6-mesh-dwg-face-count-domain-2026-11-02.json).

@@ -40,9 +40,32 @@
     "result": "Successful read, zero entity/object parse failures, 119 frames published. The HEADER envelope ends at byte 844 with 739 unclaimed bytes. Strict DXF export refuses incomplete read disposition.",
     "comparison": "Original source has 731 unclaimed bytes after its validated trailer; same-revision resave has 739. Length comparison does not establish content identity, meaning, or semantic preservation."
   },
-  "next": "Compare the independently decoded section bytes and obtain normative or producer evidence for their framing before changing admission.",
+  "next": "Obtain producer-backed or normative evidence for suffix framing and meaning before changing admission.",
   "limits": [
     "No native semantic validation or complete output support claim.",
     "No drawing fixture committed."
-  ]
+  ],
+  "decodedHeaderComparison": {
+    "method": "Temporary dwgReader27 probe invokes the current libdxfrw parseDataPage, then writes exactly the logical HEADER section size; both output sections retain the validated trailer ending at offset 844.",
+    "independence": "A scratch driver calls LibreDWG 0.14 decompress_R2004_section on the original and resaved physical compressed HEADER page payloads. Both peer decodes match the local logical section bytes exactly, including both suffixes.",
+    "originalSectionSha256": "9963f027fac0daada9cbab9f3b2af56c73540534fd6a2e47ba8c0568e0571ab1",
+    "originalSuffixSha256": "7472357c307226b9a9dd0405bae1a533cef13ce4c9f3c6c59c9f4e365d3ab5b3",
+    "resavedSectionSha256": "55551135612baa4deee22c2d740ca386f3e786c08d81f4a99dfec30401cba1f3",
+    "resavedSuffixSha256": "6737be156086ce40761e00e7e595383dcea844680cdb73bb72b374336e42e0db",
+    "samePositionMatchingBytes": 6,
+    "longestCommonContiguousRunBytes": 3,
+    "interpretation": "Suffixes differ substantially; this does not establish their meaning, whether they are padding, or semantic preservation.",
+    "independentDecoder": {
+      "archive": "/opt/homebrew/lib/libredwg.a",
+      "archiveSha256": "340d6166b974005d816ec88dd1fff70accfda978d8e618c56258854660bd97e7",
+      "driver": "/private/tmp/libredwg-header-decompress.c",
+      "executableSha256": "a4f5420fc20ca3045831911bbe338e38c3de8a2983538b32e01288a715054c0e",
+      "originalCompressedOffset": "0x40a0",
+      "originalCompressedBytes": 1538,
+      "resaveCompressedOffset": "0x41e0",
+      "resaveCompressedBytes": 1546,
+      "status": "both returned 0; all 1575/1583 logical section bytes match the local decoder",
+      "window": "Each peer output is 29696 bytes with zeros beyond the logical section length; these buffer contents do not establish suffix semantics."
+    }
+  }
 }
