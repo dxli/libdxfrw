@@ -8410,7 +8410,13 @@ bool DRW_Textstyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
 
     putCommonObjectHandlePrefix(hb, kStyleControl, reactorCount,
                                 xDictFlag, &reactorHandles, xDictHandle);
-    hb->putHandle(makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer));
+    dwgHandle xref = makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer);
+    // Preserve a typed null when explicitly supplied; ODA §20.4.56 gives
+    // this field a hard-pointer role. Legacy untyped nulls stay unchanged.
+    if (version >= DRW::AC1018 && xrefBlockHandle.ref == 0u
+        && xrefBlockHandle.code == DRW::DwgHardPointer)
+        xref.code = DRW::DwgHardPointer;
+    hb->putHandle(xref);
     return buf->isGood() && sb->isGood() && hb->isGood();
 }
 

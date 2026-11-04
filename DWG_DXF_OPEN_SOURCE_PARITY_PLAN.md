@@ -880,10 +880,14 @@ ODA advances past its prior invalid-input failure on a generated AC1018 drawing
 and initially reports an AcDbDictionary recovery error. Corrected root-owner
 and HEADER GROUP references alone did not resolve it. Setting the synthetic
 root dictionary's missing-extension flag advances the controlled ODA case to
-an AcDbTextStyleTableRecord recovery error; resolve that next. Synthetic NOD
-and GROUP dictionaries now use the source-backed missing flag for R2004+,
-without changing caller metadata. See the [dictionary owner receipt](docs/research/p6-dictionary-root-typed-null-owner-2026-11-04.json)
-and [controlled flag receipt](docs/research/p6-generated-dictionary-missing-xdict-2026-11-04.json).
+an AcDbTextStyleTableRecord recovery error. Correcting both the synthetic
+STANDARD STYLE missing-extension flag and typed-null xref advances that
+controlled case to an AcDbBlockTable error; resolve the latter next. Synthetic
+defaults now use these source-backed states without changing supplied metadata.
+See the [dictionary flag receipt](docs/research/p6-generated-dictionary-missing-xdict-2026-11-04.json)
+and [STYLE receipt](docs/research/p6-standard-style-synthetic-xdict-xref-2026-11-04.json).
+R2004-family object-section prefixes now roll back on failed writes and retry
+without duplication ([rollback receipt](docs/research/p6-r2004-object-section-prefix-rollback-2026-11-04.json)).
 The reader now rejects truncated declared literal runs while retaining
 valid bounded and implicit-end streams; audit other malformed token profiles
 separately. See the [system-page receipt](docs/research/p6-r2004-system-page-termination-2026-11-03.json)

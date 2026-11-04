@@ -6409,6 +6409,12 @@ bool dwgWriter15::writeDwgObjects() {
         DRW_Textstyle standardStyle = m_haveStandardStyle
             ? m_standardStyle : DRW_Textstyle{};
         standardStyle.name = "STANDARD";
+        if (!m_haveStandardStyle && m_version >= DRW::AC1018) {
+            // The built-in STYLE has no extension or xref. Preserve explicit
+            // source/caller metadata when a STANDARD style was supplied.
+            standardStyle.setDwgCommonObjectState(0, 1, false);
+            standardStyle.xrefBlockHandle.code = DRW::DwgHardPointer;
+        }
         if (!emitStyleRecord(DRW::DwgStandardTextStyleHandle, standardStyle))
             return false;
         for (auto& p : m_pendingStyles)

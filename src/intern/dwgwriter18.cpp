@@ -521,8 +521,23 @@ static std::vector<std::uint8_t> buildFileHeader(std::uint64_t secPageMapAddr,
 // --- dwgWriter18::objectBaseOffset -------------------------------------------
 
 bool dwgWriter18::writeDwgObjects() {
+    if (m_dwgTableRecordsComplete)
+        return true;
+    // The base writer checkpoints after this prefix. Roll back the prefix as
+    // well if it fails or unwinds, and never append it twice on a retry.
+    if (m_buf.bitPos() != 0u)
+        return false;
+    struct PrefixGuard {
+        dwgBufferW& buffer;
+        std::size_t start;
+        bool committed{false};
+        ~PrefixGuard() { if (!committed) buffer.truncate(start); }
+    } guard{m_buf, m_buf.size()};
     m_buf.putRawLong32(0x0dca);
-    return dwgWriter15::writeDwgObjects();
+    if (!dwgWriter15::writeDwgObjects())
+        return false;
+    guard.committed = true;
+    return true;
 }
 
 bool dwgWriter18::objectBaseOffset(std::uint32_t& offset) const {

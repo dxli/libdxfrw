@@ -15160,6 +15160,20 @@ public:
         ++lines;
         lineEnd = line.secPoint;
     }
+    void addTextStyle(const DRW_Textstyle& style) override {
+        if (style.name == "STANDARD") {
+            ++standardStyles;
+            standardStyleFlag = style.extensionDictionaryFlag();
+            standardStyleXrefCode = style.xrefBlockHandle.code;
+            standardStyleXrefRef = style.xrefBlockHandle.ref;
+            standardStyleFont = style.font;
+        }
+    }
+    std::size_t standardStyles{0};
+    std::uint8_t standardStyleFlag{0};
+    std::uint8_t standardStyleXrefCode{0};
+    std::uint32_t standardStyleXrefRef{0};
+    std::string standardStyleFont;
     std::size_t headers{0};
     std::size_t lines{0};
     std::uint32_t handseed{0};
@@ -15544,7 +15558,75 @@ void testHeaderWriterSealing(TestContext& t, const std::string& version) {
     }
 }
 
+template<class Writer>
+void testStandardStyleDefaults(TestContext& t, DRW::Version version,
+                               const std::string& label) {
+    for (int mode = 0; mode < 4; ++mode) {
+        std::stringbuf output(std::ios::out | std::ios::binary);
+        std::ofstream stream;
+        static_cast<std::ostream&>(stream).rdbuf(&output);
+        DRW_Header header;
+        Writer writer(&stream, &header);
+        const bool prepared = writer.prepareDwgClassManifest()
+            && writer.writeFileHeaderStub() && writer.writeDwgHeader()
+            && writer.writeDwgClasses();
+        t.expect(prepared, "STANDARD STYLE preparation: " + label);
+        if (!prepared) continue;
+        DRW_Textstyle caller;
+        caller.name = "STANDARD";
+        caller.font = "caller-style";
+        caller.setDwgCommonObjectState(0, 0, false);
+        if (mode == 2) caller.width = std::numeric_limits<double>::quiet_NaN();
+        if (mode == 3) caller.xrefBlockHandle.code = DRW::DwgHardPointer;
+        if (mode != 0)
+            t.expect(writer.addTextstyle(caller) == DRW::DwgStandardTextStyleHandle,
+                     "caller STANDARD STYLE registered: " + label);
+        if (mode == 2) {
+            const auto before = writer.buffer();
+            t.expect(!writer.writeDwgObjects() && writer.buffer() == before
+                         && output.str().empty(),
+                     "invalid STANDARD STYLE rolls back without output: " + label);
+            caller.width = 1.0;
+            t.expect(writer.addTextstyle(caller) == DRW::DwgStandardTextStyleHandle,
+                     "corrected STANDARD STYLE registered on same writer: " + label);
+        }
+        DRW_Line line;
+        line.basePoint = DRW_Coord(1, 2, 3);
+        line.secPoint = DRW_Coord(4, 5, 6);
+        const bool objectsWritten = writer.writeDwgObjects();
+        const auto completedObjects = writer.buffer();
+        t.expect(objectsWritten && writer.writeDwgObjects()
+                     && writer.buffer() == completedObjects,
+                 "completed object section is idempotent: " + label);
+        const bool published = objectsWritten && writer.encodeEntity(&line)
+            && writer.emitDeferredBlockControl() && writer.finalizeHeaderHandseed()
+            && writer.writeDwgHandles() && writer.writeSecondHeader() && writer.finalize();
+        t.expect(published, "STANDARD STYLE complete publication: " + label);
+        if (!published) continue;
+        const auto file = output.str();
+        std::vector<std::uint8_t> bytes(file.begin(), file.end());
+        HeaderPublicationSink sink;
+        dwgRW reader("");
+        const bool read = reader.readBuffer(bytes.data(), bytes.size(), &sink, false);
+        const bool synthesized = mode == 0 && version >= DRW::AC1018;
+        t.expect(read && sink.standardStyles == 1u && sink.lines == 1u
+                     && sink.standardStyleFlag == (synthesized ? 1u : 0u)
+                     && sink.standardStyleXrefCode
+                         == ((synthesized || (mode == 3 && version >= DRW::AC1018))
+                                 ? DRW::DwgHardPointer : 0u)
+                     && sink.standardStyleXrefRef == 0u
+                     && sink.standardStyleFont == (mode == 0 ? "txt" : "caller-style"),
+                 "STANDARD STYLE source state and following LINE survive readback: " + label);
+    }
+}
+
 void testHeaderWriters(TestContext& t) {
+    testStandardStyleDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
+    testStandardStyleDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
+    testStandardStyleDefaults<dwgWriter21>(t, DRW::AC1021, "AC1021");
+    testStandardStyleDefaults<dwgWriter24>(t, DRW::AC1024, "AC1024");
+    testStandardStyleDefaults<dwgWriter27>(t, DRW::AC1027, "AC1027");
+    testStandardStyleDefaults<dwgWriter32>(t, DRW::AC1032, "AC1032");
     testHeaderWriterSealing<dwgWriter15>(t, "AC1015");
     testHeaderWriterSealing<dwgWriter18>(t, "AC1018");
     testHeaderWriterSealing<dwgWriter21>(t, "AC1021");
