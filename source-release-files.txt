@@ -666,6 +666,7 @@ tools/audit_sunstudy_dxf_graph.py
 tools/audit_wipeout_ac1018_source.py
 tools/audit_wipeout_ac1024_frame1_source.py
 tools/audit_wipeout_ac1024_source.py
+tools/audit_wipeout_ac1027_1032_frame1_source.py
 tools/audit_wipeout_ac1032_source.py
 tools/author_ac1021_curve_geometry.py
 tools/author_ac1021_geometry_matrix.py
@@ -761,6 +762,7 @@ tools/probe_rastervariables_ac1018_source.cpp
 tools/probe_wipeout_ac1018_source.cpp
 tools/probe_wipeout_ac1024_frame1_source.cpp
 tools/probe_wipeout_ac1024_source.cpp
+tools/probe_wipeout_ac1027_1032_frame1_source.cpp
 tools/probe_wipeout_ac1032_source.cpp
 tools/qualify_material_source_order.py
 tools/replay_dwg_legacy_extrusion.cpp

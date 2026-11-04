@@ -741,7 +741,8 @@ public:
         if (found == data.m_opaqueDwgSourceFrames.end()) return false;
         auto& raw = found->second;
         const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
-        if (raw.m_version != DRW::AC1024 || !raw.m_bodyBitSize || raw.m_bodyBitSize >= total)
+        if ((raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1027
+             && raw.m_version != DRW::AC1032) || !raw.m_bodyBitSize || raw.m_bodyBitSize >= total)
             return false;
         dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u, total - raw.m_bodyBitSize};
         const auto tag = body.take(2u);
@@ -749,7 +750,8 @@ public:
             : tag == 1u ? body.take(8u) + 0x1F0u : body.little(2u);
         if (tag == 3u || type != static_cast<std::uint32_t>(raw.m_objectType)
             || dx_raster_wire::detail::handle(body, 0u, 0u, true).value != handle
-            || body.shortValue() != 0u || body.longValue() != 1u || body.take(1u) != 1u)
+            || body.shortValue() != 0u || body.longValue() != 1u || body.take(1u) != 1u
+            || (raw.m_version >= DRW::AC1027 && body.take(1u) != 0u))
             return false;
         const auto start = body.pos;
         if (body.take(2u) != 1u || body.end - body.pos < 8u) return false;
@@ -762,7 +764,8 @@ public:
         if (found == data.m_opaqueDwgSourceFrames.end()) return false;
         auto& raw = found->second;
         const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
-        if (raw.m_version != DRW::AC1024 || !raw.m_bodyBitSize || raw.m_bodyBitSize >= total)
+        if ((raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1027
+             && raw.m_version != DRW::AC1032) || !raw.m_bodyBitSize || raw.m_bodyBitSize >= total)
             return false;
         dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u, total - raw.m_bodyBitSize};
         const auto tag = body.take(2u);
@@ -770,7 +773,8 @@ public:
             : tag == 1u ? body.take(8u) + 0x1F0u : body.little(2u);
         if (tag == 3u || type != static_cast<std::uint32_t>(raw.m_objectType)
             || dx_raster_wire::detail::handle(body, 0u, 0u, true).value != handle
-            || body.shortValue() != 0u || body.longValue() != 1u || body.take(1u) != 1u)
+            || body.shortValue() != 0u || body.longValue() != 1u || body.take(1u) != 1u
+            || (raw.m_version >= DRW::AC1027 && body.take(1u) != 0u))
             return false;
         const auto start = body.pos;
         if (body.take(2u) != 1u || body.take(8u) != 1u || !body.good) return false;
@@ -70385,6 +70389,12 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-ac1024-frame1")
         return wipeoutVariablesDwgAdapterTransport(true, DRW::AC1024, true) ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--wipeoutvariables-dwg-ac1027-frame1")
+        return wipeoutVariablesDwgAdapterTransport(true, DRW::AC1027, true) ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--wipeoutvariables-dwg-ac1032-frame1")
+        return wipeoutVariablesDwgAdapterTransport(true, DRW::AC1032, true) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-ac1018-direct-nod")
         return wipeoutVariablesDwgAdapterTransport(true, DRW::AC1018) ? 0 : 1;

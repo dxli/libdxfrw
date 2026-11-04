@@ -11678,7 +11678,9 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             && variables.reactorHandles.front() == variables.parentHandle
                             && variables.extensionDictionaryFlag() == 1u
                             && (variables.m_displayFrame == 0u
-                                || (data->sourceVersion == DRW::AC1024
+                                || ((data->sourceVersion == DRW::AC1024
+                                     || data->sourceVersion == DRW::AC1027
+                                     || data->sourceVersion == DRW::AC1032)
                                     && variables.m_displayFrame == 1u));
                         const bool nested = variables.reactorCount() == 0
                             && variables.reactorHandles.empty()
@@ -72597,7 +72599,7 @@ static bool matchesDirectNodWipeoutWire(const DRW_UnsupportedObject& raw,
         return frame == 0u && matchesAc1018DirectWipeoutWire(raw, parent);
     if ((raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1027
          && raw.m_version != DRW::AC1032)
-        || (frame != 0u && (raw.m_version != DRW::AC1024 || frame != 1u))
+        || frame > 1u
         || raw.m_rawBytes.empty()
         || raw.m_rawBytes.size() > 64u * 1024u * 1024u) return false;
     const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
@@ -72745,7 +72747,9 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
                 && variables.reactorHandles.front() == variables.parentHandle
                 && variables.extensionDictionaryFlag() == 1u
                 && (variables.m_displayFrame == 0u
-                    || (cData->sourceVersion == DRW::AC1024
+                    || ((cData->sourceVersion == DRW::AC1024
+                         || cData->sourceVersion == DRW::AC1027
+                         || cData->sourceVersion == DRW::AC1032)
                         && variables.m_displayFrame == 1u));
             const bool nested = cData->sourceVersion == DRW::AC1027
                 && variables.reactorCount() == 0

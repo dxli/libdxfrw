@@ -2551,6 +2551,13 @@ add_test(NAME dwg2dxf_wipeoutvariables_ac1024_direct_nod
     COMMAND libdxfrw_dwg2dxf_adapter_tests --wipeoutvariables-dwg-ac1024-direct-nod)
 add_test(NAME dwg2dxf_wipeoutvariables_ac1024_frame1
     COMMAND libdxfrw_dwg2dxf_adapter_tests --wipeoutvariables-dwg-ac1024-frame1)
+add_test(NAME dwg2dxf_wipeoutvariables_ac1027_frame1
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --wipeoutvariables-dwg-ac1027-frame1)
+add_test(NAME dwg2dxf_wipeoutvariables_ac1032_frame1
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --wipeoutvariables-dwg-ac1032-frame1)
+set_tests_properties(dwg2dxf_wipeoutvariables_ac1027_frame1
+    dwg2dxf_wipeoutvariables_ac1032_frame1 PROPERTIES
+    LABELS "fast;dwg;dxf;wipeout;adapter;generated;transaction;AC1027;AC1032" TIMEOUT 30)
 set_tests_properties(dwg2dxf_wipeoutvariables_ac1024_frame1 PROPERTIES
     LABELS "fast;dwg;dxf;wipeout;adapter;generated;transaction;AC1024" TIMEOUT 30)
 add_test(NAME dwg2dxf_wipeoutvariables_ac1018_direct_nod
