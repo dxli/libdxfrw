@@ -9621,10 +9621,14 @@ public:
     bool finalizeDwgWriteStructure() override { return true; }
 
     void addNamedObjectDictionary(const DRW_Dictionary& dictionary) override {
+        rootDictionaryFlag_ = dictionary.extensionDictionaryFlag();
+        rootDictionaryExtension_ = dictionary.xDictHandle;
         dx_iface::addNamedObjectDictionary(dictionary);
     }
     void addDictionary(const DRW_Dictionary& dictionary) override {
         if (dictionary.handle == DRW::DwgAcadGroupDictionaryHandle) {
+            groupDictionaryFlag_ = dictionary.extensionDictionaryFlag();
+            groupDictionaryExtension_ = dictionary.xDictHandle;
             const std::size_t expectedCount = scenario_ == Scenario::Empty
                 ? 0u : scenario_ == Scenario::ManyGroups
                     ? kManyGroupCount : 1u;
@@ -9701,6 +9705,11 @@ public:
     bool wroteSecondLine() const { return wroteSecondLine_; }
     bool wroteFollowing() const { return wroteFollowing_; }
     bool groupDictionarySeen() const { return groupDictionarySeen_; }
+    bool generatedDictionaryExtensionsMatch(DRW::Version version) const {
+        const int expected = version >= DRW::AC1018 ? 1 : 0;
+        return rootDictionaryFlag_ == expected && groupDictionaryFlag_ == expected
+            && rootDictionaryExtension_ == 0u && groupDictionaryExtension_ == 0u;
+    }
     bool groupSeen() const { return groupSeen_; }
     bool followingSeen() const { return followingSeen_; }
     bool manyGroupsWritten() const {
@@ -9743,6 +9752,10 @@ private:
     bool wroteFollowing_ {false};
     bool wroteGroupExtension_ {false};
     bool groupDictionarySeen_ {false};
+    int rootDictionaryFlag_ {-1};
+    int groupDictionaryFlag_ {-1};
+    std::uint32_t rootDictionaryExtension_ {0};
+    std::uint32_t groupDictionaryExtension_ {0};
     bool groupSeen_ {false};
     bool followingSeen_ {false};
     bool registeredManyGroups_ {false};
@@ -11591,8 +11604,26 @@ bool runDwgGroupDictionaryControls(
             expect(source.registeredGroup() && !source.firstGroupWrite(),
                    test.label, failures);
 
-        if (!test.succeeds)
+        if (!test.succeeds) {
+            if (test.scenario == Scenario::MissingFrame) {
+                std::error_code statusError;
+                const bool present = std::filesystem::exists(output, statusError);
+                const auto outputSize = present && !statusError
+                    ? std::filesystem::file_size(output, statusError) : 0u;
+                expect(!statusError && outputSize == 0u,
+                       "failed GROUP graph publishes no DWG bytes", failures);
+                DwgGroupDictionaryProbe retry(&writer, Scenario::Valid);
+                const bool retried = writer.write(&retry, version, true);
+                DwgGroupDictionaryProbe retryReader(nullptr, Scenario::Valid);
+                dwgRW readRetry(output.string().c_str());
+                const bool readRetried = retried && readRetry.read(&retryReader, false);
+                expect(readRetried && retryReader.groupDictionarySeen()
+                           && retryReader.generatedDictionaryExtensionsMatch(version)
+                           && retryReader.groupSeen() && retryReader.followingSeen(),
+                       "same writer retries after GROUP failure with correct dictionary flags and following objects", failures);
+            }
             continue;
+        }
         expect(source.wroteLine() && source.wroteSecondLine(),
                "generated GROUP control emits both ordered member entities",
                failures);
@@ -11609,6 +11640,8 @@ bool runDwgGroupDictionaryControls(
         const bool readOk = reader.read(&destination, false);
         expect(readOk && destination.groupDictionarySeen(),
                test.label, failures);
+        expect(readOk && destination.generatedDictionaryExtensionsMatch(version),
+               "generated NOD and GROUP dictionaries encode missing extension state", failures);
         if (test.scenario == Scenario::Valid || test.scenario == Scenario::EmptyDescription) {
             expect(destination.groupSeen() && destination.followingSeen(),
                    "reader preserves GROUP description separately from dictionary key, owner, flags, members and sentinel",

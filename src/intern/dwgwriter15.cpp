@@ -6542,6 +6542,10 @@ bool dwgWriter15::writeDwgObjects() {
     // owned-handle lists.
 
     DRW_Dictionary namedObjects;
+    // These are newly constructed objects with no extension dictionary.
+    // R2004+ omits the handle when its missing flag is set (ODA §20.4.44).
+    if (m_version >= DRW::AC1018)
+        namedObjects.setDwgCommonObjectState(0, 1, false);
     namedObjects.handle = DRW::DwgNamedObjectsDictionaryHandle;
     namedObjects.cloning = 1;
     namedObjects.hardOwner = 0;
@@ -6551,6 +6555,8 @@ bool dwgWriter15::writeDwgObjects() {
         namedObjects.m_entries.push_back({entry.name, entry.childHandle});
 
     DRW_Dictionary acadGroup;
+    if (m_version >= DRW::AC1018)
+        acadGroup.setDwgCommonObjectState(0, 1, false);
     acadGroup.handle = DRW::DwgAcadGroupDictionaryHandle;
     acadGroup.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
     acadGroup.cloning = 1;

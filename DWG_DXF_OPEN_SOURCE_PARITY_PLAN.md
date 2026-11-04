@@ -865,10 +865,13 @@ rejection and any class-manifest ordinal issues remain open. See the [CLASSES
 bit receipt](docs/research/p6-dwg-classes-true-header-bit-2026-11-03.json).
 R2004-family system pages now carry their required compressed-stream terminator.
 ODA advances past its prior invalid-input failure on a generated AC1018 drawing
-and reports an AcDbDictionary recovery error; resolve that object/graph failure
-next. The R2004+ DICTIONARY writer now retains the specified soft-pointer role
-for a null parent, but the effect on that ODA failure is not yet tested. See
-the [dictionary owner receipt](docs/research/p6-dictionary-root-typed-null-owner-2026-11-04.json).
+and initially reports an AcDbDictionary recovery error. Corrected root-owner
+and HEADER GROUP references alone did not resolve it. Setting the synthetic
+root dictionary's missing-extension flag advances the controlled ODA case to
+an AcDbTextStyleTableRecord recovery error; resolve that next. Synthetic NOD
+and GROUP dictionaries now use the source-backed missing flag for R2004+,
+without changing caller metadata. See the [dictionary owner receipt](docs/research/p6-dictionary-root-typed-null-owner-2026-11-04.json)
+and [controlled flag receipt](docs/research/p6-generated-dictionary-missing-xdict-2026-11-04.json).
 The reader now rejects truncated declared literal runs while retaining
 valid bounded and implicit-end streams; audit other malformed token profiles
 separately. See the [system-page receipt](docs/research/p6-r2004-system-page-termination-2026-11-03.json)
