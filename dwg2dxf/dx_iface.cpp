@@ -41273,8 +41273,10 @@ bool dx_iface::inspectDxfSunStudyOutput(const dxfRW::DxfObjectsWriteView& view) 
         const auto emitted = dxfW->remapHandle(source.handle);
         const auto owner = dxfW->remapHandle(source.parentHandle);
         const auto root = dxfW->remapHandle(cData->namedObjectDictionary.handle);
+        constexpr std::uint32_t group = 0xDu;
         if (emitted == 0u || emitted == DRW::NoHandle || owner == 0u || owner == DRW::NoHandle
-            || root == 0u || root == DRW::NoHandle || emitted == owner || owner == root || emitted == root)
+            || root == 0u || root == DRW::NoHandle || emitted == owner || owner == root || emitted == root
+            || group == emitted || group == owner || group == root)
             return false;
         const auto rootEntry = std::find_if(m_sunStudyRootSnapshot->m_entries.begin(),
             m_sunStudyRootSnapshot->m_entries.end(), [&](const auto& entry) { return entry.m_handle == source.parentHandle; });
@@ -41282,18 +41284,30 @@ bool dx_iface::inspectDxfSunStudyOutput(const dxfRW::DxfObjectsWriteView& view) 
             return false;
         dx_standard_output::Decoder decoder(view);
         if (!decoder.good()) return false;
-        std::size_t seen = 0u, rootSeen = 0u, ownerSeen = 0u;
+        std::size_t seen = 0u, rootSeen = 0u, ownerSeen = 0u, groupSeen = 0u;
         bool recordNameMatches = false;
         const bool inspected = dx_standard_output::inspectSelected(view,
             [emitted, owner, root, &recordNameMatches](std::string_view name, std::uint32_t handle) {
-                if (handle != emitted && handle != owner && handle != root) return false;
+                if (handle != emitted && handle != owner && handle != root && handle != group) return false;
                 recordNameMatches = handle == emitted ? name == "SUNSTUDY" : name == "DICTIONARY";
                 return true;
             },
             [&](const dx_standard_output::Shape& shape, std::string_view body) {
                 if (!recordNameMatches) return false;
-                if (shape.handle == owner || shape.handle == root) {
-                    if (!shape.complete() || shape.kind != dx_standard_output::Family::Dictionary) return false;
+                if (shape.handle == owner || shape.handle == root || shape.handle == group) {
+                    if (shape.kind != dx_standard_output::Family::Dictionary) return false;
+                    if (shape.handle == group) {
+                        if (++groupSeen != 1u || !shape.valid || shape.self != 1u || shape.owner != 1u
+                            || shape.subclass != 1u || shape.hardOwner > 1u || shape.cloning != 1u
+                            || shape.depth != 0u || shape.pointNext != 0 || shape.entryPending || shape.xdata) return false;
+                        return decoder.decodeRecord<DRW_Dictionary>(body, [&](const DRW_Dictionary& actual) {
+                            return actual.handle == group && actual.parentHandle == root
+                                && actual.hardOwner == 0 && actual.cloning == 1
+                                && actual.m_entries.empty() && actual.xDictHandle == 0u
+                                && actual.reactorHandles.empty() && actual.appData.empty() && actual.extData.empty();
+                        });
+                    }
+                    if (!shape.complete()) return false;
                     const bool isRoot = shape.handle == root;
                     if ((isRoot ? ++rootSeen : ++ownerSeen) != 1u) return false;
                     return decoder.decodeRecord<DRW_Dictionary>(body, [&](const DRW_Dictionary& actual) {
@@ -41301,6 +41315,12 @@ bool dx_iface::inspectDxfSunStudyOutput(const dxfRW::DxfObjectsWriteView& view) 
                         const auto expectedTarget = isRoot ? owner : emitted;
                         return actual.handle == shape.handle && actual.parentHandle == (isRoot ? 0u : root)
                             && actual.hardOwner == 0 && actual.cloning == 1
+                            && actual.xDictHandle == 0u && actual.reactorHandles.empty()
+                            && actual.appData.empty() && actual.extData.empty()
+                            && actual.m_entries.size() == (isRoot ? 2u : 1u)
+                            && (!isRoot || std::count_if(actual.m_entries.begin(), actual.m_entries.end(),
+                                [&](const auto& entry) { return entry.m_name == "ACAD_GROUP" && entry.m_handle == group
+                                    && entry.m_dxfHandleCode == DRW_Dictionary::Entry::DxfHandleCode::SoftOwner; }) == 1)
                             && std::count_if(actual.m_entries.begin(), actual.m_entries.end(),
                                 [&](const auto& entry) { return entry.m_name == expectedName && entry.m_handle == expectedTarget
                                     && entry.m_dxfHandleCode == DRW_Dictionary::Entry::DxfHandleCode::SoftOwner; }) == 1;
@@ -41314,7 +41334,7 @@ bool dx_iface::inspectDxfSunStudyOutput(const dxfRW::DxfObjectsWriteView& view) 
                         && dx_sunstudy_dxf_profile::samePayload(source, actual);
                 });
             });
-        m_sunStudyOutputInspected = inspected && seen == 1u && rootSeen == 1u && ownerSeen == 1u;
+        m_sunStudyOutputInspected = inspected && seen == 1u && rootSeen == 1u && ownerSeen == 1u && groupSeen == 1u;
         return m_sunStudyOutputInspected;
     } catch (...) { return false; }
 }
@@ -62689,7 +62709,8 @@ bool dx_data::hasBoundDxfSunStudyGraph() const noexcept {
             || m_sunStudyRawBaselines.size() != 1u || m_sunStudyTypedBaselines.size() != 1u
             || !hasNamedObjectDictionary || namedObjectDictionary.handle == 0u
             || namedObjectDictionary.handle == DRW::NoHandle
-            || namedObjectDictionary.parentHandle != 0u || namedObjectDictionary.m_entries.size() != 1u
+            || namedObjectDictionary.parentHandle != 0u
+            || (namedObjectDictionary.m_entries.size() != 1u && namedObjectDictionary.m_entries.size() != 2u)
             || !namedObjectDictionary.name.empty() || namedObjectDictionary.flags != 0u
             || namedObjectDictionary.hardOwner != 0 || namedObjectDictionary.cloning != 1
             || namedObjectDictionary.xDictHandle != 0u || !namedObjectDictionary.reactorHandles.empty()
@@ -62790,6 +62811,26 @@ bool dx_data::hasBoundDxfSunStudyGraph() const noexcept {
                 && dx_sunstudy_dxf_profile::matchesDictionary(*input->raw, *original);
         };
         if (!sourceMatches(namedObjectDictionary, true) || !sourceMatches(*owner, false)) return false;
+        if (namedObjectDictionary.m_entries.size() == 2u) {
+            const auto& groupEntry = namedObjectDictionary.m_entries[1];
+            if (namedObjectDictionary.m_entries[0].m_handle != owner->handle
+                || groupEntry.m_name != "ACAD_GROUP"
+                || groupEntry.m_dxfHandleCode != DRW_Dictionary::Entry::DxfHandleCode::SoftOwner
+                || groupEntry.m_handle == 0u || groupEntry.m_handle == DRW::NoHandle
+                || groupEntry.m_handle == owner->handle || groupEntry.m_handle == study.handle
+                || groupEntry.m_handle == namedObjectDictionary.handle) return false;
+            const DRW_Dictionary* group = nullptr;
+            for (const auto& dictionary : dictionaries) {
+                if (dictionary.handle != groupEntry.m_handle) continue;
+                if (group) return false;
+                group = &dictionary;
+            }
+            if (!group || group->parentHandle != namedObjectDictionary.handle
+                || !group->m_entries.empty() || !group->name.empty() || group->flags != 0u
+                || group->hardOwner != 0 || group->cloning != 1 || group->xDictHandle != 0u
+                || !group->reactorHandles.empty() || !group->appData.empty() || !group->extData.empty()
+                || !sourceMatches(*group, false)) return false;
+        }
         std::size_t roots = 0u;
         for (const auto& entry : namedObjectDictionary.m_entries)
             if (entry.m_handle == owner->handle && !entry.m_name.empty() && entry.m_name.size() <= 128u

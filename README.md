@@ -238,8 +238,7 @@ scalar observation before import. It is off by default and works with positional
 `-o` and batch commands. Observation retains at most 64 MiB of source data and
 has a separate work limit; total process memory can be higher. It leaves strict
 text, ownership, graph and output checks in force. For example, it enables the
-qualified AC1027 SUNSTUDY graph profile; the resulting output may not itself
-qualify for another conversion under that narrow source profile.
+qualified AC1027 SUNSTUDY graph profile and its bounded repeated conversion.
 
 For example, `dwg2dxf input.dxf -o output.dxf --dxf-codepage-policy=exact-named`
 retains the input revision unless an output

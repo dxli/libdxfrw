@@ -1,6 +1,7 @@
 {
   "scope": "CLI access to existing bounded whole-DXF scalar observation; no change to export qualification or DWG read policy",
   "option": "--observe-whole-dxf-source",
+  "superseded_second_pass_observation": "See p5-sunstudy-repeat-graph-2026-11-04.json for the later bounded repeat-conversion successor; the second-pass refusal below describes this earlier revision.",
   "behavior": "Default off. The option enables observation on each fresh input adapter before import, including traditional, -o and batch invocations. Existing source-text, graph, owner, proxy, completeness and output transaction checks remain in force. Observation uses the existing shared retained budget and its 1000000-field, 64 MiB retained and 128 MiB work limits; it is not byte-exact source retention.",
   "tests": {
     "focused": "python3 -B tests/dwg2dxf_cli_contract_tests.py --converter build-gcc/dwg2dxf/dwg2dxf --sunstudy-observation-only",

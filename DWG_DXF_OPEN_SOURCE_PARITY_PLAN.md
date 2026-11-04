@@ -524,12 +524,10 @@ output until explicitly repaired; consumers using older inline copy operators
 must rebuild to preserve that guard across copies. See the [array guard receipt](docs/research/p5-sunstudy-incomplete-dxf-array-guard-2026-11-03.json).
 The adapter refuses SUNSTUDY output outside the bounded source-observed graph,
 including unobserved imports and unqualified references.
-The CLI exposes the opt-in as `--observe-whole-dxf-source`. Its emitted DXF
-currently fails the narrow SUNSTUDY source gate on a second pass. Qualify the
-exact emitted owner-before-reactor ordering and the additional NOD-to-empty
-`ACAD_GROUP` dictionary, including source roles and independent emitted-edge
-proof, before allowing repeat conversion
-([CLI receipt](docs/research/p5-sunstudy-cli-observation-opt-in-2026-11-04.json)).
+The CLI exposes the opt-in as `--observe-whole-dxf-source`. Bounded AC1027
+repeat conversion now verifies the additional empty `ACAD_GROUP` dictionary and
+both root edges. Other dictionary graphs, source versions and native rendering
+remain open ([repeat receipt](docs/research/p5-sunstudy-repeat-graph-2026-11-04.json)).
 The adapter also retains typed LIGHTLIST callbacks within aggregate record,
 item, and byte bounds ([capture receipt](docs/research/p5-lightlist-callback-retention-2026-11-03.json));
 the source-aware DXF parser now separates the first ACAD_REACTORS group-330

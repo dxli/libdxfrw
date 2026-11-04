@@ -57,14 +57,37 @@ def check_sunstudy_observation_cli(converter, root):
                 raise AssertionError("Binary SUNSTUDY output lost selected identities")
         else:
             inspect_sunstudy(destination)
-            # The emitted root also contains ACAD_GROUP and therefore does not
-            # meet the narrowly qualified one-entry source profile for a second
-            # pass. This must remain an atomic refusal, not silent promotion.
-            second = root / "sun-second-pass.dxf"
-            second.write_bytes(SENTINEL)
-            convert([destination, "-o", second, "-y", flag], False)
-            if second.read_bytes() != SENTINEL:
-                raise AssertionError("unqualified second pass replaced destination")
+        second = root / "sun-second-pass.dxf"
+        convert([destination, "-o", second, "-y", flag], True)
+        inspect_sunstudy(second)
+        third = root / "sun-third-pass.dxf"
+        convert([second, "-o", third, "-y", flag, *options], True)
+        if third.read_bytes().startswith(BINARY_PREFIX) != binary:
+            raise AssertionError("third-pass SUNSTUDY encoding mismatch")
+        if not binary:
+            inspect_sunstudy(third)
+        if not binary:
+            repeated_source = destination.read_bytes()
+            edge = b"  3\nACAD_GROUP\n350\nD\n"
+            group = b"  5\nD\n330\nC\n100\nAcDbDictionary\n281\n    1\n"
+            if repeated_source.count(edge) != 1 or repeated_source.count(group) != 1:
+                raise AssertionError("expected exact generated GROUP source profile")
+            mutations = (
+                (edge, b"  3\nACAD_GROUP\n360\nD\n"),
+                (edge, b"  3\nACAD_GROUP\n350\nF0\n"),
+                (group, group.replace(b"330\nC\n", b"330\n0\n")),
+                (group, group + b"300\nunmodeled\n"),
+                (group, group + b"  3\nEXTRA\n350\nF0\n"),
+            )
+            for index, (old, new) in enumerate(mutations):
+                bad = root / f"sun-repeat-bad-{index}.dxf"
+                bad.write_bytes(repeated_source.replace(old, new, 1))
+                second.write_bytes(SENTINEL)
+                convert([bad, "-o", second, "-y", flag], False)
+                if second.read_bytes() != SENTINEL:
+                    raise AssertionError("invalid repeated GROUP source replaced destination")
+                convert([destination, "-o", second, "-y", flag], True)
+                inspect_sunstudy(second)
 
     # Unknown CLASS fields and wrong target revision still fail closed even
     # with observation, preserving the existing output; corrected retry works.
@@ -104,7 +127,7 @@ def check_sunstudy_observation_cli(converter, root):
     inspect_sunstudy(batch / source.name)
     if source.read_bytes() != source_bytes:
         raise AssertionError("source was modified")
-    return 14
+    return 26
 PRE_R13_MARKERS = (
     (5, b"unsupported-r11-repeat"),
     (6, b"unsupported-r11-endrep"),

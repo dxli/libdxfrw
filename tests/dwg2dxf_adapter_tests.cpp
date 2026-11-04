@@ -69811,7 +69811,22 @@ bool sunStudyDxfGraph(const std::string& source) {
         const auto& study = actual.sunStudies.front();
         const auto owner = std::find_if(actual.dictionaries.begin(), actual.dictionaries.end(),
             [&](const DRW_Dictionary& dictionary) { return dictionary.handle == study.parentHandle; });
+        const auto groupEntry = std::find_if(actual.namedObjectDictionary.m_entries.begin(),
+            actual.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) { return entry.m_name == "ACAD_GROUP"; });
+        if (groupEntry == actual.namedObjectDictionary.m_entries.end()) return false;
+        const auto group = std::find_if(actual.dictionaries.begin(), actual.dictionaries.end(),
+            [&](const DRW_Dictionary& dictionary) { return dictionary.handle == groupEntry->m_handle; });
         return owner != actual.dictionaries.end() && owner->parentHandle == actual.namedObjectDictionary.handle
+            && actual.namedObjectDictionary.m_entries.size() == 2u
+            && std::count_if(actual.namedObjectDictionary.m_entries.begin(), actual.namedObjectDictionary.m_entries.end(),
+                [&](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "MY_SUNSTUDIES" && entry.m_handle == owner->handle
+                        && entry.m_dxfHandleCode == DRW_Dictionary::Entry::DxfHandleCode::SoftOwner;
+                }) == 1
+            && groupEntry->m_dxfHandleCode == DRW_Dictionary::Entry::DxfHandleCode::SoftOwner
+            && group != actual.dictionaries.end() && group->parentHandle == actual.namedObjectDictionary.handle
+            && group->m_entries.empty() && group->handle != owner->handle && group->handle != study.handle
             && study.reactorHandles == std::vector<std::uint32_t>{owner->handle}
             && owner->m_entries.size() == 1u && owner->m_entries.front().m_handle == study.handle
             && study.m_setupName == "Morning" && study.m_dates.size() == 1u
@@ -69859,6 +69874,48 @@ bool sunStudyDxfGraph(const std::string& source) {
         data.dictionaries = savedDictionaries;
         if (accepted || actual != "prior destination" || !write(binary) || !check())
             return fail("late SUNSTUDY owner mutation was published or retry failed");
+
+        // Re-import the emitted NOD + generated empty GROUP graph with a new
+        // observation. Every source identity and edge must remain bound.
+        dx_data repeated; dx_iface repeatedReader;
+        if (!repeatedReader.enableWholeDxfSourceObservation()
+            || !repeatedReader.fileImport(output.string(), &repeated, false)
+            || repeated.namedObjectDictionary.m_entries.size() != 2u)
+            return fail("SUNSTUDY emitted graph failed fresh source qualification");
+        const auto repeatRoot = repeated.namedObjectDictionary;
+        const auto repeatDictionaries = repeated.dictionaries;
+        const auto groupHandle = repeatRoot.m_entries[1].m_handle;
+        const auto repeatWrite = [&]() { return exporter.fileExport(output.string(), DRW::AC1027, binary,
+            &repeated, false, true, dx_dxfSourceTextPolicy::Compatible, DRW::DxfTextWritePolicy::Compatible,
+            dx_dxfProxyGraphicsPolicy::Compatible, dx_dwgReadCompletenessPolicy::RequireComplete); };
+        for (unsigned fault = 0u; fault < 8u; ++fault) {
+            auto group = std::find_if(repeated.dictionaries.begin(), repeated.dictionaries.end(),
+                [&](const DRW_Dictionary& value) { return value.handle == groupHandle; });
+            if (group == repeated.dictionaries.end()) return fail("SUNSTUDY GROUP source missing");
+            if (fault == 0u) repeated.namedObjectDictionary.m_entries.pop_back();
+            if (fault == 1u) repeated.namedObjectDictionary.m_entries[1].m_handle = repeated.sunStudies.front().handle;
+            if (fault == 2u) repeated.namedObjectDictionary.m_entries[1].m_name = "OTHER";
+            if (fault == 3u) repeated.namedObjectDictionary.m_entries[1].m_dxfHandleCode = DRW_Dictionary::Entry::DxfHandleCode::HardOwner;
+            if (fault == 4u) group->parentHandle = 0u;
+            if (fault == 5u) group->m_entries.push_back({"EXTRA", repeated.sunStudies.front().handle});
+            if (fault == 6u) repeated.dictionaries.erase(group);
+            if (fault == 7u) repeated.dictionaries.push_back(*group);
+            { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }
+            const bool badAccepted = repeatWrite();
+            std::ifstream saved(output, std::ios::binary);
+            const std::string prior((std::istreambuf_iterator<char>(saved)), {});
+            repeated.namedObjectDictionary = repeatRoot; repeated.dictionaries = repeatDictionaries;
+            if (badAccepted || prior != "prior destination" || !repeatWrite() || !check())
+                return fail("SUNSTUDY repeat graph mutation was published or retry failed");
+        }
+        { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }
+        exporter.afterObjects = [&]() { repeated.namedObjectDictionary.m_entries[1].m_handle = 0u; };
+        const bool lateAccepted = repeatWrite(); exporter.afterObjects = {};
+        std::ifstream saved(output, std::ios::binary);
+        const std::string latePrior((std::istreambuf_iterator<char>(saved)), {});
+        repeated.namedObjectDictionary = repeatRoot;
+        if (lateAccepted || latePrior != "prior destination" || !repeatWrite() || !check())
+            return fail("late SUNSTUDY repeat graph edit was published or retry failed");
     }
     for (const bool binary : {false, true}) {
         { std::ofstream stream(output, std::ios::binary); stream << "prior destination"; }

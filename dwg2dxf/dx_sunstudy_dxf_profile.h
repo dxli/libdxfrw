@@ -13,8 +13,7 @@
 namespace dx_sunstudy_dxf_profile {
 inline bool matchesDictionary(const DRW_RawDxfObject& raw, const DRW_Dictionary& value) noexcept {
     if (raw.name != "DICTIONARY" || raw.handle != value.handle || raw.parentHandle != value.parentHandle
-        || value.m_entries.size() != 1u || raw.groups.size() != 7u) return false;
-    const auto& entry = value.m_entries.front();
+        || value.m_entries.size() > 2u) return false;
     const auto& g = raw.groups;
     const auto handle = [](const DRW_Variant& item, int code, std::uint32_t expected) {
         std::uint64_t parsed = 0u;
@@ -27,11 +26,25 @@ inline bool matchesDictionary(const DRW_RawDxfObject& raw, const DRW_Dictionary&
     const auto integer = [](const DRW_Variant& item, int code, int expected) {
         return item.code() == code && item.type() == DRW_Variant::INTEGER && item.content.i == expected;
     };
-    return handle(g[0], 5, value.handle) && handle(g[1], 330, value.parentHandle)
-        && text(g[2], 100, "AcDbDictionary") && integer(g[3], 280, value.hardOwner)
-        && integer(g[4], 281, value.cloning) && text(g[5], 3, entry.m_name)
-        && entry.m_dxfHandleCode == DRW_Dictionary::Entry::DxfHandleCode::SoftOwner
-        && handle(g[6], 350, entry.m_handle);
+    // The generated empty GROUP dictionary may omit 280; nonempty source
+    // dictionaries explicitly retain it and each ordered 3/350 pair.
+    if (value.m_entries.empty())
+        return (g.size() == 4u || g.size() == 5u) && value.hardOwner == 0
+            && handle(g[0], 5, value.handle) && handle(g[1], 330, value.parentHandle)
+            && text(g[2], 100, "AcDbDictionary")
+            && (g.size() == 4u ? integer(g[3], 281, value.cloning)
+                               : integer(g[3], 280, 0) && integer(g[4], 281, value.cloning));
+    if (g.size() != 5u + 2u * value.m_entries.size()
+        || !handle(g[0], 5, value.handle) || !handle(g[1], 330, value.parentHandle)
+        || !text(g[2], 100, "AcDbDictionary") || !integer(g[3], 280, value.hardOwner)
+        || !integer(g[4], 281, value.cloning)) return false;
+    for (std::size_t i = 0; i < value.m_entries.size(); ++i) {
+        const auto& entry = value.m_entries[i];
+        if (!text(g[5u + 2u * i], 3, entry.m_name)
+            || entry.m_dxfHandleCode != DRW_Dictionary::Entry::DxfHandleCode::SoftOwner
+            || !handle(g[6u + 2u * i], 350, entry.m_handle)) return false;
+    }
+    return true;
 }
 inline bool samePayload(const DRW_SunStudy& a, const DRW_SunStudy& b) noexcept {
     if (a.m_classVersion != b.m_classVersion || a.m_setupName != b.m_setupName
@@ -87,9 +100,14 @@ inline bool matches(const DRW_RawDxfObject& raw, const DRW_SunStudy& value) noex
         std::uint64_t parsed = 0u;
         return item && dx_standard_output::handleValue(*item, parsed) && parsed == expected;
     };
-    if (!handle(5, value.handle) || !string(102, "{ACAD_REACTORS")
-        || !handle(330, value.parentHandle) || !string(102, "}")
-        || !handle(330, value.parentHandle) || !string(100, "AcDbSunStudy")
+    if (!handle(5, value.handle)) return false;
+    // Both the authored source and the writer's emitted ordering represent
+    // exactly one parent and one reactor, with the same identity.
+    const bool ownerFirst = pos < raw.groups.size() && raw.groups[pos].code() == 330;
+    if ((ownerFirst && !handle(330, value.parentHandle))
+        || !string(102, "{ACAD_REACTORS") || !handle(330, value.parentHandle)
+        || !string(102, "}") || (!ownerFirst && !handle(330, value.parentHandle))
+        || !string(100, "AcDbSunStudy")
         || !integer(90, value.m_classVersion) || !string(1, value.m_setupName)
         || !string(2, value.m_description) || !integer(70, value.m_outputType)
         || !integer(291, value.m_selectDatesFromCalendar ? 1 : 0)
