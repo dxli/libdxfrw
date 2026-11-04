@@ -2792,7 +2792,27 @@ bool dwgWriter15::emitViewRecord(std::uint32_t handle, const DRW_View& view) {
 }
 
 bool dwgWriter15::emitVportRecord(std::uint32_t handle, const DRW_Vport& vp) {
-    return emitTableRecord(handle, vp, DRW::DwgVPortObjectType);
+    const bool synthetic = handle == DRW::DwgActiveVportHandle
+        && !m_haveActiveVport && m_version >= DRW::AC1018;
+    if (!synthetic)
+        return emitTableRecord(handle, vp, DRW::DwgVPortObjectType);
+    DRW_Vport object = vp;
+    if (!prepareDwgCommonObjectState(object, m_version))
+        return false;
+    std::vector<DRW_Entity::PendingHandleRef> appIdRefs;
+    std::vector<DRW_Entity::PendingHandleRef> layerRefs;
+    if (!prepareTableEntryEed(object, appIdRefs, layerRefs))
+        return false;
+    dwgBufferW& body = beginObject(handle);
+    dwgBufferW *sb = nullptr, *hb = nullptr;
+    if (!emitRecordPreamble(body, m_version, DRW::DwgVPortObjectType, handle,
+                            m_objectStrings, m_objectHandles, sb, hb,
+                            object.reactorCount(), object.extensionDictionaryFlag(),
+                            object.hasDataStorageBinaryData(), &object.extData,
+                            &appIdRefs, &layerRefs, fileCodePageId())
+        || !object.encodeDwgForWriter(m_version, &body, sb, hb, true))
+        return false;
+    return finishTableRecord(handle);
 }
 
 bool dwgWriter15::emitViewportEntityHeaderRecord(
@@ -6486,6 +6506,8 @@ bool dwgWriter15::writeDwgObjects() {
         DRW_Vport activeVport = m_haveActiveVport
             ? m_activeVport : DRW_Vport{};
         activeVport.name = "*ACTIVE";
+        if (!m_haveActiveVport && m_version >= DRW::AC1018)
+            activeVport.setDwgCommonObjectState(0, 1, false);
         if (!emitVportRecord(DRW_Vport::kDwgActiveHandle, activeVport))
             return false;
         for (auto& p : m_pendingVports)

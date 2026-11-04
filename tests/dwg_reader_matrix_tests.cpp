@@ -61,6 +61,16 @@ public:
     }
 };
 
+class DrwObjectEncodeTestAccess {
+public:
+    static bool encodeVport(DRW_Vport& viewport, DRW::Version version,
+                            dwgBufferW& data, dwgBufferW& strings,
+                            dwgBufferW& handles, bool typedNulls) {
+        return viewport.encodeDwgForWriter(version, &data, &strings, &handles,
+                                           typedNulls);
+    }
+};
+
 class DrwHeaderEncodeTestAccess {
 public:
     static void setControlHandles(DRW_Header& header) {
@@ -15160,6 +15170,20 @@ public:
         ++lines;
         lineEnd = line.secPoint;
     }
+    void addVport(const DRW_Vport& vport) override {
+        if (vport.name == "*ACTIVE") {
+            ++activeVports;
+            activeVportFlag = vport.extensionDictionaryFlag();
+            activeVportXrefCode = vport.xrefBlockHandle.code;
+            activeVportNamed = vport.namedUcsHandle;
+            activeVportBase = vport.baseUcsHandle;
+        }
+    }
+    std::size_t activeVports{0};
+    std::uint8_t activeVportFlag{0};
+    std::uint8_t activeVportXrefCode{0};
+    std::uint32_t activeVportNamed{0};
+    std::uint32_t activeVportBase{0};
     void addLType(const DRW_LType& ltype) override {
         const std::array<std::string, 3> names{{"BYBLOCK", "BYLAYER", "CONTINUOUS"}};
         for (std::size_t i = 0; i < names.size(); ++i) {
@@ -15761,7 +15785,76 @@ void testBuiltinLtypeDefaults(TestContext& t, DRW::Version version,
     }
 }
 
+template<class Writer>
+void testActiveVportDefaults(TestContext& t, DRW::Version version,
+                             const std::string& label) {
+    for (int mode = 0; mode < 3; ++mode) {
+        std::stringbuf output(std::ios::out | std::ios::binary);
+        std::ofstream stream;
+        static_cast<std::ostream&>(stream).rdbuf(&output);
+        DRW_Header header;
+        Writer writer(&stream, &header);
+        const bool prepared = writer.prepareDwgClassManifest()
+            && writer.writeFileHeaderStub() && writer.writeDwgHeader()
+            && writer.writeDwgClasses();
+        t.expect(prepared, "*ACTIVE VPORT preparation: " + label);
+        if (!prepared) continue;
+        DRW_Vport caller;
+        caller.name = "*ACTIVE";
+        caller.setDwgCommonObjectState(0, 0, false);
+        if (mode == 2) caller.height = std::numeric_limits<double>::quiet_NaN();
+        if (mode != 0)
+            t.expect(writer.addVport(caller), "caller *ACTIVE registered: " + label);
+        if (mode == 2) {
+            const auto before = writer.buffer();
+            t.expect(!writer.writeDwgObjects() && writer.buffer() == before
+                         && output.str().empty(),
+                     "invalid *ACTIVE rolls back without output: " + label);
+            caller.height = 5.0;
+            t.expect(writer.addVport(caller), "corrected *ACTIVE registered on same writer: " + label);
+        }
+        DRW_Line line;
+        line.basePoint = DRW_Coord(1, 2, 3);
+        line.secPoint = DRW_Coord(4, 5, 6);
+        const bool published = writer.writeDwgObjects() && writer.encodeEntity(&line)
+            && writer.emitDeferredBlockControl() && writer.finalizeHeaderHandseed()
+            && writer.writeDwgHandles() && writer.writeSecondHeader() && writer.finalize();
+        t.expect(published, "*ACTIVE VPORT complete publication: " + label);
+        if (!published) continue;
+        const auto file = output.str();
+        std::vector<std::uint8_t> bytes(file.begin(), file.end());
+        HeaderPublicationSink sink;
+        dwgRW reader("");
+        const bool read = reader.readBuffer(bytes.data(), bytes.size(), &sink, false);
+        const bool synthesized = mode == 0 && version >= DRW::AC1018;
+        t.expect(read && sink.activeVports == 1u && sink.lines == 1u
+                     && sink.activeVportFlag == (synthesized ? 1u : 0u)
+                     && sink.activeVportXrefCode == (synthesized ? DRW::DwgHardPointer : 0u)
+                     && sink.activeVportNamed == 0u && sink.activeVportBase == 0u,
+                 "*ACTIVE caller state and following LINE survive readback: " + label);
+    }
+    if (version >= DRW::AC1018) {
+        DRW_Vport probe;
+        probe.setDwgCommonObjectState(0, 1, false);
+        dwgBufferW body, strings, handles;
+        const bool encoded = DrwObjectEncodeTestAccess::encodeVport(
+            probe, version, body, strings, handles, true);
+        const std::vector<std::uint8_t> expected = version == DRW::AC1018
+            ? std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x50u, 0x50u}
+            : std::vector<std::uint8_t>{0x41u, 0x08u, 0x50u, 0x00u, 0x00u,
+                                        0x00u, 0x50u, 0x50u};
+        t.expect(encoded && handles.data() == expected,
+                 "*ACTIVE typed null handle bytes and ordering: " + label);
+    }
+}
+
 void testHeaderWriters(TestContext& t) {
+    testActiveVportDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
+    testActiveVportDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
+    testActiveVportDefaults<dwgWriter21>(t, DRW::AC1021, "AC1021");
+    testActiveVportDefaults<dwgWriter24>(t, DRW::AC1024, "AC1024");
+    testActiveVportDefaults<dwgWriter27>(t, DRW::AC1027, "AC1027");
+    testActiveVportDefaults<dwgWriter32>(t, DRW::AC1032, "AC1032");
     testBuiltinLtypeDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
     testBuiltinLtypeDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
     testBuiltinLtypeDefaults<dwgWriter21>(t, DRW::AC1021, "AC1021");

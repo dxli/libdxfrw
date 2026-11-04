@@ -8716,6 +8716,12 @@ bool DRW_UCS::encodeDwg(DRW::Version version, dwgBufferW *buf,
 
 bool DRW_Vport::encodeDwg(DRW::Version version, dwgBufferW *buf,
                            dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
+    return encodeDwgForWriter(version, buf, strBuf, hdlBuf, false);
+}
+
+bool DRW_Vport::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                    dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                    bool typedNullReferences) const {
     if (buf == nullptr || !validatePayloadFields()
         || !std::isfinite(encodeVportAspectRatio(version, height, ratio)))
         return false;
@@ -8803,15 +8809,21 @@ bool DRW_Vport::encodeDwg(DRW::Version version, dwgBufferW *buf,
     putCommonObjectHandlePrefix(hb, kVportControl, reactorCount,
                                 effectiveXDictFlag,
                                 &reactorHandles, xDictHandle);
-    hb->putHandle(makeRefW(xrefBlockHandle.ref, DRW::DwgHardPointer));
+    const auto hardReference = [typedNullReferences](std::uint32_t ref) {
+        dwgHandle value = makeRefW(ref, DRW::DwgHardPointer);
+        if (typedNullReferences && ref == 0u)
+            value.code = DRW::DwgHardPointer;
+        return value;
+    };
+    hb->putHandle(hardReference(xrefBlockHandle.ref));
     if (version > DRW::AC1018) {
         hb->putHandle(makeRefW(backgroundHandle, DRW::DwgSoftPointer));
         hb->putHandle(makeRefW(visualStyleHandle, DRW::DwgHardPointer));
         hb->putHandle(makeRefW(m_sunHandle, DRW::DwgHardOwnership));
     }
     if (version > DRW::AC1014) {
-        hb->putHandle(makeRefW(namedUcsHandle, DRW::DwgHardPointer));
-        hb->putHandle(makeRefW(baseUcsHandle, DRW::DwgHardPointer));
+        hb->putHandle(hardReference(namedUcsHandle));
+        hb->putHandle(hardReference(baseUcsHandle));
     }
     return buf->isGood() && sb->isGood() && hb->isGood();
 }

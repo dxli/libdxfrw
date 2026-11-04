@@ -2862,6 +2862,9 @@ public:
   bool ucsPerVP = false; /*!< R2000+ UCS-per-viewport flag (DWG-only) */
 
 private:
+  [[nodiscard]] bool encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                        dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                        bool typedNullReferences) const;
   DRW_DwgCmcColorMetadata m_ambientColorCmc;
   std::size_t m_dxfAmbientColorNameBytes {0u};
 };

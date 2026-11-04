@@ -900,6 +900,10 @@ Synthetic R2004+ BYBLOCK, BYLAYER and CONTINUOUS linetypes now preserve their
 witnessed missing-extension and typed-null xref states. With the separately
 probed plot-style graph, ODA advances to a VIEWPORT error; the graph is not
 yet integrated. See the [linetype receipt](docs/research/p6-synthetic-ltype-xdict-xref-2026-11-04.json).
+The synthetic R2004+ active VPORT now also uses witnessed missing-extension,
+xref and named/base UCS null roles through a private writer path. With the
+scratch plot-style graph, ODA reaches an APPID error; production graph
+integration and that later failure remain open. See the [VPORT receipt](docs/research/p6-synthetic-active-vport-null-roles-2026-11-04.json).
 AC1021 BLOCK_CONTROL now stages handles at its declared boundary; the reader
 also supports the witnessed historical inline profile under narrow checks.
 LibreDWG and an ODA-produced source confirm model/paper references, but ODA
