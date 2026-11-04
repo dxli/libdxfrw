@@ -37,7 +37,15 @@
         "padding_bits": 2,
         "peer_290": 0,
         "peer_uid": "{00000000-0000-0000-0000-000000000000}",
-        "revision_flag_bit": 228
+        "revision_flag_bit": 228,
+        "tentative_common_prefix": {
+          "acis_empty": 1,
+          "acis_empty_span": [
+            74,
+            75
+          ],
+          "common_end": 74
+        }
       },
       {
         "candidate_flag_starts": [
@@ -74,7 +82,15 @@
         "padding_bits": 2,
         "peer_290": 1,
         "peer_uid": "{7cf5f000-46fc-4a48-beef-14b47a01fb47}",
-        "revision_flag_bit": 292
+        "revision_flag_bit": 292,
+        "tentative_common_prefix": {
+          "acis_empty": 1,
+          "acis_empty_span": [
+            74,
+            75
+          ],
+          "common_end": 74
+        }
       },
       {
         "candidate_flag_starts": [
@@ -108,7 +124,15 @@
         "padding_bits": 0,
         "peer_290": 1,
         "peer_uid": "{4947ebc7-d030-324c-a853-307cea64983a}",
-        "revision_flag_bit": 310
+        "revision_flag_bit": 310,
+        "tentative_common_prefix": {
+          "acis_empty": 1,
+          "acis_empty_span": [
+            156,
+            157
+          ],
+          "common_end": 156
+        }
       }
     ]
   },
@@ -152,7 +176,22 @@
             "padding_bits": 1,
             "peer_290": 1,
             "peer_uid": "{88ee0c1a-9d9a-9a46-a5ff-88457c10dc07}",
-            "revision_flag_bit": 77
+            "revision_flag_bit": 77,
+            "tentative_common_prefix": {
+              "acis_empty": 0,
+              "acis_empty_span": [
+                74,
+                75
+              ],
+              "common_end": 74,
+              "oda_version": 6,
+              "oda_version_span": [
+                76,
+                86
+              ],
+              "unknown_bit": 1,
+              "version_crosses_peer_guid_boundary": true
+            }
           }
         ],
         "authored_input_dxf_sha256": "aa87ecea16fb7d3165505dac1a95aeca3883cadb5eeb72a76123602d311e1e1b",
@@ -191,7 +230,22 @@
             "padding_bits": 1,
             "peer_290": 1,
             "peer_uid": "{e63113ae-2253-0e43-99fc-6ff42ee34c71}",
-            "revision_flag_bit": 77
+            "revision_flag_bit": 77,
+            "tentative_common_prefix": {
+              "acis_empty": 0,
+              "acis_empty_span": [
+                74,
+                75
+              ],
+              "common_end": 74,
+              "oda_version": 43,
+              "oda_version_span": [
+                76,
+                86
+              ],
+              "unknown_bit": 1,
+              "version_crosses_peer_guid_boundary": true
+            }
           }
         ],
         "authored_input_dxf_sha256": "c0729ea2d1503e02ecc39c14276ec2beeff63b63d154728720cc8c6fafc57b65",
@@ -231,7 +285,22 @@
             "padding_bits": 1,
             "peer_290": 1,
             "peer_uid": "{5dfa6c60-4738-6a46-8834-a8dc467a37e7}",
-            "revision_flag_bit": 77
+            "revision_flag_bit": 77,
+            "tentative_common_prefix": {
+              "acis_empty": 0,
+              "acis_empty_span": [
+                74,
+                75
+              ],
+              "common_end": 74,
+              "oda_version": 24,
+              "oda_version_span": [
+                76,
+                86
+              ],
+              "unknown_bit": 1,
+              "version_crosses_peer_guid_boundary": true
+            }
           }
         ],
         "authored_input_dxf_sha256": "590ef0faf1beb8e63e04a71f21ad5e4f201d2bd002885f903659b675f16728aa",
@@ -268,7 +337,22 @@
             "padding_bits": 1,
             "peer_290": 1,
             "peer_uid": "{dbbfbe1c-1eba-bc46-9fe8-fd238b987fa1}",
-            "revision_flag_bit": 77
+            "revision_flag_bit": 77,
+            "tentative_common_prefix": {
+              "acis_empty": 0,
+              "acis_empty_span": [
+                74,
+                75
+              ],
+              "common_end": 74,
+              "oda_version": 7,
+              "oda_version_span": [
+                76,
+                86
+              ],
+              "unknown_bit": 1,
+              "version_crosses_peer_guid_boundary": true
+            }
           }
         ],
         "authored_input_dxf_sha256": "65d3d62e22e3e48c34669253020dfb8b4f48a91a400033893a4166a8df93667c",
@@ -281,8 +365,8 @@
   "reproduction": {
     "probe_build": "cmake --build BUILD --target libdxfrw_ac1027_acds_source_probe",
     "command": "python3 -B tests/ac1027_modeler_uid_span.py --source INPUT.dwg --source-sha256 INPUT_SHA256 --oda-dxf ODA_OUTPUT.dxf --oda-sha256 OUTPUT_SHA256 --probe BUILD/libdxfrw_ac1027_acds_source_probe",
-    "source_revision": "isolated snapshot df7d6017 plus probe print change; reader uses that snapshot and no production parser edits",
-    "probe_executable_sha256": "c543f69afd59775e912a443a1c9adaaf1c065b181f4901835c2227f052fcc3c9",
+    "source_revision": "isolated current-worktree CMake build; common-entity boundary comes from the same libdxfrw parser and is not independent source evidence",
+    "probe_executable_sha256": "d0c56a4c041e7dcc1fa28deb5c0574de4f591fc66c018cbc75adff11592f18a7",
     "peer": "ODA File Converter DXF output from the exact hash-pinned input; one converter, not an independent geometric/kernel validation",
     "fast_tests": "Generated zero and nonzero GUID controls verify exact bound, footer, following handle, bit mutations and truncation.",
     "physical_negative_controls": "A scratch probe wrapper flipped source 0x2E1 flag bit 292, GUID bit 293, footer bit 428, or following layer handle bit 439; each was rejected. An incorrect input SHA-256 was also rejected."
@@ -291,5 +375,10 @@
     "No general backward extraction is safe when multiple starts satisfy canonical encodings. Forward parsing the complete body or other conclusive source-bound evidence is needed.",
     "Unknown producer provenance for public source; the other four files share one ODA producer. No independent native FreeCAD or ACIS semantic qualification.",
     "Existing DWG-associated SAB shell refusal remains in effect. No source shell fields are automatically promoted and no DWG/DXF fixture was added."
-  ]
+  ],
+  "forward_trace": {
+    "source": "COMMON_END is obtained by rerunning the in-tree DRW_Entity::parseDwg on the retained frame. This is a tentative boundary, not independent proof.",
+    "oda_prefix_interpretation": "Using the ODA section 20.4.41 first-field order at that tentative boundary, the four generated controls yield ACIS empty=0 at bit 74, unknown=1 at bit 75, and BS versions 6/43/24/7 spanning bits 76\u201386. ODA specifies versions 1 or 2; the proposed version overlaps the peer-bound revision flag at bit 77. The 3 public-source entities instead yield empty=1, with 154/218/154 bits from common end to peer-bound revision start. Their unknown intervening source profile prevents unique forward decoding.",
+    "limitation": "The mismatch can arise from a boundary error, a distinct AcDs source profile, or another misunderstood field; it does not establish which interpretation is correct and does not promote the tentative GUID or flag as a production field."
+  }
 }

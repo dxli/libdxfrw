@@ -46,7 +46,7 @@ def candidates(bits, end):
     return sorted(set(result))
 
 
-def verify(raw, handle_bits, uid, flag, handles):
+def verify(raw, handle_bits, uid, flag, handles, common_end=None):
     bits = rawbits(raw)
     end = len(bits)-handle_bits
     require(0 < end <= len(bits), 'invalid object/handle boundary')
@@ -66,9 +66,24 @@ def verify(raw, handle_bits, uid, flag, handles):
     require(0 <= len(bits)-reader.pos < 8, 'unexpected trailing handle data')
     starts = candidates(bits, end)
     require(start in starts, 'peer-bound GUID missing from reverse candidates')
-    return {'object_end': end, 'revision_flag_bit': start, 'guid_bits': [start+1, end-3],
+    result = {'object_end': end, 'revision_flag_bit': start, 'guid_bits': [start+1, end-3],
             'footer_bits': [end-3, end], 'candidate_flag_starts': starts,
             'handle_spans': spans, 'padding_bits': len(bits)-reader.pos}
+    if common_end is not None:
+        require(0 <= common_end < start, 'invalid common-entity boundary')
+        b = Bits(raw)
+        b.pos = common_end
+        empty = b.take(1)
+        forward = {'common_end': common_end, 'acis_empty': empty,
+                   'acis_empty_span': [common_end, b.pos]}
+        if not empty:
+            forward['unknown_bit'] = b.take(1)
+            at = b.pos
+            forward['oda_version'] = b.short()
+            forward['oda_version_span'] = [at, b.pos]
+            forward['version_crosses_peer_guid_boundary'] = b.pos > start
+        result['tentative_common_prefix'] = forward
+    return result
 
 
 def projection(data):
@@ -140,7 +155,7 @@ def main():
     peer = projection(checked(args.oda_dxf, args.oda_sha256))
     run = subprocess.run([str(args.probe), str(args.source)], capture_output=True, check=True, timeout=60)
     require(len(run.stdout) <= MAX_BYTES, 'probe output too large')
-    frames = {}
+    frames, common_ends = {}, {}
     for line in run.stdout.decode('ascii').splitlines():
         row = line.split()
         if row and row[0] == 'REVISION_FRAME':
@@ -148,9 +163,14 @@ def main():
             identity = int(row[1], 16)
             require(identity not in frames, 'duplicate frame')
             frames[identity] = (bytes.fromhex(row[3]), int(row[2]))
-    require(set(frames) == set(peer), 'source/peer entity census mismatch')
+        elif row and row[0] == 'COMMON_END':
+            require(len(row) == 3, 'bad common end row')
+            identity = int(row[1], 16)
+            require(identity not in common_ends, 'duplicate common end')
+            common_ends[identity] = int(row[2])
+    require(set(frames) == set(peer) == set(common_ends), 'source/peer entity census mismatch')
     for identity, (kind, uid, flag, handles) in sorted(peer.items()):
-        result = verify(*frames[identity], uid, flag, handles)
+        result = verify(*frames[identity], uid, flag, handles, common_ends[identity])
         result.update(handle=f'{identity:X}', kind=kind, peer_uid=uid, peer_290=flag)
         print(json.dumps(result, sort_keys=True))
     print('PASS: peer-bound suffix and following handles; candidates are not semantic proof')

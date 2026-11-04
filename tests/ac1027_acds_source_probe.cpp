@@ -41,6 +41,17 @@ public:
     }
 };
 
+// The published modeler parser retains the frame but does not expose the
+// common-entity/body boundary. Re-run just that existing common parser for
+// this diagnostic; this is not independent confirmation of its boundary.
+class ModelerCommonProbe final : public DRW_ModelerGeometry {
+public:
+    bool commonEnd(dwgBuffer& data, std::uint32_t handleBits) {
+        dwgBuffer strings = data.forkIndependent();
+        return DRW_Entity::parseDwg(DRW::AC1027, &data, &strings, handleBits);
+    }
+};
+
 const char* modelerName(DRW::ETYPE type) {
     switch (type) {
     case DRW::REGION: return "REGION";
@@ -126,6 +137,11 @@ int main(int argc, char** argv) {
             std::cout << "REVISION_FRAME " << std::hex << modeler->handle
                       << std::dec << ' ' << modeler->m_bodyBitSize << ' ';
             hexBytes(modeler->m_rawBytes); std::cout << '\n';
+            dwgBuffer raw(modeler->m_rawBytes.data(), modeler->m_rawBytes.size());
+            ModelerCommonProbe common;
+            if (!common.commonEnd(raw, modeler->m_bodyBitSize)) return false;
+            std::cout << "COMMON_END " << std::hex << modeler->handle << std::dec << ' '
+                      << (raw.getPosition() * 8u + raw.getBitPos()) << '\n';
         }
         return true;
     };

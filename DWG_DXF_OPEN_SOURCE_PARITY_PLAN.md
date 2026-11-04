@@ -1060,7 +1060,9 @@ rendering semantics remain open.
   different shell values after ODA reimport; DWG-associated SAB output now
   requires explicitly supplied shell fields. The physical eight-name schema
   remains gated. Matching UID suffixes have multiple plausible field boundaries
-  in several physical frames, so resolve forward framing before decoding them.
+  in several physical frames. A forward trace from the current common-entity
+  boundary also overlaps the peer-bound revision field in four ODA files;
+  resolve the common/body boundary and source profile before decoding them.
   See the [shell-loss receipt](docs/research/p7-dwg-modeler-shell-loss-guard-2026-11-03.json)
   and [UID span receipt](docs/research/p7-ac1027-modeler-revision-uid-physical-spans-2026-11-03.json).
 - Complete source placement, units/transforms, topology, trims, periodicity and
