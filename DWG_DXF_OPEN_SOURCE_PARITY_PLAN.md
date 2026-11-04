@@ -827,6 +827,12 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 Audit only a current failing source/profile; do not revive historical defects whose
 receipt and code path already agree.
 
+Investigate the ODA AC1027 HEADER suffix generator across unrelated producers
+and versions. Seven same-producer saves, including controls authored separately
+from Cover, each have a 739-byte suffix with a position-wise matching or inverted
+lowest-bit pattern; this is not proof of padding or safe omission. Keep strict
+output refused; see the [cross-source receipt](docs/research/p6-ac1027-oda-header-suffix-cross-source-2026-11-04.json).
+
 SOLID, TRACE and 3DFACE input now refuse a fourth Z without fourth X/Y
 instead of silently replacing it. Valid triangle and default-Z inputs
 remain supported; see the [corner receipt](docs/research/p6-dxf-incomplete-fourth-corner-2026-11-04.json).
