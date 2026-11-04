@@ -1146,6 +1146,11 @@ qualify DWG/AcDs ownership. See the [preflight receipt](docs/research/p7-cad-ass
 
 ## P8 — consumer, platform, packaging and release gates
 
+The plot-style provider passes the LibreCAD_3 facade compile guard and the
+FreeCAD 1.1.4 converter subprocess contract in build-tree and installed CLI
+tests. Native application execution, binary ABI and Linux/Windows remain
+open; see the [consumer receipt](docs/research/p6-default-plotstyle-consumer-compatibility-2026-11-04.json).
+
 The SAB minimum-header helper is included in the canonical CMake and generated
 source-release inventories; the inventory check and refusal self-tests pass.
 Native source-release builds and platform qualification remain open.
