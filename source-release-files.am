@@ -459,6 +459,7 @@ EXTRA_DIST = \
     tests/dxf_legacy_extrusion_ezdxf.py \
     tests/dxf_light_rgb_421_tests.cpp \
     tests/dxf_lightlist_reference_tests.cpp \
+    tests/dxf_lightlist_resolver_snapshot_tests.cpp \
     tests/dxf_lwpoly_wcs_vertices_tests.cpp \
     tests/dxf_mline_source_dependency_tests.cpp \
     tests/dxf_no_raw_sections_tests.cpp \
@@ -682,6 +683,7 @@ EXTRA_DIST = \
     tools/audit_ac1027_block_control_peer.py \
     tools/audit_ac1027_header_suffix_compare.py \
     tools/audit_ac1027_light_preview.py \
+    tools/audit_ac1027_lightlist_snapshot.py \
     tools/audit_ac1027_planar_sab_geometry.py \
     tools/audit_ac1027_sab_brlcad_rays.py \
     tools/audit_dwg_hatch_ellipse_edge.py \
@@ -726,6 +728,7 @@ EXTRA_DIST = \
     tools/author_light_dxf_421.py \
     tools/author_r12_ellipse_wrap_source.py \
     tools/author_selected_ac1027_light.py \
+    tools/author_selected_ac1027_lightlist.py \
     tools/author_wipeout_ac1024_frame1.py \
     tools/author_wipeout_direct_nod.py \
     tools/bounded_process.py \

@@ -727,6 +727,120 @@ bool hasTypedProxyGraphics(const DRW_Entity& entity) noexcept {
     return entity.numProxyGraph != 0 || !entity.proxyGraphics.empty();
 }
 
+// DRW_Variant exposes its content pointer publicly. A consumer can redirect
+// it away from its owned storage, in which case its copy constructor's owned
+// value may differ. Refuse such a lossy snapshot rather than serialize it.
+bool sameLightListVariant(const DRW_Variant& a, const DRW_Variant& b) {
+    if (a.code() != b.code() || a.type() != b.type()
+        || a.isLayerRef() != b.isLayerRef()) return false;
+    switch (a.type()) {
+    case DRW_Variant::STRING:
+        return a.content.s && b.content.s && *a.content.s == *b.content.s;
+    case DRW_Variant::INTEGER: return a.i_val() == b.i_val();
+    case DRW_Variant::INTEGER64: return a.i64_val() == b.i64_val();
+    case DRW_Variant::DOUBLE: return a.d_val() == b.d_val();
+    case DRW_Variant::COORD:
+        return a.content.v && b.content.v && a.content.v->x == b.content.v->x
+            && a.content.v->y == b.content.v->y && a.content.v->z == b.content.v->z;
+    case DRW_Variant::BINARY:
+        return a.content.b && b.content.b && *a.content.b == *b.content.b;
+    default: return false;
+    }
+}
+bool sameLightListSnapshot(const DRW_LightList& original, const DRW_LightList& copy) {
+    if (original.appData.size() != copy.appData.size()
+        || original.extData.size() != copy.extData.size()) return false;
+    auto left = original.appData.cbegin();
+    auto right = copy.appData.cbegin();
+    for (; left != original.appData.cend(); ++left, ++right) {
+        if (left->size() != right->size()) return false;
+        auto a = left->cbegin(); auto b = right->cbegin();
+        for (; a != left->cend(); ++a, ++b)
+            if (!sameLightListVariant(*a, *b)) return false;
+    }
+    for (std::size_t i = 0; i < original.extData.size(); ++i) {
+        const auto* a = original.extData[i]; const auto* b = copy.extData[i];
+        if ((a == nullptr) != (b == nullptr)
+            || (a && !sameLightListVariant(*a, *b))) return false;
+    }
+    return true;
+}
+
+// Resolver callbacks may mutate their caller-owned LIGHTLIST. Keep the
+// in-flight record isolated, prohibit same-writer recursive emission, and
+// require one stable result per source reference throughout this record.
+struct LightListResolverContext {
+    const dxfRW* writer;
+    std::map<std::uint32_t, std::uint32_t> resolved;
+    bool resolving = false;
+    bool failed = false;
+    LightListResolverContext* previous;
+};
+thread_local LightListResolverContext* lightListResolverContext = nullptr;
+class LightListResolverScope final {
+public:
+    explicit LightListResolverScope(const dxfRW* writer)
+        : current{writer, {}, false, false, lightListResolverContext} {
+        lightListResolverContext = &current;
+    }
+    ~LightListResolverScope() noexcept { lightListResolverContext = current.previous; }
+    LightListResolverScope(const LightListResolverScope&) = delete;
+    LightListResolverScope& operator=(const LightListResolverScope&) = delete;
+private:
+    LightListResolverContext current;
+};
+LightListResolverContext* findLightListResolver(const dxfRW* writer) noexcept {
+    for (auto* scope = lightListResolverContext; scope; scope = scope->previous)
+        if (scope->writer == writer) return scope;
+    return nullptr;
+}
+class LightListCallbackScope final {
+public:
+    LightListCallbackScope(LightListResolverContext& context, bool& inspecting,
+                           bool& binary, int& ellipseParts,
+                           std::vector<DRW_RawDxfSection>& rawSections,
+                           std::vector<DRW_Group>& groups) noexcept
+        : context(context), inspecting(inspecting), binary(binary), ellipseParts(ellipseParts),
+          rawSections(rawSections), groups(groups), wasInspecting(inspecting), wasBinary(binary),
+          previousEllipseParts(ellipseParts), rawData(reinterpret_cast<std::uintptr_t>(rawSections.data())),
+          rawSize(rawSections.size()), rawCapacity(rawSections.capacity()),
+          groupData(reinterpret_cast<std::uintptr_t>(groups.data())),
+          groupSize(groups.size()), groupCapacity(groups.capacity()) {
+        context.resolving = true;
+        // Existing inline preflightDxfSetup() sees this even in old clients.
+        inspecting = true;
+    }
+    ~LightListCallbackScope() noexcept {
+        if (binary != wasBinary || ellipseParts != previousEllipseParts
+            || reinterpret_cast<std::uintptr_t>(rawSections.data()) != rawData || rawSections.size() != rawSize
+            || rawSections.capacity() != rawCapacity
+            || reinterpret_cast<std::uintptr_t>(groups.data()) != groupData
+            || groups.size() != groupSize || groups.capacity() != groupCapacity) context.failed = true;
+        binary = wasBinary;
+        ellipseParts = previousEllipseParts;
+        inspecting = wasInspecting;
+        context.resolving = false;
+    }
+    LightListCallbackScope(const LightListCallbackScope&) = delete;
+    LightListCallbackScope& operator=(const LightListCallbackScope&) = delete;
+private:
+    LightListResolverContext& context;
+    bool& inspecting;
+    bool& binary;
+    int& ellipseParts;
+    std::vector<DRW_RawDxfSection>& rawSections;
+    std::vector<DRW_Group>& groups;
+    bool wasInspecting;
+    bool wasBinary;
+    int previousEllipseParts;
+    std::uintptr_t rawData;
+    std::size_t rawSize;
+    std::size_t rawCapacity;
+    std::uintptr_t groupData;
+    std::size_t groupSize;
+    std::size_t groupCapacity;
+};
+
 struct LightPreviewContext {
     const dxfRW* writer;
     const DRW_Light* entity;
@@ -5827,7 +5941,9 @@ bool dxfRW::writeRequiredString(int code, const std::string& value) {
 }
 
 bool dxfRW::preflightDxfWrite() noexcept {
-    if (lightPreviewResolverActive(this) || m_dxfWriteInspecting || m_dxfWriteFinalizing || m_writeError || writer == nullptr || writer->hasWriteError()) {
+    const auto* lightListScope = findLightListResolver(this);
+    if ((lightListScope && (lightListScope->resolving || lightListScope->failed))
+        || lightPreviewResolverActive(this) || m_dxfWriteInspecting || m_dxfWriteFinalizing || m_writeError || writer == nullptr || writer->hasWriteError()) {
         m_writeError = true;
         return false;
     }
@@ -9116,7 +9232,28 @@ std::uint32_t dxfRW::resolveReference(std::uint32_t handle) const {
     if (handle == 0 || !m_referenceResolver)
         return handle;
     LightPreviewResolverScope lightScope(this);
-    return m_referenceResolver(handle);
+    auto* lightListScope = findLightListResolver(this);
+    if (!lightListScope)
+        return m_referenceResolver(handle);
+    if (lightListScope->resolving || lightListScope->failed) {
+        lightListScope->failed = true;
+        return 0u;
+    }
+    std::uint32_t result = 0u;
+    {
+        auto* self = const_cast<dxfRW*>(this);
+        LightListCallbackScope callback(*lightListScope, self->m_dxfWriteInspecting,
+                                        self->binFile, self->elParts,
+                                        self->m_rawDxfSections, self->m_groups);
+        result = m_referenceResolver(handle);
+    }
+    if (lightListScope->failed) return 0u;
+    const auto inserted = lightListScope->resolved.emplace(handle, result);
+    if (!inserted.second && inserted.first->second != result) {
+        lightListScope->failed = true;
+        return 0u;
+    }
+    return result;
 }
 
 bool dxfRW::writePoint(DRW_Point *ent) {
@@ -35207,6 +35344,17 @@ bool dxfRW::writeLightList(DRW_LightList *ent) {
                std::numeric_limits<std::int32_t>::max()))
         return failDxfWrite();
 
+    try {
+    // DRW_LightList's copy owns independent app-data, EED and member storage.
+    // Take it before any resolver call; callback mutations stay caller-owned.
+    std::unique_ptr<DRW_LightList> snapshot;
+    if (m_referenceResolver) {
+        snapshot = std::make_unique<DRW_LightList>(*ent);
+        if (!sameLightListSnapshot(*ent, *snapshot)) return failDxfWrite();
+        ent = snapshot.get();
+    }
+    LightListResolverScope resolverScope(this);
+
     std::uint32_t sourceAcLightDictionary = 0u;
     if (!ent->getAcLightDictionaryHandle(sourceAcLightDictionary)
         || sourceAcLightDictionary == 0u
@@ -35390,6 +35538,9 @@ bool dxfRW::writeLightList(DRW_LightList *ent) {
         return failDxfWrite();
     state.commit();
     return true;
+    } catch (...) {
+        return failDxfWrite();
+    }
 }
 
 bool dxfRW::writeSunStudy(DRW_SunStudy *ent) {

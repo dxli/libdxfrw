@@ -4985,3 +4985,12 @@ add_test(NAME libdxfrw_dwg_ac1027_block_control_boundary COMMAND libdxfrw_dwg_ac
 set_tests_properties(libdxfrw_dwg_ac1027_block_control_boundary PROPERTIES LABELS "dwg;fast;transaction;AC1027" TIMEOUT 30)
 add_test(NAME libdxfrw_ac1027_block_control_peer_audit COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/ac1027_block_control_peer_audit_tests.py)
 set_tests_properties(libdxfrw_ac1027_block_control_peer_audit PROPERTIES LABELS "dwg;fast;AC1027;peer" TIMEOUT 30)
+
+add_executable(libdxfrw_dxf_lightlist_resolver_snapshot_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dxf_lightlist_resolver_snapshot_tests.cpp)
+target_compile_features(libdxfrw_dxf_lightlist_resolver_snapshot_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dxf_lightlist_resolver_snapshot_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dxf_lightlist_resolver_snapshot_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dxf_lightlist_resolver_snapshot_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dxf_lightlist_resolver_snapshot COMMAND libdxfrw_dxf_lightlist_resolver_snapshot_tests)
+set_tests_properties(libdxfrw_dxf_lightlist_resolver_snapshot PROPERTIES LABELS "fast;dxf;lightlist;transaction" TIMEOUT 30)

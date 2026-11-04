@@ -475,6 +475,13 @@ output gates are met.
 
 ## P5 — rendering and TABLE
 
+LIGHTLIST resolver callbacks now operate on a validated deep snapshot; tested
+member and setup mutations, inconsistent resolutions and recursive writes fail
+or leave the emitted snapshot stable. Callback-time raw-section and GROUP
+transfer detection observes storage signatures only; swap-out/edit/swap-back,
+address reuse and in-place mutation are not detected. Broader graph closure
+remains open ([receipt](docs/research/p5-lightlist-resolver-snapshot-2026-11-04.json)).
+
 **FIELD output reference IDs:** `writeField` now rejects zero and
 `DRW::NoHandle` for child hard-owner and object soft-pointer identities, and
 preflights each remapped ID before emitting the FIELD record. Active type-64
