@@ -5106,3 +5106,16 @@ target_include_directories(libdxfrw_dxf_dictionary_late_hardowner_tests PRIVATE 
 target_link_libraries(libdxfrw_dxf_dictionary_late_hardowner_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dxf_dictionary_late_hardowner COMMAND libdxfrw_dxf_dictionary_late_hardowner_tests)
 set_tests_properties(libdxfrw_dxf_dictionary_late_hardowner PROPERTIES LABELS "fast;dxf;dictionary" TIMEOUT 30)
+
+add_executable(libdxfrw_dwg_ac1027_maintenance_header_tests ${CMAKE_CURRENT_SOURCE_DIR}/dwg_ac1027_maintenance_header_tests.cpp)
+target_compile_features(libdxfrw_dwg_ac1027_maintenance_header_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_ac1027_maintenance_header_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_ac1027_maintenance_header_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_ac1027_maintenance_header_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_ac1027_maintenance_header COMMAND libdxfrw_dwg_ac1027_maintenance_header_tests)
+set_tests_properties(libdxfrw_dwg_ac1027_maintenance_header PROPERTIES LABELS "dwg;fast;AC1027;transaction" TIMEOUT 30)
+
+add_test(NAME libdxfrw_ac1027_maintenance_header_audit COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/ac1027_maintenance_header_audit_tests.py)
+set_tests_properties(libdxfrw_ac1027_maintenance_header_audit PROPERTIES LABELS "dwg;fast;AC1027;peer" TIMEOUT 30)
+add_test(NAME libdxfrw_ac1027_header_geometry_peer COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/ac1027_header_geometry_peer_tests.py)
+set_tests_properties(libdxfrw_ac1027_header_geometry_peer PROPERTIES LABELS "dwg;fast;AC1027;peer" TIMEOUT 30)

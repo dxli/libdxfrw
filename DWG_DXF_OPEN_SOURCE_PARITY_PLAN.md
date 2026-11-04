@@ -897,6 +897,13 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+New AC1027 files now use a source-witnessed maintenance release and matching
+AuxHeader copies. Nine selected opt-in generated drawings converted through ODA
+and passed independent geometry, graph and checksum checks. The complete
+header tuple is a hybrid not yet witnessed in a physical source; broader
+producer, native application and whole-file qualification remain open
+([receipt](docs/research/p6-ac1027-maintenance-header-coherence-2026-11-04.json)).
+
 The dwg2dxf adapter converts per-record AC1024 DWG PDF underlay rotation to
 DXF degrees while retaining the public callback's documented radians and
 source identity. DGN/DWF and other revisions remain unqualified; original
@@ -910,28 +917,29 @@ coverage, native rendering and generated ODA acceptance remain open
 ([receipt](docs/research/p6-dwg-viewport-angle-units-2026-11-04.json)).
 
 The bounded synthetic AC1027 active VPORT now writes the three observed typed
-null handle roles. ODA converts only a diagnostic copy with a changed file
-header byte; the unmodified writer output still fails, so header and whole-file
-qualification remain open
+null handle roles. The original role audit converted only a diagnostic copy;
+the later maintenance correction permits the selected opt-in controls above,
+while broader header and whole-file qualification remain open
 ([receipt](docs/research/p6-ac1027-synthetic-vport-null-roles-2026-11-04.json)).
 
 DWG VIEW table twist angles now convert radians to the existing degree-valued
 DXF API and back. Consumers compensating for the former raw-radian callback
-must remove that workaround. VIEWPORT entity angles, broader producer coverage
-and generated ODA acceptance remain open
+must remove that workaround. Broader producer coverage and generated ODA
+acceptance for named VIEW records remain open
 ([receipt](docs/research/p6-dwg-view-angle-units-2026-11-04.json)).
 
 DWG VPORT table snap and twist angles now convert radians to the existing
 degree-valued DXF API and back. Consumers compensating for the former
-raw-radian callback must remove that workaround. VIEW and VIEWPORT entity
-angles, broader producer coverage and generated ODA acceptance remain open
+raw-radian callback must remove that workaround. Broader producer coverage and
+generated ODA acceptance for authored VPORT records remain open
 ([receipt](docs/research/p6-dwg-vport-angle-units-2026-11-04.json)).
 
 The explicit default-material and plotstyle opt-ins now cover the bounded
 AC1027 synthetic layer-0 graph and exact material frames. Source/peer controls
-verify selected fields and reference roles; ODA still stops at VPORT and the
-native material payload remains opaque. Other layers, native material meaning
-and whole-file support remain open
+verify selected fields and reference roles. The earlier diagnostic stopped at
+VPORT; later selected opt-in controls pass ODA after the maintenance correction,
+but the native material payload remains opaque. Other layers, native material
+meaning and broader whole-file support remain open
 ([receipt](docs/research/p6-ac1027-default-material-graph-optin-2026-11-04.json)).
 The existing six-version synthetic null-role control now matches the bounded
 AC1027 profile; caller and AC1032 expectations remain unchanged.
@@ -965,14 +973,15 @@ Audit only a current failing source/profile; do not revive historical defects wh
 receipt and code path already agree.
 
 For the exact empty AC1027 BLOCK_CONTROL profile, emit the absent-string and
-handle boundary at the observed bit position. ODA no longer reports that record
-as improperly read, but still rejects the complete generated drawing on later
-records. Preserve the distinction and investigate the next individual frame;
+handle boundary at the observed bit position. The earlier ODA diagnostic no
+longer reported that record as improperly read, but rejected later records.
+Later maintenance and VPORT changes enable the selected opt-in controls above;
+investigate remaining profiles without generalizing those results;
 AC1032 and other control profiles remain unqualified
 ([boundary receipt](docs/research/p6-ac1027-empty-block-control-boundary-2026-11-04.json)).
 The bounded empty AC1027 VIEW and UCS controls now use their observed bit
-boundary too; ODA no longer reports those two records as improperly read but
-still rejects the whole file at LAYER. Transaction controls cover one-shot
+boundary too; the earlier ODA diagnostic no longer reported those two records
+as improperly read but then rejected LAYER. Transaction controls cover one-shot
 allocation failures; persistent allocation failure during rollback remains a
 limit ([VIEW/UCS receipt](docs/research/p6-ac1027-empty-view-ucs-controls-2026-11-04.json)).
 

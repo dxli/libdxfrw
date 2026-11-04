@@ -359,6 +359,8 @@ tests/ac1027_acds_source_probe.cpp
 tests/ac1027_active_vport_peer_tests.py
 tests/ac1027_block_control_peer_audit_tests.py
 tests/ac1027_empty_view_ucs_peer_tests.py
+tests/ac1027_header_geometry_peer_tests.py
+tests/ac1027_maintenance_header_audit_tests.py
 tests/ac1027_material_peer_audit_tests.py
 tests/ac1027_modeler_uid_span.py
 tests/acds_delivery_tests.cpp
@@ -412,6 +414,7 @@ tests/dwg_ac1024_default_material_tests.cpp
 tests/dwg_ac1024_header_suffix_tests.cpp
 tests/dwg_ac1027_block_control_boundary_tests.cpp
 tests/dwg_ac1027_empty_view_ucs_controls_tests.cpp
+tests/dwg_ac1027_maintenance_header_tests.cpp
 tests/dwg_class_evidence_tests.cpp
 tests/dwg_class_section_wire_tests.cpp
 tests/dwg_class_source_tests.cpp
@@ -696,9 +699,12 @@ tools/audit_ac1024_vport_null_roles.py
 tools/audit_ac1027_active_vport_peer.py
 tools/audit_ac1027_block_control_peer.py
 tools/audit_ac1027_empty_view_ucs_peer.py
+tools/audit_ac1027_header_geometry_peer.py
 tools/audit_ac1027_header_suffix_compare.py
 tools/audit_ac1027_light_preview.py
 tools/audit_ac1027_lightlist_snapshot.py
+tools/audit_ac1027_maintenance_header.py
+tools/audit_ac1027_maintenance_source.py
 tools/audit_ac1027_material_peer.py
 tools/audit_ac1027_planar_sab_geometry.py
 tools/audit_ac1027_sab_brlcad_rays.py
@@ -862,6 +868,8 @@ tools/probe_ac1024_rastervariables_matcher.cpp
 tools/probe_ac1024_rastervariables_source.cpp
 tools/probe_ac1024_tilted_geometry.cpp
 tools/probe_ac1027_1032_writer_rejection.cpp
+tools/probe_ac1027_header_geometry.cpp
+tools/probe_ac1027_maintenance_native.cpp
 tools/probe_ac1027_source_sab_cqacis.py
 tools/probe_dwg_hatch_pattern.cpp
 tools/probe_dwg_hatch_unsupported_edges.cpp

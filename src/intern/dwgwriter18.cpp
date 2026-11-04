@@ -374,6 +374,9 @@ static std::vector<std::uint8_t> buildAuxHeaderContent(DRW::Version version,
                                                  const DRW_Header *header) {
     std::vector<std::uint8_t> v;
     const std::uint16_t rawVersion = auxHeaderRawVersion(version);
+    // New AC1027 drawings use the source-witnessed maintenance release 8.
+    // Keep the redundant AuxHeader copies consistent with file-header 0x0b.
+    const std::uint16_t maintenance = version == DRW::AC1027 ? 8u : 0u;
     if (rawVersion == 0)
         return v;
 
@@ -381,16 +384,16 @@ static std::vector<std::uint8_t> buildAuxHeaderContent(DRW::Version version,
     v.push_back(0x77);
     v.push_back(0x01);
     putRS(v, rawVersion);
-    putRS(v, 0);                       // maintenance version
+    putRS(v, maintenance);             // maintenance release version
     putRL(v, 1);                       // number of saves
     putRL(v, static_cast<std::uint32_t>(-1));
     putRS(v, 1);                       // saves part 1
     putRS(v, 0);                       // saves part 2
     putRL(v, 0);
     putRS(v, rawVersion);
-    putRS(v, 0);
+    putRS(v, maintenance);
     putRS(v, rawVersion);
-    putRS(v, 0);
+    putRS(v, maintenance);
     putRS(v, 0x0005);
     putRS(v, 0x0893);
     putRS(v, 0x0005);
@@ -442,7 +445,11 @@ static std::vector<std::uint8_t> buildFileHeader(std::uint64_t secPageMapAddr,
     std::vector<std::uint8_t> hdr(kR2004FileHeaderSize, 0);
 
     std::memcpy(hdr.data(), verStr, 6);
-    // Byte 11: maintenance version = 0 (already 0).
+    // Byte 11 is the format maintenance release, distinct from the
+    // application-maintenance value at byte 18. AC1027 release 8 matches
+    // the bounded source profile and the redundant AuxHeader copies.
+    if (std::strcmp(verStr, "AC1027") == 0)
+        hdr[11] = 8;
     // Byte 12: 0x00 (already 0).
     // Bytes 13-16: preview image position = 0 (no preview).
     // Bytes 17-18: app version / maintenance = 0. R2013 files use an
