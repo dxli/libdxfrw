@@ -907,9 +907,12 @@ The synthetic R2004+ active VPORT now also uses witnessed missing-extension,
 xref and named/base UCS null roles through a private writer path. With the
 scratch plot-style graph, ODA reaches an APPID error; production graph
 integration and that later failure remain open. See the [VPORT receipt](docs/research/p6-synthetic-active-vport-null-roles-2026-11-04.json).
-Synthetic R2004+ ACAD APPID now uses witnessed missing-extension and typed
-null-xref roles; with the scratch plot-style graph ODA advances to DIMSTYLE,
-which remains open. See the [APPID receipt](docs/research/p6-synthetic-acad-appid-xdict-xref-2026-11-04.json).
+Synthetic R2004+ ACAD APPID and STANDARD DIMSTYLE now use witnessed common
+handle roles; DIMSTYLE also preserves caller reactors and conditional
+extension slots. With an explicitly staged scratch plot-style graph, ODA
+successfully converts a generated AC1018 LINE. Automatic graph integration
+and broader profiles remain open. See the [DIMSTYLE receipt](docs/research/p6-dimstyle-common-handles-and-oda-line-2026-11-04.json)
+and [APPID receipt](docs/research/p6-synthetic-acad-appid-xdict-xref-2026-11-04.json).
 AC1021 BLOCK_CONTROL now stages handles at its declared boundary; the reader
 also supports the witnessed historical inline profile under narrow checks.
 LibreDWG and an ODA-produced source confirm model/paper references, but ODA

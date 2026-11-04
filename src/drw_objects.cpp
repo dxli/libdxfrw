@@ -8432,7 +8432,16 @@ bool DRW_Textstyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
 
 bool DRW_Dimstyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
                               dwgBufferW *strBuf, dwgBufferW *hdlBuf) const {
-    if (buf == nullptr || version < DRW::AC1015)
+    return encodeDwgForWriter(version, buf, strBuf, hdlBuf, false);
+}
+
+bool DRW_Dimstyle::encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                       dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                       bool typedNullReferences) const {
+    if (buf == nullptr || version < DRW::AC1015
+        || !dwgSafety::validReactorCount(numReactors)
+        || reactorHandles.size() > dwgSafety::MaxReactorCount
+        || xDictFlag > 1u)
         return false;
     const auto validUnsigned = [](int value) {
         return validUnsignedBitShort(value);
@@ -8651,20 +8660,27 @@ bool DRW_Dimstyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
     buf->putSBitShort(static_cast<std::int16_t>(dimlwe));
     buf->putBit(0); // flag0, the final bit of the table-record flags field
 
-    hb->putHandle(makeRefW(kDimstyleControl, DRW::DwgSoftPointer));
-    hb->putHandle(makeRefW(0, DRW::DwgSoftPointer));
-    hb->putHandle(makeNullHandleW()); // external-reference block
-    hb->putHandle(makeRefW(dimtxstyH.ref, DRW::DwgHardPointer));
+    const std::uint8_t effectiveXDictFlag = version > DRW::AC1015 ? xDictFlag : 0u;
+    putCommonObjectHandlePrefix(hb, kDimstyleControl, numReactors,
+                                effectiveXDictFlag, &reactorHandles, xDictHandle);
+    const auto hardReference = [typedNullReferences](std::uint32_t ref) {
+        dwgHandle value = makeRefW(ref, DRW::DwgHardPointer);
+        if (typedNullReferences && ref == 0u)
+            value.code = DRW::DwgHardPointer;
+        return value;
+    };
+    hb->putHandle(hardReference(0)); // external-reference block
+    hb->putHandle(hardReference(dimtxstyH.ref));
     if (version >= DRW::AC1015) {
-        hb->putHandle(makeRefW(dimldrblkH.ref, DRW::DwgHardPointer));
-        hb->putHandle(makeRefW(dimblkH.ref, DRW::DwgHardPointer));
-        hb->putHandle(makeRefW(dimblk1H.ref, DRW::DwgHardPointer));
-        hb->putHandle(makeRefW(dimblk2H.ref, DRW::DwgHardPointer));
+        hb->putHandle(hardReference(dimldrblkH.ref));
+        hb->putHandle(hardReference(dimblkH.ref));
+        hb->putHandle(hardReference(dimblk1H.ref));
+        hb->putHandle(hardReference(dimblk2H.ref));
     }
     if (version >= DRW::AC1021) {
-        hb->putHandle(makeRefW(dimltypeH.ref, DRW::DwgHardPointer));
-        hb->putHandle(makeRefW(dimltex1H.ref, DRW::DwgHardPointer));
-        hb->putHandle(makeRefW(dimltex2H.ref, DRW::DwgHardPointer));
+        hb->putHandle(hardReference(dimltypeH.ref));
+        hb->putHandle(hardReference(dimltex1H.ref));
+        hb->putHandle(hardReference(dimltex2H.ref));
     }
     return buf->isGood() && sb->isGood() && hb->isGood();
 }

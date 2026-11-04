@@ -2908,7 +2908,27 @@ bool dwgWriter15::emitAppIdRecord(std::uint32_t handle, const DRW_AppId& ai) {
 }
 
 bool dwgWriter15::emitDimstyleRecord(std::uint32_t handle, const DRW_Dimstyle& ds) {
-    return emitTableRecord(handle, ds, DRW::DwgDimStyleObjectType);
+    const bool synthetic = handle == DRW::DwgStandardDimstyleHandle
+        && !m_haveStandardDimstyle && m_version >= DRW::AC1018;
+    if (!synthetic)
+        return emitTableRecord(handle, ds, DRW::DwgDimStyleObjectType);
+    DRW_Dimstyle object = ds;
+    if (!prepareDwgCommonObjectState(object, m_version))
+        return false;
+    std::vector<DRW_Entity::PendingHandleRef> appIdRefs;
+    std::vector<DRW_Entity::PendingHandleRef> layerRefs;
+    if (!prepareTableEntryEed(object, appIdRefs, layerRefs))
+        return false;
+    dwgBufferW& body = beginObject(handle);
+    dwgBufferW *sb = nullptr, *hb = nullptr;
+    if (!emitRecordPreamble(body, m_version, DRW::DwgDimStyleObjectType, handle,
+                            m_objectStrings, m_objectHandles, sb, hb,
+                            object.reactorCount(), object.extensionDictionaryFlag(),
+                            object.hasDataStorageBinaryData(), &object.extData,
+                            &appIdRefs, &layerRefs, fileCodePageId())
+        || !object.encodeDwgForWriter(m_version, &body, sb, hb, true))
+        return false;
+    return finishTableRecord(handle);
 }
 
 bool dwgWriter15::emitAcDbPlaceholderObject(
@@ -6603,6 +6623,8 @@ bool dwgWriter15::writeDwgObjects() {
         DRW_Dimstyle standardDimstyle = m_haveStandardDimstyle
             ? m_standardDimstyle : DRW_Dimstyle{};
         standardDimstyle.name = "STANDARD";
+        if (!m_haveStandardDimstyle && m_version >= DRW::AC1018)
+            standardDimstyle.setDwgCommonObjectState(0, 1, false);
         standardDimstyle.syncStructToVars();
         if (!emitDimstyleRecord(DRW::DwgStandardDimstyleHandle,
                                 standardDimstyle))

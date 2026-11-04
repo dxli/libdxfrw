@@ -63,6 +63,12 @@ public:
 
 class DrwObjectEncodeTestAccess {
 public:
+    static bool encodeDimstyle(DRW_Dimstyle& style, DRW::Version version,
+                               dwgBufferW& data, dwgBufferW& strings,
+                               dwgBufferW& handles, bool typedNulls) {
+        return style.encodeDwgForWriter(version, &data, &strings, &handles,
+                                        typedNulls);
+    }
     static bool encodeAppId(DRW_AppId& appId, DRW::Version version,
                             dwgBufferW& data, dwgBufferW& strings,
                             dwgBufferW& handles, bool typedNull) {
@@ -15176,6 +15182,24 @@ public:
         ++lines;
         lineEnd = line.secPoint;
     }
+    void addDimStyle(const DRW_Dimstyle& style) override {
+        if (style.name == "STANDARD") {
+            ++standardDimstyles;
+            standardDimFlag = style.extensionDictionaryFlag();
+            standardDimTextStyle = style.dimtxstyH.ref;
+            standardDimTextCode = style.dimtxstyH.code;
+            standardDimArrowCode = style.dimblkH.code;
+            standardDimReactors = style.reactorHandles;
+            standardDimXdict = style.xDictHandle;
+        }
+    }
+    std::vector<std::uint32_t> standardDimReactors;
+    std::uint32_t standardDimXdict{0};
+    std::size_t standardDimstyles{0};
+    std::uint8_t standardDimFlag{0};
+    std::uint32_t standardDimTextStyle{0};
+    std::uint8_t standardDimTextCode{0};
+    std::uint8_t standardDimArrowCode{0};
     void addAppId(const DRW_AppId& appId) override {
         if (appId.name == "ACAD") {
             ++acadAppIds;
@@ -15939,7 +15963,105 @@ void testAcadAppIdDefaults(TestContext& t, DRW::Version version,
     }
 }
 
+template<class Writer>
+void testStandardDimstyleDefaults(TestContext& t, DRW::Version version,
+                                  const std::string& label) {
+    for (int mode = 0; mode < 5; ++mode) {
+        std::stringbuf output(std::ios::out | std::ios::binary);
+        std::ofstream stream;
+        static_cast<std::ostream&>(stream).rdbuf(&output);
+        DRW_Header header;
+        Writer writer(&stream, &header);
+        const bool prepared = writer.prepareDwgClassManifest()
+            && writer.writeFileHeaderStub() && writer.writeDwgHeader()
+            && writer.writeDwgClasses();
+        t.expect(prepared, "STANDARD DIMSTYLE preparation: " + label);
+        if (!prepared) continue;
+        DRW_Dimstyle caller;
+        caller.name = "STANDARD";
+        caller.setDwgCommonObjectState(0, mode == 2 ? 1u : 0u, false);
+        caller.dimtxstyH.ref = DRW::DwgStandardTextStyleHandle;
+        if (mode == 4) {
+            caller.reactorHandles.push_back(DRW::DwgLayer0Handle);
+            caller.xDictHandle = DRW::DwgAcadGroupDictionaryHandle;
+        }
+        if (mode == 3) caller.dimscale = std::numeric_limits<double>::quiet_NaN();
+        if (mode != 0)
+            t.expect(writer.addDimstyle(caller) == DRW::DwgStandardDimstyleHandle,
+                     "caller STANDARD DIMSTYLE registered: " + label);
+        if (mode == 3) {
+            const auto before = writer.buffer();
+            t.expect(!writer.writeDwgObjects() && writer.buffer() == before
+                         && output.str().empty(),
+                     "invalid STANDARD DIMSTYLE rolls back without output: " + label);
+            caller.dimscale = 1.0;
+            t.expect(writer.addDimstyle(caller) == DRW::DwgStandardDimstyleHandle,
+                     "corrected STANDARD DIMSTYLE registered on same writer: " + label);
+        }
+        DRW_Line line;
+        line.basePoint = DRW_Coord(1, 2, 3);
+        line.secPoint = DRW_Coord(4, 5, 6);
+        const bool published = writer.writeDwgObjects() && writer.encodeEntity(&line)
+            && writer.emitDeferredBlockControl() && writer.finalizeHeaderHandseed()
+            && writer.writeDwgHandles() && writer.writeSecondHeader() && writer.finalize();
+        t.expect(published, "STANDARD DIMSTYLE complete publication: " + label);
+        if (!published) continue;
+        const auto file = output.str();
+        std::vector<std::uint8_t> bytes(file.begin(), file.end());
+        HeaderPublicationSink sink;
+        dwgRW reader("");
+        const bool read = reader.readBuffer(bytes.data(), bytes.size(), &sink, false);
+        const bool synthesized = mode == 0 && version >= DRW::AC1018;
+        const auto expectedFlag = version >= DRW::AC1018 && (mode == 0 || mode == 2) ? 1u : 0u;
+        t.expect(read && sink.standardDimstyles == 1u && sink.lines == 1u
+                     && sink.standardDimFlag == expectedFlag
+                     && sink.standardDimTextStyle == (mode == 0 ? 0u : DRW::DwgStandardTextStyleHandle)
+                     && sink.standardDimTextCode == ((mode != 0 || synthesized) ? DRW::DwgHardPointer : 0u)
+                     && sink.standardDimArrowCode == (synthesized ? DRW::DwgHardPointer : 0u)
+                     && sink.standardDimReactors == (mode == 4
+                            ? std::vector<std::uint32_t>{DRW::DwgLayer0Handle}
+                            : std::vector<std::uint32_t>{})
+                     && sink.standardDimXdict == (mode == 4 ? DRW::DwgAcadGroupDictionaryHandle : 0u),
+                 "STANDARD DIMSTYLE common state and following LINE: " + label);
+    }
+    if (version >= DRW::AC1018) {
+        DRW_Dimstyle probe;
+        probe.setDwgCommonObjectState(0, 1, false);
+        dwgBufferW body, strings, handles;
+        const bool encoded = DrwObjectEncodeTestAccess::encodeDimstyle(
+            probe, version, body, strings, handles, true);
+        std::vector<std::uint8_t> expected{0x41u,0x0au};
+        expected.insert(expected.end(), version >= DRW::AC1021 ? 9u : 6u, 0x50u);
+        t.expect(encoded && handles.data() == expected,
+                 "synthetic DIMSTYLE exact typed null handles: " + label);
+    }
+    for (unsigned flag : {0u, 1u}) {
+        DRW_Dimstyle caller;
+        caller.setDwgCommonObjectState(1, static_cast<std::uint8_t>(flag), false);
+        caller.reactorHandles.push_back(0x70u);
+        caller.xDictHandle = flag == 0u ? 0x71u : 0u;
+        caller.dimtxstyH.ref = 0x13u;
+        dwgBufferW body, strings, handles;
+        const bool encoded = caller.encodeDwg(version, &body, &strings, &handles);
+        std::vector<std::uint8_t> expected{0x41u,0x0au,0x41u,0x70u};
+        if (version < DRW::AC1018 || flag == 0u) {
+            if (flag == 0u) { expected.push_back(0x31u); expected.push_back(0x71u); }
+            else expected.push_back(0x00u);
+        }
+        expected.push_back(0x00u); expected.push_back(0x51u); expected.push_back(0x13u);
+        expected.insert(expected.end(), version >= DRW::AC1021 ? 7u : 4u, 0x00u);
+        t.expect(encoded && handles.data() == expected,
+                 "caller DIMSTYLE reactor/xdictionary/refs alignment: " + label);
+    }
+}
+
 void testHeaderWriters(TestContext& t) {
+    testStandardDimstyleDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
+    testStandardDimstyleDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
+    testStandardDimstyleDefaults<dwgWriter21>(t, DRW::AC1021, "AC1021");
+    testStandardDimstyleDefaults<dwgWriter24>(t, DRW::AC1024, "AC1024");
+    testStandardDimstyleDefaults<dwgWriter27>(t, DRW::AC1027, "AC1027");
+    testStandardDimstyleDefaults<dwgWriter32>(t, DRW::AC1032, "AC1032");
     testAcadAppIdDefaults<dwgWriter15>(t, DRW::AC1015, "AC1015");
     testAcadAppIdDefaults<dwgWriter18>(t, DRW::AC1018, "AC1018");
     testAcadAppIdDefaults<dwgWriter21>(t, DRW::AC1021, "AC1021");

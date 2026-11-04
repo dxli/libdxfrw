@@ -2136,6 +2136,9 @@ public:
   std::array<DRW_DwgCmcColorMetadata, 3> dimColorCmc{};
 
 private:
+  [[nodiscard]] bool encodeDwgForWriter(DRW::Version version, dwgBufferW *buf,
+                                        dwgBufferW *strBuf, dwgBufferW *hdlBuf,
+                                        bool typedNullReferences) const;
   static constexpr std::uint8_t kDxfLegacyDimunit = 0x01;
   static constexpr std::uint8_t kDxfLegacyDimfit = 0x02;
   static constexpr std::uint8_t kDxfModernDimfrac = 0x04;
