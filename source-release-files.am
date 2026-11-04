@@ -94,6 +94,7 @@ EXTRA_DIST = \
     makefile.mingw \
     metadata/ac1024-candidate-fields-v1.json \
     metadata/ac1024-candidate-fields-v2.json \
+    metadata/ac1024-candidate-fields-v3-experiment.json \
     metadata/adaptation-allowlist.json \
     metadata/admitted-candidate-fields-v1.json \
     metadata/baseline-api-surface-v1.json \
@@ -594,13 +595,16 @@ EXTRA_DIST = \
     tests/writer_version_matrix_tests.cpp \
     tests/xrecord_payload_identity_controls.h \
     tests/xrecord_test_helpers.h \
+    tools/ac1024_rtext_successor_v3.cpp \
     tools/acis218_autocad_witness.lsp \
     tools/acis218_autocad_witness.md \
     tools/audit_dxf_table_values.py \
+    tools/audit_p9_rtext_native_history.py \
     tools/bounded_process.py \
     tools/build_semantic_adapter.py \
     tools/check_ac1024_candidate_fields.py \
     tools/check_ac1024_candidate_fields_v2.py \
+    tools/check_ac1024_rtext_successor_v3.py \
     tools/check_admitted_candidate_fields.py \
     tools/check_api_surface.py \
     tools/check_differential_debt.py \

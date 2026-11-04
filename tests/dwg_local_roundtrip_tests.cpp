@@ -5914,6 +5914,8 @@ public:
                 && rtext->m_rTextFlags == 1
                 && data.basePoint.x == 90.0
                 && data.basePoint.y == 91.0
+                && data.basePoint.z == 0.0
+                && std::abs(data.angle - 15.0) <= 1e-12
                 && data.height == 2.0;
         }
         if (data.text == "LOCAL_ARC_TEXT") {
