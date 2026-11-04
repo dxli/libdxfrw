@@ -349,6 +349,94 @@ public:
         return true;
     }
 
+    static bool checkR2007LayerStringBoundaries() {
+        DRW_Header header; dwgWriter21 writer(nullptr, &header);
+        DRW_TextCodec codec; codec.setVersion(DRW::AC1021, false);
+        const std::vector<std::pair<std::string, std::size_t>> names{
+            {"0", 1u}, {"Defpoints", 9u}, {"\xED\x95\x9C\xEA\xB8\x80", 2u},
+            {std::string(2100u, 'A'), 2100u}};
+        for (std::size_t n = 0; n < names.size(); ++n) {
+            DRW_Layer original; original.name = names[n].first;
+            original.setDwgCommonObjectState(0, 1, false);
+            original.xrefBlockHandle.code = DRW::DwgHardPointer;
+            original.plotStyleHandle.ref = 0x31u;
+            original.materialHandle.ref = 0x35u;
+            const std::uint32_t handle = 0x40u + static_cast<std::uint32_t>(n);
+            if (!writer.emitLayerRecord(handle, original) || original.name != names[n].first
+                || original.plotStyleHandle.ref != 0x31u || original.materialHandle.ref != 0x35u)
+                return false;
+            DRW::DwgObjectFrameReceipt receipt;
+            if (!writer.getLastDwgObjectFrame(receipt) || !receipt.valid
+                || receipt.objectHandle != handle || receipt.handleBitSize != 0u) return false;
+            CapturedObjectFrame frame;
+            if (!captureObjectFrame(writer, handle, frame)) return false;
+            dwgBuffer prefix(frame.bytes.data(), frame.bytes.size());
+            const auto bodySize = prefix.getModularShort();
+            const auto bodyOffset = prefix.getPosition();
+            if (!prefix.isGood() || bodySize <= 0 || bodyOffset + bodySize + 2u != frame.bytes.size()) return false;
+            std::vector<std::uint8_t> body(frame.bytes.begin() + static_cast<std::ptrdiff_t>(bodyOffset),
+                frame.bytes.begin() + static_cast<std::ptrdiff_t>(bodyOffset + bodySize));
+            dwgBuffer decoded(body.data(), body.size(), &codec);
+            if (decoded.getObjType(DRW::AC1021) != DRW::DwgLayerObjectType) return false;
+            const auto boundary = decoded.getRawLong32();
+            std::uint64_t stringStart = 0u, stringEnd = 0u;
+            if (!decoded.getR2007StringStreamBounds(boundary, stringStart, stringEnd)) return false;
+            const std::size_t units = names[n].second + 1u; // retained writer TU terminator
+            const auto stringBits = (units < 256u ? 10u : 18u) + 16u * units;
+            if (stringEnd - stringStart != stringBits
+                || boundary != stringEnd + (stringBits <= 0x7fffu ? 17u : 33u)) return false;
+            std::vector<DRW::DwgHandleWriteOccurrence> tokens;
+            for (const auto& occurrence : receipt.occurrences)
+                if (occurrence.stream == DRW::DwgObjectHandleStream::Handles) {
+                    if (occurrence.serializedSegment != DRW::DwgObjectSerializedSegment::Data) return false;
+                    tokens.push_back(occurrence.token);
+                }
+            if (tokens.size() != 5u || tokens.front().startBit != boundary
+                || tokens[0].code != DRW::DwgSoftPointer || tokens[0].reference != DRW::DwgLayerControlHandle
+                || tokens[1].code != DRW::DwgHardPointer || tokens[1].reference != 0u
+                || tokens[2].code != DRW::DwgHardPointer || tokens[2].reference != 0x31u
+                || tokens[3].code != DRW::DwgHardPointer || tokens[3].reference != 0x35u
+                || tokens[4].code != DRW::DwgHardPointer || tokens[4].reference != DRW::DwgLtypeContinuousHandle)
+                return false;
+            for (std::size_t i = 1; i < tokens.size(); ++i)
+                if (tokens[i - 1u].endBit != tokens[i].startBit) return false;
+            struct ReadableLayer : DRW_Layer { using DRW_Layer::parseDwg; } parsed;
+            const auto parse = [&parsed, &codec](std::vector<std::uint8_t>& bytes) {
+                dwgBuffer input(bytes.data(), bytes.size(), &codec);
+                return parsed.parseDwg(DRW::AC1021, &input, 0u) && input.isGood();
+            };
+            if (!parse(body) || parsed.name != original.name || parsed.handle != handle
+                || parsed.parentHandle != DRW::DwgLayerControlHandle
+                || parsed.plotStyleHandle.ref != 0x31u || parsed.materialHandle.ref != 0x35u
+                || parsed.lTypeH.ref != DRW::DwgLtypeContinuousHandle) return false;
+            // Rebuild the earlier writer's byte-rounded strings and aligned
+            // detached handles using this same exact payload and token tail.
+            dwgBufferW old;
+            const auto bitAt = [&body](std::uint64_t bit) {
+                return static_cast<std::uint8_t>((body[bit / 8u] >> (7u - bit % 8u)) & 1u);
+            };
+            for (std::uint64_t bit = 0u; bit < stringEnd; ++bit) old.putBit(bitAt(bit));
+            const auto stringBytePadding = (8u - (stringBits & 7u)) & 7u;
+            const auto trailerPadding = (7u - (stringStart & 7u)) & 7u;
+            for (std::uint64_t i = 0; i < stringBytePadding + trailerPadding; ++i) old.putBit(0u);
+            const auto oldStringBits = stringBits + stringBytePadding + trailerPadding;
+            if (oldStringBits <= 0x7fffu) old.putRawShort16(static_cast<std::uint16_t>(oldStringBits));
+            else {
+                old.putRawShort16(static_cast<std::uint16_t>(oldStringBits >> 15));
+                old.putRawShort16(static_cast<std::uint16_t>(0x8000u | (oldStringBits & 0x7fffu)));
+            }
+            old.putBit(1u); old.alignToByte();
+            const auto oldBoundary = old.bitCount();
+            for (std::uint64_t bit = boundary; bit < tokens.back().endBit; ++bit) old.putBit(bitAt(bit));
+            old.alignToByte(); old.patchRawLong32AtBit(10u, static_cast<std::uint32_t>(oldBoundary));
+            auto legacy = old.data();
+            if (!parse(legacy) || parsed.name != original.name || parsed.materialHandle.ref != 0x35u) return false;
+            auto truncated = body; truncated.pop_back();
+            if (parse(truncated) || !parse(body) || parsed.name != original.name) return false;
+        }
+        return true;
+    }
+
     static bool checkR2007GenericControlBoundaries(dwgWriter21& writer) {
         if (!writer.prepareDwgClassManifest() || !writer.writeFileHeaderStub()
             || !writer.writeDwgHeader() || !writer.writeDwgClasses()
@@ -36163,6 +36251,10 @@ int main(int argc, char** argv) {
             && DwgBlockRecordXrefWireTestAccess::checkBuiltInBlockModes(w32);
         std::cout << "DWG built-in block owner modes: "
                   << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    } else if (argc == 2 && std::string(argv[1]) == "--r2007-layer-string-boundaries") {
+        const bool passed = DwgBlockRecordXrefWireTestAccess::checkR2007LayerStringBoundaries();
+        std::cout << "DWG R2007 layer string boundaries: " << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
     } else if (argc == 2 && std::string(argv[1]) == "--r2007-generic-control-boundaries") {
         DRW_Header header; dwgWriter21 writer(nullptr, &header);

@@ -1237,6 +1237,10 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dwg_local_roundtrip --block-control-handle-boundary)
     add_test(NAME libdxfrw_dwg_r2007_generic_control_boundaries
         COMMAND libdxfrw_dwg_local_roundtrip --r2007-generic-control-boundaries)
+    add_test(NAME libdxfrw_dwg_r2007_layer_string_boundaries
+        COMMAND libdxfrw_dwg_local_roundtrip --r2007-layer-string-boundaries)
+    set_tests_properties(libdxfrw_dwg_r2007_layer_string_boundaries PROPERTIES
+        LABELS "fast;dwg;AC1021;generated;transaction")
     set_tests_properties(libdxfrw_dwg_r2007_generic_control_boundaries PROPERTIES
         LABELS "fast;dwg;AC1021;generated;transaction")
     set_tests_properties(libdxfrw_dwg_block_control_handle_boundary

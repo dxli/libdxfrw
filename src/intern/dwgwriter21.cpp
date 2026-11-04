@@ -928,15 +928,33 @@ void dwgWriter21::finishObject() {
     default: break;
     }
     const bool exactControlBoundary = expectedControlType != 0;
+    if (m_objectBody.data().empty()) {
+        m_writeError = true;
+        return;
+    }
+    dwgBuffer typeReader(m_objectBody.data().data(), m_objectBody.size());
+    const auto objectType = typeReader.getObjType(m_version);
+    if (!typeReader.isGood()) {
+        m_writeError = true;
+        return;
+    }
+    // A LAYER's string stream is bit-counted; its footer and handle tail
+    // immediately follow those bits, without rounding the string buffer.
+    // Keep the existing TU contents (including the writer's terminator).
+    const bool exactLayerBoundary = objectType == DRW::DwgLayerObjectType;
+    const bool mergedHandleBoundary = exactControlBoundary || exactLayerBoundary;
     if (exactControlBoundary) {
-        dwgBuffer typeReader(m_objectBody.data().data(), m_objectBody.size());
-        if (m_objectBody.data().empty() || m_objectHandles.data().empty()
+        if (m_objectHandles.data().empty()
             || !m_objectStrings.data().empty()
-            || typeReader.getObjType(m_version) != expectedControlType
-            || !typeReader.isGood()) {
+            || objectType != expectedControlType) {
             m_writeError = true;
             return;
         }
+    }
+    if (exactLayerBoundary && (m_objectStrings.data().empty()
+                               || m_objectHandles.data().empty())) {
+        m_writeError = true;
+        return;
     }
     // R2007 strings follow the scalar data at its bit boundary. Padding
     // before the strings makes a contiguous TV array (e.g. DICTIONARY)
@@ -953,7 +971,24 @@ void dwgWriter21::finishObject() {
         return;
     }
     const std::uint64_t mergedStringBaseBit = m_objectBody.bitCount();
-    if (!appendR2007StringStream(m_objectBody, m_objectStrings, false)) {
+    if (exactLayerBoundary) {
+        const auto stringBits = m_objectStrings.bitCount();
+        if (stringBits == 0u || stringBits > 0x7fffffffu) {
+            m_writeError = true;
+            return;
+        }
+        for (std::uint64_t i = 0; i < stringBits; ++i)
+            m_objectBody.putBit(static_cast<std::uint8_t>(
+                (m_objectStrings.data()[i / 8u] >> (7u - i % 8u)) & 1u));
+        if (stringBits <= 0x7fffu) {
+            m_objectBody.putRawShort16(static_cast<std::uint16_t>(stringBits));
+        } else {
+            m_objectBody.putRawShort16(static_cast<std::uint16_t>(stringBits >> 15));
+            m_objectBody.putRawShort16(static_cast<std::uint16_t>(
+                0x8000u | (stringBits & 0x7fffu)));
+        }
+        m_objectBody.putBit(1u);
+    } else if (!appendR2007StringStream(m_objectBody, m_objectStrings, false)) {
         m_writeError = true;
         m_objectStrings.reset();
         m_objectHandles.reset();
@@ -961,7 +996,7 @@ void dwgWriter21::finishObject() {
     }
 
     const std::uint64_t handleBaseBit = m_objectBody.bitCount();
-    if (exactControlBoundary) {
+    if (mergedHandleBoundary) {
         if (handleBaseBit > std::numeric_limits<std::uint32_t>::max()) {
             m_writeError = true;
             return;
@@ -973,7 +1008,7 @@ void dwgWriter21::finishObject() {
     const std::uint32_t dataBytes =
         static_cast<std::uint32_t>(m_objectBody.size());
     const std::uint32_t handleBytes =
-        static_cast<std::uint32_t>(exactControlBoundary ? 0u : m_objectHandles.size());
+        static_cast<std::uint32_t>(mergedHandleBoundary ? 0u : m_objectHandles.size());
     const std::uint64_t totalBytes64 =
         static_cast<std::uint64_t>(dataBytes) + handleBytes;
     if (dataBytes > std::numeric_limits<std::uint32_t>::max() / 8u
@@ -984,7 +1019,7 @@ void dwgWriter21::finishObject() {
         return;
     }
 
-    std::uint32_t bitCount = exactControlBoundary
+    std::uint32_t bitCount = mergedHandleBoundary
         ? static_cast<std::uint32_t>(handleBaseBit) : dataBytes * 8u;
     if (!m_objectBody.data().empty()) {
         const std::uint8_t bsCode = (m_objectBody.data()[0] >> 6) & 0x03;
@@ -1010,7 +1045,7 @@ void dwgWriter21::finishObject() {
         0xC0C1, frameStart, bodyStart + static_cast<std::size_t>(totalBytes64));
     m_buf.putRawShort16(crc);
     if (!captureLastDwgObjectHandleOccurrences(mergedStringBaseBit, handleBaseBit, true,
-                                               exactControlBoundary)) {
+                                               mergedHandleBoundary)) {
         m_buf.truncate(frameStart);
         m_writeError = true;
         m_currentHandle = 0;
