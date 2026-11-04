@@ -1820,25 +1820,69 @@ void dwgWriter15::rollbackCompoundWrite(
 
 bool dwgWriter15::stageLegacyModelChain(
     const std::vector<DRW_DwgLegacyModelChainEntry>& plan) {
+    return stageLegacyModelChain(plan, {});
+}
+
+const DRW_DwgLegacyPolylineChain* dwgWriter15::legacyPolylinePlan(
+    std::uint32_t parent) const noexcept {
+    const auto it = m_legacyPolylineChains.find(parent);
+    return it == m_legacyPolylineChains.end() ? nullptr : &it->second;
+}
+
+bool dwgWriter15::stageLegacyModelChain(
+    const std::vector<DRW_DwgLegacyModelChainEntry>& plan,
+    const std::vector<DRW_DwgLegacyPolylineChain>& polylines) {
     if (m_version != DRW::AC1015 || m_legacyModelChainActive
         || m_dwgTableRecordsComplete || !m_buf.data().empty() || plan.empty()
-        || plan.size() > dwgSafety::MaxOwnedObjectCount)
+        || plan.size() > dwgSafety::MaxOwnedObjectCount
+        || polylines.size() > plan.size())
         return false;
+    // Bound the complete graph before allocating indexes or copying chains.
+    std::size_t identityCount = plan.size();
+    for (const auto& polyline : polylines) {
+        if (identityCount >= dwgSafety::MaxDwgReadObjectCount
+            || polyline.vertexHandles.size()
+                > dwgSafety::MaxDwgReadObjectCount - identityCount - 1u)
+            return false;
+        identityCount += polyline.vertexHandles.size() + 1u;
+    }
     try {
         std::set<std::uint32_t> seen;
+        std::set<std::uint32_t> polylineParents;
         for (const auto& entry : plan) {
             if (entry.handle < 0x30u
                 || entry.handle == std::numeric_limits<std::uint32_t>::max()
                 || m_handles.isUnavailable(entry.handle)
                 || !seen.insert(entry.handle).second
                 || (entry.type != DRW::LINE && entry.type != DRW::CIRCLE
-                    && entry.type != DRW::ARC))
+                    && entry.type != DRW::ARC && entry.type != DRW::POLYLINE))
                 return false;
+            if (entry.type == DRW::POLYLINE) polylineParents.insert(entry.handle);
+        }
+        if (polylineParents.size() != polylines.size()) return false;
+        std::map<std::uint32_t, DRW_DwgLegacyPolylineChain> chains;
+        std::map<std::uint32_t, std::pair<std::uint32_t, std::size_t>> children;
+        for (const auto& polyline : polylines) {
+            if (polylineParents.count(polyline.parentHandle) == 0
+                || polyline.vertexHandles.size() < 2u
+                || polyline.vertexHandles.size() > dwgSafety::MaxOwnedObjectCount
+                || !chains.emplace(polyline.parentHandle, polyline).second)
+                return false;
+            for (std::size_t i = 0; i <= polyline.vertexHandles.size(); ++i) {
+                const auto handle = i == polyline.vertexHandles.size()
+                    ? polyline.seqendHandle : polyline.vertexHandles[i];
+                if (handle < 0x30u || handle == std::numeric_limits<std::uint32_t>::max()
+                    || m_handles.isUnavailable(handle) || !seen.insert(handle).second
+                    || !children.emplace(handle, std::make_pair(polyline.parentHandle, i)).second)
+                    return false;
+            }
         }
         auto savedHandles = m_handles;
         try {
-            for (const auto& entry : plan) m_handles.reserveForWrite(entry.handle);
+            for (const auto handle : seen) m_handles.reserveForWrite(handle);
             m_legacyModelChain = plan;
+            m_legacyPolylineChains = std::move(chains);
+            m_legacyPolylineChildOwners = std::move(children);
             m_legacyModelChainHandles = std::move(seen);
         } catch (...) {
             m_handles = std::move(savedHandles);
@@ -1855,6 +1899,10 @@ bool dwgWriter15::emitDeferredBlockControl() {
             || m_modelSpaceEntityHandles.size() != m_legacyModelChain.size()
             || !m_paperSpaceEntityHandles.empty() || !m_userBlocks.empty()))
         return false;
+    if (m_legacyModelChainActive) {
+        for (const auto& entry : m_legacyPolylineChains)
+            if (!hasEmittedDwgObjectHandle(entry.second.seqendHandle)) return false;
+    }
     if (m_blockControlEmitted)
         return true;
     if (m_activeUserBlockRecordHandle != 0)
@@ -6720,22 +6768,51 @@ bool dwgWriter15::encodeEntity(DRW_Entity *ent) {
     if (ent == nullptr || objectWriteFailed() || m_blockControlEmitted)
         return false;
     std::uint32_t legacyPrevious = 0, legacyNext = 0;
+    const auto legacyChild = m_legacyPolylineChildOwners.find(ent->handle);
+    const bool plannedChild = m_legacyModelChainActive
+        && legacyChild != m_legacyPolylineChildOwners.end();
     if (m_legacyModelChainActive) {
-        const std::size_t index = m_modelSpaceEntityHandles.size();
-        const bool supportedConcreteType =
-            (ent->eType == DRW::LINE && typeid(*ent) == typeid(DRW_Line))
-            || (ent->eType == DRW::CIRCLE && typeid(*ent) == typeid(DRW_Circle))
-            || (ent->eType == DRW::ARC && typeid(*ent) == typeid(DRW_Arc));
-        if (m_legacyModelChainConflict || index >= m_legacyModelChain.size()
-            || ent->handle != m_legacyModelChain[index].handle
-            || ent->eType != m_legacyModelChain[index].type
-            || !supportedConcreteType
-            || ent->parentHandle != DRW::NoHandle || ent->space != DRW::ModelSpace) {
-            m_legacyModelChainConflict = true;
-            return false;
+        if (plannedChild) {
+            const auto parent = legacyChild->second.first;
+            const auto* chain = legacyPolylinePlan(parent);
+            const std::size_t index = legacyChild->second.second;
+            const bool isEnd = chain != nullptr && index == chain->vertexHandles.size();
+            const bool supported = isEnd
+                ? ent->eType == DRW::SEQEND && typeid(*ent) == typeid(DRW_SeqEnd)
+                : ent->eType == DRW::VERTEX && typeid(*ent) == typeid(DRW_Vertex);
+            if (m_legacyModelChainConflict || !m_legacyPolylineWriting || chain == nullptr
+                || index > chain->vertexHandles.size() || !supported || ent->parentHandle != parent || ent->space != DRW::ModelSpace
+                || m_modelSpaceEntityHandles.empty() || m_modelSpaceEntityHandles.back() != parent
+                || !hasEmittedDwgObjectHandle(parent) || hasEmittedDwgObjectHandle(ent->handle)
+                || (index != 0u && !hasEmittedDwgObjectHandle(chain->vertexHandles[index - 1u]))) {
+                m_legacyModelChainConflict = true;
+                return false;
+            }
+            if (!isEnd) {
+                if (index != 0u) legacyPrevious = chain->vertexHandles[index - 1u];
+                if (index + 1u < chain->vertexHandles.size()) legacyNext = chain->vertexHandles[index + 1u];
+            }
+        } else {
+            const std::size_t index = m_modelSpaceEntityHandles.size();
+            const bool supportedConcreteType =
+                (ent->eType == DRW::LINE && typeid(*ent) == typeid(DRW_Line))
+                || (ent->eType == DRW::CIRCLE && typeid(*ent) == typeid(DRW_Circle))
+                || (ent->eType == DRW::ARC && typeid(*ent) == typeid(DRW_Arc))
+                || (ent->eType == DRW::POLYLINE && typeid(*ent) == typeid(DRW_Polyline)
+                    && m_legacyPolylineWriting && legacyPolylinePlan(ent->handle) != nullptr);
+            const auto* prior = index == 0u || index > m_legacyModelChain.size() ? nullptr
+                : legacyPolylinePlan(m_legacyModelChain[index - 1u].handle);
+            if (m_legacyModelChainConflict || index >= m_legacyModelChain.size()
+                || ent->handle != m_legacyModelChain[index].handle
+                || ent->eType != m_legacyModelChain[index].type
+                || !supportedConcreteType || (prior != nullptr && !hasEmittedDwgObjectHandle(prior->seqendHandle))
+                || ent->parentHandle != DRW::NoHandle || ent->space != DRW::ModelSpace) {
+                m_legacyModelChainConflict = true;
+                return false;
+            }
+            if (index != 0u) legacyPrevious = m_legacyModelChain[index - 1u].handle;
+            if (index + 1u < m_legacyModelChain.size()) legacyNext = m_legacyModelChain[index + 1u].handle;
         }
-        if (index != 0u) legacyPrevious = m_legacyModelChain[index - 1u].handle;
-        if (index + 1u < m_legacyModelChain.size()) legacyNext = m_legacyModelChain[index + 1u].handle;
     }
 
     m_lastEntityWriteCheckpointValid = false;
@@ -6826,6 +6903,12 @@ bool dwgWriter15::encodeEntity(DRW_Entity *ent) {
     if (!canRecordBlockOwnedEntity(*ent))
         return fail();
 
+    struct PlannedFrameScope {
+        bool& flag;
+        bool previous;
+        PlannedFrameScope(bool& value, bool active) : flag(value), previous(value) { if (active) flag = true; }
+        ~PlannedFrameScope() { flag = previous; }
+    } plannedFrame(m_legacyPlannedFrameWriting, m_legacyModelChainActive);
     frameStarted = true;
     dwgBufferW& body = beginObject(handle);
     bool ok = false;
@@ -6855,10 +6938,10 @@ bool dwgWriter15::encodeEntity(DRW_Entity *ent) {
     if (objectWriteFailed())
         return fail();
 
-    if (!recordBlockOwnedEntity(*ent, &checkpoint.blockOwnerHandle))
+    if (!plannedChild && !recordBlockOwnedEntity(*ent, &checkpoint.blockOwnerHandle))
         return fail();
     checkpoint.entityHandle = ent->handle;
-    checkpoint.blockOwnedEntityRecorded = true;
+    checkpoint.blockOwnedEntityRecorded = !plannedChild;
     if (!recordBlockInsertReference(*ent))
         return fail();
     if (const auto* insert = dynamic_cast<const DRW_Insert*>(ent)) {
@@ -8500,6 +8583,12 @@ std::uint16_t dwgWriter15::fileCodePageId() const {
 }
 
 void dwgWriter15::finishObject() {
+    if (m_legacyModelChainActive && isLegacyModelChainHandle(m_currentHandle)
+        && !m_legacyPlannedFrameWriting) {
+        m_legacyModelChainConflict = true;
+        m_frameWriteError = true;
+        return;
+    }
     // For AC1015 non-entity objects the first handle-stream token is the
     // common owner (§20.1); some object codecs use hard ownership there.
     // A planned model-space entity cannot also own an unrelated object in

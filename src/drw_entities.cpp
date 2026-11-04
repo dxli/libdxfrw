@@ -29364,16 +29364,29 @@ bool DRW_Polyline::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_
 
     dwgBufferW *hb = (handleBuf != nullptr) ? handleBuf : buf;
 
-    if (version < DRW::AC1018) {
-        // R2000-: first/last vertex handles (absolute hard pointers).
-        putAbsHandle(hb, vertlist.empty() ? 0u : vertlist.front()->handle);
-        putAbsHandle(hb, vertlist.empty() ? 0u : vertlist.back()->handle);
+    std::uint32_t legacyPrevious = 0, legacyNext = 0;
+    const bool plannedLegacy = version == DRW::AC1015
+        && ScopedDwgLegacyEntityLinks::lookup(hb, legacyPrevious, legacyNext);
+    if (plannedLegacy) {
+        // ODA §20.4.16–17: legacy first/last vertices are soft pointers;
+        // the separate SEQEND is a hard owner.
+        dwgHandle first, last, seqEnd;
+        first.code = last.code = DRW::DwgSoftPointer;
+        first.ref = vertlist.empty() ? 0u : vertlist.front()->handle;
+        last.ref = vertlist.empty() ? 0u : vertlist.back()->handle;
+        seqEnd.code = DRW::DwgHardOwnership;
+        seqEnd.ref = seqEndH.ref;
+        hb->putHandle(first); hb->putHandle(last); hb->putHandle(seqEnd);
     } else {
-        // R2004+: one handle per vertex.
-        for (const auto& v : vertlist)
-            putAbsHandle(hb, v ? v->handle : 0u);
+        if (version < DRW::AC1018) {
+            putAbsHandle(hb, vertlist.empty() ? 0u : vertlist.front()->handle);
+            putAbsHandle(hb, vertlist.empty() ? 0u : vertlist.back()->handle);
+        } else {
+            for (const auto& v : vertlist)
+                putAbsHandle(hb, v ? v->handle : 0u);
+        }
+        putAbsHandle(hb, seqEndH.ref);
     }
-    putAbsHandle(hb, seqEndH.ref);
 
     return true;
 }

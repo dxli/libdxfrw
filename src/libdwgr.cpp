@@ -21,6 +21,7 @@
 #include <exception>
 #include <limits>
 #include <sstream>
+#include <type_traits>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -48,6 +49,14 @@
 #include "intern/dwgutil.h"
 
 #define FIRSTHANDLE 48
+
+namespace {
+thread_local bool g_throwNextLegacyPolylineForTest = false;
+thread_local bool g_throwNextLegacyPolylineLateForTest = false;
+}
+// Internal test seams: no dwgRW or consumer class layout changes.
+void drwThrowNextLegacyPolylineForTest() { g_throwNextLegacyPolylineForTest = true; }
+void drwThrowNextLegacyPolylineLateForTest() { g_throwNextLegacyPolylineLateForTest = true; }
 
 namespace {
 
@@ -514,8 +523,8 @@ struct dwgRW::DwgEntityWriteState {
     std::uint32_t objSize {0};
     std::uint64_t dwgDataEndBit {0};
     std::int16_t oType {0};
-    std::vector<std::pair<std::size_t, std::uint32_t>> eedAppIdRefs;
-    std::vector<std::pair<std::size_t, std::uint32_t>> eedLayerRefs;
+    std::vector<DRW_Entity::PendingHandleRef> eedAppIdRefs;
+    std::vector<DRW_Entity::PendingHandleRef> eedLayerRefs;
     std::uint16_t eedCodePage {30};
 
     bool hasInsertState {false};
@@ -644,12 +653,8 @@ dwgRW::DwgEntityWriteState dwgRW::captureEntityWriteState(
     state.objSize = entity->objSize;
     state.dwgDataEndBit = entity->dwgDataEndBit;
     state.oType = entity->oType;
-    state.eedAppIdRefs.reserve(entity->dwgEedAppIdWriteRefs.size());
-    for (const auto& ref : entity->dwgEedAppIdWriteRefs)
-        state.eedAppIdRefs.emplace_back(ref.indexInExtData, ref.handleRef);
-    state.eedLayerRefs.reserve(entity->dwgEedLayerWriteRefs.size());
-    for (const auto& ref : entity->dwgEedLayerWriteRefs)
-        state.eedLayerRefs.emplace_back(ref.indexInExtData, ref.handleRef);
+    state.eedAppIdRefs = entity->dwgEedAppIdWriteRefs;
+    state.eedLayerRefs = entity->dwgEedLayerWriteRefs;
     state.eedCodePage = entity->dwgEedCodePage;
 
     if (auto *insert = dynamic_cast<DRW_Insert *>(entity)) {
@@ -733,12 +738,8 @@ void dwgRW::restoreEntityWriteState(const DwgEntityWriteState& state) {
     entity->objSize = state.objSize;
     entity->dwgDataEndBit = state.dwgDataEndBit;
     entity->oType = state.oType;
-    entity->dwgEedAppIdWriteRefs.clear();
-    for (const auto& ref : state.eedAppIdRefs)
-        entity->dwgEedAppIdWriteRefs.push_back({ref.first, ref.second});
-    entity->dwgEedLayerWriteRefs.clear();
-    for (const auto& ref : state.eedLayerRefs)
-        entity->dwgEedLayerWriteRefs.push_back({ref.first, ref.second});
+    entity->dwgEedAppIdWriteRefs = state.eedAppIdRefs;
+    entity->dwgEedLayerWriteRefs = state.eedLayerRefs;
     entity->dwgEedCodePage = state.eedCodePage;
 
     if (state.hasInsertState) {
@@ -1752,10 +1753,16 @@ bool dwgRW::write(DRW_Interface *interface_, DRW::Version ver, bool bin) {
     iface->writeDwgClasses();
     // Plan legacy entity neighbors before any graph allocates output handles.
     auto* legacyChainProvider = dynamic_cast<DRW_DwgLegacyModelChainProvider*>(iface);
+    auto* legacyPolylineProvider = dynamic_cast<DRW_DwgLegacyPolylineChainProvider*>(iface);
+    if (!m_requiredWriteFailure && legacyPolylineProvider && !legacyChainProvider)
+        markDwgWriteFailure();
     if (!m_requiredWriteFailure && legacyChainProvider) {
         auto* native = dynamic_cast<dwgWriter15*>(writer.get());
+        const auto polylines = legacyPolylineProvider
+            ? legacyPolylineProvider->dwgLegacyPolylineChains()
+            : std::vector<DRW_DwgLegacyPolylineChain>{};
         if (native == nullptr || !native->stageLegacyModelChain(
-                legacyChainProvider->dwgLegacyModelChain()))
+                legacyChainProvider->dwgLegacyModelChain(), polylines))
             markDwgWriteFailure();
     }
 
@@ -2536,9 +2543,88 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
             mutations.push_back(captureEntityWriteState(vertex.get()));
     }
     auto *objectWriter = dynamic_cast<dwgWriter15 *>(writer.get());
-    bool useEntityFrameBatchRollback = objectWriter != nullptr
+    const bool legacyChain = objectWriter != nullptr && objectWriter->legacyModelChainActive();
+    const DRW_DwgLegacyPolylineChain* legacyPlan = legacyChain
+        ? objectWriter->legacyPolylinePlan(ent->handle) : nullptr;
+    if (legacyChain) {
+        const bool is3d = (ent->flags & 8) != 0;
+        if (legacyPlan == nullptr || ent->space != DRW::ModelSpace
+            || ent->parentHandle != DRW::NoHandle || (ent->flags & ~(1 | 8)) != 0
+            || ent->seqEndEntity != nullptr || ent->curvetype != 0 || ent->basePoint.x != 0.0 || ent->basePoint.y != 0.0
+            || ent->vertexcount != 0 || ent->facecount != 0 || ent->smoothM != 0 || ent->smoothN != 0
+            || (is3d && (ent->basePoint.z != 0.0 || ent->extPoint.x != 0.0
+                         || ent->extPoint.y != 0.0 || ent->extPoint.z != 1.0
+                         || ent->defstawidth != 0.0 || ent->defendwidth != 0.0
+                         || ent->thickness != 0.0))
+            || ent->vertlist.size() != legacyPlan->vertexHandles.size()
+            || (ent->dwgSeqEndHandle() != 0u
+                && ent->dwgSeqEndHandle() != legacyPlan->seqendHandle))
+            return recordWriteResult(WriteSkipKind::Entity, false);
+        for (std::size_t i = 0; i < ent->vertlist.size(); ++i) {
+            const auto& vertex = ent->vertlist[i];
+            if (!vertex || vertex->handle != legacyPlan->vertexHandles[i]
+                || (vertex->parentHandle != DRW::NoHandle
+                    && vertex->parentHandle != ent->handle)
+                || vertex->space != DRW::ModelSpace || vertex->identifier != 0
+                || vertex->vindex1 != 0 || vertex->vindex2 != 0
+                || vertex->vindex3 != 0 || vertex->vindex4 != 0
+                || (is3d ? ((vertex->flags != 0 && vertex->flags != 32)
+                             || vertex->stawidth != 0.0 || vertex->endwidth != 0.0
+                             || vertex->bulge != 0.0 || vertex->tgdir != 0.0)
+                         : (vertex->flags != 0 || vertex->stawidth < 0.0
+                            || vertex->basePoint.z != ent->basePoint.z)))
+                return recordWriteResult(WriteSkipKind::Entity, false);
+        }
+    }
+    if (legacyChain && objectWriter->m_legacyPolylineWriting)
+        return recordWriteResult(WriteSkipKind::Entity, false);
+    struct LegacyPolylineScope {
+        bool* active;
+        ~LegacyPolylineScope() { if (active != nullptr) *active = false; }
+    } legacyScope{legacyChain ? &objectWriter->m_legacyPolylineWriting : nullptr};
+    if (legacyScope.active != nullptr) *legacyScope.active = true;
+    bool useEntityFrameBatchRollback = !legacyChain && objectWriter != nullptr
         && writer->supportsLastEntityWriteRollback();
     dwgWriter::CompoundWriteCheckpoint checkpoint;
+    if (legacyChain) checkpoint = writer->checkpointCompoundWrite();
+    const bool tracksMutations = legacyChain && !m_dwgWriteTransactions.empty()
+        && m_dwgWriteTransactions.back()->trackCallerMutations;
+    const std::size_t originalMutationCount = tracksMutations
+        ? m_dwgWriteTransactions.back()->entityMutations.size() : 0u;
+    const auto undoLegacyException = [&]() noexcept {
+        try { writer->rollbackCompoundWrite(checkpoint); }
+        catch (...) { writer->markObjectWriteFailure(); }
+        // POLYLINE/VERTEX snapshots contain no image or INSERT state. Move
+        // their saved EED vectors aside so primitive restoration needs no
+        // allocation, then swap the complete original raw references back.
+        for (auto it = mutations.rbegin(); it != mutations.rend(); ++it) {
+            auto appRefs = std::move(it->eedAppIdRefs);
+            auto layerRefs = std::move(it->eedLayerRefs);
+            try { restoreEntityWriteState(*it); }
+            catch (...) { writer->markObjectWriteFailure(); }
+            if (it->entity != nullptr) {
+                it->entity->dwgEedAppIdWriteRefs.swap(appRefs);
+                it->entity->dwgEedLayerWriteRefs.swap(layerRefs);
+            }
+        }
+        if (tracksMutations && !m_dwgWriteTransactions.empty()) {
+            auto& tracked = m_dwgWriteTransactions.back()->entityMutations;
+            if (tracked.size() >= originalMutationCount) tracked.resize(originalMutationCount);
+        }
+        m_lastWriteTransaction.reset();
+        m_lastDwgObjectFrame = {};
+        m_lastDwgObjectFrameValid = false;
+        m_lastDwgCompoundEntityWriteReceipt = {};
+        markDwgWriteFailure();
+    };
+    struct LegacyExceptionGuard {
+        const decltype(undoLegacyException)& undo;
+        bool enabled;
+        int depth;
+        ~LegacyExceptionGuard() noexcept {
+            if (enabled && std::uncaught_exceptions() > depth) undo();
+        }
+    } exceptionGuard{undoLegacyException, legacyChain, std::uncaught_exceptions()};
     std::vector<dwgWriter15::EntityFrameCheckpoint> frameCheckpoints;
     if (useEntityFrameBatchRollback)
         frameCheckpoints.reserve(ent->vertlist.size() + 2u);
@@ -2602,7 +2688,7 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
             return fail();
     }
     DRW_SeqEnd seqEnd;
-    seqEnd.handle = writer->allocNextHandle();
+    seqEnd.handle = legacyChain ? legacyPlan->seqendHandle : writer->allocNextHandle();
     seqEnd.parentHandle = ent->handle;
     seqEnd.space = ent->space;
     if (seqEnd.handle == ent->handle
@@ -2630,7 +2716,7 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
     if (useEntityFrameBatchRollback
         && hasClassAssociatedFrame(seqEnd.handle))
         useEntityFrameBatchRollback = false;
-    if (!useEntityFrameBatchRollback)
+    if (!useEntityFrameBatchRollback && !legacyChain)
         checkpoint = writer->checkpointCompoundWrite();
 
     // The parent must be the first entry in a modern BLOCK_RECORD ownership
@@ -2675,6 +2761,10 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
             return fail();
         }
     }
+    if (legacyChain && g_throwNextLegacyPolylineForTest) {
+        g_throwNextLegacyPolylineForTest = false;
+        throw std::bad_alloc();
+    }
     if (consumeCompoundSeqEndFailureForTest()
         || !writer->encodeEntity(&seqEnd))
         return fail();
@@ -2688,6 +2778,31 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         return fail();
     }
     receipt.valid = true;
+    if (legacyChain) {
+        // All potentially throwing work precedes moving the rollback
+        // checkpoint or publishing success/receipt state.
+        auto transaction = std::make_unique<DwgWriteTransaction>();
+        transaction->entityMutations = mutations;
+        rememberCallerMutations(mutations);
+        if (g_throwNextLegacyPolylineLateForTest) {
+            g_throwNextLegacyPolylineLateForTest = false;
+            throw std::bad_alloc();
+        }
+        static_assert(std::is_nothrow_move_assignable<dwgWriter::CompoundWriteCheckpoint>::value,
+                      "legacy transaction commit must not throw");
+        static_assert(std::is_nothrow_move_assignable<DRW::DwgObjectFrameReceipt>::value,
+                      "legacy frame receipt commit must not throw");
+        static_assert(std::is_nothrow_move_assignable<DRW::DwgCompoundEntityWriteReceipt>::value,
+                      "legacy compound receipt commit must not throw");
+        transaction->checkpoint = std::move(checkpoint);
+        m_lastDwgObjectFrame = std::move(parentFrame);
+        m_lastDwgObjectFrameValid = true;
+        m_lastDwgCompoundEntityWriteReceipt = std::move(receipt);
+        m_lastWriteTransaction = std::move(transaction);
+        ++m_successfulEntityWrites;
+        m_lastSuccessfulEntityHandle = ent->handle;
+        return recordWriteResult(WriteSkipKind::Entity, true);
+    }
     ++m_successfulEntityWrites;
     m_lastSuccessfulEntityHandle = ent->handle;
     m_lastDwgObjectFrame = std::move(parentFrame);

@@ -897,11 +897,12 @@ and [DIMSTYLE receipt](docs/research/p6-ac1015-synthetic-dimstyle-roles-2026-11-
 and [APPID receipt](docs/research/p6-ac1015-synthetic-appid-null-roles-2026-11-04.json)
 and [viewport receipt](docs/research/p6-ac1015-synthetic-vport-null-roles-2026-11-04.json)
 and [linetype receipt](docs/research/p6-ac1015-synthetic-ltype-null-roles-2026-11-04.json).
-An explicit AC1015 opt-in now emits a predeclared model-space LINE/CIRCLE/ARC
-chain with final links in each frame receipt; independent ODA and LibreDWG
-controls pass. Compounds, named blocks, paper space and raw replay remain
-refused in that profile. Implement separate parent/child chains and isolated
-SEQENDs using the [simple-chain receipt](docs/research/p6-ac1015-predeclared-model-chain-2026-11-04.json)
+Explicit AC1015 opt-ins now emit predeclared model-space LINE/CIRCLE/ARC and
+bounded 2D/3D POLYLINE chains with final parent, child and SEQEND links in
+frame receipts. Independent ODA and LibreDWG controls pass for tested
+two- and three-vertex profiles. Singleton polylines, INSERT, named blocks,
+paper space, unsupported fields and raw replay remain refused; extend only
+with source-backed graph and rollback evidence. See the [POLYLINE receipt](docs/research/p6-ac1015-predeclared-polyline-chain-2026-11-04.json)
 and [compound witness](docs/research/p6-ac1015-compound-entity-chain-witness-2026-11-04.json).
 An explicit AC1024 opt-in now emits the witnessed NOD→ACAD_MATERIAL→
 ByBlock/ByLayer/Global graph, HEADER references and generated layer binding,
