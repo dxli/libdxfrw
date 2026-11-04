@@ -828,11 +828,12 @@ Audit only a current failing source/profile; do not revive historical defects wh
 receipt and code path already agree.
 
 Generated LTYPE_CONTROL output has a consumer-visible built-in linetype
-ordering risk. Six ODA-produced files conflict with the PDF’s stated special
-entry order, and the specified BL count differs from the current BS path.
-Keep the PDF authoritative, obtain 255/256/257 physical boundaries and an
-authoritative order clarification, then implement scoped compatibility and
-lossless output. See the [LTYPE conflict receipt](docs/research/p6-dwg-ltype-control-order-roles-2026-11-04.json).
+ordering risk: six ODA-produced files conflict with the PDF’s stated order.
+Keep the PDF authoritative and seek clarification before changing that order.
+AC1015 count encoding now follows the specified BL, with a tightly checked
+historical BS fallback; count behavior for later versions remains open. See
+the [count receipt](docs/research/p6-ac1015-ltype-control-bl-count-2026-11-04.json)
+and [order conflict receipt](docs/research/p6-dwg-ltype-control-order-roles-2026-11-04.json).
 
 The AC1018 empty-name STYLE still fails strict output: ODA-produced bit
 observations conflict with the ODA v5.4.1 STYLE field order, which remains

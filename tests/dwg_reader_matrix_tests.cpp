@@ -54,6 +54,45 @@
 #include "intern/dwgwriter32.h"
 #include "intern/dwgsafety.h"
 
+class DwgBlockRecordXrefWireTestAccess {
+public:
+    static bool ac1015LtypeCount(std::uint16_t count) {
+        DRW_Header header;
+        dwgWriter15 writer(nullptr, &header);
+        if (!writer.prepareDwgClassManifest() || !writer.writeFileHeaderStub()
+            || !writer.writeDwgHeader() || !writer.writeDwgClasses()) return false;
+        for (std::uint32_t i = 1; i < count; ++i) {
+            DRW_LType type;
+            type.updateValues("T" + std::to_string(i), "test", 2, 1.0, {.5, -.5});
+            if (!writer.addLType(type)) return false;
+        }
+        if (!writer.writeDwgObjects()) return false;
+        const auto it = std::find_if(writer.m_objectMap.cbegin(), writer.m_objectMap.cend(),
+            [](const auto& entry) { return entry.first == DRW::DwgLtypeControlHandle; });
+        if (it == writer.m_objectMap.cend()) return false;
+        auto& bytes = writer.m_buf.data();
+        dwgBuffer input(bytes.data(), bytes.size());
+        DwgObjectFrame frame;
+        if (!frame.readAt(input, DRW::AC1015, it->second)) return false;
+        dwgBuffer body(frame.body().data(), frame.body().size());
+        if (body.getObjType(DRW::AC1015) != DRW::DwgLTypeControlObjectType) return false;
+        const auto boundary = body.getRawLong32();
+        if (body.getHandle().ref != DRW::DwgLtypeControlHandle || body.getBitShort() != 0
+            || body.getBitLong() != 0) return false;
+        dwgBuffer tag = body.forkIndependent();
+        if (tag.get2Bits() != (count < 256u ? 1u : 0u)
+            || body.getBitLong() != count
+            || body.getPosition() * 8u + body.getBitPos() != boundary) return false;
+        const auto owner = body.getHandle(), xdict = body.getHandle();
+        if (owner.code != DRW::DwgSoftPointer || owner.ref != 0
+            || xdict.code != DRW::DwgHardOwnership || xdict.ref != 0) return false;
+        dwgBuffer reread(frame.body().data(), frame.body().size());
+        DRW_ObjControl control;
+        return control.parseDwg(DRW::AC1015, &reread, 0)
+            && control.orderedHandleSlots.size() == static_cast<std::size_t>(count) + 2u;
+    }
+};
+
 class DwgHeaderCurrentTestAccess {
 public:
     static std::array<std::uint32_t, 4> offsets(const dwgWriter& writer) {
@@ -7368,6 +7407,102 @@ void testDwgControlPreservesDeclaredHandleSlots(TestContext& t) {
     t.expect(parsedHandles == nonNullHandles
                  && control.phantomHandles.empty(),
              "generic table ownership handles remain compact and null slots do not become references");
+}
+
+std::vector<std::uint8_t> makeAc1015LtypeCountBody(
+    std::uint16_t count, bool legacyShort, int corruption = 0,
+    bool forceLong = false) {
+    auto h = [](std::uint8_t code, std::uint32_t ref) {
+        dwgHandle value;
+        value.code = code;
+        value.ref = ref;
+        value.ref64 = ref;
+        for (std::uint32_t n = ref; n != 0u; n >>= 8u) ++value.size;
+        return value;
+    };
+    dwgBufferW body;
+    body.putObjType(DRW::AC1015, DRW::DwgLTypeControlObjectType);
+    body.putRawLong32(0);
+    body.putHandle(h(0, DRW::DwgLtypeControlHandle));
+    body.putBitShort(0);
+    body.putBitLong(0);
+    if (legacyShort) body.putBitShort(count);
+    else if (forceLong) { body.put2Bits(0); body.putRawLong32(count); }
+    else body.putBitLong(count);
+    if (corruption == 5) body.putBit(0); // Unexpected data before the handle stream.
+    const auto dataBits = static_cast<std::uint32_t>(body.bitCount());
+    body.patchRawLong32AtBit(10, corruption == 4 ? dataBits - 16u : dataBits);
+    body.putHandle(h(corruption == 1 ? 0 : DRW::DwgSoftPointer, 0));
+    body.putHandle(h(DRW::DwgHardOwnership, 0));
+    for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(count) + 2u; ++i) {
+        const std::uint32_t fixed[] = {DRW::DwgLtypeByBlockHandle,
+                                      DRW::DwgLtypeByLayerHandle,
+                                      DRW::DwgLtypeContinuousHandle};
+        std::uint32_t ref = i < 3u ? fixed[i] : 0x1000u + i;
+        if (corruption == 2 && i == 0u) ref = DRW::DwgLtypeByLayerHandle;
+        if (corruption == 3 && i == 3u) ref = DRW::DwgLtypeContinuousHandle;
+        body.putHandle(h(DRW::DwgSoftOwnership, ref));
+    }
+    body.alignToByte();
+    return body.data();
+}
+
+void testAc1015LtypeControlCountBoundary(TestContext& t) {
+    DRW_TextCodec decoder;
+    decoder.setVersion(DRW::AC1015, false);
+    for (const std::uint16_t count : {255u, 256u, 257u}) {
+        t.expect(DwgBlockRecordXrefWireTestAccess::ac1015LtypeCount(count),
+                 "AC1015 writer emits BL count and aligned following handles: "
+                     + std::to_string(count));
+        for (const bool legacy : {false, true}) {
+            auto bytes = makeAc1015LtypeCountBody(count, legacy);
+            dwgBuffer input(bytes.data(), bytes.size(), &decoder);
+            DRW_ObjControl control;
+            const bool ok = control.parseDwg(DRW::AC1015, &input, 0);
+            t.expect(ok && control.orderedHandleSlots.size() == static_cast<std::size_t>(count) + 2u
+                         && control.orderedHandleSlots.front() == DRW::DwgLtypeByBlockHandle
+                         && control.orderedHandleSlots[1] == DRW::DwgLtypeByLayerHandle
+                         && control.orderedHandleSlots[2] == DRW::DwgLtypeContinuousHandle,
+                     std::string("AC1015 LTYPE_CONTROL ") + (legacy ? "old BS " : "spec BL ")
+                         + std::to_string(count) + " preserves following handles");
+        }
+    }
+    for (const int corruption : {1, 2, 3, 4}) {
+        auto bad = makeAc1015LtypeCountBody(257, true, corruption);
+        dwgBuffer invalid(bad.data(), bad.size(), &decoder);
+        DRW_ObjControl control;
+        const bool rejected = !control.parseDwg(DRW::AC1015, &invalid, 0);
+        auto good = makeAc1015LtypeCountBody(257, false);
+        dwgBuffer retry(good.data(), good.size(), &decoder);
+        t.expect(rejected && control.parseDwg(DRW::AC1015, &retry, 0)
+                     && control.orderedHandleSlots.size() == 259u,
+                 "invalid legacy count tail or boundary fails and same control retries");
+    }
+    for (const std::uint16_t count : {0u, 1u, 255u}) {
+        auto bytes = makeAc1015LtypeCountBody(count, false, 0, true);
+        dwgBuffer input(bytes.data(), bytes.size(), &decoder);
+        DRW_ObjControl control;
+        t.expect(control.parseDwg(DRW::AC1015, &input, 0)
+                     && control.orderedHandleSlots.size() == static_cast<std::size_t>(count) + 2u,
+                 "bounded noncanonical BL count is accepted: " + std::to_string(count));
+    }
+    for (const std::uint16_t count : {0u, 1u, 255u}) {
+        auto bytes = makeAc1015LtypeCountBody(count, false, 5);
+        dwgBuffer invalid(bytes.data(), bytes.size(), &decoder);
+        DRW_ObjControl control;
+        const bool rejected = !control.parseDwg(DRW::AC1015, &invalid, 0);
+        auto good = makeAc1015LtypeCountBody(count, false);
+        dwgBuffer retry(good.data(), good.size(), &decoder);
+        t.expect(rejected && control.parseDwg(DRW::AC1015, &retry, 0)
+                     && control.orderedHandleSlots.size() == static_cast<std::size_t>(count) + 2u,
+                 "compact BL count with body/handle gap fails and retries: " + std::to_string(count));
+    }
+    auto truncated = makeAc1015LtypeCountBody(257, true);
+    truncated.pop_back();
+    dwgBuffer invalid(truncated.data(), truncated.size(), &decoder);
+    DRW_ObjControl control;
+    t.expect(!control.parseDwg(DRW::AC1015, &invalid, 0),
+             "truncated old BS LTYPE_CONTROL fails closed");
 }
 
 void testErasedBlockRecordTableRecovery(TestContext& t) {
@@ -19190,6 +19325,13 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--control-handle-slots") {
         TestContext focused;
         testDwgControlPreservesDeclaredHandleSlots(focused);
+        std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--ac1015-ltype-count") {
+        TestContext focused;
+        testAc1015LtypeControlCountBoundary(focused);
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

@@ -1589,6 +1589,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_dwg_control_handle_slots PROPERTIES
         LABELS "fast;dwg;tables;proxy;generated"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_dwg_ac1015_ltype_count
+        COMMAND libdxfrw_dwg_reader_matrix_tests --ac1015-ltype-count)
+    set_tests_properties(libdxfrw_dwg_ac1015_ltype_count PROPERTIES
+        LABELS "fast;dwg;tables;generated"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_dwg_space_block_delimiter_owner
         COMMAND libdxfrw_dwg_reader_matrix_tests --space-block-delimiter-owner)
     set_tests_properties(libdxfrw_dwg_space_block_delimiter_owner PROPERTIES

@@ -381,7 +381,15 @@ bool controlEntryCountUsesBitShort(std::uint16_t objectType) {
 }
 
 bool writeControlEntryCount(dwgBufferW& body, std::uint16_t objectType,
-                            std::uint32_t count) {
+                            std::uint32_t count, DRW::Version version) {
+    // ODA v5.4.1 §20.4.57 specifies BL for R2000 LTYPE_CONTROL.
+    // Other versions keep their previous behavior pending separate proof.
+    if (version == DRW::AC1015 && objectType == DRW::DwgLTypeControlObjectType) {
+        if (count > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()))
+            return false;
+        body.putBitLong(static_cast<std::int32_t>(count));
+        return body.isGood();
+    }
     if (controlEntryCountUsesBitShort(objectType)) {
         if (count > std::numeric_limits<std::uint16_t>::max())
             return false;
@@ -929,7 +937,7 @@ bool dwgWriter15::emitControlObject(
     //   H   null handle
     //   H   XDic handle  (xDictFlag=0 → reader reads one)
     //   H   child offset handles × numEntries (+2 for BLOCK/LTYPE controls)
-    if (!writeControlEntryCount(body, typeCode, numEntries))
+    if (!writeControlEntryCount(body, typeCode, numEntries, m_version))
         return false;
     if (typeCode == DRW::DwgDimStyleControlObjectType) {
         body.putRawChar8(0);
@@ -976,7 +984,7 @@ bool dwgWriter15::emitControlObject(
         body.putBit(0);    // xDictFlag
     if (m_version > DRW::AC1024)
         body.putBit(0);    // Have binary data (AC1027+)
-    if (!writeControlEntryCount(body, typeCode, numEntries))
+    if (!writeControlEntryCount(body, typeCode, numEntries, m_version))
         return false;
     if (typeCode == DRW::DwgDimStyleControlObjectType)
         body.putRawChar8(0);

@@ -14508,10 +14508,84 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
     return fail();
   // last parsed is: XDic Missing Flag 2004+
   std::int32_t rawNumEntries = 0;
-  const bool countRead =
-      controlEntryCountUsesBitShort(oType)
-          ? readControlBitShort(*buf, bodyEndBit, rawNumEntries)
-          : readControlBitLong(*buf, bodyEndBit, rawNumEntries);
+  bool countRead = false;
+  if (version == DRW::AC1015 && oType == DRW::DwgLTypeControlObjectType) {
+    // ODA §20.4.57 specifies BL. Our older writer used BS, whose compact
+    // encodings agree for 0..255 but differ at 256 and above. On those
+    // extended forms use the declared data/handle boundary to distinguish
+    // candidates; only admit the exact old fixed-handle writer profile.
+    dwgBuffer tagProbe = buf->forkIndependent();
+    const std::uint8_t tag = tagProbe.get2Bits();
+    if (!tagProbe.isGood()) return fail();
+    if (tag == 1u || tag == 2u) {
+      countRead = readControlBitLong(*buf, bodyEndBit, rawNumEntries);
+      std::uint64_t countEnd = 0;
+      if (countRead && objSize != 0u)
+        countRead = controlCurrentBit(*buf, countEnd) && countEnd == bodyEndBit;
+    } else if (objSize != 0u) {
+      dwgBuffer longProbe = buf->forkIndependent();
+      dwgBuffer shortProbe = buf->forkIndependent();
+      std::int32_t longCount = 0, shortCount = 0;
+      std::uint64_t longEnd = 0, shortEnd = 0;
+      const bool longMatches = tag == 0u
+          && readControlBitLong(longProbe, bodyEndBit, longCount)
+          && controlCurrentBit(longProbe, longEnd) && longEnd == bodyEndBit
+          && longCount >= 0;
+      const bool shortMatches = readControlBitShort(shortProbe, bodyEndBit, shortCount)
+          && controlCurrentBit(shortProbe, shortEnd) && shortEnd == bodyEndBit
+          && ((tag == 3u && shortCount == 256)
+              || (tag == 0u && shortCount >= 257));
+      if (longMatches && !shortMatches) {
+        *buf = longProbe;
+        rawNumEntries = longCount;
+        countRead = true;
+      } else if (shortMatches && !longMatches
+                 && handle == DRW::DwgLtypeControlHandle && numReactors == 0
+                 && extData.empty() && xDictFlag == 0) {
+        // Validate the complete older writer tail on an independent cursor;
+        // no mere count tag or boundary alone authorizes compatibility fallback.
+        dwgBuffer legacy = shortProbe.forkIndependent();
+        dwgHandle owner, xdict, child;
+        bool valid = readDwgHandleChecked(legacy, 0, false, owner)
+            && owner.code == DRW::DwgSoftPointer && owner.size == 0 && owner.ref == 0
+            && readDwgHandleChecked(legacy, 0, false, xdict)
+            && xdict.code == DRW::DwgHardOwnership && xdict.size == 0 && xdict.ref == 0;
+        std::unordered_set<std::uint32_t> seen;
+        try {
+          for (std::int32_t i = 0; valid && i < shortCount + 2; ++i) {
+            valid = readDwgHandleChecked(legacy, 0, false, child)
+                && child.code == DRW::DwgSoftOwnership && child.ref != 0
+                && child.ref64 <= std::numeric_limits<std::uint32_t>::max()
+                && seen.insert(child.ref).second;
+            if (valid && i < 3) {
+              const std::uint32_t fixed[] = {DRW::DwgLtypeByBlockHandle,
+                                              DRW::DwgLtypeByLayerHandle,
+                                              DRW::DwgLtypeContinuousHandle};
+              valid = child.ref == fixed[i];
+            }
+          }
+        } catch (...) {
+          return fail();
+        }
+        std::uint64_t end = 0;
+        valid = valid && controlCurrentBit(legacy, end) && end <= totalBits
+            && totalBits - end <= 7u;
+        while (valid && end < totalBits) {
+          valid = legacy.getBit() == 0 && legacy.isGood();
+          ++end;
+        }
+        if (valid) {
+          *buf = shortProbe;
+          rawNumEntries = shortCount;
+          countRead = true;
+        }
+      }
+    }
+  } else {
+    countRead = controlEntryCountUsesBitShort(oType)
+        ? readControlBitShort(*buf, bodyEndBit, rawNumEntries)
+        : readControlBitLong(*buf, bodyEndBit, rawNumEntries);
+  }
   if (!countRead || rawNumEntries < 0)
     return fail();
   const std::uint32_t numEntries = static_cast<std::uint32_t>(rawNumEntries);
