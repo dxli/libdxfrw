@@ -1197,6 +1197,9 @@ if(LIBDXFRW_BUILD_TESTS)
         LABELS "fast;dwg;generated;objects;retention;transaction" TIMEOUT 15)
     add_test(NAME libdxfrw_rooted_standard_dwg_output_proof
         COMMAND libdxfrw_dwg_local_roundtrip --rooted-standard-dwg-output-proof)
+    add_test(NAME libdxfrw_dwg_fixed_metadata_pointer
+        COMMAND libdxfrw_dwg_local_roundtrip --dwg-fixed-metadata-pointer)
+    set_tests_properties(libdxfrw_dwg_fixed_metadata_pointer PROPERTIES LABELS "fast;dwg;metadata;generated")
     add_test(NAME libdxfrw_standard_dwg_group_metadata
         COMMAND libdxfrw_dwg_local_roundtrip --standard-dwg-group-metadata)
     set_tests_properties(libdxfrw_standard_dwg_group_metadata PROPERTIES

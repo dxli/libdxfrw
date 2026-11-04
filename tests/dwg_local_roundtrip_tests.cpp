@@ -34,6 +34,7 @@
 #include "libdxfrw.h"
 #include "intern/dwgbuffer.h"
 #include "intern/dwgbufferw.h"
+#include "intern/dwgutil.h"
 #include "intern/dwg_fixed_handles.h"
 #include "intern/dwghatchboundary.h"
 #include "intern/dwgwriter15.h"
@@ -24357,6 +24358,63 @@ private:
     dx_data owned_;
 };
 
+bool runDwgFixedMetadataPointerControls(const std::filesystem::path& directory) {
+    // ODA 4.1/5.2: the metadata's 32-bit field at 0x28 points to 0x80.
+    // Check literal output bytes for the R2004 family and the R2007 writer.
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto root = directory / ("libdxfrw-fixed-metadata-" + std::to_string(nonce));
+    std::error_code error;
+    if (!std::filesystem::create_directory(root, error) || error) return false;
+    struct Cleanup { std::filesystem::path path; ~Cleanup() {
+        std::error_code ignored; std::filesystem::remove_all(path, ignored);
+    }} cleanup{root};
+    for (const auto& profile : {
+             std::pair<const char*, DRW::Version>{"AC1018", DRW::AC1018},
+             {"AC1021", DRW::AC1021}, {"AC1024", DRW::AC1024}}) {
+        const auto path = root / (std::string(profile.first) + ".dwg");
+        dwgRW writer(path.string().c_str());
+        ReadOutcomeControl source(&writer, 0);
+        if (!writer.write(&source, profile.second, true) || !source.wrote)
+            return false;
+        std::array<std::uint8_t, 44> bytes{};
+        std::ifstream input(path, std::ios::binary);
+        if (!input.read(reinterpret_cast<char*>(bytes.data()), bytes.size())
+            || !std::equal(profile.first, profile.first + 6, bytes.begin())
+            || bytes[0x28] != 0x80u || bytes[0x29] != 0u
+            || bytes[0x2a] != 0u || bytes[0x2b] != 0u)
+            return false;
+        if (profile.second == DRW::AC1021) {
+            // Decode the actual RS(255,239) file-header page and verify all
+            // required repetitions, independently of the writer's buffers.
+            std::array<std::uint8_t, 765> encoded{};
+            std::array<std::uint8_t, 717> decoded{};
+            input.seekg(0x80);
+            if (!input.read(reinterpret_cast<char*>(encoded.data()), encoded.size())
+                || !dwgRSCodec::decode239I(encoded.data(), decoded.data(), 3))
+                return false;
+            std::uint32_t rawSize = 0u;
+            for (unsigned i = 0; i < 4; ++i)
+                rawSize |= static_cast<std::uint32_t>(decoded[24u + i]) << (8u * i);
+            std::int32_t signedSize = 0;
+            std::memcpy(&signedSize, &rawSize, sizeof(signedSize));
+            if (signedSize == 0 || signedSize == std::numeric_limits<std::int32_t>::min())
+                return false;
+            const std::size_t dataSize = static_cast<std::size_t>(
+                signedSize < 0 ? -signedSize : signedSize);
+            const std::size_t blockSize = (32u + dataSize + 7u) & ~std::size_t{7u};
+            if (blockSize > decoded.size() / 2u)
+                return false;
+            for (std::size_t offset = blockSize;
+                 offset <= decoded.size() - blockSize; offset += blockSize) {
+                if (!std::equal(decoded.begin(), decoded.begin() + blockSize,
+                                decoded.begin() + offset))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool runDwgReadOutcomeControls(const std::filesystem::path& directory) {
     std::array<std::filesystem::path, 3> paths;
     for (int kind = 0; kind != 3; ++kind) {
@@ -35247,6 +35305,11 @@ bool runBlockRecordXrefMetadataRoundTrip(
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2 && std::string(argv[1]) == "--dwg-fixed-metadata-pointer") {
+        const bool passed = runDwgFixedMetadataPointerControls(std::filesystem::temp_directory_path());
+        std::cout << "DWG fixed metadata header pointer: " << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--spline-bitlong-boundary") {
         int failures = 0;
         expect(runR2013SplineBitLongBoundaryTest(),

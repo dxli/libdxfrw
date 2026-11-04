@@ -829,8 +829,21 @@ std::vector<std::uint8_t> buildEncodedFileHeader(
     for (unsigned int i = 0; i < 4; ++i)
         decoded[24 + i] = static_cast<std::uint8_t>(dataSize >> (i * 8));
     std::copy(data.cbegin(), data.cend(), decoded.begin() + 32);
-    protection.random.fillPadding(decoded.data() + 32 + data.size(),
-                                  decoded.size() - 32 - data.size());
+    // ODA 5.2.1.5 repeats the entire eight-byte-aligned block as often as
+    // it fits in the 3 x 239-byte Reed-Solomon input, then pads the tail.
+    const std::size_t contentEnd = 32u + data.size();
+    const std::size_t blockSize = (contentEnd + 7u) & ~std::size_t{7u};
+    if (blockSize > decoded.size())
+        return {};
+    protection.random.fillPadding(decoded.data() + contentEnd,
+                                  blockSize - contentEnd);
+    std::size_t filled = blockSize;
+    while (blockSize <= decoded.size() - filled) {
+        std::copy_n(decoded.begin(), blockSize, decoded.begin() + filled);
+        filled += blockSize;
+    }
+    protection.random.fillPadding(decoded.data() + filled,
+                                  decoded.size() - filled);
     std::vector<std::uint8_t> encoded(kR2007EncodedHeaderSize, 0);
     if (!dwgRSCodec::encode239I(decoded.data(), encoded.data(), 3))
         return {};
@@ -1217,6 +1230,8 @@ bool dwgWriter21::finalize() {
     metadata[0x0C] = 3;
     metadata[0x11] = 0x21;
     metadata[0x12] = 0xFF;
+    // ODA 5.2: little-endian offset of the R2007 file header page.
+    metadata[0x28] = static_cast<std::uint8_t>(kR2007FileHeaderOffset);
     const std::uint16_t codePage = fileCodePageId();
     metadata[0x13] = static_cast<std::uint8_t>(codePage);
     metadata[0x14] = static_cast<std::uint8_t>(codePage >> 8);
