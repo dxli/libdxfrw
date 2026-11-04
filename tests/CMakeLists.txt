@@ -4994,3 +4994,12 @@ target_include_directories(libdxfrw_dxf_lightlist_resolver_snapshot_tests PRIVAT
 target_link_libraries(libdxfrw_dxf_lightlist_resolver_snapshot_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dxf_lightlist_resolver_snapshot COMMAND libdxfrw_dxf_lightlist_resolver_snapshot_tests)
 set_tests_properties(libdxfrw_dxf_lightlist_resolver_snapshot PROPERTIES LABELS "fast;dxf;lightlist;transaction" TIMEOUT 30)
+
+add_executable(libdxfrw_dxf_layer_color_order_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dxf_layer_color_order_tests.cpp)
+target_compile_features(libdxfrw_dxf_layer_color_order_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dxf_layer_color_order_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dxf_layer_color_order_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dxf_layer_color_order_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dxf_layer_color_order COMMAND libdxfrw_dxf_layer_color_order_tests)
+set_tests_properties(libdxfrw_dxf_layer_color_order PROPERTIES LABELS "fast;dxf;layer;color" TIMEOUT 30)

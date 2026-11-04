@@ -5112,12 +5112,9 @@ bool DRW_Layer::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
             return false;
         break;
     case DRW::dxfCode::COLOR:
+        // ACI (including the negative off-layer flag), true color and color
+        // name are independent DXF fields. Group order is not significant.
         color = reader->getInt32();
-        if (!releaseDxfRetainedStringBytes(m_dxfRetainedColorNameBytes))
-            return false;
-        m_dxfRetainedColorNameBytes = 0u;
-        color24 = -1;
-        colorName.clear();
         m_colorDwgMethod = 0;
         m_hasDwgColorCmcMetadata = false;
         m_colorDwgFlags = 0u;

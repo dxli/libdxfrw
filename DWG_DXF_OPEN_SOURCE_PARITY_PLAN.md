@@ -875,6 +875,12 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 
 ## P6 — residual semantic and version audit
 
+DXF LAYER color groups now preserve ACI/off state, true color and color name
+independently when group 62 follows groups 420 or 430. Reordered selected
+producer-derived records and generated ASCII/Binary controls cover the change;
+broader producer and native display qualification remain open
+([receipt](docs/research/p6-dxf-layer-color-group-order-2026-11-04.json)).
+
 Audit only a current failing source/profile; do not revive historical defects whose
 receipt and code path already agree.
 
