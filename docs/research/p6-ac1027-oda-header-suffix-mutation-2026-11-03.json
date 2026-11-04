@@ -52,7 +52,7 @@
     "odaResult": "The same ODA ACAD2013 DXF route converts original and both variants without .err. With only $TDUPDATE and $TDUUPDATE values normalized, all three DXFs have 127131 bytes and SHA-256 721bce02dec30f9cc78d2c20b6dee2671b9329b904ee8d191e9d4ac33680dc1a."
   },
   "ac1018EtBorderRepeat": {
-    "source": "ODA AC1021-to-AC1018 resave of the local ET Border drawing, SHA-256 99f261cf43273013e3cac4182abd2acf34f7a1679acab28d26ab34f34eb9e94d; see the AC1018 suffix diagnostic receipt.",
+    "source": "ODA AC1018-to-AC1018 resave of the local ET Border drawing, SHA-256 99f261cf43273013e3cac4182abd2acf34f7a1679acab28d26ab34f34eb9e94d; see the AC1018 suffix diagnostic receipt.",
     "framing": "The 739-byte suffix begins after validated HEADER trailer offset 534 in the 1273-byte logical section. Its unique contiguous literal begins at physical offset 0x9364; the compressed page begins at 0x9180.",
     "zeroDwgSha256": "9bbb2d903b06e0777dc38550775b9b3be25b0ee5e1e4f0169b41b34f0a022d3f",
     "patternDwgSha256": "8ce38c5ae90740ca8a4fe024920e40d8f598c0e5824baad4923d95a138c1185e",
