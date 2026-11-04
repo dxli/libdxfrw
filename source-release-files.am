@@ -620,6 +620,7 @@ EXTRA_DIST = \
     tools/check_support_matrix.py \
     tools/check_target_advisory_differential.py \
     tools/check_version_surfaces.py \
+    tools/circle_arc_extrusion_repro.cpp \
     tools/compare_dwg_3d_consumer_oracle.py \
     tools/create_acis218_mesh_witness.py \
     tools/dbcolor_fallback_differential.py \
