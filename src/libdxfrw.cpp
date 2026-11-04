@@ -33633,16 +33633,24 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
 
     const std::int32_t objectVersion = ent->m_version != 0
         ? ent->m_version : 2;
-    // Autodesk's published GEODATA map identifies versions 1 (2009) and
-    // 2 (2010). Do not emit the historical default of 3 without a schema.
-    if (objectVersion < 1 || objectVersion > 2)
+    // ODA §20.4.78 identifies version 3 for R2013 and its fields as the
+    // version-2 layout; an ODA R2013 DXF witness emits version 3 as well.
+    // Autodesk's published DXF table lists only object versions 1 and 2.
+    if (objectVersion < 1 || objectVersion > 3
+        || (objectVersion == 3 && version < DRW::AC1027))
         return false;
 
     std::string normalizedDefinition;
     std::string_view definition = ent->m_coordinateSystemDefinition;
     const bool hasDefinitionLineBreak =
         definition.find('\n') != std::string_view::npos;
-    if (hasDefinitionLineBreak) {
+    const bool binaryLineBreak = binFile && hasDefinitionLineBreak;
+    // The ASCII newline spelling cannot distinguish a literal ^J from a
+    // normalized LF in the existing chunk encoder. Refuse that combination.
+    if (!binFile && hasDefinitionLineBreak
+        && definition.find("^J") != std::string_view::npos)
+        return false;
+    if (hasDefinitionLineBreak && !binaryLineBreak) {
         normalizedDefinition.assign(definition);
         for (std::string::size_type pos = normalizedDefinition.find('\n');
              pos != std::string::npos;
@@ -33746,7 +33754,13 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
             || !finite(civil.m_ambiguous141Value)
             || !finite(civil.m_seaLevelElevation)
             || !finite(civil.m_coordinateProjectionRadius)
-            || !representableText(definition)
+            || !(binaryLineBreak
+                     ? definition.find('\0') == std::string_view::npos
+                         && definition.find('\r') == std::string_view::npos
+                         && (writer->usesCompatibleModernDxfUtf8()
+                                 ? definition.size() <= 255u
+                                 : writer->fromUtf8String(definition).size() <= 255u)
+                     : representableText(definition))
             || !representableText(ent->m_geoRssTag)
             || !representableText(ent->m_legacy.m_coordinateSystemDescription)
             || !representableText(ent->m_legacy.m_coordinateSystemDatum)
@@ -33778,7 +33792,11 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
         const auto safeText = [](std::string_view value) {
             return isSafeDxfRecordText(value);
         };
-        if (!safeText(definition) || !safeText(ent->m_geoRssTag)
+        const bool safeDefinition = binaryLineBreak
+            ? definition.find('\0') == std::string_view::npos
+                && definition.find('\r') == std::string_view::npos
+            : safeText(definition);
+        if (!safeDefinition || !safeText(ent->m_geoRssTag)
             || !safeText(ent->m_observationFromTag)
             || !safeText(ent->m_observationToTag)
             || !safeText(ent->m_observationCoverageTag)
@@ -33868,7 +33886,9 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
         writer->writeDouble(210, ent->m_upDirection.x);
         writer->writeDouble(220, ent->m_upDirection.y);
         writer->writeDouble(230, ent->m_upDirection.z);
-        if (hasDefinitionLineBreak)
+        if (binaryLineBreak)
+            writer->writeUtf8StringBounded(301, definition, 255u);
+        else if (hasDefinitionLineBreak)
             writer->writeUtf8StringPreservingCaretJ(301, definition);
         else
             writer->writeUtf8String(301, definition);
@@ -33942,7 +33962,10 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
     const std::string_view definitionView(definition);
     std::string::size_type offset = 0;
     if (objectVersion != 1) {
-        if (hasDefinitionLineBreak) {
+        if (binaryLineBreak) {
+            if (!writer->writeUtf8Chunks(definition, 303, 301, 255u))
+                return false;
+        } else if (hasDefinitionLineBreak) {
             if (!writer->writeUtf8ChunksPreservingCaretJ(
                     definition, 303, 301, 255u))
                 return false;

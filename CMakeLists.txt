@@ -805,6 +805,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_geodata_identity_remapping
         PROPERTIES LABELS "fast;dxf;writer;geodata;identity;generated;transaction"
         TIMEOUT 15)
+    add_test(NAME libdxfrw_geodata_versioned_writer
+        COMMAND libdxfrw_wave1_tests --geodata-versioned-writer)
+    set_tests_properties(libdxfrw_geodata_versioned_writer
+        PROPERTIES LABELS "fast;dxf;writer;geodata;generated;transaction"
+        TIMEOUT 15)
     add_test(NAME libdxfrw_dbcolor_identity_remapping
         COMMAND libdxfrw_wave1_tests --dbcolor-identity-remapping)
     set_tests_properties(libdxfrw_dbcolor_identity_remapping

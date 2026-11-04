@@ -15386,7 +15386,7 @@ void testGeoDataVersionedWriter(TestContext& t) {
         }
     }
 
-    for (const std::int32_t objectVersion : {2}) {
+    for (const std::int32_t objectVersion : {2, 3}) {
         std::vector<std::string> modernAsciiProjection;
         for (const bool binary : {false, true}) {
             std::ostringstream output;
@@ -15411,6 +15411,11 @@ void testGeoDataVersionedWriter(TestContext& t) {
             modern.m_verticalUnits = 92;
             modern.m_upDirection = DRW_Coord{210.125, 220.125, 230.125};
             modern.m_northDirection = DRW_Coord{12.125, 22.125, 0.0};
+            modern.m_scaleEstimationMethod = 2;
+            modern.m_userSpecifiedScaleFactor = 1.25;
+            modern.m_enableSeaLevelCorrection = true;
+            modern.m_seaLevelElevation = 15.125;
+            modern.m_coordinateProjectionRadius = 16.125;
             modern.m_coordinateSystemDefinition = "modern-coordinate-definition";
             modern.m_geoRssTag = "modern-georss";
             modern.m_observationFromTag = "modern-observation-tag";
@@ -15439,7 +15444,107 @@ void testGeoDataVersionedWriter(TestContext& t) {
             else
                 t.expect(projection == modernAsciiProjection,
                          "v2/v3 ASCII and binary writer values are identical");
+
+            std::istringstream input(output.str());
+            dxfRW parser("");
+            parser.binFile = binary;
+            if (binary)
+                parser.reader = std::make_unique<dxfReaderBinary>(&input);
+            else
+                parser.reader = std::make_unique<dxfReaderAscii>(&input);
+            DRW_GeoData decoded;
+            DRW_RawDxfObject raw;
+            bool reading = false, parsed = true;
+            int code = 0;
+            while (parser.reader->readRec(&code)) {
+                if (code == 0) {
+                    const std::string record = parser.reader->getString();
+                    if (record == "GEODATA") {
+                        reading = true;
+                        raw.name = record;
+                    } else if (reading || record == "WIRE_END") {
+                        break;
+                    }
+                } else if (reading) {
+                    parsed = parser.captureAndParseRawDxfGroup(raw, code, decoded)
+                        && parsed;
+                }
+            }
+            t.expect(parsed && reading && decoded.m_version == objectVersion
+                         && decoded.handle == modern.handle
+                         && decoded.parentHandle == modern.parentHandle
+                         && decoded.m_hostBlockHandle == modern.m_hostBlockHandle
+                         && decoded.m_coordinatesType == modern.m_coordinatesType
+                         && decoded.m_designPoint.x == modern.m_designPoint.x
+                         && decoded.m_designPoint.y == modern.m_designPoint.y
+                         && decoded.m_designPoint.z == modern.m_designPoint.z
+                         && decoded.m_referencePoint.x == modern.m_referencePoint.x
+                         && decoded.m_referencePoint.y == modern.m_referencePoint.y
+                         && decoded.m_referencePoint.z == modern.m_referencePoint.z
+                         && decoded.m_horizontalUnitScale == modern.m_horizontalUnitScale
+                         && decoded.m_verticalUnitScale == modern.m_verticalUnitScale
+                         && decoded.m_horizontalUnits == modern.m_horizontalUnits
+                         && decoded.m_verticalUnits == modern.m_verticalUnits
+                         && decoded.m_upDirection.x == modern.m_upDirection.x
+                         && decoded.m_upDirection.y == modern.m_upDirection.y
+                         && decoded.m_upDirection.z == modern.m_upDirection.z
+                         && decoded.m_northDirection.x == modern.m_northDirection.x
+                         && decoded.m_northDirection.y == modern.m_northDirection.y
+                         && decoded.m_scaleEstimationMethod == modern.m_scaleEstimationMethod
+                         && decoded.m_userSpecifiedScaleFactor == modern.m_userSpecifiedScaleFactor
+                         && decoded.m_enableSeaLevelCorrection == modern.m_enableSeaLevelCorrection
+                         && decoded.m_seaLevelElevation == modern.m_seaLevelElevation
+                         && decoded.m_coordinateProjectionRadius == modern.m_coordinateProjectionRadius
+                         && decoded.m_coordinateSystemDefinition == modern.m_coordinateSystemDefinition
+                         && decoded.m_geoRssTag == modern.m_geoRssTag
+                         && decoded.m_observationFromTag == modern.m_observationFromTag
+                         && decoded.m_observationToTag == modern.m_observationToTag
+                         && decoded.m_observationCoverageTag == modern.m_observationCoverageTag
+                         && decoded.m_points.size() == 1u
+                         && decoded.m_points[0].m_source.x == modern.m_points[0].m_source.x
+                         && decoded.m_points[0].m_source.y == modern.m_points[0].m_source.y
+                         && decoded.m_points[0].m_destination.x == modern.m_points[0].m_destination.x
+                         && decoded.m_points[0].m_destination.y == modern.m_points[0].m_destination.y
+                         && decoded.m_faces.size() == 1u
+                         && decoded.m_faces[0].m_index1 == modern.m_faces[0].m_index1
+                         && decoded.m_faces[0].m_index2 == modern.m_faces[0].m_index2
+                         && decoded.m_faces[0].m_index3 == modern.m_faces[0].m_index3,
+                     "v2/v3 typed readback preserves every modeled DXF field");
         }
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW owner("");
+        owner.version = DRW::AC1024;
+        owner.binFile = binary;
+        if (binary)
+            owner.writer = std::make_unique<dxfWriterBinary>(&output);
+        else
+            owner.writer = std::make_unique<dxfWriterAscii>(&output);
+        t.expect(owner.writer->writeString(1, "PRESERVED_PREFIX"),
+                 "v3 GEODATA preflight setup writes prefix");
+        const std::string prefix = output.str();
+        DRW_GeoData geo;
+        geo.handle = 0x722u;
+        geo.parentHandle = 0x2u;
+        geo.m_hostBlockHandle = 0x3u;
+        geo.m_version = 3;
+        const bool oldRevisionRefused = !owner.writeGeoData(&geo)
+            && output.str() == prefix && geo.handle == 0x722u
+            && geo.parentHandle == 0x2u && geo.m_hostBlockHandle == 0x3u
+            && !owner.m_writeError && !owner.writer->hasWriteError();
+        owner.version = DRW::AC1027;
+        geo.m_designPoint.x = std::numeric_limits<double>::quiet_NaN();
+        const bool invalidRefused = !owner.writeGeoData(&geo)
+            && output.str() == prefix && geo.handle == 0x722u
+            && !owner.m_writeError && !owner.writer->hasWriteError();
+        geo.m_designPoint.x = 12.5;
+        const bool retried = owner.writeGeoData(&geo);
+        t.expect(oldRevisionRefused && invalidRefused && retried
+                     && geo.handle == 0x722u && geo.parentHandle == 0x2u
+                     && geo.m_hostBlockHandle == 0x3u,
+                 "v3 old revision and invalid field refuse atomically and retry");
     }
 
     {
@@ -15452,12 +15557,12 @@ void testGeoDataVersionedWriter(TestContext& t) {
         const std::string beforeReject = output.str();
         DRW_GeoData unsupported;
         unsupported.handle = 0x720u;
-        unsupported.m_version = 3;
+        unsupported.m_version = 4;
         t.expect(!owner.writeGeoData(&unsupported)
                      && output.str() == beforeReject
                      && !owner.m_writeError
                      && !owner.writer->hasWriteError(),
-                 "unpublished GEODATA version 3 is rejected before output");
+                 "unsupported GEODATA version 4 is rejected before output");
 
         DRW_GeoData defaultVersion;
         defaultVersion.handle = 0x721u;
@@ -15557,6 +15662,198 @@ void testGeoDataVersionedWriter(TestContext& t) {
         const bool retry = owner.writeGeoData(&mixed);
         t.expect(rejected && unsafeTextRejected && retry,
                  "modern schema rejects legacy-only values then retries");
+    }
+}
+
+void testGeoDataDefinitionControlRoundTrip(TestContext& t) {
+    for (const std::int32_t version : {1, 2, 3}) {
+        for (const bool binary : {false, true}) {
+            for (const std::string& source : {std::string("Alpha\nBeta"),
+                                             std::string("Alpha^JBeta"),
+                                             std::string("Alpha^J\nBeta")}) {
+                std::ostringstream output;
+                dxfRW writer("");
+                writer.version = DRW::AC1027;
+                writer.binFile = binary;
+                if (binary)
+                    writer.writer = std::make_unique<dxfWriterBinary>(&output);
+                else
+                    writer.writer = std::make_unique<dxfWriterAscii>(&output);
+                writer.writer->setVersion("AC1027", true);
+                t.expect(writer.writer->writeString(1, "PREFIX"),
+                         "GEODATA text preflight prefix");
+                const std::string prefix = output.str();
+                DRW_GeoData geo;
+                geo.handle = 0x731u;
+                geo.m_version = version;
+                geo.m_coordinateSystemDefinition = source;
+                if (!binary && source == "Alpha^J\nBeta") {
+                    const bool rejected = !writer.writeGeoData(&geo)
+                        && output.str() == prefix && geo.handle == 0x731u
+                        && !writer.m_writeError && !writer.writer->hasWriteError();
+                    geo.m_coordinateSystemDefinition = "Alpha^JBeta";
+                    const bool retried = writer.writeGeoData(&geo);
+                    t.expect(rejected && retried && geo.handle == 0x731u,
+                             "mixed LF and literal caret-J refuse atomically and retry");
+                    continue;
+                }
+                const bool wrote = writer.writeGeoData(&geo)
+                    && writer.writer->writeString(0, "WIRE_END");
+                std::istringstream input(output.str());
+                dxfRW parser("");
+                parser.binFile = binary;
+                if (binary)
+                    parser.reader = std::make_unique<dxfReaderBinary>(&input);
+                else
+                    parser.reader = std::make_unique<dxfReaderAscii>(&input);
+                parser.reader->setVersion("AC1027", true);
+                DRW_GeoData decoded;
+                DRW_RawDxfObject raw;
+                std::string wire;
+                bool reading = false, parsed = true;
+                int code = 0;
+                while (parser.reader->readRec(&code)) {
+                    if (code == 0) {
+                        const std::string record = parser.reader->getString();
+                        if (record == "GEODATA") {
+                            reading = true;
+                            raw.name = record;
+                        } else if (reading || record == "WIRE_END") {
+                            break;
+                        }
+                    } else if (reading) {
+                        if (code == 301 || (code == 303 && version != 1))
+                            wire += parser.reader->getRawValue();
+                        parsed = parser.captureAndParseRawDxfGroup(raw, code, decoded)
+                            && parsed;
+                    }
+                }
+                const std::string expectedWire = binary ? source
+                    : source == "Alpha\nBeta" ? "Alpha^JBeta" : "Alpha^ JBeta";
+                t.expect(wrote && reading && parsed && wire == expectedWire
+                             && decoded.m_coordinateSystemDefinition == source,
+                         "GEODATA v1/v2/v3 text bytes and typed value round trip");
+            }
+        }
+    }
+}
+
+// Optional independently produced witness: the input is created from scratch
+// by ezdxf, then converted to AC1027 DWG by ODA. It is deliberately not a
+// repository fixture and this selected-record check makes no whole-file claim.
+void testPhysicalGeoDataV3SelectedRecord(TestContext& t, const std::string& path) {
+    dx_data data;
+    dx_iface importer;
+    const bool imported = importer.fileImport(path, &data, false);
+    if (!imported || data.geoDataObjects.size() != 1u) {
+        t.expect(false, "physical v3 GEODATA callback is captured once");
+        return;
+    }
+    const DRW_GeoData& original = data.geoDataObjects.begin()->second;
+    if (original.handle != 0x30u || original.parentHandle != 0x2Fu
+        || original.m_hostBlockHandle != 0x17u || original.m_version != 3
+        || original.reactorHandles.size() != 1u
+        || original.reactorHandles[0] != 0x2Fu
+        || original.m_coordinatesType != 1
+        || original.m_designPoint.x != 100.0
+        || original.m_designPoint.y != 200.0
+        || original.m_referencePoint.x != 1718030.0
+        || original.m_referencePoint.y != 5921664.0
+        || original.m_horizontalUnits != 6 || original.m_verticalUnits != 6
+        || !original.m_points.empty() || !original.m_faces.empty()) {
+        t.expect(false, "physical v3 source fields, owner and host match ODA output");
+        return;
+    }
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW writer("");
+        writer.version = DRW::AC1027;
+        writer.binFile = binary;
+        if (binary)
+            writer.writer = std::make_unique<dxfWriterBinary>(&output);
+        else
+            writer.writer = std::make_unique<dxfWriterAscii>(&output);
+        writer.writer->setVersion("AC1027", true);
+        writer.setHandleRemap({{0x2Fu, 0xA2u}, {0x17u, 0xA3u}});
+        DRW_GeoData selected = original;
+        const bool wrote = writer.writeGeoData(&selected)
+            && writer.writer->writeString(0, "WIRE_END");
+
+        std::istringstream input(output.str());
+        dxfRW parser("");
+        parser.binFile = binary;
+        if (binary)
+            parser.reader = std::make_unique<dxfReaderBinary>(&input);
+        else
+            parser.reader = std::make_unique<dxfReaderAscii>(&input);
+        parser.reader->setVersion("AC1027", true);
+        DRW_GeoData decoded;
+        DRW_RawDxfObject raw;
+        bool reading = false, parsed = true;
+        int code = 0;
+        while (parser.reader->readRec(&code)) {
+            if (code == 0) {
+                const std::string record = parser.reader->getString();
+                if (record == "GEODATA") {
+                    reading = true;
+                    raw.name = record;
+                } else if (reading || record == "WIRE_END") {
+                    break;
+                }
+            } else if (reading) {
+                parsed = parser.captureAndParseRawDxfGroup(raw, code, decoded)
+                    && parsed;
+            }
+        }
+        if (!wrote || !reading || !parsed
+            || decoded.m_coordinateSystemDefinition != original.m_coordinateSystemDefinition
+            || decoded.reactorHandles.size() != 1u) {
+            std::cerr << "physical GEODATA diagnostics: binary=" << binary
+                      << " wrote=" << wrote << " reading=" << reading
+                      << " parsed=" << parsed
+                      << " parent=" << decoded.parentHandle
+                      << " host=" << decoded.m_hostBlockHandle
+                      << " reactors=" << decoded.reactorHandles.size()
+                      << " XML=" << decoded.m_coordinateSystemDefinition.size()
+                      << "/" << original.m_coordinateSystemDefinition.size()
+                      << " writeError=" << writer.m_writeError
+                      << " wireError=" << writer.writer->hasWriteError()
+                      << '\n';
+        }
+        t.expect(wrote && reading && parsed && decoded.m_version == 3
+                     && decoded.handle == original.handle
+                     && decoded.parentHandle == 0xA2u
+                     && decoded.m_hostBlockHandle == 0xA3u
+                     && decoded.reactorHandles.size() == 1u
+                     && decoded.reactorHandles[0] == 0xA2u
+                     && decoded.m_coordinatesType == original.m_coordinatesType
+                     && decoded.m_designPoint.x == original.m_designPoint.x
+                     && decoded.m_designPoint.y == original.m_designPoint.y
+                     && decoded.m_designPoint.z == original.m_designPoint.z
+                     && decoded.m_referencePoint.x == original.m_referencePoint.x
+                     && decoded.m_referencePoint.y == original.m_referencePoint.y
+                     && decoded.m_referencePoint.z == original.m_referencePoint.z
+                     && decoded.m_horizontalUnitScale == original.m_horizontalUnitScale
+                     && decoded.m_verticalUnitScale == original.m_verticalUnitScale
+                     && decoded.m_horizontalUnits == original.m_horizontalUnits
+                     && decoded.m_verticalUnits == original.m_verticalUnits
+                     && decoded.m_upDirection.x == original.m_upDirection.x
+                     && decoded.m_upDirection.y == original.m_upDirection.y
+                     && decoded.m_upDirection.z == original.m_upDirection.z
+                     && decoded.m_northDirection.x == original.m_northDirection.x
+                     && decoded.m_northDirection.y == original.m_northDirection.y
+                     && decoded.m_scaleEstimationMethod == original.m_scaleEstimationMethod
+                     && decoded.m_userSpecifiedScaleFactor == original.m_userSpecifiedScaleFactor
+                     && decoded.m_enableSeaLevelCorrection == original.m_enableSeaLevelCorrection
+                     && decoded.m_seaLevelElevation == original.m_seaLevelElevation
+                     && decoded.m_coordinateProjectionRadius == original.m_coordinateProjectionRadius
+                     && decoded.m_coordinateSystemDefinition == original.m_coordinateSystemDefinition
+                     && decoded.m_geoRssTag == original.m_geoRssTag
+                     && decoded.m_observationFromTag == original.m_observationFromTag
+                     && decoded.m_observationToTag == original.m_observationToTag
+                     && decoded.m_observationCoverageTag == original.m_observationCoverageTag
+                     && decoded.m_points.empty() && decoded.m_faces.empty(),
+                 "physical v3 selected record preserves fields and remaps owner/host");
     }
 }
 
@@ -23021,10 +23318,19 @@ int main(int argc, char** argv) {
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
+    if (argc == 3
+        && std::string(argv[1]) == "--geodata-physical-v3") {
+        TestContext focused;
+        testPhysicalGeoDataV3SelectedRecord(focused, argv[2]);
+        std::cout << "Physical GEODATA v3 selected record: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
     if (argc == 2
         && std::string(argv[1]) == "--geodata-versioned-writer") {
         TestContext focused;
         testGeoDataVersionedWriter(focused);
+        testGeoDataDefinitionControlRoundTrip(focused);
         std::cout << "GEODATA versioned writer: "
                   << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;

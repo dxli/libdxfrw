@@ -18885,16 +18885,22 @@ void testDxfGeoDataModernTextPreflightView(TestContext& t) {
                     ? "compatible" : "strict";
                 const std::string newlineLabel =
                     "GEODATA " + policyName
-                    + " writer preserves newline-to-caret-J normalization ("
+                    + " writer preserves semantic newlines ("
                     + version + (binary ? ", Binary)" : ", ASCII)");
                 checkDefinitionChunks(
                     version, binary, policy, "Alpha\nBeta\nGamma",
-                    {{301, "Alpha^JBeta^JGamma"}}, newlineLabel.c_str());
+                    {{301, binary ? "Alpha\nBeta\nGamma" : "Alpha^JBeta^JGamma"}},
+                    newlineLabel.c_str());
                 checkDefinitionChunks(
                     version, binary, policy,
                     std::string(254u, 'A') + "\n" + std::string(20u, 'B'),
-                    {{303, std::string(254u, 'A')},
-                     {301, "^J" + std::string(20u, 'B')}},
+                    binary
+                        ? std::vector<std::pair<int, std::string>>{
+                            {303, std::string(254u, 'A') + "\n"},
+                            {301, std::string(20u, 'B')}}
+                        : std::vector<std::pair<int, std::string>>{
+                            {303, std::string(254u, 'A')},
+                            {301, "^J" + std::string(20u, 'B')}},
                     (newlineLabel + " at the 255-byte boundary").c_str());
             }
         }
