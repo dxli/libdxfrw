@@ -26782,8 +26782,9 @@ bool DRW_Sun::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
         m_isOn = reader->getBool();
         break;
     case 63:
+        // Preserve a separately supplied group 421 regardless of tag order;
+        // typed DXF output must continue to reject this unqualified field.
         m_color = reader->getInt32();
-        m_color24 = -1;
         m_colorCmc = DRW_DwgCmcColorMetadata{};
         m_colorName.clear();
         break;

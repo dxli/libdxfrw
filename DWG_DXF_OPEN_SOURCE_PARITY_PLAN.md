@@ -475,6 +475,11 @@ output gates are met.
 
 ## P5 — rendering and TABLE
 
+DXF SUN parsing retains a separately supplied RGB group regardless of the
+order of group 63, so the existing strict output refusal cannot be bypassed by
+reordering. SUN RGB output and native lighting remain unqualified
+([receipt](docs/research/p5-dxf-sun-color-order-2026-11-04.json)).
+
 LIGHTLIST resolver callbacks now operate on a validated deep snapshot; tested
 member and setup mutations, inconsistent resolutions and recursive writes fail
 or leave the emitted snapshot stable. Callback-time raw-section and GROUP
