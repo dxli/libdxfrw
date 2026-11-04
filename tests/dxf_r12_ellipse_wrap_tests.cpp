@@ -89,12 +89,15 @@ bool run(){
  }
  // Full turn, equal-parameter, noncanonical and explicit clockwise controls
  // remain byte-for-byte equivalent as geometry, even for an opting adapter.
- for(bool binary:{false,true})for(int mode=0;mode<4;++mode){
+ for(bool binary:{false,true})for(int mode=0;mode<7;++mode){
   DRW_Ellipse e=capture.ellipse;
   if(mode==0){e.staparam=0.;e.endparam=turn;}
   if(mode==1){e.staparam=.5;e.endparam=.5;}
   if(mode==2){e.staparam=7.;e.endparam=2.;}
   if(mode==3)e.isccw=0;
+  if(mode==4){e.staparam=turn;e.endparam=0.;}
+  if(mode==5){e.staparam=turn-5.0e-11;e.endparam=0.;}
+  if(mode==6){e.staparam=.5;e.endparam=.5-5.0e-11;}
   DRW_Polyline legacy,enabled;
   if(!writeRead(dir/"control0.dxf",e,false,binary,legacy)||!writeRead(dir/"control1.dxf",e,true,binary,enabled)||!same(legacy,enabled))return false;
  }

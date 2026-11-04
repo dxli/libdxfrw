@@ -915,7 +915,8 @@ qualification beyond the bounded extreme-axis normalization fix; see the
 [normalization receipt](docs/research/p6-dxf-ellipse-extreme-axis-normalization-2026-11-04.json).
 For standalone R12 derivation, an explicit adapter opt-in interprets canonical
 wrapped ELLIPSE parameters as counterclockwise; default signed-sweep behavior,
-HATCH edges and derived types remain unchanged. The opt-in requires a known
+HATCH edges, derived types and existing zero/full-turn tolerance behavior remain
+unchanged. The opt-in requires a known
 input convention and does not qualify mixed authored drawings or native CAD
 rendering ([CCW wrap receipt](docs/research/p6-r12-ellipse-ccw-wrap-opt-in-2026-11-04.json)).
 The shared DWG HATCH/MPOLYGON edge writer now dispatches ellipse edges before

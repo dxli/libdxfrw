@@ -1053,7 +1053,8 @@ struct DRW_DxfObjectPhysicalSourceLimits {
 };
 /** Explicit document-wide opt-in for standalone R12 ELLIPSE derivation.
  * For an exact DRW_Ellipse with canonical parameters in [0,2pi], a smaller
- * end parameter is interpreted as a counterclockwise wrap through zero.
+ * end parameter is interpreted as a counterclockwise wrap through zero,
+ * except for sweeps within the tessellator's zero- and full-turn tolerances.
  * Inherit this independent marker only when the caller knows those inputs
  * use ordinary DXF ELLIPSE semantics; legacy authored negative sweeps may
  * intentionally mean clockwise. HATCH edge output and other DXF revisions
