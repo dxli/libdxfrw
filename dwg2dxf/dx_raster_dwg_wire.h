@@ -13,7 +13,10 @@
 
 namespace dx_raster_wire {
 enum class Kind { Definition, Reactor };
-enum class Status { Malformed, Unsupported, Proven };
+// The diagnostic status records a fully framed AC1024 source whose
+// IMAGEDEF owner uses the common-object soft-pointer role, in conflict with
+// the IMAGEDEF-specific hard-owner wording. It is not output qualification.
+enum class Status { Malformed, Unsupported, Proven, UnqualifiedOwnerRole };
 enum class Field : std::size_t {
     Type, DataEnd, Self, EedSize, ReactorCount, XDictMissing, DataStorage,
     ClassVersion, ImageU, ImageV, PathLength, PathUnits, Loaded, Resolution,
@@ -307,11 +310,23 @@ Proof observe(const std::uint8_t* bytes, std::size_t size, unsigned revision,
         if (!body.good || result.dataEnd <= body.pos || result.dataEnd >= total) return result;
         body.end = result.dataEnd;
     }
+    // Identify this possible conflicting owner before parsing EED. An
+    // unsupported EED must not fall through the generic Unsupported path,
+    // which is allowed for older profiles without inspecting owner bytes.
+    detail::Bits ownerProbe{bytes, result.dataEnd, total};
+    const bool unqualifiedOwnerCandidate = revision == 2010u
+        && kind == Kind::Definition
+        && (ownerProbe.take(8u) >> 4u) == 4u && ownerProbe.good;
+    // Fixed-type role-4 IMAGEDEF is not part of this observed profile.
+    if (unqualifiedOwnerCandidate && definitionType < 500u) return result;
     begin = body.pos;
     result.self = detail::handle(body, 0u, 0u, true).value;
     detail::span(result, Field::Self, begin, body.pos);
     const auto eedStatus = detail::eed(body, revision, result, eedVisitor);
-    if (eedStatus != Status::Proven) { result.status = eedStatus; return result; }
+    if (eedStatus != Status::Proven) {
+        result.status = unqualifiedOwnerCandidate ? Status::Malformed : eedStatus;
+        return result;
+    }
     if (revision < 2000u) {
         begin = body.pos;
         result.dataEnd = static_cast<std::uint32_t>(body.little(4u));
@@ -400,10 +415,11 @@ Proof observe(const std::uint8_t* bytes, std::size_t size, unsigned revision,
     detail::span(result, Field::ScalarPadding, body.pos, body.end);
     detail::Bits handles{bytes, result.dataEnd, total};
     begin = handles.pos;
-    const auto owner = detail::handle(handles, kind == Kind::Definition ? 3u : 4u, result.self);
+    const auto owner = detail::handle(handles, unqualifiedOwnerCandidate ? 4u : kind == Kind::Definition ? 3u : 4u, result.self);
     result.owner = owner.value; result.ownerRole = owner.role;
     detail::span(result, Field::Owner, begin, handles.pos);
-    if (!handles.good || result.reactorCount > (handles.end - handles.pos) / 8u) return result;
+    if (!handles.good || (unqualifiedOwnerCandidate && (owner.length == 0u || owner.value == 0u))
+        || result.reactorCount > (handles.end - handles.pos) / 8u) return result;
     begin = handles.pos;
     for (std::uint32_t n = 0; n < result.reactorCount; ++n) {
         const auto start = handles.pos;
@@ -419,7 +435,8 @@ Proof observe(const std::uint8_t* bytes, std::size_t size, unsigned revision,
     }
     if (!handles.good || handles.end - handles.pos > 7u) return result;
     detail::span(result, Field::HandlePadding, handles.pos, handles.end);
-    result.status = result.dataStorage ? Status::Unsupported : Status::Proven;
+    result.status = unqualifiedOwnerCandidate ? Status::UnqualifiedOwnerRole
+        : result.dataStorage ? Status::Unsupported : Status::Proven;
     return result;
 }
 } // namespace dx_raster_wire

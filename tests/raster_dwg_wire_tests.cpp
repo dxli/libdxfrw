@@ -374,6 +374,74 @@ bool run() {
             || !wire::profile(revision, wire::Kind::Definition, p).knownBodyClass) return false;
         ++customProfiles;
     }
+    // The physical AC1024 producer uses an IMAGEDEF soft-pointer parent,
+    // conflicting with the record-specific ODA hard-owner wording. Retain
+    // complete evidence in a distinct, non-output-qualified status only.
+    auto unqualified = make(2010u, wire::Kind::Definition, true, false,
+                            2u, 514u, false, nullptr, true);
+    const auto parent = unqualified.spans[static_cast<std::size_t>(wire::Field::Owner)];
+    const auto reactors = unqualified.spans[static_cast<std::size_t>(wire::Field::Reactors)];
+    unqualified.bytes.patch(parent.begin, 4u, 4u);
+    unsigned visitedReactors = 0u;
+    const auto inspectReactor = [&](std::uint32_t index, std::uint32_t value,
+                                    wire::Span span, std::uint8_t role) noexcept {
+        const std::uint32_t values[] = {0x3344u, 0x5566u};
+        if (index >= 2u || value != values[index] || role != 4u
+            || span.begin != reactors.begin + 24u * index
+            || span.end != reactors.begin + 24u * (index + 1u)) return false;
+        ++visitedReactors;
+        return true;
+    };
+    const auto unqualifiedProof = wire::observe(unqualified.bytes.bytes.data(),
+        unqualified.bytes.bytes.size(), unqualified.revision, unqualified.kind,
+        unqualified.handles, inspectReactor, wire::detail::IgnoreEed{},
+        unqualified.objectType);
+    if (unqualifiedProof.status != wire::Status::UnqualifiedOwnerRole
+        || unqualifiedProof.ownerRole != 4u || unqualifiedProof.owner != 0x2211u
+        || unqualifiedProof.reactorCount != 2u || visitedReactors != 2u
+        || !sameSpans(unqualified, unqualifiedProof)) return false;
+    for (unsigned role : {2u, 5u, 6u}) {
+        auto bad = unqualified; bad.bytes.patch(parent.begin, role, 4u);
+        if (scan(bad).status != wire::Status::Malformed) return false;
+    }
+    auto zeroOwner = unqualified; zeroOwner.bytes.patch(parent.begin + 8u, 0u, 16u);
+    if (scan(zeroOwner).status != wire::Status::Malformed) return false;
+    auto badReactor = unqualified; badReactor.bytes.patch(reactors.begin, 5u, 4u);
+    if (scan(badReactor).status != wire::Status::Malformed) return false;
+    for (std::size_t size = 0; size < unqualified.bytes.bytes.size(); ++size)
+        if (wire::observe(unqualified.bytes.bytes.data(), size, unqualified.revision,
+                          unqualified.kind, unqualified.handles,
+                          wire::detail::Ignore{}, wire::detail::IgnoreEed{},
+                          unqualified.objectType).status != wire::Status::Malformed) return false;
+    for (unsigned revision : {2004u, 2007u, 2013u, 2018u}) {
+        auto wrongRevision = make(revision, wire::Kind::Definition, true, false,
+                                  2u, 514u, false, nullptr, true);
+        wrongRevision.bytes.patch(
+            wrongRevision.spans[static_cast<std::size_t>(wire::Field::Owner)].begin, 4u, 4u);
+        if (scan(wrongRevision).status != wire::Status::Malformed) return false;
+    }
+    const auto ownerEed = eed(2010u);
+    auto unknownEed = make(2010u, wire::Kind::Definition, true, false,
+                           2u, 514u, false, &ownerEed.bytes, true);
+    unknownEed.bytes.patch(unknownEed.spans[static_cast<std::size_t>(wire::Field::Owner)].begin, 4u, 4u);
+    const auto eedStart = unknownEed.spans[static_cast<std::size_t>(wire::Field::Eed)].begin;
+    unknownEed.bytes.patch(eedStart + ownerEed.tokens[1].span.begin, 1u, 8u);
+    if (scan(unknownEed).status != wire::Status::Malformed) return false;
+    auto dataStorage = make(2013u, wire::Kind::Definition, true, false,
+                            2u, 514u, false, nullptr, true);
+    dataStorage.bytes.patch(dataStorage.spans[static_cast<std::size_t>(wire::Field::Owner)].begin, 4u, 4u);
+    dataStorage.bytes.patch(dataStorage.spans[static_cast<std::size_t>(wire::Field::DataStorage)].begin, 1u, 1u);
+    if (scan(dataStorage).status != wire::Status::Malformed) return false;
+    auto fixedWithEed = make(2010u, wire::Kind::Definition, true, false,
+                             2u, 514u, false, &ownerEed.bytes, false);
+    fixedWithEed.bytes.patch(fixedWithEed.spans[static_cast<std::size_t>(wire::Field::Owner)].begin, 4u, 4u);
+    if (scan(fixedWithEed).status != wire::Status::Malformed) return false;
+    const auto fixedEedStart = fixedWithEed.spans[static_cast<std::size_t>(wire::Field::Eed)].begin;
+    fixedWithEed.bytes.patch(fixedEedStart + ownerEed.tokens[1].span.begin, 1u, 8u);
+    if (scan(fixedWithEed).status != wire::Status::Malformed) return false;
+    auto wrongType = make(2010u, wire::Kind::Definition, true);
+    wrongType.bytes.patch(wrongType.spans[static_cast<std::size_t>(wire::Field::Owner)].begin, 4u, 4u);
+    if (scan(wrongType).status != wire::Status::Malformed) return false;
     auto unsupported = make(2018u, wire::Kind::Definition);
     auto proof = scan(unsupported);
     unsupported.bytes.patch(proof.at(wire::Field::EedSize).begin, 1u, 2u);

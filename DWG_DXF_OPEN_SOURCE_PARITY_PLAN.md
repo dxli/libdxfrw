@@ -836,9 +836,13 @@ A suffix-free AC1027 source acquired the same 739-byte form after an ODA
 resave, narrowing its origin to that observed save process without explaining
 its contents; see the [controlled receipt](docs/research/p6-ac1027-oda-header-suffix-controlled-producer-2026-11-04.json).
 An AC1024 maintenance-55 source now reaches its raster and NOD callbacks under
-the same diagnostic policy. Its strict export first fails on IMAGEDEF/reactor
-capture or correlation; resolve that graph while retaining the separate HEADER
-warnings and unclaimed suffix refusal. See the [AC1024 HEADER receipt](docs/research/p6-ac1024-header-unclaimed-suffix-diagnostic-2026-11-04.json).
+the same diagnostic policy. Its IMAGEDEF and reactor are retained for diagnosis,
+but export refuses the IMAGEDEF's unqualified role-4 owner because ODA's common
+and record-specific descriptions conflict. Resolve that role with authoritative
+evidence and close the image/proxy graph while retaining the separate HEADER
+warnings and unclaimed suffix refusal. Audit other revisions' generic Unsupported
+paths separately. See the [HEADER receipt](docs/research/p6-ac1024-header-unclaimed-suffix-diagnostic-2026-11-04.json)
+and [IMAGEDEF receipt](docs/research/p4-ac1024-imagedef-owner-role-diagnostic-2026-11-04.json).
 
 SOLID, TRACE and 3DFACE input now refuse a fourth Z without fourth X/Y
 instead of silently replacing it. Valid triangle and default-Z inputs

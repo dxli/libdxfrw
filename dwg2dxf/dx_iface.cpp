@@ -19844,7 +19844,8 @@ unsigned rasterWireRevision(DRW::Version version) noexcept {
 
 bool rasterWireMatches(const dx_raster_wire::Proof& proof, const DRW_TableEntry& typed,
                        int objectType, bool definition) noexcept {
-    if (proof.status != dx_raster_wire::Status::Proven)
+    if (proof.status != dx_raster_wire::Status::Proven
+        && proof.status != dx_raster_wire::Status::UnqualifiedOwnerRole)
         return proof.status == dx_raster_wire::Status::Unsupported;
     if (proof.objectType != static_cast<unsigned>(objectType) || proof.self != typed.handle
         || proof.owner != typed.parentHandle || proof.reactorCount != typed.reactorHandles.size()
@@ -24152,7 +24153,9 @@ void dx_iface::finishRasterDwgSources(bool successfulRead, std::size_t appIdBegi
                     : dx_raster_wire::Kind::Reactor, raw.m_bodyBitSize, visitReactor, inspectEed,
                 static_cast<std::uint32_t>(raw.m_objectType));
             if (!rasterWireMatches(wire, *typed, raw.m_objectType, definition)
-                || (wire.status == dx_raster_wire::Status::Proven && wire.eedVariants != typed->extData.size())) {
+                || ((wire.status == dx_raster_wire::Status::Proven
+                     || wire.status == dx_raster_wire::Status::UnqualifiedOwnerRole)
+                    && wire.eedVariants != typed->extData.size())) {
                 reject();
                 return;
             }
@@ -24401,7 +24404,9 @@ bool dx_iface::hasUnchangedRasterDwgSources() const noexcept {
                 || frame.nameImport->codePagePresent != frame.sourceCodePageFieldPresent
                 || frame.nameImport->codePageRecognized != frame.sourceCodePageRecognized))
             || !frame.classBindingObserved || !dx_class_evidence::sameRasterBinding(frame.classBinding, rasterClassBinding(frame))
-            || !frame.wireObserved || !frame.dependenciesObserved || frame.wire.status == dx_raster_wire::Status::Malformed
+            || !frame.wireObserved || !frame.dependenciesObserved
+            || frame.wire.status == dx_raster_wire::Status::Malformed
+            || frame.wire.status == dx_raster_wire::Status::UnqualifiedOwnerRole
             || !frame.publicationSeen || source.first.first != frame.generation
             || source.first.second != frame.raw.m_handle
             || (definition && reactor != cData->imageDefinitionReactors.end())
@@ -72468,7 +72473,14 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         return false;
     }
     if (!hasUnchangedRasterDwgSources()) {
-        reportPreflightFailure("DWG IMAGEDEF/reactor source capture or immutable payload correlation failed");
+        const bool unqualifiedOwner = std::any_of(cData->m_rasterDwgSources.begin(),
+            cData->m_rasterDwgSources.end(), [](const auto& item) {
+                return item.second.wireObserved
+                    && item.second.wire.status == dx_raster_wire::Status::UnqualifiedOwnerRole;
+            });
+        reportPreflightFailure(unqualifiedOwner
+            ? "DWG IMAGEDEF owner role is unqualified for output"
+            : "DWG IMAGEDEF/reactor source capture or immutable payload correlation failed");
         return false;
     }
     if (cData->hasStandardDwgObjectCaptureFailure()) {
