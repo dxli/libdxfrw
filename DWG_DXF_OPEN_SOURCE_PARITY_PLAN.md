@@ -123,8 +123,11 @@ and [original receipt](docs/research/p4-ac1018-empty-style-dwg-bit-order-differe
 ## P4 — original bodies and complete document closure
 
 **Open strict-output defect:** a CRC-resealed AC1027 source with layer 0's
-linetype handle changed to a missing target can currently export successfully
-with `CONTINUOUS` substituted. Keep the selected one-layer graph's output
+linetype handle changed to a missing target previously exported successfully
+with `CONTINUOUS` substituted. Strict and partial output is now conservatively
+refused for aggregates that have imported AC1027 DWG, until source closure is
+proven ([guard receipt](docs/research/p4-ac1027-strict-graph-interim-guard-2026-11-04.json)).
+Keep the selected one-layer graph's output
 qualification open until same-import LTYPE identity, target kind/name and
 emitted reference are bound, with dangling and wrong-kind refusal/retry tests.
 Common entity LAYER and explicit LTYPE lookups now report unresolved or
@@ -145,12 +148,11 @@ closure proof or refusal. Audit referenced color, text/dimension style, block
 record and MLINESTYLE lookup fallbacks as well; class-specific gates do not
 automatically establish closure for every entity route.
 
-The bounded one-layer AC1027 default-material/plotstyle graph now converts a
-selected generated LINE DWG through strict CLI in ASCII and Binary. Source
-frames, CLASS rows, HEADER material, LAYER targets and emitted OBJECTS are
-correlated and checked. The broader physical producer contains an additional
-layer and remains outside this admission; arbitrary materials, extra layers,
-other versions and native FreeCAD behavior remain open
+Earlier selected generated LINE conversions exercised a bounded one-layer
+AC1027 default-material/plotstyle graph in ASCII and Binary. Reopen strict
+output only after the unresolved references above are closed. The broader
+physical producer contains an additional layer; arbitrary materials, extra
+layers, other versions and native FreeCAD behavior remain open
 ([receipt](docs/research/p6-ac1027-default-graph-strict-dxf-2026-11-04.json)).
 Strict same-version DXF repeat is bounded to the selected one-layer graph and
 its source-bound CLASS and dictionary records; broader source shapes,

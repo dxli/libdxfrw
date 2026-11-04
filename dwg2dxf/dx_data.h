@@ -2379,6 +2379,8 @@ private:
     std::optional<dwgHandle> m_ac1027HeaderMaterialSource;
     std::uint64_t m_ac1027HeaderMaterialGeneration{0u};
     bool m_ac1027HeaderMaterialDuplicate{false};
+    // Sticky while this aggregate may retain data from an AC1027 DWG import.
+    bool m_unqualifiedAc1027DwgImport{false};
     struct StandardDwgObjectFrame {
         DRW_UnsupportedObject raw;
         DRW_DwgFramePublication publication;

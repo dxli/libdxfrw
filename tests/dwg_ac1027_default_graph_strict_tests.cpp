@@ -1,3 +1,5 @@
+// Historical positive/graph controls remain runnable via an explicit switch;
+// they cannot pass until the selected source graph is fully qualified.
 #include "dx_iface.h"
 #include "dx_data.h"
 #include "libdwgr.h"
@@ -63,7 +65,7 @@ public:
  bool finalizeDwgWrite() override { return ok; }
  dwgRW& writer; bool ok=false;
 };
-int main(){
+static int historicalPositiveControls(){
  const auto base=std::filesystem::temp_directory_path() / ("libdxfrw-ac1027-strict-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
  std::filesystem::create_directories(base);
  const std::string input=(base/"line.dwg").string(); dwgRW dwg(input.c_str());Provider provider(dwg);if(!dwg.write(&provider,DRW::AC1027,true)||!provider.ok)return 2;
@@ -280,4 +282,84 @@ int main(){
       ||contents(target2)!=contents(source))return 69;
  }
  std::filesystem::remove_all(base);
+ return 0;
+}
+
+class GuardProvider final : public LC3CompatCheck, public DRW_DwgDefaultMaterialProvider, public DRW_DwgDefaultPlotStyleProvider {
+public:
+ explicit GuardProvider(dwgRW& w): writer(w) {}
+ bool wantsDwgDefaultMaterialGraph() const override { return true; }
+ bool wantsDwgDefaultPlotStyleGraph() const override { return true; }
+ bool dwgDefaultMaterialOpaqueReferencesAbsent(std::uint32_t a,std::uint32_t b,std::uint32_t c,std::uint32_t d) const override { return a && b && c && d; }
+ void writeEntities() override { DRW_Line line;line.basePoint={1.,2.,3.};line.secPoint={4.,5.,6.};ok=writer.writeLine(&line); }
+ bool finalizeDwgWrite() override { return ok; }
+ dwgRW& writer;bool ok=false;
+};
+class ReentrantGuardWriter final : public dx_iface {
+public:
+ dx_data* data{nullptr};std::string input;bool attempted{false},imported{false};
+ void writeHeader(DRW_Header& header) override {
+  attempted=true;dx_iface other;imported=other.fileImport(input,data,false);
+  dx_iface::writeHeader(header);
+ }
+ bool finalizeDxfWrite() override { return true; }
+};
+int main(int argc,char** argv) {
+ if(argc==2 && std::string(argv[1])=="--historical-positive-controls")return historicalPositiveControls();
+ const auto base=std::filesystem::temp_directory_path() / ("libdxfrw-ac1027-guard-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+ std::filesystem::create_directories(base);
+ const std::string input=(base/"line.dwg").string();dwgRW dwg(input.c_str());GuardProvider provider(dwg);
+ if(!dwg.write(&provider,DRW::AC1027,true)||!provider.ok)return 2;
+ dx_data data;dx_iface reader;if(!reader.fileImport(input,&data,false)||data.materials.size()!=3u||data.dictionaryWithDefaults.size()!=1u)return 3;
+ if(!DxIfaceStandardDwgCaptureTestAccess::headerMaterial(data)||!DxIfaceStandardDwgCaptureTestAccess::layerSource(data))return 4;
+ for(bool bin:{false,true}) {
+  dx_iface writer;const auto output=(base/(bin?"binary.dxf":"ascii.dxf")).string();
+  const auto save=[&](dx_dwgReadCompletenessPolicy p,bool owners) {return writer.fileExport(output,DRW::AC1027,bin,&data,false,owners,dx_dxfSourceTextPolicy::RequireValidSource,DRW::DxfTextWritePolicy::RequireLossless,dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,p);};
+  const auto blocked=[&](dx_dwgReadCompletenessPolicy p,bool owners) {
+   {std::ofstream out(output,std::ios::binary|std::ios::trunc);out<<"sentinel";}
+   return !save(p,owners)&&contents(output)=="sentinel";
+  };
+  for(auto mode:{std::make_pair(dx_dwgReadCompletenessPolicy::RequireComplete,false),std::make_pair(dx_dwgReadCompletenessPolicy::RequireComplete,true),std::make_pair(dx_dwgReadCompletenessPolicy::AllowPartial,false),std::make_pair(dx_dwgReadCompletenessPolicy::AllowPartial,true),std::make_pair(dx_dwgReadCompletenessPolicy::Legacy,true)}) {
+   if(!blocked(mode.first,mode.second)||!blocked(mode.first,mode.second))return 5;
+   const auto format=data.sourceFormat;const auto version=data.sourceVersion;const auto generation=data.importGeneration;
+   data.sourceFormat=dx_source_format::Unknown;data.sourceVersion=DRW::UNKNOWNV;++data.importGeneration;
+   if(!blocked(mode.first,mode.second))return 13;
+   data.sourceFormat=format;data.sourceVersion=version;data.importGeneration=generation;
+   auto savedMaterials=std::move(data.materials);if(!blocked(mode.first,mode.second))return 6;data.materials=std::move(savedMaterials);
+   auto savedDictionaries=std::move(data.dictionaryWithDefaults);if(!blocked(mode.first,mode.second))return 7;data.dictionaryWithDefaults=std::move(savedDictionaries);
+   auto header=DxIfaceStandardDwgCaptureTestAccess::headerMaterial(data);DxIfaceStandardDwgCaptureTestAccess::headerMaterial(data).reset();
+   if(!blocked(mode.first,mode.second))return 8;
+   DxIfaceStandardDwgCaptureTestAccess::headerMaterial(data)=header;
+   auto layer=DxIfaceStandardDwgCaptureTestAccess::layerSource(data);DxIfaceStandardDwgCaptureTestAccess::layerSource(data).reset();
+   if(!blocked(mode.first,mode.second))return 9;
+   DxIfaceStandardDwgCaptureTestAccess::layerSource(data)=layer;
+   auto& layerGeneration=DxIfaceStandardDwgCaptureTestAccess::layerGeneration(data);
+   auto& headerGeneration=DxIfaceStandardDwgCaptureTestAccess::headerGeneration(data);
+   auto& layerDuplicate=DxIfaceStandardDwgCaptureTestAccess::layerDuplicate(data);
+   const auto oldLayerGeneration=layerGeneration,oldHeaderGeneration=headerGeneration;
+   const bool oldDuplicate=layerDuplicate;
+   layerGeneration=0u;headerGeneration=0u;layerDuplicate=true;
+   if(!blocked(mode.first,mode.second))return 16;
+   layerGeneration=oldLayerGeneration;headerGeneration=oldHeaderGeneration;layerDuplicate=oldDuplicate;
+  }
+  // Legacy without owner checks remains on its prior unguarded route; this
+  // particular source may still fail later, for unrelated output limits.
+  (void)writer.fileExport(output,DRW::AC1027,bin,&data,false,false);
+ }
+ {
+  dx_data fresh;ReentrantGuardWriter out;out.data=&fresh;out.input=input;
+  const auto target=(base/"reentrant.dxf").string();const auto generation=fresh.importGeneration;
+  const bool wrote=out.fileExport(target,DRW::AC1027,false,&fresh,false,false,
+      dx_dxfSourceTextPolicy::Compatible,DRW::DxfTextWritePolicy::RequireLossless,
+      dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,dx_dwgReadCompletenessPolicy::RequireComplete);
+  if(!wrote||!out.attempted||out.imported||fresh.importGeneration!=generation)return 11;
+  dx_iface reimport;if(!reimport.fileImport(target,&data,false))return 14;
+  dx_iface check;const auto blockedTarget=(base/"after-reimport.dxf").string();
+  {std::ofstream sentinel(blockedTarget,std::ios::binary|std::ios::trunc);sentinel<<"sentinel";}
+  if(check.fileExport(blockedTarget,DRW::AC1027,false,&data,false,false,dx_dxfSourceTextPolicy::RequireValidSource,
+       DRW::DxfTextWritePolicy::RequireLossless,dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
+       dx_dwgReadCompletenessPolicy::RequireComplete)||contents(blockedTarget)!="sentinel")return 15;
+  dx_iface after;if(!after.fileImport(input,&fresh,false))return 12;
+ }
+ std::filesystem::remove_all(base);return 0;
 }

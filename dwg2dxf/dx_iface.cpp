@@ -70,6 +70,22 @@
 #include "intern/dxfmleadercolor.h"
 
 namespace {
+struct StrictDxfExportLease {
+    dx_data* data;
+    bool strict;
+    StrictDxfExportLease* previous;
+    static thread_local StrictDxfExportLease* active;
+    StrictDxfExportLease(dx_data* value, bool enabled) noexcept
+        : data(value), strict(enabled), previous(active) { active=this; }
+    ~StrictDxfExportLease() { active=previous; }
+};
+thread_local StrictDxfExportLease* StrictDxfExportLease::active=nullptr;
+
+bool hasStrictDxfExportLease(const dx_data* data) noexcept {
+    for (auto* lease=StrictDxfExportLease::active;lease;lease=lease->previous)
+        if (lease->strict && lease->data==data) return true;
+    return false;
+}
 
 bool standardDwgCommonEqual(const DRW_TableEntry&, const DRW_TableEntry&,
                             DRW::Version, bool) noexcept;
@@ -66436,6 +66452,7 @@ bool validateNamedObjectRootForExport(const dx_data& data,
 
 bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
                           DRW::DxfCodePagePolicy codePagePolicy){
+    if (fData && hasStrictDxfExportLease(fData)) return false;
     // Every attempt invalidates a previous accepted whole-source owner before
     // any early failure; reentry also invalidates the still-active owner.
     const auto invalidateWhole=[](dx_data& data) noexcept {
@@ -66881,7 +66898,15 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
                 owner.m_dwgDimensionImport.reset();
             }
         } dimensionImportScope{*this};
+        // A nested export during import must not observe a temporarily
+        // unguarded DWG. Retain the marker for AC1027 and for reentrant reads.
+        const bool priorUnqualifiedAc1027 = fData->m_unqualifiedAc1027DwgImport;
+        const auto guardedImportGeneration = fData->importGeneration;
+        fData->m_unqualifiedAc1027DwgImport = true;
         const bool success = dwg.read(this, false);
+        if (dwg.getVersion() != DRW::AC1027
+            && fData->importGeneration == guardedImportGeneration)
+            fData->m_unqualifiedAc1027DwgImport = priorUnqualifiedAc1027;
         m_collectDwgDimensionImport = false;
         if (m_dwgDimensionImport) {
             m_dwgDimensionImport->version = dwg.getVersion();
@@ -73143,6 +73168,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                           DRW::DxfTextWritePolicy targetTextPolicy,
                           dx_dxfProxyGraphicsPolicy proxyGraphicsPolicy,
                           dx_dwgReadCompletenessPolicy readCompletenessPolicy){
+    const bool ac1027GuardStrict = readCompletenessPolicy!=dx_dwgReadCompletenessPolicy::Legacy || requireResolvedOwners;
+    StrictDxfExportLease strictExportLease(fData,ac1027GuardStrict);
     m_sunStudyOutputInspected = false;
     m_sunStudyRootSnapshot.reset();
     m_sunStudyOwnerSnapshot.reset();
@@ -73515,6 +73542,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         && readCompletenessPolicy
                != dx_dwgReadCompletenessPolicy::AllowPartial) {
         reportPreflightFailure("unknown DWG read completeness policy");
+        return false;
+    }
+    // Source owner/member roles and entity references are not yet all bound.
+    if (ac1027GuardStrict && cData->m_unqualifiedAc1027DwgImport) {
+        reportPreflightFailure("AC1027 DWG source references are not fully qualified");
         return false;
     }
     if (requireResolvedOwners
