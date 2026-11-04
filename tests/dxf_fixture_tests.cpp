@@ -25695,7 +25695,7 @@ bool generateAmbiguousLwPolyline(const std::filesystem::path& path, bool binary,
     tags->writeString(2, "ENTITIES"); tags->writeString(0, "LWPOLYLINE");
     tags->writeString(100, "AcDbEntity"); tags->writeString(8, "0");
     tags->writeString(100, "AcDbPolyline");
-    if (mode != 3) tags->writeInt32(90, 3);
+    if (mode != 3 && mode != 9) tags->writeInt32(90, 3);
     if (mode == 0) { // Grouped coordinates with a sparse, unbound width array.
         for (int i = 0; i < 3; ++i) tags->writeDouble(20, i + 2.);
         for (int i = 0; i < 3; ++i) tags->writeDouble(10, i + 1.);
@@ -25706,6 +25706,17 @@ bool generateAmbiguousLwPolyline(const std::filesystem::path& path, bool binary,
             if (i == 1) tags->writeDouble(42, .5);
         }
         tags->writeInt32(90, 3);
+    } else if (mode >= 4 && mode <= 9) {
+        if (mode == 7) { // Grouped coordinates; one Y component is absent.
+            for (int i = 0; i < 3; ++i) tags->writeDouble(10, i + 1.);
+            for (int i = 0; i < 2; ++i) tags->writeDouble(20, i + 2.);
+        } else {
+            for (int i = 0; i < 3; ++i) {
+                tags->writeDouble(10, i + 1.);
+                if (mode == 8 || i != (mode == 9 ? 1 : mode - 4))
+                    tags->writeDouble(20, mode == 8 ? 0. : i + 2.);
+            }
+        }
     } else { // An interleaved record then a contradictory coordinate or duplicate field.
         tags->writeDouble(10, 1.); tags->writeDouble(20, 2.); tags->writeDouble(40, .5);
         if (mode == 1) {tags->writeDouble(10, 2.); tags->writeDouble(10, 3.);}
@@ -25963,6 +25974,26 @@ void testLwPolylinePointComponentOrder(TestContext& t) {
                      && latePolyline->vertlist[1]->bulge == .5
                      && latePolyline->vertlist[2]->bulge == 0.,
                  (format + " LWPOLYLINE group 90 after vertices preserves sparse binding").c_str());
+        for (int mode : {4,5,6,7,9}) {
+            PolylineCallbackProbe missingReader;dx_data missingData;
+            const bool missingRefused = generateAmbiguousLwPolyline(malformedPath, binary, mode)
+                && !missingReader.fileImport(malformedPath.string(), &missingData, false);
+            t.expect(missingRefused && missingReader.callbacks == 0u,
+                     (format + " LWPOLYLINE missing Y refuses before callback").c_str());
+            dx_data recovered;
+            t.expect(missingReader.fileImport(sourcePath.string(), &recovered, false)
+                         && missingReader.callbacks == 1u,
+                     (format + " same-reader retry succeeds after missing Y").c_str());
+        }
+        dx_data zeroData;dx_iface zeroReader;
+        const bool zeroRead = generateAmbiguousLwPolyline(malformedPath, binary, 8)
+            && zeroReader.fileImport(malformedPath.string(), &zeroData, false);
+        const auto* zeroPolyline = zeroRead && zeroData.mBlock != nullptr && !zeroData.mBlock->ent.empty()
+            ? dynamic_cast<const DRW_LWPolyline*>(zeroData.mBlock->ent.front()) : nullptr;
+        t.expect(zeroPolyline != nullptr && zeroPolyline->vertlist.size() == 3u
+                     && std::all_of(zeroPolyline->vertlist.cbegin(),zeroPolyline->vertlist.cend(),
+                         [](const auto& vertex){return vertex != nullptr && vertex->y == 0.;}),
+                 (format + " explicit zero Y is valid for each LWPOLYLINE vertex").c_str());
         std::filesystem::remove(sourcePath, error);
         std::filesystem::remove(reorderedPath, error);
         std::filesystem::remove(malformedPath, error);

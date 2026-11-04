@@ -617,6 +617,7 @@ EXTRA_DIST = \
     tools/audit_ac1024_vport_null_roles.py \
     tools/audit_ac1027_planar_sab_geometry.py \
     tools/audit_dwg_ltype_control.py \
+    tools/audit_dxf_lwpolyline_missing_y.py \
     tools/audit_dxf_sparse_lwpolyline.py \
     tools/audit_dxf_table_values.py \
     tools/audit_p9_rtext_native_history.py \
@@ -678,6 +679,7 @@ EXTRA_DIST = \
     tools/normalize_oracle.py \
     tools/probe_ac1024_tilted_geometry.cpp \
     tools/probe_ac1027_source_sab_cqacis.py \
+    tools/probe_dxf_lwpolyline_missing_y.cpp \
     tools/probe_dxf_sparse_lwpolyline.cpp \
     tools/qualify_material_source_order.py \
     tools/run_external_advisory.py \

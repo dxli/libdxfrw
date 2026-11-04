@@ -13309,7 +13309,8 @@ bool DRW_LWPolyline::validateDxf() const {
         m_dxfVertexFieldCounts.cbegin(), m_dxfVertexFieldCounts.cend(),
         [](std::uint32_t count) { return count != 0; });
     return (!parsedVertexFields
-            || xCount == vertlist.size())
+            || (xCount == vertlist.size()
+                && m_dxfVertexFieldCounts[1] == xCount))
         && (!m_dxfVertexCountSeen
             || (vertlist.size() == static_cast<std::size_t>(vertexnum)
                 && xCount == static_cast<std::uint32_t>(vertexnum)))
