@@ -1440,6 +1440,10 @@ if(LIBDXFRW_BUILD_TESTS)
     add_test(NAME libdxfrw_dwg_r2007_section_map_page_extent
         COMMAND libdxfrw_dwg_reader_matrix_tests
             --r2007-section-map-page-extent)
+    add_test(NAME libdxfrw_dwg_header_reference_roles
+        COMMAND libdxfrw_dwg_reader_matrix_tests --header-reference-roles)
+    set_tests_properties(libdxfrw_dwg_header_reference_roles PROPERTIES
+        LABELS "fast;dwg;header;generated;handles" TIMEOUT 30)
     set_tests_properties(libdxfrw_dwg_r2007_section_map_page_extent PROPERTIES
         LABELS "fast;dwg;section-map;generated;AC1021"
         TIMEOUT 30)

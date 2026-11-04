@@ -4108,12 +4108,12 @@ namespace {
         }
         return UTF8STRING(it->second->c_str());
     }
-    /// Build a hard-pointer handle (code 4) referring to `ref`.  Returns
+    /// Build a hard-pointer handle (code 5) referring to `ref`.  Returns
     /// the null handle when ref==0, which matches what parseDwg sees in
     /// an empty document.
     dwgHandle makeHardPtr(std::uint32_t ref) {
         dwgHandle h;
-        h.code = (ref == 0) ? 0 : 4;
+        h.code = (ref == 0) ? 0 : 5;
         h.ref  = ref;
         h.size = 0;
         if (ref != 0) {
@@ -4539,17 +4539,17 @@ bool DRW_Header::encodeDwgForWriter(
 
     // -------- Control-handle block (parseDwg:2162-2199, 12 or 13 handles) ---------
     // vpEntHeaderCtrl is R2000 and earlier only (parseDwg skips it for AC1018+).
-    hBbuf->putHandle(makeHardPtr(blockCtrl));           // BLOCK_CONTROL  (0x01)
-    hBbuf->putHandle(makeHardPtr(layerCtrl));           // LAYER_CONTROL  (0x02)
-    hBbuf->putHandle(makeHardPtr(styleCtrl));           // STYLE_CONTROL  (0x03)
-    hBbuf->putHandle(makeHardPtr(linetypeCtrl));        // LTYPE_CONTROL  (0x05)
-    hBbuf->putHandle(makeHardPtr(viewCtrl));            // VIEW_CONTROL   (0x06)
-    hBbuf->putHandle(makeHardPtr(ucsCtrl));             // UCS_CONTROL    (0x07)
-    hBbuf->putHandle(makeHardPtr(vportCtrl));           // VPORT_CONTROL  (0x08)
-    hBbuf->putHandle(makeHardPtr(appidCtrl));           // APPID_CONTROL  (0x09)
-    hBbuf->putHandle(makeHardPtr(dimstyleCtrl));        // DIMSTYLE_CONTROL (0x0A)
+    hBbuf->putHandle(makeHardOwner(blockCtrl));           // BLOCK_CONTROL  (0x01)
+    hBbuf->putHandle(makeHardOwner(layerCtrl));           // LAYER_CONTROL  (0x02)
+    hBbuf->putHandle(makeHardOwner(styleCtrl));           // STYLE_CONTROL  (0x03)
+    hBbuf->putHandle(makeHardOwner(linetypeCtrl));        // LTYPE_CONTROL  (0x05)
+    hBbuf->putHandle(makeHardOwner(viewCtrl));            // VIEW_CONTROL   (0x06)
+    hBbuf->putHandle(makeHardOwner(ucsCtrl));             // UCS_CONTROL    (0x07)
+    hBbuf->putHandle(makeHardOwner(vportCtrl));           // VPORT_CONTROL  (0x08)
+    hBbuf->putHandle(makeHardOwner(appidCtrl));           // APPID_CONTROL  (0x09)
+    hBbuf->putHandle(makeHardOwner(dimstyleCtrl));        // DIMSTYLE_CONTROL (0x0A)
     if (version < DRW::AC1018) {                        // R2000 and earlier only
-        hBbuf->putHandle(makeHardPtr(vpEntHeaderCtrl)); // VPORT_ENTITY_HEADER_CONTROL (0x0B)
+        hBbuf->putHandle(makeHardOwner(vpEntHeaderCtrl)); // VPORT_ENTITY_HEADER_CONTROL (0x0B)
     }
     hBbuf->putHandle(makeSoftOwner(0));                 // DICT ACAD_GROUP (Phase 3.5: 0x0D)
     hBbuf->putHandle(makeSoftOwner(0));                 // DICT ACAD_MLINESTYLE (Phase 3.5: 0x0E)

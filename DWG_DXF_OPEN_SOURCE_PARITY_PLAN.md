@@ -838,6 +838,9 @@ freshly generated single-LINE AC1021 file. Identify the remaining cause before
 qualifying this writer profile; see the [second-header receipt](docs/research/p6-ac1021-second-file-header-offset-2026-11-03.json),
 the [section-profile receipt](docs/research/p6-ac1021-section-capacity-appinfo-profile-2026-11-03.json)
 and earlier [framing receipt](docs/research/p6-ac1021-fixed-metadata-header-pointer-2026-11-03.json).
+Non-null HEADER table-control and standard-reference roles now use their
+specified handle codes, while typed nulls and caller-selected current table
+references still need source-backed output binding. See the [role receipt](docs/research/p6-dwg-header-nonnull-reference-wire-roles-2026-11-03.json).
 
 The ELLIPSE-to-polyline work bound now covers derived segment counts and R12
 refusal/retry; other geometry and caller-state profiles below remain open. See the

@@ -54,6 +54,22 @@
 #include "intern/dwgwriter32.h"
 #include "intern/dwgsafety.h"
 
+class DrwHeaderEncodeTestAccess {
+public:
+    static void setControlHandles(DRW_Header& header) {
+        header.blockCtrl = 0xa1u;
+        header.layerCtrl = 0xa2u;
+        header.styleCtrl = 0xa3u;
+        header.linetypeCtrl = 0xa4u;
+        header.viewCtrl = 0xa5u;
+        header.ucsCtrl = 0xa6u;
+        header.vportCtrl = 0xa7u;
+        header.appidCtrl = 0xa8u;
+        header.dimstyleCtrl = 0xa9u;
+        header.vpEntHeaderCtrl = 0xaau;
+    }
+};
+
 class DwgBlockOwnershipTestAccess {
 public:
     static bool parse(DRW_Block_Record& record, DRW::Version version,
@@ -10659,6 +10675,52 @@ public:
     using DRW_Header::encodeDwg;
 };
 
+void testHeaderReferenceRoles(TestContext& t) {
+    for (const DRW::Version version : {DRW::AC1015, DRW::AC1018, DRW::AC1021,
+             DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+        HeaderWriteProbe header;
+        DrwHeaderEncodeTestAccess::setControlHandles(header);
+        dwgBufferW data;
+        dwgBufferW handles;
+        dwgBufferW strings;
+        const bool encoded = header.encodeDwg(version, &data, &handles, &strings);
+        t.expect(encoded, "HEADER handle-role fixture encodes");
+        if (!encoded)
+            continue;
+        const auto& bytes = handles.data();
+        const auto tokenMatches = [&handles, &bytes](std::uint64_t reference,
+                                                     std::uint8_t expectedCode) {
+            const DRW::DwgHandleWriteOccurrence* match = nullptr;
+            for (const auto& occurrence : handles.handleOccurrences()) {
+                if (occurrence.reference != reference)
+                    continue;
+                if (match != nullptr)
+                    return false;
+                match = &occurrence;
+            }
+            if (match == nullptr || match->startBit + 16u > bytes.size() * 8u)
+                return false;
+            std::uint16_t raw = 0u;
+            for (std::uint64_t bit = match->startBit;
+                 bit < match->startBit + 16u; ++bit) {
+                raw = static_cast<std::uint16_t>((raw << 1u)
+                    | ((bytes[bit / 8u] >> (7u - bit % 8u)) & 1u));
+            }
+            // These literal one-byte references yield a one-byte handle body.
+            return raw == static_cast<std::uint16_t>(
+                ((expectedCode << 4u) | 1u) * 256u + reference);
+        };
+        for (std::uint64_t ref = 0xa1u; ref <= 0xa9u; ++ref)
+            t.expect(tokenMatches(ref, 3u), "HEADER table control is a hard owner");
+        if (version == DRW::AC1015)
+            t.expect(tokenMatches(0xaau, 3u),
+                     "legacy viewport entity header control is a hard owner");
+        for (const std::uint64_t ref : {0x18u, 0x17u, 0x10u, 0x0fu, 0x11u})
+            t.expect(tokenMatches(ref, 5u),
+                     "HEADER model/paper space and standard linetypes are hard pointers");
+    }
+}
+
 std::uint16_t headerTestCrc(const std::vector<std::uint8_t>& bytes,
                            std::size_t start, std::size_t end) {
     // Bit-wise CRC from ODA's reflected CRC16 table, independent of the
@@ -17635,6 +17697,12 @@ int main(int argc, char** argv) {
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }
+    if (argc == 2 && std::string(argv[1]) == "--header-reference-roles") {
+        TestContext focused;
+        testHeaderReferenceRoles(focused);
+        std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--header-date-time-validation") {
         TestContext focused;
         testHeaderDateTimeEncoding(focused);
@@ -17860,6 +17928,7 @@ int main(int argc, char** argv) {
     testAc1027CommonEntityHandleOrder(context);
     testTrackedHeaderRead(context);
     testHeaderPublicRead(context);
+    testHeaderReferenceRoles(context);
     testHeaderWriters(context);
     testHeaderWriterSealingFailures(context);
     testDwgOperationAdmission(context);
