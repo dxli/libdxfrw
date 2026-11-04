@@ -943,13 +943,15 @@ mixed drawing, passed ODA conversion to AC1027 DXF and independent field checks;
 other values, graph profiles and native rendering remain open
 ([matrix receipt](docs/research/p6-ac1021-varied-entity-matrix-2026-11-04.json)).
 AC1018–AC1032 2D/3D POLYLINE child and SEQEND references use the
-producer-witnessed hard-owner role. The bounded AC1021 model-space membership
-and 3D footer fixes preserve the sampled vertices through ODA; qualify paper
-space, named blocks, mesh/polyface and other revisions separately. GROUP
-references to AC1021 model-space vertices now have one bounded reciprocal-reactor
-route; SEQEND, other GROUP shapes and unqualified spaces still need
-independent target closure
+producer-witnessed hard-owner role. The bounded AC1021 model-space, paper-space
+and ordinary named-block membership and 3D footer fixes preserve the sampled vertices
+through ODA and independent readback. Qualify other ownership profiles,
+mesh/polyface and other revisions separately. GROUP references to AC1021
+model-space vertices have one bounded reciprocal-reactor route; paper-space
+and named-block child references are refused until independently qualified.
+SEQEND and other GROUP shapes still need independent target closure
 ([membership receipt](docs/research/p6-ac1021-polyline-model-block-membership-2026-11-04.json),
+[paper and named-block receipt](docs/research/p6-ac1021-polyline-paper-named-membership-2026-11-04.json),
 [footer receipt](docs/research/p6-ac1021-polyline3d-footer-2026-11-04.json),
 [GROUP receipt](docs/research/p6-ac1021-polyline-group-vertex-closure-2026-11-04.json)).
 

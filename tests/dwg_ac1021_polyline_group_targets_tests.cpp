@@ -18,7 +18,7 @@ public:
 
 namespace {
 enum class Mode { Vertex, Parent, Missing, Wrong, Duplicate, Additional, LateAdd, LateRemove,
-                  SeqEnd, Paper, FailedCompound, RolledBackCompound, ChildCollision,
+                  SeqEnd, Paper, Named, FailedCompound, RolledBackCompound, ChildCollision,
                   GroupMissingReactor, GroupWrongReactor, GroupXdict, GroupDescription,
                   GroupExtraMember, GroupUnnamed, GroupNotSelectable, GroupFlags,
                   OuterRollback, EarlyException, LateException };
@@ -33,7 +33,15 @@ public:
     void writeDwgClasses() override {
         registered = out.registerDwgGroupDictionaryEntry("GROUP_VERTEX", 0x900u);
     }
-    void writeEntities() override {
+    void writeBlocks() override {
+        if (mode != Mode::Named) return;
+        const auto block = out.defineBlock("GROUP_NAMED", DRW_Coord(0., 0., 0.));
+        if (!block || !out.beginBlockContent(block)) return;
+        emitPolyline();
+        if (!out.endBlockContent()) wrotePolyline = false;
+    }
+    void writeEntities() override { if (mode != Mode::Named) emitPolyline(); }
+    void emitPolyline() {
         DRW_Polyline poly;
         poly.handle = 0x451u;
         if (threeD) poly.flags = 8;
@@ -120,11 +128,11 @@ int main(int argc, char** argv) {
             reader.expected = mode == Mode::Parent ? 0x451u : 0x501u;
             return input.read(&reader, false) && reader.groupSeen && reader.vertexSeen;
         };
-        for (const auto mode : {Mode::Vertex, Mode::LateRemove, Mode::Parent, Mode::Paper}) {
+        for (const auto mode : {Mode::Vertex, Mode::LateRemove, Mode::Parent}) {
             if (!success(mode)) { std::cerr << "positive GROUP mode=" << static_cast<int>(mode) << " 3D=" << threeD << '\n'; return 1; }
         }
         for (const auto mode : {Mode::Missing, Mode::Wrong, Mode::Duplicate, Mode::Additional, Mode::LateAdd,
-                                 Mode::SeqEnd, Mode::FailedCompound,
+                                 Mode::SeqEnd, Mode::Paper, Mode::Named, Mode::FailedCompound,
                                  Mode::RolledBackCompound, Mode::ChildCollision,
                                  Mode::GroupMissingReactor, Mode::GroupWrongReactor,
                                  Mode::GroupXdict, Mode::GroupDescription,

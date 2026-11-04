@@ -2810,8 +2810,23 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         && (ent->flags & (16 | 64)) == 0
         && (ent->parentHandle == DRW::NoHandle
             || ent->parentHandle == DRW::DwgModelSpaceBlockRecordHandle);
+    const auto activeBlock = objectWriter != nullptr
+        ? objectWriter->m_activeUserBlockRecordHandle : 0u;
+    const bool paperScope = activeBlock == 0u && ent->space == DRW::PaperSpace
+        && (ent->parentHandle == DRW::NoHandle
+            || ent->parentHandle == DRW::DwgPaperSpaceBlockRecordHandle);
+    const auto* activeOwner = activeBlock != 0u ? objectWriter->findUserBlock(activeBlock) : nullptr;
+    const bool namedScope = activeOwner != nullptr
+        && activeOwner->ownerKind == dwgWriter15::BlockOwnerKind::OrdinaryBlock
+        && ent->space == DRW::ModelSpace
+        && (ent->parentHandle == DRW::NoHandle || ent->parentHandle == activeBlock);
+    // GROUP vertex qualification remains tied to the model-only predicate;
+    // these additional scopes qualify only the compound membership treatment.
+    const bool ac1021ChildProfile = ac1021ModelChildProfile
+        || (version == DRW::AC1021 && objectWriter != nullptr && !legacyChain
+            && (ent->flags & (16 | 64)) == 0 && (paperScope || namedScope));
     bool useEntityFrameBatchRollback = !legacyChain && objectWriter != nullptr
-        && writer->supportsLastEntityWriteRollback() && !ac1021ModelChildProfile;
+        && writer->supportsLastEntityWriteRollback() && !ac1021ChildProfile;
     dwgWriter::CompoundWriteCheckpoint checkpoint;
     if (legacyChain) checkpoint = writer->checkpointCompoundWrite();
     bool checkpointSet = legacyChain;
@@ -2819,7 +2834,7 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         checkpoint = writer->checkpointCompoundWrite();
         checkpointSet = true;
     }
-    const bool guardedPolyline = legacyChain || ac1021ModelChildProfile;
+    const bool guardedPolyline = legacyChain || ac1021ChildProfile;
     const bool tracksMutations = guardedPolyline && !m_dwgWriteTransactions.empty()
         && m_dwgWriteTransactions.back()->trackCallerMutations;
     const std::size_t originalMutationCount = tracksMutations
@@ -3019,8 +3034,7 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
             DRW_Entity* previous;
             ~ScopedChildPermit() { slot = previous; }
         };
-        if (!ac1021ModelChildProfile || ent->space != DRW::ModelSpace
-            || ent->parentHandle != DRW::NoHandle)
+        if (!ac1021ChildProfile)
             return writer->encodeEntity(child);
         ScopedChildPermit permit{objectWriter->m_ac1021PolylineChildPermit,
                                  objectWriter->m_ac1021PolylineChildPermit};
@@ -3077,7 +3091,7 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
         g_throwNextLegacyPolylineForTest = false;
         throw std::bad_alloc();
     }
-    if (ac1021ModelChildProfile && g_throwNextAc1021PolylineForTest) {
+    if (ac1021ChildProfile && g_throwNextAc1021PolylineForTest) {
         g_throwNextAc1021PolylineForTest = false;
         throw std::bad_alloc();
     }
@@ -3111,7 +3125,7 @@ bool dwgRW::writePolyline(DRW_Polyline *ent) {
             g_throwNextLegacyPolylineLateForTest = false;
             throw std::bad_alloc();
         }
-        if (ac1021ModelChildProfile && g_throwNextAc1021PolylineLateForTest) {
+        if (ac1021ChildProfile && g_throwNextAc1021PolylineLateForTest) {
             g_throwNextAc1021PolylineLateForTest = false;
             throw std::bad_alloc();
         }
