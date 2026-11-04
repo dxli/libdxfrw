@@ -634,6 +634,7 @@ tools/audit_dxf_lwpolyline_missing_y.py
 tools/audit_dxf_sparse_lwpolyline.py
 tools/audit_dxf_table_values.py
 tools/audit_p9_rtext_native_history.py
+tools/audit_wipeout_ac1018_source.py
 tools/audit_wipeout_ac1024_source.py
 tools/audit_wipeout_ac1032_source.py
 tools/author_dwg_legacy_extrusion.py
@@ -706,6 +707,7 @@ tools/probe_dxf_lwpolyline_missing_y.cpp
 tools/probe_dxf_sparse_lwpolyline.cpp
 tools/probe_geodata_physical_capture.cpp
 tools/probe_lightlist_physical_capture.cpp
+tools/probe_wipeout_ac1018_source.cpp
 tools/probe_wipeout_ac1024_source.cpp
 tools/probe_wipeout_ac1032_source.cpp
 tools/qualify_material_source_order.py

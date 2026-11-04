@@ -134,6 +134,9 @@ public:
     static DRW_UnsupportedObject& mutableStandardRaw(dx_data& data, std::uint32_t handle) {
         return data.m_standardDwgObjectFrames.at({data.importGeneration, handle}).raw;
     }
+    static DRW_UnsupportedObject& mutableOpaqueRaw(dx_data& data, std::uint32_t handle) {
+        return data.m_opaqueDwgSourceFrames.at({data.importGeneration, handle});
+    }
     static std::size_t geoDataSourceRoleCount(const dx_data& data) {
         return data.m_dwgGeoDataSourceRoles.size();
     }
@@ -687,8 +690,16 @@ public:
         if (found == data.m_opaqueDwgSourceFrames.end()) return false;
         auto& raw = found->second;
         const auto total = raw.m_rawBytes.size() * 8u;
-        if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
-        const auto bit = total - raw.m_bodyBitSize + 3u;
+        std::size_t start = 0u;
+        if (raw.m_version == DRW::AC1018) {
+            dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u, static_cast<std::uint32_t>(total)};
+            (void)body.shortValue(); start = static_cast<std::size_t>(body.little(4u));
+            if (!body.good || start >= total) return false;
+        } else {
+            if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
+            start = total - raw.m_bodyBitSize;
+        }
+        const auto bit = start + 3u;
         if (bit >= total) return false;
         raw.m_rawBytes[bit / 8u] ^= static_cast<std::uint8_t>(1u << (7u - bit % 8u));
         return true;
@@ -730,9 +741,16 @@ public:
         if (found == data.m_opaqueDwgSourceFrames.end()) return false;
         auto& raw = found->second;
         const auto total = raw.m_rawBytes.size() * 8u;
-        if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
-        dx_raster_wire::detail::Bits cursor{raw.m_rawBytes.data(),
-            static_cast<std::uint32_t>(total - raw.m_bodyBitSize), static_cast<std::uint32_t>(total)};
+        std::uint32_t start = 0u;
+        if (raw.m_version == DRW::AC1018) {
+            dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u, static_cast<std::uint32_t>(total)};
+            (void)body.shortValue(); start = static_cast<std::uint32_t>(body.little(4u));
+            if (!body.good || start >= total) return false;
+        } else {
+            if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
+            start = static_cast<std::uint32_t>(total - raw.m_bodyBitSize);
+        }
+        dx_raster_wire::detail::Bits cursor{raw.m_rawBytes.data(), start, static_cast<std::uint32_t>(total)};
         (void)dx_raster_wire::detail::handle(cursor, 4u, handle);
         const auto bit = static_cast<std::size_t>(cursor.pos) + 3u;
         if (!cursor.good || bit >= total) return false;
@@ -68776,7 +68794,7 @@ bool wipeoutVariablesDwgAdapterTransport(bool directNod = false,
     for (const auto& target : {
              std::make_pair(asciiPath, false),
              std::make_pair(binaryPath, true)}) {
-        const bool requireResolvedOwners = target.second;
+        const bool requireResolvedOwners = target.second || revision == DRW::AC1018;
         const std::string sentinel = "WIPEOUTVARIABLES_ATOMIC_DESTINATION";
         {
             std::ofstream previous(target.first, std::ios::binary);
@@ -68797,6 +68815,45 @@ bool wipeoutVariablesDwgAdapterTransport(bool directNod = false,
                 std::ifstream file(target.first, std::ios::binary);
                 return std::string((std::istreambuf_iterator<char>(file)), {}) == sentinel;
             };
+            if (revision == DRW::AC1018) {
+                const auto root = imported.namedObjectDictionary.handle;
+                std::uint32_t owner = DRW::NoHandle;
+                if (!imported.getCompleteDwgDictionaryOwner(root, owner) || owner != 0u)
+                    return fail("AC1018 source-specific root proof unavailable");
+                imported.dwgReadOutcome.opaqueSourceCaptureFailed = true;
+                const bool rejectedCapture = !imported.getCompleteDwgDictionaryOwner(root, owner)
+                    && rejectsWithoutPublication();
+                imported.dwgReadOutcome.opaqueSourceCaptureFailed = false;
+                if (!rejectedCapture || !imported.getCompleteDwgDictionaryOwner(root, owner))
+                    return fail("failed WIPEOUT source capture falsely retained root proof");
+                const auto savedCoverage = imported.dwgClassCoverage;
+                auto classRow = std::find_if(imported.dwgClassCoverage.m_entries.begin(),
+                    imported.dwgClassCoverage.m_entries.end(), [](const auto& value) {
+                        return value.m_recordName == "WIPEOUTVARIABLES";
+                    });
+                if (classRow == imported.dwgClassCoverage.m_entries.end()) return fail("wipeout class missing");
+                ++classRow->m_instanceCount;
+                const bool rejectedClass = !imported.getCompleteDwgDictionaryOwner(root, owner)
+                    && rejectsWithoutPublication();
+                imported.dwgClassCoverage = savedCoverage;
+                if (!rejectedClass || !imported.getCompleteDwgDictionaryOwner(root, owner))
+                    return fail("changed WIPEOUT class falsely retained root proof");
+                auto& opaque = DxIfaceStandardDwgCaptureTestAccess::mutableOpaqueRaw(imported, saved.handle);
+                opaque.m_classProxyFlag ^= 1u;
+                const bool rejectedFrameClass = !imported.getCompleteDwgDictionaryOwner(root, owner)
+                    && rejectsWithoutPublication();
+                opaque.m_classProxyFlag ^= 1u;
+                if (!rejectedFrameClass || !imported.getCompleteDwgDictionaryOwner(root, owner))
+                    return fail("changed WIPEOUT frame class falsely retained root proof");
+                auto& rootRaw = DxIfaceStandardDwgCaptureTestAccess::mutableStandardRaw(imported, root);
+                if (rootRaw.m_rawBytes.empty()) return fail("AC1018 root frame missing");
+                rootRaw.m_rawBytes[0] ^= 1u;
+                const bool rejectedRoot = !imported.getCompleteDwgDictionaryOwner(root, owner)
+                    && rejectsWithoutPublication();
+                rootRaw.m_rawBytes[0] ^= 1u;
+                if (!rejectedRoot || !imported.getCompleteDwgDictionaryOwner(root, owner))
+                    return fail("changed AC1018 root frame falsely retained root proof");
+            }
             mutableSource.reactorHandles.clear();
             if (!rejectsWithoutPublication()) return fail("missing wipeout reactor was accepted");
             mutableSource = saved;
@@ -69924,6 +69981,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-ac1024-direct-nod")
         return wipeoutVariablesDwgAdapterTransport(true, DRW::AC1024) ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--wipeoutvariables-dwg-ac1018-direct-nod")
+        return wipeoutVariablesDwgAdapterTransport(true, DRW::AC1018) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-ac1024-nested-refusal")
         return wipeoutVariablesDwgAdapterTransport(false, DRW::AC1024) ? 0 : 1;
