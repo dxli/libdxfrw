@@ -122,6 +122,12 @@ add_test(NAME libdxfrw_ac1021_material_peer_audit
 set_tests_properties(libdxfrw_ac1021_material_peer_audit PROPERTIES
     LABELS "dwg;fast;material;tools" TIMEOUT 15)
 
+add_test(NAME libdxfrw_ac1021_geometry_peer_audit
+    COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B
+        ${CMAKE_CURRENT_SOURCE_DIR}/ac1021_geometry_peer_audit_tests.py)
+set_tests_properties(libdxfrw_ac1021_geometry_peer_audit PROPERTIES
+    LABELS "dwg;fast;geometry;tools" TIMEOUT 15)
+
 add_executable(libdxfrw_dwg_legacy_model_chain_optin_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dwg_legacy_model_chain_optin_tests.cpp)
 target_compile_features(libdxfrw_dwg_legacy_model_chain_optin_tests PRIVATE cxx_std_17)
