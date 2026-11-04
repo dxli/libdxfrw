@@ -983,7 +983,8 @@ void dwgWriter21::finishObject() {
     // still explicitly say so, including when their body was byte-aligned.
     if (m_objectStrings.data().empty()
         && (objectType == dwgType::POINT || objectType == dwgType::CIRCLE
-            || objectType == dwgType::POLYLINE_3D || objectType == dwgType::LWPOLYLINE))
+            || objectType == dwgType::POLYLINE_3D || objectType == dwgType::LWPOLYLINE
+            || objectType == dwgType::SOLID || objectType == dwgType::TRACE))
         m_objectBody.putBit(0u);
     if (m_objectStrings.data().empty() && !exactControlBoundary)
         m_objectBody.alignToByte();

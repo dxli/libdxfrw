@@ -921,6 +921,9 @@ Qualify CIRCLE/ARC DWG extrusion writeback beyond the explicit AC1024 helper
 profile and its selected geometry checks ([receipt](docs/research/p6-ac1024-dwg-legacy-extrusion-opt-in-2026-11-04.json)).
 Qualify SOLID/TRACE DWG writeback and broader producer/normal coverage beyond
 the explicit DXF inverse-extrusion helper ([receipt](docs/research/p6-ac1024-trace-solid-legacy-extrusion-opt-in-2026-11-04.json)).
+The AC1021 SOLID/TRACE absent-string boundary now passes the sampled tilted and
+default-normal ODA cases; broader profiles and native rendering remain open
+([boundary receipt](docs/research/p6-ac1021-solid-trace-absent-string-2026-11-04.json)).
 Qualify additional text-derived entities and producer/normal profiles beyond
 the explicit TEXT DXF inverse-extrusion helper; current DWG TEXT reads do not
 apply that transform ([receipt](docs/research/p6-text-legacy-extrusion-opt-in-2026-11-04.json)).
