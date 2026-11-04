@@ -470,6 +470,7 @@ tests/dxf_lwpoly_wcs_vertices_tests.cpp
 tests/dxf_mline_source_dependency_tests.cpp
 tests/dxf_no_raw_sections_tests.cpp
 tests/dxf_r12_ellipse_wrap_tests.cpp
+tests/dxf_sectionobject_411_tests.cpp
 tests/dxf_sparse_material_raw_tests.cpp
 tests/dxf_sun_color_order_tests.cpp
 tests/dxf_symbol_output_tests.cpp
@@ -720,6 +721,7 @@ tools/audit_r12_ellipse_wrap.py
 tools/audit_rastervariables_ac1018_frame1_source.py
 tools/audit_rastervariables_ac1018_source.py
 tools/audit_rastervariables_ac1032_frame1_source.py
+tools/audit_sectionobject_411.py
 tools/audit_solid_trace_triangle_elevation.py
 tools/audit_sparse_material_source.py
 tools/audit_sun_color_order.py
@@ -751,6 +753,8 @@ tools/author_dwg_vport.cpp
 tools/author_dwg_vport_source.py
 tools/author_light_dxf_421.py
 tools/author_r12_ellipse_wrap_source.py
+tools/author_sectionobject_411.py
+tools/author_sectionobject_411_source.cpp
 tools/author_selected_ac1027_light.py
 tools/author_selected_ac1027_lightlist.py
 tools/author_selected_layer_color.py
@@ -864,6 +868,8 @@ tools/probe_r12_ellipse_wrap_consumer.cpp
 tools/probe_rastervariables_ac1018_frame1_source.cpp
 tools/probe_rastervariables_ac1018_source.cpp
 tools/probe_rastervariables_ac1032_frame1_source.cpp
+tools/probe_sectionobject_411_legacy.cpp
+tools/probe_sectionobject_411_loss.cpp
 tools/probe_solid_trace_triangle_elevation.cpp
 tools/probe_sparse_material_adapter.cpp
 tools/probe_sparse_material_source.cpp

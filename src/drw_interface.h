@@ -1065,6 +1065,19 @@ public:
   virtual ~DRW_DxfR12CcwEllipseOptIn() = default;
 };
 
+/** Explicit opt-in to receive SECTIONOBJECT records with AcDbSection group
+ * 411 only through the existing addRawDxfEntity callback. The typed
+ * DRW_SectionObject projection does not model this documented color field, so
+ * no addSectionObject callback is issued for that record. Consumers must
+ * preserve the raw record and resolve its owner/graph and source version before
+ * replay. Without this policy such records refuse before either callback.
+ * This independent facet adds no DRW_Interface slots or existing fields. */
+class DRW_DxfSectionObjectRaw411Policy {
+public:
+  virtual ~DRW_DxfSectionObjectRaw411Policy() = default;
+  virtual bool wantsDxfSectionObjectRaw411Only() const noexcept { return false; }
+};
+
 /** Optional, explicit opt-in for the exact sparse DXF MATERIAL profile.
  * The typed callback is incomplete: the consumer must retain the accompanying
  * raw object and honor DRW_Material::requiresRawDxfMaterialReplay(). Kept

@@ -21754,6 +21754,8 @@ bool dxfRW::processSectionObject() {
     int code;
     DRW_SectionObject section;
     DRW_RawDxfObject raw;
+    bool inSectionBody = false;
+    bool hasRawOnlyColor = false;
     if (!copyRawDxfCarrierName(raw, nextentity))
         return setError(DRW::BAD_CODE_PARSED);
     while (reader->readRec(&code)) {
@@ -21768,10 +21770,28 @@ bool dxfRW::processSectionObject() {
                 return setError(DRW::BAD_CODE_PARSED);
             if (!validateCapturedRawDxfObject(raw, binFile, reader->classifierProfile()))
                 return setError(DRW::BAD_CODE_PARSED);
+            if (hasRawOnlyColor) {
+                const auto* policy = dynamic_cast<const DRW_DxfSectionObjectRaw411Policy*>(iface);
+                if (policy == nullptr || !policy->wantsDxfSectionObjectRaw411Only()) {
+                    recordOperationDiagnostic(
+                        DRW::OperationPhase::Entities,
+                        DRW::OperationCause::ValidationFailure,
+                        "sectionobject-411-raw-only",
+                        "SECTIONOBJECT group 411 requires the explicit raw-only callback policy; its typed color projection is incomplete",
+                        0, false, section.handle, section.handle != DRW::NoHandle);
+                    return setError(DRW::BAD_CODE_PARSED);
+                }
+                iface->addRawDxfEntity(raw);
+                return true;
+            }
             iface->addSectionObject(section);
             iface->addRawDxfEntity(raw);
             return true;
         }
+        if (code == 100)
+            inSectionBody = reader->getStringView() == "AcDbSection";
+        if (code == 411 && inSectionBody)
+            hasRawOnlyColor = true;
         if (!captureAndParseRawDxfGroup(raw, code, section))
             return setError(DRW::BAD_CODE_PARSED);
     }

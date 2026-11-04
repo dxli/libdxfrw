@@ -122,6 +122,12 @@ and [original receipt](docs/research/p4-ac1018-empty-style-dwg-bit-order-differe
 
 ## P4 — original bodies and complete document closure
 
+SECTIONOBJECT AcDbSection group 411 no longer disappears through a typed
+projection: default consumers refuse the record, while an explicit raw-only
+policy delivers it for caller-managed same-version replay. Its color semantics,
+graph closure and automatic CLI admission remain open
+([receipt](docs/research/p4-dxf-sectionobject-411-raw-only-2026-11-04.json)).
+
 P4 supplies source/context/role providers and composes them with the existing
 local record providers and P5 output. Do not create parallel capture or graph
 engines.
