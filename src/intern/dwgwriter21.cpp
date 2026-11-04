@@ -772,6 +772,8 @@ std::vector<std::uint8_t> buildFileHeader(std::uint64_t fileSize,
                                           const R2007SystemPage& sectionMap,
                                           std::uint64_t sectionCount,
                                           const R2007HeaderProtection& protection) {
+    if (fileSize < kR2007DataStart + kR2007FileHeaderPageSize)
+        return {};
     std::vector<std::uint8_t> header(kR2007FileHeaderDataSize, 0);
     patchRLL(header, 0, kR2007FileHeaderDataSize);
     patchRLL(header, 8, fileSize);
@@ -782,7 +784,10 @@ std::vector<std::uint8_t> buildFileHeader(std::uint64_t fileSize,
     patchRLL(header, 48, pageMap2Id);
     patchRLL(header, 56, 0); // page map 1 is at the data-section start
     patchRLL(header, 64, pageMapId);
-    patchRLL(header, 72, 0); // no second header
+    // Header2offset is relative to the page-map base at 0x480 (ODA 5.2).
+    // The second 0x400-byte file-header page is written at the end of file.
+    patchRLL(header, 72,
+             fileSize - kR2007FileHeaderPageSize - kR2007DataStart);
     patchRLL(header, 80, pageMap.compressedSize);
     patchRLL(header, 88, pageMap.uncompressedSize);
     patchRLL(header, 96, pageCount);

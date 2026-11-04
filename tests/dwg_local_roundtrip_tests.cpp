@@ -24410,6 +24410,29 @@ bool runDwgFixedMetadataPointerControls(const std::filesystem::path& directory) 
                                 decoded.begin() + offset))
                     return false;
             }
+            // The uncompressed header's Header2offset is relative to 0x480
+            // and must point at the complete trailing 0x400-byte copy.
+            if (signedSize != -272)
+                return false;
+            std::uint64_t header2Offset = 0u;
+            for (unsigned i = 0; i < 8; ++i)
+                header2Offset |= static_cast<std::uint64_t>(decoded[32u + 72u + i])
+                    << (8u * i);
+            input.seekg(0, std::ios::end);
+            const auto end = input.tellg();
+            if (end < std::streamoff{0x880}
+                || header2Offset != static_cast<std::uint64_t>(end) - 0x880u)
+                return false;
+            std::array<std::uint8_t, 1024> firstHeader{};
+            std::array<std::uint8_t, 1024> secondHeader{};
+            input.seekg(0x80);
+            if (!input.read(reinterpret_cast<char*>(firstHeader.data()),
+                            firstHeader.size()))
+                return false;
+            input.seekg(static_cast<std::streamoff>(0x480u + header2Offset));
+            if (!input.read(reinterpret_cast<char*>(secondHeader.data()),
+                            secondHeader.size()) || firstHeader != secondHeader)
+                return false;
         }
     }
     return true;

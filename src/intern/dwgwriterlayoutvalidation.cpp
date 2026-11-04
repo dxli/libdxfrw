@@ -772,6 +772,13 @@ ValidationResult validateR2007(const R2007Snapshot& snapshot) {
         if (snapshot.fileHeaderData.size() != kR2007FileHeaderDataSize
             || snapshot.fileHeaderPage.size() < kR2007EncodedHeaderSize)
             return fail(ValidationCategory::Header);
+        const auto* header2Field = snapshot.fileHeaderData.data() + 72u;
+        const std::uint64_t header2Offset = getRL(header2Field)
+            | (static_cast<std::uint64_t>(getRL(header2Field + 4u)) << 32);
+        std::uint64_t header2Address = 0u;
+        if (!dwgSafety::add(receipt.dataStart, header2Offset, header2Address)
+            || header2Address != receipt.trailingHeaderAddress)
+            return fail(ValidationCategory::Header);
         std::vector<std::uint8_t> encodedHeader(
             snapshot.fileHeaderPage.cbegin(),
             snapshot.fileHeaderPage.cbegin() + kR2007EncodedHeaderSize);
