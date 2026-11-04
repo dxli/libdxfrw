@@ -35398,6 +35398,43 @@ bool fieldListMembershipOutput() {
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch()
                            .count();
+    {
+        const auto output = std::filesystem::temp_directory_path()
+            / ("libdxfrw-fieldlist-empty-diagnostic-" + std::to_string(nonce) + ".dxf");
+        Cleanup cleanup{output};
+        dx_data data;
+        dx_iface writer;
+        const auto attempt = [&](std::string& message) {
+            std::ostringstream diagnostics;
+            struct Redirect {
+                std::streambuf* previous;
+                ~Redirect() { std::cerr.rdbuf(previous); }
+            } redirect{std::cerr.rdbuf(diagnostics.rdbuf())};
+            const bool result = writer.fileExport(output.string(), DRW::AC1027,
+                                                  false, &data, true);
+            message = diagnostics.str();
+            return result;
+        };
+        std::string message;
+        if (!attempt(message)
+            || message.find("FIELDLIST profile is not closed") != std::string::npos)
+            return fail("absent FIELD/FIELDLIST graph emitted a closure warning");
+        const std::string sentinel = "FIELDLIST diagnostic sentinel\n";
+        { std::ofstream file(output, std::ios::binary | std::ios::trunc); file << sentinel; }
+        data.fieldLists.emplace_back();
+        message.clear();
+        if (attempt(message)
+            || message.find("FIELD/FIELDLIST") == std::string::npos)
+            return fail("unclosed FIELDLIST graph was not refused diagnostically");
+        std::ifstream preserved(output, std::ios::binary);
+        if (std::string(std::istreambuf_iterator<char>(preserved), {}) != sentinel)
+            return fail("unclosed FIELDLIST graph replaced the destination");
+        data.fieldLists.clear();
+        message.clear();
+        if (!attempt(message)
+            || message.find("FIELDLIST profile is not closed") != std::string::npos)
+            return fail("empty FIELDLIST corrected retry failed or warned");
+    }
     for (const bool binary : {false, true}) {
         dx_data data;
         dx_iface writer;

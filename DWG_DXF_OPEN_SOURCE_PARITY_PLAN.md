@@ -827,6 +827,11 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 Audit only a current failing source/profile; do not revive historical defects whose
 receipt and code path already agree.
 
+The AC1018 empty-name STYLE still fails strict output: ODA-produced bit
+observations conflict with the ODA v5.4.1 STYLE field order, which remains
+authoritative under repository instructions. A spurious FIELDLIST warning
+was also removed; see the [factorial receipt](docs/research/p4-ac1018-style-oda-factorial-and-fieldlist-diagnostic-2026-11-04.json).
+
 Older DXF output now refuses nonzero LWPOLYLINE vertex identifiers rather
 than silently dropping them; the earliest valid group-91 revision remains
 unqualified. See the [identifier receipt](docs/research/p6-lwpolyline-older-dxf-vertex-id-loss-2026-11-04.json).

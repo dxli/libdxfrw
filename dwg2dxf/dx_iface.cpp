@@ -77015,7 +77015,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         backgroundRootEntries);
     const bool fieldListEmissionReady = !cData->fieldLists.empty()
         && hasTableContentFieldOutputProfile(*cData, v);
-    if (!fieldListEmissionReady && (debug || requireResolvedOwners))
+    if (hasFieldCarriers && !fieldListEmissionReady
+        && (debug || requireResolvedOwners))
         std::cerr << "DXF export FIELDLIST profile is not closed for output\n";
     if (cData->hasNamedObjectDictionary) {
         for (const DRW_Dictionary::Entry& sourceEntry :
