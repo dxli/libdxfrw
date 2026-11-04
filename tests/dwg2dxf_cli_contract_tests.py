@@ -975,6 +975,53 @@ def check_partial_dwg_read_cli(converter, root, writer):
                 f"{version} partial output did not reopen with the retained LINE only: "
                 f"{reopened!r}")
         checked += 1
+
+        # The opt-in partial path must apply the same disposition policy when
+        # writing Binary DXF. Reopen through the CLI as ASCII so that this
+        # check observes the retained entity instead of just the binary header.
+        binary_output = root / f"partial-read binary result {version}.dxf"
+        binary_output.write_bytes(SENTINEL)
+        binary_strict = run_bounded(
+            [str(converter), str(source), "-o", str(binary_output),
+             "-b", "-y", "-d"], 10, 2 * 1024 * 1024, cwd=root)
+        if (binary_strict.returncode != 1
+                or binary_output.read_bytes() != SENTINEL
+                or source.read_bytes() != original
+                or any(item not in binary_strict.stderr for item in strict_required)):
+            raise AssertionError(
+                f"strict {version} Binary partial-read refusal was not atomic: "
+                f"{binary_strict!r}")
+        checked += 1
+
+        binary_partial = run_bounded(
+            [str(converter), str(source), "-o", str(binary_output), "-b", "-y",
+             "--allow-partial-dwg-read", "-d"],
+            10, 2 * 1024 * 1024, cwd=root)
+        binary_payload = binary_output.read_bytes()
+        if (binary_partial.returncode != 0
+                or any(item not in binary_partial.stderr for item in partial_required)
+                or not output_has_revision(binary_payload, revision, True)
+                or source.read_bytes() != original):
+            raise AssertionError(
+                f"explicit {version} Binary partial-read output failed: {binary_partial!r}")
+        checked += 1
+
+        binary_readback = root / f"partial-read binary readback {version}.dxf"
+        binary_reopened = run_bounded(
+            [str(converter), str(binary_output), "-o", str(binary_readback)],
+            10, 2 * 1024 * 1024, cwd=root)
+        binary_readback_payload = (binary_readback.read_bytes()
+                                   if binary_readback.is_file() else b"")
+        if (binary_reopened.returncode != 0
+                or not output_has_revision(binary_readback_payload, revision, False)
+                or sum(1 for line in binary_readback_payload.splitlines()
+                       if line.strip() == b"LINE") != 1
+                or binary_output.read_bytes() != binary_payload
+                or source.read_bytes() != original):
+            raise AssertionError(
+                f"{version} Binary partial output did not reopen with the retained "
+                f"LINE only: {binary_reopened!r}")
+        checked += 1
     return checked
 
 
@@ -1963,6 +2010,10 @@ def main():
                         help="run only CLI repair/skip/mask preflight projections")
     args = parser.parse_args()
     converter = args.converter.resolve(strict=True)
+    # Child processes run in a temporary directory, so resolve a caller's
+    # relative writer path before changing their working directory.
+    if args.writer is not None:
+        args.writer = args.writer.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="libdxfrw-cli-contract-") as directory:
         root = Path(directory)
         if args.options_only:

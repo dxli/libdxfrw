@@ -43,7 +43,12 @@
         "is_xref_ref": 1,
         "is_xref_resolved": 0,
         "is_xref_dep": 0,
-        "xref": [5, 0, 0, 0],
+        "xref": [
+          5,
+          0,
+          0,
+          0
+        ],
         "is_shape": 1,
         "is_vertical": 0,
         "font_file": "ltypeshp.shx"
@@ -83,5 +88,11 @@
     "The source-reference receipts cover decoded references but do not establish native command/shape-load semantics.",
     "No DWG/DXF fixture was added."
   ],
-  "nextAction": "Resolve AC1018 STYLE bit order with an eligible producer/native witness or authoritative ODA clarification; retain atomic refusal while unresolved."
+  "nextAction": "Resolve AC1018 STYLE bit order with an eligible producer/native witness or authoritative ODA clarification; retain atomic refusal while unresolved.",
+  "versionScopeRecheck": {
+    "oda": "Section 20.4.56 places the two bits in a Common section without an explicit R2007+ reversal; its parenthetical bit numbers also conflict with the Autodesk DXF flag assignments, so its wording alone does not explain the current version split.",
+    "libredwg": "LibreDWG 0.14 src/dwg.spec applies shape then vertical since R13b1, without an R2007 boundary, and annotates the ODA order as wrong.",
+    "libdxfrw": "Both parseDwg and encodeDwg use vertical then shape through AC1018 and shape then vertical for AC1021 and later. A paired local encoder/parser round trip cannot independently prove either ordering.",
+    "remaining": "Qualify the bit order on each side of the version boundary with provenance-qualified producer or authoritative clarification and validate both parse and emission. The AC1018 ET Border mismatch alone does not prove the AC1021+ choice."
+  }
 }
