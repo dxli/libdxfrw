@@ -827,6 +827,10 @@ conversion, or native evaluation; see the [guard receipt](docs/research/p5-field
 Audit only a current failing source/profile; do not revive historical defects whose
 receipt and code path already agree.
 
+SOLID, TRACE and 3DFACE input now refuse a fourth Z without fourth X/Y
+instead of silently replacing it. Valid triangle and default-Z inputs
+remain supported; see the [corner receipt](docs/research/p6-dxf-incomplete-fourth-corner-2026-11-04.json).
+
 Generated LTYPE_CONTROL output has a consumer-visible built-in linetype
 ordering risk: six ODA-produced files conflict with the PDF’s stated order.
 Keep the PDF authoritative and seek clarification before changing that order.

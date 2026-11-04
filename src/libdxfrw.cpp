@@ -20204,6 +20204,7 @@ bool dxfRW::processTrace() {
     bool hasThirdY = false;
     bool hasFourthX = false;
     bool hasFourthY = false;
+    bool hasFourthZ = false;
     while (reader->readRec(&code)) {
         DRW_DBG(code); DRW_DBG("\n");
         if (0 == code) {
@@ -20214,7 +20215,7 @@ bool dxfRW::processTrace() {
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!hasFirstX || !hasFirstY || !hasSecondX || !hasSecondY
                 || !hasThirdX || !hasThirdY
-                || hasFourthX != hasFourthY)
+                || hasFourthX != hasFourthY || (hasFourthZ && !hasFourthX))
                 return setError(DRW::BAD_CODE_PARSED);
             if (!hasFourthX)
                 trace.fourPoint = trace.thirdPoint;
@@ -20232,6 +20233,7 @@ bool dxfRW::processTrace() {
         hasThirdY = hasThirdY || code == 22;
         hasFourthX = hasFourthX || code == 13;
         hasFourthY = hasFourthY || code == 23;
+        hasFourthZ = hasFourthZ || code == 33;
 
         if (!trace.parseCode(code, reader)) {
             return setError( DRW::BAD_CODE_PARSED);
@@ -20253,6 +20255,7 @@ bool dxfRW::processSolid() {
     bool hasThirdY = false;
     bool hasFourthX = false;
     bool hasFourthY = false;
+    bool hasFourthZ = false;
     while (reader->readRec(&code)) {
         DRW_DBG(code); DRW_DBG("\n");
         if (0 == code) {
@@ -20263,7 +20266,7 @@ bool dxfRW::processSolid() {
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!hasFirstX || !hasFirstY || !hasSecondX || !hasSecondY
                 || !hasThirdX || !hasThirdY
-                || hasFourthX != hasFourthY)
+                || hasFourthX != hasFourthY || (hasFourthZ && !hasFourthX))
                 return setError(DRW::BAD_CODE_PARSED);
             if (!hasFourthX)
                 solid.fourPoint = solid.thirdPoint;
@@ -20281,6 +20284,7 @@ bool dxfRW::processSolid() {
         hasThirdY = hasThirdY || code == 22;
         hasFourthX = hasFourthX || code == 13;
         hasFourthY = hasFourthY || code == 23;
+        hasFourthZ = hasFourthZ || code == 33;
 
         if (!solid.parseCode(code, reader)) {
             return setError( DRW::BAD_CODE_PARSED);
@@ -20439,6 +20443,7 @@ bool dxfRW::process3dface() {
     bool hasThirdY = false;
     bool hasFourthX = false;
     bool hasFourthY = false;
+    bool hasFourthZ = false;
     while (reader->readRec(&code)) {
         DRW_DBG(code); DRW_DBG("\n");
         if (0 == code) {
@@ -20449,7 +20454,7 @@ bool dxfRW::process3dface() {
                 return setError(DRW::BAD_READ_ENTITIES);
             if (!hasFirstX || !hasFirstY || !hasSecondX || !hasSecondY
                 || !hasThirdX || !hasThirdY
-                || hasFourthX != hasFourthY)
+                || hasFourthX != hasFourthY || (hasFourthZ && !hasFourthX))
                 return setError(DRW::BAD_CODE_PARSED);
             if (!hasFourthX)
                 face.fourPoint = face.thirdPoint;
@@ -20465,6 +20470,7 @@ bool dxfRW::process3dface() {
         hasThirdY = hasThirdY || code == 22;
         hasFourthX = hasFourthX || code == 13;
         hasFourthY = hasFourthY || code == 23;
+        hasFourthZ = hasFourthZ || code == 33;
 
         if (!face.parseCode(code, reader)) {
             return setError( DRW::BAD_CODE_PARSED);
