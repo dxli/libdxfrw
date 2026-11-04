@@ -282,6 +282,31 @@ target_link_libraries(libdxfrw_dwg_polyline_owner_facade_tests PRIVATE dxfrw)
 add_test(NAME libdxfrw_dwg_polyline_owner_facade COMMAND libdxfrw_dwg_polyline_owner_facade_tests)
 set_tests_properties(libdxfrw_dwg_polyline_owner_facade PROPERTIES LABELS "dwg;fast;polyline" TIMEOUT 30)
 
+add_executable(libdxfrw_dwg_modern_repeated_header_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_modern_repeated_header_tests.cpp)
+target_compile_features(libdxfrw_dwg_modern_repeated_header_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_modern_repeated_header_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_dwg_modern_repeated_header_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_dwg_modern_repeated_header_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_modern_repeated_header
+    COMMAND libdxfrw_dwg_modern_repeated_header_tests)
+set_tests_properties(libdxfrw_dwg_modern_repeated_header PROPERTIES
+    LABELS "dwg;fast;transaction;AC1027;AC1032" TIMEOUT 30)
+
+add_executable(libdxfrw_dwg_modern_repeated_header_fault_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/dwg_modern_repeated_header_tests.cpp
+    ${CMAKE_SOURCE_DIR}/src/intern/dwgwriter18.cpp
+    ${CMAKE_SOURCE_DIR}/src/intern/dwgwriterlayoutvalidation.cpp)
+target_compile_features(libdxfrw_dwg_modern_repeated_header_fault_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_dwg_modern_repeated_header_fault_tests PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_compile_definitions(libdxfrw_dwg_modern_repeated_header_fault_tests PRIVATE DWG_LAYOUT_VALIDATION_TESTS)
+target_include_directories(libdxfrw_dwg_modern_repeated_header_fault_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/intern)
+target_link_libraries(libdxfrw_dwg_modern_repeated_header_fault_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_dwg_modern_repeated_header_fault
+    COMMAND libdxfrw_dwg_modern_repeated_header_fault_tests)
+set_tests_properties(libdxfrw_dwg_modern_repeated_header_fault PROPERTIES
+    LABELS "dwg;fast;transaction;AC1027;AC1032" TIMEOUT 30)
+
 add_executable(libdxfrw_dwg_ac1021_polyline_block_membership_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dwg_ac1021_polyline_block_membership_tests.cpp)
 target_compile_features(libdxfrw_dwg_ac1021_polyline_block_membership_tests PRIVATE cxx_std_17)

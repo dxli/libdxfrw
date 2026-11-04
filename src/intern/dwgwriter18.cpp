@@ -435,6 +435,7 @@ static std::vector<std::uint8_t> buildAuxHeaderContent(DRW::Version version,
 static std::vector<std::uint8_t> buildFileHeader(std::uint64_t secPageMapAddr,
                                            std::uint32_t secMapId,
                                            std::uint64_t lastPageEndAddr,
+                                           std::uint64_t secondHeaderAddr,
                                            std::uint32_t numPages,
                                            const char* verStr,
                                            std::uint16_t codePage) {
@@ -485,7 +486,7 @@ static std::vector<std::uint8_t> buildFileHeader(std::uint64_t secPageMapAddr,
     vrl(36, 1);  // unknown long (1)
     vrl(40, numPages);  // last section page Id = last page in Section Page Map
     vrll(44, lastPageEndAddr - 0x100);  // last section page end addr (relative: - 0x100)
-    vrll(52, 0);         // start of second header = 0
+    vrll(52, secondHeaderAddr);
     vrl(60, 0);          // @0x3c numgaps = 0
     // @0x40 numsections: libreDWG checks (pages-in-map == numgaps + numsections);
     // with no gaps this is the TOTAL page count (data pages + DSM + SPM), == numPages.
@@ -1015,8 +1016,10 @@ bool dwgWriter18::finalize() {
     if (!dwgSafety::add(addrSPM, static_cast<std::uint64_t>(spmPage.size()),
                         lastPageEndAddr))
         return false;
+    const bool repeatHeader = m_version >= DRW::AC1027;
     auto fileHdr = buildFileHeader(addrSPM, dataSectionMapPageId,
                                    lastPageEndAddr,
+                                   repeatHeader ? lastPageEndAddr : 0,
                                    static_cast<std::uint32_t>(pageSizes.size()),  // total pages (incl SPM)
                                    fileHeaderVersion(), fileCodePageId());
     R2004LayoutReceipt receipt;
@@ -1069,6 +1072,11 @@ bool dwgWriter18::finalize() {
     if (receiptAddress > std::numeric_limits<std::size_t>::max())
         return false;
     receipt.actualFileSize = receiptAddress;
+    if (repeatHeader && !dwgSafety::add(receipt.actualFileSize, 0x6cu,
+                                        receipt.actualFileSize))
+        return false;
+    if (receipt.actualFileSize > std::numeric_limits<std::size_t>::max())
+        return false;
     std::vector<std::uint8_t> assembled;
     try {
         assembled.reserve(static_cast<std::size_t>(receipt.actualFileSize));
@@ -1077,6 +1085,9 @@ bool dwgWriter18::finalize() {
             assembled.insert(assembled.end(), page.cbegin(), page.cend());
         assembled.insert(assembled.end(), dsmPage.cbegin(), dsmPage.cend());
         assembled.insert(assembled.end(), spmPage.cbegin(), spmPage.cend());
+        if (repeatHeader)
+            assembled.insert(assembled.end(), fileHdr.cbegin() + 0x80,
+                             fileHdr.cbegin() + 0xec);
     } catch (...) {
         return false;
     }

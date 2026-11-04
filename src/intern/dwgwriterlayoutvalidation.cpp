@@ -563,9 +563,36 @@ ValidationResult validateR2004(const R2004Snapshot& snapshot) {
             if (!dwgSafety::add(address, page.size, address))
                 return fail(ValidationCategory::Span);
         }
-        if (address != receipt.actualFileSize
-            || receipt.actualFileSize != receipt.declaredFileSize)
+        const bool repeatHeader = receipt.version >= DRW::AC1027;
+        std::uint64_t expectedFileSize = address;
+        if (repeatHeader && !dwgSafety::add(expectedFileSize, 0x6cu,
+                                           expectedFileSize))
+            return fail(ValidationCategory::Span);
+        if (address != receipt.declaredFileSize
+            || receipt.actualFileSize != expectedFileSize)
             return fail(ValidationCategory::Header);
+        if (repeatHeader) {
+            if (!checkedSpan(snapshot.assembled, address, 0x6cu, span)
+                || !std::equal(snapshot.fileHeader.cbegin() + 0x80,
+                               snapshot.fileHeader.cbegin() + 0xec, span))
+                return fail(ValidationCategory::Header);
+            std::array<std::uint8_t, 0x6c> decoded{};
+            std::uint32_t seed = 1;
+            for (std::size_t i = 0; i < decoded.size(); ++i) {
+                seed = seed * 0x343fdu + 0x269ec3u;
+                decoded[i] = span[i] ^ static_cast<std::uint8_t>(seed >> 16);
+            }
+            const auto read64 = [](const std::uint8_t* p) {
+                return static_cast<std::uint64_t>(getRL(p))
+                    | (static_cast<std::uint64_t>(getRL(p + 4)) << 32);
+            };
+            if (read64(decoded.data() + 0x34) != address)
+                return fail(ValidationCategory::Header);
+            const std::uint32_t storedCrc = getRL(decoded.data() + 0x68);
+            std::fill(decoded.begin() + 0x68, decoded.end(), 0);
+            if (dwgUtil::crc32(0, decoded.data(), decoded.size()) != storedCrc)
+                return fail(ValidationCategory::Checksum);
+        }
 
         std::vector<bool> seen(snapshot.dataPages.size() + 1, false);
         for (const R2004Section& section : snapshot.sections) {
