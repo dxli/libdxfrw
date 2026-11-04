@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-03. This file contains open work only. Implementation history and
+Updated 2026-11-04. This file contains open work only. Implementation history and
 completed-item evidence belong in Git and `docs/research/`, not in this queue.
 
 The objective remains full, evidence-backed DWG/DXF parity with the intended
@@ -862,8 +862,8 @@ and an independently produced AutoCAD 2010 witness before changing the parser
 or output gate ([receipt](docs/research/p4-ac1024-geodata-v2-civil-tail-conflict-2026-11-04.json)).
 
 For WIPEOUT, qualify automatic adapter preview handling and native rendering
-beyond the explicitly authorized AC1024/AC1027 resource-free preview profile;
-the caller remains responsible for cache freshness ([receipt](docs/research/p5-wipeout-dwg-preview-explicit-replay-2026-11-04.json)).
+beyond the explicitly authorized AC1024/AC1027/AC1032 resource-free preview
+profile; the caller remains responsible for cache freshness ([AC1024/AC1027](docs/research/p5-wipeout-dwg-preview-explicit-replay-2026-11-04.json), [AC1032](docs/research/p5-ac1032-wipeout-dwg-preview-explicit-replay-2026-11-04.json)).
 
 SOLID, TRACE and 3DFACE input now refuse a fourth Z without fourth X/Y
 instead of silently replacing it. Valid triangle and default-Z inputs

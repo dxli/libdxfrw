@@ -746,7 +746,7 @@ private:
 };
 
 // This exact resource-free WIPEOUT preview shape was independently observed
-// in AC1024/AC1027 DWG and same-version ODA DXF. Source authority remains the
+// in AC1024/AC1027/AC1032 DWG and same-version ODA DXF. Source authority remains the
 // caller's explicit replay acknowledgement, which must be revoked before
 // editing either the cache or its associated geometry.
 bool isQualifiedDwgWipeoutPreview(const std::string& bytes) noexcept {
@@ -806,7 +806,8 @@ bool canReplayTypedProxyGraphics(const DRW_Entity& entity,
         wipeoutPreviewContext.armed = false;
         return provenance.encoding == DRW_ProxyGraphicsEncoding::DwgBitStream
             && (provenance.sourceVersion == DRW::AC1024
-                || provenance.sourceVersion == DRW::AC1027)
+                || provenance.sourceVersion == DRW::AC1027
+                || provenance.sourceVersion == DRW::AC1032)
             && provenance.sourceCodePage.empty() && provenance.countCode == 0
             && isQualifiedDwgWipeoutPreview(entity.proxyGraphics);
     }

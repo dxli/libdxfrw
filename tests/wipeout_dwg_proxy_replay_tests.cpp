@@ -274,5 +274,6 @@ int main(int argc, char** argv) {
         return 1;
     }
     return exercise(authored(DRW::AC1024), DRW::AC1024)
-        && exercise(authored(DRW::AC1027), DRW::AC1027) ? 0 : 1;
+        && exercise(authored(DRW::AC1027), DRW::AC1027)
+        && exercise(authored(DRW::AC1032), DRW::AC1032) ? 0 : 1;
 }
