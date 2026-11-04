@@ -158,6 +158,12 @@ add_test(NAME libdxfrw_polyline_cross_version_membership_audit
 set_tests_properties(libdxfrw_polyline_cross_version_membership_audit PROPERTIES
     LABELS "dwg;fast;polyline;tools;AC1018;AC1024" TIMEOUT 15)
 
+add_test(NAME libdxfrw_modern_writer_rejection_audit
+    COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B
+        ${CMAKE_CURRENT_SOURCE_DIR}/modern_writer_rejection_audit_tests.py)
+set_tests_properties(libdxfrw_modern_writer_rejection_audit PROPERTIES
+    LABELS "dwg;fast;tools;AC1027;AC1032" TIMEOUT 15)
+
 add_test(NAME libdxfrw_polyline_cross_scope_peer_audit
     COMMAND ${LIBDXFRW_PYTHON_EXECUTABLE} -B
         ${CMAKE_CURRENT_SOURCE_DIR}/polyline_cross_scope_peer_audit_tests.py)

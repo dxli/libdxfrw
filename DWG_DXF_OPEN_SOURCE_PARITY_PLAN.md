@@ -938,6 +938,11 @@ bit profiles. The original no-material-opt-in probe still fails at a subsequent
 LAYER record; qualify that graph and remaining profiles before claiming complete
 interoperability
 ([receipt](docs/research/p6-ac1021-generic-control-boundaries-2026-11-04.json)).
+AC1027 and AC1032 generated LINE and POLYLINE outputs are rejected by ODA even
+when matching producer controls convert successfully. A fixed-header byte
+factorial and a scratch default-material graph did not resolve the failures;
+trace their container and object boundaries without assuming either error names
+the failing section ([diagnostic receipt](docs/research/p6-ac1027-1032-oda-writer-rejection-2026-11-04.json)).
 The AC1021 LAYER string and handle boundary is now emitted without byte padding;
 with a diagnostic typed-null material, ODA no longer reports that LAYER as
 improperly read, but broader material graphs and full-file acceptance remain

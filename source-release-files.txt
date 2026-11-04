@@ -541,6 +541,7 @@ tests/material_normal_role_tests.cpp
 tests/modeler_block_census_tests.cpp
 tests/modeler_dxf_writer_matrix_tests.cpp
 tests/modeler_sat_dxf_compare.cpp
+tests/modern_writer_rejection_audit_tests.py
 tests/numeric_locale_tests.cpp
 tests/oTypes.md
 tests/object_physical_controls.h
@@ -666,6 +667,7 @@ tools/audit_dxf_lwpolyline_missing_y.py
 tools/audit_dxf_sparse_lwpolyline.py
 tools/audit_dxf_table_values.py
 tools/audit_librecad3_native_dxf.py
+tools/audit_modern_writer_rejection.py
 tools/audit_p9_rtext_native_history.py
 tools/audit_polyline_cross_scope_peer.py
 tools/audit_polyline_cross_version_membership.py
@@ -686,6 +688,7 @@ tools/author_ac1021_hatch_edge_source.py
 tools/author_ac1021_lwpolyline_footer.py
 tools/author_ac1021_polyline_owner_scopes.py
 tools/author_ac1021_varied_geometry.py
+tools/author_ac1027_1032_writer_control.py
 tools/author_dwg_legacy_extrusion.py
 tools/author_wipeout_ac1024_frame1.py
 tools/author_wipeout_direct_nod.py
@@ -749,6 +752,8 @@ tools/make_p9_rtext_oda_input.py
 tools/mutate_r2004_header_suffix_probe.py
 tools/normalize_drawing_result.py
 tools/normalize_oracle.py
+tools/prepare_modern_header_differential.py
+tools/prepare_modern_material_diagnostic.py
 tools/prepare_polyline_cross_membership_scratch.py
 tools/probe_ac1014_imagedef_zero_size.py
 tools/probe_ac1021_control_frames.cpp
@@ -767,6 +772,7 @@ tools/probe_ac1024_rastervariables_frame1_source.cpp
 tools/probe_ac1024_rastervariables_matcher.cpp
 tools/probe_ac1024_rastervariables_source.cpp
 tools/probe_ac1024_tilted_geometry.cpp
+tools/probe_ac1027_1032_writer_rejection.cpp
 tools/probe_ac1027_source_sab_cqacis.py
 tools/probe_dwg_hatch_unsupported_edges.cpp
 tools/probe_dxf_lwpolyline_missing_y.cpp
