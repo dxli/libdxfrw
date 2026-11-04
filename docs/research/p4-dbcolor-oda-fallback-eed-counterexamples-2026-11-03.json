@@ -7,7 +7,7 @@
   "origin": "A real existing local drawing children-room-decoration.dwg (SHA256 cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce) contained RGB 0xCFD0CF, RAL CLASSIC$RAL 7047, and 13 repeated DBColXD EED tuples whose group 1070 was 254. ODA output group 62 was also 254. The six controls below are authored from scratch to test that apparent relationship.",
   "generator": {
     "path": "tools/dbcolor_fallback_differential.py",
-    "sha256": "3b866457cdf7640ea7b7497d5eadd2d1ace98159bf55c700626cac1e09aea8ec",
+    "sha256": "f0ac788d0f7999e182b052a3e124f1fcb43249bcf4a8c290a8f7e683fbb6070b",
     "scaffold": "ezdxf 1.4.5 creates a fresh empty AC1021 DXF; the tool authors the DBCOLOR record, dictionary entry and 13 EED tuples locally.",
     "commands": [
       "build/rpp5gh-evidence/peer/bin/python -B tools/dbcolor_fallback_differential.py prepare <new-input-directory>",
@@ -26,8 +26,8 @@
   "results": [
     {
       "name": "none_254",
-      "inputSha256": "005d084a25efd95f038b0e4e3c41b351770998ffce0166d6acf69a31047a2365",
-      "outputSha256": "bd193e6e1379d546a87a4603a315f7bf07921eff03d6ebbad87bc3fa1929478c",
+      "inputSha256": "561288ab58514a461ef8cef8406c99fc592e27a5de281e253b149956317455b4",
+      "outputSha256": "17cb2c7fab20134a73e0512b53110e02c5151c68c1a7011444cecb25aab96266",
       "input": {
         "group62": [],
         "group420": [
@@ -84,8 +84,8 @@
     },
     {
       "name": "none_1",
-      "inputSha256": "3dfa2f53d326bf0c6735dd80b137b50567a3eb90f3748adb1f40ea21b91baaa0",
-      "outputSha256": "1d87df6a36080ad265be67a585ef288d7c98b119c7409574070183a56018d4e2",
+      "inputSha256": "9dc4720b7483ab3adf8827623dd0e3bb6c5a130c4de27f5fc95c62cab1485901",
+      "outputSha256": "9aa1fd98440eeefdf3a5a19b73cc1179d84297193216d961948e4fc6e3265418",
       "input": {
         "group62": [],
         "group420": [
@@ -142,8 +142,8 @@
     },
     {
       "name": "none_0",
-      "inputSha256": "612c869b5bb70341e0617fa35114ef06903d9c42f80a5b3d4c988a296d84310c",
-      "outputSha256": "a178e1128596859a7ced5c005009c7ea3b17e2cf3b7dc725667bc6ea9a3ea077",
+      "inputSha256": "9ca03060a0fc70fa909847dbb1ad647befb97e58db16ce7bc33f96b07925eced",
+      "outputSha256": "369ace10f9227b3f183f520837b591f215590914d37339f01edacc8b289ad3f3",
       "input": {
         "group62": [],
         "group420": [
@@ -200,8 +200,8 @@
     },
     {
       "name": "aci1_254",
-      "inputSha256": "9a3336e41ac8f37be102ecad491068ea2616e5414cb89c89286c0ea1ef48af3c",
-      "outputSha256": "95419eeb70f80810d35eab3b4eeb13b23d35585f9dff66157b058d9c2411939d",
+      "inputSha256": "2b61c3cdfc8a140fd102fafae2d05fcf0bfe6caf95a3d16306569dcdcd913d23",
+      "outputSha256": "94c776b97c973a0e5f864764ab3e6629e2fde64f02c406eb771ed775561da6bb",
       "input": {
         "group62": [
           "1"
@@ -260,8 +260,8 @@
     },
     {
       "name": "aci254_1",
-      "inputSha256": "97b915c94f3285636f1cae7e52b809c09b16a5303424411341594904a88ec158",
-      "outputSha256": "ce81582dcbb1616ad1e3d21b6c99e23c2b1a4fde521c536df7766db3a198596e",
+      "inputSha256": "a6fc992c476002c201c5cbdcced012123415bd512ec7feb984993a4125d93128",
+      "outputSha256": "6dc6b8fd01ea3dfc4ec8dd4042a964b538d0dd77ae4a5ff8f239e32af936cdd2",
       "input": {
         "group62": [
           "254"
@@ -320,8 +320,8 @@
     },
     {
       "name": "none_tagother",
-      "inputSha256": "1bf506c19a4ea5b6fcb8f200fb9843cee47132f67988fcca909afea4e1ada1b1",
-      "outputSha256": "47434791508a308be1150335bc8b169de9e4f297f31a0ab6264ebdf9c3a7e302",
+      "inputSha256": "45d7f36e70634e9d8d666def1d8f2757c497f8cec1973a9d1278ae5496240061",
+      "outputSha256": "53570b1c89934158fe81ea9f7cb8f1516df11695b97044aa3eccb77954b0171f",
       "input": {
         "group62": [],
         "group420": [
