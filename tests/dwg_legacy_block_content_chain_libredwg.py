@@ -9,10 +9,11 @@ from pathlib import Path
 
 
 def main():
-    if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] not in ("singleton", "scaled")):
-        raise SystemExit("usage: dwg_legacy_block_content_chain_libredwg.py <dwgread> <file.dwg> [singleton|scaled]")
+    if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] not in ("singleton", "scaled", "tilted", "negativez")):
+        raise SystemExit("usage: dwg_legacy_block_content_chain_libredwg.py <dwgread> <file.dwg> [singleton|scaled|tilted|negativez]")
     singleton = len(sys.argv) == 4 and sys.argv[3] == "singleton"
-    scaled = len(sys.argv) == 4 and sys.argv[3] == "scaled"
+    mode = sys.argv[3] if len(sys.argv) == 4 else "normal"
+    scaled = mode in ("scaled", "tilted", "negativez")
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "out.json"
         subprocess.run([sys.argv[1], "-O", "JSON", "-o", str(path), sys.argv[2]], check=True)
@@ -57,6 +58,8 @@ def main():
     insert = by_handle[0x451]
     assert insert["entity"] == "INSERT" and insert["has_attribs"] == 1
     assert insert["scale"] == ([2., 3., 4.] if scaled else [1., 1., 1.])
+    assert insert.get("extrusion", [0., 0., 1.]) == {
+        "tilted": [0., 1., 0.], "negativez": [0., 0., -1.]}.get(mode, [0., 0., 1.])
     assert math.isclose(insert.get("rotation", 0.), math.pi/6 if scaled else 0., abs_tol=1e-9)
     ref(insert["block_header"], 5, 0xD00)
     ref(insert["first_attrib"], 4, 0xA10); ref(insert["last_attrib"], 4, 0xA10)

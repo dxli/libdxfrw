@@ -623,6 +623,7 @@ EXTRA_DIST = \
     tools/audit_ac1015_compound_entity_chains.py \
     tools/audit_ac1015_empty_attributed_insert.py \
     tools/audit_ac1015_insert_scale.py \
+    tools/audit_ac1015_insert_tilted.py \
     tools/audit_ac1024_rastervariables_source.py \
     tools/audit_ac1024_tilted_geometry.py \
     tools/audit_ac1024_vport_null_roles.py \

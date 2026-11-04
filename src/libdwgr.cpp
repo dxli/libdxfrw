@@ -2248,7 +2248,9 @@ bool dwgRW::writeInsert(DRW_Insert *ent) {
             || !std::isfinite(ent->xscale) || ent->xscale <= 0.0
             || !std::isfinite(ent->yscale) || ent->yscale <= 0.0
             || !std::isfinite(ent->zscale) || ent->zscale <= 0.0
-            || ent->extPoint.x != 0.0 || ent->extPoint.y != 0.0 || ent->extPoint.z != 1.0
+            || !(ent->extPoint.x == 0.0
+                 && ((ent->extPoint.y == 0.0 && (ent->extPoint.z == 1.0 || ent->extPoint.z == -1.0))
+                     || (ent->extPoint.y == 1.0 && ent->extPoint.z == 0.0)))
             || !finiteCoord(ent->basePoint) || ent->basePoint.z != 0.0 || !std::isfinite(ent->angle))
             return recordWriteResult(WriteSkipKind::Entity, false);
         const auto plainTag = [](const std::string& value) {

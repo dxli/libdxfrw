@@ -47,7 +47,7 @@ enum class Mode { Normal, Rotated, ScaleUniform, ScaleXUnit, ScaleNonuniform, Sc
                   DuplicatePlanAttr, PlanOwnerCollision, PlanSeqCollision, ZeroPlanAttr,
                   ZeroPlanSeq, ReservedPlanAttr, ReservedPlanSeq, InjectedSeqend,
                   InjectedException, InjectedLateException, BadXScale, BadYScale, BadZScale, BadScaleNan,
-                  BadExtrusion, BadPosition, BadRotation, BadRowSpacing, BadColSpacing,
+                  BadExtrusion, ZeroExtrusion, NanExtrusion, BadPosition, BadRotation, BadRowSpacing, BadColSpacing,
                   BadStyle, BadMText, BadAttVersion, BadAttributeType, BadLock,
                   BadXRecord, BadAnnotative, BadAlignmentZ, BadUnicodeText, BadUnicodeTag,
                   DuplicateTag, RetainedAttrHandles, OverBudgetPlan, EarlyNodAlias, EarlyGroupAlias,
@@ -169,7 +169,9 @@ struct Adapter : LC3CompatCheck, DRW_DwgLegacyModelChainProvider,
         if(mode==Mode::BadYScale)first.yscale=-1.;
         if(mode==Mode::BadZScale)first.zscale=std::numeric_limits<double>::infinity();
         if(mode==Mode::BadScaleNan)first.xscale=std::numeric_limits<double>::quiet_NaN();
-        if(mode==Mode::BadExtrusion)first.extPoint={0.,1.,0.};
+        if(mode==Mode::BadExtrusion)first.extPoint={1.,0.,0.};
+        if(mode==Mode::ZeroExtrusion)first.extPoint={0.,0.,0.};
+        if(mode==Mode::NanExtrusion)first.extPoint={0.,std::numeric_limits<double>::quiet_NaN(),0.};
         if(mode==Mode::BadPosition)first.basePoint.x=std::numeric_limits<double>::quiet_NaN();
         if(mode==Mode::Rotated)first.angle=0.5235987755982988;
         if(mode==Mode::BadRotation)first.angle=std::numeric_limits<double>::infinity();
@@ -336,7 +338,7 @@ int main(int argc,char**argv){
         Mode::PlanOwnerCollision,Mode::PlanSeqCollision,Mode::ZeroPlanAttr,Mode::ZeroPlanSeq,
         Mode::ReservedPlanAttr,Mode::ReservedPlanSeq,Mode::InjectedSeqend,Mode::InjectedException,
         Mode::InjectedLateException,Mode::BadXScale,Mode::BadYScale,Mode::BadZScale,Mode::BadScaleNan,
-        Mode::BadExtrusion,Mode::BadPosition,Mode::BadRotation,Mode::BadRowSpacing,Mode::BadColSpacing,
+        Mode::BadExtrusion,Mode::ZeroExtrusion,Mode::NanExtrusion,Mode::BadPosition,Mode::BadRotation,Mode::BadRowSpacing,Mode::BadColSpacing,
         Mode::BadStyle,Mode::BadMText,Mode::BadAttVersion,Mode::BadAttributeType,Mode::BadLock,
         Mode::BadXRecord,Mode::BadAnnotative,Mode::BadAlignmentZ,Mode::BadUnicodeText,Mode::BadUnicodeTag,
         Mode::DuplicateTag,Mode::RetainedAttrHandles,Mode::OverBudgetPlan,
