@@ -1,19 +1,19 @@
 {
   "id": "p6-dxf-underlay-objects-allocation-failure-retry-2026-11-05",
   "date": "2026-11-05",
-  "scope": "Generated PDF underlay definition OBJECTS callback allocation failure, destination rollback, same-adapter retry and typed graph readback.",
+  "scope": "Generated PDF/DGN/DWF underlay definition OBJECTS callback allocation failure, destination rollback, same-adapter retry and typed graph readback.",
   "source": {
     "kind": "created-from-scratch control; no DWG/DXF fixture committed",
     "revision": "fa59bb07dd41786e5aded73e9bccf6fb18fa9b92",
-    "input": "The test authors one AC1027 DXF graph with an ACAD_PDFDEFINITIONS root entry, one owned child dictionary, one PDF definition, and one referencing underlay entity."
+    "input": "The test authors one AC1027 DXF graph with ACAD_PDFDEFINITIONS, ACAD_DGNDEFINITIONS and ACAD_DWFDEFINITIONS root entries, each with an owned child dictionary, definition and referencing underlay entity."
   },
   "implementation": {
     "test": "tests/underlay_objects_allocation_tests.cpp",
-    "testSha256": "0e770846c6844039ae8fb8ead8cc3d6ec33854972ba82ebf991a11d960f5199d",
+    "testSha256": "0fc57f61e9523fc26cca1a13d54c73b3628221ceb075646813ccaec552ba89dd",
     "cmakeSha256": "f40ca2fc4a247baa3b89a5f5b90fe62253e77fe169ec1bbf671ed43de23c54e4",
     "target": "libdxfrw_underlay_objects_allocation_tests",
-    "binarySha256": "5c116de65b00855327bd0b7eb3812c20bc126694fadef907d1ebc8e4b07f993c",
-    "asanBinarySha256": "3f4fe2ddcd46cd1d8b599f9a6abfb73391e46e64ccf443a8a67464611f098333"
+    "binarySha256": "ffc22d1551f1615653185035047309675339b95931c433c4b0f060a44ffd1ea2",
+    "asanBinarySha256": "885d25106ac8c7507ba835eaf43354fffa0d84a379f2310f2adc2cb669551f7f"
   },
   "environment": {
     "compiler": "Apple clang 21.0.0 (clang-2100.3.34.2)",
@@ -30,22 +30,22 @@
   "result": {
     "status": "PASS",
     "ascii": {
-      "reachedCallbackAllocations": 21,
-      "injectedFailures": 21,
+      "reachedCallbackAllocations": 60,
+      "injectedFailureOffsets": 60,
       "destinationSentinelPreserved": true,
       "sameAdapterRetries": 21,
       "typedGraphReadbacks": 21
     },
     "binary": {
-      "reachedCallbackAllocations": 19,
-      "injectedFailures": 19,
+      "reachedCallbackAllocations": 53,
+      "injectedFailureOffsets": 53,
       "destinationSentinelPreserved": true,
       "sameAdapterRetries": 19,
       "typedGraphReadbacks": 19
     },
     "selector": "libdxfrw_underlay_objects_allocation_retry",
-    "durationSeconds": 0.79,
-    "asanSelector": "ctest --test-dir build-asan-custom -R '^libdxfrw_underlay_objects_allocation_retry$' --output-on-failure: PASS (1/1, 1.63 seconds)",
+    "durationSeconds": 2.47,
+    "asanSelector": "ctest --test-dir build-asan-custom -R '^libdxfrw_underlay_objects_allocation_retry$' --output-on-failure: PASS (1/1, 4.82 seconds)",
     "suite": "focused normal and ASan selectors only; no full suite"
   },
   "limits": [
