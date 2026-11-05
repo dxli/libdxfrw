@@ -168,6 +168,39 @@ public:
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
+    static void retainDictionaries(dx_data& data,
+                                   const std::set<std::uint32_t>& keep) {
+        for (auto it = data.m_standardDwgObjectFrames.begin();
+             it != data.m_standardDwgObjectFrames.end();) {
+            if (keep.count(it->first.second) == 0u)
+                it = data.m_standardDwgObjectFrames.erase(it);
+            else
+                ++it;
+        }
+        for (auto it = data.m_standardDwgObjectOrdinals.begin();
+             it != data.m_standardDwgObjectOrdinals.end();) {
+            if (keep.count(it->first.second) == 0u)
+                it = data.m_standardDwgObjectOrdinals.erase(it);
+            else
+                ++it;
+        }
+        data.m_standardDwgObjectLocations.clear();
+        for (auto it = data.m_opaqueDwgSourceFrames.begin();
+             it != data.m_opaqueDwgSourceFrames.end();) {
+            if (keep.count(it->first.second) == 0u)
+                it = data.m_opaqueDwgSourceFrames.erase(it);
+            else
+                ++it;
+        }
+        for (auto it = data.m_opaqueDwgSourceFrameIdentities.begin();
+             it != data.m_opaqueDwgSourceFrameIdentities.end();) {
+            if (keep.count(it->second) == 0u)
+                it = data.m_opaqueDwgSourceFrameIdentities.erase(it);
+            else
+                ++it;
+        }
+    }
+
     static bool collectAc1024AcdsOpaqueProxyObjects(
             const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
             std::vector<std::uint32_t>& materialHandles, bool debug = false) {
@@ -401,6 +434,184 @@ public:
             retainFrame(record.handle);
         for (const DRW_Scale& scale : projection.scales)
             retainFrame(scale.handle);
+        return true;
+    }
+
+    static bool makeEmptyAc1021LayerStateProjection(dx_data& data,
+                                                     std::uint32_t& control,
+                                                     std::uint32_t& extension) {
+        if (data.sourceFormat != dx_source_format::DWG
+            || data.sourceVersion != DRW::AC1021
+            || data.importGeneration == 0u
+            || !data.getLayerTableControlExtensionDictionary(
+                control, extension)
+            || control == 0u || extension == 0u)
+            return false;
+        const auto extensionDictionary = std::find_if(
+            data.dictionaries.begin(), data.dictionaries.end(),
+            [extension](const DRW_Dictionary& candidate) {
+                return candidate.handle == extension;
+            });
+        if (extensionDictionary == data.dictionaries.end()
+            || extensionDictionary->parentHandle != control
+            || extensionDictionary->m_entries.size() != 3u)
+            return false;
+
+        std::set<std::uint32_t> dictionaries{extension};
+        const std::set<std::string> expectedRoots{
+            "ACAD_LAYERFILTERS", "ACAD_LAYERSTATES", "ACLYDICTIONARY"};
+        std::set<std::string> actualRoots;
+        for (const DRW_Dictionary::Entry& root :
+             extensionDictionary->m_entries) {
+            actualRoots.insert(root.m_name);
+            dictionaries.insert(root.m_handle);
+            const auto child = std::find_if(data.dictionaries.begin(),
+                data.dictionaries.end(), [&root](const DRW_Dictionary& value) {
+                    return value.handle == root.m_handle;
+                });
+            if (child == data.dictionaries.end()
+                || child->parentHandle != extension
+                || !child->m_entries.empty())
+                return false;
+        }
+        if (actualRoots != expectedRoots)
+            return false;
+
+        data.fields.clear(); data.fieldLists.clear(); data.rawFields.clear();
+        data.rawFieldLists.clear(); data.fieldCarrierTypedCaptureFailed = false;
+        data.rawFieldCarrierCaptureFailed = false; data.fieldCarrierImport = {};
+        const auto removeInvalidFrozenLayers = [&data](dx_ifaceBlock* block) {
+            if (block == nullptr) return;
+            for (DRW_Entity* entity : block->ent) {
+                auto* viewport = dynamic_cast<DRW_Viewport*>(entity);
+                if (viewport == nullptr) continue;
+                viewport->frozenLayerHandles.erase(
+                    std::remove_if(viewport->frozenLayerHandles.begin(),
+                        viewport->frozenLayerHandles.end(), [&data](
+                            std::uint32_t handle) {
+                            return handle == 0u || handle == DRW::NoHandle
+                                || std::count_if(data.layers.begin(),
+                                    data.layers.end(), [handle](
+                                        const DRW_Layer& layer) {
+                                        return layer.handle == handle;
+                                    }) != 1;
+                        }), viewport->frozenLayerHandles.end());
+            }
+        };
+        removeInvalidFrozenLayers(data.mBlock);
+        for (dx_ifaceBlock* block : data.blocks)
+            removeInvalidFrozenLayers(block);
+
+        std::set<std::uint32_t> sortDictionaryHandles;
+        for (const DRW_SortEntsTable& table : data.sortEntsTables) {
+            sortDictionaryHandles.insert(table.parentHandle);
+            for (const DRW_Dictionary& dictionary : data.dictionaries) {
+                if (dictionary.handle != table.parentHandle) continue;
+                for (const DRW_Dictionary::Entry& entry : dictionary.m_entries)
+                    if (entry.m_name != "ACAD_SORTENTS")
+                        sortDictionaryHandles.insert(entry.m_handle);
+            }
+        }
+        for (DRW_Block_Record& record : data.blockRecords) {
+            record.xDictHandle = 0u;
+            record.reactorHandles.clear();
+            record.insertHandles.clear();
+        }
+        data.dictionaries.erase(std::remove_if(data.dictionaries.begin(),
+            data.dictionaries.end(), [&sortDictionaryHandles](
+                const DRW_Dictionary& dictionary) {
+                return sortDictionaryHandles.count(dictionary.handle) != 0u;
+            }), data.dictionaries.end());
+        data.sortEntsTables.clear(); data.rawSortEntsTables.clear();
+        data.dwgSortEntsMemberships.clear(); data.sortEntsCaptureFailed = false;
+
+        const auto clearBlockEntities = [](dx_ifaceBlock* block) {
+            if (block == nullptr) return;
+            for (DRW_Entity* entity : block->ent) delete entity;
+            block->ent.clear(); block->rawEntities.clear();
+        };
+        clearBlockEntities(data.mBlock);
+        for (dx_ifaceBlock* block : data.blocks) clearBlockEntities(block);
+
+        const auto detachTableObjects = [](auto& rows) {
+            for (auto& row : rows) {
+                row.xDictHandle = 0u;
+                row.reactorHandles.clear();
+            }
+        };
+        detachTableObjects(data.lineTypes); detachTableObjects(data.layers);
+        data.dimStyles.clear();
+        detachTableObjects(data.textStyles); detachTableObjects(data.appIds);
+        for (DRW_Layout& layout : data.layouts) {
+            layout.viewportHandles.clear(); layout.viewportCount = 0;
+            layout.lastActiveViewportHandle.ref = 0u;
+            layout.xDictHandle = 0u; layout.reactorHandles.clear();
+            if (layout.shadePlotMode == 4) {
+                layout.shadePlotMode = 0;
+                layout.shadePlotHandle.ref = 0u;
+            }
+        }
+        data.VPorts.clear(); data.views.clear();
+        data.visualStyles.clear(); data.rawVisualStyleObjects.clear();
+        for (const char* name : {"$INTERFEREOBJVS", "$INTERFEREVPVS",
+                                 "$DRAGVS"}) {
+            const auto headerReference = data.headerC.vars.find(name);
+            if (headerReference != data.headerC.vars.end()) {
+                delete headerReference->second;
+                data.headerC.vars.erase(headerReference);
+            }
+        }
+        data.dynamicBlockObjects.clear(); data.evaluationGraphs.clear();
+        data.dictionaryWithDefaults.clear(); data.dictionaryDefaultImport = {};
+        data.dictionaryVars.clear(); data.rawNamedResourceObjects.clear();
+        data.mLineStyles.clear(); data.mLeaderStyles.clear();
+        data.tableStyles.clear(); data.tableStylesRetainedRecords = 0u;
+        data.tableStylesRetainedItems = 0u; data.tableStylesRetainedBytes = 0u;
+        data.tableStylesCaptureFailed = false;
+        data.cellStyleMaps.clear(); data.cellStyleMapsRetainedRecords = 0u;
+        data.cellStyleMapsRetainedItems = 0u;
+        data.cellStyleMapsRetainedBytes = 0u;
+        data.cellStyleMapsCaptureFailed = false;
+        data.rawCellStyleMaps.clear();
+        data.m_rawCellStyleMapDxfBaselines.clear();
+        data.namedResourceImport.scaleRange = {0u, data.scales.size()};
+        data.namedResourceImport.dictionaryVarRange = {0u, 0u};
+        data.namedResourceImport.mLineStyleRange = {0u, 0u};
+        data.namedResourceImport.mLeaderStyleRange = {0u, 0u};
+        data.namedResourceImport.typedRetainedRecords = data.scales.size();
+        data.namedResourceTypedRetainedRecords = data.scales.size();
+        data.namedResourceImport.typedRetainedBytes =
+            data.namedResourceTypedRetainedBytes;
+        data.mLineStyleRetainedRecords = 0u;
+        data.mLineStyleRetainedItems = 0u;
+        data.mLineStyleRetainedBytes = 0u;
+        data.rawNamedResourceRetainedRecords = 0u;
+        data.rawNamedResourceRawGroups = 0u;
+        data.rawNamedResourceRetainedBytes = 0u;
+        data.xRecords.clear(); data.rawDictionaryWithDefaults.clear();
+        data.placeholders.clear(); data.rawPlaceholders.clear();
+        data.proxyObjects.clear(); data.materials.clear();
+        data.renderSettings.clear(); data.backgrounds.clear(); data.suns.clear();
+        data.visualStyles.clear(); data.groups.clear();
+        data.acshHistoryObjects.clear();
+        data.dwgDimensionAssociations.clear();
+
+        if (!data.hasNamedObjectDictionary)
+            return false;
+        data.namedObjectDictionary.m_entries.erase(
+            std::remove_if(data.namedObjectDictionary.m_entries.begin(),
+                data.namedObjectDictionary.m_entries.end(),
+                [&dictionaries](const DRW_Dictionary::Entry& entry) {
+                    const bool keep = entry.m_name == "ACAD_LAYOUT";
+                    if (keep) dictionaries.insert(entry.m_handle);
+                    return !keep;
+                }), data.namedObjectDictionary.m_entries.end());
+        data.dictionaries.erase(std::remove_if(data.dictionaries.begin(),
+            data.dictionaries.end(), [&dictionaries](
+                const DRW_Dictionary& dictionary) {
+                return dictionaries.count(dictionary.handle) == 0u;
+            }), data.dictionaries.end());
+        retainDictionaries(data, dictionaries);
         return true;
     }
 
@@ -50148,6 +50359,134 @@ bool physicalLayerStateXrecordSourceAdmission(
     return true;
 }
 
+bool physicalAc1021EmptyLayerStateProjection(
+        const std::filesystem::path& sourcePath) {
+    const auto uniqueDictionary = [](const dx_data& data,
+                                    std::uint32_t handle)
+            -> const DRW_Dictionary* {
+        const DRW_Dictionary* result = nullptr;
+        for (const DRW_Dictionary& dictionary : data.dictionaries) {
+            if (dictionary.handle != handle) continue;
+            if (result != nullptr) return nullptr;
+            result = &dictionary;
+        }
+        return result;
+    };
+    for (const bool binary : {false, true}) {
+        dx_iface sourceReader;
+        dx_data source;
+        std::uint32_t control = 0u, extension = 0u;
+        if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+            || !DxIfaceStandardDwgCaptureTestAccess::
+                makeEmptyAc1021LayerStateProjection(source, control,
+                                                     extension))
+            return fail("physical AC1021 empty LayerStates graph could not be projected");
+
+        const auto nonce = std::chrono::steady_clock::now()
+                               .time_since_epoch().count();
+        const std::filesystem::path outputPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-layerstates-ac1021-empty-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{outputPath};
+
+        dx_iface writer;
+        writer.cData = &source;
+        if (!DxIfaceStandardDwgCaptureTestAccess::prepareLayerStateOutput(
+                writer, DRW::AC1024))
+            return fail("physical AC1021 empty LayerStates output preparation failed");
+        DRW_Dictionary* sourceExtension = nullptr;
+        for (DRW_Dictionary& candidate : source.dictionaries)
+            if (candidate.handle == extension) {
+                if (sourceExtension != nullptr)
+                    return fail("physical AC1021 LayerStates extension dictionary is ambiguous");
+                sourceExtension = &candidate;
+            }
+        if (sourceExtension == nullptr || sourceExtension->m_entries.size() != 3u)
+            return fail("physical AC1021 LayerStates root changed before output");
+        const auto originalEntries = sourceExtension->m_entries;
+        sourceExtension->m_entries.front().m_name += "_MUTATED";
+        const std::string sentinel =
+            "AC1021 LayerStates destination sentinel\n";
+        {
+            std::ofstream existing(outputPath,
+                                   std::ios::binary | std::ios::trunc);
+            if (!existing || !(existing << sentinel))
+                return fail("could not seed AC1021 LayerStates destination sentinel");
+        }
+        const auto write = [&]() {
+            return writer.fileExport(outputPath.string(), DRW::AC1024, binary,
+                &source, false, true,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::AllowPartial);
+        };
+        if (write())
+            return fail("mutated AC1021 LayerStates source graph was published");
+        {
+            std::ifstream input(outputPath, std::ios::binary);
+            const std::string retained{
+                std::istreambuf_iterator<char>(input), {}};
+            if (retained != sentinel)
+                return fail("AC1021 LayerStates mutation refusal changed the destination");
+        }
+        sourceExtension->m_entries = originalEntries;
+        if (!write()) {
+            std::cerr << "AC1021 LayerStates projection detail: "
+                      << writer.extensionGraphFailureDetail() << '\n';
+            return fail("corrected AC1021 LayerStates source did not retry on the same adapter");
+        }
+
+        dx_iface outputReader;
+        dx_data output;
+        if (!outputReader.fileImport(outputPath.string(), &output, false)
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1024)
+            return fail("AC1021 LayerStates output failed fresh DXF readback");
+        std::uint32_t outputControl = 0u, outputExtension = 0u;
+        if (!output.getLayerTableControlExtensionDictionary(
+                outputControl, outputExtension)
+            || outputControl != control || outputExtension != extension)
+            return fail("AC1021 LayerStates readback changed the LAYER_CONTROL extension edge");
+        const DRW_Dictionary* readbackExtension =
+            uniqueDictionary(output, outputExtension);
+        if (readbackExtension == nullptr
+            || readbackExtension->parentHandle != outputControl
+            || readbackExtension->m_entries.size() != 3u)
+            return fail("AC1021 LayerStates readback changed the extension owner or root count");
+        const std::set<std::string> expectedNames{
+            "ACAD_LAYERFILTERS", "ACAD_LAYERSTATES", "ACLYDICTIONARY"};
+        std::set<std::string> actualNames;
+        for (const DRW_Dictionary::Entry& entry :
+             readbackExtension->m_entries) {
+            actualNames.insert(entry.m_name);
+            if (entry.m_dxfHandleCode
+                != DRW_Dictionary::Entry::DxfHandleCode::HardOwner)
+                return fail("AC1021 LayerStates readback changed a root handle role");
+            const DRW_Dictionary* child = uniqueDictionary(output,
+                                                           entry.m_handle);
+            if (child == nullptr
+                || child->parentHandle != outputExtension
+                || !child->m_entries.empty())
+                return fail("AC1021 LayerStates readback changed an empty child dictionary");
+        }
+        if (actualNames != expectedNames || !output.xRecords.empty())
+            return fail("AC1021 LayerStates readback changed the empty-root profile");
+        std::cout << "Physical AC1021 empty LayerStates projection "
+                  << (binary ? "Binary" : "ASCII")
+                  << " output/readback passed; mutation refusal preserved the destination and the same adapter retried successfully.\n";
+    }
+    return true;
+}
+
 bool physicalTableStyleSourceProfile(
         const std::filesystem::path& sourcePath) {
     dx_iface sourceReader;
@@ -73198,6 +73537,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--layerstates-empty-ac1021-source-admission")
         return physicalAc1021EmptyLayerStateRootAdmission(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--layerstates-empty-ac1021-output-readback")
+        return physicalAc1021EmptyLayerStateProjection(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--layerstates-xrecord-physical-source-admission")
         return physicalLayerStateXrecordSourceAdmission(argv[2]) ? 0 : 1;
