@@ -50989,6 +50989,11 @@ bool dx_iface::inspectDwgLineTypeControlOutput(
         std::vector<dx_symbol_output::LineTypeTargetBinding> targets;
         std::vector<DwgLtypeOutputBinding> retained;
         std::unordered_map<std::uint32_t, std::size_t> bindingIndex;
+        std::vector<DwgLayerOutputBinding> layerBindings;
+        std::unordered_map<std::uint32_t, std::size_t> layerBindingIndex;
+        std::unordered_map<std::uint32_t, std::size_t> layerEmittedIndex;
+        std::unordered_set<std::string> layerNameKeys;
+        bool sourceHasLayerZero = false;
         targets.reserve(cData->lineTypes.size());
         retained.reserve(cData->lineTypes.size());
         bindingIndex.reserve(cData->lineTypes.size());
@@ -51013,15 +51018,81 @@ bool dx_iface::inspectDwgLineTypeControlOutput(
         }
         if (!dx_symbol_output::inspectLineTypeTargetBindings(view, targets))
             return false;
+
+        if (cData->layers.size() > kMaxAdapterBasicTableRecords)
+            return false;
+        layerBindings.reserve(cData->layers.size());
+        layerBindingIndex.reserve(cData->layers.size());
+        layerEmittedIndex.reserve(cData->layers.size());
+        layerNameKeys.reserve(cData->layers.size());
+        for (const DRW_Layer& layer : cData->layers) {
+            const std::uint32_t emitted =
+                dxfW->dxfWriteEmittedSourceTableHandle(layer.handle);
+            std::string nameKey;
+            if (layer.handle == 0u || layer.handle == DRW::NoHandle
+                || layer.name.empty() || emitted == 0u
+                || emitted == DRW::NoHandle
+                || !dx_symbol_output::nameKey(layer.name, nameKey)
+                || !layerNameKeys.insert(std::move(nameKey)).second)
+                return false;
+            const std::size_t index = layerBindings.size();
+            layerBindings.push_back(
+                {layer.handle, emitted, layer.name, {}});
+            if (!layerBindingIndex.emplace(layer.handle, index).second
+                || !layerEmittedIndex.emplace(emitted, index).second)
+                return false;
+            sourceHasLayerZero = sourceHasLayerZero
+                || sameAsciiName(layer.name, "0");
+        }
+        std::size_t observedLayerRows = 0u;
+        std::size_t observedBoundLayerRows = 0u;
+        bool observedSyntheticLayerZero = false;
+        if (!dx_symbol_output::inspect(view, [&](const auto& actual) {
+                if (actual.type != dx_symbol_output::Kind::Layer)
+                    return true;
+                ++observedLayerRows;
+                if (!actual.qualified || actual.tableHandle != 0x2u
+                    || actual.owner != (view.version >= DRW::AC1014
+                                            ? 0x2u : 0u))
+                    return false;
+                const auto found = layerEmittedIndex.find(actual.handle);
+                if (found == layerEmittedIndex.end()) {
+                    if (sourceHasLayerZero || observedSyntheticLayerZero
+                        || actual.handle != 0x10u || actual.name != "0")
+                        return false;
+                    observedSyntheticLayerZero = true;
+                    return true;
+                }
+                if (found->second >= layerBindings.size()) return false;
+                DwgLayerOutputBinding& binding =
+                    layerBindings[found->second];
+                if (!binding.outputName.empty() || !actual.qualified
+                    || !sameAsciiName(actual.name, binding.sourceName))
+                    return false;
+                binding.outputName = actual.name;
+                ++observedBoundLayerRows;
+                return true;
+            })
+            || observedBoundLayerRows != layerBindings.size()
+            || observedLayerRows != layerBindings.size()
+                + (sourceHasLayerZero ? 0u : 1u)
+            || observedSyntheticLayerZero != !sourceHasLayerZero)
+            return false;
+
         m_dwgLtypeControlOutputBindings.swap(retained);
         m_dwgLtypeControlOutputBindingIndex.swap(bindingIndex);
+        m_dwgLayerOutputBindings.swap(layerBindings);
+        m_dwgLayerOutputBindingIndex.swap(layerBindingIndex);
         for (const DRW_Layer& layer : cData->layers) {
-            if (hasClosedDwgLayerLinetypeReference(layer))
-                continue;
-            m_dwgLtypeControlOutputBindings.clear();
-            m_dwgLtypeControlOutputBindingIndex.clear();
-            return false;
+            if (!hasClosedDwgLayerLinetypeReference(layer)) {
+                m_dwgLtypeControlOutputBindings.clear();
+                m_dwgLtypeControlOutputBindingIndex.clear();
+                m_dwgLayerOutputBindings.clear();
+                m_dwgLayerOutputBindingIndex.clear();
+                return false;
+            }
         }
+        m_dwgLayerOutputInspected = true;
         m_dwgLtypeControlOutputInspected = true;
         return true;
     } catch (...) {
@@ -51037,7 +51108,11 @@ bool dx_iface::finalizeDwgLineTypeControlOutput() const noexcept {
         || !cData->hasCompleteDwgLineTypeControlMembership()
         || m_dwgLtypeControlOutputBindings.size() != cData->lineTypes.size()
         || m_dwgLtypeControlOutputBindingIndex.size()
-            != m_dwgLtypeControlOutputBindings.size())
+            != m_dwgLtypeControlOutputBindings.size()
+        || !m_dwgLayerOutputInspected
+        || m_dwgLayerOutputBindings.size() != cData->layers.size()
+        || m_dwgLayerOutputBindingIndex.size()
+            != m_dwgLayerOutputBindings.size())
         return false;
     try {
         std::size_t index = 0u;
@@ -51065,6 +51140,24 @@ bool dx_iface::finalizeDwgLineTypeControlOutput() const noexcept {
             } else if (binding.outputName != lineType.name) {
                 return false;
             }
+        }
+        index = 0u;
+        for (const DRW_Layer& layer : cData->layers) {
+            const std::size_t bindingPosition = index++;
+            const DwgLayerOutputBinding& binding =
+                m_dwgLayerOutputBindings[bindingPosition];
+            const auto indexed =
+                m_dwgLayerOutputBindingIndex.find(layer.handle);
+            if (binding.sourceHandle != layer.handle
+                || indexed == m_dwgLayerOutputBindingIndex.end()
+                || indexed->second != bindingPosition
+                || binding.sourceName != layer.name
+                || binding.emittedHandle == 0u
+                || binding.emittedHandle == DRW::NoHandle
+                || !sameAsciiName(binding.outputName, binding.sourceName)
+                || dxfW->dxfWriteEmittedSourceTableHandle(layer.handle)
+                    != binding.emittedHandle)
+                return false;
         }
         return true;
     } catch (...) {
@@ -51128,6 +51221,58 @@ bool dx_iface::hasClosedDwgLayerLinetypeReference(
         return false;
     return hasClosedDwgLinetypeReference(layer.lTypeH.ref, layer.lineType,
                                          false);
+}
+
+bool dx_iface::hasClosedDwgEntityLayerReferenceTree(
+        const DRW_Entity* entity) const noexcept {
+    if (!m_dwgLtypeControlOutputRequired)
+        return true;
+    if (entity == nullptr || cData == nullptr || dxfW == nullptr
+        || cData->sourceFormat != dx_source_format::DWG
+        || !m_dwgLayerOutputInspected || entity->layer.empty())
+        return false;
+
+    const std::uint32_t sourceHandle = entity->dwgLayerHandle();
+    if (sourceHandle == 0u || sourceHandle == DRW::NoHandle
+        || entity->dwgLayerHandle64() != sourceHandle
+        || entity->dwgLayerHandleRole() != DRW::DwgHardPointer)
+        return false;
+    const auto found = m_dwgLayerOutputBindingIndex.find(sourceHandle);
+    if (found == m_dwgLayerOutputBindingIndex.end()
+        || found->second >= m_dwgLayerOutputBindings.size())
+        return false;
+    const DwgLayerOutputBinding& binding =
+        m_dwgLayerOutputBindings[found->second];
+    if (binding.sourceHandle != sourceHandle
+        || binding.sourceName != entity->layer
+        || binding.emittedHandle == 0u
+        || binding.emittedHandle == DRW::NoHandle
+        || !sameAsciiName(binding.outputName, binding.sourceName)
+        || dxfW->dxfWriteEmittedSourceTableHandle(sourceHandle)
+            != binding.emittedHandle)
+        return false;
+
+    if (const auto* polyline = dynamic_cast<const DRW_Polyline*>(entity)) {
+        for (const auto& vertex : polyline->vertlist)
+            if (vertex
+                && !hasClosedDwgEntityLayerReferenceTree(vertex.get()))
+                return false;
+        if (polyline->seqEndEntity
+            && !hasClosedDwgEntityLayerReferenceTree(
+                polyline->seqEndEntity.get()))
+            return false;
+    }
+    if (const auto* insert = dynamic_cast<const DRW_Insert*>(entity)) {
+        for (const auto& attribute : insert->attlist)
+            if (attribute
+                && !hasClosedDwgEntityLayerReferenceTree(attribute.get()))
+                return false;
+        if (insert->seqEndEntity
+            && !hasClosedDwgEntityLayerReferenceTree(
+                insert->seqEndEntity.get()))
+            return false;
+    }
+    return true;
 }
 
 bool dx_iface::hasClosedDwgEntityLinetypeReferenceTree(
@@ -73533,6 +73678,10 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         m_dwgLtypeControlOutputBindings);
     std::unordered_map<std::uint32_t, std::size_t>().swap(
         m_dwgLtypeControlOutputBindingIndex);
+    m_dwgLayerOutputInspected = false;
+    std::vector<DwgLayerOutputBinding>().swap(m_dwgLayerOutputBindings);
+    std::unordered_map<std::uint32_t, std::size_t>().swap(
+        m_dwgLayerOutputBindingIndex);
     m_sunStudyOutputInspected = false;
     m_sunStudyRootSnapshot.reset();
     m_sunStudyOwnerSnapshot.reset();
@@ -79740,7 +79889,8 @@ void dx_iface::writeEntity(DRW_Entity* e){
         failHatchPublication();
         return;
     }
-    if (!hasClosedDwgEntityLinetypeReferenceTree(e)) {
+    if (!hasClosedDwgEntityLayerReferenceTree(e)
+        || !hasClosedDwgEntityLinetypeReferenceTree(e)) {
         (void)dxfW->writeRawDxfEntity(nullptr);
         return;
     }

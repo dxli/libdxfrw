@@ -479,9 +479,25 @@ public:
     [[nodiscard]] std::uint32_t dwgLayerHandle() const noexcept {
         return layerH.ref;
     }
+    [[nodiscard]] std::uint64_t dwgLayerHandle64() const noexcept {
+        return layerH.ref64;
+    }
+    [[nodiscard]] std::uint8_t dwgLayerHandleRole() const noexcept {
+        return layerH.rawCode;
+    }
     void setDwgLayerHandle(std::uint32_t ref) noexcept {
         layerH.ref = ref;
+        layerH.ref64 = ref;
         layerH.code = ref == 0 ? 0 : 5;
+        layerH.rawCode = ref == 0 ? 0 : DRW::DwgHardPointer;
+    }
+    void setDwgLayerHandleWireState(std::uint32_t resolvedRef,
+                                    std::uint64_t rawRef,
+                                    std::uint8_t role) noexcept {
+        layerH.ref = resolvedRef;
+        layerH.ref64 = rawRef;
+        layerH.code = resolvedRef == 0 ? 0 : 5;
+        layerH.rawCode = role;
     }
     [[nodiscard]] std::uint32_t dwgLinetypeHandle() const noexcept {
         return lTypeH.ref;

@@ -24,10 +24,15 @@ public:
     static void begin(dx_iface& iface) {
         iface.m_dwgLtypeControlOutputRequired = true;
         iface.m_dwgLtypeControlOutputInspected = false;
+        iface.m_dwgLayerOutputInspected = false;
         std::vector<dx_iface::DwgLtypeOutputBinding>().swap(
             iface.m_dwgLtypeControlOutputBindings);
         std::unordered_map<std::uint32_t, std::size_t>().swap(
             iface.m_dwgLtypeControlOutputBindingIndex);
+        std::vector<dx_iface::DwgLayerOutputBinding>().swap(
+            iface.m_dwgLayerOutputBindings);
+        std::unordered_map<std::uint32_t, std::size_t>().swap(
+            iface.m_dwgLayerOutputBindingIndex);
     }
     static bool inspect(dx_iface& iface,
                         const dxfRW::DxfTablesWriteView& view) noexcept {
@@ -43,6 +48,10 @@ public:
     static bool validateEntity(const dx_iface& iface,
                                const DRW_Entity* entity) noexcept {
         return iface.hasClosedDwgEntityLinetypeReferenceTree(entity);
+    }
+    static bool validateLayerTree(const dx_iface& iface,
+                                  const DRW_Entity* entity) noexcept {
+        return iface.hasClosedDwgEntityLayerReferenceTree(entity);
     }
 };
 
@@ -718,6 +727,8 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
             addDwgFramePublication(control);
             entity = new DRW_Line();
             entity->handle = 0xC420u;
+            entity->layer = "CHECK_LAYER";
+            entity->setDwgLayerHandle(0xC421u);
             entity->lineType = "CustomDash";
             entity->setDwgLinetypeHandle(0xC413u);
             data.mBlock->ent.push_back(entity);
@@ -778,6 +789,8 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
         }
 
         void writeEntities() override {
+            entity->layer = "CHECK_LAYER";
+            entity->setDwgLayerHandle(0xC421u);
             entity->setDwgLinetypeHandle(0xC413u);
             entity->lineType = "CustomDash";
             if (fault == 7u)
@@ -800,15 +813,58 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
                 entity->setDwgLinetypeHandle(0u);
                 entity->lineType = "CONTINUOUS";
             }
+            if (fault == 20u)
+                entity->layer = "WRONG_LAYER";
+            else if (fault == 21u)
+                entity->setDwgLayerHandle(0xC422u);
+            else if (fault == 22u)
+                entity->setDwgLayerHandle(0u);
+            else if (fault == 23u)
+                entity->setDwgLayerHandleWireState(
+                    0xC421u, 0xC421u, DRW::DwgSoftPointer);
+            else if (fault == 24u)
+                entity->setDwgLayerHandleWireState(
+                    0xC421u, 0x10000C421ull, DRW::DwgHardPointer);
+            else if (fault == 25u)
+                entity->setDwgLayerHandle(0xC413u);
+            if (fault == 0u) {
+                DRW_Polyline layerPolyline;
+                layerPolyline.layer = "CHECK_LAYER";
+                layerPolyline.setDwgLayerHandle(0xC421u);
+                auto layerVertex = std::make_shared<DRW_Vertex>();
+                layerVertex->layer = "CHECK_LAYER";
+                layerVertex->setDwgLayerHandle(0xC421u);
+                layerPolyline.vertlist.push_back(layerVertex);
+                nestedLayerValid =
+                    DxIfaceDwgLtypeControlOutputTestAccess::validateLayerTree(
+                        *this, &layerPolyline);
+                layerVertex->layer = "WRONG_LAYER";
+                nestedLayerNameRejected =
+                    !DxIfaceDwgLtypeControlOutputTestAccess::validateLayerTree(
+                        *this, &layerPolyline);
+                layerVertex->layer = "CHECK_LAYER";
+                layerVertex->setDwgLayerHandle(0xC413u);
+                nestedLayerWrongKindRejected =
+                    !DxIfaceDwgLtypeControlOutputTestAccess::validateLayerTree(
+                        *this, &layerPolyline);
+            }
             dx_iface::writeEntities();
         }
 
         void writeObjects() override {
-            if (fault != 6u)
+            if (fault != 6u && fault != 26u)
                 return;
             auto* context = dxfW->getWritingContext();
             if (context == nullptr)
                 return;
+            if (fault == 26u) {
+                const std::uint32_t emitted =
+                    dxfW->dxfWriteEmittedSourceTableHandle(0xC421u);
+                if (emitted != 0u)
+                    context->sourceHandleToWrittenTableMap[0xC421u]
+                        = emitted + 1u;
+                return;
+            }
             const std::uint32_t emitted =
                 dxfW->dxfWriteSourceLinetypeTargetHandle(0xC413u);
             if (emitted != 0u)
@@ -820,6 +876,9 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
         DRW_Layer* layerRecord{nullptr};
         unsigned fault{0u};
         bool writeFailed{false};
+        bool nestedLayerValid{false};
+        bool nestedLayerNameRejected{false};
+        bool nestedLayerWrongKindRejected{false};
     } iface;
 
     t.expect(iface.data.hasCompleteDwgLineTypeControlMembership(),
@@ -878,7 +937,7 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
     for (const auto outputVersion : {DRW::AC1014, DRW::AC1015, DRW::AC1018,
              DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
       for (const bool binary : {false, true}) {
-        for (unsigned fault = 0u; fault <= 19u; ++fault) {
+        for (unsigned fault = 0u; fault <= 26u; ++fault) {
             iface.fault = fault;
             iface.writeFailed = false;
             unsigned inspections = 0u;
@@ -931,8 +990,9 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
                     ? "CustomDash" : fault == 11u ? "BYLAYER"
                     : fault == 12u ? "BYBLOCK" : "CONTINUOUS";
                 t.expect(read && line != readback.data.mBlock->ent.cend()
-                             && (*line)->lineType == expectedName,
-                         "DXF readback retains the exact explicit/implicit entity linetype name");
+                             && (*line)->lineType == expectedName
+                             && (*line)->layer == "CHECK_LAYER",
+                         "DXF readback retains exact entity layer and explicit/implicit linetype names");
                 t.expect(layer != readback.data.layers.cend()
                              && layer->lineType == "CustomDash",
                          "DXF readback retains the layer's exact bound linetype name");
@@ -961,8 +1021,14 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
         }
       }
     }
-    std::cout << "DWG LTYPE control output cells=" << cells
-              << " target-versions=7 formats=2 negative cases=16 with same-codec retries\n";
+    t.expect(iface.nestedLayerValid,
+             "Bounded emitted layer binding accepts a valid embedded VERTEX");
+    t.expect(iface.nestedLayerNameRejected,
+             "Embedded POLYLINE VERTEX layer names are checked against the source handle");
+    t.expect(iface.nestedLayerWrongKindRejected,
+             "Embedded POLYLINE VERTEX wrong-kind layer handles are rejected");
+    std::cout << "DWG LTYPE/LAYER control output cells=" << cells
+              << " target-versions=7 formats=2 negative cases=23 with same-codec retries\n";
 }
 
 void testSymbolNameWireInspection(TestContext& t) {
