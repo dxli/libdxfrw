@@ -663,6 +663,14 @@ and Binary output/readback. This qualifies the bounded DICTIONARYVAR graph only;
 the HATCH stop profile remains refused under P6. See the [current selector
 recheck receipt](docs/research/p4-ac1018-dictionaryvar-hatch-resolution-recheck-2026-11-02.json).
 
+An independent LibreDWG 0.14 `dxf2dwg` attempt on the strict mechanical-alt
+output stops before producing a DWG: it treats SORTENTSTABLE body group 5 as a
+duplicate record handle and does not implement the emitted
+`AcDbAssocValueDependency` subclass. The matching handle is the documented
+SORTENTSTABLE sort key, not a second object identity. This run supplies no
+readback and does not establish a libdxfrw output defect; consumer qualification
+for this profile remains open ([peer rejection receipt](docs/research/p4-mechanical-alt-libredwg-dxf-peer-rejection-2026-11-05.json)).
+
 After actual prerequisites close, run one composed strict CLI checkpoint. A
 successful process exit or record count alone is not closure. For AC1018 opt-in
 capture, keep default legacy consumers opted out until codec, source, dependency and
