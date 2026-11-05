@@ -937,6 +937,34 @@ public:
             || typed->second.m_displayFrame != 0u || typed->second.reactorHandles != std::vector<std::uint32_t>{0xAu}
             || typed->second.extensionDictionaryFlag() != 1u) return false;
         const auto& raw = frame->second;
+        if (raw.m_version == DRW::AC1018) {
+            if (raw.m_rawBytes.size() != 15u || raw.m_bodyBitSize != 0u
+                || raw.m_objectType != 513u || !raw.m_isCustomClass
+                || raw.m_commonLinkEvidence
+                    != DRW_DwgCommonLinkEvidence::Unknown)
+                return false;
+            using namespace dx_raster_wire::detail;
+            Bits body{raw.m_rawBytes.data(), 0u, 120u};
+            if (body.shortValue() != 513u || body.little(4u) != 81u
+                || handle(body, 0u, 0u, true).value != 0x30u
+                || body.shortValue() != 0u || body.longValue() != 1u
+                || body.take(1u) != 1u || body.shortValue() != 0u
+                || !body.good || body.pos != 81u)
+                return false;
+            const auto owner = handle(body, 4u, 0x30u);
+            if (!body.good || owner.role != 4u || owner.value != 0xAu
+                || body.pos != 97u)
+                return false;
+            const auto reactor = handle(body, 4u, 0x30u);
+            if (!body.good || reactor.role != 4u || reactor.value != 0xAu
+                || body.pos != 113u || body.take(7u) != 0u
+                || !body.good || body.pos != 120u)
+                return false;
+            return std::count_if(data.namedObjectDictionary.m_entries.begin(),
+                data.namedObjectDictionary.m_entries.end(), [](const DRW_Dictionary::Entry& e) {
+                    return e.m_name == "ACAD_WIPEOUT_VARS" && e.m_handle == 0x30u;
+                }) == 1;
+        }
         if (raw.m_rawBytes.size() != 10u) return false;
         using namespace dx_raster_wire;
         if (raw.m_version == DRW::AC1024) {
@@ -72113,7 +72141,8 @@ bool wipeoutVariablesDwgAdapterTransport(bool directNod = false,
     dx_iface physicalReader;
     const DRW_WipeoutVariables* physicalWitness = nullptr;
     if (!generatedSource) {
-        if ((revision != DRW::AC1024 && revision != DRW::AC1027
+        if ((revision != DRW::AC1018 && revision != DRW::AC1024
+                && revision != DRW::AC1027
                 && revision != DRW::AC1032)
             || !directNod || frameOne
             || !physicalReader.fileImport(
@@ -73667,6 +73696,10 @@ int main(int argc, char** argv) {
     if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1024-direct-nod") {
         return wipeoutVariablesDwgAdapterTransport(
             true, DRW::AC1024, false, argv[2]) ? 0 : 1;
+    }
+    if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1018-direct-nod") {
+        return wipeoutVariablesDwgAdapterTransport(
+            true, DRW::AC1018, false, argv[2]) ? 0 : 1;
     }
     if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1032-direct-nod") {
         return wipeoutVariablesDwgAdapterTransport(

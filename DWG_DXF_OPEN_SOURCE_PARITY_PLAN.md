@@ -2077,17 +2077,18 @@ Native source-release builds and platform qualification remain open.
   These controls do not convert either physical drawing as a whole. Their
   unrelated source/read/layout-integrity gates and native image semantics remain
   open, as do broader producer/version profiles.
-  Hash-bound AC1024, AC1027 and AC1032 WIPEOUTVARIABLES witnesses now seed
-  local wrapper DWGs. Their version-specific frame proof, remapped NOD
-  owner/reactor graph, selected ASCII/Binary output, atomic refusal, retry and
-  typed readback pass ([AC1024](docs/research/p4-ac1024-wipeoutvariables-physical-writer-bridge-2026-11-05.json),
+  Hash-bound AC1018, AC1024, AC1027 and AC1032 WIPEOUTVARIABLES witnesses now
+  seed local wrapper DWGs. Their version-specific frame proofs, selected
+  ASCII/Binary owner/reactor output, refusal, retry and typed readback pass
+  ([AC1018](docs/research/p4-ac1018-wipeoutvariables-physical-writer-bridge-2026-11-05.json),
+  [AC1024](docs/research/p4-ac1024-wipeoutvariables-physical-writer-bridge-2026-11-05.json),
   [AC1027](docs/research/p4-ac1027-wipeoutvariables-physical-writer-bridge-2026-11-05.json),
   [AC1032](docs/research/p4-ac1032-wipeoutvariables-physical-writer-bridge-2026-11-05.json)).
-  None converts its physical drawing as a whole; AC1024 retains an unclaimed
-  HEADER suffix and unrelated VISUALSTYLE gate, while AC1027 retains HEADER
+  None converts its physical drawing as a whole; AC1018/AC1024 retain unclaimed
+  HEADER suffixes and unrelated whole-source gates, while AC1027 retains HEADER
   integrity observations and the global strict-source gate. Native wipeout
-  display/plot behavior, preview preservation, AC1018 physical output and
-  broader producer/mode coverage remain open.
+  display/plot behavior, preview preservation, generic common-link expansion,
+  and broader producer/mode coverage remain open.
   A separate AC1024 source-frame control supports the bounded 0/1/3 profile.
   The exact hash-bound physical source now passes selected-object ASCII/Binary
   output and fresh typed readback: its source NOD `0x0A` owner/reactor map to
