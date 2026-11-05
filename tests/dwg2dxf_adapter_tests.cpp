@@ -54,8 +54,33 @@ static_assert(!std::is_assignable<decltype((std::declval<dx_data&>()
                   .appIds.front().handleRef)), std::uint32_t>::value,
               "DBCOLOR source handle evidence must not be mutable by consumers");
 
+class DrwMLeaderProxyTestAccess {
+public:
+    static bool markParsedAc1021(DRW_MLeader& entity) {
+        DRW_ProxyGraphicsProvenance& provenance =
+            entity.m_proxyGraphicsProvenance;
+        if (entity.proxyGraphics.empty()
+            || entity.numProxyGraph
+                != static_cast<int>(entity.proxyGraphics.size()))
+            return false;
+        provenance.origin = DRW_ProxyGraphicsOrigin::ParsedDwg;
+        provenance.encoding = DRW_ProxyGraphicsEncoding::DwgBitStream;
+        provenance.sourceVersion = DRW::AC1021;
+        provenance.sourceCodePage.clear();
+        provenance.countCode = 0;
+        provenance.declaredByteCount = entity.proxyGraphics.size();
+        return true;
+    }
+};
+
 class DxIfaceExtensionGraphTestAccess {
 public:
+    static void attachDxfWriter(dx_iface& interface_, dx_data& data,
+                                dxfRW& writer) {
+        interface_.cData = &data;
+        interface_.currentBlock = data.mBlock;
+        interface_.dxfW = &writer;
+    }
     static bool prepareGeoData(dx_iface& interface_, dx_data& data) {
         interface_.cData = &data;
         return interface_.prepareDwgGeoDataOutput(false);
@@ -31983,6 +32008,121 @@ bool qualifyMLeaderAdapterSerializer() {
             || validMLeader->context.textStyleHandle.ref != 0x31u
             || validGraph.mLeaderStyles.size() != 1u)
             return fail("generated rooted MLEADER graph did not import expected references");
+
+        // Bypass only the document-wide adapter preflight so this focused
+        // generated control can isolate the entity serializer and parser.
+        // The dxfRW writer still runs the actual table/entity write callbacks.
+        dx_data proxyGraph;
+        dx_iface proxyGraphReader;
+        if (!proxyGraphReader.fileImport(validGraphSource.string(),
+                                         &proxyGraph, false))
+            return fail("could not reload generated MLEADER proxy control");
+        DRW_MLeader* proxyMLeader = findMLeader(proxyGraph);
+        if (proxyMLeader == nullptr)
+            return fail("generated MLEADER proxy control lost its typed entity");
+        std::string sourceProxy(8u, '\0');
+        const auto appendProxyU32 = [&sourceProxy](std::uint32_t value) {
+            for (unsigned shift = 0u; shift < 32u; shift += 8u)
+                sourceProxy.push_back(static_cast<char>(
+                    (value >> shift) & 0xffu));
+        };
+        const auto appendProxyChunk = [&sourceProxy, &appendProxyU32](
+                std::uint32_t opcode, const std::string& payload) {
+            appendProxyU32(static_cast<std::uint32_t>(payload.size() + 8u));
+            appendProxyU32(opcode);
+            sourceProxy.append(payload);
+        };
+        std::string sourceLayerIndex;
+        for (unsigned shift = 0u; shift < 32u; shift += 8u)
+            sourceLayerIndex.push_back(static_cast<char>(
+                (51u >> shift) & 0xffu));
+        appendProxyChunk(16u, sourceLayerIndex);
+        std::string proxyCircle;
+        const auto appendProxyDouble = [&proxyCircle](double value) {
+            std::array<unsigned char, sizeof(value)> raw{};
+            std::memcpy(raw.data(), &value, sizeof(value));
+            for (unsigned char byte : raw)
+                proxyCircle.push_back(static_cast<char>(byte));
+        };
+        appendProxyDouble(1.0); appendProxyDouble(2.0);
+        appendProxyDouble(3.0); appendProxyDouble(4.0);
+        appendProxyDouble(0.0); appendProxyDouble(0.0);
+        appendProxyDouble(1.0);
+        appendProxyChunk(2u, proxyCircle);
+        proxyMLeader->proxyGraphics = sourceProxy;
+        proxyMLeader->numProxyGraph = static_cast<int>(sourceProxy.size());
+        proxyMLeader->styleTextColor = 37;
+        if (!DrwMLeaderProxyTestAccess::markParsedAc1021(*proxyMLeader))
+            return fail("could not mark generated parsed-DWG MLEADER provenance");
+        proxyGraph.sourceFormat = dx_source_format::DWG;
+        proxyGraph.sourceVersion = DRW::AC1021;
+        proxyGraph.dwgProxyResourceOrderCaptured = true;
+        proxyGraph.dwgProxyLayerNameOrder.assign(52u, "UNUSED_SOURCE_LAYER");
+        proxyGraph.dwgProxyLayerNameOrder[51] = "PROXY_TARGET";
+        DRW_Layer proxyLayer;
+        proxyLayer.name = "PROXY_TARGET";
+        proxyGraph.layers.push_back(proxyLayer);
+        std::vector<std::string> targetLayerOrder;
+        bool hasLayerZero = false;
+        for (const DRW_Layer& layer : proxyGraph.layers) {
+            targetLayerOrder.push_back(layer.name);
+            hasLayerZero = hasLayerZero || layer.name == "0";
+        }
+        if (!hasLayerZero)
+            targetLayerOrder.emplace_back("0");
+        const auto targetLayer = std::find(targetLayerOrder.begin(),
+                                           targetLayerOrder.end(),
+                                           "PROXY_TARGET");
+        if (targetLayer == targetLayerOrder.end()
+            || targetLayer - targetLayerOrder.begin() == 51)
+            return fail("generated MLEADER proxy control has no changed target layer slot");
+        std::string expectedProxy;
+        std::size_t expectedLayerRefs = 0u;
+        std::size_t expectedLinetypeRefs = 0u;
+        if (!DRW_ProxyGraphicDecoder::remapResourceIndices(
+                sourceProxy, proxyGraph.dwgProxyLayerNameOrder,
+                targetLayerOrder, {}, {}, expectedProxy,
+                expectedLayerRefs, expectedLinetypeRefs)
+            || expectedLayerRefs != 1u || expectedLinetypeRefs != 0u)
+            return fail("generated MLEADER proxy resource index did not remap");
+        const std::filesystem::path proxyOutput = directory
+            / ("proxy-remap-" + suffix + ".dxf");
+        dxfRW proxyDxfWriter(proxyOutput.string().c_str());
+        dx_iface proxyWriter;
+        DxIfaceExtensionGraphTestAccess::attachDxfWriter(
+            proxyWriter, proxyGraph, proxyDxfWriter);
+        const std::string proxySentinel =
+            "existing MLEADER proxy output survives\n";
+        {
+            std::ofstream previous(proxyOutput, std::ios::binary);
+            if (!previous)
+                return fail("could not seed MLEADER proxy refusal destination");
+            previous << proxySentinel;
+        }
+        proxyGraph.dwgProxyLayerNameOrder[51].clear();
+        if (proxyDxfWriter.write(&proxyWriter, DRW::AC1021, binary))
+            return fail("MLEADER proxy with an unresolved source layer was emitted");
+        std::ifstream refusedProxyInput(proxyOutput, std::ios::binary);
+        const std::string refusedProxyBytes(
+            (std::istreambuf_iterator<char>(refusedProxyInput)),
+            std::istreambuf_iterator<char>());
+        if (refusedProxyBytes != proxySentinel)
+            return fail("unresolved MLEADER proxy remap replaced the destination");
+        proxyGraph.dwgProxyLayerNameOrder[51] = "PROXY_TARGET";
+        if (!proxyDxfWriter.write(&proxyWriter, DRW::AC1021, binary))
+            return fail("corrected MLEADER proxy failed same-writer retry");
+        dx_data proxyReadback;
+        dx_iface proxyReadbackReader;
+        if (!proxyReadbackReader.fileImport(proxyOutput.string(),
+                                            &proxyReadback, false))
+            return fail("generated MLEADER proxy dxfRW output did not read back");
+        DRW_MLeader* proxyRoundtrip = findMLeader(proxyReadback);
+        if (proxyRoundtrip == nullptr
+            || proxyRoundtrip->numProxyGraph
+                != static_cast<int>(expectedProxy.size())
+            || proxyRoundtrip->proxyGraphics != expectedProxy
+            || proxyRoundtrip->styleTextColor != 37)
+            return fail("MLEADER proxy count/cache or class-specific group 92 changed on readback");
 
         const std::string sentinel = "existing rooted MLEADER output survives\n";
         const std::filesystem::path emittedOutput = directory

@@ -165,6 +165,7 @@ class DwgPolylineTraceTestAccess; // test-only friend; defined in
                                   // dwg_safety_tests.cpp
 class DxfAcisCarrierTestAccess;   // test-only retained-owner inspection
 class DxfDimensionDstyleTestAccess; // test-only DIMENSION projection checks
+class DrwMLeaderProxyTestAccess; // test-only parsed-provenance proxy controls
 class DrwBlockStateTestAccess;       // test-only BLOCK reset-state checks
 
 #define SETENTFRIENDS  friend class dxfRW; \
@@ -176,7 +177,8 @@ class DrwBlockStateTestAccess;       // test-only BLOCK reset-state checks
                        friend class DrwDataStorageTestAccess; \
                        friend class DrwVisibilityTestAccess; \
                        friend class DwgPolylineTraceTestAccess; \
-                       friend class DxfAcisCarrierTestAccess;
+                       friend class DxfAcisCarrierTestAccess; \
+                       friend class DrwMLeaderProxyTestAccess;
 
 //! Base class for entities
 /*!

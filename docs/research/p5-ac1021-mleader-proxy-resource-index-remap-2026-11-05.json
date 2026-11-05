@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "evidenceId": "p5-ac1021-mleader-proxy-resource-index-remap-2026-11-05",
   "date": "2026-11-05",
-  "status": "BOUNDED_SOURCE_RESOURCE_REMAP_IMPLEMENTED__OUTPUT_READBACK_PENDING",
-  "scope": "Correctly classify and remap AC1021 MLEADER proxy-cache layer indices from DWG control-record order to the emitted DXF LAYER table order, then determine the remaining strict whole-file blocker.",
+  "status": "GENERATED_DXF_CACHE_ROUNDTRIP_AND_GROUP92_COLLISION_PASS__PHYSICAL_REPLAY_UNQUALIFIED",
+  "scope": "Correctly classify and remap AC1021 MLEADER proxy-cache layer indices from DWG control-record order to the emitted DXF LAYER table order; prove exact generated DXF cache output/readback and keep physical whole-document gates separate.",
   "source": {
     "path": "tests/samples/AC1021/architectural_-_annotation_scaling_and_multileaders.dwg",
     "sha256": "0e74f0aa84b1323c922345f067739c42ee26213dea010b407b87a94212271654",
@@ -36,10 +36,11 @@
       "src/drw_entities.h",
       "src/libdxfrw.cpp",
       "tests/graph_preservation_tests.cpp",
+      "tests/dwg2dxf_adapter_tests.cpp",
       "tests/dimassoc_physical_transport_tests.cpp"
     ],
     "behavior": "For parsed AC1021 DWG MLEADER caches only, preflight validates that every indexed resource resolves and that at least one layer index can be mapped. Entity output clones the caller model, remaps opcode-16 layer indices to the current DXF LAYER row order, preserves sentinel linetypes and unknown well-framed chunks, and authorizes only the transformed AC1021 MLEADER cache for same-revision DXF output. Failed remaps leave the cache/output unchanged.",
-    "limitation": "This does not qualify native rendering, all opcode/resource roles, or complete physical MLEADER document conversion. Exact MLEADER proxy-byte output/readback and simultaneous group-92 proxy-count/class-field readback still require an isolated generated control."
+    "limitation": "The generated dxfRW control bypasses only document-wide adapter preflight; it uses the production table/entity callbacks and serializer. This does not qualify physical-source cache replay, native rendering, all opcode/resource roles, or complete physical MLEADER document conversion."
   },
   "validation": {
     "build": {
@@ -49,7 +50,7 @@
     "focusedControls": [
       {
         "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --mleader-adapter-writer",
-        "result": "PASS; existing generated rooted MLEADER ASCII/Binary typed output, retry and readback controls"
+        "result": "PASS; generated ASCII/Binary dxfRW callback output remaps source layer slot 51 to the emitted row, reads back the exact proxy cache and byte count, and retains AcDbMLeader style text color 37 (subclass group 92). An unresolved source-layer name refuses atomically with the prior destination intact; correcting the mapping succeeds on the same dxfRW writer. Existing rooted MLEADER typed graph controls also pass."
       },
       {
         "command": "build-gcc/libdxfrw_graph_preservation_tests",
@@ -74,7 +75,8 @@
   "claimBoundary": [
     "The stale MLINE classification and proxy-cache blocker are corrected.",
     "Source index-to-layer-name evidence and generated remapper mechanics are present, and current strict preflight no longer stops at the 36 caches.",
-    "No support claim is promoted: isolated remapped MLEADER cache output/readback, group-92 collision proof, whole-document export, and native rendering remain open."
+    "Generated remapped MLEADER cache output/readback and the group-92 collision are proven for the controlled byte stream.",
+    "No support claim is promoted: exact replay of the 36 physical caches, whole-document export, broader opcode/resource roles, and native rendering remain open."
   ],
   "supportClaimEffect": "none"
 }
