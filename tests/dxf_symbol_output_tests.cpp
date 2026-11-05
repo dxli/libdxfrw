@@ -686,6 +686,18 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
                 data.lineTypes.push_back(std::move(row));
             }
 
+            DRW_Layer layer;
+            layer.handle = 0xC421u;
+            layer.parentHandle = 0xC402u;
+            layer.name = "CHECK_LAYER";
+            layer.lineType = "CustomDash";
+            layer.lTypeH.code = DRW::DwgHardPointer;
+            layer.lTypeH.rawCode = DRW::DwgHardPointer;
+            layer.lTypeH.ref = 0xC413u;
+            layer.lTypeH.ref64 = 0xC413u;
+            data.layers.push_back(std::move(layer));
+            layerRecord = &data.layers.back();
+
             DRW_DwgFramePublication control;
             control.m_version = DRW::AC1024;
             control.m_handle = 0xC400u;
@@ -738,6 +750,33 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
             }
         }
 
+        void writeLayers() override {
+            layerRecord->lineType = "CustomDash";
+            layerRecord->lTypeH.code = DRW::DwgHardPointer;
+            layerRecord->lTypeH.rawCode = DRW::DwgHardPointer;
+            layerRecord->lTypeH.ref = 0xC413u;
+            layerRecord->lTypeH.ref64 = 0xC413u;
+            if (fault == 14u)
+                layerRecord->lineType = "WrongDash";
+            else if (fault == 15u) {
+                layerRecord->lTypeH.ref = 0xC414u;
+                layerRecord->lTypeH.ref64 = 0xC414u;
+            } else if (fault == 16u) {
+                layerRecord->lTypeH.ref = 0u;
+                layerRecord->lTypeH.ref64 = 0u;
+            } else if (fault == 17u) {
+                layerRecord->lTypeH.code = DRW::DwgSoftPointer;
+                layerRecord->lTypeH.rawCode = DRW::DwgSoftPointer;
+            } else if (fault == 18u) {
+                layerRecord->lTypeH.ref64 = 0x10000C413ull;
+            } else if (fault == 19u) {
+                layerRecord->lineType = "CONTINUOUS";
+                layerRecord->lTypeH.ref = 0u;
+                layerRecord->lTypeH.ref64 = 0u;
+            }
+            dx_iface::writeLayers();
+        }
+
         void writeEntities() override {
             entity->setDwgLinetypeHandle(0xC413u);
             entity->lineType = "CustomDash";
@@ -778,6 +817,7 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
 
         dx_data data;
         DRW_Line* entity{nullptr};
+        DRW_Layer* layerRecord{nullptr};
         unsigned fault{0u};
         bool writeFailed{false};
     } iface;
@@ -838,7 +878,7 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
     for (const auto outputVersion : {DRW::AC1014, DRW::AC1015, DRW::AC1018,
              DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
       for (const bool binary : {false, true}) {
-        for (unsigned fault = 0u; fault <= 13u; ++fault) {
+        for (unsigned fault = 0u; fault <= 19u; ++fault) {
             iface.fault = fault;
             iface.writeFailed = false;
             unsigned inspections = 0u;
@@ -864,7 +904,7 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
             t.expect(installInspector(),
                      "DWG LTYPE output inspector installs before write");
             const bool wrote = codec.write(&iface, outputVersion, binary);
-            if (fault == 0u || fault >= 11u) {
+            if (fault == 0u || (fault >= 11u && fault <= 13u)) {
                 t.expect(wrote && inspections == 1u && !iface.writeFailed,
                          "Explicit source LTYPE and the three implicit modes pass across target versions/codecs");
                 class Readback final : public dx_iface {
@@ -882,12 +922,20 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
                     readback.data.mBlock->ent.cend(), [](const DRW_Entity* value) {
                         return value != nullptr && value->eType == DRW::LINE;
                     });
+                const auto layer = std::find_if(
+                    readback.data.layers.cbegin(), readback.data.layers.cend(),
+                    [](const DRW_Layer& value) {
+                        return value.name == "CHECK_LAYER";
+                    });
                 const std::string expectedName = fault == 0u
                     ? "CustomDash" : fault == 11u ? "BYLAYER"
                     : fault == 12u ? "BYBLOCK" : "CONTINUOUS";
                 t.expect(read && line != readback.data.mBlock->ent.cend()
                              && (*line)->lineType == expectedName,
                          "DXF readback retains the exact explicit/implicit entity linetype name");
+                t.expect(layer != readback.data.layers.cend()
+                             && layer->lineType == "CustomDash",
+                         "DXF readback retains the layer's exact bound linetype name");
                 ++cells;
                 continue;
             }
@@ -896,7 +944,7 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
                 (std::istreambuf_iterator<char>(previous)),
                 std::istreambuf_iterator<char>());
             t.expect(!wrote && inspections == 1u && retained == sentinel,
-                     "Wrong/missing/extra/duplicate table rows, ambiguous/changed alias, or invalid entity LTYPE reference refuses atomically");
+                     "Wrong/missing/extra/duplicate rows, changed aliases, or invalid entity/layer LTYPE references refuse atomically");
 
             iface.fault = 0u;
             iface.writeFailed = false;
@@ -914,7 +962,7 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
       }
     }
     std::cout << "DWG LTYPE control output cells=" << cells
-              << " target-versions=7 formats=2 negative cases=10 with same-codec retries\n";
+              << " target-versions=7 formats=2 negative cases=16 with same-codec retries\n";
 }
 
 void testSymbolNameWireInspection(TestContext& t) {

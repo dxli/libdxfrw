@@ -51015,6 +51015,13 @@ bool dx_iface::inspectDwgLineTypeControlOutput(
             return false;
         m_dwgLtypeControlOutputBindings.swap(retained);
         m_dwgLtypeControlOutputBindingIndex.swap(bindingIndex);
+        for (const DRW_Layer& layer : cData->layers) {
+            if (hasClosedDwgLayerLinetypeReference(layer))
+                continue;
+            m_dwgLtypeControlOutputBindings.clear();
+            m_dwgLtypeControlOutputBindingIndex.clear();
+            return false;
+        }
         m_dwgLtypeControlOutputInspected = true;
         return true;
     } catch (...) {
@@ -51065,52 +51072,72 @@ bool dx_iface::finalizeDwgLineTypeControlOutput() const noexcept {
     }
 }
 
+bool dx_iface::hasClosedDwgLinetypeReference(
+        std::uint32_t sourceHandle, const std::string& name,
+        bool allowImplicit) const noexcept {
+    if (!m_dwgLtypeControlOutputRequired)
+        return true;
+    if (cData == nullptr || dxfW == nullptr
+        || cData->sourceFormat != dx_source_format::DWG
+        || name.empty())
+        return false;
+
+    if (sourceHandle == 0u) {
+        if (!allowImplicit)
+            return false;
+        if (cData->sourceVersion < DRW::AC1015) {
+            if (!sameAsciiName(name, "BYLAYER"))
+                return false;
+        } else if (!sameAsciiName(name, "BYLAYER")
+                   && !sameAsciiName(name, "BYBLOCK")
+                   && !sameAsciiName(name, "CONTINUOUS")) {
+            return false;
+        }
+        return true;
+    }
+
+    if (sourceHandle == DRW::NoHandle)
+        return false;
+    const auto found =
+        m_dwgLtypeControlOutputBindingIndex.find(sourceHandle);
+    if (found == m_dwgLtypeControlOutputBindingIndex.end()
+        || found->second >= m_dwgLtypeControlOutputBindings.size())
+        return false;
+    const DwgLtypeOutputBinding& binding =
+        m_dwgLtypeControlOutputBindings[found->second];
+    if (binding.sourceHandle != sourceHandle
+        || binding.sourceName != name
+        || binding.emittedHandle == 0u
+        || binding.emittedHandle == DRW::NoHandle
+        || dxfW->dxfWriteSourceLinetypeTargetHandle(sourceHandle)
+            != binding.emittedHandle)
+        return false;
+    const bool builtin = sameAsciiName(binding.sourceName, "BYBLOCK")
+        || sameAsciiName(binding.sourceName, "BYLAYER")
+        || sameAsciiName(binding.sourceName, "CONTINUOUS");
+    if (builtin)
+        return sameAsciiName(binding.outputName, name);
+    return binding.outputName == name;
+}
+
+bool dx_iface::hasClosedDwgLayerLinetypeReference(
+        const DRW_Layer& layer) const noexcept {
+    if (m_dwgLtypeControlOutputRequired
+        && (layer.lTypeH.ref64 != layer.lTypeH.ref
+            || layer.lTypeH.rawCode != DRW::DwgHardPointer))
+        return false;
+    return hasClosedDwgLinetypeReference(layer.lTypeH.ref, layer.lineType,
+                                         false);
+}
+
 bool dx_iface::hasClosedDwgEntityLinetypeReferenceTree(
         const DRW_Entity* entity) const noexcept {
     if (!m_dwgLtypeControlOutputRequired)
         return true;
-    if (entity == nullptr || cData == nullptr || dxfW == nullptr
-        || cData->sourceFormat != dx_source_format::DWG
-        || entity->lineType.empty())
+    if (entity == nullptr
+        || !hasClosedDwgLinetypeReference(entity->dwgLinetypeHandle(),
+                                          entity->lineType, true))
         return false;
-
-    const std::uint32_t sourceHandle = entity->dwgLinetypeHandle();
-    if (sourceHandle == 0u) {
-        if (cData->sourceVersion < DRW::AC1015) {
-            if (!sameAsciiName(entity->lineType, "BYLAYER"))
-                return false;
-        } else if (!sameAsciiName(entity->lineType, "BYLAYER")
-                   && !sameAsciiName(entity->lineType, "BYBLOCK")
-                   && !sameAsciiName(entity->lineType, "CONTINUOUS")) {
-            return false;
-        }
-    } else {
-        if (sourceHandle == DRW::NoHandle)
-            return false;
-        const auto found =
-            m_dwgLtypeControlOutputBindingIndex.find(sourceHandle);
-        if (found == m_dwgLtypeControlOutputBindingIndex.end()
-            || found->second >= m_dwgLtypeControlOutputBindings.size())
-            return false;
-        const DwgLtypeOutputBinding& binding =
-            m_dwgLtypeControlOutputBindings[found->second];
-        if (binding.sourceHandle != sourceHandle
-            || binding.sourceName != entity->lineType
-            || binding.emittedHandle == 0u
-            || binding.emittedHandle == DRW::NoHandle
-            || dxfW->dxfWriteSourceLinetypeTargetHandle(sourceHandle)
-                != binding.emittedHandle)
-            return false;
-        const bool builtin = sameAsciiName(binding.sourceName, "BYBLOCK")
-            || sameAsciiName(binding.sourceName, "BYLAYER")
-            || sameAsciiName(binding.sourceName, "CONTINUOUS");
-        if (builtin) {
-            if (!sameAsciiName(binding.outputName, entity->lineType))
-                return false;
-        } else if (binding.outputName != entity->lineType) {
-            return false;
-        }
-    }
 
     if (const auto* polyline = dynamic_cast<const DRW_Polyline*>(entity)) {
         for (const auto& vertex : polyline->vertlist)

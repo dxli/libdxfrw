@@ -3546,6 +3546,10 @@ private:
     bool inspectDwgLineTypeControlOutput(
         const dxfRW::DxfTablesWriteView&) noexcept;
     bool finalizeDwgLineTypeControlOutput() const noexcept;
+    bool hasClosedDwgLinetypeReference(std::uint32_t, const std::string&,
+                                       bool allowImplicit) const noexcept;
+    bool hasClosedDwgLayerLinetypeReference(
+        const DRW_Layer&) const noexcept;
     bool hasClosedDwgEntityLinetypeReferenceTree(
         const DRW_Entity*) const noexcept;
     bool preallocateDxfMLineLinetypeXdataEntityHandles();
