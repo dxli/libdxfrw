@@ -13878,6 +13878,47 @@ void testGeoDataDwgScaleMethodDomain(TestContext& t) {
     }
 }
 
+void testGeoDataDwgUnitDomain(TestContext& t) {
+    for (const std::int32_t objectVersion : {2, 3}) {
+        for (const bool horizontal : {false, true}) {
+            for (const std::int32_t invalidValue : {-1, 25}) {
+                GeoDataCodecProbe geoData;
+                geoData.handle = 0xA110u;
+                geoData.parentHandle = 0xA200u;
+                geoData.setDwgCommonObjectState(0, 1, false);
+                geoData.m_version = objectVersion;
+                geoData.m_hostBlockHandle = 0xA300u;
+                geoData.m_horizontalUnits = horizontal ? invalidValue : 6;
+                geoData.m_verticalUnits = horizontal ? 6 : invalidValue;
+
+                dwgBufferW body;
+                dwgBufferW strings;
+                dwgBufferW handles;
+                body.putRawChar8(0xA5u);
+                strings.putRawChar8(0x5Au);
+                handles.putRawChar8(0xC3u);
+                const auto bodyBefore = body.data();
+                const auto stringsBefore = strings.data();
+                const auto handlesBefore = handles.data();
+                const bool rejected = !geoData.encodeDwg(
+                        DRW::AC1027, &body, &strings, &handles)
+                    && body.data() == bodyBefore
+                    && strings.data() == stringsBefore
+                    && handles.data() == handlesBefore;
+
+                if (horizontal)
+                    geoData.m_horizontalUnits = invalidValue < 0 ? 0 : 24;
+                else
+                    geoData.m_verticalUnits = invalidValue < 0 ? 0 : 24;
+                const bool retried = geoData.encodeDwg(
+                    DRW::AC1027, &body, &strings, &handles);
+                t.expect(rejected && retried,
+                         "DWG GEODATA v2/v3 rejects out-of-domain UnitsValue without buffer mutation and retries at a valid endpoint");
+            }
+        }
+    }
+}
+
 void testOptionalStreamFallbacks(TestContext& t) {
     for (DRW::Version version : kVersions) {
         PlotSettingsEncodeProbe plotSettings;
@@ -20148,6 +20189,14 @@ int main(int argc, char** argv) {
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
+    if (argc == 2
+        && std::string(argv[1]) == "--geodata-dwg-unit-domain") {
+        TestContext context;
+        testGeoDataDwgUnitDomain(context);
+        std::cout << "DWG GEODATA UnitsValue domain: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--layout-vectors") {
         TestContext context;
         testLayoutVectors(context);
@@ -20721,6 +20770,7 @@ int main(int argc, char** argv) {
     testGeoDataCivilTailReaderVectors(context);
     testGeoDataCivilTailWriterVectors(context);
     testGeoDataDwgScaleMethodDomain(context);
+    testGeoDataDwgUnitDomain(context);
     testOptionalStreamFallbacks(context);
     testDwgEedSizeBoundaries(context);
     testLtypeTextAreaVectors(context);

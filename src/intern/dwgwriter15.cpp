@@ -5596,6 +5596,10 @@ bool dwgWriter15::writeGeoData(const DRW_GeoData& geoData) {
             && (geoData.m_scaleEstimationMethod < 1
                 || geoData.m_scaleEstimationMethod > 4)))
         return false;
+    if ((geoData.m_version == 2 || geoData.m_version == 3)
+        && (geoData.m_horizontalUnits < 0 || geoData.m_horizontalUnits > 24
+            || geoData.m_verticalUnits < 0 || geoData.m_verticalUnits > 24))
+        return false;
 
     DRW_GeoData object = geoData;
     if (!prepareDwgCommonObjectState(object, m_version))

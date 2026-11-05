@@ -1729,6 +1729,11 @@ if(LIBDXFRW_BUILD_TESTS)
             --geodata-dwg-scale-method-domain)
     set_tests_properties(libdxfrw_geodata_dwg_scale_method_domain PROPERTIES
         LABELS "fast;dwg;object-vectors;geodata;writer;domain;generated" TIMEOUT 10)
+    add_test(NAME libdxfrw_geodata_dwg_unit_domain
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --geodata-dwg-unit-domain)
+    set_tests_properties(libdxfrw_geodata_dwg_unit_domain PROPERTIES
+        LABELS "fast;dwg;object-vectors;geodata;writer;domain;generated" TIMEOUT 10)
     add_test(NAME libdxfrw_associative_action_value_kinds
         COMMAND libdxfrw_dwg_object_vectors_tests
             --associative-action-value-kinds)

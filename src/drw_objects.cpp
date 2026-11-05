@@ -21332,6 +21332,10 @@ bool DRW_GeoData::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || (m_version >= 2 && (m_scaleEstimationMethod < 1
                                || m_scaleEstimationMethod > 4)))
         return false;
+    if (m_version >= 2
+        && (m_horizontalUnits < 0 || m_horizontalUnits > 24
+            || m_verticalUnits < 0 || m_verticalUnits > 24))
+        return false;
     const auto finite = [](const DRW_Coord& point) {
         return std::isfinite(point.x) && std::isfinite(point.y)
             && std::isfinite(point.z);
