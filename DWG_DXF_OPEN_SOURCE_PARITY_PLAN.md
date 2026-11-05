@@ -1209,6 +1209,11 @@ and [same-version receipt](docs/research/p6-ac1027-cover-oda-same-version-resave
 A suffix-free AC1027 source acquired the same 739-byte form after an ODA
 resave, narrowing its origin to that observed save process without explaining
 its contents; see the [controlled receipt](docs/research/p6-ac1027-oda-header-suffix-controlled-producer-2026-11-04.json).
+After the user unlocked the macOS session, the direct ODA 27.1 CLI retry still
+aborted before conversion with PasteBoard/XPC service errors and produced no
+output. Do not repeat this invocation until the host service or supported GUI
+path changes; this is not evidence about suffix contents. Keep the bytes
+unclaimed and strict output refused ([retry receipt](docs/research/p6-ac1027-oda-unlocked-cli-retry-2026-11-05.json)).
 An AC1024 maintenance-55 source now reaches its raster and NOD callbacks under
 the same diagnostic policy. Its IMAGEDEF and reactor are retained for diagnosis,
 but export refuses the IMAGEDEF's unqualified role-4 owner because ODA's common
