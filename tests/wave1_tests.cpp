@@ -23086,6 +23086,87 @@ void testDimensionPictureBlockStrictNameAdmission(TestContext& t) {
     }
 }
 
+void testDynamicConstraintDimensionDxfProfile(TestContext& t) {
+    constexpr const char* legacyLayer = "*LayerNameForDynamicConstraint";
+    constexpr const char* canonicalLayer = "*ADSK_CONSTRAINTS";
+    for (const bool binary : {false, true}) {
+        std::ostringstream output;
+        dxfRW owner("");
+        owner.version = DRW::AC1024;
+        owner.binFile = binary;
+        owner.writer = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&output))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&output));
+
+        DRW_Layer constraintLayer;
+        constraintLayer.handle = 0x710u;
+        constraintLayer.name = legacyLayer;
+        DRW_Layer constraintAlias;
+        constraintAlias.name = canonicalLayer;
+        DRW_Dimension constraint;
+        constraint.handle = 0x711u;
+        constraint.layer = legacyLayer;
+        constraint.setText("BOLTHOLE=1\"");
+        DRW_Dimension ordinary;
+        ordinary.handle = 0x712u;
+        ordinary.setName("*D_ORDINARY");
+
+        const bool wrote = owner.writeLayer(&constraintLayer)
+            && owner.writeLayer(&constraintAlias)
+            && owner.writeDimension(&constraint)
+            && owner.writeDimension(&ordinary)
+            && owner.writer->writeString(0, "WIRE_END");
+        t.expect(wrote, "dynamic constraint and ordinary DIMENSION records serialize");
+        if (!wrote)
+            continue;
+
+        bool ended = false;
+        const auto tags = numericWireProjection(output.str(), binary, ended);
+        t.expect(ended
+                     && std::find(tags.begin(), tags.end(),
+                                  std::string("2:") + legacyLayer)
+                         != tags.end()
+                     && std::find(tags.begin(), tags.end(),
+                                  std::string("2:") + canonicalLayer)
+                         != tags.end(),
+                 "legacy and canonical constraint layers coexist for preserved source references");
+
+        std::vector<std::vector<std::string>> dimensions;
+        for (std::size_t index = 0; index < tags.size(); ++index) {
+            if (tags[index] != "0:DIMENSION")
+                continue;
+            std::vector<std::string> record;
+            for (++index; index < tags.size() && tags[index].rfind("0:", 0) != 0;
+                 ++index)
+                record.push_back(tags[index]);
+            dimensions.push_back(std::move(record));
+            if (index < tags.size())
+                --index;
+        }
+        const auto hasTag = [](const std::vector<std::string>& record,
+                               const std::string& tag) {
+            return std::find(record.begin(), record.end(), tag) != record.end();
+        };
+        t.expect(dimensions.size() == 2u
+                     && !hasTag(dimensions[0], "2:*D_ORDINARY")
+                     && !std::any_of(dimensions[0].begin(), dimensions[0].end(),
+                         [](const std::string& tag) {
+                             return tag.rfind("2:", 0) == 0
+                                 || tag.rfind("70:", 0) == 0;
+                         })
+                     && hasTag(dimensions[0], "8:*ADSK_CONSTRAINTS")
+                     && hasTag(dimensions[0], "1:BOLTHOLE=1\"")
+                     && hasTag(dimensions[1], "2:*D_ORDINARY")
+                     && std::any_of(dimensions[1].begin(), dimensions[1].end(),
+                         [](const std::string& tag) {
+                             return tag.rfind("70:", 0) == 0;
+                         }),
+                 "dynamic constraint omits geometry/type groups while ordinary DIMENSION keeps its standard profile");
+    }
+}
+
 void testHandlesAndHeader(TestContext& t) {
     HandleAllocator allocator;
     allocator.seedReserved();
@@ -23570,6 +23651,14 @@ int main(int argc, char** argv) {
         return focused.failures == 0 ? 0 : 1;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--dynamic-constraint-dimension-dxf-profile") {
+        TestContext focused;
+        testDynamicConstraintDimensionDxfProfile(focused);
+        std::cout << "Dynamic constraint DIMENSION DXF profile: "
+                  << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--common-appdata-base-scope") {
         TestContext focused;
         testCommonAppDataBaseScope(focused);
@@ -23792,6 +23881,7 @@ int main(int argc, char** argv) {
     testDimensionUnassignedDirectGroups(context);
     testDimensionDstyleWriterMappings(context);
     testDimensionPictureBlockStrictNameAdmission(context);
+    testDynamicConstraintDimensionDxfProfile(context);
     testDxfClassifierProfileProbe(context);
     testDxfBinaryLegacyProfileReplay(context);
     testDxfFacadeClassifierProfile(context);

@@ -31,6 +31,7 @@ namespace blockref_source_relation { struct Result; }
 #include <iostream>
 #include <iosfwd>
 #include <limits>
+#include <string_view>
 #include <type_traits>
 #include <typeinfo>
 #include <unordered_map>
@@ -1522,12 +1523,61 @@ public:
     bool finalizeAc1027DefaultLayerOutput() const noexcept;
     virtual void writeLayers() override {
         if (!hasUnchangedDxfLayerMaterials()) { dxfW->writeLayer(nullptr); return; }
+        const auto isLayerName = [](std::string_view value,
+                                    std::string_view expected) {
+            return value.size() == expected.size()
+                && std::equal(value.begin(), value.end(), expected.begin(),
+                    [](unsigned char left, unsigned char right) {
+                        const auto upper = [](unsigned char c) {
+                            return c >= 'a' && c <= 'z'
+                                ? static_cast<unsigned char>(c - 'a' + 'A')
+                                : c;
+                        };
+                        return upper(left) == upper(right);
+                    });
+        };
+        const bool hasCanonicalConstraintLayer = std::any_of(
+            cData->layers.begin(), cData->layers.end(), [&](const DRW_Layer& layer) {
+                return isLayerName(layer.name, "*ADSK_CONSTRAINTS");
+            });
+        const auto writeLayerAndConstraintAlias =
+            [this, hasCanonicalConstraintLayer, &isLayerName](DRW_Layer& layer) {
+                if (!dxfW->writeLayer(&layer))
+                    return false;
+                if (!isLayerName(layer.name,
+                                 "*LayerNameForDynamicConstraint")
+                    || hasCanonicalConstraintLayer)
+                    return true;
+                const auto prepareAlias = [](DRW_Layer& alias) {
+                    alias.name = "*ADSK_CONSTRAINTS";
+                    alias.handle = 0u;
+                    alias.parentHandle = 0u;
+                    alias.reactorHandles.clear();
+                    alias.xDictHandle = 0u;
+                    alias.appData.clear();
+                    for (DRW_Variant* value : alias.extData)
+                        delete value;
+                    alias.extData.clear();
+                };
+                if (auto* bound = dynamic_cast<DRW_Ac1027BoundLayer*>(&layer)) {
+                    DRW_Ac1027BoundLayer alias(*bound, bound->sourcePlotStyle);
+                    prepareAlias(alias);
+                    if (!dxfW->writeLayer(&alias))
+                        return false;
+                    return true;
+                }
+                DRW_Layer alias(layer);
+                prepareAlias(alias);
+                if (!dxfW->writeLayer(&alias))
+                    return false;
+                return true;
+            };
         for (auto& layer : cData->layers) {
             if (!checkDxfLayerMaterial(layer)) { dxfW->writeLayer(nullptr); return; }
             if (m_dxfLayerMaterialState.plotActive) {
                 if (!hasUnchangedDxfLayerPlot()) { dxfW->writeLayer(nullptr); return; }
                 DRW_Ac1027BoundLayer projection(layer, m_dxfLayerMaterialState.plotTarget);
-                if (!dxfW->writeLayer(&projection)) return;
+                if (!writeLayerAndConstraintAlias(projection)) return;
                 continue;
             }
             if (usesAc1027DefaultLayerProfile()) {
@@ -1536,7 +1586,7 @@ public:
                     dxfW->writeLayer(nullptr); return;
                 }
                 DRW_Ac1027BoundLayer projection(layer, plotStyle);
-                if (!dxfW->writeLayer(&projection)) return;
+                if (!writeLayerAndConstraintAlias(projection)) return;
                 continue;
             }
             if (cData->sourceFormat != dx_source_format::DXF
@@ -1547,8 +1597,8 @@ public:
                 auto projection = layer;
                 projection.handleMaterialS.clear();
                 projection.materialHandle = dwgHandle{};
-                if (!dxfW->writeLayer(&projection)) return;
-            } else if (!dxfW->writeLayer(&layer)) return;
+                if (!writeLayerAndConstraintAlias(projection)) return;
+            } else if (!writeLayerAndConstraintAlias(layer)) return;
         }
     }
     virtual void writeTextstyles() override{

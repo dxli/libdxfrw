@@ -2483,6 +2483,11 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_dxf_fixture_tests --dimension-ocs-extrusion)
     set_tests_properties(libdxfrw_dxf_dimension_ocs_extrusion PROPERTIES
         LABELS "fast;dxf;reader;generated;geometry" TIMEOUT 30)
+    add_test(NAME libdxfrw_dynamic_constraint_dimension_dxf_profile
+        COMMAND libdxfrw_wave1_tests
+            --dynamic-constraint-dimension-dxf-profile)
+    set_tests_properties(libdxfrw_dynamic_constraint_dimension_dxf_profile
+        PROPERTIES LABELS "fast;dxf;writer;dimension;generated" TIMEOUT 30)
     add_test(NAME libdxfrw_mtext_legacy_truecolor_compatibility
         COMMAND libdxfrw_dxf_fixture_tests
             --mtext-legacy-truecolor-compatibility)

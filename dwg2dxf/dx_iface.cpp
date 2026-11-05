@@ -52204,6 +52204,8 @@ bool dx_iface::inspectDwgLineTypeControlOutput(
         std::unordered_map<std::uint32_t, std::size_t> layerEmittedIndex;
         std::unordered_set<std::string> layerNameKeys;
         bool sourceHasLayerZero = false;
+        bool sourceHasLegacyConstraintLayer = false;
+        bool sourceHasCanonicalConstraintLayer = false;
         targets.reserve(cData->lineTypes.size());
         retained.reserve(cData->lineTypes.size());
         bindingIndex.reserve(cData->lineTypes.size());
@@ -52253,10 +52255,19 @@ bool dx_iface::inspectDwgLineTypeControlOutput(
                 return false;
             sourceHasLayerZero = sourceHasLayerZero
                 || sameAsciiName(layer.name, "0");
+            sourceHasLegacyConstraintLayer = sourceHasLegacyConstraintLayer
+                || sameAsciiName(
+                    layer.name, "*LayerNameForDynamicConstraint");
+            sourceHasCanonicalConstraintLayer = sourceHasCanonicalConstraintLayer
+                || sameAsciiName(layer.name, "*ADSK_CONSTRAINTS");
         }
+        const bool expectConstraintLayerAlias =
+            sourceHasLegacyConstraintLayer
+            && !sourceHasCanonicalConstraintLayer;
         std::size_t observedLayerRows = 0u;
         std::size_t observedBoundLayerRows = 0u;
         bool observedSyntheticLayerZero = false;
+        bool observedConstraintLayerAlias = false;
         if (!dx_symbol_output::inspect(view, [&](const auto& actual) {
                 if (actual.type != dx_symbol_output::Kind::Layer)
                     return true;
@@ -52267,6 +52278,12 @@ bool dx_iface::inspectDwgLineTypeControlOutput(
                     return false;
                 const auto found = layerEmittedIndex.find(actual.handle);
                 if (found == layerEmittedIndex.end()) {
+                    if (expectConstraintLayerAlias
+                        && !observedConstraintLayerAlias
+                        && actual.name == "*ADSK_CONSTRAINTS") {
+                        observedConstraintLayerAlias = true;
+                        return true;
+                    }
                     if (sourceHasLayerZero || observedSyntheticLayerZero
                         || actual.handle != 0x10u || actual.name != "0")
                         return false;
@@ -52286,7 +52303,9 @@ bool dx_iface::inspectDwgLineTypeControlOutput(
             || observedBoundLayerRows != layerBindings.size()
             || observedLayerRows != layerBindings.size()
                 + (sourceHasLayerZero ? 0u : 1u)
-            || observedSyntheticLayerZero != !sourceHasLayerZero)
+                + (expectConstraintLayerAlias ? 1u : 0u)
+            || observedSyntheticLayerZero != !sourceHasLayerZero
+            || observedConstraintLayerAlias != expectConstraintLayerAlias)
             return false;
 
         m_dwgLtypeControlOutputBindings.swap(retained);

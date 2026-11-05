@@ -98,6 +98,24 @@ constexpr unsigned char dxfAsciiUpper(unsigned char value) {
         ? static_cast<unsigned char>(value - 'a' + 'A') : value;
 }
 
+constexpr std::string_view legacyDynamicConstraintLayerName =
+    "*LayerNameForDynamicConstraint";
+constexpr std::string_view dynamicConstraintLayerName = "*ADSK_CONSTRAINTS";
+
+bool dxfAsciiNameEquals(std::string_view left,
+                        std::string_view right) noexcept {
+    return left.size() == right.size()
+        && std::equal(left.begin(), left.end(), right.begin(),
+            [](unsigned char lhs, unsigned char rhs) {
+                return dxfAsciiUpper(lhs) == dxfAsciiUpper(rhs);
+            });
+}
+
+std::string_view dxfLayerNameForWrite(std::string_view name) noexcept {
+    return dxfAsciiNameEquals(name, legacyDynamicConstraintLayerName)
+        ? dynamicConstraintLayerName : name;
+}
+
 int closestDxfAci(std::int32_t rgb24) noexcept {
     const std::uint32_t rgb = static_cast<std::uint32_t>(rgb24) & 0xFFFFFFu;
     const int red = static_cast<int>((rgb >> 16) & 0xFFu);
@@ -6828,10 +6846,11 @@ bool dxfRW::writeEntity(DRW_Entity *ent, bool captureSourceHandle,
     if (paperSpaceEntity)
         writer->writeInt16(67, 1);
     if (version > DRW::AC1009) {
-        writer->writeUtf8String(8, ent->layer);
+        writer->writeUtf8String(8, dxfLayerNameForWrite(ent->layer));
         writer->writeUtf8String(6, ent->lineType);
     } else {
-        writer->writeUtf8Caps(8, ent->layer);
+        writer->writeUtf8Caps(
+            8, std::string(dxfLayerNameForWrite(ent->layer)));
         writer->writeUtf8Caps(6, ent->lineType);
     }
     writer->writeInt16(62, ent->color);
@@ -11250,6 +11269,16 @@ bool dxfRW::writeDimension(DRW_Dimension *ent) {
         && !std::isfinite(ent->getOb52()))
         return failDxfWrite();
     if (version > DRW::AC1009) {
+        const std::string_view dimensionLayer(ent->layer);
+        const bool constraintLayer =
+            dxfAsciiNameEquals(dimensionLayer,
+                               legacyDynamicConstraintLayerName)
+            || dxfAsciiNameEquals(dimensionLayer,
+                                 dynamicConstraintLayerName);
+        const bool dimensionalConstraint = constraintLayer
+            && ent->getName().empty()
+            && (ent->blockH.ref == 0u
+                || ent->blockH.ref == DRW::NoHandle);
         std::vector<std::shared_ptr<DRW_Variant>> dimensionXdata;
         if (!buildDimensionDstyleXdata(*ent, dimensionXdata))
             return false;
@@ -11307,8 +11336,10 @@ bool dxfRW::writeDimension(DRW_Dimension *ent) {
         // accidental assignment of DRW::DIMENSION (the entity enum value 8)
         // cannot leak into the emitted subtype; preserve the documented
         // high flags (associativity, ordinate axis, and anonymous-block bit).
-        const int dimType = (ent->type & ~0x0F) | subtype | 32;
-        writer->writeInt16(70, dimType);
+        if (!dimensionalConstraint) {
+            const int dimType = (ent->type & ~0x0F) | subtype | 32;
+            writer->writeInt16(70, dimType);
+        }
         if ( !(ent->getText().empty()) )
             writer->writeUtf8String(1, ent->getText());
         writer->writeInt16(71, ent->getAlign());
