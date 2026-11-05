@@ -4339,12 +4339,20 @@ public:
         rasterVariables.handle = 0xB500u;
         rasterVariables.parentHandle = dictionary.handle;
         rasterVariables.m_classVersion = 1;
-        rasterVariables.m_imageFrame = 1;
+        rasterVariables.m_imageFrame = 2;
         rasterVariables.m_imageQuality = 1;
         rasterVariables.m_units = 8;
-        wroteRasterVariables_ = registeredRasterVariables_
+        const bool rejectedRasterFrameBeforeFirstWrite =
+            registeredRasterVariables_
+            && !writer_->writeRasterVariables(&rasterVariables);
+        rasterDomainRetriesSucceeded_ = rejectedRasterFrameBeforeFirstWrite
+            && rasterVariables.handle == 0xB500u;
+        rasterVariables.m_imageFrame = 1;
+        wroteRasterVariables_ = rasterDomainRetriesSucceeded_
             && writer_->writeRasterVariables(&rasterVariables)
             && rasterVariables.handle != 0;
+        rasterDomainRetriesSucceeded_ = rasterDomainRetriesSucceeded_
+            && wroteRasterVariables_;
 
         DRW_WipeoutVariables wipeoutVariables;
         wipeoutVariables.handle = 0xB600u;
@@ -4582,15 +4590,6 @@ public:
         invalidRasterVariables.m_classVersion = 11;
         bool rejectedInvalidRasterVersion =
             !writer_->writeRasterVariables(&invalidRasterVariables);
-        DRW_RasterVariables invalidRasterFrame;
-        invalidRasterFrame.handle = 0xB502u;
-        invalidRasterFrame.parentHandle = dictionary.handle;
-        invalidRasterFrame.m_classVersion = 1;
-        invalidRasterFrame.m_imageFrame = 2;
-        invalidRasterFrame.m_imageQuality = 1;
-        invalidRasterFrame.m_units = 3;
-        const bool rejectedInvalidRasterFrame =
-            !writer_->writeRasterVariables(&invalidRasterFrame);
         DRW_RasterVariables invalidRasterQuality;
         invalidRasterQuality.handle = 0xB503u;
         invalidRasterQuality.parentHandle = dictionary.handle;
@@ -4608,7 +4607,7 @@ public:
         const bool rejectedInvalidRasterUnits =
             !writer_->writeRasterVariables(&invalidRasterUnits);
         rejectedMalformedRasterVariables_ = rejectedInvalidRasterVersion
-            && rejectedInvalidRasterFrame && rejectedInvalidRasterQuality
+            && rejectedRasterFrameBeforeFirstWrite && rejectedInvalidRasterQuality
             && rejectedInvalidRasterUnits;
 
         DRW_WipeoutVariables invalidWipeoutVariables;
@@ -8188,6 +8187,9 @@ public:
     bool rejectedMalformedRasterVariables() const {
         return rejectedMalformedRasterVariables_;
     }
+    bool rasterDomainRetriesSucceeded() const {
+        return rasterDomainRetriesSucceeded_;
+    }
     bool rejectedMalformedWipeoutVariables() const {
         return rejectedMalformedWipeoutVariables_;
     }
@@ -8927,6 +8929,7 @@ private:
     bool rejectedMalformedFieldList_ {false};
     bool rejectedMalformedField_ {false};
     bool rejectedMalformedRasterVariables_ {false};
+    bool rasterDomainRetriesSucceeded_ {false};
     bool rejectedMalformedWipeoutVariables_ {false};
     bool rejectedMalformedVisualStyle_ {false};
     bool rejectedMalformedRenderSettings_ {false};
@@ -13500,6 +13503,34 @@ bool runWipeoutVariablesDwgDomainRefusal() {
         }
     }
     return true;
+}
+
+bool runRasterVariablesDwgDomainRefusal() {
+    DRW_Header header;
+    const auto refuses = [&header](int classVersion, int imageFrame,
+                                   int imageQuality, int units) {
+        dwgWriter15 writer(nullptr, &header);
+        DRW_RasterVariables variables;
+        variables.handle = 0xB500u;
+        variables.parentHandle = 0xA601u;
+        variables.m_classVersion = classVersion;
+        variables.m_imageFrame = imageFrame;
+        variables.m_imageQuality = imageQuality;
+        variables.m_units = units;
+        return !writer.writeRasterVariables(variables)
+            && variables.handle == 0xB500u
+            && variables.m_classVersion == classVersion
+            && variables.m_imageFrame == imageFrame
+            && variables.m_imageQuality == imageQuality
+            && variables.m_units == units;
+    };
+    const bool passed = refuses(11, 0, 0, 0)
+        && refuses(1, 2, 0, 0)
+        && refuses(1, 0, 2, 0)
+        && refuses(1, 0, 0, 9);
+    if (!passed)
+        std::cerr << "DWG RASTERVARIABLES invalid scalar admission failed\n";
+    return passed;
 }
 
 std::vector<std::uint8_t> makeLocalSabPayload(
@@ -36290,6 +36321,13 @@ bool runBlockRecordXrefMetadataRoundTrip(
 
 int main(int argc, char** argv) {
     if (argc == 2
+        && std::string(argv[1]) == "--rastervariables-dwg-scalar-domain") {
+        const bool passed = runRasterVariablesDwgDomainRefusal();
+        std::cout << "DWG RASTERVARIABLES scalar domain: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-scalar-domain") {
         const bool passed = runWipeoutVariablesDwgDomainRefusal();
         std::cout << "DWG WIPEOUTVARIABLES scalar domain: "
@@ -37448,6 +37486,9 @@ int main(int argc, char** argv) {
                failures);
         expect(writeIface.rejectedMalformedRasterVariables(),
                ("local DWG writer rejected malformed RASTERVARIABLES transaction" + suffix).c_str(),
+               failures);
+        expect(writeIface.rasterDomainRetriesSucceeded(),
+               ("local DWG RASTERVARIABLES scalar refusal supports same-writer correction retry" + suffix).c_str(),
                failures);
         expect(writeIface.rejectedMalformedWipeoutVariables(),
                ("local DWG writer rejected malformed WIPEOUTVARIABLES transaction" + suffix).c_str(),

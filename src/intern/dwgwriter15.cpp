@@ -5241,7 +5241,14 @@ bool dwgWriter15::writeRasterVariables(
     // routing).  Parser mirrors the same shape.  The matching class
     // registration in writeDwgClasses now gates on
     // canRegisterCustomClassObjects (≥AC1015).
-    if (m_version < DRW::AC1015)
+    if (m_version < DRW::AC1015
+        || rasterVariables.m_classVersion < 0
+        || rasterVariables.m_classVersion > 10
+        || (rasterVariables.m_imageFrame != 0
+            && rasterVariables.m_imageFrame != 1)
+        || (rasterVariables.m_imageQuality != 0
+            && rasterVariables.m_imageQuality != 1)
+        || rasterVariables.m_units < 0 || rasterVariables.m_units > 8)
         return false;
 
     DRW_RasterVariables object = rasterVariables;

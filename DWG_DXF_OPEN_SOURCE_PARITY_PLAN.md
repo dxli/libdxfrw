@@ -99,7 +99,10 @@ tuples, physical whole-document output, broader graphs and native image
 behavior remain open. The DWG and DXF writers admit only Autodesk's
 frame/quality/unit domains (and DXF class version 0); input preserves
 unsupported values. This does not
-expand the source-origin adapter profile. See the [AC1024 frame receipt](docs/research/p4-ac1024-rastervariables-frame1-direct-nod-2026-11-04.json),
+expand the source-origin adapter profile. The DWG object writer now checks the
+same domains before common-state preparation and identity reservation; a
+same-writer invalid-frame correction, output and readback control is included
+with the focused refusal selector. See the [AC1024 frame receipt](docs/research/p4-ac1024-rastervariables-frame1-direct-nod-2026-11-04.json),
 [AC1032 frame receipt](docs/research/p4-ac1032-rastervariables-frame1-direct-nod-2026-11-04.json),
 the [DXF scalar-domain receipt](docs/research/p4-rastervariables-dxf-scalar-domain-2026-11-05.json),
 and [DWG writer receipt](docs/research/p4-rastervariables-dwg-scalar-domain-2026-11-05.json).

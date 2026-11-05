@@ -1569,6 +1569,11 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_wipeoutvariables_dwg_scalar_domain PROPERTIES
         LABELS "fast;dwg;wipeout;generated"
         TIMEOUT 30)
+    add_test(NAME libdxfrw_rastervariables_dwg_scalar_domain
+        COMMAND libdxfrw_dwg_local_roundtrip --rastervariables-dwg-scalar-domain)
+    set_tests_properties(libdxfrw_rastervariables_dwg_scalar_domain PROPERTIES
+        LABELS "fast;dwg;raster;generated"
+        TIMEOUT 30)
     add_executable(libdxfrw_raster_dwg_wire_tests tests/raster_dwg_wire_tests.cpp)
     target_include_directories(libdxfrw_raster_dwg_wire_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/dwg2dxf)
     target_compile_features(libdxfrw_raster_dwg_wire_tests PRIVATE cxx_std_14)
