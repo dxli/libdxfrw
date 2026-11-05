@@ -79,6 +79,10 @@ frame 1 with its witnessed 10-bit field encoding; physical whole-file output
 and native rendering remain open ([AC1018 receipt](docs/research/p4-ac1018-wipeoutvariables-frame1-direct-nod-2026-11-04.json),
 [AC1024 receipt](docs/research/p4-ac1024-wipeoutvariables-frame1-direct-nod-2026-11-04.json),
 [AC1027/AC1032 receipt](docs/research/p4-ac1027-ac1032-wipeoutvariables-frame1-direct-nod-2026-11-04.json)).
+The generic DXF codec now reads and retains WIPEOUTVARIABLES group 90, emits
+the documented fixed class version 0, and refuses unsupported output versions
+before reserving identity. Source-origin graph profiles, physical whole-file
+output and native wipeout behavior remain open ([class-version receipt](docs/research/p4-wipeoutvariables-dxf-class-version-2026-11-05.json)).
 The bounded AC1018 direct-NOD RASTERVARIABLES graph covers the witnessed
 0/0/1/3 and 0/1/1/3 profiles in generated ASCII/Binary output; broader graphs,
 physical whole-document output and native image behavior remain open

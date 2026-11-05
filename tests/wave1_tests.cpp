@@ -2877,11 +2877,15 @@ void testRasterAndWipeoutVariablesIdentityRemapping(TestContext& t) {
             wipeout = value;
             wipeoutFound = true;
         }
+        void addRawDxfObject(const DRW_RawDxfObject& value) override {
+            rawObjects.push_back(value);
+        }
 
         DRW_RasterVariables raster;
         DRW_WipeoutVariables wipeout;
         bool rasterFound {false};
         bool wipeoutFound {false};
+        std::vector<DRW_RawDxfObject> rawObjects;
     };
 
     const auto readRaster = [](const std::string& bytes, bool binary,
@@ -2912,7 +2916,8 @@ void testRasterAndWipeoutVariablesIdentityRemapping(TestContext& t) {
     };
 
     const auto readWipeout = [](const std::string& bytes, bool binary,
-                                DRW_WipeoutVariables& value) {
+                                DRW_WipeoutVariables& value,
+                                DRW_RawDxfObject* rawObject = nullptr) {
         std::istringstream input(bytes);
         VariablesProbe probe;
         dxfRW readerOwner("");
@@ -2930,8 +2935,11 @@ void testRasterAndWipeoutVariablesIdentityRemapping(TestContext& t) {
             readerOwner.nextentity = readerOwner.reader->getString();
             if (readerOwner.nextentity == "WIPEOUTVARIABLES") {
                 const bool processed = readerOwner.processWipeoutVariables();
-                if (processed && probe.wipeoutFound)
+                if (processed && probe.wipeoutFound) {
                     value = probe.wipeout;
+                    if (rawObject != nullptr && !probe.rawObjects.empty())
+                        *rawObject = probe.rawObjects.back();
+                }
                 return processed && probe.wipeoutFound;
             }
         }
@@ -2947,6 +2955,7 @@ void testRasterAndWipeoutVariablesIdentityRemapping(TestContext& t) {
     };
     const auto prepareWipeout = [](DRW_WipeoutVariables& value) {
         value.parentHandle = 0xCu;
+        value.m_classVersion = 0;
         value.m_displayFrame = 1u;
     };
     const auto rasterPayloadMatches = [](const DRW_RasterVariables& value) {
@@ -2954,7 +2963,7 @@ void testRasterAndWipeoutVariablesIdentityRemapping(TestContext& t) {
             && value.m_imageQuality == 1 && value.m_units == 8;
     };
     const auto wipeoutPayloadMatches = [](const DRW_WipeoutVariables& value) {
-        return value.m_displayFrame == 1u;
+        return value.m_classVersion == 0 && value.m_displayFrame == 1u;
     };
 
     const auto exercise = [&](const char* recordName, std::uint32_t source,
@@ -3191,6 +3200,69 @@ void testRasterAndWipeoutVariablesIdentityRemapping(TestContext& t) {
         [](dxfRW& owner, DRW_WipeoutVariables& value) {
             return owner.writeWipeoutVariables(&value);
         }, readWipeout, wipeoutPayloadMatches);
+
+    const std::vector<std::pair<const char*, std::function<void(DRW_WipeoutVariables&)>>>
+        invalidWipeoutProfiles = {
+            {"class version", [](DRW_WipeoutVariables& value) {
+                value.m_classVersion = 1;
+            }},
+            {"display frame", [](DRW_WipeoutVariables& value) {
+                value.m_displayFrame = 2u;
+            }}};
+    for (const bool binary : {false, true}) {
+        for (const auto& invalidProfile : invalidWipeoutProfiles) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+            owner.writer->setRecordInventoryEnabled(true, 16u);
+            DRW_WipeoutVariables invalid;
+            invalid.handle = wipeoutSource;
+            prepareWipeout(invalid);
+            invalidProfile.second(invalid);
+            const bool refused = !owner.writeWipeoutVariables(&invalid)
+                && output.str().empty();
+            prepareWipeout(invalid);
+            const bool retried = owner.writeWipeoutVariables(&invalid)
+                && owner.writer->writeString(0, "WIRE_END");
+            DRW_WipeoutVariables readback;
+            DRW_RawDxfObject raw;
+            const bool read = retried
+                && readWipeout(output.str(), binary, readback, &raw);
+            const auto classVersion = std::find_if(
+                raw.groups.begin(), raw.groups.end(),
+                [](const DRW_Variant& group) { return group.code() == 90; });
+            const std::string label = std::string("WIPEOUTVARIABLES ")
+                + invalidProfile.first
+                + " refusal preserves same-writer ASCII/Binary retry, class-version group, and readback";
+            t.expect(refused && read && wipeoutPayloadMatches(readback)
+                         && classVersion != raw.groups.end()
+                         && classVersion->i_val() == 0
+                         && owner.writer->recordHandleCount(wipeoutSource) == 1u,
+                     label.c_str());
+        }
+    }
+
+    const std::string unsupportedWipeoutClassVersion =
+        "0\nWIPEOUTVARIABLES\n5\nA72\n330\nC\n"
+        "100\nAcDbWipeoutVariables\n90\n1\n70\n1\n0\nENDSEC\n";
+    DRW_WipeoutVariables tolerantWipeout;
+    DRW_RawDxfObject tolerantWipeoutRaw;
+    t.expect(readWipeout(unsupportedWipeoutClassVersion, false,
+                         tolerantWipeout, &tolerantWipeoutRaw)
+                 && tolerantWipeout.m_classVersion == 1
+                 && std::any_of(tolerantWipeoutRaw.groups.begin(),
+                                tolerantWipeoutRaw.groups.end(),
+                                [](const DRW_Variant& group) {
+                                    return group.code() == 90
+                                        && group.i_val() == 1;
+                                }),
+             "WIPEOUTVARIABLES input retains unsupported class version for caller-visible inspection");
 }
 
 void testGeoDataIdentityRemapping(TestContext& t) {

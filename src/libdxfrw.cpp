@@ -35347,9 +35347,11 @@ bool dxfRW::writeMLineStyle(DRW_MLineStyle *ent) {
 }
 
 //WIPEOUTVARIABLES (AcDbWipeoutVariables, custom class). Inverse of
-//DRW_WipeoutVariables::parseCode: only the global display-frame flag (DXF 70).
+//DRW_WipeoutVariables::parseCode: class version 0 (DXF 90) and the global
+//display-frame flag (DXF 70).
 bool dxfRW::writeWipeoutVariables(DRW_WipeoutVariables *ent) {
-    if (!preflightTableEntry(ent) || ent->m_displayFrame > 1u)
+    if (ent == nullptr || writer == nullptr || ent->m_classVersion != 0
+        || ent->m_displayFrame > 1u || !preflightTableEntry(ent))
         return false;
     const std::uint32_t sourceHandle = ent->handle;
     std::uint32_t emittedHandle = sourceHandle == 0u
@@ -35372,6 +35374,7 @@ bool dxfRW::writeWipeoutVariables(DRW_WipeoutVariables *ent) {
         return false;
     writeObjectOwner(static_cast<std::uint32_t>(ent->parentHandle));
     writer->writeString(100, "AcDbWipeoutVariables");
+    writer->writeInt32(90, ent->m_classVersion);
     writer->writeInt16(70, ent->m_displayFrame);
     if (!ent->extData.empty() && !writeExtData(ent->extData))
         return false;

@@ -4124,6 +4124,7 @@ public:
   DRW_WipeoutVariables() { reset(); }
   void reset() {
     tType = DRW::UNKNOWNT;
+    m_classVersion = 0;
     m_displayFrame = 0;
     DRW_TableEntry::reset();
   }
@@ -4137,6 +4138,7 @@ protected:
                                dwgBufferW *handleBuf = nullptr) const;
 
 public:
+  std::int32_t m_classVersion = 0; /*!< DXF group 90; documented value 0 */
   std::uint16_t m_displayFrame = 0; /*!< global display-frame flag, DXF 70 */
 };
 

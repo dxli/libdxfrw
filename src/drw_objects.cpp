@@ -11671,6 +11671,10 @@ bool DRW_RasterVariables::parseDwg(DRW::Version version, dwgBuffer *buf, std::ui
 }
 
 bool DRW_WipeoutVariables::parseCode(int code, const std::unique_ptr<dxfReader>& reader){
+    if (code == 90) {
+        m_classVersion = reader->getInt32();
+        return true;
+    }
     if (code == 70) {   //global display-frame flag
         const std::int32_t displayFrame = reader->getInt32();
         if (displayFrame < std::numeric_limits<std::int16_t>::min()
