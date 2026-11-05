@@ -19293,7 +19293,10 @@ bool rawDxfEntityTableNameReferencesCloseAtOutput() {
             {6, std::string("NO_SUCH_NESTED_LTYPE")},
             {102, std::string("}")},
             {8, std::string("NO_SUCH_LAYER")},
-            {6, std::string("NO_SUCH_LTYPE")}};
+            {6, std::string("NO_SUCH_LTYPE")},
+            {1001, std::string("MISSING_XDATA_APP")},
+            {1000, std::string("retained-xdata")},
+            {1003, std::string("MISSING_XDATA_LAYER")}};
         if (raw.hasRawValues) {
             for (const DRW_Variant& group : raw.groups)
                 raw.rawValues.emplace_back(group.c_str());
@@ -19335,9 +19338,25 @@ bool rawDxfEntityTableNameReferencesCloseAtOutput() {
         if (!replaceString(7u, "0") || !refusesAtomically())
             return fail("unresolved raw entity linetype did not refuse atomically");
         if (!replaceString(8u, "continuous")
-            || !iface.fileExport(output.string(), DRW::AC1027, binary,
-                                 &data, false))
-            return fail("corrected raw entity table names did not retry successfully");
+            || !refusesAtomically())
+            return fail("unresolved XDATA APPID did not refuse atomically");
+        if (!replaceString(9u, "ACAD") || !refusesAtomically())
+            return fail("unresolved XDATA layer did not refuse atomically");
+        if (!replaceString(11u, "0"))
+            return fail("could not repair raw XDATA layer name");
+        DRW_RawDxfObject& corrected =
+            data.mBlock->rawEntities.front().record;
+        corrected.groups.emplace_back(1001, std::string("ACAD"));
+        if (corrected.hasRawValues)
+            corrected.rawValues.emplace_back("ACAD");
+        if (!refusesAtomically())
+            return fail("duplicate XDATA APPID groups were not refused atomically");
+        corrected.groups.pop_back();
+        if (corrected.hasRawValues)
+            corrected.rawValues.pop_back();
+        if (!iface.fileExport(output.string(), DRW::AC1027, binary,
+                              &data, false))
+            return fail("corrected raw entity/XDATA table names did not retry successfully");
 
         dx_data readback;
         dx_iface reader;
@@ -19350,6 +19369,9 @@ bool rawDxfEntityTableNameReferencesCloseAtOutput() {
         unsigned lineTypeReferences = 0u;
         bool nestedLayerPreserved = false;
         bool nestedLineTypePreserved = false;
+        bool appIdPreserved = false;
+        bool xdataLayerPreserved = false;
+        bool xdataPayloadPreserved = false;
         for (const DRW_Variant& group : actual.groups) {
             if (group.code() == 8 && group.c_str() != nullptr
                 && std::string_view(group.c_str()) == "0")
@@ -19365,15 +19387,30 @@ bool rawDxfEntityTableNameReferencesCloseAtOutput() {
                 || (group.code() == 6 && group.c_str() != nullptr
                     && std::string_view(group.c_str())
                         == "NO_SUCH_NESTED_LTYPE");
+            appIdPreserved = appIdPreserved
+                || (group.code() == 1001 && group.c_str() != nullptr
+                    && std::string_view(group.c_str()) == "ACAD");
+            xdataLayerPreserved = xdataLayerPreserved
+                || (group.code() == 1003 && group.c_str() != nullptr
+                    && std::string_view(group.c_str()) == "0");
+            xdataPayloadPreserved = xdataPayloadPreserved
+                || (group.code() == 1000 && group.c_str() != nullptr
+                    && std::string_view(group.c_str())
+                        == "retained-xdata");
         }
         if (layerReferences != 1u || lineTypeReferences != 1u
-            || !nestedLayerPreserved || !nestedLineTypePreserved) {
+            || !nestedLayerPreserved || !nestedLineTypePreserved
+            || !appIdPreserved || !xdataLayerPreserved
+            || !xdataPayloadPreserved) {
             std::ostringstream detail;
             detail << "raw entity table names or nested raw payload changed on readback: layer="
                    << layerReferences << " ltype=" << lineTypeReferences
                    << " groups=" << actual.groups.size()
                    << " nestedLayer=" << nestedLayerPreserved
-                   << " nestedLtype=" << nestedLineTypePreserved;
+                   << " nestedLtype=" << nestedLineTypePreserved
+                   << " xdataApp=" << appIdPreserved
+                   << " xdataLayer=" << xdataLayerPreserved
+                   << " xdataPayload=" << xdataPayloadPreserved;
             return fail(detail.str());
         }
     }

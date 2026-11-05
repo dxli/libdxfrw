@@ -215,60 +215,12 @@ bool collectRawEntityTableNameReferences(
                 bool xdata = false;
                 unsigned layerFields = 0u;
                 unsigned lineTypeFields = 0u;
-                for (std::size_t index = 0; index < raw.groups.size(); ++index) {
-                    const DRW_Variant& group = raw.groups[index];
-                    if (group.code() == 102) {
-                        if (group.type() != DRW_Variant::STRING
-                            || group.c_str() == nullptr)
-                            return false;
-                        const std::string_view marker(group.c_str());
-                        if (marker == "}") {
-                            if (applicationDepth == 0)
-                                return false;
-                            --applicationDepth;
-                        } else if (marker.size() > 1u
-                                   && marker.front() == '{') {
-                            if (applicationDepth >= 32)
-                                return false;
-                            ++applicationDepth;
-                        } else {
-                            return false;
-                        }
-                        continue;
-                    }
-                    if (applicationDepth != 0)
-                        continue;
-                    if (group.code() == 1001) {
-                        xdata = true;
-                        continue;
-                    }
-                    if (xdata && group.code() >= 1000
-                        && group.code() <= 1071)
-                        continue;
-                    xdata = false;
-                    if (group.code() == 101
-                        || (group.code() == 100
-                            && (group.type() != DRW_Variant::STRING
-                                || group.c_str() == nullptr
-                                || std::string_view(group.c_str())
-                                    != "AcDbEntity")))
-                        commonEntityScope = false;
-                    if (!commonEntityScope
-                        || (group.code() != DRW::dxfCode::LAYER
-                            && group.code() != 6))
-                        continue;
+                std::unordered_set<std::string> entityAppIds;
+                const auto addReference = [&](const DRW_Variant& group,
+                        std::size_t index, dx_symbol_output::Kind kind) {
                     if (group.type() != DRW_Variant::STRING
                         || group.c_str() == nullptr)
                         return false;
-                    const dx_symbol_output::Kind kind =
-                        group.code() == DRW::dxfCode::LAYER
-                            ? dx_symbol_output::Kind::Layer
-                            : dx_symbol_output::Kind::LineType;
-                    unsigned& fieldCount = kind == dx_symbol_output::Kind::Layer
-                        ? layerFields : lineTypeFields;
-                    if (++fieldCount != 1u)
-                        return false;
-
                     const std::string_view wireValue =
                         !view.binary && raw.hasRawValues
                             ? std::string_view(raw.rawValues[index])
@@ -293,9 +245,75 @@ bool collectRawEntityTableNameReferences(
                         || !rawEntitySymbolNameKey(outputText, outputKey)
                         || sourceKey != outputKey)
                         return false;
+                    if (kind == dx_symbol_output::Kind::AppId
+                        && !entityAppIds.insert(sourceKey).second)
+                        return false;
                     references.push_back(
                         {kind, std::move(sourceKey), std::move(outputKey)});
-                    if (references.size() > 1000000u)
+                    return references.size() <= 1000000u;
+                };
+                for (std::size_t index = 0; index < raw.groups.size(); ++index) {
+                    const DRW_Variant& group = raw.groups[index];
+                    if (group.code() == 102) {
+                        if (group.type() != DRW_Variant::STRING
+                            || group.c_str() == nullptr)
+                            return false;
+                        const std::string_view marker(group.c_str());
+                        if (marker == "}") {
+                            if (applicationDepth == 0)
+                                return false;
+                            --applicationDepth;
+                        } else if (marker.size() > 1u
+                                   && marker.front() == '{') {
+                            if (applicationDepth >= 32)
+                                return false;
+                            ++applicationDepth;
+                        } else {
+                            return false;
+                        }
+                        continue;
+                    }
+                    if (applicationDepth != 0)
+                        continue;
+                    if (group.code() == 1001) {
+                        if (!addReference(group, index,
+                                          dx_symbol_output::Kind::AppId))
+                            return false;
+                        xdata = true;
+                        continue;
+                    }
+                    if (xdata && group.code() >= 1000
+                        && group.code() <= 1071) {
+                        if (group.code() == 1003
+                            && !addReference(group, index,
+                                             dx_symbol_output::Kind::Layer))
+                            return false;
+                        continue;
+                    }
+                    xdata = false;
+                    if (group.code() == 101
+                        || (group.code() == 100
+                            && (group.type() != DRW_Variant::STRING
+                                || group.c_str() == nullptr
+                                || std::string_view(group.c_str())
+                                    != "AcDbEntity")))
+                        commonEntityScope = false;
+                    if (!commonEntityScope
+                        || (group.code() != DRW::dxfCode::LAYER
+                            && group.code() != 6))
+                        continue;
+                    if (group.type() != DRW_Variant::STRING
+                        || group.c_str() == nullptr)
+                        return false;
+                    const dx_symbol_output::Kind kind =
+                        group.code() == DRW::dxfCode::LAYER
+                            ? dx_symbol_output::Kind::Layer
+                            : dx_symbol_output::Kind::LineType;
+                    unsigned& fieldCount = kind == dx_symbol_output::Kind::Layer
+                        ? layerFields : lineTypeFields;
+                    if (++fieldCount != 1u)
+                        return false;
+                    if (!addReference(group, index, kind))
                         return false;
                 }
                 if (applicationDepth != 0)
@@ -333,7 +351,8 @@ bool inspectRawEntityTableNameReferences(
         for (const RawEntityTableNameReference& reference : references) {
             const char kindPrefix = reference.kind == dx_symbol_output::Kind::Layer
                 ? 'L' : reference.kind == dx_symbol_output::Kind::LineType
-                    ? 'T' : '\0';
+                    ? 'T' : reference.kind == dx_symbol_output::Kind::AppId
+                        ? 'A' : '\0';
             if (kindPrefix == '\0' || reference.sourceKey.empty()
                 || reference.sourceKey != reference.outputKey)
                 return false;
@@ -347,13 +366,15 @@ bool inspectRawEntityTableNameReferences(
         }
         return dx_symbol_output::inspect(view, [&](const auto& row) {
             if (row.type != dx_symbol_output::Kind::Layer
-                && row.type != dx_symbol_output::Kind::LineType)
+                && row.type != dx_symbol_output::Kind::LineType
+                && row.type != dx_symbol_output::Kind::AppId)
                 return true;
             std::string nameKey;
             if (!rawEntitySymbolNameKey(row.name, nameKey))
                 return false;
             std::string key(1u, row.type == dx_symbol_output::Kind::Layer
-                ? 'L' : 'T');
+                ? 'L' : row.type == dx_symbol_output::Kind::LineType
+                    ? 'T' : 'A');
             key.append(nameKey);
             const auto target = expected.find(key);
             if (target == expected.end())
