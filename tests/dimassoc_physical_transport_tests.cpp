@@ -123,6 +123,15 @@ bool sameAppData(const std::list<std::list<DRW_Variant>>& left,
     return true;
 }
 
+std::vector<std::uint32_t> mainObjectHandles(
+        const DRW_DimensionAssociationOsnapRef& ref) {
+    if (!ref.m_objectHandles.empty())
+        return ref.m_objectHandles;
+    return ref.m_objectHandle != 0
+        ? std::vector<std::uint32_t>{ref.m_objectHandle}
+        : std::vector<std::uint32_t>{};
+}
+
 bool sameRef(const DRW_DimensionAssociationOsnapRef& source,
              const DRW_DimensionAssociationOsnapRef& output,
              const std::map<std::uint32_t, std::uint32_t>& remap) {
@@ -132,6 +141,16 @@ bool sameRef(const DRW_DimensionAssociationOsnapRef& source,
         const auto found = remap.find(handle);
         return found == remap.end() ? handle : found->second;
     };
+    const std::vector<std::uint32_t> sourceHandles =
+        mainObjectHandles(source);
+    const std::vector<std::uint32_t> outputHandles =
+        mainObjectHandles(output);
+    if (sourceHandles.size() != outputHandles.size())
+        return false;
+    for (std::size_t i = 0; i < sourceHandles.size(); ++i) {
+        if (mapped(sourceHandles[i]) != outputHandles[i])
+            return false;
+    }
     return source.m_className == output.m_className
         && source.m_objectOsnapType == output.m_objectOsnapType
         && source.m_hasObjectOsnapType == output.m_hasObjectOsnapType
@@ -224,7 +243,8 @@ std::map<std::uint32_t, std::uint32_t> makeHandleRemap(
     for (const std::uint32_t reactor : association.reactorHandles)
         add(reactor);
     for (const auto& ref : association.m_osnapRefs) {
-        add(ref.m_objectHandle);
+        for (std::uint32_t handle : mainObjectHandles(ref))
+            add(handle);
         if (ref.m_hasIntersectionObjectHandle)
             add(ref.m_intersectionObjectHandle);
     }
@@ -324,10 +344,13 @@ bool hasResolvedEntityReferences(
         || entities.count(association.m_dimensionHandle) == 0)
         return false;
     for (const auto& ref : association.m_osnapRefs) {
-        if (ref.m_objectHandle == 0
-            || entities.count(ref.m_objectHandle) == 0
-            || ref.m_hasXrefObjectHandleString)
+        const std::vector<std::uint32_t> handles = mainObjectHandles(ref);
+        if (handles.empty() || ref.m_hasXrefObjectHandleString)
             return false;
+        for (std::uint32_t handle : handles) {
+            if (handle == 0 || entities.count(handle) == 0)
+                return false;
+        }
         if (ref.m_hasIntersectionObjectHandle
             && (entities.count(ref.m_intersectionObjectHandle) == 0
                 || ref.m_hasIntersectionXrefObjectHandleString))
@@ -387,9 +410,15 @@ bool runPhysicalSource(const std::string& path) {
                       << " unrepresentable="
                       << association.m_hasUnrepresentableDetail << '\n';
             for (const auto& ref : association.m_osnapRefs) {
-                std::cerr << "  main=" << std::hex << ref.m_objectHandle
-                          << " mainFound="
-                          << entities.count(ref.m_objectHandle)
+                const std::vector<std::uint32_t> handles =
+                    mainObjectHandles(ref);
+                std::cerr << "  main=" << std::hex;
+                for (std::uint32_t handle : handles)
+                    std::cerr << handle << ',';
+                std::cerr << " mainFound=";
+                for (std::uint32_t handle : handles)
+                    std::cerr << entities.count(handle) << ',';
+                std::cerr
                           << " xref=" << ref.m_hasXrefObjectHandleString
                           << " intersection="
                           << ref.m_intersectionObjectHandle
@@ -397,6 +426,32 @@ bool runPhysicalSource(const std::string& path) {
                           << entities.count(ref.m_intersectionObjectHandle)
                           << " intersectionXref="
                           << ref.m_hasIntersectionXrefObjectHandleString
+                          << std::dec << " class=" << ref.m_className
+                          << " osnapType="
+                          << static_cast<unsigned>(ref.m_objectOsnapType)
+                          << " hasSubent=" << ref.m_hasSubentType
+                          << " subent=" << ref.m_subentType
+                          << " hasGs=" << ref.m_hasGsMarker
+                          << " gs=" << ref.m_gsMarker
+                          << " hasNear=" << ref.m_hasNearParameter
+                          << " near=" << ref.m_nearParameter
+                          << " hasPoint=" << ref.m_hasOsnapPoint
+                          << " hasLast=" << ref.m_hasLastPointRef
+                          << " last=" << ref.m_lastPointRef
+                          << " hasInterSubent="
+                          << ref.m_hasIntersectionSubentType
+                          << " interSubent=" << ref.m_intersectionSubentType
+                          << " hasInterGs="
+                          << ref.m_hasIntersectionGsMarker
+                          << " interGs=" << ref.m_intersectionGsMarker
+                          << " hasMainXref="
+                          << ref.m_hasXrefObjectHandleString
+                          << " mainXrefPath="
+                          << ref.m_xrefObjectHandleString
+                          << " hasInterXref="
+                          << ref.m_hasIntersectionXrefObjectHandleString
+                          << " interXrefPath="
+                          << ref.m_intersectionXrefObjectHandleString
                           << std::dec << '\n';
             }
             continue;

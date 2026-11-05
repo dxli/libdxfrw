@@ -12935,6 +12935,7 @@ bool makeDimensionAssociationDetailFrame(DimensionAssociationFrame& frame) {
         const char* name;
         std::uint8_t type;
         std::uint32_t handle;
+        std::uint32_t additionalHandle;
         std::int32_t subent;
         std::int32_t gsMarker;
         const char* xrefPath;
@@ -12948,19 +12949,20 @@ bool makeDimensionAssociationDetailFrame(DimensionAssociationFrame& frame) {
         bool lastPoint;
     };
     const std::array<RefVector, 3> refs{{
-        {"AcDbOsnapPointRef", 1u, 0x40u, 2, 9, nullptr,
+        {"AcDbOsnapPointRef", 1u, 0x40u, 0x44u, 2, 9, nullptr,
          1.0, {1.25, -2.5, 2.0e50}, false, 0u, 0, 0, nullptr, true},
-        {"AcDbOsnapPointRef", 6u, 0x41u, 3, 10, nullptr,
+        {"AcDbOsnapPointRef", 6u, 0x41u, 0u, 3, 10, nullptr,
          0.04914376136317, {-3.0, 4.5, 6.0}, true, 0x50u, 5, 0,
          "xref-intersection-6", false},
-        {"AcDbOsnapPointRef", 13u, 0x42u, 4, 12,
+        {"AcDbOsnapPointRef", 13u, 0x42u, 0u, 4, 12,
          "xref-main-13", 2.0, {7.0, 8.0, 9.0}, false, 0u, 0, 0,
          nullptr, true}}};
 
     for (const RefVector& ref : refs) {
         strings.putVariableText(version, ref.name);
         body.putRawChar8(ref.type);
-        body.putBitLong(1); // one main object handle
+        body.putBitLong(ref.additionalHandle != 0 ? 2 : 1);
+        // Main object handle vector (including one two-handle control).
         body.putBitLong(ref.subent);
         body.putBitLong(ref.gsMarker);
         body.putBitLong(ref.xrefPath != nullptr ? 1 : 0);
@@ -13007,6 +13009,8 @@ bool makeDimensionAssociationDetailFrame(DimensionAssociationFrame& frame) {
     putHandle(DRW::DwgSoftPointer, 0x30u); // dimension
     for (const RefVector& ref : refs) {
         putHandle(DRW::DwgSoftPointer, ref.handle);
+        if (ref.additionalHandle != 0)
+            putHandle(DRW::DwgSoftPointer, ref.additionalHandle);
         if (ref.intersection)
             putHandle(DRW::DwgSoftPointer, ref.intersectionHandle);
     }
@@ -13023,6 +13027,94 @@ bool makeDimensionAssociationDetailFrame(DimensionAssociationFrame& frame) {
     return true;
 }
 
+bool makeEncodedDimensionAssociationMultiHandleFrame(
+        DimensionAssociationFrame& frame) {
+    constexpr DRW::Version version = DRW::AC1024;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+
+    DimensionAssociationCodecProbe source;
+    source.handle = 0xA200u;
+    source.parentHandle = 0x20u;
+    source.reactorHandles = {0x21u};
+    source.m_dimensionHandle = 0x30u;
+    source.m_associativityFlags = 1u;
+    DRW_DimensionAssociationOsnapRef ref;
+    ref.m_className = "AcDbOsnapPointRef";
+    ref.m_hasObjectOsnapType = true;
+    ref.m_objectOsnapType = 0u;
+    ref.m_objectHandle = 0x40u;
+    ref.m_objectHandles = {0x40u, 0x44u};
+    source.m_osnapRefs.push_back(ref);
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec), object(&codec);
+    if (!source.encodeDwg(version, &body, &strings, &handles)
+        || !body.isGood() || !strings.isGood() || !handles.isGood())
+        return false;
+
+    object.putObjType(version, 1u);
+    dwgHandle ownHandle;
+    ownHandle.ref = source.handle;
+    object.putHandle(ownHandle);
+    object.putBitShort(0u); // no EED
+    object.putBitLong(1); // one reactor
+    object.putBit(0u); // no extension dictionary handle follows
+    appendBits(object, body);
+    object.alignToByte();
+    strings.alignToByte();
+    if (!strings.data().empty())
+        object.putBytes(strings.data().data(), strings.size());
+    for (int bit = 0; bit < 7; ++bit)
+        object.putBit(0u);
+    const std::uint64_t stringBitSize = strings.size() * 8u + 7u;
+    if (stringBitSize > std::numeric_limits<std::uint16_t>::max())
+        return false;
+    object.putRawShort16(static_cast<std::uint16_t>(stringBitSize));
+    object.putBit(1u); // bounded R2007+ string stream
+    object.alignToByte();
+    appendBits(object, handles);
+    if (!object.isGood())
+        return false;
+    frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+    frame.bytes = object.data();
+    return true;
+}
+
+void testDimensionAssociationMultiHandleDwgEncoder(TestContext& t) {
+    DimensionAssociationFrame frame;
+    const bool built = makeEncodedDimensionAssociationMultiHandleFrame(frame);
+    t.expect(built,
+             "generated AC1024 DIMASSOC multi-handle frame builds from encoder");
+    if (!built)
+        return;
+
+    DRW_TextCodec codec;
+    codec.setVersion(DRW::AC1024, false);
+    DimensionAssociationCodecProbe parsed;
+    parsed.m_osnapRefs.push_back({});
+    std::vector<std::uint8_t> truncated = frame.bytes;
+    if (!truncated.empty())
+        truncated.pop_back();
+    dwgBuffer truncatedInput(truncated.data(), truncated.size(), &codec);
+    const bool rejected = !parsed.parseDwg(DRW::AC1024, &truncatedInput,
+                                           frame.handleBits)
+        && !truncatedInput.isGood() && parsed.handle == 0u
+        && parsed.m_osnapRefs.empty();
+    t.expect(rejected,
+             "truncated multi-handle DIMASSOC resets before the successful retry");
+
+    dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+    const bool read = parsed.parseDwg(DRW::AC1024, &input, frame.handleBits);
+    const bool handlesMatch = read && input.isGood()
+        && parsed.m_osnapRefs.size() == 1u
+        && parsed.m_osnapRefs[0].m_objectHandle == 0x40u
+        && parsed.m_osnapRefs[0].m_objectHandles
+            == std::vector<std::uint32_t>{0x40u, 0x44u}
+        && !parsed.m_hasUnrepresentableDetail;
+    t.expect(handlesMatch,
+             "AC1024 DIMASSOC encoder and parser preserve both main handles in order");
+}
+
 void testDimensionAssociationDxfOutputReadback(
         TestContext& t, DRW_DimensionAssociation& source, bool binary) {
     const std::string format = binary ? "Binary" : "ASCII";
@@ -13033,7 +13125,7 @@ void testDimensionAssociationDxfOutputReadback(
     owner.setHandleRemap({
         {0x20u, 0x21u}, {0x21u, 0x22u}, {0x30u, 0x31u},
         {0x40u, 0x41u}, {0x41u, 0x42u}, {0x42u, 0x43u},
-        {0x50u, 0x51u}, {0xA100u, 0xA101u}});
+        {0x44u, 0x45u}, {0x50u, 0x51u}, {0xA100u, 0xA101u}});
     if (binary)
         owner.writer = std::make_unique<dxfWriterBinary>(&output);
     else
@@ -13095,6 +13187,8 @@ void testDimensionAssociationDxfOutputReadback(
     const bool detailFieldsMatch = pointRef.m_className == "AcDbOsnapPointRef"
         && pointRef.m_hasObjectOsnapType && pointRef.m_objectOsnapType == 1u
         && pointRef.m_objectHandle == 0x41u
+        && pointRef.m_objectHandles
+            == std::vector<std::uint32_t>{0x41u, 0x45u}
         && pointRef.m_hasSubentType && pointRef.m_subentType == 2
         && pointRef.m_hasGsMarker && pointRef.m_gsMarker == 9
         && pointRef.m_hasNearParameter && pointRef.m_nearParameter == 1.0
@@ -13145,6 +13239,7 @@ void testDimensionAssociationDxfOutputReadback(
 }
 
 void testDimensionAssociationDwgDetailReadback(TestContext& t) {
+    testDimensionAssociationMultiHandleDwgEncoder(t);
     DimensionAssociationFrame frame;
     const bool built = makeDimensionAssociationDetailFrame(frame);
     t.expect(built, "generated AC1024 DIMASSOC detail frame builds from scratch");
@@ -13188,6 +13283,8 @@ void testDimensionAssociationDwgDetailReadback(TestContext& t) {
                      && pointRef.m_hasObjectOsnapType
                      && pointRef.m_objectOsnapType == 1u
                      && pointRef.m_objectHandle == 0x40u
+                     && pointRef.m_objectHandles
+                         == std::vector<std::uint32_t>{0x40u, 0x44u}
                      && pointRef.m_hasSubentType
                      && pointRef.m_subentType == 2
                      && pointRef.m_hasGsMarker

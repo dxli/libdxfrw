@@ -24232,9 +24232,14 @@ bool DRW_DimensionAssociation::parseCode(int code, const std::unique_ptr<dxfRead
             return true;
         case 331:
             if (!m_osnapRefs.empty()) {
-                if (m_osnapRefs.back().m_objectHandle != 0)
-                    m_hasUnrepresentableDetail = true;
-                m_osnapRefs.back().m_objectHandle = reader->getHandleString();
+                DRW_DimensionAssociationOsnapRef& ref = m_osnapRefs.back();
+                if (ref.m_objectHandles.size()
+                    >= dwgSafety::MaxOwnedObjectCount)
+                    return false;
+                const std::uint32_t handle = reader->getHandleString();
+                ref.m_objectHandles.push_back(handle);
+                if (ref.m_objectHandles.size() == 1)
+                    ref.m_objectHandle = handle;
             } else {
                 (void)reader->getHandleString();
                 m_hasUnrepresentableDetail = true;
@@ -26078,13 +26083,13 @@ bool DRW_DimensionAssociation::parseDwg(DRW::Version version, dwgBuffer *buf, st
         if (!readBitLongWithinBody(bodyBuf, version, bodyEnd, xrefCount)
             || !isValidAssocCount(xrefCount))
             return false;
-        if (xrefCount > 1)
-            hasUnrepresentableDetail = true;
+        ref.m_objectHandles.reserve(static_cast<std::size_t>(xrefCount));
         for (std::int32_t i = 0; i < xrefCount; ++i) {
             const std::uint32_t objectHandle =
                 readObjectHandleRef(&hBuff, handleEndBit);
             if (!hBuff.isGood())
                 return false;
+            ref.m_objectHandles.push_back(objectHandle);
             if (i == 0)
                 ref.m_objectHandle = objectHandle;
         }
@@ -35370,6 +35375,28 @@ bool DRW_DimensionAssociation::encodeDwg(
     if (activeSlots != m_osnapRefs.size())
         return false;
 
+    std::size_t validationRefIndex = 0;
+    for (std::uint32_t flag = 1; flag <= 8; flag <<= 1) {
+        if ((m_associativityFlags & flag) == 0)
+            continue;
+        const DRW_DimensionAssociationOsnapRef& ref =
+            m_osnapRefs[validationRefIndex++];
+        if (ref.m_objectOsnapType != 0
+            || ref.m_objectHandles.size() > dwgSafety::MaxOwnedObjectCount
+            || ref.m_objectHandles.size()
+                > static_cast<std::size_t>(kMaxAssocItems)
+            || (!ref.m_objectHandles.empty()
+                && (ref.m_objectHandles.front() != ref.m_objectHandle
+                    || !std::all_of(
+                        ref.m_objectHandles.begin(), ref.m_objectHandles.end(),
+                        [](std::uint32_t handle) {
+                            return handle != 0 && handle != DRW::NoHandle;
+                        })))
+            || (ref.m_objectHandles.empty()
+                && ref.m_objectHandle == DRW::NoHandle))
+            return false;
+    }
+
     dwgBufferW *stringBuf = strBuf != nullptr ? strBuf : buf;
     dwgBufferW *handles = handleBuf != nullptr ? handleBuf : buf;
     buf->putBitLong(static_cast<std::int32_t>(m_associativityFlags));
@@ -35381,12 +35408,12 @@ bool DRW_DimensionAssociation::encodeDwg(
         if ((m_associativityFlags & flag) == 0)
             continue;
         const DRW_DimensionAssociationOsnapRef& ref = m_osnapRefs[refIndex++];
-        if (ref.m_objectOsnapType != 0)
-            return false;
         stringBuf->putVariableText(version, ref.m_className);
         buf->putRawChar8(ref.m_objectOsnapType);
 
-        const std::uint32_t xrefCount = ref.m_objectHandle != 0 ? 1 : 0;
+        const std::size_t xrefCount = ref.m_objectHandles.empty()
+            ? (ref.m_objectHandle != 0 ? 1u : 0u)
+            : ref.m_objectHandles.size();
         buf->putBitLong(static_cast<std::int32_t>(xrefCount));
         buf->putBitDouble(0.0); // osnap_dist
         buf->put3BitDouble(DRW_Coord{}); // osnap_pt
@@ -35404,9 +35431,14 @@ bool DRW_DimensionAssociation::encodeDwg(
         if ((m_associativityFlags & flag) == 0)
             continue;
         const auto& ref = m_osnapRefs[refIndex++];
-        if (ref.m_objectHandle != 0)
+        if (ref.m_objectHandles.empty() && ref.m_objectHandle != 0) {
             handles->putHandle(makeRefW(
                 ref.m_objectHandle, DRW::DwgSoftPointer));
+        } else {
+            for (std::uint32_t objectHandle : ref.m_objectHandles)
+                handles->putHandle(makeRefW(
+                    objectHandle, DRW::DwgSoftPointer));
+        }
     }
     return buf->isGood() && stringBuf->isGood() && handles->isGood();
 }

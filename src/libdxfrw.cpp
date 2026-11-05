@@ -1618,8 +1618,22 @@ bool canWriteDxfDimensionAssociation(
                                    || ref.m_xrefObjectHandleString.empty())
                                && (ref.m_hasIntersectionXrefObjectHandleString
                                    || ref.m_intersectionXrefObjectHandleString.empty());
+                           const bool objectHandlesStateValid =
+                               ref.m_objectHandles.size()
+                                   <= dwgSafety::MaxOwnedObjectCount
+                               && (ref.m_objectHandles.empty()
+                                   || (ref.m_objectHandles.front()
+                                           == ref.m_objectHandle
+                                       && std::all_of(
+                                           ref.m_objectHandles.begin(),
+                                           ref.m_objectHandles.end(),
+                                           [](std::uint32_t handle) {
+                                               return handle != 0
+                                                   && handle != DRW::NoHandle;
+                                           })));
                            return ref.m_className == "AcDbOsnapPointRef"
                                && ref.m_objectOsnapType <= 13u
+                               && objectHandlesStateValid
                                && pointStateValid
                                && subentTypeValid
                                && lastPointRefValid
@@ -36667,18 +36681,29 @@ bool dxfRW::writeDimensionAssociation(DRW_DimensionAssociation *ent) {
                 && hasUniqueWrittenEntityOutput(output);
         };
     std::uint32_t emittedDimension = 0;
-    std::array<std::uint32_t, 4> emittedOsnapHandles {{0, 0, 0, 0}};
+    std::vector<std::vector<std::uint32_t>> sourceOsnapHandles;
+    std::vector<std::vector<std::uint32_t>> emittedOsnapHandles;
     std::array<std::uint32_t, 4> emittedIntersectionHandles {{0, 0, 0, 0}};
     try {
+        sourceOsnapHandles.resize(ent->m_osnapRefs.size());
+        emittedOsnapHandles.resize(ent->m_osnapRefs.size());
         if (ent->m_dimensionHandle != 0)
             emittedDimension = resolveAssociationReference(
                 ent->m_dimensionHandle);
         for (std::size_t i = 0; i < ent->m_osnapRefs.size(); ++i) {
-            const std::uint32_t source = ent->m_osnapRefs[i].m_objectHandle;
-            if (source != 0)
-                emittedOsnapHandles[i] = resolveAssociationReference(source);
             const DRW_DimensionAssociationOsnapRef& ref =
                 ent->m_osnapRefs[i];
+            if (ref.m_objectHandles.empty()) {
+                if (ref.m_objectHandle != 0)
+                    sourceOsnapHandles[i].push_back(ref.m_objectHandle);
+            } else {
+                sourceOsnapHandles[i] = ref.m_objectHandles;
+            }
+            for (std::uint32_t source : sourceOsnapHandles[i]) {
+                const std::uint32_t emitted =
+                    resolveAssociationReference(source);
+                emittedOsnapHandles[i].push_back(emitted);
+            }
             if (ref.m_hasIntersectionObjectHandle
                 && ref.m_intersectionObjectHandle != 0)
                 emittedIntersectionHandles[i] = resolveAssociationReference(
@@ -36696,12 +36721,12 @@ bool dxfRW::writeDimensionAssociation(DRW_DimensionAssociation *ent) {
         return failDxfWrite();
     for (std::size_t i = 0; i < ent->m_osnapRefs.size(); ++i) {
         const DRW_DimensionAssociationOsnapRef& ref = ent->m_osnapRefs[i];
-        if (ref.m_objectHandle != 0
-            && (emittedOsnapHandles[i] == 0
+        for (std::size_t j = 0; j < sourceOsnapHandles[i].size(); ++j) {
+            if (emittedOsnapHandles[i][j] == 0
                 || !associationReferenceIsClosed(
-                    ref.m_objectHandle,
-                    emittedOsnapHandles[i])))
-            return failDxfWrite();
+                    sourceOsnapHandles[i][j], emittedOsnapHandles[i][j]))
+                return failDxfWrite();
+        }
         if (ref.m_hasIntersectionObjectHandle
             && (emittedIntersectionHandles[i] == 0
                 || !associationReferenceIsClosed(
@@ -36739,8 +36764,9 @@ bool dxfRW::writeDimensionAssociation(DRW_DimensionAssociation *ent) {
         const DRW_DimensionAssociationOsnapRef &ref = ent->m_osnapRefs[i];
         written = written && writeUtf8String(1, ref.m_className)
             && writer->writeInt16(72, static_cast<int>(ref.m_objectOsnapType));
-        if (ref.m_objectHandle != 0)
-            written = written && writeString(331, toHexStr(emittedOsnapHandles[i]));
+        for (std::uint32_t objectHandle : emittedOsnapHandles[i])
+            written = written
+                && writeString(331, toHexStr(objectHandle));
         if (ref.m_hasSubentType)
             written = written && writer->writeInt16(
                 73, static_cast<int>(ref.m_subentType));
