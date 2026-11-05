@@ -21,7 +21,7 @@
     "logSha256": "06afc0e9b036237b43deaf74a41eb8370f63904befb09c9e1c7cc89b838066ac"
   },
   "interpretation": "Two typed AcDbTable proxy caches are bound to source hosts 0x2856E and 0x2A974. A bounded same-revision writer now emits authorized complete ParsedDwg TABLE cache bytes through the existing group-92/310 serializer. The physical source CLI passes the proxy preflight gate but stops before serialization at FIELD/FIELDLIST output. A generated one-cell TABLE separately proves exact ASCII/Binary proxy-byte roundtrip, wrong-version atomic refusal and same-adapter retry. Native marker-to-geometry behavior and physical-source group-310 output remain unqualified; strict whole-document output remains refused.",
-  "nextAction": "Qualify native marker-to-geometry behavior and native TABLE cache semantics. The two physical source cache byte streams now pass exact group-310 ASCII readback inside generated valid TABLE wrappers, but the original whole source still refuses before serialization at FIELD/FIELDLIST; do not claim full-source output.",
+  "nextAction": "Qualify native marker-to-geometry behavior and native TABLE cache semantics. Both physical source cache byte streams now pass exact group-310 ASCII and Binary readback inside generated valid TABLE wrappers, but the original whole source still refuses before serialization at FIELD/FIELDLIST; do not claim full-source output.",
   "supportClaimEffect": "none",
   "nonClaims": [
     "No proxy-graphics semantic or replay support is established.",
@@ -195,7 +195,7 @@
     "writerRoute": "Bounded to an explicitly authorized, exact-version ParsedDwg AcDbTable cache with complete declared chunk framing. The dx_iface source run passed this proxy preflight gate.",
     "strictOutput": "Physical AC1021 source preflight passes the TABLE proxy-cache gate and is still refused before serialization by FIELD/FIELDLIST carriers with no qualified DXF serializer; no DXF created.",
     "fixturePolicy": "No fixture added or modified.",
-    "generatedPhysicalOutputScope": "The generated one-cell TABLE test proves serializer mechanics with a scratch-generated 84-byte cache. The separate physical-source probe copied exact caches from both AcDbTable source records into valid generated TABLE wrappers, emitted strict AC1021 ASCII DXF and freshly read back all 32,980 and 37,080 bytes exactly. This proves raw-cache byte transport for those two caches, not preservation of the original source TABLE records, whole-file conversion or marker semantics.",
+    "generatedPhysicalOutputScope": "The generated one-cell TABLE test proves serializer mechanics with a scratch-generated 84-byte cache in ASCII and Binary. A separate physical-source probe copied exact caches from both AcDbTable source records into valid generated TABLE wrappers, emitted strict AC1021 ASCII and Binary DXF, and freshly read back all bytes exactly: 32,980 and 37,080 bytes in both encodings. This proves raw-cache byte transport for those two caches, not preservation of the original source TABLE records, whole-file conversion or marker semantics.",
     "focusedValidation": {
       "command": "ctest --test-dir build-gcc -R 'libdxfrw_(table_dwg_proxy_graphics_roundtrip|proxy_subentity_markers|proxy_subentity_marker_journal)$' --output-on-failure",
       "result": "PASS 3/3"
@@ -239,30 +239,48 @@
   "physicalSourceCacheReadback": {
     "sourceSha256": "7d5507da05fb70ba55875d99e676524ca2caa0ed7a5582ad130c3c06e8d925f1",
     "probeSourcePath": "/private/tmp/probe_ac1021_table_proxy_roundtrip.cpp",
-    "probeSourceSha256": "7c1ee1363cd5fd3bb0ca74c0a74460b41a916ee3ac0bc1ccf134932eb1ace68d",
+    "probeSourceSha256": "05a7c4c160c46d367102798ffc4e192232332f9a493229296b7e3f883a4563bc",
     "probeBinaryPath": "/private/tmp/probe_ac1021_table_proxy_roundtrip",
-    "probeBinarySha256": "df2bd65370ca0ed28831145299c4fca90c5b08fe911cf76da4d90129dd4a8bb3",
+    "probeBinarySha256": "984c862b6c170f373a9560dbd7a5fc7c1f6f72546445f63dc12b582f69b8a063",
     "command": "/private/tmp/probe_ac1021_table_proxy_roundtrip",
     "result": "PASS",
     "targetVersion": "AC1021",
-    "encoding": "ASCII DXF",
+    "encoding": "ASCII and Binary DXF",
     "wrapper": "Locally generated valid one-cell TABLE; only the proxy cache bytes and parsed-DWG provenance were copied from the physical source record.",
     "records": [
       {
         "sourceHandle": "0x2856E",
+        "encoding": "ASCII",
         "sourceBytes": 32980,
         "readbackBytes": 32980,
         "exactByteMatch": true,
         "outputSha256": "b22f8a8a621913b3cda64a9b35d9b8214a855aac02159642e64c24c786507773"
       },
       {
+        "sourceHandle": "0x2856E",
+        "encoding": "Binary",
+        "sourceBytes": 32980,
+        "readbackBytes": 32980,
+        "exactByteMatch": true,
+        "outputSha256": "dca64c5cc9486ca24f1c087573928c3d0ee34675e09b757d3514922c55c942db"
+      },
+      {
         "sourceHandle": "0x2A974",
+        "encoding": "ASCII",
         "sourceBytes": 37080,
         "readbackBytes": 37080,
         "exactByteMatch": true,
         "outputSha256": "dc6b1783c74966e0d6171a94187ece0001a469c20885105eac48b16d722dcd49"
+      },
+      {
+        "sourceHandle": "0x2A974",
+        "encoding": "Binary",
+        "sourceBytes": 37080,
+        "readbackBytes": 37080,
+        "exactByteMatch": true,
+        "outputSha256": "c670eb62fb1cdc9aad75c2eff60e11147ff152250c26aed952229c9681fbcc3b"
       }
     ],
-    "scopeLimit": "This is exact opaque byte transport for two source caches in generated TABLE wrappers. It does not establish source TABLE semantic output, native marker behavior, native cache display or whole-document conversion."
+    "scopeLimit": "This is exact opaque byte transport for two source caches in generated TABLE wrappers, in ASCII and Binary DXF. It does not establish source TABLE semantic output, native cache display or whole-document conversion."
   }
 }
