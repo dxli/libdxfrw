@@ -19366,8 +19366,111 @@ bool acdsOpaqueProxyCodecReadback() {
             return fail("generated ACDS proxy typed payload readback failed");
     }
 
+    for (const bool binary : {false, true}) {
+        const auto nonce = std::chrono::steady_clock::now()
+                               .time_since_epoch()
+                               .count();
+        const std::filesystem::path path =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-acds-proxy-adapter-readback-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{path};
+
+        DRW_Class sourceClass;
+        sourceClass.recName = "ACSH_GENERATED_PROXY_CLASS";
+        sourceClass.className = "AcDbGeneratedAcShHistory";
+        sourceClass.appName = "ObjectDBX Classes";
+        sourceClass.proxyFlag = 0x401;
+        sourceClass.instanceCount = 1;
+        sourceClass.wasaProxyFlag = 1;
+        sourceClass.entityFlag = 0;
+
+        DRW_RawDxfObject rawProxy;
+        rawProxy.name = "ACAD_PROXY_OBJECT";
+        rawProxy.handle = 0xA501u;
+        rawProxy.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+        rawProxy.m_version = DRW::AC1027;
+        rawProxy.groups.emplace_back(5, UTF8STRING("A501"));
+        rawProxy.groups.emplace_back(
+            330, UTF8STRING("C"));
+        rawProxy.groups.emplace_back(
+            100, UTF8STRING("AcDbProxyObject"));
+        rawProxy.groups.emplace_back(90, std::int32_t{1});
+        rawProxy.groups.emplace_back(91, std::int32_t{0});
+        rawProxy.groups.emplace_back(161, std::int64_t{16});
+        rawProxy.groups.emplace_back(
+            310, UTF8STRING("DEAD"));
+
+        dx_data sourceData;
+        sourceData.sourceFormat = dx_source_format::DXF;
+        sourceData.sourceVersion = DRW::AC1027;
+        sourceData.dxfClasses.push_back(sourceClass);
+        sourceData.rawProxyObjects.push_back(rawProxy);
+        dx_iface exporter;
+        const std::string sentinel =
+            "generated proxy adapter retry sentinel\n";
+        {
+            std::ofstream existing(path, std::ios::binary);
+            if (!existing || !(existing << sentinel))
+                return fail("could not seed generated proxy adapter destination");
+        }
+        sourceData.rawProxyObjects.front().m_version = DRW::AC1024;
+        const bool refused = !exporter.fileExport(
+            path.string(), DRW::AC1027, binary, &sourceData, false, true);
+        std::ifstream refusedOutput(path, std::ios::binary);
+        const std::string refusedBytes(
+            (std::istreambuf_iterator<char>(refusedOutput)),
+            std::istreambuf_iterator<char>());
+        sourceData.rawProxyObjects.front().m_version = DRW::AC1027;
+        if (!refused || refusedBytes != sentinel)
+            return fail("invalid generated proxy source revision replaced the adapter destination");
+
+        if (!exporter.fileExport(
+                path.string(), DRW::AC1027, binary, &sourceData, false, true))
+            return fail("corrected generated proxy graph did not retry through the same adapter");
+        dx_data readData;
+        dx_iface reader;
+        if (!reader.fileImport(path.string(), &readData, false)
+            || readData.dxfClasses.size() != 1u
+            || readData.dxfClasses.front().recName != sourceClass.recName
+            || readData.dxfClasses.front().className != sourceClass.className
+            || readData.dxfClasses.front().instanceCount != 1
+            || readData.rawProxyObjects.size() != 1u
+            || readData.rawProxyObjects.front().handle != rawProxy.handle
+            || readData.rawProxyObjects.front().groups.size()
+                != rawProxy.groups.size())
+            return fail("generated proxy adapter output failed fresh class/raw readback");
+        const DRW_RawDxfObject& actual = readData.rawProxyObjects.front();
+        for (std::size_t index = 0u; index < rawProxy.groups.size(); ++index) {
+            const DRW_Variant& expected = rawProxy.groups[index];
+            const DRW_Variant& observed = actual.groups[index];
+            if (expected.code() != observed.code()
+                || expected.type() != observed.type())
+                return fail("generated proxy adapter readback changed ordered group types");
+            if (expected.type() == DRW_Variant::STRING) {
+                if (expected.c_str() == nullptr || observed.c_str() == nullptr
+                    || std::string(expected.c_str()) != observed.c_str())
+                    return fail("generated proxy adapter readback changed a string value");
+            } else if (expected.type() == DRW_Variant::INTEGER
+                       && expected.i_val() != observed.i_val()) {
+                return fail("generated proxy adapter readback changed an integer value");
+            } else if (expected.type() == DRW_Variant::INTEGER64
+                       && expected.i64_val() != observed.i64_val()) {
+                return fail("generated proxy adapter readback changed the body bit span");
+            }
+        }
+    }
+
     std::cout << "Generated ACDS proxy/class DXF codec readback passed in ASCII and binary; "
-                 "this control makes no source, graph-closure, or semantic claim.\n";
+                 "the graph-closed adapter path retries and reads back in both encodings; "
+                 "this generated control makes no physical-source or semantic claim.\n";
     return true;
 }
 
