@@ -1033,6 +1033,16 @@ Strict output still fails, and no support claim is promoted.
    disagreement and unresolved child-count framing for type-4 roots. For the
    physical AC1021 FIELD population, 15 `AcExpr` roots parse as complete; the
    71 checksum children are also now complete, leaving 56/142 records raw-only.
+   A focused follow-up localizes nine oversized child-count failures to the
+   `AcSm` type-4 profile (handles `0x151D0`, `0x151D5`, `0x151DA`, `0x15BFB`,
+   `0x15C00`, `0x15C05`, `0x15C15`, `0x15C1A`, and `0x15C1F`): each has an
+   88-byte value-string length, unit values 20/22/28, and the bounded parser
+   reads `0x50069006` at the child-count slot. One separate source FIELD has a
+   negative child count. LibreDWG 0.14 JSON also omits child values for these
+   `AcSm` objects, but does not expose a trustworthy wire count; ODA §20.4.76
+   specifies a BL count. Keep the source records raw and the output profile
+   closed until an independent physical span or producer witness resolves the
+   layout ([focused receipt](docs/research/p5-ac1021-acsm-child-count-trace-2026-11-05.json)).
    The 42 peer-selected
    `AcObjProp` handles match local raw-only shells. Their object-data suffixes
    remain unexplained:
