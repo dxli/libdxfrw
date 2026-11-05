@@ -13027,25 +13027,12 @@ bool makeDimensionAssociationDetailFrame(DimensionAssociationFrame& frame) {
     return true;
 }
 
-bool makeEncodedDimensionAssociationMultiHandleFrame(
+bool makeEncodedDimensionAssociationFrame(
+        const DimensionAssociationCodecProbe& source,
         DimensionAssociationFrame& frame) {
     constexpr DRW::Version version = DRW::AC1024;
     DRW_TextCodec codec;
     codec.setVersion(version, false);
-
-    DimensionAssociationCodecProbe source;
-    source.handle = 0xA200u;
-    source.parentHandle = 0x20u;
-    source.reactorHandles = {0x21u};
-    source.m_dimensionHandle = 0x30u;
-    source.m_associativityFlags = 1u;
-    DRW_DimensionAssociationOsnapRef ref;
-    ref.m_className = "AcDbOsnapPointRef";
-    ref.m_hasObjectOsnapType = true;
-    ref.m_objectOsnapType = 0u;
-    ref.m_objectHandle = 0x40u;
-    ref.m_objectHandles = {0x40u, 0x44u};
-    source.m_osnapRefs.push_back(ref);
 
     dwgBufferW body(&codec), strings(&codec), handles(&codec), object(&codec);
     if (!source.encodeDwg(version, &body, &strings, &handles)
@@ -13057,8 +13044,8 @@ bool makeEncodedDimensionAssociationMultiHandleFrame(
     ownHandle.ref = source.handle;
     object.putHandle(ownHandle);
     object.putBitShort(0u); // no EED
-    object.putBitLong(1); // one reactor
-    object.putBit(0u); // no extension dictionary handle follows
+    object.putBitLong(static_cast<std::int32_t>(source.reactorHandles.size()));
+    object.putBit(source.extensionDictionaryFlag());
     appendBits(object, body);
     object.alignToByte();
     strings.alignToByte();
@@ -13078,6 +13065,24 @@ bool makeEncodedDimensionAssociationMultiHandleFrame(
     frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
     frame.bytes = object.data();
     return true;
+}
+
+bool makeEncodedDimensionAssociationMultiHandleFrame(
+        DimensionAssociationFrame& frame) {
+    DimensionAssociationCodecProbe source;
+    source.handle = 0xA200u;
+    source.parentHandle = 0x20u;
+    source.reactorHandles = {0x21u};
+    source.m_dimensionHandle = 0x30u;
+    source.m_associativityFlags = 1u;
+    DRW_DimensionAssociationOsnapRef ref;
+    ref.m_className = "AcDbOsnapPointRef";
+    ref.m_hasObjectOsnapType = true;
+    ref.m_objectOsnapType = 0u;
+    ref.m_objectHandle = 0x40u;
+    ref.m_objectHandles = {0x40u, 0x44u};
+    source.m_osnapRefs.push_back(ref);
+    return makeEncodedDimensionAssociationFrame(source, frame);
 }
 
 void testDimensionAssociationMultiHandleDwgEncoder(TestContext& t) {
@@ -13338,11 +13343,52 @@ void testDimensionAssociationDwgDetailReadback(TestContext& t) {
         testDimensionAssociationDxfOutputReadback(t, parsed, true);
     }
 
+    DimensionAssociationFrame encodedFrame;
+    const bool encoded = makeEncodedDimensionAssociationFrame(
+        parsed, encodedFrame);
+    t.expect(encoded,
+             "bounded detailed DIMASSOC profile encodes to an AC1024 frame");
+    if (encoded) {
+        DimensionAssociationCodecProbe encodedReadback;
+        dwgBuffer encodedInput(encodedFrame.bytes.data(),
+                               encodedFrame.bytes.size(), &codec);
+        const bool encodedRead = encodedReadback.parseDwg(
+            DRW::AC1024, &encodedInput, encodedFrame.handleBits);
+        const auto& encodedRefs = encodedReadback.m_osnapRefs;
+        const bool encodedFieldsMatch = encodedRead && encodedInput.isGood()
+            && encodedReadback.handle == parsed.handle
+            && encodedReadback.parentHandle == parsed.parentHandle
+            && encodedReadback.reactorHandles == parsed.reactorHandles
+            && encodedReadback.m_dimensionHandle == parsed.m_dimensionHandle
+            && encodedReadback.m_associativityFlags
+                == parsed.m_associativityFlags
+            && encodedRefs.size() == 3u
+            && encodedRefs[0].m_objectHandles
+                == std::vector<std::uint32_t>{0x40u, 0x44u}
+            && encodedRefs[0].m_subentType == 2
+            && encodedRefs[0].m_gsMarker == 9
+            && encodedRefs[0].m_nearParameter == 1.0
+            && encodedRefs[0].m_osnapPoint.z == 2.0e50
+            && encodedRefs[1].m_objectHandle == 0x41u
+            && encodedRefs[1].m_intersectionObjectHandle == 0x50u
+            && encodedRefs[1].m_intersectionSubentType == 5
+            && encodedRefs[1].m_intersectionXrefObjectHandleString
+                == "xref-intersection-6"
+            && encodedRefs[2].m_xrefObjectHandleString == "xref-main-13"
+            && !encodedReadback.m_hasUnrepresentableDetail;
+        t.expect(encodedFieldsMatch,
+                 "detailed DIMASSOC DWG encode and parse preserve modeled fields and handles");
+    }
+
+    DimensionAssociationCodecProbe unsafe = parsed;
+    unsafe.m_hasUnrepresentableDetail = true;
     dwgBufferW body(&codec), strings(&codec), handles(&codec);
-    t.expect(!parsed.encodeDwg(DRW::AC1024, &body, &strings, &handles)
-                 && body.data().empty() && strings.data().empty()
-                 && handles.data().empty(),
-             "detailed DIMASSOC remains refused by the unqualified DWG encoder");
+    const bool unsafeRefused = !unsafe.encodeDwg(
+        DRW::AC1024, &body, &strings, &handles)
+        && body.data().empty() && strings.data().empty()
+        && handles.data().empty();
+    t.expect(unsafeRefused,
+             "DIMASSOC unknown detail remains atomically refused by the DWG encoder");
 }
 
 bool makeAc1018DimensionAssociationFrame(DimensionAssociationFrame& frame) {

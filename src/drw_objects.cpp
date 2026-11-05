@@ -35341,33 +35341,18 @@ bool DRW_DbColor::encodeDwg(DRW::Version version, dwgBufferW *buf,
 bool DRW_DimensionAssociation::encodeDwg(
     DRW::Version version, dwgBufferW *buf, dwgBufferW *strBuf,
     dwgBufferW *handleBuf) const {
-    const bool hasDxfOnlyOsnapDetail = std::any_of(
-        m_osnapRefs.begin(), m_osnapRefs.end(),
-        [](const DRW_DimensionAssociationOsnapRef& ref) {
-            return ref.m_hasSubentType || ref.m_hasGsMarker
-                || ref.m_hasNearParameter || ref.m_hasOsnapPoint
-                || ref.m_hasLastPointRef
-                || ref.m_hasIntersectionObjectHandle
-                || ref.m_hasIntersectionSubentType
-                || ref.m_hasIntersectionGsMarker
-                || ref.m_hasXrefObjectHandleString
-                || !ref.m_xrefObjectHandleString.empty()
-                || ref.m_hasIntersectionXrefObjectHandleString
-                || !ref.m_intersectionXrefObjectHandleString.empty();
-        });
-    // DIMASSOC is introduced with the R2007 custom-class set. The local
-    // metadata model retains four associativity slots; reject source flags
-    // that require slots or sub-record data the model cannot represent.
+    // DIMASSOC is introduced with the R2007 custom-class set. This encoder
+    // writes the modeled AcDbOsnapPointRef profile, retaining ordered main
+    // handles, optional XREF paths, and the single modeled intersection edge.
     if (buf == nullptr || version < DRW::AC1021
         || (m_associativityFlags & ~0x0Fu) != 0
         || m_osnapRefs.size() > 4
         || m_hasUnrepresentableDetail
-        || hasDxfOnlyOsnapDetail
         || reactorHandles.size() > dwgSafety::MaxReactorCount
         || extensionDictionaryFlag() > 1)
         return false;
 
-    std::uint32_t activeSlots = 0;
+    std::size_t activeSlots = 0;
     for (std::uint32_t flag = 1; flag <= 8; flag <<= 1) {
         if ((m_associativityFlags & flag) != 0)
             ++activeSlots;
@@ -35375,25 +35360,61 @@ bool DRW_DimensionAssociation::encodeDwg(
     if (activeSlots != m_osnapRefs.size())
         return false;
 
-    std::size_t validationRefIndex = 0;
-    for (std::uint32_t flag = 1; flag <= 8; flag <<= 1) {
-        if ((m_associativityFlags & flag) == 0)
-            continue;
-        const DRW_DimensionAssociationOsnapRef& ref =
-            m_osnapRefs[validationRefIndex++];
-        if (ref.m_objectOsnapType != 0
-            || ref.m_objectHandles.size() > dwgSafety::MaxOwnedObjectCount
-            || ref.m_objectHandles.size()
-                > static_cast<std::size_t>(kMaxAssocItems)
-            || (!ref.m_objectHandles.empty()
-                && (ref.m_objectHandles.front() != ref.m_objectHandle
-                    || !std::all_of(
+    for (const DRW_DimensionAssociationOsnapRef& ref : m_osnapRefs) {
+        const bool intersectionType = ref.m_objectOsnapType == 6u
+            || ref.m_objectOsnapType == 11u;
+        const bool hasMainPath = ref.m_hasXrefObjectHandleString
+            || !ref.m_xrefObjectHandleString.empty();
+        const bool hasIntersectionPath =
+            ref.m_hasIntersectionXrefObjectHandleString
+            || !ref.m_intersectionXrefObjectHandleString.empty();
+        const bool hasMainHandles = !ref.m_objectHandles.empty()
+            || ref.m_objectHandle != 0;
+        const bool mainHandlesValid =
+            ref.m_objectHandles.size() <= dwgSafety::MaxOwnedObjectCount
+            && ref.m_objectHandles.size()
+                <= static_cast<std::size_t>(kMaxAssocItems)
+            && (ref.m_objectHandles.empty()
+                ? ref.m_objectHandle != DRW::NoHandle
+                : ref.m_objectHandles.front() == ref.m_objectHandle
+                    && std::all_of(
                         ref.m_objectHandles.begin(), ref.m_objectHandles.end(),
                         [](std::uint32_t handle) {
                             return handle != 0 && handle != DRW::NoHandle;
-                        })))
-            || (ref.m_objectHandles.empty()
-                && ref.m_objectHandle == DRW::NoHandle))
+                        }));
+        const bool intersectionFieldsAbsent =
+            !ref.m_hasIntersectionObjectHandle
+            && ref.m_intersectionObjectHandle == 0
+            && !ref.m_hasIntersectionSubentType
+            && ref.m_intersectionSubentType == 0
+            && !ref.m_hasIntersectionGsMarker
+            && ref.m_intersectionGsMarker == 0
+            && !ref.m_hasIntersectionXrefObjectHandleString
+            && ref.m_intersectionXrefObjectHandleString.empty();
+        const bool intersectionValid = intersectionType
+            ? ref.m_hasIntersectionObjectHandle
+                && ref.m_intersectionObjectHandle != 0
+                && ref.m_intersectionObjectHandle != DRW::NoHandle
+                && hasMainHandles
+            : intersectionFieldsAbsent;
+        const bool pointMaskValid = ref.m_dxfPointComponentMask == 0
+            || ref.m_dxfPointComponentMask == 0x07u;
+        if (ref.m_className != "AcDbOsnapPointRef"
+            || ref.m_objectOsnapType > 13u
+            || !mainHandlesValid || !intersectionValid
+            || (ref.m_objectOsnapType == 0u
+                && (ref.m_hasSubentType || ref.m_hasGsMarker || hasMainPath))
+            || (hasMainPath && ref.m_objectOsnapType == 0u)
+            || (hasIntersectionPath && !intersectionType)
+            || !pointMaskValid
+            || (ref.m_dxfPointComponentMask == 0x07u
+                && !ref.m_hasOsnapPoint)
+            || !std::isfinite(ref.m_nearParameter)
+            || !std::isfinite(ref.m_osnapPoint.x)
+            || !std::isfinite(ref.m_osnapPoint.y)
+            || !std::isfinite(ref.m_osnapPoint.z)
+            || (ref.m_hasLastPointRef
+                && ref.m_lastPointRef != 0 && ref.m_lastPointRef != 1))
             return false;
     }
 
@@ -35408,37 +35429,66 @@ bool DRW_DimensionAssociation::encodeDwg(
         if ((m_associativityFlags & flag) == 0)
             continue;
         const DRW_DimensionAssociationOsnapRef& ref = m_osnapRefs[refIndex++];
-        stringBuf->putVariableText(version, ref.m_className);
-        buf->putRawChar8(ref.m_objectOsnapType);
-
+        const bool intersectionType = ref.m_objectOsnapType == 6u
+            || ref.m_objectOsnapType == 11u;
+        const bool hasMainPath = ref.m_hasXrefObjectHandleString
+            || !ref.m_xrefObjectHandleString.empty();
+        const bool hasIntersectionPath =
+            ref.m_hasIntersectionXrefObjectHandleString
+            || !ref.m_intersectionXrefObjectHandleString.empty();
         const std::size_t xrefCount = ref.m_objectHandles.empty()
             ? (ref.m_objectHandle != 0 ? 1u : 0u)
             : ref.m_objectHandles.size();
+
+        stringBuf->putVariableText(version, ref.m_className);
+        buf->putRawChar8(ref.m_objectOsnapType);
         buf->putBitLong(static_cast<std::int32_t>(xrefCount));
-        buf->putBitDouble(0.0); // osnap_dist
-        buf->put3BitDouble(DRW_Coord{}); // osnap_pt
-        buf->putBit(0); // has_lastpt_ref
+        if (ref.m_objectOsnapType != 0u) {
+            buf->putBitLong(ref.m_subentType);
+            buf->putBitLong(ref.m_gsMarker);
+            buf->putBitLong(hasMainPath ? 1 : 0);
+            if (hasMainPath)
+                stringBuf->putVariableText(
+                    version, ref.m_xrefObjectHandleString);
+        }
+        buf->putBitDouble(ref.m_hasNearParameter
+            ? ref.m_nearParameter : 0.0);
+        buf->put3BitDouble(ref.m_hasOsnapPoint
+            ? ref.m_osnapPoint : DRW_Coord{});
+        if (intersectionType) {
+            buf->putBitLong(1); // one modeled intersection handle
+            buf->putBitLong(ref.m_intersectionSubentType);
+            buf->putBitLong(ref.m_intersectionGsMarker);
+            buf->putBitLong(hasIntersectionPath ? 1 : 0);
+            if (hasIntersectionPath)
+                stringBuf->putVariableText(
+                    version, ref.m_intersectionXrefObjectHandleString);
+        }
+        buf->putBit(ref.m_hasLastPointRef && ref.m_lastPointRef != 0 ? 1 : 0);
     }
 
     putCommonObjectHandlePrefix(
         handles, static_cast<std::uint32_t>(parentHandle),
         static_cast<std::int32_t>(reactorHandles.size()),
         extensionDictionaryFlag(), &reactorHandles, xDictHandle);
-    handles->putHandle(makeRefW(
-        m_dimensionHandle, DRW::DwgSoftPointer));
+    handles->putHandle(makeRefW(m_dimensionHandle, DRW::DwgSoftPointer));
     refIndex = 0;
     for (std::uint32_t flag = 1; flag <= 8; flag <<= 1) {
         if ((m_associativityFlags & flag) == 0)
             continue;
-        const auto& ref = m_osnapRefs[refIndex++];
-        if (ref.m_objectHandles.empty() && ref.m_objectHandle != 0) {
-            handles->putHandle(makeRefW(
-                ref.m_objectHandle, DRW::DwgSoftPointer));
+        const DRW_DimensionAssociationOsnapRef& ref = m_osnapRefs[refIndex++];
+        if (ref.m_objectHandles.empty()) {
+            if (ref.m_objectHandle != 0)
+                handles->putHandle(makeRefW(
+                    ref.m_objectHandle, DRW::DwgSoftPointer));
         } else {
             for (std::uint32_t objectHandle : ref.m_objectHandles)
                 handles->putHandle(makeRefW(
                     objectHandle, DRW::DwgSoftPointer));
         }
+        if (ref.m_objectOsnapType == 6u || ref.m_objectOsnapType == 11u)
+            handles->putHandle(makeRefW(
+                ref.m_intersectionObjectHandle, DRW::DwgSoftPointer));
     }
     return buf->isGood() && stringBuf->isGood() && handles->isGood();
 }

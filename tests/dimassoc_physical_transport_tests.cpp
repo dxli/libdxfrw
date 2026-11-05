@@ -48,6 +48,103 @@ public:
     std::vector<DimensionAssociationProbe> associations;
 };
 
+class DimensionAssociationAuthor final : public dx_iface {
+public:
+    explicit DimensionAssociationAuthor(dwgRW& output) : output(output) {
+        cData = &storage;
+        currentBlock = storage.mBlock;
+        association.handle = 0xA300u;
+        association.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
+        association.reactorHandles = {DRW::DwgNamedObjectsDictionaryHandle};
+        association.m_dimensionHandle = 0x30u;
+        association.m_associativityFlags = 0x07u;
+        association.m_isTransSpace = true;
+        association.m_rotatedDimensionType = 4u;
+
+        DRW_DimensionAssociationOsnapRef point;
+        point.m_className = "AcDbOsnapPointRef";
+        point.m_hasObjectOsnapType = true;
+        point.m_objectOsnapType = 1u;
+        point.m_objectHandles = {0x40u, 0x44u};
+        point.m_objectHandle = point.m_objectHandles.front();
+        point.m_hasSubentType = true;
+        point.m_subentType = 2;
+        point.m_hasGsMarker = true;
+        point.m_gsMarker = 9;
+        point.m_hasNearParameter = true;
+        point.m_nearParameter = 1.0;
+        point.m_hasOsnapPoint = true;
+        point.m_osnapPoint = {1.25, -2.5, 2.0e50};
+        point.m_hasLastPointRef = true;
+        point.m_lastPointRef = 0;
+        association.m_osnapRefs.push_back(point);
+
+        DRW_DimensionAssociationOsnapRef intersection;
+        intersection.m_className = "AcDbOsnapPointRef";
+        intersection.m_hasObjectOsnapType = true;
+        intersection.m_objectOsnapType = 6u;
+        intersection.m_objectHandle = 0x41u;
+        intersection.m_hasSubentType = true;
+        intersection.m_subentType = 3;
+        intersection.m_hasGsMarker = true;
+        intersection.m_gsMarker = 10;
+        intersection.m_hasNearParameter = true;
+        intersection.m_nearParameter = 0.04914376136317;
+        intersection.m_hasOsnapPoint = true;
+        intersection.m_osnapPoint = {-3.0, 4.5, 6.0};
+        intersection.m_hasIntersectionObjectHandle = true;
+        intersection.m_intersectionObjectHandle = 0x50u;
+        intersection.m_hasIntersectionSubentType = true;
+        intersection.m_intersectionSubentType = 5;
+        intersection.m_hasIntersectionGsMarker = true;
+        intersection.m_intersectionGsMarker = 0;
+        intersection.m_hasIntersectionXrefObjectHandleString = true;
+        intersection.m_intersectionXrefObjectHandleString =
+            "xref-intersection-6";
+        intersection.m_hasLastPointRef = true;
+        intersection.m_lastPointRef = 0;
+        association.m_osnapRefs.push_back(intersection);
+
+        DRW_DimensionAssociationOsnapRef xref;
+        xref.m_className = "AcDbOsnapPointRef";
+        xref.m_hasObjectOsnapType = true;
+        xref.m_objectOsnapType = 13u;
+        xref.m_objectHandle = 0x42u;
+        xref.m_hasSubentType = true;
+        xref.m_subentType = 4;
+        xref.m_hasGsMarker = true;
+        xref.m_gsMarker = 12;
+        xref.m_hasXrefObjectHandleString = true;
+        xref.m_xrefObjectHandleString = "xref-main-13";
+        xref.m_hasNearParameter = true;
+        xref.m_nearParameter = 2.0;
+        xref.m_hasOsnapPoint = true;
+        xref.m_osnapPoint = {7.0, 8.0, 9.0};
+        xref.m_hasLastPointRef = true;
+        xref.m_lastPointRef = 0;
+        association.m_osnapRefs.push_back(xref);
+    }
+
+    void writeHeader(DRW_Header& header) override { header.vars.clear(); }
+    void writeDwgClasses() override {
+        classRegistered = output.registerDimensionAssociationObjectClass(
+            &association);
+    }
+    void writeObjects() override {
+        objectWritten = output.writeDimensionAssociation(&association);
+    }
+    bool finalizeDwgWrite() override {
+        return classRegistered && objectWritten;
+    }
+    bool finalizeDwgWriteStructure() override { return true; }
+
+    dwgRW& output;
+    dx_data storage;
+    DRW_DimensionAssociation association;
+    bool classRegistered = false;
+    bool objectWritten = false;
+};
+
 bool sameVariant(const DRW_Variant& left, const DRW_Variant& right) {
     if (left.type() != right.type() || left.code() != right.code())
         return false;
@@ -484,8 +581,14 @@ bool runPhysicalSource(const std::string& path) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--generate-dimassoc") {
+        dwgRW writer(argv[2]);
+        DimensionAssociationAuthor author(writer);
+        return writer.write(&author, DRW::AC1024, false) ? 0 : 1;
+    }
     if (argc != 2) {
-        std::cerr << "usage: libdxfrw_dimassoc_physical_transport_tests <source.dwg>\n";
+        std::cerr << "usage: libdxfrw_dimassoc_physical_transport_tests <source.dwg>\n"
+                  << "   or: libdxfrw_dimassoc_physical_transport_tests --generate-dimassoc <scratch.dwg>\n";
         return 2;
     }
     return runPhysicalSource(argv[1]) ? 0 : 1;
