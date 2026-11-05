@@ -48688,6 +48688,164 @@ bool physicalAc1018LayoutOutputReadback(
     return true;
 }
 
+bool physicalAc1024EmptyLayerStateRootOutputReadback(
+        const std::filesystem::path& sourcePath) {
+    dx_iface sourceReader;
+    dx_data source;
+    if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1024)
+        return fail("empty LayerStates witness is not an AC1024 DWG");
+
+    std::uint32_t layerControl = 0u;
+    std::uint32_t extensionHandle = 0u;
+    if (!source.getLayerTableControlExtensionDictionary(
+            layerControl, extensionHandle))
+        return fail("empty LayerStates LAYER_CONTROL extension edge is absent");
+    const auto uniqueDictionary = [](const dx_data& data,
+                                    std::uint32_t handle) {
+        const DRW_Dictionary* found = nullptr;
+        for (const DRW_Dictionary& row : data.dictionaries) {
+            if (row.handle != handle)
+                continue;
+            if (found != nullptr)
+                return static_cast<const DRW_Dictionary*>(nullptr);
+            found = &row;
+        }
+        return found;
+    };
+    const DRW_Dictionary* extension = uniqueDictionary(source, extensionHandle);
+    if (extension == nullptr || extension->parentHandle != layerControl
+        || extension->m_entries.size() != 1u
+        || extension->m_entries.front().m_name != "ACAD_LAYERSTATES")
+        return fail("AC1024 empty LayerStates extension is outside its one-root profile");
+    const DRW_Dictionary* states = uniqueDictionary(
+        source, extension->m_entries.front().m_handle);
+    if (states == nullptr || states->handle == extension->handle
+        || states->parentHandle != extension->handle
+        || !states->m_entries.empty()
+        || states->reactorHandles
+            != std::vector<std::uint32_t>{extension->handle})
+        return fail("AC1024 LayerStates child is not one empty, source-owned dictionary");
+    auto mutableStates = std::find_if(source.dictionaries.begin(),
+        source.dictionaries.end(), [states](const DRW_Dictionary& candidate) {
+            return candidate.handle == states->handle;
+        });
+    if (mutableStates == source.dictionaries.end())
+        return fail("empty LayerStates child dictionary is not mutable source data");
+    const auto* extensionFrame =
+        DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+            source, source.importGeneration, extension->handle);
+    const auto* statesFrame =
+        DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+            source, source.importGeneration, states->handle);
+    if (extensionFrame == nullptr || statesFrame == nullptr
+        || extensionFrame->m_objectType != 42u
+        || statesFrame->m_objectType != 42u
+        || extensionFrame->m_version != DRW::AC1024
+        || statesFrame->m_version != DRW::AC1024
+        || extensionFrame->m_isEntity || statesFrame->m_isEntity
+        || extensionFrame->m_hasDataStorage || statesFrame->m_hasDataStorage)
+        return fail("empty LayerStates dictionaries are not bound to exact AC1024 object frames");
+
+    for (const bool binary : {false, true}) {
+        const auto nonce = std::chrono::steady_clock::now()
+                               .time_since_epoch().count();
+        const std::filesystem::path outputPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-layerstates-empty-ac1024-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{outputPath};
+        const std::string sentinel = "empty LayerStates output sentinel\n";
+        {
+            std::ofstream existing(outputPath,
+                                   std::ios::binary | std::ios::trunc);
+            if (!existing || !(existing << sentinel))
+                return fail("could not seed empty LayerStates destination");
+        }
+        dx_iface writer;
+        writer.cData = &source;
+        if (!DxIfaceStandardDwgCaptureTestAccess::prepareLayerStateOutput(
+                writer, DRW::AC1024)
+            || !DxIfaceStandardDwgCaptureTestAccess::layerStateOutputPrepared(
+                writer)
+            || DxIfaceStandardDwgCaptureTestAccess::layerStateOutputHasRecord(
+                writer)
+            || !DxIfaceStandardDwgCaptureTestAccess::layerStateDictionaryQueued(
+                writer, extension->handle)
+            || !DxIfaceStandardDwgCaptureTestAccess::layerStateDictionaryQueued(
+                writer, states->handle))
+            return fail("one-root empty AC1024 LayerStates profile was not admitted");
+
+        const std::uint32_t originalParent = mutableStates->parentHandle;
+        mutableStates->parentHandle = DRW::NoHandle;
+        const bool invalidWrote = writer.fileExport(
+            outputPath.string(), DRW::AC1024, binary, &source, false, true,
+            dx_dxfSourceTextPolicy::RequireValidSource,
+            DRW::DxfTextWritePolicy::RequireLossless,
+            dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
+            dx_dwgReadCompletenessPolicy::RequireComplete);
+        mutableStates->parentHandle = originalParent;
+        if (invalidWrote)
+            return fail("invalid empty LayerStates owner was emitted");
+        {
+            std::ifstream input(outputPath, std::ios::binary);
+            const std::string retained{
+                std::istreambuf_iterator<char>(input), {}};
+            if (retained != sentinel)
+                return fail("invalid empty LayerStates graph changed the destination");
+        }
+        if (!writer.fileExport(outputPath.string(), DRW::AC1024, binary,
+                &source, false, true,
+                dx_dxfSourceTextPolicy::RequireValidSource,
+                DRW::DxfTextWritePolicy::RequireLossless,
+                dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
+                dx_dwgReadCompletenessPolicy::RequireComplete))
+            return fail("corrected empty LayerStates graph failed same-writer retry");
+
+        dx_iface outputReader;
+        dx_data output;
+        if (!outputReader.fileImport(outputPath.string(), &output, false)
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1024)
+            return fail("empty LayerStates output did not parse on fresh readback");
+        std::uint32_t outputControl = 0u;
+        std::uint32_t outputExtensionHandle = 0u;
+        if (!output.getLayerTableControlExtensionDictionary(
+                outputControl, outputExtensionHandle))
+            return fail("fresh output lost the LAYER_CONTROL extension edge");
+        const DRW_Dictionary* outputExtension = uniqueDictionary(
+            output, outputExtensionHandle);
+        if (outputExtension == nullptr
+            || outputExtension->m_entries.size() != 1u
+            || outputExtension->m_entries.front().m_name != "ACAD_LAYERSTATES")
+            return fail("fresh output changed the one-root LayerStates dictionary");
+        const DRW_Dictionary* outputStates = uniqueDictionary(
+            output, outputExtension->m_entries.front().m_handle);
+        if (outputStates == nullptr
+            || outputStates->parentHandle != outputExtension->handle
+            || !outputStates->m_entries.empty()
+            || outputStates->reactorHandles
+                != std::vector<std::uint32_t>{outputExtension->handle}
+            || std::any_of(output.xRecords.begin(), output.xRecords.end(),
+                [outputStates](const DRW_XRecord& record) {
+                    return record.parentHandle == outputStates->handle;
+                }))
+            return fail("fresh output changed the empty child owner/reactor graph");
+    }
+    std::cerr << "Physical AC1024 empty LayerStates root passed: ASCII/Binary "
+                 "source-frame admission, owner refusal, same-writer retry, "
+                 "and fresh typed readback.\n";
+    return true;
+}
+
 bool physicalLayerStateXrecordSourceAdmission(
         const std::filesystem::path& sourcePath) {
     dx_iface sourceReader;
@@ -72440,6 +72598,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--layout-physical-ac1018-output-readback")
         return physicalAc1018LayoutOutputReadback(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--layerstates-empty-ac1024-output-readback")
+        return physicalAc1024EmptyLayerStateRootOutputReadback(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--layerstates-xrecord-physical-source-admission")
         return physicalLayerStateXrecordSourceAdmission(argv[2]) ? 0 : 1;

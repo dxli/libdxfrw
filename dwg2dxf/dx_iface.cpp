@@ -32871,12 +32871,16 @@ bool dx_iface::prepareDwgLayerStateOutput(
         return found;
     };
     const DRW_Dictionary* extension = uniqueDictionary(extensionHandle);
+    const bool ac1024EmptyLayerStatesRoot =
+        sourceVersion == DRW::AC1024 && extension != nullptr
+        && extension->m_entries.size() == 1u;
     if (extension == nullptr || extension->handle != extensionHandle
         || extension->parentHandle != controlHandle
         || extension->hardOwner != 1 || extension->cloning != 1
         || extension->countCap || !extension->hasCompleteDwgEntries()
         || extension->m_entries.size()
-            != (sourceVersion == DRW::AC1018 ? 1u : 3u)
+            != (sourceVersion == DRW::AC1018
+                    || ac1024EmptyLayerStatesRoot ? 1u : 3u)
         || !extension->appData.empty() || !extension->extData.empty()
         || !extension->reactorHandles.empty()
         || extension->xDictHandle != 0u
@@ -32916,9 +32920,9 @@ bool dx_iface::prepareDwgLayerStateOutput(
         return skip("ACAD_LAYERSTATES child dictionary common fields are outside the admitted profile");
 
     const DRW_XRecord* layerStateRecord = nullptr;
-    if (sourceVersion == DRW::AC1018) {
+    if (sourceVersion == DRW::AC1018 || ac1024EmptyLayerStatesRoot) {
         if (!states->m_entries.empty())
-            return skip("AC1018 ACAD_LAYERSTATES child dictionary is outside its empty profile");
+            return skip("empty ACAD_LAYERSTATES child dictionary profile contains entries");
     } else {
         if (states->m_entries.size() != 1u)
             return skip("AC1024 ACAD_LAYERSTATES child dictionary is outside its single-XRECORD profile");
@@ -33060,7 +33064,9 @@ bool dx_iface::prepareDwgLayerStateOutput(
                 return skip("AC1024 LayerStates companion root is not one source-bound empty dictionary");
             layerStateCompanions.push_back(*companion);
         }
-        if (companionNames.size() != 2u)
+        const std::size_t expectedCompanionCount =
+            ac1024EmptyLayerStatesRoot ? 0u : 2u;
+        if (companionNames.size() != expectedCompanionCount)
             return skip("AC1024 LAYER_CONTROL extension companion roots are incomplete");
     }
     if (cData->importGeneration == 0u
