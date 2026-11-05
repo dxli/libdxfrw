@@ -1624,8 +1624,8 @@ protected:
                                 DwgIntegrityAddressSpace offsetSpace) noexcept;
   void recordDanglingControlHandle(std::uint32_t controlHandle,
                                    std::uint32_t recordHandle) noexcept;
-  /// Preserve tolerant LTYPE callbacks while recording a strict-output error
-  /// when a non-null control member uses the wrong ownership role.
+  /// Preserve tolerant LTYPE callbacks while recording strict-output errors
+  /// for null member slots or mismatched source ownership roles.
   void recordLtypeControlMemberRoleError(
       const objHandle &source, const DRW_ObjControl &control,
       DwgIntegrityAddressSpace offsetSpace) noexcept;

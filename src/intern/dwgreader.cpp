@@ -864,11 +864,18 @@ void dwgReader::recordLtypeControlMemberRoleError(
   const std::size_t countedEntries = slots.size() - 2u;
   for (std::size_t index = 0; index < slots.size(); ++index) {
     const std::uint32_t member = slots[index];
-    if (member == 0u)
-      continue;
     const std::uint8_t expected = static_cast<std::uint8_t>(
         index < countedEntries ? DRW::DwgSoftOwnership
                                : DRW::DwgHardOwnership);
+    if (member == 0u) {
+      recordIntegrityDiagnostic(
+          DwgIntegritySeverity::Error, offsetSpace,
+          DwgIntegrityPhase::SectionParser,
+          DwgIntegrityCheckKind::TableControlNullMember, secEnum::OBJECTS,
+          -1, "LTYPE_CONTROL", 0u, false, source.loc, true, source.handle,
+          source.handle != DRW::NoHandle, expected, roles[index], true);
+      return;
+    }
     if (roles[index] == expected)
       continue;
     recordIntegrityDiagnostic(

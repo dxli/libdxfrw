@@ -210,10 +210,13 @@ checks 32 generated profiles, emitted MATERIAL and owner binding, fresh typed
 readback, 82 callback rollbacks, 108 corrected retries and staged-table
 mutation refusal. This remains generated graph evidence, not physical producer
 or native renderer qualification; see the [LAYER material receipt](docs/research/p4-layer-material-graph-closure-adapter-fast-2026-11-04.json).
-Raw H member roles are retained and
-the first non-null role mismatch remains a source-anchored integrity Error;
-tolerant callbacks are unchanged. See the
-[role diagnostic receipt](docs/research/p4-ltype-control-source-member-role-diagnostics-2026-11-04.json).
+Raw H member roles are retained. The first null ordered slot now emits a
+source-anchored `TableControlNullMember` Error, and the first non-null role
+mismatch emits `TableControlHandleRole`; tolerant callbacks remain unchanged.
+Generated controls cover both counted and phantom null slots. This diagnoses
+incomplete membership without qualifying or repairing it. See the
+[role diagnostic receipt](docs/research/p4-ltype-control-source-member-role-diagnostics-2026-11-04.json)
+and [null-member receipt](docs/research/p4-ltype-control-null-member-diagnostic-2026-11-04.json).
 
 Typed entity LTYPE references now close against the source and emitted table
 binding before the entity is serialized. Explicit non-null handles must map to

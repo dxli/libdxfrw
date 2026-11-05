@@ -754,6 +754,8 @@ static_assert(static_cast<unsigned>(DwgIntegrityCheckKind::NamedObjectDictionary
               "NOD reference observations append without renumbering prior categories");
 static_assert(static_cast<unsigned>(DwgIntegrityCheckKind::TableControlHandleRole) == 40u,
               "table-control role observations append without renumbering prior categories");
+static_assert(static_cast<unsigned>(DwgIntegrityCheckKind::TableControlNullMember) == 41u,
+              "table-control null-member observations append without renumbering prior categories");
 static_assert(static_cast<unsigned>(DwgIntegrityCheckKind::EntityLayerHandleRole) == 37u
                   && static_cast<unsigned>(DwgIntegrityCheckKind::EntityLineTypeHandleRole) == 38u
                   && static_cast<unsigned>(DwgIntegrityCheckKind::LayerLineTypeHandleRole) == 39u,
@@ -7472,6 +7474,41 @@ void testLtypeControlMemberRoleDiagnostics(TestContext& t) {
     t.expect(reader.diagnostics().empty(),
              "correct LTYPE_CONTROL source roles do not produce an integrity error");
 
+    for (const auto& missingCase :
+         std::array<std::pair<int, std::uint8_t>, 2>{
+             std::make_pair(7, DRW::DwgSoftOwnership),
+             std::make_pair(8, DRW::DwgHardOwnership)}) {
+        auto missingBody = makeAc1015LtypeCountBody(1u, false,
+                                                   missingCase.first);
+        DRW_ObjControl missing;
+        TableControlRecoveryReader missingReader(emptyInput);
+        const bool parsedMissing =
+            missingReader.parseLtypeControlBody(missingBody, missing);
+        if (parsedMissing)
+            missingReader.recordLtypeControlRoles(source, missing);
+        const auto& missingDiagnostics = missingReader.diagnostics();
+        const auto nullMember = std::find_if(
+            missingDiagnostics.begin(), missingDiagnostics.end(),
+            [](const DwgIntegrityDiagnostic& diagnostic) {
+                return diagnostic.kind
+                    == DwgIntegrityCheckKind::TableControlNullMember;
+            });
+        const std::size_t missingIndex = missingCase.first == 7 ? 0u : 2u;
+        t.expect(parsedMissing && missing.orderedHandleSlots.size() == 3u
+                     && missing.orderedHandleSlots[missingIndex] == 0u
+                     && nullMember != missingDiagnostics.end()
+                     && nullMember->severity == DwgIntegritySeverity::Error
+                     && nullMember->phase == DwgIntegrityPhase::SectionParser
+                     && nullMember->logicalHandle == source.handle
+                     && nullMember->hasLogicalHandle
+                     && nullMember->fileOffset == source.loc
+                     && nullMember->hasFileOffset
+                     && nullMember->expected == missingCase.second
+                     && nullMember->observed == missingCase.second
+                     && nullMember->hasExpected && nullMember->hasObserved,
+                 "null counted or phantom LTYPE_CONTROL slot is source-anchored and strict-fatal");
+    }
+
     auto wrongRoleBody = makeAc1015LtypeCountBody(1u, false, 6);
     DRW_ObjControl wrongRole;
     const bool parsedWrongRole =
@@ -7566,6 +7603,9 @@ std::vector<std::uint8_t> makeAc1015LtypeCountBody(
             : (i < count ? 0x1000u + i
                          : (i == count ? DRW::DwgLtypeByBlockHandle
                                        : DRW::DwgLtypeByLayerHandle));
+        if ((corruption == 7 && i == 0u)
+            || (corruption == 8 && i == count + 1u))
+            ref = 0u;
         if (corruption == 2 && i == 0u) ref = DRW::DwgLtypeByLayerHandle;
         if (corruption == 3 && i == 3u) ref = DRW::DwgLtypeContinuousHandle;
         const auto role = corruption == 6 && i == 0u
