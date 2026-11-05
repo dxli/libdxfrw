@@ -671,6 +671,15 @@ SORTENTSTABLE sort key, not a second object identity. This run supplies no
 readback and does not establish a libdxfrw output defect; consumer qualification
 for this profile remains open ([peer rejection receipt](docs/research/p4-mechanical-alt-libredwg-dxf-peer-rejection-2026-11-05.json)).
 
+FreeCAD 1.1.4's native C++ importer does open the same strict AC1024
+mechanical-alt output through the exact current `dwg2dxf` executable: 96 entities
+were read and 75 FreeCAD objects created. The profile reports two unsupported
+VIEWPORT records and two unsupported aligned dimensions; text/dimension and
+layout import were disabled, and a LayerStates output diagnostic remains. This
+is a selected macOS consumer handoff only, with no source-to-object semantic
+comparison, and does not close whole-file support or platform gates
+([receipt](docs/research/p4-ac1024-mechanical-alt-freecad-readback-2026-11-05.json)).
+
 After actual prerequisites close, run one composed strict CLI checkpoint. A
 successful process exit or record count alone is not closure. For AC1018 opt-in
 capture, keep default legacy consumers opted out until codec, source, dependency and
