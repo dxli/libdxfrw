@@ -188,6 +188,16 @@ remain open (see the [common-field
 receipt](docs/research/p4-raw-entity-common-table-name-output-closure-2026-11-04.json),
 [XDATA receipt](docs/research/p4-raw-entity-xdata-table-name-output-closure-2026-11-04.json)
 and [legacy-codepage receipt](docs/research/p4-raw-entity-cp1252-name-output-readback-2026-11-04.json)).
+The generated HEADER `$CMATERIAL` control is now registered as a focused fast
+CTest and refreshes its direct-writer mapping vector for current object-handle
+remapping: the `2 → EA02 → EA12` chain refuses when the one-hop HEADER target
+does not identify the emitted MATERIAL, while source `EA02` and object `EA12`
+close at output handle `EA12`. Both encodings pass the 80-profile facade matrix,
+68 callback refusals, 248 corrected retries, 52 malformed/target refusals, 16
+staged-byte refusals, six direct-writer profiles, eight inspector guards and
+128 persistent allocation-failure rollback/readback cycles. This verifies local
+identity and transaction behavior, not producer coverage or native material
+semantics; see the [HEADER material receipt](docs/research/p4-header-material-one-hop-and-persistent-rollback-fast-2026-11-04.json).
 Raw H member roles are retained and
 the first non-null role mismatch remains a source-anchored integrity Error;
 tolerant callbacks are unchanged. See the

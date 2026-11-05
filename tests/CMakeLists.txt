@@ -3022,6 +3022,15 @@ set_tests_properties(dxf_raw_entity_material_visualstyle_bindings PROPERTIES
 )
 
 add_test(
+    NAME dxf_header_material_bindings
+    COMMAND libdxfrw_dxf_fixture_tests --header-material-bindings
+)
+set_tests_properties(dxf_header_material_bindings PROPERTIES
+    LABELS "fast;dxf;adapter;header;material;reference;transaction;generated"
+    TIMEOUT 30
+)
+
+add_test(
     NAME dwg2dxf_raw_dxf_section_capture_limits
     COMMAND libdxfrw_dwg2dxf_adapter_tests --raw-dxf-section-capture-limits
 )

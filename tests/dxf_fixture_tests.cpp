@@ -240,13 +240,13 @@ public:
 };
 
 namespace {
-long materialAllocationCountdown=-1;std::size_t materialFailedAllocations=0u;
+long materialAllocationCountdown=-1;std::size_t materialFailedAllocations=0u;bool materialAllocationPersistent=false;
 struct MaterialAllocationFailure {explicit MaterialAllocationFailure(long value){materialAllocationCountdown=value;}~MaterialAllocationFailure(){materialAllocationCountdown=-1;}};
 }
 void* operator new(std::size_t size){
     if(materialAllocationCountdown==0){
         ++materialFailedAllocations;
-        materialAllocationCountdown=-1;
+        if(!materialAllocationPersistent)materialAllocationCountdown=-1;
         throw std::bad_alloc();
     }
     if(materialAllocationCountdown>0)--materialAllocationCountdown;
@@ -53254,15 +53254,15 @@ struct Replay:dx_iface {
     }
 };
 struct Direct:dx_iface {
-    dx_data data;dxfRW& output;std::string material="2";bool bare=false;unsigned provider=0u;long allocation=-1;bool inspected=false;std::size_t inventory=0u;
+    dx_data data;dxfRW& output;std::string material="2";std::uint32_t materialHandle=0xEA02u;bool bare=false;unsigned provider=0u;long allocation=-1;bool inspected=false;std::size_t inventory=0u;
     explicit Direct(dxfRW& writer):output(writer){cData=&data;currentBlock=data.mBlock;}
     void writeHeader(DRW_Header& header)override{if(!material.empty())header.addStr(bare?"CMATERIAL":"$CMATERIAL",material,347);if(allocation>=0)materialAllocationCountdown=allocation;}
     void writeBlocks()override{}void writeBlockRecords()override{}void writeLayers()override{}void writeLTypes()override{}void writeTextstyles()override{}
     void writeVports()override{}void writeDimstyles()override{}void writeAppId()override{}
-    void emit(){DRW_Material value;value.handle=0xEA02u;value.parentHandle=0xCu;value.m_name="Direct Paint";output.writeMaterial(&value);}
+    void emit(){DRW_Material value;value.handle=materialHandle;value.parentHandle=0xCu;value.m_name="Direct Paint";output.writeMaterial(&value);}
     void writeEntities()override{if(provider==2u){DRW_Line value;value.handle=2u;value.secPoint=DRW_Coord(1,2,3);output.writeLine(&value);}if(provider==3u)emit();}
     void writeObjects()override{if(provider==0u)emit();}
-    bool finalizeDxfWrite()override{materialAllocationCountdown=-1;inventory=output.dxfWriteRecordHandleCount(0xEA02u);return dx_iface::finalizeDxfWrite();}
+    bool finalizeDxfWrite()override{materialAllocationCountdown=-1;inventory=output.dxfWriteRecordHandleCount(materialHandle);return true;}
 };
 bool run(const std::filesystem::path& dir){
     const auto input=dir/"input.dxf",output=dir/"output.dxf";std::size_t profiles=0u,fields=0u,readbacks=0u,callbacks=0u,retries=0u,invalid=0u,mutations=0u,direct=0u,guards=0u,faults=0u,unreached=0u,fast=0u,diagnostics=0u;
@@ -53308,10 +53308,11 @@ bool run(const std::filesystem::path& dir){
         if(plain.fileExport(output.string(),DRW::AC1027,binary,&ordinary,false)||!kept(output))return fail(__LINE__);++callbacks;plain.active=false;erase(ordinary.headerC,"$CMATERIAL");
         if(!plain.fileExport(output.string(),DRW::AC1027,binary,&ordinary,false))return fail(__LINE__);++retries;
         ordinary.headerC.addStr("$CMATERIAL","0",347);if(!plain.fileExport(output.string(),DRW::AC1027,binary,&ordinary,false)||!proof(wire(output,binary),1u,fields)||!readback(output,1u))return fail(__LINE__);++fast;
-        dxfRW target(output.string().c_str());target.setHandleRemap({{2u,0xEA02u},{0xEA02u,0xEA12u}});Direct codec(target);codec.bare=true;
-        if(!target.write(&codec,DRW::AC1027,binary)||codec.inventory!=1u||!proof(wire(output,binary),2u,fields,true))return fail(__LINE__);++direct;
+        dxfRW target(output.string().c_str());target.setHandleRemap({{2u,0xEA02u},{0xEA02u,0xEA12u}});Direct codec(target);codec.bare=true;codec.materialHandle=0xEA12u;
+        sentinel(output);if(target.write(&codec,DRW::AC1027,binary)||!kept(output))return fail(__LINE__);++callbacks;
+        codec.material="EA02";if(!target.write(&codec,DRW::AC1027,binary)||codec.inventory!=1u||!proof(wire(output,binary),2u,fields,true))return fail(__LINE__);++direct;++retries;
         codec.material.clear();if(!target.write(&codec,DRW::AC1027,binary)||codec.inventory||!proof(wire(output,binary),0u,fields,true))return fail(__LINE__);++direct;
-        codec.material="2";
+        codec.material="EA02";
         unsigned guard=0u;target.setDxfHeaderWriteInspector([&](const auto& view){codec.inspected=true;if(view.bytes.empty()||view.bytes.find("ENDSEC")!=std::string_view::npos)return false;
             if(guard==1u)return false;if(guard==2u)throw std::runtime_error("authored HEADER inspector failure");if(guard==3u)target.setDxfHeaderWriteInspector({});if(guard==4u&&target.write(&codec,DRW::AC1027,binary))return false;return true;});
         if(!target.write(&codec,DRW::AC1027,binary)||!codec.inspected||!proof(wire(output,binary),2u,fields,true))return fail(__LINE__);++direct;
@@ -53319,7 +53320,7 @@ bool run(const std::filesystem::path& dir){
             if(!target.write(&codec,DRW::AC1027,binary)||!proof(wire(output,binary),2u,fields,true))return fail(__LINE__);++retries;guard=old;}guard=0u;
         for(unsigned provider=1u;provider<4u;++provider){codec.provider=provider;sentinel(output);if(target.write(&codec,DRW::AC1027,binary)||!kept(output))return fail(__LINE__);++invalid;
             codec.provider=0u;if(!target.write(&codec,DRW::AC1027,binary))return fail(__LINE__);++retries;}
-        for(long offset=0;offset<64;++offset){codec.allocation=offset;const auto before=materialFailedAllocations;sentinel(output);const bool good=target.write(&codec,DRW::AC1027,binary);materialAllocationCountdown=-1;
+        for(long offset=0;offset<64;++offset){codec.allocation=offset;const auto before=materialFailedAllocations;sentinel(output);materialAllocationPersistent=true;const bool good=target.write(&codec,DRW::AC1027,binary);materialAllocationPersistent=false;materialAllocationCountdown=-1;
             if(materialFailedAllocations!=before){if(good||!kept(output)||!noTemporaries(dir))return fail(__LINE__);const auto diagnostic=target.getLastDiagnostic();if(!diagnostic.failed())return fail(__LINE__);if(diagnostic.code.empty()&&diagnostic.message.empty())++diagnostics;++faults;}else{if(!good)return fail(__LINE__);++unreached;}
             codec.allocation=-1;if(!target.write(&codec,DRW::AC1027,binary)||!proof(wire(output,binary),2u,fields,true))return fail(__LINE__);++retries;
         }
@@ -53340,7 +53341,7 @@ bool run(const std::filesystem::path& dir){
     }
     std::cout<<"HEADER material profiles="<<profiles<<"; independent fields="<<fields<<"; readbacks="<<readbacks<<"; callback rollbacks="<<callbacks<<"; corrected retries="<<retries<<"; malformed/target refusals="<<invalid
         <<"; staged field refusals="<<mutations<<"; direct profiles="<<direct<<"; inspector guards="<<guards<<"; reached post-header writer faults="<<faults<<"; unreached offsets="<<unreached<<"; scalar-only diagnostics="<<diagnostics<<"; inactive/null2D profiles="<<fast<<'\n';
-    return profiles==80u&&readbacks==80u&&callbacks==66u&&invalid==52u&&retries==246u&&mutations==16u&&direct==6u&&guards==8u&&faults+unreached==128u&&diagnostics==faults&&fast==4u;
+    return profiles==80u&&readbacks==80u&&callbacks==68u&&invalid==52u&&retries==248u&&mutations==16u&&direct==6u&&guards==8u&&faults+unreached==128u&&diagnostics==faults&&fast==4u;
 }
 }
 void testHeaderMaterialBindings(TestContext& t){
