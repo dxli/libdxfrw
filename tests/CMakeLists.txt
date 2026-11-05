@@ -3004,6 +3004,15 @@ set_tests_properties(dwg2dxf_raw_dxf_entity_capture_limits PROPERTIES
 )
 
 add_test(
+    NAME dwg2dxf_raw_dxf_entity_table_name_references
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --raw-dxf-entity-table-name-references
+)
+set_tests_properties(dwg2dxf_raw_dxf_entity_table_name_references PROPERTIES
+    LABELS "fast;dxf;adapter;raw-entity;table-reference;transaction;generated"
+    TIMEOUT 30
+)
+
+add_test(
     NAME dwg2dxf_raw_dxf_section_capture_limits
     COMMAND libdxfrw_dwg2dxf_adapter_tests --raw-dxf-section-capture-limits
 )

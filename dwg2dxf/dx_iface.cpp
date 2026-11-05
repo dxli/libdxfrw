@@ -142,6 +142,234 @@ public:
     using DRW_Material::parseDwg;
 };
 
+struct RawEntityTableNameReference {
+    dx_symbol_output::Kind kind{dx_symbol_output::Kind::Other};
+    std::string sourceKey;
+    std::string outputKey;
+};
+
+bool rawEntitySymbolNameKey(std::string_view text, std::string& key) {
+    if (text.empty() || !DRW_TextCodec::isUtf8ScalarText(text))
+        return false;
+    key.assign(text);
+    for (char& value : key) {
+        const auto byte = static_cast<unsigned char>(value);
+        if (byte >= 'A' && byte <= 'Z')
+            value = static_cast<char>(byte + ('a' - 'A'));
+    }
+    return true;
+}
+
+bool collectRawEntityTableNameReferences(
+        const dx_data& data, const dxfRW::DxfTablesWriteView& view,
+        std::vector<RawEntityTableNameReference>& references) noexcept {
+    references.clear();
+    try {
+        const auto sourceCodePage = [&data](DRW::Version version) {
+            if (version >= DRW::AC1021)
+                return std::string("UTF-8");
+            const auto& outcome = data.dxfReadOutcome;
+            if (outcome.finalNormalizedCodePage.length != 0u
+                && !outcome.finalNormalizedCodePage.truncated)
+                return std::string(outcome.finalNormalizedCodePage.bytes.data(),
+                                   outcome.finalNormalizedCodePage.length);
+            const auto found = data.headerC.vars.find("$DWGCODEPAGE");
+            if (found != data.headerC.vars.end() && found->second != nullptr
+                && found->second->type() == DRW_Variant::STRING
+                && found->second->content.s != nullptr)
+                return *found->second->content.s;
+            return std::string{};
+        };
+
+        const auto inspectBlock = [&](const dx_ifaceBlock* block) {
+            if (block == nullptr)
+                return true;
+            for (const dx_ifaceRawEntityEvent& event : block->rawEntities) {
+                const DRW_RawDxfObject& raw = event.record;
+                if (raw.groups.size() > DRW::kMaxDxfRawRecordGroups
+                    || (raw.hasRawValues
+                        && raw.rawValues.size() != raw.groups.size()))
+                    return false;
+                DRW::Version sourceVersion = raw.m_version;
+                if (sourceVersion == DRW::UNKNOWNV)
+                    sourceVersion = data.sourceVersion;
+                const bool sourceVersionKnown =
+                    sourceVersion != DRW::UNKNOWNV;
+                if (sourceVersion == DRW::UNKNOWNV)
+                    sourceVersion = view.version;
+                if (raw.m_version != DRW::UNKNOWNV
+                    && raw.m_version != view.version)
+                    return false;
+                const std::string codePage = sourceCodePage(sourceVersion);
+                DRW_TextCodec sourceCodec;
+                sourceCodec.setVersion(sourceVersion, true);
+                if (!codePage.empty())
+                    sourceCodec.setCodePage(codePage, true);
+                DRW_TextCodec outputCodec;
+                outputCodec.setVersion(view.version, true);
+                if (!view.codePage.empty())
+                    outputCodec.setCodePage(std::string(view.codePage), true);
+
+                int applicationDepth = 0;
+                bool commonEntityScope = true;
+                bool xdata = false;
+                unsigned layerFields = 0u;
+                unsigned lineTypeFields = 0u;
+                for (std::size_t index = 0; index < raw.groups.size(); ++index) {
+                    const DRW_Variant& group = raw.groups[index];
+                    if (group.code() == 102) {
+                        if (group.type() != DRW_Variant::STRING
+                            || group.c_str() == nullptr)
+                            return false;
+                        const std::string_view marker(group.c_str());
+                        if (marker == "}") {
+                            if (applicationDepth == 0)
+                                return false;
+                            --applicationDepth;
+                        } else if (marker.size() > 1u
+                                   && marker.front() == '{') {
+                            if (applicationDepth >= 32)
+                                return false;
+                            ++applicationDepth;
+                        } else {
+                            return false;
+                        }
+                        continue;
+                    }
+                    if (applicationDepth != 0)
+                        continue;
+                    if (group.code() == 1001) {
+                        xdata = true;
+                        continue;
+                    }
+                    if (xdata && group.code() >= 1000
+                        && group.code() <= 1071)
+                        continue;
+                    xdata = false;
+                    if (group.code() == 101
+                        || (group.code() == 100
+                            && (group.type() != DRW_Variant::STRING
+                                || group.c_str() == nullptr
+                                || std::string_view(group.c_str())
+                                    != "AcDbEntity")))
+                        commonEntityScope = false;
+                    if (!commonEntityScope
+                        || (group.code() != DRW::dxfCode::LAYER
+                            && group.code() != 6))
+                        continue;
+                    if (group.type() != DRW_Variant::STRING
+                        || group.c_str() == nullptr)
+                        return false;
+                    const dx_symbol_output::Kind kind =
+                        group.code() == DRW::dxfCode::LAYER
+                            ? dx_symbol_output::Kind::Layer
+                            : dx_symbol_output::Kind::LineType;
+                    unsigned& fieldCount = kind == dx_symbol_output::Kind::Layer
+                        ? layerFields : lineTypeFields;
+                    if (++fieldCount != 1u)
+                        return false;
+
+                    const std::string_view wireValue =
+                        !view.binary && raw.hasRawValues
+                            ? std::string_view(raw.rawValues[index])
+                            : std::string_view(group.c_str());
+                    if (!sourceVersionKnown
+                        && std::any_of(wireValue.begin(), wireValue.end(),
+                            [](unsigned char byte) { return byte >= 0x80u; }))
+                        return false;
+                    const bool sourceAscii = raw.hasRawValues;
+                    const std::string sourceText = sourceCodec.toUtf8(
+                        wireValue, sourceAscii);
+                    if (sourceCodec.lastDecodeObservation().issues != 0u
+                        || !DRW_TextCodec::isUtf8ScalarText(sourceText))
+                        return false;
+                    const std::string outputText = outputCodec.toUtf8(
+                        wireValue, !view.binary);
+                    if (outputCodec.lastDecodeObservation().issues != 0u
+                        || !DRW_TextCodec::isUtf8ScalarText(outputText))
+                        return false;
+                    std::string sourceKey, outputKey;
+                    if (!rawEntitySymbolNameKey(sourceText, sourceKey)
+                        || !rawEntitySymbolNameKey(outputText, outputKey)
+                        || sourceKey != outputKey)
+                        return false;
+                    references.push_back(
+                        {kind, std::move(sourceKey), std::move(outputKey)});
+                    if (references.size() > 1000000u)
+                        return false;
+                }
+                if (applicationDepth != 0)
+                    return false;
+            }
+            return true;
+        };
+
+        return inspectBlock(data.mBlock)
+            && std::all_of(data.blocks.begin(), data.blocks.end(),
+                [&](const dx_ifaceBlock* block) {
+                    return inspectBlock(block);
+                });
+    } catch (...) {
+        references.clear();
+        return false;
+    }
+}
+
+bool inspectRawEntityTableNameReferences(
+        const dx_data& data, const dxfRW::DxfTablesWriteView& view) noexcept {
+    std::vector<RawEntityTableNameReference> references;
+    if (!collectRawEntityTableNameReferences(data, view, references))
+        return false;
+    if (references.empty())
+        return true;
+    try {
+        struct TargetState {
+            dx_symbol_output::Kind kind{dx_symbol_output::Kind::Other};
+            std::size_t count{0u};
+            bool qualified{false};
+        };
+        std::unordered_map<std::string, TargetState> expected;
+        expected.reserve(references.size());
+        for (const RawEntityTableNameReference& reference : references) {
+            const char kindPrefix = reference.kind == dx_symbol_output::Kind::Layer
+                ? 'L' : reference.kind == dx_symbol_output::Kind::LineType
+                    ? 'T' : '\0';
+            if (kindPrefix == '\0' || reference.sourceKey.empty()
+                || reference.sourceKey != reference.outputKey)
+                return false;
+            std::string key(1u, kindPrefix);
+            key.append(reference.sourceKey);
+            auto inserted = expected.emplace(
+                std::move(key), TargetState{reference.kind, 0u, false});
+            if (!inserted.second
+                && inserted.first->second.kind != reference.kind)
+                return false;
+        }
+        return dx_symbol_output::inspect(view, [&](const auto& row) {
+            if (row.type != dx_symbol_output::Kind::Layer
+                && row.type != dx_symbol_output::Kind::LineType)
+                return true;
+            std::string nameKey;
+            if (!rawEntitySymbolNameKey(row.name, nameKey))
+                return false;
+            std::string key(1u, row.type == dx_symbol_output::Kind::Layer
+                ? 'L' : 'T');
+            key.append(nameKey);
+            const auto target = expected.find(key);
+            if (target == expected.end())
+                return true;
+            if (++target->second.count != 1u || !row.qualified)
+                return false;
+            target->second.qualified = true;
+            return true;
+        }) && std::all_of(expected.begin(), expected.end(), [](const auto& target) {
+            return target.second.count == 1u && target.second.qualified;
+        });
+    } catch (...) {
+        return false;
+    }
+}
+
 bool exactAc1027MaterialSourceMatches(const DRW_UnsupportedObject& raw,
                                       const DRW_Material& typed) noexcept {
     if (!dx_ac1027_material_wire::matches(raw, typed)) return false;
@@ -78307,6 +78535,13 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         cData->m_standardDwgObjectFrames.end(), [](const auto& source) {
             return !source.second.appIdDependencies.empty() || !source.second.layerDependencies.empty();
         });
+    const auto hasRawEntityRecords = [](const dx_ifaceBlock* block) {
+        return block != nullptr && !block->rawEntities.empty();
+    };
+    const bool needsRawEntityNameReferences =
+        hasRawEntityRecords(cData->mBlock)
+        || std::any_of(cData->blocks.begin(), cData->blocks.end(),
+            hasRawEntityRecords);
     std::uint32_t layerControlSourceHandle = 0u;
     std::uint32_t layerControlSourceDictionary = 0u;
     const bool needsLayerControlOutput =
@@ -78319,10 +78554,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         !m_dwgLayoutOutputSources.empty();
     const bool needsDwgLayerStateOutput =
         m_dwgLayerStateOutputPrepared;
-    if ((needsStandardNames || needsLayerControlOutput
+    if ((needsStandardNames || needsRawEntityNameReferences
+            || needsLayerControlOutput
             || m_dwgLtypeControlOutputRequired
             || m_dxfLayerMaterialState.active || !m_dxfMLineLinetypes.empty()
-            || needsDwgLayoutsOutput || !m_dwgGeoDataGraphs.empty() || usesAc1027DefaultLayerProfile()) && !dxfW->setDxfTablesWriteInspector([this, needsStandardNames, needsLayerControlOutput, needsDwgLayoutsOutput, debug, requireResolvedOwners](const auto& view) {
+            || needsDwgLayoutsOutput || !m_dwgGeoDataGraphs.empty() || usesAc1027DefaultLayerProfile()) && !dxfW->setDxfTablesWriteInspector([this, needsStandardNames, needsRawEntityNameReferences, needsLayerControlOutput, needsDwgLayoutsOutput, debug, requireResolvedOwners](const auto& view) {
             if (m_dwgLtypeControlOutputRequired
                 && !inspectDwgLineTypeControlOutput(view))
                 return false;
@@ -78334,9 +78570,12 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             if ((needsStandardNames || needsLayerControlOutput)
                 && !inspectStandardDwgTablesOutput(view))
                 return false;
-            return !needsDwgLayoutsOutput
-                || inspectDwgLayoutBlockRecords(
-                    view, debug || requireResolvedOwners);
+            if (needsDwgLayoutsOutput
+                && !inspectDwgLayoutBlockRecords(
+                    view, debug || requireResolvedOwners))
+                return false;
+            return !needsRawEntityNameReferences
+                || inspectRawEntityTableNameReferences(*cData, view);
         })) {
         delete dxfW; dxfW = nullptr; return false;
     }

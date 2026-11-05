@@ -19253,6 +19253,133 @@ bool rawDxfEntityAdapterCaptureLimitsFailClosed() {
     return true;
 }
 
+bool rawDxfEntityTableNameReferencesCloseAtOutput() {
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch()
+                           .count();
+    for (const bool binary : {false, true}) {
+        const std::filesystem::path output =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-raw-entity-table-refs-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{output};
+
+        dx_data data;
+        data.sourceFormat = dx_source_format::DXF;
+        data.sourceVersion = DRW::AC1027;
+        dx_iface iface;
+        iface.cData = &data;
+        iface.currentBlock = data.mBlock;
+
+        DRW_RawDxfObject raw;
+        raw.name = "CUSTOM_ENTITY";
+        raw.handle = 0xA701u;
+        raw.parentHandle = DRW::DxfModelSpaceBlockRecordHandle;
+        raw.m_version = DRW::AC1027;
+        raw.hasRawValues = !binary;
+        raw.groups = {
+            {5, std::string("A701")},
+            {330, std::string("1F")},
+            {100, std::string("AcDbEntity")},
+            {102, std::string("{RAW_REFERENCE_TEST")},
+            {8, std::string("NO_SUCH_NESTED_LAYER")},
+            {6, std::string("NO_SUCH_NESTED_LTYPE")},
+            {102, std::string("}")},
+            {8, std::string("NO_SUCH_LAYER")},
+            {6, std::string("NO_SUCH_LTYPE")}};
+        if (raw.hasRawValues) {
+            for (const DRW_Variant& group : raw.groups)
+                raw.rawValues.emplace_back(group.c_str());
+        }
+        iface.addRawDxfEntity(raw);
+        if (data.rawDxfEntityCaptureFailed
+            || data.mBlock->rawEntities.size() != 1u)
+            return fail("raw entity reference fixture was not retained");
+
+        const auto replaceString = [&](std::size_t index,
+                                       const std::string& value) {
+            DRW_Variant& group =
+                data.mBlock->rawEntities.front().record.groups[index];
+            if (group.type() != DRW_Variant::STRING)
+                return false;
+            group = DRW_Variant(group.code(), value);
+            if (data.mBlock->rawEntities.front().record.hasRawValues)
+                data.mBlock->rawEntities.front().record.rawValues[index] = value;
+            return true;
+        };
+        const auto writeSentinel = [&]() {
+            std::ofstream stream(output, std::ios::binary | std::ios::trunc);
+            stream << "RAW_ENTITY_TABLE_REFERENCE_SENTINEL\n";
+            return static_cast<bool>(stream);
+        };
+        const auto sentinelUnchanged = [&]() {
+            std::ifstream stream(output, std::ios::binary);
+            return std::string{std::istreambuf_iterator<char>(stream), {}}
+                == "RAW_ENTITY_TABLE_REFERENCE_SENTINEL\n";
+        };
+        const auto refusesAtomically = [&]() {
+            return writeSentinel()
+                && !iface.fileExport(output.string(), DRW::AC1027, binary,
+                                     &data, false)
+                && sentinelUnchanged();
+        };
+        if (!refusesAtomically())
+            return fail("unresolved raw entity layer/linetype references were published");
+        if (!replaceString(7u, "0") || !refusesAtomically())
+            return fail("unresolved raw entity linetype did not refuse atomically");
+        if (!replaceString(8u, "continuous")
+            || !iface.fileExport(output.string(), DRW::AC1027, binary,
+                                 &data, false))
+            return fail("corrected raw entity table names did not retry successfully");
+
+        dx_data readback;
+        dx_iface reader;
+        if (!reader.fileImport(output.string(), &readback, false)
+            || readback.mBlock->rawEntities.size() != 1u)
+            return fail("raw entity table-name output failed readback");
+        const DRW_RawDxfObject& actual =
+            readback.mBlock->rawEntities.front().record;
+        unsigned layerReferences = 0u;
+        unsigned lineTypeReferences = 0u;
+        bool nestedLayerPreserved = false;
+        bool nestedLineTypePreserved = false;
+        for (const DRW_Variant& group : actual.groups) {
+            if (group.code() == 8 && group.c_str() != nullptr
+                && std::string_view(group.c_str()) == "0")
+                ++layerReferences;
+            if (group.code() == 6 && group.c_str() != nullptr
+                && std::string_view(group.c_str()) == "continuous")
+                ++lineTypeReferences;
+            nestedLayerPreserved = nestedLayerPreserved
+                || (group.code() == 8 && group.c_str() != nullptr
+                    && std::string_view(group.c_str())
+                        == "NO_SUCH_NESTED_LAYER");
+            nestedLineTypePreserved = nestedLineTypePreserved
+                || (group.code() == 6 && group.c_str() != nullptr
+                    && std::string_view(group.c_str())
+                        == "NO_SUCH_NESTED_LTYPE");
+        }
+        if (layerReferences != 1u || lineTypeReferences != 1u
+            || !nestedLayerPreserved || !nestedLineTypePreserved) {
+            std::ostringstream detail;
+            detail << "raw entity table names or nested raw payload changed on readback: layer="
+                   << layerReferences << " ltype=" << lineTypeReferences
+                   << " groups=" << actual.groups.size()
+                   << " nestedLayer=" << nestedLayerPreserved
+                   << " nestedLtype=" << nestedLineTypePreserved;
+            return fail(detail.str());
+        }
+    }
+    return true;
+}
+
 bool rawDxfSectionAdapterCaptureLimitsFailClosed() {
     DRW_RawDxfSection section;
     section.m_name = "CUSTOM_SECTION";
@@ -70812,6 +70939,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--raw-dxf-entity-capture-limits")
         return rawDxfEntityAdapterCaptureLimitsFailClosed() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--raw-dxf-entity-table-name-references")
+        return rawDxfEntityTableNameReferencesCloseAtOutput() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--raw-dxf-section-capture-limits")
         return rawDxfSectionAdapterCaptureLimitsFailClosed() ? 0 : 1;
