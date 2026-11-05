@@ -16599,6 +16599,7 @@ bool addViewportRetainedBytes(
     return addStringPayloadBytes(viewport.styleSheet, estimate)
         && addStringPayloadBytes(viewport.ambientColorName, estimate)
         && addVectorPayloadBytes(viewport.frozenLayerHandles, estimate)
+        && addVectorPayloadBytes(viewport.layerOverrideReferences, estimate)
         && estimate <= kMaxAdapterTypedEntityRetainedBytes;
 }
 
@@ -69140,6 +69141,25 @@ bool validateLayoutGraph(const dx_data& data, DRW::Version targetVersion,
                 if (frozenLayerHandle == 0 || layer == layerHandleCounts.end()
                     || layer->second != 1u)
                     return reject("VIEWPORT 331 frozen-layer handle does not resolve uniquely to a LAYER record");
+            }
+            for (const DRW_Viewport::LayerOverrideReference& reference :
+                    viewport->layerOverrideReferences) {
+                if ((reference.groupCode != 335
+                     && reference.groupCode != 343
+                     && reference.groupCode != 344)
+                    || reference.handle == 0u
+                    || reference.handle == DRW::NoHandle
+                    || reference.handle
+                        > std::numeric_limits<std::uint32_t>::max())
+                    return reject("VIEWPORT layer-override reference has an unsupported code or handle width");
+                const std::uint32_t handle =
+                    static_cast<std::uint32_t>(reference.handle);
+                const auto target = entitiesByHandle.find(handle);
+                if (target == entitiesByHandle.end()
+                    || ambiguousEntityHandles.count(handle) != 0
+                    || dynamic_cast<const DRW_Viewport*>(target->second)
+                        == nullptr)
+                    return reject("VIEWPORT layer-override reference does not resolve uniquely to a VIEWPORT entity");
             }
 
             const bool nonRectangular =

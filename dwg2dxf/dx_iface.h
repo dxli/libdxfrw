@@ -1241,6 +1241,19 @@ public:
                             && dxfW->preallocateEntityHandle(
                                    viewport->clipBoundaryHandle) == 0))
                         return false;
+                    for (const DRW_Viewport::LayerOverrideReference& ref :
+                            viewport->layerOverrideReferences) {
+                        if ((ref.groupCode != 335 && ref.groupCode != 343
+                             && ref.groupCode != 344)
+                            || ref.handle == 0u
+                            || ref.handle == DRW::NoHandle
+                            || ref.handle
+                                > std::numeric_limits<std::uint32_t>::max()
+                            || dxfW->preallocateEntityHandle(
+                                   static_cast<std::uint32_t>(ref.handle))
+                                == 0u)
+                            return false;
+                    }
                 }
                 return true;
             };

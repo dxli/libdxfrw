@@ -13,6 +13,7 @@
 ******************************************************************************/
 
 #include <algorithm>
+#include <charconv>
 #include <cctype>
 #include <cstdint>
 #include <cmath>
@@ -217,6 +218,18 @@ constexpr std::int32_t kMaxHatchItems = DRW_Hatch::kMaxDxfItems;
 constexpr std::int32_t kMaxMInsertCount =
     std::numeric_limits<std::int16_t>::max();
 constexpr std::int32_t kMaxViewportFrozenLayers = 512;
+constexpr std::int32_t kMaxViewportLayerOverrideReferences = 512;
+
+bool parseViewportLayerOverrideHandle(std::string_view text,
+                                      std::uint64_t& handle) noexcept {
+    if (text.empty() || text.size() > 16u)
+        return false;
+    const char* const begin = text.data();
+    const char* const end = begin + text.size();
+    const std::from_chars_result parsed =
+        std::from_chars(begin, end, handle, 16);
+    return parsed.ec == std::errc{} && parsed.ptr == end;
+}
 constexpr std::int32_t kMaxMTextColumnHeights = 4096;
 constexpr std::int32_t kMaxMLeaderItems = 5000;
 constexpr std::int32_t kMaxLeaderVertices = 5000;
@@ -29111,6 +29124,28 @@ bool DRW_Viewport::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         visualStyleHandle = static_cast<std::uint32_t>(reader->getHandleString());
         fullVisualStyleHandle = visualStyleHandle;
         break;
+    case 335: case 343: case 344: {
+        if (layerOverrideReferences.size()
+                >= static_cast<std::size_t>(
+                    kMaxViewportLayerOverrideReferences)
+            || !DRW::reserve(
+                layerOverrideReferences,
+                static_cast<int>(layerOverrideReferences.size() + 1u)))
+            return false;
+        LayerOverrideReference reference;
+        reference.groupCode = code;
+        if (!parseViewportLayerOverrideHandle(reader->getStringView(),
+                                              reference.handle))
+            return false;
+        layerOverrideReferences.push_back(reference);
+        break;
+    }
+    case 91:
+        // Autodesk's VIEWPORT-specific table calls this a soft pointer, but
+        // its generic DXF type tables classify 90-99 as int32. Keep the
+        // ambiguous carrier out of the typed model until a producer/binary
+        // witness resolves the representation.
+        return false;
     case 349:
         // Code 349 is HEADER $DRAGVS, not a VIEWPORT shade-plot target.
         // Reject this out-of-schema carrier value rather than aliasing it to
@@ -29162,7 +29197,10 @@ bool DRW_Viewport::validatePayloadFields() const {
         && fitsByte(defaultLightingType)
         && ambientColor <= std::numeric_limits<std::uint16_t>::max()
         && ambientColorRgb >= -1 && ambientColorRgb <= 0xFFFFFF
-        && frozenLayerHandles.size() <= kMaxViewportFrozenLayers;
+        && frozenLayerHandles.size() <= kMaxViewportFrozenLayers
+        && layerOverrideReferences.size()
+            <= static_cast<std::size_t>(
+                kMaxViewportLayerOverrideReferences);
 }
 
 bool DRW_Viewport::validateDxf() const {
@@ -29173,7 +29211,18 @@ bool DRW_Viewport::validateDxf() const {
     return validatePayloadFields()
         && renderMode <= 6
         && defaultLightingType <= 1
-        && ucsOrthographicType <= 6;
+        && ucsOrthographicType <= 6
+        && std::all_of(
+            layerOverrideReferences.cbegin(), layerOverrideReferences.cend(),
+            [](const LayerOverrideReference& reference) {
+                return (reference.groupCode == 335
+                        || reference.groupCode == 343
+                        || reference.groupCode == 344)
+                    && reference.handle != 0u
+                    && reference.handle != DRW::NoHandle
+                    && reference.handle
+                        <= std::numeric_limits<std::uint32_t>::max();
+            });
 }
 //ex 22 dec 34
 void DRW_Viewport::resetDwgState() {
@@ -29227,6 +29276,7 @@ void DRW_Viewport::resetDwgState() {
     shadePlotHandle = 0;
     m_sunHandle = 0;
     frozenLayerHandles.clear();
+    layerOverrideReferences.clear();
     frozenLyCount = 0;
 }
 
@@ -29924,6 +29974,7 @@ bool DRW_Viewport::encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_
                                dwgBufferW *strBuf, dwgBufferW *handleBuf) {
     (void)bs;
     if (buf == nullptr || !validatePayloadFields()
+        || !layerOverrideReferences.empty()
         || (version > DRW::AC1014 && !drwHasEncodableDwgViewportAngles(*this)))
         return false;
     ViewportAmbientCmc ambientCmc;

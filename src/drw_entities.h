@@ -5943,6 +5943,21 @@ public:
     std::uint8_t ambientColorDwgFlags = 0u;
     std::uint16_t ambientColorDwgIndex = 0u;
     bool ambientColorDwgMetadataPresent = false;
+
+    // Autodesk's VIEWPORT DXF table defines groups 335, 343 and 344 as
+    // soft-pointer references to VIEWPORT objects for layer overrides. Keep
+    // the group code with the 64-bit source handle so output can remap each
+    // occurrence without confusing these with Layer-owned XRECORD payloads.
+    // Group 91 remains unmodeled because Autodesk's generic DXF type table
+    // defines 90-99 as int32 while the VIEWPORT table calls 91 a soft pointer.
+    struct LayerOverrideReference {
+        int groupCode{0};
+        std::uint64_t handle{0u};
+        LayerOverrideReference() = default;
+        LayerOverrideReference(int code, std::uint64_t value)
+            : groupCode(code), handle(value) {}
+    };
+    std::vector<LayerOverrideReference> layerOverrideReferences;
 };
 
 //used  //DRW_Coord basePoint;      /*!<  base point, code 10, 20 & 30 */

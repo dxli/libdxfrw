@@ -14449,6 +14449,37 @@ bool dxfRW::writeViewport(DRW_Viewport *ent) {
         || (version > DRW::AC1018
             && !isResolvedOptional(ent->m_sunHandle, emittedSunHandle)))
         return failDxfWrite();
+    std::vector<std::pair<int, std::uint32_t>>
+        emittedLayerOverrideReferences;
+    if (!ent->layerOverrideReferences.empty()) {
+        if (version <= DRW::AC1009
+            || !DRW::reserve(
+                emittedLayerOverrideReferences,
+                static_cast<int>(ent->layerOverrideReferences.size())))
+            return failDxfWrite();
+        for (const DRW_Viewport::LayerOverrideReference& reference :
+                ent->layerOverrideReferences) {
+            if ((reference.groupCode != 335 && reference.groupCode != 343
+                 && reference.groupCode != 344)
+                || reference.handle == 0u
+                || reference.handle == DRW::NoHandle
+                || reference.handle
+                    > std::numeric_limits<std::uint32_t>::max())
+                return failDxfWrite();
+            const std::uint32_t sourceHandle =
+                static_cast<std::uint32_t>(reference.handle);
+            const std::uint32_t plannedEntityHandle =
+                remapEntityHandle(sourceHandle);
+            const std::uint32_t emittedHandle = m_referenceResolver
+                ? resolveReference(sourceHandle)
+                : (plannedEntityHandle != sourceHandle
+                    ? plannedEntityHandle : emittedReference(sourceHandle));
+            if (emittedHandle == 0u || emittedHandle == DRW::NoHandle)
+                return failDxfWrite();
+            emittedLayerOverrideReferences.emplace_back(
+                reference.groupCode, emittedHandle);
+        }
+    }
     std::vector<std::uint32_t> emittedFrozenLayerHandles;
     if (version > DRW::AC1009) {
         if (!DRW::reserve(emittedFrozenLayerHandles,
@@ -14469,7 +14500,7 @@ bool dxfRW::writeViewport(DRW_Viewport *ent) {
         m_writeError = true;
         return false;
     }
-    if (!writeEntity(ent))
+    if (!writeEntity(ent, true))
         return false;
     bool result = true;
     if (version > DRW::AC1009) {
@@ -14557,6 +14588,8 @@ bool dxfRW::writeViewport(DRW_Viewport *ent) {
         if (ent->m_sunHandle != 0)
             writer->writeString(361, toHexStr(emittedSunHandle));
     }
+    for (const auto& reference : emittedLayerOverrideReferences)
+        writer->writeString(reference.first, toHexStr(reference.second));
     if (!ent->extData.empty())
         result = writeExtData(ent->extData) && result;
     if (!result || writer->hasWriteError())

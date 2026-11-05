@@ -3567,6 +3567,17 @@ void testDwgViewportProjection(TestContext& t) {
         t.expect(added,
                  "generated controls cover per-layout order, model space and following entities");
         if (!added) continue;
+        auto* targetViewportA = dynamic_cast<DRW_Viewport*>(
+            findEntity(source, 0x705u));
+        if (sourceA != nullptr && targetViewportA != nullptr) {
+            sourceA->layerOverrideReferences = {
+                {335, targetViewportA->handle},
+                {343, targetViewportA->handle},
+                {344, targetViewportA->handle}};
+        }
+        t.expect(sourceA != nullptr && targetViewportA != nullptr
+                     && sourceA->layerOverrideReferences.size() == 3u,
+                 "generated VIEWPORT layer-override references have a retained VIEWPORT target");
 
         DRW_Block_Record ordinaryRecord;
         ordinaryRecord.handle = 0x604u;
@@ -3599,6 +3610,28 @@ void testDwgViewportProjection(TestContext& t) {
         if (sheetALayout == source.layouts.end()
             || sheetBLayout == source.layouts.end())
             continue;
+        dx_iface exporter;
+        if (sourceA != nullptr && !sourceA->layerOverrideReferences.empty()) {
+            const auto savedReferences = sourceA->layerOverrideReferences;
+            sourceA->layerOverrideReferences = {{335, 0x713u}};
+            {
+                std::ofstream sentinel(output,
+                                       std::ios::binary | std::ios::trunc);
+                sentinel << "VIEWPORT override target sentinel";
+            }
+            const bool invalidOverrideExported =
+                exporter.fileExport(
+                    output.string(), DRW::AC1027, binary, &source, false);
+            std::ifstream preserved(output, std::ios::binary);
+            const std::string preservedBytes(
+                (std::istreambuf_iterator<char>(preserved)),
+                std::istreambuf_iterator<char>());
+            sourceA->layerOverrideReferences = savedReferences;
+            t.expect(!invalidOverrideExported
+                         && preservedBytes
+                             == "VIEWPORT override target sentinel",
+                     "VIEWPORT layer-override reference rejects a LINE target atomically");
+        }
         // The DWG list is a source relationship, not a census of every
         // paper-space VIEWPORT that the DXF entity stream must preserve.
         // Keep Sheet A's list empty while its entity space has two viewports.
@@ -3726,7 +3759,6 @@ void testDwgViewportProjection(TestContext& t) {
         if (currentPaperLayout == source.layouts.end()) continue;
         // DWG ENTITIES carries current-space entities without an explicit
         // BLOCK_RECORD owner. LAYOUT 331 must still resolve that viewport.
-        dx_iface exporter;
         {
             std::ofstream sentinel(output, std::ios::binary | std::ios::trunc);
             sentinel << "DXF ownerless viewport destination";
@@ -3759,6 +3791,32 @@ void testDwgViewportProjection(TestContext& t) {
         const std::uint32_t ownerOrdinary =
             blockRecordHandle(readback, "Ordinary_Block");
         const auto projectedViewports = collectViewports(readback);
+        const auto projectedSourceA = std::find_if(
+            projectedViewports.begin(), projectedViewports.end(),
+            [](const DRW_Viewport* viewport) {
+                return viewport->centerPX == 700.0;
+            });
+        const auto projectedTargetA = std::find_if(
+            projectedViewports.begin(), projectedViewports.end(),
+            [](const DRW_Viewport* viewport) {
+                return viewport->centerPX == 0x705u;
+            });
+        const bool layerOverrideReferencesProjected =
+            projectedSourceA != projectedViewports.end()
+            && projectedTargetA != projectedViewports.end()
+            && (*projectedSourceA)->layerOverrideReferences.size() == 3u
+            && std::all_of(
+                (*projectedSourceA)->layerOverrideReferences.cbegin(),
+                (*projectedSourceA)->layerOverrideReferences.cend(),
+                [target = *projectedTargetA](
+                    const DRW_Viewport::LayerOverrideReference& reference) {
+                    return (reference.groupCode == 335
+                            || reference.groupCode == 343
+                            || reference.groupCode == 344)
+                        && reference.handle == target->handle;
+                });
+        t.expect(layerOverrideReferencesProjected,
+                 "VIEWPORT 335/343/344 targets remap to the emitted VIEWPORT identity in ASCII and Binary DXF");
         const auto collectLayoutViewportProjection =
             [&collectViewports, &blockRecordHandle](const dx_data& data) {
                 using Projection =
@@ -3943,6 +4001,42 @@ void testViewportTypedHandleRemapping(TestContext& t) {
         t.expect(shadeParsed && dragPointerRejected,
                  "VIEWPORT code 349 is rejected without overwriting code 333");
     }
+    {
+        class TestViewport final : public DRW_Viewport {
+        public:
+            bool parse(int code,
+                       const std::unique_ptr<dxfReader>& reader) {
+                return parseCode(code, reader);
+            }
+        };
+        std::istringstream references(
+            "335\nA04\n343\nA05\n344\nA06\n91\n123\n");
+        std::unique_ptr<dxfReader> reader =
+            std::make_unique<dxfReaderAscii>(&references);
+        TestViewport viewport;
+        int code = 0;
+        bool parsed = true;
+        for (const DRW_Viewport::LayerOverrideReference expected :
+                {DRW_Viewport::LayerOverrideReference{335, 0xA04u},
+                 DRW_Viewport::LayerOverrideReference{343, 0xA05u},
+                 DRW_Viewport::LayerOverrideReference{344, 0xA06u}}) {
+            parsed = parsed && reader->readRec(&code)
+                && code == expected.groupCode
+                && viewport.parse(code, reader);
+        }
+        const bool fieldsRetained = parsed
+            && viewport.layerOverrideReferences.size() == 3u
+            && viewport.layerOverrideReferences[0].groupCode == 335
+            && viewport.layerOverrideReferences[0].handle == 0xA04u
+            && viewport.layerOverrideReferences[1].groupCode == 343
+            && viewport.layerOverrideReferences[1].handle == 0xA05u
+            && viewport.layerOverrideReferences[2].groupCode == 344
+            && viewport.layerOverrideReferences[2].handle == 0xA06u;
+        const bool ambiguous91Rejected = reader->readRec(&code)
+            && code == 91 && !viewport.parse(code, reader);
+        t.expect(fieldsRetained && ambiguous91Rejected,
+                 "VIEWPORT 335/343/344 retain ordered soft-pointer IDs while ambiguous group 91 fails closed");
+    }
 
     class ViewportWriter final : public dx_iface {
     public:
@@ -3982,6 +4076,8 @@ void testViewportTypedHandleRemapping(TestContext& t) {
         writer.viewport.layer = "0";
         writer.viewport.parentHandle = DRW::DxfModelSpaceBlockRecordHandle;
         writer.viewport.frozenLayerHandles = {0x901u, 0x902u};
+        writer.viewport.layerOverrideReferences = {
+            {335, 0x901u}, {343, 0x902u}, {344, 0x903u}};
         writer.viewport.shadePlotMode = 4;
         writer.viewport.shadePlotHandle = 0x904u;
         writer.viewport.clipBoundaryHandle = 0x905u;
@@ -4015,6 +4111,13 @@ void testViewportTypedHandleRemapping(TestContext& t) {
 
         const bool referencesRemapped =
             viewport->frozenLayerHandles == std::vector<std::uint32_t>{0xA01u, 0xA02u}
+            && viewport->layerOverrideReferences.size() == 3u
+            && viewport->layerOverrideReferences[0].groupCode == 335
+            && viewport->layerOverrideReferences[0].handle == 0xA01u
+            && viewport->layerOverrideReferences[1].groupCode == 343
+            && viewport->layerOverrideReferences[1].handle == 0xA02u
+            && viewport->layerOverrideReferences[2].groupCode == 344
+            && viewport->layerOverrideReferences[2].handle == 0xA03u
             && viewport->shadePlotMode == 4
             && viewport->shadePlotHandle == 0xA04u
             && viewport->clipBoundaryHandle == 0xA05u
