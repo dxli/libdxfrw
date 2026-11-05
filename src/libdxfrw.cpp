@@ -1448,6 +1448,29 @@ bool validateDxfXdataGroups(const Range& values, GetPointer getPointer,
     return inApplication && nesting == 0;
 }
 
+bool insertDxfXdataAppIdsAtomically(
+        std::unordered_set<std::string>& required,
+        const std::vector<std::string>& appIds) {
+    std::vector<std::string> pending;
+    try {
+        pending.reserve(appIds.size());
+        for (const std::string& appId : appIds) {
+            if (required.find(appId) == required.end())
+                pending.push_back(appId);
+        }
+        if (pending.size() > required.max_size() - required.size())
+            return false;
+        required.reserve(required.size() + pending.size());
+        for (const std::string& appId : pending)
+            required.insert(appId);
+    } catch (...) {
+        for (const std::string& appId : pending)
+            required.erase(appId);
+        return false;
+    }
+    return true;
+}
+
 // Authored DICTIONARY entries require unique keys and objects. Groups350/360
 // are owning roles, not arbitrary references. Keep this writer-only: tolerant
 // parsing/raw replay and non-ASCII equivalence remain separate policies.
@@ -16433,20 +16456,22 @@ bool dxfRW::preflightDxfXdataAppIds(
     if (extData.empty())
         return true;
 
-    std::vector<std::string> appIds;
-    if (!validateDxfXdataGroups(
-            extData, [](DRW_Variant* value) { return value; }, &appIds)) {
-        recordOperationDiagnostic(
-            DRW::OperationPhase::Validation,
-            DRW::OperationCause::ValidationFailure,
-            "xdata-group-structure",
-            "XDATA must have unique APPID groups and balanced controls");
-        m_writeError = true;
-        return false;
-    }
     try {
-        for (std::string& appId : appIds)
-            m_requiredDxfXdataAppIds.insert(std::move(appId));
+        std::vector<std::string> appIds;
+        if (!validateDxfXdataGroups(
+                extData, [](DRW_Variant* value) { return value; }, &appIds)) {
+            recordOperationDiagnostic(
+                DRW::OperationPhase::Validation,
+                DRW::OperationCause::ValidationFailure,
+                "xdata-group-structure",
+                "XDATA must have unique APPID groups and balanced controls");
+            m_writeError = true;
+            return false;
+        }
+        if (!insertDxfXdataAppIdsAtomically(m_requiredDxfXdataAppIds, appIds)) {
+            m_writeError = true;
+            return false;
+        }
     } catch (...) {
         m_writeError = true;
         return false;
@@ -18300,8 +18325,11 @@ bool dxfRW::writeExtDataRange(const Range& ed, GetPointer getPointer) {
             m_writeError = true;
             return false;
         }
-        for (std::string& appId : applicationIds)
-            m_requiredDxfXdataAppIds.insert(std::move(appId));
+        if (!insertDxfXdataAppIdsAtomically(
+                m_requiredDxfXdataAppIds, applicationIds)) {
+            m_writeError = true;
+            return false;
+        }
     } catch (...) {
         m_writeError = true;
         return false;

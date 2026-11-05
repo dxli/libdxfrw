@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cstdlib>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -6,6 +7,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <new>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -16,6 +18,38 @@
 #include "dx_iface.h"
 #include "intern/dxfreader.h"
 #include "intern/dxfwriter.h"
+
+namespace {
+long xdataAllocationFailureOffset = -1;
+bool xdataAllocationFailed = false;
+}
+
+void* operator new(std::size_t size) {
+    if (xdataAllocationFailureOffset >= 0
+        && xdataAllocationFailureOffset-- == 0) {
+        xdataAllocationFailed = true;
+        throw std::bad_alloc();
+    }
+    if (void* memory = std::malloc(size == 0 ? 1 : size))
+        return memory;
+    throw std::bad_alloc();
+}
+
+void* operator new[](std::size_t size) {
+    if (xdataAllocationFailureOffset >= 0
+        && xdataAllocationFailureOffset-- == 0) {
+        xdataAllocationFailed = true;
+        throw std::bad_alloc();
+    }
+    if (void* memory = std::malloc(size == 0 ? 1 : size))
+        return memory;
+    throw std::bad_alloc();
+}
+
+void operator delete(void* memory) noexcept { std::free(memory); }
+void operator delete[](void* memory) noexcept { std::free(memory); }
+void operator delete(void* memory, std::size_t) noexcept { std::free(memory); }
+void operator delete[](void* memory, std::size_t) noexcept { std::free(memory); }
 
 class DxfXdataInt16TestAccess {
 public:
@@ -28,6 +62,19 @@ public:
     }
     static bool writeXdata(dxfRW& codec, const std::vector<DRW_Variant*>& values) {
         return codec.writeExtData(values);
+    }
+    static bool preflightXdata(dxfRW& codec,
+                               const std::vector<DRW_Variant*>& values) {
+        return codec.preflightDxfXdataAppIds(values);
+    }
+    static void addRequiredAppId(dxfRW& codec, const std::string& value) {
+        codec.m_requiredDxfXdataAppIds.insert(value);
+    }
+    static bool hasRequiredAppId(const dxfRW& codec, const std::string& value) {
+        return codec.m_requiredDxfXdataAppIds.count(value) == 1u;
+    }
+    static std::size_t requiredAppIdCount(const dxfRW& codec) {
+        return codec.m_requiredDxfXdataAppIds.size();
     }
 };
 
@@ -99,6 +146,63 @@ bool directTypedControls() {
         }
     }
     if (!found) return fail("opaque raw-object 1070 was omitted");
+    return true;
+}
+
+bool appIdAllocationRollbackControls() {
+    unsigned reached = 0u;
+    bool completed = false;
+    DRW_Variant first(1001, std::string("APP_ONE"));
+    DRW_Variant firstValue(1000, std::string("one"));
+    DRW_Variant second(1001, std::string("APP_TWO"));
+    DRW_Variant secondValue(1000, std::string("two"));
+    const std::vector<DRW_Variant*> values{
+        &first, &firstValue, &second, &secondValue};
+    for (long offset = 0; offset < 128; ++offset) {
+        std::ostringstream output;
+        dxfRW codec("");
+        DxfXdataInt16TestAccess::setup(codec, false, output);
+        DxfXdataInt16TestAccess::addRequiredAppId(codec, "EXISTING");
+        xdataAllocationFailed = false;
+        xdataAllocationFailureOffset = offset;
+        bool accepted = false;
+        try {
+            accepted = DxfXdataInt16TestAccess::preflightXdata(codec, values);
+        } catch (...) {
+            xdataAllocationFailureOffset = -1;
+            return fail("APPID admission leaked an allocation exception");
+        }
+        const bool injected = xdataAllocationFailed;
+        xdataAllocationFailureOffset = -1;
+        if (accepted) {
+            if (DxfXdataInt16TestAccess::requiredAppIdCount(codec) != 3u
+                || !DxfXdataInt16TestAccess::hasRequiredAppId(codec, "EXISTING")
+                || !DxfXdataInt16TestAccess::hasRequiredAppId(codec, "APP_ONE")
+                || !DxfXdataInt16TestAccess::hasRequiredAppId(codec, "APP_TWO"))
+                return fail("successful APPID admission lost a requirement");
+            completed = true;
+            break;
+        }
+        if (!injected)
+            return fail("APPID admission refused without injected allocation failure");
+        ++reached;
+        if (DxfXdataInt16TestAccess::requiredAppIdCount(codec) != 1u
+            || !DxfXdataInt16TestAccess::hasRequiredAppId(codec, "EXISTING")
+            || DxfXdataInt16TestAccess::hasRequiredAppId(codec, "APP_ONE")
+            || DxfXdataInt16TestAccess::hasRequiredAppId(codec, "APP_TWO"))
+            return fail("allocation failure left a partial APPID requirement set");
+        std::ostringstream retryOutput;
+        dxfRW retryCodec("");
+        DxfXdataInt16TestAccess::setup(retryCodec, false, retryOutput);
+        DxfXdataInt16TestAccess::addRequiredAppId(retryCodec, "EXISTING");
+        if (!DxfXdataInt16TestAccess::preflightXdata(retryCodec, values)
+            || DxfXdataInt16TestAccess::requiredAppIdCount(retryCodec) != 3u)
+            return fail("fresh APPID admission retry did not recover");
+    }
+    if (!completed || reached == 0u)
+        return fail("APPID allocation sweep did not reach failure and success");
+    std::cout << "XDATA APPID allocation failures rolled back=" << reached
+              << " before successful admission\n";
     return true;
 }
 
@@ -221,6 +325,7 @@ bool wholeFileControls() {
 
 int main() {
     if (!directTypedControls() || !wholeFileControls()) return 1;
+    if (!appIdAllocationRollbackControls()) return 1;
     std::cout << "Typed XDATA 1070 Binary exact numeric policy: PASS\n";
     return 0;
 }
