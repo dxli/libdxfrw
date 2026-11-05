@@ -20,11 +20,14 @@
   "regressionControl": {
     "file": "tests/dwg_local_roundtrip_tests.cpp",
     "coverage": "The generated DWG write/read path retains the valid displayFrame=1 value. Its malformed-object control separately submits displayFrame=2 with otherwise valid common state and requires refusal; an existing malformed common-state refusal remains covered.",
+    "focusedSelector": "--wipeoutvariables-dwg-scalar-domain tests invalid values 2 and 65535 through dwgWriter15 with a null backing stream, and checks that refusal leaves the input carrier identity/value unchanged.",
     "fixturePolicy": "The test harness generates its DWG; no DWG/DXF fixture was added."
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg_local_roundtrip -j4",
     "buildResult": "passed",
+    "focusedTest": "ctest --test-dir build-gcc -R '^libdxfrw_wipeoutvariables_dwg_scalar_domain$' --output-on-failure",
+    "focusedTestResult": "passed",
     "owningTest": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_local_roundtrip$' --output-on-failure",
     "owningTestResult": "nonzero due 16 existing ACDS/modeler and DWG read-outcome assertions; no WIPEOUTVARIABLES assertion failed",
     "knownBaseline": "The same 16 unrelated failures were observed in the preceding baseline comparison for this exact owning test.",

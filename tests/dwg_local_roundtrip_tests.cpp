@@ -13483,6 +13483,25 @@ bool runDwgTableWriterRefusal(const std::filesystem::path& directory) {
     return true;
 }
 
+bool runWipeoutVariablesDwgDomainRefusal() {
+    DRW_Header header;
+    dwgWriter15 writer(nullptr, &header);
+    for (const std::uint16_t displayFrame : {2u, 0xFFFFu}) {
+        DRW_WipeoutVariables variables;
+        variables.handle = 0xB602u;
+        variables.parentHandle = 0xA601u;
+        variables.m_displayFrame = displayFrame;
+        const std::uint32_t originalHandle = variables.handle;
+        if (writer.writeWipeoutVariables(variables)
+            || variables.handle != originalHandle
+            || variables.m_displayFrame != displayFrame) {
+            std::cerr << "DWG WIPEOUTVARIABLES invalid display-frame admission failed\n";
+            return false;
+        }
+    }
+    return true;
+}
+
 std::vector<std::uint8_t> makeLocalSabPayload(
     std::uint32_t pointIndex = 0u, double x = 1.0, double y = 2.0,
     double z = 3.0) {
@@ -36270,6 +36289,13 @@ bool runBlockRecordXrefMetadataRoundTrip(
 #include "dwg_ellipse_wcs_test.h"
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--wipeoutvariables-dwg-scalar-domain") {
+        const bool passed = runWipeoutVariablesDwgDomainRefusal();
+        std::cout << "DWG WIPEOUTVARIABLES scalar domain: "
+                  << (passed ? "PASS" : "FAIL") << '\n';
+        return passed ? 0 : 1;
+    }
     if (argc == 3 && std::string(argv[1]) == "--dwg-ellipse-wcs-oda-source") {
         return runDwgEllipseWcsOdaSource(argv[2]) ? 0 : 1;
     }

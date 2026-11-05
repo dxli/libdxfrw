@@ -86,6 +86,8 @@ output and native wipeout behavior remain open ([class-version receipt](docs/res
 The DWG writer also refuses WIPEOUTVARIABLES display-frame values outside the
 documented 0/1 domain before reserving identity; input remains tolerant. See the
 [DWG scalar-domain receipt](docs/research/p4-wipeoutvariables-dwg-scalar-domain-2026-11-05.json).
+A dedicated fast selector covers invalid values 2 and 65535 independently of
+the broader local DWG roundtrip cohort.
 The bounded AC1018 direct-NOD RASTERVARIABLES graph covers the witnessed
 0/0/1/3 and 0/1/1/3 profiles in generated ASCII/Binary output; broader graphs,
 physical whole-document output and native image behavior remain open
