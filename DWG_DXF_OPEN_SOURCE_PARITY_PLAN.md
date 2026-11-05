@@ -83,6 +83,9 @@ The generic DXF codec now reads and retains WIPEOUTVARIABLES group 90, emits
 the documented fixed class version 0, and refuses unsupported output versions
 before reserving identity. Source-origin graph profiles, physical whole-file
 output and native wipeout behavior remain open ([class-version receipt](docs/research/p4-wipeoutvariables-dxf-class-version-2026-11-05.json)).
+The DWG writer also refuses WIPEOUTVARIABLES display-frame values outside the
+documented 0/1 domain before reserving identity; input remains tolerant. See the
+[DWG scalar-domain receipt](docs/research/p4-wipeoutvariables-dwg-scalar-domain-2026-11-05.json).
 The bounded AC1018 direct-NOD RASTERVARIABLES graph covers the witnessed
 0/0/1/3 and 0/1/1/3 profiles in generated ASCII/Binary output; broader graphs,
 physical whole-document output and native image behavior remain open

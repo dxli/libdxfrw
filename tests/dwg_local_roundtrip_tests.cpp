@@ -4615,8 +4615,16 @@ public:
         invalidWipeoutVariables.handle = 0xB601u;
         invalidWipeoutVariables.parentHandle = dictionary.handle;
         invalidWipeoutVariables.setDwgCommonObjectState(0, 2, false);
-        rejectedMalformedWipeoutVariables_ =
+        const bool rejectedMalformedWipeoutCommonState =
             !writer_->writeWipeoutVariables(&invalidWipeoutVariables);
+        DRW_WipeoutVariables invalidWipeoutFrame;
+        invalidWipeoutFrame.handle = 0xB602u;
+        invalidWipeoutFrame.parentHandle = dictionary.handle;
+        invalidWipeoutFrame.m_displayFrame = 2;
+        const bool rejectedInvalidWipeoutFrame =
+            !writer_->writeWipeoutVariables(&invalidWipeoutFrame);
+        rejectedMalformedWipeoutVariables_ =
+            rejectedMalformedWipeoutCommonState && rejectedInvalidWipeoutFrame;
 
         DRW_VisualStyle invalidVisualStyle;
         invalidVisualStyle.handle = 0xC001u;

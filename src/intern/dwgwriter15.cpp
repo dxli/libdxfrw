@@ -5299,7 +5299,7 @@ bool dwgWriter15::emitWipeoutVariablesObject(
 
 bool dwgWriter15::writeWipeoutVariables(
     const DRW_WipeoutVariables& wipeoutVariables) {
-    if (m_version < DRW::AC1015)
+    if (m_version < DRW::AC1015 || wipeoutVariables.m_displayFrame > 1u)
         return false;
 
     DRW_WipeoutVariables object = wipeoutVariables;

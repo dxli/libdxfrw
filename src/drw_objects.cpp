@@ -11754,7 +11754,7 @@ bool DRW_WipeoutVariables::encodeDwg(DRW::Version version, dwgBufferW *buf,
                                      dwgBufferW *handleBuf) const {
     if (buf == nullptr || !dwgSafety::validReactorCount(numReactors)
         || reactorHandles.size() > dwgSafety::MaxReactorCount
-        || xDictFlag > 1)
+        || xDictFlag > 1 || m_displayFrame > 1u)
         return false;
     DRW_UNUSED(strBuf);
     dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014)
