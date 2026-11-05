@@ -2000,9 +2000,14 @@ Native source-release builds and platform qualification remain open.
   The physical selectors verify import only. Whole-source output remains
   blocked by the samples' unrelated read/layout-integrity gaps, and native
   image semantics and broader producer/version coverage remain open.
-  A separate AC1024 source-frame control supports the bounded 0/1/3 profile;
-  generated output is covered, while physical NOD `0x0A` output binding and
-  whole-source conversion remain open ([receipt](docs/research/p4-ac1024-rastervariables-direct-nod-2026-11-04.json)).
+  A separate AC1024 source-frame control supports the bounded 0/1/3 profile.
+  The exact hash-bound physical source now passes selected-object ASCII/Binary
+  output and fresh typed readback: its source NOD `0x0A` owner/reactor map to
+  the output NOD, and source mutation refusal plus corrected same-adapter retry
+  pass. This uses debug/legacy partial-output settings because the source has
+  two HEADER integrity observations; strict whole-drawing output remains
+  refused. See the [original source-frame receipt](docs/research/p4-ac1024-rastervariables-direct-nod-2026-11-04.json)
+  and [selected-output receipt](docs/research/p4-ac1024-rastervariables-physical-selected-output-2026-11-05.json).
   The low-level WIPEOUT writer now translates both IMAGEDEF and IMAGEDEF_REACTOR
   references through the configured resolver or remap fallback; see the
   [WIPEOUT reference receipt](docs/research/p8-wipeout-dxf-reference-remapping-2026-11-03.json).
