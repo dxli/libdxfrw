@@ -26,7 +26,11 @@
     },
     "selected_projection": {
       "result": "not qualified",
-      "reason": "The existing test projection retains broader FIELD/FIELDLIST carriers and production export refuses at 'FIELD/FIELDLIST carriers have no qualified DXF serializer'. Follow-up same-writer attempts did not yield stable corrected-retry/readback evidence."
+      "experiments": [
+        "The existing broad test projection retains unrelated FIELD/FIELDLIST carriers and production export refuses at 'FIELD/FIELDLIST carriers have no qualified DXF serializer'.",
+        "A narrower experiment retained only the four source-bound LayerStates dictionaries and the ACAD_SCALELIST dictionary/SCALE records, cleared unrelated XRECORDs and source-frame receipts, and kept only STANDARD DIMSTYLE/TEXTSTYLE rows. It passed the FIELD/FIELDLIST gate but failed at BLOCK_RECORD planning callbacks because the test projection lacks a bounded source BLOCK_RECORD/BLOCK graph. No output/readback was produced."
+      ],
+      "decision": "Do not admit the AC1021 LayerStates profile. A future projection must include a dependency-closed block-record graph and prove same-writer retry plus fresh ASCII/Binary readback while retaining strict full-source refusal."
     },
     "alternate_sample": {
       "path": "/Users/dli/doc/dwg/Pool_Detail.dwg",
