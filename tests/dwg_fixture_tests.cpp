@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
@@ -122,6 +123,27 @@ std::vector<const DRW_Line*> linesIn(const dx_data& data) {
     return lines;
 }
 
+bool hasControlRoleDiagnostic(const dx_data& data, const char* controlName) {
+    if (controlName == nullptr)
+        return false;
+    const std::string expected(controlName);
+    const DwgReadIntegrityObservations& integrity =
+        data.dwgReadOutcome.observations.integrity;
+    for (std::size_t index = 0;
+         index < std::min(integrity.retained, integrity.rows.size()); ++index) {
+        const DwgReadIntegrityObservation& row = integrity.rows[index];
+        if (row.kind != DwgIntegrityCheckKind::TableControlHandleRole
+            || row.sectionName.length != expected.size())
+            continue;
+        const std::string observed(
+            reinterpret_cast<const char*>(row.sectionName.bytes.data()),
+            row.sectionName.length);
+        if (observed == expected)
+            return true;
+    }
+    return false;
+}
+
 void testOrdinaryEncoding(TestContext& t, const char* name,
                           bool extended, const char* expectedBookName,
                           const char* expectedCodePage) {
@@ -137,6 +159,12 @@ void testOrdinaryEncoding(TestContext& t, const char* name,
              "ordinary ENC DWG publishes exactly one header callback");
     t.expect(interface_.sourceCodePage == expectedCodePage,
              "ordinary ENC DWG propagates its source code page");
+    if (data.sourceVersion == DRW::AC1021 || data.sourceVersion == DRW::AC1027) {
+        t.expect(hasControlRoleDiagnostic(data, "LTYPE_CONTROL"),
+                 "historical ENC LTYPE member roles remain diagnostic");
+        t.expect(hasControlRoleDiagnostic(data, "BLOCK_CONTROL"),
+                 "historical ENC BLOCK member roles remain diagnostic");
+    }
     const std::vector<const DRW_Line*> lines = linesIn(data);
     t.expect(lines.size() == 3u,
              "ordinary ENC DWG publishes the three LINE records");

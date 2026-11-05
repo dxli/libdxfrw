@@ -921,6 +921,38 @@ void dwgReader::recordLtypeControlMemberRoleError(
   }
 }
 
+void dwgReader::recordBlockControlMemberRoleError(
+    const objHandle &source, const DRW_ObjControl &control,
+    DwgIntegrityAddressSpace offsetSpace) noexcept {
+  const std::vector<std::uint32_t> &slots = control.orderedHandleSlots;
+  const std::vector<std::uint8_t> &roles = control.orderedHandleRoles;
+  if (slots.size() != roles.size() || slots.size() < 2u) {
+    recordIntegrityDiagnostic(
+        DwgIntegritySeverity::Error, offsetSpace,
+        DwgIntegrityPhase::SectionParser,
+        DwgIntegrityCheckKind::TableControlHandleRole, secEnum::OBJECTS, -1,
+        "BLOCK_CONTROL", 0u, false, source.loc, true, source.handle,
+        source.handle != DRW::NoHandle, slots.size(), roles.size(), true);
+    return;
+  }
+
+  const std::size_t ownedEntries = slots.size() - 2u;
+  for (std::size_t index = 0; index < slots.size(); ++index) {
+    const std::uint8_t expected = static_cast<std::uint8_t>(
+        index < ownedEntries ? DRW::DwgSoftOwnership
+                             : DRW::DwgHardOwnership);
+    if (slots[index] != 0u && roles[index] == expected)
+      continue;
+    recordIntegrityDiagnostic(
+        DwgIntegritySeverity::Error, offsetSpace,
+        DwgIntegrityPhase::SectionParser,
+        DwgIntegrityCheckKind::TableControlHandleRole, secEnum::OBJECTS, -1,
+        "BLOCK_CONTROL", 0u, false, source.loc, true, slots[index],
+        slots[index] != DRW::NoHandle, expected, roles[index], true);
+    return;
+  }
+}
+
 void dwgReader::recordOrphanedEntity(
     const objHandle &object, std::uint32_t ownerHandle,
     DwgIntegrityAddressSpace offsetSpace) noexcept {
@@ -8777,6 +8809,8 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
     eraseObject(mit);
     DRW_ObjControl blockControl;
     ret2 = parseControl(oc, kBlockTable, blockControl);
+    if (ret2)
+      recordBlockControlMemberRoleError(oc, blockControl, offsetSpace);
     ret2 = ret2 && claimControlHandles(blockControl, /*skipAbsent=*/true);
     ret2 = ret2 && stageControlReceipt(oc, kBlockTable, blockControl);
     if (!ret2) {
@@ -14780,7 +14814,6 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
     const std::uint64_t footerBits = detached ? 1u : 0u;
     if (bodyEndBit < footerBits) return fail();
     const std::uint64_t countLimit = bodyEndBit - footerBits;
-
     const auto validWriterTail = [&](dwgBuffer legacy, std::int32_t count) {
       if (count < 1 || static_cast<std::uint32_t>(count) > dwgSafety::MaxOwnedObjectCount
           || count > std::numeric_limits<std::int32_t>::max() - 2
@@ -14842,6 +14875,58 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
       }
       return valid;
     };
+    // LibreCAD's historical writer (the provenance of the tracked ENC
+    // regression fixtures) emitted a distinct control profile: null owner,
+    // null hard-owner XDictionary, then BYBLOCK/BYLAYER/CONTINUOUS followed
+    // by named entries as code-4 pointers. Keep this compatibility route exact
+    // and separate from the ODA and current-writer ownership profiles;
+    // readDwgTables records the role mismatch so strict output admission can
+    // continue to refuse it.
+    const auto validHistoricalLibreCADTail = [&](dwgBuffer legacy,
+                                                  std::int32_t count) {
+      if ((version != DRW::AC1021 && version != DRW::AC1027)
+          || count < 1
+          || static_cast<std::uint32_t>(count) > dwgSafety::MaxOwnedObjectCount
+          || handle != DRW::DwgLtypeControlHandle || numReactors != 0
+          || !extData.empty() || xDictFlag != 0
+          || hasDataStorageBinaryData())
+        return false;
+      dwgHandle owner, xdict, child;
+      if (!readDwgHandleChecked(legacy, 0, false, owner)
+          || owner.code != DRW::DwgNullReference || owner.size != 0
+          || owner.ref != 0
+          || !readDwgHandleChecked(legacy, 0, false, xdict)
+          || xdict.code != DRW::DwgHardOwnership || xdict.size != 0
+          || xdict.ref != 0)
+        return false;
+      const std::uint32_t builtinOrder[] = {
+          DRW::DwgLtypeByBlockHandle,
+          DRW::DwgLtypeByLayerHandle,
+          DRW::DwgLtypeContinuousHandle};
+      std::unordered_set<std::uint32_t> seen;
+      try {
+        for (std::int32_t i = 0; i < count + 2; ++i) {
+          if (!readDwgHandleChecked(legacy, 0, false, child)
+              || child.code != DRW::DwgSoftPointer || child.ref == 0
+              || child.ref64 > std::numeric_limits<std::uint32_t>::max()
+              || !seen.insert(child.ref).second
+              || (i < 3 && child.ref != builtinOrder[i]))
+            return false;
+        }
+      } catch (...) {
+        return false;
+      }
+      std::uint64_t end = 0;
+      if (!controlCurrentBit(legacy, end) || end > totalBits
+          || totalBits - end > 7u)
+        return false;
+      while (end < totalBits) {
+        if (legacy.getBit() != 0 || !legacy.isGood())
+          return false;
+        ++end;
+      }
+      return true;
+    };
     const auto matchesBoundary = [&](const dwgBuffer &candidate,
                                      std::int32_t count) {
       std::uint64_t end = 0;
@@ -14854,8 +14939,12 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
       if (!detached || end > UINT64_MAX - 8u) return false;
       const std::uint64_t aligned = (end + 8u) & ~std::uint64_t(7u);
       const std::uint64_t extra = version > DRW::AC1021 ? 24u : 0u;
-      if (aligned > UINT64_MAX - extra || aligned + extra != bodyEndBit
-          || !validWriterTail(hBuff.forkIndependent(), count)) return false;
+      const bool alignedMatch = aligned <= UINT64_MAX - extra
+          && aligned + extra == bodyEndBit;
+      const bool tailMatch = alignedMatch
+          && (validWriterTail(hBuff.forkIndependent(), count)
+              || validHistoricalLibreCADTail(hBuff.forkIndependent(), count));
+      if (!tailMatch) return false;
       dwgBuffer trailer = candidate.forkIndependent();
       for (std::uint64_t i = end; i < bodyEndBit; ++i)
         if (trailer.getBit() != 0 || !trailer.isGood()) return false;
@@ -14863,8 +14952,9 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
     };
     if (legacyR2007InlineLtypeControl) {
       // Old R2007 frames put BS and handles inline while objSize describes
-      // the entire padded frame. Only the complete old writer graph admits
-      // this special framing, including compact counts.
+      // the entire padded frame. The original bundled LibreCAD writer uses a
+      // BL count in this framing; older libdxfrw output used BS. Admit either
+      // only with the corresponding complete, byte-bounded handle profile.
       dwgBuffer candidate = buf->forkIndependent();
       bool stringBit = false;
       countRead = readControlBitShort(candidate, countLimit, rawNumEntries);
@@ -14872,6 +14962,21 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
       countRead = countRead && readControlBit(tail, bodyEndBit, stringBit)
           && !stringBit && validWriterTail(tail, rawNumEntries);
       if (countRead) *buf = candidate;
+      if (!countRead) {
+        candidate = buf->forkIndependent();
+        std::int32_t historicalCount = 0;
+        const bool historicalCountRead =
+            readControlBitLong(candidate, countLimit, historicalCount);
+        tail = candidate.forkIndependent();
+        stringBit = false;
+        countRead = historicalCountRead
+            && readControlBit(tail, bodyEndBit, stringBit) && !stringBit
+            && validHistoricalLibreCADTail(tail, historicalCount);
+        if (countRead) {
+          rawNumEntries = historicalCount;
+          *buf = candidate;
+        }
+      }
     } else {
       dwgBuffer tagProbe = buf->forkIndependent();
       const std::uint8_t tag = tagProbe.get2Bits();
@@ -14965,8 +15070,9 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   dwgHandle objectH;
   if (!readDwgHandleChecked(*hBuf, 0, false, objectH)
       || (legacyR2007InlineBlockControl
-          && (objectH.code != DRW::DwgSoftPointer || objectH.size != 0
-              || objectH.ref != 0)))
+          && ((objectH.code != DRW::DwgSoftPointer
+               && objectH.code != DRW::DwgNullReference)
+              || objectH.size != 0 || objectH.ref != 0)))
     return fail();
   DRW_DBG(" NULL Handle: ");
   DRW_DBGHL(objectH.code, objectH.size, objectH.ref);
@@ -15056,7 +15162,9 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
           : DRW::DwgPaperSpaceBlockRecordHandle;
       if (objectH.code != (phantom ? DRW::DwgHardOwnership
                                   : DRW::DwgSoftOwnership)
-          || objectH.ref == 0 || (phantom && objectH.ref != expected))
+          && objectH.code != DRW::DwgSoftPointer)
+        return fail();
+      if (objectH.ref == 0 || (phantom && objectH.ref != expected))
         return fail();
     }
     parsedHandleSlots.push_back(objectH.ref);

@@ -1631,6 +1631,11 @@ protected:
   void recordLtypeControlMemberRoleError(
       const objHandle &source, const DRW_ObjControl &control,
       DwgIntegrityAddressSpace offsetSpace) noexcept;
+  /// Preserve tolerant BLOCK_CONTROL imports while recording non-ODA member
+  /// roles as strict-output errors.
+  void recordBlockControlMemberRoleError(
+      const objHandle &source, const DRW_ObjControl &control,
+      DwgIntegrityAddressSpace offsetSpace) noexcept;
   void recordOrphanedEntity(const objHandle &object,
                             std::uint32_t ownerHandle,
                             DwgIntegrityAddressSpace offsetSpace) noexcept;
