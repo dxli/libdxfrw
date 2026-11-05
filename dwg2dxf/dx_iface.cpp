@@ -32856,6 +32856,7 @@ bool dx_iface::prepareDwgLayerStateOutput(
         return false;
     if (cData->sourceFormat != dx_source_format::DWG
         || (cData->sourceVersion != DRW::AC1018
+            && cData->sourceVersion != DRW::AC1021
             && cData->sourceVersion != DRW::AC1024)
         || targetVersion != DRW::AC1024)
         return true;
@@ -32945,7 +32946,10 @@ bool dx_iface::prepareDwgLayerStateOutput(
         return skip("ACAD_LAYERSTATES child dictionary common fields are outside the admitted profile");
 
     const DRW_XRecord* layerStateRecord = nullptr;
-    if (sourceVersion == DRW::AC1018 || ac1024EmptyLayerStatesRoot) {
+    const bool ac1021EmptyLayerStatesRoot =
+        sourceVersion == DRW::AC1021 && states->m_entries.empty();
+    if (sourceVersion == DRW::AC1018 || ac1024EmptyLayerStatesRoot
+        || ac1021EmptyLayerStatesRoot) {
         if (!states->m_entries.empty())
             return skip("empty ACAD_LAYERSTATES child dictionary profile contains entries");
     } else {
@@ -33062,7 +33066,7 @@ bool dx_iface::prepareDwgLayerStateOutput(
             dwgObjType::XRECORD);
     };
     std::vector<DRW_Dictionary> layerStateCompanions;
-    if (sourceVersion == DRW::AC1024) {
+    if (sourceVersion == DRW::AC1021 || sourceVersion == DRW::AC1024) {
         std::set<std::string> companionNames;
         for (const DRW_Dictionary::Entry& entry : extension->m_entries) {
             if (entry.m_name == "ACAD_LAYERSTATES")
@@ -33166,6 +33170,7 @@ bool dx_iface::hasUnchangedDwgLayerStateOutputSource() const noexcept {
     if (cData == nullptr || m_dwgLayerStateOutputOwner != cData
         || m_dwgLayerStateOutputGeneration != cData->importGeneration
         || (m_dwgLayerStateOutputSourceVersion != DRW::AC1018
+            && m_dwgLayerStateOutputSourceVersion != DRW::AC1021
             && m_dwgLayerStateOutputSourceVersion != DRW::AC1024)
         || cData->sourceFormat != dx_source_format::DWG
         || cData->sourceVersion != m_dwgLayerStateOutputSourceVersion)
