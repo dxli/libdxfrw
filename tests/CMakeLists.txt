@@ -3013,6 +3013,15 @@ set_tests_properties(dwg2dxf_raw_dxf_entity_table_name_references PROPERTIES
 )
 
 add_test(
+    NAME dxf_raw_entity_material_visualstyle_bindings
+    COMMAND libdxfrw_dxf_fixture_tests --material-consumer-bindings
+)
+set_tests_properties(dxf_raw_entity_material_visualstyle_bindings PROPERTIES
+    LABELS "fast;dxf;adapter;raw-entity;material;visual-style;reference;transaction;generated"
+    TIMEOUT 30
+)
+
+add_test(
     NAME dwg2dxf_raw_dxf_section_capture_limits
     COMMAND libdxfrw_dwg2dxf_adapter_tests --raw-dxf-section-capture-limits
 )
