@@ -52,6 +52,14 @@ public:
 
     void setFormatVersion(DRW::Version value) noexcept { version = value; }
 
+    void addSourceFrame(std::uint32_t handle) {
+        DRW_DwgFrameCoverageEntry entry;
+        entry.m_handle = handle;
+        const std::size_t index = m_dwgSourceFrameLedger.size();
+        m_dwgSourceFrameIndexes.emplace(handle, index);
+        m_dwgSourceFrameLedger.push_back(entry);
+    }
+
     void setPrototypeSectionData(std::vector<std::uint8_t> data) {
         m_prototypeSectionData = std::move(data);
         dwgSectionInfo section;
@@ -12838,6 +12846,59 @@ void testDataStorageBlobPages(TestContext& t) {
                  && orphanSection.orphanRecordCount == 1u
                  && hasOrphanDiagnostic,
              "parsed DataStorage finalization reports unattached record by handle");
+
+    std::vector<std::uint8_t> sourceMappedReaderBacking{0u};
+    dwgRW sourceMappedParent(nullptr);
+    DataStorageLinkTestReader sourceMappedReader(
+        std::unique_ptr<dwgBuffer>(new dwgBuffer(
+            sourceMappedReaderBacking.data(),
+            sourceMappedReaderBacking.size())),
+        &sourceMappedParent);
+    sourceMappedReader.setFormatVersion(DRW::AC1027);
+    sourceMappedReader.m_dataStorageSections.push_back(
+        DRW_parseDataStorage(fixture.bytes, DRW::AC1027));
+    sourceMappedReader.addSourceFrame(0xa18u);
+    DRW_ModelerGeometry sourceMappedBody(DRW::E3DSOLID);
+    sourceMappedBody.setHasDataStorageBinaryData(true);
+    sourceMappedBody.dataStorageHandle = 0xa17u;
+    sourceMappedBody.dataStorageHandleKey = "A17";
+    sourceMappedReader.linkDataStorage(sourceMappedBody);
+    sourceMappedReader.finalizeDataStorageLinks();
+    const DRW_DataStorageSection& sourceMappedSection =
+        sourceMappedReader.m_dataStorageSections.front();
+    const bool hasUnboundSourceDiagnostic = std::any_of(
+        sourceMappedSection.diagnostics.cbegin(),
+        sourceMappedSection.diagnostics.cend(),
+        [](const DRW_DataStorageDiagnostic& diagnostic) {
+            return diagnostic.code == "datastorage-unbound-source-frame" &&
+                diagnostic.handle == 0xa18u && diagnostic.hasOffset &&
+                diagnostic.kind ==
+                    DRW_DataStorageDiagnostic::Kind::Informational;
+        });
+    t.expect(sourceMappedReader.m_dataStorageOrphanRecords == 0u &&
+                 sourceMappedSection.orphanRecordCount == 0u &&
+                 sourceMappedSection.unboundRecordCount == 1u &&
+                 hasUnboundSourceDiagnostic,
+             "unlinked DataStorage record with a validated source handle is reported separately from a dangling record");
+
+    std::vector<std::uint8_t> invalidSourceMapReaderBacking{0u};
+    dwgRW invalidSourceMapParent(nullptr);
+    DataStorageLinkTestReader invalidSourceMapReader(
+        std::unique_ptr<dwgBuffer>(new dwgBuffer(
+            invalidSourceMapReaderBacking.data(),
+            invalidSourceMapReaderBacking.size())),
+        &invalidSourceMapParent);
+    invalidSourceMapReader.setFormatVersion(DRW::AC1027);
+    invalidSourceMapReader.m_dataStorageSections.push_back(
+        DRW_parseDataStorage(fixture.bytes, DRW::AC1027));
+    invalidSourceMapReader.m_dwgSourceFrameIndexes.emplace(0xa18u, 0u);
+    invalidSourceMapReader.finalizeDataStorageLinks();
+    const DRW_DataStorageSection& invalidSourceMapSection =
+        invalidSourceMapReader.m_dataStorageSections.front();
+    t.expect(invalidSourceMapReader.m_dataStorageOrphanRecords == 2u &&
+                 invalidSourceMapSection.orphanRecordCount == 2u &&
+                 invalidSourceMapSection.unboundRecordCount == 0u,
+             "stale source-frame index cannot suppress DataStorage orphan diagnostics");
 
     std::vector<std::uint8_t> mismatchReaderBacking{0u};
     dwgRW mismatchParent(nullptr);

@@ -846,8 +846,10 @@ public:
     /// AC1027+ modeler/surface entities that advertised a DataStorage payload
     /// but had no matching handle-keyed record. Non-fatal compatibility data.
     size_t getDataStorageLinkFailures() const;
-    /// AC1027+ DataStorage records that were not referenced by a parsed
-    /// modeler/surface entity. Non-fatal compatibility data.
+    /// AC1027+ DataStorage records whose handles have no validated
+    /// source-frame entry and are not linked to a parsed modeler/surface
+    /// entity. Unbound records with an existing source frame are reported in
+    /// DRW_DataStorageSection diagnostics. Non-fatal compatibility data.
     size_t getDataStorageOrphanRecords() const;
     /// Copy the location-bearing integrity observations from the most recent
     /// read. Records are appended in parser encounter order, including

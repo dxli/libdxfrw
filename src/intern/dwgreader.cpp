@@ -10324,10 +10324,13 @@ void dwgReader::finalizeDataStorageLinks() {
        sectionIndex < m_dataStorageSections.size(); ++sectionIndex) {
     DRW_DataStorageSection &section = m_dataStorageSections[sectionIndex];
     section.orphanRecordCount = 0;
+    section.unboundRecordCount = 0;
     section.diagnostics.erase(
         std::remove_if(section.diagnostics.begin(), section.diagnostics.end(),
                        [](const DRW_DataStorageDiagnostic &diagnostic) {
-                         return diagnostic.code == "datastorage-orphan-record";
+                         return diagnostic.code == "datastorage-orphan-record" ||
+                                diagnostic.code ==
+                                    "datastorage-unbound-source-frame";
                        }),
         section.diagnostics.end());
     for (std::size_t recordIndex = 0; recordIndex < section.records.size();
@@ -10335,6 +10338,35 @@ void dwgReader::finalizeDataStorageLinks() {
       const DRW_DataStorageRecord &record = section.records[recordIndex];
       if (m_dataStorageLinkedRecords.find({sectionIndex, recordIndex}) !=
           m_dataStorageLinkedRecords.end()) {
+        continue;
+      }
+
+      const bool handleFitsSourceMap =
+          record.handle <= std::numeric_limits<std::uint32_t>::max();
+      const auto sourceFrame = handleFitsSourceMap
+          ? m_dwgSourceFrameIndexes.find(
+                static_cast<std::uint32_t>(record.handle))
+          : m_dwgSourceFrameIndexes.end();
+      const bool hasValidatedSourceFrame =
+          sourceFrame != m_dwgSourceFrameIndexes.end() &&
+          sourceFrame->second < m_dwgSourceFrameLedger.size() &&
+          m_dwgSourceFrameLedger[sourceFrame->second].m_handle ==
+              record.handle;
+
+      if (hasValidatedSourceFrame) {
+        ++section.unboundRecordCount;
+        DRW_DataStorageDiagnostic diagnostic;
+        diagnostic.code = "datastorage-unbound-source-frame";
+        diagnostic.message =
+            "DataStorage record handle " + record.handleKey +
+            " exists in the validated DWG handle map but was not linked to a "
+            "parsed modeler/surface entity";
+        diagnostic.handle = record.handle;
+        diagnostic.hasHandle = true;
+        diagnostic.offset = record.recordOffset;
+        diagnostic.hasOffset = true;
+        diagnostic.kind = DRW_DataStorageDiagnostic::Kind::Informational;
+        section.diagnostics.push_back(std::move(diagnostic));
         continue;
       }
 
