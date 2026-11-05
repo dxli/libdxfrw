@@ -32389,6 +32389,145 @@ bool qualifyMLeaderAdapterSerializer() {
     return true;
 }
 
+bool physicalMLeaderProxyCacheRoundtrip(const std::filesystem::path& source) {
+    dx_data physical;
+    dx_iface physicalReader;
+    if (!physicalReader.fileImport(source.string(), &physical, false)
+        || physical.sourceFormat != dx_source_format::DWG
+        || physical.sourceVersion != DRW::AC1021
+        || !physical.dwgProxyResourceOrderCaptured
+        || physical.dwgProxyResourceOrderCaptureFailed)
+        return fail("physical MLEADER proxy source/resource-order import failed");
+
+    std::vector<const DRW_MLeader*> physicalMLeaders;
+    const auto collect = [&physicalMLeaders](const dx_ifaceBlock* block) {
+        if (block == nullptr)
+            return;
+        for (const DRW_Entity* entity : block->ent) {
+            const auto* mleader = dynamic_cast<const DRW_MLeader*>(entity);
+            if (mleader != nullptr && entity->eType == DRW::MLEADER
+                && !mleader->proxyGraphics.empty())
+                physicalMLeaders.push_back(mleader);
+        }
+    };
+    collect(physical.mBlock);
+    for (const dx_ifaceBlock* block : physical.blocks)
+        collect(block);
+    if (physicalMLeaders.empty())
+        return fail("physical AC1021 source has no MLEADER proxy caches");
+
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch()
+                           .count();
+    const std::filesystem::path directory =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-physical-mleader-proxy-"
+           + std::to_string(nonce));
+    std::filesystem::create_directories(directory);
+
+    std::vector<std::string> targetLayerNames;
+    std::set<std::string> seenLayerNames;
+    for (const DRW_Layer& layer : physical.layers) {
+        if (!layer.name.empty() && seenLayerNames.insert(layer.name).second)
+            targetLayerNames.push_back(layer.name);
+    }
+    if (seenLayerNames.insert("0").second)
+        targetLayerNames.emplace_back("0");
+    for (const bool binary : {false, true}) {
+        const std::string suffix = binary ? "binary" : "ascii";
+        const std::filesystem::path sourcePath = directory
+            / ("wrapper-source-" + suffix + ".dxf");
+        if (!generateRootMLeaderStyleControl(
+                sourcePath, binary, true, 0, true))
+            return fail("could not generate physical-cache MLEADER wrapper");
+
+        std::size_t completed = 0u;
+        for (std::size_t index = 0; index < physicalMLeaders.size(); ++index) {
+            dx_data wrapper;
+            dx_iface wrapperReader;
+            if (!wrapperReader.fileImport(sourcePath.string(), &wrapper, false))
+                return fail("could not parse generated physical-cache wrapper");
+            DRW_MLeader* outputEntity = nullptr;
+            for (DRW_Entity* entity : wrapper.mBlock->ent) {
+                if (entity != nullptr && entity->eType == DRW::MLEADER) {
+                    outputEntity = dynamic_cast<DRW_MLeader*>(entity);
+                    break;
+                }
+            }
+            const DRW_MLeader& inputEntity = *physicalMLeaders[index];
+            if (outputEntity == nullptr
+                || inputEntity.numProxyGraph <= 0
+                || inputEntity.proxyGraphics.size()
+                    != static_cast<std::size_t>(inputEntity.numProxyGraph))
+                return fail("physical MLEADER proxy cache has invalid byte count");
+
+            outputEntity->proxyGraphics = inputEntity.proxyGraphics;
+            outputEntity->numProxyGraph = inputEntity.numProxyGraph;
+            outputEntity->styleTextColor = 37;
+            if (!DrwMLeaderProxyTestAccess::markParsedAc1021(*outputEntity))
+                return fail("could not bind physical MLEADER cache provenance");
+            wrapper.sourceFormat = dx_source_format::DWG;
+            wrapper.sourceVersion = DRW::AC1021;
+            wrapper.dwgProxyResourceOrderCaptured = true;
+            wrapper.dwgProxyLayerNameOrder = physical.dwgProxyLayerNameOrder;
+            wrapper.dwgProxyLinetypeNameOrder =
+                physical.dwgProxyLinetypeNameOrder;
+            wrapper.layers.clear();
+            for (const std::string& name : targetLayerNames) {
+                DRW_Layer layer;
+                layer.name = name;
+                wrapper.layers.push_back(layer);
+            }
+
+            std::string expectedCache;
+            std::size_t layerReferences = 0u;
+            std::size_t linetypeReferences = 0u;
+            if (!DRW_ProxyGraphicDecoder::remapResourceIndices(
+                    inputEntity.proxyGraphics,
+                    wrapper.dwgProxyLayerNameOrder, targetLayerNames,
+                    wrapper.dwgProxyLinetypeNameOrder, {}, expectedCache,
+                    layerReferences, linetypeReferences)
+                || layerReferences == 0u)
+                return fail("physical MLEADER proxy resource mapping failed");
+
+            const std::filesystem::path outputPath = directory
+                / ("cache-" + std::to_string(index) + "-" + suffix + ".dxf");
+            dxfRW writer(outputPath.string().c_str());
+            dx_iface output;
+            DxIfaceExtensionGraphTestAccess::attachDxfWriter(
+                output, wrapper, writer);
+            if (!writer.write(&output, DRW::AC1021, binary))
+                return fail("physical MLEADER proxy dxfRW write failed at cache "
+                    + std::to_string(index) + " " + suffix);
+
+            dx_data readback;
+            dx_iface readbackReader;
+            if (!readbackReader.fileImport(outputPath.string(), &readback,
+                                           false))
+                return fail("physical MLEADER proxy output did not read back");
+            DRW_MLeader* readbackEntity = nullptr;
+            for (DRW_Entity* entity : readback.mBlock->ent) {
+                if (entity != nullptr && entity->eType == DRW::MLEADER) {
+                    readbackEntity = dynamic_cast<DRW_MLeader*>(entity);
+                    break;
+                }
+            }
+            if (readbackEntity == nullptr
+                || readbackEntity->proxyGraphics != expectedCache
+                || readbackEntity->numProxyGraph
+                    != static_cast<int>(expectedCache.size())
+                || readbackEntity->styleTextColor != 37)
+                return fail("physical proxy bytes/count or class group 92 changed on readback");
+            ++completed;
+        }
+        std::cout << "physical MLEADER proxy " << suffix << " readback="
+                  << completed << '/' << physicalMLeaders.size() << '\n';
+    }
+    std::error_code ignored;
+    std::filesystem::remove_all(directory, ignored);
+    return true;
+}
+
 bool qualifyArcAlignedTextD2tOutputGuard() {
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch()
@@ -72660,6 +72799,9 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--mleader-adapter-writer")
         return qualifyMLeaderAdapterSerializer()
                 && objectContextDataLossRefusesExport() ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--mleader-physical-proxy-roundtrip")
+        return physicalMLeaderProxyCacheRoundtrip(argv[2]) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--arcalignedtext-d2t-output-guard")
         return qualifyArcAlignedTextD2tOutputGuard() ? 0 : 1;
