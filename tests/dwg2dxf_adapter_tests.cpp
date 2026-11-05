@@ -905,27 +905,37 @@ public:
     static bool rasterUnchanged(const dx_iface& iface) {
         return iface.hasUnchangedRasterDwgSources();
     }
-    static bool physicalDirectRaster1032Wire(const dx_data& data) {
+    static bool physicalDirectRaster1032Wire(
+            const dx_data& data, std::int32_t expectedFrame = 0) {
         const auto frame = data.m_opaqueDwgSourceFrames.find({data.importGeneration, 0x2Fu});
         if (frame == data.m_opaqueDwgSourceFrames.end()
             || data.namedObjectDictionary.handle != 0xAu) return false;
         const auto& raw = frame->second;
-        if (raw.m_version != DRW::AC1032 || raw.m_rawBytes.size() != 13u
+        const std::uint32_t handleStart = expectedFrame == 1 ? 73u : 65u;
+        const std::uint32_t scalarEnd = expectedFrame == 1 ? 72u : 64u;
+        if (raw.m_version != DRW::AC1032
+            || raw.m_rawBytes.size() != (expectedFrame == 1 ? 14u : 13u)
             || raw.m_bodyBitSize != 39u) return false;
         using namespace dx_raster_wire;
-        detail::Bits body{raw.m_rawBytes.data(), 0u, 65u};
+        detail::Bits body{raw.m_rawBytes.data(), 0u, scalarEnd + 1u};
         if (body.take(2u) != 1u || body.take(8u) + 0x1F0u != 512u
             || detail::handle(body, 0u, 0u, true).value != 0x2Fu
             || body.shortValue() != 0u || body.longValue() != 1u
             || body.take(1u) != 1u || body.take(1u) != 0u
-            || body.longValue() != 0u || body.shortValue() != 0u
+            || body.longValue() != 0u || body.pos != 42u) return false;
+        const auto frameBitStart = body.pos;
+        if (body.shortValue() != static_cast<std::uint32_t>(expectedFrame)
+            || body.pos - frameBitStart != (expectedFrame == 1 ? 10u : 2u)
             || body.shortValue() != 1u || body.shortValue() != 3u
-            || body.pos != 64u || body.take(1u) != 0u || !body.good) return false;
-        detail::Bits handles{raw.m_rawBytes.data(), 65u, 104u};
+            || body.pos != scalarEnd || body.take(1u) != 0u || !body.good)
+            return false;
+        detail::Bits handles{raw.m_rawBytes.data(), handleStart,
+                              static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u)};
         const auto owner = detail::handle(handles, 4u, 0x2Fu);
         const auto reactor = detail::handle(handles, 4u, 0x2Fu);
         if (!handles.good || owner.role != 4u || reactor.role != 4u
-            || owner.value != 0xAu || reactor.value != 0xAu || handles.pos != 97u) return false;
+            || owner.value != 0xAu || reactor.value != 0xAu
+            || handles.pos != handleStart + 32u) return false;
         while (handles.pos < handles.end) if (handles.take(1u) != 0u) return false;
         return true;
     }
@@ -71526,7 +71536,7 @@ bool rasterVariablesDwgAdapterTransport(
             return fail("generated RASTERVARIABLES DWG source failed to write");
     } else {
         expectedRootKey = "ACAD_IMAGE_VARS";
-        expectedFrame = revision == DRW::AC1021 ? 1 : 0;
+        expectedFrame = revision == DRW::AC1021 || frameOne ? 1 : 0;
         expectedQuality = 1;
         expectedUnits = (revision == DRW::AC1024 || revision == DRW::AC1032) ? 3 : 1;
     }
@@ -71610,7 +71620,8 @@ bool rasterVariablesDwgAdapterTransport(
     }
     if (!generatedSource) {
         if (revision == DRW::AC1032
-            && !DxIfaceStandardDwgCaptureTestAccess::physicalDirectRaster1032Wire(imported))
+            && !DxIfaceStandardDwgCaptureTestAccess::physicalDirectRaster1032Wire(
+                imported, expectedFrame))
             return fail("physical AC1032 RASTERVARIABLES field/role span mismatch");
         if (revision == DRW::AC1024) {
             using Access = DxIfaceStandardDwgCaptureTestAccess;
@@ -71675,7 +71686,8 @@ bool rasterVariablesDwgAdapterTransport(
         for (const std::uint32_t reactor :
              source->second.reactorHandles)
             std::cerr << "RASTERVARIABLES reactor handle=" << reactor << '\n';
-        if (revision != DRW::AC1021 && revision != DRW::AC1027)
+        if (revision != DRW::AC1021 && revision != DRW::AC1027
+            && !(revision == DRW::AC1032 && frameOne))
             return true;
 
         // Bind the physical producer's decoded record to a locally authored,
@@ -71687,9 +71699,8 @@ bool rasterVariablesDwgAdapterTransport(
             || source->second.xDictHandle != 0u
             || source->second.extensionDictionaryFlag() != 1u
             || source->second.reactorHandles
-                != std::vector<std::uint32_t>{
-                    DRW::DwgNamedObjectsDictionaryHandle})
-            return fail("physical AC1021 RASTERVARIABLES exceeds the selected wrapper profile");
+                != std::vector<std::uint32_t>{expectedParent})
+            return fail("physical RASTERVARIABLES exceeds the selected wrapper profile");
         expectedHandle = 0xB500u;
         expectedParent = DRW::DwgNamedObjectsDictionaryHandle;
         expectedRootKey = "ACAD_IMAGE_VARS";
@@ -71722,10 +71733,10 @@ bool rasterVariablesDwgAdapterTransport(
                 != source->second.m_imageQuality
             || projectedRecord->second.m_units != source->second.m_units
             || projectedRecord->second.reactorHandles
-                != source->second.reactorHandles
+                != std::vector<std::uint32_t>{expectedParent}
             || projectedRecord->second.extensionDictionaryFlag()
                 != source->second.extensionDictionaryFlag())
-            return fail("physical RASTERVARIABLES fields changed in wrapper DWG readback");
+            return fail("physical RASTERVARIABLES fields or remapped handle roles changed in wrapper DWG readback");
         outputSourceData = &projected;
         key = projectedKey;
         source = projected.dwgRasterVariables.find(key);
@@ -73684,6 +73695,11 @@ int main(int argc, char** argv) {
         && std::string(argv[1])
             == "--rastervariables-physical-ac1032-direct-nod")
         return rasterVariablesDwgAdapterTransport(argv[2], true, DRW::AC1032) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1])
+            == "--rastervariables-physical-ac1032-frame1-direct-nod")
+        return rasterVariablesDwgAdapterTransport(
+            argv[2], true, DRW::AC1032, true) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1])
             == "--rastervariables-physical-ac1024-direct-nod")
