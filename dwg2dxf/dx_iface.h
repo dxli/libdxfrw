@@ -1797,6 +1797,12 @@ public:
 
                     DRW_DimensionAssociation output = source;
                     if (!dxfW->writeDimensionAssociation(&output)) {
+                        std::cerr << "DIMASSOC writer refusal handle="
+                                  << sourceHandle << " dimension="
+                                  << source.m_dimensionHandle << " eType="
+                                  << static_cast<int>(dimension->second)
+                                  << " refs=" << source.m_osnapRefs.size()
+                                  << '\n';
                         dxfW->writeRawDxfObject(nullptr);
                         return;
                     }
@@ -1808,6 +1814,15 @@ public:
                         || !dxfW->dxfWriteRecordHasIdentity(
                             emittedHandle, "DIMASSOC", "OBJECTS")
                         || !recordOpaqueDwgOutputQualification(sourceHandle)) {
+                        std::cerr << "DIMASSOC output identity refusal source="
+                                  << sourceHandle << " emitted="
+                                  << emittedHandle << " handleCount="
+                                  << dxfW->dxfWriteRecordHandleCount(
+                                         emittedHandle)
+                                  << " identity="
+                                  << dxfW->dxfWriteRecordHasIdentity(
+                                         emittedHandle, "DIMASSOC", "OBJECTS")
+                                  << '\n';
                         dxfW->writeRawDxfObject(nullptr);
                         return;
                     }

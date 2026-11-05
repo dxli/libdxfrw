@@ -79603,6 +79603,12 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     const bool needsShadeOutput = m_dxfShadeConsumerEntities
         || std::any_of(m_dxfShadeConsumers.begin(), m_dxfShadeConsumers.end(),
             [](const auto& source) { return source.kind != DxfShadeConsumerSource::Viewport; });
+    const auto dimensionAssociationBegin =
+        cData->dwgDimensionAssociations.lower_bound(
+            {cData->importGeneration, 0u});
+    const bool needsDimensionAssociationInventory =
+        dimensionAssociationBegin != cData->dwgDimensionAssociations.end()
+        && dimensionAssociationBegin->first.first == cData->importGeneration;
     exportStage = "dynamic-block immutable output-source capture";
     if (!prepareDwgDynamicBlockOutputSources(
             debug || requireResolvedOwners)) {
@@ -79624,6 +79630,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         || !m_dxfMLineLinetypes.empty()
         || !m_dxfAssociativeGeometrySources.empty()
         || !m_dxfAssociativeValueSources.empty()
+        || needsDimensionAssociationInventory
         || cData->dwgProxyEntityPresent
         || !m_dwgAssociativeDimensionDependencies.empty());
     if ((!m_dxfMLineStyles.empty() || needsDxfMLineConsumerInspection())

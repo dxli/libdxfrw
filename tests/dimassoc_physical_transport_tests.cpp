@@ -15,8 +15,8 @@
 #include "drw_header.h"
 #define private public
 #include "libdxfrw.h"
-#undef private
 #include "dx_data.h"
+#undef private
 #include "dx_iface.h"
 #include "intern/dxfreader.h"
 #include "intern/dxfwriter.h"
@@ -619,11 +619,154 @@ bool runStaleGenerationOutput(const std::string& outputPath) {
     return true;
 }
 
+bool runAdapterClosureRetryRoundtrip(const std::string& outputPath,
+                                     bool binary) {
+    dx_data data;
+    data.sourceFormat = dx_source_format::DWG;
+    data.sourceVersion = DRW::AC1024;
+    data.importGeneration = 1u;
+    data.dwgReadOutcome.attempted = true;
+    data.dwgReadOutcome.operationSucceeded = true;
+    data.dwgReadOutcome.sourceVersion = DRW::AC1024;
+
+    auto* line = new DRW_Line;
+    line->handle = 0x40u;
+    line->basePoint = DRW_Coord(0.0, 0.0, 0.0);
+    line->secPoint = DRW_Coord(10.0, 0.0, 0.0);
+    data.mBlock->ent.push_back(line);
+    auto* dimension = new DRW_DimAligned;
+    dimension->handle = 0x30u;
+    dimension->setName("*D1");
+    dimension->setStyle("Standard");
+    dimension->setDimPoint(DRW_Coord(5.0, 2.0, 0.0));
+    dimension->setTextPoint(DRW_Coord(5.0, 3.0, 0.0));
+    dimension->setDef1Point(DRW_Coord(0.0, 0.0, 0.0));
+    dimension->setDef2Point(DRW_Coord(10.0, 0.0, 0.0));
+    data.mBlock->ent.push_back(dimension);
+
+    DRW_DimensionAssociation association;
+    association.handle = 0x500u;
+    association.m_dimensionHandle = dimension->handle;
+    association.m_associativityFlags = 1u;
+    association.m_osnapRefs.resize(1u);
+    DRW_DimensionAssociationOsnapRef& ref =
+        association.m_osnapRefs.front();
+    ref.m_className = "AcDbOsnapPointRef";
+    ref.m_objectOsnapType = 1u;
+    ref.m_hasObjectOsnapType = true;
+    ref.m_objectHandle = 0x41u; // invalid until the correction below
+    ref.m_objectHandles = {0x41u};
+    ref.m_hasSubentType = true;
+    ref.m_subentType = 1;
+    ref.m_hasGsMarker = true;
+    ref.m_gsMarker = 0;
+    ref.m_hasNearParameter = true;
+    ref.m_nearParameter = 0.5;
+    ref.m_hasOsnapPoint = true;
+    ref.m_osnapPoint = DRW_Coord(5.0, 0.0, 0.0);
+    ref.m_hasLastPointRef = true;
+    ref.m_lastPointRef = 0;
+    data.dwgDimensionAssociations.emplace(
+        dx_data::DimensionAssociationKey{data.importGeneration,
+                                         association.handle},
+        association);
+    data.dimensionAssociationsRetainedRecords = 1u;
+
+    const dx_data::StandardDwgFrameKey key{
+        data.importGeneration, association.handle};
+    DRW_UnsupportedObject rawFrame;
+    rawFrame.m_objectType = 1;
+    rawFrame.m_handle = association.handle;
+    rawFrame.m_version = DRW::AC1024;
+    rawFrame.m_objectSize = 1u;
+    rawFrame.m_rawBytes = {0u};
+    data.m_opaqueDwgSourceFrames.emplace(key, std::move(rawFrame));
+    data.m_opaqueDwgSourceFrameIdentities.insert(key);
+    data.dwgReadOutcome.opaqueSourceFramesCaptured = 1u;
+
+    dx_iface exporter;
+    std::remove(outputPath.c_str());
+    const std::string sentinel = "prior destination must survive refusal\n";
+    {
+        std::ofstream output(outputPath, std::ios::binary);
+        output << sentinel;
+    }
+    if (exporter.fileExport(outputPath, DRW::AC1024, binary, &data, false)) {
+        std::remove(outputPath.c_str());
+        std::cerr << "adapter accepted an absent DIMASSOC entity target\n";
+        return false;
+    }
+    {
+        std::ifstream input(outputPath, std::ios::binary);
+        const std::string retained((std::istreambuf_iterator<char>(input)),
+                                   std::istreambuf_iterator<char>());
+        if (retained != sentinel) {
+            std::remove(outputPath.c_str());
+            std::cerr << "DIMASSOC refusal changed the prior destination\n";
+            return false;
+        }
+    }
+
+    data.dwgDimensionAssociations.begin()->second.m_osnapRefs.front()
+        .m_objectHandle = line->handle;
+    data.dwgDimensionAssociations.begin()->second.m_osnapRefs.front()
+        .m_objectHandles = {line->handle};
+    if (!exporter.fileExport(outputPath, DRW::AC1024, binary, &data, false)) {
+        std::cerr << "adapter same-instance retry rejected the corrected graph\n";
+        return false;
+    }
+
+    dx_data readbackData;
+    DimensionAssociationCapture readback;
+    const bool imported = readback.fileImport(outputPath, &readbackData, false);
+    std::map<std::uint32_t, DRW::ETYPE> outputEntities;
+    for (const DRW_Entity* entity : readbackData.mBlock->ent) {
+        if (entity != nullptr)
+            outputEntities.emplace(entity->handle, entity->eType);
+    }
+    const auto dimensionType = [&outputEntities](std::uint32_t handle) {
+        const auto found = outputEntities.find(handle);
+        return found != outputEntities.end()
+            && (found->second == DRW::DIMENSION
+                || found->second == DRW::DIMALIGNED
+                || found->second == DRW::DIMLINEAR
+                || found->second == DRW::DIMRADIAL
+                || found->second == DRW::DIMDIAMETRIC
+                || found->second == DRW::DIMANGULAR
+                || found->second == DRW::DIMANGULAR3P
+                || found->second == DRW::DIMORDINATE
+                || found->second == DRW::DIMARC);
+    };
+    const bool graphReadback = imported && readback.associations.size() == 1u
+        && readback.associations.front().m_dimensionHandle != 0u
+        && dimensionType(readback.associations.front().m_dimensionHandle)
+        && readback.associations.front().m_osnapRefs.size() == 1u
+        && readback.associations.front().m_osnapRefs.front().m_objectHandle
+            != 0u
+        && outputEntities.count(
+               readback.associations.front().m_osnapRefs.front().m_objectHandle)
+            == 1u
+        && readback.associations.front().m_osnapRefs.front().m_hasOsnapPoint
+        && readback.associations.front().m_osnapRefs.front().m_osnapPoint.x
+            == 5.0;
+    if (!graphReadback) {
+        std::remove(outputPath.c_str());
+        std::cerr << "adapter DIMASSOC success path failed typed readback\n";
+        return false;
+    }
+    std::remove(outputPath.c_str());
+    return true;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
     if (argc == 3 && std::string(argv[1]) == "--stale-generation-output")
         return runStaleGenerationOutput(argv[2]) ? 0 : 1;
+    if (argc == 3 && std::string(argv[1]) == "--adapter-closure-retry-ascii")
+        return runAdapterClosureRetryRoundtrip(argv[2], false) ? 0 : 1;
+    if (argc == 3 && std::string(argv[1]) == "--adapter-closure-retry-binary")
+        return runAdapterClosureRetryRoundtrip(argv[2], true) ? 0 : 1;
     if (argc == 3 && std::string(argv[1]) == "--generate-dimassoc") {
         dwgRW writer(argv[2]);
         DimensionAssociationAuthor author(writer);
