@@ -71603,7 +71603,7 @@ bool rasterVariablesDwgAdapterTransport(
         for (const std::uint32_t reactor :
              source->second.reactorHandles)
             std::cerr << "RASTERVARIABLES reactor handle=" << reactor << '\n';
-        if (revision != DRW::AC1021)
+        if (revision != DRW::AC1021 && revision != DRW::AC1027)
             return true;
 
         // Bind the physical producer's decoded record to a locally authored,
@@ -71624,16 +71624,16 @@ bool rasterVariablesDwgAdapterTransport(
         expectedXDictFlag = 1u;
         {
             dwgRW projectionWriter(physicalProjectionPath.string().c_str());
-            Author author(projectionWriter, true, DRW::AC1021, false,
+            Author author(projectionWriter, true, revision, false,
                           &source->second);
-            if (!projectionWriter.write(&author, DRW::AC1021, true))
+            if (!projectionWriter.write(&author, revision, true))
                 return fail("physical RASTERVARIABLES wrapper DWG failed to write");
         }
         dx_iface projectionImporter;
         if (!projectionImporter.fileImport(
                 physicalProjectionPath.string(), &projected, false)
             || projected.sourceFormat != dx_source_format::DWG
-            || projected.sourceVersion != DRW::AC1021
+            || projected.sourceVersion != revision
             || projected.dwgRasterVariables.size() != 1u
             || projected.rasterVariablesCaptureFailed)
             return fail("physical RASTERVARIABLES wrapper did not re-import");

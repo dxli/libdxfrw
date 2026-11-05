@@ -2069,9 +2069,14 @@ Native source-release builds and platform qualification remain open.
   refusals, destination preservation, same-adapter retry, and source-frame
   binding. See the
   [direct-owner receipt](docs/research/p4-rastervariables-ac1021-ac1027-direct-nod-owner-2026-11-03.json).
-  The physical RASTERVARIABLES selectors verify import only. Whole-source output remains
-  blocked by the samples' unrelated read/layout-integrity gaps, and native
-  image semantics and broader producer/version coverage remain open.
+  Hash-bound physical AC1021 and AC1027 RASTERVARIABLES witnesses now seed
+  locally authored wrapper DWGs; each wrapper passes source-value re-import,
+  selected ASCII/Binary output, atomic invalid-value refusal, same-adapter retry,
+  and typed readback ([AC1021 receipt](docs/research/p4-ac1021-rastervariables-physical-writer-bridge-2026-11-05.json),
+  [AC1027 receipt](docs/research/p4-ac1027-rastervariables-physical-writer-bridge-2026-11-05.json)).
+  These controls do not convert either physical drawing as a whole. Their
+  unrelated source/read/layout-integrity gates and native image semantics remain
+  open, as do broader producer/version profiles.
   The hash-bound AC1027 WIPEOUTVARIABLES witness now seeds a local wrapper DWG;
   selected ASCII/Binary output verifies the remapped NOD owner/reactor graph,
   atomic refusal, retry, and typed readback ([physical writer bridge receipt](docs/research/p4-ac1027-wipeoutvariables-physical-writer-bridge-2026-11-05.json)).
