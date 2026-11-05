@@ -34320,6 +34320,12 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
         && (ent->m_horizontalUnits < 0 || ent->m_horizontalUnits > 24
             || ent->m_verticalUnits < 0 || ent->m_verticalUnits > 24))
         return false;
+    // Autodesk's modern GEODATA DXF group-95 scale method is 1 (none),
+    // 2 (user factor), 3 (grid scale at reference point), or 4 (prismoidal).
+    if (objectVersion >= 2
+        && (ent->m_scaleEstimationMethod < 1
+            || ent->m_scaleEstimationMethod > 4))
+        return false;
 
     std::string normalizedDefinition;
     std::string_view definition = ent->m_coordinateSystemDefinition;
@@ -34468,7 +34474,7 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
             || ent->m_horizontalUnitScale != 1.0
             || ent->m_verticalUnitScale != 1.0
             || ent->m_horizontalUnits != 0 || ent->m_verticalUnits != 0
-            || ent->m_scaleEstimationMethod != 0
+            || ent->m_scaleEstimationMethod != 1
             || ent->m_userSpecifiedScaleFactor != 1.0
             || ent->m_enableSeaLevelCorrection
             || ent->m_seaLevelElevation != 0.0

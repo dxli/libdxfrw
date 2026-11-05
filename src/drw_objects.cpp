@@ -25495,7 +25495,7 @@ void DRW_GeoData::reset() {
     m_verticalUnitScale = 1.0;
     m_horizontalUnits = 0;
     m_verticalUnits = 0;
-    m_scaleEstimationMethod = 0;
+    m_scaleEstimationMethod = 1;
     m_userSpecifiedScaleFactor = 1.0;
     m_enableSeaLevelCorrection = false;
     m_seaLevelElevation = 0.0;

@@ -15387,6 +15387,50 @@ void testGeoDataVersionedWriter(TestContext& t) {
         }
     }
 
+    for (const std::int32_t objectVersion : {2, 3}) {
+        for (const bool binary : {false, true}) {
+            for (const std::int32_t invalidValue : {-1, 0, 5}) {
+                std::ostringstream output(std::ios::out | std::ios::binary);
+                dxfRW owner("");
+                owner.version = DRW::AC1027;
+                owner.binFile = binary;
+                owner.writer = binary
+                    ? std::unique_ptr<dxfWriter>(
+                          new dxfWriterBinary(&output))
+                    : std::unique_ptr<dxfWriter>(
+                          new dxfWriterAscii(&output));
+                owner.writer->setVersion("AC1027", true);
+                t.expect(owner.writer->writeString(1, "PRESERVED_PREFIX"),
+                         "GEODATA scale-method setup writes prefix");
+                const std::string beforeReject = output.str();
+
+                DRW_GeoData geo;
+                geo.handle = 0x706u;
+                geo.parentHandle = 0x2u;
+                geo.m_hostBlockHandle = 0x3u;
+                geo.m_version = objectVersion;
+                geo.m_coordinatesType = 2;
+                geo.m_scaleEstimationMethod = invalidValue;
+                const bool rejected = !owner.writeGeoData(&geo)
+                    && output.str() == beforeReject
+                    && geo.handle == 0x706u
+                    && !owner.m_writeError
+                    && !owner.writer->hasWriteError();
+
+                geo.m_scaleEstimationMethod = invalidValue < 1 ? 1 : 4;
+                const bool retried = owner.writeGeoData(&geo)
+                    && owner.writer->writeString(0, "WIRE_END");
+                DRW_GeoData decoded;
+                const bool readback = retried
+                    && readGeoData(output.str(), binary, decoded)
+                    && decoded.m_scaleEstimationMethod
+                        == geo.m_scaleEstimationMethod;
+                t.expect(rejected && retried && readback,
+                         "modern GEODATA scale method rejects outside 1..4 atomically and retries with typed readback");
+            }
+        }
+    }
+
     std::vector<std::string> asciiProjection;
     for (const bool binary : {false, true}) {
         std::ostringstream output;
@@ -15886,8 +15930,11 @@ void testGeoDataVersionedWriter(TestContext& t) {
                                                       ended);
         t.expect(wrote && ended
                      && std::find(projection.begin(), projection.end(),
-                                  "90:2") != projection.end(),
-                 "unspecified GEODATA version defaults to documented version 2");
+                                  "90:2") != projection.end()
+                     && std::find(projection.begin(), projection.end(),
+                                  "95:1") != projection.end()
+                     && defaultVersion.m_scaleEstimationMethod == 1,
+                 "unspecified GEODATA version defaults to v2 and documented no-adjustment scale method");
     }
 
     {

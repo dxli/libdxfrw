@@ -1798,7 +1798,7 @@ public:
   double m_verticalUnitScale = 1.0;
   std::int32_t m_horizontalUnits = 0;
   std::int32_t m_verticalUnits = 0;
-  std::int32_t m_scaleEstimationMethod = 0;
+  std::int32_t m_scaleEstimationMethod = 1;
   double m_userSpecifiedScaleFactor = 1.0;
   bool m_enableSeaLevelCorrection = false;
   double m_seaLevelElevation = 0.0;
