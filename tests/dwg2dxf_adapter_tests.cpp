@@ -309,6 +309,14 @@ public:
             source.m_dwgLayerControlPublicationSeen;
         projection.m_dwgLayerControlCaptureFailed =
             source.m_dwgLayerControlCaptureFailed;
+        projection.m_dwgLtypeControlPublication =
+            source.m_dwgLtypeControlPublication;
+        projection.m_dwgLtypeControlGeneration =
+            source.m_dwgLtypeControlGeneration;
+        projection.m_dwgLtypeControlPublicationSeen =
+            source.m_dwgLtypeControlPublicationSeen;
+        projection.m_dwgLtypeControlCaptureFailed =
+            source.m_dwgLtypeControlCaptureFailed;
 
         std::set<std::uint32_t> requestedDictionaries(
             dictionaryHandles.begin(), dictionaryHandles.end());

@@ -690,9 +690,11 @@ owner/reactor, unchanged-snapshot, and emitted-body checks. A focused selector
 passes ASCII/Binary output, wrong-owner atomic refusal, same-writer correction
 retry, and fresh typed readback; strict CLI conversion and FreeCAD's native C++
 importer also pass without the prior skip diagnostic. This does not broaden
-the separate three-root/XRECORD profile: its current physical selector fails
-at projected production output, and strict whole-file conversion of its aerial
-witness is independently refused by the SUN owner graph. Keep other
+the separate three-root/XRECORD profile: its source-projected ASCII/Binary
+production output and readback selector passes after the test projection was
+updated to retain the required LTYPE_CONTROL membership receipt. Strict
+whole-file conversion of its aerial witness remains refused by the SUN owner
+graph. Keep other
 LayerStates profiles and native restoration/evaluation open ([receipt](docs/research/p4-ac1024-empty-layerstates-root-output-2026-11-05.json)).
 
 After actual prerequisites close, run one composed strict CLI checkpoint. A
