@@ -46,9 +46,12 @@
     "focused_checks": [
       "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j2",
       "ctest --test-dir build-gcc -R '^(libdxfrw_visual_style_ac1021_typed_writer|libdxfrw_visual_style_ac1024_typed_writer|libdxfrw_visual_style_import_evidence)$' --output-on-failure",
+      "cmake --build build-gcc --target libdxfrw_dwg_object_vectors_tests -j2",
+      "ctest --test-dir build-gcc -R '^libdxfrw_dwg_object_vectors$' --output-on-failure",
       "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --visual-style-ac1021-physical-output /Users/dli/doc/dwg/architectural_-_annotation_scaling_and_multileaders.dwg /private/tmp/ac1021-visualstyle-output"
     ],
-    "focused_ctest_result": "3/3 passed",
+    "focused_ctest_result": "3/3 VISUALSTYLE adapter checks and the DWG object-vector test passed",
+    "dwg_codec_roundtrip": "A hand-authored AC1021 body vector confirms the parser retains reserved double 12.5 and the encoder replays the exact body, string, and handle bytes. The shared test frame builder now includes the AC1015–AC1021 explicit object-size prefix.",
     "full_source_conversion": "Still atomically refused at the unrelated FIELD/FIELDLIST serializer gate; no whole-document support claim is made.",
     "fixture_policy": "No external DWG/DXF fixture was added to the repository. The generated writer vector is created locally by the focused test."
   }

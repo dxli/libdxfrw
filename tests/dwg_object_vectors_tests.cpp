@@ -868,6 +868,47 @@ void literalStyleBody(DRW::Version version, dwgBufferW& body,
     }
 }
 
+void literalAc1021VisualStyleBody(dwgBufferW& body, dwgBufferW& strings) {
+    strings.putVariableText(DRW::AC1021, "literal-ac1021-visual-style");
+    body.putBitLong(8); // type
+    body.putBitLong(2); // faceLightingModel
+    body.putBitLong(1); // faceLightingQuality
+    body.putBitLong(3); // faceColorMode
+    body.putBitDouble(0.625);
+    body.putBitDouble(4.5);
+    const auto putColor = [&body](std::uint32_t rawRgb) {
+        body.putBitShort(0); // CMC color index
+        body.putBitLong(static_cast<std::int32_t>(rawRgb));
+        body.putRawChar8(0); // no color/book names
+    };
+    putColor(0xC2FFFFFFu);
+    body.putBitLong(2); // faceModifier
+    body.putBitLong(1); // edgeModel
+    body.putBitLong(4); // edgeStyle
+    putColor(0xC3000007u);
+    putColor(0xC8000000u);
+    body.putBitLong(1); // edgeObscuredLtype
+    body.putBitDouble(1.0); // edgeCreaseAngle
+    body.putBitLong(8); // edgeModifier
+    putColor(0xC2787878u);
+    body.putBitDouble(0.875); // edgeOpacity
+    body.putBitShort(1); // edgeWidth
+    body.putBitShort(2); // edgeOverhang
+    body.putBitLong(3); // edgeJitter
+    putColor(0xC2808080u);
+    body.putBitShort(4); // edgeSilhouetteWidth
+    body.putRawChar8(5); // edgeHaloGap
+    body.putBitShort(6); // edgeIsolines
+    body.putBit(1); // edgeDoHidePrecision
+    body.putBitShort(2); // edgeStyleApply
+    body.putBitShort(7); // edgeIntersectionLtype
+    body.putBitLong(9); // displaySettings
+    body.putBitLong(10); // displayBrightness
+    body.putBitLong(1); // displayShadowType
+    body.putBitDouble(12.5); // R2007 reserved field 45
+    body.putBit(1); // internalOnly
+}
+
 struct VisualStyleFrame {
     std::vector<std::uint8_t> bytes;
     std::uint32_t handleBits{0};
@@ -877,6 +918,11 @@ VisualStyleFrame styleFrame(DRW::Version version, const dwgBufferW& body,
                          const dwgBufferW& strings, const dwgBufferW& handles) {
     dwgBufferW full;
     full.putObjType(version, DRW_VisualStyle::kDwgClassNum);
+    const bool hasExplicitObjectSize =
+        version > DRW::AC1014 && version < DRW::AC1024;
+    const std::size_t objectSizeBit = full.bitCount();
+    if (hasExplicitObjectSize)
+        full.putRawLong32(0u);
     dwgHandle own;
     own.ref = 0xA100u;
     full.putHandle(own);
@@ -892,6 +938,9 @@ VisualStyleFrame styleFrame(DRW::Version version, const dwgBufferW& body,
     for (int i = 0; i < 7; ++i) full.putBit(0u);
     full.putRawShort16(static_cast<std::uint16_t>(text.size() * 8u + 7u));
     full.putBit(1u);
+    if (hasExplicitObjectSize)
+        full.patchRawLong32AtBit(
+            objectSizeBit, static_cast<std::uint32_t>(full.bitCount()));
     dwgBufferW links = handles;
     links.alignToByte();
     VisualStyleFrame result;
@@ -7043,6 +7092,45 @@ void testVisualStyleSourceMetadata(TestContext& t) {
             t.expect(cappedStyle.encodeDwg(version, &refused, &refusedText, &refusedLinks),
                      "explicit safe isoline replacement permits corrected same-object retry");
         }
+    }
+
+    dwgBufferW legacyBody, legacyText, legacyLinks;
+    literalAc1021VisualStyleBody(legacyBody, legacyText);
+    for (const std::uint32_t ref : {0xA200u, 0xA201u, 0xA202u}) {
+        dwgHandle handle;
+        handle.code = ref == 0xA202u
+            ? DRW::DwgHardOwnership : DRW::DwgSoftPointer;
+        handle.ref = ref;
+        legacyLinks.putHandle(handle);
+    }
+    const VisualStyleFrame legacyFrame = styleFrame(
+        DRW::AC1021, legacyBody, legacyText, legacyLinks);
+    DRW_TextCodec legacyCodec;
+    legacyCodec.setVersion(DRW::AC1021, false);
+    dwgBuffer legacyInput(legacyFrame.bytes.data(), legacyFrame.bytes.size(),
+                          &legacyCodec);
+    VisualStyleCodecProbe legacyParsed;
+    const bool legacyRead = legacyParsed.parseDwg(
+        DRW::AC1021, &legacyInput, legacyFrame.handleBits);
+    t.expect(legacyRead, "literal AC1021 VISUALSTYLE parses");
+    t.expect(legacyParsed.m_bodyDecoded,
+             "literal AC1021 VISUALSTYLE body is complete");
+    t.expect(legacyParsed.m_body.hasLegacyReserved
+                 && legacyParsed.m_body.legacyReserved == 12.5,
+             "literal AC1021 VISUALSTYLE retains its reserved double");
+    t.expect(legacyParsed.m_body.internalOnly
+                 && legacyParsed.m_body.m_encoding.colorCount == 5u,
+             "literal AC1021 VISUALSTYLE retains internal-only and CMC fields");
+    if (legacyRead) {
+        dwgBufferW replayBody, replayText, replayLinks;
+        const bool replayed = legacyParsed.encodeDwg(
+            DRW::AC1021, &replayBody, &replayText, &replayLinks);
+        t.expect(replayed && replayBody.bitCount() == legacyBody.bitCount()
+                     && replayBody.data() == legacyBody.data()
+                     && replayText.bitCount() == legacyText.bitCount()
+                     && replayText.data() == legacyText.data()
+                     && replayLinks.data() == legacyLinks.data(),
+                 "AC1021 VISUALSTYLE encoder replays the literal reserved-double bits");
     }
 }
 
