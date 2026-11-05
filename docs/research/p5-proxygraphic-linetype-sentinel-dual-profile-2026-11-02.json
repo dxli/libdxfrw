@@ -17,7 +17,7 @@
     "sha256": "0e74f0aa84b1323c922345f067739c42ee26213dea010b407b87a94212271654",
     "version": "AC1021",
     "readResult": "success",
-    "entityAndBlock": "36 MLINE proxy caches in block *U0",
+    "entityAndBlock": "36 MLEADER proxy caches in block *U0 (corrected 2026-11-05; earlier MLINE classification was incorrect)",
     "observation": "Every inspected cache contains proxy chunk opcode 18 with a 4-byte payload value 0x00007FFF.",
     "inspection": {
       "tool": "Temporary local C++ inspector using dwgRW, dx_iface, and DRW_ProxyGraphicDecoder::inspect",
@@ -61,8 +61,8 @@
   },
   "claimBoundary": [
     "This proves bounded decoder sentinel mapping and generated callback behavior only.",
-    "It does not prove the complete MLINE proxy-cache schema, source resource-index remapping, cache replay compatibility, or native rendering semantics.",
-    "Keep strict output refusal for the 36 physical proxy caches and keep the AC1021 sample unqualified until those gaps have eligible evidence."
+    "It does not prove the complete MLEADER proxy-cache schema, source resource-index remapping, cache replay compatibility, or native rendering semantics. The 36 records were misclassified as MLINE in this receipt; the DWG dispatcher type is MLEADER (28), while MLINE is type 27.",
+    "This receipt is superseded for source classification and current strict-preflight status by p5-ac1021-mleader-proxy-resource-index-remap-2026-11-05.json. Keep native rendering and whole-document qualification open."
   ],
   "supportClaimEffect": "none"
 }

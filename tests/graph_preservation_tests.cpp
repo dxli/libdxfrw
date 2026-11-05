@@ -15758,6 +15758,55 @@ void testProxyResourceIndexResolution(TestContext& t) {
                  && rejectedLayerCapture.circles.front().layer
                         == "ADAPTER_LAYER_ORDER",
              "proxy layer index pointing to a missing source record is counted and keeps the parent fallback");
+
+    std::vector<std::uint8_t> remapBytes(8u, 0u);
+    std::vector<std::uint8_t> layerOne;
+    appendU32(layerOne, 1u);
+    appendProxyChunk(remapBytes, 16u, layerOne);
+    std::vector<std::uint8_t> linetypeOne;
+    appendU32(linetypeOne, 1u);
+    appendProxyChunk(remapBytes, 18u, linetypeOne);
+    std::vector<std::uint8_t> circle;
+    appendDouble(circle, 0.0); appendDouble(circle, 0.0);
+    appendDouble(circle, 0.0); appendDouble(circle, 1.0);
+    appendDouble(circle, 0.0); appendDouble(circle, 0.0);
+    appendDouble(circle, 1.0);
+    appendProxyChunk(remapBytes, 2u, circle);
+    const std::string sourceCache(
+        reinterpret_cast<const char*>(remapBytes.data()), remapBytes.size());
+    const std::vector<std::string> targetLayers = {"SOURCE_LAYER_1",
+                                                   "SOURCE_LAYER_0"};
+    const std::vector<std::string> targetLinetypes = {"SOURCE_LTYPE_1",
+                                                      "SOURCE_LTYPE_0"};
+    std::string remappedCache = "prior cache";
+    std::size_t remappedLayers = 0u;
+    std::size_t remappedLinetypes = 0u;
+    const bool remapped = DRW_ProxyGraphicDecoder::remapResourceIndices(
+        sourceCache, sourceLayers, targetLayers, sourceLinetypes,
+        targetLinetypes, remappedCache, remappedLayers,
+        remappedLinetypes);
+    ProxyGraphicCapture remappedCapture;
+    const DRW_ProxyGraphicDecodeResult remappedReadback =
+        DRW_ProxyGraphicDecoder::decode(
+            remappedCache, DRW::AC1021, remappedCapture, parent,
+            targetLayers, targetLinetypes);
+    t.expect(remapped && remappedLayers == 1u && remappedLinetypes == 1u
+                 && remappedReadback.completed()
+                 && remappedCapture.circles.size() == 1u
+                 && remappedCapture.circles.front().layer == "SOURCE_LAYER_1"
+                 && remappedCapture.circles.front().lineType
+                        == "SOURCE_LTYPE_1",
+             "proxy resource remapper translates source layer and linetype slots into target table order");
+
+    std::string preservedCache = "prior cache";
+    const std::vector<std::string> missingTargetLayers = {"OTHER_LAYER"};
+    t.expect(!DRW_ProxyGraphicDecoder::remapResourceIndices(
+                 sourceCache, sourceLayers, missingTargetLayers,
+                 sourceLinetypes, targetLinetypes, preservedCache,
+                 remappedLayers, remappedLinetypes)
+                 && preservedCache == "prior cache"
+                 && remappedLayers == 0u && remappedLinetypes == 0u,
+             "proxy resource remapper leaves output unchanged when a source name has no target row");
 }
 
 void testProxyShellMultiFaceFraming(TestContext& t) {

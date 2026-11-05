@@ -988,6 +988,24 @@ bool canReplayTypedProxyGraphics(const DRW_Entity& entity,
         return false;
     }
 
+    if (entity.eType == DRW::MLEADER
+        || dynamic_cast<const DRW_MLeader*>(&entity) != nullptr) {
+        const auto* mleader = dynamic_cast<const DRW_MLeader*>(&entity);
+        if (entity.eType != DRW::MLEADER || mleader == nullptr
+            || typeid(entity) != typeid(DRW_MLeader)
+            || provenance.origin != DRW_ProxyGraphicsOrigin::ParsedDwg
+            || provenance.encoding != DRW_ProxyGraphicsEncoding::DwgBitStream
+            || provenance.sourceVersion != DRW::AC1021
+            || !provenance.sourceCodePage.empty()
+            || provenance.countCode != 92
+            || !provenance.resourceIndicesRemappedForDxf)
+            return false;
+        const DRW_ProxyGraphicDecodeResult inspection =
+            DRW_ProxyGraphicDecoder::inspect(entity.proxyGraphics);
+        return inspection.completed()
+            && inspection.consumedByteCount == entity.proxyGraphics.size();
+    }
+
     if (entity.eType == DRW::LIGHT || dynamic_cast<const DRW_Light*>(&entity) != nullptr) {
         const auto* light = dynamic_cast<const DRW_Light*>(&entity);
         if (entity.eType != DRW::LIGHT || light == nullptr || typeid(entity) != typeid(DRW_Light)

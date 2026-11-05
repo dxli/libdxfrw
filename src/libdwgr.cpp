@@ -5092,6 +5092,10 @@ bool dwgRW::processDwg() {
         iface->addLayer(const_cast<DRW_Layer&>(*ly));
     }
 
+    if (auto* sink = dynamic_cast<DRW_DwgProxyGraphicsResourceOrderHandler*>(iface))
+        sink->addDwgProxyGraphicsResourceOrder(
+            reader->m_layerNameOrder, reader->m_ltypeNameOrder);
+
     for (auto it=reader->stylemap.begin(); it!=reader->stylemap.end(); ++it) {
         DRW_Textstyle *ly = it->second;
         iface->addTextStyle(const_cast<DRW_Textstyle&>(*ly));

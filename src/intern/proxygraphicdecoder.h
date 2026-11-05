@@ -103,6 +103,23 @@ public:
         const std::string &bytes,
         const DRW_ProxyGraphicLimits &limits = {});
 
+    //! Remap the four-byte resource indices in ATTRIBUTE_LAYER and
+    //! ATTRIBUTE_LINETYPE chunks from their DWG source control-table slots to
+    //! the target DXF table row order. Sentinel linetype values are preserved.
+    //! Unknown chunks and all unmodified bytes are copied verbatim. The output
+    //! string is changed only when the complete stream and every referenced
+    //! resource are valid.
+    static bool remapResourceIndices(
+        const std::string &bytes,
+        const std::vector<std::string> &sourceLayerNames,
+        const std::vector<std::string> &targetLayerNames,
+        const std::vector<std::string> &sourceLinetypeNames,
+        const std::vector<std::string> &targetLinetypeNames,
+        std::string &output,
+        std::size_t &remappedLayerCount,
+        std::size_t &remappedLinetypeCount,
+        const DRW_ProxyGraphicLimits &limits = {});
+
     //! Decode @p bytes and emit each recovered primitive through @p sink,
     //! inheriting layer / space / handle from @p parent (the owning custom
     //! entity) and the decoder's accumulated colour / layer / linetype /

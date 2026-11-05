@@ -615,6 +615,13 @@ public:
     DRW_Header headerC;                 //stores a copy of the header vars
     DRW::Version sourceVersion;          //detected source DXF/DWG revision
     dx_source_format sourceFormat {dx_source_format::Unknown};
+    // DWG proxy resource indices address the declared control-table slots,
+    // not the compact callback vectors. Keep the exact source order so a
+    // future same-revision DXF cache projection can remap those indices.
+    std::vector<std::string> dwgProxyLayerNameOrder;
+    std::vector<std::string> dwgProxyLinetypeNameOrder;
+    bool dwgProxyResourceOrderCaptured{false};
+    bool dwgProxyResourceOrderCaptureFailed{false};
     // Monotonic per-container import attempt identity. Zero means no attempt.
     std::uint64_t importGeneration{0};
     dx_dxfReadOutcome dxfReadOutcome;     //owned most-recent DXF import evidence

@@ -39,6 +39,8 @@ public:
     void attachData(dx_data& data) {
         cData = &data;
         currentBlock = data.mBlock;
+        data.sourceFormat = dx_source_format::DWG;
+        data.importGeneration = 1u;
     }
 
     void addDimensionAssociation(
@@ -479,6 +481,21 @@ bool runPhysicalSource(const std::string& path) {
     const bool read = reader.read(&capture, false);
     if (!read) {
         std::cerr << "DWG read failed: error=" << reader.getError() << '\n';
+        return false;
+    }
+    if (!data.dwgProxyResourceOrderCaptured
+        || data.dwgProxyResourceOrderCaptureFailed
+        || data.dwgProxyLayerNameOrder != reader.getLayerNameOrder()
+        || data.dwgProxyLinetypeNameOrder != reader.getLtypeNameOrder()) {
+        std::cerr << "DWG proxy resource order was not retained exactly"
+                  << " captured=" << data.dwgProxyResourceOrderCaptured
+                  << " failed=" << data.dwgProxyResourceOrderCaptureFailed
+                  << " sourceFormat=" << static_cast<int>(data.sourceFormat)
+                  << " generation=" << data.importGeneration
+                  << " layers=" << data.dwgProxyLayerNameOrder.size() << '/'
+                  << reader.getLayerNameOrder().size()
+                  << " linetypes=" << data.dwgProxyLinetypeNameOrder.size()
+                  << '/' << reader.getLtypeNameOrder().size() << '\n';
         return false;
     }
 

@@ -55,6 +55,7 @@
 #include "intern/drw_dbg.h"
 #include "intern/drw_textcodec.h"
 #include "intern/dwgutil.h"
+#include "intern/proxygraphicdecoder.h"
 #include "intern/dwgbuffer.h"
 #include "intern/dwgbufferw.h"
 #include "intern/sabheader.h"
@@ -68299,6 +68300,10 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
         fData->appIds.size(), fData->layers.size()};
     ++fData->importGeneration;
     fData->dimensionAssociationCaptureFailed = false;
+    fData->dwgProxyLayerNameOrder.clear();
+    fData->dwgProxyLinetypeNameOrder.clear();
+    fData->dwgProxyResourceOrderCaptured = false;
+    fData->dwgProxyResourceOrderCaptureFailed = false;
     fData->m_classEvidenceGeneration = fData->importGeneration;
     fData->m_classEvidenceFailure.generation = fData->importGeneration;
     if (fData->importGeneration <= fData->m_classEvidenceHighWater) {
@@ -76053,10 +76058,19 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         == dx_dxfProxyGraphicsPolicy::FailIfNotPreserved) {
         std::size_t typedEntitiesWithProxyGraphics = 0;
         std::uint32_t firstProxyEntityHandle = DRW::NoHandle;
-        const auto authorizedForTarget = [v](const DRW_Entity& entity) {
+        const auto authorizedForTarget = [this, v](const DRW_Entity& entity) {
             const DRW_ProxyGraphicsProvenance& provenance =
                 entity.proxyGraphicsProvenance();
-            if (!provenance.replayAuthorized || entity.numProxyGraph <= 0
+            const bool remappableMLeader = entity.eType == DRW::MLEADER
+                && provenance.origin == DRW_ProxyGraphicsOrigin::ParsedDwg
+                && provenance.encoding
+                       == DRW_ProxyGraphicsEncoding::DwgBitStream
+                && provenance.sourceVersion == DRW::AC1021
+                && provenance.sourceCodePage.empty()
+                && provenance.countCode == 0
+                && !provenance.resourceIndicesRemappedForDxf;
+            if ((!provenance.replayAuthorized && !remappableMLeader)
+                || entity.numProxyGraph <= 0
                 || entity.proxyGraphics.empty()
                 || entity.proxyGraphics.size()
                        != static_cast<std::size_t>(entity.numProxyGraph)
@@ -76071,6 +76085,47 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                            == DRW_ProxyGraphicsEncoding::DwgBitStream
                     && provenance.sourceCodePage.empty()
                     && provenance.countCode == 0;
+            if (entity.eType == DRW::MLEADER)
+            {
+                if (cData == nullptr || v != DRW::AC1021
+                    || cData->sourceFormat != dx_source_format::DWG
+                    || cData->sourceVersion != DRW::AC1021
+                    || !cData->dwgProxyResourceOrderCaptured
+                    || cData->dwgProxyResourceOrderCaptureFailed
+                    || provenance.origin != DRW_ProxyGraphicsOrigin::ParsedDwg
+                    || provenance.encoding
+                           != DRW_ProxyGraphicsEncoding::DwgBitStream
+                    || !provenance.sourceCodePage.empty()
+                    || provenance.countCode != 0
+                    || provenance.resourceIndicesRemappedForDxf)
+                    return false;
+                try {
+                    std::vector<std::string> targetLayerNames;
+                    targetLayerNames.reserve(cData->layers.size() + 1u);
+                    bool hasLayerZero = false;
+                    for (const DRW_Layer& layer : cData->layers) {
+                        targetLayerNames.push_back(layer.name);
+                        hasLayerZero = hasLayerZero || layer.name == "0";
+                    }
+                    if (!hasLayerZero)
+                        targetLayerNames.emplace_back("0");
+                    std::string remapped;
+                    std::size_t layerReferences = 0u;
+                    std::size_t linetypeReferences = 0u;
+                    return DRW_ProxyGraphicDecoder::remapResourceIndices(
+                               entity.proxyGraphics,
+                               cData->dwgProxyLayerNameOrder,
+                               targetLayerNames,
+                               cData->dwgProxyLinetypeNameOrder, {}, remapped,
+                               layerReferences, linetypeReferences)
+                        && layerReferences != 0u
+                        && remapped.size()
+                            <= static_cast<std::size_t>(
+                                   std::numeric_limits<int>::max());
+                } catch (...) {
+                    return false;
+                }
+            }
             if (provenance.countCode
                 != (v >= DRW::AC1024 ? 160 : 92))
                 return false;
@@ -81668,10 +81723,60 @@ void dx_iface::writeEntity(DRW_Entity* e){
             dxfW->writeRawDxfEntity(nullptr);
         break;
     case DRW::MLEADER:
-        if (auto* entity = exactEntityForDxfWrite<DRW_MLeader>(e, DRW::MLEADER))
-            written = dxfW->writeMultiLeader(entity);
-        else
+        if (auto* source = exactEntityForDxfWrite<DRW_MLeader>(
+                e, DRW::MLEADER)) {
+            DRW_MLeader output(*source);
+            if (source->numProxyGraph != 0
+                || !source->proxyGraphics.empty()) {
+                bool proxyReady = false;
+                try {
+                    if (cData != nullptr
+                        && cData->sourceFormat == dx_source_format::DWG
+                        && cData->sourceVersion == DRW::AC1021
+                        && dxfW->getVersion() == DRW::AC1021
+                        && cData->dwgProxyResourceOrderCaptured
+                        && !cData->dwgProxyResourceOrderCaptureFailed) {
+                        std::vector<std::string> targetLayerNames;
+                        targetLayerNames.reserve(cData->layers.size() + 1u);
+                        bool hasLayerZero = false;
+                        for (const DRW_Layer& layer : cData->layers) {
+                            targetLayerNames.push_back(layer.name);
+                            hasLayerZero = hasLayerZero || layer.name == "0";
+                        }
+                        if (!hasLayerZero)
+                            targetLayerNames.emplace_back("0");
+                        std::string remapped;
+                        std::size_t layerReferences = 0u;
+                        std::size_t linetypeReferences = 0u;
+                        if (DRW_ProxyGraphicDecoder::remapResourceIndices(
+                                source->proxyGraphics,
+                                cData->dwgProxyLayerNameOrder,
+                                targetLayerNames,
+                                cData->dwgProxyLinetypeNameOrder, {}, remapped,
+                                layerReferences, linetypeReferences)
+                            && layerReferences != 0u
+                            && remapped.size()
+                                <= static_cast<std::size_t>(
+                                       std::numeric_limits<int>::max())) {
+                            output.proxyGraphics.swap(remapped);
+                            output.numProxyGraph = static_cast<int>(
+                                output.proxyGraphics.size());
+                            proxyReady = output
+                                .authorizeRemappedDwgMLeaderProxyGraphicsReplay();
+                        }
+                    }
+                } catch (...) {
+                    proxyReady = false;
+                }
+                if (!proxyReady) {
+                    written = dxfW->writeMultiLeader(nullptr);
+                    break;
+                }
+            }
+            written = dxfW->writeMultiLeader(&output);
+        } else {
             dxfW->writeRawDxfEntity(nullptr);
+        }
         break;
     case DRW::HATCH:
         if (auto* hatch = dynamic_cast<DRW_Hatch*>(e)) {

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "../drw_entities.h"
@@ -719,6 +720,133 @@ DRW_ProxyGraphicDecodeResult DRW_ProxyGraphicDecoder::inspect(
         result.consumedByteCount = index;
     }
     return result;
+}
+
+bool DRW_ProxyGraphicDecoder::remapResourceIndices(
+    const std::string& bytes,
+    const std::vector<std::string>& sourceLayerNames,
+    const std::vector<std::string>& targetLayerNames,
+    const std::vector<std::string>& sourceLinetypeNames,
+    const std::vector<std::string>& targetLinetypeNames,
+    std::string& output, std::size_t& remappedLayerCount,
+    std::size_t& remappedLinetypeCount,
+    const DRW_ProxyGraphicLimits& limits) {
+    remappedLayerCount = 0u;
+    remappedLinetypeCount = 0u;
+    constexpr std::size_t maxResourceNames = 100000u;
+    constexpr std::size_t maxProxyBytes = 16u * 1024u * 1024u;
+    if (bytes.empty() || bytes.size() > maxProxyBytes
+        || sourceLayerNames.size() > maxResourceNames
+        || targetLayerNames.size() > maxResourceNames
+        || sourceLinetypeNames.size() > maxResourceNames
+        || targetLinetypeNames.size() > maxResourceNames)
+        return false;
+    const DRW_ProxyGraphicDecodeResult inspected = inspect(bytes, limits);
+    if (!inspected.completed() || inspected.consumedByteCount != bytes.size())
+        return false;
+
+    try {
+        const auto makeTargetIndex = [](
+                const std::vector<std::string>& names,
+                std::unordered_map<std::string, std::uint32_t>& index) {
+            index.reserve(names.size());
+            for (std::size_t i = 0; i < names.size(); ++i) {
+                if (names[i].empty()
+                    || i >= static_cast<std::size_t>(0xFFFFFFFEu)
+                    || !index.emplace(names[i],
+                                      static_cast<std::uint32_t>(i)).second)
+                    return false;
+            }
+            return true;
+        };
+        std::unordered_map<std::string, std::uint32_t> targetLayers;
+        std::unordered_map<std::string, std::uint32_t> targetLinetypes;
+        if (!makeTargetIndex(targetLayerNames, targetLayers)
+            || !makeTargetIndex(targetLinetypeNames, targetLinetypes))
+            return false;
+
+        const auto read32 = [](const char* data) {
+            const auto* bytes = reinterpret_cast<const std::uint8_t*>(data);
+            return static_cast<std::uint32_t>(bytes[0])
+                | (static_cast<std::uint32_t>(bytes[1]) << 8u)
+                | (static_cast<std::uint32_t>(bytes[2]) << 16u)
+                | (static_cast<std::uint32_t>(bytes[3]) << 24u);
+        };
+        const auto write32 = [](char* data, std::uint32_t value) {
+            data[0] = static_cast<char>(value & 0xFFu);
+            data[1] = static_cast<char>((value >> 8u) & 0xFFu);
+            data[2] = static_cast<char>((value >> 16u) & 0xFFu);
+            data[3] = static_cast<char>((value >> 24u) & 0xFFu);
+        };
+        const auto translate = [](std::uint32_t sourceIndex,
+                                  const std::vector<std::string>& sourceNames,
+                                  const std::unordered_map<std::string,
+                                      std::uint32_t>& targetIndex,
+                                  std::uint32_t& target) {
+            if (sourceIndex >= sourceNames.size()
+                || sourceNames[sourceIndex].empty())
+                return false;
+            const auto found = targetIndex.find(sourceNames[sourceIndex]);
+            if (found == targetIndex.end())
+                return false;
+            target = found->second;
+            return true;
+        };
+
+        std::string staged(bytes);
+        std::size_t index = 8u;
+        std::size_t layerCount = 0u;
+        std::size_t linetypeCount = 0u;
+        const auto* original = reinterpret_cast<const std::uint8_t*>(
+            bytes.data());
+        while (index < bytes.size()) {
+            const std::uint32_t chunkSize = read32(
+                reinterpret_cast<const char*>(original + index));
+            const std::uint32_t type = read32(
+                reinterpret_cast<const char*>(original + index + 4u));
+            if (chunkSize < 8u || chunkSize > bytes.size() - index)
+                return false;
+            if (type == OP_ATTRIBUTE_LAYER
+                || type == OP_ATTRIBUTE_LINETYPE) {
+                if (chunkSize != 12u)
+                    return false;
+                const std::uint32_t sourceIndex = read32(
+                    bytes.data() + index + 8u);
+                if (type == OP_ATTRIBUTE_LAYER) {
+                    std::uint32_t target = 0u;
+                    if (!translate(sourceIndex, sourceLayerNames,
+                                   targetLayers, target))
+                        return false;
+                    write32(&staged[index + 8u], target);
+                    ++layerCount;
+                } else if (sourceIndex == 0xFFFFFFFEu
+                           || sourceIndex == 0xFFFFFFFFu
+                           || sourceIndex == 32766u
+                           || sourceIndex == 32767u) {
+                    // ODA's full-width sentinels and the independently
+                    // observed AC1021 low-16-bit forms are index-free.
+                } else {
+                    std::uint32_t target = 0u;
+                    if (!translate(sourceIndex, sourceLinetypeNames,
+                                   targetLinetypes, target))
+                        return false;
+                    write32(&staged[index + 8u], target);
+                    ++linetypeCount;
+                }
+            }
+            index += chunkSize;
+        }
+        if (index != bytes.size())
+            return false;
+        output.swap(staged);
+        remappedLayerCount = layerCount;
+        remappedLinetypeCount = linetypeCount;
+        return true;
+    } catch (...) {
+        remappedLayerCount = 0u;
+        remappedLinetypeCount = 0u;
+        return false;
+    }
 }
 
 DRW_ProxyGraphicDecodeResult DRW_ProxyGraphicDecoder::decode(

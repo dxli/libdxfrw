@@ -827,6 +827,18 @@ public:
   virtual void addDwgAc1027DefaultLayerSource(const DRW_DwgAc1027LayerSource& source) noexcept = 0;
 };
 
+/** Optional source-slot metadata for decoding DWG proxy graphic resources.
+ * This extension is separate from DRW_Interface so existing consumers keep
+ * the same virtual table. The vectors preserve the source control-table index
+ * spaces, including null layer slots. */
+class DRW_DwgProxyGraphicsResourceOrderHandler {
+public:
+  virtual ~DRW_DwgProxyGraphicsResourceOrderHandler() = default;
+  virtual void addDwgProxyGraphicsResourceOrder(
+      const std::vector<std::string>& layerNames,
+      const std::vector<std::string>& linetypeNames) noexcept = 0;
+};
+
 class DRW_DwgDefaultPlotStyleProvider {
 public:
   virtual ~DRW_DwgDefaultPlotStyleProvider() = default;

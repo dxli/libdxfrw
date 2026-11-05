@@ -149,7 +149,7 @@
         "nearParameters": {"1.0": 6, "0.04914376136317": 1, "0.0": 1},
         "intersectionType6": {"intersectionSubentityType": 2, "intersectionGsMarker": 0}
       },
-      "wholeConversion": "Still refused by strict preflight at typed-proxy-graphics-not-preserved (36 MLINE proxy records; first handle 11344). This is not a successful source-to-DXF DIMASSOC proof."
+      "wholeConversion": "Historical status superseded 2026-11-05: 36 records are MLEADER, not MLINE. Current strict preflight passes the bounded remapped proxy-cache gate and stops at the unrelated FIELD/FIELDLIST serializer gate. This is still not a successful source-to-DXF DIMASSOC proof; see p5-ac1021-mleader-proxy-resource-index-remap-2026-11-05.json."
     },
     "localAC1018Witness": {
       "path": "/Users/dli/doc/dwg/Extruder2.dwg",
@@ -218,7 +218,7 @@
     "fullSuites": false
   },
   "limitations": [
-    "Physical DIMASSOC record output/readback does not close either source document: AC1018 strict output is blocked by 474 entity parse failures, and AC1021 strict output is blocked by 36 unqualified MLINE proxy caches.",
+    "Physical DIMASSOC record output/readback does not close either source document: AC1018 strict output is blocked by 474 entity parse failures, and AC1021 strict output passes the MLEADER proxy-cache gate but remains blocked by FIELD/FIELDLIST serialization.",
     "The generated AC1024 frame validates implementation behavior, not an independently observed DWG byte layout.",
     "ODA v5.4.1 does not specify this body; the AC1018 physical comparison is one peer/source profile, not universal version qualification.",
     "Live associative dimension updates and native CAD interpretation are unqualified.",

@@ -151,6 +151,7 @@ struct DRW_ProxyGraphicsProvenance {
     int countCode{0}; // 92/160 in DXF; zero denotes DWG's binary count.
     std::uint64_t declaredByteCount{0};
     bool replayAuthorized{false};
+    bool resourceIndicesRemappedForDxf{false};
 };
 
 class dwgBufferW;
@@ -400,6 +401,7 @@ public:
             return false;
         }
         m_proxyGraphicsProvenance.replayAuthorized = true;
+        m_proxyGraphicsProvenance.resourceIndicesRemappedForDxf = false;
         return true;
     }
     //! Authorize an unchanged DWG ACAD_PROXY_ENTITY cache, or the bounded
@@ -421,6 +423,28 @@ public:
             || provenance.declaredByteCount != proxyGraphics.size())
             return false;
         m_proxyGraphicsProvenance.replayAuthorized = true;
+        m_proxyGraphicsProvenance.resourceIndicesRemappedForDxf = false;
+        return true;
+    }
+    //! A bounded AC1021 MLEADER projection may remap its DWG cache's resource
+    //! indices to the exact destination DXF table order before authorization.
+    //! The caller must validate the complete proxy stream and every mapping.
+    bool authorizeRemappedDwgMLeaderProxyGraphicsReplay() noexcept {
+        DRW_ProxyGraphicsProvenance& provenance =
+            m_proxyGraphicsProvenance;
+        if (eType != DRW::MLEADER
+            || provenance.origin != DRW_ProxyGraphicsOrigin::ParsedDwg
+            || provenance.encoding != DRW_ProxyGraphicsEncoding::DwgBitStream
+            || provenance.sourceVersion != DRW::AC1021
+            || !provenance.sourceCodePage.empty()
+            || provenance.countCode != 0
+            || numProxyGraph <= 0 || proxyGraphics.empty()
+            || proxyGraphics.size() != static_cast<std::size_t>(numProxyGraph))
+            return false;
+        provenance.countCode = 92;
+        provenance.declaredByteCount = proxyGraphics.size();
+        provenance.resourceIndicesRemappedForDxf = true;
+        provenance.replayAuthorized = true;
         return true;
     }
     void revokeProxyGraphicsReplayAuthorization() noexcept {

@@ -43,7 +43,7 @@ class DxIfaceExtensionGraphTestAccess;
 class DxIfaceTableSourceTestAccess;
 class DxIfaceDwgLtypeControlOutputTestAccess;
 
-class dx_iface : public DRW_Interface, public DRW_DxfClassSourceHandler, public DRW_DwgHeaderMaterialSourceHandler, public DRW_UnmodeledDxfObjectHandler,
+class dx_iface : public DRW_Interface, public DRW_DxfClassSourceHandler, public DRW_DwgHeaderMaterialSourceHandler, public DRW_DwgProxyGraphicsResourceOrderHandler, public DRW_UnmodeledDxfObjectHandler,
                  public DRW_DwgDbColorEedSourceHandler,
                  public DRW_DwgClassSourceHandler, public DRW_DxfTableSourceHandler,
                  public DRW_DxfSymbolSourceHandler, public DRW_DxfRootDictionarySourceHandler,
@@ -583,6 +583,45 @@ public:
         if (cData->m_ac1027HeaderMaterialSource) { cData->m_ac1027HeaderMaterialDuplicate = true; return; }
         cData->m_ac1027HeaderMaterialSource = source;
         cData->m_ac1027HeaderMaterialGeneration = cData->importGeneration;
+    }
+    void addDwgProxyGraphicsResourceOrder(
+            const std::vector<std::string>& layerNames,
+            const std::vector<std::string>& linetypeNames) noexcept override {
+        if (!cData || cData->sourceFormat != dx_source_format::DWG
+            || cData->importGeneration == 0u) return;
+        constexpr std::size_t maxResourceNames = 100000u;
+        constexpr std::size_t maxResourceNameBytes =
+            16u * 1024u * 1024u;
+        const auto bounded = [](const std::vector<std::string>& names) {
+            std::size_t bytes = 0u;
+            if (names.size() > maxResourceNames) return false;
+            for (const std::string& name : names) {
+                if (name.size() > maxResourceNameBytes - bytes)
+                    return false;
+                bytes += name.size();
+            }
+            return true;
+        };
+        if (!bounded(layerNames) || !bounded(linetypeNames)) {
+            cData->dwgProxyResourceOrderCaptureFailed = true;
+            cData->dwgProxyResourceOrderCaptured = false;
+            cData->dwgProxyLayerNameOrder.clear();
+            cData->dwgProxyLinetypeNameOrder.clear();
+            return;
+        }
+        try {
+            std::vector<std::string> layers(layerNames);
+            std::vector<std::string> linetypes(linetypeNames);
+            cData->dwgProxyLayerNameOrder.swap(layers);
+            cData->dwgProxyLinetypeNameOrder.swap(linetypes);
+            cData->dwgProxyResourceOrderCaptureFailed = false;
+            cData->dwgProxyResourceOrderCaptured = true;
+        } catch (...) {
+            cData->dwgProxyResourceOrderCaptureFailed = true;
+            cData->dwgProxyResourceOrderCaptured = false;
+            cData->dwgProxyLayerNameOrder.clear();
+            cData->dwgProxyLinetypeNameOrder.clear();
+        }
     }
     void addHeader(const DRW_Header* data) override{
         cData->headerC = *data;

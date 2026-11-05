@@ -87,7 +87,7 @@
       "CMakeLists.txt"
     ],
     "behavior": "DRW_ObjControl retains declared wire-order handle slots, including zero references, while handlesList remains a compact set of valid ownership references. The DWG reader builds m_layerNameOrder from LAYER_CONTROL's slot vector and resolves non-null handles through the parsed layer table. Linetype indexing is unchanged because this source has only the BYLAYER sentinel and does not adjudicate linetype null-slot indexing.",
-    "strictOutput": "Unchanged: whole-source DWG-to-DXF output still refuses the 36 typed proxy caches.",
+    "strictOutput": "Superseded 2026-11-05: after source resource-order capture and the AC1021 MLEADER cache remapping route, strict preflight passes the 36 proxy caches and stops at the unrelated FIELD/FIELDLIST serializer gate. The records are MLEADER, not MLINE; see p5-ac1021-mleader-proxy-resource-index-remap-2026-11-05.json.",
     "sourceSha256": {
       "src/intern/dwgreader.cpp": "f8b4c8987ecfba207c36f37720cb4ec473de74ee850e1da6c114d4a355bb711d",
       "src/intern/dwgreader.h": "4e244632362102cf08b84e78bd49117708ebca51d21eb597030b6325199893af",
@@ -117,7 +117,7 @@
       "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/architectural_-_annotation_scaling_and_multileaders.dwg -y -v2007 /private/tmp/architectural-proxy-slots-after-current-build.dxf",
       "executableSha256": "c40096c76b9e16207f3362e5e0fcd34e9b6d950491f041e5ac9305aa9d21af77",
       "exitCode": 1,
-      "result": "Refused with typed-proxy-graphics-not-preserved count=36 firstHandle=11344; a pre-existing destination sentinel remained byte-identical."
+      "result": "Historical result; subsequent code passes the proxy-cache gate."
     },
     "diffCheck": "PASS: git diff --check",
     "sha256": {
@@ -133,7 +133,7 @@
   },
   "claimBoundary": [
     "This resolves the witnessed AC1021 proxy layer names at source-control indices 51\u201353.",
-    "It does not qualify cache replay, destination DXF table-index remapping, whole-document conversion, or native rendering semantics.",
-    "No testing DWG/DXF fixture was added; whole-source output remains atomically refused because the 36 typed proxy caches are not represented."
+    "It does not qualify complete MLEADER cache output/readback, whole-document conversion, or native rendering semantics.",
+    "No testing DWG/DXF fixture was added."
   ]
 }
