@@ -40,6 +40,7 @@ namespace blockref_source_relation { struct Result; }
 
 class DxIfaceExtensionGraphTestAccess;
 class DxIfaceTableSourceTestAccess;
+class DxIfaceDwgLtypeControlOutputTestAccess;
 
 class dx_iface : public DRW_Interface, public DRW_DxfClassSourceHandler, public DRW_DwgHeaderMaterialSourceHandler, public DRW_UnmodeledDxfObjectHandler,
                  public DRW_DwgDbColorEedSourceHandler,
@@ -2751,6 +2752,7 @@ public:
 private:
     friend class DxWholeSourceTestAccess;
     friend class DxIfaceMlineDependencyTestAccess;
+    friend class DxIfaceDwgLtypeControlOutputTestAccess;
     bool mlineRootDictionarySourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
     bool mlineStyleDictionarySourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
     bool mlineStyleBodiesSourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
@@ -3524,12 +3526,23 @@ private:
     bool m_dxfMLineLinetypesInspected{false};
     std::size_t m_dxfMLineLinetypeCount{0u};
     std::size_t m_dxfMLineLayerCount{0u};
+    struct DwgLtypeOutputBinding {
+        std::uint32_t sourceHandle{0u};
+        std::uint32_t emittedHandle{0u};
+        std::string outputName;
+    };
+    bool m_dwgLtypeControlOutputRequired{false};
+    bool m_dwgLtypeControlOutputInspected{false};
+    std::vector<DwgLtypeOutputBinding> m_dwgLtypeControlOutputBindings;
     bool prepareDxfMLineLinetypes(std::size_t chargedBytes=0u) noexcept;
     bool hasUnchangedDxfMLineLinetypes() const noexcept;
     bool collectDxfMLineXdataEntitySources(
         std::map<std::uint32_t,DxfMLineXdataEntitySource>&,
         std::size_t&,std::size_t&) const noexcept;
     bool inspectDxfMLineLinetypes(const dxfRW::DxfTablesWriteView&) noexcept;
+    bool inspectDwgLineTypeControlOutput(
+        const dxfRW::DxfTablesWriteView&) noexcept;
+    bool finalizeDwgLineTypeControlOutput() const noexcept;
     bool preallocateDxfMLineLinetypeXdataEntityHandles();
     struct DxfMLineConsumerSource {
         const DRW_MLine* live{nullptr};

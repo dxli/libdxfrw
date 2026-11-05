@@ -1,9 +1,16 @@
 #ifndef DX_SYMBOL_OUTPUT_H
 #define DX_SYMBOL_OUTPUT_H
 
-// Internal, per-record observations of the exact staged TABLES body. This is
-// name/identity/scope evidence only, never a full symbol-table semantic model.
+// Internal observations of the exact staged TABLES body. These prove primary
+// record identity and scope only, never full symbol-table semantics.
 #include "dx_standard_output.h"
+#include "dx_symbol_name_key.h"
+
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace dx_symbol_output {
 
@@ -19,6 +26,12 @@ struct NameRecord {
     std::uint32_t tableDictionaryHandle{0};
     std::string name;
     bool qualified{false};
+};
+
+struct LineTypeTargetBinding {
+    std::uint32_t sourceHandle{0u};
+    std::uint32_t emittedHandle{0u};
+    std::string outputName;
 };
 
 struct Limits {
@@ -190,6 +203,67 @@ template <class Visitor> bool inspect(
     }
     return records != 0u && !active && mode == Mode::End && finish()
         && !budget->exceeded() && !reader->recordBudgetExceeded();
+}
+
+// Bind every expected source LTYPE to exactly one serialized LTYPE row. The
+// caller supplies handles from the writer's source-target registry; this
+// routine checks the staged row handle, spelling, table and owner against the
+// actual TABLES body. It makes no claim about dash-pattern semantics.
+inline bool inspectLineTypeTargetBindings(
+        const dxfRW::DxfTablesWriteView& view,
+        const std::vector<LineTypeTargetBinding>& expected,
+        Limits limits = {}) {
+    if (expected.size() > limits.records)
+        return false;
+    try {
+        std::unordered_map<std::uint32_t, const LineTypeTargetBinding*> byHandle;
+        std::unordered_set<std::uint32_t> sourceHandles;
+        std::unordered_set<std::string> expectedNames;
+        byHandle.reserve(expected.size());
+        sourceHandles.reserve(expected.size());
+        expectedNames.reserve(expected.size());
+        for (const LineTypeTargetBinding& target : expected) {
+            std::string key;
+            if (target.sourceHandle == 0u
+                || target.sourceHandle == DRW::NoHandle
+                || target.emittedHandle == 0u
+                || target.emittedHandle == DRW::NoHandle
+                || target.outputName.empty()
+                || !sourceHandles.insert(target.sourceHandle).second
+                || !nameKey(target.outputName, key)
+                || !expectedNames.insert(key).second
+                || !byHandle.emplace(target.emittedHandle, &target).second)
+                return false;
+        }
+
+        std::unordered_set<std::uint32_t> observedHandles;
+        std::unordered_set<std::string> observedNames;
+        observedHandles.reserve(expected.size());
+        observedNames.reserve(expected.size());
+        std::size_t observedRows = 0u;
+        const bool scanned = inspect(view, [&](const NameRecord& row) {
+            if (row.type != Kind::LineType)
+                return true;
+            if (++observedRows > expected.size())
+                return false;
+            const auto target = byHandle.find(row.handle);
+            std::string key;
+            if (target == byHandle.end()
+                || !nameKey(row.name, key)
+                || row.name != target->second->outputName
+                || !observedNames.insert(key).second
+                || !observedHandles.insert(row.handle).second
+                || !row.qualified || row.tableHandle != 0x5u
+                || row.owner != (view.version >= DRW::AC1014 ? 0x5u : 0u))
+                return false;
+            return true;
+        }, limits);
+        return scanned && observedRows == expected.size()
+            && observedHandles.size() == expected.size()
+            && observedNames.size() == expected.size();
+    } catch (...) {
+        return false;
+    }
 }
 
 } // namespace dx_symbol_output

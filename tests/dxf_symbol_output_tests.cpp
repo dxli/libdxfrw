@@ -16,9 +16,32 @@
 #include "dx_symbol_output.h"
 #include "dx_symbol_name_key.h"
 #include "intern/dxfwriter.h"
+#include "intern/dwg_fixed_handles.h"
 #include "intern/drw_textcodec.h"
 
+class DxIfaceDwgLtypeControlOutputTestAccess {
+public:
+    static void begin(dx_iface& iface) {
+        iface.m_dwgLtypeControlOutputRequired = true;
+        iface.m_dwgLtypeControlOutputInspected = false;
+        std::vector<dx_iface::DwgLtypeOutputBinding>().swap(
+            iface.m_dwgLtypeControlOutputBindings);
+    }
+    static bool inspect(dx_iface& iface,
+                        const dxfRW::DxfTablesWriteView& view) noexcept {
+        return iface.inspectDwgLineTypeControlOutput(view);
+    }
+    static bool prepareMline(dx_iface& iface) noexcept {
+        return iface.prepareDxfMLineStyles(
+            DRW::AC1024, false, DRW::DxfTextWritePolicy::Compatible);
+    }
+    static bool outputRequired(const dx_iface& iface) noexcept {
+        return iface.m_dwgLtypeControlOutputRequired;
+    }
+};
+
 namespace {
+
 struct TestContext {
     int failures{0};
     void expect(bool condition, const char* label) {
@@ -552,10 +575,37 @@ void testDxfSourceLinetypeTargets(TestContext& t) {
         codec.setDxfWriteRecordInventoryEnabled(true);
         unsigned lineTypes = 0u;
         codec.setDxfTablesWriteInspector([&](const auto& view) {
-            return dx_symbol_output::inspect(view, [&](const auto& row) {
-                if (row.type == dx_symbol_output::Kind::LineType) { ++lineTypes; return row.qualified; }
-                return true;
-            }) && lineTypes == 4u;
+            const std::pair<std::uint32_t, const char*> expectedRows[] = {
+                {0xC410u, "ByBlock"}, {0xC411u, "ByLayer"},
+                {0xC412u, "Continuous"}, {0xC413u, "CustomDash"}};
+            std::vector<dx_symbol_output::LineTypeTargetBinding> expected;
+            expected.reserve(std::size(expectedRows));
+            for (const auto& row : expectedRows) {
+                const std::uint32_t emitted =
+                    codec.dxfWriteSourceLinetypeTargetHandle(row.first);
+                if (emitted == 0u)
+                    return false;
+                expected.push_back({row.first, emitted, row.second});
+            }
+            const bool bound =
+                dx_symbol_output::inspectLineTypeTargetBindings(view, expected);
+            if (bound) {
+                lineTypes = static_cast<unsigned>(expected.size());
+                auto wrongName = expected;
+                wrongName.back().outputName = "DifferentDash";
+                auto wrongHandle = expected;
+                ++wrongHandle.back().emittedHandle;
+                auto missing = expected;
+                missing.pop_back();
+                t.expect(!dx_symbol_output::inspectLineTypeTargetBindings(
+                             view, wrongName)
+                             && !dx_symbol_output::inspectLineTypeTargetBindings(
+                                 view, wrongHandle)
+                             && !dx_symbol_output::inspectLineTypeTargetBindings(
+                                 view, missing),
+                         "Wrong source name, emitted handle, or missing source row cannot pass LTYPE binding");
+            }
+            return bound;
         });
         const auto before = codec.dxfWriteSourceLinetypeTargetHandle(0xC413u);
         const bool wrote = codec.write(&iface, version, binary);
@@ -600,6 +650,178 @@ void testDxfSourceLinetypeTargets(TestContext& t) {
         }
     }
     std::cout << "Source LTYPE target cells=" << cells << " atomic refusal/retries=" << refusals << " no-inventory controls=2\n";
+}
+
+void testDwgLtypeControlOutputBinding(TestContext& t) {
+    class Interface final : public dx_iface {
+    public:
+        Interface() {
+            cData = &data;
+            currentBlock = data.mBlock;
+            data.sourceFormat = dx_source_format::DWG;
+            data.sourceVersion = DRW::AC1024;
+            data.importGeneration = 9u;
+            data.dwgReadOutcome.attempted = true;
+            data.dwgReadOutcome.operationSucceeded = true;
+            data.dwgReadOutcome.sourceVersion = DRW::AC1024;
+
+            const std::pair<std::uint32_t, const char*> sourceRows[] = {
+                {DRW::DwgLtypeContinuousHandle, "CONTINUOUS"},
+                {0xC413u, "CustomDash"},
+                {DRW::DwgLtypeByBlockHandle, "BYBLOCK"},
+                {DRW::DwgLtypeByLayerHandle, "BYLAYER"}};
+            for (const auto& source : sourceRows) {
+                DRW_LType row;
+                row.handle = source.first;
+                row.parentHandle = 0xC400u;
+                row.name = source.second;
+                if (source.first == 0xC413u)
+                    row.path = {.5, -.25};
+                data.lineTypes.push_back(std::move(row));
+            }
+
+            DRW_DwgFramePublication control;
+            control.m_version = DRW::AC1024;
+            control.m_handle = 0xC400u;
+            control.m_sourceOffset = 0x80u;
+            control.m_sourceMapOrdinal = 4u;
+            control.m_sourceOffsetSpace =
+                DRW_DwgFrameOffsetSpace::PhysicalFile;
+            control.m_hasSourceLocation = true;
+            control.m_encodedType = DRW::DwgLTypeControlObjectType;
+            control.m_resolvedType = DRW::DwgLTypeControlObjectType;
+            control.m_recordName = "LTYPE_CONTROL";
+            control.m_commonLinkEvidence =
+                DRW_DwgCommonLinkEvidence::NotApplicable;
+            control.m_controlHandles = {
+                DRW::DwgLtypeContinuousHandle, 0xC413u,
+                DRW::DwgLtypeByBlockHandle, DRW::DwgLtypeByLayerHandle};
+            control.m_carrier = DRW_DwgFramePublication::Carrier::Control;
+            addDwgFramePublication(control);
+        }
+
+        void writeHeader(DRW_Header& header) override {
+            header.vars.clear();
+            header.vars["$DWGCODEPAGE"] =
+                new DRW_Variant(3, std::string("ANSI_1252"));
+        }
+
+        void writeLTypes() override {
+            for (const DRW_LType& source : data.lineTypes) {
+                if (fault == 2u && source.handle == 0xC413u)
+                    continue;
+                DRW_LType row = source;
+                if (fault == 1u && source.handle == 0xC413u)
+                    row.name = "WrongDash";
+                if (!dxfW->writeLineType(&row))
+                    writeFailed = true;
+            }
+            if (fault == 3u || fault == 4u) {
+                DRW_LType extra;
+                extra.handle = 0xC416u;
+                extra.parentHandle = 0xC400u;
+                extra.name = fault == 3u ? "UnexpectedDash" : "CustomDash";
+                extra.path = {.25, -.5};
+                if (!dxfW->writeLineType(&extra))
+                    writeFailed = true;
+            }
+        }
+
+        void writeObjects() override {
+            if (fault != 6u)
+                return;
+            auto* context = dxfW->getWritingContext();
+            if (context == nullptr)
+                return;
+            const std::uint32_t emitted =
+                dxfW->dxfWriteSourceLinetypeTargetHandle(0xC413u);
+            if (emitted != 0u)
+                context->sourceHandleToMintedMap[0xC413u] = emitted + 1u;
+        }
+
+        dx_data data;
+        unsigned fault{0u};
+        bool writeFailed{false};
+    } iface;
+
+    t.expect(iface.data.hasCompleteDwgLineTypeControlMembership(),
+             "Generated source LTYPE_CONTROL membership is complete before output");
+    DxIfaceDwgLtypeControlOutputTestAccess::begin(iface);
+    t.expect(DxIfaceDwgLtypeControlOutputTestAccess::prepareMline(iface)
+                 && DxIfaceDwgLtypeControlOutputTestAccess::outputRequired(iface),
+             "Later MLINE preparation cannot clear the imported-DWG LTYPE output gate");
+    const auto path = std::filesystem::temp_directory_path()
+        / ("libdxfrw-dwg-ltype-control-output-"
+           + std::to_string(std::chrono::steady_clock::now()
+                                .time_since_epoch().count())
+           + ".dxf");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() { std::error_code ignored; std::filesystem::remove(path, ignored); }
+    } cleanup{path};
+    dxfRW codec(path.string().c_str());
+    iface.dxfW = &codec;
+    codec.setDxfWriteRecordInventoryEnabled(false);
+    unsigned cells = 0u;
+    for (const auto outputVersion : {DRW::AC1014, DRW::AC1015, DRW::AC1018,
+             DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
+      for (const bool binary : {false, true}) {
+        for (unsigned fault = 0u; fault <= 6u; ++fault) {
+            iface.fault = fault;
+            iface.writeFailed = false;
+            unsigned inspections = 0u;
+            const std::string sentinel = "DWG_LTYPE_CONTROL_DESTINATION_UNCHANGED";
+            if (fault != 0u) {
+                std::ofstream prior(path, std::ios::binary);
+                prior << sentinel;
+            }
+            const auto installInspector = [&]() {
+                DxIfaceDwgLtypeControlOutputTestAccess::begin(iface);
+                return codec.setDxfTablesWriteInspector([&](const auto& view) {
+                    ++inspections;
+                    if (iface.fault == 5u) {
+                        auto* context = codec.getWritingContext();
+                        if (context == nullptr)
+                            return false;
+                        context->ambiguousSourceHandles.insert(0xC413u);
+                    }
+                    return DxIfaceDwgLtypeControlOutputTestAccess::inspect(
+                        iface, view);
+                });
+            };
+            t.expect(installInspector(),
+                     "DWG LTYPE output inspector installs before write");
+            const bool wrote = codec.write(&iface, outputVersion, binary);
+            if (fault == 0u) {
+                t.expect(wrote && inspections == 1u && !iface.writeFailed,
+                         "Exact source-to-emitted LTYPE identity and table owner pass across target versions/codecs");
+                ++cells;
+                continue;
+            }
+            std::ifstream previous(path, std::ios::binary);
+            const std::string retained(
+                (std::istreambuf_iterator<char>(previous)),
+                std::istreambuf_iterator<char>());
+            t.expect(!wrote && inspections == 1u && retained == sentinel,
+                     "Wrong name, missing row, unexpected row, duplicate name, ambiguous target, or changed alias refuses atomically");
+
+            iface.fault = 0u;
+            iface.writeFailed = false;
+            t.expect(installInspector(),
+                     "Corrected LTYPE output inspector reinstalls on same codec");
+            const bool retried = codec.write(&iface, outputVersion, binary);
+            std::ifstream recovered(path, std::ios::binary);
+            const std::string output((std::istreambuf_iterator<char>(recovered)),
+                                     std::istreambuf_iterator<char>());
+            t.expect(retried && inspections == 2u && !iface.writeFailed
+                         && output != sentinel,
+                     "Same-codec retry rebuilds complete LTYPE output binding");
+            ++cells;
+        }
+      }
+    }
+    std::cout << "DWG LTYPE control output cells=" << cells
+              << " target-versions=7 formats=2 negative cases=6 with same-codec retries\n";
 }
 
 void testSymbolNameWireInspection(TestContext& t) {
@@ -728,6 +950,7 @@ int main(int argc, char** argv) {
     if (argc == 1 || (argc == 2 && std::string(argv[1]) == "--source-table-identities")) {
         testDxfSourceTableIdentities(context);
         testDxfSourceLinetypeTargets(context);
+        testDwgLtypeControlOutputBinding(context);
     }
     if (argc == 1 || (argc == 2 && std::string(argv[1]) == "--symbol-unicode-keys"))
         testSymbolUnicodeKeys(context);

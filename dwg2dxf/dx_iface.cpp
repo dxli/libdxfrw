@@ -50974,6 +50974,82 @@ bool dx_iface::inspectDxfMLineLinetypes(const dxfRW::DxfTablesWriteView& view) n
     } catch (...) {return false;}
 }
 
+bool dx_iface::inspectDwgLineTypeControlOutput(
+        const dxfRW::DxfTablesWriteView& view) noexcept {
+    if (!m_dwgLtypeControlOutputRequired
+        || m_dwgLtypeControlOutputInspected || cData == nullptr || dxfW == nullptr
+        || cData->sourceFormat != dx_source_format::DWG
+        || !cData->hasCompleteDwgLineTypeControlMembership()
+        || view.version != dxfW->getVersion()
+        || cData->lineTypes.empty()
+        || cData->lineTypes.size() > kMaxAdapterBasicTableRecords)
+        return false;
+
+    try {
+        std::vector<dx_symbol_output::LineTypeTargetBinding> targets;
+        std::vector<DwgLtypeOutputBinding> retained;
+        targets.reserve(cData->lineTypes.size());
+        retained.reserve(cData->lineTypes.size());
+        for (const DRW_LType& lineType : cData->lineTypes) {
+            const std::uint32_t emitted =
+                dxfW->dxfWriteSourceLinetypeTargetHandle(lineType.handle);
+            if (emitted == 0u || emitted == DRW::NoHandle)
+                return false;
+            std::string outputName = lineType.name;
+            if (sameAsciiName(lineType.name, "BYBLOCK"))
+                outputName = "ByBlock";
+            else if (sameAsciiName(lineType.name, "BYLAYER"))
+                outputName = "ByLayer";
+            else if (sameAsciiName(lineType.name, "CONTINUOUS"))
+                outputName = "Continuous";
+            targets.push_back({lineType.handle, emitted, outputName});
+            retained.push_back({lineType.handle, emitted, std::move(outputName)});
+        }
+        if (!dx_symbol_output::inspectLineTypeTargetBindings(view, targets))
+            return false;
+        m_dwgLtypeControlOutputBindings.swap(retained);
+        m_dwgLtypeControlOutputInspected = true;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool dx_iface::finalizeDwgLineTypeControlOutput() const noexcept {
+    if (!m_dwgLtypeControlOutputRequired)
+        return true;
+    if (cData == nullptr || dxfW == nullptr
+        || !m_dwgLtypeControlOutputInspected
+        || !cData->hasCompleteDwgLineTypeControlMembership()
+        || m_dwgLtypeControlOutputBindings.size() != cData->lineTypes.size())
+        return false;
+    try {
+        std::size_t index = 0u;
+        for (const DRW_LType& lineType : cData->lineTypes) {
+            const DwgLtypeOutputBinding& binding =
+                m_dwgLtypeControlOutputBindings[index++];
+            if (binding.sourceHandle != lineType.handle
+                || binding.emittedHandle == 0u
+                || binding.emittedHandle == DRW::NoHandle
+                || dxfW->dxfWriteSourceLinetypeTargetHandle(lineType.handle)
+                    != binding.emittedHandle)
+                return false;
+            if (sameAsciiName(lineType.name, "BYBLOCK")) {
+                if (binding.outputName != "ByBlock") return false;
+            } else if (sameAsciiName(lineType.name, "BYLAYER")) {
+                if (binding.outputName != "ByLayer") return false;
+            } else if (sameAsciiName(lineType.name, "CONTINUOUS")) {
+                if (binding.outputName != "Continuous") return false;
+            } else if (binding.outputName != lineType.name) {
+                return false;
+            }
+        }
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 dx_iface::TableSourceReport dx_iface::tableSourceReport(const dx_data& data) noexcept {
     TableSourceReport report;
     const auto& source = data.m_tableDxfSource;
@@ -69463,6 +69539,7 @@ bool dx_iface::finalizeDxfWrite() {
             || !dxfW->dxfWriteRecordHasIdentity(owner, "DICTIONARY", "OBJECTS")) return false;
     }
     if (!validateDxfBlockRecordInsertReferences(true)
+        || !finalizeDwgLineTypeControlOutput()
         || (mlineGeometryTransaction
             && (!dxfW || !dxfW->dxfWriteNoRawSectionsObserved()))
         || (mlineGeometryTransaction&&m_dxfMLineDependencySourceLivePreflightPassed
@@ -73337,6 +73414,10 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                           dx_dwgReadCompletenessPolicy readCompletenessPolicy){
     const bool ac1027GuardStrict = readCompletenessPolicy!=dx_dwgReadCompletenessPolicy::Legacy || requireResolvedOwners;
     StrictDxfExportLease strictExportLease(fData,ac1027GuardStrict);
+    m_dwgLtypeControlOutputRequired = false;
+    m_dwgLtypeControlOutputInspected = false;
+    std::vector<DwgLtypeOutputBinding>().swap(
+        m_dwgLtypeControlOutputBindings);
     m_sunStudyOutputInspected = false;
     m_sunStudyRootSnapshot.reset();
     m_sunStudyOwnerSnapshot.reset();
@@ -75279,6 +75360,11 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         reportPreflightFailure("MLINESTYLE current source/body transaction");
         return false;
     }
+    m_dwgLtypeControlOutputRequired =
+        cData->sourceFormat == dx_source_format::DWG
+        && cData->dwgReadOutcome.attempted
+        && (readCompletenessPolicy != dx_dwgReadCompletenessPolicy::Legacy
+            || requireResolvedOwners);
     if (!prepareDwgMLineStyles(v)) {
         reportPreflightFailure("MLINESTYLE DWG source/output snapshot");
         return false;
@@ -77970,8 +78056,12 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     const bool needsDwgLayerStateOutput =
         m_dwgLayerStateOutputPrepared;
     if ((needsStandardNames || needsLayerControlOutput
+            || m_dwgLtypeControlOutputRequired
             || m_dxfLayerMaterialState.active || !m_dxfMLineLinetypes.empty()
             || needsDwgLayoutsOutput || !m_dwgGeoDataGraphs.empty() || usesAc1027DefaultLayerProfile()) && !dxfW->setDxfTablesWriteInspector([this, needsStandardNames, needsLayerControlOutput, needsDwgLayoutsOutput, debug, requireResolvedOwners](const auto& view) {
+            if (m_dwgLtypeControlOutputRequired
+                && !inspectDwgLineTypeControlOutput(view))
+                return false;
             if (!inspectDwgGeoDataTables(view)) return false;
             if (!inspectDxfLayerMaterials(view) || !inspectAc1027DefaultLayerOutput(view)) {
                 return false;
