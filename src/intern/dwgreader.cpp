@@ -14137,10 +14137,27 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
               } else {
                 // A failed typed history-body decode is still useful as an
                 // opaque, version-bound source frame. Keep ret=false so the
-                // read remains observably partial and strict conversion does
-                // not mistake raw retention for semantic decoding.
+                // parser failure visible. AC1024 LOFT and REVOLVE frames
+                // have a separately qualified ODA proxy transport, so
+                // publish those exact bodies as raw carriers while retaining
+                // the failure count. The strict writer still validates the
+                // complete source graph and bounded proxy profile before
+                // output.
                 intfa.addUnsupportedObject(
                     makeRawObject(oType, cit->second, false));
+                const bool ac1024OpaqueBodyProfile =
+                    version == DRW::AC1024
+                    && ((rn == "ACSH_REVOLVE_CLASS"
+                         && cit->second->className == "AcDbShRevolve")
+                        || (rn == "ACSH_LOFT_CLASS"
+                            && cit->second->className == "AcDbShLoft"));
+                if (ac1024OpaqueBodyProfile) {
+                  ++m_objectParseFailures;
+                  ret = true;
+                  DRW_DBG("AC1024 ACSH LOFT/REVOLVE retained as a ");
+                  DRW_DBG("qualified opaque source frame after typed ");
+                  DRW_DBG("body parse failure\n");
+                }
               }
               break;
             }

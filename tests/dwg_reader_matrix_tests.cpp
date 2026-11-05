@@ -19179,9 +19179,14 @@ int runAcShFailedFrameRetention(const std::string& path) {
         if (typed != data.acshHistoryObjects.cend())
             continue;
         ++untypedAcShFrames;
+        const bool qualifiedAcshClass =
+            (raw.m_recordName == "ACSH_REVOLVE_CLASS"
+             && raw.m_className == "AcDbShRevolve")
+            || (raw.m_recordName == "ACSH_LOFT_CLASS"
+                && raw.m_className == "AcDbShLoft");
         if (raw.m_isEntity || !raw.m_isCustomClass
             || !raw.m_hasClassDefinition || raw.m_version != DRW::AC1024
-            || raw.m_recordName.empty() || raw.m_className.empty()
+            || !qualifiedAcshClass
             || raw.m_rawBytes.empty()
             || raw.m_objectSize != raw.m_rawBytes.size()
             || raw.m_bodyBitSize > raw.m_objectSize * 8u) {
@@ -19197,17 +19202,25 @@ int runAcShFailedFrameRetention(const std::string& path) {
         || observations.entityParseFailures != 0u
         || observations.objectParseFailures != 3u
         || untypedAcShFrames != observations.objectParseFailures
+        || observations.frames.status
+            != DRW_DwgFrameCoverageStatus::FinalizedComplete
+        || observations.frames.dispositions[static_cast<std::size_t>(
+               DRW_DwgFrameDisposition::Failed)] != 0u
         || data.acdsHistoryDwgFrameCaptureFailed) {
-        std::cerr << "ACSH failed-frame retention did not match the partial "
-                  << "sample disposition: import=" << imported
+        std::cerr << "ACSH raw recovery did not publish a complete frame "
+                  << "disposition: import=" << imported
                   << " objectParseFailures="
                   << observations.objectParseFailures
-                  << " untypedAcShFrames=" << untypedAcShFrames << '\n';
+                  << " untypedAcShFrames=" << untypedAcShFrames
+                  << " frameStatus="
+                  << static_cast<unsigned>(observations.frames.status) << '\n';
         dx_iface::reportDwgReadOutcome(std::cerr, outcome);
         return 1;
     }
-    std::cout << "ACSH failed-frame retention: PASS (opaque frames="
-              << untypedAcShFrames << ", typed failures remain visible)\n";
+    std::cout << "ACSH opaque recovery: PASS (frames="
+              << untypedAcShFrames
+              << ", typed parse failures remain visible, source frame "
+                 "coverage complete)\n";
     return 0;
 }
 

@@ -4854,7 +4854,73 @@ bool hasNamedDwgSkip(const DwgReadNamedObservations& observations) noexcept {
         || observations.aggregateSaturated;
 }
 
-bool strictDwgReadOutcomeIsComplete(const dx_data& data) noexcept {
+bool hasOnlyRecoverableAc1024AcshParseFailures(
+        const dx_data& data, DRW::Version targetVersion) noexcept {
+    const dx_dwgReadOutcome& outcome = data.dwgReadOutcome;
+    const DwgReadObservations& observations = outcome.observations;
+    if (data.sourceFormat != dx_source_format::DWG
+        || data.sourceVersion != DRW::AC1024
+        || targetVersion != DRW::AC1027
+        || observations.entityParseFailures != 0u
+        || observations.objectParseFailures == 0u
+        || observations.frames.status
+            != DRW_DwgFrameCoverageStatus::FinalizedComplete
+        || data.acdsHistoryDwgFrameCaptureFailed)
+        return false;
+
+    try {
+        std::unordered_set<std::uint32_t> typedHandles;
+        typedHandles.reserve(data.acshHistoryObjects.size());
+        for (const DRW_AcShHistoryObject& typed : data.acshHistoryObjects) {
+            if (typed.handle == 0u || typed.handle == DRW::NoHandle
+                || !typedHandles.insert(typed.handle).second)
+                return false;
+        }
+
+        std::unordered_set<std::uint32_t> rawHandles;
+        rawHandles.reserve(data.acdsHistoryDwgFrames.size());
+        std::size_t recovered = 0u;
+        for (const DRW_UnsupportedObject& raw : data.acdsHistoryDwgFrames) {
+            const bool acshFrame = raw.m_recordName.rfind("ACSH_", 0u) == 0u
+                || raw.m_className.rfind("AcDbSh", 0u) == 0u;
+            if (!acshFrame)
+                continue;
+            if (raw.m_handle == 0u || raw.m_handle == DRW::NoHandle
+                || !rawHandles.insert(raw.m_handle).second)
+                return false;
+            if (typedHandles.find(raw.m_handle) != typedHandles.end())
+                continue;
+
+            const bool qualifiedAcshClass =
+                (raw.m_recordName == "ACSH_REVOLVE_CLASS"
+                 && raw.m_className == "AcDbShRevolve")
+                || (raw.m_recordName == "ACSH_LOFT_CLASS"
+                    && raw.m_className == "AcDbShLoft");
+            if (raw.m_version != DRW::AC1024 || !qualifiedAcshClass
+                || !raw.m_isCustomClass || raw.m_isEntity
+                || !raw.m_hasClassDefinition
+                || raw.m_commonLinkEvidence
+                    != DRW_DwgCommonLinkEvidence::Validated
+                || !raw.m_commonHandleDataValidated
+                || raw.m_parentHandle == 0u
+                || raw.m_parentHandle == DRW::NoHandle
+                || raw.m_objectSize == 0u
+                || raw.m_objectSize != raw.m_rawBytes.size()
+                || raw.m_bodyBitSize == 0u
+                || raw.m_bodyBitSize
+                    > static_cast<std::uint64_t>(raw.m_objectSize) * 8u)
+                return false;
+            ++recovered;
+        }
+        return recovered != 0u
+            && recovered == observations.objectParseFailures;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool strictDwgReadOutcomeIsComplete(const dx_data& data,
+                                    DRW::Version targetVersion) noexcept {
     const dx_dwgReadOutcome& outcome = data.dwgReadOutcome;
     if (!outcome.attempted)
         return true;  // Programmatically constructed models have no read receipt.
@@ -4864,7 +4930,12 @@ bool strictDwgReadOutcomeIsComplete(const dx_data& data) noexcept {
         return false;
 
     const DwgReadObservations& observations = outcome.observations;
-    if (observedDwgSemanticGaps(observations)
+    const bool unrecoveredParseGaps =
+        observations.entityParseFailures != 0u
+        || (observations.objectParseFailures != 0u
+            && !hasOnlyRecoverableAc1024AcshParseFailures(
+                data, targetVersion));
+    if (unrecoveredParseGaps
         || hasNamedDwgSkip(observations.skippedCustomClasses)
         || hasNamedDwgSkip(observations.skippedUnsupportedObjects)
         || observations.dataStorageOrphanRecords != 0
@@ -75597,7 +75668,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     }
     if (requireCompleteDwgRead
         && cData->sourceFormat == dx_source_format::DWG
-        && !strictDwgReadOutcomeIsComplete(*cData)) {
+        && !strictDwgReadOutcomeIsComplete(*cData, v)) {
         reportPreflightFailure(
             "strict-complete conversion requires successful, complete DWG read disposition");
         return false;
