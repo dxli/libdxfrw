@@ -34247,6 +34247,11 @@ bool dxfRW::writeDictionaryVar(DRW_DictionaryVar *ent) {
 }
 
 bool dxfRW::writeRasterVariables(DRW_RasterVariables *ent) {
+    if (ent == nullptr || writer == nullptr || ent->m_classVersion != 0
+        || (ent->m_imageFrame != 0 && ent->m_imageFrame != 1)
+        || (ent->m_imageQuality != 0 && ent->m_imageQuality != 1)
+        || ent->m_units < 0 || ent->m_units > 8)
+        return false;
     if (!preflightTableEntry(ent))
         return false;
     const std::uint32_t sourceHandle = ent->handle;

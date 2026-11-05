@@ -3,8 +3,9 @@
   "id": "p4-rastervariables-dwg-adapter-transport-2026-11-02",
   "date": "2026-11-02",
   "title": "Generated AC1027 RASTERVARIABLES DWG adapter transport",
-  "status": "GENERATED_DWG_ORIGIN_RASTERVARIABLES_ADAPTER_TRANSPORT_PASSED",
-  "supportClaimEffect": "none",
+  "status": "HISTORICAL_GENERATED_PROFILE_SUPERSEDED_BY_NORMATIVE_DXF_DOMAIN_CONTROL",
+  "supportClaimEffect": "none; the generated self-consistency profile used classVersion=1 and displayQuality=2, which Autodesk's DXF table does not permit for RASTERVARIABLES output",
+  "supersededBy": "docs/research/p4-rastervariables-dxf-scalar-domain-2026-11-05.json",
   "scope": "Bounded generation-keyed typed RASTERVARIABLES capture, source CLASS/frame binding, rooted dictionary ownership, same-revision profile-gated DXF output, atomic field refusal/retry, and fresh ASCII/Binary typed readback for a locally authored AC1027 DWG.",
   "fixture": {
     "kind": "locally-authored-from-scratch",

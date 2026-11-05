@@ -85,9 +85,13 @@ physical whole-document output and native image behavior remain open
 ([frame-0 receipt](docs/research/p4-ac1018-rastervariables-direct-nod-2026-11-04.json),
 [frame-1 receipt](docs/research/p4-ac1018-rastervariables-frame1-direct-nod-2026-11-04.json)).
 The AC1024 and AC1032 direct-NOD profiles additionally cover source-witnessed
-frame=1; other scalar values, graph shapes and native image behavior remain open
-([AC1024 receipt](docs/research/p4-ac1024-rastervariables-frame1-direct-nod-2026-11-04.json),
-[AC1032 receipt](docs/research/p4-ac1032-rastervariables-frame1-direct-nod-2026-11-04.json)).
+frame=1; source-origin adapter admission outside its physically witnessed
+tuples, physical whole-document output, broader graphs and native image
+behavior remain open. The low-level DXF codec now preserves tolerant input but
+admits only Autodesk's class-version/frame/quality/unit domains; this does not
+expand the source-origin adapter profile. See the [AC1024 frame receipt](docs/research/p4-ac1024-rastervariables-frame1-direct-nod-2026-11-04.json),
+[AC1032 frame receipt](docs/research/p4-ac1032-rastervariables-frame1-direct-nod-2026-11-04.json),
+and [DXF scalar-domain receipt](docs/research/p4-rastervariables-dxf-scalar-domain-2026-11-05.json).
 
 **SORTENTSTABLE owner-scope restriction:** Autodesk's DXF definition limits the
 owner reference to `*MODEL_SPACE` or `*PAPER_SPACE`. Physical AC1024 testing

@@ -2940,18 +2940,18 @@ void testRasterAndWipeoutVariablesIdentityRemapping(TestContext& t) {
 
     const auto prepareRaster = [](DRW_RasterVariables& value) {
         value.parentHandle = 0xCu;
-        value.m_classVersion = 2;
+        value.m_classVersion = 0;
         value.m_imageFrame = 1;
-        value.m_imageQuality = 2;
-        value.m_units = 3;
+        value.m_imageQuality = 1;
+        value.m_units = 8;
     };
     const auto prepareWipeout = [](DRW_WipeoutVariables& value) {
         value.parentHandle = 0xCu;
         value.m_displayFrame = 1u;
     };
     const auto rasterPayloadMatches = [](const DRW_RasterVariables& value) {
-        return value.m_classVersion == 2 && value.m_imageFrame == 1
-            && value.m_imageQuality == 2 && value.m_units == 3;
+        return value.m_classVersion == 0 && value.m_imageFrame == 1
+            && value.m_imageQuality == 1 && value.m_units == 8;
     };
     const auto wipeoutPayloadMatches = [](const DRW_WipeoutVariables& value) {
         return value.m_displayFrame == 1u;
@@ -3114,6 +3114,78 @@ void testRasterAndWipeoutVariablesIdentityRemapping(TestContext& t) {
         [](dxfRW& owner, DRW_RasterVariables& value) {
             return owner.writeRasterVariables(&value);
         }, readRaster, rasterPayloadMatches);
+
+    const std::vector<std::pair<const char*, std::function<void(DRW_RasterVariables&)>>>
+        invalidRasterProfiles = {
+            {"class version", [](DRW_RasterVariables& value) {
+                value.m_classVersion = 1;
+            }},
+            {"frame below domain", [](DRW_RasterVariables& value) {
+                value.m_imageFrame = -1;
+            }},
+            {"frame above domain", [](DRW_RasterVariables& value) {
+                value.m_imageFrame = 2;
+            }},
+            {"quality below domain", [](DRW_RasterVariables& value) {
+                value.m_imageQuality = -1;
+            }},
+            {"quality above domain", [](DRW_RasterVariables& value) {
+                value.m_imageQuality = 2;
+            }},
+            {"units below domain", [](DRW_RasterVariables& value) {
+                value.m_units = -1;
+            }},
+            {"units above domain", [](DRW_RasterVariables& value) {
+                value.m_units = 9;
+            }}};
+    for (const bool binary : {false, true}) {
+        for (const auto& invalidProfile : invalidRasterProfiles) {
+            std::ostringstream output;
+            dxfRW owner("");
+            owner.version = DRW::AC1032;
+            owner.binFile = binary;
+            owner.writer = binary
+                ? std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterBinary>(&output))
+                : std::unique_ptr<dxfWriter>(
+                      std::make_unique<dxfWriterAscii>(&output));
+            owner.writer->setRecordInventoryEnabled(true, 16u);
+            DRW_RasterVariables invalid;
+            invalid.handle = rasterSource;
+            prepareRaster(invalid);
+            invalidProfile.second(invalid);
+            const std::string label = std::string("RASTERVARIABLES rejects ")
+                + invalidProfile.first + (binary ? " in Binary" : " in ASCII")
+                + " before emitting bytes";
+            const bool refused = !owner.writeRasterVariables(&invalid)
+                && output.str().empty();
+            prepareRaster(invalid);
+            const bool retried = owner.writeRasterVariables(&invalid)
+                && owner.writer->writeString(0, "WIRE_END");
+            DRW_RasterVariables readback;
+            const bool read = retried
+                && readRaster(output.str(), binary, readback);
+            const std::string retryLabel = std::string("RASTERVARIABLES ")
+                + invalidProfile.first + " refusal preserves same-writer retry and readback";
+            t.expect(refused, label.c_str());
+            t.expect(refused && read && rasterPayloadMatches(readback)
+                         && owner.writer->recordHandleCount(rasterSource) == 1u,
+                     retryLabel.c_str());
+        }
+    }
+
+    const std::string unsupportedRasterValues =
+        "0\nRASTERVARIABLES\n5\nA71\n330\nC\n"
+        "100\nAcDbRasterVariables\n90\n1\n70\n2\n71\n2\n72\n9\n"
+        "0\nENDSEC\n";
+    DRW_RasterVariables tolerantRaster;
+    t.expect(readRaster(unsupportedRasterValues, false, tolerantRaster)
+                 && tolerantRaster.m_classVersion == 1
+                 && tolerantRaster.m_imageFrame == 2
+                 && tolerantRaster.m_imageQuality == 2
+                 && tolerantRaster.m_units == 9,
+             "RASTERVARIABLES input preserves values outside the documented DXF output domain");
+
     exercise("WIPEOUTVARIABLES", wipeoutSource, wipeoutOutput,
         [] { return DRW_WipeoutVariables{}; }, prepareWipeout,
         [](dxfRW& owner, DRW_WipeoutVariables& value) {

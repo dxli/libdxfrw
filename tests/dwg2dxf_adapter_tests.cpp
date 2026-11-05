@@ -69974,7 +69974,7 @@ bool rasterVariablesDwgAdapterTransport(
             variables.m_classVersion = 0;
             variables.m_imageFrame = directNodOwner
                 ? (revision == DRW::AC1021 || frameOne ? 1 : 0) : 1;
-            variables.m_imageQuality = directNodOwner ? 1 : 2;
+            variables.m_imageQuality = 1;
             variables.m_units = directNodOwner && revision != DRW::AC1018 && revision != DRW::AC1024 && revision != DRW::AC1032 ? 1 : 3;
             if (directNodOwner
                 && (revision == DRW::AC1018 || revision == DRW::AC1021
@@ -70031,7 +70031,7 @@ bool rasterVariablesDwgAdapterTransport(
     std::int32_t expectedClassVersion = 0;
     std::int32_t expectedFrame = directNodOwner
         ? (revision == DRW::AC1021 || frameOne ? 1 : 0) : 1;
-    std::int32_t expectedQuality = directNodOwner ? 1 : 2;
+    std::int32_t expectedQuality = 1;
     std::int32_t expectedUnits = directNodOwner && revision != DRW::AC1018 && revision != DRW::AC1024 && revision != DRW::AC1032 ? 1 : 3;
     const bool expectedNodReactor = directNodOwner
         && (revision == DRW::AC1018 || revision == DRW::AC1021 || revision == DRW::AC1024 || revision == DRW::AC1027 || revision == DRW::AC1032);
