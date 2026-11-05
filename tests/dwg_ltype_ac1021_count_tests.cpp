@@ -17,14 +17,21 @@ dwgHandle ref(std::uint8_t code,std::uint32_t value) {
     for(auto n=value;n;n>>=8u)++h.size;
     return h;
 }
-std::vector<std::uint32_t> children(unsigned count) {
-    std::vector<std::uint32_t> result{DRW::DwgLtypeByBlockHandle,
-        DRW::DwgLtypeByLayerHandle,DRW::DwgLtypeContinuousHandle};
+std::vector<std::uint32_t> children(unsigned count, bool legacy = false) {
+    if (legacy) {
+        std::vector<std::uint32_t> result{DRW::DwgLtypeByBlockHandle,
+            DRW::DwgLtypeByLayerHandle,DRW::DwgLtypeContinuousHandle};
+        for(unsigned i=1;i<count;++i)result.push_back(0x1000u+i);
+        return result;
+    }
+    std::vector<std::uint32_t> result{DRW::DwgLtypeContinuousHandle};
     for(unsigned i=1;i<count;++i)result.push_back(0x1000u+i);
+    result.push_back(DRW::DwgLtypeByBlockHandle);
+    result.push_back(DRW::DwgLtypeByLayerHandle);
     return result;
 }
-bool slots(const DRW_ObjControl& control,unsigned count) {
-    const auto expected=children(count);
+bool slots(const DRW_ObjControl& control,unsigned count,bool legacy = false) {
+    const auto expected=children(count,legacy);
     return control.orderedHandleSlots.size()==expected.size()
         &&std::equal(control.orderedHandleSlots.begin(),control.orderedHandleSlots.end(),expected.begin());
 }
@@ -45,11 +52,17 @@ std::vector<std::uint8_t> build(unsigned count,bool shortCount,Framing framing,i
     }
     const auto boundary=static_cast<std::uint32_t>(b.bitCount());
     b.putHandle(ref(bad==1?0:DRW::DwgSoftPointer,0));b.putHandle(ref(DRW::DwgHardOwnership,0));
-    auto values=children(count);
+    const bool legacyGraph = framing==Framing::LegacyInline;
+    auto values=children(count,legacyGraph);
     if(bad==2)values[0]=DRW::DwgLtypeByLayerHandle;
     if(bad==3)values[3]=DRW::DwgLtypeContinuousHandle;
-    for(std::size_t i=0;i<values.size();++i)
-        b.putHandle(ref(bad==9&&i==0?DRW::DwgHardOwnership:DRW::DwgSoftOwnership,values[i]));
+    for(std::size_t i=0;i<values.size();++i) {
+        const auto role = bad==9&&i==0
+            ? DRW::DwgHardOwnership
+            : (!legacyGraph && i>=count ? DRW::DwgHardOwnership
+                                        : DRW::DwgSoftOwnership);
+        b.putHandle(ref(role,values[i]));
+    }
     const auto tailPad=(8u-(b.bitCount()&7u))&7u;
     for(std::uint64_t i=0;i<tailPad;++i)b.putBit(bad==8&&i==0?1:0);
     auto declared=framing==Framing::LegacyInline
@@ -58,8 +71,11 @@ std::vector<std::uint8_t> build(unsigned count,bool shortCount,Framing framing,i
     b.patchRawLong32AtBit(sizeBit,declared);
     auto data=b.data();if(bad==4)data.pop_back();return data;
 }
-bool parse(std::vector<std::uint8_t>& body,unsigned count,DRW_ObjControl& control) {
-    dwgBuffer input(body.data(),body.size());return control.parseDwg(DRW::AC1021,&input,0)&&slots(control,count);
+bool parse(std::vector<std::uint8_t>& body,unsigned count,
+           DRW_ObjControl& control,bool legacy = false) {
+    dwgBuffer input(body.data(),body.size());
+    return control.parseDwg(DRW::AC1021,&input,0)
+        &&slots(control,count,legacy);
 }
 }
 class DwgBlockRecordXrefWireTestAccess {
@@ -86,10 +102,12 @@ public:
         for(std::uint64_t i=0;i<pad;++i)if(body.getBit()!=0||!body.isGood())return false;
         const auto owner=body.getHandle(),xdict=body.getHandle();
         if(owner.code!=DRW::DwgSoftPointer||owner.ref!=0||xdict.code!=DRW::DwgHardOwnership||xdict.ref!=0)return false;
-        for(auto expected:values){const auto h=body.getHandle();
-            if(!body.isGood()||h.code!=DRW::DwgSoftOwnership||h.ref!=expected)return false;}
+        for(std::size_t i=0;i<values.size();++i){const auto h=body.getHandle();
+            const auto expectedRole = i < count ? DRW::DwgSoftOwnership
+                                                : DRW::DwgHardOwnership;
+            if(!body.isGood()||h.code!=expectedRole||h.ref!=values[i])return false;}
         dwgBuffer retry(frame.body().data(),frame.body().size());DRW_ObjControl control;
-        if(!control.parseDwg(DRW::AC1021,&retry,0)||!slots(control,count))return false;
+            if(!control.parseDwg(DRW::AC1021,&retry,0)||!slots(control,count))return false;
         // A second framed object proves the moved handle stream ends cleanly.
         constexpr std::uint32_t nextHandle=0x600u;
         if(!writer.emitControlObject(DRW::DwgLayerControlObjectType,nextHandle,0u,
@@ -129,6 +147,14 @@ int main(int argc,char**argv) {
         if(probe.getHandle().ref==0||probe.getBitShort()!=0||probe.getBitLong()!=0||probe.getBit()!=1
             ||probe.getBitLong()!=static_cast<std::int32_t>(count)||probe.getBit()!=0
             ||probe.getPosition()*8u+probe.getBitPos()!=boundary)return 1;
+        const auto nullOwner=probe.getHandle();
+        if(!probe.isGood()||nullOwner.code!=DRW::DwgSoftPointer||nullOwner.ref!=0)return 1;
+        for(unsigned i=0;i<count+2u;++i) {
+            const auto child=probe.getHandle();
+            const auto expectedRole=i<count?DRW::DwgSoftOwnership
+                                           :DRW::DwgHardOwnership;
+            if(!probe.isGood()||child.code!=expectedRole)return 1;
+        }
         dwgBuffer input(bytes.data()+offset,size);DRW_ObjControl c;
         if(!c.parseDwg(DRW::AC1021,&input,0)||c.orderedHandleSlots.size()!=count+2u)return 1;
         std::cout<<"physical ODA AC1021 LTYPE_CONTROL PASS\n";return 0;
@@ -140,12 +166,12 @@ int main(int argc,char**argv) {
         for(auto framing:{Framing::Physical,Framing::LegacyInline,Framing::WriterAligned}) {
             const bool old=framing==Framing::LegacyInline;
             auto body=build(count,old,framing);DRW_ObjControl c;
-            if(!parse(body,count,c)){std::cerr<<"generated failure count="<<count<<" framing="<<static_cast<int>(framing)<<" old="<<old<<'\n';return 1;}
+            if(!parse(body,count,c,old)){std::cerr<<"generated failure count="<<count<<" framing="<<static_cast<int>(framing)<<" old="<<old<<'\n';return 1;}
         }
         for(int bad:{1,2,3,4,5,6,8,9,10}) {auto invalid=build(count,true,Framing::LegacyInline,bad);DRW_ObjControl c;
-            if(parse(invalid,count,c)){std::cerr<<"invalid legacy accepted mode="<<bad<<'\n';return 1;}
+            if(parse(invalid,count,c,true)){std::cerr<<"invalid legacy accepted mode="<<bad<<'\n';return 1;}
             auto good=build(count,true,Framing::LegacyInline);
-            if(!parse(good,count,c)){std::cerr<<"legacy retry failed\n";return 1;}}
+            if(!parse(good,count,c,true)){std::cerr<<"legacy retry failed\n";return 1;}}
         for(int bad:{5,6}){auto invalid=build(count,false,Framing::Physical,bad);DRW_ObjControl c;
             if(parse(invalid,count,c)){std::cerr<<"invalid physical framing accepted mode="<<bad<<'\n';return 1;}
             auto good=build(count,false,Framing::Physical);if(!parse(good,count,c))return 1;}

@@ -86,6 +86,20 @@ public:
         const auto owner = body.getHandle(), xdict = body.getHandle();
         if (owner.code != DRW::DwgSoftPointer || owner.ref != 0
             || xdict.code != DRW::DwgHardOwnership || xdict.ref != 0) return false;
+        for (std::uint32_t index = 0; index < count + 2u; ++index) {
+            const auto child = body.getHandle();
+            const auto expectedRole = index < count ? DRW::DwgSoftOwnership
+                                                    : DRW::DwgHardOwnership;
+            const bool fixedIdentityMatches = index == 0u
+                ? child.ref == DRW::DwgLtypeContinuousHandle
+                : (index == count
+                       ? child.ref == DRW::DwgLtypeByBlockHandle
+                       : (index == count + 1u
+                              ? child.ref == DRW::DwgLtypeByLayerHandle
+                              : true));
+            if (!body.isGood() || child.code != expectedRole
+                || !fixedIdentityMatches) return false;
+        }
         dwgBuffer reread(frame.body().data(), frame.body().size());
         DRW_ObjControl control;
         return control.parseDwg(DRW::AC1015, &reread, 0)
@@ -7435,13 +7449,15 @@ std::vector<std::uint8_t> makeAc1015LtypeCountBody(
     body.putHandle(h(corruption == 1 ? 0 : DRW::DwgSoftPointer, 0));
     body.putHandle(h(DRW::DwgHardOwnership, 0));
     for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(count) + 2u; ++i) {
-        const std::uint32_t fixed[] = {DRW::DwgLtypeByBlockHandle,
-                                      DRW::DwgLtypeByLayerHandle,
-                                      DRW::DwgLtypeContinuousHandle};
-        std::uint32_t ref = i < 3u ? fixed[i] : 0x1000u + i;
+        std::uint32_t ref = i == 0u ? DRW::DwgLtypeContinuousHandle
+            : (i < count ? 0x1000u + i
+                         : (i == count ? DRW::DwgLtypeByBlockHandle
+                                       : DRW::DwgLtypeByLayerHandle));
         if (corruption == 2 && i == 0u) ref = DRW::DwgLtypeByLayerHandle;
         if (corruption == 3 && i == 3u) ref = DRW::DwgLtypeContinuousHandle;
-        body.putHandle(h(DRW::DwgSoftOwnership, ref));
+        const auto role = i < count ? DRW::DwgSoftOwnership
+                                    : DRW::DwgHardOwnership;
+        body.putHandle(h(role, ref));
     }
     body.alignToByte();
     return body.data();
@@ -7460,9 +7476,9 @@ void testAc1015LtypeControlCountBoundary(TestContext& t) {
             DRW_ObjControl control;
             const bool ok = control.parseDwg(DRW::AC1015, &input, 0);
             t.expect(ok && control.orderedHandleSlots.size() == static_cast<std::size_t>(count) + 2u
-                         && control.orderedHandleSlots.front() == DRW::DwgLtypeByBlockHandle
-                         && control.orderedHandleSlots[1] == DRW::DwgLtypeByLayerHandle
-                         && control.orderedHandleSlots[2] == DRW::DwgLtypeContinuousHandle,
+                         && control.orderedHandleSlots.front() == DRW::DwgLtypeContinuousHandle
+                         && control.orderedHandleSlots[count] == DRW::DwgLtypeByBlockHandle
+                         && control.orderedHandleSlots[count + 1u] == DRW::DwgLtypeByLayerHandle,
                      std::string("AC1015 LTYPE_CONTROL ") + (legacy ? "old BS " : "spec BL ")
                          + std::to_string(count) + " preserves following handles");
         }

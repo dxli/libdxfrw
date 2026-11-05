@@ -20,19 +20,28 @@ dwgHandle ref(std::uint8_t code, std::uint32_t value) {
     for (auto n=value; n; n >>= 8u) ++h.size;
     return h;
 }
-std::vector<std::uint32_t> children(unsigned count) {
-    std::vector<std::uint32_t> result{DRW::DwgLtypeByBlockHandle,
-        DRW::DwgLtypeByLayerHandle, DRW::DwgLtypeContinuousHandle};
+std::vector<std::uint32_t> children(unsigned count, bool legacyOrder = false) {
+    if (legacyOrder) {
+        std::vector<std::uint32_t> result{DRW::DwgLtypeByBlockHandle,
+            DRW::DwgLtypeByLayerHandle, DRW::DwgLtypeContinuousHandle};
+        for (unsigned i=1; i<count; ++i) result.push_back(0x1000u+i);
+        return result;
+    }
+    std::vector<std::uint32_t> result{DRW::DwgLtypeContinuousHandle};
     for (unsigned i=1; i<count; ++i) result.push_back(0x1000u+i);
+    result.push_back(DRW::DwgLtypeByBlockHandle);
+    result.push_back(DRW::DwgLtypeByLayerHandle);
     return result;
 }
-bool slots(const DRW_ObjControl& obj, unsigned count) {
-    const auto expected=children(count);
+bool slots(const DRW_ObjControl& obj, unsigned count,
+           bool legacyOrder = false) {
+    const auto expected=children(count, legacyOrder);
     return obj.orderedHandleSlots.size()==expected.size()
         && std::equal(obj.orderedHandleSlots.begin(),obj.orderedHandleSlots.end(),expected.begin());
 }
 struct Body {std::vector<std::uint8_t> data;std::uint32_t handleBits;};
-Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,bool forceLong=false) {
+Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,
+           bool forceLong=false,bool legacyOrder=false) {
     dwgBufferW b;
     b.putObjType(version,DRW::DwgLTypeControlObjectType);
     const auto sizeBit=b.bitCount();
@@ -45,7 +54,7 @@ Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,bool
     else b.putBitLong(count);
     if(corruption==5)b.putBit(0);
     if(version>DRW::AC1018)b.putBit(corruption==6 ? 1 : 0);
-    if(version>=DRW::AC1024 && corruption>=7 && corruption<=10) {
+    if(version>=DRW::AC1024 && corruption>=7 && corruption<=12) {
         const auto pad=(8u-(b.bitCount()&7u))&7u;
         for(std::uint64_t bit=0;bit<pad;++bit)
             b.putBit(corruption==10 && bit==0 ? 1 : 0);
@@ -56,10 +65,17 @@ Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,bool
     if(version<DRW::AC1024)b.patchRawLong32AtBit(sizeBit,boundary);
     b.putHandle(ref(corruption==1?0:DRW::DwgSoftPointer,0));
     b.putHandle(ref(DRW::DwgHardOwnership,0));
-    auto values=children(count);
+    auto values=children(count, legacyOrder);
     if(corruption==2)values[0]=DRW::DwgLtypeByLayerHandle;
     if(corruption==3)values[3]=DRW::DwgLtypeContinuousHandle;
-    for(auto value:values)b.putHandle(ref(DRW::DwgSoftOwnership,value));
+    for(std::size_t i=0;i<values.size();++i) {
+        const auto role = corruption==12 && i==count
+            ? DRW::DwgSoftOwnership
+            : (legacyOrder ? DRW::DwgSoftOwnership
+                           : (i >= count ? DRW::DwgHardOwnership
+                                         : DRW::DwgSoftOwnership));
+        b.putHandle(ref(role,values[i]));
+    }
     b.alignToByte();
     auto data=b.data();
     if(corruption==4)data.pop_back();
@@ -67,9 +83,11 @@ Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,bool
         ? static_cast<std::uint32_t>(data.size()*8u-boundary):0u;
     return {std::move(data),handleBits};
 }
-bool parse(const Body& b,DRW::Version version,unsigned count,DRW_ObjControl& object) {
+bool parse(const Body& b,DRW::Version version,unsigned count,
+           DRW_ObjControl& object,bool legacyOrder=false) {
     dwgBuffer in(const_cast<std::uint8_t*>(b.data.data()),b.data.size());
-    return object.parseDwg(version,&in,b.handleBits)&&slots(object,count);
+    return object.parseDwg(version,&in,b.handleBits)
+        &&slots(object,count,legacyOrder);
 }
 }
 
@@ -79,7 +97,10 @@ public:
         DRW_Header header;Writer writer(nullptr,&header);
         auto values=children(count);
         if(!writer.emitControlObject(DRW::DwgLTypeControlObjectType,
-                                     DRW::DwgLtypeControlHandle,count,values))return false;
+                                     DRW::DwgLtypeControlHandle,count,values)) {
+            std::cerr<<"emit failed version="<<writer.m_version<<" count="<<count<<'\n';
+            return false;
+        }
         const auto found=std::find_if(writer.m_objectMap.begin(),writer.m_objectMap.end(),
             [](const auto& e){return e.first==DRW::DwgLtypeControlHandle;});
         if(found==writer.m_objectMap.end())return false;
@@ -110,10 +131,24 @@ public:
         const auto owner=body.getHandle(),xdict=body.getHandle();
         if(owner.code!=DRW::DwgSoftPointer||owner.ref!=0
             ||xdict.code!=DRW::DwgHardOwnership||xdict.ref!=0)return false;
-        for(auto expected:values){const auto h=body.getHandle();
-            if(!body.isGood()||h.code!=DRW::DwgSoftOwnership||h.ref!=expected)return false;}
+        for(std::size_t i=0;i<values.size();++i){const auto h=body.getHandle();
+            const auto expectedRole = i < count ? DRW::DwgSoftOwnership
+                                                : DRW::DwgHardOwnership;
+            if(!body.isGood()||h.code!=expectedRole||h.ref!=values[i]) {
+                std::cerr<<"child mismatch version="<<writer.m_version<<" index="<<i
+                    <<" role="<<static_cast<unsigned>(h.code)<<" ref="<<h.ref
+                    <<" expectedRole="<<static_cast<unsigned>(expectedRole)
+                    <<" expectedRef="<<values[i]<<'\n';
+                return false;
+            }}
         dwgBuffer again(frame.body().data(),frame.body().size());DRW_ObjControl parsed;
-        return parsed.parseDwg(writer.m_version,&again,frame.bodyBitSize())&&slots(parsed,count);
+        const bool parsedOkay=parsed.parseDwg(writer.m_version,&again,frame.bodyBitSize());
+        if(!parsedOkay||!slots(parsed,count)) {
+            std::cerr<<"readback mismatch version="<<writer.m_version<<" count="<<count
+                <<" parsed="<<parsedOkay<<" size="<<parsed.orderedHandleSlots.size()<<'\n';
+            return false;
+        }
+        return true;
     }
 };
 
@@ -146,6 +181,14 @@ int main(int argc,char** argv){
         if(version<DRW::AC1024&&boundary!=suppliedBoundary)return 1;
         boundary=suppliedBoundary;
         if(boundary>size*8u)return 1;
+        const auto nullOwner=probe.getHandle();
+        if(!probe.isGood()||nullOwner.code!=DRW::DwgSoftPointer||nullOwner.ref!=0)return 1;
+        for(unsigned i=0;i<count+2u;++i) {
+            const auto child=probe.getHandle();
+            const auto expectedRole=i<count?DRW::DwgSoftOwnership
+                                           :DRW::DwgHardOwnership;
+            if(!probe.isGood()||child.code!=expectedRole)return 1;
+        }
         const auto bs=version>=DRW::AC1024?static_cast<std::uint32_t>(size*8u-boundary):0u;
         DRW_ObjControl parsed;
         if(!parsed.parseDwg(version,&input,bs)||parsed.orderedHandleSlots.size()!=count+2u)return 1;
@@ -174,6 +217,23 @@ int main(int argc,char** argv){
             for(int bad:{8,9,10}) {auto invalid=build(version,count,legacy,bad);
                 if(parse(invalid,version,count,c)){std::cerr<<"malformed old writer footer accepted\n";return 1;}
                 if(!parse(padded,version,count,c)){std::cerr<<"footer retry failed\n";return 1;}}
+        }
+        if(version>=DRW::AC1024) {
+            auto wrongTailRole=build(version,257,false,12);DRW_ObjControl c;
+            if(parse(wrongTailRole,version,257,c)) {
+                std::cerr<<"ODA-profile phantom owner role accepted version="
+                    <<version<<'\n';return 1;
+            }
+            auto validTail=build(version,257,false,7);
+            if(!parse(validTail,version,257,c)) {
+                std::cerr<<"ODA-profile phantom role retry failed version="
+                    <<version<<'\n';return 1;
+            }
+            auto oldWriterProfile=build(version,257,false,7,false,true);
+            if(!parse(oldWriterProfile,version,257,c,true)) {
+                std::cerr<<"legacy writer-order profile rejected version="
+                    <<version<<'\n';return 1;
+            }
         }
         for(unsigned count:{1u,255u}){auto bad=build(version,count,false,5);DRW_ObjControl c;
             if(parse(bad,version,count,c)){std::cerr<<"compact body gap accepted\n";return 1;}

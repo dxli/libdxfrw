@@ -933,6 +933,10 @@ bool dwgWriter15::emitControlObject(
         && ((handle == DRW::DwgViewControlHandle && typeCode == DRW::DwgViewControlObjectType)
             || (handle == DRW::DwgUcsControlHandle && typeCode == DRW::DwgUcsControlObjectType));
     const auto emit = [&]() -> bool {
+    if (typeCode == DRW::DwgLTypeControlObjectType
+        && (numEntries > childHandles.size()
+            || childHandles.size() - numEntries != 2u))
+        return false;
     dwgBufferW& body = beginObject(handle);
 
     // Common preamble (mirrors DRW_TableEntry::parseDwg):
@@ -982,8 +986,15 @@ bool dwgWriter15::emitControlObject(
     }
     hdlBuf->putHandle(makeSoftPointer(0));
     hdlBuf->putHandle(makeHardOwner(0));  // XDic null
-    for (std::uint32_t child : childHandles)
-        hdlBuf->putHandle(makeSoftOwner(child));
+    std::size_t childIndex = 0;
+    for (std::uint32_t child : childHandles) {
+        const bool ltypePhantom =
+            typeCode == DRW::DwgLTypeControlObjectType
+            && childIndex >= numEntries;
+        hdlBuf->putHandle(ltypePhantom ? makeHardOwner(child)
+                                       : makeSoftOwner(child));
+        ++childIndex;
+    }
 
     finishObject();
     if (objectWriteFailed())
@@ -1032,6 +1043,10 @@ bool dwgWriter15::emitControlObject(
         && ((handle == DRW::DwgViewControlHandle && typeCode == DRW::DwgViewControlObjectType)
             || (handle == DRW::DwgUcsControlHandle && typeCode == DRW::DwgUcsControlObjectType));
     const auto emit = [&]() -> bool {
+    if (typeCode == DRW::DwgLTypeControlObjectType
+        && (numEntries > childHandles.size()
+            || childHandles.size() - numEntries != 2u))
+        return false;
     dwgBufferW& body = beginObject(handle);
     body.putObjType(m_version, typeCode);
     if (m_version > DRW::AC1014 && m_version < DRW::AC1024)
@@ -1060,8 +1075,15 @@ bool dwgWriter15::emitControlObject(
     }
     hdlBuf->putHandle(makeSoftPointer(0));
     hdlBuf->putHandle(makeHardOwner(0));
-    for (std::uint32_t child : childHandles)
-        hdlBuf->putHandle(makeSoftOwner(child));
+    std::size_t childIndex = 0;
+    for (std::uint32_t child : childHandles) {
+        const bool ltypePhantom =
+            typeCode == DRW::DwgLTypeControlObjectType
+            && childIndex >= numEntries;
+        hdlBuf->putHandle(ltypePhantom ? makeHardOwner(child)
+                                       : makeSoftOwner(child));
+        ++childIndex;
+    }
     finishObject();
     if (objectWriteFailed())
         return false;
@@ -7410,11 +7432,14 @@ bool dwgWriter15::writeDwgObjects() {
     // when emitLayerRecord resolves lineType→handle)
     {
         std::vector<std::uint32_t> ltypeChildren = {
-            reservedHandle::LTYPE_BYBLOCK,
-            reservedHandle::LTYPE_BYLAYER,
             reservedHandle::LTYPE_CONTINUOUS
         };
         for (auto& p : m_pendingLTypes) ltypeChildren.push_back(p.first);
+        // ODA §20.4.57 excludes BYLAYER and BYBLOCK from Numentries and
+        // places their hard-owner handles last. Its physical producer
+        // outputs resolve in BYBLOCK, BYLAYER order for the observed profile.
+        ltypeChildren.push_back(reservedHandle::LTYPE_BYBLOCK);
+        ltypeChildren.push_back(reservedHandle::LTYPE_BYLAYER);
         // numEntries excludes BYBLOCK/BYLAYER phantoms (reader adds +2)
         if (!emitControlObject(
                 DRW::DwgLTypeControlObjectType, reservedHandle::LTYPE_CONTROL,
