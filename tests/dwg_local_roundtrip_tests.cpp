@@ -15265,7 +15265,11 @@ bool runDxfAcdsMultipleDataStorageProjection(
         storage.recordIndexByHandle.emplace(record.handle, index);
         storage.recordIndexByHandleKey.emplace(record.handleKey, index);
     }
-    storage.orphanRecordCount = 2u;
+    // A thumbnail may be unlinked from parsed modeler callbacks while its
+    // record handle still exists in the source HANDLE map. Preserve both
+    // accounting classes through the same strict ACDSDATA projection gate.
+    storage.orphanRecordCount = 1u;
+    storage.unboundRecordCount = 1u;
     source.dataStorageSections.push_back(std::move(storage));
 
     dx_iface exporter;

@@ -1683,6 +1683,12 @@ rendering semantics remain open.
   latter receives a separate informational diagnostic and per-section count;
   it still has no typed modeler/surface association or qualified output route.
   Generated controls cover both cases and reject a stale source-frame index.
+  The strict ACDSDATA thumbnail projection now reconciles both unlinked
+  accounting classes against the exact recognized thumbnail count; its
+  generated multi-modeler ASCII/Binary control exercises a mixed orphan /
+  source-frame-present split and retains atomic refusal/retry/readback coverage.
+  This closes only the counter-consumer consistency gap, not the unlinked
+  record's association or output route.
   ODA v5.4.1 §24.2.2.3 identifies each stored record's handle as the object
   handle; this accounting change does not establish payload semantics or
   preserve the record. See the [source-frame accounting receipt](docs/research/p7-acds-unlinked-record-source-frame-accounting-2026-11-04.json).

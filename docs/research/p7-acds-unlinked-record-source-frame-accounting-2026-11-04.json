@@ -20,17 +20,19 @@
     "unboundRecordCount": "Counts an unlinked record whose 32-bit handle indexes a source-frame ledger entry with the same handle.",
     "diagnostic": "datastorage-unbound-source-frame is informational and states that the source handle exists but no typed modeler/surface callback claimed the record.",
     "staleIndex": "A missing, out-of-range, or handle-mismatched source-frame index cannot suppress orphan accounting.",
-    "output": "No writer routing, record preservation, graph-closure, or 3D semantic behavior is changed."
+    "thumbnailProjectionConsumer": "The strict ACDSDATA thumbnail projector now reconciles orphanRecordCount + unboundRecordCount against the exact recognized thumbnail count using a subtraction-based check that cannot overflow. It still requires every linked modeler and thumbnail payload to satisfy the existing exact profile checks.",
+    "output": "This fixes accounting compatibility in the bounded thumbnail projection only; it does not add writer routing for arbitrary unlinked records, record preservation, graph closure, or 3D semantic behavior."
   },
   "generatedControls": [
     "One record is linked to a parsed modeler while a second unlinked record has an exact source-frame entry; the second increments unboundRecordCount, not orphanRecordCount.",
     "A stale source-frame index leaves both generated unlinked records classified as orphans.",
+    "The generated multi-modeler ACDSDATA projection splits two recognized thumbnails across one orphan and one source-frame-present unbound record, then exercises strict ASCII/Binary projection, failure rollback, retry and readback.",
     "Existing valid modeler link, duplicate-claim, missing-record, and orphan diagnostics remain covered by the owning graph-preservation executable."
   ],
   "validation": {
-    "build": "cmake --build build-gcc --target libdxfrw_graph_preservation_tests -j2",
-    "focused_test": "ctest --test-dir build-gcc -R '^libdxfrw_graph_preservation$' --output-on-failure",
-    "result": "PASS: build succeeded and libdxfrw_graph_preservation passed 1/1 in 1.43 seconds.",
+    "build": "cmake --build build-gcc --target libdxfrw_dwg_local_roundtrip libdxfrw_graph_preservation_tests -j2",
+    "focused_test": "ctest --test-dir build-gcc -R '^(dwg2dxf_modeler_acds_r2013plus_projection|libdxfrw_graph_preservation)$' --output-on-failure",
+    "result": "PASS: both build targets succeeded; dwg2dxf_modeler_acds_r2013plus_projection and libdxfrw_graph_preservation passed 2/2 in 1.28 seconds.",
     "diff_check": "git diff --check passed.",
     "fixtures": "No DWG/DXF fixture was added or committed."
   },

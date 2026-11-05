@@ -7368,7 +7368,9 @@ bool appendAcdsDataSection(
         }
     }
     if (matchedModelers.size() != linkedModelers.size()
-        || storage.orphanRecordCount != thumbnailCount
+        || storage.orphanRecordCount > thumbnailCount
+        || storage.unboundRecordCount
+               != thumbnailCount - storage.orphanRecordCount
         || storage.records.size() != linkedModelers.size() + thumbnailCount)
         return false;
 
