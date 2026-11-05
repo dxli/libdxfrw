@@ -69550,6 +69550,7 @@ bool dx_iface::prepareDwgViewportProjection(std::string& failure) {
             return found == recordsByName.end() ? nullptr : found->second;
         };
         std::unordered_map<std::uint32_t, int> nextViewportByLayout;
+        std::unordered_set<std::uint32_t> emittedListedViewports;
         const auto projectBlock = [&](const dx_ifaceBlock* block,
                                       bool mainContainer) {
             if (block == nullptr)
@@ -69622,11 +69623,14 @@ bool dx_iface::prepareDwgViewportProjection(std::string& failure) {
                            std::uint32_t handle) {
                             return entry.first < handle;
                         });
-                    if (entity->handle == 0 || entity->handle == DRW::NoHandle
-                        || declaredViewport == declaredViewportOwners.end()
-                        || declaredViewport->first != entity->handle
-                        || declaredViewport->second != owner->layoutHandle)
-                        return reject("emitted paper-space VIEWPORT is absent from its DWG LAYOUT viewport list");
+                    if (entity->handle == 0 || entity->handle == DRW::NoHandle)
+                        return reject("emitted paper-space VIEWPORT has an invalid identity");
+                    if (declaredViewport != declaredViewportOwners.end()
+                        && declaredViewport->first == entity->handle) {
+                        if (declaredViewport->second != owner->layoutHandle)
+                            return reject("DWG LAYOUT viewport-list target resolves to a different paper-space LAYOUT");
+                        emittedListedViewports.insert(entity->handle);
+                    }
                 }
 
                 int& next = nextViewportByLayout[owner->layoutHandle];
@@ -69654,12 +69658,11 @@ bool dx_iface::prepareDwgViewportProjection(std::string& failure) {
         }
         if (!cData->layouts.empty()) {
             for (const DRW_Layout& layout : cData->layouts) {
-                const auto projected = nextViewportByLayout.find(layout.handle);
-                const int projectedCount = projected == nextViewportByLayout.end()
-                    ? 0 : projected->second;
-                if (projectedCount
-                    != static_cast<int>(layout.viewportHandles.size()))
-                    return reject("DWG LAYOUT viewport list does not match the emitted paper-space VIEWPORT set");
+                for (const std::uint32_t listedHandle :
+                     layout.viewportHandles) {
+                    if (emittedListedViewports.count(listedHandle) != 1u)
+                        return reject("DWG LAYOUT viewport-list target is absent from the emitted paper-space VIEWPORT set");
+                }
             }
         }
     } catch (...) {

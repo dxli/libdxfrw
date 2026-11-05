@@ -3499,6 +3499,8 @@ void testDwgViewportProjection(TestContext& t) {
         const auto literalOutput = directory / ("literal-" + encoding + ".dxf");
         const auto reorderedListOutput = directory
             / ("projected-reordered-list-" + encoding + ".dxf");
+        const auto subsetListOutput = directory
+            / ("projected-subset-list-" + encoding + ".dxf");
         t.expect(writeLayoutGraphControl(input, binary),
                  "generated two-layout VIEWPORT source is complete");
 
@@ -3597,10 +3599,14 @@ void testDwgViewportProjection(TestContext& t) {
         if (sheetALayout == source.layouts.end()
             || sheetBLayout == source.layouts.end())
             continue;
-        sheetALayout->viewportHandles = {0x700u, 0x705u};
-        sheetALayout->viewportCount = 2;
+        // The DWG list is a source relationship, not a census of every
+        // paper-space VIEWPORT that the DXF entity stream must preserve.
+        // Keep Sheet A's list empty while its entity space has two viewports.
+        sheetALayout->viewportHandles.clear();
+        sheetALayout->viewportCount = 0;
         sheetBLayout->viewportHandles = {0x704u, 0x706u};
         sheetBLayout->viewportCount = 2;
+        sheetALayout->lastActiveViewportHandle.ref = 0x705u;
         const auto expectInvalidViewportList = [
             &source, &output, &binary, &t](DRW_Layout& layout,
                                            std::vector<std::uint32_t> handles,
@@ -3666,8 +3672,6 @@ void testDwgViewportProjection(TestContext& t) {
         };
         expectInvalidViewportList(*sheetALayout, {0x700u, 0x705u}, 1,
             "DWG LAYOUT viewport count/vector mismatch is rejected atomically");
-        expectInvalidViewportList(*sheetALayout, {0x700u}, 1,
-            "DWG LAYOUT viewport list rejects an omitted retained same-layout VIEWPORT atomically");
         expectInvalidViewportList(*sheetALayout, {0x700u, 0x777u}, 2,
             "DWG LAYOUT viewport list rejects a missing target atomically");
         expectInvalidViewportList(*sheetALayout, {0x700u, 0x710u}, 2,
@@ -3677,6 +3681,43 @@ void testDwgViewportProjection(TestContext& t) {
         expectInvalidViewportList(*sheetALayout, {0x700u, 0x700u}, 2,
             "DWG LAYOUT viewport list rejects duplicate targets atomically");
         expectMissingTargetsWithoutRetainedViewports();
+
+        // An active viewport can be absent from the DWG counted list. DXF has
+        // no corresponding list field, so preserve the complete owner-backed
+        // entity set and serialize the distinct last-active group-331 edge.
+        const std::vector<std::uint32_t> savedSheetAHandles =
+            sheetALayout->viewportHandles;
+        const std::int32_t savedSheetACount = sheetALayout->viewportCount;
+        sheetALayout->viewportHandles = {0x700u};
+        sheetALayout->viewportCount = 1;
+        dx_iface subsetExporter;
+        const bool subsetWritten = subsetExporter.fileExport(
+            subsetListOutput.string(), DRW::AC1027, binary, &source, false);
+        dx_data subsetReadback;
+        dx_iface subsetReader;
+        const bool subsetRead = subsetWritten && subsetReader.fileImport(
+            subsetListOutput.string(), &subsetReadback, false);
+        const auto subsetViewports = collectViewports(subsetReadback);
+        const auto subsetLayout = std::find_if(
+            subsetReadback.layouts.begin(), subsetReadback.layouts.end(),
+            [](const DRW_Layout& layout) { return layout.name == "Sheet A"; });
+        const auto* subsetLastActive = subsetLayout == subsetReadback.layouts.end()
+            ? nullptr
+            : dynamic_cast<const DRW_Viewport*>(findEntity(
+                  subsetReadback,
+                  subsetLayout->lastActiveViewportHandle.ref));
+        const std::uint32_t subsetOwnerA =
+            blockRecordHandle(subsetReadback, "*Paper_Space");
+        const bool subsetAccepted = subsetRead && subsetViewports.size() == 6u
+            && subsetOwnerA != 0u && subsetLastActive != nullptr
+            && subsetLastActive->parentHandle == subsetOwnerA
+            && subsetLastActive->vpstatus == 2
+            && subsetLastActive->vpID == 2;
+        sheetALayout->viewportHandles = savedSheetAHandles;
+        sheetALayout->viewportCount = savedSheetACount;
+        t.expect(subsetAccepted,
+                 "DWG LAYOUT viewport list may be a subset while all owner-backed paper-space VIEWPORTs and last-active group 331 round-trip");
+
         const auto currentPaperLayout = std::find_if(
             source.layouts.begin(), source.layouts.end(),
             [](const DRW_Layout& layout) { return layout.name == "Sheet A"; });
@@ -3685,7 +3726,6 @@ void testDwgViewportProjection(TestContext& t) {
         if (currentPaperLayout == source.layouts.end()) continue;
         // DWG ENTITIES carries current-space entities without an explicit
         // BLOCK_RECORD owner. LAYOUT 331 must still resolve that viewport.
-        currentPaperLayout->lastActiveViewportHandle.ref = 0x705u;
         dx_iface exporter;
         {
             std::ofstream sentinel(output, std::ios::binary | std::ios::trunc);
