@@ -450,7 +450,9 @@ bool hasResolvedEntityReferences(
             || dimension->second == DRW::DIMANGULAR
             || dimension->second == DRW::DIMANGULAR3P
             || dimension->second == DRW::DIMORDINATE
-            || dimension->second == DRW::DIMARC);
+            || dimension->second == DRW::DIMARC
+            || dimension->second == DRW::LEADER
+            || dimension->second == DRW::MLEADER);
     if (association.m_dimensionHandle == 0 || !dimensionType)
         return false;
     for (const auto& ref : association.m_osnapRefs) {
@@ -735,7 +737,9 @@ bool runAdapterClosureRetryRoundtrip(const std::string& outputPath,
                 || found->second == DRW::DIMANGULAR
                 || found->second == DRW::DIMANGULAR3P
                 || found->second == DRW::DIMORDINATE
-                || found->second == DRW::DIMARC);
+                || found->second == DRW::DIMARC
+                || found->second == DRW::LEADER
+                || found->second == DRW::MLEADER);
     };
     const bool graphReadback = imported && readback.associations.size() == 1u
         && readback.associations.front().m_dimensionHandle != 0u

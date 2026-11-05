@@ -1728,7 +1728,8 @@ public:
                         return;
                     }
                 }
-                const auto isDimensionEntityType = [](DRW::ETYPE type) {
+                const auto isAssociativeAnnotationEntityType =
+                    [](DRW::ETYPE type) {
                     switch (type) {
                     case DRW::DIMENSION:
                     case DRW::DIMALIGNED:
@@ -1739,6 +1740,11 @@ public:
                     case DRW::DIMANGULAR3P:
                     case DRW::DIMORDINATE:
                     case DRW::DIMARC:
+                    // Autodesk describes AcDbDimAssoc as updating a
+                    // dimension or leader; physical DWGs also bind it to
+                    // AcDbMLeader targets.
+                    case DRW::LEADER:
+                    case DRW::MLEADER:
                         return true;
                     default:
                         return false;
@@ -1762,7 +1768,8 @@ public:
                                frameKey) != 1u
                         || rawFrame == cData->m_opaqueDwgSourceFrames.end()
                         || dimension == entityTypes.end()
-                        || !isDimensionEntityType(dimension->second)) {
+                        || !isAssociativeAnnotationEntityType(
+                               dimension->second)) {
                         dxfW->writeRawDxfObject(nullptr);
                         return;
                     }
