@@ -30,14 +30,15 @@
     "focusedTest": "build-gcc/libdxfrw_wave1_tests --raster-wipeout-variables-identity-remapping",
     "focusedTestResult": "passed",
     "diffCheck": "git diff --check passed",
-    "adapterBaseline": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --rastervariables-dwg-adapter-transport-direct-nod failed at corrected RASTERVARIABLES same-adapter retry both with the working tree changes and after replacing the changed source/test files with their HEAD versions; this failure is not attributed to this slice."
+    "adapterBaseline": "The earlier generated-DWG adapter selector incorrectly required whole-source reference qualification for its selected-record control, which failed on unrelated unqualified references in Binary output. The harness now applies the same selected-graph scope to ASCII and Binary. Both --rastervariables-dwg-adapter-transport-direct-nod and --rastervariables-dwg-adapter-transport pass, including deliberate atomic refusal and same-adapter corrected retry. This does not qualify whole-source output."
   },
   "sourceBinding": {
     "baseRevision": "fdc35473",
     "files": {
       "src/libdxfrw.cpp": "5ae487a1ddc16044b57d7508a8b744d7b9000cc9188d7da138783d39686ab23d",
       "tests/wave1_tests.cpp": "b683c408f7a5a0db539c154d141e703d89b07131c4b76def6d81bf31d34be372",
-      "tests/dwg2dxf_adapter_tests.cpp": "5aa692a2b5479570b7af7637a70104acedbaa1b0bd4ad9c05224842b9112e1fe"
+      "tests/dwg2dxf_adapter_tests.cpp": "c3dae8f0592344a4afbb83a174a6013ad3e3ffb4f06c52cc314eb1f3696c24bc",
+      "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests": "d9ef5cd5e8682e7af327bd74a37e79d92451e8d9f6a2217338c2a02af96df664"
     }
   },
   "fixturePolicy": {

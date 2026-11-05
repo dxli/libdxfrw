@@ -70370,8 +70370,12 @@ bool rasterVariablesDwgAdapterTransport(
     for (const auto& target : {
              std::make_pair(asciiPath, false),
              std::make_pair(binaryPath, true)}) {
-        const bool requireResolvedOwners = (target.second && generatedSource)
-            || revision == DRW::AC1018 || frameOne;
+        // This control qualifies the selected RASTERVARIABLES graph. Its
+        // generated DWG intentionally omits unrelated source-reference
+        // closure, so whole-source owner qualification would test a different
+        // gate (and make ASCII/Binary coverage asymmetric).
+        const bool requireResolvedOwners =
+            revision == DRW::AC1018 || frameOne;
         const std::string sentinel = "RASTERVARIABLES_ATOMIC_DESTINATION";
         {
             std::ofstream previous(target.first, std::ios::binary);
