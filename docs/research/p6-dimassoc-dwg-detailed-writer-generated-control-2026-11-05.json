@@ -37,7 +37,24 @@
       "path_vector_observation": "When XREF paths are present, LibreDWG reads the path count but reports a buffer overflow while reading the path string from the scalar cursor; subsequent ref decoding is lost.",
       "source_explanation": "In the local LibreDWG source, FIELD_T reads R2007+ text from str_dat (dec_macros.h:656-674), while FIELD_VECTOR_T invokes bit_read_T(dat) (dec_macros.h:1248-1274). DIMASSOC uses FIELD_VECTOR_T for both XREF path vectors (dwg2.spec:3689-3690, 3704-3705), explaining why this peer cannot qualify the path-bearing vector. This identifies a peer-reader limitation; it does not itself prove the writer interoperable."
     },
-    "oda": "ODA File Converter 27.1.0.0 was attempted locally; this invocation exited 134 with macOS PasteBoard/XPC connection errors, so no ODA conversion result is claimed."
+    "oda": "ODA File Converter 27.1.0.0 was attempted locally; this invocation exited 134 with macOS PasteBoard/XPC connection errors, so no ODA conversion result is claimed.",
+    "adapterStrictOutputProbe": {
+      "command": "build-gcc/dwg2dxf/dwg2dxf /private/tmp/libdxfrw-dimassoc-paths-lastzero.dwg -y -v2010 /private/tmp/libdxfrw-dimassoc-adapter-current.dxf",
+      "result": "refused atomically",
+      "diagnostic": "strict-complete conversion requires output qualification for every opaque DWG callback (qualified=2/3)",
+      "interpretation": "The generated DIMASSOC frame remains unqualified by the dwg2dxf adapter. This is fail-closed behavior; no DXF output was published. The next implementation slice is typed adapter retention, dimension/entity target closure, and exact source-frame output qualification."
+    },
+    "odaRetryAfterUserUnlock": {
+      "executable": "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter",
+      "command": "ODAFileConverter /private/tmp/libdxfrw-dimassoc-oda-retry/in /private/tmp/libdxfrw-dimassoc-oda-retry/out ACAD2013 DXF 0 0",
+      "exitCode": 134,
+      "stderr": [
+        "PasteBoard: Error creating pasteboard: com.apple.pasteboard.clipboard [-4960]",
+        "PasteBoard: Error creating pasteboard: com.apple.pasteboard.find [-4960]",
+        "Connection Invalid error for service com.apple.hiservices-xpcservice."
+      ],
+      "interpretation": "No independent ODA DIMASSOC validation was produced."
+    }
   },
   "support_effect": "No producer, native semantic, graph-closure, or platform support claim is promoted. Keep broader DWG DIMASSOC qualification open until an independent implementation correctly reads the path vectors and the target graph is closed."
 }
