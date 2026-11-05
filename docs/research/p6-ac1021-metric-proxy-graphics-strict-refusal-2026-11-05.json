@@ -16,17 +16,123 @@
     "command": "build-gcc/dwg2dxf/dwg2dxf tests/samples/AC1021/blocks_and_tables_-_metric.dwg -y -v2007 /private/tmp/libdxfrw-ac1021-metric-strict.dxf",
     "exitCode": 1,
     "diagnostic": "DXF export preflight failed: typed-proxy-graphics-not-preserved count=2 firstHandle=165230",
-    "firstHandleHex": "0x285CE",
+    "firstHandleHex": "0x2856E",
     "outputCreated": false,
     "logPath": "/private/tmp/libdxfrw-ac1021-metric-strict.log",
     "logSha256": "f9a13406f67e5506c4952326dc8e13e67db68742061f8d999652b9cae6f0eb9b"
   },
-  "interpretation": "Two typed proxy-graphics records block strict output. Their exact source bodies, ownership, and lossless DXF replay have not been qualified. The existing fail-closed gate is correct pending that evidence.",
-  "nextAction": "Trace both source records and their graph roles, then establish exact body preservation and independent readback before changing the strict-output gate.",
+  "interpretation": "Two typed INSERT proxy caches block strict output. ODA \u00a729 identifies the 15 type-19 chunks as marker-index controls; ezdxf independently reads the marker values and decodes both exact extracted streams to 231 and 259 POLYLINE/TEXT virtual entities. This does not establish INSERT cache source association, exact DXF output/readback, or native display. The existing fail-closed gate remains correct.",
+  "nextAction": "Establish whether the source proxy stream is semantically attached to each INSERT or its referenced block, and whether DXF permits exact same-version cache replay for this entity type. Bind output bytes to the source INSERT and block graph, then verify exact group 310 readback and a native consumer before admitting the profile.",
   "supportClaimEffect": "none",
   "nonClaims": [
     "No proxy-graphics semantic or replay support is established.",
     "No whole-document AC1021 conversion support is established.",
     "No source fixture was added or modified."
-  ]
+  ],
+  "inspectedEntities": [
+    {
+      "handle": "0x2856E",
+      "type": "INSERT",
+      "proxyBytes": 32980,
+      "declaredBytes": 32980,
+      "framingComplete": true,
+      "recognizedPrimitiveChunks": 231,
+      "unsupportedChunks": 471,
+      "unresolvedResourceReferencesReportedByScanner": 0,
+      "chunkOpcodeCounts": {
+        "19": 7,
+        "22": 231,
+        "23": 231,
+        "29": 1,
+        "31": 1,
+        "32": 165,
+        "38": 66
+      },
+      "unknownOpcode19Count": 7,
+      "scanClassificationNote": "The inspect API counts non-primitive control chunks as skippedUnsupportedChunkCount even when decode handles their state effect; this aggregate is not an unsupported-opcode count."
+    },
+    {
+      "handle": "0x2A974",
+      "type": "INSERT",
+      "proxyBytes": 37080,
+      "declaredBytes": 37080,
+      "framingComplete": true,
+      "recognizedPrimitiveChunks": 259,
+      "unsupportedChunks": 528,
+      "unresolvedResourceReferencesReportedByScanner": 0,
+      "chunkOpcodeCounts": {
+        "19": 8,
+        "22": 259,
+        "23": 259,
+        "29": 1,
+        "31": 1,
+        "32": 184,
+        "38": 75
+      },
+      "unknownOpcode19Count": 8,
+      "scanClassificationNote": "The inspect API counts non-primitive control chunks as skippedUnsupportedChunkCount even when decode handles their state effect; this aggregate is not an unsupported-opcode count."
+    }
+  ],
+  "probe": {
+    "method": "A temporary local C++ probe imported the exact source through dx_iface and enumerated typed entities, provenance and DRW_ProxyGraphicDecoder::inspect results.",
+    "sourcePath": "/private/tmp/probe_ac1021_proxy.cpp",
+    "sourceSha256": "d551ee39b90fa7baf80cf43aa5d9f59e6a2525f712c277e07de8a1bd10505d80",
+    "binaryPath": "/private/tmp/probe_ac1021_proxy",
+    "binarySha256": "3bc8bf9593b4aa02072356603db5440a9c6e9c6926732eb5d63b2df97825a8f0",
+    "result": "Chunk histogram: handle 0x2856E has opcode counts 19:7, 22:231, 23:231, 29:1, 31:1, 32:165, 38:66; handle 0x2A974 has 19:8, 22:259, 23:259, 29:1, 31:1, 32:184, 38:75. Opcodes 22/23 are attribute controls and 29/31 matrix controls handled by decode; 32/38 are recognized primitive types. Opcode 19 is not named in the current decoder. The inspect API's non-primitive count is not an unsupported-opcode count.",
+    "rawExtractedProxyFiles": [
+      {
+        "handle": "0x2856E",
+        "path": "/private/tmp/proxy-165230.bin",
+        "bytes": 32980,
+        "sha256": "ad678b6ba91fdd318fcba934f1ff6be9a6a2525f712c277e07de8a1bd10505d80"
+      },
+      {
+        "handle": "0x2A974",
+        "path": "/private/tmp/proxy-174452.bin",
+        "bytes": 37080,
+        "sha256": "9afce916bb4f69035de8957a8708d65b70c8a698ed636b0855b8e832f04fc2c4"
+      }
+    ]
+  },
+  "specificationEvidence": {
+    "source": "Open Design Specification for .dwg files v5.4.1, \u00a729, Proxy Entity Graphics",
+    "url": "https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf",
+    "finding": "Type 19 is SUBENT_MARKER and its payload is one RL marker index. The spec also defines proxy graphic chunks as RL size, RL type, then type-specific bytes.",
+    "scopeLimit": "This defines the chunk role and wire payload, not whether INSERT proxy caches may be replayed as DXF proxy graphics or how a native consumer should display them."
+  },
+  "independentDecoderEvidence": {
+    "implementation": "ezdxf proxygraphic.py",
+    "repositoryCommit": "dd7f6cc34983fdbf0b2b910f2497e0720d06dd16",
+    "fileSha256": "facdb0bb5f04dec47036bd5f8d927b444f7706d61044e4240350ba74fc293a05",
+    "pinnedSourceUrl": "https://github.com/mozman/ezdxf/blob/dd7f6cc34983fdbf0b2b910f2497e0720d06dd16/src/ezdxf/proxygraphic.py",
+    "version": "1.4.5",
+    "exactExtractedInputs": [
+      {
+        "path": "/private/tmp/proxy-165230.bin",
+        "sha256": "ad678b6ba91fdd318fcba934f1ff6be9a6a2525f712c277e07de8a1bd10505d80",
+        "handle": "0x2856E",
+        "markerChunks": 7,
+        "decodedVirtualEntities": 231,
+        "types": [
+          "POLYLINE",
+          "TEXT"
+        ]
+      },
+      {
+        "path": "/private/tmp/proxy-174452.bin",
+        "sha256": "9afce916bb4f69035de8957a8708d65b70c8a698ed636b0855b8e832f04fc2c4",
+        "handle": "0x2A974",
+        "markerChunks": 8,
+        "decodedVirtualEntities": 259,
+        "types": [
+          "POLYLINE",
+          "TEXT"
+        ]
+      }
+    ],
+    "finding": "The independent decoder names type 19 ATTRIBUTE_MARKER and reads a 32-bit marker index; both extracted streams decode completely to virtual entities.",
+    "scopeLimit": "This is byte-stream decoding only. It does not prove source INSERT-to-proxy semantic association, DXF writer preservation, or native application behavior.",
+    "validationCommand": "/Users/dli/dev/libdxfrw/build/rpp5gh-evidence/peer/bin/python with ezdxf 1.4.5: ProxyGraphic(bytes, dxfversion=AC1021/DXF2007).info() and virtual_entities()"
+  }
 }
