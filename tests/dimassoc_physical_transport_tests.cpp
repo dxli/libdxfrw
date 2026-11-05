@@ -630,6 +630,14 @@ bool runAdapterClosureRetryRoundtrip(const std::string& outputPath,
     data.dwgReadOutcome.attempted = true;
     data.dwgReadOutcome.operationSucceeded = true;
     data.dwgReadOutcome.sourceVersion = DRW::AC1024;
+    data.hasNamedObjectDictionary = true;
+    data.namedObjectDictionary.handle = 0x60u;
+    DRW_Dictionary associationOwner;
+    associationOwner.handle = 0x61u;
+    associationOwner.parentHandle = data.namedObjectDictionary.handle;
+    data.namedObjectDictionary.m_entries.push_back(
+        {"ACAD_DIMASSOC", associationOwner.handle});
+    data.dictionaries.push_back(associationOwner);
 
     auto* line = new DRW_Line;
     line->handle = 0x40u;
@@ -648,6 +656,10 @@ bool runAdapterClosureRetryRoundtrip(const std::string& outputPath,
 
     DRW_DimensionAssociation association;
     association.handle = 0x500u;
+    association.parentHandle = associationOwner.handle;
+    association.reactorHandles = {associationOwner.handle};
+    association.xDictHandle = associationOwner.handle;
+    association.setDwgCommonObjectState(1, 1u, false);
     association.m_dimensionHandle = dimension->handle;
     association.m_associativityFlags = 1u;
     association.m_osnapRefs.resize(1u);
@@ -692,6 +704,46 @@ bool runAdapterClosureRetryRoundtrip(const std::string& outputPath,
     {
         std::ofstream output(outputPath, std::ios::binary);
         output << sentinel;
+    }
+    auto& capturedAssociation =
+        data.dwgDimensionAssociations.begin()->second;
+    const auto refusalPreservesDestination = [&]() {
+        if (exporter.fileExport(outputPath, DRW::AC1024, binary, &data,
+                                false))
+            return false;
+        std::ifstream input(outputPath, std::ios::binary);
+        const std::string retained(
+            (std::istreambuf_iterator<char>(input)),
+            std::istreambuf_iterator<char>());
+        return retained == sentinel;
+    };
+    const auto rejectsInvalidCommonLink = [&](auto invalidate) {
+        const DRW_DimensionAssociation saved = capturedAssociation;
+        invalidate(capturedAssociation);
+        const bool refused = refusalPreservesDestination();
+        capturedAssociation = saved;
+        return refused;
+    };
+    if (!rejectsInvalidCommonLink([](DRW_DimensionAssociation& value) {
+            value.parentHandle = 0x999u;
+        })
+        || !rejectsInvalidCommonLink([](DRW_DimensionAssociation& value) {
+            value.parentHandle = 0x40u; // emitted LINE, not DICTIONARY
+        })
+        || !rejectsInvalidCommonLink([](DRW_DimensionAssociation& value) {
+            value.reactorHandles = {0x999u};
+            value.setDwgCommonObjectState(1, 1u, false);
+        })
+        || !rejectsInvalidCommonLink([](DRW_DimensionAssociation& value) {
+            value.setDwgCommonObjectState(0, 1u, false);
+        })
+        || !rejectsInvalidCommonLink([](DRW_DimensionAssociation& value) {
+            value.xDictHandle = 0x999u;
+        })) {
+        std::remove(outputPath.c_str());
+        std::cerr << "adapter accepted an unclosed DIMASSOC common link or "
+                     "changed the prior destination\n";
+        return false;
     }
     if (exporter.fileExport(outputPath, DRW::AC1024, binary, &data, false)) {
         std::remove(outputPath.c_str());
@@ -744,6 +796,17 @@ bool runAdapterClosureRetryRoundtrip(const std::string& outputPath,
     const bool graphReadback = imported && readback.associations.size() == 1u
         && readback.associations.front().m_dimensionHandle != 0u
         && dimensionType(readback.associations.front().m_dimensionHandle)
+        && readback.associations.front().reactorHandles.size() == 1u
+        && readback.associations.front().reactorHandles.front()
+            == readback.associations.front().parentHandle
+        && readback.associations.front().xDictHandle
+            == readback.associations.front().parentHandle
+        && std::any_of(
+            readbackData.dictionaries.begin(), readbackData.dictionaries.end(),
+            [&readback](const DRW_Dictionary& dictionary) {
+                return dictionary.handle
+                    == readback.associations.front().parentHandle;
+            })
         && readback.associations.front().m_osnapRefs.size() == 1u
         && readback.associations.front().m_osnapRefs.front().m_objectHandle
             != 0u
@@ -755,7 +818,19 @@ bool runAdapterClosureRetryRoundtrip(const std::string& outputPath,
             == 5.0;
     if (!graphReadback) {
         std::remove(outputPath.c_str());
-        std::cerr << "adapter DIMASSOC success path failed typed readback\n";
+        std::cerr << "adapter DIMASSOC success path failed typed readback"
+                  << " imported=" << imported
+                  << " associations=" << readback.associations.size()
+                  << " dictionaries=" << readbackData.dictionaries.size();
+        if (!readback.associations.empty()) {
+            const DRW_DimensionAssociation& result =
+                readback.associations.front();
+            std::cerr << " owner=" << result.parentHandle
+                      << " reactors=" << result.reactorCount() << '/'
+                      << result.reactorHandles.size()
+                      << " xdict=" << result.xDictHandle;
+        }
+        std::cerr << '\n';
         return false;
     }
     std::remove(outputPath.c_str());
