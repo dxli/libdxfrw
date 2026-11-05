@@ -13540,7 +13540,8 @@ void testGeoDataCivilTailReaderVectors(TestContext& t) {
                      && parsed.handle == 0xA100u
                      && parsed.parentHandle == 0xA200u
                      && parsed.m_hostBlockHandle == 0xA300u
-                     && parsed.m_coordinatesType == 2
+                     && parsed.m_coordinatesType
+                         == (item.objectVersion >= 2 ? 2 : 0)
                      && parsed.m_designPoint.x == 101.25
                      && parsed.m_referencePoint.y == 20.25
                      && parsed.m_horizontalUnitScale == 1.125
@@ -13933,6 +13934,39 @@ void testGeoDataDwgUnitDomain(TestContext& t) {
     const bool retried = writer.writeGeoData(geoData);
     t.expect(rejected && retried,
              "DWG writer rejects invalid GEODATA units before identity staging and retries on the same writer");
+}
+
+void testGeoDataDwgCoordinateTypeDomain(TestContext& t) {
+    for (const std::int32_t invalidValue : {-1, 4}) {
+        GeoDataCodecProbe geoData;
+        geoData.handle = 0xA120u;
+        geoData.parentHandle = 0xA200u;
+        geoData.setDwgCommonObjectState(0, 1, false);
+        geoData.m_version = 2;
+        geoData.m_hostBlockHandle = 0xA300u;
+        geoData.m_coordinatesType = invalidValue;
+
+        dwgBufferW body;
+        dwgBufferW strings;
+        dwgBufferW handles;
+        body.putRawChar8(0xA5u);
+        strings.putRawChar8(0x5Au);
+        handles.putRawChar8(0xC3u);
+        const auto bodyBefore = body.data();
+        const auto stringsBefore = strings.data();
+        const auto handlesBefore = handles.data();
+        const bool rejected = !geoData.encodeDwg(
+                DRW::AC1027, &body, &strings, &handles)
+            && body.data() == bodyBefore
+            && strings.data() == stringsBefore
+            && handles.data() == handlesBefore;
+
+        geoData.m_coordinatesType = invalidValue < 0 ? 0 : 3;
+        const bool retried = geoData.encodeDwg(
+            DRW::AC1027, &body, &strings, &handles);
+        t.expect(rejected && retried,
+                 "DWG GEODATA rejects out-of-domain coordinate types without buffer mutation and retries at a valid endpoint");
+    }
 }
 
 void testOptionalStreamFallbacks(TestContext& t) {
@@ -20213,6 +20247,14 @@ int main(int argc, char** argv) {
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
+    if (argc == 2
+        && std::string(argv[1]) == "--geodata-dwg-coordinate-type-domain") {
+        TestContext context;
+        testGeoDataDwgCoordinateTypeDomain(context);
+        std::cout << "DWG GEODATA coordinate-type domain: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--layout-vectors") {
         TestContext context;
         testLayoutVectors(context);
@@ -20787,6 +20829,7 @@ int main(int argc, char** argv) {
     testGeoDataCivilTailWriterVectors(context);
     testGeoDataDwgScaleMethodDomain(context);
     testGeoDataDwgUnitDomain(context);
+    testGeoDataDwgCoordinateTypeDomain(context);
     testOptionalStreamFallbacks(context);
     testDwgEedSizeBoundaries(context);
     testLtypeTextAreaVectors(context);

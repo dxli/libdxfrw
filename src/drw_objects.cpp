@@ -21325,6 +21325,8 @@ bool DRW_GeoData::encodeDwg(DRW::Version version, dwgBufferW *buf,
             && geoDataCivilTailHasUnrepresentedData(m_civilTail)))
         return false;
     if (m_version < 1 || m_version > 3
+        || (m_version >= 2
+            && (m_coordinatesType < 0 || m_coordinatesType > 3))
         || m_points.size() > static_cast<std::size_t>(kMaxMeshItems)
         || m_faces.size() > static_cast<std::size_t>(kMaxMeshItems))
         return false;
@@ -21393,7 +21395,11 @@ bool DRW_GeoData::encodeDwg(DRW::Version version, dwgBufferW *buf,
     // the deferred handle stream (ODA §20.4.78).
     if (version <= DRW::AC1018)
         hostBuf->putHandle(makeRefW(m_hostBlockHandle, DRW::DwgSoftPointer));
-    buf->putBitShort(m_coordinatesType);
+    // ODA §20.4.78 adds Design coordinate type only for GEODATA object
+    // versions 2/3 (AutoCAD 2010+). Version 1 begins directly with the
+    // legacy reference-point fields.
+    if (m_version >= 2)
+        buf->putBitShort(m_coordinatesType);
 
     if (m_version == 1) {
         buf->put3BitDouble(m_referencePoint);
@@ -25592,7 +25598,7 @@ bool DRW_GeoData::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t b
     }
 
     std::int32_t parsedCoordinatesType = 0;
-    if (!readShort(parsedCoordinatesType))
+    if (parsedVersion >= 2 && !readShort(parsedCoordinatesType))
         return fail();
     DRW_Coord parsedDesignPoint{0.0, 0.0, 0.0};
     DRW_Coord parsedReferencePoint{0.0, 0.0, 0.0};

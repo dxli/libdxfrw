@@ -5065,9 +5065,16 @@ public:
             geoDataV2.m_civilTail.m_seaLevelElevation = 321.5;
             geoDataV2.m_civilTail.m_coordinateProjectionRadius = 654.25;
         }
-        wroteGeoDataV2_ = registeredGeoDataV2_
+        geoDataV2.m_coordinatesType = 4;
+        const bool rejectedInvalidGeoDataCoordinateType =
+            registeredGeoDataV2_
+            && !writer_->writeGeoData(&geoDataV2)
+            && geoDataV2.handle == 0xD200u;
+        geoDataV2.m_coordinatesType = 2;
+        geoDataV2DomainRetrySucceeded_ = rejectedInvalidGeoDataCoordinateType
             && writer_->writeGeoData(&geoDataV2)
             && geoDataV2.handle != 0;
+        wroteGeoDataV2_ = geoDataV2DomainRetrySucceeded_;
 
         DRW_UnderlayDefinition pdfDefinition;
         pdfDefinition.handle = 0xD300u;
@@ -7525,7 +7532,7 @@ public:
                 && data.xDictHandle == 0xA601u
                 && data.m_version == 1
                 && data.m_hostBlockHandle == 0x17u
-                && data.m_coordinatesType == 1
+                && data.m_coordinatesType == 0
                 && data.m_designPoint.x == 100.0
                 && data.m_referencePoint.y == 20.0
                 && data.m_horizontalUnitScale == 1.5
@@ -8243,6 +8250,9 @@ public:
     bool wroteGeoData() const { return wroteGeoData_; }
     bool rejectedMalformedGeoData() const { return rejectedMalformedGeoData_; }
     bool wroteGeoDataV2() const { return wroteGeoDataV2_; }
+    bool geoDataV2DomainRetrySucceeded() const {
+        return geoDataV2DomainRetrySucceeded_;
+    }
     bool rejectedMalformedUnderlay() const { return rejectedMalformedUnderlay_; }
     bool wrotePdfUnderlay() const { return wrotePdfUnderlay_; }
     bool wroteDgnUnderlay() const { return wroteDgnUnderlay_; }
@@ -8919,6 +8929,7 @@ private:
     bool wroteSpatialFilter_ {false};
     bool wroteGeoData_ {false};
     bool wroteGeoDataV2_ {false};
+    bool geoDataV2DomainRetrySucceeded_ {false};
     bool rejectedMalformedObject_ {false};
     bool rejectedMalformedStyle_ {false};
     bool rejectedUnmappedMLineStyleCmc_ {false};
@@ -37572,6 +37583,9 @@ int main(int argc, char** argv) {
                ("local DWG writer emitted GEODATA object" + suffix).c_str(), failures);
         expect(writeIface.wroteGeoDataV2(),
                ("local DWG writer emitted GEODATA v2 object" + suffix).c_str(), failures);
+        expect(writeIface.geoDataV2DomainRetrySucceeded(),
+               ("local DWG GEODATA coordinate-type refusal preserves identity and supports same-writer retry" + suffix).c_str(),
+               failures);
         expect(writeIface.rejectedMalformedGeoData(),
                ("local DWG writer rejected malformed GEODATA transaction" + suffix).c_str(),
                failures);

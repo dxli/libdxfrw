@@ -5590,6 +5590,9 @@ bool dwgWriter15::writeGeoData(const DRW_GeoData& geoData) {
         || geoData.reactorHandles.size() > dwgSafety::MaxReactorCount
         || geoData.extensionDictionaryFlag() > 1)
         return false;
+    if (geoData.m_version >= 2
+        && (geoData.m_coordinatesType < 0 || geoData.m_coordinatesType > 3))
+        return false;
     if ((geoData.m_version == 1
             && geoData.m_scaleEstimationMethod != 1)
         || ((geoData.m_version == 2 || geoData.m_version == 3)
