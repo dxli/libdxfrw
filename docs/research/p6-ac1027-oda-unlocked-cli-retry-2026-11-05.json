@@ -38,9 +38,41 @@
     }
   ],
   "interpretation": "The user unlocked the macOS session, but this direct CLI retry still aborts before conversion with the same pasteboard/XPC service errors and creates no output. This is a tool invocation/environment failure, not evidence about HEADER suffix bytes.",
-  "nextAction": "Do not retry this exact invocation until the host pasteboard/XPC service or supported GUI invocation path changes. Continue independent local implementation; retain suffix bytes as unclaimed and strict output refused.",
+  "nextAction": "Do not repeat direct CLI invocation until the host pasteboard/XPC service or a supported GUI invocation path changes. Continue independent implementation and keep HEADER suffix bytes unclaimed.",
   "limits": [
     "No output was available for suffix comparison.",
     "No parser, format, or support claim changed."
-  ]
+  ],
+  "followupAttempt": {
+    "timestampLocal": "2026-11-05 12:32:59 EST",
+    "command": [
+      "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter",
+      "/private/tmp/libdxfrw-oda-unlock-recheck-20261105/input",
+      "/private/tmp/libdxfrw-oda-unlock-recheck-20261105/output",
+      "ACAD2013",
+      "DWG",
+      "0",
+      "0"
+    ],
+    "inputDirectory": "/private/tmp/libdxfrw-oda-unlock-recheck-20261105/input",
+    "inputs": [
+      {
+        "path": "Line.dwg",
+        "sha256": "351a239cdae05894fe11863aabecfde171bd4d1758a3dd1c9868d8fe534fe6c1"
+      },
+      {
+        "path": "Cover.dwg",
+        "sha256": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42"
+      }
+    ],
+    "exitCode": -6,
+    "stderr": [
+      "PasteBoard: Error creating pasteboard: com.apple.pasteboard.clipboard [-4960]",
+      "PasteBoard: Error creating pasteboard: com.apple.pasteboard.find [-4960]",
+      "Connection Invalid error for service com.apple.hiservices-xpcservice",
+      "Error received in message reply handler: Connection invalid"
+    ],
+    "outputs": [],
+    "interpretation": "A second fresh-directory invocation after the user indicated they were unlocking the session reproduced the same pre-conversion pasteboard/XPC abort. The user did not explicitly confirm the unlock had completed. No converter output or suffix evidence resulted."
+  }
 }
