@@ -35,6 +35,14 @@
     "buildResult": "passed",
     "focusedTest": "ctest --test-dir build-gcc -R '^libdxfrw_geodata_dwg_unit_domain$' --output-on-failure",
     "focusedTestResult": "passed",
+    "physicalSelectedGraphRegression": {
+      "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --physical-geodata-dictionary-graph /private/tmp/geodata-probe-dwg/local_grid.dwg <empty-output-dir>",
+      "inputSha256": "8e4c46cb724d8c66c52eeef3b64ddd8a4b40ea36fd12cb6c69ae8f40186d3bae",
+      "selectorResult": "passed; selected ASCII/Binary graph outputs were emitted with fresh typed readback and the existing refusal/retry controls",
+      "asciiSha256": "25baa32ab925a204bc29866feb7a7c0152673bfdb24b843f2a68807b3dd014c3",
+      "binarySha256": "e97e0517e4ea8ecc43e2480e4bfd2157aa6f677ce35896f88d1323807abd34d3",
+      "sourceQualification": "ODA 27.1-derived local source; 109/109 observed frames published, with two retained HEADER integrity observations and strict whole-source refusal. This confirms only the selected GEODATA graph profile."
+    },
     "diffCheck": "git diff --check passed"
   },
   "sourceBinding": {
