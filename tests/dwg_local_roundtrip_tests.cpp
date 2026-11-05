@@ -4340,8 +4340,8 @@ public:
         rasterVariables.parentHandle = dictionary.handle;
         rasterVariables.m_classVersion = 1;
         rasterVariables.m_imageFrame = 1;
-        rasterVariables.m_imageQuality = 2;
-        rasterVariables.m_units = 3;
+        rasterVariables.m_imageQuality = 1;
+        rasterVariables.m_units = 8;
         wroteRasterVariables_ = registeredRasterVariables_
             && writer_->writeRasterVariables(&rasterVariables)
             && rasterVariables.handle != 0;
@@ -4580,8 +4580,36 @@ public:
         invalidRasterVariables.handle = 0xB501u;
         invalidRasterVariables.parentHandle = dictionary.handle;
         invalidRasterVariables.m_classVersion = 11;
-        rejectedMalformedRasterVariables_ =
+        bool rejectedInvalidRasterVersion =
             !writer_->writeRasterVariables(&invalidRasterVariables);
+        DRW_RasterVariables invalidRasterFrame;
+        invalidRasterFrame.handle = 0xB502u;
+        invalidRasterFrame.parentHandle = dictionary.handle;
+        invalidRasterFrame.m_classVersion = 1;
+        invalidRasterFrame.m_imageFrame = 2;
+        invalidRasterFrame.m_imageQuality = 1;
+        invalidRasterFrame.m_units = 3;
+        const bool rejectedInvalidRasterFrame =
+            !writer_->writeRasterVariables(&invalidRasterFrame);
+        DRW_RasterVariables invalidRasterQuality;
+        invalidRasterQuality.handle = 0xB503u;
+        invalidRasterQuality.parentHandle = dictionary.handle;
+        invalidRasterQuality.m_classVersion = 1;
+        invalidRasterQuality.m_imageQuality = 2;
+        invalidRasterQuality.m_units = 3;
+        const bool rejectedInvalidRasterQuality =
+            !writer_->writeRasterVariables(&invalidRasterQuality);
+        DRW_RasterVariables invalidRasterUnits;
+        invalidRasterUnits.handle = 0xB504u;
+        invalidRasterUnits.parentHandle = dictionary.handle;
+        invalidRasterUnits.m_classVersion = 1;
+        invalidRasterUnits.m_imageQuality = 1;
+        invalidRasterUnits.m_units = 9;
+        const bool rejectedInvalidRasterUnits =
+            !writer_->writeRasterVariables(&invalidRasterUnits);
+        rejectedMalformedRasterVariables_ = rejectedInvalidRasterVersion
+            && rejectedInvalidRasterFrame && rejectedInvalidRasterQuality
+            && rejectedInvalidRasterUnits;
 
         DRW_WipeoutVariables invalidWipeoutVariables;
         invalidWipeoutVariables.handle = 0xB601u;
@@ -7229,8 +7257,8 @@ public:
             readRasterVariablesSeen_ = data.parentHandle == 0xA601u
                 && data.m_classVersion == 1
                 && data.m_imageFrame == 1
-                && data.m_imageQuality == 2
-                && data.m_units == 3;
+                && data.m_imageQuality == 1
+                && data.m_units == 8;
         if (data.handle == 0xB501u)
             readMalformedRasterVariablesSeen_ = true;
     }

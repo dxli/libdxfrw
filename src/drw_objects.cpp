@@ -21159,9 +21159,9 @@ bool DRW_RasterVariables::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || reactorHandles.size() > dwgSafety::MaxReactorCount
         || xDictFlag > 1
         || m_classVersion < 0 || m_classVersion > 10
-        || !validUnsignedBitShort(m_imageFrame)
-        || !validUnsignedBitShort(m_imageQuality)
-        || !validUnsignedBitShort(m_units))
+        || (m_imageFrame != 0 && m_imageFrame != 1)
+        || (m_imageQuality != 0 && m_imageQuality != 1)
+        || m_units < 0 || m_units > 8)
         return false;
     DRW_UNUSED(strBuf);
     dwgBufferW *hb = (handleBuf != nullptr && version > DRW::AC1014) ? handleBuf : buf;

@@ -1,0 +1,48 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "title": "RASTERVARIABLES DWG writer scalar domains",
+  "date": "2026-11-05",
+  "status": "DWG_ENCODER_DOMAIN_GUARDS_IMPLEMENTED_BASELINE_ROUNDTRIP_FAILURE_UNRELATED",
+  "scope": "The DWG writer now rejects undocumented display-frame, image-quality and insertion-unit values while the parser continues to preserve source values. The existing class-version range is unchanged because ODA's DWG body specifies a bit-long field but does not define the DXF class-version constant's domain.",
+  "normativeSource": {
+    "title": "Autodesk RASTERVARIABLES (DXF)",
+    "url": "https://help.autodesk.com/cloudhelp/2020/ENU/AutoCAD-DXF/files/GUID-DDCC21A4-822A-469B-9954-1E1EC4F6DF82.htm",
+    "domains": {
+      "displayFrame": [0, 1],
+      "imageQuality": [0, 1],
+      "insertionUnits": [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    }
+  },
+  "implementation": {
+    "file": "src/drw_objects.cpp",
+    "behavior": "DRW_RasterVariables::encodeDwg accepts only frame 0/1, quality 0/1, and units 0..8 before emitting the BitShort fields. The parser is unchanged and remains tolerant."
+  },
+  "regressionControl": {
+    "file": "tests/dwg_local_roundtrip_tests.cpp",
+    "coverage": "The generated local DWG roundtrip writes and reads frame=1, quality=1, units=8. It separately submits frame=2, quality=2 and units=9 and requires each writer call to fail; the existing class-version overflow refusal remains checked."
+  },
+  "validation": {
+    "build": "cmake --build build-gcc --target libdxfrw_dwg_local_roundtrip -j4",
+    "buildResult": "passed",
+    "owningTest": "ctest --test-dir build-gcc -R '^libdxfrw_dwg_local_roundtrip$' --output-on-failure",
+    "owningTestResult": "nonzero: 16 ACDS/modeler and DWG read-outcome assertions fail; no RASTERVARIABLES assertion is reported",
+    "baselineComparison": "The same test exits with the same 16 unrelated ACDS/modeler and read-outcome assertions after restoring src/drw_objects.cpp and tests/dwg_local_roundtrip_tests.cpp from HEAD. The failure is pre-existing and is not attributed to this change.",
+    "diffCheck": "git diff --check passed"
+  },
+  "sourceBinding": {
+    "baseRevision": "cce22fe9",
+    "files": {
+      "src/drw_objects.cpp": "520ee3851167933078672ec26057a6dd4a19874161b905a061d6a3689f2084af",
+      "tests/dwg_local_roundtrip_tests.cpp": "6cd181e1f5eb78b14c145dbd7321a7e89e832ff18663a7b0b36e2731999ee806"
+    }
+  },
+  "fixturePolicy": {
+    "newDwgOrDxfFixtureCommitted": false,
+    "generatedInputs": "The local DWG writer harness generates its input; no fixture was added."
+  },
+  "nonClaims": [
+    "No physical producer with every allowed value was tested.",
+    "No native image display or unit-scaling behavior was qualified.",
+    "This does not widen the DWG-origin adapter's source graph profiles."
+  ]
+}
