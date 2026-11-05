@@ -5727,10 +5727,10 @@ bool collectSunOwnerGraph(const dx_data& data, DRW::Version targetVersion,
             return reject("SUN owner edge has no typed SUN target");
 
         // ODA §20.4.44 describes dictionary item handles as soft or hard
-        // ownership according to the dictionary flag. The AC1024
-        // sun-and-sky profile is rooted at NOD/ACAD_SUN, contains the
-        // canonical "360" entry, and uses soft ownership (hardOwner=0).
-        // The SUN's common parent handle is the reciprocal soft pointer.
+        // ownership according to the dictionary flag. The physical AC1024
+        // ACAD_SUN profile is rooted at NOD/ACAD_SUN, contains the canonical
+        // "360" entry, and uses soft ownership (hardOwner=0). The SUN common
+        // parent is reciprocal.
         std::uint32_t sunDictionaryHandle = 0u;
         const DRW_Dictionary* sunDictionary = nullptr;
         std::size_t sunRootMatches = 0u;
@@ -5794,9 +5794,16 @@ bool collectSunOwnerGraph(const dx_data& data, DRW::Version targetVersion,
                                            std::uint32_t sunHandle) {
             const auto sun = sunsByHandle.find(sunHandle);
             if (ownerHandle == 0 || ownerHandle == DRW::NoHandle
-                || sun == sunsByHandle.end()
-                || !ownerHandles.insert(ownerHandle).second
-                || sun->second->parentHandle != ownerHandle
+                || sun == sunsByHandle.end())
+                return reject("SUN must have exactly one matching VIEW, VPORT, VIEWPORT, or validated dictionary owner");
+            if (sun->second->parentHandle != ownerHandle) {
+                std::ostringstream detail;
+                detail << "SUN parent mismatch: owner 0x" << std::hex
+                       << ownerHandle << ", SUN 0x" << sunHandle
+                       << ", parent 0x" << sun->second->parentHandle;
+                return reject(detail.str().c_str());
+            }
+            if (!ownerHandles.insert(ownerHandle).second
                 || ++ownerCounts[sunHandle] != 1u)
                 return reject("SUN must have exactly one matching VIEW, VPORT, VIEWPORT, or validated dictionary owner");
             return true;

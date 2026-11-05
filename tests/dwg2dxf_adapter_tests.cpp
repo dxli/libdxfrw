@@ -38285,12 +38285,14 @@ bool dwgTypedSunOutputProfile() {
         return text.str();
     };
 
+    const DRW::Version targetVersion = DRW::AC1024;
     for (const bool binary : {false, true}) {
         const std::string encoding = binary ? "binary" : "ascii";
         const std::filesystem::path output =
             std::filesystem::temp_directory_path()
-            / ("libdxfrw-dwg-typed-sun-" + encoding + "-"
-               + std::to_string(nonce) + ".dxf");
+            / ("libdxfrw-dwg-typed-sun-"
+               + std::to_string(static_cast<unsigned>(targetVersion)) + "-"
+               + encoding + "-" + std::to_string(nonce) + ".dxf");
         struct OutputCleanup {
             std::filesystem::path path;
             ~OutputCleanup() {
@@ -38376,7 +38378,7 @@ bool dwgTypedSunOutputProfile() {
             if (!existing)
                 return fail("could not seed typed SUN output destination");
         }
-        if (iface.fileExport(output.string(), DRW::AC1024, binary, &data,
+        if (iface.fileExport(output.string(), targetVersion, binary, &data,
                              false, true))
             return fail("typed DWG SUN with unrepresentable RGB CMC was emitted");
         {
@@ -38388,10 +38390,31 @@ bool dwgTypedSunOutputProfile() {
                 return fail("refused typed DWG SUN replaced the destination");
         }
 
+        const auto viewSunSource = std::find_if(data.suns.begin(),
+            data.suns.end(), [&viewSun](const DRW_Sun& sun) {
+                return sun.handle == viewSun.handle;
+            });
+        if (viewSunSource == data.suns.end())
+            return fail("typed DWG VIEW SUN source identity was lost");
+        const std::uint32_t viewSunOwner = viewSunSource->parentHandle;
+        viewSunSource->parentHandle = 0xA77Au;
+        if (iface.fileExport(output.string(), targetVersion, binary, &data,
+                             false, true))
+            return fail("typed DWG VIEW SUN with a mismatched hard owner was emitted");
+        {
+            std::ifstream input(output, std::ios::binary);
+            const std::string preserved(
+                (std::istreambuf_iterator<char>(input)),
+                std::istreambuf_iterator<char>());
+            if (preserved != sentinel)
+                return fail("mismatched VIEW SUN owner replaced the destination");
+        }
+        viewSunSource->parentHandle = viewSunOwner;
+
         data.suns.front().m_color = 42u;
         data.suns.front().m_color24 = -1;
         data.suns.front().m_colorCmc.method = dwgColor::ACI;
-        if (!iface.fileExport(output.string(), DRW::AC1024, binary, &data,
+        if (!iface.fileExport(output.string(), targetVersion, binary, &data,
                               false, true))
             return fail("group-63-faithful typed DWG SUN failed export: "
                         + iface.extensionGraphFailureDetail());
@@ -38399,6 +38422,7 @@ bool dwgTypedSunOutputProfile() {
         dx_data readback;
         dx_iface reader;
         if (!reader.fileImport(output.string(), &readback, false)
+            || readback.sourceVersion != targetVersion
             || readback.suns.size() != 4u
             || readback.rawSunObjects.size() != 4u
             || readback.VPorts.size() != 1u
