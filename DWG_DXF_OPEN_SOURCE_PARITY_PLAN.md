@@ -198,6 +198,12 @@ staged-byte refusals, six direct-writer profiles, eight inspector guards and
 128 persistent allocation-failure rollback/readback cycles. This verifies local
 identity and transaction behavior, not producer coverage or native material
 semantics; see the [HEADER material receipt](docs/research/p4-header-material-one-hop-and-persistent-rollback-fast-2026-11-04.json).
+The adapter's LAYER group-347 material graph control is also registered as a
+focused fast CTest. Across AC1021/AC1024/AC1027/AC1032 and ASCII/Binary it
+checks 32 generated profiles, emitted MATERIAL and owner binding, fresh typed
+readback, 82 callback rollbacks, 108 corrected retries and staged-table
+mutation refusal. This remains generated graph evidence, not physical producer
+or native renderer qualification; see the [LAYER material receipt](docs/research/p4-layer-material-graph-closure-adapter-fast-2026-11-04.json).
 Raw H member roles are retained and
 the first non-null role mismatch remains a source-anchored integrity Error;
 tolerant callbacks are unchanged. See the
