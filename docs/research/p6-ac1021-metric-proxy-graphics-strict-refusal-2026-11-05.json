@@ -21,8 +21,8 @@
     "logPath": "/private/tmp/libdxfrw-ac1021-metric-strict.log",
     "logSha256": "f9a13406f67e5506c4952326dc8e13e67db68742061f8d999652b9cae6f0eb9b"
   },
-  "interpretation": "Two typed INSERT proxy caches block strict output. ODA \u00a729 identifies the 15 type-19 chunks as marker-index controls; ezdxf independently reads the marker values and decodes both exact extracted streams to 231 and 259 POLYLINE/TEXT virtual entities. This does not establish INSERT cache source association, exact DXF output/readback, or native display. The existing fail-closed gate remains correct.",
-  "nextAction": "Resolve the SUBENT_MARKER scope and preserve its marker identity with the affected subsequent geometry before treating opcode 19 as supported. Establish whether the source proxy stream is semantically attached to each INSERT or its referenced block, and whether DXF permits exact same-version cache replay for this entity type. Bind output bytes to the source INSERT and block graph, then verify exact group 310 readback and a native consumer before admitting the profile.",
+  "interpretation": "Two typed INSERT proxy caches block strict output. ODA \u00a729 identifies the 15 type-19 chunks as marker-index controls; ezdxf independently reads the marker values and decodes both exact extracted streams to 231 and 259 POLYLINE/TEXT virtual entities. libdxfrw now emits ordered marker callbacks scoped to the source host handle and retains them in the DWG block journal. This does not establish INSERT cache source association, exact DXF output/readback, or native display. The existing fail-closed gate remains correct.",
+  "nextAction": "Establish whether the source proxy stream is semantically attached to each INSERT or its referenced block, and whether DXF permits exact same-version cache replay for this entity type. Bind output bytes to the source INSERT and block graph, then verify exact group 310 readback and native marker-to-geometry behavior before admitting the profile.",
   "supportClaimEffect": "none",
   "nonClaims": [
     "No proxy-graphics semantic or replay support is established.",
@@ -37,7 +37,6 @@
       "declaredBytes": 32980,
       "framingComplete": true,
       "recognizedPrimitiveChunks": 231,
-      "unsupportedChunks": 471,
       "unresolvedResourceReferencesReportedByScanner": 0,
       "chunkOpcodeCounts": {
         "19": 7,
@@ -48,8 +47,11 @@
         "32": 165,
         "38": 66
       },
-      "unknownOpcode19Count": 7,
-      "scanClassificationNote": "The inspect API counts non-primitive control chunks as skippedUnsupportedChunkCount even when decode handles their state effect; this aggregate is not an unsupported-opcode count."
+      "scanClassificationNote": "The legacy pre-change non-primitive count includes handled controls. The updated inspector separates recognizedControlChunkCount from skippedUnsupportedChunkCount.",
+      "legacyNonPrimitiveChunkCountBeforeControlClassification": 471,
+      "unsupportedChunksAfterControlClassification": 0,
+      "recognizedControlChunksAfterUpdate": 471,
+      "subentityMarkerChunkCount": 7
     },
     {
       "handle": "0x2A974",
@@ -58,7 +60,6 @@
       "declaredBytes": 37080,
       "framingComplete": true,
       "recognizedPrimitiveChunks": 259,
-      "unsupportedChunks": 528,
       "unresolvedResourceReferencesReportedByScanner": 0,
       "chunkOpcodeCounts": {
         "19": 8,
@@ -69,8 +70,11 @@
         "32": 184,
         "38": 75
       },
-      "unknownOpcode19Count": 8,
-      "scanClassificationNote": "The inspect API counts non-primitive control chunks as skippedUnsupportedChunkCount even when decode handles their state effect; this aggregate is not an unsupported-opcode count."
+      "scanClassificationNote": "The legacy pre-change non-primitive count includes handled controls. The updated inspector separates recognizedControlChunkCount from skippedUnsupportedChunkCount.",
+      "legacyNonPrimitiveChunkCountBeforeControlClassification": 528,
+      "unsupportedChunksAfterControlClassification": 0,
+      "recognizedControlChunksAfterUpdate": 528,
+      "subentityMarkerChunkCount": 8
     }
   ],
   "probe": {
@@ -79,7 +83,7 @@
     "sourceSha256": "d551ee39b90fa7baf80cf43aa5d9f59e6a2525f712c277e07de8a1bd10505d80",
     "binaryPath": "/private/tmp/probe_ac1021_proxy",
     "binarySha256": "3bc8bf9593b4aa02072356603db5440a9c6e9c6926732eb5d63b2df97825a8f0",
-    "result": "Chunk histogram: handle 0x2856E has opcode counts 19:7, 22:231, 23:231, 29:1, 31:1, 32:165, 38:66; handle 0x2A974 has 19:8, 22:259, 23:259, 29:1, 31:1, 32:184, 38:75. Opcodes 22/23 are attribute controls and 29/31 matrix controls handled by decode; 32/38 are recognized primitive types. Opcode 19 is not named in the current decoder. The inspect API's non-primitive count is not an unsupported-opcode count.",
+    "result": "Chunk histogram: handle 0x2856E has opcode counts 19:7, 22:231, 23:231, 29:1, 31:1, 32:165, 38:66; handle 0x2A974 has 19:8, 22:259, 23:259, 29:1, 31:1, 32:184, 38:75. Opcodes 19, 22/23 and 29/31 are recognized controls; 32/38 are recognized primitive types. The updated source probe reports zero skipped unknown chunks and 471/528 recognized control chunks.",
     "rawExtractedProxyFiles": [
       {
         "handle": "0x2856E",
@@ -102,10 +106,10 @@
     "scopeLimit": "This defines the chunk role and wire payload, not whether INSERT proxy caches may be replayed as DXF proxy graphics or how a native consumer should display them."
   },
   "markerImplementationGap": {
-    "odaMeaning": "ODA §29 says SUBENT items indicate changes for subsequently drawn items; opcode 19 supplies the marker index as RL.",
-    "currentDecoder": "Opcode 19 is not named or dispatched by DRW_ProxyGraphicDecoder. inspect/decode count it in skippedUnsupportedChunkCount, then continue decoding later primitives without marker identity.",
-    "effect": "The 15 observed markers are not proven semantically preserved by the current proxy-to-primitive projection. Do not count byte-framing completion or emitted primitive totals as marker-complete support.",
-    "requiredEvidence": "Bind each marker to its affected following primitives, carry that association through the consumer/output route, and verify a native consumer's subentity behavior."
+    "odaMeaning": "ODA \u00a729 says SUBENT items indicate changes for subsequently drawn items; opcode 19 supplies the marker index as RL.",
+    "currentDecoder": "DRW_ProxyGraphicDecoder reads the 32-bit RL marker, reports marker/control counts, and calls setSubentityMarker before subsequent primitives. The DWG output journal records addProxySubentityMarker(sourceHostHandle, marker) in stream order. Sinks that do not retain markers are counted as unhandled; DWG block decoding refuses that projection.",
+    "effect": "The local decode/journal path now transports marker identity, but the AC1021 cache's source association and native marker-to-geometry behavior remain unqualified. Strict output remains refused.",
+    "requiredEvidence": "Bind marker events to their affected following primitives in a consumer, establish the source cache's owner/block role, and verify exact DXF output/readback plus native subentity behavior."
   },
   "independentDecoderEvidence": {
     "implementation": "ezdxf proxygraphic.py",
@@ -140,5 +144,39 @@
     "finding": "The independent decoder names type 19 ATTRIBUTE_MARKER and reads a 32-bit marker index; both extracted streams decode completely to virtual entities.",
     "scopeLimit": "This is byte-stream decoding only. It does not prove source INSERT-to-proxy semantic association, DXF writer preservation, or native application behavior.",
     "validationCommand": "/Users/dli/dev/libdxfrw/build/rpp5gh-evidence/peer/bin/python with ezdxf 1.4.5: ProxyGraphic(bytes, dxfversion=AC1021/DXF2007).info() and virtual_entities()"
+  },
+  "implementationEvidence": {
+    "generatedControls": [
+      {
+        "selector": "libdxfrw_graph_preservation_tests --proxy-subentity-markers",
+        "result": "PASS",
+        "checks": "RL marker transitions bind to subsequent primitives; unhandled sinks are reported; control/primitive counts and malformed payload refusal."
+      },
+      {
+        "selector": "libdxfrw_dwg_reader_matrix_tests --proxy-subentity-marker-journal",
+        "result": "PASS",
+        "checks": "The DWG output journal replays host-scoped marker events in order."
+      }
+    ],
+    "sourceDecodeProbe": [
+      {
+        "handle": "0x2856E",
+        "result": "complete",
+        "primitives": 231,
+        "markers": 7,
+        "unhandledMarkers": 0,
+        "skippedUnknownChunks": 0
+      },
+      {
+        "handle": "0x2A974",
+        "result": "complete",
+        "primitives": 259,
+        "markers": 8,
+        "unhandledMarkers": 0,
+        "skippedUnknownChunks": 0
+      }
+    ],
+    "strictOutput": "Still refused before output by typed-proxy-graphics-not-preserved; no DXF created.",
+    "fixturePolicy": "No fixture added or modified."
   }
 }

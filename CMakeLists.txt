@@ -1491,6 +1491,12 @@ if(LIBDXFRW_BUILD_TESTS)
     set_tests_properties(libdxfrw_dwg_acds_dataindex_order PROPERTIES
         LABELS "fast;dwg;acds;generated"
         TIMEOUT 30)
+    add_test(NAME libdxfrw_proxy_subentity_marker_journal
+        COMMAND libdxfrw_dwg_reader_matrix_tests
+            --proxy-subentity-marker-journal)
+    set_tests_properties(libdxfrw_proxy_subentity_marker_journal PROPERTIES
+        LABELS "fast;dwg;generated;proxy-graphics"
+        TIMEOUT 30)
     add_test(NAME libdxfrw_dwg_r2007_class_string_footer
         COMMAND libdxfrw_dwg_reader_matrix_tests --r2007-class-string-footer)
     set_tests_properties(libdxfrw_dwg_r2007_class_string_footer PROPERTIES
@@ -1659,6 +1665,11 @@ if(LIBDXFRW_BUILD_TESTS)
         COMMAND libdxfrw_graph_preservation_tests --datastorage-bounds)
     set_tests_properties(libdxfrw_datastorage_bounds PROPERTIES
         LABELS "fast;dwg;generated;datastorage"
+        TIMEOUT 30)
+    add_test(NAME libdxfrw_proxy_subentity_markers
+        COMMAND libdxfrw_graph_preservation_tests --proxy-subentity-markers)
+    set_tests_properties(libdxfrw_proxy_subentity_markers PROPERTIES
+        LABELS "fast;dwg;generated;proxy-graphics"
         TIMEOUT 30)
 
     add_executable(libdxfrw_writer_primitives_tests

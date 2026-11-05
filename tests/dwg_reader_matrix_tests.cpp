@@ -4515,6 +4515,17 @@ public:
         return output.replay(target);
     }
 
+    bool replayProxySubentityMarkerSequence(
+        std::uint32_t sourceHostHandle,
+        const std::vector<std::uint32_t>& markers, DRW_Interface& target) {
+        DwgBlockJournalOutput output(*this);
+        for (const std::uint32_t marker : markers) {
+            if (!output.appendProxySubentityMarker(sourceHostHandle, marker))
+                return false;
+        }
+        return output.replay(target);
+    }
+
     bool captureDataStorageSection() {
         return captureRawDwgDataSections();
     }
@@ -9322,6 +9333,34 @@ void testOwnedUnsupportedObjectJournalEvent(TestContext& t) {
                  && moveSink.rawEntityMoveCallbacks.front().m_rawBytes.back()
                         == 0x5Au,
              "move-aware raw-object callback retains the event allocation exactly once");
+}
+
+void testProxySubentityMarkerJournalEvent(TestContext& t) {
+    class MarkerEventCapture final : public dx_iface {
+    public:
+        bool addProxySubentityMarker(std::uint32_t host,
+                                    std::uint32_t marker) override {
+            events.emplace_back(host, marker);
+            return true;
+        }
+        std::vector<std::pair<std::uint32_t, std::uint32_t>> events;
+    };
+
+    dwgRW parent("");
+    std::vector<std::uint8_t> inputBytes{0u};
+    auto readerBuffer = std::unique_ptr<dwgBuffer>(
+        new dwgBuffer(inputBytes.data(), inputBytes.size()));
+    ModelerDispatchReader reader(std::move(readerBuffer), &parent);
+    MarkerEventCapture capture;
+    const bool replayed = reader.replayProxySubentityMarkerSequence(
+        0x2856Eu, {0x1234u, 0x5678u}, capture);
+    t.expect(replayed
+                 && capture.events
+                        == std::vector<std::pair<std::uint32_t,
+                                                 std::uint32_t>>{
+                               {0x2856Eu, 0x1234u},
+                               {0x2856Eu, 0x5678u}},
+             "proxy marker journal preserves source host and marker order");
 }
 
 void testR2004DataPageLogicalTail(TestContext& t) {
@@ -19547,6 +19586,13 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--acds-dataindex-order") {
         TestContext focused;
         testModelerAcDsDataIndexOrder(focused);
+        std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return focused.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--proxy-subentity-marker-journal") {
+        TestContext focused;
+        testProxySubentityMarkerJournalEvent(focused);
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

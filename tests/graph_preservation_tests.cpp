@@ -100,11 +100,12 @@ void appendDouble(std::vector<std::uint8_t>& bytes, double value) {
     bytes.insert(bytes.end(), raw.begin(), raw.end());
 }
 
-class ProxyGraphicCapture final : public DRW_ProxyGraphicSink {
+class ProxyGraphicCapture : public DRW_ProxyGraphicSink {
 public:
     bool addArc(const DRW_Arc&) override { return true; }
     bool addCircle(const DRW_Circle& value) override {
         circles.push_back(value);
+        circleMarkers.push_back(currentMarker);
         return true;
     }
     bool addEllipse(const DRW_Ellipse&) override { return true; }
@@ -115,9 +116,17 @@ public:
     }
     bool addPolyline(const DRW_Polyline&) override { return true; }
     bool addText(const DRW_Text&) override { return true; }
+    bool setSubentityMarker(std::uint32_t marker) override {
+        currentMarker = marker;
+        markers.push_back(marker);
+        return true;
+    }
 
     std::vector<DRW_Circle> circles;
     std::vector<DRW_Mesh> meshes;
+    std::vector<std::uint32_t> markers;
+    std::vector<std::uint32_t> circleMarkers;
+    std::uint32_t currentMarker {0};
 };
 
 void appendSabString(std::vector<std::uint8_t>& bytes, const std::string& value) {
@@ -15512,6 +15521,10 @@ void writeU32(std::string& bytes, std::size_t offset, std::uint32_t value) {
     std::memcpy(bytes.data() + offset, &value, sizeof(value));
 }
 
+void appendProxyChunk(std::vector<std::uint8_t>& stream,
+                      std::uint32_t opcode,
+                      const std::vector<std::uint8_t>& payload);
+
 void testProxyBounds(TestContext& t) {
     const DRW_ProxyGraphicDecodeResult empty =
         DRW_ProxyGraphicDecoder::inspect("");
@@ -15549,6 +15562,76 @@ void testProxyBounds(TestContext& t) {
     t.expect(DRW_ProxyGraphicDecoder::inspect(unknown, limits).stopReason
                  == DRW_ProxyGraphicStopReason::ChunkLimit,
              "proxy inspector enforces chunk resource limit");
+}
+
+class UnhandledProxyMarkerCapture final : public ProxyGraphicCapture {
+public:
+    bool setSubentityMarker(std::uint32_t) override { return false; }
+};
+
+void testProxySubentityMarkers(TestContext& t) {
+    std::vector<std::uint8_t> stream(8u, 0u);
+    const auto appendMarker = [&stream](std::uint32_t marker) {
+        std::vector<std::uint8_t> payload;
+        appendU32(payload, marker);
+        appendProxyChunk(stream, 19u, payload);
+    };
+    const auto appendCircle = [&stream](double x) {
+        std::vector<std::uint8_t> payload;
+        appendDouble(payload, x); appendDouble(payload, 0.0);
+        appendDouble(payload, 0.0); // center
+        appendDouble(payload, 1.0); // radius
+        appendDouble(payload, 0.0); appendDouble(payload, 0.0);
+        appendDouble(payload, 1.0); // normal
+        appendProxyChunk(stream, 2u, payload);
+    };
+    appendMarker(0x1234u);
+    appendCircle(1.0);
+    appendMarker(0x5678u);
+    appendCircle(2.0);
+
+    const std::string encoded(reinterpret_cast<const char*>(stream.data()),
+                              stream.size());
+    const DRW_ProxyGraphicDecodeResult inspected =
+        DRW_ProxyGraphicDecoder::inspect(encoded);
+    t.expect(inspected.completed()
+                 && inspected.recognizedPrimitiveChunkCount == 2u
+                 && inspected.recognizedControlChunkCount == 2u
+                 && inspected.subentityMarkerCount == 2u
+                 && inspected.skippedUnsupportedChunkCount == 0u,
+             "proxy inspector recognizes SUBENT_MARKER control chunks");
+
+    DRW_Point parent;
+    parent.handle = 0x77u;
+    ProxyGraphicCapture capture;
+    const DRW_ProxyGraphicDecodeResult decoded =
+        DRW_ProxyGraphicDecoder::decode(encoded, DRW::AC1021, capture, parent);
+    t.expect(decoded.completed() && decoded.subentityMarkerCount == 2u
+                 && decoded.recognizedControlChunkCount == 2u
+                 && decoded.unhandledSubentityMarkerCount == 0u
+                 && capture.markers == std::vector<std::uint32_t>{0x1234u,
+                                                                   0x5678u}
+                 && capture.circleMarkers
+                        == std::vector<std::uint32_t>{0x1234u, 0x5678u},
+             "proxy marker changes bind in order to subsequent emitted primitives");
+
+    UnhandledProxyMarkerCapture unhandled;
+    const DRW_ProxyGraphicDecodeResult partial =
+        DRW_ProxyGraphicDecoder::decode(encoded, DRW::AC1021, unhandled,
+                                        parent);
+    t.expect(partial.completed() && partial.subentityMarkerCount == 2u
+                 && partial.unhandledSubentityMarkerCount == 2u
+                 && partial.emittedPrimitiveCount == 2u,
+             "proxy decode reports each marker the sink does not retain");
+
+    std::vector<std::uint8_t> malformed(8u, 0u);
+    appendProxyChunk(malformed, 19u, {0x01u, 0x02u, 0x03u});
+    const std::string malformedBytes(
+        reinterpret_cast<const char*>(malformed.data()), malformed.size());
+    t.expect(DRW_ProxyGraphicDecoder::decode(
+                 malformedBytes, DRW::AC1021, capture, parent).stopReason
+                 == DRW_ProxyGraphicStopReason::InvalidChunkSize,
+             "proxy SUBENT_MARKER rejects a non-RL payload length");
 }
 
 void appendProxyChunk(std::vector<std::uint8_t>& stream,
@@ -15771,9 +15854,20 @@ int main(int argc, char** argv) {
         std::cout << "DataStorage bounds tests: PASS\n";
         return 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "--proxy-subentity-markers") {
+        testProxyBounds(context);
+        testProxySubentityMarkers(context);
+        if (context.failures != 0) {
+            std::cerr << context.failures
+                      << " proxy-graphics assertion(s) failed\n";
+            return 1;
+        }
+        std::cout << "Proxy subentity marker tests: PASS\n";
+        return 0;
+    }
     if (argc != 1) {
         std::cerr << "Usage: libdxfrw_graph_preservation_tests"
-                     " [--datastorage-bounds]\n";
+                     " [--datastorage-bounds|--proxy-subentity-markers]\n";
         return 2;
     }
     testFramePublicationContract(context);
@@ -15791,6 +15885,7 @@ int main(int argc, char** argv) {
     testAcisRootedBodyProjectionFailures(context);
     testModelerLazyDecode(context);
     testProxyBounds(context);
+    testProxySubentityMarkers(context);
     testProxyLinetypeSentinels(context);
     testProxyResourceIndexResolution(context);
     testProxyShellMultiFaceFraming(context);

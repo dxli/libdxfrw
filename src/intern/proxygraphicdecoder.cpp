@@ -39,6 +39,7 @@ enum OpCode {
     OP_PUSH_MATRIX           = 29,
     OP_PUSH_MATRIX2          = 30,
     OP_POP_MATRIX            = 31,
+    OP_SUBENT_MARKER         = 19,
     OP_POLYLINE_NORMALS      = 32,
     OP_LWPOLYLINE            = 33,
     OP_UNICODE_TEXT2         = 38,
@@ -621,9 +622,27 @@ bool isPrimitiveOpcode(std::uint32_t type) noexcept {
     }
 }
 
+bool isSupportedControlOpcode(std::uint32_t type) noexcept {
+    switch (type) {
+    case OP_ATTRIBUTE_COLOR:
+    case OP_ATTRIBUTE_LAYER:
+    case OP_ATTRIBUTE_LINETYPE:
+    case OP_ATTRIBUTE_TRUE_COLOR:
+    case OP_ATTRIBUTE_LINEWEIGHT:
+    case OP_PUSH_MATRIX:
+    case OP_PUSH_MATRIX2:
+    case OP_POP_MATRIX:
+    case OP_SUBENT_MARKER:
+        return true;
+    default:
+        return false;
+    }
+}
+
 class InterfaceSink final : public DRW_ProxyGraphicSink {
 public:
-    explicit InterfaceSink(DRW_Interface& target) noexcept : m_target(target) {}
+    InterfaceSink(DRW_Interface& target, std::uint32_t sourceHostHandle) noexcept
+        : m_target(target), m_sourceHostHandle(sourceHostHandle) {}
 
     bool addArc(const DRW_Arc& value) override { m_target.addArc(value); return true; }
     bool addCircle(const DRW_Circle& value) override { m_target.addCircle(value); return true; }
@@ -632,9 +651,13 @@ public:
     bool addMesh(const DRW_Mesh& value) override { m_target.addMesh(value); return true; }
     bool addPolyline(const DRW_Polyline& value) override { m_target.addPolyline(value); return true; }
     bool addText(const DRW_Text& value) override { m_target.addText(value); return true; }
+    bool setSubentityMarker(std::uint32_t marker) override {
+        return m_target.addProxySubentityMarker(m_sourceHostHandle, marker);
+    }
 
 private:
     DRW_Interface& m_target;
+    std::uint32_t m_sourceHostHandle;
 };
 
 } // namespace
@@ -685,6 +708,10 @@ DRW_ProxyGraphicDecodeResult DRW_ProxyGraphicDecoder::inspect(
                 break;
             }
             ++result.recognizedPrimitiveChunkCount;
+        } else if (isSupportedControlOpcode(type)) {
+            ++result.recognizedControlChunkCount;
+            if (type == OP_SUBENT_MARKER)
+                ++result.subentityMarkerCount;
         } else {
             ++result.skippedUnsupportedChunkCount;
         }
@@ -757,11 +784,29 @@ DRW_ProxyGraphicDecodeResult DRW_ProxyGraphicDecoder::decode(
                 break;
             }
             ++result.recognizedPrimitiveChunkCount;
+        } else if (isSupportedControlOpcode(type)) {
+            ++result.recognizedControlChunkCount;
         } else {
             ++result.skippedUnsupportedChunkCount;
         }
 
         switch (type) {
+        case OP_SUBENT_MARKER: {
+            if (payloadLength != sizeof(std::uint32_t)) {
+                context.fail(DRW_ProxyGraphicStopReason::InvalidChunkSize);
+                break;
+            }
+            ByteStream markerStream(payload, payloadLength);
+            const std::uint32_t marker = markerStream.readLong();
+            if (markerStream.bad) {
+                context.fail(DRW_ProxyGraphicStopReason::TruncatedChunk);
+                break;
+            }
+            ++result.subentityMarkerCount;
+            if (!sink.setSubentityMarker(marker))
+                ++result.unhandledSubentityMarkerCount;
+            break;
+        }
         case OP_ATTRIBUTE_COLOR:
             if (payloadLength >= 4) {
                 std::uint32_t color = 0;
@@ -889,9 +934,11 @@ int DRW_ProxyGraphicDecoder::decode(const std::string& bytes,
                                     const DRW_Entity& parent,
                                     const std::vector<std::string>& layerNames,
                                     const std::vector<std::string>& ltypeNames) {
-    InterfaceSink sink(iface);
+    InterfaceSink sink(iface, parent.handle);
     const DRW_ProxyGraphicDecodeResult result = decode(
         bytes, version, sink, parent, layerNames, ltypeNames);
+    if (result.unhandledSubentityMarkerCount != 0u)
+        return -1;
     return result.emittedPrimitiveCount
         > static_cast<std::size_t>(std::numeric_limits<int>::max())
         ? std::numeric_limits<int>::max()

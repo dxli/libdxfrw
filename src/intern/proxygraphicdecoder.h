@@ -32,6 +32,13 @@ public:
     virtual bool addMesh(const DRW_Mesh& value) = 0;
     virtual bool addPolyline(const DRW_Polyline& value) = 0;
     virtual bool addText(const DRW_Text& value) = 0;
+
+    //! Notify the sink that the marker applies to subsequently emitted
+    //! primitives in this proxy stream. Returns true when the sink retains it.
+    virtual bool setSubentityMarker(std::uint32_t marker) {
+        (void)marker;
+        return false;
+    }
 };
 
 enum class DRW_ProxyGraphicStopReason : unsigned char {
@@ -62,6 +69,9 @@ struct DRW_ProxyGraphicDecodeResult {
     std::size_t emittedPrimitiveCount {0};
     std::size_t recognizedPrimitiveChunkCount {0};
     std::size_t skippedUnsupportedChunkCount {0};
+    std::size_t recognizedControlChunkCount {0};
+    std::size_t subentityMarkerCount {0};
+    std::size_t unhandledSubentityMarkerCount {0};
     std::size_t unresolvedResourceReferenceCount {0};
     std::size_t consumedByteCount {0};
     DRW_ProxyGraphicStopReason stopReason {

@@ -710,6 +710,17 @@ public:
     (void)description;
   }
 
+  /** Called when proxy graphics changes the subentity marker for subsequent
+   *  proxy-rendered primitives. The source host handle scopes the marker
+   *  stream. Consumers that need subentity selection can retain this ordered
+   *  event; the default keeps existing 2D consumers source-compatible. */
+  virtual bool addProxySubentityMarker(std::uint32_t sourceHostHandle,
+                                       std::uint32_t marker) {
+    (void)sourceHostHandle;
+    (void)marker;
+    return false;
+  }
+
 };
 
 /** One entity in an explicitly predeclared AC1015 model-space chain. */

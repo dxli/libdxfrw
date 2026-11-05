@@ -1266,6 +1266,8 @@ protected:
     void appendValue(const T &value, Callback callback);
     void appendUnsupportedObject(DRW_UnsupportedObject &&value);
     void appendModelerGeometry(DRW_ModelerGeometry &&value);
+    [[nodiscard]] bool appendProxySubentityMarker(
+        std::uint32_t sourceHostHandle, std::uint32_t marker);
     [[nodiscard]] SourceScope
     bindSource(const DwgSourceFrameId &source) noexcept;
     [[nodiscard]] bool appendEndBlock(const DRW_Block &data);

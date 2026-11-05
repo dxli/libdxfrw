@@ -71,11 +71,13 @@ P6–P9 qualification can proceed when its inputs are ready; it does not block
 independently ready local code work.
 
 The AC1021 proxy streams contain 15 type-19 `SUBENT_MARKER` chunks. ODA §29
-defines these as marker-index changes for subsequently drawn items; the current
-proxy decoder counts them as skipped unsupported chunks and emits later
-primitives without marker identity. Resolve marker-to-geometry scope and carry
-that association through output and native consumer checks before this proxy
-profile can advance. Strict output remains refused
+defines these as marker-index changes for subsequently drawn items. The decoder
+now reads the RL marker and sends an ordered callback scoped to the source host
+handle; DWG block journaling retains that callback order. Generated controls
+cover marker transitions, unhandled sinks and malformed lengths. The source
+profile still needs native confirmation of marker-to-geometry behavior and
+source-cache association, exact DXF output/readback, and consumer qualification
+before it advances. Strict output remains refused
 ([source and peer receipt](docs/research/p6-ac1021-metric-proxy-graphics-strict-refusal-2026-11-05.json)).
 
 Modern GEODATA DXF versions 2 and 3 now admit only documented coordinate types

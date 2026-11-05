@@ -304,6 +304,39 @@ void dwgReader::DwgEntityOutput::appendModelerGeometry(
   append(std::make_unique<MoveEvent>(std::move(value), m_activeSource));
 }
 
+bool dwgReader::DwgEntityOutput::appendProxySubentityMarker(
+    std::uint32_t sourceHostHandle, std::uint32_t marker) {
+  class MarkerEvent final : public Event {
+  public:
+    MarkerEvent(std::uint32_t host, std::uint32_t value,
+                const std::optional<DwgSourceFrameId> &source)
+        : m_host(host), m_marker(value), m_source(source) {}
+
+    bool replay(dwgReader &, DRW_Interface &target) const override {
+      target.addProxySubentityMarker(m_host, m_marker);
+      return true;
+    }
+
+    bool hasSource() const noexcept override { return m_source.has_value(); }
+
+    DwgSourceFrameId source() const noexcept override {
+      return m_source.value_or(DwgSourceFrameId{});
+    }
+
+    bool completesSource() const noexcept override { return false; }
+
+  private:
+    std::uint32_t m_host;
+    std::uint32_t m_marker;
+    std::optional<DwgSourceFrameId> m_source;
+  };
+
+  if (sourceHostHandle == 0u || sourceHostHandle == DRW::NoHandle)
+    return false;
+  return append(std::make_unique<MarkerEvent>(
+      sourceHostHandle, marker, m_activeSource));
+}
+
 bool dwgReader::DwgEntityOutput::appendEndBlock(const DRW_Block &data) {
   class EndBlockEvent final : public Event {
   public:
@@ -11493,8 +11526,9 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
     bool compoundFrameHandled = false;
     class ProxyOutputSink final : public DRW_ProxyGraphicSink {
     public:
-      explicit ProxyOutputSink(DwgEntityOutput &output) noexcept
-          : m_output(output) {}
+      ProxyOutputSink(DwgEntityOutput &output,
+                      std::uint32_t sourceHostHandle) noexcept
+          : m_output(output), m_sourceHostHandle(sourceHostHandle) {}
 
       bool addArc(const DRW_Arc &value) override {
         try {
@@ -11553,8 +11587,18 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
         }
       }
 
+      bool setSubentityMarker(std::uint32_t marker) override {
+        try {
+          return m_output.appendProxySubentityMarker(m_sourceHostHandle,
+                                                     marker);
+        } catch (...) {
+          return false;
+        }
+      }
+
     private:
       DwgEntityOutput &m_output;
+      std::uint32_t m_sourceHostHandle;
     };
     const auto decodeProxyGraphics =
         [this, &output](const DRW_Entity &host,
@@ -11577,6 +11621,7 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
           if (m_activeBlockTransaction != nullptr) {
             const std::size_t requiredEventCount =
                 preflight.recognizedPrimitiveChunkCount +
+                preflight.subentityMarkerCount +
                 carrierAndReceiptEventCount;
             // The block walker has already reserved the standard
             // semantic-event plus receipt budget for this source.
@@ -11587,7 +11632,7 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
             }
           }
 
-          ProxyOutputSink sink(output);
+          ProxyOutputSink sink(output, host.handle);
           const DRW_ProxyGraphicDecodeResult decoded =
               DRW_ProxyGraphicDecoder::decode(host.proxyGraphics, version, sink,
                                               host, m_layerNameOrder,
@@ -11596,6 +11641,12 @@ bool dwgReader::readDwgEntityWithOutput(dwgBuffer *dbuf, objHandle &obj,
             DRW_DBG("proxy graphics unresolved layer/linetype references=");
             DRW_DBG(decoded.unresolvedResourceReferenceCount);
             DRW_DBG("; retained the record with rendering fallback\n");
+          }
+          if (decoded.unhandledSubentityMarkerCount != 0u) {
+            DRW_DBG("proxy graphics unhandled subentity markers=");
+            DRW_DBG(decoded.unhandledSubentityMarkerCount);
+            DRW_DBG("\n");
+            return false;
           }
           switch (decoded.stopReason) {
           case DRW_ProxyGraphicStopReason::Complete:
