@@ -1661,11 +1661,19 @@ public:
             return;
         }
         objectWritePhase = "DWG DIMASSOC records";
+        const auto currentDimensionAssociationBegin =
+            cData->dwgDimensionAssociations.lower_bound(
+                {cData->importGeneration, 0u});
+        const bool hasCurrentDimensionAssociations =
+            currentDimensionAssociationBegin
+                != cData->dwgDimensionAssociations.end()
+            && currentDimensionAssociationBegin->first.first
+                == cData->importGeneration;
         if (cData->dimensionAssociationCaptureFailed) {
             dxfW->writeRawDxfObject(nullptr);
             return;
         }
-        if (!cData->dwgDimensionAssociations.empty()) {
+        if (hasCurrentDimensionAssociations) {
             if (cData->sourceFormat != dx_source_format::DWG
                 || !cData->dwgReadOutcome.attempted
                 || cData->importGeneration == 0u
@@ -1736,16 +1744,19 @@ public:
                         return false;
                     }
                 };
-                for (const auto& item : cData->dwgDimensionAssociations) {
-                    const std::uint32_t sourceHandle = item.first.second;
-                    const DRW_DimensionAssociation& source = item.second;
+                for (auto item = currentDimensionAssociationBegin;
+                     item != cData->dwgDimensionAssociations.end()
+                         && item->first.first == cData->importGeneration;
+                     ++item) {
+                    const std::uint32_t sourceHandle = item->first.second;
+                    const DRW_DimensionAssociation& source = item->second;
                     const dx_data::StandardDwgFrameKey frameKey{
                         cData->importGeneration, sourceHandle};
                     const auto rawFrame = cData->m_opaqueDwgSourceFrames.find(
                         frameKey);
                     const auto dimension = entityTypes.find(
                         source.m_dimensionHandle);
-                    if (item.first.first != cData->importGeneration
+                    if (item->first.first != cData->importGeneration
                         || source.handle != sourceHandle
                         || cData->m_opaqueDwgSourceFrameIdentities.count(
                                frameKey) != 1u

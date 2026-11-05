@@ -10,9 +10,9 @@
   },
   "implementation": {
     "retention": "dx_iface retains typed DWG DIMASSOC callback data under record and byte bounds, keyed by import generation and source handle",
-    "output": "same-version OBJECTS path requires exact opaque source-frame identity, a unique typed dimension entity target, and emitted entity targets for main/intersection osnap handles before writing",
+    "output": "same-version OBJECTS path considers only the current import generation and requires exact opaque source-frame identity, a unique typed dimension entity target, and emitted entity targets for main/intersection osnap handles before writing",
     "qualification": "opaque source frame is marked output-qualified only after the writer confirms one DIMASSOC OBJECTS record at the remapped handle",
-    "failure": "incomplete or invalid target closure aborts OBJECTS emission"
+    "failure": "incomplete or invalid target closure aborts OBJECTS emission; a later import resets the current-generation capture failure and ignores stale DIMASSOC rows"
   },
   "validation": [
     {
@@ -26,6 +26,10 @@
     {
       "command": "ctest --test-dir build-gcc -R '^libdxfrw_dimassoc_dwg_detail_readback$' --output-on-failure",
       "result": "passed 1/1 generated DWG detail codec and ASCII/Binary DXF readback control"
+    },
+    {
+      "command": "ctest --test-dir build-gcc -R '^dwg2dxf_dimassoc_stale_generation_ignored$' --output-on-failure",
+      "result": "passed 1/1; a synthetic prior-generation DIMASSOC row neither blocks nor appears in a later DXF export"
     },
     {
       "command": "build-gcc/libdxfrw_dimassoc_physical_transport_tests tests/samples/AC1021/architectural_-_annotation_scaling_and_multileaders.dwg",

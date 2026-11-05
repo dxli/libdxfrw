@@ -68298,6 +68298,7 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
         fData->dictionaries.size(), groupBegin, fData->xRecords.size(),
         fData->appIds.size(), fData->layers.size()};
     ++fData->importGeneration;
+    fData->dimensionAssociationCaptureFailed = false;
     fData->m_classEvidenceGeneration = fData->importGeneration;
     fData->m_classEvidenceFailure.generation = fData->importGeneration;
     if (fData->importGeneration <= fData->m_classEvidenceHighWater) {

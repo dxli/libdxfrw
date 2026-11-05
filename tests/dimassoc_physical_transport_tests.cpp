@@ -1,7 +1,10 @@
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdint>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -588,9 +591,39 @@ bool runPhysicalSource(const std::string& path) {
     return closed != 0 && ascii == closed && binary == closed;
 }
 
+bool runStaleGenerationOutput(const std::string& outputPath) {
+    dx_data data;
+    data.sourceFormat = dx_source_format::DXF;
+    data.sourceVersion = DRW::AC1024;
+    data.importGeneration = 2u;
+    DRW_DimensionAssociation stale;
+    stale.handle = 0x900u;
+    data.dwgDimensionAssociations.emplace(
+        dx_data::DimensionAssociationKey{1u, stale.handle}, stale);
+    data.dimensionAssociationsRetainedRecords = 1u;
+
+    dx_iface exporter;
+    if (!exporter.fileExport(outputPath, DRW::AC1024, false, &data, false)) {
+        std::cerr << "stale DIMASSOC generation poisoned current DXF export\n";
+        return false;
+    }
+    std::ifstream input(outputPath, std::ios::binary);
+    const std::string contents((std::istreambuf_iterator<char>(input)),
+                               std::istreambuf_iterator<char>());
+    std::remove(outputPath.c_str());
+    if (contents.empty()
+        || contents.find("0\nDIMASSOC\n") != std::string::npos) {
+        std::cerr << "stale DIMASSOC generation was emitted or output is empty\n";
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--stale-generation-output")
+        return runStaleGenerationOutput(argv[2]) ? 0 : 1;
     if (argc == 3 && std::string(argv[1]) == "--generate-dimassoc") {
         dwgRW writer(argv[2]);
         DimensionAssociationAuthor author(writer);

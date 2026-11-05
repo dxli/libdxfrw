@@ -1496,6 +1496,13 @@ add_test(NAME dwg2dxf_dimassoc_adapter_closure_refusal
 set_tests_properties(dwg2dxf_dimassoc_adapter_closure_refusal PROPERTIES
     LABELS "fast;dwg;dxf;dimassoc;adapter;graph;generated;transaction"
     TIMEOUT 30)
+add_test(NAME dwg2dxf_dimassoc_stale_generation_ignored
+    COMMAND libdxfrw_dimassoc_physical_transport_tests
+        --stale-generation-output
+        "${CMAKE_CURRENT_BINARY_DIR}/dimassoc-stale-generation-scratch.dxf")
+set_tests_properties(dwg2dxf_dimassoc_stale_generation_ignored PROPERTIES
+    LABELS "fast;dwg;dxf;dimassoc;adapter;generation;generated"
+    TIMEOUT 30)
 add_test(NAME dwg2dxf_sunstudy_dxf_graph
     COMMAND ${CMAKE_COMMAND}
         "-DADAPTER_TEST=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"
