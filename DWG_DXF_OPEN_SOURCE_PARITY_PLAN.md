@@ -2069,9 +2069,16 @@ Native source-release builds and platform qualification remain open.
   refusals, destination preservation, same-adapter retry, and source-frame
   binding. See the
   [direct-owner receipt](docs/research/p4-rastervariables-ac1021-ac1027-direct-nod-owner-2026-11-03.json).
-  The physical selectors verify import only. Whole-source output remains
+  The physical RASTERVARIABLES selectors verify import only. Whole-source output remains
   blocked by the samples' unrelated read/layout-integrity gaps, and native
   image semantics and broader producer/version coverage remain open.
+  The hash-bound AC1027 WIPEOUTVARIABLES witness now seeds a local wrapper DWG;
+  selected ASCII/Binary output verifies the remapped NOD owner/reactor graph,
+  atomic refusal, retry, and typed readback ([physical writer bridge receipt](docs/research/p4-ac1027-wipeoutvariables-physical-writer-bridge-2026-11-05.json)).
+  This does not qualify physical whole-source conversion: its two HEADER
+  integrity observations and global AC1027 strict-source gate remain unresolved.
+  Native wipeout display/plot behavior, preview preservation, and broader
+  producer/version/mode coverage remain open.
   A separate AC1024 source-frame control supports the bounded 0/1/3 profile.
   The exact hash-bound physical source now passes selected-object ASCII/Binary
   output and fresh typed readback: its source NOD `0x0A` owner/reactor map to
