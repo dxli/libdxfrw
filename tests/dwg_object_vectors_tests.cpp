@@ -22,6 +22,7 @@
 #undef private
 #include "intern/dxfwriter.h"
 #include "intern/dwgreader.h"
+#include "intern/dwgwriter27.h"
 #include "intern/dwg_fixed_handles.h"
 #include "intern/dwgutil.h"
 #include "intern/dwgvaluekind.h"
@@ -13917,6 +13918,21 @@ void testGeoDataDwgUnitDomain(TestContext& t) {
             }
         }
     }
+
+    DRW_Header header;
+    dwgWriter27 writer(nullptr, &header);
+    DRW_GeoData geoData;
+    geoData.handle = 0xA120u;
+    geoData.parentHandle = 0xA200u;
+    geoData.m_version = 2;
+    geoData.m_hostBlockHandle = 0xA300u;
+    geoData.m_horizontalUnits = 25;
+    const bool rejected = !writer.writeGeoData(geoData)
+        && geoData.handle == 0xA120u;
+    geoData.m_horizontalUnits = 0;
+    const bool retried = writer.writeGeoData(geoData);
+    t.expect(rejected && retried,
+             "DWG writer rejects invalid GEODATA units before identity staging and retries on the same writer");
 }
 
 void testOptionalStreamFallbacks(TestContext& t) {
