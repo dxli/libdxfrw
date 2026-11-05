@@ -842,6 +842,45 @@ void dwgReader::recordDanglingControlHandle(
   }
 }
 
+void dwgReader::recordLtypeControlMemberRoleError(
+    const objHandle &source, const DRW_ObjControl &control,
+    DwgIntegrityAddressSpace offsetSpace) noexcept {
+  const std::vector<std::uint32_t> &slots = control.orderedHandleSlots;
+  const std::vector<std::uint8_t> &roles = control.orderedHandleRoles;
+  if (slots.size() != roles.size() || slots.size() < 2u) {
+    recordIntegrityDiagnostic(
+        DwgIntegritySeverity::Error, offsetSpace,
+        DwgIntegrityPhase::SectionParser,
+        DwgIntegrityCheckKind::TableControlHandleRole, secEnum::OBJECTS, -1,
+        "LTYPE_CONTROL", 0u, false, source.loc, true, source.handle,
+        source.handle != DRW::NoHandle, slots.size(), roles.size(), true);
+    return;
+  }
+
+  // ODA §20.4.57's counted entries are soft owners; the final BYBLOCK and
+  // BYLAYER phantom members are hard owners. The reader still accepts the
+  // historical all-soft libdxfrw layout, but strict consumers must see that
+  // its source roles do not match the documented/witnessed profile.
+  const std::size_t countedEntries = slots.size() - 2u;
+  for (std::size_t index = 0; index < slots.size(); ++index) {
+    const std::uint32_t member = slots[index];
+    if (member == 0u)
+      continue;
+    const std::uint8_t expected = static_cast<std::uint8_t>(
+        index < countedEntries ? DRW::DwgSoftOwnership
+                               : DRW::DwgHardOwnership);
+    if (roles[index] == expected)
+      continue;
+    recordIntegrityDiagnostic(
+        DwgIntegritySeverity::Error, offsetSpace,
+        DwgIntegrityPhase::SectionParser,
+        DwgIntegrityCheckKind::TableControlHandleRole, secEnum::OBJECTS, -1,
+        "LTYPE_CONTROL", 0u, false, source.loc, true, member,
+        member != DRW::NoHandle, expected, roles[index], true);
+    return;
+  }
+}
+
 void dwgReader::recordOrphanedEntity(
     const objHandle &object, std::uint32_t ownerHandle,
     DwgIntegrityAddressSpace offsetSpace) noexcept {
@@ -8387,6 +8426,8 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
     eraseObject(mit);
     DRW_ObjControl ltControl;
     ret2 = parseControl(oc, kLTypeTable, ltControl);
+    if (ret2)
+      recordLtypeControlMemberRoleError(oc, ltControl, offsetSpace);
     ret2 = ret2 && claimControlHandles(ltControl);
     ret2 = ret2 && stageControlReceipt(oc, kLTypeTable, ltControl);
     if (!ret2) {
@@ -14884,8 +14925,11 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   std::list<std::uint32_t> parsedHandles;
   std::list<std::uint32_t> parsedPhantoms;
   std::vector<std::uint32_t> parsedHandleSlots;
+  std::vector<std::uint8_t> parsedHandleRoles;
   if (!DRW::reserve(parsedHandleSlots,
-                    static_cast<int>(childHandleCount)))
+                    static_cast<int>(childHandleCount))
+      || !DRW::reserve(parsedHandleRoles,
+                       static_cast<int>(childHandleCount)))
     return fail();
   std::unordered_set<std::uint32_t> seenHandles;
 
@@ -14903,6 +14947,7 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
         return fail();
     }
     parsedHandleSlots.push_back(objectH.ref);
+    parsedHandleRoles.push_back(objectH.rawCode);
     if (objectH.ref != 0) { // in vports R14  I found some NULL handles
       if (!seenHandles.insert(objectH.ref).second)
         return fail();
@@ -14946,6 +14991,7 @@ bool DRW_ObjControl::parseDwg(DRW::Version version, dwgBuffer *buf,
   handlesList = std::move(parsedHandles);
   phantomHandles = std::move(parsedPhantoms);
   orderedHandleSlots = std::move(parsedHandleSlots);
+  orderedHandleRoles = std::move(parsedHandleRoles);
   if (version == DRW::AC1021 && oType == DRW::DwgBlockControlObjectType)
     reactorHandles = std::move(parsedControlReactors);
   return buf->isGood() && hBuf->isGood() ? true : fail();

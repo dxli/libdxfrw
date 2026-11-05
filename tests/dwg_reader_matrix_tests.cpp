@@ -752,6 +752,12 @@ static_assert(static_cast<unsigned>(DwgIntegrityCheckKind::HeaderSectionCompatib
               "compatible HEADER observations append without renumbering prior categories");
 static_assert(static_cast<unsigned>(DwgIntegrityCheckKind::NamedObjectDictionaryReference) == 26u,
               "NOD reference observations append without renumbering prior categories");
+static_assert(static_cast<unsigned>(DwgIntegrityCheckKind::TableControlHandleRole) == 40u,
+              "table-control role observations append without renumbering prior categories");
+static_assert(static_cast<unsigned>(DwgIntegrityCheckKind::EntityLayerHandleRole) == 37u
+                  && static_cast<unsigned>(DwgIntegrityCheckKind::EntityLineTypeHandleRole) == 38u
+                  && static_cast<unsigned>(DwgIntegrityCheckKind::LayerLineTypeHandleRole) == 39u,
+              "existing reference-role categories retain their stable values");
 
 struct TestContext {
     int failures {0};
@@ -7242,6 +7248,18 @@ public:
             && body.isGood();
     }
 
+    bool parseLtypeControlBody(const std::vector<std::uint8_t>& bytes,
+                               DRW_ObjControl& control) {
+        dwgBuffer body(bytes.data(), bytes.size(), &decoder);
+        return control.parseDwg(DRW::AC1015, &body, 0u) && body.isGood();
+    }
+
+    void recordLtypeControlRoles(const objHandle& source,
+                                 const DRW_ObjControl& control) {
+        recordLtypeControlMemberRoleError(
+            source, control, DwgIntegrityAddressSpace::DecodedBuffer);
+    }
+
     bool readTrackedAc1015Header(
         DRW_Header& header,
         std::map<std::int16_t, std::uint32_t>& controlHandles) {
@@ -7416,8 +7434,16 @@ void testDwgControlPreservesDeclaredHandleSlots(TestContext& t) {
     }
     const std::vector<std::uint32_t> parsedHandles(
         control.handlesList.begin(), control.handlesList.end());
+    const bool nullRolesPreserved = control.orderedHandleRoles.size() == entries.size()
+        && std::all_of(control.orderedHandleRoles.begin(),
+                       control.orderedHandleRoles.end(),
+                       [](std::uint8_t role) {
+                           return role == DRW::DwgNullReference;
+                       });
     t.expect(parsed && control.orderedHandleSlots == entries,
              "LAYER_CONTROL preserves null references at their declared table indices");
+    t.expect(nullRolesPreserved,
+             "DRW_ObjControl retains raw roles for null slots as well as non-null entries");
     t.expect(parsedHandles == nonNullHandles
                  && control.phantomHandles.empty(),
              "generic table ownership handles remain compact and null slots do not become references");
@@ -7425,7 +7451,94 @@ void testDwgControlPreservesDeclaredHandleSlots(TestContext& t) {
 
 std::vector<std::uint8_t> makeAc1015LtypeCountBody(
     std::uint16_t count, bool legacyShort, int corruption = 0,
-    bool forceLong = false) {
+    bool forceLong = false);
+
+void testLtypeControlMemberRoleDiagnostics(TestContext& t) {
+    std::vector<std::uint8_t> emptyInput;
+    TableControlRecoveryReader reader(emptyInput);
+    const auto validBody = makeAc1015LtypeCountBody(1u, false);
+    DRW_ObjControl valid;
+    const bool parsedValid = reader.parseLtypeControlBody(validBody, valid);
+    t.expect(parsedValid && valid.orderedHandleSlots.size() == 3u
+                 && valid.orderedHandleRoles.size() == 3u
+                 && valid.orderedHandleRoles[0] == DRW::DwgSoftOwnership
+                 && valid.orderedHandleRoles[1] == DRW::DwgHardOwnership
+                 && valid.orderedHandleRoles[2] == DRW::DwgHardOwnership,
+             "LTYPE_CONTROL retains source roles for counted and phantom members");
+    const objHandle source(DRW::DwgLTypeControlObjectType,
+                           DRW::DwgLtypeControlHandle, 0x1234u);
+    if (parsedValid)
+        reader.recordLtypeControlRoles(source, valid);
+    t.expect(reader.diagnostics().empty(),
+             "correct LTYPE_CONTROL source roles do not produce an integrity error");
+
+    auto wrongRoleBody = makeAc1015LtypeCountBody(1u, false, 6);
+    DRW_ObjControl wrongRole;
+    const bool parsedWrongRole =
+        reader.parseLtypeControlBody(wrongRoleBody, wrongRole);
+    t.expect(parsedWrongRole && wrongRole.orderedHandleRoles.size() == 3u
+                 && wrongRole.orderedHandleRoles[0] == DRW::DwgHardOwnership,
+             "tolerant LTYPE_CONTROL parsing preserves an unexpected member role");
+    if (parsedWrongRole)
+        reader.recordLtypeControlRoles(source, wrongRole);
+    const auto& diagnostics = reader.diagnostics();
+    t.expect(diagnostics.size() == 1u
+                 && diagnostics.front().severity == DwgIntegritySeverity::Error
+                 && diagnostics.front().phase == DwgIntegrityPhase::SectionParser
+                 && diagnostics.front().kind
+                     == DwgIntegrityCheckKind::TableControlHandleRole
+                 && diagnostics.front().logicalHandle
+                     == wrongRole.orderedHandleSlots.front()
+                 && diagnostics.front().hasLogicalHandle
+                 && diagnostics.front().fileOffset == source.loc
+                 && diagnostics.front().hasFileOffset
+                 && diagnostics.front().expected == DRW::DwgSoftOwnership
+                 && diagnostics.front().observed == DRW::DwgHardOwnership
+                 && diagnostics.front().hasExpected
+                 && diagnostics.front().hasObserved,
+             "wrong source member role is an anchored Error for strict consumers");
+
+    const auto samplePath = std::filesystem::path(
+        LIBDXFRW_READER_FIXTURE_DIR) / "ordinary_enc_AC1015.dwg";
+    std::ifstream sampleInput(samplePath, std::ios::binary);
+    std::vector<std::uint8_t> sampleBytes(
+        (std::istreambuf_iterator<char>(sampleInput)),
+        std::istreambuf_iterator<char>());
+    TableControlRecoveryReader headerReader(sampleBytes);
+    DRW_Header sourceHeader;
+    std::map<std::int16_t, std::uint32_t> controlHandles;
+    const bool sourceReady = sampleInput.is_open() && !sampleBytes.empty()
+        && headerReader.readTrackedAc1015Header(sourceHeader, controlHandles);
+    t.expect(sourceReady,
+             "tracked AC1015 source supplies control handles for integration coverage");
+    if (!sourceReady)
+        return;
+
+    GeneratedTableControls generated(
+        sourceHeader, controlHandles,
+        {{DRW::DwgLTypeControlObjectType, {0x9030u}}},
+        {0x9040u, 0x9041u});
+    TableControlRecoveryReader sourceGraph(generated.bytes);
+    const bool installed = generated.install(sourceGraph);
+    const bool read = installed
+        && sourceGraph.readTables(generated.header, generated.bytes);
+    const auto sourceRoleError = std::find_if(
+        sourceGraph.diagnostics().begin(), sourceGraph.diagnostics().end(),
+        [](const DwgIntegrityDiagnostic& diagnostic) {
+            return diagnostic.kind
+                == DwgIntegrityCheckKind::TableControlHandleRole;
+        });
+    t.expect(installed && !read
+                 && sourceRoleError != sourceGraph.diagnostics().end()
+                 && sourceRoleError->severity == DwgIntegritySeverity::Error
+                 && sourceRoleError->logicalHandle == 0x9030u
+                 && sourceRoleError->expected == DRW::DwgSoftOwnership
+                 && sourceRoleError->observed == DRW::DwgNullReference,
+             "table traversal records a source role Error before missing-target recovery");
+}
+
+std::vector<std::uint8_t> makeAc1015LtypeCountBody(
+    std::uint16_t count, bool legacyShort, int corruption, bool forceLong) {
     auto h = [](std::uint8_t code, std::uint32_t ref) {
         dwgHandle value;
         value.code = code;
@@ -7455,8 +7568,10 @@ std::vector<std::uint8_t> makeAc1015LtypeCountBody(
                                        : DRW::DwgLtypeByLayerHandle));
         if (corruption == 2 && i == 0u) ref = DRW::DwgLtypeByLayerHandle;
         if (corruption == 3 && i == 3u) ref = DRW::DwgLtypeContinuousHandle;
-        const auto role = i < count ? DRW::DwgSoftOwnership
-                                    : DRW::DwgHardOwnership;
+        const auto role = corruption == 6 && i == 0u
+            ? DRW::DwgHardOwnership
+            : (i < count ? DRW::DwgSoftOwnership
+                         : DRW::DwgHardOwnership);
         body.putHandle(h(role, ref));
     }
     body.alignToByte();
@@ -19342,6 +19457,7 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--control-handle-slots") {
         TestContext focused;
         testDwgControlPreservesDeclaredHandleSlots(focused);
+        testLtypeControlMemberRoleDiagnostics(focused);
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

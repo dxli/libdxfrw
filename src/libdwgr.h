@@ -192,7 +192,9 @@ enum class DwgIntegrityCheckKind : std::uint8_t {
     /// An explicit entity LTYPE handle does not use a hard-pointer source role.
     EntityLineTypeHandleRole,
     /// A LAYER LTYPE handle does not use a hard-pointer source role.
-    LayerLineTypeHandleRole
+    LayerLineTypeHandleRole,
+    /// A non-null LTYPE_CONTROL member does not use its source ownership role.
+    TableControlHandleRole
 };
 
 /// Version of the field and enum contract carried by DwgIntegrityDiagnostic.

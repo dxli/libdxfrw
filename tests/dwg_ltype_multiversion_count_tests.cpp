@@ -86,8 +86,19 @@ Body build(DRW::Version version,unsigned count,bool legacy,int corruption=0,
 bool parse(const Body& b,DRW::Version version,unsigned count,
            DRW_ObjControl& object,bool legacyOrder=false) {
     dwgBuffer in(const_cast<std::uint8_t*>(b.data.data()),b.data.size());
-    return object.parseDwg(version,&in,b.handleBits)
-        &&slots(object,count,legacyOrder);
+    if (!object.parseDwg(version,&in,b.handleBits)
+        || !slots(object,count,legacyOrder)
+        || object.orderedHandleRoles.size() != count + 2u)
+        return false;
+    for (std::size_t index = 0; index < object.orderedHandleRoles.size(); ++index) {
+        const std::uint8_t expected = legacyOrder
+            ? DRW::DwgSoftOwnership
+            : (index < count ? DRW::DwgSoftOwnership
+                             : DRW::DwgHardOwnership);
+        if (object.orderedHandleRoles[index] != expected)
+            return false;
+    }
+    return true;
 }
 }
 

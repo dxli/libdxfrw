@@ -1112,6 +1112,7 @@ public:
     handlesList.clear();
     phantomHandles.clear();
     orderedHandleSlots.clear();
+    orderedHandleRoles.clear();
   }
   bool parseDwg(DRW::Version version, dwgBuffer *buf,
                 std::uint32_t bs = 0) override;
@@ -1120,6 +1121,9 @@ public:
   // Declared table-entry references in wire order, preserving null handles.
   // Phantom entries, when present, follow the declared entries.
   std::vector<std::uint32_t> orderedHandleSlots;
+  // Original four-bit H codes for orderedHandleSlots. Offset references are
+  // normalized in dwgHandle::code, so retain rawCode for source graph checks.
+  std::vector<std::uint8_t> orderedHandleRoles;
 };
 
 class DwgCodePageTestAccess;
@@ -1620,6 +1624,11 @@ protected:
                                 DwgIntegrityAddressSpace offsetSpace) noexcept;
   void recordDanglingControlHandle(std::uint32_t controlHandle,
                                    std::uint32_t recordHandle) noexcept;
+  /// Preserve tolerant LTYPE callbacks while recording a strict-output error
+  /// when a non-null control member uses the wrong ownership role.
+  void recordLtypeControlMemberRoleError(
+      const objHandle &source, const DRW_ObjControl &control,
+      DwgIntegrityAddressSpace offsetSpace) noexcept;
   void recordOrphanedEntity(const objHandle &object,
                             std::uint32_t ownerHandle,
                             DwgIntegrityAddressSpace offsetSpace) noexcept;

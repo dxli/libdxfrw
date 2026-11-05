@@ -74,8 +74,19 @@ std::vector<std::uint8_t> build(unsigned count,bool shortCount,Framing framing,i
 bool parse(std::vector<std::uint8_t>& body,unsigned count,
            DRW_ObjControl& control,bool legacy = false) {
     dwgBuffer input(body.data(),body.size());
-    return control.parseDwg(DRW::AC1021,&input,0)
-        &&slots(control,count,legacy);
+    if (!control.parseDwg(DRW::AC1021,&input,0)
+        || !slots(control,count,legacy)
+        || control.orderedHandleRoles.size() != count + 2u)
+        return false;
+    for (std::size_t index = 0; index < control.orderedHandleRoles.size(); ++index) {
+        const std::uint8_t expected = legacy
+            ? DRW::DwgSoftOwnership
+            : (index < count ? DRW::DwgSoftOwnership
+                             : DRW::DwgHardOwnership);
+        if (control.orderedHandleRoles[index] != expected)
+            return false;
+    }
+    return true;
 }
 }
 class DwgBlockRecordXrefWireTestAccess {
