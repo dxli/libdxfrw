@@ -15308,6 +15308,36 @@ void testGeoDataVersionedWriter(TestContext& t) {
         }
         return codes;
     };
+    const auto readGeoData = [](const std::string& bytes, bool binary,
+                                DRW_GeoData& decoded) {
+        std::istringstream input(bytes);
+        dxfRW parser("");
+        parser.binFile = binary;
+        if (binary)
+            parser.reader = std::make_unique<dxfReaderBinary>(&input);
+        else
+            parser.reader = std::make_unique<dxfReaderAscii>(&input);
+        parser.reader->setVersion("AC1027", true);
+        DRW_RawDxfObject raw;
+        bool reading = false;
+        bool parsed = true;
+        int code = 0;
+        while (parser.reader->readRec(&code)) {
+            if (code == 0) {
+                const std::string record = parser.reader->getString();
+                if (record == "GEODATA") {
+                    reading = true;
+                    raw.name = record;
+                } else if (reading || record == "WIRE_END") {
+                    break;
+                }
+            } else if (reading) {
+                parsed = parser.captureAndParseRawDxfGroup(raw, code, decoded)
+                    && parsed;
+            }
+        }
+        return reading && parsed;
+    };
 
     std::vector<std::string> asciiProjection;
     for (const bool binary : {false, true}) {
@@ -15655,6 +15685,66 @@ void testGeoDataVersionedWriter(TestContext& t) {
                          && decoded.m_faces[0].m_index3 == modern.m_faces[0].m_index3,
                      "v2/v3 typed readback preserves every modeled DXF field");
         }
+    }
+
+    for (const std::int32_t objectVersion : {2, 3}) {
+        for (const bool binary : {false, true}) {
+            for (const std::int16_t invalidType : {-1, 4}) {
+                std::ostringstream output;
+                dxfRW owner("");
+                owner.version = DRW::AC1027;
+                owner.binFile = binary;
+                owner.writer = binary
+                    ? std::unique_ptr<dxfWriter>(
+                          std::make_unique<dxfWriterBinary>(&output))
+                    : std::unique_ptr<dxfWriter>(
+                          std::make_unique<dxfWriterAscii>(&output));
+                owner.writer->setVersion("AC1027", true);
+                t.expect(owner.writer->writeString(1, "PRESERVED_PREFIX"),
+                         "GEODATA coordinates-type preflight prefix");
+                const std::string prefix = output.str();
+                DRW_GeoData geo;
+                geo.handle = 0x742u;
+                geo.m_version = objectVersion;
+                geo.m_coordinatesType = invalidType;
+                const bool rejected = !owner.writeGeoData(&geo)
+                    && output.str() == prefix && geo.handle == 0x742u
+                    && geo.m_coordinatesType == invalidType
+                    && !owner.m_writeError && !owner.writer->hasWriteError();
+                geo.m_coordinatesType = 2;
+                const bool retried = owner.writeGeoData(&geo)
+                    && owner.writer->writeString(0, "WIRE_END");
+                DRW_GeoData decoded;
+                const bool read = retried
+                    && readGeoData(output.str(), binary, decoded);
+                t.expect(rejected && read && decoded.m_version == objectVersion
+                             && decoded.m_coordinatesType == 2,
+                         "modern GEODATA coordinates type rejects, retries and reads back");
+            }
+        }
+    }
+
+    for (const bool binary : {false, true}) {
+        std::ostringstream inputBytes;
+        dxfWriter* inputWriter = nullptr;
+        std::unique_ptr<dxfWriter> ownedInputWriter = binary
+            ? std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterBinary>(&inputBytes))
+            : std::unique_ptr<dxfWriter>(
+                  std::make_unique<dxfWriterAscii>(&inputBytes));
+        inputWriter = ownedInputWriter.get();
+        inputWriter->setVersion("AC1027", true);
+        const bool sourceWritten = inputWriter->writeString(0, "GEODATA")
+            && inputWriter->writeString(5, "A70")
+            && inputWriter->writeString(100, "AcDbGeoData")
+            && inputWriter->writeInt32(90, 2)
+            && inputWriter->writeInt16(70, 4)
+            && inputWriter->writeString(0, "WIRE_END");
+        DRW_GeoData decoded;
+        t.expect(sourceWritten && readGeoData(inputBytes.str(), binary, decoded)
+                     && decoded.m_version == 2
+                     && decoded.m_coordinatesType == 4,
+                 "modern GEODATA input retains an unsupported coordinates type");
     }
 
     for (const std::int32_t objectVersion : {2, 3}) {

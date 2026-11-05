@@ -34309,6 +34309,11 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
     if (objectVersion < 1 || objectVersion > 3
         || (objectVersion == 3 && version < DRW::AC1027))
         return false;
+    // Autodesk's modern GEODATA DXF group-70 domain is 0..3. Version 1 uses
+    // group 70 for legacy control flags and is validated by its separate map.
+    if (objectVersion >= 2
+        && (ent->m_coordinatesType < 0 || ent->m_coordinatesType > 3))
+        return false;
 
     std::string normalizedDefinition;
     std::string_view definition = ent->m_coordinateSystemDefinition;

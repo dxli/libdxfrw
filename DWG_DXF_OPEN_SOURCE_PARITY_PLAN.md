@@ -70,6 +70,12 @@ created locally from scratch for the specific control.
 P6–P9 qualification can proceed when its inputs are ready; it does not block
 independently ready local code work.
 
+Modern GEODATA DXF versions 2 and 3 now admit only documented coordinate types
+0–3 on output; tolerant input retains other signed group-70 values. Generated
+ASCII/Binary refusal, same-writer correction/readback and tolerant-input
+controls pass. Physical whole-document and native geospatial qualification
+remain open ([receipt](docs/research/p4-geodata-coordinate-type-dxf-domain-2026-11-05.json)).
+
 The bounded AC1018 direct-NOD frame-0 WIPEOUTVARIABLES graph has selected-source
 and generated ASCII/Binary output evidence; physical whole-document output,
 other graph shapes and native wipeout behavior remain open
