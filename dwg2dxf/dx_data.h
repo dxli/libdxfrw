@@ -1429,7 +1429,9 @@ public:
     // exact, duplicate-free membership of the retained BLOCK_RECORD table.
     bool hasCompleteDwgBlockRecordControlMembership() const noexcept;
     // Confirms the current source-matched LTYPE_CONTROL slots name every
-    // retained LTYPE row, including the required BYBLOCK/BYLAYER phantoms.
+    // retained LTYPE row, with CONTINUOUS counted and BYBLOCK/BYLAYER in the
+    // two final phantom slots. Source handles are not assumed to equal the
+    // canonical values used by this library's DWG writer.
     bool hasCompleteDwgLineTypeControlMembership() const noexcept;
     // Returns the current Layer TABLE control identity and extension-dictionary
     // handle only when the imported control/header is uniquely tied to every

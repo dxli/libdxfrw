@@ -63492,22 +63492,6 @@ bool dx_data::hasCompleteDwgLineTypeControlMembership() const noexcept {
 
         const std::size_t phantomStart =
             control.m_controlHandles.size() - 2u;
-        const std::uint32_t firstPhantom =
-            control.m_controlHandles[phantomStart];
-        const std::uint32_t secondPhantom =
-            control.m_controlHandles[phantomStart + 1u];
-        if (!((firstPhantom == DRW::DwgLtypeByBlockHandle
-               && secondPhantom == DRW::DwgLtypeByLayerHandle)
-              || (firstPhantom == DRW::DwgLtypeByLayerHandle
-                  && secondPhantom == DRW::DwgLtypeByBlockHandle))
-            || std::find(control.m_controlHandles.cbegin(),
-                         control.m_controlHandles.cbegin()
-                             + static_cast<std::ptrdiff_t>(phantomStart),
-                         DRW::DwgLtypeContinuousHandle)
-                == control.m_controlHandles.cbegin()
-                     + static_cast<std::ptrdiff_t>(phantomStart))
-            return false;
-
         std::unordered_map<std::uint32_t, const DRW_LType*> recordsByHandle;
         recordsByHandle.reserve(lineTypes.size());
         std::unordered_set<std::string> names;
@@ -63528,28 +63512,40 @@ bool dx_data::hasCompleteDwgLineTypeControlMembership() const noexcept {
             }
             if (!names.insert(std::move(key)).second)
                 return false;
-            const std::uint32_t fixedHandle =
-                sameAsciiName(record.name, "BYBLOCK")
-                    ? DRW::DwgLtypeByBlockHandle
-                    : sameAsciiName(record.name, "BYLAYER")
-                        ? DRW::DwgLtypeByLayerHandle
-                        : sameAsciiName(record.name, "CONTINUOUS")
-                            ? DRW::DwgLtypeContinuousHandle : 0u;
-            if (fixedHandle != 0u && record.handle != fixedHandle)
-                return false;
         }
         if (!declaredHandles.empty())
             return false;
 
-        const auto hasFixedName = [&recordsByHandle](std::uint32_t handle,
-                                                      const char* name) {
-            const auto found = recordsByHandle.find(handle);
-            return found != recordsByHandle.end()
-                && sameAsciiName(found->second->name, name);
+        const auto findNamedHandle = [&recordsByHandle](const char* name,
+                                                        std::uint32_t& handle) {
+            handle = 0u;
+            for (const auto& row : recordsByHandle) {
+                if (!sameAsciiName(row.second->name, name))
+                    continue;
+                if (handle != 0u)
+                    return false;
+                handle = row.first;
+            }
+            return handle != 0u;
         };
-        return hasFixedName(DRW::DwgLtypeByBlockHandle, "BYBLOCK")
-            && hasFixedName(DRW::DwgLtypeByLayerHandle, "BYLAYER")
-            && hasFixedName(DRW::DwgLtypeContinuousHandle, "CONTINUOUS");
+        std::uint32_t byBlockHandle = 0u;
+        std::uint32_t byLayerHandle = 0u;
+        std::uint32_t continuousHandle = 0u;
+        if (!findNamedHandle("BYBLOCK", byBlockHandle)
+            || !findNamedHandle("BYLAYER", byLayerHandle)
+            || !findNamedHandle("CONTINUOUS", continuousHandle))
+            return false;
+
+        const auto byBlock = control.m_controlHandles[phantomStart];
+        const auto byLayer = control.m_controlHandles[phantomStart + 1u];
+        const bool phantomNamesMatch =
+            (byBlock == byBlockHandle && byLayer == byLayerHandle)
+            || (byBlock == byLayerHandle && byLayer == byBlockHandle);
+        const auto countedEnd = control.m_controlHandles.cbegin()
+            + static_cast<std::ptrdiff_t>(phantomStart);
+        return phantomNamesMatch
+            && std::find(control.m_controlHandles.cbegin(), countedEnd,
+                         continuousHandle) != countedEnd;
     } catch (...) {
         return false;
     }

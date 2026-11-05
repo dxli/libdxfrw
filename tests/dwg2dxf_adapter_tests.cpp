@@ -18641,7 +18641,7 @@ bool dwgLtypeTableControlMembershipCapture() {
         records[1].handle = 0x31u;
         records[1].name = duplicateName ? "CONTINUOUS" : "DASHED";
         records[2].handle = DRW::DwgLtypeByBlockHandle;
-        records[2].name = wrongSpecialName ? "BYLAYER" : "BYBLOCK";
+        records[2].name = wrongSpecialName ? "CUSTOM" : "BYBLOCK";
         records[3].handle = DRW::DwgLtypeByLayerHandle;
         records[3].name = "BYLAYER";
         for (DRW_LType& record : records)
@@ -18700,6 +18700,20 @@ bool dwgLtypeTableControlMembershipCapture() {
                    DRW::DwgLtypeByBlockHandle},
                   records, false, false))
         return fail("typed identities were coupled to one producer's phantom order");
+    auto noncanonicalHandles = records;
+    noncanonicalHandles[0].handle = 0x16u;
+    noncanonicalHandles[1].handle = 0x1B1u;
+    noncanonicalHandles[2].handle = 0x14u;
+    noncanonicalHandles[3].handle = 0x15u;
+    if (!makeCase({0x16u, 0x1B1u, 0x14u, 0x15u},
+                  noncanonicalHandles, false, false))
+        return fail("source LTYPE names were coupled to writer-canonical handles");
+    if (!makeCase({0x16u, 0x1B1u, 0x15u, 0x14u},
+                  noncanonicalHandles, false, false))
+        return fail("noncanonical phantom handles were coupled to one producer order");
+    if (makeCase({0x16u, 0x14u, 0x1B1u, 0x15u},
+                 noncanonicalHandles, false, false))
+        return fail("BYBLOCK phantom outside the final LTYPE_CONTROL slots was accepted");
     if (makeCase(odaOrder, makeRecords(true), false, false))
         return fail("LTYPE row with a different control owner was accepted");
     if (makeCase({DRW::DwgLtypeContinuousHandle, 0x55u,
@@ -18708,7 +18722,7 @@ bool dwgLtypeTableControlMembershipCapture() {
                  records, false, false))
         return fail("LTYPE_CONTROL member without its typed target was accepted");
     if (makeCase(odaOrder, makeRecords(false, true), false, false))
-        return fail("fixed BYBLOCK handle with a different source name was accepted");
+        return fail("LTYPE_CONTROL phantom without a BYBLOCK row name was accepted");
     if (makeCase(odaOrder, makeRecords(false, false, true), false, false))
         return fail("ambiguous duplicate LTYPE names were accepted");
     if (makeCase({DRW::DwgLtypeContinuousHandle, 0x31u, 0u,
