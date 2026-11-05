@@ -26,6 +26,12 @@
     "status": "SUCCESS",
     "json_was_scratch_only": true
   },
+  "independent_output_oracle": {
+    "name": "LibreDWG 0.14 DXF-to-DWG and minJSON roundtrip",
+    "generated_source": "locally-authored adapter DIMASSOC DXF success control",
+    "observation": "dxf2dwg returned exit code 0 but warned 'Object DIMASSOC unsupported'; the AC1024 resave contained zero DIMASSOC objects",
+    "disposition": "excluded as output interoperability evidence; exit code 0 is not proof of record preservation"
+  },
   "inputs": [
     {
       "path": "/Users/dli/doc/dwg/architectural_-_annotation_scaling_and_multileaders.dwg",
