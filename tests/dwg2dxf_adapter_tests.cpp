@@ -71328,11 +71328,13 @@ bool rasterVariablesDwgAdapterTransport(
     const std::filesystem::path sourcePath = generatedSource
         ? std::filesystem::path(base.string() + ".dwg")
         : physicalSourcePath;
+    const std::filesystem::path physicalProjectionPath =
+        base.string() + "-physical-projection.dwg";
     const std::filesystem::path asciiPath = base.string() + "-ascii.dxf";
     const std::filesystem::path binaryPath = base.string() + "-binary.dxf";
     struct Cleanup {
         std::filesystem::path source;
-        std::array<std::filesystem::path, 2> outputs;
+        std::array<std::filesystem::path, 3> outputs;
         bool removeSource;
         ~Cleanup() {
             if (removeSource) {
@@ -71344,9 +71346,10 @@ bool rasterVariablesDwgAdapterTransport(
                 std::filesystem::remove(path, ignored);
             }
         }
-    } cleanup{sourcePath, {asciiPath, binaryPath}, generatedSource};
+    } cleanup{sourcePath, {asciiPath, binaryPath, physicalProjectionPath}, generatedSource};
     if ((generatedSource && std::filesystem::exists(sourcePath))
         || (!generatedSource && !std::filesystem::is_regular_file(sourcePath))
+        || std::filesystem::exists(physicalProjectionPath)
         || std::filesystem::exists(asciiPath)
         || std::filesystem::exists(binaryPath))
         return fail("RASTERVARIABLES adapter scratch path unexpectedly exists");
@@ -71354,7 +71357,8 @@ bool rasterVariablesDwgAdapterTransport(
     class Author final : public dx_iface {
     public:
         explicit Author(dwgRW& output, bool directNodOwner,
-                        DRW::Version revision, bool frameOne)
+                        DRW::Version revision, bool frameOne,
+                        const DRW_RasterVariables* witness = nullptr)
             : output(output), directNodOwner(directNodOwner) {
             cData = &storage;
             currentBlock = storage.mBlock;
@@ -71370,6 +71374,19 @@ bool rasterVariablesDwgAdapterTransport(
                 ? (revision == DRW::AC1021 || frameOne ? 1 : 0) : 1;
             variables.m_imageQuality = 1;
             variables.m_units = directNodOwner && revision != DRW::AC1018 && revision != DRW::AC1024 && revision != DRW::AC1032 ? 1 : 3;
+            if (witness != nullptr) {
+                variables.m_classVersion = witness->m_classVersion;
+                variables.m_imageFrame = witness->m_imageFrame;
+                variables.m_imageQuality = witness->m_imageQuality;
+                variables.m_units = witness->m_units;
+                variables.appData = witness->appData;
+                variables.extData = witness->extData;
+                variables.reactorHandles = witness->reactorHandles;
+                variables.setDwgCommonObjectState(
+                    witness->reactorCount(),
+                    witness->extensionDictionaryFlag(),
+                    witness->hasDataStorageBinaryData());
+            }
             if (directNodOwner
                 && (revision == DRW::AC1018 || revision == DRW::AC1021
                     || revision == DRW::AC1024
@@ -71443,6 +71460,8 @@ bool rasterVariablesDwgAdapterTransport(
     }
 
     dx_data imported;
+    dx_data projected;
+    dx_data* outputSourceData = &imported;
     dx_iface importer;
     if (!importer.fileImport(sourcePath.string(), &imported, false)
         || imported.sourceFormat != dx_source_format::DWG
@@ -71491,9 +71510,9 @@ bool rasterVariablesDwgAdapterTransport(
         expectedHandle = rootEntry->m_handle;
         expectedParent = imported.namedObjectDictionary.handle;
     }
-    const dx_data::RasterVariablesKey key{
+    dx_data::RasterVariablesKey key{
         imported.importGeneration, expectedHandle};
-    const auto source = imported.dwgRasterVariables.find(key);
+    auto source = imported.dwgRasterVariables.find(key);
     if (source == imported.dwgRasterVariables.end()
         || source->second.parentHandle != expectedParent
         || source->second.m_classVersion != expectedClassVersion
@@ -71584,7 +71603,60 @@ bool rasterVariablesDwgAdapterTransport(
         for (const std::uint32_t reactor :
              source->second.reactorHandles)
             std::cerr << "RASTERVARIABLES reactor handle=" << reactor << '\n';
-        return true;
+        if (revision != DRW::AC1021)
+            return true;
+
+        // Bind the physical producer's decoded record to a locally authored,
+        // dependency-closed DWG wrapper. This qualifies that captured profile
+        // through the writer and DXF serializer without claiming whole-source
+        // conversion of the physical drawing.
+        if (!source->second.appData.empty() || !source->second.extData.empty()
+            || source->second.hasDataStorageBinaryData()
+            || source->second.xDictHandle != 0u
+            || source->second.extensionDictionaryFlag() != 1u
+            || source->second.reactorHandles
+                != std::vector<std::uint32_t>{
+                    DRW::DwgNamedObjectsDictionaryHandle})
+            return fail("physical AC1021 RASTERVARIABLES exceeds the selected wrapper profile");
+        expectedHandle = 0xB500u;
+        expectedParent = DRW::DwgNamedObjectsDictionaryHandle;
+        expectedRootKey = "ACAD_IMAGE_VARS";
+        expectedXDictFlag = 1u;
+        {
+            dwgRW projectionWriter(physicalProjectionPath.string().c_str());
+            Author author(projectionWriter, true, DRW::AC1021, false,
+                          &source->second);
+            if (!projectionWriter.write(&author, DRW::AC1021, true))
+                return fail("physical RASTERVARIABLES wrapper DWG failed to write");
+        }
+        dx_iface projectionImporter;
+        if (!projectionImporter.fileImport(
+                physicalProjectionPath.string(), &projected, false)
+            || projected.sourceFormat != dx_source_format::DWG
+            || projected.sourceVersion != DRW::AC1021
+            || projected.dwgRasterVariables.size() != 1u
+            || projected.rasterVariablesCaptureFailed)
+            return fail("physical RASTERVARIABLES wrapper did not re-import");
+        const dx_data::RasterVariablesKey projectedKey{
+            projected.importGeneration, expectedHandle};
+        const auto projectedRecord = projected.dwgRasterVariables.find(
+            projectedKey);
+        if (projectedRecord == projected.dwgRasterVariables.end()
+            || projectedRecord->second.m_classVersion
+                != source->second.m_classVersion
+            || projectedRecord->second.m_imageFrame
+                != source->second.m_imageFrame
+            || projectedRecord->second.m_imageQuality
+                != source->second.m_imageQuality
+            || projectedRecord->second.m_units != source->second.m_units
+            || projectedRecord->second.reactorHandles
+                != source->second.reactorHandles
+            || projectedRecord->second.extensionDictionaryFlag()
+                != source->second.extensionDictionaryFlag())
+            return fail("physical RASTERVARIABLES fields changed in wrapper DWG readback");
+        outputSourceData = &projected;
+        key = projectedKey;
+        source = projected.dwgRasterVariables.find(key);
     }
 
     class Readback final : public dx_iface {
@@ -71614,11 +71686,11 @@ bool rasterVariablesDwgAdapterTransport(
                 return fail("failed to write RASTERVARIABLES destination sentinel");
         }
         DRW_RasterVariables& mutableSource =
-            imported.dwgRasterVariables.find(key)->second;
-        const bool debugExport = !generatedSource || directNodOwner;
+            outputSourceData->dwgRasterVariables.find(key)->second;
+        const bool debugExport = directNodOwner;
         const auto exportProfile = [&](DRW::Version targetRevision) {
             return exporter.fileExport(target.first.string(), targetRevision, target.second,
-                &imported, debugExport, requireResolvedOwners,
+                outputSourceData, debugExport, requireResolvedOwners,
                 dx_dxfSourceTextPolicy::Compatible, DRW::DxfTextWritePolicy::Compatible,
                 dx_dxfProxyGraphicsPolicy::Compatible,
                 revision == DRW::AC1018 || frameOne
@@ -71634,29 +71706,29 @@ bool rasterVariablesDwgAdapterTransport(
             };
             if (revision == DRW::AC1018) {
                 using Access = DxIfaceStandardDwgCaptureTestAccess;
-                const auto root = imported.namedObjectDictionary.handle;
+                const auto root = outputSourceData->namedObjectDictionary.handle;
                 std::uint32_t owner = DRW::NoHandle;
-                if (!imported.getCompleteDwgDictionaryOwner(root, owner) || owner != 0u)
+                if (!outputSourceData->getCompleteDwgDictionaryOwner(root, owner) || owner != 0u)
                     return fail("AC1018 raster root source proof missing");
-                imported.dwgReadOutcome.opaqueSourceCaptureFailed = true;
-                const bool rejectedCapture = !imported.getCompleteDwgDictionaryOwner(root, owner)
+                outputSourceData->dwgReadOutcome.opaqueSourceCaptureFailed = true;
+                const bool rejectedCapture = !outputSourceData->getCompleteDwgDictionaryOwner(root, owner)
                     && refusedWithSentinel(revision);
-                imported.dwgReadOutcome.opaqueSourceCaptureFailed = false;
-                if (!rejectedCapture || !imported.getCompleteDwgDictionaryOwner(root, owner))
+                outputSourceData->dwgReadOutcome.opaqueSourceCaptureFailed = false;
+                if (!rejectedCapture || !outputSourceData->getCompleteDwgDictionaryOwner(root, owner))
                     return fail("failed raster capture retained root proof");
-                const auto savedCoverage = imported.dwgClassCoverage;
-                auto classRow = std::find_if(imported.dwgClassCoverage.m_entries.begin(),
-                    imported.dwgClassCoverage.m_entries.end(), [](const auto& value) {
+                const auto savedCoverage = outputSourceData->dwgClassCoverage;
+                auto classRow = std::find_if(outputSourceData->dwgClassCoverage.m_entries.begin(),
+                    outputSourceData->dwgClassCoverage.m_entries.end(), [](const auto& value) {
                         return value.m_recordName == "RASTERVARIABLES";
                     });
-                if (classRow == imported.dwgClassCoverage.m_entries.end()) return fail("raster class missing");
+                if (classRow == outputSourceData->dwgClassCoverage.m_entries.end()) return fail("raster class missing");
                 ++classRow->m_instanceCount;
-                const bool rejectedClass = !imported.getCompleteDwgDictionaryOwner(root, owner)
+                const bool rejectedClass = !outputSourceData->getCompleteDwgDictionaryOwner(root, owner)
                     && refusedWithSentinel(revision);
-                imported.dwgClassCoverage = savedCoverage;
-                if (!rejectedClass || !imported.getCompleteDwgDictionaryOwner(root, owner))
+                outputSourceData->dwgClassCoverage = savedCoverage;
+                if (!rejectedClass || !outputSourceData->getCompleteDwgDictionaryOwner(root, owner))
                     return fail("changed raster class retained root proof");
-                auto& opaque = Access::mutableOpaqueRaw(imported, expectedHandle);
+                auto& opaque = Access::mutableOpaqueRaw(*outputSourceData, expectedHandle);
                 const auto originalRaw = opaque.m_rawBytes;
                 const auto total = static_cast<std::uint32_t>(originalRaw.size() * 8u);
                 dx_raster_wire::detail::Bits body{originalRaw.data(), 0u, total};
@@ -71665,29 +71737,29 @@ bool rasterVariablesDwgAdapterTransport(
                     return fail("invalid raster witness boundary");
                 for (const auto bit : {2u, boundary - 1u, total - 1u}) {
                     opaque.m_rawBytes[bit / 8u] ^= static_cast<std::uint8_t>(0x80u >> (bit % 8u));
-                    const bool rejected = !imported.getCompleteDwgDictionaryOwner(root, owner)
+                    const bool rejected = !outputSourceData->getCompleteDwgDictionaryOwner(root, owner)
                         && refusedWithSentinel(revision);
                     opaque.m_rawBytes = originalRaw;
-                    if (!rejected || !imported.getCompleteDwgDictionaryOwner(root, owner)
+                    if (!rejected || !outputSourceData->getCompleteDwgDictionaryOwner(root, owner)
                         || !exportProfile(revision))
                         return fail("mutated raster source escaped proof or retry failed");
                     std::ofstream previous(target.first, std::ios::binary | std::ios::trunc);
                     previous << sentinel;
                 }
                 if (frameOne) {
-                    if (!Access::toggleAc1018RasterFrameBit(imported, expectedHandle))
+                    if (!Access::toggleAc1018RasterFrameBit(*outputSourceData, expectedHandle))
                         return fail("could not mutate AC1018 raster wire frame");
-                    const bool rejectedWireFrame = !imported.getCompleteDwgDictionaryOwner(root, owner)
+                    const bool rejectedWireFrame = !outputSourceData->getCompleteDwgDictionaryOwner(root, owner)
                         && refusedWithSentinel(revision);
-                    if (!Access::toggleAc1018RasterFrameBit(imported, expectedHandle)
-                        || !rejectedWireFrame || !imported.getCompleteDwgDictionaryOwner(root, owner))
+                    if (!Access::toggleAc1018RasterFrameBit(*outputSourceData, expectedHandle)
+                        || !rejectedWireFrame || !outputSourceData->getCompleteDwgDictionaryOwner(root, owner))
                         return fail("altered AC1018 raster wire frame retained source proof");
-                    if (!Access::makeRasterFrameOneLongBitShort(imported, expectedHandle))
+                    if (!Access::makeRasterFrameOneLongBitShort(*outputSourceData, expectedHandle))
                         return fail("could not construct noncanonical raster frame BS");
-                    const bool rejected = !imported.getCompleteDwgDictionaryOwner(root, owner)
+                    const bool rejected = !outputSourceData->getCompleteDwgDictionaryOwner(root, owner)
                         && refusedWithSentinel(revision);
                     opaque.m_rawBytes = originalRaw;
-                    if (!rejected || !imported.getCompleteDwgDictionaryOwner(root, owner))
+                    if (!rejected || !outputSourceData->getCompleteDwgDictionaryOwner(root, owner))
                         return fail("noncanonical raster frame retained source proof");
                 }
 
@@ -71717,20 +71789,20 @@ bool rasterVariablesDwgAdapterTransport(
             if (!refusedWithSentinel(revision))
                 return fail("AC1024 unobserved XDictionary state was not refused atomically");
             mutableSource.setDwgCommonObjectState(1, 1, false);
-            imported.namedObjectDictionary.m_entries.push_back({"ALIASED_RASTER", expectedHandle});
+            outputSourceData->namedObjectDictionary.m_entries.push_back({"ALIASED_RASTER", expectedHandle});
             const bool aliasRefused = refusedWithSentinel(revision);
-            imported.namedObjectDictionary.m_entries.pop_back();
+            outputSourceData->namedObjectDictionary.m_entries.pop_back();
             if (!aliasRefused)
                 return fail("AC1024 duplicate NOD target was not refused atomically");
             if (revision == DRW::AC1018 || revision == DRW::AC1032 || frameOne) {
-                const auto originalEntries = imported.namedObjectDictionary.m_entries;
+                const auto originalEntries = outputSourceData->namedObjectDictionary.m_entries;
                 if (originalEntries.empty()) return fail("AC1032 raster root is empty");
-                imported.namedObjectDictionary.m_entries.push_back(
+                outputSourceData->namedObjectDictionary.m_entries.push_back(
                     {"acad_image_vars", originalEntries.front().m_handle});
                 const bool duplicateRefused = refusedWithSentinel(revision);
-                imported.namedObjectDictionary.m_entries = originalEntries;
+                outputSourceData->namedObjectDictionary.m_entries = originalEntries;
                 if (!duplicateRefused) return fail("AC1032 duplicate raster root key was accepted");
-                auto& rootEntries = imported.namedObjectDictionary.m_entries;
+                auto& rootEntries = outputSourceData->namedObjectDictionary.m_entries;
                 rootEntries.erase(std::remove_if(rootEntries.begin(), rootEntries.end(),
                     [expectedHandle](const DRW_Dictionary::Entry& entry) {
                         return entry.m_handle == expectedHandle;
@@ -71739,37 +71811,37 @@ bool rasterVariablesDwgAdapterTransport(
                 rootEntries = originalEntries;
                 if (!missingRootRefused) return fail("AC1032 missing raster root was accepted");
                 using Access = DxIfaceStandardDwgCaptureTestAccess;
-                if (!Access::toggleRetainedOwnerRole(imported, expectedHandle))
+                if (!Access::toggleRetainedOwnerRole(*outputSourceData, expectedHandle))
                     return fail("could not mutate AC1032 raster owner role");
                 const bool roleRefused = refusedWithSentinel(revision);
-                if (!Access::toggleRetainedOwnerRole(imported, expectedHandle) || !roleRefused)
+                if (!Access::toggleRetainedOwnerRole(*outputSourceData, expectedHandle) || !roleRefused)
                     return fail("AC1032 altered raster owner role was accepted");
-                if (!Access::toggleRetainedReactorRole(imported, expectedHandle))
+                if (!Access::toggleRetainedReactorRole(*outputSourceData, expectedHandle))
                     return fail("could not mutate AC1032 raster reactor role");
                 const bool reactorRoleRefused = refusedWithSentinel(revision);
-                if (!Access::toggleRetainedReactorRole(imported, expectedHandle) || !reactorRoleRefused)
+                if (!Access::toggleRetainedReactorRole(*outputSourceData, expectedHandle) || !reactorRoleRefused)
                     return fail("AC1032 altered raster reactor role was accepted");
                 if (frameOne && (revision == DRW::AC1024 || revision == DRW::AC1032)) {
-                    if (!Access::toggleRetainedModernRasterFrame(imported, expectedHandle))
+                    if (!Access::toggleRetainedModernRasterFrame(*outputSourceData, expectedHandle))
                         return fail("could not mutate AC1024 raster wire frame");
                     const bool frameRefused = refusedWithSentinel(revision);
-                    if (!Access::toggleRetainedModernRasterFrame(imported, expectedHandle)
+                    if (!Access::toggleRetainedModernRasterFrame(*outputSourceData, expectedHandle)
                         || !frameRefused)
                         return fail("changed AC1024 raster wire frame was accepted");
                     if (revision == DRW::AC1032) {
-                        auto& raw = Access::mutableOpaqueRaw(imported, expectedHandle);
+                        auto& raw = Access::mutableOpaqueRaw(*outputSourceData, expectedHandle);
                         const auto originalRaw = raw.m_rawBytes;
-                        if (!Access::makeRasterFrameOneLongBitShort(imported, expectedHandle))
+                        if (!Access::makeRasterFrameOneLongBitShort(*outputSourceData, expectedHandle))
                             return fail("could not construct noncanonical raster frame BS");
                         const bool refused = refusedWithSentinel(revision);
                         raw.m_rawBytes = originalRaw;
                         if (!refused) return fail("noncanonical AC1032 raster frame was accepted");
                     }
-                    if (!Access::setRetainedFrameVersion(imported, expectedHandle,
+                    if (!Access::setRetainedFrameVersion(*outputSourceData, expectedHandle,
                             revision == DRW::AC1032 ? DRW::AC1024 : DRW::AC1032))
                         return fail("could not mutate raster wire revision");
                     const bool revisionRefused = refusedWithSentinel(revision);
-                    if (!Access::setRetainedFrameVersion(imported, expectedHandle, revision)
+                    if (!Access::setRetainedFrameVersion(*outputSourceData, expectedHandle, revision)
                         || !revisionRefused)
                         return fail("changed AC1024 raster wire revision was accepted");
                 }
@@ -71815,7 +71887,7 @@ bool rasterVariablesDwgAdapterTransport(
         if (!exportProfile(revision))
             return fail("corrected RASTERVARIABLES profile failed same-adapter retry");
         if (!DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
-                imported, imported.importGeneration, expectedHandle))
+                *outputSourceData, outputSourceData->importGeneration, expectedHandle))
             return fail("corrected RASTERVARIABLES retry did not bind output to the source frame");
 
         readback.records.clear();
@@ -71830,7 +71902,7 @@ bool rasterVariablesDwgAdapterTransport(
                 return dictionary.handle == actual.parentHandle;
             });
         const bool directNodOwner = expectedParent
-            == imported.namedObjectDictionary.handle;
+            == outputSourceData->namedObjectDictionary.handle;
         const std::size_t rootOwnerEntries = directNodOwner
             ? static_cast<std::size_t>(std::count_if(
                 outputData.namedObjectDictionary.m_entries.begin(),

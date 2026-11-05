@@ -110,10 +110,15 @@ physical whole-document output and native image behavior remain open
 ([frame-0 receipt](docs/research/p4-ac1018-rastervariables-direct-nod-2026-11-04.json),
 [frame-1 receipt](docs/research/p4-ac1018-rastervariables-frame1-direct-nod-2026-11-04.json)).
 The AC1024 and AC1032 direct-NOD profiles additionally cover source-witnessed
-frame=1; source-origin adapter admission outside its physically witnessed
-tuples, physical whole-document output, broader graphs and native image
-behavior remain open. The DWG and DXF writers admit only Autodesk's
-frame/quality/unit domains (and DXF class version 0); input preserves
+frame=1. The physical AC1021 `children-room-decoration.dwg` record now seeds a
+locally authored dependency-closed wrapper DWG; its captured fields pass wrapper
+re-import, ASCII/Binary DXF output, atomic invalid-value refusal, same-adapter
+retry and typed graph readback ([physical writer bridge receipt](docs/research/p4-ac1021-rastervariables-physical-writer-bridge-2026-11-05.json)).
+This is not direct or whole-source output from the physical drawing. A whole-source
+conversion attempt stops at the separate ModelDocViewStyle source-version gate.
+Source-origin admission outside witnessed tuples, broader graphs, physical
+whole-document output and native image behavior remain open. The DWG and DXF
+writers admit only Autodesk's frame/quality/unit domains (and DXF class version 0); input preserves
 unsupported values. This does not
 expand the source-origin adapter profile. The DWG object writer now checks the
 same domains before common-state preparation and identity reservation; a
