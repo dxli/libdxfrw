@@ -2670,6 +2670,24 @@ set_tests_properties(dwg2dxf_rastervariables_dwg_adapter_transport PROPERTIES
     LABELS "fast;dwg;dxf;raster;adapter;generated;transaction"
     TIMEOUT 30
 )
+add_executable(libdxfrw_rastervariables_objects_allocation_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/rastervariables_objects_allocation_tests.cpp
+    ${_libdxfrw_test_adapter_source}
+)
+target_compile_features(libdxfrw_rastervariables_objects_allocation_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_rastervariables_objects_allocation_tests
+    PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_rastervariables_objects_allocation_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/dwg2dxf
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(libdxfrw_rastervariables_objects_allocation_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_rastervariables_objects_allocation_retry
+    COMMAND libdxfrw_rastervariables_objects_allocation_tests
+        "${CMAKE_CURRENT_BINARY_DIR}/rastervariables-objects-allocation-scratch")
+set_tests_properties(libdxfrw_rastervariables_objects_allocation_retry PROPERTIES
+    LABELS "fast;dwg;dxf;raster;allocation;transaction;generated"
+    TIMEOUT 60)
 
 # The direct NOD -> ACAD_IMAGE_VARS -> RASTERVARIABLES profile is authored
 # locally from the observed physical AC1027 ownership shape. It proves only
