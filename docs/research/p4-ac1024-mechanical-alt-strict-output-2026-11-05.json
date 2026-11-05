@@ -23,9 +23,20 @@
   },
   "limits": [
     "This is a current-code strict conversion result for one existing AC1024 input.",
-    "No fresh typed DXF readback or independent consumer readback was performed.",
-    "This does not establish a new producer/version profile, native semantics or full AC1024 support."
+    "This does not establish a new producer/version profile, native semantics or full AC1024 support.",
+    "The re-import uses the same libdxfrw codebase; independent consumer readback and broader producer/version coverage remain unqualified."
   ],
   "support_claim_effect": "none; extends local strict-conversion observation from one to two mechanical corpus inputs",
-  "no_new_fixture_committed": true
+  "no_new_fixture_committed": true,
+  "typed_readback": {
+    "operation": "Fresh dx_iface::fileImport of the emitted ASCII DXF into new dx_data.",
+    "result": "PASS; sourceVersion enum 16 (AC1024), 90 model-space entities including 56 LINE records, 8 XRECORDs and 23 dictionaries.",
+    "probe_source": "/private/tmp/dxf_typed_readback.cpp",
+    "probe_sha256": "eb3cdba29d418c205c7dd821d6a67010de5eb25e89957e823acad26843e2d563",
+    "probe_binary_sha256": "092e6b0e31cb08d74023b395cafe1a877f0ac6e06f072a3fd01778fa3bd219f0",
+    "linked_adapter_object_sha256": "30adc66ba9e7262ca28a8115e124aa785cc4cfde9fdbb1fcadf7fcf72c3ede95",
+    "linked_library_sha256": "9263f4e2e85c74747ac5fc11b66c4bb0cf71ddd955883e31c36efd34d1f849e5",
+    "command": "/private/tmp/dxf_typed_readback /private/tmp/libdxfrw-mechanical-alt-current.dxf",
+    "build_command": "/usr/bin/g++ -std=c++17 -I dwg2dxf -I src /private/tmp/dxf_typed_readback.cpp build-gcc/dwg2dxf/CMakeFiles/dwg2dxf.dir/dx_iface.cpp.o build-gcc/libdxfrw.a -framework CoreFoundation -o /private/tmp/dxf_typed_readback"
+  }
 }
