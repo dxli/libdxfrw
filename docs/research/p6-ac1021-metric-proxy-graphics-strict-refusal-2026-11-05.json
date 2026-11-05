@@ -22,7 +22,7 @@
     "logSha256": "f9a13406f67e5506c4952326dc8e13e67db68742061f8d999652b9cae6f0eb9b"
   },
   "interpretation": "Two typed INSERT proxy caches block strict output. ODA \u00a729 identifies the 15 type-19 chunks as marker-index controls; ezdxf independently reads the marker values and decodes both exact extracted streams to 231 and 259 POLYLINE/TEXT virtual entities. This does not establish INSERT cache source association, exact DXF output/readback, or native display. The existing fail-closed gate remains correct.",
-  "nextAction": "Establish whether the source proxy stream is semantically attached to each INSERT or its referenced block, and whether DXF permits exact same-version cache replay for this entity type. Bind output bytes to the source INSERT and block graph, then verify exact group 310 readback and a native consumer before admitting the profile.",
+  "nextAction": "Resolve the SUBENT_MARKER scope and preserve its marker identity with the affected subsequent geometry before treating opcode 19 as supported. Establish whether the source proxy stream is semantically attached to each INSERT or its referenced block, and whether DXF permits exact same-version cache replay for this entity type. Bind output bytes to the source INSERT and block graph, then verify exact group 310 readback and a native consumer before admitting the profile.",
   "supportClaimEffect": "none",
   "nonClaims": [
     "No proxy-graphics semantic or replay support is established.",
@@ -100,6 +100,12 @@
     "url": "https://www.opendesign.com/files/guestdownloads/OpenDesign_Specification_for_.dwg_files.pdf",
     "finding": "Type 19 is SUBENT_MARKER and its payload is one RL marker index. The spec also defines proxy graphic chunks as RL size, RL type, then type-specific bytes.",
     "scopeLimit": "This defines the chunk role and wire payload, not whether INSERT proxy caches may be replayed as DXF proxy graphics or how a native consumer should display them."
+  },
+  "markerImplementationGap": {
+    "odaMeaning": "ODA §29 says SUBENT items indicate changes for subsequently drawn items; opcode 19 supplies the marker index as RL.",
+    "currentDecoder": "Opcode 19 is not named or dispatched by DRW_ProxyGraphicDecoder. inspect/decode count it in skippedUnsupportedChunkCount, then continue decoding later primitives without marker identity.",
+    "effect": "The 15 observed markers are not proven semantically preserved by the current proxy-to-primitive projection. Do not count byte-framing completion or emitted primitive totals as marker-complete support.",
+    "requiredEvidence": "Bind each marker to its affected following primitives, carry that association through the consumer/output route, and verify a native consumer's subentity behavior."
   },
   "independentDecoderEvidence": {
     "implementation": "ezdxf proxygraphic.py",
