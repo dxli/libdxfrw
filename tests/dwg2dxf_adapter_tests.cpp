@@ -18630,6 +18630,97 @@ bool dwgBlockRecordControlMembershipCapture() {
     return true;
 }
 
+bool dwgLtypeTableControlMembershipCapture() {
+    const auto makeRecords = [](bool wrongOwner = false,
+                                bool wrongSpecialName = false,
+                                bool duplicateName = false) {
+        std::vector<DRW_LType> records(4u);
+        records[0].handle = DRW::DwgLtypeContinuousHandle;
+        records[0].name = "CONTINUOUS";
+        records[1].handle = 0x31u;
+        records[1].name = duplicateName ? "CONTINUOUS" : "DASHED";
+        records[2].handle = DRW::DwgLtypeByBlockHandle;
+        records[2].name = wrongSpecialName ? "BYLAYER" : "BYBLOCK";
+        records[3].handle = DRW::DwgLtypeByLayerHandle;
+        records[3].name = "BYLAYER";
+        for (DRW_LType& record : records)
+            record.parentHandle = 0x10u;
+        if (wrongOwner)
+            records[1].parentHandle = 0x11u;
+        return records;
+    };
+    const auto makeCase = [&](const std::vector<std::uint32_t>& controlHandles,
+                              std::vector<DRW_LType> records,
+                              bool duplicateControl,
+                              bool mutateGeneration) {
+        dx_data data;
+        dx_iface iface;
+        iface.cData = &data;
+        data.sourceFormat = dx_source_format::DWG;
+        data.sourceVersion = DRW::AC1024;
+        data.importGeneration = 7u;
+        data.dwgReadOutcome.attempted = true;
+        data.dwgReadOutcome.sourceVersion = DRW::AC1024;
+        for (const DRW_LType& record : records)
+            iface.addLType(record);
+
+        DRW_DwgFramePublication control;
+        control.m_version = DRW::AC1024;
+        control.m_handle = 0x10u;
+        control.m_sourceOffset = 0x80u;
+        control.m_sourceMapOrdinal = 4u;
+        control.m_sourceOffsetSpace = DRW_DwgFrameOffsetSpace::PhysicalFile;
+        control.m_hasSourceLocation = true;
+        control.m_encodedType = DRW::DwgLTypeControlObjectType;
+        control.m_resolvedType = DRW::DwgLTypeControlObjectType;
+        control.m_recordName = "LTYPE_CONTROL";
+        control.m_commonLinkEvidence =
+            DRW_DwgCommonLinkEvidence::NotApplicable;
+        control.m_controlHandles = controlHandles;
+        control.m_carrier = DRW_DwgFramePublication::Carrier::Control;
+        iface.addDwgFramePublication(control);
+        if (duplicateControl)
+            iface.addDwgFramePublication(control);
+
+        data.dwgReadOutcome.operationSucceeded = true;
+        if (mutateGeneration)
+            ++data.importGeneration;
+        return data.hasCompleteDwgLineTypeControlMembership();
+    };
+
+    const std::vector<std::uint32_t> odaOrder{
+        DRW::DwgLtypeContinuousHandle, 0x31u,
+        DRW::DwgLtypeByBlockHandle, DRW::DwgLtypeByLayerHandle};
+    const auto records = makeRecords();
+    if (!makeCase(odaOrder, records, false, false))
+        return fail("source-matched LTYPE_CONTROL membership was not accepted");
+    if (!makeCase({DRW::DwgLtypeContinuousHandle, 0x31u,
+                   DRW::DwgLtypeByLayerHandle,
+                   DRW::DwgLtypeByBlockHandle},
+                  records, false, false))
+        return fail("typed identities were coupled to one producer's phantom order");
+    if (makeCase(odaOrder, makeRecords(true), false, false))
+        return fail("LTYPE row with a different control owner was accepted");
+    if (makeCase({DRW::DwgLtypeContinuousHandle, 0x55u,
+                  DRW::DwgLtypeByBlockHandle,
+                  DRW::DwgLtypeByLayerHandle},
+                 records, false, false))
+        return fail("LTYPE_CONTROL member without its typed target was accepted");
+    if (makeCase(odaOrder, makeRecords(false, true), false, false))
+        return fail("fixed BYBLOCK handle with a different source name was accepted");
+    if (makeCase(odaOrder, makeRecords(false, false, true), false, false))
+        return fail("ambiguous duplicate LTYPE names were accepted");
+    if (makeCase({DRW::DwgLtypeContinuousHandle, 0x31u, 0u,
+                  DRW::DwgLtypeByLayerHandle},
+                 records, false, false))
+        return fail("null LTYPE_CONTROL member slot was accepted");
+    if (makeCase(odaOrder, records, true, false))
+        return fail("duplicate LTYPE_CONTROL publication was accepted");
+    if (makeCase(odaOrder, records, false, true))
+        return fail("stale LTYPE_CONTROL publication generation was accepted");
+    return true;
+}
+
 bool dwgLayerTableControlDictionaryCapture() {
     const auto makeCase = [](std::uint32_t sourceControlHandle,
                              std::uint32_t dictionaryHandle,
@@ -70686,6 +70777,10 @@ int main(int argc, char** argv) {
         && std::string(argv[1])
             == "--dwg-block-record-control-membership")
         return dwgBlockRecordControlMembershipCapture() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1])
+            == "--dwg-ltype-table-control-membership")
+        return dwgLtypeTableControlMembershipCapture() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1])
             == "--dwg-layer-table-control-dictionary")

@@ -1428,6 +1428,9 @@ public:
     // Confirms the current source-matched BLOCK_CONTROL handle list is an
     // exact, duplicate-free membership of the retained BLOCK_RECORD table.
     bool hasCompleteDwgBlockRecordControlMembership() const noexcept;
+    // Confirms the current source-matched LTYPE_CONTROL slots name every
+    // retained LTYPE row, including the required BYBLOCK/BYLAYER phantoms.
+    bool hasCompleteDwgLineTypeControlMembership() const noexcept;
     // Returns the current Layer TABLE control identity and extension-dictionary
     // handle only when the imported control/header is uniquely tied to every
     // retained LAYER row.
@@ -2511,6 +2514,10 @@ private:
     std::uint64_t m_dwgBlockControlGeneration{0u};
     bool m_dwgBlockControlPublicationSeen{false};
     bool m_dwgBlockControlCaptureFailed{false};
+    DRW_DwgFramePublication m_dwgLtypeControlPublication;
+    std::uint64_t m_dwgLtypeControlGeneration{0u};
+    bool m_dwgLtypeControlPublicationSeen{false};
+    bool m_dwgLtypeControlCaptureFailed{false};
     DRW_DwgFramePublication m_dwgLayerControlPublication;
     std::uint64_t m_dwgLayerControlGeneration{0u};
     bool m_dwgLayerControlPublicationSeen{false};

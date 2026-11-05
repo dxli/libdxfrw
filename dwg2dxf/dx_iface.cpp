@@ -4595,7 +4595,8 @@ bool strictDwgReadOutcomeIsComplete(const dx_data& data) noexcept {
         || !data.hasCompleteOpaqueDwgSourceCapture()
         || observations.integrity.extractionOmitted != 0
         || observations.integrity.reportedUpstreamDropped != 0
-        || observations.integrity.aggregateSaturated)
+        || observations.integrity.aggregateSaturated
+        || !data.hasCompleteDwgLineTypeControlMembership())
         return false;
 
     const std::size_t integrityRows = std::min(
@@ -4621,7 +4622,8 @@ bool dwgReadOutcomeAllowsBoundedPartialExport(const dx_data& data) noexcept {
         return false;  // An explicit partial-read request requires a DWG receipt.
     if (!outcome.operationSucceeded || outcome.error != DRW::BAD_NONE
         || outcome.sourceVersion == DRW::UNKNOWNV
-        || outcome.sourceVersion != data.sourceVersion)
+        || outcome.sourceVersion != data.sourceVersion
+        || !data.hasCompleteDwgLineTypeControlMembership())
         return false;
 
     const DwgReadObservations& observations = outcome.observations;
@@ -25205,6 +25207,61 @@ void dx_iface::addDwgFramePublication(const DRW_DwgFramePublication& data) {
             cData->m_dwgLayerControlPublication = data;
             cData->m_dwgLayerControlGeneration = cData->importGeneration;
             cData->m_dwgLayerControlPublicationSeen = true;
+        } catch (...) {
+            reject();
+        }
+        return;
+    }
+    const bool ltypeControlCandidate =
+        data.m_recordName == "LTYPE_CONTROL"
+        || data.m_encodedType == DRW::DwgLTypeControlObjectType
+        || data.m_resolvedType == DRW::DwgLTypeControlObjectType;
+    if (ltypeControlCandidate) {
+        const auto reject = [this]() {
+            cData->m_dwgLtypeControlCaptureFailed = true;
+        };
+        std::size_t estimate = sizeof(DRW_DwgFramePublication);
+        if (data.m_carrier != DRW_DwgFramePublication::Carrier::Control
+            || cData->sourceFormat != dx_source_format::DWG
+            || data.m_version < DRW::AC1012 || data.m_version > DRW::AC1032
+            || data.m_handle == 0u || data.m_handle == DRW::NoHandle
+            || !data.m_hasSourceLocation
+            || (data.m_sourceOffsetSpace
+                    != DRW_DwgFrameOffsetSpace::PhysicalFile
+                && data.m_sourceOffsetSpace
+                    != DRW_DwgFrameOffsetSpace::DecodedBuffer)
+            || data.m_encodedType != DRW::DwgLTypeControlObjectType
+            || data.m_resolvedType != DRW::DwgLTypeControlObjectType
+            || data.m_isEntity || data.m_isCustomClass
+            || data.m_classStreamOrdinal.has_value()
+            || data.m_recordName != "LTYPE_CONTROL"
+            || !data.m_className.empty()
+            || data.m_commonLinkEvidence
+                != DRW_DwgCommonLinkEvidence::NotApplicable
+            || data.m_xDictFlag > 1u
+            || data.m_controlHandles.size()
+                > kMaxAdapterBasicTableRecords
+            || cData->m_dwgLtypeControlPublicationSeen
+            || cData->m_dwgLtypeControlCaptureFailed
+            || !addVectorPayloadBytes(data.m_controlHandles, estimate)
+            || !addStringPayloadBytes(data.m_recordName, estimate)
+            || estimate > kMaxDwgBlockControlPublicationBytes) {
+            reject();
+            return;
+        }
+        try {
+            std::unordered_set<std::uint32_t> uniqueHandles;
+            uniqueHandles.reserve(data.m_controlHandles.size());
+            for (std::uint32_t handle : data.m_controlHandles) {
+                if (handle == 0u || handle == DRW::NoHandle
+                    || !uniqueHandles.insert(handle).second) {
+                    reject();
+                    return;
+                }
+            }
+            cData->m_dwgLtypeControlPublication = data;
+            cData->m_dwgLtypeControlGeneration = cData->importGeneration;
+            cData->m_dwgLtypeControlPublicationSeen = true;
         } catch (...) {
             reject();
         }
@@ -62810,6 +62867,111 @@ bool dx_data::hasCompleteDwgBlockRecordControlMembership() const noexcept {
     }
 }
 
+bool dx_data::hasCompleteDwgLineTypeControlMembership() const noexcept {
+    const DRW_DwgFramePublication& control = m_dwgLtypeControlPublication;
+    if (sourceFormat != dx_source_format::DWG || importGeneration == 0u
+        || !dwgReadOutcome.attempted || !dwgReadOutcome.operationSucceeded
+        || dwgReadOutcome.sourceVersion == DRW::UNKNOWNV
+        || sourceVersion != dwgReadOutcome.sourceVersion
+        || m_dwgLtypeControlCaptureFailed
+        || !m_dwgLtypeControlPublicationSeen
+        || m_dwgLtypeControlGeneration != importGeneration
+        || basicTableCaptureFailed
+        || control.m_handle == 0u || control.m_handle == DRW::NoHandle
+        || control.m_version != dwgReadOutcome.sourceVersion
+        || control.m_encodedType != DRW::DwgLTypeControlObjectType
+        || control.m_resolvedType != DRW::DwgLTypeControlObjectType
+        || control.m_recordName != "LTYPE_CONTROL"
+        || control.m_carrier != DRW_DwgFramePublication::Carrier::Control
+        || control.m_isEntity || control.m_isCustomClass
+        || control.m_classStreamOrdinal.has_value()
+        || !control.m_className.empty()
+        || control.m_commonLinkEvidence
+            != DRW_DwgCommonLinkEvidence::NotApplicable
+        || !control.m_hasSourceLocation
+        || (control.m_sourceOffsetSpace
+                != DRW_DwgFrameOffsetSpace::PhysicalFile
+            && control.m_sourceOffsetSpace
+                != DRW_DwgFrameOffsetSpace::DecodedBuffer)
+        || control.m_controlHandles.size() < 3u
+        || control.m_controlHandles.size() > kMaxAdapterBasicTableRecords
+        || lineTypes.size() != control.m_controlHandles.size())
+        return false;
+
+    try {
+        std::unordered_set<std::uint32_t> declaredHandles;
+        declaredHandles.reserve(control.m_controlHandles.size());
+        for (const std::uint32_t handle : control.m_controlHandles) {
+            if (handle == 0u || handle == DRW::NoHandle
+                || !declaredHandles.insert(handle).second)
+                return false;
+        }
+
+        const std::size_t phantomStart =
+            control.m_controlHandles.size() - 2u;
+        const std::uint32_t firstPhantom =
+            control.m_controlHandles[phantomStart];
+        const std::uint32_t secondPhantom =
+            control.m_controlHandles[phantomStart + 1u];
+        if (!((firstPhantom == DRW::DwgLtypeByBlockHandle
+               && secondPhantom == DRW::DwgLtypeByLayerHandle)
+              || (firstPhantom == DRW::DwgLtypeByLayerHandle
+                  && secondPhantom == DRW::DwgLtypeByBlockHandle))
+            || std::find(control.m_controlHandles.cbegin(),
+                         control.m_controlHandles.cbegin()
+                             + static_cast<std::ptrdiff_t>(phantomStart),
+                         DRW::DwgLtypeContinuousHandle)
+                == control.m_controlHandles.cbegin()
+                     + static_cast<std::ptrdiff_t>(phantomStart))
+            return false;
+
+        std::unordered_map<std::uint32_t, const DRW_LType*> recordsByHandle;
+        recordsByHandle.reserve(lineTypes.size());
+        std::unordered_set<std::string> names;
+        names.reserve(lineTypes.size());
+        for (const DRW_LType& record : lineTypes) {
+            if (record.handle == 0u || record.handle == DRW::NoHandle
+                || record.parentHandle != control.m_handle
+                || record.name.empty()
+                || declaredHandles.erase(record.handle) != 1u
+                || !recordsByHandle.emplace(record.handle, &record).second)
+                return false;
+            std::string key;
+            key.reserve(record.name.size());
+            for (const unsigned char value : record.name) {
+                key.push_back(value >= 'a' && value <= 'z'
+                                  ? static_cast<char>(value - 'a' + 'A')
+                                  : static_cast<char>(value));
+            }
+            if (!names.insert(std::move(key)).second)
+                return false;
+            const std::uint32_t fixedHandle =
+                sameAsciiName(record.name, "BYBLOCK")
+                    ? DRW::DwgLtypeByBlockHandle
+                    : sameAsciiName(record.name, "BYLAYER")
+                        ? DRW::DwgLtypeByLayerHandle
+                        : sameAsciiName(record.name, "CONTINUOUS")
+                            ? DRW::DwgLtypeContinuousHandle : 0u;
+            if (fixedHandle != 0u && record.handle != fixedHandle)
+                return false;
+        }
+        if (!declaredHandles.empty())
+            return false;
+
+        const auto hasFixedName = [&recordsByHandle](std::uint32_t handle,
+                                                      const char* name) {
+            const auto found = recordsByHandle.find(handle);
+            return found != recordsByHandle.end()
+                && sameAsciiName(found->second->name, name);
+        };
+        return hasFixedName(DRW::DwgLtypeByBlockHandle, "BYBLOCK")
+            && hasFixedName(DRW::DwgLtypeByLayerHandle, "BYLAYER")
+            && hasFixedName(DRW::DwgLtypeContinuousHandle, "CONTINUOUS");
+    } catch (...) {
+        return false;
+    }
+}
+
 bool dx_data::getLayerTableControlExtensionDictionary(
         std::uint32_t& controlHandle,
         std::uint32_t& dictionaryHandle) const noexcept {
@@ -66614,6 +66776,10 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
     fData->m_dwgBlockControlGeneration = 0u;
     fData->m_dwgBlockControlPublicationSeen = false;
     fData->m_dwgBlockControlCaptureFailed = false;
+    fData->m_dwgLtypeControlPublication = {};
+    fData->m_dwgLtypeControlGeneration = 0u;
+    fData->m_dwgLtypeControlPublicationSeen = false;
+    fData->m_dwgLtypeControlCaptureFailed = false;
     fData->m_dwgLayerControlPublication = {};
     fData->m_dwgLayerControlGeneration = 0u;
     fData->m_dwgLayerControlPublicationSeen = false;

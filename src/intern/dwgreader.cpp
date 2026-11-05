@@ -8272,8 +8272,14 @@ bool dwgReader::readDwgTables(DRW_Header &hdr, dwgBuffer *dbuf,
       }
       publication.setCommonLinkEvidence(
           DRW_DwgCommonLinkEvidence::NotApplicable);
-      publication.m_controlHandles.assign(control.handlesList.cbegin(),
-                                          control.handlesList.cend());
+      if (descriptor.controlType == DRW::DwgLTypeControlObjectType) {
+        // LTYPE strict membership needs to distinguish declared null slots
+        // from a genuinely complete compact member list.
+        publication.m_controlHandles = control.orderedHandleSlots;
+      } else {
+        publication.m_controlHandles.assign(control.handlesList.cbegin(),
+                                            control.handlesList.cend());
+      }
       publication.m_carrier = DRW_DwgFramePublication::Carrier::Control;
       stagedTableFramePublications.push_back(std::move(publication));
     } catch (...) {

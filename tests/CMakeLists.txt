@@ -2775,6 +2775,15 @@ set_tests_properties(dwg2dxf_dwg_block_record_control_membership PROPERTIES
     TIMEOUT 15
 )
 add_test(
+    NAME dwg2dxf_dwg_ltype_table_control_membership
+    COMMAND libdxfrw_dwg2dxf_adapter_tests
+        --dwg-ltype-table-control-membership
+)
+set_tests_properties(dwg2dxf_dwg_ltype_table_control_membership PROPERTIES
+    LABELS "fast;dwg;adapter;tables;ownership;generated"
+    TIMEOUT 15
+)
+add_test(
     NAME dwg2dxf_dwg_layer_table_control_dictionary
     COMMAND libdxfrw_dwg2dxf_adapter_tests
         --dwg-layer-table-control-dictionary
