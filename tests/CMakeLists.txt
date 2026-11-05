@@ -1495,6 +1495,28 @@ add_test(NAME dwg2dxf_sunstudy_dxf_graph
         "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/run_sunstudy_dxf_graph_test.cmake)
 set_tests_properties(dwg2dxf_sunstudy_dxf_graph PROPERTIES LABELS "fast;dxf;graph;adapter;transaction" TIMEOUT 30)
+add_executable(libdxfrw_sunstudy_objects_allocation_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/sunstudy_objects_allocation_tests.cpp
+    ${_libdxfrw_test_adapter_source}
+)
+target_compile_features(libdxfrw_sunstudy_objects_allocation_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_sunstudy_objects_allocation_tests
+    PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_sunstudy_objects_allocation_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/dwg2dxf
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(libdxfrw_sunstudy_objects_allocation_tests PRIVATE dxfrw)
+add_test(NAME libdxfrw_sunstudy_objects_allocation_retry
+    COMMAND ${CMAKE_COMMAND}
+        "-DALLOCATION_TEST=$<TARGET_FILE:libdxfrw_sunstudy_objects_allocation_tests>"
+        "-DPYTHON=${LIBDXFRW_PYTHON_EXECUTABLE}"
+        "-DAUTHOR=${CMAKE_SOURCE_DIR}/tools/audit_sunstudy_dxf_graph.py"
+        "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_sunstudy_objects_allocation_test.cmake)
+set_tests_properties(libdxfrw_sunstudy_objects_allocation_retry PROPERTIES
+    LABELS "fast;dxf;sunstudy;allocation;transaction;generated"
+    TIMEOUT 60)
 foreach(_sunstudy_version IN ITEMS AC1024 AC1032)
     add_test(NAME dwg2dxf_sunstudy_dxf_graph_${_sunstudy_version}
         COMMAND ${CMAKE_COMMAND}
