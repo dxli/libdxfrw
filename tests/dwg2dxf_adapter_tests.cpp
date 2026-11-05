@@ -19224,10 +19224,117 @@ bool ac1024AcdsOpaqueProxyMatchesOda(const std::string& sourcePath,
         || retriedMaterials != materials)
         return fail("valid source owner did not recover on a fresh retry");
 
+    const auto sourceEntityForHandle = [&source](std::uint32_t handle) {
+        const auto findInBlock = [handle](const dx_ifaceBlock* block)
+                -> DRW_Entity* {
+            if (block == nullptr)
+                return nullptr;
+            for (DRW_Entity* entity : block->ent)
+                if (entity != nullptr && entity->handle == handle)
+                    return entity;
+            return nullptr;
+        };
+        if (DRW_Entity* entity = findInBlock(source.mBlock))
+            return entity;
+        for (dx_ifaceBlock* block : source.blocks)
+            if (DRW_Entity* entity = findInBlock(block))
+                return entity;
+        return static_cast<DRW_Entity*>(nullptr);
+    };
+    const auto expectAtomicRefusal = [&](const char* reason) {
+        DRW_RawDxfObject prior;
+        prior.name = "KEEP";
+        prior.handle = 0x7F101u;
+        std::vector<DRW_RawDxfObject> retained{prior};
+        std::vector<std::uint32_t> retainedMaterials{0x7F102u};
+        const bool accepted = DxIfaceStandardDwgCaptureTestAccess::
+            collectAc1024AcdsOpaqueProxyObjects(
+                source, retained, retainedMaterials, false);
+        if (accepted || retained.size() != 1u
+            || retained.front().name != "KEEP"
+            || retained.front().handle != prior.handle
+            || retainedMaterials != std::vector<std::uint32_t>{0x7F102u})
+            return fail(std::string(reason)
+                        + " did not refuse atomically");
+        return true;
+    };
+
+    const auto solidOwnedFrame = std::find_if(
+        source.acdsHistoryDwgFrames.begin(),
+        source.acdsHistoryDwgFrames.end(), [&](const DRW_UnsupportedObject& frame) {
+            DRW_Entity* owner = sourceEntityForHandle(frame.m_parentHandle);
+            return owner != nullptr && owner->eType == DRW::E3DSOLID;
+        });
+    if (solidOwnedFrame == source.acdsHistoryDwgFrames.end())
+        return fail("ODA-backed source has no ACSH object owned by 3DSOLID");
+    DRW_Entity* solidOwner = sourceEntityForHandle(
+        solidOwnedFrame->m_parentHandle);
+    const DRW::ETYPE savedOwnerType = solidOwner->eType;
+    solidOwner->eType = DRW::LINE;
+    const bool wrongOwnerRefused = expectAtomicRefusal(
+        "existing handle with a non-3DSOLID owner kind");
+    solidOwner->eType = savedOwnerType;
+    if (!wrongOwnerRefused)
+        return false;
+
+    const auto mutateMaterialTargetForCode = [&](int code) {
+        std::uint32_t targetHandle = 0u;
+        for (const DRW_RawDxfObject& raw : projected) {
+            bool inProxyBody = false;
+            for (const DRW_Variant& group : raw.groups) {
+                if (group.code() == 100 && group.type() == DRW_Variant::STRING
+                    && group.c_str() != nullptr
+                    && std::string(group.c_str()) == "AcDbProxyObject") {
+                    inProxyBody = true;
+                    continue;
+                }
+                if (!inProxyBody || group.code() != code
+                    || group.type() != DRW_Variant::STRING
+                    || group.c_str() == nullptr)
+                    continue;
+                try {
+                    std::size_t consumed = 0u;
+                    const unsigned long long parsed = std::stoull(
+                        group.c_str(), &consumed, 16);
+                    if (consumed == std::string(group.c_str()).size()
+                        && parsed != 0u
+                        && parsed <= std::numeric_limits<std::uint32_t>::max())
+                        targetHandle = static_cast<std::uint32_t>(parsed);
+                } catch (...) {
+                    return false;
+                }
+                if (targetHandle != 0u)
+                    break;
+            }
+            if (targetHandle != 0u)
+                break;
+        }
+        if (targetHandle == 0u)
+            return false;
+        auto material = std::find_if(source.materials.begin(),
+            source.materials.end(), [targetHandle](const DRW_Material& value) {
+                return value.handle == targetHandle;
+            });
+        if (material == source.materials.end())
+            return false;
+        const std::uint32_t savedHandle = material->handle;
+        material->handle = DRW::NoHandle;
+        const bool refused = expectAtomicRefusal(
+            code == 330
+                ? "group-330 reference to a handle without a MATERIAL"
+                : "group-340 reference to a handle without a MATERIAL");
+        material->handle = savedHandle;
+        return refused;
+    };
+    if (!mutateMaterialTargetForCode(330)
+        || !mutateMaterialTargetForCode(340))
+        return fail("proxy material reference target-kind mutation was accepted");
+
     std::cout << "AC1024 ACSH proxy projection matched ODA groups: "
               << matched << " objects; ordered EED groups=" << eedGroups
               << "; source parser failures retained="
               << source.dwgReadOutcome.observations.objectParseFailures
+              << "; wrong owner/reference target kinds refused atomically"
               << '\n';
     return true;
 }

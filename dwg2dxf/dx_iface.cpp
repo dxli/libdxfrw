@@ -8363,12 +8363,20 @@ bool dx_iface::collectAc1024AcdsOpaqueProxyObjects(
         std::unordered_map<std::uint32_t, std::size_t> classCounts;
         std::unordered_map<std::uint32_t, const DRW_UnsupportedObject*>
             acdsByHandle;
+        std::unordered_map<std::uint32_t, DRW::ETYPE> entityTypesByHandle;
+        std::unordered_map<std::uint32_t, std::size_t> dictionaryHandleCounts;
+        std::unordered_map<std::uint32_t, std::size_t> materialHandleCounts;
+        std::unordered_set<std::uint32_t> acdsOwnerHandles;
         std::vector<DRW_RawDxfObject> projected;
         std::set<std::uint32_t> projectedMaterials;
         projected.reserve(data.acdsHistoryDwgFrames.size());
         sourceTargets.reserve(data.dwgReadOutcome.opaqueViewCallbacks
                               + data.acdsHistoryDwgFrames.size());
         acdsByHandle.reserve(data.acdsHistoryDwgFrames.size());
+        acdsOwnerHandles.reserve(data.acdsHistoryDwgFrames.size());
+        entityTypesByHandle.reserve(data.acdsHistoryDwgFrames.size());
+        dictionaryHandleCounts.reserve(data.acdsHistoryDwgFrames.size());
+        materialHandleCounts.reserve(data.materials.size());
 
         const auto addHandle = [&sourceTargets](std::uint32_t handle) {
             if (handle != 0u && handle != DRW::NoHandle)
@@ -8453,7 +8461,50 @@ bool dx_iface::collectAc1024AcdsOpaqueProxyObjects(
             if (!acdsByHandle.emplace(frame.m_handle, &frame).second)
                 return reject("duplicate captured source handle",
                               frame.m_handle);
+            if (frame.m_parentHandle != 0u
+                && frame.m_parentHandle != DRW::NoHandle)
+                acdsOwnerHandles.insert(frame.m_parentHandle);
             addHandle(frame.m_handle);
+        }
+
+        // The retained ACAD2013 projections establish this bounded AC1024
+        // owner profile: ACSH proxy objects are owned by 3DSOLID entities,
+        // other captured ACSH objects, or typed DICTIONARY objects. A present
+        // handle with another kind is not an owner proof.
+        std::unordered_set<const dx_ifaceBlock*> visitedBlocks;
+        const auto indexEntityTypes = [&](const dx_ifaceBlock* block) {
+            if (block == nullptr)
+                return false;
+            if (!visitedBlocks.insert(block).second)
+                return true;
+            for (const DRW_Entity* entity : block->ent) {
+                if (entity == nullptr)
+                    return false;
+                if (entity->handle == 0u || entity->handle == DRW::NoHandle)
+                    continue;
+                if (acdsOwnerHandles.count(entity->handle) == 0u)
+                    continue;
+                if (!entityTypesByHandle.emplace(entity->handle,
+                                                 entity->eType).second)
+                    return false;
+            }
+            return true;
+        };
+        if (!indexEntityTypes(data.mBlock))
+            return reject("duplicate or invalid source entity target identity");
+        for (const dx_ifaceBlock* block : data.blocks) {
+            if (!indexEntityTypes(block))
+                return reject("duplicate or invalid source entity target identity");
+        }
+        for (const DRW_Dictionary& dictionary : data.dictionaries) {
+            if (acdsOwnerHandles.count(dictionary.handle) != 0u
+                && dictionary.handle != 0u
+                && dictionary.handle != DRW::NoHandle)
+                ++dictionaryHandleCounts[dictionary.handle];
+        }
+        for (const DRW_Material& material : data.materials) {
+            if (material.handle != 0u && material.handle != DRW::NoHandle)
+                ++materialHandleCounts[material.handle];
         }
 
         for (const DRW_UnsupportedObject& frame :
@@ -8505,6 +8556,31 @@ bool dx_iface::collectAc1024AcdsOpaqueProxyObjects(
             if (!requireTarget(frame.m_parentHandle))
                 return reject("common owner has no captured source target",
                               frame.m_handle);
+            const auto ownerEntity = entityTypesByHandle.find(
+                frame.m_parentHandle);
+            const bool ownerIs3dSolid =
+                ownerEntity != entityTypesByHandle.end()
+                && ownerEntity->second == DRW::E3DSOLID;
+            const bool ownerIsAcdsObject =
+                acdsByHandle.count(frame.m_parentHandle) == 1u;
+            const auto ownerDictionary = dictionaryHandleCounts.find(
+                frame.m_parentHandle);
+            const bool ownerIsDictionary =
+                ownerDictionary != dictionaryHandleCounts.end()
+                && ownerDictionary->second == 1u;
+            const bool ownerHasWrongEntityKind =
+                ownerEntity != entityTypesByHandle.end()
+                && !ownerIs3dSolid;
+            const bool ownerHasAmbiguousDictionary =
+                ownerDictionary != dictionaryHandleCounts.end()
+                && ownerDictionary->second != 1u;
+            if (static_cast<unsigned>(ownerIs3dSolid)
+                    + static_cast<unsigned>(ownerIsAcdsObject)
+                    + static_cast<unsigned>(ownerIsDictionary) != 1u
+                || ownerHasWrongEntityKind || ownerHasAmbiguousDictionary) {
+                return reject("common owner has an unsupported target kind",
+                              frame.m_handle);
+            }
             for (const std::uint32_t reactor : frame.m_reactorHandles)
                 if (!requireTarget(reactor))
                     return reject("reactor has no captured source target",
@@ -8527,14 +8603,25 @@ bool dx_iface::collectAc1024AcdsOpaqueProxyObjects(
                 if (!requireTarget(reference.m_handle))
                     return reject("proxy reference has no captured target",
                                   frame.m_handle);
-                if (reference.m_dxfCode == 340) {
-                    const auto material = std::find_if(
-                        data.materials.begin(), data.materials.end(),
-                        [&reference](const DRW_Material& candidate) {
-                            return candidate.handle == reference.m_handle;
-                        });
-                    if (material != data.materials.end())
-                        projectedMaterials.insert(material->handle);
+                if (reference.m_dxfCode == 360) {
+                    if (acdsByHandle.count(static_cast<std::uint32_t>(
+                            reference.m_handle)) != 1u)
+                        return reject("group-360 target is not a captured ACSH object",
+                                      frame.m_handle);
+                } else if (reference.m_dxfCode == 330
+                           || reference.m_dxfCode == 340) {
+                    const auto material = materialHandleCounts.find(
+                        static_cast<std::uint32_t>(reference.m_handle));
+                    if (material == materialHandleCounts.end()
+                        || material->second != 1u)
+                        return reject("group-330/340 target is not a unique MATERIAL",
+                                      frame.m_handle);
+                    if (reference.m_dxfCode == 340)
+                        projectedMaterials.insert(
+                            static_cast<std::uint32_t>(reference.m_handle));
+                } else {
+                    return reject("proxy reference has an unsupported target role",
+                                  frame.m_handle);
                 }
             }
             projected.push_back(std::move(raw));
