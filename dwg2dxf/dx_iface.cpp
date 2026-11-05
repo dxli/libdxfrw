@@ -8351,6 +8351,110 @@ bool buildAc1024VisualStyleRaw(const DRW_VisualStyle& typed,
     return true;
 }
 
+bool buildAc1021VisualStyleRaw(const DRW_VisualStyle& typed,
+                               DRW_RawDxfObject& output) {
+    const DRW_VisualStyleBody& body = typed.m_body;
+    const DRW_VisualStyleEncoding& encoding = body.m_encoding;
+    if (!body.hasLegacyReserved || !std::isfinite(body.legacyReserved))
+        return false;
+    output = DRW_RawDxfObject{};
+    output.name = "VISUALSTYLE";
+    output.handle = typed.handle;
+    output.parentHandle = typed.parentHandle;
+    output.m_version = DRW::AC1021;
+    output.groups.emplace_back(5, proxyHandleString(typed.handle));
+    output.groups.emplace_back(102, "{ACAD_REACTORS");
+    output.groups.emplace_back(
+        330, proxyHandleString(typed.reactorHandles.front()));
+    output.groups.emplace_back(102, "}");
+    output.groups.emplace_back(330, proxyHandleString(typed.parentHandle));
+    output.groups.emplace_back(100, "AcDbVisualStyle");
+    output.groups.emplace_back(2, typed.desc);
+    output.groups.emplace_back(70, typed.type);
+
+    const auto appendInteger = [&output](int code, std::int32_t value) {
+        output.groups.emplace_back(code, value);
+    };
+    const auto appendReal = [&output](int code, double value) {
+        output.groups.emplace_back(code, value);
+    };
+    const auto legacyAciForWitnessedCmc = [](std::uint32_t rawRgb) {
+        if (rawRgb == 0xC2FFFFFFu)
+            return 7;
+        if (rawRgb == 0xC2808080u)
+            return 9;
+        // The admitted AC1021 source also contains C2787878, which has no
+        // exact ACI palette entry and therefore uses the true-color fallback.
+        return 256;
+    };
+    const auto appendColor = [&output, &encoding, &legacyAciForWitnessedCmc](
+                                std::size_t colorIndex, int code,
+                                int extensionCode) {
+        const DRW_VisualStyleColor& color = encoding.colors[colorIndex];
+        const std::uint8_t method =
+            static_cast<std::uint8_t>(color.rawRgb >> 24u);
+        const int dxfColor = method == 0xC2u
+            ? legacyAciForWitnessedCmc(color.rawRgb)
+            : (method == 0xC8u ? 257 : color.normalizedIndex);
+        output.groups.emplace_back(code, dxfColor);
+        if (method == 0xC2u)
+            output.groups.emplace_back(
+                extensionCode, static_cast<std::uint64_t>(color.rawRgb));
+    };
+
+    appendInteger(71, body.faceLightingModel);
+    appendInteger(72, body.faceLightingQuality);
+    appendInteger(73, body.faceColorMode);
+    appendInteger(90, body.faceModifier);
+    appendReal(40, body.faceOpacity);
+    appendReal(41, body.faceSpecular);
+    appendInteger(62, 5); // Legacy AC1021 face color constant in dwg2.spec.
+    const std::uint8_t faceColorMethod = static_cast<std::uint8_t>(
+        encoding.colors[0].rawRgb >> 24u);
+    output.groups.emplace_back(63, faceColorMethod == 0xC2u
+        ? legacyAciForWitnessedCmc(encoding.colors[0].rawRgb)
+        : (faceColorMethod == 0xC8u ? 257
+                                    : encoding.colors[0].normalizedIndex));
+    if (faceColorMethod == 0xC2u)
+        output.groups.emplace_back(
+            421, static_cast<std::uint64_t>(encoding.colors[0].rawRgb));
+    appendInteger(74, body.edgeModel);
+    appendInteger(91, body.edgeStyle);
+    appendColor(1u, 64, 422);
+    appendColor(2u, 65, 423);
+    appendInteger(75, body.edgeObscuredLtype);
+    appendInteger(175, body.edgeIntersectionLtype);
+    appendReal(42, body.edgeCreaseAngle);
+    appendInteger(92, body.edgeModifier);
+    appendColor(3u, 66, 424);
+    appendReal(43, body.edgeOpacity);
+    appendInteger(76, body.edgeWidth);
+    appendInteger(77, body.edgeOverhang);
+    appendInteger(78, body.edgeJitter);
+    appendColor(4u, 67, 425);
+    appendInteger(79, body.edgeSilhouetteWidth);
+    appendInteger(170, body.edgeHaloGap);
+    appendInteger(171, body.edgeIsolines);
+    appendInteger(290, body.edgeDoHidePrecision ? 1 : 0);
+    appendInteger(174, body.edgeStyleApply);
+    appendInteger(93, body.displaySettings);
+    appendReal(44, body.displayBrightness);
+    appendInteger(173, body.displayShadowType);
+    appendInteger(291, body.internalOnly ? 1 : 0);
+    appendReal(45, body.legacyReserved);
+    return true;
+}
+
+bool buildDwgVisualStyleRaw(DRW::Version sourceVersion,
+                            const DRW_VisualStyle& typed,
+                            DRW_RawDxfObject& output) {
+    if (sourceVersion == DRW::AC1021)
+        return buildAc1021VisualStyleRaw(typed, output);
+    if (sourceVersion == DRW::AC1024)
+        return buildAc1024VisualStyleRaw(typed, output);
+    return false;
+}
+
 } // namespace
 
 bool dx_iface::writeVisualStyleRaw(DRW_RawDxfObject* raw,
@@ -8370,15 +8474,14 @@ bool dx_iface::writeVisualStyleRaw(DRW_RawDxfObject* raw,
 
         if (cData == nullptr
             || cData->sourceFormat != dx_source_format::DWG
-            || cData->sourceVersion != DRW::AC1024
-            || dxfW->getVersion() != DRW::AC1024
-            || !cData->hasCompleteAc1024VisualStyleSourceProfile()
+            || dxfW->getVersion() != cData->sourceVersion
+            || !cData->hasCompleteDwgVisualStyleSourceProfile()
             || !hasUnchangedDxfVisualStyles())
             return false;
         const auto source = m_dxfVisualStyles.find(typed->handle);
         if (source == m_dxfVisualStyles.end()
             || !visualStyleModelEqual(*typed, source->second.model,
-                                      DRW::AC1024))
+                                      cData->sourceVersion))
             return false;
         return dxfW->writeRawDxfObject(&source->second.output);
     } catch (...) {
@@ -10450,7 +10553,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         }
         const bool typedDwgVisualStyleRoute =
             data->sourceFormat == dx_source_format::DWG
-            && data->hasCompleteAc1024VisualStyleSourceProfile();
+            && data->hasCompleteDwgVisualStyleSourceProfile();
         if ((typedDwgVisualStyleRoute && !rawVisualStyles.empty())
             || (!typedDwgVisualStyleRoute
                 && rawVisualStyles.size() != visualStyles.size())) {
@@ -12873,7 +12976,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         const auto raw = rawVisualStyles.find(frame.handle);
                         const bool typedDwgVisualStyleRoute =
                             data->sourceFormat == dx_source_format::DWG
-                            && data->hasCompleteAc1024VisualStyleSourceProfile();
+                            && data->hasCompleteDwgVisualStyleSourceProfile();
                         if (typedDwgVisualStyleRoute
                             ? raw != rawVisualStyles.end()
                                 || frame.visualStyle->parentHandle
@@ -15646,8 +15749,8 @@ bool dx_iface::validateVisualStyleReferences(const dx_data& data,
         *failure = nullptr;
     const bool typedDwgVisualStyleRoute =
         data.sourceFormat == dx_source_format::DWG
-        && targetVersion == DRW::AC1024
-        && data.hasCompleteAc1024VisualStyleSourceProfile();
+        && targetVersion == data.sourceVersion
+        && data.hasCompleteDwgVisualStyleSourceProfile();
     if (!data.headerC.canWriteDxfVisualStyleReferences(targetVersion))
         return reject("HEADER VisualStyle hard pointer is malformed or unavailable for the target version");
     const auto isVisualStyleKey = [](const std::string& name) {
@@ -21869,15 +21972,16 @@ bool visualStyleModelEqual(const DRW_VisualStyle& lhs,
         b.bProp1c, b.bProp1d, b.bProp1e, b.bProp1f, b.bProp20,
         b.bProp21, b.bProp22, b.bProp23, b.bProp24, b.bProp2d,
         b.bProp31, b.bProp37}};
-    const std::array<double, 10> aDoubles{{
+    const std::array<double, 11> aDoubles{{
         a.faceOpacity, a.faceSpecular, a.edgeCreaseAngle, a.edgeOpacity,
-        a.displayBrightness, a.bdProp26, a.bdProp27, a.bdProp34,
+        a.displayBrightness, a.legacyReserved, a.bdProp26, a.bdProp27, a.bdProp34,
         a.bdProp38, a.bdProp39}};
-    const std::array<double, 10> bDoubles{{
+    const std::array<double, 11> bDoubles{{
         b.faceOpacity, b.faceSpecular, b.edgeCreaseAngle, b.edgeOpacity,
-        b.displayBrightness, b.bdProp26, b.bdProp27, b.bdProp34,
+        b.displayBrightness, b.legacyReserved, b.bdProp26, b.bdProp27, b.bdProp34,
         b.bdProp38, b.bdProp39}};
     if (aIntegers != bIntegers || aBooleans != bBooleans
+        || a.hasLegacyReserved != b.hasLegacyReserved
         || a.strokes != b.strokes
         || a.m_encoding.companions != b.m_encoding.companions
         || a.m_encoding.companionCount != b.m_encoding.companionCount
@@ -21893,6 +21997,7 @@ bool visualStyleModelEqual(const DRW_VisualStyle& lhs,
         const DRW_VisualStyleColor& right = b.m_encoding.colors[index];
         if (left.present != right.present || left.modern != right.modern
             || left.rawIndex != right.rawIndex || left.rawRgb != right.rawRgb
+            || left.cmcIndex != right.cmcIndex
             || left.flags != right.flags
             || left.normalizedIndex != right.normalizedIndex
             || left.name != right.name || left.bookName != right.bookName)
@@ -21914,10 +22019,11 @@ bool dx_iface::prepareDxfVisualStyles(DRW::Version version,
     m_dxfVisualStyleOutputBytes = 0u;
     if (cData == nullptr || m_extensionVisualStyleHandles.empty()
         || cData->sourceFormat != dx_source_format::DWG
-        || cData->sourceVersion != DRW::AC1024)
+        || (cData->sourceVersion != DRW::AC1021
+            && cData->sourceVersion != DRW::AC1024))
         return true;
-    if (version != DRW::AC1024
-        || !cData->hasCompleteAc1024VisualStyleSourceProfile()
+    if (version != cData->sourceVersion
+        || !cData->hasCompleteDwgVisualStyleSourceProfile()
         || m_extensionVisualStyleHandles.size() != cData->visualStyles.size()
         || m_extensionVisualStyleHandles.size()
             > dx_data::kMaxVisualStyleTypedRetainedRecords)
@@ -21937,7 +22043,8 @@ bool dx_iface::prepareDxfVisualStyles(DRW::Version version,
                 return false;
             DxfVisualStyleWriteSource source;
             source.model = style;
-            if (!buildAc1024VisualStyleRaw(style, source.output))
+            if (!buildDwgVisualStyleRaw(cData->sourceVersion, style,
+                                        source.output))
                 return false;
             std::size_t modelBytes = 0u;
             std::size_t outputBytes = 0u;
@@ -21979,11 +22086,13 @@ bool dx_iface::hasUnchangedDxfVisualStyles() const noexcept {
             && m_dxfVisualStyleOutputBytes == 0u;
     if (cData == nullptr || m_dxfVisualStyleOwner != cData
         || m_dxfVisualStyleGeneration != cData->importGeneration
-        || m_dxfVisualStyleOutputVersion != DRW::AC1024
-        || (dxfW != nullptr && dxfW->getVersion() != DRW::AC1024)
+        || m_dxfVisualStyleOutputVersion != cData->sourceVersion
+        || (dxfW != nullptr
+            && dxfW->getVersion() != cData->sourceVersion)
         || cData->sourceFormat != dx_source_format::DWG
-        || cData->sourceVersion != DRW::AC1024
-        || !cData->hasCompleteAc1024VisualStyleSourceProfile()
+        || (cData->sourceVersion != DRW::AC1021
+            && cData->sourceVersion != DRW::AC1024)
+        || !cData->hasCompleteDwgVisualStyleSourceProfile()
         || cData->visualStyles.size() != m_dxfVisualStyles.size()
         || m_extensionVisualStyleHandles.size() != m_dxfVisualStyles.size()
         || m_dxfVisualStyleOutputBytes
@@ -22001,10 +22110,11 @@ bool dx_iface::hasUnchangedDxfVisualStyles() const noexcept {
             if (found == m_dxfVisualStyles.end()
                 || selected.erase(style.handle) != 1u
                 || !visualStyleModelEqual(style, found->second.model,
-                                           DRW::AC1024))
+                                           cData->sourceVersion))
                 return false;
             DRW_RawDxfObject liveOutput;
-            if (!buildAc1024VisualStyleRaw(style, liveOutput)
+            if (!buildDwgVisualStyleRaw(cData->sourceVersion, style,
+                                        liveOutput)
                 || !retainedRawDxfObjectsEqual(liveOutput,
                                                found->second.output))
                 return false;

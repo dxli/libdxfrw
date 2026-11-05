@@ -2435,8 +2435,8 @@ public:
                 }
                 if (rawMatches != 0u || typedMatches != 1u
                     || typed == nullptr
-                    || !cData->hasCompleteAc1024VisualStyleSourceProfile()
-                    || dxfW->getVersion() != DRW::AC1024
+                    || !cData->hasCompleteDwgVisualStyleSourceProfile()
+                    || dxfW->getVersion() != cData->sourceVersion
                     || !writeVisualStyleRaw(nullptr, typed))
                     return;
             } else {

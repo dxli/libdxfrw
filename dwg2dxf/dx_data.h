@@ -35,6 +35,7 @@
 
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <list>
@@ -1379,7 +1380,10 @@ public:
                     || color.flags != 0u || !color.name.empty()
                     || !color.bookName.empty()
                     || (method != 0xC2u && method != 0xC3u
-                        && method != 0xC8u))
+                        && method != 0xC8u)
+                    || (method == 0xC2u
+                        && color.rawRgb != 0xC2FFFFFFu
+                        && color.rawRgb != 0xC2808080u))
                     return false;
                 if ((method == 0xC2u && color.normalizedIndex != 256)
                     || (method == 0xC3u
@@ -1394,6 +1398,81 @@ public:
                     return false;
         }
         return true;
+    }
+
+    // Bounded legacy R2007 profile. Its DXF property order differs from the
+    // R2010 companion-coded form, and the R2007 reserved double is retained
+    // explicitly so the same-version writer cannot silently replace it.
+    bool hasCompleteAc1021VisualStyleSourceProfile() const noexcept {
+        if (!hasSingleSuccessfulVisualStyleImport()
+            || visualStyleImport.sourceFormat != dx_source_format::DWG
+            || visualStyleImport.sourceVersion != DRW::AC1021
+            || visualStyles.empty() || !rawVisualStyleObjects.empty())
+            return false;
+
+        for (const DRW_VisualStyle& style : visualStyles) {
+            const DRW_VisualStyleBody& body = style.m_body;
+            const DRW_VisualStyleEncoding& encoding = body.m_encoding;
+            if (!style.m_bodyDecoded || body.hasR2013bExpansion
+                || encoding.companionCount != 0u
+                || encoding.colorCount != 5u
+                || encoding.hasSourceIsolines
+                || body.edgeIsolines < 0
+                || body.edgeIsolines > DRW_VisualStyleBody::kMaxEdgeIsolines
+                || !body.hasLegacyReserved
+                || !std::isfinite(body.legacyReserved)
+                || style.handle == 0u || style.handle == DRW::NoHandle
+                || style.parentHandle == 0u
+                || style.parentHandle == DRW::NoHandle
+                || style.reactorCount() != 1u
+                || style.reactorHandles.size() != 1u
+                || style.reactorHandles.front() != style.parentHandle
+                || style.extensionDictionaryFlag() != 1u
+                || style.xDictHandle != 0u
+                || style.hasDataStorageBinaryData()
+                || !style.extData.empty() || !style.appData.empty()
+                || !style.pendingAppIdResolutions.empty()
+                || !style.pendingLayerRefResolutions.empty())
+                return false;
+
+            for (std::size_t index = 0u; index < encoding.colorCount; ++index) {
+                const DRW_VisualStyleColor& color = encoding.colors[index];
+                const std::uint8_t method =
+                    static_cast<std::uint8_t>(color.rawRgb >> 24u);
+                if (!color.present || !color.modern || color.rawIndex != 0u
+                    || color.flags != 0u || !color.name.empty()
+                    || !color.bookName.empty()
+                    || (method != 0xC2u && method != 0xC3u
+                        && method != 0xC8u))
+                    return false;
+                // This source profile contains three exact C2 colors. The
+                // fallback ACI is 256 for the non-palette RGB value; keep the
+                // admitted color set explicit until the general palette
+                // conversion has independent coverage.
+                if (method == 0xC2u
+                    && color.rawRgb != 0xC2FFFFFFu
+                    && color.rawRgb != 0xC2787878u
+                    && color.rawRgb != 0xC2808080u)
+                    return false;
+                if ((method == 0xC2u && color.normalizedIndex != 256)
+                    || (method == 0xC3u
+                        && color.normalizedIndex
+                            != static_cast<int>(color.rawRgb & 0xFFu))
+                    || (method == 0xC8u && color.normalizedIndex != 256))
+                    return false;
+            }
+            for (std::size_t index = encoding.colorCount;
+                 index < encoding.colors.size(); ++index)
+                if (encoding.colors[index].present)
+                    return false;
+        }
+        return true;
+    }
+
+    bool hasCompleteDwgVisualStyleSourceProfile() const noexcept {
+        return visualStyleImport.sourceVersion == DRW::AC1021
+            ? hasCompleteAc1021VisualStyleSourceProfile()
+            : hasCompleteAc1024VisualStyleSourceProfile();
     }
 
     // Verifies one fresh, successful import and (for DXF) a one-to-one

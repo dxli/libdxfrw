@@ -34659,6 +34659,12 @@ bool DRW_VisualStyle::parseCode(int code, const std::unique_ptr<dxfReader>& read
                 reader->getUtf8String()))
             return false;
         break;
+    case 45:
+        if (m_dxfInVisualStyle && reader->getVersion() == DRW::AC1021) {
+            m_body.legacyReserved = reader->getDouble();
+            m_body.hasLegacyReserved = true;
+        }
+        break;
     case 70:
         if (m_dxfInVisualStyle && !m_dxfInPropertyTail)
             type = reader->getInt32();
@@ -34755,7 +34761,8 @@ bool DRW_VisualStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32
         std::uint32_t parsed = 0;
         if (!readCmColorWithinBounds(bodyBuf, bodySBuf, version, bodyEnd,
                                      stringEnd, parsed, nullptr, &source.name,
-                                     &source.bookName)
+                                     &source.bookName, nullptr, nullptr,
+                                     nullptr, &source.cmcIndex)
             || !prefix.isGood())
             return false;
         value = static_cast<int>(parsed);
@@ -34820,9 +34827,15 @@ bool DRW_VisualStyle::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32
 
         if (bodyBytesRemaining()) {
             double ignoredReserved = 0.0;
-            if (!readLong(m_body.displayShadowType)
-                || (version >= DRW::AC1021 && !readDouble(ignoredReserved))
-                || !readBit(m_body.internalOnly))
+            if (!readLong(m_body.displayShadowType))
+                return fail();
+            if (version >= DRW::AC1021) {
+                if (!readDouble(ignoredReserved))
+                    return fail();
+                m_body.legacyReserved = ignoredReserved;
+                m_body.hasLegacyReserved = true;
+            }
+            if (!readBit(m_body.internalOnly))
                 return fail();
         }
     } else if (version >= DRW::AC1024 && bodyBytesRemaining()) {
@@ -34961,6 +34974,7 @@ bool DRW_VisualStyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || !validDouble(m_body.edgeCreaseAngle)
         || !validDouble(m_body.edgeOpacity)
         || !validDouble(m_body.displayBrightness)
+        || !validDouble(m_body.legacyReserved)
         || m_body.edgeIsolines < 0
         || m_body.edgeIsolines > DRW_VisualStyleBody::kMaxEdgeIsolines
         || (version < DRW::AC1024
@@ -35093,7 +35107,8 @@ bool DRW_VisualStyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
         buf->putBitLong(visualStyleLong(m_body.displayBrightness));
         buf->putBitLong(m_body.displayShadowType);
         if (version >= DRW::AC1021)
-            buf->putBitDouble(0.0); // bd2007_45, reserved by the layout
+            buf->putBitDouble(m_body.hasLegacyReserved
+                ? m_body.legacyReserved : 0.0);
         buf->putBit(m_body.internalOnly ? 1 : 0);
     } else {
         putShort(buf, m_body.extLightingModel);

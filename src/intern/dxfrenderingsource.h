@@ -80,8 +80,8 @@ public:
         if(std::tie(u.companions,u.companionCount,u.colorCount,u.hasSourceIsolines,u.sourceIsolines)
             !=std::tie(v.companions,v.companionCount,v.colorCount,v.hasSourceIsolines,v.sourceIsolines))return false;
         for(std::size_t i=0u;i<u.colors.size();++i){const auto& c=u.colors[i];const auto& d=v.colors[i];
-            if(std::tie(c.present,c.modern,c.rawIndex,c.rawRgb,c.flags,c.normalizedIndex,c.name,c.bookName)
-                !=std::tie(d.present,d.modern,d.rawIndex,d.rawRgb,d.flags,d.normalizedIndex,d.name,d.bookName))return false;}
+            if(std::tie(c.present,c.modern,c.rawIndex,c.cmcIndex,c.rawRgb,c.flags,c.normalizedIndex,c.name,c.bookName)
+                !=std::tie(d.present,d.modern,d.rawIndex,d.cmcIndex,d.rawRgb,d.flags,d.normalizedIndex,d.name,d.bookName))return false;}
         return true;
     }
     static bool visual(const DRW_VisualStyle& a,const DRW_VisualStyle& b) noexcept {

@@ -55,7 +55,7 @@ std::vector<std::function<void(DRW_VisualStyle&)>> visualMutations() {
     for(std::size_t i=0u;i<DRW_VisualStyleEncoding::kColorCount;++i)for(unsigned field=0u;field<8u;++field)
         edits.push_back([i,field](auto& value){auto& color=value.m_body.m_encoding.colors[i];
             if(field==0u)color.present=!color.present;else if(field==1u)color.modern=!color.modern;else if(field==2u)++color.rawIndex;
-            else if(field==3u)++color.rawRgb;else if(field==4u)++color.flags;else if(field==5u)++color.normalizedIndex;
+            else if(field==3u)++color.rawRgb;else if(field==4u)++color.flags;else if(field==5u)++color.normalizedIndex;else if(field==6u)++color.cmcIndex;
             else if(field==6u)color.name="changed-color";else color.bookName="changed-book";});
     edits.push_back([](auto& value){++value.m_body.m_encoding.companionCount;});
     edits.push_back([](auto& value){++value.m_body.m_encoding.colorCount;});

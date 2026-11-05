@@ -8589,6 +8589,9 @@ struct DRW_VisualStyleColor {
   bool present = false;
   bool modern = false; // R2004+ BS/BL/RC rather than an index-only BS.
   std::uint16_t rawIndex = 0;
+  // The index stored inside the CMC value. It can differ from rawIndex,
+  // which is a separate leading field in the legacy VisualStyle body.
+  std::uint16_t cmcIndex = 0;
   std::uint32_t rawRgb = 0; // Includes the method byte, even if unrecognized.
   std::uint8_t flags = 0;
   int normalizedIndex = 0;
@@ -8640,6 +8643,11 @@ struct DRW_VisualStyleBody {
   // display group
   int displaySettings = 0, displayShadowType = 0;
   double displayBrightness = 0.0;
+  // R2007 stores a reserved double between displayShadowType and
+  // internalOnly. Preserve it so same-version DXF projection can fail closed
+  // or emit the exact source value instead of silently replacing it with 0.
+  double legacyReserved = 0.0;
+  bool hasLegacyReserved = false;
   // r2010b header
   int extLightingModel = 0;
   bool internalOnly = false;

@@ -44016,6 +44016,324 @@ void populateTypedAc1024VisualStyleGraph(dx_data& data) {
     receipt.successful = true;
 }
 
+void populateTypedAc1021VisualStyleGraph(dx_data& data) {
+    data.sourceFormat = dx_source_format::DWG;
+    data.sourceVersion = DRW::AC1021;
+    data.importGeneration = 1u;
+    data.dwgReadOutcome.attempted = true;
+    data.dwgReadOutcome.operationSucceeded = true;
+    data.dwgReadOutcome.sourceVersion = DRW::AC1021;
+    data.hasNamedObjectDictionary = true;
+    data.namedObjectDictionary.handle = 0xCu;
+    data.namedObjectDictionary.name = "NOD";
+    data.namedObjectDictionary.m_entries.push_back(
+        {"ACAD_VISUALSTYLE", 0x700u});
+
+    DRW_Dictionary styles;
+    styles.handle = 0x700u;
+    styles.parentHandle = data.namedObjectDictionary.handle;
+    styles.m_entries.push_back({"GENERATED_STYLE", 0x520u});
+    data.dictionaries.push_back(styles);
+
+    DRW_VisualStyle style;
+    style.handle = 0x520u;
+    style.parentHandle = styles.handle;
+    style.setDwgCommonObjectState(1, 1u, false);
+    style.reactorHandles.push_back(styles.handle);
+    style.desc = "Generated AC1021 VisualStyle";
+    style.type = 8;
+    style.m_bodyDecoded = true;
+    style.m_body.faceLightingModel = 2;
+    style.m_body.faceLightingQuality = 2;
+    style.m_body.faceColorMode = 1;
+    style.m_body.faceModifier = 3;
+    style.m_body.faceOpacity = 0.625;
+    style.m_body.faceSpecular = 4.5;
+    style.m_body.faceMonoColor = 256;
+    style.m_body.edgeModel = 1;
+    style.m_body.edgeStyle = 0;
+    style.m_body.edgeIntersectionColor = 7;
+    style.m_body.edgeObscuredColor = 257;
+    style.m_body.edgeObscuredLtype = 1;
+    style.m_body.edgeIntersectionLtype = 2;
+    style.m_body.edgeCreaseAngle = 0.75;
+    style.m_body.edgeModifier = 3;
+    style.m_body.edgeColor = 7;
+    style.m_body.edgeOpacity = 0.875;
+    style.m_body.edgeWidth = 1;
+    style.m_body.edgeOverhang = 2;
+    style.m_body.edgeJitter = 3;
+    style.m_body.edgeSilhouetteColor = 7;
+    style.m_body.edgeSilhouetteWidth = 4;
+    style.m_body.edgeHaloGap = 5;
+    style.m_body.edgeIsolines = 6;
+    style.m_body.edgeDoHidePrecision = true;
+    style.m_body.edgeStyleApply = 2;
+    style.m_body.displaySettings = 7;
+    style.m_body.displayBrightness = 8.0;
+    style.m_body.displayShadowType = 1;
+    style.m_body.legacyReserved = 12.5;
+    style.m_body.hasLegacyReserved = true;
+    DRW_VisualStyleEncoding& encoding = style.m_body.m_encoding;
+    encoding.colorCount = 5u;
+    const std::array<std::uint32_t, 5> rawColors{{
+        0xC2FFFFFFu, 0xC3000007u, 0xC8000000u,
+        0xC2808080u, 0xC3000007u}};
+    const std::array<int, 5> indices{{256, 7, 256, 256, 7}};
+    const std::array<std::uint16_t, 5> cmcIndices{{5u, 7u, 0u, 7u, 7u}};
+    for (std::size_t index = 0u; index < encoding.colorCount; ++index) {
+        DRW_VisualStyleColor& color = encoding.colors[index];
+        color.present = true;
+        color.modern = true;
+        color.rawIndex = 0u;
+        color.cmcIndex = cmcIndices[index];
+        color.rawRgb = rawColors[index];
+        color.normalizedIndex = indices[index];
+    }
+    dx_iface capture;
+    capture.cData = &data;
+    capture.addVisualStyle(style);
+
+    dx_visualStyleImportReceipt& receipt = data.visualStyleImport;
+    receipt.generation = 1u;
+    receipt.sourceFormat = dx_source_format::DWG;
+    receipt.sourceVersion = DRW::AC1021;
+    receipt.visualStyleBegin = 0u;
+    receipt.visualStyleEnd = data.visualStyles.size();
+    receipt.rawVisualStyleBegin = 0u;
+    receipt.rawVisualStyleEnd = data.rawVisualStyleObjects.size();
+    receipt.typedRetainedRecords = data.visualStyleTypedRetainedRecords;
+    receipt.typedRetainedBytes = data.visualStyleTypedRetainedBytes;
+    receipt.successful = true;
+}
+
+bool typedAc1021VisualStyleWriterRoundTrip(
+        const std::filesystem::path& directory) {
+    std::filesystem::create_directories(directory);
+    for (const bool binary : {false, true}) {
+        const auto output = directory / (binary
+            ? "typed-visual-style-ac1021-binary.dxf"
+            : "typed-visual-style-ac1021-ascii.dxf");
+        dx_data data;
+        populateTypedAc1021VisualStyleGraph(data);
+        if (!data.hasCompleteAc1021VisualStyleSourceProfile())
+            return fail("generated AC1021 VisualStyle source profile was not admitted");
+        dx_iface writer;
+        if (!writer.fileExport(output.string(), DRW::AC1021, binary, &data,
+                               false, false,
+                               dx_dxfSourceTextPolicy::Compatible,
+                               DRW::DxfTextWritePolicy::Compatible,
+                               dx_dxfProxyGraphicsPolicy::Compatible,
+                               dx_dwgReadCompletenessPolicy::Legacy))
+            return fail("typed AC1021 VisualStyle did not export: "
+                + writer.extensionGraphFailureDetail());
+
+        dx_data readback;
+        dx_iface reader;
+        if (!reader.fileImport(output.string(), &readback, false)
+            || readback.visualStyles.size() != 1u
+            || readback.rawVisualStyleObjects.size() != 1u)
+            return fail("typed AC1021 VisualStyle did not reimport as one typed/raw pair");
+        const DRW_RawDxfObject& raw = readback.rawVisualStyleObjects.front();
+        const auto groupIndex = [&raw](int code) {
+            for (std::size_t index = 0u; index < raw.groups.size(); ++index)
+                if (raw.groups[index].code() == code)
+                    return index;
+            return raw.groups.size();
+        };
+        if (raw.m_version != DRW::AC1021
+            || groupIndex(174) == raw.groups.size()
+            || groupIndex(45) == raw.groups.size()
+            || raw.groups[groupIndex(174)].i_val() != 2
+            || raw.groups[groupIndex(45)].d_val() != 12.5
+            || groupIndex(63) == raw.groups.size()
+            || raw.groups[groupIndex(63)].i_val() != 7
+            || groupIndex(421) == raw.groups.size()
+            || raw.groups[groupIndex(421)].i64_val() != 0xC2FFFFFFu
+            || groupIndex(66) == raw.groups.size()
+            || raw.groups[groupIndex(66)].i_val() != 9
+            || groupIndex(424) == raw.groups.size()
+            || raw.groups[groupIndex(424)].i64_val() != 0xC2808080u)
+            return fail("AC1021 VisualStyle legacy fields or CMC extension changed on readback");
+        const DRW_VisualStyle& typed = readback.visualStyles.front();
+        if (typed.m_body.edgeStyleApply != 2)
+            return fail("AC1021 VisualStyle typed edgeStyleApply changed on readback");
+        if (!typed.m_body.hasLegacyReserved
+            || typed.m_body.legacyReserved != 12.5)
+            return fail("AC1021 VisualStyle typed reserved double changed on readback");
+
+        const std::string sentinel = "preserve on rejected AC1021 CMC\n";
+        { std::ofstream existing(output, std::ios::binary | std::ios::trunc);
+          existing << sentinel; }
+        DRW_VisualStyle& mutableStyle = data.visualStyles.front();
+        const std::uint32_t savedRgb =
+            mutableStyle.m_body.m_encoding.colors[0].rawRgb;
+        mutableStyle.m_body.m_encoding.colors[0].rawRgb = 0xC2A1B2C3u;
+        if (writer.fileExport(output.string(), DRW::AC1021, binary, &data,
+                false, false,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::Legacy))
+            return fail("unqualified AC1021 CMC color was emitted");
+        std::ifstream sentinelInput(output, std::ios::binary);
+        const std::string retained{
+            std::istreambuf_iterator<char>(sentinelInput),
+            std::istreambuf_iterator<char>()};
+        if (retained != sentinel)
+            return fail("rejected AC1021 CMC color replaced the prior destination");
+        mutableStyle.m_body.m_encoding.colors[0].rawRgb = savedRgb;
+        if (!writer.fileExport(output.string(), DRW::AC1021, binary, &data,
+                false, false,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::Legacy))
+            return fail("corrected AC1021 VisualStyle retry failed");
+        dx_data retryReadback;
+        dx_iface retryReader;
+        if (!retryReader.fileImport(output.string(), &retryReadback, false)
+            || retryReadback.visualStyles.size() != 1u
+            || retryReadback.rawVisualStyleObjects.size() != 1u)
+            return fail("corrected AC1021 VisualStyle retry did not read back");
+    }
+    return true;
+}
+
+bool physicalAc1021VisualStyleOutput(const std::filesystem::path& sourcePath,
+                                    const std::filesystem::path& directory) {
+    dx_iface sourceReader;
+    dx_data source;
+    if (!sourceReader.fileImport(sourcePath.string(), &source, false))
+        return fail("physical AC1021 VisualStyle source failed ordinary import");
+    if (source.sourceVersion != DRW::AC1021
+        || source.visualStyles.size() != 16u
+        || !source.hasCompleteAc1021VisualStyleSourceProfile()) {
+        std::cerr << "physical VISUALSTYLE diagnostic: version="
+                  << source.sourceVersion << " count="
+                  << source.visualStyles.size() << " complete="
+                  << source.hasCompleteAc1021VisualStyleSourceProfile()
+                  << " retained=" << source.visualStyleTypedRetainedRecords
+                  << " bytes=" << source.visualStyleTypedRetainedBytes
+                  << " receipt=" << source.visualStyleImport.typedRetainedRecords
+                  << '/' << source.visualStyleImport.typedRetainedBytes
+                  << " successful=" << source.visualStyleImport.successful
+                  << " captureFailed=" << source.visualStyleImport.typedCaptureFailed
+                  << '\n';
+        for (const DRW_VisualStyle& style : source.visualStyles)
+            std::cerr << "style " << style.handle << " decoded="
+                      << style.m_bodyDecoded << " colors="
+                      << static_cast<int>(style.m_body.m_encoding.colorCount)
+                      << " reserved=" << style.m_body.hasLegacyReserved << ':'
+                      << style.m_body.legacyReserved << " companions="
+                      << static_cast<int>(style.m_body.m_encoding.companionCount)
+                      << " isolines="
+                      << style.m_body.m_encoding.hasSourceIsolines
+                      << " owner=" << style.parentHandle << " reactors="
+                      << style.reactorHandles.size() << " xdict="
+                      << style.xDictHandle << '\n';
+        if (!source.visualStyles.empty()) {
+            const DRW_VisualStyleEncoding& encoding =
+                source.visualStyles.front().m_body.m_encoding;
+            for (std::size_t index = 0u; index < encoding.colorCount; ++index) {
+                const DRW_VisualStyleColor& color = encoding.colors[index];
+                std::cerr << "color " << index << " present=" << color.present
+                          << " modern=" << color.modern << " rawIndex="
+                          << color.rawIndex << " rawRgb=0x" << std::hex
+                          << color.rawRgb << std::dec << " method=0x"
+                          << std::hex
+                          << static_cast<unsigned>(color.rawRgb >> 24u)
+                          << std::dec << " flags="
+                          << static_cast<unsigned>(color.flags)
+                          << " index=" << color.normalizedIndex << '\n';
+            }
+        }
+        return fail("physical AC1021 VisualStyle source did not match the bounded profile");
+    }
+
+    std::uint32_t styleDictionaryHandle = 0u;
+    std::size_t rootMatches = 0u;
+    for (const DRW_Dictionary::Entry& entry :
+         source.namedObjectDictionary.m_entries) {
+        if (entry.m_name == "ACAD_VISUALSTYLE") {
+            styleDictionaryHandle = entry.m_handle;
+            ++rootMatches;
+        }
+    }
+    const DRW_Dictionary* sourceStyleDictionary = nullptr;
+    for (const DRW_Dictionary& dictionary : source.dictionaries) {
+        if (dictionary.handle != styleDictionaryHandle)
+            continue;
+        sourceStyleDictionary = &dictionary;
+    }
+    if (rootMatches != 1u || sourceStyleDictionary == nullptr
+        || sourceStyleDictionary->m_entries.size() != source.visualStyles.size())
+        return fail("physical AC1021 VISUALSTYLE dictionary does not cover the typed source set");
+
+    dx_data selected;
+    selected.sourceFormat = dx_source_format::DWG;
+    selected.sourceVersion = DRW::AC1021;
+    selected.importGeneration = source.importGeneration;
+    selected.dwgReadOutcome = source.dwgReadOutcome;
+    selected.visualStyleImport = source.visualStyleImport;
+    selected.visualStyleTypedRetainedRecords =
+        source.visualStyleTypedRetainedRecords;
+    selected.visualStyleTypedRetainedBytes =
+        source.visualStyleTypedRetainedBytes;
+    selected.visualStyles = source.visualStyles;
+    selected.hasNamedObjectDictionary = true;
+    selected.namedObjectDictionary.handle = source.namedObjectDictionary.handle;
+    selected.namedObjectDictionary.name = "NOD";
+    selected.namedObjectDictionary.m_entries.push_back(
+        {"ACAD_VISUALSTYLE", styleDictionaryHandle});
+    DRW_Dictionary styleDictionary = *sourceStyleDictionary;
+    selected.dictionaries.push_back(styleDictionary);
+    if (!selected.hasCompleteAc1021VisualStyleSourceProfile())
+        return fail("selected physical AC1021 VisualStyle profile lost source admission");
+
+    std::filesystem::create_directories(directory);
+    for (const bool binary : {false, true}) {
+        const std::filesystem::path output = directory
+            / (binary ? "physical-visual-style-ac1021-binary.dxf"
+                      : "physical-visual-style-ac1021-ascii.dxf");
+        dx_iface writer;
+        if (!writer.fileExport(output.string(), DRW::AC1021, binary,
+                &selected, false, false,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::Legacy))
+            return fail("selected physical AC1021 VisualStyle output failed: "
+                + writer.extensionGraphFailureDetail());
+        dx_data readback;
+        dx_iface reader;
+        if (!reader.fileImport(output.string(), &readback, false)
+            || readback.visualStyles.size() != source.visualStyles.size()
+            || readback.rawVisualStyleObjects.size()
+                != source.visualStyles.size())
+            return fail("selected physical AC1021 VisualStyle output did not reimport completely");
+        for (const DRW_VisualStyle& original : source.visualStyles) {
+            const auto found = std::find_if(readback.visualStyles.begin(),
+                readback.visualStyles.end(), [&original](
+                    const DRW_VisualStyle& candidate) {
+                        return candidate.handle == original.handle;
+                    });
+            if (found == readback.visualStyles.end()
+                || found->desc != original.desc
+                || found->type != original.type
+                || found->parentHandle != original.parentHandle
+                || found->m_body.edgeStyleApply
+                    != original.m_body.edgeStyleApply
+                || found->m_body.hasLegacyReserved
+                    != original.m_body.hasLegacyReserved
+                || found->m_body.legacyReserved
+                    != original.m_body.legacyReserved)
+                return fail("physical AC1021 VisualStyle field or owner changed on output readback");
+        }
+    }
+    return true;
+}
+
 bool typedAc1024VisualStyleWriterRoundTrip(
         const std::filesystem::path& directory) {
     std::filesystem::create_directories(directory);
@@ -73571,6 +73889,12 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--visual-style-ac1024-typed-writer")
         return typedAc1024VisualStyleWriterRoundTrip(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--visual-style-ac1021-typed-writer")
+        return typedAc1021VisualStyleWriterRoundTrip(argv[2]) ? 0 : 1;
+    if (argc == 4
+        && std::string(argv[1]) == "--visual-style-ac1021-physical-output")
+        return physicalAc1021VisualStyleOutput(argv[2], argv[3]) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--visual-style-raw-capture-limits")
         return visualStyleRawCaptureLimitsFailClosed() ? 0 : 1;
