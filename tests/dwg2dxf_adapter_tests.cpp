@@ -968,10 +968,23 @@ public:
                     return e.m_name == "ACAD_WIPEOUT_VARS" && e.m_handle == 0x30u;
                 }) == 1;
         }
-        if (raw.m_version != DRW::AC1027 || raw.m_bodyBitSize != 37u)
+        if ((raw.m_version != DRW::AC1027
+                && raw.m_version != DRW::AC1032)
+            || raw.m_bodyBitSize != 37u)
             return false;
+        const std::uint32_t expectedClass =
+            raw.m_version == DRW::AC1027 ? 516u : 514u;
+        if (raw.m_version == DRW::AC1032) {
+            const std::array<std::uint8_t, 10> expected{{
+                0x44u, 0x80u, 0x4Cu, 0x24u, 0x06u,
+                0x88u, 0x21u, 0x48u, 0x21u, 0x40u}};
+            if (raw.m_hasDataStorage
+                || !std::equal(expected.begin(), expected.end(),
+                               raw.m_rawBytes.begin()))
+                return false;
+        }
         detail::Bits body{raw.m_rawBytes.data(), 0u, 43u};
-        if (body.take(2u) != 1u || body.take(8u) + 0x1F0u != 516u
+        if (body.take(2u) != 1u || body.take(8u) + 0x1F0u != expectedClass
             || detail::handle(body, 0u, 0u, true).value != 0x30u
             || body.shortValue() != 0u || body.longValue() != 1u
             || body.take(1u) != 1u || body.take(1u) != 0u
@@ -72100,7 +72113,8 @@ bool wipeoutVariablesDwgAdapterTransport(bool directNod = false,
     dx_iface physicalReader;
     const DRW_WipeoutVariables* physicalWitness = nullptr;
     if (!generatedSource) {
-        if ((revision != DRW::AC1024 && revision != DRW::AC1027)
+        if ((revision != DRW::AC1024 && revision != DRW::AC1027
+                && revision != DRW::AC1032)
             || !directNod || frameOne
             || !physicalReader.fileImport(
                 physicalSourcePath.string(), &physicalData, false)
@@ -73653,6 +73667,10 @@ int main(int argc, char** argv) {
     if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1024-direct-nod") {
         return wipeoutVariablesDwgAdapterTransport(
             true, DRW::AC1024, false, argv[2]) ? 0 : 1;
+    }
+    if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1032-direct-nod") {
+        return wipeoutVariablesDwgAdapterTransport(
+            true, DRW::AC1032, false, argv[2]) ? 0 : 1;
     }
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-direct-nod")
