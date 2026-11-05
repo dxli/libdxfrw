@@ -142,6 +142,40 @@ public:
     using DRW_Material::parseDwg;
 };
 
+// AC1024 ACSH source frames need only the ordinary OBJECTS prefix decoded;
+// the class-specific body remains opaque.  This probe deliberately exposes
+// no ACSH parser and therefore cannot turn a failed semantic parse into a
+// successful typed record.
+class Ac1024AcdsProxyPrefixProbe final : public DRW_TableEntry {
+public:
+    bool parsePrefix(DRW::Version version, dwgBuffer* buffer,
+                     std::uint32_t handleStreamBits) {
+        if (buffer == nullptr)
+            return false;
+        dwgBuffer stringBuffer = *buffer;
+        return DRW_TableEntry::parseDwg(version, buffer, &stringBuffer,
+                                        handleStreamBits);
+    }
+
+    bool parseDwg(DRW::Version version, dwgBuffer* buffer,
+                  std::uint32_t handleStreamBits) override {
+        return parsePrefix(version, buffer, handleStreamBits);
+    }
+
+    std::uint32_t objectDataEndBit() const noexcept { return objSize; }
+
+    bool readCommonHandlePrefix(DRW::Version version, dwgBuffer& handles,
+                                std::uint32_t& owner,
+                                std::vector<std::uint32_t>& reactors,
+                                std::uint32_t& xdictionary,
+                                std::uint64_t& endBit) const {
+        if (!getDwgHandleEndBit(version, handles, endBit))
+            return false;
+        return readDwgObjectCommonHandles(version, &handles, &owner,
+                                          &reactors, &xdictionary);
+    }
+};
+
 struct RawEntityTableNameReference {
     dx_symbol_output::Kind kind{dx_symbol_output::Kind::Other};
     std::string sourceKey;
@@ -6389,6 +6423,375 @@ bool appendProxyBinaryGroups(DRW_RawDxfObject& raw, int code,
 
 bool makeRawProxyObject(const DRW_ProxyObject& proxy,
                         std::int32_t outputClassId,
+                        DRW_RawDxfObject& raw);
+
+constexpr std::size_t kMaxAdapterAcDsHistoryDwgFrameRecords = 100000u;
+
+bool makeAc1024AcdsDxfClass(const DRW_DwgClassCoverageEntry& source,
+                            int instanceCount, DRW_Class& output) {
+    const auto safeString = [](const std::string& value) {
+        return value.find_first_of("\r\n") == std::string::npos
+            && value.find('\0') == std::string::npos;
+    };
+    const bool acdsClass = source.m_recordName == "ACAD_EVALUATION_GRAPH"
+        || source.m_recordName.rfind("ACSH_", 0u) == 0u;
+    if (!acdsClass || source.m_state != DRW_DwgClassCoverageState::Published
+        || source.m_reason != DRW_DwgClassCoverageReason::None
+        || source.m_classNumber < 500u || source.m_recordName.empty()
+        || source.m_className.empty() || !safeString(source.m_recordName)
+        || !safeString(source.m_className) || !safeString(source.m_appName)
+        || source.m_proxyFlag < 0 || source.m_proxyFlag > 65535
+        || source.m_wasAProxyFlag < 0 || source.m_wasAProxyFlag > 1
+        || source.m_entityFlag != 0 || instanceCount < 0
+        || source.m_instanceCount != instanceCount)
+        return false;
+    output = DRW_Class{};
+    output.recName = source.m_recordName;
+    output.className = source.m_className;
+    output.appName = source.m_appName;
+    output.proxyFlag = source.m_proxyFlag;
+    output.instanceCount = instanceCount;
+    output.wasaProxyFlag = source.m_wasAProxyFlag;
+    output.entityFlag = source.m_entityFlag;
+    output.classNum = source.m_classNumber;
+    output.dwgVersion = source.m_dwgVersion;
+    output.maintenanceVersion = source.m_maintenanceVersion;
+    output.unknown1 = source.m_unknown1;
+    output.unknown2 = source.m_unknown2;
+    output.entityFlagRaw = source.m_entityFlagRaw;
+    return true;
+}
+
+bool copyAcdsProxyBitRange(const std::vector<std::uint8_t>& source,
+                           std::uint64_t startBit, std::uint64_t bitCount,
+                           std::vector<std::uint8_t>& output) {
+    if (source.size() > std::numeric_limits<std::uint64_t>::max() / 8u)
+        return false;
+    const std::uint64_t sourceBits =
+        static_cast<std::uint64_t>(source.size()) * 8u;
+    if (startBit > sourceBits || bitCount > sourceBits - startBit
+        || bitCount > DRW::kMaxDxfBinaryPayloadBytes * 8u
+        || bitCount > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    const std::uint64_t outputBytes = bitCount / 8u
+        + ((bitCount & 7u) != 0u ? 1u : 0u);
+    if (outputBytes > DRW::kMaxDxfBinaryPayloadBytes
+        || outputBytes > std::numeric_limits<std::size_t>::max())
+        return false;
+    try {
+        output.assign(static_cast<std::size_t>(outputBytes), 0u);
+        for (std::uint64_t index = 0u; index < bitCount; ++index) {
+            const std::uint64_t sourceOffset = startBit + index;
+            const unsigned value =
+                (source[static_cast<std::size_t>(sourceOffset >> 3u)]
+                 >> (7u - static_cast<unsigned>(sourceOffset & 7u))) & 1u;
+            if (value != 0u) {
+                output[static_cast<std::size_t>(index >> 3u)]
+                    |= static_cast<std::uint8_t>(
+                        1u << (7u - static_cast<unsigned>(index & 7u)));
+            }
+        }
+        return true;
+    } catch (...) {
+        output.clear();
+        return false;
+    }
+}
+
+template<class ResolveAppId, class ResolveLayer>
+bool appendAcdsProxyExtendedData(Ac1024AcdsProxyPrefixProbe& prefix,
+                                DRW_RawDxfObject& raw,
+                                ResolveAppId&& resolveAppId,
+                                ResolveLayer&& resolveLayer) {
+    std::set<std::size_t> appIndexes;
+    std::set<std::size_t> layerIndexes;
+    for (const DRW_TableEntry::PendingHandleRef& reference :
+         prefix.pendingAppIdResolutions) {
+        if (reference.indexInExtData >= prefix.extData.size()
+            || reference.handleRef == 0u
+            || reference.handleRef == DRW::NoHandle
+            || !appIndexes.insert(reference.indexInExtData).second)
+            return false;
+        DRW_Variant* value = prefix.extData[reference.indexInExtData];
+        std::string name;
+        if (!resolveAppId(reference.handleRef, name) || name.empty()
+            || value == nullptr
+            || value->code() != 1001 || value->type() != DRW_Variant::STRING
+            || value->content.s == nullptr || !value->content.s->empty())
+            return false;
+        value->addString(1001, name);
+    }
+    for (const DRW_TableEntry::PendingHandleRef& reference :
+         prefix.pendingLayerRefResolutions) {
+        if (reference.indexInExtData >= prefix.extData.size()
+            || reference.handleRef == 0u
+            || reference.handleRef == DRW::NoHandle
+            || !layerIndexes.insert(reference.indexInExtData).second)
+            return false;
+        DRW_Variant* value = prefix.extData[reference.indexInExtData];
+        std::string name;
+        if (!resolveLayer(reference.handleRef, name) || name.empty()
+            || value == nullptr
+            || value->code() != 1003 || value->type() != DRW_Variant::STRING
+            || value->content.s == nullptr
+            || !value->activeDwgLayerReference()
+            || value->rawDwgLayerReference() != reference.handleRef)
+            return false;
+        value->setLayerRefName(name);
+    }
+
+    try {
+        for (std::size_t index = 0u; index < prefix.extData.size(); ++index) {
+            const DRW_Variant* value = prefix.extData[index];
+            if (value == nullptr || value->code() < 1000
+                || value->code() > 1071 || value->type() == DRW_Variant::INVALID
+                || value->code() == 1005)
+                return false;
+            if ((value->code() == 1001 && appIndexes.count(index) != 1u)
+                || (value->code() == 1003
+                    && layerIndexes.count(index) != 1u))
+                return false;
+            raw.groups.push_back(*value);
+        }
+    } catch (...) {
+        return false;
+    }
+    return true;
+}
+
+template<class ResolveAppId, class ResolveLayer>
+bool makeAc1024AcdsRawProxyObject(
+        const dx_data& data, const DRW_UnsupportedObject& frame,
+        DRW_RawDxfObject& output, std::uint16_t& sourceClassNumber,
+        std::vector<DRW_ProxyObjectIdRef>& sourceReferences,
+        ResolveAppId&& resolveAppId, ResolveLayer&& resolveLayer,
+        bool debug) {
+    constexpr std::uint32_t kAc1024OdaProxyDrawingFormat = 0x25001Du;
+    const auto fail = [&frame, debug](const char* stage) {
+        if (debug)
+            std::cerr << "AC1024 ACSH projection stage failed: handle="
+                      << proxyHandleString(frame.m_handle)
+                      << " stage=" << stage << '\n';
+        return false;
+    };
+    if (data.sourceFormat != dx_source_format::DWG
+        || data.sourceVersion != DRW::AC1024
+        || data.importGeneration == 0u
+        || frame.m_version != DRW::AC1024 || !frame.m_isCustomClass
+        || frame.m_isEntity || !frame.m_hasClassDefinition
+        || frame.m_hasDataStorage || frame.m_handle == 0u
+        || frame.m_handle == DRW::NoHandle
+        || frame.m_commonLinkEvidence != DRW_DwgCommonLinkEvidence::Validated
+        || !frame.m_commonHandleDataValidated
+        || frame.m_parentHandle == 0u || frame.m_parentHandle == DRW::NoHandle
+        || frame.m_numReactors < 0
+        || static_cast<std::size_t>(frame.m_numReactors)
+            != frame.m_reactorHandles.size()
+        || frame.m_xDictFlag > 1u || frame.m_rawBytes.empty()
+        || frame.m_rawBytes.size() != frame.m_objectSize
+        || frame.m_bodyBitSize == 0u
+        || frame.m_bodyBitSize
+            > static_cast<std::uint64_t>(frame.m_objectSize) * 8u
+        || frame.m_objectSize > DRW::kMaxDxfBinaryPayloadBytes)
+        return fail("frame admission");
+
+    const DRW_DwgClassCoverageEntry* sourceClass = nullptr;
+    for (const DRW_DwgClassCoverageEntry& entry :
+         data.dwgClassCoverage.m_entries) {
+        if (entry.m_classNumber != frame.m_objectType)
+            continue;
+        if (sourceClass != nullptr)
+            return fail("duplicate class number");
+        sourceClass = &entry;
+    }
+    const bool acdsClass = frame.m_recordName == "ACAD_EVALUATION_GRAPH"
+        ? frame.m_className == "AcDbEvalGraph"
+        : frame.m_recordName.rfind("ACSH_", 0u) == 0u
+            && frame.m_className.rfind("AcDbSh", 0u) == 0u;
+    DRW_Class classProbe;
+    if (!acdsClass || sourceClass == nullptr
+        || sourceClass->m_recordName != frame.m_recordName
+        || sourceClass->m_className != frame.m_className
+        || sourceClass->m_appName != frame.m_classAppName
+        || sourceClass->m_proxyFlag != frame.m_classProxyFlag
+        || sourceClass->m_wasAProxyFlag != (frame.m_classWasProxy ? 1 : 0)
+        || sourceClass->m_entityFlagRaw != frame.m_classEntityFlagRaw
+        || sourceClass->m_dwgVersion != frame.m_classDwgVersion
+        || sourceClass->m_maintenanceVersion
+            != frame.m_classMaintenanceVersion
+        || sourceClass->m_unknown1 != frame.m_classUnknown1
+        || sourceClass->m_unknown2 != frame.m_classUnknown2
+        || !makeAc1024AcdsDxfClass(
+            *sourceClass, sourceClass->m_instanceCount, classProbe)) {
+        return fail("class evidence");
+    }
+
+    try {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1024, false);
+        const dx_dwgReadOutcome& outcome = data.dwgReadOutcome;
+        if (outcome.sourceCodePageFieldPresent
+            && outcome.sourceCodePageRecognized) {
+            const char* page = dwgCodePageName(outcome.sourceCodePageId);
+            if (page == nullptr)
+                return fail("source codepage mapping");
+            codec.setByteCodePage(page);
+        } else if (outcome.sourceCodePageFieldPresent
+                   && !outcome.sourceCodePageRecognized) {
+            return fail("unrecognized source codepage");
+        }
+
+        dwgBuffer buffer(frame.m_rawBytes.data(), frame.m_rawBytes.size(),
+                         &codec);
+        Ac1024AcdsProxyPrefixProbe prefix;
+        if (!prefix.parsePrefix(DRW::AC1024, &buffer, frame.m_bodyBitSize)
+            || !buffer.isGood() || prefix.handle != frame.m_handle
+            || prefix.objectDataEndBit() == 0u)
+            return fail("common object/EED prefix parse");
+        const std::uint64_t totalBits =
+            static_cast<std::uint64_t>(frame.m_rawBytes.size()) * 8u;
+        if (prefix.objectDataEndBit() > totalBits
+            || frame.m_bodyBitSize
+                != totalBits - prefix.objectDataEndBit())
+            return fail("object data end boundary");
+        const std::uint64_t dataStartBit =
+            buffer.getPosition() * 8u + buffer.getBitPos();
+        const std::uint64_t dataEndBit = prefix.objectDataEndBit();
+        if (dataStartBit > dataEndBit
+            || dataEndBit - dataStartBit
+                > DRW::kMaxDxfBinaryPayloadBytes * 8u)
+            return fail("object data bit span");
+
+        std::uint64_t proxyBodyBitSize = dataEndBit - dataStartBit;
+        // ODA's AC1024 ACAD_PROXY_OBJECT projection excludes the terminal
+        // zero bit at the end of each captured custom-class object-data span.
+        // Retain this bounded producer profile only when that bit is proven
+        // zero; the source bytes and source frame boundaries remain untouched.
+        if (proxyBodyBitSize == 0u || dataEndBit == 0u)
+            return fail("proxy body terminal boundary");
+        const std::uint64_t terminalBit = dataEndBit - 1u;
+        const unsigned terminalValue =
+            (frame.m_rawBytes[static_cast<std::size_t>(terminalBit >> 3u)]
+             >> (7u - static_cast<unsigned>(terminalBit & 7u))) & 1u;
+        if (terminalValue != 0u)
+            return fail("proxy body terminal-bit profile");
+        --proxyBodyBitSize;
+
+        dwgBuffer handles = buffer.forkIndependent();
+        if (!handles.setPosition(dataEndBit >> 3u))
+            return fail("handle stream positioning");
+        handles.setBitPos(static_cast<std::uint8_t>(dataEndBit & 7u));
+        std::uint32_t owner = 0u;
+        std::uint32_t xdictionary = 0u;
+        std::vector<std::uint32_t> reactors;
+        std::uint64_t handleEndBit = 0u;
+        if (!handles.isGood()
+            || !prefix.readCommonHandlePrefix(
+                DRW::AC1024, handles, owner, reactors, xdictionary,
+                handleEndBit)
+            || owner != frame.m_parentHandle
+            || reactors != frame.m_reactorHandles
+            || xdictionary != frame.m_xDictHandle
+            || reactors.size() != static_cast<std::size_t>(frame.m_numReactors))
+            return fail("common owner/reactor/xDictionary handles");
+
+        DRW_ProxyObject proxy;
+        proxy.handle = frame.m_handle;
+        proxy.parentHandle = owner;
+        proxy.reactorHandles = reactors;
+        proxy.xDictHandle = xdictionary;
+        proxy.m_hasProxyCarrierId = true;
+        proxy.m_proxyCarrierId = DRW_ProxyObject::kDwgType;
+        proxy.m_hasProxyClassId = true;
+        proxy.m_proxyClassId = sourceClass->m_classNumber;
+        proxy.m_hasProxyDrawingFormat = true;
+        proxy.m_proxyDrawingFormat = kAc1024OdaProxyDrawingFormat;
+        proxy.m_hasFromDxf = true;
+        proxy.m_fromDxf = false;
+        proxy.m_hasObjectDataBitSize = true;
+        proxy.m_objectDataBitSize = static_cast<std::uint32_t>(
+            proxyBodyBitSize);
+        if (!copyAcdsProxyBitRange(frame.m_rawBytes, dataStartBit,
+                                   proxy.m_objectDataBitSize,
+                                   proxy.m_objectData))
+            return fail("proxy body bit copy");
+
+        const auto currentBit = [](const dwgBuffer& value) {
+            return static_cast<std::uint64_t>(value.getPosition()) * 8u
+                + value.getBitPos();
+        };
+        while (currentBit(handles) <= handleEndBit
+               && handleEndBit - currentBit(handles) >= 8u) {
+            dwgBuffer rawProbe = handles.forkIndependent();
+            const dwgHandle rawReference = rawProbe.getHandle();
+            const dwgHandle resolvedReference =
+                handles.getOffsetHandle(frame.m_handle);
+            if (!rawProbe.isGood() || !handles.isGood()
+                || currentBit(rawProbe) > handleEndBit
+                || currentBit(handles) > handleEndBit)
+                return fail("trailing proxy reference boundary");
+            if (rawReference.code == DRW::DwgNullReference
+                && rawReference.ref64 == 0u) {
+                if (debug)
+                    std::cerr << "AC1024 ACSH null handle terminator: handle="
+                              << proxyHandleString(frame.m_handle)
+                              << " size=" << static_cast<unsigned>(rawReference.size)
+                              << " at=" << currentBit(handles)
+                              << " end=" << handleEndBit << '\n';
+                break;
+            }
+            const int dxfCode =
+                DRW_ProxyObjectIdRef::dxfGroupCodeForDwgHandleCode(
+                    rawReference.code);
+            if (dxfCode < 0
+                || resolvedReference.ref64
+                    > std::numeric_limits<std::uint32_t>::max()
+                || proxy.m_objectIdRefs.size()
+                    >= DRW::kMaxDxfRawRecordGroups)
+                return fail("trailing proxy reference role/value");
+            DRW_ProxyObjectIdRef reference;
+            reference.m_dxfCode = dxfCode;
+            reference.m_handleCode = rawReference.code;
+            reference.m_rawHandle = rawReference.ref64;
+            reference.m_handle = resolvedReference.ref64;
+            proxy.m_objectIdRefs.push_back(reference);
+        }
+        if (!handles.isGood() || currentBit(handles) > handleEndBit
+            || handleEndBit - currentBit(handles) >= 8u)
+            return fail("trailing proxy reference tail size");
+        // ODA §20.1 specifies B* padding to byte-align the 2010+ object
+        // handle stream. The bits carry no reference role and are not
+        // required to be zero; only a full unexplained byte is rejected.
+        while (currentBit(handles) < handleEndBit) {
+            (void)handles.getBit();
+        }
+        if (!handles.isGood())
+            return fail("handle stream padding boundary");
+
+        DRW_RawDxfObject result;
+        if (!makeRawProxyObject(proxy, sourceClass->m_classNumber, result))
+            return fail("proxy fields or common EED");
+        // ODA omits the explicit zero-valued group-94 terminator when an
+        // AC1024 ACSH proxy has no object-ID references. Keep the legacy
+        // generic proxy representation unchanged outside this profile.
+        if (proxy.m_objectIdRefs.empty() && !result.groups.empty()
+            && result.groups.back().code() == 94)
+            result.groups.pop_back();
+        if (!appendAcdsProxyExtendedData(prefix, result,
+                                         resolveAppId, resolveLayer))
+            return fail("proxy common EED");
+        result.m_version = DRW::AC1027;
+        output = std::move(result);
+        sourceClassNumber = sourceClass->m_classNumber;
+        sourceReferences = std::move(proxy.m_objectIdRefs);
+        return true;
+    } catch (...) {
+        return fail("allocation or codec failure");
+    }
+}
+
+bool makeRawProxyObject(const DRW_ProxyObject& proxy,
+                        std::int32_t outputClassId,
                         DRW_RawDxfObject& raw) {
     const auto expectedBytes = [](std::uint64_t bits) {
         return bits / 8u + ((bits & 7u) != 0 ? 1u : 0u);
@@ -6481,9 +6884,17 @@ bool makeRawProxyObject(const DRW_ProxyObject& proxy,
             return false;
     }
     for (const DRW_ProxyObjectIdRef& reference : proxy.m_objectIdRefs) {
-        if ((reference.m_dxfCode != 330 && reference.m_dxfCode != 340
+        const int expectedDxfCode =
+            DRW_ProxyObjectIdRef::dxfGroupCodeForDwgHandleCode(
+                reference.m_handleCode);
+        const bool typedNullReference =
+            (reference.m_handleCode == DRW::DwgSoftPointer
+             || reference.m_handleCode == DRW::DwgHardPointer)
+            && reference.m_rawHandle == 0u && reference.m_handle == 0u;
+        if (expectedDxfCode < 0 || reference.m_dxfCode != expectedDxfCode
+            || (reference.m_dxfCode != 330 && reference.m_dxfCode != 340
              && reference.m_dxfCode != 350 && reference.m_dxfCode != 360)
-            || reference.m_handle == 0) {
+            || (reference.m_handle == 0u && !typedNullReference)) {
             return false;
         }
         raw.groups.emplace_back(reference.m_dxfCode,
@@ -7841,6 +8252,242 @@ bool dx_iface::writeVisualStyleRaw(DRW_RawDxfObject* raw,
         return dxfW->writeRawDxfObject(&source->second.output);
     } catch (...) {
         return false;
+    }
+}
+
+bool dx_iface::collectAc1024AcdsOpaqueProxyObjects(
+        const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
+        std::vector<std::uint32_t>& materialHandles, bool debug) {
+    const auto reject = [debug](const char* reason,
+                                std::uint32_t handle = 0u) {
+        if (debug)
+            std::cerr << "AC1024 ACSH opaque-proxy closure rejected: handle="
+                      << proxyHandleString(handle) << " reason=" << reason
+                      << '\n';
+        return false;
+    };
+    if (data.sourceFormat != dx_source_format::DWG
+        || data.sourceVersion != DRW::AC1024
+        || data.importGeneration == 0u
+        || data.acdsHistoryDwgFrameCaptureFailed
+        || data.acdsHistoryDwgFrames.empty()
+        || data.acdsHistoryDwgFrames.size()
+            > kMaxAdapterAcDsHistoryDwgFrameRecords
+        || !data.dwgClassCoverage.m_complete
+        || data.dwgClassCoverage.m_status
+            != DRW_DwgClassCoverageStatus::FinalizedComplete
+        || !data.proxyObjects.empty() || !data.rawProxyObjects.empty())
+        return reject("source, capture, class table, or mixed-proxy profile");
+
+    try {
+        using FrameKey = dx_data::StandardDwgFrameKey;
+        std::unordered_set<std::uint32_t> sourceTargets;
+        std::unordered_map<std::uint32_t, std::size_t> classCounts;
+        std::unordered_map<std::uint32_t, const DRW_UnsupportedObject*>
+            acdsByHandle;
+        std::vector<DRW_RawDxfObject> projected;
+        std::set<std::uint32_t> projectedMaterials;
+        projected.reserve(data.acdsHistoryDwgFrames.size());
+        sourceTargets.reserve(data.dwgReadOutcome.opaqueViewCallbacks
+                              + data.acdsHistoryDwgFrames.size());
+        acdsByHandle.reserve(data.acdsHistoryDwgFrames.size());
+
+        const auto addHandle = [&sourceTargets](std::uint32_t handle) {
+            if (handle != 0u && handle != DRW::NoHandle)
+                sourceTargets.insert(handle);
+        };
+        const auto addRange = [&addHandle](const auto& records) {
+            for (const auto& record : records)
+                addHandle(record.handle);
+        };
+        const auto resolveAppIdName = [&data](std::uint32_t handle,
+                                               std::string& name) {
+            const auto source = data.m_standardDwgAppIdSources.find(
+                {data.importGeneration, handle});
+            if (source == data.m_standardDwgAppIdSources.end()
+                || !source->second || source->second->handle != handle
+                || source->second->name.empty())
+                return false;
+            name = source->second->name;
+            return true;
+        };
+        const auto resolveLayerName = [&data](std::uint32_t handle,
+                                               std::string& name) {
+            const auto source = data.m_standardDwgLayerSources.find(
+                {data.importGeneration, handle});
+            if (source == data.m_standardDwgLayerSources.end()
+                || !source->second || source->second->handle != handle
+                || source->second->name.empty())
+                return false;
+            name = source->second->name;
+            return true;
+        };
+        const FrameKey first{data.importGeneration, 0u};
+        for (auto current = data.m_opaqueDwgSourceFrameIdentities.lower_bound(first);
+             current != data.m_opaqueDwgSourceFrameIdentities.end()
+                 && current->first == data.importGeneration; ++current)
+            addHandle(current->second);
+        for (auto current = data.m_standardDwgObjectFrames.lower_bound(first);
+             current != data.m_standardDwgObjectFrames.end()
+                 && current->first.first == data.importGeneration; ++current)
+            addHandle(current->first.second);
+        for (auto current = data.m_standardDwgAppIdSources.lower_bound(first);
+             current != data.m_standardDwgAppIdSources.end()
+                 && current->first.first == data.importGeneration; ++current)
+            addHandle(current->first.second);
+        for (auto current = data.m_standardDwgLayerSources.lower_bound(first);
+             current != data.m_standardDwgLayerSources.end()
+                 && current->first.first == data.importGeneration; ++current)
+            addHandle(current->first.second);
+        addRange(data.lineTypes);
+        addRange(data.layers);
+        addRange(data.textStyles);
+        addRange(data.appIds);
+        addRange(data.blockRecords);
+        addRange(data.layouts);
+        addRange(data.dictionaries);
+        addRange(data.xRecords);
+        addRange(data.materials);
+        addRange(data.placeholders);
+        addRange(data.mLineStyles);
+        addRange(data.evaluationGraphs);
+        for (const dx_ifaceBlock* block : data.blocks) {
+            if (block == nullptr)
+                return reject("null block in target inventory");
+            addHandle(block->handle);
+            for (const DRW_Entity* entity : block->ent) {
+                if (entity == nullptr)
+                    return reject("null entity in target inventory");
+                addHandle(entity->handle);
+            }
+        }
+        if (data.mBlock == nullptr)
+            return reject("missing model-space block");
+        addHandle(data.mBlock->handle);
+        for (const DRW_Entity* entity : data.mBlock->ent) {
+            if (entity == nullptr)
+                return reject("null model-space entity");
+            addHandle(entity->handle);
+        }
+
+        for (const DRW_UnsupportedObject& frame :
+             data.acdsHistoryDwgFrames) {
+            if (!acdsByHandle.emplace(frame.m_handle, &frame).second)
+                return reject("duplicate captured source handle",
+                              frame.m_handle);
+            addHandle(frame.m_handle);
+        }
+
+        for (const DRW_UnsupportedObject& frame :
+             data.acdsHistoryDwgFrames) {
+            DRW_RawDxfObject raw;
+            std::uint16_t sourceClassNumber = 0u;
+            std::vector<DRW_ProxyObjectIdRef> references;
+            if (!makeAc1024AcdsRawProxyObject(
+                    data, frame, raw, sourceClassNumber, references,
+                    resolveAppIdName, resolveLayerName, debug)) {
+                if (debug)
+                    std::cerr << "AC1024 ACSH projection frame details: handle="
+                              << proxyHandleString(frame.m_handle)
+                              << " record=" << frame.m_recordName
+                              << " class=" << frame.m_className
+                              << " type=" << frame.m_objectType
+                              << " frameVersion="
+                              << static_cast<unsigned>(frame.m_version)
+                              << " custom=" << frame.m_isCustomClass
+                              << " entity=" << frame.m_isEntity
+                              << " hasClass=" << frame.m_hasClassDefinition
+                              << " storage=" << frame.m_hasDataStorage
+                              << " rawBytes=" << frame.m_rawBytes.size()
+                              << " objectBytes=" << frame.m_objectSize
+                              << " bodyBits=" << frame.m_bodyBitSize
+                              << " owner="
+                              << proxyHandleString(frame.m_parentHandle)
+                              << " reactors=" << frame.m_reactorHandles.size()
+                              << " xdict="
+                              << proxyHandleString(frame.m_xDictHandle)
+                              << " commonEvidence="
+                              << static_cast<unsigned>(
+                                  frame.m_commonLinkEvidence)
+                              << " commonValidated="
+                              << frame.m_commonHandleDataValidated << '\n';
+                return reject("source frame cannot be projected", frame.m_handle);
+            }
+            if (data.m_opaqueDwgSourceFrameIdentities.count(
+                    {data.importGeneration, frame.m_handle}) != 1u)
+                return reject("source-frame callback identity is absent",
+                              frame.m_handle);
+            ++classCounts[sourceClassNumber];
+
+            const auto requireTarget = [&](std::uint64_t target) {
+                return target <= std::numeric_limits<std::uint32_t>::max()
+                    && sourceTargets.count(
+                        static_cast<std::uint32_t>(target)) == 1u;
+            };
+            if (!requireTarget(frame.m_parentHandle))
+                return reject("common owner has no captured source target",
+                              frame.m_handle);
+            for (const std::uint32_t reactor : frame.m_reactorHandles)
+                if (!requireTarget(reactor))
+                    return reject("reactor has no captured source target",
+                                  frame.m_handle);
+            if (frame.m_xDictHandle != 0u
+                && !requireTarget(frame.m_xDictHandle))
+                return reject("extension dictionary has no captured target",
+                              frame.m_handle);
+            for (const DRW_ProxyObjectIdRef& reference : references) {
+                if (reference.m_handle == 0u) {
+                    const bool typedNull =
+                        (reference.m_handleCode == DRW::DwgSoftPointer
+                         || reference.m_handleCode == DRW::DwgHardPointer)
+                        && reference.m_rawHandle == 0u;
+                    if (!typedNull)
+                        return reject("unqualified null proxy reference",
+                                      frame.m_handle);
+                    continue;
+                }
+                if (!requireTarget(reference.m_handle))
+                    return reject("proxy reference has no captured target",
+                                  frame.m_handle);
+                if (reference.m_dxfCode == 340) {
+                    const auto material = std::find_if(
+                        data.materials.begin(), data.materials.end(),
+                        [&reference](const DRW_Material& candidate) {
+                            return candidate.handle == reference.m_handle;
+                        });
+                    if (material != data.materials.end())
+                        projectedMaterials.insert(material->handle);
+                }
+            }
+            projected.push_back(std::move(raw));
+        }
+
+        for (const DRW_DwgClassCoverageEntry& entry :
+             data.dwgClassCoverage.m_entries) {
+            const bool acdsClass = entry.m_recordName == "ACAD_EVALUATION_GRAPH"
+                || entry.m_recordName.rfind("ACSH_", 0u) == 0u;
+            if (!acdsClass)
+                continue;
+            const auto count = classCounts.find(entry.m_classNumber);
+            const std::size_t actual = count == classCounts.end()
+                ? 0u : count->second;
+            if (entry.m_state != DRW_DwgClassCoverageState::Published
+                || entry.m_instanceCount < 0
+                || actual != static_cast<std::size_t>(entry.m_instanceCount))
+                return reject("source class count does not match retained frames");
+        }
+
+        if (projected.size() != data.acdsHistoryDwgFrames.size())
+            return reject("projected-frame census mismatch");
+        objects.insert(objects.end(),
+                       std::make_move_iterator(projected.begin()),
+                       std::make_move_iterator(projected.end()));
+        materialHandles.insert(materialHandles.end(),
+                               projectedMaterials.begin(),
+                               projectedMaterials.end());
+        return true;
+    } catch (...) {
+        return reject("allocation or source-index failure");
     }
 }
 
@@ -15380,7 +16027,6 @@ constexpr std::size_t kMaxAdapterSpatialFilterRetainedBytes =
 constexpr std::size_t kMaxAdapterAcShHistoryRecords = 100000u;
 constexpr std::size_t kMaxAdapterAcShHistoryRetainedBytes =
     DRW::kMaxDxfBinaryPayloadBytes;
-constexpr std::size_t kMaxAdapterAcDsHistoryDwgFrameRecords = 100000u;
 constexpr std::size_t kMaxAdapterAcDsHistoryDwgFrameRetainedBytes =
     DRW::kMaxDxfBinaryPayloadBytes;
 constexpr std::size_t kMaxAdapterEvaluationGraphRecords = 100000u;
@@ -77410,7 +78056,22 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         const bool hasTypedAcdsObjects =
             !cData->acshHistoryObjects.empty()
             || !cData->evaluationGraphs.empty();
-        if (hasTypedAcdsObjects) {
+        const bool ac1024AcdsOpaqueProxyProfile =
+            cData->sourceFormat == dx_source_format::DWG
+            && cData->sourceVersion == DRW::AC1024
+            && v == DRW::AC1027
+            && !cData->acdsHistoryDwgFrames.empty();
+        if (ac1024AcdsOpaqueProxyProfile) {
+            if (!collectAc1024AcdsOpaqueProxyObjects(
+                    *cData, m_acdsHistoryObjects, referencedMaterials,
+                    debug)) {
+                reportPreflightFailure(
+                    "AC1024 ACSH opaque-proxy source/graph closure");
+                delete dxfW;
+                dxfW = nullptr;
+                return false;
+            }
+        } else if (hasTypedAcdsObjects) {
             if (!collectAcdsTypedBoxHistoryObjects(
                     *cData, m_acdsTypedHistoryObjects,
                     m_acdsTypedEvaluationGraphs, referencedMaterials,
@@ -77491,26 +78152,20 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 return failAcdsExport();
             dxfW->setDxfClasses(std::move(classes));
         } else {
-        // DXF proxy group 91 indexes CLASSES from 500; ODA discards proxies
-        // if those ordinal references do not resolve. Rebuild the class table
-        // from the exact source DWG class records used by the validated proxy
-        // graphs, then assign output ordinals independent of source numbering.
-        static const char* supportedProxyClasses[] = {
-            "ACSH_HISTORY_CLASS", "ACAD_EVALUATION_GRAPH",
-            "ACSH_CONE_CLASS", "ACSH_BOX_CLASS",
-            "ACSH_EXTRUSION_CLASS"};
-        std::unordered_map<std::uint32_t, std::string> sourceClassNames;
-        std::map<std::string, int> classInstanceCounts;
+        // DXF proxy group 91 indexes CLASSES from 500. Rebuild the class table
+        // in source CLASSES order and bind every rewritten proxy ordinal to
+        // the exact source class row that supplied its opaque body.
+        std::map<std::uint32_t, std::size_t> classInstanceCounts;
+        std::map<std::uint32_t, const DRW_DwgClassCoverageEntry*>
+            sourceClassRows;
         for (DRW_RawDxfObject& object : m_acdsHistoryObjects) {
             std::size_t classIdCount = 0;
             std::uint32_t sourceClassId = 0;
-            std::size_t classIdGroupIndex = 0;
             for (std::size_t index = 0; index < object.groups.size(); ++index) {
                 const DRW_Variant& group = object.groups[index];
                 if (group.code() != 91)
                     continue;
                 ++classIdCount;
-                classIdGroupIndex = index;
                 if (group.type() != DRW_Variant::INTEGER
                 || group.i_val() < 0) {
                     return failAcdsExport();
@@ -77531,37 +78186,46 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 classEntry = &entry;
             }
             if (classEntry == nullptr
-                || std::find(std::begin(supportedProxyClasses),
-                             std::end(supportedProxyClasses),
-                             classEntry->m_recordName)
-                       == std::end(supportedProxyClasses)) {
+                || classEntry->m_classNumber != sourceClassId) {
                 return failAcdsExport();
             }
-            const auto inserted = sourceClassNames.emplace(
-                sourceClassId, classEntry->m_recordName);
-            if (!inserted.second
-                && inserted.first->second != classEntry->m_recordName) {
+            const auto inserted = sourceClassRows.emplace(
+                sourceClassId, classEntry);
+            if (!inserted.second && inserted.first->second != classEntry) {
                 return failAcdsExport();
             }
-            ++classInstanceCounts[classEntry->m_recordName];
-            object.groups[classIdGroupIndex].addInt(91, 0);
+            ++classInstanceCounts[sourceClassId];
         }
 
         std::vector<DRW_Class> classes;
-        std::unordered_map<std::string, std::int32_t> outputClassIds;
-        for (const char* name : supportedProxyClasses) {
-            const auto count = classInstanceCounts.find(name);
+        std::unordered_map<std::uint32_t, std::int32_t> outputClassIds;
+        std::set<std::string> outputClassNames;
+        for (const DRW_DwgClassCoverageEntry& sourceClass :
+             cData->dwgClassCoverage.m_entries) {
+            const auto count = classInstanceCounts.find(
+                sourceClass.m_classNumber);
             if (count == classInstanceCounts.end())
                 continue;
+            const auto sourceRow = sourceClassRows.find(
+                sourceClass.m_classNumber);
+            if (sourceRow == sourceClassRows.end()
+                || sourceRow->second != &sourceClass
+                || count->second
+                    != static_cast<std::size_t>(sourceClass.m_instanceCount)
+                || outputClassNames.insert(sourceClass.m_recordName).second
+                    == false
+                || classes.size() >= DRW::kMaxDxfClasses
+                || classes.size() > static_cast<std::size_t>(
+                    std::numeric_limits<std::int32_t>::max() - 500))
+                return failAcdsExport();
             DRW_Class cls;
-            if (!dxfRW::dxfClassForRecordName(name, cls)) {
-                delete dxfW;
-                dxfW = nullptr;
-                return false;
-            }
-            cls.instanceCount = count->second;
-            cls.wasaProxyFlag = 1;
-            outputClassIds.emplace(name,
+            if (count->second
+                    > static_cast<std::size_t>(
+                        std::numeric_limits<int>::max())
+                || !makeAc1024AcdsDxfClass(
+                    sourceClass, static_cast<int>(count->second), cls))
+                return failAcdsExport();
+            outputClassIds.emplace(sourceClass.m_classNumber,
                 static_cast<std::int32_t>(500u + classes.size()));
             classes.push_back(std::move(cls));
         }
@@ -77588,24 +78252,14 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             }
             if (classIdGroupIndex == object.groups.size())
                 return failAcdsExport();
-            // The temporary value was zeroed above; recover the exact class
-            // name from the proxy subclass and the source coverage report.
-            const DRW_ProxyObject* sourceProxy = nullptr;
-            for (const DRW_ProxyObject& proxy : cData->proxyObjects) {
-                if (proxy.handle != object.handle)
-                    continue;
-                if (sourceProxy != nullptr)
-                    return failAcdsExport();
-                sourceProxy = &proxy;
-            }
-            if (sourceProxy == nullptr || !sourceProxy->m_hasProxyClassId)
+            const DRW_Variant& sourceIdGroup =
+                object.groups[classIdGroupIndex];
+            if (sourceIdGroup.type() != DRW_Variant::INTEGER
+                || sourceIdGroup.i_val() < 500)
                 return failAcdsExport();
             sourceClassId = static_cast<std::uint32_t>(
-                sourceProxy->m_proxyClassId);
-            const auto sourceName = sourceClassNames.find(sourceClassId);
-            if (sourceName == sourceClassNames.end())
-                return failAcdsExport();
-            const auto outputId = outputClassIds.find(sourceName->second);
+                sourceIdGroup.i_val());
+            const auto outputId = outputClassIds.find(sourceClassId);
             if (outputId == outputClassIds.end())
                 return failAcdsExport();
             object.groups[classIdGroupIndex].addInt(91, outputId->second);

@@ -131,6 +131,13 @@ public:
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
+    static bool collectAc1024AcdsOpaqueProxyObjects(
+            const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
+            std::vector<std::uint32_t>& materialHandles, bool debug = false) {
+        return dx_iface::collectAc1024AcdsOpaqueProxyObjects(
+            data, objects, materialHandles, debug);
+    }
+
     static DRW_UnsupportedObject& mutableStandardRaw(dx_data& data, std::uint32_t handle) {
         return data.m_standardDwgObjectFrames.at({data.importGeneration, handle}).raw;
     }
@@ -18918,6 +18925,310 @@ bool acDsHistoryDwgFrameCaptureLimitsFailClosed() {
         std::filesystem::remove(output, ignored);
         return fail("rejected AcDs history frame capture published a DXF");
     }
+    return true;
+}
+
+bool ac1024AcdsOpaqueProxyMatchesOda(const std::string& sourcePath,
+                                    const std::string& odaDxfPath) {
+    const auto fail = [](const std::string& reason) {
+        std::cerr << reason << '\n';
+        return false;
+    };
+    dx_data source;
+    dx_iface sourceReader;
+    if (!sourceReader.fileImport(sourcePath, &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1024
+        || source.acdsHistoryDwgFrames.empty())
+        return fail("AC1024 ACSH source import/capture failed");
+
+    std::map<std::uint32_t, std::vector<std::pair<int, std::string>>>
+        odaByHandle;
+    std::ifstream odaFile(odaDxfPath, std::ios::binary);
+    if (!odaFile)
+        return fail("ODA DXF could not be opened");
+    std::string codeLine;
+    std::string valueLine;
+    std::string recordName;
+    std::vector<std::pair<int, std::string>> currentGroups;
+    const auto finishOdaRecord = [&]() {
+        if (recordName != "ACAD_PROXY_OBJECT")
+            return true;
+        std::uint32_t handle = 0u;
+        std::size_t handles = 0u;
+        for (const auto& group : currentGroups) {
+            if (group.first != 5)
+                continue;
+            if (++handles != 1u || group.second.empty())
+                return false;
+            try {
+                std::size_t consumed = 0u;
+                const unsigned long long value =
+                    std::stoull(group.second, &consumed, 16);
+                if (consumed != group.second.size()
+                    || value > std::numeric_limits<std::uint32_t>::max())
+                    return false;
+                handle = static_cast<std::uint32_t>(value);
+            } catch (...) {
+                return false;
+            }
+        }
+        return handles == 1u
+            && odaByHandle.emplace(handle, currentGroups).second;
+    };
+    while (std::getline(odaFile, codeLine)) {
+        if (!std::getline(odaFile, valueLine))
+            return fail("ODA DXF ended between a group code and value");
+        if (!codeLine.empty() && codeLine.back() == '\r')
+            codeLine.pop_back();
+        if (!valueLine.empty() && valueLine.back() == '\r')
+            valueLine.pop_back();
+        int code = 0;
+        try {
+            std::size_t consumed = 0u;
+            code = std::stoi(codeLine, &consumed, 10);
+            if (consumed != codeLine.size())
+                return fail("ODA DXF contains an invalid group code");
+        } catch (...) {
+            return fail("ODA DXF contains an invalid group code");
+        }
+        if (code == 0) {
+            if (!finishOdaRecord())
+                return fail("ODA DXF proxy identity is invalid or duplicated");
+            recordName = valueLine;
+            currentGroups.clear();
+        } else if (recordName == "ACAD_PROXY_OBJECT") {
+            currentGroups.emplace_back(code, valueLine);
+        }
+    }
+    if (odaFile.bad() || !finishOdaRecord()
+        || odaByHandle.size() < source.acdsHistoryDwgFrames.size())
+        return fail("ODA DXF proxy census does not match source frames: ODA="
+            + std::to_string(odaByHandle.size()) + " source="
+            + std::to_string(source.acdsHistoryDwgFrames.size()));
+
+    std::vector<DRW_RawDxfObject> projected;
+    std::vector<std::uint32_t> materials;
+    if (!DxIfaceStandardDwgCaptureTestAccess::
+            collectAc1024AcdsOpaqueProxyObjects(
+                source, projected, materials, true)
+        || projected.size() != source.acdsHistoryDwgFrames.size())
+        return fail("AC1024 ACSH opaque-proxy collector refused the source");
+
+    const auto valueEqual = [](const DRW_Variant& expected,
+                               const std::pair<int, std::string>& actual) {
+        if (expected.code() != actual.first)
+            return false;
+        switch (expected.type()) {
+        case DRW_Variant::INTEGER:
+        case DRW_Variant::INTEGER64: {
+            try {
+                std::size_t consumed = 0u;
+                const long long value = std::stoll(actual.second, &consumed, 10);
+                return consumed == actual.second.size()
+                    && value == (expected.type() == DRW_Variant::INTEGER
+                        ? static_cast<long long>(expected.i_val())
+                        : static_cast<long long>(expected.i64_val()));
+            } catch (...) {
+                return false;
+            }
+        }
+        case DRW_Variant::DOUBLE: {
+            try {
+                std::size_t consumed = 0u;
+                const double value = std::stod(actual.second, &consumed);
+                const double target = expected.d_val();
+                const double tolerance = 3.0e-14
+                    * std::max({1.0, std::abs(value), std::abs(target)});
+                return consumed == actual.second.size()
+                    && std::isfinite(value) && std::isfinite(target)
+                    && std::abs(value - target) <= tolerance;
+            } catch (...) {
+                return false;
+            }
+        }
+        case DRW_Variant::STRING:
+            return expected.c_str() != nullptr
+                && std::string(expected.c_str()) == actual.second;
+        case DRW_Variant::BINARY: {
+            if (expected.binary() == nullptr)
+                return false;
+            static constexpr char hex[] = "0123456789ABCDEF";
+            std::string encoded;
+            encoded.reserve(expected.binary()->size() * 2u);
+            for (std::uint8_t byte : *expected.binary()) {
+                encoded.push_back(hex[byte >> 4u]);
+                encoded.push_back(hex[byte & 0x0Fu]);
+            }
+            std::string actualHex = actual.second;
+            std::transform(actualHex.begin(), actualHex.end(),
+                           actualHex.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::toupper(ch));
+            });
+            return encoded == actualHex;
+        }
+        case DRW_Variant::COORD:
+        case DRW_Variant::INVALID:
+            return false;
+        }
+        return false;
+    };
+    std::unordered_map<std::uint32_t, const DRW_UnsupportedObject*> sourceByHandle;
+    for (const DRW_UnsupportedObject& frame : source.acdsHistoryDwgFrames) {
+        if (!sourceByHandle.emplace(frame.m_handle, &frame).second)
+            return fail("source ACSH inventory contains a duplicate handle");
+    }
+
+    std::size_t eedGroups = 0u;
+    std::size_t matched = 0u;
+    std::size_t sizeMismatches = 0u;
+    std::size_t groupMismatches = 0u;
+    for (const DRW_RawDxfObject& raw : projected) {
+        const auto sourceFrame = sourceByHandle.find(raw.handle);
+        const auto odaObject = odaByHandle.find(raw.handle);
+        if (sourceFrame == sourceByHandle.end()
+            || odaObject == odaByHandle.end()
+            || raw.name != "ACAD_PROXY_OBJECT"
+            || raw.parentHandle != sourceFrame->second->m_parentHandle)
+            return fail("projected ACSH identity/owner does not match both inputs");
+        const auto& odaGroups = odaObject->second;
+        std::vector<DRW_Variant> expectedGroups;
+        try {
+            expectedGroups.reserve(raw.groups.size());
+            for (const DRW_Variant& group : raw.groups) {
+                if (group.type() != DRW_Variant::COORD) {
+                    expectedGroups.push_back(group);
+                    continue;
+                }
+                const DRW_Coord* coordinate = group.coord();
+                if (coordinate == nullptr || group.code() < 1010
+                    || group.code() > 1013)
+                    return fail("projected EED coordinate has an invalid group code");
+                expectedGroups.emplace_back(group.code(), coordinate->x);
+                expectedGroups.emplace_back(group.code() + 10, coordinate->y);
+                expectedGroups.emplace_back(group.code() + 20, coordinate->z);
+            }
+        } catch (...) {
+            return fail("unable to normalize projected EED coordinate groups");
+        }
+        if (expectedGroups.size() != odaGroups.size()) {
+            ++groupMismatches;
+            std::cerr << "ACSH/ODA group count mismatch: handle=" << std::hex
+                      << raw.handle << std::dec << " class="
+                      << sourceFrame->second->m_recordName << " projected="
+                      << expectedGroups.size() << " ODA=" << odaGroups.size()
+                      << '\n';
+        }
+        const std::size_t comparableGroups =
+            std::min(expectedGroups.size(), odaGroups.size());
+        for (std::size_t index = 0u; index < comparableGroups; ++index) {
+            if (!valueEqual(expectedGroups[index], odaGroups[index])) {
+                ++groupMismatches;
+                const DRW_Variant& expected = expectedGroups[index];
+                std::cerr << "ACSH/ODA group mismatch: handle=" << std::hex
+                          << raw.handle << std::dec << " index=" << index
+                          << " expectedCode=" << expected.code()
+                          << " actualCode=" << odaGroups[index].first
+                          << " expectedType="
+                          << static_cast<unsigned>(expected.type())
+                          << " actualText=\"" << odaGroups[index].second
+                          << "\"";
+                if (expected.type() == DRW_Variant::STRING
+                    && expected.c_str() != nullptr)
+                    std::cerr << " expectedText=\"" << expected.c_str()
+                              << "\"";
+                else if (expected.type() == DRW_Variant::INTEGER)
+                    std::cerr << " expectedInteger=" << expected.i_val();
+                else if (expected.type() == DRW_Variant::INTEGER64)
+                    std::cerr << " expectedInteger=" << expected.i64_val();
+                else if (expected.type() == DRW_Variant::DOUBLE)
+                    std::cerr << " expectedDouble=" << expected.d_val();
+                if (expected.code() == 161) {
+                    for (const DRW_Variant& body : raw.groups)
+                        if (body.code() == 310 && body.type() == DRW_Variant::STRING)
+                            std::cerr << " projectedBody=" << body.c_str();
+                    for (const auto& body : odaGroups)
+                        if (body.first == 310)
+                            std::cerr << " odaBody=" << body.second;
+                }
+                std::cerr << '\n';
+            }
+            if (expectedGroups[index].code() == 161
+                && ((expectedGroups[index].type() == DRW_Variant::INTEGER
+                         && expectedGroups[index].i_val() == 0)
+                    || (expectedGroups[index].type() == DRW_Variant::INTEGER64
+                        && expectedGroups[index].i64_val() == 0)))
+                return fail("ACSH significant object-data bit span is zero");
+            if (expectedGroups[index].code() == 161) {
+                try {
+                    const long long expectedBits =
+                        expectedGroups[index].type() == DRW_Variant::INTEGER
+                            ? expectedGroups[index].i_val()
+                            : expectedGroups[index].i64_val();
+                    std::size_t consumed = 0u;
+                    const long long actualBits = std::stoll(
+                        odaGroups[index].second, &consumed, 10);
+                    if (consumed != odaGroups[index].second.size())
+                        return fail("ODA proxy bit span is not an integer");
+                    if (expectedBits != actualBits) {
+                        ++sizeMismatches;
+                        std::cerr << "ACSH proxy bit span delta: handle="
+                                  << std::hex << raw.handle << std::dec
+                                  << " class=" << sourceFrame->second->m_recordName
+                                  << " projected=" << expectedBits
+                                  << " ODA=" << actualBits << '\n';
+                    }
+                } catch (...) {
+                    return fail("ODA proxy bit span is invalid");
+                }
+            }
+            if (raw.groups[index].code() >= 1000
+                && raw.groups[index].code() <= 1071
+                && raw.groups[index].code() != 1005)
+                ++eedGroups;
+        }
+        ++matched;
+    }
+
+    if (matched != source.acdsHistoryDwgFrames.size()
+        || sizeMismatches != 0u
+        || groupMismatches != 0u
+        || source.dwgReadOutcome.observations.objectParseFailures == 0u
+        || materials.size() > source.materials.size())
+        return fail("projection changed source parse disposition or census");
+
+    DRW_RawDxfObject sentinel;
+    sentinel.name = "KEEP";
+    sentinel.handle = 0x7F001u;
+    std::vector<DRW_RawDxfObject> retained{sentinel};
+    std::vector<std::uint32_t> retainedMaterials{0x7F002u};
+    DRW_UnsupportedObject& first = source.acdsHistoryDwgFrames.front();
+    const std::uint32_t savedOwner = first.m_parentHandle;
+    first.m_parentHandle = 0u;
+    const bool rejected = !DxIfaceStandardDwgCaptureTestAccess::
+        collectAc1024AcdsOpaqueProxyObjects(
+            source, retained, retainedMaterials, false);
+    first.m_parentHandle = savedOwner;
+    if (!rejected || retained.size() != 1u
+        || retained.front().name != "KEEP"
+        || retained.front().handle != sentinel.handle
+        || retainedMaterials != std::vector<std::uint32_t>{0x7F002u})
+        return fail("invalid source owner did not refuse atomically");
+
+    std::vector<DRW_RawDxfObject> retried;
+    std::vector<std::uint32_t> retriedMaterials;
+    if (!DxIfaceStandardDwgCaptureTestAccess::
+            collectAc1024AcdsOpaqueProxyObjects(
+                source, retried, retriedMaterials, false)
+        || retried.size() != projected.size()
+        || retriedMaterials != materials)
+        return fail("valid source owner did not recover on a fresh retry");
+
+    std::cout << "AC1024 ACSH proxy projection matched ODA groups: "
+              << matched << " objects; ordered EED groups=" << eedGroups
+              << "; source parser failures retained="
+              << source.dwgReadOutcome.observations.objectParseFailures
+              << '\n';
     return true;
 }
 
@@ -70969,6 +71280,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--acds-history-dwg-frame-capture-limits")
         return acDsHistoryDwgFrameCaptureLimitsFailClosed() ? 0 : 1;
+    if (argc == 4
+        && std::string(argv[1]) == "--acds-opaque-proxy-oda-compare")
+        return ac1024AcdsOpaqueProxyMatchesOda(argv[2], argv[3]) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1])
             == "--opaque-dwg-source-capture-and-output-gate")

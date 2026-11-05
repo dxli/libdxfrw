@@ -2516,7 +2516,11 @@ public:
             } else {
                 for (DRW_RawDxfObject& object : m_acdsHistoryObjects) {
                     if (rawProxyHandles.count(object.handle) != 0
-                        || !dxfW->writeRawDxfObject(&object)) {
+                        || !dxfW->writeRawDxfObject(&object)
+                        || (cData->sourceFormat == dx_source_format::DWG
+                            && cData->dwgReadOutcome.attempted
+                            && !recordOpaqueDwgOutputQualification(
+                                object.handle))) {
                         return;
                     }
                 }
@@ -3259,6 +3263,9 @@ private:
                                      DRW::Version targetVersion,
                                      const char** failure) const;
     static bool collectAcdsHistoryProxyObjects(
+        const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
+        std::vector<std::uint32_t>& materialHandles, bool debug);
+    static bool collectAc1024AcdsOpaqueProxyObjects(
         const dx_data& data, std::vector<DRW_RawDxfObject>& objects,
         std::vector<std::uint32_t>& materialHandles, bool debug);
     static bool collectAcdsTypedBoxHistoryObjects(
