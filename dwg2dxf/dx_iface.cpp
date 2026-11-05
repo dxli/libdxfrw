@@ -16430,6 +16430,9 @@ constexpr std::size_t kMaxAdapterRasterVariablesRetainedBytes =
 constexpr std::size_t kMaxAdapterWipeoutVariablesRecords = 1024u;
 constexpr std::size_t kMaxAdapterWipeoutVariablesRetainedBytes =
     DRW::kMaxDxfBinaryPayloadBytes;
+constexpr std::size_t kMaxAdapterDimensionAssociationRecords = 100000u;
+constexpr std::size_t kMaxAdapterDimensionAssociationRetainedBytes =
+    DRW::kMaxDxfBinaryPayloadBytes;
 constexpr std::size_t kMaxAdapterRawNamedResourceRecords = 100000u;
 constexpr std::size_t kMaxAdapterRawNamedResourceGroups = 4000000u;
 constexpr std::size_t kMaxAdapterRawNamedResourceRetainedBytes =
@@ -17746,6 +17749,27 @@ bool estimateWipeoutVariablesTypedBytes(
     estimate = sizeof(WipeoutVariablesMapValue) + 4u * sizeof(void*);
     return addTableEntryRetainedBytes(data, estimate)
         && estimate <= kMaxAdapterWipeoutVariablesRetainedBytes;
+}
+
+bool estimateDimensionAssociationTypedBytes(
+        const DRW_DimensionAssociation& data,
+        std::size_t& estimate) noexcept {
+    using DimensionAssociationMapValue = std::pair<
+        const dx_data::DimensionAssociationKey,
+        DRW_DimensionAssociation>;
+    estimate = sizeof(DimensionAssociationMapValue) + 4u * sizeof(void*);
+    if (!addTableEntryRetainedBytes(data, estimate)
+        || !addVectorPayloadBytes(data.m_osnapRefs, estimate))
+        return false;
+    for (const DRW_DimensionAssociationOsnapRef& ref : data.m_osnapRefs) {
+        if (!addStringPayloadBytes(ref.m_className, estimate)
+            || !addVectorPayloadBytes(ref.m_objectHandles, estimate)
+            || !addStringPayloadBytes(ref.m_xrefObjectHandleString, estimate)
+            || !addStringPayloadBytes(
+                   ref.m_intersectionXrefObjectHandleString, estimate))
+            return false;
+    }
+    return estimate <= kMaxAdapterDimensionAssociationRetainedBytes;
 }
 
 bool estimateDbColorTypedBytes(
@@ -63566,6 +63590,48 @@ void dx_iface::addGeoData(const DRW_GeoData& data) {
     } catch (...) {
         if (insertedSourceRole)
             cData->m_dwgGeoDataSourceRoles.erase(key);
+        reject();
+    }
+}
+
+void dx_iface::addDimensionAssociation(
+        const DRW_DimensionAssociation& data) {
+    if (cData == nullptr || cData->sourceFormat != dx_source_format::DWG
+        || !cData->dwgReadOutcome.attempted
+        || cData->dimensionAssociationCaptureFailed)
+        return;
+    const auto reject = [this]() {
+        cData->dimensionAssociationCaptureFailed = true;
+    };
+    if (cData->importGeneration == 0u || data.handle == 0u
+        || data.handle == DRW::NoHandle
+        || cData->dimensionAssociationsRetainedRecords
+            >= kMaxAdapterDimensionAssociationRecords) {
+        reject();
+        return;
+    }
+
+    std::size_t estimatedBytes = 0u;
+    if (!estimateDimensionAssociationTypedBytes(data, estimatedBytes)
+        || cData->dimensionAssociationsRetainedBytes
+            > kMaxAdapterDimensionAssociationRetainedBytes
+        || estimatedBytes > kMaxAdapterDimensionAssociationRetainedBytes
+                - cData->dimensionAssociationsRetainedBytes) {
+        reject();
+        return;
+    }
+
+    const dx_data::DimensionAssociationKey key{
+        cData->importGeneration, data.handle};
+    try {
+        const auto inserted = cData->dwgDimensionAssociations.emplace(key, data);
+        if (!inserted.second) {
+            reject();
+            return;
+        }
+        ++cData->dimensionAssociationsRetainedRecords;
+        cData->dimensionAssociationsRetainedBytes += estimatedBytes;
+    } catch (...) {
         reject();
     }
 }

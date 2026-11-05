@@ -1487,6 +1487,15 @@ target_include_directories(libdxfrw_dwg2dxf_adapter_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
 )
 target_link_libraries(libdxfrw_dwg2dxf_adapter_tests PRIVATE dxfrw)
+add_test(NAME dwg2dxf_dimassoc_adapter_closure_refusal
+    COMMAND ${CMAKE_COMMAND}
+        "-DAUTHOR=$<TARGET_FILE:libdxfrw_dimassoc_physical_transport_tests>"
+        "-DCONVERTER=$<TARGET_FILE:dwg2dxf>"
+        "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dimassoc_adapter_closure_test.cmake)
+set_tests_properties(dwg2dxf_dimassoc_adapter_closure_refusal PROPERTIES
+    LABELS "fast;dwg;dxf;dimassoc;adapter;graph;generated;transaction"
+    TIMEOUT 30)
 add_test(NAME dwg2dxf_sunstudy_dxf_graph
     COMMAND ${CMAKE_COMMAND}
         "-DADAPTER_TEST=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"

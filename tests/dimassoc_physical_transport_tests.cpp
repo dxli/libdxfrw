@@ -437,8 +437,18 @@ bool emitAndReadback(const DimensionAssociationProbe& source,
 bool hasResolvedEntityReferences(
         const DRW_DimensionAssociation& association,
         const std::map<std::uint32_t, DRW::ETYPE>& entities) {
-    if (association.m_dimensionHandle == 0
-        || entities.count(association.m_dimensionHandle) == 0)
+    const auto dimension = entities.find(association.m_dimensionHandle);
+    const bool dimensionType = dimension != entities.end()
+        && (dimension->second == DRW::DIMENSION
+            || dimension->second == DRW::DIMALIGNED
+            || dimension->second == DRW::DIMLINEAR
+            || dimension->second == DRW::DIMRADIAL
+            || dimension->second == DRW::DIMDIAMETRIC
+            || dimension->second == DRW::DIMANGULAR
+            || dimension->second == DRW::DIMANGULAR3P
+            || dimension->second == DRW::DIMORDINATE
+            || dimension->second == DRW::DIMARC);
+    if (association.m_dimensionHandle == 0 || !dimensionType)
         return false;
     for (const auto& ref : association.m_osnapRefs) {
         const std::vector<std::uint32_t> handles = mainObjectHandles(ref);

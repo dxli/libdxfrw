@@ -634,6 +634,8 @@ public:
     void addDetailViewStyle(const DRW_DetailViewStyle& data) override;
     void addSectionViewStyle(const DRW_SectionViewStyle& data) override;
     void addScale(const DRW_Scale& data) override;
+    void addDimensionAssociation(
+        const DRW_DimensionAssociation& data) override;
     void addDictionaryVar(const DRW_DictionaryVar& data) override;
     void addNamedObjectDictionary(const DRW_Dictionary& data) override;
     void addXRecord(const DRW_XRecord& data) override;
@@ -1657,6 +1659,152 @@ public:
             || !hasUnchangedDxfMLineStyles() || !hasUnchangedDxfMLineConsumers()) {
             dxfW->writeRawDxfObject(nullptr);
             return;
+        }
+        objectWritePhase = "DWG DIMASSOC records";
+        if (cData->dimensionAssociationCaptureFailed) {
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (!cData->dwgDimensionAssociations.empty()) {
+            if (cData->sourceFormat != dx_source_format::DWG
+                || !cData->dwgReadOutcome.attempted
+                || cData->importGeneration == 0u
+                || dxfW->getVersion() != cData->sourceVersion) {
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+            try {
+                std::unordered_map<std::uint32_t, DRW::ETYPE> entityTypes;
+                std::size_t entityCount = 0u;
+                const auto countEntities = [&entityCount](
+                        const dx_ifaceBlock* block) {
+                    if (block == nullptr)
+                        return true;
+                    if (block->ent.size()
+                        > DRW::kMaxDxfTypedTableRecords - entityCount)
+                        return false;
+                    entityCount += block->ent.size();
+                    return true;
+                };
+                if (!countEntities(cData->mBlock)) {
+                    dxfW->writeRawDxfObject(nullptr);
+                    return;
+                }
+                for (const dx_ifaceBlock* block : cData->blocks) {
+                    if (!countEntities(block)) {
+                        dxfW->writeRawDxfObject(nullptr);
+                        return;
+                    }
+                }
+                entityTypes.reserve(entityCount);
+                const auto indexEntities = [&entityTypes](
+                        const dx_ifaceBlock* block) {
+                    if (block == nullptr)
+                        return true;
+                    for (const DRW_Entity* entity : block->ent) {
+                        if (entity == nullptr || entity->handle == 0u
+                            || entity->handle == DRW::NoHandle
+                            || !entityTypes.emplace(
+                                entity->handle, entity->eType).second)
+                            return false;
+                    }
+                    return true;
+                };
+                if (!indexEntities(cData->mBlock)) {
+                    dxfW->writeRawDxfObject(nullptr);
+                    return;
+                }
+                for (const dx_ifaceBlock* block : cData->blocks) {
+                    if (!indexEntities(block)) {
+                        dxfW->writeRawDxfObject(nullptr);
+                        return;
+                    }
+                }
+                const auto isDimensionEntityType = [](DRW::ETYPE type) {
+                    switch (type) {
+                    case DRW::DIMENSION:
+                    case DRW::DIMALIGNED:
+                    case DRW::DIMLINEAR:
+                    case DRW::DIMRADIAL:
+                    case DRW::DIMDIAMETRIC:
+                    case DRW::DIMANGULAR:
+                    case DRW::DIMANGULAR3P:
+                    case DRW::DIMORDINATE:
+                    case DRW::DIMARC:
+                        return true;
+                    default:
+                        return false;
+                    }
+                };
+                for (const auto& item : cData->dwgDimensionAssociations) {
+                    const std::uint32_t sourceHandle = item.first.second;
+                    const DRW_DimensionAssociation& source = item.second;
+                    const dx_data::StandardDwgFrameKey frameKey{
+                        cData->importGeneration, sourceHandle};
+                    const auto rawFrame = cData->m_opaqueDwgSourceFrames.find(
+                        frameKey);
+                    const auto dimension = entityTypes.find(
+                        source.m_dimensionHandle);
+                    if (item.first.first != cData->importGeneration
+                        || source.handle != sourceHandle
+                        || cData->m_opaqueDwgSourceFrameIdentities.count(
+                               frameKey) != 1u
+                        || rawFrame == cData->m_opaqueDwgSourceFrames.end()
+                        || dimension == entityTypes.end()
+                        || !isDimensionEntityType(dimension->second)) {
+                        dxfW->writeRawDxfObject(nullptr);
+                        return;
+                    }
+                    const auto hasEntityTarget = [&entityTypes](
+                            std::uint32_t handle) {
+                        return handle != 0u && handle != DRW::NoHandle
+                            && entityTypes.count(handle) == 1u;
+                    };
+                    for (const DRW_DimensionAssociationOsnapRef& ref :
+                         source.m_osnapRefs) {
+                        if (ref.m_objectHandles.empty()) {
+                            if (!hasEntityTarget(ref.m_objectHandle)) {
+                                dxfW->writeRawDxfObject(nullptr);
+                                return;
+                            }
+                        } else {
+                            for (const std::uint32_t handle :
+                                 ref.m_objectHandles) {
+                                if (!hasEntityTarget(handle)) {
+                                    dxfW->writeRawDxfObject(nullptr);
+                                    return;
+                                }
+                            }
+                        }
+                        if (ref.m_hasIntersectionObjectHandle
+                            && !hasEntityTarget(
+                                ref.m_intersectionObjectHandle)) {
+                            dxfW->writeRawDxfObject(nullptr);
+                            return;
+                        }
+                    }
+
+                    DRW_DimensionAssociation output = source;
+                    if (!dxfW->writeDimensionAssociation(&output)) {
+                        dxfW->writeRawDxfObject(nullptr);
+                        return;
+                    }
+                    const std::uint32_t emittedHandle =
+                        dxfW->remapHandle(sourceHandle);
+                    if (emittedHandle == 0u
+                        || emittedHandle == DRW::NoHandle
+                        || dxfW->dxfWriteRecordHandleCount(emittedHandle) != 1u
+                        || !dxfW->dxfWriteRecordHasIdentity(
+                            emittedHandle, "DIMASSOC", "OBJECTS")
+                        || !recordOpaqueDwgOutputQualification(sourceHandle)) {
+                        dxfW->writeRawDxfObject(nullptr);
+                        return;
+                    }
+                }
+            } catch (...) {
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
         }
         objectWritePhase = "ACDS history records";
         for (auto& record : m_acdsDxfHistoryObjects) {

@@ -687,6 +687,12 @@ public:
     std::size_t wipeoutVariablesRetainedRecords{0};
     std::size_t wipeoutVariablesRetainedBytes{0};
     bool wipeoutVariablesCaptureFailed{false};
+    using DimensionAssociationKey = std::pair<std::uint64_t, std::uint32_t>;
+    std::map<DimensionAssociationKey, DRW_DimensionAssociation>
+        dwgDimensionAssociations;
+    std::size_t dimensionAssociationsRetainedRecords{0};
+    std::size_t dimensionAssociationsRetainedBytes{0};
+    bool dimensionAssociationCaptureFailed{false};
     // Render-settings callbacks are paired with raw positional DXF carriers;
     // export only replays complete rooted graphs at the exact source version.
     std::list<DRW_RenderSettings> renderSettings;
