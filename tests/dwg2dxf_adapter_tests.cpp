@@ -144,6 +144,11 @@ public:
     static DRW_UnsupportedObject& mutableOpaqueRaw(dx_data& data, std::uint32_t handle) {
         return data.m_opaqueDwgSourceFrames.at({data.importGeneration, handle});
     }
+    static const DRW_UnsupportedObject& opaqueRaw(
+            const dx_data& data, std::uint32_t handle) {
+        return data.m_opaqueDwgSourceFrames.at(
+            {data.importGeneration, handle});
+    }
     static std::size_t geoDataSourceRoleCount(const dx_data& data) {
         return data.m_dwgGeoDataSourceRoles.size();
     }
@@ -18951,7 +18956,53 @@ bool ac1024AcdsOpaqueProxyMatchesOda(const std::string& sourcePath,
     std::string valueLine;
     std::string recordName;
     std::vector<std::pair<int, std::string>> currentGroups;
+    using OdaClassKey = std::tuple<std::string, std::string, std::string>;
+    std::map<OdaClassKey, int> odaClassOutputIds;
+    std::map<OdaClassKey, int> odaClassInstanceCounts;
+    std::size_t odaClassOrdinal = 0u;
     const auto finishOdaRecord = [&]() {
+        if (recordName == "CLASS") {
+            std::string classRecordName;
+            std::string className;
+            std::string classAppName;
+            int instanceCount = -1;
+            for (const auto& group : currentGroups) {
+                if (group.first == 1) {
+                    if (!classRecordName.empty())
+                        return false;
+                    classRecordName = group.second;
+                } else if (group.first == 2) {
+                    if (!className.empty())
+                        return false;
+                    className = group.second;
+                } else if (group.first == 3) {
+                    if (!classAppName.empty())
+                        return false;
+                    classAppName = group.second;
+                } else if (group.first == 91) {
+                    if (instanceCount != -1)
+                        return false;
+                    try {
+                        std::size_t consumed = 0u;
+                        instanceCount = std::stoi(group.second, &consumed, 10);
+                        if (consumed != group.second.size())
+                            return false;
+                    } catch (...) {
+                        return false;
+                    }
+                }
+            }
+            if (classRecordName.empty() || className.empty()
+                || classAppName.empty() || instanceCount < 0
+                || odaClassOrdinal
+                    > static_cast<std::size_t>(
+                        std::numeric_limits<int>::max() - 500))
+                return false;
+            const OdaClassKey key{classRecordName, className, classAppName};
+            const int outputId = static_cast<int>(500u + odaClassOrdinal++);
+            return odaClassOutputIds.emplace(key, outputId).second
+                && odaClassInstanceCounts.emplace(key, instanceCount).second;
+        }
         if (recordName != "ACAD_PROXY_OBJECT")
             return true;
         std::uint32_t handle = 0u;
@@ -18997,7 +19048,8 @@ bool ac1024AcdsOpaqueProxyMatchesOda(const std::string& sourcePath,
                 return fail("ODA DXF proxy identity is invalid or duplicated");
             recordName = valueLine;
             currentGroups.clear();
-        } else if (recordName == "ACAD_PROXY_OBJECT") {
+        } else if (recordName == "ACAD_PROXY_OBJECT"
+                   || recordName == "CLASS") {
             currentGroups.emplace_back(code, valueLine);
         }
     }
@@ -19007,12 +19059,88 @@ bool ac1024AcdsOpaqueProxyMatchesOda(const std::string& sourcePath,
             + std::to_string(odaByHandle.size()) + " source="
             + std::to_string(source.acdsHistoryDwgFrames.size()));
 
+    std::unordered_map<std::uint32_t, const DRW_UnsupportedObject*> sourceByHandle;
+    for (const DRW_UnsupportedObject& frame : source.acdsHistoryDwgFrames) {
+        if (!sourceByHandle.emplace(frame.m_handle, &frame).second)
+            return fail("source ACSH inventory contains a duplicate handle");
+    }
+    std::size_t assocPersistentSubentManagers = 0u;
+    std::size_t barePersistentSubentManagers = 0u;
+    for (const DRW_AssociativeObject& object : source.dwgAssociativeObjects) {
+        const bool assocManager =
+            object.m_recordName == "ACDBASSOCPERSSUBENTMANAGER";
+        const bool bareManager =
+            object.m_recordName == "ACDBPERSSUBENTMANAGER";
+        if (!assocManager && !bareManager)
+            continue;
+        const DRW_UnsupportedObject* raw = nullptr;
+        try {
+            raw = &DxIfaceStandardDwgCaptureTestAccess::opaqueRaw(
+                source, object.handle);
+        } catch (...) {
+            return fail("persistent subentity manager source frame is missing");
+        }
+        if (object.handle == 0u || object.handle == DRW::NoHandle
+            || raw->m_recordName != object.m_recordName
+            || raw->m_className != (assocManager
+                ? "AcDbAssocPersSubentManager" : "AcDbPersSubentManager")
+            || raw->m_parentHandle != object.parentHandle
+            || raw->m_reactorHandles != object.reactorHandles
+            || raw->m_xDictHandle != object.xDictHandle
+            || !sourceByHandle.emplace(object.handle, raw).second) {
+            std::cerr << "persistent source binding: record="
+                      << object.m_recordName << " handle=" << std::hex
+                      << object.handle << std::dec << " rawRecord="
+                      << raw->m_recordName << " rawClass=" << raw->m_className
+                      << " type=" << raw->m_objectType << " owner="
+                      << std::hex << raw->m_parentHandle << " typedOwner="
+                      << object.parentHandle << " reactors=";
+            for (std::uint32_t reactor : raw->m_reactorHandles)
+                std::cerr << std::hex << reactor << ',';
+            std::cerr << " typedReactors=";
+            for (std::uint32_t reactor : object.reactorHandles)
+                std::cerr << std::hex << reactor << ',';
+            std::cerr << " xdict=" << raw->m_xDictHandle << " typedXdict="
+                      << object.xDictHandle << std::dec << " type="
+                      << raw->m_objectType << '\n';
+            return fail("persistent subentity manager typed/raw source binding is incomplete");
+        }
+        const auto sourceClass = std::find_if(
+            source.dwgClassCoverage.m_entries.begin(),
+            source.dwgClassCoverage.m_entries.end(),
+            [raw](const DRW_DwgClassCoverageEntry& entry) {
+                return entry.m_classNumber == raw->m_objectType
+                    && entry.m_recordName == raw->m_recordName
+                    && entry.m_className == raw->m_className;
+            });
+        if (sourceClass == source.dwgClassCoverage.m_entries.end()
+            || std::count_if(source.dwgClassCoverage.m_entries.begin(),
+                source.dwgClassCoverage.m_entries.end(), [raw] (
+                    const DRW_DwgClassCoverageEntry& entry) {
+                    return entry.m_classNumber == raw->m_objectType;
+                }) != 1)
+            return fail("persistent manager class ordinal lacks unique source class metadata");
+        if (assocManager)
+            ++assocPersistentSubentManagers;
+        else
+            ++barePersistentSubentManagers;
+    }
+    if (assocPersistentSubentManagers != 1u
+        || barePersistentSubentManagers != 1u
+        || odaByHandle.size() != sourceByHandle.size())
+        return fail("ODA proxy census includes an unexpected or unbound record: ODA="
+            + std::to_string(odaByHandle.size()) + " source="
+            + std::to_string(sourceByHandle.size()) + " persistent-subentity="
+            + std::to_string(assocPersistentSubentManagers)
+            + "; bare-persistent-subentity="
+            + std::to_string(barePersistentSubentManagers));
+
     std::vector<DRW_RawDxfObject> projected;
     std::vector<std::uint32_t> materials;
     if (!DxIfaceStandardDwgCaptureTestAccess::
             collectAc1024AcdsOpaqueProxyObjects(
                 source, projected, materials, true)
-        || projected.size() != source.acdsHistoryDwgFrames.size())
+        || projected.size() != sourceByHandle.size())
         return fail("AC1024 ACSH opaque-proxy collector refused the source");
 
     const auto valueEqual = [](const DRW_Variant& expected,
@@ -19073,16 +19201,63 @@ bool ac1024AcdsOpaqueProxyMatchesOda(const std::string& sourcePath,
         }
         return false;
     };
-    std::unordered_map<std::uint32_t, const DRW_UnsupportedObject*> sourceByHandle;
-    for (const DRW_UnsupportedObject& frame : source.acdsHistoryDwgFrames) {
-        if (!sourceByHandle.emplace(frame.m_handle, &frame).second)
-            return fail("source ACSH inventory contains a duplicate handle");
-    }
-
     std::size_t eedGroups = 0u;
     std::size_t matched = 0u;
     std::size_t sizeMismatches = 0u;
     std::size_t groupMismatches = 0u;
+    std::size_t commonReactorLinks = 0u;
+    std::size_t commonXDictionaryLinks = 0u;
+    for (const DRW_UnsupportedObject& frame : source.acdsHistoryDwgFrames) {
+        commonReactorLinks += frame.m_reactorHandles.size();
+        if (frame.m_xDictHandle != 0u)
+            ++commonXDictionaryLinks;
+    }
+    if (commonReactorLinks != 0u || commonXDictionaryLinks != 0u)
+        return fail("captured ACSH common links differ from the retained ODA profile");
+    const auto odaClassIdForSourceClass = [&](std::uint32_t sourceClassId,
+                                              int& outputClassId) {
+        const DRW_DwgClassCoverageEntry* sourceClass = nullptr;
+        for (const DRW_DwgClassCoverageEntry& entry :
+             source.dwgClassCoverage.m_entries) {
+            if (entry.m_classNumber != sourceClassId)
+                continue;
+            if (sourceClass != nullptr)
+                return false;
+            sourceClass = &entry;
+        }
+        if (sourceClass == nullptr)
+            return false;
+        const OdaClassKey key{sourceClass->m_recordName,
+                              sourceClass->m_className,
+                              sourceClass->m_appName};
+        const auto outputId = odaClassOutputIds.find(key);
+        const auto instanceCount = odaClassInstanceCounts.find(key);
+        const bool persistentManagerClass =
+            sourceClass->m_recordName == "ACDBASSOCPERSSUBENTMANAGER"
+            || sourceClass->m_recordName == "ACDBPERSSUBENTMANAGER";
+        const int expectedOdaInstanceCount =
+            persistentManagerClass && sourceClass->m_instanceCount == 1
+                ? 2 : sourceClass->m_instanceCount;
+        if (outputId == odaClassOutputIds.end()
+            || instanceCount == odaClassInstanceCounts.end()
+            || (persistentManagerClass
+                && instanceCount->second != expectedOdaInstanceCount)) {
+            std::cerr << "proxy class binding: sourceId=" << sourceClassId
+                      << " sourceRecord=" << sourceClass->m_recordName
+                      << " sourceClass=" << sourceClass->m_className
+                      << " sourceApp=" << sourceClass->m_appName
+                      << " sourceInstances=" << sourceClass->m_instanceCount
+                      << " odaClassRows=" << odaClassOutputIds.size();
+            if (outputId != odaClassOutputIds.end())
+                std::cerr << " odaOutputId=" << outputId->second;
+            if (instanceCount != odaClassInstanceCounts.end())
+                std::cerr << " odaInstances=" << instanceCount->second;
+            std::cerr << '\n';
+            return false;
+        }
+        outputClassId = outputId->second;
+        return true;
+    };
     for (const DRW_RawDxfObject& raw : projected) {
         const auto sourceFrame = sourceByHandle.find(raw.handle);
         const auto odaObject = odaByHandle.find(raw.handle);
@@ -19096,6 +19271,18 @@ bool ac1024AcdsOpaqueProxyMatchesOda(const std::string& sourcePath,
         try {
             expectedGroups.reserve(raw.groups.size());
             for (const DRW_Variant& group : raw.groups) {
+                if (group.code() == 91) {
+                    if (group.type() != DRW_Variant::INTEGER
+                        || group.i_val() < 0)
+                        return fail("projected proxy has an invalid source class ID");
+                    int outputClassId = 0;
+                    if (!odaClassIdForSourceClass(
+                            static_cast<std::uint32_t>(group.i_val()),
+                            outputClassId))
+                        return fail("source proxy class does not bind to the ODA CLASS row");
+                    expectedGroups.emplace_back(91, outputClassId);
+                    continue;
+                }
                 if (group.type() != DRW_Variant::COORD) {
                     expectedGroups.push_back(group);
                     continue;
@@ -19190,7 +19377,7 @@ bool ac1024AcdsOpaqueProxyMatchesOda(const std::string& sourcePath,
         ++matched;
     }
 
-    if (matched != source.acdsHistoryDwgFrames.size()
+    if (matched != sourceByHandle.size()
         || sizeMismatches != 0u
         || groupMismatches != 0u
         || source.dwgReadOutcome.observations.objectParseFailures == 0u
@@ -19330,8 +19517,69 @@ bool ac1024AcdsOpaqueProxyMatchesOda(const std::string& sourcePath,
         || !mutateMaterialTargetForCode(340))
         return fail("proxy material reference target-kind mutation was accepted");
 
+    const auto dictionary = std::find_if(source.dictionaries.begin(),
+        source.dictionaries.end(), [](const DRW_Dictionary& value) {
+            return value.handle != 0u && value.handle != DRW::NoHandle;
+        });
+    if (dictionary == source.dictionaries.end())
+        return fail("ODA-backed source has no typed reactor dictionary");
+    DRW_UnsupportedObject& xdictCandidate =
+        source.acdsHistoryDwgFrames.front();
+    const std::uint32_t savedXdict = xdictCandidate.m_xDictHandle;
+    xdictCandidate.m_xDictHandle = dictionary->handle;
+    const bool xdictRefused = expectAtomicRefusal(
+        "unobserved non-null proxy xDictionary link");
+    xdictCandidate.m_xDictHandle = savedXdict;
+    if (!xdictRefused)
+        return false;
+
+    DRW_UnsupportedObject& reactorCandidate =
+        source.acdsHistoryDwgFrames.front();
+    reactorCandidate.m_reactorHandles.push_back(dictionary->handle);
+    const bool reactorRefused = expectAtomicRefusal(
+        "unobserved reactor link on a captured ACSH frame");
+    reactorCandidate.m_reactorHandles.clear();
+    if (!reactorRefused)
+        return false;
+
+    auto manager = std::find_if(source.dwgAssociativeObjects.begin(),
+        source.dwgAssociativeObjects.end(), [](const DRW_AssociativeObject& value) {
+            return value.m_recordName == "ACDBASSOCPERSSUBENTMANAGER";
+        });
+    if (manager == source.dwgAssociativeObjects.end()
+        || source.materials.empty())
+        return fail("ODA-backed source lacks manager or MATERIAL for owner-role mutation");
+    const DRW_Material& material = source.materials.front();
+    DRW_UnsupportedObject& managerFrame =
+        DxIfaceStandardDwgCaptureTestAccess::mutableOpaqueRaw(
+            source, manager->handle);
+    const std::uint64_t savedManagerOwner = manager->parentHandle;
+    const std::vector<std::uint32_t> savedManagerReactors =
+        manager->reactorHandles;
+    const std::uint32_t savedManagerRawOwner = managerFrame.m_parentHandle;
+    const std::vector<std::uint32_t> savedManagerRawReactors =
+        managerFrame.m_reactorHandles;
+    manager->parentHandle = material.handle;
+    manager->reactorHandles = {material.handle};
+    managerFrame.m_parentHandle = material.handle;
+    managerFrame.m_reactorHandles = {material.handle};
+    const bool managerWrongKindRefused = expectAtomicRefusal(
+        "persistent manager owner/reactor aliased to a MATERIAL");
+    manager->parentHandle = savedManagerOwner;
+    manager->reactorHandles = savedManagerReactors;
+    managerFrame.m_parentHandle = savedManagerRawOwner;
+    managerFrame.m_reactorHandles = savedManagerRawReactors;
+    if (!managerWrongKindRefused)
+        return false;
+
     std::cout << "AC1024 ACSH proxy projection matched ODA groups: "
-              << matched << " objects; ordered EED groups=" << eedGroups
+              << matched << " proxy objects; ordered EED groups=" << eedGroups
+              << "; persistent subentity managers="
+              << assocPersistentSubentManagers
+              << "; bare persistent subentity managers="
+              << barePersistentSubentManagers
+              << "; common reactor links=" << commonReactorLinks
+              << "; non-null xDictionary links=" << commonXDictionaryLinks
               << "; source parser failures retained="
               << source.dwgReadOutcome.observations.objectParseFailures
               << "; wrong owner/reference target kinds refused atomically"
@@ -19471,6 +19719,107 @@ bool acdsOpaqueProxyCodecReadback() {
             || readback.proxies.front().m_objectData
                 != std::vector<std::uint8_t>{0xDEu, 0xADu})
             return fail("generated ACDS proxy typed payload readback failed");
+    }
+
+    for (const bool binary : {false, true}) {
+        const auto nonce = std::chrono::steady_clock::now()
+                               .time_since_epoch()
+                               .count();
+        const std::filesystem::path path =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-persistent-subentity-proxy-readback-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{path};
+
+        DRW_Class sourceClass;
+        sourceClass.recName = "ACDBASSOCPERSSUBENTMANAGER";
+        sourceClass.className = "AcDbAssocPersSubentManager";
+        sourceClass.appName = "ObjectDBX Classes";
+        sourceClass.proxyFlag = 1024;
+        sourceClass.instanceCount = 2;
+        sourceClass.wasaProxyFlag = 1;
+        sourceClass.entityFlag = 0;
+        sourceClass.classNum = 500;
+
+        dx_data data;
+        DirectWriter writerAdapter;
+        writerAdapter.cData = &data;
+        writerAdapter.currentBlock = data.mBlock;
+        writerAdapter.proxy.name = "ACAD_PROXY_OBJECT";
+        writerAdapter.proxy.handle = 0xA502u;
+        writerAdapter.proxy.m_version = DRW::AC1027;
+        writerAdapter.proxy.groups.emplace_back(5, UTF8STRING("A502"));
+        writerAdapter.proxy.groups.emplace_back(
+            102, UTF8STRING("{ACAD_REACTORS"));
+        writerAdapter.proxy.groups.emplace_back(330, UTF8STRING("C"));
+        writerAdapter.proxy.groups.emplace_back(102, UTF8STRING("}"));
+        writerAdapter.proxy.groups.emplace_back(330, UTF8STRING("C"));
+        writerAdapter.proxy.groups.emplace_back(
+            100, UTF8STRING("AcDbProxyObject"));
+        writerAdapter.proxy.groups.emplace_back(90, std::int32_t{499});
+        writerAdapter.proxy.groups.emplace_back(91, std::int32_t{500});
+        writerAdapter.proxy.groups.emplace_back(95, std::int32_t{2424861});
+        writerAdapter.proxy.groups.emplace_back(70, std::int32_t{0});
+        writerAdapter.proxy.groups.emplace_back(161, std::int64_t{16});
+        writerAdapter.proxy.groups.emplace_back(310, UTF8STRING("DEAD"));
+
+        dxfRW output(path.string().c_str());
+        writerAdapter.dxfW = &output;
+        output.setDxfClasses(std::vector<DRW_Class>{sourceClass});
+        if (!output.reserveHandle(writerAdapter.proxy.handle)
+            || !output.write(&writerAdapter, DRW::AC1027, binary)
+            || !writerAdapter.wroteProxy)
+            return fail("generated persistent-subentity proxy write failed");
+
+        dxfRW input(path.string().c_str());
+        dx_data readData;
+        Readback readback;
+        readback.cData = &readData;
+        readback.currentBlock = readData.mBlock;
+        if (!input.read(&readback, false)
+            || readback.classes.size() != 1u
+            || readback.classes.front().recName != sourceClass.recName
+            || readback.classes.front().className != sourceClass.className
+            || readback.classes.front().instanceCount != 2
+            || readback.proxies.size() != 1u
+            || readback.rawProxies.size() != 1u)
+            return fail("generated persistent-subentity class/proxy readback failed");
+
+        const DRW_RawDxfObject& actual = readback.rawProxies.front();
+        if (actual.handle != writerAdapter.proxy.handle
+            || actual.groups.size() != writerAdapter.proxy.groups.size()
+            || readback.proxies.front().parentHandle != 0xCu
+            || readback.proxies.front().reactorHandles
+                != std::vector<std::uint32_t>{0xCu})
+            return fail("generated persistent-subentity owner/reactor readback changed");
+        for (std::size_t index = 0u;
+             index < writerAdapter.proxy.groups.size(); ++index) {
+            const DRW_Variant& expected = writerAdapter.proxy.groups[index];
+            const DRW_Variant& received = actual.groups[index];
+            if (expected.code() != received.code()
+                || expected.type() != received.type())
+                return fail("generated persistent-subentity proxy field order changed");
+            if (expected.type() == DRW_Variant::STRING) {
+                if (expected.c_str() == nullptr || received.c_str() == nullptr
+                    || std::string(expected.c_str()) != received.c_str())
+                    return fail("generated persistent-subentity string field changed");
+            } else if (expected.type() == DRW_Variant::INTEGER) {
+                if (expected.i_val() != received.i_val())
+                    return fail("generated persistent-subentity integer field changed");
+            } else if (expected.type() == DRW_Variant::INTEGER64) {
+                if (expected.i64_val() != received.i64_val())
+                    return fail("generated persistent-subentity bit span changed");
+            } else {
+                return fail("generated persistent-subentity test used an unsupported group type");
+            }
+        }
     }
 
     for (const bool binary : {false, true}) {

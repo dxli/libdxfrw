@@ -6505,7 +6505,8 @@ bool makeRawProxyObject(const DRW_ProxyObject& proxy,
 
 constexpr std::size_t kMaxAdapterAcDsHistoryDwgFrameRecords = 100000u;
 
-bool makeAc1024AcdsDxfClass(const DRW_DwgClassCoverageEntry& source,
+bool makeAc1024OpaqueProxyDxfClass(
+                            const DRW_DwgClassCoverageEntry& source,
                             int instanceCount, DRW_Class& output) {
     const auto safeString = [](const std::string& value) {
         return value.find_first_of("\r\n") == std::string::npos
@@ -6513,7 +6514,27 @@ bool makeAc1024AcdsDxfClass(const DRW_DwgClassCoverageEntry& source,
     };
     const bool acdsClass = source.m_recordName == "ACAD_EVALUATION_GRAPH"
         || source.m_recordName.rfind("ACSH_", 0u) == 0u;
-    if (!acdsClass || source.m_state != DRW_DwgClassCoverageState::Published
+    // The AC1024 persistent subentity manager has the same independently
+    // observed proxy envelope, but is not an AcDs history record. Keep it as
+    // an explicit second class profile rather than broadening all custom
+    // class admission.
+    const bool persistentSubentManager =
+        source.m_recordName == "ACDBASSOCPERSSUBENTMANAGER"
+        && source.m_className == "AcDbAssocPersSubentManager"
+        && source.m_appName == "ObjectDBX Classes";
+    const bool barePersistentSubentManager =
+        source.m_recordName == "ACDBPERSSUBENTMANAGER"
+        && source.m_className == "AcDbPersSubentManager"
+        && source.m_appName == "AcDbPersSubentManager";
+    const bool managerOutputInstanceCountProfile =
+        (persistentSubentManager || barePersistentSubentManager)
+        && source.m_instanceCount == 1 && instanceCount == 2;
+    // Both retained ODA projections write these two manager CLASS rows with
+    // instanceCount 2 although the source row reports 1 and one proxy of
+    // that class is emitted. Do not extend this adjustment to other classes.
+    if ((!acdsClass && !persistentSubentManager
+            && !barePersistentSubentManager)
+        || source.m_state != DRW_DwgClassCoverageState::Published
         || source.m_reason != DRW_DwgClassCoverageReason::None
         || source.m_classNumber < 500u || source.m_recordName.empty()
         || source.m_className.empty() || !safeString(source.m_recordName)
@@ -6521,7 +6542,8 @@ bool makeAc1024AcdsDxfClass(const DRW_DwgClassCoverageEntry& source,
         || source.m_proxyFlag < 0 || source.m_proxyFlag > 65535
         || source.m_wasAProxyFlag < 0 || source.m_wasAProxyFlag > 1
         || source.m_entityFlag != 0 || instanceCount < 0
-        || source.m_instanceCount != instanceCount)
+        || (source.m_instanceCount != instanceCount
+            && !managerOutputInstanceCountProfile))
         return false;
     output = DRW_Class{};
     output.recName = source.m_recordName;
@@ -6638,7 +6660,7 @@ bool appendAcdsProxyExtendedData(Ac1024AcdsProxyPrefixProbe& prefix,
 }
 
 template<class ResolveAppId, class ResolveLayer>
-bool makeAc1024AcdsRawProxyObject(
+bool makeAc1024OpaqueDwgRawProxyObject(
         const dx_data& data, const DRW_UnsupportedObject& frame,
         DRW_RawDxfObject& output, std::uint16_t& sourceClassNumber,
         std::vector<DRW_ProxyObjectIdRef>& sourceReferences,
@@ -6686,8 +6708,20 @@ bool makeAc1024AcdsRawProxyObject(
         ? frame.m_className == "AcDbEvalGraph"
         : frame.m_recordName.rfind("ACSH_", 0u) == 0u
             && frame.m_className.rfind("AcDbSh", 0u) == 0u;
+    const bool persistentSubentManager =
+        frame.m_recordName == "ACDBASSOCPERSSUBENTMANAGER"
+        && frame.m_className == "AcDbAssocPersSubentManager"
+        && frame.m_classAppName == "ObjectDBX Classes";
+    const bool barePersistentSubentManager =
+        frame.m_recordName == "ACDBPERSSUBENTMANAGER"
+        && frame.m_className == "AcDbPersSubentManager"
+        && frame.m_classAppName == "AcDbPersSubentManager";
+    const bool persistentManagerProxyProfile =
+        persistentSubentManager || barePersistentSubentManager;
     DRW_Class classProbe;
-    if (!acdsClass || sourceClass == nullptr
+    if ((!acdsClass && !persistentSubentManager
+            && !barePersistentSubentManager)
+        || sourceClass == nullptr
         || sourceClass->m_recordName != frame.m_recordName
         || sourceClass->m_className != frame.m_className
         || sourceClass->m_appName != frame.m_classAppName
@@ -6699,7 +6733,7 @@ bool makeAc1024AcdsRawProxyObject(
             != frame.m_classMaintenanceVersion
         || sourceClass->m_unknown1 != frame.m_classUnknown1
         || sourceClass->m_unknown2 != frame.m_classUnknown2
-        || !makeAc1024AcdsDxfClass(
+        || !makeAc1024OpaqueProxyDxfClass(
             *sourceClass, sourceClass->m_instanceCount, classProbe)) {
         return fail("class evidence");
     }
@@ -6849,6 +6883,24 @@ bool makeAc1024AcdsRawProxyObject(
         DRW_RawDxfObject result;
         if (!makeRawProxyObject(proxy, sourceClass->m_classNumber, result))
             return fail("proxy fields or common EED");
+        if (persistentManagerProxyProfile) {
+            // Both retained AC1024 ODA projections place this class's one
+            // reactor block before the owner group. The generic proxy helper
+            // uses the opposite common-link ordering, so swap only this
+            // source-witnessed class profile.
+            if (proxy.reactorHandles.size() != 1u
+                || result.groups.size() < 6u
+                || result.groups[0].code() != 5
+                || result.groups[1].code() != 330
+                || result.groups[2].code() != 102
+                || result.groups[3].code() != 330
+                || result.groups[4].code() != 102
+                || result.groups[5].code() != 100)
+                return fail("persistent subentity manager link ordering");
+            std::rotate(result.groups.begin() + 1,
+                        result.groups.begin() + 2,
+                        result.groups.begin() + 5);
+        }
         // ODA omits the explicit zero-valued group-94 terminator when an
         // AC1024 ACSH proxy has no object-ID references. Keep the legacy
         // generic proxy representation unchanged outside this profile.
@@ -8348,6 +8400,8 @@ bool dx_iface::collectAc1024AcdsOpaqueProxyObjects(
         || data.sourceVersion != DRW::AC1024
         || data.importGeneration == 0u
         || data.acdsHistoryDwgFrameCaptureFailed
+        || data.dwgAssociativeCaptureFailed
+        || data.dwgReadOutcome.opaqueSourceCaptureFailed
         || data.acdsHistoryDwgFrames.empty()
         || data.acdsHistoryDwgFrames.size()
             > kMaxAdapterAcDsHistoryDwgFrameRecords
@@ -8367,13 +8421,54 @@ bool dx_iface::collectAc1024AcdsOpaqueProxyObjects(
         std::unordered_map<std::uint32_t, std::size_t> dictionaryHandleCounts;
         std::unordered_map<std::uint32_t, std::size_t> materialHandleCounts;
         std::unordered_set<std::uint32_t> acdsOwnerHandles;
+        std::unordered_set<std::uint32_t> proxyCandidateHandles;
+        std::vector<const DRW_UnsupportedObject*> proxyFrames;
         std::vector<DRW_RawDxfObject> projected;
         std::set<std::uint32_t> projectedMaterials;
-        projected.reserve(data.acdsHistoryDwgFrames.size());
+        proxyFrames.reserve(data.acdsHistoryDwgFrames.size()
+                            + data.dwgAssociativeObjects.size());
+        for (const DRW_UnsupportedObject& frame :
+             data.acdsHistoryDwgFrames)
+            proxyFrames.push_back(&frame);
+        std::unordered_set<std::uint32_t> persistentSubentHandles;
+        persistentSubentHandles.reserve(data.dwgAssociativeObjects.size());
+        for (const DRW_AssociativeObject& object :
+             data.dwgAssociativeObjects) {
+            const bool assocPersistentManager =
+                object.m_recordName == "ACDBASSOCPERSSUBENTMANAGER";
+            const bool barePersistentManager =
+                object.m_recordName == "ACDBPERSSUBENTMANAGER";
+            if (!assocPersistentManager && !barePersistentManager)
+                continue;
+            if (object.handle == 0u || object.handle == DRW::NoHandle
+                || !persistentSubentHandles.insert(object.handle).second)
+                return reject("duplicate persistent subentity manager identity",
+                              object.handle);
+            const FrameKey key{data.importGeneration, object.handle};
+            const auto raw = data.m_opaqueDwgSourceFrames.find(key);
+            if (raw == data.m_opaqueDwgSourceFrames.end()
+                || data.m_opaqueDwgSourceFrameIdentities.count(key) != 1u
+                || raw->second.m_handle != object.handle
+                || raw->second.m_recordName != object.m_recordName
+                || raw->second.m_className
+                    != (assocPersistentManager
+                        ? "AcDbAssocPersSubentManager"
+                        : "AcDbPersSubentManager")
+                || raw->second.m_parentHandle != object.parentHandle
+                || raw->second.m_reactorHandles != object.reactorHandles
+                || raw->second.m_xDictHandle != object.xDictHandle)
+                return reject("persistent subentity manager lacks an exact captured frame",
+                              object.handle);
+            proxyFrames.push_back(&raw->second);
+        }
+        if (proxyFrames.size() > kMaxAdapterAcDsHistoryDwgFrameRecords)
+            return reject("proxy frame profile exceeds its record bound");
+        projected.reserve(proxyFrames.size());
         sourceTargets.reserve(data.dwgReadOutcome.opaqueViewCallbacks
-                              + data.acdsHistoryDwgFrames.size());
+                              + proxyFrames.size());
         acdsByHandle.reserve(data.acdsHistoryDwgFrames.size());
-        acdsOwnerHandles.reserve(data.acdsHistoryDwgFrames.size());
+        proxyCandidateHandles.reserve(proxyFrames.size());
+        acdsOwnerHandles.reserve(proxyFrames.size());
         entityTypesByHandle.reserve(data.acdsHistoryDwgFrames.size());
         dictionaryHandleCounts.reserve(data.acdsHistoryDwgFrames.size());
         materialHandleCounts.reserve(data.materials.size());
@@ -8456,15 +8551,22 @@ bool dx_iface::collectAc1024AcdsOpaqueProxyObjects(
             addHandle(entity->handle);
         }
 
-        for (const DRW_UnsupportedObject& frame :
-             data.acdsHistoryDwgFrames) {
-            if (!acdsByHandle.emplace(frame.m_handle, &frame).second)
-                return reject("duplicate captured source handle",
-                              frame.m_handle);
-            if (frame.m_parentHandle != 0u
-                && frame.m_parentHandle != DRW::NoHandle)
-                acdsOwnerHandles.insert(frame.m_parentHandle);
-            addHandle(frame.m_handle);
+        for (const DRW_UnsupportedObject* frame : proxyFrames) {
+            if (frame == nullptr || frame->m_handle == 0u
+                || frame->m_handle == DRW::NoHandle
+                || !proxyCandidateHandles.insert(frame->m_handle).second)
+                return reject("duplicate or invalid captured source handle",
+                              frame == nullptr ? 0u : frame->m_handle);
+            if (frame->m_recordName.rfind("ACSH_", 0u) == 0u
+                || frame->m_recordName == "ACAD_EVALUATION_GRAPH") {
+                if (!acdsByHandle.emplace(frame->m_handle, frame).second)
+                    return reject("duplicate captured ACSH source handle",
+                                  frame->m_handle);
+            }
+            if (frame->m_parentHandle != 0u
+                && frame->m_parentHandle != DRW::NoHandle)
+                acdsOwnerHandles.insert(frame->m_parentHandle);
+            addHandle(frame->m_handle);
         }
 
         // The retained ACAD2013 projections establish this bounded AC1024
@@ -8502,17 +8604,45 @@ bool dx_iface::collectAc1024AcdsOpaqueProxyObjects(
                 && dictionary.handle != DRW::NoHandle)
                 ++dictionaryHandleCounts[dictionary.handle];
         }
+        if (data.hasNamedObjectDictionary
+            && data.namedObjectDictionary.handle != 0u
+            && data.namedObjectDictionary.handle != DRW::NoHandle
+            && acdsOwnerHandles.count(
+                   data.namedObjectDictionary.handle) != 0u)
+            ++dictionaryHandleCounts[data.namedObjectDictionary.handle];
         for (const DRW_Material& material : data.materials) {
             if (material.handle != 0u && material.handle != DRW::NoHandle)
                 ++materialHandleCounts[material.handle];
         }
 
-        for (const DRW_UnsupportedObject& frame :
-             data.acdsHistoryDwgFrames) {
+        for (const DRW_UnsupportedObject* framePointer : proxyFrames) {
+            if (framePointer == nullptr)
+                return reject("null source frame in proxy inventory");
+            const DRW_UnsupportedObject& frame = *framePointer;
+            const bool persistentSubentManager =
+                frame.m_recordName == "ACDBASSOCPERSSUBENTMANAGER"
+                || frame.m_recordName == "ACDBPERSSUBENTMANAGER";
+            if (persistentSubentManager) {
+                if (frame.m_reactorHandles.size() != 1u
+                    || frame.m_reactorHandles.front()
+                        != frame.m_parentHandle
+                    || frame.m_xDictHandle != 0u)
+                    return reject("persistent subentity manager common links are outside the observed owner/reactor profile",
+                                  frame.m_handle);
+            } else {
+                // Neither retained ACAD2013 projection has reactor or
+                // XDICTIONARY links on the captured ACSH records.
+                if (!frame.m_reactorHandles.empty())
+                    return reject("reactor links are outside the observed ACSH frame profile",
+                                  frame.m_handle);
+                if (frame.m_xDictHandle != 0u)
+                    return reject("xDictionary link is outside the observed ACSH profile",
+                                  frame.m_handle);
+            }
             DRW_RawDxfObject raw;
             std::uint16_t sourceClassNumber = 0u;
             std::vector<DRW_ProxyObjectIdRef> references;
-            if (!makeAc1024AcdsRawProxyObject(
+            if (!makeAc1024OpaqueDwgRawProxyObject(
                     data, frame, raw, sourceClassNumber, references,
                     resolveAppIdName, resolveLayerName, debug)) {
                 if (debug)
@@ -8568,6 +8698,12 @@ bool dx_iface::collectAc1024AcdsOpaqueProxyObjects(
             const bool ownerIsDictionary =
                 ownerDictionary != dictionaryHandleCounts.end()
                 && ownerDictionary->second == 1u;
+            if (persistentSubentManager
+                && (!ownerIsDictionary || ownerIs3dSolid
+                    || ownerIsAcdsObject
+                    || !requireTarget(frame.m_reactorHandles.front())))
+                return reject("persistent subentity manager owner/reactor is not the observed unique DICTIONARY target",
+                              frame.m_handle);
             const bool ownerHasWrongEntityKind =
                 ownerEntity != entityTypesByHandle.end()
                 && !ownerIs3dSolid;
@@ -8581,15 +8717,10 @@ bool dx_iface::collectAc1024AcdsOpaqueProxyObjects(
                 return reject("common owner has an unsupported target kind",
                               frame.m_handle);
             }
-            for (const std::uint32_t reactor : frame.m_reactorHandles)
-                if (!requireTarget(reactor))
-                    return reject("reactor has no captured source target",
-                                  frame.m_handle);
-            if (frame.m_xDictHandle != 0u
-                && !requireTarget(frame.m_xDictHandle))
-                return reject("extension dictionary has no captured target",
-                              frame.m_handle);
             for (const DRW_ProxyObjectIdRef& reference : references) {
+                if (persistentSubentManager)
+                    return reject("persistent subentity manager body references are outside the observed profile",
+                                  frame.m_handle);
                 if (reference.m_handle == 0u) {
                     const bool typedNull =
                         (reference.m_handleCode == DRW::DwgSoftPointer
@@ -8631,18 +8762,28 @@ bool dx_iface::collectAc1024AcdsOpaqueProxyObjects(
              data.dwgClassCoverage.m_entries) {
             const bool acdsClass = entry.m_recordName == "ACAD_EVALUATION_GRAPH"
                 || entry.m_recordName.rfind("ACSH_", 0u) == 0u;
-            if (!acdsClass)
+            const bool persistentSubentManager =
+                entry.m_recordName == "ACDBASSOCPERSSUBENTMANAGER"
+                && entry.m_className == "AcDbAssocPersSubentManager"
+                && entry.m_appName == "ObjectDBX Classes";
+            const bool barePersistentSubentManager =
+                entry.m_recordName == "ACDBPERSSUBENTMANAGER"
+                && entry.m_className == "AcDbPersSubentManager"
+                && entry.m_appName == "AcDbPersSubentManager";
+            if (!acdsClass && !persistentSubentManager
+                && !barePersistentSubentManager)
                 continue;
             const auto count = classCounts.find(entry.m_classNumber);
             const std::size_t actual = count == classCounts.end()
                 ? 0u : count->second;
             if (entry.m_state != DRW_DwgClassCoverageState::Published
                 || entry.m_instanceCount < 0
-                || actual != static_cast<std::size_t>(entry.m_instanceCount))
+                || actual
+                    != static_cast<std::size_t>(entry.m_instanceCount))
                 return reject("source class count does not match retained frames");
         }
 
-        if (projected.size() != data.acdsHistoryDwgFrames.size())
+        if (projected.size() != proxyFrames.size())
             return reject("projected-frame census mismatch");
         objects.insert(objects.end(),
                        std::make_move_iterator(projected.begin()),
@@ -78396,10 +78537,17 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 continue;
             const auto sourceRow = sourceClassRows.find(
                 sourceClass.m_classNumber);
+            const bool persistentSubentManager =
+                sourceClass.m_recordName == "ACDBASSOCPERSSUBENTMANAGER"
+                || sourceClass.m_recordName == "ACDBPERSSUBENTMANAGER";
+            const bool managerClassCountProfile =
+                persistentSubentManager && sourceClass.m_instanceCount == 1
+                && count->second == 1u;
             if (sourceRow == sourceClassRows.end()
                 || sourceRow->second != &sourceClass
-                || count->second
-                    != static_cast<std::size_t>(sourceClass.m_instanceCount)
+                || (!managerClassCountProfile
+                    && count->second
+                        != static_cast<std::size_t>(sourceClass.m_instanceCount))
                 || outputClassNames.insert(sourceClass.m_recordName).second
                     == false
                 || classes.size() >= DRW::kMaxDxfClasses
@@ -78408,10 +78556,17 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 return failAcdsExport();
             DRW_Class cls;
             if (count->second
-                    > static_cast<std::size_t>(
-                        std::numeric_limits<int>::max())
-                || !makeAc1024AcdsDxfClass(
-                    sourceClass, static_cast<int>(count->second), cls))
+                > static_cast<std::size_t>(
+                    std::numeric_limits<int>::max()))
+                return failAcdsExport();
+            int outputInstanceCount = static_cast<int>(count->second);
+            if (managerClassCountProfile) {
+                // Match the measured ODA CLASS row for the two manager
+                // profiles; the source-row count remains 1.
+                outputInstanceCount = 2;
+            }
+            if (!makeAc1024OpaqueProxyDxfClass(
+                    sourceClass, outputInstanceCount, cls))
                 return failAcdsExport();
             outputClassIds.emplace(sourceClass.m_classNumber,
                 static_cast<std::int32_t>(500u + classes.size()));
