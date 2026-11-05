@@ -1536,6 +1536,12 @@ add_test(NAME libdxfrw_table_callback_owner_order
     COMMAND libdxfrw_dwg2dxf_adapter_tests --retain-table-callback)
 set_tests_properties(libdxfrw_table_callback_owner_order PROPERTIES
     LABELS "fast;dxf;graph;adapter;tables" TIMEOUT 30)
+add_test(NAME libdxfrw_table_dwg_proxy_graphics_roundtrip
+    COMMAND libdxfrw_dwg2dxf_adapter_tests
+        --table-dwg-proxy-graphics-roundtrip)
+set_tests_properties(libdxfrw_table_dwg_proxy_graphics_roundtrip PROPERTIES
+    LABELS "fast;dxf;dwg;adapter;tables;proxy-graphics;generated;readback"
+    TIMEOUT 30)
 add_test(NAME libdxfrw_table_fallback_runtime_dispatch
     COMMAND libdxfrw_dwg2dxf_adapter_tests --table-fallback-runtime-type)
 set_tests_properties(libdxfrw_table_fallback_runtime_dispatch PROPERTIES

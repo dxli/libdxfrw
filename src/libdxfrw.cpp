@@ -1004,6 +1004,26 @@ bool canReplayTypedProxyGraphics(const DRW_Entity& entity,
             && provenance.sourceCodePage.empty()
             && provenance.countCode == 0;
     }
+    if (entity.eType == DRW::TABLE
+        || dynamic_cast<const DRW_Table*>(&entity) != nullptr) {
+        const auto* table = dynamic_cast<const DRW_Table*>(&entity);
+        if (entity.eType != DRW::TABLE || table == nullptr
+            || typeid(entity) != typeid(DRW_Table)
+            || provenance.origin != DRW_ProxyGraphicsOrigin::ParsedDwg
+            || provenance.encoding != DRW_ProxyGraphicsEncoding::DwgBitStream
+            || !provenance.sourceCodePage.empty()
+            || provenance.countCode != 0)
+            return false;
+
+        // Autodesk's TABLE DXF profile stores the AcDbEntity proxy byte count
+        // in group 92 and the bytes in group 310. Preserve the DWG cache as
+        // opaque bytes only for same-version output; do not promote its
+        // rendering semantics or reinterpret its marker/resource controls.
+        const DRW_ProxyGraphicDecodeResult inspection =
+            DRW_ProxyGraphicDecoder::inspect(entity.proxyGraphics);
+        return inspection.completed()
+            && inspection.consumedByteCount == entity.proxyGraphics.size();
+    }
     if (provenance.sourceCodePage.empty()
         || provenance.sourceCodePage != targetCodePage)
         return false;

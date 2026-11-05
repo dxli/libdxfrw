@@ -3,6 +3,7 @@
 #include "intern/dxfwriter.h"
 #include "intern/dxflayout.h"
 #include "intern/dwgbufferw.h"
+#include "intern/proxygraphicdecoder.h"
 #include "intern/dwgobjectframe.h"
 #include "intern/dwg_fixed_handles.h"
 #include "libdxfrw.h"
@@ -121,6 +122,17 @@ public:
         leader.dimStyleH.code = 5;
         leader.dimStyleH.ref = handle;
         leader.dimStyleH.ref64 = handle;
+    }
+};
+
+class DrwEntityEncodeTestAccess {
+public:
+    static void setParsedDwgProxy(DRW_Entity& entity, DRW::Version version) {
+        entity.m_proxyGraphicsProvenance = {
+            DRW_ProxyGraphicsOrigin::ParsedDwg,
+            DRW_ProxyGraphicsEncoding::DwgBitStream,
+            version, {}, 0,
+            static_cast<std::uint64_t>(entity.proxyGraphics.size()), false};
     }
 };
 
@@ -32582,6 +32594,132 @@ DRW_Table makeTextTableControl() {
     merged.m_mergedHeight = 2;
     table.m_content.m_mergedRanges.push_back({0, 0, 1, 1});
     return table;
+}
+
+std::string generatedDwgTableProxyGraphic() {
+    std::string bytes(8u, '\0');
+    const auto appendU32 = [&bytes](std::uint32_t value) {
+        for (unsigned shift = 0; shift < 32; shift += 8)
+            bytes.push_back(static_cast<char>((value >> shift) & 0xffu));
+    };
+    const auto appendChunk = [&bytes, &appendU32](
+            std::uint32_t opcode, const std::string& payload) {
+        appendU32(static_cast<std::uint32_t>(payload.size() + 8u));
+        appendU32(opcode);
+        bytes.append(payload);
+    };
+    std::string marker;
+    for (unsigned shift = 0; shift < 32; shift += 8)
+        marker.push_back(static_cast<char>((0x1234u >> shift) & 0xffu));
+    appendChunk(19u, marker);
+    std::string circle;
+    const auto appendDouble = [&circle](double value) {
+        std::array<unsigned char, sizeof(value)> raw{};
+        std::memcpy(raw.data(), &value, sizeof(value));
+        for (unsigned char byte : raw)
+            circle.push_back(static_cast<char>(byte));
+    };
+    appendDouble(1.0); appendDouble(2.0); appendDouble(3.0);
+    appendDouble(4.0);
+    appendDouble(0.0); appendDouble(0.0); appendDouble(1.0);
+    appendChunk(2u, circle);
+    return bytes;
+}
+
+bool tableDwgProxyGraphicsRoundTrip(bool binary, std::uint64_t nonce) {
+    const auto directory = std::filesystem::temp_directory_path()
+        / ("libdxfrw-table-dwg-proxy-" + std::to_string(nonce)
+           + (binary ? "-binary" : "-ascii"));
+    std::filesystem::create_directories(directory);
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ec;
+            std::filesystem::remove_all(path, ec);
+        }
+    } cleanup{directory};
+
+    const std::string expected = generatedDwgTableProxyGraphic();
+    const DRW_ProxyGraphicDecodeResult inspection =
+        DRW_ProxyGraphicDecoder::inspect(expected);
+    if (!inspection.completed()
+        || inspection.consumedByteCount != expected.size())
+        return fail("generated DWG TABLE proxy stream framing is incomplete");
+
+    dx_data data;
+    dx_iface writer;
+    writer.cData = &data;
+    writer.currentBlock = data.mBlock;
+    DRW_Table table;
+    table.handle = 0x530u;
+    table.parentHandle = 0x1Fu;
+    table.name = "*T530";
+    table.basePoint = DRW_Coord(4.0, 5.0, 0.0);
+    table.m_horizontalDirection = DRW_Coord(1.0, 0.0, 0.0);
+    table.m_hasSemanticContent = true;
+    table.m_semanticContentComplete = true;
+    table.m_content.m_columns = {DRW_TableColumn{"", 3.0}};
+    table.m_content.m_rows.resize(1u);
+    table.m_content.m_rows.front().m_height = 1.0;
+    DRW_TableCell cell;
+    cell.m_type = 1;
+    DRW_TableCellContent content;
+    content.m_type = 1;
+    content.m_text = "generated";
+    cell.m_contents.push_back(content);
+    table.m_content.m_rows.front().m_cells.push_back(cell);
+    table.proxyGraphics = expected;
+    table.numProxyGraph = static_cast<int>(expected.size());
+    DrwEntityEncodeTestAccess::setParsedDwgProxy(table, DRW::AC1021);
+    if (!table.authorizeParsedDwgProxyGraphicsReplay())
+        return fail("generated TABLE cache could not be authorized as DWG data");
+    writer.addTable(table);
+    if (data.tables.size() != 1u
+        || !data.tables.front().proxyGraphicsProvenance().replayAuthorized
+        || data.mBlock->ent.empty()
+        || !data.mBlock->ent.back()->proxyGraphics.empty())
+        return fail("TABLE proxy was not retained once on the typed record");
+
+    const auto output = directory / "same-version.dxf";
+    const auto exportCurrent = [&]() {
+        return writer.fileExport(
+            output.string(), DRW::AC1021, binary, &data, false, false,
+            dx_dxfSourceTextPolicy::Compatible,
+            DRW::DxfTextWritePolicy::Compatible,
+            dx_dxfProxyGraphicsPolicy::FailIfNotPreserved);
+    };
+    if (!exportCurrent())
+        return fail("same-version AC1021 TABLE proxy export failed");
+    const auto exactReadback = [&]() {
+        dx_data readback;
+        dx_iface reader;
+        return reader.fileImport(output.string(), &readback, false)
+            && readback.tables.size() == 1u
+            && readback.tables.front().proxyGraphics == expected
+            && readback.tables.front().numProxyGraph
+                == static_cast<int>(expected.size());
+    };
+    if (!exactReadback())
+        return fail("AC1021 TABLE proxy bytes changed after DXF readback");
+
+    const auto rejected = directory / "wrong-version.dxf";
+    const std::string sentinel = "prior TABLE proxy output";
+    {
+        std::ofstream stream(rejected, std::ios::binary | std::ios::trunc);
+        stream << sentinel;
+    }
+    if (writer.fileExport(
+            rejected.string(), DRW::AC1024, binary, &data, false, false,
+            dx_dxfSourceTextPolicy::Compatible,
+            DRW::DxfTextWritePolicy::Compatible,
+            dx_dxfProxyGraphicsPolicy::FailIfNotPreserved))
+        return fail("TABLE proxy was accepted for a different output revision");
+    std::ifstream preserved(rejected, std::ios::binary);
+    if (std::string(std::istreambuf_iterator<char>(preserved), {}) != sentinel)
+        return fail("wrong-version TABLE proxy refusal changed the destination");
+    if (!exportCurrent() || !exactReadback())
+        return fail("same-adapter TABLE proxy retry/readback failed");
+    return true;
 }
 
 std::size_t countDxfRecord(const std::filesystem::path& path, bool binary,
@@ -72448,6 +72586,14 @@ int main(int argc, char** argv) {
         return plotSettingsVisualStyleShadeReferenceRoundTrip() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--retain-table-callback")
         return retainTableCallback() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--table-dwg-proxy-graphics-roundtrip") {
+        const auto nonce = static_cast<std::uint64_t>(
+            std::chrono::steady_clock::now().time_since_epoch().count());
+        return tableDwgProxyGraphicsRoundTrip(false, nonce)
+                && tableDwgProxyGraphicsRoundTrip(true, nonce)
+            ? 0 : 1;
+    }
     if (argc == 2
         && std::string(argv[1]) == "--tablestyle-nested-raw-net") {
         const auto nonce = std::chrono::steady_clock::now()

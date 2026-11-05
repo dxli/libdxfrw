@@ -807,6 +807,19 @@ public:
     virtual void addKnot(const DRW_Entity& data) override{(void)data;}
 
     virtual void addInsert(const DRW_Insert& data) override{
+        if (m_entitiesTableProjection && data.eType == DRW::TABLE
+            && (data.numProxyGraph != 0 || !data.proxyGraphics.empty())) {
+            // The typed TABLE record retains and serializes this exact cache.
+            // Its INSERT-shaped compatibility projection must not advertise a
+            // second independent proxy cache; DWG reading already delivered
+            // the decoded display primitives through the event journal.
+            DRW_Insert projection(data);
+            projection.numProxyGraph = 0;
+            projection.proxyGraphics.clear();
+            projection.revokeProxyGraphicsReplayAuthorization();
+            retainTypedEntity<DRW_Insert>(projection);
+            return;
+        }
         retainTypedEntity<DRW_Insert>(data);
     }
     void addMLine(const DRW_MLine* data) override {
@@ -847,6 +860,10 @@ public:
         estimatedBytes += tableListNodeLinkBytes;
         try {
             cData->tables.push_back(data);
+            DRW_Table& retainedTable = cData->tables.back();
+            if (retainedTable.proxyGraphicsProvenance().origin
+                    == DRW_ProxyGraphicsOrigin::ParsedDwg)
+                (void)retainedTable.authorizeParsedDwgProxyGraphicsReplay();
             ++cData->typedTableRetainedRecords;
             cData->typedEntityRetainedBytes += estimatedBytes;
             cData->typedTableRetainedBytes += estimatedBytes;
