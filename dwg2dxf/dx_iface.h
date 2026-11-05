@@ -3529,11 +3529,14 @@ private:
     struct DwgLtypeOutputBinding {
         std::uint32_t sourceHandle{0u};
         std::uint32_t emittedHandle{0u};
+        std::string sourceName;
         std::string outputName;
     };
     bool m_dwgLtypeControlOutputRequired{false};
     bool m_dwgLtypeControlOutputInspected{false};
     std::vector<DwgLtypeOutputBinding> m_dwgLtypeControlOutputBindings;
+    std::unordered_map<std::uint32_t, std::size_t>
+        m_dwgLtypeControlOutputBindingIndex;
     bool prepareDxfMLineLinetypes(std::size_t chargedBytes=0u) noexcept;
     bool hasUnchangedDxfMLineLinetypes() const noexcept;
     bool collectDxfMLineXdataEntitySources(
@@ -3543,6 +3546,8 @@ private:
     bool inspectDwgLineTypeControlOutput(
         const dxfRW::DxfTablesWriteView&) noexcept;
     bool finalizeDwgLineTypeControlOutput() const noexcept;
+    bool hasClosedDwgEntityLinetypeReferenceTree(
+        const DRW_Entity*) const noexcept;
     bool preallocateDxfMLineLinetypeXdataEntityHandles();
     struct DxfMLineConsumerSource {
         const DRW_MLine* live{nullptr};

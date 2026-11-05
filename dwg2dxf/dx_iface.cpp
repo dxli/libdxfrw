@@ -50988,8 +50988,10 @@ bool dx_iface::inspectDwgLineTypeControlOutput(
     try {
         std::vector<dx_symbol_output::LineTypeTargetBinding> targets;
         std::vector<DwgLtypeOutputBinding> retained;
+        std::unordered_map<std::uint32_t, std::size_t> bindingIndex;
         targets.reserve(cData->lineTypes.size());
         retained.reserve(cData->lineTypes.size());
+        bindingIndex.reserve(cData->lineTypes.size());
         for (const DRW_LType& lineType : cData->lineTypes) {
             const std::uint32_t emitted =
                 dxfW->dxfWriteSourceLinetypeTargetHandle(lineType.handle);
@@ -51003,11 +51005,16 @@ bool dx_iface::inspectDwgLineTypeControlOutput(
             else if (sameAsciiName(lineType.name, "CONTINUOUS"))
                 outputName = "Continuous";
             targets.push_back({lineType.handle, emitted, outputName});
-            retained.push_back({lineType.handle, emitted, std::move(outputName)});
+            const std::size_t index = retained.size();
+            retained.push_back({lineType.handle, emitted, lineType.name,
+                                std::move(outputName)});
+            if (!bindingIndex.emplace(lineType.handle, index).second)
+                return false;
         }
         if (!dx_symbol_output::inspectLineTypeTargetBindings(view, targets))
             return false;
         m_dwgLtypeControlOutputBindings.swap(retained);
+        m_dwgLtypeControlOutputBindingIndex.swap(bindingIndex);
         m_dwgLtypeControlOutputInspected = true;
         return true;
     } catch (...) {
@@ -51021,14 +51028,22 @@ bool dx_iface::finalizeDwgLineTypeControlOutput() const noexcept {
     if (cData == nullptr || dxfW == nullptr
         || !m_dwgLtypeControlOutputInspected
         || !cData->hasCompleteDwgLineTypeControlMembership()
-        || m_dwgLtypeControlOutputBindings.size() != cData->lineTypes.size())
+        || m_dwgLtypeControlOutputBindings.size() != cData->lineTypes.size()
+        || m_dwgLtypeControlOutputBindingIndex.size()
+            != m_dwgLtypeControlOutputBindings.size())
         return false;
     try {
         std::size_t index = 0u;
         for (const DRW_LType& lineType : cData->lineTypes) {
+            const std::size_t bindingPosition = index++;
             const DwgLtypeOutputBinding& binding =
-                m_dwgLtypeControlOutputBindings[index++];
+                m_dwgLtypeControlOutputBindings[bindingPosition];
+            const auto indexed =
+                m_dwgLtypeControlOutputBindingIndex.find(lineType.handle);
             if (binding.sourceHandle != lineType.handle
+                || indexed == m_dwgLtypeControlOutputBindingIndex.end()
+                || indexed->second != bindingPosition
+                || binding.sourceName != lineType.name
                 || binding.emittedHandle == 0u
                 || binding.emittedHandle == DRW::NoHandle
                 || dxfW->dxfWriteSourceLinetypeTargetHandle(lineType.handle)
@@ -51048,6 +51063,77 @@ bool dx_iface::finalizeDwgLineTypeControlOutput() const noexcept {
     } catch (...) {
         return false;
     }
+}
+
+bool dx_iface::hasClosedDwgEntityLinetypeReferenceTree(
+        const DRW_Entity* entity) const noexcept {
+    if (!m_dwgLtypeControlOutputRequired)
+        return true;
+    if (entity == nullptr || cData == nullptr || dxfW == nullptr
+        || cData->sourceFormat != dx_source_format::DWG
+        || entity->lineType.empty())
+        return false;
+
+    const std::uint32_t sourceHandle = entity->dwgLinetypeHandle();
+    if (sourceHandle == 0u) {
+        if (cData->sourceVersion < DRW::AC1015) {
+            if (!sameAsciiName(entity->lineType, "BYLAYER"))
+                return false;
+        } else if (!sameAsciiName(entity->lineType, "BYLAYER")
+                   && !sameAsciiName(entity->lineType, "BYBLOCK")
+                   && !sameAsciiName(entity->lineType, "CONTINUOUS")) {
+            return false;
+        }
+    } else {
+        if (sourceHandle == DRW::NoHandle)
+            return false;
+        const auto found =
+            m_dwgLtypeControlOutputBindingIndex.find(sourceHandle);
+        if (found == m_dwgLtypeControlOutputBindingIndex.end()
+            || found->second >= m_dwgLtypeControlOutputBindings.size())
+            return false;
+        const DwgLtypeOutputBinding& binding =
+            m_dwgLtypeControlOutputBindings[found->second];
+        if (binding.sourceHandle != sourceHandle
+            || binding.sourceName != entity->lineType
+            || binding.emittedHandle == 0u
+            || binding.emittedHandle == DRW::NoHandle
+            || dxfW->dxfWriteSourceLinetypeTargetHandle(sourceHandle)
+                != binding.emittedHandle)
+            return false;
+        const bool builtin = sameAsciiName(binding.sourceName, "BYBLOCK")
+            || sameAsciiName(binding.sourceName, "BYLAYER")
+            || sameAsciiName(binding.sourceName, "CONTINUOUS");
+        if (builtin) {
+            if (!sameAsciiName(binding.outputName, entity->lineType))
+                return false;
+        } else if (binding.outputName != entity->lineType) {
+            return false;
+        }
+    }
+
+    if (const auto* polyline = dynamic_cast<const DRW_Polyline*>(entity)) {
+        for (const auto& vertex : polyline->vertlist)
+            if (vertex
+                && !hasClosedDwgEntityLinetypeReferenceTree(vertex.get()))
+                return false;
+        if (polyline->seqEndEntity
+            && !hasClosedDwgEntityLinetypeReferenceTree(
+                polyline->seqEndEntity.get()))
+            return false;
+    }
+    if (const auto* insert = dynamic_cast<const DRW_Insert*>(entity)) {
+        for (const auto& attribute : insert->attlist)
+            if (attribute
+                && !hasClosedDwgEntityLinetypeReferenceTree(
+                    attribute.get()))
+                return false;
+        if (insert->seqEndEntity
+            && !hasClosedDwgEntityLinetypeReferenceTree(
+                insert->seqEndEntity.get()))
+            return false;
+    }
+    return true;
 }
 
 dx_iface::TableSourceReport dx_iface::tableSourceReport(const dx_data& data) noexcept {
@@ -73418,6 +73504,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     m_dwgLtypeControlOutputInspected = false;
     std::vector<DwgLtypeOutputBinding>().swap(
         m_dwgLtypeControlOutputBindings);
+    std::unordered_map<std::uint32_t, std::size_t>().swap(
+        m_dwgLtypeControlOutputBindingIndex);
     m_sunStudyOutputInspected = false;
     m_sunStudyRootSnapshot.reset();
     m_sunStudyOwnerSnapshot.reset();
@@ -79623,6 +79711,10 @@ void dx_iface::writeEntity(DRW_Entity* e){
     if(!checkDxfCommonEntity(e)){dxfW->writeRawDxfEntity(nullptr);return;}
     if (e == nullptr) {
         failHatchPublication();
+        return;
+    }
+    if (!hasClosedDwgEntityLinetypeReferenceTree(e)) {
+        (void)dxfW->writeRawDxfEntity(nullptr);
         return;
     }
     const auto selected = m_hatchTargets.find(e->handle);

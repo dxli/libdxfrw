@@ -26,6 +26,8 @@ public:
         iface.m_dwgLtypeControlOutputInspected = false;
         std::vector<dx_iface::DwgLtypeOutputBinding>().swap(
             iface.m_dwgLtypeControlOutputBindings);
+        std::unordered_map<std::uint32_t, std::size_t>().swap(
+            iface.m_dwgLtypeControlOutputBindingIndex);
     }
     static bool inspect(dx_iface& iface,
                         const dxfRW::DxfTablesWriteView& view) noexcept {
@@ -37,6 +39,10 @@ public:
     }
     static bool outputRequired(const dx_iface& iface) noexcept {
         return iface.m_dwgLtypeControlOutputRequired;
+    }
+    static bool validateEntity(const dx_iface& iface,
+                               const DRW_Entity* entity) noexcept {
+        return iface.hasClosedDwgEntityLinetypeReferenceTree(entity);
     }
 };
 
@@ -698,6 +704,11 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
                 DRW::DwgLtypeByBlockHandle, DRW::DwgLtypeByLayerHandle};
             control.m_carrier = DRW_DwgFramePublication::Carrier::Control;
             addDwgFramePublication(control);
+            entity = new DRW_Line();
+            entity->handle = 0xC420u;
+            entity->lineType = "CustomDash";
+            entity->setDwgLinetypeHandle(0xC413u);
+            data.mBlock->ent.push_back(entity);
         }
 
         void writeHeader(DRW_Header& header) override {
@@ -727,6 +738,32 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
             }
         }
 
+        void writeEntities() override {
+            entity->setDwgLinetypeHandle(0xC413u);
+            entity->lineType = "CustomDash";
+            if (fault == 7u)
+                entity->lineType = "WrongDash";
+            else if (fault == 8u)
+                entity->setDwgLinetypeHandle(0xC414u);
+            else if (fault == 9u) {
+                entity->setDwgLinetypeHandle(0u);
+                entity->lineType = "CustomDash";
+            } else if (fault == 10u) {
+                entity->setDwgLinetypeHandle(0u);
+                entity->lineType.clear();
+            } else if (fault == 11u) {
+                entity->setDwgLinetypeHandle(0u);
+                entity->lineType = "BYLAYER";
+            } else if (fault == 12u) {
+                entity->setDwgLinetypeHandle(0u);
+                entity->lineType = "BYBLOCK";
+            } else if (fault == 13u) {
+                entity->setDwgLinetypeHandle(0u);
+                entity->lineType = "CONTINUOUS";
+            }
+            dx_iface::writeEntities();
+        }
+
         void writeObjects() override {
             if (fault != 6u)
                 return;
@@ -740,6 +777,7 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
         }
 
         dx_data data;
+        DRW_Line* entity{nullptr};
         unsigned fault{0u};
         bool writeFailed{false};
     } iface;
@@ -762,11 +800,45 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
     dxfRW codec(path.string().c_str());
     iface.dxfW = &codec;
     codec.setDxfWriteRecordInventoryEnabled(false);
+    DxIfaceDwgLtypeControlOutputTestAccess::begin(iface);
+    iface.data.sourceVersion = DRW::AC1014;
+    iface.entity->setDwgLinetypeHandle(0u);
+    iface.entity->lineType = "BYLAYER";
+    t.expect(DxIfaceDwgLtypeControlOutputTestAccess::validateEntity(
+                 iface, iface.entity),
+             "Pre-R2000 implicit BYLAYER remains accepted");
+    iface.entity->lineType = "BYBLOCK";
+    t.expect(!DxIfaceDwgLtypeControlOutputTestAccess::validateEntity(
+                 iface, iface.entity),
+             "Pre-R2000 implicit modes do not admit BYBLOCK without a handle");
+    iface.data.sourceVersion = DRW::AC1024;
+    iface.entity->lineType = "BYBLOCK";
+    t.expect(DxIfaceDwgLtypeControlOutputTestAccess::validateEntity(
+                 iface, iface.entity),
+             "R2000+ implicit BYBLOCK is a distinct supported mode");
+    DRW_Polyline nestedPolyline;
+    nestedPolyline.lineType = "BYLAYER";
+    auto vertex = std::make_shared<DRW_Vertex>();
+    vertex->lineType = "CustomDash";
+    vertex->setDwgLinetypeHandle(0xC414u);
+    nestedPolyline.vertlist.push_back(vertex);
+    t.expect(!DxIfaceDwgLtypeControlOutputTestAccess::validateEntity(
+                 iface, &nestedPolyline),
+             "Embedded POLYLINE VERTEX linetype references are checked");
+    DRW_Insert nestedInsert;
+    nestedInsert.lineType = "BYLAYER";
+    auto attribute = std::make_shared<DRW_Attrib>();
+    attribute->lineType = "CustomDash";
+    attribute->setDwgLinetypeHandle(0xC414u);
+    nestedInsert.attlist.push_back(attribute);
+    t.expect(!DxIfaceDwgLtypeControlOutputTestAccess::validateEntity(
+                 iface, &nestedInsert),
+             "Embedded INSERT ATTRIB linetype references are checked");
     unsigned cells = 0u;
     for (const auto outputVersion : {DRW::AC1014, DRW::AC1015, DRW::AC1018,
              DRW::AC1021, DRW::AC1024, DRW::AC1027, DRW::AC1032}) {
       for (const bool binary : {false, true}) {
-        for (unsigned fault = 0u; fault <= 6u; ++fault) {
+        for (unsigned fault = 0u; fault <= 13u; ++fault) {
             iface.fault = fault;
             iface.writeFailed = false;
             unsigned inspections = 0u;
@@ -792,9 +864,30 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
             t.expect(installInspector(),
                      "DWG LTYPE output inspector installs before write");
             const bool wrote = codec.write(&iface, outputVersion, binary);
-            if (fault == 0u) {
+            if (fault == 0u || fault >= 11u) {
                 t.expect(wrote && inspections == 1u && !iface.writeFailed,
-                         "Exact source-to-emitted LTYPE identity and table owner pass across target versions/codecs");
+                         "Explicit source LTYPE and the three implicit modes pass across target versions/codecs");
+                class Readback final : public dx_iface {
+                public:
+                    Readback() {
+                        cData = &data;
+                        currentBlock = data.mBlock;
+                    }
+                    dx_data data;
+                } readback;
+                dxfRW reader(path.string().c_str());
+                const bool read = reader.read(&readback, false);
+                const auto line = std::find_if(
+                    readback.data.mBlock->ent.cbegin(),
+                    readback.data.mBlock->ent.cend(), [](const DRW_Entity* value) {
+                        return value != nullptr && value->eType == DRW::LINE;
+                    });
+                const std::string expectedName = fault == 0u
+                    ? "CustomDash" : fault == 11u ? "BYLAYER"
+                    : fault == 12u ? "BYBLOCK" : "CONTINUOUS";
+                t.expect(read && line != readback.data.mBlock->ent.cend()
+                             && (*line)->lineType == expectedName,
+                         "DXF readback retains the exact explicit/implicit entity linetype name");
                 ++cells;
                 continue;
             }
@@ -803,7 +896,7 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
                 (std::istreambuf_iterator<char>(previous)),
                 std::istreambuf_iterator<char>());
             t.expect(!wrote && inspections == 1u && retained == sentinel,
-                     "Wrong name, missing row, unexpected row, duplicate name, ambiguous target, or changed alias refuses atomically");
+                     "Wrong/missing/extra/duplicate table rows, ambiguous/changed alias, or invalid entity LTYPE reference refuses atomically");
 
             iface.fault = 0u;
             iface.writeFailed = false;
@@ -821,7 +914,7 @@ void testDwgLtypeControlOutputBinding(TestContext& t) {
       }
     }
     std::cout << "DWG LTYPE control output cells=" << cells
-              << " target-versions=7 formats=2 negative cases=6 with same-codec retries\n";
+              << " target-versions=7 formats=2 negative cases=10 with same-codec retries\n";
 }
 
 void testSymbolNameWireInspection(TestContext& t) {
