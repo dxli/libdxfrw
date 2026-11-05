@@ -8701,8 +8701,8 @@ struct TableGeometryFrame {
     std::uint32_t handleBits {0};
 };
 
-bool makeTableGeometryNonzeroFlagsFrame(TableGeometryFrame& frame,
-                                        std::int32_t flags,
+bool makeTableGeometryDwgBdFrame(TableGeometryFrame& frame,
+                                 double unknownValue,
                                         int handleCode = DRW::DwgSoftPointer,
                                         std::uint32_t handleRef = 0xA720u) {
     constexpr DRW::Version version = DRW::AC1021;
@@ -8723,7 +8723,7 @@ bool makeTableGeometryNonzeroFlagsFrame(TableGeometryFrame& frame,
     body.putBitDouble(9.25); // content height
     body.putBitDouble(10.5); // width
     body.putBitDouble(11.75); // height
-    body.putBitLong(flags); // shared content-geometry tail, ODA §20.4.98 BL
+    body.putBitDouble(unknownValue); // ODA §20.4.103 BD
 
     object.putObjType(version, 0u); // direct parser vector; dispatch is not under test
     const std::size_t objectSizeBit = object.bitCount();
@@ -8772,11 +8772,11 @@ bool makeTableGeometryNonzeroFlagsFrame(TableGeometryFrame& frame,
     return true;
 }
 
-void testTableGeometryNonzeroFlags(TestContext& t) {
-    constexpr std::int32_t flags = 0x12345;
+void testTableGeometryDwgBdValue(TestContext& t) {
+    constexpr double unknownValue = 12.5;
     TableGeometryFrame frame;
-    const bool built = makeTableGeometryNonzeroFlagsFrame(frame, flags);
-    t.expect(built, "TABLEGEOMETRY nonzero shared BL frame builds from scratch");
+    const bool built = makeTableGeometryDwgBdFrame(frame, unknownValue);
+    t.expect(built, "TABLEGEOMETRY nonzero BD frame builds from scratch");
     if (!built)
         return;
 
@@ -8784,18 +8784,20 @@ void testTableGeometryNonzeroFlags(TestContext& t) {
     TableGeometryCodecProbe parsed;
     const bool read = parsed.parseDwg(DRW::AC1021, &input, frame.handleBits);
     t.expect(read && input.isGood(),
-             "TABLEGEOMETRY nonzero shared BL field parses with aligned handles");
+             "TABLEGEOMETRY nonzero BD field parses with aligned handles");
     t.expect(parsed.m_rowCount == 1 && parsed.m_columnCount == 1
                  && parsed.m_cellCount == 1 && parsed.m_cells.size() == 1u
                  && parsed.m_cells[0].m_flags == 0x21
                  && parsed.m_cells[0].m_unknownHandle == 0xA720u
                  && parsed.m_cells[0].m_contents.size() == 1u,
-             "TABLEGEOMETRY counts and cell framing remain aligned after BL field");
+             "TABLEGEOMETRY counts and cell framing remain aligned after BD field");
     if (parsed.m_cells.size() == 1u
         && parsed.m_cells[0].m_contents.size() == 1u) {
         const DRW_TableGeometryContent& content =
             parsed.m_cells[0].m_contents[0];
-        t.expect(content.m_unknown == flags
+        t.expect(content.m_unknown == 0
+                     && content.m_dwgUnknownValue == unknownValue
+                     && content.m_hasDwgUnknownValue
                      && content.m_topLeft.x == 1.25
                      && content.m_topLeft.y == 2.5
                      && content.m_topLeft.z == 3.75
@@ -8806,12 +8808,12 @@ void testTableGeometryNonzeroFlags(TestContext& t) {
                      && content.m_contentHeight == 9.25
                      && content.m_width == 10.5
                      && content.m_height == 11.75,
-                 "TABLEGEOMETRY preserves nonzero BL value and preceding geometry fields");
+                 "TABLEGEOMETRY preserves exact nonzero BD value and preceding geometry fields");
     }
 
     TableGeometryFrame wrongRole;
-    const bool wrongBuilt = makeTableGeometryNonzeroFlagsFrame(
-        wrongRole, flags, DRW::DwgHardPointer);
+    const bool wrongBuilt = makeTableGeometryDwgBdFrame(
+        wrongRole, unknownValue, DRW::DwgHardPointer);
     t.expect(wrongBuilt, "TABLEGEOMETRY wrong-role vector builds");
     if (wrongBuilt) {
         dwgBuffer wrong(wrongRole.bytes.data(), wrongRole.bytes.size());
@@ -8828,8 +8830,8 @@ void testTableGeometryNonzeroFlags(TestContext& t) {
              {{0x06u, 0u, 0xA501u}}, {{0x08u, 0u, 0xA4FFu}},
              {{0x0Au, 0x20u, 0xA520u}}, {{0x0Cu, 0x20u, 0xA4E0u}}}}) {
         TableGeometryFrame relativeFrame;
-        const bool relativeBuilt = makeTableGeometryNonzeroFlagsFrame(
-            relativeFrame, flags, static_cast<int>(relative[0]), relative[1]);
+        const bool relativeBuilt = makeTableGeometryDwgBdFrame(
+            relativeFrame, unknownValue, static_cast<int>(relative[0]), relative[1]);
         t.expect(relativeBuilt, "TABLEGEOMETRY relative soft-pointer vector builds");
         if (relativeBuilt) {
             dwgBuffer inputRelative(relativeFrame.bytes.data(), relativeFrame.bytes.size());
@@ -8842,8 +8844,8 @@ void testTableGeometryNonzeroFlags(TestContext& t) {
     for (const auto& invalid : std::array<std::array<std::uint32_t, 2>, 3>{{
              {{0x06u, 1u}}, {{0x0Au, 0xFFFFFFFFu}}, {{0x0Cu, 0xFFFFu}}}}) {
         TableGeometryFrame invalidFrame;
-        const bool invalidBuilt = makeTableGeometryNonzeroFlagsFrame(
-            invalidFrame, flags, static_cast<int>(invalid[0]), invalid[1]);
+        const bool invalidBuilt = makeTableGeometryDwgBdFrame(
+            invalidFrame, unknownValue, static_cast<int>(invalid[0]), invalid[1]);
         t.expect(invalidBuilt, "TABLEGEOMETRY invalid relative pointer vector builds");
         if (invalidBuilt) {
             dwgBuffer inputInvalid(invalidFrame.bytes.data(), invalidFrame.bytes.size());
@@ -8853,8 +8855,8 @@ void testTableGeometryNonzeroFlags(TestContext& t) {
         }
     }
     TableGeometryFrame nullHandle;
-    const bool nullBuilt = makeTableGeometryNonzeroFlagsFrame(
-        nullHandle, flags, DRW::DwgSoftPointer, 0u);
+    const bool nullBuilt = makeTableGeometryDwgBdFrame(
+        nullHandle, unknownValue, DRW::DwgSoftPointer, 0u);
     t.expect(nullBuilt, "TABLEGEOMETRY null soft-pointer vector builds");
     if (nullBuilt) {
         dwgBuffer inputNull(nullHandle.bytes.data(), nullHandle.bytes.size());
@@ -20487,10 +20489,10 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
-        && std::string(argv[1]) == "--tablegeometry-nonzero-bl-tail") {
+        && std::string(argv[1]) == "--tablegeometry-dwg-bd-tail") {
         TestContext context;
-        testTableGeometryNonzeroFlags(context);
-        std::cout << "TABLEGEOMETRY nonzero shared BL tail: "
+        testTableGeometryDwgBdValue(context);
+        std::cout << "TABLEGEOMETRY nonzero DWG BD tail: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
@@ -20796,7 +20798,7 @@ int main(int argc, char** argv) {
     testTableContentDwgPayloadEncoder(context);
     testTableContentSkippedDataCompleteness(context);
     testTableContentCellStyleBorderAlignment(context);
-    testTableGeometryNonzeroFlags(context);
+    testTableGeometryDwgBdValue(context);
     testTableContentOverrideStyleTypes(context);
     testR2010EmbeddedTableContentVector(context);
     testR2010TableBreakDataFlagDomain(context);

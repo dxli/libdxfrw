@@ -245,6 +245,7 @@ bool tests(const std::filesystem::path& directory) {
     unsigned writerRoutes=0u,writerFailures=0u,writerRetries=0u;
     unsigned versionRefusals=0u,versionRetries=0u;
     unsigned flagRefusals=0u,flagRetries=0u;
+    unsigned unknownValueRefusals=0u,unknownValueRetries=0u;
     const std::array<DRW::Version,4> outputVersions{{
         DRW::AC1021,DRW::AC1024,DRW::AC1027,DRW::AC1032}};
     const std::array<std::array<int,2>,2> flagProfiles{{{3,3},{4,7}}};
@@ -298,6 +299,29 @@ bool tests(const std::filesystem::path& directory) {
                 || !readback())
                 return fail("same-exporter TABLEGEOMETRY flag correction did not retry");
             ++flagRetries;
+        }
+
+        if (flags[0] == 4 && outputVersion == DRW::AC1021
+            && !inputBinary && !outputBinary) {
+            auto& content = retained.tableGeometries.front()
+                                .m_cells.front().m_contents.front();
+            content.m_dwgUnknownValue = 12.5;
+            content.m_hasDwgUnknownValue = true;
+            const std::string unknownSentinel=
+                "KEEP_UNREPRESENTABLE_TABLE_GEOMETRY_BD\n";
+            {std::ofstream stream(output,std::ios::binary); stream<<unknownSentinel;}
+            if (exporter.fileExport(output.string(),outputVersion,outputBinary,
+                                    &retained,false,false)
+                || bytes(output)!=unknownSentinel)
+                return fail("unrepresentable TABLEGEOMETRY DWG BD value was not refused atomically");
+            ++unknownValueRefusals;
+            content.m_dwgUnknownValue = 0.0;
+            if (!exporter.fileExport(output.string(),outputVersion,outputBinary,
+                                     &retained,false,false)
+                || !readback())
+                return fail("corrected TABLEGEOMETRY DWG BD value did not retry");
+            content.m_hasDwgUnknownValue = false;
+            ++unknownValueRetries;
         }
 
         retained.tableGeometries.front().m_cells.front().m_unknownHandle=0xA1u;
@@ -359,11 +383,14 @@ bool tests(const std::filesystem::path& directory) {
              <<" atomic refusals/"<<writerRetries<<" same-exporter retries; "
              <<flagRefusals<<" unqualified-flag refusals/"<<flagRetries
              <<" same-exporter retries; "
+             <<unknownValueRefusals<<" unrepresentable-DWG-BD refusals/"
+             <<unknownValueRetries<<" same-exporter retries; "
              <<versionRefusals<<" pre-AC1021 refusals/"<<versionRetries
              <<" AC1021 retries; "<<refusals<<" atomic table-dependency refusals/readbacks\n";
     return positives==16u && fallbacks==320u && retries==320u && refusals==24u
         && writerRoutes==32u && writerFailures==32u && writerRetries==32u
         && flagRefusals==1u && flagRetries==1u
+        && unknownValueRefusals==1u && unknownValueRetries==1u
         && versionRefusals==8u && versionRetries==8u;
 }
 

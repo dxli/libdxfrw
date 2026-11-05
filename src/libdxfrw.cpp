@@ -34147,6 +34147,10 @@ bool dxfRW::writeTableGeometry(DRW_TableGeometry *ent) {
                 || !std::isfinite(content.m_contentHeight)
                 || !std::isfinite(content.m_width)
                 || !std::isfinite(content.m_height)
+                || (content.m_hasDwgUnknownValue
+                    && (!std::isfinite(content.m_dwgUnknownValue)
+                        || content.m_dwgUnknownValue
+                            != static_cast<double>(content.m_unknown)))
                 || content.m_topLeft.z != 0.0
                 || content.m_center.z != 0.0
                 || content.m_contentWidth < 0.0

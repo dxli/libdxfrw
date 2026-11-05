@@ -25885,7 +25885,7 @@ bool DRW_TableGeometry::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint
 
         std::int32_t contentCount = 0;
         if (!readBitLongWithinBody(bodyBuf, version, bodyEnd, contentCount)
-            // Six compressed doubles and one compressed BL are each at least
+            // Seven compressed doubles are each at least
             // two bits; full values are still checked by the readers below.
             || !countFitsObjectBody(bodyBuf, version, bodyEnd, contentCount, 14)
             || !bodyBuf->isGood()
@@ -25910,10 +25910,20 @@ bool DRW_TableGeometry::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint
                                             content.m_width)
                 || !readBitDoubleWithinBody(bodyBuf, version, bodyEnd,
                                             content.m_height)
-                || !readBitLongWithinBody(bodyBuf, version, bodyEnd,
-                                          content.m_unknown)
+                || !readBitDoubleWithinBody(bodyBuf, version, bodyEnd,
+                                            content.m_dwgUnknownValue)
+                || !std::isfinite(content.m_dwgUnknownValue)
                 || !bodyBuf->isGood() || !finiteGeometry(content))
                 return fail();
+            content.m_hasDwgUnknownValue = true;
+            if (content.m_dwgUnknownValue
+                    >= static_cast<double>(std::numeric_limits<std::int32_t>::min())
+                && content.m_dwgUnknownValue
+                    <= static_cast<double>(std::numeric_limits<std::int32_t>::max())
+                && std::trunc(content.m_dwgUnknownValue)
+                    == content.m_dwgUnknownValue)
+                content.m_unknown = static_cast<std::int32_t>(
+                    content.m_dwgUnknownValue);
             cell.m_contents.push_back(content);
         }
         if (!bodyBuf->isGood())

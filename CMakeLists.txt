@@ -1799,10 +1799,10 @@ if(LIBDXFRW_BUILD_TESTS)
             --table-content-cell-style-border-alignment)
     set_tests_properties(libdxfrw_table_content_cell_style_border_alignment PROPERTIES
         LABELS "fast;dwg;object-vectors;tables;generated" TIMEOUT 10)
-    add_test(NAME libdxfrw_tablegeometry_nonzero_bl_tail
+    add_test(NAME libdxfrw_tablegeometry_dwg_bd_tail
         COMMAND libdxfrw_dwg_object_vectors_tests
-            --tablegeometry-nonzero-bl-tail)
-    set_tests_properties(libdxfrw_tablegeometry_nonzero_bl_tail PROPERTIES
+            --tablegeometry-dwg-bd-tail)
+    set_tests_properties(libdxfrw_tablegeometry_dwg_bd_tail PROPERTIES
         LABELS "fast;dwg;object-vectors;tables;generated" TIMEOUT 10)
     add_test(NAME libdxfrw_table_content_override_style_types
         COMMAND libdxfrw_dwg_object_vectors_tests

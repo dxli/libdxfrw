@@ -1836,7 +1836,11 @@ struct DRW_TableGeometryContent {
   double m_contentHeight = 0.0;
   double m_width = 0.0;
   double m_height = 0.0;
+  // DXF group 95 is an integer. DWG §20.4.103 encodes the source field as
+  // BD, so retain its exact value separately and refuse lossy DXF output.
   std::int32_t m_unknown = 0;
+  double m_dwgUnknownValue = 0.0;
+  bool m_hasDwgUnknownValue = false;
 };
 
 struct DRW_TableGeometryCell {
