@@ -569,7 +569,7 @@ bool makeLiteralGeoDataFrame(DRW::Version targetVersion,
     geoData.m_horizontalUnits = 4;
     geoData.m_verticalUnitScale = 2.25;
     geoData.m_verticalUnits = 7;
-    geoData.m_scaleEstimationMethod = 2;
+    geoData.m_scaleEstimationMethod = objectVersion == 1 ? 1 : 2;
     geoData.m_userSpecifiedScaleFactor = 1.75;
     geoData.m_enableSeaLevelCorrection = true;
     geoData.m_seaLevelElevation = 8.5;
@@ -13701,7 +13701,7 @@ void testGeoDataCivilTailWriterVectors(TestContext& t) {
         object.m_horizontalUnits = 4;
         object.m_verticalUnitScale = 2.25;
         object.m_verticalUnits = 7;
-        object.m_scaleEstimationMethod = 2;
+        object.m_scaleEstimationMethod = item.objectVersion == 1 ? 1 : 2;
         object.m_userSpecifiedScaleFactor = 1.75;
         object.m_enableSeaLevelCorrection = true;
         object.m_seaLevelElevation = 8.5;
@@ -13841,6 +13841,41 @@ void testGeoDataCivilTailWriterVectors(TestContext& t) {
                  && unmarkedStrings.data() == unmarkedStringsBefore
                  && unmarkedHandles.data() == unmarkedHandlesBefore,
              "GEODATA no-tail downgrade rejects populated tail fields even without a presence marker");
+}
+
+void testGeoDataDwgScaleMethodDomain(TestContext& t) {
+    for (const std::int32_t objectVersion : {2, 3}) {
+        for (const std::int32_t invalidValue : {-1, 0, 5}) {
+            GeoDataCodecProbe geoData;
+            geoData.handle = 0xA100u;
+            geoData.parentHandle = 0xA200u;
+            geoData.setDwgCommonObjectState(0, 1, false);
+            geoData.m_version = objectVersion;
+            geoData.m_hostBlockHandle = 0xA300u;
+            geoData.m_scaleEstimationMethod = invalidValue;
+
+            dwgBufferW body;
+            dwgBufferW strings;
+            dwgBufferW handles;
+            body.putRawChar8(0xA5u);
+            strings.putRawChar8(0x5Au);
+            handles.putRawChar8(0xC3u);
+            const auto bodyBefore = body.data();
+            const auto stringsBefore = strings.data();
+            const auto handlesBefore = handles.data();
+            const bool rejected = !geoData.encodeDwg(
+                    DRW::AC1027, &body, &strings, &handles)
+                && body.data() == bodyBefore
+                && strings.data() == stringsBefore
+                && handles.data() == handlesBefore;
+
+            geoData.m_scaleEstimationMethod = invalidValue < 1 ? 1 : 4;
+            const bool retried = geoData.encodeDwg(
+                DRW::AC1027, &body, &strings, &handles);
+            t.expect(rejected && retried,
+                     "DWG GEODATA v2/v3 rejects invalid scale methods without buffer mutation and retries at a valid endpoint");
+        }
+    }
 }
 
 void testOptionalStreamFallbacks(TestContext& t) {
@@ -20105,6 +20140,14 @@ int main(int argc, char** argv) {
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }
+    if (argc == 2
+        && std::string(argv[1]) == "--geodata-dwg-scale-method-domain") {
+        TestContext context;
+        testGeoDataDwgScaleMethodDomain(context);
+        std::cout << "DWG GEODATA scale-method domain: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string(argv[1]) == "--layout-vectors") {
         TestContext context;
         testLayoutVectors(context);
@@ -20677,6 +20720,7 @@ int main(int argc, char** argv) {
     testR2010MergedRangeProjectionVector(context);
     testGeoDataCivilTailReaderVectors(context);
     testGeoDataCivilTailWriterVectors(context);
+    testGeoDataDwgScaleMethodDomain(context);
     testOptionalStreamFallbacks(context);
     testDwgEedSizeBoundaries(context);
     testLtypeTextAreaVectors(context);

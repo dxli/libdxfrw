@@ -21328,6 +21328,10 @@ bool DRW_GeoData::encodeDwg(DRW::Version version, dwgBufferW *buf,
         || m_points.size() > static_cast<std::size_t>(kMaxMeshItems)
         || m_faces.size() > static_cast<std::size_t>(kMaxMeshItems))
         return false;
+    if ((m_version == 1 && m_scaleEstimationMethod != 1)
+        || (m_version >= 2 && (m_scaleEstimationMethod < 1
+                               || m_scaleEstimationMethod > 4)))
+        return false;
     const auto finite = [](const DRW_Coord& point) {
         return std::isfinite(point.x) && std::isfinite(point.y)
             && std::isfinite(point.z);

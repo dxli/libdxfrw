@@ -1724,6 +1724,11 @@ if(LIBDXFRW_BUILD_TESTS)
             --geodata-civil-tail-target-matrix)
     set_tests_properties(libdxfrw_geodata_civil_tail_target_matrix
         PROPERTIES LABELS "fast;dwg;object-vectors;geodata" TIMEOUT 10)
+    add_test(NAME libdxfrw_geodata_dwg_scale_method_domain
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --geodata-dwg-scale-method-domain)
+    set_tests_properties(libdxfrw_geodata_dwg_scale_method_domain PROPERTIES
+        LABELS "fast;dwg;object-vectors;geodata;writer;domain;generated" TIMEOUT 10)
     add_test(NAME libdxfrw_associative_action_value_kinds
         COMMAND libdxfrw_dwg_object_vectors_tests
             --associative-action-value-kinds)
