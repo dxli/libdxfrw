@@ -19232,6 +19232,145 @@ bool ac1024AcdsOpaqueProxyMatchesOda(const std::string& sourcePath,
     return true;
 }
 
+bool acdsOpaqueProxyCodecReadback() {
+    const auto fail = [](const std::string& reason) {
+        std::cerr << reason << '\n';
+        return false;
+    };
+    class DirectWriter final : public dx_iface {
+    public:
+        void writeEntities() override {}
+        void writeObjects() override {
+            wroteProxy = dxfW->writeRawDxfObject(&proxy);
+        }
+        DRW_RawDxfObject proxy;
+        bool wroteProxy {false};
+    };
+    class Readback final : public dx_iface {
+    public:
+        void addDxfClass(const DRW_Class& record) override {
+            classes.push_back(record);
+        }
+        void addProxyObject(const DRW_ProxyObject& object) override {
+            proxies.push_back(object);
+        }
+        void addRawDxfObject(const DRW_RawDxfObject& object) override {
+            if (object.name == "ACAD_PROXY_OBJECT")
+                rawProxies.push_back(object);
+        }
+        std::vector<DRW_Class> classes;
+        std::vector<DRW_ProxyObject> proxies;
+        std::vector<DRW_RawDxfObject> rawProxies;
+    };
+
+    for (const bool binary : {false, true}) {
+        const auto nonce = std::chrono::steady_clock::now()
+                               .time_since_epoch()
+                               .count();
+        const std::filesystem::path path =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-acds-proxy-codec-readback-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{path};
+
+        DRW_Class sourceClass;
+        sourceClass.recName = "ACSH_GENERATED_PROXY_CLASS";
+        sourceClass.className = "AcDbGeneratedAcShHistory";
+        sourceClass.appName = "ObjectDBX Classes";
+        sourceClass.proxyFlag = 0x401;
+        sourceClass.instanceCount = 1;
+        sourceClass.wasaProxyFlag = 1;
+        sourceClass.entityFlag = 0;
+
+        dx_data data;
+        DirectWriter writerAdapter;
+        writerAdapter.cData = &data;
+        writerAdapter.currentBlock = data.mBlock;
+        writerAdapter.proxy.name = "ACAD_PROXY_OBJECT";
+        writerAdapter.proxy.handle = 0xA501u;
+        writerAdapter.proxy.m_version = DRW::AC1027;
+        writerAdapter.proxy.groups.emplace_back(5, UTF8STRING("A501"));
+        writerAdapter.proxy.groups.emplace_back(330, UTF8STRING("0"));
+        writerAdapter.proxy.groups.emplace_back(
+            100, UTF8STRING("AcDbProxyObject"));
+        writerAdapter.proxy.groups.emplace_back(90, std::int32_t{1});
+        writerAdapter.proxy.groups.emplace_back(91, std::int32_t{0});
+        writerAdapter.proxy.groups.emplace_back(161, std::int64_t{16});
+        writerAdapter.proxy.groups.emplace_back(
+            310, UTF8STRING("DEAD"));
+
+        dxfRW output(path.string().c_str());
+        writerAdapter.dxfW = &output;
+        output.setDxfClasses(std::vector<DRW_Class>{sourceClass});
+        if (!output.reserveHandle(writerAdapter.proxy.handle))
+            return fail("generated ACDS proxy handle reservation failed");
+        if (!output.write(&writerAdapter, DRW::AC1027, binary)) {
+            const DRW_OperationDiagnostic diagnostic = output.getLastDiagnostic();
+            return fail("generated ACDS proxy/class document write failed: "
+                + diagnostic.code + " " + diagnostic.message);
+        }
+        if (!writerAdapter.wroteProxy)
+            return fail("generated ACDS raw proxy callback failed");
+
+        dxfRW input(path.string().c_str());
+        dx_data readData;
+        Readback readback;
+        readback.cData = &readData;
+        readback.currentBlock = readData.mBlock;
+        const bool readSucceeded = input.read(&readback, false);
+        if (!readSucceeded
+            || readback.classes.size() != 1u
+            || readback.classes.front().recName != sourceClass.recName
+            || readback.classes.front().className != sourceClass.className
+            || readback.classes.front().appName != sourceClass.appName
+            || readback.classes.front().instanceCount != 1
+            || readback.proxies.size() != 1u
+            || readback.rawProxies.size() != 1u)
+            return fail("generated ACDS proxy/class readback lost its records");
+
+        const DRW_RawDxfObject& actual = readback.rawProxies.front();
+        const DRW_RawDxfObject& expected = writerAdapter.proxy;
+        if (actual.handle != expected.handle
+            || actual.name != expected.name
+            || actual.groups.size() != expected.groups.size())
+            return fail("generated ACDS proxy readback changed identity or groups");
+        for (std::size_t index = 0u; index < expected.groups.size(); ++index) {
+            const DRW_Variant& before = expected.groups[index];
+            const DRW_Variant& after = actual.groups[index];
+            if (before.code() != after.code() || before.type() != after.type())
+                return fail("generated ACDS proxy readback changed group ordering");
+            if (before.type() == DRW_Variant::STRING) {
+                if (before.c_str() == nullptr || after.c_str() == nullptr
+                    || std::string(before.c_str()) != after.c_str())
+                    return fail("generated ACDS proxy readback changed a string group");
+            } else if (before.type() == DRW_Variant::INTEGER) {
+                if (before.i_val() != after.i_val())
+                    return fail("generated ACDS proxy readback changed an integer group");
+            } else if (before.type() == DRW_Variant::INTEGER64) {
+                if (before.i64_val() != after.i64_val())
+                    return fail("generated ACDS proxy readback changed a 64-bit integer group");
+            } else {
+                return fail("generated ACDS proxy control used an unexpected group type");
+            }
+        }
+        if (readback.proxies.front().handle != expected.handle
+            || readback.proxies.front().m_objectData
+                != std::vector<std::uint8_t>{0xDEu, 0xADu})
+            return fail("generated ACDS proxy typed payload readback failed");
+    }
+
+    std::cout << "Generated ACDS proxy/class DXF codec readback passed in ASCII and binary; "
+                 "this control makes no source, graph-closure, or semantic claim.\n";
+    return true;
+}
+
 bool opaqueDwgSourceCaptureAndStrictOutputGate() {
     const auto configure = [](dx_data& data, std::uint64_t generation) {
         data.sourceFormat = dx_source_format::DWG;
@@ -71272,6 +71411,9 @@ int main(int argc, char** argv) {
         return dynamicBlockParameterDependencyBodyDxfWriter(argv[2]) ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--proxy-object-capture-limits")
         return proxyObjectCaptureLimitsFailClosed() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--acds-opaque-proxy-codec-readback")
+        return acdsOpaqueProxyCodecReadback() ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--raw-dxf-object-list-node-accounting")
         return rawDxfObjectListNodeCaptureAccounting() ? 0 : 1;

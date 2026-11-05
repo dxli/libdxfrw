@@ -3300,6 +3300,18 @@ set_tests_properties(dwg2dxf_proxy_object_capture_limits PROPERTIES
     TIMEOUT 10
 )
 
+# Exercise the integrated CLASS table and opaque ACAD_PROXY_OBJECT writer,
+# then verify typed and raw readback in both DXF encodings.
+add_test(
+    NAME dwg2dxf_acds_opaque_proxy_codec_readback
+    COMMAND libdxfrw_dwg2dxf_adapter_tests
+        --acds-opaque-proxy-codec-readback
+)
+set_tests_properties(dwg2dxf_acds_opaque_proxy_codec_readback PROPERTIES
+    LABELS "fast;dxf;adapter;proxy;acds"
+    TIMEOUT 30
+)
+
 add_test(
     NAME dwg2dxf_raw_dxf_object_list_node_accounting
     COMMAND libdxfrw_dwg2dxf_adapter_tests --raw-dxf-object-list-node-accounting
