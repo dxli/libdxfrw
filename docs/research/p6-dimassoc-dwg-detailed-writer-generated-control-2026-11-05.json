@@ -24,6 +24,7 @@
       "command": "ctest --test-dir build-gcc -R '^libdxfrw_dimassoc_dwg_detail_readback$' --output-on-failure",
       "result": "passed, 1/1"
     },
+    "encoder_failure_retry": "An unsupported-detail encode is refused with body, string, and handle buffers empty; correcting the same source and retrying with those same buffers succeeds.",
     "full_file_readback": {
       "command": "build-gcc/libdxfrw_dimassoc_physical_transport_tests /private/tmp/libdxfrw-dimassoc-paths-lastzero.dwg",
       "read_observation": "sourceVersion=16 (AC1024), entityParseFailures=0, objectParseFailures=0, callbacks=1, and all three authored types, ordered handle values, and both path strings were reported by the typed callback.",

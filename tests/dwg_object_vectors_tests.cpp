@@ -13389,6 +13389,13 @@ void testDimensionAssociationDwgDetailReadback(TestContext& t) {
         && handles.data().empty();
     t.expect(unsafeRefused,
              "DIMASSOC unknown detail remains atomically refused by the DWG encoder");
+    const bool correctedRetry = unsafeRefused
+        && parsed.encodeDwg(DRW::AC1024, &body, &strings, &handles)
+        && body.isGood() && strings.isGood() && handles.isGood()
+        && !body.data().empty() && !strings.data().empty()
+        && !handles.data().empty();
+    t.expect(correctedRetry,
+             "corrected DIMASSOC detail encodes on the same buffers after atomic refusal");
 }
 
 bool makeAc1018DimensionAssociationFrame(DimensionAssociationFrame& frame) {
