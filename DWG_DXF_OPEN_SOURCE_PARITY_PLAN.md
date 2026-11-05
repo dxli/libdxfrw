@@ -136,7 +136,7 @@ establishes the required behavior for both roots, visibility, parameter/action
 behavior and reachable geometry. The available FreeCAD, ODA converter and
 LibreDWG paths do not currently supply that evaluator.
 
-Separate unresolved gates remain: AC1021 proxy-graphics refusal belongs to P6.
+Separate unresolved gates remain: AC1021 proxy-graphics refusal belongs to P6. A distinct `blocks_and_tables_-_metric.dwg` AC1021 corpus input reads, then strict output refuses two typed proxy-graphics records (first handle `0x285CE`) before creating a DXF; preserve the refusal until both source bodies, graph roles and exact replay are qualified ([receipt](docs/research/p6-ac1021-metric-proxy-graphics-strict-refusal-2026-11-05.json)).
 The physical AC1018 ET Border source contains empty-name STYLE `0xDF` with font
 `ltypeshp.shx`. The current libdxfrw parse gives flags 68 (xref-reference plus
 vertical; shape false); LibreDWG 0.14 decodes the same bytes as shape true,

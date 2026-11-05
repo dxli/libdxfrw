@@ -1,0 +1,32 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "title": "AC1021 metric corpus strict refusal on typed proxy graphics",
+  "date": "2026-11-05",
+  "status": "STRICT_OUTPUT_REFUSED_NO_DXF",
+  "scope": "Identify the first strict-output gate for one distinct local AC1021 corpus drawing. This records a refusal and does not qualify proxy-graphics preservation or whole-document support.",
+  "source": {
+    "path": "tests/samples/AC1021/blocks_and_tables_-_metric.dwg",
+    "sha256": "7d5507da05fb70ba55875d99e676524ca2caa0ed7a5582ad130c3c06e8d925f1",
+    "version": "AC1021",
+    "fixturePolicy": "Existing local corpus input; not modified or committed by this investigation."
+  },
+  "converter": {
+    "path": "build-gcc/dwg2dxf/dwg2dxf",
+    "sha256": "7c76c6ebddbe72d822c153e18a2ac2ad822fcc88e87f33dcddb190d1dd14c99b",
+    "command": "build-gcc/dwg2dxf/dwg2dxf tests/samples/AC1021/blocks_and_tables_-_metric.dwg -y -v2007 /private/tmp/libdxfrw-ac1021-metric-strict.dxf",
+    "exitCode": 1,
+    "diagnostic": "DXF export preflight failed: typed-proxy-graphics-not-preserved count=2 firstHandle=165230",
+    "firstHandleHex": "0x285CE",
+    "outputCreated": false,
+    "logPath": "/private/tmp/libdxfrw-ac1021-metric-strict.log",
+    "logSha256": "f9a13406f67e5506c4952326dc8e13e67db68742061f8d999652b9cae6f0eb9b"
+  },
+  "interpretation": "Two typed proxy-graphics records block strict output. Their exact source bodies, ownership, and lossless DXF replay have not been qualified. The existing fail-closed gate is correct pending that evidence.",
+  "nextAction": "Trace both source records and their graph roles, then establish exact body preservation and independent readback before changing the strict-output gate.",
+  "supportClaimEffect": "none",
+  "nonClaims": [
+    "No proxy-graphics semantic or replay support is established.",
+    "No whole-document AC1021 conversion support is established.",
+    "No source fixture was added or modified."
+  ]
+}
