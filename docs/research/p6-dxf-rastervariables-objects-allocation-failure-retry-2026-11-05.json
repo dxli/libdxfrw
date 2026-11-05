@@ -10,10 +10,10 @@
   },
   "implementation": {
     "test": "tests/rastervariables_objects_allocation_tests.cpp",
-    "testSha256": "f46f8ce74c398a074eeb6184bceb2ef3b46fcaa80bbcf2ea3acab21366f5ec17",
-    "cmakeSha256": "b0407cafab98483748455d3bb0bdc9fe843fdd3815ea4e4e8903fecc118bc2a9",
-    "normalBinarySha256": "1a519e6a024374252f1b34df072561ae555971b021b911487c436cf4e9442b88",
-    "asanBinarySha256": "d3d780661c50092ede79091322f1e95edbc94771211eaa7952dc44c9a8a14c58"
+    "testSha256": "c19e5da120eedef1e876fbe0c0c419a30757e7a752d203751eddd3f9328abeef",
+    "cmakeSha256": "db7e0b29d828b0aab5a67ae2be331e12da3ab85bf50a2b7777494abe36ad75c1",
+    "normalBinarySha256": "ad7e42942e3a7ee87746b2c5311803ac768eaa472df9d80ceb786fb1b5830f32",
+    "asanBinarySha256": "381351b368fff11fcfa166b6d9ebe3e7d7709ed9e7b3bcc2b075f2d049ae966e"
   },
   "environment": {
     "compiler": "Apple clang 21.0.0 (clang-2100.3.34.2)",
@@ -37,7 +37,8 @@
       "destinationSentinelPreservedAtEveryOffset": true,
       "sameAdapterRetryAtEveryOffset": true,
       "typedReadbackAtEveryRetry": true,
-      "durationSeconds": 0.79
+      "durationSeconds": 0.8,
+      "callerTypedRecordPreservedAtEveryOffset": true
     },
     "asan": {
       "asciiAllocationOffsets": 11,
@@ -45,7 +46,8 @@
       "destinationSentinelPreservedAtEveryOffset": true,
       "sameAdapterRetryAtEveryOffset": true,
       "typedReadbackAtEveryRetry": true,
-      "durationSeconds": 1.68
+      "durationSeconds": 1.7,
+      "callerTypedRecordPreservedAtEveryOffset": true
     },
     "suite": "focused normal and ASan selectors only; no full suite"
   },

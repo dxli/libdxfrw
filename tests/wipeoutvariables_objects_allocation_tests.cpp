@@ -123,6 +123,19 @@ bool verifyGraph(const std::filesystem::path& path) {
             == std::vector<std::uint32_t>{data.namedObjectDictionary.handle};
 }
 
+bool sourceRecordUnchanged(const dx_data& data,
+                           const DRW_WipeoutVariables& expected) {
+    if (data.dwgWipeoutVariables.size() != 1u)
+        return false;
+    const auto& actual = data.dwgWipeoutVariables.begin()->second;
+    return actual.handle == expected.handle
+        && actual.parentHandle == expected.parentHandle
+        && actual.reactorHandles == expected.reactorHandles
+        && actual.xDictHandle == expected.xDictHandle
+        && actual.m_classVersion == expected.m_classVersion
+        && actual.m_displayFrame == expected.m_displayFrame;
+}
+
 bool run(const std::filesystem::path& directory) {
     const auto fail = [](const char* message) {
         std::cerr << "WIPEOUTVARIABLES OBJECTS allocation retry: "
@@ -165,6 +178,8 @@ bool run(const std::filesystem::path& directory) {
         || data.dwgWipeoutVariables.size() != 1u
         || data.wipeoutVariablesRetainedRecords != 1u)
         return fail("generated source did not import one typed wipeout graph");
+    const DRW_WipeoutVariables sourceRecord =
+        data.dwgWipeoutVariables.begin()->second;
 
     WipeoutExport exporter;
     exporter.cData = &data;
@@ -210,9 +225,11 @@ bool run(const std::filesystem::path& directory) {
             std::string current;
             if (wrote || exporter.reached < 1
                 || !readAll(destinations[index], current)
-                || current != sentinel)
-                return fail("injected failure did not preserve destination");
-            if (!write(index, binary) || !verifyGraph(destinations[index]))
+                || current != sentinel
+                || !sourceRecordUnchanged(data, sourceRecord))
+                return fail("injected failure changed destination or caller record");
+            if (!write(index, binary) || !verifyGraph(destinations[index])
+                || !sourceRecordUnchanged(data, sourceRecord))
                 return fail("same-adapter retry failed typed graph readback");
             ++offsets;
         }

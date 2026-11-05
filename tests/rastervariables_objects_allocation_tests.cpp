@@ -127,6 +127,21 @@ bool verifyGraph(const std::filesystem::path& path) {
             == std::vector<std::uint32_t>{data.namedObjectDictionary.handle};
 }
 
+bool sourceRecordUnchanged(const dx_data& data,
+                           const DRW_RasterVariables& expected) {
+    if (data.dwgRasterVariables.size() != 1u)
+        return false;
+    const auto& actual = data.dwgRasterVariables.begin()->second;
+    return actual.handle == expected.handle
+        && actual.parentHandle == expected.parentHandle
+        && actual.reactorHandles == expected.reactorHandles
+        && actual.xDictHandle == expected.xDictHandle
+        && actual.m_classVersion == expected.m_classVersion
+        && actual.m_imageFrame == expected.m_imageFrame
+        && actual.m_imageQuality == expected.m_imageQuality
+        && actual.m_units == expected.m_units;
+}
+
 bool run(const std::filesystem::path& directory) {
     const auto fail = [](const char* message) {
         std::cerr << "RASTERVARIABLES OBJECTS allocation retry: "
@@ -169,6 +184,8 @@ bool run(const std::filesystem::path& directory) {
         || data.dwgRasterVariables.size() != 1u
         || data.rasterVariablesRetainedRecords != 1u)
         return fail("generated source did not import one typed raster graph");
+    const DRW_RasterVariables sourceRecord =
+        data.dwgRasterVariables.begin()->second;
 
     RasterExport exporter;
     exporter.cData = &data;
@@ -214,9 +231,11 @@ bool run(const std::filesystem::path& directory) {
             std::string current;
             if (wrote || exporter.reached < 1
                 || !readAll(destinations[index], current)
-                || current != sentinel)
-                return fail("injected failure did not preserve destination");
-            if (!write(index, binary) || !verifyGraph(destinations[index]))
+                || current != sentinel
+                || !sourceRecordUnchanged(data, sourceRecord))
+                return fail("injected failure changed destination or caller record");
+            if (!write(index, binary) || !verifyGraph(destinations[index])
+                || !sourceRecordUnchanged(data, sourceRecord))
                 return fail("same-adapter retry failed typed graph readback");
             ++offsets;
         }
