@@ -19421,6 +19421,10 @@ bool rawDxfEntityTableNameReferencesCloseAtOutput() {
     // the same Unicode symbol in both output encodings.
     const std::string utf8LayerName("Caf\xC3\xA9", 5u);
     const std::string cp1252LayerName("Caf\xE9", 4u);
+    const std::string utf8LineTypeName("Caf\xC3\xA9Type", 9u);
+    const std::string cp1252LineTypeName("Caf\xE9Type", 8u);
+    const std::string utf8AppIdName("Caf\xC3\xA9" "App", 8u);
+    const std::string cp1252AppIdName("Caf\xE9" "App", 7u);
     for (const bool binary : {false, true}) {
         const std::filesystem::path output =
             std::filesystem::temp_directory_path()
@@ -19448,6 +19452,18 @@ bool rawDxfEntityTableNameReferencesCloseAtOutput() {
         layer.name = utf8LayerName;
         layer.handle = 0xA718u;
         iface.addLayer(layer);
+        DRW_LType lineType;
+        lineType.name = utf8LineTypeName;
+        lineType.handle = 0xA71Au;
+        lineType.desc = "legacy codepage linetype";
+        lineType.size = 1;
+        lineType.length = 1.0;
+        lineType.path = {1.0};
+        iface.addLType(lineType);
+        DRW_AppId appId;
+        appId.name = utf8AppIdName;
+        appId.handle = 0xA71Bu;
+        iface.addAppId(appId);
 
         DRW_RawDxfObject raw;
         raw.name = "CUSTOM_ENTITY";
@@ -19460,8 +19476,8 @@ bool rawDxfEntityTableNameReferencesCloseAtOutput() {
             {330, std::string("1F")},
             {100, std::string("AcDbEntity")},
             {8, cp1252LayerName},
-            {6, std::string("Continuous")},
-            {1001, std::string("ACAD")},
+            {6, cp1252LineTypeName},
+            {1001, cp1252AppIdName},
             {1000, std::string("retained-cp1252-xdata")},
             {1003, cp1252LayerName}};
         for (const DRW_Variant& group : raw.groups)
@@ -19483,15 +19499,24 @@ bool rawDxfEntityTableNameReferencesCloseAtOutput() {
         DRW_TextCodec codec;
         codec.setVersion(DRW::AC1018, true);
         codec.setCodePage("ANSI_1252", true);
-        unsigned layerReferences = 0u;
-        unsigned xdataLayerReferences = 0u;
+        unsigned layerReferences = 0u, lineTypeReferences = 0u;
+        unsigned appIdReferences = 0u, xdataLayerReferences = 0u;
         bool layerTableRowPreserved = false;
+        bool lineTypeTableRowPreserved = false;
+        bool appIdTableRowPreserved = false;
         for (const DRW_Layer& actualLayer : readback.layers)
             layerTableRowPreserved = layerTableRowPreserved
                 || actualLayer.name == utf8LayerName;
+        for (const DRW_LType& actualLineType : readback.lineTypes)
+            lineTypeTableRowPreserved = lineTypeTableRowPreserved
+                || actualLineType.name == utf8LineTypeName;
+        for (const DRW_AppId& actualAppId : readback.appIds)
+            appIdTableRowPreserved = appIdTableRowPreserved
+                || actualAppId.name == utf8AppIdName;
         for (const DRW_Variant& group :
              readback.mBlock->rawEntities.front().record.groups) {
-            if ((group.code() == 8 || group.code() == 1003)
+            if ((group.code() == 6 || group.code() == 8
+                 || group.code() == 1001 || group.code() == 1003)
                 && group.type() == DRW_Variant::STRING
                 && group.c_str() != nullptr) {
                 const std::string decoded = codec.toUtf8(group.c_str());
@@ -19499,11 +19524,17 @@ bool rawDxfEntityTableNameReferencesCloseAtOutput() {
                     return fail("CP1252 raw entity name had a decode issue");
                 if (group.code() == 8 && decoded == utf8LayerName)
                     ++layerReferences;
+                if (group.code() == 6 && decoded == utf8LineTypeName)
+                    ++lineTypeReferences;
+                if (group.code() == 1001 && decoded == utf8AppIdName)
+                    ++appIdReferences;
                 if (group.code() == 1003 && decoded == utf8LayerName)
                     ++xdataLayerReferences;
             }
         }
-        if (!layerTableRowPreserved || layerReferences != 1u
+        if (!layerTableRowPreserved || !lineTypeTableRowPreserved
+            || !appIdTableRowPreserved || layerReferences != 1u
+            || lineTypeReferences != 1u || appIdReferences != 1u
             || xdataLayerReferences != 1u)
             return fail("CP1252 raw entity/table names changed on readback");
     }
