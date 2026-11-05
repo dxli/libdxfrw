@@ -2077,13 +2077,16 @@ Native source-release builds and platform qualification remain open.
   These controls do not convert either physical drawing as a whole. Their
   unrelated source/read/layout-integrity gates and native image semantics remain
   open, as do broader producer/version profiles.
-  The hash-bound AC1027 WIPEOUTVARIABLES witness now seeds a local wrapper DWG;
-  selected ASCII/Binary output verifies the remapped NOD owner/reactor graph,
-  atomic refusal, retry, and typed readback ([physical writer bridge receipt](docs/research/p4-ac1027-wipeoutvariables-physical-writer-bridge-2026-11-05.json)).
-  This does not qualify physical whole-source conversion: its two HEADER
-  integrity observations and global AC1027 strict-source gate remain unresolved.
-  Native wipeout display/plot behavior, preview preservation, and broader
-  producer/version/mode coverage remain open.
+  Hash-bound AC1024 and AC1027 WIPEOUTVARIABLES witnesses now seed local wrapper
+  DWGs. Their version-specific frame proof, remapped NOD owner/reactor graph,
+  selected ASCII/Binary output, atomic refusal, retry and typed readback pass
+  ([AC1024 receipt](docs/research/p4-ac1024-wipeoutvariables-physical-writer-bridge-2026-11-05.json),
+  [AC1027 receipt](docs/research/p4-ac1027-wipeoutvariables-physical-writer-bridge-2026-11-05.json)).
+  Neither converts its physical drawing as a whole; AC1024 retains an unclaimed
+  HEADER suffix and unrelated VISUALSTYLE gate, while AC1027 retains its HEADER
+  integrity observations and global strict-source gate. Native wipeout
+  display/plot behavior, preview preservation, and AC1018/AC1032 physical output
+  profiles remain open.
   A separate AC1024 source-frame control supports the bounded 0/1/3 profile.
   The exact hash-bound physical source now passes selected-object ASCII/Binary
   output and fresh typed readback: its source NOD `0x0A` owner/reactor map to

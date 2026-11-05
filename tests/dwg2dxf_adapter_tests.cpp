@@ -937,8 +937,39 @@ public:
             || typed->second.m_displayFrame != 0u || typed->second.reactorHandles != std::vector<std::uint32_t>{0xAu}
             || typed->second.extensionDictionaryFlag() != 1u) return false;
         const auto& raw = frame->second;
-        if (raw.m_rawBytes.size() != 10u || raw.m_bodyBitSize != 37u) return false;
+        if (raw.m_rawBytes.size() != 10u) return false;
         using namespace dx_raster_wire;
+        if (raw.m_version == DRW::AC1024) {
+            const std::array<std::uint8_t, 10> expected{{
+                0x44u, 0x40u, 0x4Cu, 0x24u, 0x07u,
+                0x10u, 0x42u, 0x90u, 0x42u, 0x80u}};
+            if (raw.m_objectType != 513u || raw.m_bodyBitSize != 38u
+                || !std::equal(expected.begin(), expected.end(),
+                               raw.m_rawBytes.begin()))
+                return false;
+            detail::Bits body{raw.m_rawBytes.data(), 0u, 42u};
+            if (body.take(2u) != 1u || body.take(8u) + 0x1F0u != 513u
+                || detail::handle(body, 0u, 0u, true).value != 0x30u
+                || body.shortValue() != 0u || body.longValue() != 1u
+                || body.take(1u) != 1u || body.shortValue() != 0u
+                || body.pos != 41u || body.take(1u) != 0u || !body.good)
+                return false;
+            detail::Bits handles{raw.m_rawBytes.data(), 42u, 80u};
+            const auto owner = detail::handle(handles, 4u, 0x30u);
+            const auto reactor = detail::handle(handles, 4u, 0x30u);
+            if (!handles.good || owner.role != 4u || reactor.role != 4u
+                || owner.value != 0xAu || reactor.value != 0xAu
+                || handles.pos != 74u)
+                return false;
+            while (handles.pos < handles.end)
+                if (handles.take(1u) != 0u) return false;
+            return std::count_if(data.namedObjectDictionary.m_entries.begin(),
+                data.namedObjectDictionary.m_entries.end(), [](const DRW_Dictionary::Entry& e) {
+                    return e.m_name == "ACAD_WIPEOUT_VARS" && e.m_handle == 0x30u;
+                }) == 1;
+        }
+        if (raw.m_version != DRW::AC1027 || raw.m_bodyBitSize != 37u)
+            return false;
         detail::Bits body{raw.m_rawBytes.data(), 0u, 43u};
         if (body.take(2u) != 1u || body.take(8u) + 0x1F0u != 516u
             || detail::handle(body, 0u, 0u, true).value != 0x30u
@@ -72069,14 +72100,15 @@ bool wipeoutVariablesDwgAdapterTransport(bool directNod = false,
     dx_iface physicalReader;
     const DRW_WipeoutVariables* physicalWitness = nullptr;
     if (!generatedSource) {
-        if (revision != DRW::AC1027 || !directNod || frameOne
+        if ((revision != DRW::AC1024 && revision != DRW::AC1027)
+            || !directNod || frameOne
             || !physicalReader.fileImport(
                 physicalSourcePath.string(), &physicalData, false)
             || physicalData.sourceFormat != dx_source_format::DWG
-            || physicalData.sourceVersion != DRW::AC1027
+            || physicalData.sourceVersion != revision
             || !DxIfaceStandardDwgCaptureTestAccess::physicalDirectWipeoutWire(
                 physicalData))
-            return fail("physical WIPEOUTVARIABLES source is outside the AC1027 frame-0 profile");
+            return fail("physical WIPEOUTVARIABLES source is outside its evidenced frame-0 profile");
         const auto found = physicalData.dwgWipeoutVariables.find(
             {physicalData.importGeneration, 0x30u});
         if (found == physicalData.dwgWipeoutVariables.end()
@@ -73617,6 +73649,10 @@ int main(int argc, char** argv) {
     if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1027-direct-nod") {
         return wipeoutVariablesDwgAdapterTransport(
             true, DRW::AC1027, false, argv[2]) ? 0 : 1;
+    }
+    if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1024-direct-nod") {
+        return wipeoutVariablesDwgAdapterTransport(
+            true, DRW::AC1024, false, argv[2]) ? 0 : 1;
     }
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-direct-nod")
