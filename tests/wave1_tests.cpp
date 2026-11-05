@@ -15339,6 +15339,54 @@ void testGeoDataVersionedWriter(TestContext& t) {
         return reading && parsed;
     };
 
+    for (const bool binary : {false, true}) {
+        for (const bool horizontal : {false, true}) {
+            for (const std::int32_t invalidValue : {-1, 25}) {
+                std::ostringstream output(std::ios::out | std::ios::binary);
+                dxfRW owner("");
+                owner.version = DRW::AC1027;
+                owner.binFile = binary;
+                owner.writer = binary
+                    ? std::unique_ptr<dxfWriter>(
+                          new dxfWriterBinary(&output))
+                    : std::unique_ptr<dxfWriter>(
+                          new dxfWriterAscii(&output));
+                owner.writer->setVersion("AC1027", true);
+                t.expect(owner.writer->writeString(1, "PRESERVED_PREFIX"),
+                         "GEODATA unit-domain setup writes prefix");
+                const std::string beforeReject = output.str();
+
+                DRW_GeoData geo;
+                geo.handle = 0x705u;
+                geo.parentHandle = 0x2u;
+                geo.m_hostBlockHandle = 0x3u;
+                geo.m_version = 2;
+                geo.m_coordinatesType = 2;
+                geo.m_horizontalUnits = horizontal ? invalidValue : 6;
+                geo.m_verticalUnits = horizontal ? 6 : invalidValue;
+                const bool rejected = !owner.writeGeoData(&geo)
+                    && output.str() == beforeReject
+                    && geo.handle == 0x705u
+                    && !owner.m_writeError
+                    && !owner.writer->hasWriteError();
+
+                if (horizontal)
+                    geo.m_horizontalUnits = invalidValue < 0 ? 0 : 24;
+                else
+                    geo.m_verticalUnits = invalidValue < 0 ? 0 : 24;
+                const bool retried = owner.writeGeoData(&geo)
+                    && owner.writer->writeString(0, "WIRE_END");
+                DRW_GeoData decoded;
+                const bool readback = retried
+                    && readGeoData(output.str(), binary, decoded)
+                    && decoded.m_horizontalUnits == geo.m_horizontalUnits
+                    && decoded.m_verticalUnits == geo.m_verticalUnits;
+                t.expect(rejected && retried && readback,
+                         "modern GEODATA unit enum rejects outside 0..24 atomically and retries with typed readback");
+            }
+        }
+    }
+
     std::vector<std::string> asciiProjection;
     for (const bool binary : {false, true}) {
         std::ostringstream output;
@@ -15581,8 +15629,8 @@ void testGeoDataVersionedWriter(TestContext& t) {
             modern.m_referencePoint = DRW_Coord{11.125, 21.125, 31.125};
             modern.m_horizontalUnitScale = 40.125;
             modern.m_verticalUnitScale = 41.125;
-            modern.m_horizontalUnits = 91;
-            modern.m_verticalUnits = 92;
+            modern.m_horizontalUnits = 21;
+            modern.m_verticalUnits = 24;
             modern.m_upDirection = DRW_Coord{210.125, 220.125, 230.125};
             modern.m_northDirection = DRW_Coord{12.125, 22.125, 0.0};
             modern.m_scaleEstimationMethod = 2;

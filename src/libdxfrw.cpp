@@ -34314,6 +34314,12 @@ bool dxfRW::writeGeoData(DRW_GeoData *ent) {
     if (objectVersion >= 2
         && (ent->m_coordinatesType < 0 || ent->m_coordinatesType > 3))
         return false;
+    // Autodesk's GEODATA DXF definition uses AcDb::UnitsValue for groups
+    // 91/92: Undefined through US Survey Mile are values 0..24.
+    if (objectVersion >= 2
+        && (ent->m_horizontalUnits < 0 || ent->m_horizontalUnits > 24
+            || ent->m_verticalUnits < 0 || ent->m_verticalUnits > 24))
+        return false;
 
     std::string normalizedDefinition;
     std::string_view definition = ent->m_coordinateSystemDefinition;
