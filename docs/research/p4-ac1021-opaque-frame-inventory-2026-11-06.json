@@ -17,7 +17,7 @@
       "count": 74,
       "customClassCount": 68,
       "fixedTypeCount": 6,
-      "outputQualified": 67,
+      "outputQualified": 68,
       "outputQualifiedByRecord": {
         "VISUALSTYLE": 25,
         "SCALE": 17,
@@ -30,7 +30,8 @@
         "ACDBDETAILVIEWSTYLE": 2,
         "MLEADERSTYLE": 1,
         "TABLESTYLE": 1,
-        "CELLSTYLEMAP": 1
+        "CELLSTYLEMAP": 1,
+        "MLINESTYLE": 1
       },
       "byRecord": {
         "VISUALSTYLE": 25,
@@ -46,7 +47,7 @@
         "SORTENTSTABLE": 1,
         "DBCOLOR": 1,
         "CELLSTYLEMAP": 1,
-        "fixed unclassified records": 5
+        "fixed unclassified records": 4
       }
     },
     "standardObjectFrames": {
@@ -57,9 +58,9 @@
       },
       "typedPayloadMatches": 112,
       "opaquePayloadMatches": 0,
-      "outputQualified": 76
+      "outputQualified": 77
     },
-    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. Bounded physical AC1021 routes now qualify 67 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one TABLESTYLE, and one CELLSTYLEMAP. They qualify 76 standard-object frames; these selected graph routes verify ASCII/Binary output and typed/raw readback, with applicable dependency closure, mutation/refusal, and retry checks. The children-room TABLESTYLE/CELLSTYLEMAP route adds two typed carriers and its two owner/extension dictionaries using a second physical source profile. The remaining seven opaque carriers and 36 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify 68 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, and one CELLSTYLEMAP. They qualify 77 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining six opaque carriers and 35 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -100,7 +101,7 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Implement and qualify the source-backed AC1021 MLINESTYLE profile at handle 0x18 first; freeze its actual owner and extension-dictionary graph before admission. Then choose among the remaining AC1021 LAYOUT, VIEWPORT, RASTERVARIABLES, SORTENTSTABLE frames using the same source-frame/output-binding gate. Preserve whole-source refusal and avoid double-counting.",
+  "nextAction": "Qualify the next typed AC1021 LAYOUT frame profile only after matching each LAYOUT identity to its exact source owner, BLOCK_RECORD and extension payload graph. Keep the other LAYOUT, VIEWPORT, RASTERVARIABLES and SORTENTSTABLE frames unqualified until their own selected-output/readback proof passes. Preserve whole-source refusal and do not double-count.",
   "materialCandidateBoundary": {
     "record": "MATERIAL",
     "observedCount": 3,
@@ -162,16 +163,8 @@
   "remainingOpaqueFrames": {
     "source": "/Users/dli/doc/dwg/children-room-decoration.dwg",
     "sourceSha256": "cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce",
-    "evidence": "Current source inventory selector output; exact record identities and handles listed below. Handle 0xF (ACDBPLACEHOLDER) is already included in output-qualified counts; six other fixed-object frames include five still unqualified.",
+    "evidence": "Current source inventory selector output reconciled with source-frame output qualification. Handles 0xF (ACDBPLACEHOLDER) and 0x18 (MLINESTYLE) are output-qualified; the remaining unqualified frame identities are listed below.",
     "frames": [
-      {
-        "handle": "0x18",
-        "objectType": 73,
-        "record": "MLINESTYLE",
-        "class": "",
-        "state": "UNQUALIFIED",
-        "sourceRoles": "NOD ACAD_MLINESTYLE root points to owner dictionary 0x17; parser debug identifies STANDARD, flags 0, two elements. Extension-dictionary handle/contents and complete field/dependency binding still require exact typed-model capture."
-      },
       {
         "handle": "0x22",
         "objectType": 82,
@@ -226,5 +219,15 @@
     "mlineStyleTrace": "dwg2dxf -d on the same source; parser trace around object 0x18 identifies STANDARD, flags 0 and two elements; not an independent wire-layout oracle.",
     "mlineStyleTraceLogSha256": "5f8ae476e5febb539ef46a8511662840c0411cc21a3dbf9dcbf85c9a0fa157e7",
     "limit": "This is a source-inventory/readiness update only. It qualifies no output frame or support claim."
+  },
+  "mLineStyleCandidateBoundary": {
+    "record": "MLINESTYLE",
+    "handle": "0x18",
+    "selector": "--mline-style-ac1021-source-probe /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "sourceProfile": "STANDARD; owner dictionary 0x17; NOD key ACAD_MLINESTYLE; no extension dictionary; one owner entry Standard -> 0x18; owner reactor to NOD and MLINESTYLE reactor to owner; two inline ByLayer elements at offsets +0.5 and -0.5.",
+    "implementation": "Admitted AC1021 in the existing exact STANDARD profile allowlist for DWG MLINESTYLE output preparation and frozen-source verification. Other profile guards remain unchanged.",
+    "result": "PASS selected AC1024 DXF output and fresh typed readback in ASCII/Binary, including source-frame qualification, exact style/element fields and NOD/owner/reactor closure. A nonzero retained CMC index is refused with the existing destination preserved; corrected retry succeeds on the same adapter.",
+    "wholeSourceLimit": "The full children-room conversion remains refused before selected output preparation at the unrelated exact-version ModelDocViewStyle gate. This receipt qualifies one selected MLINESTYLE graph only.",
+    "receipt": "docs/research/p4-ac1021-mline-style-physical-selected-output-2026-11-06.json"
   }
 }

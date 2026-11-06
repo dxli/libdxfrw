@@ -32705,14 +32705,15 @@ bool dx_iface::prepareDwgMLineStyles(DRW::Version version) noexcept {
     if (cData->sourceFormat != dx_source_format::DWG
         || (cData->sourceVersion != DRW::AC1015
             && cData->sourceVersion != DRW::AC1018
+            && cData->sourceVersion != DRW::AC1021
             && cData->sourceVersion != DRW::AC1024)
         || version != DRW::AC1024
         || m_extensionMLineStyleHandles.empty())
         return true;
 
-    // Admit only the source-backed AC1015/AC1018/AC1024 STANDARD profile in the
-    // tracked witnesses. Other MLINESTYLE bodies continue through the
-    // existing writer, but do not qualify their opaque DWG callbacks.
+    // Admit only the source-backed AC1015/AC1018/AC1021/AC1024 STANDARD
+    // profile in the tracked witnesses. Other MLINESTYLE bodies continue
+    // through the existing writer, but do not qualify their opaque callbacks.
     if (m_extensionMLineStyleHandles.size() != 1u
         || cData->mLineStyles.size() != 1u
         || !cData->hasNamedObjectDictionary
@@ -32878,6 +32879,7 @@ bool dx_iface::hasUnchangedDwgMLineStyleOutputSources() const noexcept {
         || cData->sourceFormat != dx_source_format::DWG
         || (cData->sourceVersion != DRW::AC1015
             && cData->sourceVersion != DRW::AC1018
+            && cData->sourceVersion != DRW::AC1021
             && cData->sourceVersion != DRW::AC1024)
         || !cData->hasSingleSuccessfulNamedResourceImport()
         || cData->mLineStyles.size() != m_dwgMLineStyleOutputSources.size()

@@ -441,6 +441,170 @@ public:
         return true;
     }
 
+    static bool selectPhysicalAc1021MLineStyleGraph(
+            const dx_data& source, dx_data& projection) {
+        if (source.sourceFormat != dx_source_format::DWG
+            || source.sourceVersion != DRW::AC1021
+            || source.importGeneration == 0u
+            || source.mLineStyles.size() != 1u
+            || !source.hasNamedObjectDictionary)
+            return false;
+        const DRW_MLineStyle& style = source.mLineStyles.front();
+        const DRW_Dictionary* owner = nullptr;
+        for (const DRW_Dictionary& candidate : source.dictionaries) {
+            if (candidate.handle != style.parentHandle)
+                continue;
+            if (owner != nullptr)
+                return false;
+            owner = &candidate;
+        }
+        const auto rootEntry = std::find_if(
+            source.namedObjectDictionary.m_entries.begin(),
+            source.namedObjectDictionary.m_entries.end(),
+            [&owner](const DRW_Dictionary::Entry& entry) {
+                return owner != nullptr && entry.m_name == "ACAD_MLINESTYLE"
+                    && entry.m_handle == owner->handle;
+            });
+        const dx_data::StandardDwgFrameKey styleKey{
+            source.importGeneration, style.handle};
+        const dx_data::StandardDwgFrameKey ownerKey{
+            source.importGeneration, style.parentHandle};
+        const auto styleFrame = source.m_opaqueDwgSourceFrames.find(styleKey);
+        const auto ownerFrame = source.m_standardDwgObjectFrames.find(ownerKey);
+        if (style.handle != 0x18u || style.parentHandle != 0x17u
+            || style.xDictHandle != 0u || style.name != "STANDARD"
+            || style.flags != 0 || !style.description.empty()
+            || style.elements.size() != 2u || owner == nullptr
+            || owner->parentHandle != source.namedObjectDictionary.handle
+            || owner->m_entries.size() != 1u
+            || owner->m_entries.front().m_name != "Standard"
+            || owner->m_entries.front().m_handle != style.handle
+            || owner->reactorCount() != 1
+            || owner->reactorHandles
+                != std::vector<std::uint32_t>{source.namedObjectDictionary.handle}
+            || style.reactorCount() != 1
+            || style.reactorHandles != std::vector<std::uint32_t>{owner->handle}
+            || rootEntry == source.namedObjectDictionary.m_entries.end()
+            || std::count_if(source.namedObjectDictionary.m_entries.begin(),
+                source.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ACAD_MLINESTYLE";
+                }) != 1
+            || styleFrame == source.m_opaqueDwgSourceFrames.end()
+            || source.m_opaqueDwgSourceFrameIdentities.count(styleKey) != 1u
+            || styleFrame->second.m_handle != style.handle
+            || styleFrame->second.m_objectType != 73
+            || styleFrame->second.m_isEntity
+            || styleFrame->second.m_version != DRW::AC1021
+            || ownerFrame == source.m_standardDwgObjectFrames.end()
+            || ownerFrame->second.raw.m_handle != owner->handle
+            || ownerFrame->second.raw.m_objectType != dwgObjType::DICTIONARY
+            || ownerFrame->second.raw.m_isEntity
+            || !ownerFrame->second.payloadMatched)
+            return false;
+        for (std::size_t index = 0u; index < style.elements.size(); ++index) {
+            const DRW_MLineElement& element = style.elements[index];
+            const double expectedOffset = index == 0u ? 0.5 : -0.5;
+            if (element.offset != expectedOffset || element.color != 256
+                || element.colorMethod != 0xC0u
+                || element.color24 != -1 || element.colorFlags != 0u
+                || element.linetypeIndex != 32767
+                || element.linetypeHandle != 0u || !element.linetype.empty())
+                return false;
+        }
+
+        projection.sourceFormat = source.sourceFormat;
+        projection.sourceVersion = source.sourceVersion;
+        projection.importGeneration = source.importGeneration;
+        projection.dwgReadOutcome = source.dwgReadOutcome;
+        projection.hasNamedObjectDictionary = true;
+        projection.namedObjectDictionary = source.namedObjectDictionary;
+        projection.namedObjectDictionary.m_entries.erase(
+            std::remove_if(
+                projection.namedObjectDictionary.m_entries.begin(),
+                projection.namedObjectDictionary.m_entries.end(),
+                [&owner](const DRW_Dictionary::Entry& entry) {
+                    return owner == nullptr
+                        || entry.m_name != "ACAD_MLINESTYLE"
+                        || entry.m_handle != owner->handle;
+                }),
+            projection.namedObjectDictionary.m_entries.end());
+        if (projection.namedObjectDictionary.m_entries.size() != 1u)
+            return false;
+        projection.dictionaries.push_back(*owner);
+        projection.mLineStyles.push_back(style);
+        projection.lineTypes = source.lineTypes;
+        projection.basicTableCaptureFailed = source.basicTableCaptureFailed;
+        projection.basicTableRetainedRecords =
+            source.basicTableRetainedRecords;
+        projection.basicTableRetainedItems = source.basicTableRetainedItems;
+        projection.basicTableRetainedBytes = source.basicTableRetainedBytes;
+        projection.m_dwgLtypeControlPublication =
+            source.m_dwgLtypeControlPublication;
+        projection.m_dwgLtypeControlGeneration =
+            source.m_dwgLtypeControlGeneration;
+        projection.m_dwgLtypeControlPublicationSeen =
+            source.m_dwgLtypeControlPublicationSeen;
+        projection.m_dwgLtypeControlCaptureFailed =
+            source.m_dwgLtypeControlCaptureFailed;
+        projection.mLineStyleRetainedRecords = 1u;
+        projection.mLineStyleRetainedItems = source.mLineStyleRetainedItems;
+        projection.mLineStyleRetainedBytes = source.mLineStyleRetainedBytes;
+        projection.mLineStyleCaptureFailed = false;
+        projection.namedResourceTypedRetainedRecords = 1u;
+        projection.namedResourceTypedRetainedBytes =
+            source.mLineStyleRetainedBytes;
+        projection.namedResourceTypedCaptureFailed = false;
+        projection.namedResourceTypedResourceLimitExceeded = false;
+        projection.namedResourceImport = source.namedResourceImport;
+        projection.namedResourceImport.scaleRange = {0u, 0u};
+        projection.namedResourceImport.dictionaryVarRange = {0u, 0u};
+        projection.namedResourceImport.mLineStyleRange = {0u, 1u};
+        projection.namedResourceImport.mLeaderStyleRange = {0u, 0u};
+        projection.namedResourceImport.rawRange = {0u, 0u};
+        projection.namedResourceImport.typedRetainedRecords = 1u;
+        projection.namedResourceImport.typedRetainedBytes =
+            projection.namedResourceTypedRetainedBytes;
+        projection.namedResourceImport.typedCaptureFailed = false;
+        projection.namedResourceImport.typedResourceLimitExceeded = false;
+        projection.namedResourceImport.rawCallbacks = 0u;
+        projection.namedResourceImport.rawGroupCount = 0u;
+        projection.namedResourceImport.retainedBytes = 0u;
+        projection.namedResourceImport.resourceLimitExceeded = false;
+        projection.namedResourceImport.captureFailed = false;
+        projection.namedResourceImport.successful = true;
+        projection.rawNamedResourceRetainedRecords = 0u;
+        projection.rawNamedResourceRawGroups = 0u;
+        projection.rawNamedResourceRetainedBytes = 0u;
+        projection.rawNamedResourceCaptureFailed = false;
+        projection.dictionaryCaptureFailed = false;
+        projection.dictionaryRetainedRecords = 1u;
+        projection.dictionaryRetainedEntries = owner->m_entries.size();
+        projection.dictionaryRetainedBytes = source.dictionaryRetainedBytes;
+        projection.m_opaqueDwgSourceFrames.emplace(*styleFrame);
+        projection.m_opaqueDwgSourceFrameIdentities.insert(styleKey);
+        projection.m_opaqueDwgSourceFrameRetainedBytes =
+            styleFrame->second.m_rawBytes.size();
+        projection.m_standardDwgObjectFrames.emplace(*ownerFrame);
+        const auto ownerOrdinal = source.m_standardDwgObjectOrdinals.find(
+            ownerKey);
+        if (ownerOrdinal != source.m_standardDwgObjectOrdinals.end())
+            projection.m_standardDwgObjectOrdinals.emplace(*ownerOrdinal);
+        projection.m_standardDwgObjectRetainedBytes =
+            ownerFrame->second.raw.m_rawBytes.size();
+        projection.m_standardDwgObjectMembershipEntries =
+            source.m_standardDwgObjectMembershipEntries;
+        projection.m_standardDwgObjectCaptureFailed = false;
+        projection.m_standardDwgObjectPayloadFailed = false;
+        projection.m_standardDwgNamesClosedThrough =
+            source.m_standardDwgNamesClosedThrough;
+        projection.m_standardDwgAppIdSources =
+            source.m_standardDwgAppIdSources;
+        projection.m_standardDwgLayerSources =
+            source.m_standardDwgLayerSources;
+        return projection.hasSingleSuccessfulNamedResourceImport();
+    }
+
     static void setScaleExtensionHandles(
             dx_iface& iface, const std::vector<std::uint32_t>& handles) {
         iface.m_extensionScaleHandles = handles;
@@ -54245,6 +54409,318 @@ bool physicalAc1021CellStyleMapSourceProbe(
     return true;
 }
 
+bool physicalAc1021MLineStyleSourceProbe(
+        const std::filesystem::path& sourcePath) {
+    dx_iface reader;
+    dx_data data;
+    if (!reader.fileImport(sourcePath.string(), &data, false)
+        || data.sourceFormat != dx_source_format::DWG
+        || data.sourceVersion != DRW::AC1021
+        || data.mLineStyles.size() != 1u
+        || !data.hasNamedObjectDictionary)
+        return fail("physical AC1021 MLINESTYLE source inventory changed");
+    const DRW_MLineStyle& style = data.mLineStyles.front();
+    const auto dictionaryByHandle = [&data](std::uint32_t handle)
+            -> const DRW_Dictionary* {
+        const DRW_Dictionary* result = nullptr;
+        for (const DRW_Dictionary& candidate : data.dictionaries) {
+            if (candidate.handle != handle)
+                continue;
+            if (result != nullptr)
+                return nullptr;
+            result = &candidate;
+        }
+        return result;
+    };
+    const DRW_Dictionary* owner = dictionaryByHandle(style.parentHandle);
+    const DRW_Dictionary* extension = dictionaryByHandle(style.xDictHandle);
+    const DRW_UnsupportedObject* frame =
+        DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+            data, data.importGeneration, style.handle);
+    const auto nodEntry = std::find_if(
+        data.namedObjectDictionary.m_entries.begin(),
+        data.namedObjectDictionary.m_entries.end(),
+        [](const DRW_Dictionary::Entry& entry) {
+            return entry.m_name == "ACAD_MLINESTYLE";
+        });
+    std::cout << "MLINESTYLE handle=0x" << std::hex << style.handle
+              << " owner=0x" << style.parentHandle
+              << " xdict=0x" << style.xDictHandle << std::dec
+              << " name=" << style.name << " description=" << style.description
+              << " flags=" << style.flags << " fill=" << style.fillColor
+              << " xdictFlag="
+              << static_cast<unsigned>(style.extensionDictionaryFlag())
+              << " fillMethod=" << static_cast<unsigned>(style.fillColorMethod)
+              << " start=" << style.startAngle << " end=" << style.endAngle
+              << " reactors=";
+    for (const std::uint32_t handle : style.reactorHandles)
+        std::cout << "0x" << std::hex << handle << ',' << std::dec;
+    std::cout << " ownerEntries=" << (owner == nullptr ? 0u : owner->m_entries.size())
+              << " extensionEntries="
+              << (extension == nullptr ? 0u : extension->m_entries.size())
+              << " rawResources=" << data.rawNamedResourceObjects.size()
+              << " namedResourceRetained="
+              << data.namedResourceTypedRetainedRecords
+              << " mlineRetained=" << data.mLineStyleRetainedRecords
+              << " nodMLineStyleTarget="
+              << (nodEntry == data.namedObjectDictionary.m_entries.end()
+                      ? 0u : nodEntry->m_handle)
+              << " sourceFrame=" << (frame != nullptr);
+    if (owner != nullptr) {
+        std::cout << " ownerParent=0x" << std::hex << owner->parentHandle
+                  << " ownerReactors=";
+        for (const std::uint32_t handle : owner->reactorHandles)
+            std::cout << "0x" << handle << ',';
+        std::cout << std::dec;
+        for (const DRW_Dictionary::Entry& entry : owner->m_entries)
+            std::cout << " ownerKey=" << entry.m_name << "->0x"
+                      << std::hex << entry.m_handle << std::dec;
+    }
+    if (extension != nullptr) {
+        std::cout << " extensionParent=0x" << std::hex
+                  << extension->parentHandle << " extensionReactors=";
+        for (const std::uint32_t handle : extension->reactorHandles)
+            std::cout << "0x" << handle << ',';
+        std::cout << std::dec;
+        for (const DRW_Dictionary::Entry& entry : extension->m_entries)
+            std::cout << " extensionKey=" << entry.m_name << "->0x"
+                      << std::hex << entry.m_handle << std::dec;
+    }
+    std::cout << '\n';
+    for (std::size_t index = 0u; index < style.elements.size(); ++index) {
+        const DRW_MLineElement& element = style.elements[index];
+        std::cout << "element=" << index << " offset=" << element.offset
+                  << " color=" << element.color << " method="
+                  << static_cast<unsigned>(element.colorMethod)
+                  << " linetypeIndex=" << element.linetypeIndex
+                  << " linetypeHandle=0x" << std::hex
+                  << element.linetypeHandle << std::dec
+                  << " linetype=" << element.linetype << '\n';
+    }
+    if (frame != nullptr)
+        std::cout << "frameType=" << frame->m_objectType
+                  << " frameOwner=0x" << std::hex << frame->m_parentHandle
+                  << " frameXdict=0x" << frame->m_xDictHandle << std::dec
+                  << " frameReactors=" << frame->m_reactorHandles.size()
+                  << " linkEvidence="
+                  << static_cast<unsigned>(frame->m_commonLinkEvidence) << '\n';
+    const std::filesystem::path outputPath =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-ac1021-mline-style-probe-"
+           + std::to_string(std::chrono::steady_clock::now()
+                                .time_since_epoch().count())
+           + ".dxf");
+    dx_iface exporter;
+    std::ostringstream diagnostic;
+    bool exported = false;
+    {
+        struct Redirect {
+            std::streambuf* old;
+            ~Redirect() { std::cerr.rdbuf(old); }
+        } redirect{std::cerr.rdbuf(diagnostic.rdbuf())};
+        exported = exporter.fileExport(
+            outputPath.string(), DRW::AC1024, false, &data, true, true,
+            dx_dxfSourceTextPolicy::Compatible,
+            DRW::DxfTextWritePolicy::Compatible,
+            dx_dxfProxyGraphicsPolicy::Compatible,
+            dx_dwgReadCompletenessPolicy::AllowPartial);
+    }
+    const bool qualified =
+        DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
+            data, data.importGeneration, style.handle);
+    std::error_code cleanupError;
+    std::filesystem::remove(outputPath, cleanupError);
+    std::cout << "wholePartialOutput=" << exported
+              << " mlineStyleQualified=" << qualified
+              << " outputDiagnostic=" << diagnostic.str() << '\n';
+    dx_data selected;
+    if (!DxIfaceStandardDwgCaptureTestAccess::
+            selectPhysicalAc1021MLineStyleGraph(data, selected))
+        return fail("physical AC1021 MLINESTYLE graph could not be projected");
+    for (const bool binary : {false, true}) {
+        const std::filesystem::path selectedPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-ac1021-mline-style-selected-"
+               + std::to_string(std::chrono::steady_clock::now()
+                                    .time_since_epoch().count())
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } selectedCleanup{selectedPath};
+        dx_iface selectedWriter;
+        const std::string sentinel =
+            "preserve physical AC1021 MLINESTYLE destination\n";
+        {
+            std::ofstream existing(selectedPath,
+                                   std::ios::binary | std::ios::trunc);
+            if (!existing || !(existing << sentinel))
+                return fail("could not seed physical AC1021 MLINESTYLE destination");
+        }
+        const std::uint16_t originalFillIndex =
+            selected.mLineStyles.front().fillColorDwgIndex;
+        selected.mLineStyles.front().fillColorDwgIndex = 1u;
+        std::ostringstream selectedDiagnostic;
+        bool selectedOutput = false;
+        {
+            struct Redirect {
+                std::streambuf* old;
+                ~Redirect() { std::cerr.rdbuf(old); }
+            } redirect{std::cerr.rdbuf(selectedDiagnostic.rdbuf())};
+            selectedOutput = selectedWriter.fileExport(
+                selectedPath.string(), DRW::AC1024, binary, &selected,
+                true, true, dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::AllowPartial);
+        }
+        std::ifstream rejectedInput(selectedPath, std::ios::binary);
+        const std::string preserved{
+            std::istreambuf_iterator<char>(rejectedInput), {}};
+        selected.mLineStyles.front().fillColorDwgIndex = originalFillIndex;
+        if (selectedOutput || preserved != sentinel)
+            return fail("physical AC1021 MLINESTYLE mutation did not refuse atomically");
+        selectedDiagnostic.str("");
+        selectedDiagnostic.clear();
+        {
+            struct Redirect {
+                std::streambuf* old;
+                ~Redirect() { std::cerr.rdbuf(old); }
+            } redirect{std::cerr.rdbuf(selectedDiagnostic.rdbuf())};
+            selectedOutput = selectedWriter.fileExport(
+                selectedPath.string(), DRW::AC1024, binary, &selected,
+                true, true, dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::AllowPartial);
+        }
+        const bool selectedQualified =
+            DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
+                selected, selected.importGeneration, style.handle);
+        if (!selectedOutput || !selectedQualified) {
+            std::cerr << selectedDiagnostic.str();
+            return fail("physical AC1021 MLINESTYLE selected output failed: "
+                + selectedWriter.extensionGraphFailureDetail());
+        }
+        dx_iface outputReader;
+        dx_data output;
+        const bool read = outputReader.fileImport(
+            selectedPath.string(), &output, false);
+        const auto outputOwner = std::find_if(
+            output.dictionaries.begin(), output.dictionaries.end(),
+            [&style](const DRW_Dictionary& dictionary) {
+                return dictionary.handle == style.parentHandle;
+            });
+        const std::size_t rootEdges = static_cast<std::size_t>(
+            std::count_if(
+                output.namedObjectDictionary.m_entries.begin(),
+                output.namedObjectDictionary.m_entries.end(),
+                [&style](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ACAD_MLINESTYLE"
+                        && entry.m_handle == style.parentHandle;
+                }));
+        const std::size_t rootNameEdges = static_cast<std::size_t>(
+            std::count_if(
+                output.namedObjectDictionary.m_entries.begin(),
+                output.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ACAD_MLINESTYLE";
+                }));
+        const std::size_t outputOwnerMatches = static_cast<std::size_t>(
+            std::count_if(output.dictionaries.begin(), output.dictionaries.end(),
+                [&style](const DRW_Dictionary& dictionary) {
+                    return dictionary.handle == style.parentHandle;
+                }));
+        const std::size_t styleEdges = outputOwner == output.dictionaries.end()
+            ? 0u : static_cast<std::size_t>(std::count_if(
+                outputOwner->m_entries.begin(), outputOwner->m_entries.end(),
+                [&style](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "Standard"
+                        && entry.m_handle == style.handle;
+                }));
+        if (!read || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1024
+            || output.mLineStyles.size() != 1u
+            || output.mLineStyles.front().name != style.name
+            || output.mLineStyles.front().elements.size() != 2u
+            || output.mLineStyles.front().flags != style.flags
+            || output.mLineStyles.front().fillColor != style.fillColor
+            || output.mLineStyles.front().description != style.description
+            || output.mLineStyles.front().startAngle != style.startAngle
+            || output.mLineStyles.front().endAngle != style.endAngle
+            || output.mLineStyles.front().handle != style.handle
+            || output.mLineStyles.front().xDictHandle != 0u
+            || output.mLineStyles.front().elements[0].offset
+                != style.elements[0].offset
+            || output.mLineStyles.front().elements[1].offset
+                != style.elements[1].offset
+            || output.mLineStyles.front().elements[0].color
+                != style.elements[0].color
+            || output.mLineStyles.front().elements[1].color
+                != style.elements[1].color
+            || output.mLineStyles.front().elements[0].linetype != "BYLAYER"
+            || output.mLineStyles.front().elements[1].linetype != "BYLAYER"
+            || output.mLineStyles.front().parentHandle != style.parentHandle
+            || output.mLineStyles.front().reactorHandles
+                != std::vector<std::uint32_t>{style.parentHandle}
+            || outputOwner == output.dictionaries.end()
+            || outputOwner->parentHandle != output.namedObjectDictionary.handle
+            || outputOwner->cloning != owner->cloning
+            || outputOwner->hardOwner != owner->hardOwner
+            || outputOwner->m_entries.size() != 1u
+            || outputOwner->reactorHandles
+                != std::vector<std::uint32_t>{output.namedObjectDictionary.handle}
+            || outputOwnerMatches != 1u || rootEdges != 1u
+            || rootNameEdges != 1u || styleEdges != 1u) {
+            std::cerr << "MLINESTYLE readback diagnostic: read=" << read
+                      << " format=" << static_cast<int>(output.sourceFormat)
+                      << " version=" << static_cast<int>(output.sourceVersion)
+                      << " styles=" << output.mLineStyles.size()
+                      << " NOD=" << output.namedObjectDictionary.m_entries.size();
+            if (!output.mLineStyles.empty())
+                std::cerr << " name=" << output.mLineStyles.front().name
+                          << " elements="
+                          << output.mLineStyles.front().elements.size()
+                          << " handle=" << output.mLineStyles.front().handle
+                          << " parent="
+                          << output.mLineStyles.front().parentHandle;
+            for (const DRW_Dictionary::Entry& entry :
+                     output.namedObjectDictionary.m_entries)
+                std::cerr << " NOD-entry=" << entry.m_name << "->"
+                          << entry.m_handle;
+            std::cerr << " rootEdges=" << rootEdges
+                      << " rootNames=" << rootNameEdges
+                      << " ownerMatches=" << outputOwnerMatches
+                      << " styleReactors="
+                      << (output.mLineStyles.empty() ? 0u
+                          : output.mLineStyles.front().reactorHandles.size())
+                      << " styleReactorCount="
+                      << (output.mLineStyles.empty() ? 0
+                          : output.mLineStyles.front().reactorCount());
+            if (outputOwner != output.dictionaries.end()) {
+                std::cerr << " ownerParent=" << outputOwner->parentHandle
+                          << " nod=" << output.namedObjectDictionary.handle
+                          << " ownerEntries=" << outputOwner->m_entries.size()
+                          << " ownerCloning=" << outputOwner->cloning
+                          << '/' << owner->cloning
+                          << " ownerHard=" << outputOwner->hardOwner
+                          << '/' << owner->hardOwner
+                          << " ownerReactors="
+                          << outputOwner->reactorHandles.size();
+            }
+            std::cerr << '\n';
+            return fail("physical AC1021 MLINESTYLE selected output readback changed the exact graph");
+        }
+        std::cout << "Physical AC1021 MLINESTYLE "
+                  << (binary ? "Binary" : "ASCII")
+                  << " selected output/readback passed with source-frame qualification.\n";
+    }
+    return true;
+}
+
 bool physicalAc1021CellStyleMapSelectedOutput(
         const std::filesystem::path& sourcePath,
         const std::filesystem::path& outputDirectory = {}) {
@@ -77281,6 +77757,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--tablestyle-ac1021-cellstylemap-source-probe")
         return physicalAc1021CellStyleMapSourceProbe(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--mline-style-ac1021-selected-output")
+        return physicalAc1021MLineStyleSourceProbe(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--tablestyle-ac1021-physical-selected-output")
         return physicalAc1021TableStyleSelectedOutput(argv[2]) ? 0 : 1;
