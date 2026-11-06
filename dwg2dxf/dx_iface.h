@@ -3445,6 +3445,7 @@ private:
     std::size_t m_rasterOutputByteLimit{ImageDefinitionCaptureMaxRetainedBytes};
     bool m_rasterOutputInspected{false}, m_rasterOutputFinalized{false}, m_rasterOutputPublished{false};
     bool m_requireCompleteDwgOutputQualification{false};
+    bool m_debugDwgOutputQualification{false};
     using OpaqueDwgOutputKey = std::pair<std::uint64_t, std::uint32_t>;
     std::set<OpaqueDwgOutputKey>
         m_pendingOpaqueDwgOutputQualificationFrameIdentities;

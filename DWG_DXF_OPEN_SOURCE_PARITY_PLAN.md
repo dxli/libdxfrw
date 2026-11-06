@@ -1,7 +1,8 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-06. This file contains open work only. Implementation history and
-completed-item evidence belong in Git and `docs/research/`, not in this queue.
+Updated 2026-11-06 (current-workspace recheck). This file contains open work
+only. Implementation history and completed-item evidence belong in Git and
+`docs/research/`, not in this queue.
 
 The objective remains full, evidence-backed DWG/DXF parity with the intended
 LibreCAD/libdxfrw routes, preserving LibreCAD and LibreCAD_3 as 2D consumers while
@@ -60,7 +61,27 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
+1. **P4 / AC1021 `lineweights.dwg` remaining callback closure — next source-bound slice:**
+   same-version DICTIONARYWDFLT/PLACEHOLDER output is now qualified in ASCII
+   and Binary, including source-frame binding, readback, atomic refusal and
+   same-adapter retry ([receipt](docs/research/p4-ac1021-dictionary-default-same-version-output-2026-11-06.json)).
+   A fresh strict AC1021 conversion therefore advances through serialization
+   and stops only at the final completeness check: 41/49 opaque callbacks are
+   qualified. The eight named gaps are MLINESTYLE `0x18` (type 73); LAYOUT
+   `0x22`, `0x102`, `0x108` (type 82); and their four VIEWPORTs `0x104`,
+   `0x105`, `0x10A`, `0x10B` (type 34). Compare each source object and owner,
+   reactor, table/control and layout/block membership against LibreDWG 0.14
+   source JSON and DXF output plus ODA v5.4.1 sections for MLINESTYLE, LAYOUT
+   and VIEWPORT. Extend the existing exact source profiles only where all
+   modeled fields and reference roles are represented. Prove source-bound
+   ASCII/Binary output and fresh readback for the MLINESTYLE and each
+   layout/viewport graph; include bad-reference destination preservation and
+   same-writer retry. Then rerun strict same-version conversion once and use
+   its debug gap list to choose the next residual. The source is existing
+   local input (`lineweights.dwg`, SHA-256
+   `ad2656f141675aeda06ede347f8921516700b60a0f5ba17af042419be5397b4d`);
+   commit no drawing fixture.
+2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
    links and source frame offsets are captured. The enclosing FIELDLIST has
@@ -74,7 +95,7 @@ created locally from scratch for the specific control.
    remain excluded. Reopen this candidate only with a source/profile that
    supplies full membership and a consumer-visible root relation; see the
    [source-graph screen receipt](docs/research/p5-ac1021-acexpr-root-graph-output-readiness-2026-11-06.json).
-2. **P6 / converter-dependent suffix:** the 2026-11-06 ODA File Converter
+3. **P6 / converter-dependent suffix:** the 2026-11-06 ODA File Converter
    27.1.0 retry after the reported session unlock again aborted during
    pasteboard/XPC initialization (exit 134) and produced no output. No suffix
    evidence or support claim follows. Keep the AC1027 suffix unclaimed and

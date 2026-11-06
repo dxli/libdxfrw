@@ -49804,7 +49804,8 @@ bool dx_iface::inspectDwgDictionaryDefaultOutput(
         m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027
             ? DRW::AC1027
             : (m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1021
-                && selectedAc1021LayoutProfile)
+                && (selectedAc1021LayoutProfile
+                    || view.version == DRW::AC1021))
                 ? DRW::AC1021 : DRW::AC1024;
     if (dxfW == nullptr || cData == nullptr
         || view.version != expectedTargetVersion
@@ -72633,11 +72634,12 @@ bool dx_iface::finalizeDxfWrite() {
         } catch (...) {
             // Diagnostics cannot authorize publication of incomplete output.
         }
-        if (m_extensionBlockRepresentationDataOutputDebug) {
+        if (m_debugDwgOutputQualification) {
             const dx_data::StandardDwgFrameKey first{
                 cData->importGeneration, 0u};
             const auto begin =
                 cData->m_opaqueDwgSourceFrameIdentities.lower_bound(first);
+            std::size_t reportedGaps = 0u;
             for (auto current = begin;
                  current != cData->m_opaqueDwgSourceFrameIdentities.end()
                      && current->first == cData->importGeneration;
@@ -72645,6 +72647,11 @@ bool dx_iface::finalizeDxfWrite() {
                 if (m_pendingOpaqueDwgOutputQualificationFrameIdentities
                         .count(*current) != 0u)
                     continue;
+                if (reportedGaps == 32u) {
+                    std::cerr << "Additional unqualified opaque DWG callbacks omitted from diagnostic output.\n";
+                    break;
+                }
+                ++reportedGaps;
                 const auto raw = cData->m_opaqueDwgSourceFrames.find(
                     *current);
                 if (raw == cData->m_opaqueDwgSourceFrames.end()) {
@@ -75967,6 +75974,15 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                           DRW::DxfTextWritePolicy targetTextPolicy,
                           dx_dxfProxyGraphicsPolicy proxyGraphicsPolicy,
                           dx_dwgReadCompletenessPolicy readCompletenessPolicy){
+    const bool previousOutputQualificationDebug =
+        m_debugDwgOutputQualification;
+    m_debugDwgOutputQualification = debug;
+    struct OutputQualificationDebugScope {
+        bool& value;
+        bool previous;
+        ~OutputQualificationDebugScope() { value = previous; }
+    } outputQualificationDebugScope{
+        m_debugDwgOutputQualification, previousOutputQualificationDebug};
     const bool ac1027GuardStrict = readCompletenessPolicy!=dx_dwgReadCompletenessPolicy::Legacy || requireResolvedOwners;
     StrictDxfExportLease strictExportLease(fData,ac1027GuardStrict);
     m_dwgLtypeControlOutputRequired = false;

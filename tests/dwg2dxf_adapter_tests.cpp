@@ -50063,7 +50063,8 @@ bool physicalSortEntsOwnerScopeQualification(
 
 bool physicalDictionaryDefaultOutputReadback(
         const std::filesystem::path& sourcePath,
-        bool requireAc1018 = false) {
+        bool requireAc1018 = false,
+        bool sameVersionAc1021 = false) {
     dx_iface sourceReader;
     dx_data source;
     if (!sourceReader.fileImport(sourcePath.string(), &source, false)
@@ -50073,6 +50074,7 @@ bool physicalDictionaryDefaultOutputReadback(
             && source.sourceVersion != DRW::AC1024
             && source.sourceVersion != DRW::AC1018)
         || (requireAc1018 && source.sourceVersion != DRW::AC1018)
+        || (sameVersionAc1021 && source.sourceVersion != DRW::AC1021)
         || !source.hasSingleSuccessfulDictionaryDefaultImport()
         || !source.hasNamedObjectDictionary
         || source.dictionaryWithDefaults.size() != 1u
@@ -50083,7 +50085,8 @@ bool physicalDictionaryDefaultOutputReadback(
         || source.placeholders.front().handle != 0x0fu)
         return fail("physical dictionary-default source is not the admitted AC1015/AC1018/AC1021/AC1024 typed pair");
 
-    const DRW::Version targetVersion = DRW::AC1024;
+    const DRW::Version targetVersion = sameVersionAc1021
+        ? DRW::AC1021 : DRW::AC1024;
 
     const std::uint32_t sourceDictionaryHandle =
         source.dictionaryWithDefaults.front().handle;
@@ -82286,6 +82289,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--dictionary-default-physical-ac1018-output-readback")
         return physicalDictionaryDefaultOutputReadback(argv[2], true) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--dictionary-default-ac1021-same-version-output-readback")
+        return physicalDictionaryDefaultOutputReadback(argv[2], false, true) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--dictionaryvar-physical-output-readback")
         return physicalDictionaryVarOutputReadback(argv[2]) ? 0 : 1;
