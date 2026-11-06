@@ -25,6 +25,14 @@
       "postAttemptOutputFiles": [],
       "observedAtMacLocalLog": "2026-11-06 06:30 UTC local system log timestamp"
     },
+    "latestRetryAfterSecondUnlockReport": {
+      "command": "ODAFileConverter /private/tmp/libdxfrw-cover-unlock-1106/in /private/tmp/libdxfrw-cover-unlock-1106/out ACAD2013 DWG 0 0",
+      "result": "ABORT (exit 134) during pasteboard/XPC initialization; stdout empty; stderr reports pasteboard clipboard/find errors and invalid com.apple.hiservices-xpcservice connections.",
+      "sourceSha256": "351a239cdae05894fe11863aabecfde171bd4d1758a3dd1c9868d8fe534fe6c1",
+      "converterSha256": "21a8f029e7d41af64088f65492404d97ffec0d2f7886703b3b725f5ac4a55783",
+      "postAttemptOutputFiles": [],
+      "observedAtUtc": "2026-11-06 10:23 UTC"
+    },
     "sourceCopySha256": "351a239cdae05894fe11863aabecfde171bd4d1758a3dd1c9868d8fe534fe6c1"
   },
   "decision": "No fresh resave exists to analyze. The bounded retry after the user unlocked the Mac again reproduced the pasteboard/XPC abort. Preserve strict refusal and the existing unclaimed-suffix disposition. This is an environment/tool-launch blocker, not evidence about suffix semantics.",
@@ -34,6 +42,6 @@
     "converterHashRechecked": true,
     "outputDirectoryChecked": true,
     "fullSuites": "NOT RUN",
-    "postUnlockUserReportedRetry": "Repeated once after the latest unlock report; converter aborted before reading source and produced no output."
+    "postUnlockUserReportedRetry": "Repeated after both unlock reports; latest retry at 2026-11-06 10:23 UTC aborted before reading source and produced no output."
   }
 }
