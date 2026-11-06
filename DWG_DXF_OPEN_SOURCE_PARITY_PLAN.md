@@ -60,21 +60,28 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P5 / AC1021 FIELD source-to-output bridge:** investigate the 15 complete
-   physical `AcExpr` roots in the existing local AC1021 witness. The root
-   census is a candidate inventory, not output qualification. First record
-   each root's source span, owner, FIELDLIST membership, dependency roles and
-   exact output identity. Admit only a bounded graph with fully represented
-   targets and fields. Keep all 42 raw-only `AcObjProp` records, the nine
-   unresolved `AcSm` records, the negative-count record, and records with
-   unexplained suffixes outside the route. Do not infer expression evaluation
-   or broaden support claims. If none of the roots has exact graph closure,
-   record the exclusion and move to the next independent P4 source/graph item;
-   do not weaken the gate. Use focused FIELD selectors and one ASCII/Binary
-   output/readback, rollback and same-adapter retry control; skip full suites.
-2. **P4 / next physical source graph:** select the smallest remaining standard
-   object or retained raw OBJECTS graph with complete source roles and
-   dependencies, using the current per-handle inventory. Keep whole-source
+1. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
+   the 15 complete physical `AcExpr` records are each one-member FIELDLIST
+   entries and each is a child of a typed `_text` FIELD; all 15 parent-child
+   links and source frame offsets are captured. The enclosing FIELDLIST has
+   142 ordered slots, of which only 86 point to typed FIELD callbacks; 56
+   FIELD records remain raw-only. The 15 `AcExpr` fields have no TABLE or
+   TABLECONTENT cell references, and the source has no typed TABLECONTENT
+   callback. Therefore the available witness does not provide a complete
+   FIELDLIST/output graph. Keep the physical FIELD serializer gate closed and
+   do not infer expression evaluation. The 42 raw-only `AcObjProp` records,
+   nine unresolved `AcSm` records, negative-count record and unexplained tails
+   remain excluded. Reopen this candidate only with a source/profile that
+   supplies full membership and a consumer-visible root relation; see the
+   [source-graph screen receipt](docs/research/p5-ac1021-acexpr-root-graph-output-readiness-2026-11-06.json).
+2. **P4 / standard-object inventory to implementation:** screen the 30
+   remaining unqualified standard-object frames in the AC1021 children-room
+   source by typed DICTIONARY/XRECORD model, exact owner, reciprocal edges and
+   already-qualified dependencies. Select one smallest graph whose owner and
+   all references are themselves represented, then implement its bounded
+   physical-source output path with fresh ASCII/Binary readback, rollback and
+   same-adapter retry. The inventory output now includes concise per-frame
+   DICTIONARY/XRECORD summaries to make this selection direct. Keep whole-source
    preflight strict; selected projections are not document support. Update the
    inventory only after a source frame is actually qualified.
 3. **P6 / converter-dependent suffix:** a fresh ODA File Converter 27.1.0

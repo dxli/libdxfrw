@@ -1813,6 +1813,46 @@ public:
                       << '\n';
         }
     }
+    static void printStandardObjectPayloadSummaries(
+            const dx_data& data, std::uint64_t generation) {
+        for (const auto& source : data.m_standardDwgObjectFrames) {
+            if (source.first.first != generation)
+                continue;
+            const std::uint32_t handle = source.first.second;
+            const DRW_UnsupportedObject& frame = source.second.raw;
+            if (frame.m_objectType == 42) {
+                const auto dictionary = std::find_if(
+                    data.dictionaries.begin(), data.dictionaries.end(),
+                    [handle](const DRW_Dictionary& value) {
+                        return value.handle == handle;
+                    });
+                if (dictionary != data.dictionaries.end()) {
+                    std::cout << " standardDictionary handle=" << handle
+                              << " owner=" << dictionary->parentHandle
+                              << " entries=" << dictionary->m_entries.size()
+                              << " reactors="
+                              << dictionary->reactorHandles.size()
+                              << " xdict=" << dictionary->xDictHandle << '\n';
+                }
+            } else if (frame.m_objectType == 79) {
+                const auto record = std::find_if(
+                    data.xRecords.begin(), data.xRecords.end(),
+                    [handle](const DRW_XRecord& value) {
+                        return value.handle == handle;
+                    });
+                if (record != data.xRecords.end()) {
+                    std::cout << " standardXRecord handle=" << handle
+                              << " owner=" << record->parentHandle
+                              << " values=" << record->m_values.size()
+                              << " dataEntries="
+                              << record->m_dataEntries.size()
+                              << " reactors="
+                              << record->reactorHandles.size()
+                              << " xdict=" << record->xDictHandle << '\n';
+                }
+            }
+        }
+    }
     static bool opaqueOutputQualified(const dx_data& data,
             std::uint64_t generation, std::uint32_t handle) {
         return data.m_opaqueDwgOutputQualifiedFrameIdentities.count(
@@ -21606,6 +21646,8 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
         data, data.importGeneration);
     DxIfaceStandardDwgCaptureTestAccess::printStandardSourceFrames(
         data, data.importGeneration);
+    DxIfaceStandardDwgCaptureTestAccess::printStandardObjectPayloadSummaries(
+        data, data.importGeneration);
     for (const DRW_VisualStyle& style : data.visualStyles) {
         std::size_t dictionaryMatches = 0u;
         const DRW_Dictionary* dictionary = nullptr;
@@ -39289,6 +39331,12 @@ bool physicalAc1021FieldFlag4Type2ProfileCensus(
     const std::string& sourcePath) {
     class FieldCensusIface final : public dx_iface {
     public:
+        void addDwgFramePublication(
+            const DRW_DwgFramePublication& publication) override {
+            publications.push_back(publication);
+            dx_iface::addDwgFramePublication(publication);
+        }
+
         void addUnsupportedObject(
             const DRW_UnsupportedObject& object) override {
             if (object.m_recordName == "FIELD"
@@ -39298,6 +39346,7 @@ bool physicalAc1021FieldFlag4Type2ProfileCensus(
         }
 
         std::vector<std::uint32_t> rawFieldFrames;
+        std::vector<DRW_DwgFramePublication> publications;
     };
 
     dx_data data;
@@ -39388,6 +39437,35 @@ bool physicalAc1021FieldFlag4Type2ProfileCensus(
         rawOnlyFieldHandles.begin(), rawOnlyFieldHandles.end(),
         peerAcObjPropHandles.begin(), peerAcObjPropHandles.end());
 
+    std::map<std::uint32_t, std::size_t> tableFieldReferences;
+    std::unordered_map<std::uint32_t, DRW_DwgFramePublication>
+        publicationsByHandle;
+    std::unordered_set<std::uint32_t> typedFieldHandleSet;
+    for (const DRW_Field& field : data.fields)
+        typedFieldHandleSet.insert(field.handle);
+    for (const DRW_DwgFramePublication& publication : iface.publications)
+        publicationsByHandle.emplace(publication.m_handle, publication);
+    for (const DRW_Table& table : data.tables) {
+        for (const DRW_TableRow& row : table.m_content.m_rows) {
+            for (const DRW_TableCell& cell : row.m_cells) {
+                for (const DRW_TableCellContent& content : cell.m_contents) {
+                    if (content.m_type == 2)
+                        ++tableFieldReferences[content.m_handle];
+                }
+            }
+        }
+    }
+    for (const DRW_TableContentObject& table : data.tableContents) {
+        for (const DRW_TableRow& row : table.m_content.m_rows) {
+            for (const DRW_TableCell& cell : row.m_cells) {
+                for (const DRW_TableCellContent& content : cell.m_contents) {
+                    if (content.m_type == 2)
+                        ++tableFieldReferences[content.m_handle];
+                }
+            }
+        }
+    }
+
     std::cerr << "AC1021 FIELD profile: total=" << data.fields.size()
               << " rawFieldFrames=" << rawFieldHandles.size()
               << " rawOnlyShells=" << rawOnlyFieldHandles.size()
@@ -39402,11 +39480,110 @@ bool physicalAc1021FieldFlag4Type2ProfileCensus(
                       << ",type=" << profile.first.second << ")="
                       << profile.second;
     std::cerr << '\n';
+    std::size_t acExprParentLinks = 0u;
+    std::size_t acExprListMemberships = 0u;
+    std::size_t acExprTableReferences = 0u;
+    for (const DRW_Field& field : data.fields) {
+        if (field.m_evaluatorId != "AcExpr")
+            continue;
+        const DRW_Field* typedParent = nullptr;
+        for (const DRW_Field& candidate : data.fields) {
+            if (candidate.handle == field.parentHandle) {
+                typedParent = &candidate;
+                break;
+            }
+        }
+        std::cerr << "AcExpr handle=" << field.handle
+                  << " owner=" << field.parentHandle
+                  << " typedParent=" << (typedParent != nullptr)
+                  << " parentListsChild="
+                  << (typedParent != nullptr
+                      && std::find(typedParent->m_childHandles.begin(),
+                                   typedParent->m_childHandles.end(),
+                                   field.handle)
+                          != typedParent->m_childHandles.end())
+                  << " ownerPublication=";
+        const auto ownerPublication =
+            publicationsByHandle.find(field.parentHandle);
+        if (ownerPublication == publicationsByHandle.end()) {
+            std::cerr << "missing";
+        } else {
+            std::cerr << ownerPublication->second.m_recordName << '/'
+                      << ownerPublication->second.m_className << ":type="
+                      << ownerPublication->second.m_resolvedType
+                      << ":carrier=" << static_cast<int>(
+                             ownerPublication->second.m_carrier)
+                      << ":offset="
+                      << ownerPublication->second.m_sourceOffset;
+        }
+        std::cerr
+                  << " fieldListMembers=";
+        std::size_t listMemberships = 0u;
+        for (const DRW_FieldList& list : data.fieldLists) {
+            const std::size_t matches = static_cast<std::size_t>(
+                std::count(list.m_fieldHandles.begin(),
+                           list.m_fieldHandles.end(), field.handle));
+            if (matches != 0u) {
+                std::cerr << "[list=" << list.handle
+                          << ",owner=" << list.parentHandle
+                          << ",slots=" << matches << ']';
+                listMemberships += matches;
+            }
+        }
+        if (typedParent != nullptr
+            && std::find(typedParent->m_childHandles.begin(),
+                         typedParent->m_childHandles.end(), field.handle)
+                != typedParent->m_childHandles.end())
+            ++acExprParentLinks;
+        acExprListMemberships += listMemberships;
+        acExprTableReferences += tableFieldReferences[field.handle];
+        std::cerr << "(" << listMemberships << ") tableReferences="
+                  << tableFieldReferences[field.handle]
+                  << " codeBytes=" << field.m_fieldCode.size()
+                  << " valueType=" << field.m_value.m_dataType
+                  << " valueFlags=" << field.m_value.m_formatFlags
+                  << " valueBits=" << field.m_value.m_value.code()
+                  << " complete=" << field.hasCompleteDwgPayload()
+                  << " children=" << field.m_childHandles.size()
+                  << " objectRefs=" << field.m_objectHandles.size() << '\n';
+    }
+    std::cerr << "FIELDLISTs=" << data.fieldLists.size()
+              << " TABLECONTENTs=" << data.tableContents.size()
+              << " TABLEs=" << data.tables.size()
+              << " AcExprParentLinks=" << acExprParentLinks
+              << " AcExprListMemberships=" << acExprListMemberships
+              << " AcExprTableReferences=" << acExprTableReferences << '\n';
+    const std::size_t listSlots = data.fieldLists.size() == 1u
+        ? data.fieldLists.front().m_fieldHandles.size() : 0u;
+    std::size_t typedListMembers = 0u;
+    for (const DRW_FieldList& list : data.fieldLists) {
+        for (const std::uint32_t member : list.m_fieldHandles)
+            typedListMembers += typedFieldHandleSet.count(member) != 0u
+                ? 1u : 0u;
+        const auto publication = publicationsByHandle.find(list.handle);
+        std::cerr << "FIELDLIST handle=" << list.handle
+                  << " owner=" << list.parentHandle
+                  << " slots=" << list.m_fieldHandles.size()
+                  << " typedMembers=" << typedListMembers
+                  << " publication="
+                  << (publication == publicationsByHandle.end()
+                      ? "missing" : publication->second.m_recordName)
+                  << '\n';
+    }
+    for (const DRW_Table& table : data.tables) {
+        std::cerr << "TABLE handle=" << table.handle
+                  << " fields=" << table.m_content.m_fieldHandles.size()
+                  << " rows=" << table.m_content.m_rows.size() << '\n';
+    }
     if (data.fields.size() != 86u || typedRoots != 15u || acExprRoots != 15u
         || acObjPropRoots != 0u
         || checksumFieldRecords != 71u
         || rawFieldHandles.size() != 142u
         || rawOnlyFieldHandles.size() != 56u
+        || data.fieldLists.size() != 1u || listSlots != 142u
+        || typedListMembers != 86u || data.tableContents.size() != 0u
+        || data.tables.size() != 2u || acExprParentLinks != 15u
+        || acExprListMemberships != 15u || acExprTableReferences != 0u
         || peerAcObjPropHandles.size() != 42u
         || !peerRootHandlesAreRawOnly)
         return fail("AC1021 FIELD census differs from the source-bounded flags=2 payload profile");
