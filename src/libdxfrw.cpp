@@ -26939,9 +26939,17 @@ bool dxfRW::processMaterial() {
         if (code == 0) {
             if (!acceptObjectBoundary(code))
                 return setError(DRW::BAD_READ_OBJECTS);
-            if (!data.hasCompleteDxfMapTransforms()
+            if (data.requiresRawDxfMaterialReplay()) {
+                const auto* policy =
+                    dynamic_cast<const DRW_DxfSparseMaterialRawPolicy*>(iface);
+                if (policy == nullptr
+                    || !policy->wantsDxfSparseMaterialRawCapture())
+                    return setError(DRW::BAD_CODE_PARSED);
+            }
+            if (!data.requiresRawDxfMaterialReplay()
+                && (!data.hasCompleteDxfMapTransforms()
                 || ((!data.m_hasLuminance && !data.m_hasNormalMapStrength)
-                    && (data.m_hasLuminanceMode || data.m_hasNormalMapMethod)))
+                    && (data.m_hasLuminanceMode || data.m_hasNormalMapMethod))))
                 return setError(DRW::BAD_CODE_PARSED);
             if (pendingSparseTail) {
                 // Keep the ambiguous 72 or 273 value only in the raw
@@ -26960,6 +26968,16 @@ bool dxfRW::processMaterial() {
             iface->addMaterial(data);
             iface->addRawDxfObject(raw);  // no typed writer: raw re-emits on DXF->DXF
             return true;
+        }
+        if (data.requiresRawDxfMaterialReplay()) {
+            const auto* policy =
+                dynamic_cast<const DRW_DxfSparseMaterialRawPolicy*>(iface);
+            if (policy == nullptr
+                || !policy->wantsDxfSparseMaterialRawCapture())
+                return setError(DRW::BAD_CODE_PARSED);
+            if (!captureRawGroup(raw, code, /*validateHandles=*/true))
+                return setError(DRW::BAD_CODE_PARSED);
+            continue;
         }
         if (pendingSparseTail)
             return setError(DRW::BAD_CODE_PARSED);

@@ -47,6 +47,18 @@ bool source(const std::filesystem::path& path,bool binary,int mode,const char* n
  const auto s=[&](int c,const char* v){return w->writeString(c,v);};
  const auto i=[&](int c,int v){return w->writeInt32(c,v);};
  const auto h=[&](int c,int v){return w->writeInt16(c,v);};
+ if(mode==13){
+  if(!s(0,"SECTION")||!s(2,"HEADER")||!s(9,"$ACADVER")||!s(1,"AC1032")||!s(0,"ENDSEC")
+   ||!s(0,"SECTION")||!s(2,"OBJECTS")||!s(0,"MATERIAL")||!s(5,"97")
+   ||!s(102,"{ACAD_XDICTIONARY")||!s(360,"188")||!s(102,"}")
+   ||!s(102,"{ACAD_REACTORS")||!s(330,"72")||!s(102,"}")
+   ||!s(330,"72")||!s(100,"AcDbMaterial")||!s(1,"ByBlock")||!i(94,63)
+   ||!s(0,"MATERIAL")||!s(5,"96")||!s(330,"72")
+   ||!s(100,"AcDbMaterial")||!s(1,"Global")||!s(2,"partial AC1032 material")
+   ||!i(94,63)||!s(1001,"ACAD")||!s(1000,"raw-tail")
+   ||!s(0,"ENDSEC")||!s(0,"EOF"))return false;
+  return !w->hasWriteError();
+ }
  if(!s(0,"SECTION")||!s(2,"HEADER")||!s(9,"$ACADVER")||!s(1,mode==6?"AC1024":"AC1027")||!s(0,"ENDSEC")
  ||!s(0,"SECTION")||!s(2,"OBJECTS")||!s(0,"MATERIAL")||!s(5,"F000")||!s(102,"{ACAD_REACTORS")
  ||!s(330,"E")||!s(102,"}")||!s(330,mode==9?"D":"E")||!s(100,"AcDbMaterial")||!s(1,mode==8?"OTHER":name)
@@ -107,6 +119,49 @@ int main(){
   dwgAdapter.value.reset();dwgAdapter.value.handle=0xF000u;dwgAdapter.value.m_name="corrected";
   dwgAdapter.registered=dwgAdapter.written=false;
   if(!dwg.write(&dwgAdapter,DRW::AC1027,true)||!dwgAdapter.registered||!dwgAdapter.written){std::cerr<<"DWG retry failed\n";return 1;}
+  if(!source(inputPath,binary,13,"ByBlock"))return 33;
+  Reader ac1032;dxfRW ac1032Reader(inputName.c_str());
+  if(!ac1032Reader.read(&ac1032,false)||ac1032.materials.size()!=2u
+     ||ac1032.raw.size()!=2u||!ac1032.materials.front().requiresRawDxfMaterialReplay()
+     ||!ac1032.materials.front().m_hasChannelFlags
+     ||ac1032.materials.front().m_channelFlags!=63
+     ||!ac1032.materials.back().requiresRawDxfMaterialReplay()
+     ||ac1032.raw.front().groups.size()!=11u
+     ||ac1032.raw.back().groups.size()!=8u
+     ||ac1032.raw.back().groups.back().code()!=1000
+     ||std::string(ac1032.raw.back().groups.back().c_str())!="raw-tail")return 34;
+  const std::vector<int> ac1032Expected={5,102,360,102,102,330,102,330,100,1,94};
+  std::vector<int> ac1032Observed;
+  for(const auto& group:ac1032.raw.front().groups)ac1032Observed.push_back(group.code());
+  if(ac1032Observed!=ac1032Expected||ac1032.raw.front().groups.back().i_val()!=63)return 35;
+  const auto ac1032Dest=dir/(binary?"ac1032-out-binary.dxf":"ac1032-out-ascii.dxf");
+  {std::ofstream f(ac1032Dest);f<<"sentinel";}
+  const auto ac1032DestName=ac1032Dest.string();dxfRW ac1032Writer(ac1032DestName.c_str());
+  DxfWriter ac1032Adapter(ac1032Writer);ac1032Adapter.value=ac1032.materials.front();
+  ac1032Adapter.raw=ac1032.raw.front();
+  if(ac1032Writer.write(&ac1032Adapter,DRW::AC1032,binary)||ac1032Adapter.ok||bytes(ac1032Dest)!="sentinel")return 36;
+  ac1032Adapter.useRaw=true;
+  if(!ac1032Writer.write(&ac1032Adapter,DRW::AC1032,binary)||!ac1032Adapter.ok)return 37;
+  Reader ac1032Readback;dxfRW ac1032Check(ac1032DestName.c_str());
+  if(!ac1032Check.read(&ac1032Readback,false)||ac1032Readback.materials.size()!=1u
+     ||ac1032Readback.raw.size()!=1u
+     ||!ac1032Readback.materials.front().requiresRawDxfMaterialReplay()
+     ||ac1032Readback.raw.front().groups.size()!=11u)return 38;
+  const auto tailDest=dir/(binary?"ac1032-tail-binary.dxf":"ac1032-tail-ascii.dxf");
+  {std::ofstream f(tailDest);f<<"sentinel";}
+  const auto tailDestName=tailDest.string();dxfRW tailWriter(tailDestName.c_str());
+  DxfWriter tailAdapter(tailWriter);tailAdapter.value=ac1032.materials.back();
+  tailAdapter.raw=ac1032.raw.back();
+  if(tailWriter.write(&tailAdapter,DRW::AC1032,binary)||tailAdapter.ok||bytes(tailDest)!="sentinel")return 39;
+  tailAdapter.useRaw=true;
+  if(!tailWriter.write(&tailAdapter,DRW::AC1032,binary)||!tailAdapter.ok)return 40;
+  Reader tailReadback;dxfRW tailCheck(tailDestName.c_str());
+  if(!tailCheck.read(&tailReadback,false)||tailReadback.materials.size()!=1u
+     ||tailReadback.raw.size()!=1u
+     ||!tailReadback.materials.front().requiresRawDxfMaterialReplay()
+     ||tailReadback.raw.front().groups.size()!=8u
+     ||tailReadback.raw.front().groups.back().code()!=1000
+     ||std::string(tailReadback.raw.front().groups.back().c_str())!="raw-tail")return 41;
  }
  return 0;
 }

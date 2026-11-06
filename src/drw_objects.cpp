@@ -14690,14 +14690,27 @@ bool DRW_Material::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
     }
     case 93:
     case 94: {
+        const std::int32_t value = reader->getInt32();
         if (!m_dxfMaterialGenProcTableEnded) {
             if (m_dxfMaterialGenProcTableStarted)
                 break;
-            if (!completeNonproceduralBaseMaps)
+            if (!completeNonproceduralBaseMaps) {
+                if (code == 94 && value == 63
+                    && reader->getSourceVersion() == DRW::AC1032) {
+                    // This AC1032 channel mask can terminate a sparse or
+                    // partially modeled base-material profile. Keep the
+                    // entire remaining record raw for same-version replay;
+                    // do not publish a typed interpretation of its tail.
+                    m_channelFlags = value;
+                    m_hasChannelFlags = true;
+                    m_dxfMaterialImplicitTail = true;
+                    m_dxfMaterialGenProcTableStarted = true;
+                    break;
+                }
                 return false;
+            }
             m_dxfMaterialImplicitTail = true;
         }
-        const std::int32_t value = reader->getInt32();
         if (code == 93) {
             m_illuminationModel = value;
             m_hasIlluminationModel = true;

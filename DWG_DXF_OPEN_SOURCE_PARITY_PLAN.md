@@ -830,6 +830,15 @@ profile as incomplete typed data plus its raw record. Typed output and adapter
 replay remain refused until the ambiguous field and graph are qualified; older
 consumers keep the prior input refusal
 ([sparse MATERIAL receipt](docs/research/p6-ac1027-sparse-default-material-raw-only-2026-11-04.json)).
+The AC1032 group-94 channel mask value 63 now has a separate explicit raw-only
+replay route for sparse/partially modeled MATERIAL records, including trailing
+XDATA. Generated ASCII/Binary controls verify exact group retention, typed-output
+refusal, destination preservation, opt-in raw replay and fresh readback. A local
+physical AC1032 DXF now parses beyond these records but whole-file output remains
+refused at two unpreserved proxy graphics (first handle 1284). This does not
+qualify channel-mask semantics, typed material support, rendering, or whole-file
+output; broaden producer evidence and semantic/output qualification separately
+([receipt](docs/research/p5-ac1032-sparse-material-channel-mask-raw-replay-2026-11-05.json)).
 DXF-origin LIGHT group 421 true color now has bounded ASCII/Binary transport;
 DWG CMC mapping and complete LIGHTLIST graph output remain open
 ([color receipt](docs/research/p6-light-dxf-421-true-color-2026-11-04.json)).
