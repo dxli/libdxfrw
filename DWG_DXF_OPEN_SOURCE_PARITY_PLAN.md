@@ -2078,8 +2078,10 @@ Native source-release builds and platform qualification remain open.
   frame and 73-bit scalar/handle-boundary proof, then seeds a locally authored
   wrapper DWG. Its source NOD `0x0A` owner/reactor roles are remapped to the
   wrapper NOD `0x0C`; selected ASCII/Binary output, invalid-field/reference
-  refusal, same-adapter retry and typed readback pass. The prior frame=0
-  physical wire selector remains passing ([receipt](docs/research/p4-ac1032-rastervariables-frame1-physical-writer-bridge-2026-11-05.json)).
+  refusal, same-adapter retry and typed readback pass. A separate hash-bound
+  frame=0 AC1032 witness now passes the same selected wrapper route under
+  RequireComplete owner-resolved output ([frame=0 receipt](docs/research/p4-ac1032-rastervariables-frame0-physical-writer-bridge-2026-11-05.json);
+  [frame=1 receipt](docs/research/p4-ac1032-rastervariables-frame1-physical-writer-bridge-2026-11-05.json)).
   A hash-bound physical AC1024 frame=1 witness now passes the same bounded
   selected-wrapper route. Its source span verifies class, canonical frame
   scalar, quality/units, zero string marker and role-4 owner/reactor to source

@@ -71810,9 +71810,9 @@ bool rasterVariablesDwgAdapterTransport(
              source->second.reactorHandles)
             std::cerr << "RASTERVARIABLES reactor handle=" << reactor << '\n';
         if (revision != DRW::AC1021 && revision != DRW::AC1027
+            && revision != DRW::AC1032
             && !(frameOne
-                && (revision == DRW::AC1018 || revision == DRW::AC1024
-                    || revision == DRW::AC1032)))
+                && (revision == DRW::AC1018 || revision == DRW::AC1024)))
             return true;
 
         // Bind the physical producer's decoded record to a locally authored,
@@ -71883,7 +71883,7 @@ bool rasterVariablesDwgAdapterTransport(
         // closure, so whole-source owner qualification would test a different
         // gate (and make ASCII/Binary coverage asymmetric).
         const bool requireResolvedOwners =
-            revision == DRW::AC1018 || frameOne;
+            revision == DRW::AC1018 || revision == DRW::AC1032 || frameOne;
         const std::string sentinel = "RASTERVARIABLES_ATOMIC_DESTINATION";
         {
             std::ofstream previous(target.first, std::ios::binary);
@@ -71901,7 +71901,7 @@ bool rasterVariablesDwgAdapterTransport(
                 outputSourceData, debugExport, requireResolvedOwners,
                 dx_dxfSourceTextPolicy::Compatible, DRW::DxfTextWritePolicy::Compatible,
                 dx_dxfProxyGraphicsPolicy::Compatible,
-                revision == DRW::AC1018 || frameOne
+                revision == DRW::AC1018 || revision == DRW::AC1032 || frameOne
                     ? dx_dwgReadCompletenessPolicy::RequireComplete
                                         : dx_dwgReadCompletenessPolicy::Legacy);
         };
