@@ -60,19 +60,16 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P4 / AC1021 `ASE_INDEX_DICTIONARY` one-entry graph:** screen NOD key
-   `ASE_INDEX_DICTIONARY` → DICTIONARY `242632` (owner NOD `0xC`), containing
-   key `ASEBlockHierarchyIndexRecord` → XRECORD `242633`. The source inventory
-   reports an empty XRECORD body and one reactor on each object. Before adding
-   output qualification, verify the complete typed/raw payloads, reciprocal
-   owner/reactor relationships, duplicate handles/keys, physical source-frame
-   eligibility for both records, and the output role assigned to the dictionary
-   edge. If the two-object graph is closed, require ASCII/Binary output and
-   fresh typed readback of the NOD edge, dictionary entry and empty XRECORD;
-   late graph mutation must preserve the destination and the same adapter must
-   retry after restoration. Keep strict whole-source output and support claims
-   unchanged. The inventory selector prints DICTIONARY/XRECORD contents, NOD
-   key/target counts and GROUP callback count for reproducibility.
+1. **P4 / AC1021 `ACAD_CIP_PREVIOUS_PRODUCT_INFO` XRECORD:** screen the direct
+   NOD target handle `534` (owner NOD `0xC`); inventory reports three ordered
+   values and one reactor. Verify its exact typed/raw body, common-link and EED
+   state, unique source-frame eligibility, NOD edge output role and any APPID
+   dependency before selecting it. If closed, require ASCII/Binary output and
+   fresh readback of the NOD edge and every XRECORD value/role; late record or
+   dependency mutation must preserve the destination and the same adapter must
+   retry after source restoration. Keep strict whole-source output and support
+   claims unchanged. The inventory selector prints DICTIONARY/XRECORD contents,
+   NOD key/target counts and GROUP callback count for reproducibility.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
@@ -165,8 +162,8 @@ the distinct DBCOLOR source/output evidence gate. The 1,673 observed frames have
 zero entity/object parse failures, and no DXF is created. The 186 observer frames
 are 74 opaque carriers plus 112 standard-object frames; all 112 standard payloads
 match typed callbacks. Bounded selected-graph routes now qualify all 74 opaque
-carriers and 86 standard-object frames, with physical ASCII/Binary readback and
-applicable atomic refusal/retry. The remaining 26 standard-object frames are
+carriers and 88 standard-object frames, with physical ASCII/Binary readback and
+applicable atomic refusal/retry. The remaining 24 standard-object frames are
 unqualified. The same-version whole-source
 recheck still stops at independent DBCOLOR and other document-wide gates. See
 the [same-version gate
@@ -275,6 +272,23 @@ the source permits same-adapter retry. This is selected output from one
 unauthenticated source; it leaves 26 of 112 standard-object frames unqualified
 and does not close the sibling NOD graph, whole-source output or producer/native
 semantics ([receipt](docs/research/p4-ac1021-aec-property-set-defs-physical-selected-output-2026-11-06.json),
+[updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
+
+The AC1021 `ASE_INDEX_DICTIONARY` root at `0x3B3C8` and its single
+`ASEBlockHierarchyIndexRecord` child XRECORD at `0x3B3C9` now pass selected
+ASCII/Binary output and fresh readback. The physical DICTIONARY frame spans 95
+bytes at offset 8,539; the XRECORD frame spans 18 bytes at offset 1,996,083.
+The dictionary and child each have the reciprocal owner/reactor links expected
+by the imported graph, and the XRECORD body is empty with a validated AC1021
+common-link tail. The dictionary EED carries APPID `DCO15` (source APPID handle
+`0x4C4`) and one code-1040 value; the test verifies the APPID row and exact
+source-to-DXF EED value preservation. The output dictionary child edge is
+soft-owner. Late mutation of the dictionary and child reactors refuses
+atomically, preserves the destination, and the same adapter retries after
+restoration. This is one selected source profile and does not independently
+prove the DWG dictionary edge's wire role, ASE semantics, whole-source output,
+or producer/native support; 24 of 112 standard-object frames remain unqualified
+([receipt](docs/research/p4-ac1021-ase-index-dictionary-physical-selected-output-2026-11-06.json),
 [updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
 
 **Open strict-output defect:** a CRC-resealed AC1027 source with layer 0's

@@ -62,9 +62,9 @@
       },
       "typedPayloadMatches": 112,
       "opaquePayloadMatches": 0,
-      "outputQualified": 86
+      "outputQualified": 88
     },
-    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify all 74 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, one CELLSTYLEMAP, one RASTERVARIABLES, and one SORTENTSTABLE. They qualify 86 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining 26 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify all 74 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, one CELLSTYLEMAP, one RASTERVARIABLES, and one SORTENTSTABLE. They qualify 88 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining 24 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -109,6 +109,14 @@
     "result": "PASS for bounded physical AC1021 ASCII/Binary output and fresh typed readback through the regular source-backed DICTIONARY route. The unique NOD key, soft-owner output role, target identity/type, empty membership, NOD owner/reactor, generated-root and standard-frame proofs, late-mutation refusal, destination preservation and same-adapter retry are checked.",
     "limit": "Selected output from one unauthenticated local source under AllowPartial. Other NOD entries, strict whole-source output, native AEC semantics and producer-wide support remain unqualified."
   },
+  "aseIndexDictionaryCandidateBoundary": {
+    "record": "DICTIONARY + XRECORD",
+    "handles": ["0x3B3C8", "0x3B3C9"],
+    "root": "NOD/ASE_INDEX_DICTIONARY",
+    "receipt": "docs/research/p4-ac1021-ase-index-dictionary-physical-selected-output-2026-11-06.json",
+    "result": "PASS for the selected two-record physical AC1021 ASCII/Binary output and fresh typed readback. The unique NOD edge, one-entry dictionary, empty XRECORD, reciprocal owner/reactor links, both physical source-frame proofs, DCO15 APPID-backed EED, exact code-1040 value preservation, late mutation refusal, destination preservation and same-adapter retry are checked.",
+    "limit": "One unauthenticated local source under AllowPartial. The output test does not establish the original DWG dictionary edge wire role or ASE semantics; other NOD entries, strict whole-source output, native behavior and producer-wide coverage remain unqualified."
+  },
   "scaleCandidateBoundary": {
     "record": "SCALE",
     "observedCount": 17,
@@ -127,12 +135,12 @@
   },
   "diagnostic": {
     "testSource": "tests/dwg2dxf_adapter_tests.cpp",
-    "testSourceSha256": "43deb3635ce3fbc4aa3b5aaa6bba24af2a0e6e9c44f41cd8427edbfd89122a16",
+    "testSourceSha256": "376a216d6a4c5052b49d8e4555df463e6ee7284e107a850b08986d9ac2b6a461",
     "executable": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests",
-    "executableSha256": "40243b242db28f5389fb86aaf92943d8513aea6fe6be89bc587bbdfc68e00378",
+    "executableSha256": "741deeb5b2fe22dfa4c5059d739183b43467a184effe2675ba633624ad8b1f49",
     "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/children-room-decoration.dwg",
     "result": "PASS; prints per-handle source type, class and carrier records for all 74 opaque carrier records and all 112 standard-object source frames, including DICTIONARY/XRECORD payloads, ordered key/target edges, NOD root keys and target handles, and GROUP callback count.",
-    "logPath": "/private/tmp/p4-ac1021-opaque-inventory-post-aec-property-set-defs-2026-11-06.log",
+    "logPath": "/private/tmp/p4-ac1021-opaque-inventory-post-ase-index-2026-11-06.log",
     "logSha256": "26568efae6219f75419ee2f31bcea322f9245e33631a8a3eb59debf38d4f8499"
   },
   "limits": [
@@ -140,7 +148,7 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Screen the AC1021 ASE_INDEX_DICTIONARY at handle 242632 together with its ASEBlockHierarchyIndexRecord XRECORD target 242633; first confirm source-frame eligibility and complete child payload/link roles before attempting the two-record selected graph. Continue qualifying the 26 remaining standard-object frames; keep whole-source output, native semantics, producer-wide coverage, populated GROUP and image graphs, and named-block SORTENTSTABLE profiles open.",
+  "nextAction": "Screen ACAD_CIP_PREVIOUS_PRODUCT_INFO XRECORD handle 534 for complete payload, common-link/EED roles, unique NOD membership and APPID dependencies before selecting the next standard-object output slice. Continue qualifying the 24 remaining standard-object frames; keep whole-source output, native semantics, producer-wide coverage, populated GROUP and image graphs, and named-block SORTENTSTABLE profiles open.",
   "sortEntsCandidateBoundary": {
     "record": "SORTENTSTABLE",
     "handle": "0x2DF",

@@ -54249,11 +54249,14 @@ bool physicalAc1021EmptyGroupDictionaryOutputReadback(
     return true;
 }
 
-bool physicalAc1021EmptyNodDictionaryOutputReadback(
+bool physicalAc1021NodDictionaryGraphOutputReadback(
         const std::filesystem::path& sourcePath,
         const std::string& rootName,
         std::uint32_t expectedHandle,
-        bool imageGeneratedRoot) {
+        bool imageGeneratedRoot,
+        const std::string& childName = {},
+        std::uint32_t expectedChildHandle = 0u,
+        const std::string& expectedEedAppId = {}) {
     const auto uniqueDictionary = [](const dx_data& data,
                                      std::uint32_t handle) {
         const DRW_Dictionary* result = nullptr;
@@ -54263,6 +54266,38 @@ bool physicalAc1021EmptyNodDictionaryOutputReadback(
             result = &dictionary;
         }
         return result;
+    };
+    const auto uniqueXRecord = [](const dx_data& data,
+                                  std::uint32_t handle) {
+        const DRW_XRecord* result = nullptr;
+        for (const DRW_XRecord& record : data.xRecords) {
+            if (record.handle != handle) continue;
+            if (result != nullptr) return static_cast<const DRW_XRecord*>(nullptr);
+            result = &record;
+        }
+        return result;
+    };
+    const auto uniqueAppId = [](const dx_data& data,
+                                const std::string& name) {
+        const DRW_AppId* result = nullptr;
+        for (const DRW_AppId& appId : data.appIds) {
+            if (appId.name != name) continue;
+            if (result != nullptr) return static_cast<const DRW_AppId*>(nullptr);
+            result = &appId;
+        }
+        return result;
+    };
+    const auto validExpectedEed = [&expectedEedAppId](const DRW_Dictionary& dictionary) {
+        if (expectedEedAppId.empty()) return dictionary.extData.empty();
+        return dictionary.extData.size() == 2u
+            && dictionary.extData[0] != nullptr
+            && dictionary.extData[0]->code() == 1001
+            && dictionary.extData[0]->type() == DRW_Variant::STRING
+            && std::string(dictionary.extData[0]->c_str()) == expectedEedAppId
+            && dictionary.extData[1] != nullptr
+            && dictionary.extData[1]->code() == 1040
+            && dictionary.extData[1]->type() == DRW_Variant::DOUBLE
+            && std::isfinite(dictionary.extData[1]->d_val());
     };
     for (const bool binary : {false, true}) {
         dx_iface sourceReader;
@@ -54284,6 +54319,18 @@ bool physicalAc1021EmptyNodDictionaryOutputReadback(
             ? 0u : root->m_handle;
         const DRW_Dictionary* imageDictionary =
             uniqueDictionary(source, dictionaryHandle);
+        const DRW_Dictionary::Entry* childEntry = nullptr;
+        if (imageDictionary != nullptr && !childName.empty()) {
+            for (const DRW_Dictionary::Entry& entry : imageDictionary->m_entries) {
+                if (entry.m_name != childName) continue;
+                if (childEntry != nullptr) return fail("duplicate AC1021 child dictionary key");
+                childEntry = &entry;
+            }
+        }
+        const DRW_XRecord* childRecord = expectedChildHandle == 0u
+            ? nullptr : uniqueXRecord(source, expectedChildHandle);
+        const DRW_AppId* sourceEedAppId = expectedEedAppId.empty()
+            ? nullptr : uniqueAppId(source, expectedEedAppId);
         const DRW_UnsupportedObject* sourceFrame =
             DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
                 source, source.importGeneration, dictionaryHandle);
@@ -54304,12 +54351,35 @@ bool physicalAc1021EmptyNodDictionaryOutputReadback(
             || imageDictionary->cloning != 1
             || imageDictionary->countCap
             || !imageDictionary->hasCompleteDwgEntries()
-            || !imageDictionary->m_entries.empty()
             || imageDictionary->xDictHandle != 0u
             || !imageDictionary->appData.empty()
-            || !imageDictionary->extData.empty()
+            || !validExpectedEed(*imageDictionary)
+            || (!expectedEedAppId.empty()
+                && (sourceEedAppId == nullptr || sourceEedAppId->handle == 0u
+                    || sourceEedAppId->handle == DRW::NoHandle))
             || imageDictionary->hasDataStorageBinaryData()
             || imageDictionary->hasDwgCommonLinkTail()
+            || (childName.empty()
+                ? (!imageDictionary->m_entries.empty() || expectedChildHandle != 0u)
+                : (imageDictionary->m_entries.size() != 1u
+                    || childEntry == nullptr
+                    || childEntry->m_handle != expectedChildHandle
+                    || childEntry->m_dxfHandleCode
+                        != DRW_Dictionary::Entry::DxfHandleCode::Unspecified
+                    || childRecord == nullptr
+                    || childRecord->handle != expectedChildHandle
+                    || childRecord->parentHandle != dictionaryHandle
+                    || childRecord->reactorHandles
+                        != std::vector<std::uint32_t>{dictionaryHandle}
+                    || !childRecord->m_values.empty()
+                    || !childRecord->m_handleValues.empty()
+                    || !childRecord->m_dataEntries.empty()
+                    || childRecord->m_rawDataValid
+                    || childRecord->xDictHandle != 0u
+                    || !childRecord->appData.empty()
+                    || !childRecord->extData.empty()
+                    || childRecord->hasDataStorageBinaryData()
+                    || !childRecord->hasDwgCommonLinkTail()))
             || imageDictionary->reactorHandles
                 != std::vector<std::uint32_t>{
                     source.namedObjectDictionary.handle}
@@ -54322,9 +54392,25 @@ bool physicalAc1021EmptyNodDictionaryOutputReadback(
             || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
                 source, dictionaryHandle))
             return fail("AC1021 " + rootName + " source frame/owner/reactor profile changed");
+        const DRW_UnsupportedObject* childSourceFrame = nullptr;
+        if (expectedChildHandle != 0u) {
+            childSourceFrame =
+                DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+                    source, source.importGeneration, expectedChildHandle);
+            if (childSourceFrame == nullptr || childSourceFrame->m_objectType != 79u
+                || childSourceFrame->m_handle != expectedChildHandle
+                || childSourceFrame->m_version != DRW::AC1021
+                || childSourceFrame->m_isEntity || childSourceFrame->m_hasDataStorage
+                || childSourceFrame->m_rawBytes.empty()
+                || childSourceFrame->m_objectSize == 0u
+                || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                    source, expectedChildHandle))
+                return fail("AC1021 " + rootName + " child XRECORD source frame changed");
+        }
 
         struct Writer final : dx_iface {
             std::uint32_t targetHandle{0u};
+            std::uint32_t targetChildHandle{0u};
             bool mutateAfterObjects{false};
             void writeObjects() override {
                 dx_iface::writeObjects();
@@ -54332,13 +54418,16 @@ bool physicalAc1021EmptyNodDictionaryOutputReadback(
                 for (DRW_Dictionary& dictionary : cData->dictionaries) {
                     if (dictionary.handle == targetHandle) {
                         dictionary.reactorHandles.clear();
-                        return;
                     }
                 }
+                for (DRW_XRecord& record : cData->xRecords)
+                    if (record.handle == targetChildHandle)
+                        record.reactorHandles.clear();
             }
         } writer;
         writer.cData = &source;
         writer.targetHandle = dictionaryHandle;
+        writer.targetChildHandle = expectedChildHandle;
         const auto nonce = std::chrono::steady_clock::now()
                                .time_since_epoch().count();
         const std::filesystem::path outputPath =
@@ -54386,11 +54475,23 @@ bool physicalAc1021EmptyNodDictionaryOutputReadback(
             return fail("late AC1021 NOD dictionary mutation did not run");
         mutableImageDictionary->reactorHandles = {
             source.namedObjectDictionary.handle};
+        DRW_XRecord* mutableChildRecord = nullptr;
+        for (DRW_XRecord& record : source.xRecords)
+            if (record.handle == expectedChildHandle) mutableChildRecord = &record;
+        if (expectedChildHandle != 0u
+            && (mutableChildRecord == nullptr
+                || !mutableChildRecord->reactorHandles.empty()))
+            return fail("late AC1021 child XRECORD mutation did not run");
+        if (mutableChildRecord != nullptr)
+            mutableChildRecord->reactorHandles = {dictionaryHandle};
         writer.mutateAfterObjects = false;
         if (!write())
             return fail("corrected AC1021 NOD dictionary source did not retry on the same adapter");
         if (!DxIfaceStandardDwgCaptureTestAccess::standardOutputHas(
                 writer, dictionaryHandle)
+            || (expectedChildHandle != 0u
+                && !DxIfaceStandardDwgCaptureTestAccess::standardOutputHas(
+                    writer, expectedChildHandle))
             || !DxIfaceStandardDwgCaptureTestAccess::generatedRootsFinal(
                 writer, 2u, true)
             || (imageGeneratedRoot
@@ -54415,6 +54516,30 @@ bool physicalAc1021EmptyNodDictionaryOutputReadback(
         const DRW_Dictionary* outputImageDictionary = outputRoot
                 == output.namedObjectDictionary.m_entries.end()
             ? nullptr : uniqueDictionary(output, outputRoot->m_handle);
+        const DRW_Dictionary::Entry* outputChildEntry = nullptr;
+        if (outputImageDictionary != nullptr && !childName.empty()) {
+            for (const DRW_Dictionary::Entry& entry : outputImageDictionary->m_entries) {
+                if (entry.m_name != childName) continue;
+                if (outputChildEntry != nullptr)
+                    return fail("duplicate AC1021 output child dictionary key");
+                outputChildEntry = &entry;
+            }
+        }
+        const DRW_XRecord* outputChildRecord = expectedChildHandle == 0u
+            ? nullptr : (outputChildEntry == nullptr
+                ? nullptr : uniqueXRecord(output, outputChildEntry->m_handle));
+        const DRW_AppId* outputEedAppId = expectedEedAppId.empty()
+            ? nullptr : uniqueAppId(output, expectedEedAppId);
+        const bool outputEedMatches = expectedEedAppId.empty()
+            ? (outputImageDictionary != nullptr
+                && outputImageDictionary->extData.empty())
+            : (outputImageDictionary != nullptr
+                && validExpectedEed(*outputImageDictionary)
+                && outputEedAppId != nullptr
+                && outputEedAppId->handle != 0u
+                && outputEedAppId->handle != DRW::NoHandle
+                && outputImageDictionary->extData[1]->d_val()
+                    == imageDictionary->extData[1]->d_val());
         if (std::count_if(
                 output.namedObjectDictionary.m_entries.begin(),
                 output.namedObjectDictionary.m_entries.end(),
@@ -54433,7 +54558,20 @@ bool physicalAc1021EmptyNodDictionaryOutputReadback(
             || outputImageDictionary->cloning != 1
             || outputImageDictionary->countCap
             || !outputImageDictionary->hasCompleteDwgEntries()
-            || !outputImageDictionary->m_entries.empty()
+            || !outputEedMatches
+            || (childName.empty()
+                ? !outputImageDictionary->m_entries.empty()
+                : (outputImageDictionary->m_entries.size() != 1u
+                    || outputChildEntry == nullptr
+                    || outputChildEntry->m_handle == outputImageDictionary->handle
+                    || outputChildEntry->m_dxfHandleCode
+                        != DRW_Dictionary::Entry::DxfHandleCode::SoftOwner
+                    || outputChildRecord == nullptr
+                    || outputChildRecord->parentHandle != outputImageDictionary->handle
+                    || outputChildRecord->m_values.size() != 0u
+                    || outputChildRecord->m_dataEntries.size() != 0u
+                    || outputChildRecord->reactorHandles
+                        != std::vector<std::uint32_t>{outputImageDictionary->handle}))
             || outputImageDictionary->reactorHandles
                 != std::vector<std::uint32_t>{
                     output.namedObjectDictionary.handle})
@@ -54442,8 +54580,20 @@ bool physicalAc1021EmptyNodDictionaryOutputReadback(
                   << std::hex << dictionaryHandle << std::dec
                   << " offset=" << sourceFrame->m_objectOffset
                   << " size=" << sourceFrame->m_objectSize
-                  << " body-bytes=" << sourceFrame->m_rawBytes.size() << ".\n"
-                  << "Physical AC1021 " << rootName << " empty-root "
+                  << " body-bytes=" << sourceFrame->m_rawBytes.size() << ".\n";
+        if (childSourceFrame != nullptr)
+            std::cout << "AC1021 " << rootName << " child source frame handle=0x"
+                      << std::hex << expectedChildHandle << std::dec
+                      << " offset=" << childSourceFrame->m_objectOffset
+                      << " size=" << childSourceFrame->m_objectSize
+                      << " body-bytes=" << childSourceFrame->m_rawBytes.size() << ".\n";
+        if (!expectedEedAppId.empty())
+            std::cout << "AC1021 " << rootName << " EED APPID=" << expectedEedAppId
+                      << " APPID-handle=" << sourceEedAppId->handle
+                      << " EED-groups=" << imageDictionary->extData.size()
+                      << " EED-value=" << imageDictionary->extData[1]->d_val() << ".\n";
+        std::cout << "Physical AC1021 " << rootName
+                  << (childName.empty() ? " empty-root " : " child-graph ")
                   << (binary ? "Binary" : "ASCII")
                   << " output/readback passed through the "
                   << (imageGeneratedRoot ? "image-generated-root" : "regular source-backed dictionary")
@@ -79862,12 +80012,17 @@ int main(int argc, char** argv) {
         return physicalAc1021EmptyGroupDictionaryOutputReadback(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--image-dict-empty-ac1021-output-readback")
-        return physicalAc1021EmptyNodDictionaryOutputReadback(
+        return physicalAc1021NodDictionaryGraphOutputReadback(
             argv[2], "ACAD_IMAGE_DICT", 0x2D1u, true) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--aec-property-set-defs-empty-ac1021-output-readback")
-        return physicalAc1021EmptyNodDictionaryOutputReadback(
+        return physicalAc1021NodDictionaryGraphOutputReadback(
             argv[2], "AEC_PROPERTY_SET_DEFS", 0x745u, false) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--ase-index-dictionary-ac1021-output-readback")
+        return physicalAc1021NodDictionaryGraphOutputReadback(
+            argv[2], "ASE_INDEX_DICTIONARY", 242632u, false,
+            "ASEBlockHierarchyIndexRecord", 242633u, "DCO15") ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--layerstates-xrecord-physical-source-admission")
         return physicalLayerStateXrecordSourceAdmission(argv[2]) ? 0 : 1;
