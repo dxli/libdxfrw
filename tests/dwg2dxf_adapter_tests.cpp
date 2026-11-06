@@ -50901,6 +50901,30 @@ bool physicalViewportOutputReadback(
         }
         return found;
     };
+    const auto uniqueScaleByHandle = [](const dx_data& data,
+                                        std::uint32_t handle) {
+        const DRW_Scale* found = nullptr;
+        for (const DRW_Scale& scale : data.scales) {
+            if (scale.handle != handle)
+                continue;
+            if (found != nullptr)
+                return static_cast<const DRW_Scale*>(nullptr);
+            found = &scale;
+        }
+        return found;
+    };
+    const auto uniqueScaleByName = [](const dx_data& data,
+                                      const std::string& name) {
+        const DRW_Scale* found = nullptr;
+        for (const DRW_Scale& scale : data.scales) {
+            if (scale.name != name)
+                continue;
+            if (found != nullptr)
+                return static_cast<const DRW_Scale*>(nullptr);
+            found = &scale;
+        }
+        return found;
+    };
     const auto uniqueLayoutForViewport = [](const dx_data& data,
                                             std::uint32_t handle) {
         const DRW_Layout* found = nullptr;
@@ -51001,6 +51025,11 @@ bool physicalViewportOutputReadback(
                 || xrecord->m_dataEntries.empty()
                 || xrecord->m_rawDataValid)
                 return fail("AC1021 VIEWPORT XRECORD source role or payload is unavailable");
+            if (!DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                    source, expectedDictionary)
+                || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                    source, expectedXrecord))
+                return fail("AC1021 VIEWPORT extension graph is missing standard source-frame eligibility");
             if (styleMatches != 1u || layerMatches != 1u)
                 return fail("AC1021 VIEWPORT layer or visual-style dependency is missing/ambiguous");
         }
@@ -51074,6 +51103,17 @@ bool physicalViewportOutputReadback(
             return fail("refused physical VIEWPORT export changed published callback qualifications");
         if (!exportSelected())
             return fail("corrected physical VIEWPORT source could not retry on the same adapter");
+        if (ac1021Source) {
+            for (const std::uint32_t handle :
+                    {0x267u, 0x268u, 0x26Bu, 0x26Cu}) {
+                if (!DxIfaceStandardDwgCaptureTestAccess::standardDwgOutputQualified(
+                        writer, source.importGeneration, handle)) {
+                    return fail("physical AC1021 VIEWPORT extension DICTIONARY/XRECORD frame "
+                        + std::to_string(handle)
+                        + " lacks finalized standard output proof");
+                }
+            }
+        }
         for (const auto& callback : expectedOpaqueCallbacks) {
             if (!DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
                     source, source.importGeneration, callback.first))
@@ -51221,6 +51261,30 @@ bool physicalViewportOutputReadback(
                         || !sameVariants(sourceChild->m_dataEntries,
                                          outputChild->m_dataEntries))
                         return fail("physical VIEWPORT extension dictionary key or XRECORD owner edge changed on output/readback");
+                    if (ac1021Source && sourceChild->m_handleValues.size() == 1u
+                        && sourceChild->m_handleValues.front().first == 340) {
+                        const std::uint32_t sourceScaleHandle =
+                            sourceChild->m_handleValues.front().second;
+                        const DRW_Scale* sourceScale = uniqueScaleByHandle(
+                            source, sourceScaleHandle);
+                        const DRW_Scale* outputScale = sourceScale == nullptr
+                            ? nullptr : uniqueScaleByName(
+                                  output, sourceScale->name);
+                        if (sourceScale == nullptr || outputScale == nullptr
+                            || sourceScale->parentHandle == 0u
+                            || sourceScale->parentHandle == DRW::NoHandle
+                            || outputScale->parentHandle == 0u
+                            || outputScale->parentHandle == DRW::NoHandle
+                            || outputChild->m_handleValues.size() != 1u
+                            || outputChild->m_handleValues.front().first != 340
+                            || outputChild->m_handleValues.front().second
+                                != outputScale->handle
+                            || outputScale->name != sourceScale->name
+                            || outputScale->paperUnits != sourceScale->paperUnits
+                            || outputScale->drawingUnits
+                                != sourceScale->drawingUnits)
+                            return fail("AC1021 VIEWPORT annotation XRECORD group-340 target did not resolve to its remapped SCALE record");
+                    }
                 }
             }
             matchedOutput[match] = true;

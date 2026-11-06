@@ -43476,6 +43476,27 @@ bool dx_iface::inspectStandardDwgOutput(const dxfRW::DxfObjectsWriteView& view) 
             if (bindings == 1u && output != 0u)
                 return true;
 
+            // A validated DWG SCALE snapshot is emitted as a custom OBJECTS
+            // record; its identity is not always present in the generic table
+            // aliases. Reuse that completed SCALE source/output proof when
+            // translating a typed XRECORD handle value.
+            const auto scale = m_dwgScaleOutputSources.find(source);
+            if (scale != m_dwgScaleOutputSources.end()
+                && m_dwgScalesInspected && hasUnchangedDwgScales()) {
+                const std::uint32_t emitted = dxfW->remapHandle(source);
+                const std::uint32_t emittedOwner = dxfW->remapHandle(
+                    scale->second.model.parentHandle);
+                if (emitted != 0u && emitted != DRW::NoHandle
+                    && emittedOwner != 0u && emittedOwner != DRW::NoHandle
+                    && dxfW->dxfWriteRecordHandleCount(emitted) == 1u
+                    && dxfW->dxfWriteRecordHasIdentity(
+                        emitted, "SCALE", "OBJECTS")
+                    && dxfW->dxfWriteRecordHasOwner(emitted, emittedOwner)) {
+                    output = emitted;
+                    return true;
+                }
+            }
+
             // The bounded DWG TABLESTYLE writer deliberately does not publish
             // a generic source-object binding. It can still own a source
             // DICTIONARY. Admit that dependency only after the TABLESTYLE

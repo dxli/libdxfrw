@@ -61,8 +61,8 @@ created locally from scratch for the specific control.
 ### Next implementation-ready slices
 
 1. **P4 / AC1021 remaining standard-object frames:** the latest source
-   inventory has 112 standard-object frames; 104 now have bounded selected
-   ASCII/Binary output qualification, leaving 8. Reconcile those eight source
+   inventory has 112 standard-object frames; 106 now have bounded selected
+   ASCII/Binary output qualification, leaving 6. Reconcile those six source
    identities against every completed selector's standard-frame output-proof
    ledger before starting another projection. In particular, empty DICTIONARY
    `0x13C` (source owner `0x10`, zero entries/reactors) is already retained as
@@ -75,7 +75,7 @@ created locally from scratch for the specific control.
    [updated receipt](docs/research/p4-ac1021-recompose-data-physical-selected-output-2026-11-06.json)
    and [inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json).
    Choose the next candidate only from an identity-level reconciliation of the
-   eight remaining source frames, then prove source membership/roles, selected
+   six remaining source frames, then prove source membership/roles, selected
    output and fresh readback, invalid-graph refusal, destination preservation
    and same-adapter retry. The source inventory line alone does not establish
    candidate qualification or the owner's typed family.
@@ -188,7 +188,7 @@ the distinct DBCOLOR source/output evidence gate. The 1,673 observed frames have
 zero entity/object parse failures, and no DXF is created. The 186 observer frames
 are 74 opaque carriers plus 112 standard-object frames; all 112 standard payloads
 match typed callbacks. Bounded selected-graph routes now qualify all 74 opaque
-carriers and 104 standard-object frames, with physical ASCII/Binary readback and
+carriers and 106 standard-object frames, with physical ASCII/Binary readback and
 applicable atomic refusal/retry. The physical AC1021 direct-NOD
 `ACDB_RECOMPOSE_DATA` XRECORD now qualifies its source frame (handle `0x3C3F8`,
 offset 7794, size 34), scalar group 90, ordered group-330 handle to
@@ -234,7 +234,14 @@ The Recompose Data selector now also explicitly finalizes output proof for
 empty layer extension DICTIONARY `0x13C`, uniquely owned by typed LAYER `0x10`,
 and verifies the remapped owner and empty body on fresh ASCII/Binary readback.
 This closes one standard-object frame and updates the inventory to 104/112;
-eight remain unqualified. The same-version whole-source
+eight remain unqualified. The two AC1021 VIEWPORT annotation-scale XRECORDs
+`0x268` and `0x26C` now receive finalized standard-frame output proof after
+their group-340 references are mapped through the unchanged, inspected SCALE
+snapshot; fresh ASCII/Binary readback resolves each reference to the matching
+SCALE record. The existing AC1024 VIEWPORT compatibility witness still passes
+([receipt](docs/research/p4-ac1021-viewport-physical-selected-output-2026-11-06.json)).
+This adds two standard frames, bringing the inventory to 106/112; six remain
+unqualified. The same-version whole-source
 recheck still stops at independent DBCOLOR and other document-wide gates. See
 the [same-version gate
 recheck](docs/research/p4-ac1021-children-room-same-version-output-gate-2026-11-05.json),

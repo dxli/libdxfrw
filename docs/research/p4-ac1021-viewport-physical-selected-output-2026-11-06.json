@@ -29,13 +29,21 @@
   "validation": {
     "buildCommand": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4",
     "selectorCommand": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --viewport-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg",
-    "result": "PASS, exit 0. ASCII and Binary selected output each freshly reimport; exact typed viewport fields, layout list, derived groups 68/69, output ownership, layer/style references, dictionary/XRECORD key and owner edges, ordered typed XRECORD values, invalid-field refusal with destination preservation, and same-adapter retry are checked.",
+    "result": "PASS, exit 0 for AC1021 and the existing AC1024 compatibility witness. ASCII and Binary selected output each freshly reimport; exact typed viewport fields, layout list, derived groups 68/69, output ownership, layer/style references, dictionary/XRECORD key and owner edges, ordered typed XRECORD values, invalid-field refusal with destination preservation, and same-adapter retry are checked. For AC1021, DICTIONARY frames 0x267/0x26B and XRECORD frames 0x268/0x26C are source-eligible and receive finalized standard-object output proof. The XRECORD group-340 targets are matched through the independently inspected, unchanged SCALE source/output snapshot, and readback resolves each remapped target to the matching SCALE record.",
     "aggregateObservation": "174/186 opaque source callback identities were marked output-qualified after the selected export. This is aggregate transport accounting and does not establish semantic support or whole-document conversion.",
-    "testSourceSha256": "aeb57b27c598af3f448395bf32554b3c20d2929040061b500fc05585faf6d052",
-    "executableSha256": "207130b4f4564698f5619bdee6879b9e3e63311bb1daa90b940b955aaef66ce2"
+    "selectorLogPath": "/tmp/p4-viewport-proof-selector.log",
+    "selectorLogSha256": "483efafa111238346971e735446ba752f204db97fb3e6d85a9c3885940fd5f57",
+    "ac1024CompatibilityCommand": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --viewport-physical-output-readback /Users/dli/doc/dwg/mechanical_example-imperial.dwg",
+    "ac1024CompatibilityResult": "PASS for ASCII and Binary selected output/readback; 228/228 source callbacks qualify, atomic refusal preserves the destination, and same-adapter retry succeeds.",
+    "ac1024CompatibilitySourceSha256": "854c8ebed8726add72ba4a9a2a19ba0d010372f5cadefb40e648cdf881cad858",
+    "ac1024CompatibilityLogPath": "/tmp/p4-ac1024-viewport-compatibility-2026-11-06.log",
+    "ac1024CompatibilityLogSha256": "51388f68b6e8430bf8dfe2a4eefec3e4cf080775c9bdd3c78d56582e02428a37",
+    "testSourceSha256": "45352d836f9b79cc539705f1712b5ff9d3b8f5cc5b5a9cff82de88f4d6d2dbc9",
+    "implementationSourceSha256": "14f44ea57466e5f24b3cc482381e24058fe1ac4d83ca9fbde6cea6acdb12ad24",
+    "executableSha256": "e00576071a165eb459ab840a5f9977dcce77d7c504767ba8cdba96832989443e"
   },
   "implementation": {
-    "summary": "Admitted the exact AC1021 source census and source-bound XRECORD graph in the physical VIEWPORT selected-output route; constrained the source layout/entity-container and dependency profile; checked ordered XRECORD payload equality after readback.",
+    "summary": "Admitted the exact AC1021 source census and source-bound XRECORD graph in the physical VIEWPORT selected-output route; constrained the source layout/entity-container and dependency profile; reused finalized SCALE identity/owner evidence to map XRECORD group-340 targets; checked four standard-frame output proofs and remapped SCALE targets on readback.",
     "files": ["dwg2dxf/dx_iface.cpp", "tests/dwg2dxf_adapter_tests.cpp"]
   },
   "limits": [
