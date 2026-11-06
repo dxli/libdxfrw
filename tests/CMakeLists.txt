@@ -2698,6 +2698,14 @@ set_tests_properties(dwg2dxf_dbcolor_external_evidence_gate PROPERTIES
     LABELS "fast;dwg;dxf;color;adapter;generated;transaction"
     TIMEOUT 60
 )
+add_test(
+    NAME dwg2dxf_default_plotstyle_layer_graph
+    COMMAND libdxfrw_dwg2dxf_adapter_tests --dxf-default-plotstyle-layers
+)
+set_tests_properties(dwg2dxf_default_plotstyle_layer_graph PROPERTIES
+    LABELS "fast;dxf;plotstyle;adapter;generated;graph"
+    TIMEOUT 30
+)
 
 add_test(
     NAME dwg2dxf_rastervariables_dwg_adapter_transport

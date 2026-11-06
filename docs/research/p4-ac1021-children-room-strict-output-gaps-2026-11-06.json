@@ -55,23 +55,36 @@
     },
     "subsequentReexportProbe": {
       "command": "build-gcc/dwg2dxf/dwg2dxf /private/tmp/libdxfrw-children-room-viewstyle-strict.dxf -y -v2007 /private/tmp/libdxfrw-children-room-viewstyle-roundtrip.dxf",
-      "result": "Initial DXF source import completed; re-export failed closed at IMAGEDEF extension/reactor roots on NOD handle 0xC during reactor target lookup. No output was published.",
-      "disposition": "This was the first observed re-export blocker; a bounded uncommitted condition now admits this exact rooted AC1021 IMAGE dictionary NOD reactor for DXF-origin input, subject to the existing root and target checks.",
+      "result": "PASS: the full strict same-version DXF re-export completed, including OBJECTS staged inspection and finalization; a second fresh import/export of that output also completed. No native consumer or broader source claim follows.",
+      "disposition": "The prior IMAGEDEF, DBCOLOR, RASTERVARIABLES, four-layer default plot-style, and unnamed finalizer blockers are cleared for this exact local AC1021 DXF source profile. DXF-origin DBCOLOR raw carriers are now retained under bounded source/baseline accounting and replayed after typed graph validation. Broader source profiles remain open.",
       "latestRecheck": {
         "date": "2026-11-06",
-        "command": "build-gcc/dwg2dxf/dwg2dxf /private/tmp/libdxfrw-children-room-viewstyle-strict-final.dxf -y -v2007 /private/tmp/libdxfrw-children-room-viewstyle-plan-recheck.dxf",
-        "result": "After DXF-origin IMAGEDEF, DBCOLOR, and RASTERVARIABLES graph checks were added, re-export advanced through extension graph validation and failed closed at the strict LAYER plot-style source gate. The generated DXF has four LAYER records with default plot-style handle 0xF; the current capture gate only admits one AC1027 layer. Exit 1; no output was published.",
-        "codeState": "The bounded IMAGEDEF/DBCOLOR/RASTERVARIABLES source graph changes and focused DBCOLOR control are present in the worktree. Full-file DXF re-export remains incomplete at the LAYER plot-style gate.",
-        "sha256InputDxf": "cbb453feddbc65c78ee807e55489427f1a023cf3a15f3ee0b578089aba68c88c",
-        "focusedControl": {
-          "command": "ctest --test-dir build-gcc -R '^dwg2dxf_dbcolor_external_evidence_gate$' --output-on-failure",
-          "result": "PASS; generated AC1027 color graph was exported and read back in ASCII/Binary selected-output controls; DXF-origin ACAD_COLOR graph admission passed; wrong dictionary target was refused with destination sentinel preserved; graph admission recovered after restoring the target. The test's existing independent-evidence gate still refuses the locally authored DWG source.",
-          "durationSeconds": 0.07,
-          "supportClaimEffect": "none"
+        "sourceSha256": "cbb453feddbc65c78ee807d55489427f1a023cf3a15f3ee0b578089aba68c88c",
+        "strictReexport": {
+          "command": "build-gcc/dwg2dxf/dwg2dxf /private/tmp/libdxfrw-children-room-viewstyle-strict-final.dxf -y -d -v2007 /private/tmp/libdxfrw-children-room-viewstyle-final-current.dxf",
+          "exit": 0,
+          "outputSha256": "301769181dc8c8ee316254f8a13612b0c196be5b97abcf36028606d9796d669f"
         },
+        "freshSameVersionReadback": {
+          "command": "build-gcc/dwg2dxf/dwg2dxf /private/tmp/libdxfrw-children-room-viewstyle-final-current.dxf -y -d -v2007 /private/tmp/libdxfrw-children-room-viewstyle-readback-current.dxf",
+          "exit": 0,
+          "outputSha256": "490b6407a89adcd7d0ff3897e33e3c88900645793679608ddb8c8afcfb80d9c7"
+        },
+        "dbcolorRecord": {
+          "records": 1,
+          "groupCount": 62,
+          "payloadSha256AcrossSourceOutputReadback": "f8ae0de8917de80e9dc4f188ec8c631052f814eaeb6e06aebec01f4c5cfe613d",
+          "note": "Handle fields may be remapped; the full non-handle group order and values match, and the readback owner resolves through ACAD_COLOR."
+        },
+        "focusedTests": {
+          "command": "ctest --test-dir build-gcc -R '^(dwg2dxf_default_plotstyle_layer_graph|dwg2dxf_dbcolor_external_evidence_gate|dwg2dxf_dbcolor_eed_source_capture)$' --output-on-failure",
+          "result": "PASS, 3/3 tests; 0.67 seconds total.",
+          "coverage": "Generated locally authored AC1021 default-only plot-style plus DBCOLOR source graph; ASCII/Binary raw payload and typed readback, owner binding, destination-preserving raw mutation refusal, same-adapter retry. Existing DWG DBCOLOR gates also pass."
+        },
+        "fixturePolicy": "Generated DXF controls and full-file outputs remained in temporary storage. No test DWG/DXF fixture was added to the repository.",
         "supportClaimEffect": "none"
       },
-      "nextSlice": "Investigate the four-layer AC1021 DXF plot-style groups 390=0xF against their retained ACAD_PLOTSTYLENAME dictionary, DICTIONARYWDFLT default, and placeholder. Prove exact source graph and common fields before broadening the current one-layer gate; add staged output binding and readback coverage, then rerun full-file re-export."
+      "nextSlice": "Fast scan of the existing local DWG corpus for the next distinct, bounded mixed OBJECTS graph with independently checkable owner/reference roles; select the smallest complete source profile, then implement a locally authored regression control without committing source fixtures."
     },
     "selectedGraphEvidence": "The physical selected source selector passes ASCII/Binary output and fresh typed readback with rollback/retry; this is not full-file readback or native consumer evidence.",
     "supportClaimEffect": "none"

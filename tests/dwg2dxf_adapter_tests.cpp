@@ -99,6 +99,11 @@ public:
         return interface_.prepareExtensionObjectGraph(
             &data, includeNamedObjectRoot);
     }
+    static bool prepareDxfLayerPlot(dx_iface& interface_, dx_data& data,
+                                   DRW::Version version, bool strict) {
+        interface_.cData = &data;
+        return interface_.prepareDxfLayerPlot(version, strict);
+    }
 
     static const std::vector<std::uint32_t>& cellStyleMapHandles(
         const dx_iface& interface_) {
@@ -81525,6 +81530,223 @@ static bool dbColorExternalEvidenceGate() {
     return true;
 }
 
+static bool dxfLayerDefaultPlotStyleGraph() {
+    const auto fail = [](const char* detail) {
+        std::cerr << "DXF default plot-style layers: " << detail << '\n';
+        return false;
+    };
+    const auto nonce = std::to_string(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto source = std::filesystem::temp_directory_path()
+        / ("libdxfrw-default-plotstyle-layers-" + nonce + ".dxf");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove(path, ignored);
+        }
+    } cleanup{source};
+    std::string drawing =
+        "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n"
+        "0\nENDSEC\n0\nSECTION\n2\nTABLES\n"
+        "0\nTABLE\n2\nLAYER\n5\n2\n330\n0\n"
+        "100\nAcDbSymbolTable\n70\n4\n";
+    const char* names[] = {"0", "LayerA", "LayerB", "LayerC"};
+    const char* handles[] = {"10", "11", "12", "13"};
+    for (std::size_t index = 0u; index < 4u; ++index) {
+        drawing += "0\nLAYER\n5\n";
+        drawing += handles[index];
+        drawing += "\n330\n2\n100\nAcDbSymbolTableRecord\n"
+                   "100\nAcDbLayerTableRecord\n2\n";
+        drawing += names[index];
+        drawing += "\n70\n0\n62\n7\n6\nCONTINUOUS\n390\nF\n";
+    }
+    drawing +=
+        "0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nOBJECTS\n"
+        "0\nDICTIONARY\n5\nC\n330\n0\n100\nAcDbDictionary\n"
+        "280\n0\n281\n1\n3\nACAD_PLOTSTYLENAME\n350\nE\n"
+        "3\nACAD_COLOR\n350\n20\n"
+        "0\nACDBDICTIONARYWDFLT\n5\nE\n330\nC\n"
+        "100\nAcDbDictionary\n280\n0\n281\n1\n"
+        "3\nNormal\n350\nF\n100\nAcDbDictionaryWithDefault\n340\nF\n"
+        "0\nACDBPLACEHOLDER\n5\nF\n330\nE\n"
+        "0\nDICTIONARY\n5\n20\n330\nC\n100\nAcDbDictionary\n"
+        "280\n0\n281\n1\n3\nRAL CLASSIC$RAL 7047\n350\n50\n"
+        "0\nDBCOLOR\n5\n50\n102\n{ACAD_REACTORS\n330\n20\n102\n}\n"
+        "330\n20\n100\nAcDbColor\n420\n13619407\n"
+        "430\nRAL CLASSIC$RAL 7047\n1001\nACAD\n"
+        "1070\n254\n1071\n-1026567985\n"
+        "0\nENDSEC\n0\nEOF\n";
+    {
+        std::ofstream output(source, std::ios::binary);
+        if (!output || !(output << drawing))
+            return fail("could not write locally authored DXF control");
+    }
+    dx_data data;
+    dx_iface reader;
+    if (!reader.fileImport(source.string(), &data, false)
+        || data.sourceFormat != dx_source_format::DXF
+        || data.sourceVersion != DRW::AC1021 || data.layers.size() != 4u
+        || !data.hasNamedObjectDictionary
+        || data.dictionaryWithDefaults.size() != 1u
+        || data.rawDictionaryWithDefaults.size() != 1u
+        || data.rawPlaceholders.size() != 1u
+        || data.dxfDbColorObjects.size() != 1u
+        || data.dxfDbColorRawObjects.size() != 1u
+        || !data.hasUnchangedDxfDbColorRawObjects()
+        || std::any_of(data.layers.begin(), data.layers.end(),
+            [](const DRW_Layer& layer) {
+                return layer.handlePlotS != "F";
+            }))
+        return fail("could not import the exact four-layer default-only source graph");
+    dx_iface adapter;
+    if (!DxIfaceExtensionGraphTestAccess::prepareDxfLayerPlot(
+            adapter, data, DRW::AC1021, true))
+        return fail("exact default-only graph was refused");
+    const std::string original = data.layers.front().handlePlotS;
+    data.layers.front().handlePlotS = "10";
+    if (DxIfaceExtensionGraphTestAccess::prepareDxfLayerPlot(
+            adapter, data, DRW::AC1021, true))
+        return fail("a non-default per-layer plot-style reference bypassed the source gate");
+    data.layers.front().handlePlotS = original;
+    if (!DxIfaceExtensionGraphTestAccess::prepareDxfLayerPlot(
+            adapter, data, DRW::AC1021, true))
+        return fail("corrected default-only source did not recover");
+    const auto colorKey = dx_data::DwgDbColorKey{
+        data.importGeneration, 0x50u};
+    auto rawColor = data.dxfDbColorRawObjects.find(colorKey);
+    auto typedColor = data.dxfDbColorObjects.find(colorKey);
+    if (rawColor == data.dxfDbColorRawObjects.end()
+        || typedColor == data.dxfDbColorObjects.end()
+        || typedColor->second.bookName != "RAL CLASSIC"
+        || typedColor->second.name != "RAL 7047")
+        return fail("locally authored DBCOLOR typed/raw source pair was not retained");
+    const auto sourceRaw = rawColor->second;
+    const auto rawColorEqual = [](const DRW_RawDxfObject& left,
+                                  const DRW_RawDxfObject& right) {
+        if (left.name != right.name || left.handle != right.handle
+            || left.m_version != right.m_version
+            || left.groups.size() != right.groups.size())
+            return false;
+        for (std::size_t index = 0u; index < left.groups.size(); ++index) {
+            const DRW_Variant& a = left.groups[index];
+            const DRW_Variant& b = right.groups[index];
+            if (a.code() != b.code() || a.type() != b.type())
+                return false;
+            // The writer may remap the object's self, owner, and dictionary
+            // target handles. Their graph roles are checked independently.
+            if (a.code() == 5 || a.code() == 330 || a.code() == 350)
+                continue;
+            if (a.type() == DRW_Variant::STRING) {
+                if (a.c_str() == nullptr || b.c_str() == nullptr
+                    || std::string(a.c_str()) != b.c_str())
+                    return false;
+            } else if (a.type() == DRW_Variant::INTEGER) {
+                if (a.i_val() != b.i_val())
+                    return false;
+            } else if (a.type() == DRW_Variant::INTEGER64) {
+                if (a.i64_val() != b.i64_val())
+                    return false;
+            } else if (a.type() == DRW_Variant::DOUBLE) {
+                if (a.d_val() != b.d_val())
+                    return false;
+            } else {
+                return false;
+            }
+        }
+        return true;
+    };
+    const auto output = std::filesystem::temp_directory_path()
+        / ("libdxfrw-default-plotstyle-layers-output-" + nonce + ".dxf");
+    struct OutputCleanup {
+        std::filesystem::path path;
+        ~OutputCleanup() {
+            std::error_code ignored;
+            std::filesystem::remove(path, ignored);
+        }
+    } outputCleanup{output};
+    for (const bool binary : {false, true}) {
+        {
+            std::ofstream prior(output, std::ios::binary);
+            prior << "prior destination";
+        }
+        auto rgb = std::find_if(rawColor->second.groups.begin(),
+            rawColor->second.groups.end(),
+            [](const DRW_Variant& group) { return group.code() == 420; });
+        if (rgb == rawColor->second.groups.end())
+            return fail("DBCOLOR raw color group was absent");
+        rgb->addInt(420, 0x123456);
+        dx_iface exporter;
+        if (exporter.fileExport(output.string(), DRW::AC1021, binary,
+                &data, false, true))
+            return fail("modified DXF-origin DBCOLOR raw carrier was emitted");
+        std::ifstream preserved(output, std::ios::binary);
+        if (std::string((std::istreambuf_iterator<char>(preserved)), {})
+            != "prior destination")
+            return fail("rejected DBCOLOR raw mutation changed destination");
+        rawColor->second = sourceRaw;
+        const bool rawUnchanged = data.hasUnchangedDxfDbColorRawObjects();
+        const bool retryWritten = rawUnchanged
+            && exporter.fileExport(output.string(), DRW::AC1021, binary,
+                &data, false, true);
+        if (!retryWritten) {
+            std::cerr << "DBCOLOR retry diagnostics: raw-unchanged="
+                      << rawUnchanged << " capture-failed="
+                      << data.dxfDbColorRawCaptureFailed << " raw-count="
+                      << data.dxfDbColorRawObjects.size() << " baseline-count="
+                      << data.m_dxfDbColorRawBaselines.size()
+                      << " typed-capture-failed="
+                      << data.dxfDbColorCaptureFailed << '\n';
+            return fail("corrected DBCOLOR raw carrier did not retry on the same adapter");
+        }
+        dx_data readback;
+        dx_iface readbackAdapter;
+        if (!readbackAdapter.fileImport(output.string(), &readback, false)
+            || readback.sourceVersion != DRW::AC1021
+            || readback.dxfDbColorObjects.size() != 1u
+            || readback.dxfDbColorRawObjects.size() != 1u)
+            return fail("DBCOLOR ASCII/Binary output did not import as one typed/raw record");
+        const auto readbackColor = readback.dxfDbColorRawObjects.find(
+            {readback.importGeneration, 0x50u});
+        const auto readbackTypedColor = readback.dxfDbColorObjects.find(
+            {readback.importGeneration, 0x50u});
+        const auto readbackColorRoot = std::find_if(
+            readback.namedObjectDictionary.m_entries.begin(),
+            readback.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_COLOR";
+            });
+        const auto readbackColorDictionary = readbackColorRoot
+                == readback.namedObjectDictionary.m_entries.end()
+            ? readback.dictionaries.end()
+            : std::find_if(readback.dictionaries.begin(),
+                readback.dictionaries.end(),
+                [&readbackColorRoot](const DRW_Dictionary& dictionary) {
+                    return dictionary.handle == readbackColorRoot->m_handle;
+                });
+        if (readbackColor == readback.dxfDbColorRawObjects.end()
+            || readbackTypedColor == readback.dxfDbColorObjects.end()
+            || readbackColorRoot
+                == readback.namedObjectDictionary.m_entries.end()
+            || readbackColorDictionary == readback.dictionaries.end()
+            || readbackTypedColor->second.parentHandle
+                != readbackColorDictionary->handle
+            || readbackTypedColor->second.bookName != "RAL CLASSIC"
+            || readbackTypedColor->second.name != "RAL 7047"
+            || !rawColorEqual(sourceRaw, readbackColor->second)
+            || !std::any_of(readbackColor->second.groups.begin(),
+                readbackColor->second.groups.end(),
+                [](const DRW_Variant& group) {
+                    return group.code() == 1071
+                        && group.type() == DRW_Variant::INTEGER
+                        && group.i_val() == -1026567985;
+                }))
+            return fail("DBCOLOR raw group and typed book/name fields failed readback");
+    }
+    std::cout << "Four-layer AC1021 default plot-style and DBCOLOR graphs pass admission; bad targets/raw mutation refuse, correction retries, and ASCII/Binary readback passes\n";
+    return true;
+}
+
 bool ac1018MinimalRootGroupSource(const std::string& source) {
     const auto fail = [](const char* reason) { std::cerr << reason << '\n'; return false; };
     dx_data data; dx_iface importer;
@@ -81885,6 +82107,9 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--dbcolor-external-evidence-gate")
         return dbColorExternalEvidenceGate() ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--dxf-default-plotstyle-layers")
+        return dxfLayerDefaultPlotStyleGraph() ? 0 : 1;
     if (argc == 2 && std::string(argv[1]) == "--ucs-base-name-target-closure")
         return ucsBaseHeaderNameTargetClosure() ? 0 : 1;
     if (argc == 2

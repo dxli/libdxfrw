@@ -1136,6 +1136,15 @@ public:
     std::size_t dxfDbColorObjectRetainedRecords{0u};
     std::size_t dxfDbColorObjectRetainedBytes{0u};
     bool dxfDbColorCaptureFailed{false};
+    // DXF DBCOLOR has both a typed graph view and an exact raw carrier. The
+    // latter is required for same-version replay so unmodeled groups survive.
+    std::map<DwgDbColorKey, DRW_RawDxfObject> dxfDbColorRawObjects;
+    std::map<DwgDbColorKey, DRW_RawDxfObject> m_dxfDbColorRawBaselines;
+    std::size_t dxfDbColorRawRetainedRecords{0u};
+    std::size_t dxfDbColorRawRetainedGroups{0u};
+    std::size_t dxfDbColorRawRetainedBytes{0u};
+    bool dxfDbColorRawCaptureFailed{false};
+    bool hasUnchangedDxfDbColorRawObjects() const noexcept;
     struct DwgDbColorEedSource {
         DRW::Version version{DRW::UNKNOWNV};
         std::vector<DRW_TableEntry::PendingHandleRef> appIds;

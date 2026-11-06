@@ -9994,7 +9994,42 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
     if (data->sourceFormat == dx_source_format::DXF
         && data->dxfDbColorCaptureFailed)
         return reject(ExtensionGraphFailure::InvalidGraph,
-            "DXF DBCOLOR source identity capture is incomplete");
+            "DXF DBCOLOR typed source identity capture is incomplete");
+    if (data->sourceFormat == dx_source_format::DXF
+        && data->dxfDbColorRawCaptureFailed)
+        return reject(ExtensionGraphFailure::InvalidGraph,
+            "DXF DBCOLOR raw source identity capture is incomplete");
+    if (data->sourceFormat == dx_source_format::DXF) {
+        std::size_t typedRecords = 0u;
+        std::size_t rawRecords = 0u;
+        const auto typedBegin = data->dxfDbColorObjects.lower_bound(
+            {data->importGeneration, 0u});
+        for (auto typed = typedBegin;
+             typed != data->dxfDbColorObjects.end()
+                 && typed->first.first == data->importGeneration;
+             ++typed) {
+            ++typedRecords;
+            const auto raw = data->dxfDbColorRawObjects.find(typed->first);
+            if (typed->second.handle != typed->first.second
+                || raw == data->dxfDbColorRawObjects.end()
+                || raw->second.handle != typed->first.second
+                || raw->second.parentHandle != typed->second.parentHandle
+                || !asciiIdentifierEquals(raw->second.name, "DBCOLOR")
+                || raw->second.m_version != data->sourceVersion)
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "DXF DBCOLOR typed identity lacks one matching raw source carrier");
+        }
+        const auto rawBegin = data->dxfDbColorRawObjects.lower_bound(
+            {data->importGeneration, 0u});
+        for (auto raw = rawBegin;
+             raw != data->dxfDbColorRawObjects.end()
+                 && raw->first.first == data->importGeneration;
+             ++raw)
+            ++rawRecords;
+        if (typedRecords != rawRecords)
+            return reject(ExtensionGraphFailure::InvalidGraph,
+                "DXF DBCOLOR typed/raw source carrier census differs");
+    }
     if (data->sourceFormat == dx_source_format::DXF
         && data->dxfRasterVariablesCaptureFailed)
         return reject(ExtensionGraphFailure::InvalidGraph,
@@ -13382,6 +13417,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                 == dx_source_format::DXF) {
                             const auto source = data->dxfDbColorObjects.find(
                                 {data->importGeneration, frame.handle});
+                            const auto raw = data->dxfDbColorRawObjects.find(
+                                {data->importGeneration, frame.handle});
                             valid = valid
                             && (frame.dbColor->reactorHandles.empty()
                                 || frame.dbColor->reactorHandles
@@ -13389,7 +13426,15 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                         static_cast<std::uint32_t>(
                                             entry.parentHandle)})
                                 && source != data->dxfDbColorObjects.end()
-                                && source->second.handle == frame.handle;
+                                && source->second.handle == frame.handle
+                                && raw != data->dxfDbColorRawObjects.end()
+                                && raw->second.handle == frame.handle
+                                && raw->second.parentHandle
+                                    == entry.parentHandle
+                                && asciiIdentifierEquals(raw->second.name,
+                                                        "DBCOLOR")
+                                && raw->second.m_version
+                                    == data->sourceVersion;
                         } else {
                             valid = false;
                         }
@@ -13471,14 +13516,9 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             frame.handle);
                     else if (frame.plotSettings != nullptr)
                         m_extensionPlotSettingsHandles.push_back(frame.handle);
-                    else if (frame.rasterVariables != nullptr
-                             && data->sourceFormat == dx_source_format::DWG)
+                    else if (frame.rasterVariables != nullptr)
                         m_extensionRasterVariablesHandles.push_back(
                             frame.handle);
-                    else if (frame.rasterVariables != nullptr) {
-                        // DXF-origin RASTERVARIABLES uses its raw carrier;
-                        // this typed node is retained for graph validation.
-                    }
                     else if (frame.wipeoutVariables != nullptr)
                         m_extensionWipeoutVariablesHandles.push_back(
                             frame.handle);
@@ -13491,14 +13531,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     else if (frame.material != nullptr
                              && data->sourceFormat == dx_source_format::DWG)
                         m_extensionMaterialHandles.push_back(frame.handle);
-                    else if (frame.dbColor != nullptr
-                             && data->sourceFormat == dx_source_format::DWG)
+                    else if (frame.dbColor != nullptr)
                         m_extensionDbColorHandles.push_back(frame.handle);
-                    else if (frame.dbColor != nullptr) {
-                        // DXF-origin DBCOLOR is replayed through its retained
-                        // raw carrier. The typed graph node exists only to
-                        // prove owner and dictionary closure.
-                    }
                     else if (frame.underlayDefinition != nullptr) {
                         // UNDERLAY definitions are emitted by the dedicated
                         // rooted dictionary writer after generic graph proof.
@@ -15618,7 +15652,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 || (data->sourceFormat == dx_source_format::DWG
                     && m_extensionDbColorHandles.size() != dbColors.size())
                 || (data->sourceFormat == dx_source_format::DXF
-                    && !m_extensionDbColorHandles.empty()))
+                    && m_extensionDbColorHandles.size() != dbColors.size()))
                 return reject(ExtensionGraphFailure::InvalidGraph,
                     data->sourceFormat == dx_source_format::DWG
                         ? "DBCOLOR remains outside the independent producer source profile; only the bounded one-record AC1021 profile is admitted"
@@ -15675,7 +15709,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     || (data->sourceFormat == dx_source_format::DXF
                         && std::find(m_extensionDbColorHandles.begin(),
                             m_extensionDbColorHandles.end(), entry.m_handle)
-                            != m_extensionDbColorHandles.end()))
+                            == m_extensionDbColorHandles.end()))
                     return reject(ExtensionGraphFailure::InvalidGraph,
                         "ACAD_COLOR entry does not uniquely bind the book/name key to its owned DBCOLOR");
             }
@@ -17263,6 +17297,10 @@ constexpr std::size_t kMaxAdapterMaterialRetainedBytes =
     DRW::kMaxDxfBinaryPayloadBytes;
 constexpr std::size_t kMaxAdapterMaterialTypedRecords = 100000u;
 constexpr std::size_t kMaxAdapterMaterialTypedRetainedBytes =
+    DRW::kMaxDxfBinaryPayloadBytes;
+constexpr std::size_t kMaxAdapterDbColorRawRecords = 100000u;
+constexpr std::size_t kMaxAdapterDbColorRawGroups = 4000000u;
+constexpr std::size_t kMaxAdapterDbColorRawRetainedBytes =
     DRW::kMaxDxfBinaryPayloadBytes;
 constexpr std::size_t kMaxAdapterModelDocViewStyleRecords = 100000u;
 constexpr std::size_t kMaxAdapterModelDocViewStyleRawGroups = 4000000u;
@@ -43223,6 +43261,18 @@ bool dx_iface::hasUnchangedGeneratedRootSources(bool final) const {
 bool dx_iface::inspectGeneratedRootOutput(const dxfRW::DxfObjectsWriteView& view) noexcept {
     const auto profile = rasterOutputProfile(view.compatibilityProfile);
     if (!cData || !dxfW || !dx_raster_output::valid(profile) || m_generatedRootOutputInspected) return false;
+    std::string diagnosticStage = "generated root output setup";
+    bool diagnosticSuccess = false;
+    struct GeneratedRootDiagnostic {
+        const dx_iface& owner;
+        const std::string& stage;
+        bool& success;
+        ~GeneratedRootDiagnostic() {
+            if (!success && owner.m_debugDwgOutputQualification)
+                std::cerr << "Generated NOD root proof failed during: "
+                          << stage << '\n';
+        }
+    } generatedRootDiagnostic{*this, diagnosticStage, diagnosticSuccess};
     m_generatedRootOutputInspected = true;
     try {
         const auto* context = dxfW->getWritingContext();
@@ -43247,6 +43297,8 @@ bool dx_iface::inspectGeneratedRootOutput(const dxfRW::DxfObjectsWriteView& view
         if (!charge(2u * sizeof(GeneratedRootOutputProof))) return false;
         m_generatedRootOutputProofs.reserve(2u);
         for (const bool groups : {false, true}) {
+            diagnosticStage = groups ? "GROUPS dictionary source setup"
+                                     : "NOD dictionary source setup";
             const auto* frozen = dxfW->dxfWriteGeneratedRootSource(groups);
             if (!frozen) continue;
             std::size_t bytes = 0u, items = 0u, extra = 0u;
@@ -43262,6 +43314,7 @@ bool dx_iface::inspectGeneratedRootOutput(const dxfRW::DxfObjectsWriteView& view
                 selected.push_back({name, target, 350}); return true;
             };
             if (!groups) {
+                diagnosticStage = "NOD expected-entry census";
                 if (!select("ACAD_GROUP", 0xDu)) return false;
                 const auto image = dxfW->dxfWriteImageDictionaryHandle();
                 if (image && !select("ACAD_IMAGE_DICT", image)) return false;
@@ -43271,6 +43324,8 @@ bool dx_iface::inspectGeneratedRootOutput(const dxfRW::DxfObjectsWriteView& view
                 }
             }
             const auto count = groups ? frozen->m_entries.size() : selected.size();
+            diagnosticStage = groups ? "GROUPS expected-entry census"
+                                     : "NOD expected-entry census";
             if (count > DRW_Dictionary::kMaxEntries || !charge(count * (sizeof(Entry) + sizeof(bool)))) return false;
             expected.reserve(count); std::vector<bool> used(selected.size(), false);
             for (const auto& entry : frozen->m_entries) {
@@ -43302,6 +43357,8 @@ bool dx_iface::inspectGeneratedRootOutput(const dxfRW::DxfObjectsWriteView& view
             proof.references.reserve(slots);
             bool seen = false;
             std::string_view matchedBody;
+            diagnosticStage = groups ? "GROUPS output field inspection"
+                                     : "NOD output field inspection";
             if (!dx_raster_output::inspect(view.bytes, view.binary, [&](std::string_view name, std::uint32_t self, std::string_view body) {
                     if (name == "DICTIONARY" && !self) return false;
                     if (self != proof.emitted) return true;
@@ -43369,17 +43426,41 @@ bool dx_iface::inspectGeneratedRootOutput(const dxfRW::DxfObjectsWriteView& view
             // Decode only the independently selected root. Reading unrelated
             // records here would impose this dictionary observer's classifier
             // on other supported profiles (e.g. MATERIAL unsigned colors).
+            diagnosticStage = groups ? "GROUPS typed staged-body comparison"
+                                     : "NOD typed staged-body comparison";
             dx_standard_output::Decoder decoder(view);
             if (!decoder.good() || !decoder.decodeRecord<DRW_Dictionary>(matchedBody, [&](const auto& actual) {
-                        if (actual.m_entries.size() != expected.size()) return false;
+                        if (actual.m_entries.size() != expected.size()) {
+                            diagnosticStage = groups
+                                ? "GROUPS staged entry count comparison"
+                                : "NOD staged entry count comparison";
+                            return false;
+                        }
                         const auto textProfile = [&](std::string_view value) {
                             return value.find('\\') == std::string_view::npos && value.find('\0') == std::string_view::npos
                                 && (view.version >= DRW::AC1021 || std::all_of(value.begin(), value.end(), [](unsigned char c) { return c < 128u; }));
                         };
                         for (std::size_t index = 0u; index < expected.size(); ++index) {
                             const auto& a = actual.m_entries[index]; const auto& e = expected[index];
-                            if ((textProfile(e.name) && a.m_name != e.name) || a.m_handle != e.target || static_cast<int>(a.m_dxfHandleCode) != e.role) return false;
-                            if (!dxfW->dxfWriteRecordHasOwner(e.target, proof.emitted)) return false;
+                            if ((textProfile(e.name) && a.m_name != e.name)
+                                || a.m_handle != e.target
+                                || static_cast<int>(a.m_dxfHandleCode) != e.role) {
+                                diagnosticStage = (groups
+                                    ? "GROUPS staged entry mismatch at index "
+                                    : "NOD staged entry mismatch at index ")
+                                    + std::to_string(index);
+                                return false;
+                            }
+                            if (!dxfW->dxfWriteRecordHasOwner(
+                                    e.target, proof.emitted)) {
+                                diagnosticStage = std::string(groups
+                                    ? "GROUPS staged entry owner check at index "
+                                    : "NOD staged entry owner check at index ")
+                                    + std::to_string(index) + " key="
+                                    + std::string(e.name) + " target="
+                                    + std::to_string(e.target);
+                                return false;
+                            }
                             if (groups && !dxfW->dxfWriteRecordHasIdentity(e.target, "GROUP", "OBJECTS")) return false;
                             if (!groups && (layoutSymbolKey(std::string(e.name)) == "ACAD_GROUP" || layoutSymbolKey(std::string(e.name)) == "ACAD_IMAGE_DICT")
                                 && !dxfW->dxfWriteRecordHasIdentity(e.target, "DICTIONARY", "OBJECTS")) return false;
@@ -43393,12 +43474,24 @@ bool dx_iface::inspectGeneratedRootOutput(const dxfRW::DxfObjectsWriteView& view
                         // route without earning a common/text certificate.
                         if (!qualified) return true;
                         proof.commonCompared = generatedDictionaryCommonEqual(*frozen, actual, map, proof.references, view.binary);
+                        if (!proof.commonCompared)
+                            diagnosticStage = groups
+                                ? "GROUPS staged common-metadata comparison"
+                                : "NOD staged common-metadata comparison";
                         return proof.commonCompared;
-                    })) return false;
+                    })) {
+                if (!decoder.good())
+                    diagnosticStage = groups
+                        ? "GROUPS standard decoder setup"
+                        : "NOD standard decoder setup";
+                return false;
+            }
             if (proof.references.size() > slots) return false;
             m_generatedRootOutputProofs.push_back(std::move(proof));
         }
-        return hasUnchangedGeneratedRootSources(false);
+        diagnosticStage = "generated root source snapshot comparison";
+        diagnosticSuccess = hasUnchangedGeneratedRootSources(false);
+        return diagnosticSuccess;
     } catch (...) { return false; }
 }
 
@@ -67563,6 +67656,30 @@ bool dx_data::hasUnchangedRawSectionRecords() const noexcept {
     return true;
 }
 
+bool dx_data::hasUnchangedDxfDbColorRawObjects() const noexcept {
+    if (dxfDbColorRawCaptureFailed
+        || dxfDbColorRawObjects.size() != m_dxfDbColorRawBaselines.size()
+        || dxfDbColorRawObjects.size() > kMaxAdapterDbColorRawRecords
+        || dxfDbColorRawRetainedRecords != dxfDbColorRawObjects.size()
+        || dxfDbColorRawRetainedGroups > kMaxAdapterDbColorRawGroups
+        || dxfDbColorRawRetainedBytes
+            > kMaxAdapterDbColorRawRetainedBytes)
+        return false;
+    auto baseline = m_dxfDbColorRawBaselines.begin();
+    auto current = dxfDbColorRawObjects.begin();
+    std::size_t groups = 0u;
+    for (; current != dxfDbColorRawObjects.end(); ++current, ++baseline) {
+        if (baseline->first != current->first
+            || !retainedRawDxfObjectsEqual(baseline->second,
+                                          current->second)
+            || current->second.groups.size()
+                > kMaxAdapterDbColorRawGroups - groups)
+            return false;
+        groups += current->second.groups.size();
+    }
+    return groups == dxfDbColorRawRetainedGroups;
+}
+
 void dx_iface::addRawDxfObject(const DRW_RawDxfObject& data) {
     if (cData == nullptr)
         return;
@@ -67589,6 +67706,63 @@ void dx_iface::addRawDxfObject(const DRW_RawDxfObject& data) {
         return;
     }
     const std::string_view normalizedName(data.name);
+    if (asciiIdentifierEquals(normalizedName, "DBCOLOR")
+        && cData->sourceFormat == dx_source_format::DXF) {
+        if (cData->dxfDbColorRawCaptureFailed
+            || cData->importGeneration == 0u
+            || cData->dxfDbColorRawRetainedRecords
+                >= kMaxAdapterDbColorRawRecords
+            || cData->dxfDbColorRawRetainedGroups
+                > kMaxAdapterDbColorRawGroups
+            || data.groups.size() > kMaxAdapterDbColorRawGroups
+                - cData->dxfDbColorRawRetainedGroups) {
+            cData->dxfDbColorRawCaptureFailed = true;
+            return;
+        }
+        std::size_t estimatedBytes = 0u;
+        if (!estimateRawDxfObjectListNodeBytes(data, estimatedBytes)
+            || cData->dxfDbColorRawRetainedBytes
+                > kMaxAdapterDbColorRawRetainedBytes
+            || cData->dxfDbColorRawRetainedBytes
+                > kMaxAdapterDbColorRawRetainedBytes
+                    - 8u * sizeof(void*)
+            || estimatedBytes
+                > (kMaxAdapterDbColorRawRetainedBytes
+                   - cData->dxfDbColorRawRetainedBytes
+                   - 8u * sizeof(void*)) / 2u) {
+            cData->dxfDbColorRawCaptureFailed = true;
+            return;
+        }
+        const dx_data::DwgDbColorKey key{
+            cData->importGeneration, data.handle};
+        bool rawInserted = false;
+        try {
+            if (cData->dxfDbColorRawObjects.count(key) != 0u
+                || cData->m_dxfDbColorRawBaselines.count(key) != 0u) {
+                cData->dxfDbColorRawCaptureFailed = true;
+                return;
+            }
+            rawInserted = cData->dxfDbColorRawObjects.emplace(
+                key, data).second;
+            if (!rawInserted
+                || !cData->m_dxfDbColorRawBaselines.emplace(
+                    key, data).second) {
+                if (rawInserted)
+                    cData->dxfDbColorRawObjects.erase(key);
+                cData->dxfDbColorRawCaptureFailed = true;
+                return;
+            }
+            ++cData->dxfDbColorRawRetainedRecords;
+            cData->dxfDbColorRawRetainedGroups += data.groups.size();
+            cData->dxfDbColorRawRetainedBytes +=
+                2u * estimatedBytes + 8u * sizeof(void*);
+        } catch (...) {
+            cData->dxfDbColorRawObjects.erase(key);
+            cData->m_dxfDbColorRawBaselines.erase(key);
+            cData->dxfDbColorRawCaptureFailed = true;
+        }
+        return;
+    }
     retainTableResourceSource(data);
     observeResourceOrigin(nullptr,&data);
     observePlotStyleSource(nullptr,&data);
@@ -73811,6 +73985,31 @@ void dx_iface::recordHatchBlockPublication(const std::string& name, bool written
 
 bool dx_iface::finalizeDxfWrite() {
     const bool mlineGeometryTransaction=needsDxfMLineNoRawSectionsGuard();
+    const char* finalizationPhase = "DWG SUNSTUDY output";
+    bool finalizationSucceeded = false;
+    bool finalizationFailureReported = false;
+    struct FinalizationDiagnostic {
+        bool enabled;
+        bool& succeeded;
+        bool& reported;
+        const char*& phase;
+        ~FinalizationDiagnostic() {
+            if (enabled && !succeeded && !reported)
+                std::cerr << "DXF finalization rejected during: " << phase
+                          << '\n';
+        }
+    } finalizationDiagnostic{m_debugDwgOutputQualification,
+                             finalizationSucceeded,
+                             finalizationFailureReported,
+                             finalizationPhase};
+    const auto failFinalization = [this, &finalizationFailureReported](
+            const char* phase) {
+        if (m_debugDwgOutputQualification) {
+            std::cerr << "DXF finalization rejected during: " << phase << '\n';
+            finalizationFailureReported = true;
+        }
+        return false;
+    };
     if (cData != nullptr && (!cData->sunStudies.empty() || !m_extensionSunStudyHandles.empty())) {
         if (!dxfW || !m_sunStudyOutputInspected || m_extensionSunStudyHandles.size() != 1u
             || !hasUnchangedSunStudyOutputGraph()) return false;
@@ -73821,45 +74020,69 @@ bool dx_iface::finalizeDxfWrite() {
             || dxfW->dxfWriteRecordHandleCount(owner) != 1u
             || !dxfW->dxfWriteRecordHasIdentity(owner, "DICTIONARY", "OBJECTS")) return false;
     }
-    if (!validateDxfBlockRecordInsertReferences(true)
-        || !finalizeDwgLineTypeControlOutput()
-        || (mlineGeometryTransaction
-            && (!dxfW || !dxfW->dxfWriteNoRawSectionsObserved()))
-        || (mlineGeometryTransaction&&m_dxfMLineDependencySourceLivePreflightPassed
-            && (!mlineLayerSourceLiveProof(*cData,
-                    kMaxAdapterMLineDependencyProofWork,nullptr)
-                || !mlineStyleDictionarySourceLiveProof(*cData,
-                    kMaxAdapterMLineDependencyProofWork,nullptr)
-                || !mlineLtypeSourceLiveProof(*cData,
-                    kMaxAdapterMLineDependencyProofWork,nullptr)
-                || !mlineStyleBodiesSourceLiveProof(*cData,
-                    kMaxAdapterMLineDependencyProofWork,nullptr)))
-        || !hasUnchangedDxfMLineStyles() || !hasUnchangedDxfMLineConsumers()
-        || !hasUnchangedDxfMLineLinetypes()
-        || !hasUnchangedDwgMLeaderStyleOutputSources()
-        || !hasUnchangedDwgMLineStyleOutputSources()
-        || !hasUnchangedDwgLayoutOutputSources()
-        || !hasUnchangedDwgLayerStateOutputSource()
-        || !hasUnchangedDxfDynamicBlockReplaySources()
-        || !hasUnchangedDxfAssociativeReplaySources()
-        || (m_dxfDynamicReplayPrepared
-            && !m_dxfDynamicReplayInspected)
-        || (m_dxfAssociativeReplayPrepared
-            && !m_dxfAssociativeReplayInspected)
-        || !finalizeDwgProxyEntityObjectIds()
-        || !hasUnchangedDwgDynamicBlockOutputSources()
-        || !finalizeDwgDynamicBlockOutput()
-        || !finalizeDwgBlockRepresentationDataOutput()
-        || (!m_dwgMLineStyleOutputSources.empty()
-            && !m_dwgMLineStylesInspected)
-        || (!m_dwgLayoutOutputSources.empty()
-            && (!m_dwgLayoutsObjectsInspected
-                || !m_dwgLayoutBlocksInspected))
-        || (m_dwgLayerStateOutputPrepared
-            && !m_dwgLayerStateOutputInspected)
-        || (!m_dxfMLineLinetypes.empty() && !m_dxfMLineLinetypesInspected)
-        || (!m_dxfMLineStyles.empty() && !m_dxfMLineStylesInspected)
-        || (needsDxfMLineConsumerInspection() && m_dxfMLineConsumerInspected!=3u)) return false;
+    if (!validateDxfBlockRecordInsertReferences(true))
+        return failFinalization("BLOCK_RECORD INSERT references");
+    if (!finalizeDwgLineTypeControlOutput())
+        return failFinalization("LTYPE_CONTROL output");
+    if (mlineGeometryTransaction
+        && (!dxfW || !dxfW->dxfWriteNoRawSectionsObserved()))
+        return failFinalization("MLINE raw-section transaction");
+    if (mlineGeometryTransaction
+        && m_dxfMLineDependencySourceLivePreflightPassed
+        && (!mlineLayerSourceLiveProof(*cData,
+                kMaxAdapterMLineDependencyProofWork, nullptr)
+            || !mlineStyleDictionarySourceLiveProof(*cData,
+                kMaxAdapterMLineDependencyProofWork, nullptr)
+            || !mlineLtypeSourceLiveProof(*cData,
+                kMaxAdapterMLineDependencyProofWork, nullptr)
+            || !mlineStyleBodiesSourceLiveProof(*cData,
+                kMaxAdapterMLineDependencyProofWork, nullptr)))
+        return failFinalization("MLINE source dependency proof");
+    if (!hasUnchangedDxfMLineStyles())
+        return failFinalization("DXF MLINESTYLE source snapshot");
+    if (!hasUnchangedDxfMLineConsumers())
+        return failFinalization("DXF MLINE consumer source snapshot");
+    if (!hasUnchangedDxfMLineLinetypes())
+        return failFinalization("DXF MLINE LTYPE source snapshot");
+    if (!hasUnchangedDwgMLeaderStyleOutputSources())
+        return failFinalization("DWG MLEADERSTYLE source snapshot");
+    if (!hasUnchangedDwgMLineStyleOutputSources())
+        return failFinalization("DWG MLINESTYLE source snapshot");
+    if (!hasUnchangedDwgLayoutOutputSources())
+        return failFinalization("DWG LAYOUT source snapshot");
+    if (!hasUnchangedDwgLayerStateOutputSource())
+        return failFinalization("DWG LAYERSTATE source snapshot");
+    if (!hasUnchangedDxfDynamicBlockReplaySources())
+        return failFinalization("DXF dynamic-block replay source snapshot");
+    if (!hasUnchangedDxfAssociativeReplaySources())
+        return failFinalization("DXF associative replay source snapshot");
+    if (m_dxfDynamicReplayPrepared && !m_dxfDynamicReplayInspected)
+        return failFinalization("DXF dynamic-block staged output inspection");
+    if (m_dxfAssociativeReplayPrepared && !m_dxfAssociativeReplayInspected)
+        return failFinalization("DXF associative staged output inspection");
+    if (!finalizeDwgProxyEntityObjectIds())
+        return failFinalization("DWG proxy entity object IDs");
+    if (!hasUnchangedDwgDynamicBlockOutputSources())
+        return failFinalization("DWG dynamic-block source snapshot");
+    if (!finalizeDwgDynamicBlockOutput())
+        return failFinalization("DWG dynamic-block output");
+    if (!finalizeDwgBlockRepresentationDataOutput())
+        return failFinalization("DWG BLOCKREPRESENTATION output");
+    if (!m_dwgMLineStyleOutputSources.empty() && !m_dwgMLineStylesInspected)
+        return failFinalization("DWG MLINESTYLE staged inspection");
+    if (!m_dwgLayoutOutputSources.empty()
+        && (!m_dwgLayoutsObjectsInspected || !m_dwgLayoutBlocksInspected))
+        return failFinalization("DWG LAYOUT staged inspection");
+    if (m_dwgLayerStateOutputPrepared && !m_dwgLayerStateOutputInspected)
+        return failFinalization("DWG LAYERSTATE staged inspection");
+    if (!m_dxfMLineLinetypes.empty() && !m_dxfMLineLinetypesInspected)
+        return failFinalization("DXF MLINE LTYPE staged inspection");
+    if (!m_dxfMLineStyles.empty() && !m_dxfMLineStylesInspected)
+        return failFinalization("DXF MLINESTYLE staged inspection");
+    if (needsDxfMLineConsumerInspection()
+        && m_dxfMLineConsumerInspected != 3u)
+        return failFinalization("DXF MLINE consumer staged inspection");
+    finalizationPhase = "DXF/DWG scales and dictionary variables";
     const auto insertTargetBlockOutputBound=[this](
             std::uint32_t blockRecordHandle,const DRW_Entity* target) {
         if (cData==nullptr||dxfW==nullptr||blockRecordHandle==0u
@@ -74029,6 +74252,7 @@ bool dx_iface::finalizeDxfWrite() {
         || (!m_dwgScaleOutputSources.empty() && !m_dwgScalesInspected)) return false;
     if(!hasUnchangedDxfDictionaryVars()||(!m_dxfDictionaryVars.empty()&&!m_dxfDictionaryVarsInspected))return false;
     if(!finalizeDxfHeaderMaterial()||!finalizeDxfLayerMaterials()||!finalizeAc1027DefaultLayerOutput()||!finalizeDxfFullStyles()||!finalizeDxfCommonReferences(347,m_dxfMaterialReferenceState))return false;
+    finalizationPhase = "render presets, visual styles, and shade consumers";
     if (!hasUnchangedDxfRenderPresetSources()
         || (!m_dxfRenderPresetSources.empty() && !m_dxfRenderPresetInspected)) return false;
     if (!hasUnchangedDxfVisualStyles()
@@ -74040,6 +74264,7 @@ bool dx_iface::finalizeDxfWrite() {
         || ((!m_dxfMaterialWriteSources.empty()
              || !m_extensionMaterialSources.empty())
             && !m_dxfMaterialWriteInspected)) return false;
+    finalizationPhase = "typed DWG table and dictionary output snapshots";
     if (!hasUnchangedDwgTableStyleOutputSources()
         || (!m_dwgTableStyleOutputSources.empty()
             && !m_dwgTableStylesInspected))
@@ -74056,6 +74281,8 @@ bool dx_iface::finalizeDxfWrite() {
         || (!m_dwgSortEntsOutputSources.empty()
             && !m_dwgSortEntsOutputInspected))
         return false;
+    finalizationPhase = "DXF MATERIAL and extension dictionary output bindings";
+    finalizationPhase = "DXF MATERIAL raw records";
     for (const auto& source : m_dxfMaterialWriteSources) {
         const auto& raw = source.raw;
         const auto emitted = dxfW->remapHandle(raw.handle);
@@ -74067,6 +74294,7 @@ bool dx_iface::finalizeDxfWrite() {
             if (key != 0u && dxfW->dxfWriteRecordHandleCount(dxfW->remapHandle(static_cast<std::uint32_t>(key))) != 1u) return false;
         }
     }
+    finalizationPhase = "DXF MATERIAL dictionaries";
     for (const auto& dictionary : m_dxfMaterialWriteDictionaries) {
         const auto emitted = dxfW->remapHandle(dictionary.handle);
         if (!dxfW->dxfWriteSourceObjectHasIdentity(dictionary.handle, emitted,
@@ -74075,6 +74303,7 @@ bool dx_iface::finalizeDxfWrite() {
             if (!dxfW->dxfWriteRecordHasIdentity(dxfW->remapHandle(entry.m_handle), "MATERIAL", "OBJECTS")
                 || !dxfW->dxfWriteRecordHasOwner(dxfW->remapHandle(entry.m_handle), emitted)) return false;
     }
+    finalizationPhase = "extension MATERIAL records";
     for (const DRW_Material& source : m_extensionMaterialSources) {
         const std::uint32_t emitted = dxfW->remapHandle(source.handle);
         if (source.parentHandle > (std::numeric_limits<std::uint32_t>::max)())
@@ -74102,6 +74331,7 @@ bool dx_iface::finalizeDxfWrite() {
                 return false;
         }
     }
+    finalizationPhase = "extension MATERIAL dictionaries";
     for (const DRW_Dictionary& source :
          m_extensionMaterialDictionaries) {
         if (source.parentHandle
@@ -74123,6 +74353,9 @@ bool dx_iface::finalizeDxfWrite() {
                 return false;
         }
     }
+    finalizationPhase = "DWG-origin DBCOLOR records";
+    if (cData != nullptr
+        && cData->sourceFormat == dx_source_format::DWG) {
     for (const std::uint32_t sourceHandle : m_extensionDbColorHandles) {
         if (cData == nullptr || dxfW == nullptr)
             return false;
@@ -74144,8 +74377,12 @@ bool dx_iface::finalizeDxfWrite() {
             || !dxfW->dxfWriteRecordHasOwner(emitted, owner))
             return false;
     }
+    }
     if (cData != nullptr
         && cData->sourceFormat == dx_source_format::DXF) {
+        finalizationPhase = "DXF-origin DBCOLOR records";
+        if (!cData->hasUnchangedDxfDbColorRawObjects())
+            return false;
         const auto first = cData->dxfDbColorObjects.lower_bound(
             {cData->importGeneration, 0u});
         for (auto source = first;
@@ -74156,17 +74393,35 @@ bool dx_iface::finalizeDxfWrite() {
                 > (std::numeric_limits<std::uint32_t>::max)())
                 return false;
             const std::uint32_t sourceHandle = source->first.second;
+            const auto raw = cData->dxfDbColorRawObjects.find(source->first);
             const std::uint32_t emitted = dxfW->remapHandle(sourceHandle);
             const std::uint32_t owner = dxfW->remapHandle(
                 static_cast<std::uint32_t>(source->second.parentHandle));
-            if (emitted == 0u || emitted == DRW::NoHandle
+            const auto emittedCount = emitted == 0u || emitted == DRW::NoHandle
+                ? 0u : dxfW->dxfWriteRecordHandleCount(emitted);
+            const bool hasIdentity = emittedCount != 0u
+                && dxfW->dxfWriteRecordHasIdentity(
+                    emitted, "DBCOLOR", "OBJECTS");
+            const bool hasOwner = emittedCount != 0u
+                && dxfW->dxfWriteRecordHasOwner(emitted, owner);
+            if (raw == cData->dxfDbColorRawObjects.end()
+                || raw->second.handle != sourceHandle
+                || raw->second.parentHandle != source->second.parentHandle
+                || emitted == 0u || emitted == DRW::NoHandle
                 || owner == 0u || owner == DRW::NoHandle
-                || dxfW->dxfWriteRecordHandleCount(emitted) != 1u
-                || !dxfW->dxfWriteRecordHasIdentity(
-                    emitted, "DBCOLOR", "OBJECTS")
-                || !dxfW->dxfWriteRecordHasOwner(emitted, owner))
+                || emittedCount != 1u || !hasIdentity || !hasOwner) {
+                if (m_debugDwgOutputQualification) {
+                    std::cerr << "DXF DBCOLOR binding mismatch: source="
+                              << sourceHandle << " emitted=" << emitted
+                              << " parent=" << source->second.parentHandle
+                              << " owner=" << owner << " count="
+                              << emittedCount << " identity=" << hasIdentity
+                              << " owner-match=" << hasOwner << '\n';
+                }
                 return false;
+            }
         }
+        finalizationPhase = "DXF-origin RASTERVARIABLES records";
         const auto rasterFirst = cData->dxfRasterVariables.lower_bound(
             {cData->importGeneration, 0u});
         for (auto source = rasterFirst;
@@ -74189,41 +74444,80 @@ bool dx_iface::finalizeDxfWrite() {
                 return false;
         }
     }
+    finalizationPhase = "ACDS history source snapshot and inspection";
     if (!hasUnchangedAcdsDxfHistorySources()
-        || (!m_acdsDxfHistoryObjects.empty() && !m_acdsDxfHistoryInspected)) return false;
+        || (!m_acdsDxfHistoryObjects.empty() && !m_acdsDxfHistoryInspected))
+        return false;
+    finalizationPhase = "ACDS history record identity and owner bindings";
     for (const auto& row : m_acdsDxfHistoryObjects) {
         // Generic raw writers preserve a reserved self key; unlike typed
         // writers they do not publish a source-object binding. Prove that
         // explicit raw contract, not a binding the codec never produced.
         if (!dxfW || dxfW->remapHandle(row.handle) != row.handle
             || !dxfW->dxfWriteRecordHasIdentity(row.handle, row.name, "OBJECTS")
-            || !dxfW->dxfWriteRecordHasOwner(row.handle, dxfW->remapHandle(row.parentHandle))) return false;
+            || !dxfW->dxfWriteRecordHasOwner(row.handle, dxfW->remapHandle(row.parentHandle))) {
+            if (m_debugDwgOutputQualification)
+                std::cerr << "ACDS history binding mismatch: handle="
+                          << row.handle << " name=" << row.name
+                          << " parent=" << row.parentHandle << " emitted="
+                          << (dxfW ? dxfW->remapHandle(row.handle) : 0u)
+                          << " identity="
+                          << (dxfW && dxfW->dxfWriteRecordHasIdentity(
+                                 row.handle, row.name, "OBJECTS"))
+                          << " owner="
+                          << (dxfW && dxfW->dxfWriteRecordHasOwner(
+                                 row.handle,
+                                 dxfW->remapHandle(row.parentHandle)))
+                          << '\n';
+            return false;
+        }
+        finalizationPhase = "ACDS history referenced handle bindings";
         for (const auto& field : row.groups) if (isDxfHandleCode(field.code())) {
             std::uint64_t source = 0u;
             if (!dx_standard_output::handleValue(field, source)
-                || dxfW->dxfWriteRecordHandleCount(dxfW->remapHandle(static_cast<std::uint32_t>(source))) != 1u) return false;
+                || dxfW->dxfWriteRecordHandleCount(dxfW->remapHandle(static_cast<std::uint32_t>(source))) != 1u) {
+                if (m_debugDwgOutputQualification)
+                    std::cerr << "ACDS history reference mismatch: object="
+                              << row.handle << " group=" << field.code()
+                              << " source=" << source << " emitted="
+                              << dxfW->remapHandle(
+                                     static_cast<std::uint32_t>(source))
+                              << '\n';
+                return false;
+            }
         }
     }
-    if (m_hatchPlanningFailed
-        || !hasUnchangedXrecordWriteSources()
+    finalizationPhase = "HATCH planning and immutable object snapshots";
+    if (m_hatchPlanningFailed || !hasUnchangedXrecordWriteSources()
         || !hasUnchangedExtensionDictionaryOwnerSources()
         || !hasUnchangedDwgGeoDataGraphs()
-        || (!m_extensionDbColorHandles.empty()
-            && (cData == nullptr
-                || !hasUnchangedDwgDbColorEedDependencies(*cData)))
-        || (!m_dwgGeoDataGraphs.empty()
-            && (!m_dwgGeoDataTablesInspected || !m_dwgGeoDataObjectsInspected))
         || (cData != nullptr && !hasUnchangedStandardDwgObjectSources())
-        || (cData != nullptr && !hasUnchangedRasterDwgSources())
-        || !finalizeStandardDwgOutputProofs()
-        || !finalizeDwgPlotSettingsOutputProofs()
-        || !finalizeRasterOutputProofs()
-        || !finalizeDxfAssociativeGeometryOutput()
-        || !finalizeDxfAssociativeValueOutput()
-        || !finalizeDwgAssociativeVariables()
-        || !finalizeDwgAssociativeDimensionDependencies()
-        || !finalizeGeneratedRootOutput())
-        return false;
+        || (cData != nullptr && !hasUnchangedRasterDwgSources()))
+        return failFinalization("HATCH planning and immutable object snapshots");
+    if (cData != nullptr && cData->sourceFormat == dx_source_format::DWG
+        && !m_extensionDbColorHandles.empty()
+        && !hasUnchangedDwgDbColorEedDependencies(*cData))
+        return failFinalization("DWG DBCOLOR EED dependencies");
+    if (!m_dwgGeoDataGraphs.empty()
+        && (!m_dwgGeoDataTablesInspected || !m_dwgGeoDataObjectsInspected))
+        return failFinalization("GEODATA staged output inspection");
+    if (!finalizeStandardDwgOutputProofs())
+        return failFinalization("standard DWG object output proofs");
+    if (!finalizeDwgPlotSettingsOutputProofs())
+        return failFinalization("DWG plot settings output proofs");
+    if (!finalizeRasterOutputProofs())
+        return failFinalization("raster output proofs");
+    if (!finalizeDxfAssociativeGeometryOutput())
+        return failFinalization("DXF associative geometry output");
+    if (!finalizeDxfAssociativeValueOutput())
+        return failFinalization("DXF associative value output");
+    if (!finalizeDwgAssociativeVariables())
+        return failFinalization("DWG associative variables");
+    if (!finalizeDwgAssociativeDimensionDependencies())
+        return failFinalization("DWG associative dimension dependencies");
+    if (!finalizeGeneratedRootOutput())
+        return failFinalization("generated root output binding");
+    finalizationPhase = "GEODATA graph output bindings";
     for (const DwgGeoDataGraphBinding& graph : m_dwgGeoDataGraphs) {
         if (dxfW == nullptr)
             return false;
@@ -74247,6 +74541,7 @@ bool dx_iface::finalizeDxfWrite() {
         if (m_emittedTableHandles.count(table.first) != 1u)
             return false;
     }
+    finalizationPhase = "HATCH publication bindings";
     const auto* context = dxfW != nullptr ? dxfW->getWritingContext() : nullptr;
     if (!m_hatchTargets.empty() && context == nullptr) {
         failHatchPublication();
@@ -74467,6 +74762,7 @@ bool dx_iface::finalizeDxfWrite() {
         if (!finalizeDwgViewportOutputQualifications())
             return false;
     }
+    finalizationPhase = "strict complete opaque-output qualification";
     if (m_requireCompleteDwgOutputQualification && cData != nullptr
         && cData->sourceFormat == dx_source_format::DWG
         && cData->dwgReadOutcome.attempted
@@ -74549,6 +74845,7 @@ bool dx_iface::finalizeDxfWrite() {
         }
         return false;
     }
+    finalizationSucceeded = true;
     return true;
 }
 
@@ -83203,6 +83500,19 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                     targetWipeoutVariables = &current->second;
                     ++targetMatches;
                 }
+            } else if (cData->sourceFormat == dx_source_format::DXF) {
+                const auto firstRasterVariables =
+                    cData->dxfRasterVariables.lower_bound(
+                        {cData->importGeneration, 0u});
+                for (auto current = firstRasterVariables;
+                     current != cData->dxfRasterVariables.end()
+                         && current->first.first == cData->importGeneration;
+                     ++current) {
+                    if (current->second.handle != sourceEntry.m_handle)
+                        continue;
+                    targetRasterVariables = &current->second;
+                    ++targetMatches;
+                }
             }
             const bool dictionaryQueued = std::find(
                 m_extensionDictionaryHandles.begin(),
@@ -83287,16 +83597,18 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 && fieldListEmissionReady;
             const bool closedRasterVariables =
                 targetRasterVariables != nullptr
-                && cData->sourceFormat == dx_source_format::DWG
-                && (cData->sourceVersion == DRW::AC1018
-                    || cData->sourceVersion == DRW::AC1021
-                    || cData->sourceVersion == DRW::AC1024
-                    || cData->sourceVersion == DRW::AC1027
-                    || cData->sourceVersion == DRW::AC1032)
                 && key == "ACAD_IMAGE_VARS"
                 && targetRasterVariables->parentHandle
                     == cData->namedObjectDictionary.handle
-                && rasterVariablesQueued;
+                && ((cData->sourceFormat == dx_source_format::DWG
+                        && (cData->sourceVersion == DRW::AC1018
+                            || cData->sourceVersion == DRW::AC1021
+                            || cData->sourceVersion == DRW::AC1024
+                            || cData->sourceVersion == DRW::AC1027
+                            || cData->sourceVersion == DRW::AC1032)
+                        && rasterVariablesQueued)
+                    || (cData->sourceFormat == dx_source_format::DXF
+                        && rasterVariablesQueued));
             const bool closedWipeoutVariables =
                 targetWipeoutVariables != nullptr
                 && cData->sourceFormat == dx_source_format::DWG
@@ -85140,6 +85452,74 @@ bool dx_iface::prepareDxfLayerPlot(DRW::Version version, bool strict) noexcept {
     auto& state = m_dxfLayerMaterialState;
     if (!strict || !cData || cData->sourceFormat != dx_source_format::DXF) return true;
     try {
+        // A layer group-390 value of F is the DXF null/default plot-style
+        // reference. If every imported layer uses that value, preserve the
+        // references as an exact default-only source profile. The associated
+        // ACAD_PLOTSTYLENAME DICTIONARYWDFLT and placeholder must still close
+        // through the NOD and agree on both its named and default target.
+        // This bypasses only the explicit per-layer plot-style source audit;
+        // it does not waive the generic dictionary graph or output bindings.
+        const auto hasExactDefaultOnlyPlotStyleGraph = [&]() {
+            if (cData->sourceVersion != DRW::AC1021
+                || version != DRW::AC1021 || cData->layers.empty()
+                || !cData->hasNamedObjectDictionary
+                || cData->dictionaryWithDefaults.size() != 1u
+                || cData->rawDictionaryWithDefaults.size() != 1u
+                || cData->rawPlaceholders.size() != 1u)
+                return false;
+            for (const DRW_Layer& layer : cData->layers) {
+                std::uint32_t target = 0u;
+                const std::string& text = layer.handlePlotS;
+                const auto parsed = std::from_chars(
+                    text.data(), text.data() + text.size(), target, 16);
+                if (text.empty() || parsed.ec != std::errc{}
+                    || parsed.ptr != text.data() + text.size()
+                    || target != 0xFu)
+                    return false;
+            }
+            const DRW_Dictionary::Entry* rootEntry = nullptr;
+            std::size_t rootMatches = 0u;
+            for (const DRW_Dictionary::Entry& entry :
+                 cData->namedObjectDictionary.m_entries) {
+                if (!asciiIdentifierEquals(
+                        entry.m_name, "ACAD_PLOTSTYLENAME"))
+                    continue;
+                rootEntry = &entry;
+                ++rootMatches;
+            }
+            const DRW_DictionaryWithDefault& dictionary =
+                cData->dictionaryWithDefaults.front();
+            const DRW_RawDxfObject& rawDictionary =
+                cData->rawDictionaryWithDefaults.front();
+            const DRW_RawDxfObject& rawPlaceholder =
+                cData->rawPlaceholders.front();
+            if (rootMatches != 1u || rootEntry == nullptr
+                || rootEntry->m_handle != dictionary.handle
+                || dictionary.handle == 0u
+                || dictionary.handle == DRW::NoHandle
+                || dictionary.parentHandle
+                    != cData->namedObjectDictionary.handle
+                || !dictionary.hasCompleteDxfPayload()
+                || dictionary.m_defaultEntryHandle != 0xFu
+                || dictionary.m_entries.size() != 1u
+                || dictionary.m_entries.front().m_name != "Normal"
+                || dictionary.m_entries.front().m_handle != 0xFu
+                || (!asciiIdentifierEquals(
+                        rawDictionary.name, "DICTIONARYWDFLT")
+                    && !asciiIdentifierEquals(
+                        rawDictionary.name, "ACDBDICTIONARYWDFLT"))
+                || rawDictionary.handle != dictionary.handle
+                || rawDictionary.parentHandle
+                    != cData->namedObjectDictionary.handle
+                || rawPlaceholder.name != "ACDBPLACEHOLDER"
+                || rawPlaceholder.handle != 0xFu
+                || rawPlaceholder.parentHandle != dictionary.handle)
+                return false;
+            return true;
+        };
+        if (hasExactDefaultOnlyPlotStyleGraph())
+            return true;
+
         std::uint32_t selected = 0u; unsigned relevant = 0u;
         for (const auto& layer : cData->layers) {
             if (layer.handlePlotS.empty()) continue;

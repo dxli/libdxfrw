@@ -1720,22 +1720,74 @@ public:
             }
         } objectWriteDiagnostic{objectWritePhase, objectWriteCompleted};
 
-        if (!hasUnchangedAcdsDxfHistorySources()
-            || !hasUnchangedDxfMaterialSources()
-            || !hasUnchangedDxfAssociativeGeometrySources()
-            || !hasUnchangedDxfAssociativeValueSources()
-            || !hasUnchangedExtensionDictionaryOwnerSources()
-            || !hasUnchangedDwgGeoDataGraphs()
-            || (!m_extensionDbColorHandles.empty()
-                && !hasUnchangedDwgDbColorEedDependencies(*cData))
-            || !hasUnchangedDynamicBlockOutputProfile()
-            || !hasUnchangedExtensionMaterialSources()
-            || !hasUnchangedDxfDictionaryVars() || !hasUnchangedDxfScales()
-            || !hasUnchangedDwgDictionaryVars()
-            || !hasUnchangedDwgScales()
-            || !hasUnchangedDwgLayoutOutputSources()
-            || !hasUnchangedDwgPlotSettingsSources()
-            || !hasUnchangedDxfMLineStyles() || !hasUnchangedDxfMLineConsumers()) {
+        if (!hasUnchangedAcdsDxfHistorySources()) {
+            objectWritePhase = "ACDS history source snapshot";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (!hasUnchangedDxfMaterialSources()) {
+            objectWritePhase = "DXF MATERIAL source snapshot";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (!hasUnchangedDxfAssociativeGeometrySources()
+            || !hasUnchangedDxfAssociativeValueSources()) {
+            objectWritePhase = "DXF associative source snapshots";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (!hasUnchangedExtensionDictionaryOwnerSources()) {
+            objectWritePhase = "extension dictionary owner snapshots";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (!hasUnchangedDwgGeoDataGraphs()) {
+            objectWritePhase = "DWG GEODATA source snapshots";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (cData->sourceFormat == dx_source_format::DWG
+            && !m_extensionDbColorHandles.empty()
+            && !hasUnchangedDwgDbColorEedDependencies(*cData)) {
+            objectWritePhase = "DWG DBCOLOR EED source snapshots";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (cData->sourceFormat == dx_source_format::DXF
+            && !cData->hasUnchangedDxfDbColorRawObjects()) {
+            objectWritePhase = "DXF DBCOLOR raw source snapshots";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (!hasUnchangedDynamicBlockOutputProfile()) {
+            objectWritePhase = "dynamic-block source snapshots";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (!hasUnchangedExtensionMaterialSources()) {
+            objectWritePhase = "extension MATERIAL source snapshots";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (!hasUnchangedDxfDictionaryVars() || !hasUnchangedDxfScales()) {
+            objectWritePhase = "DXF DICTIONARYVAR/SCALE source snapshots";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (!hasUnchangedDwgDictionaryVars() || !hasUnchangedDwgScales()) {
+            objectWritePhase = "DWG DICTIONARYVAR/SCALE source snapshots";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (!hasUnchangedDwgLayoutOutputSources()
+            || !hasUnchangedDwgPlotSettingsSources()) {
+            objectWritePhase = "DWG LAYOUT/PLOTSETTINGS source snapshots";
+            dxfW->writeRawDxfObject(nullptr);
+            return;
+        }
+        if (!hasUnchangedDxfMLineStyles()
+            || !hasUnchangedDxfMLineConsumers()) {
+            objectWritePhase = "DXF MLINE source snapshots";
             dxfW->writeRawDxfObject(nullptr);
             return;
         }
@@ -1970,19 +2022,29 @@ public:
         for (const std::uint32_t handle : m_extensionRasterVariablesHandles) {
             const dx_data::RasterVariablesKey key{
                 cData->importGeneration, handle};
-            const auto variables = cData->dwgRasterVariables.find(key);
-            if (variables == cData->dwgRasterVariables.end()) {
+            DRW_RasterVariables* variables = nullptr;
+            if (cData->sourceFormat == dx_source_format::DWG) {
+                const auto source = cData->dwgRasterVariables.find(key);
+                if (source != cData->dwgRasterVariables.end())
+                    variables = &source->second;
+            } else if (cData->sourceFormat == dx_source_format::DXF) {
+                const auto source = cData->dxfRasterVariables.find(key);
+                if (source != cData->dxfRasterVariables.end())
+                    variables = &source->second;
+            }
+            if (variables == nullptr) {
                 std::cerr << "RASTERVARIABLES output binding lost before emission\n";
                 dxfW->writeRawDxfObject(nullptr);
                 return;
             }
-            if (!dxfW->writeRasterVariables(&variables->second)) {
+            if (!dxfW->writeRasterVariables(variables)) {
                 std::cerr << "RASTERVARIABLES writer refused source handle "
                           << handle << '\n';
                 dxfW->writeRawDxfObject(nullptr);
                 return;
             }
-            if (!recordOpaqueDwgOutputQualification(handle)) {
+            if (cData->sourceFormat == dx_source_format::DWG
+                && !recordOpaqueDwgOutputQualification(handle)) {
                 std::cerr << "RASTERVARIABLES output frame qualification failed for handle "
                           << handle << '\n';
                 dxfW->writeRawDxfObject(nullptr);
@@ -1992,13 +2054,27 @@ public:
         objectWritePhase = "DBCOLOR";
         for (const std::uint32_t handle : m_extensionDbColorHandles) {
             const dx_data::DwgDbColorKey key{cData->importGeneration, handle};
-            const auto color = cData->dwgDbColorObjects.find(key);
-            if (color == cData->dwgDbColorObjects.end()
-                || !dxfW->writeDbColor(&color->second, "DBCOLOR")) {
-                dxfW->writeRawDxfObject(nullptr);
-                return;
-            }
-            if (!recordOpaqueDwgOutputQualification(handle)) {
+            if (cData->sourceFormat == dx_source_format::DWG) {
+                const auto color = cData->dwgDbColorObjects.find(key);
+                if (color == cData->dwgDbColorObjects.end()
+                    || !dxfW->writeDbColor(&color->second, "DBCOLOR")) {
+                    dxfW->writeRawDxfObject(nullptr);
+                    return;
+                }
+                if (!recordOpaqueDwgOutputQualification(handle)) {
+                    dxfW->writeRawDxfObject(nullptr);
+                    return;
+                }
+            } else if (cData->sourceFormat == dx_source_format::DXF) {
+                const auto raw = cData->dxfDbColorRawObjects.find(key);
+                if (raw == cData->dxfDbColorRawObjects.end()
+                    || !cData->hasUnchangedDxfDbColorRawObjects()
+                    || raw->second.handle != handle
+                    || !dxfW->writeRawDxfObject(&raw->second)) {
+                    dxfW->writeRawDxfObject(nullptr);
+                    return;
+                }
+            } else {
                 dxfW->writeRawDxfObject(nullptr);
                 return;
             }
