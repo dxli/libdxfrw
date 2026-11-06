@@ -105,7 +105,7 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Broaden evidence beyond this one AC1021 ModelSpace SORTENTSTABLE profile; investigate the failing AC1024 selected-output comparator separately. Keep whole-source output, native semantics, producer-wide support, and the 30 unqualified standard-object frames open.",
+  "nextAction": "Broaden evidence beyond this one local AC1021 ModelSpace SORTENTSTABLE profile and continue qualifying the 30 unqualified standard-object frames. Keep whole-source output, native semantics, producer-wide coverage, and named-block SORTENTSTABLE profiles open.",
   "sortEntsCandidateBoundary": {
     "record": "SORTENTSTABLE",
     "handle": "0x2DF",
