@@ -13047,7 +13047,6 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         const bool exactDirectNodReactor =
                             data->sourceFormat == dx_source_format::DWG
                             && (data->sourceVersion == DRW::AC1018
-                                || data->sourceVersion == DRW::AC1021
                                 || data->sourceVersion == DRW::AC1024
                                 || data->sourceVersion == DRW::AC1027
                                 || data->sourceVersion == DRW::AC1032)
@@ -13060,7 +13059,6 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                 == data->namedObjectDictionary.handle;
                         if (data->sourceFormat != dx_source_format::DWG
                             || (data->sourceVersion != DRW::AC1018
-                                && data->sourceVersion != DRW::AC1021
                                 && data->sourceVersion != DRW::AC1024
                                 && data->sourceVersion != DRW::AC1027
                                 && data->sourceVersion != DRW::AC1032)
@@ -13106,6 +13104,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         if (data->sourceFormat != dx_source_format::DWG
                             || (data->sourceVersion != DRW::AC1027
                                 && !((data->sourceVersion == DRW::AC1018
+                                      || data->sourceVersion == DRW::AC1021
                                       || data->sourceVersion == DRW::AC1024
                                       || data->sourceVersion == DRW::AC1032) && directNod))
                             || variables.parentHandle != entry.parentHandle
@@ -13116,7 +13115,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             || !variables.appData.empty()
                             || !variables.extData.empty())
                             return reject(ExtensionGraphFailure::InvalidGraph,
-                                "WIPEOUTVARIABLES is outside the bounded AC1018/AC1024/AC1027/AC1032 dictionary-owned profile");
+                                "WIPEOUTVARIABLES is outside the bounded AC1018/AC1021/AC1024/AC1027/AC1032 dictionary-owned profile");
                     } else if (frame.sunStudy != nullptr) {
                         if (!data->hasBoundDxfSunStudyGraph())
                             return reject(ExtensionGraphFailure::InvalidGraph, "SUNSTUDY source graph changed");
@@ -74897,7 +74896,7 @@ bool dx_iface::prepareDwgRasterVariablesOutput(DRW::Version targetVersion,
     return m_extensionRasterVariablesHandles.size() == typedCount;
 }
 
-// Verify independently witnessed AC1018/AC1024/AC1027/AC1032 direct-NOD WIPEOUTVARIABLES
+// Verify independently witnessed AC1018/AC1021/AC1024/AC1027/AC1032 direct-NOD WIPEOUTVARIABLES
 // frame before granting its graph profile. The DWG parent and reactor are
 // distinct typed references even when they have the same numeric target.
 static bool matchesDirectNodWipeoutWire(const DRW_UnsupportedObject& raw,
@@ -74906,19 +74905,41 @@ static bool matchesDirectNodWipeoutWire(const DRW_UnsupportedObject& raw,
     using namespace dx_raster_wire;
     if (raw.m_version == DRW::AC1018)
         return matchesAc1018DirectWipeoutWire(raw, parent, frame);
-    if ((raw.m_version != DRW::AC1024 && raw.m_version != DRW::AC1027
+    if ((raw.m_version != DRW::AC1021 && raw.m_version != DRW::AC1024
+         && raw.m_version != DRW::AC1027
          && raw.m_version != DRW::AC1032)
         || frame > 1u
         || raw.m_rawBytes.empty()
         || raw.m_rawBytes.size() > 64u * 1024u * 1024u) return false;
     const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
-    if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
-    const auto end = total - raw.m_bodyBitSize;
+    std::uint32_t end = 0u;
+    if (raw.m_version == DRW::AC1021) {
+        // AC1021 predates the R2010+ frame header's explicit handle-stream
+        // bit count. Its object-size RL, following the encoded type, is the
+        // absolute bit offset of the trailing handle stream.
+        detail::Bits prefix{raw.m_rawBytes.data(), 0u, total};
+        const auto type = prefix.shortValue();
+        end = static_cast<std::uint32_t>(prefix.little(4u));
+        if (type != static_cast<std::uint32_t>(raw.m_objectType)
+            || !prefix.good || end <= prefix.pos || end >= total)
+            return false;
+    } else {
+        if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
+        end = total - raw.m_bodyBitSize;
+    }
     detail::Bits body{raw.m_rawBytes.data(), 0u, end};
-    const auto tag = body.take(2u);
-    const auto type = tag == 0u ? body.take(8u)
-        : tag == 1u ? body.take(8u) + 0x1F0u : body.little(2u);
-    if (tag == 3u || type != static_cast<std::uint32_t>(raw.m_objectType)
+    std::uint32_t type = 0u;
+    if (raw.m_version == DRW::AC1021) {
+        type = body.shortValue();
+        const auto declaredEnd = static_cast<std::uint32_t>(body.little(4u));
+        if (declaredEnd != end) return false;
+    } else {
+        const auto tag = body.take(2u);
+        type = static_cast<std::uint32_t>(tag == 0u ? body.take(8u)
+            : tag == 1u ? body.take(8u) + 0x1F0u : body.little(2u));
+        if (tag == 3u) return false;
+    }
+    if (type != static_cast<std::uint32_t>(raw.m_objectType)
         || detail::handle(body, 0u, 0u, true).value != raw.m_handle
         || body.shortValue() != 0u || body.longValue() != 1u
         || body.take(1u) != 1u
@@ -74964,11 +74985,12 @@ bool dx_iface::prepareDwgWipeoutVariablesOutput(DRW::Version targetVersion,
         ++typedCount;
     if (typedCount != 0u
         && ((cData->sourceVersion != DRW::AC1018
+             && cData->sourceVersion != DRW::AC1021
              && cData->sourceVersion != DRW::AC1024
              && cData->sourceVersion != DRW::AC1027
              && cData->sourceVersion != DRW::AC1032)
             || targetVersion != cData->sourceVersion))
-        return fail("output requires same-revision AC1018, AC1024, AC1027 or AC1032 source and target");
+        return fail("output requires same-revision AC1018, AC1021, AC1024, AC1027 or AC1032 source and target");
 
     const bool completeClassReport = cData->dwgClassCoverage.m_complete
         && cData->dwgClassCoverage.m_status
@@ -80571,6 +80593,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 targetWipeoutVariables != nullptr
                 && cData->sourceFormat == dx_source_format::DWG
                 && (cData->sourceVersion == DRW::AC1018
+                    || cData->sourceVersion == DRW::AC1021
                     || cData->sourceVersion == DRW::AC1024
                     || cData->sourceVersion == DRW::AC1027
                     || cData->sourceVersion == DRW::AC1032)

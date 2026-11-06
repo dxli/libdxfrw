@@ -1158,20 +1158,36 @@ public:
                 return e.m_name == "ACAD_WIPEOUT_VARS" && e.m_handle == 0x30u;
             }) == 1;
     }
+    static bool retainedHandleStart(const DRW_UnsupportedObject& raw,
+                                    std::uint32_t& start) {
+        const auto total = static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u);
+        if (raw.m_version == DRW::AC1018) {
+            dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u, total};
+            (void)body.shortValue();
+            start = static_cast<std::uint32_t>(body.little(4u));
+            return body.good && start < total;
+        }
+        if (raw.m_version == DRW::AC1021) {
+            dx_raster_wire::detail::Bits prefix{raw.m_rawBytes.data(), 0u, total};
+            const auto type = prefix.shortValue();
+            start = static_cast<std::uint32_t>(prefix.little(4u));
+            return type == static_cast<std::uint32_t>(raw.m_objectType)
+                && prefix.good && start > prefix.pos && start < total;
+        }
+        if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total)
+            return false;
+        start = total - raw.m_bodyBitSize;
+        return true;
+    }
     static bool toggleRetainedOwnerRole(dx_data& data, std::uint32_t handle) {
         const auto found = data.m_opaqueDwgSourceFrames.find({data.importGeneration, handle});
         if (found == data.m_opaqueDwgSourceFrames.end()) return false;
         auto& raw = found->second;
         const auto total = raw.m_rawBytes.size() * 8u;
         std::size_t start = 0u;
-        if (raw.m_version == DRW::AC1018) {
-            dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u, static_cast<std::uint32_t>(total)};
-            (void)body.shortValue(); start = static_cast<std::size_t>(body.little(4u));
-            if (!body.good || start >= total) return false;
-        } else {
-            if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
-            start = total - raw.m_bodyBitSize;
-        }
+        std::uint32_t handleStart = 0u;
+        if (!retainedHandleStart(raw, handleStart)) return false;
+        start = handleStart;
         const auto bit = start + 3u;
         if (bit >= total) return false;
         raw.m_rawBytes[bit / 8u] ^= static_cast<std::uint8_t>(1u << (7u - bit % 8u));
@@ -1407,14 +1423,7 @@ public:
         auto& raw = found->second;
         const auto total = raw.m_rawBytes.size() * 8u;
         std::uint32_t start = 0u;
-        if (raw.m_version == DRW::AC1018) {
-            dx_raster_wire::detail::Bits body{raw.m_rawBytes.data(), 0u, static_cast<std::uint32_t>(total)};
-            (void)body.shortValue(); start = static_cast<std::uint32_t>(body.little(4u));
-            if (!body.good || start >= total) return false;
-        } else {
-            if (!raw.m_bodyBitSize || raw.m_bodyBitSize >= total) return false;
-            start = static_cast<std::uint32_t>(total - raw.m_bodyBitSize);
-        }
+        if (!retainedHandleStart(raw, start)) return false;
         dx_raster_wire::detail::Bits cursor{raw.m_rawBytes.data(), start, static_cast<std::uint32_t>(total)};
         (void)dx_raster_wire::detail::handle(cursor, 4u, handle);
         const auto bit = static_cast<std::size_t>(cursor.pos) + 3u;
@@ -73948,6 +73957,10 @@ int main(int argc, char** argv) {
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-direct-nod")
         return wipeoutVariablesDwgAdapterTransport(true) ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1]) == "--wipeoutvariables-dwg-ac1021-direct-nod")
+        return wipeoutVariablesDwgAdapterTransport(true, DRW::AC1021)
+            ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-ac1024-direct-nod")
         return wipeoutVariablesDwgAdapterTransport(true, DRW::AC1024) ? 0 : 1;
