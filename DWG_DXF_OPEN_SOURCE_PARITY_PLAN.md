@@ -1284,9 +1284,7 @@ unclaimed and strict output refused ([retry receipt](docs/research/p6-ac1027-oda
 An AC1024 maintenance-55 source now reaches its raster and NOD callbacks under
 the same diagnostic policy. Its IMAGEDEF and reactor are retained for diagnosis,
 but export refuses the IMAGEDEF's unqualified role-4 owner because ODA's common
-and record-specific descriptions conflict. Resolve that role with authoritative
-evidence and close the image/proxy graph while retaining the separate HEADER
-warnings and unclaimed suffix refusal. Audit other revisions' generic Unsupported
+and record-specific descriptions conflict. Resolve that role with authoritative DWG wire evidence and close the image/proxy graph while retaining the separate HEADER warnings and unclaimed suffix refusal. Autodesk confirms the ACAD_IMAGE_DICT relationship and soft-pointer role in DXF, but that does not resolve the DWG common-parent conflict; the LibreDWG image constructor is explicitly incomplete and is not a role oracle ([role boundary receipt](docs/research/p4-imagedef-autodesk-dxf-owner-role-boundary-2026-11-05.json)). Audit other revisions' generic Unsupported
 paths separately; the reproduced R13/R14 zero-size IMAGEDEF correlation gap is
 closed ([receipt](docs/research/p4-ac1014-imagedef-zero-size-correlation-2026-11-04.json)).
 See the [HEADER receipt](docs/research/p6-ac1024-header-unclaimed-suffix-diagnostic-2026-11-04.json)
