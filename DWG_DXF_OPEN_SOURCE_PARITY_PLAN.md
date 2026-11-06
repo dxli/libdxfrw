@@ -619,11 +619,16 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    recorded in the [adapter graph receipt](docs/research/p4-blockrecord-blkrefs-adapter-graph-closure-2026-11-03.json);
    low-level group-331 identity transport remains in the
    [BLKREFS transport receipt](docs/research/p4-blockrecord-blkrefs-reference-remapping-2026-11-03.json).
-   This does not yet prove a valid adapter write/readback for the selected
-   physical source, source-bound complete membership, producer breadth or native
-   meaning. Autodesk's BLOCK_RECORD field table does not enumerate BLKREFS, and
-   generic group-331 classification is not evidence of required membership
-   semantics. Keep whole-document output unqualified until those gates close.
+   The generated positive adapter route is now verified in ASCII and Binary:
+   one named target BLOCK_RECORD, its BLOCK/ENDBLK identities, and its BLKREFS
+   INSERT survive fresh readback with exact remapped identity; wrong-owner
+   output preserves the destination, and same-adapter correction/retry passes
+   ([generated output receipt](docs/research/p4-blockrecord-blkrefs-generated-adapter-readback-2026-11-06.json)).
+   This still does not prove selected physical-source output, source-bound complete
+   membership, producer breadth or native meaning. Autodesk's BLOCK_RECORD field
+   table does not enumerate BLKREFS, and generic group-331 classification is not
+   evidence of required membership semantics. Keep whole-document output
+   unqualified until those gates close.
 3. **Recursive closure:** follow only source-required edges reached from the
    admitted graph. Reuse a qualified provider when it closes the exact target
    role; otherwise resolve that source-required body and its descendants, and
