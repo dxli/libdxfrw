@@ -332,13 +332,38 @@ def check_default_dwg_output_versions(converter, root, writer,
                 f"default-version-dwg-output-{revision.decode()}-"
                 f"{'binary' if binary else 'ascii'}.dxf")
             arguments = [str(converter), str(source), "-o", str(output)]
-            inspect_projection = revision == b"AC1018" or (revision == b"AC1021" and not binary)
+            # AC1027 import currently has an explicit strict-output guard
+            # until source owner/member roles and entity references are fully
+            # qualified. Keep this generated profile as an atomic refusal
+            # control; do not make the CLI contract imply AC1027 support.
+            ac1027_strict_refusal = revision == b"AC1027"
+            inspect_projection = (revision == b"AC1018"
+                                  or (revision == b"AC1021" and not binary)
+                                  or ac1027_strict_refusal)
             if inspect_projection:
                 arguments.append("-d")
             if binary:
                 arguments.append("-b")
             result = run_bounded(arguments, 10, 2 * 1024 * 1024, cwd=root)
             payload = output.read_bytes() if output.is_file() else b""
+            if ac1027_strict_refusal:
+                required_projection = (
+                    b"CLI conversion projection: schema=1 sourceFormat=DWG "
+                    b"sourceVersion=AC1027 targetVersion=AC1027 "
+                    b"targetSelection=source-default outputEncoding="
+                    + (b"Binary" if binary else b"ASCII")
+                    + b" readCompleteness=strict stage=before-output-preflight")
+                if (result.returncode != 1 or source.read_bytes() != original
+                        or output.exists()
+                        or b"AC1027 DWG source references are not fully qualified"
+                        not in result.stderr
+                        or required_projection not in result.stderr):
+                    raise AssertionError(
+                        "AC1027 default export did not preserve the source and "
+                        "atomically refuse its unqualified reference graph: "
+                        f"{result!r}")
+                checked += 1
+                continue
             if (result.returncode != 0 or source.read_bytes() != original
                     or not output_has_revision(payload, revision, binary)):
                 raise AssertionError(
@@ -1040,7 +1065,9 @@ def check_partial_dwg_read_cli(converter, root, writer):
             + revision,
             b"entityParseFailures=1",
             b"failed=1",
-            b"strict-complete conversion requires successful, complete DWG read disposition",
+            (b"AC1027 DWG source references are not fully qualified"
+             if revision == b"AC1027"
+             else b"strict-complete conversion requires successful, complete DWG read disposition"),
         )
         if (strict.returncode != 1 or strict_output.read_bytes() != SENTINEL
                 or source.read_bytes() != original
@@ -1050,6 +1077,42 @@ def check_partial_dwg_read_cli(converter, root, writer):
                 f"strict {version} partial-read refusal was not diagnosed atomically: "
                 f"{strict!r}")
         checked += 1
+
+        if revision == b"AC1027":
+            # The explicit partial-read opt-in does not waive AC1027 source
+            # reference qualification. Keep that distinct guard fail-closed
+            # for both encodings and verify no destination is published.
+            partial_output = root / f"partial-read admitted result {version}.dxf"
+            partial_output.write_bytes(SENTINEL)
+            partial = run_bounded(
+                [str(converter), str(source), "-o", str(partial_output), "-y",
+                 "--allow-partial-dwg-read", "-d"],
+                10, 2 * 1024 * 1024, cwd=root)
+            if (partial.returncode != 1 or partial_output.read_bytes() != SENTINEL
+                    or source.read_bytes() != original
+                    or b"AC1027 DWG source references are not fully qualified"
+                    not in partial.stderr):
+                raise AssertionError(
+                    "AC1027 partial-read opt-in bypassed the unqualified-source "
+                    f"guard or changed protected files: {partial!r}")
+            checked += 1
+
+            binary_output = root / f"partial-read binary result {version}.dxf"
+            binary_output.write_bytes(SENTINEL)
+            binary_partial = run_bounded(
+                [str(converter), str(source), "-o", str(binary_output), "-b", "-y",
+                 "--allow-partial-dwg-read", "-d"],
+                10, 2 * 1024 * 1024, cwd=root)
+            if (binary_partial.returncode != 1
+                    or binary_output.read_bytes() != SENTINEL
+                    or source.read_bytes() != original
+                    or b"AC1027 DWG source references are not fully qualified"
+                    not in binary_partial.stderr):
+                raise AssertionError(
+                    "AC1027 Binary partial-read opt-in bypassed the unqualified-source "
+                    f"guard or changed protected files: {binary_partial!r}")
+            checked += 1
+            continue
 
         partial_output = root / f"partial-read admitted result {version}.dxf"
         partial = run_bounded(
@@ -1464,7 +1527,8 @@ def check_source_disposition_projection(converter, root, writer):
             or skipped_source.read_bytes() != skipped_bytes
             or b"sourceDwgSkippedCustomClassInstances=1" not in projection
             or b"sourceDwgSkippedUnsupportedObjectInstances=1" not in projection
-            or b"strict-complete conversion requires" not in skipped.stderr):
+            or b"AC1027 DWG source references are not fully qualified"
+            not in skipped.stderr):
         raise AssertionError(
             f"strict output did not project and refuse skipped DWG records: {skipped!r}")
     checked += 1
@@ -1490,7 +1554,8 @@ def check_source_disposition_projection(converter, root, writer):
             or multiple_source.read_bytes() != multiple_bytes
             or b"sourceDwgSkippedCustomClassInstances=3" not in projection
             or b"sourceDwgSkippedUnsupportedObjectInstances=3" not in projection
-            or b"strict-complete conversion requires" not in multiple_skipped.stderr):
+            or b"AC1027 DWG source references are not fully qualified"
+            not in multiple_skipped.stderr):
         raise AssertionError(
             "three same-class skipped DWG objects were not aggregated/refused "
             f"atomically: {multiple_skipped!r}")
@@ -1519,7 +1584,8 @@ def check_source_disposition_projection(converter, root, writer):
             or b"sourceDwgSkippedUnsupportedObjectInstances=3" not in projection
             or b"skippedCustomClasses: sourceNames=3 observedInstances=3" not in multi_class_skipped.stderr
             or b"skippedUnsupportedObjects: sourceNames=3 observedInstances=3" not in multi_class_skipped.stderr
-            or b"strict-complete conversion requires" not in multi_class_skipped.stderr):
+            or b"AC1027 DWG source references are not fully qualified"
+            not in multi_class_skipped.stderr):
         raise AssertionError(
             "three distinct unknown classes were not counted and refused "
             f"atomically: {multi_class_skipped!r}")

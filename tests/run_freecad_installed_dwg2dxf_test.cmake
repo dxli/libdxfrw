@@ -60,15 +60,15 @@ if("${_installed_real_path}" STREQUAL "${_build_real_path}")
         "Installed CLI resolves to the build-tree executable '${_build_real_path}'")
 endif()
 
-set(_positive_sample "${_test_root}/source drawing AC1027.dwg")
+set(_refusal_sample "${_test_root}/source drawing AC1027.dwg")
 execute_process(
-    COMMAND "${DWG_SOURCE_GENERATOR}" --generate-cli-batch-source "${_positive_sample}" AC1027
+    COMMAND "${DWG_SOURCE_GENERATOR}" --generate-cli-batch-source "${_refusal_sample}" AC1027
     RESULT_VARIABLE _generate_result
     OUTPUT_VARIABLE _generate_stdout
     ERROR_VARIABLE _generate_stderr
     TIMEOUT 30
 )
-if(NOT "${_generate_result}" STREQUAL "0" OR NOT EXISTS "${_positive_sample}")
+if(NOT "${_generate_result}" STREQUAL "0" OR NOT EXISTS "${_refusal_sample}")
     message(FATAL_ERROR
         "Could not generate the installed-test AC1027 DWG (${_generate_result}); diagnostics retained under '${_test_root}'\n"
         "${_generate_stdout}\n${_generate_stderr}")
@@ -97,7 +97,8 @@ set(_clean_environment_command
     "PATH=${_clean_path}"
     "${CMAKE_COMMAND}"
     "-DDWG2DXF=${_installed_dwg2dxf}"
-    "-DSAMPLE=${_positive_sample}"
+    "-DSAMPLE=${_refusal_sample}"
+    "-DDWG_SOURCE_GENERATOR=${DWG_SOURCE_GENERATOR}"
     "-DRTEXT_SAMPLE=${RTEXT_SAMPLE}"
     "-DMPOLYGON_SAMPLE=${MPOLYGON_SAMPLE}"
     "-DOUTPUT_DIR=${_test_output}"

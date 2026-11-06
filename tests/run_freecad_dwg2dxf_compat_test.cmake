@@ -43,30 +43,24 @@ if(EXISTS "${_test_dir}")
     message(FATAL_ERROR "Refusing to reuse existing test directory '${_test_dir}'")
 endif()
 file(MAKE_DIRECTORY "${_test_dir}")
-set(_input "${_test_dir}/source drawing AC1027.dwg")
-if(DEFINED SAMPLE)
-    execute_process(
-        COMMAND "${CMAKE_COMMAND}" -E copy "${SAMPLE}" "${_input}"
-        RESULT_VARIABLE _copy_result
-    )
-    if(NOT "${_copy_result}" STREQUAL "0")
-        message(FATAL_ERROR "Could not prepare the test-local DWG input (${_copy_result})")
-    endif()
-else()
-    execute_process(
-        COMMAND "${DWG_SOURCE_GENERATOR}" --generate-cli-batch-source "${_input}" AC1027
-        RESULT_VARIABLE _generate_result
-        OUTPUT_VARIABLE _generate_stdout
-        ERROR_VARIABLE _generate_stderr
-        TIMEOUT 30
-    )
-    if(NOT "${_generate_result}" STREQUAL "0" OR NOT EXISTS "${_input}")
-        message(FATAL_ERROR
-            "Could not generate the test-local AC1027 DWG (${_generate_result})\n"
-            "${_generate_stdout}\n${_generate_stderr}")
-    endif()
+if(NOT DEFINED DWG_SOURCE_GENERATOR OR NOT EXISTS "${DWG_SOURCE_GENERATOR}")
+    message(FATAL_ERROR
+        "DWG_SOURCE_GENERATOR is required to generate the qualified AC1021 positive control")
 endif()
-set(_output "${_test_dir}/ordinary encoding AC1027.dxf")
+set(_input "${_test_dir}/source drawing AC1021.dwg")
+execute_process(
+    COMMAND "${DWG_SOURCE_GENERATOR}" --generate-cli-batch-source "${_input}" AC1021
+    RESULT_VARIABLE _generate_result
+    OUTPUT_VARIABLE _generate_stdout
+    ERROR_VARIABLE _generate_stderr
+    TIMEOUT 30
+)
+if(NOT "${_generate_result}" STREQUAL "0" OR NOT EXISTS "${_input}")
+    message(FATAL_ERROR
+        "Could not generate the test-local AC1021 DWG (${_generate_result})\n"
+        "${_generate_stdout}\n${_generate_stderr}")
+endif()
+set(_output "${_test_dir}/ordinary encoding AC1021.dxf")
 file(REMOVE "${_output}")
 
 # This is the exact argv shape used by FreeCAD: no shell, version, or -y flag.
@@ -87,16 +81,16 @@ endif()
 
 file(READ "${_output}" _header LIMIT 2048)
 string(FIND "${_header}" "SECTION" _section_pos)
-string(FIND "${_header}" "AC1027" _version_pos)
+string(FIND "${_header}" "AC1021" _version_pos)
 if(_section_pos EQUAL -1 OR _version_pos EQUAL -1)
     message(FATAL_ERROR
-        "Expected ASCII DXF structure and source revision AC1027 in output header")
+        "Expected ASCII DXF structure and source revision AC1021 in output header")
 endif()
 
 # DXF's effective text-codec version is AC1021 for all modern releases, but
 # the CLI's default output policy must use the exact declared $ACADVER. Verify
-# that a second FreeCAD-form conversion does not silently downgrade AC1027.
-set(_readback_output "${_test_dir}/AC1027 DXF readback.dxf")
+# that a second FreeCAD-form conversion does not silently downgrade AC1021.
+set(_readback_output "${_test_dir}/AC1021 DXF readback.dxf")
 file(REMOVE "${_readback_output}")
 execute_process(
     COMMAND "${DWG2DXF}" "${_output}" -o "${_readback_output}"
@@ -111,10 +105,56 @@ if(NOT "${_readback_result}" STREQUAL "0" OR NOT EXISTS "${_readback_output}")
         "${_readback_stdout}\n${_readback_stderr}")
 endif()
 file(READ "${_readback_output}" _readback_header LIMIT 2048)
-string(FIND "${_readback_header}" "AC1027" _readback_version_pos)
+string(FIND "${_readback_header}" "AC1021" _readback_version_pos)
 if(_readback_version_pos EQUAL -1)
     message(FATAL_ERROR
-        "FreeCAD-form DXF readback downgraded the source revision from AC1027")
+        "FreeCAD-form DXF readback downgraded the source revision from AC1021")
+endif()
+
+# AC1027 remains strict-output refused while its complete source reference graph
+# is unqualified. Exercise the exact FreeCAD argv form and require atomic refusal.
+set(_ac1027_input "${_test_dir}/source drawing AC1027.dwg")
+if(DEFINED SAMPLE)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E copy "${SAMPLE}" "${_ac1027_input}"
+        RESULT_VARIABLE _copy_result
+    )
+    if(NOT "${_copy_result}" STREQUAL "0")
+        message(FATAL_ERROR "Could not prepare the test-local AC1027 refusal input (${_copy_result})")
+    endif()
+else()
+    execute_process(
+        COMMAND "${DWG_SOURCE_GENERATOR}" --generate-cli-batch-source "${_ac1027_input}" AC1027
+        RESULT_VARIABLE _generate_result
+        OUTPUT_VARIABLE _generate_stdout
+        ERROR_VARIABLE _generate_stderr
+        TIMEOUT 30
+    )
+    if(NOT "${_generate_result}" STREQUAL "0" OR NOT EXISTS "${_ac1027_input}")
+        message(FATAL_ERROR
+            "Could not generate the test-local AC1027 refusal input (${_generate_result})\n"
+            "${_generate_stdout}\n${_generate_stderr}")
+    endif()
+endif()
+set(_ac1027_output "${_test_dir}/unqualified AC1027 output.dxf")
+file(REMOVE "${_ac1027_output}")
+file(SHA256 "${_ac1027_input}" _ac1027_input_hash_before)
+execute_process(
+    COMMAND "${DWG2DXF}" "${_ac1027_input}" -o "${_ac1027_output}"
+    RESULT_VARIABLE _ac1027_result
+    OUTPUT_VARIABLE _ac1027_stdout
+    ERROR_VARIABLE _ac1027_stderr
+    TIMEOUT 60
+)
+file(SHA256 "${_ac1027_input}" _ac1027_input_hash_after)
+string(FIND "${_ac1027_stderr}" "AC1027 DWG source references are not fully qualified"
+    _ac1027_diagnostic_pos)
+if("${_ac1027_result}" STREQUAL "0" OR EXISTS "${_ac1027_output}"
+        OR NOT "${_ac1027_input_hash_before}" STREQUAL "${_ac1027_input_hash_after}"
+        OR _ac1027_diagnostic_pos EQUAL -1)
+    message(FATAL_ERROR
+        "FreeCAD-form AC1027 strict refusal was not explicit and atomic (${_ac1027_result})\n"
+        "${_ac1027_stdout}\n${_ac1027_stderr}")
 endif()
 
 function(assert_freecad_entity_refusal sample stem diagnostic)
@@ -170,28 +210,17 @@ if(NOT CMAKE_HOST_WIN32)
     set(_unicode_input "${_unicode_dir}/drawing été.dwg")
     set(_unicode_output "${_unicode_dir}/résultat été.dxf")
     file(REMOVE "${_unicode_output}")
-    if(DEFINED SAMPLE)
-        execute_process(
-            COMMAND "${CMAKE_COMMAND}" -E copy "${SAMPLE}" "${_unicode_input}"
-            RESULT_VARIABLE _copy_result
-        )
-        if(NOT "${_copy_result}" STREQUAL "0")
-            message(FATAL_ERROR
-                "Could not prepare Unicode-path DWG input (${_copy_result})")
-        endif()
-    else()
-        execute_process(
-            COMMAND "${DWG_SOURCE_GENERATOR}" --generate-cli-batch-source "${_unicode_input}" AC1027
-            RESULT_VARIABLE _generate_result
-            OUTPUT_VARIABLE _generate_stdout
-            ERROR_VARIABLE _generate_stderr
-            TIMEOUT 30
-        )
-        if(NOT "${_generate_result}" STREQUAL "0" OR NOT EXISTS "${_unicode_input}")
-            message(FATAL_ERROR
-                "Could not generate the Unicode-path AC1027 DWG (${_generate_result})\n"
-                "${_generate_stdout}\n${_generate_stderr}")
-        endif()
+    execute_process(
+        COMMAND "${DWG_SOURCE_GENERATOR}" --generate-cli-batch-source "${_unicode_input}" AC1021
+        RESULT_VARIABLE _generate_result
+        OUTPUT_VARIABLE _generate_stdout
+        ERROR_VARIABLE _generate_stderr
+        TIMEOUT 30
+    )
+    if(NOT "${_generate_result}" STREQUAL "0" OR NOT EXISTS "${_unicode_input}")
+        message(FATAL_ERROR
+            "Could not generate the Unicode-path AC1021 DWG (${_generate_result})\n"
+            "${_generate_stdout}\n${_generate_stderr}")
     endif()
     execute_process(
         COMMAND "${DWG2DXF}" "${_unicode_input}" -o "${_unicode_output}"
@@ -205,9 +234,9 @@ if(NOT CMAKE_HOST_WIN32)
             "FreeCAD-form conversion failed for UTF-8 paths (${_result})\n${_stdout}\n${_stderr}")
     endif()
     file(READ "${_unicode_output}" _unicode_header LIMIT 2048)
-    string(FIND "${_unicode_header}" "AC1027" _unicode_version_pos)
+    string(FIND "${_unicode_header}" "AC1021" _unicode_version_pos)
     if(_unicode_version_pos EQUAL -1)
-        message(FATAL_ERROR "UTF-8-path output is not a valid AC1027 DXF")
+        message(FATAL_ERROR "UTF-8-path output is not a valid AC1021 DXF")
     endif()
 else()
     message(STATUS
@@ -265,9 +294,9 @@ if(NOT "${_result}" STREQUAL "0")
         "Explicit overwrite invocation failed (${_result})\n${_stdout}\n${_stderr}")
 endif()
 file(READ "${_output}" _header LIMIT 2048)
-string(FIND "${_header}" "AC1027" _version_pos)
+string(FIND "${_header}" "AC1021" _version_pos)
 if(_version_pos EQUAL -1)
-    message(FATAL_ERROR "Explicit overwrite did not replace the sentinel with a DXF")
+    message(FATAL_ERROR "Explicit overwrite did not replace the sentinel with an AC1021 DXF")
 endif()
 
 # FreeCAD ignores the converter exit status and accepts a path that exists.
