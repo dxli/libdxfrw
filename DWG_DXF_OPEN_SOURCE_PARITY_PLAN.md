@@ -2092,6 +2092,10 @@ Native source-release builds and platform qualification remain open.
   reactor handle spans verified before wrapping; source NOD `0x0A` maps to the
   wrapper NOD `0x0C`. Selected ASCII/Binary output, refusal, same-adapter retry
   and typed readback pass ([receipt](docs/research/p4-ac1018-rastervariables-frame1-physical-writer-bridge-2026-11-05.json)).
+  A separate physical AC1018 frame=0 witness also passes the same
+  RequireComplete owner-resolved wrapper route; its 17-byte body, RL boundary,
+  scalar fields and source owner/reactor spans are checked before NOD remapping
+  ([receipt](docs/research/p4-ac1018-rastervariables-frame0-physical-writer-bridge-2026-11-05.json)).
   These controls do not convert the physical drawings as a whole. Their
   unrelated source/read/layout-integrity gates and native image semantics remain
   open, as do broader producer/version profiles.
