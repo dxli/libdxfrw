@@ -102,7 +102,7 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Classify fixed-type source frames 0x266 and 0x26A, then bind original RASTERVARIABLES 0x2D2 and SORTENTSTABLE 0x2DF frames to exact selected output and fresh readback. Keep whole-source refusal and do not double-count.",
+  "nextAction": "Qualify the two fixed type-34 VIEWPORTs 0x266 and 0x26A as a bounded AC1021 source graph: freeze exact fields and versioned handle roles from ODA \u00a720.4.38 plus the source trace, bind paper-space LAYOUT/BLOCK_RECORD ownership and XDICTIONARY targets, then prove selected ASCII/Binary output, fresh readback, atomic refusal, and retry. Keep original RASTERVARIABLES 0x2D2 and SORTENTSTABLE 0x2DF source frames unqualified until independently source-bound.",
   "materialCandidateBoundary": {
     "record": "MATERIAL",
     "observedCount": 3,
@@ -169,18 +169,18 @@
       {
         "handle": "0x266",
         "objectType": 34,
-        "record": "",
-        "class": "",
+        "record": "VIEWPORT",
+        "class": "fixed type 34 / AcDbViewport",
         "state": "UNQUALIFIED",
-        "sourceRoles": "Fixed-type source frame; output role and owning graph need classification."
+        "sourceRoles": "Paper-space VIEWPORT entity in the AC1021 source. Local trace decodes the typed viewport body and common layer/XDICTIONARY links; the entity-specific VIEWPORT handle tail is consumed after the common-handle parser. ODA v5.4.1 \u00a720.4.38 specifies the versioned frozen-layer, clip, UCS, background, visual-style, shadeplot, and sun handles. Exact selected-output/source-span proof remains open."
       },
       {
         "handle": "0x26A",
         "objectType": 34,
-        "record": "",
-        "class": "",
+        "record": "VIEWPORT",
+        "class": "fixed type 34 / AcDbViewport",
         "state": "UNQUALIFIED",
-        "sourceRoles": "Fixed-type source frame; output role and owning graph need classification."
+        "sourceRoles": "Paper-space VIEWPORT entity in the AC1021 source. Local trace decodes the typed viewport body and common layer/XDICTIONARY links; the entity-specific VIEWPORT handle tail is consumed after the common-handle parser. ODA v5.4.1 \u00a720.4.38 specifies the versioned frozen-layer, clip, UCS, background, visual-style, shadeplot, and sun handles. Exact selected-output/source-span proof remains open."
       },
       {
         "handle": "0x2D2",
