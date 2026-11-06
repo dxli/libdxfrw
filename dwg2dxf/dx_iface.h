@@ -1500,14 +1500,27 @@ public:
             // source identities must be reserved before table records mint
             // output handles. A low source TABLESTYLE handle can otherwise
             // alias the next generated TEXTSTYLE handle.
+            std::unordered_set<std::uint32_t> selectedTableStyleHandles;
+            std::unordered_set<std::uint32_t> extensionCellStyleMapHandles(
+                m_extensionCellStyleMapHandles.begin(),
+                m_extensionCellStyleMapHandles.end());
             for (const std::uint32_t handle : m_tableStylesToEmit) {
-                if (dxfW->preallocateEntityHandle(handle) == 0) {
+                if (!selectedTableStyleHandles.insert(handle).second
+                    || dxfW->preallocateEntityHandle(handle) == 0) {
                     (void)dxfW->writeTable(nullptr);
                     return;
                 }
             }
+            std::unordered_set<std::uint32_t> extensionTableStyleHandles;
             for (const std::uint32_t handle : m_extensionTableStyleHandles) {
-                if (dxfW->preallocateEntityHandle(handle) == 0) {
+                // A typed TABLESTYLE with an extension dictionary also
+                // arrives through the generic extension-object inventory.
+                // Reserve its identity once, through the selected typed row.
+                if (selectedTableStyleHandles.count(handle) != 0u
+                    || extensionCellStyleMapHandles.count(handle) != 0u)
+                    continue;
+                if (!extensionTableStyleHandles.insert(handle).second
+                    || dxfW->preallocateEntityHandle(handle) == 0) {
                     (void)dxfW->writeTable(nullptr);
                     return;
                 }
@@ -1536,8 +1549,10 @@ public:
                 }
             }
         }
+        std::unordered_set<std::uint32_t> preallocatedCellStyleMaps;
         for (const std::uint32_t handle : m_extensionCellStyleMapHandles) {
-            if (dxfW->preallocateEntityHandle(handle) == 0) {
+            if (!preallocatedCellStyleMaps.insert(handle).second
+                || dxfW->preallocateEntityHandle(handle) == 0) {
                 (void)dxfW->writeTable(nullptr);
                 return;
             }

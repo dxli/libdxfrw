@@ -13679,12 +13679,17 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                     "CELLSTYLEMAP must be the canonical TABLESTYLE extension-dictionary entry");
                             const DRW_CellStyleMap& map =
                                 *cellStyleMap->second;
+                            const bool reactorsCloseToOwner =
+                                map.reactorHandles.empty()
+                                || (map.reactorHandles.size() == 1u
+                                    && map.reactorHandles.front()
+                                        == frame.handle);
                             const auto owners =
                                 tableStyleExtensionOwners.find(frame.handle);
                             if (map.parentHandle != frame.handle
                                 || (map.xDictHandle != 0
                                     && map.xDictHandle != DRW::NoHandle)
-                                || !map.reactorHandles.empty()
+                                || !reactorsCloseToOwner
                                 || owners == tableStyleExtensionOwners.end()
                                 || owners->second.size() != 1u
                                 || frame.dictionary->parentHandle

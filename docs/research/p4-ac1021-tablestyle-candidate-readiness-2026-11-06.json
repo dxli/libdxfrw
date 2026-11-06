@@ -35,15 +35,41 @@
     "extensionDictionary": {
       "handle": "0x1659",
       "key": "ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP",
-      "targetHandle": "0xCED7"
+      "targetHandle": "0xCE97"
     },
-    "profileLimit": "The selected route must establish the extension dictionary and target role or refuse. Retaining the table style callback alone is insufficient."
+    "profileLimit": "The exact selected TABLESTYLE/CELLSTYLEMAP graph and source profile now pass local ASCII/Binary output/readback with atomic reference refusal and retry. Keep whole-source and native consumer claims closed until unrelated source graphs close and an independent reader accepts the emitted DXF.",
+    "cellStyleMap": {
+      "handle": "0xCE97",
+      "type": 509,
+      "ownerHandle": "0x1659",
+      "reactorHandles": [
+        "0x1659"
+      ],
+      "cellCount": 3,
+      "cellNames": [
+        "_TITLE",
+        "_HEADER",
+        "_DATA"
+      ],
+      "backgroundDwgCmc": {
+        "index": 256,
+        "method": "0xC8"
+      },
+      "dxfBackgroundSentinel": 257
+    }
   },
   "independentPeer": {
     "implementation": "LibreDWG dwgread 0.14",
     "command": "dwgread -O JSON -o /private/tmp/ac1021-architectural-libre-1106.json /Users/dli/doc/dwg/architectural_-_annotation_scaling_and_multileaders.dwg",
     "result": "SUCCESS; independently reports the TABLESTYLE identity, owner/reactor, extension dictionary, Standard name, flow direction 0, flags 0, margins 0.06/0.06, and three row styles.",
-    "scopeLimit": "Peer JSON agreement is field corroboration only; it does not qualify this repository's output or native TABLESTYLE semantics."
+    "scopeLimit": "Peer JSON agreement is field corroboration only; it does not qualify this repository's output or native TABLESTYLE semantics.",
+    "cellStyleMap": {
+      "sourceObject": "LibreDWG 0.14 JSON of the same existing architectural DWG",
+      "identity": "CELLSTYLEMAP handle 52887 decimal = 0xCE97; owner and sole reactor are extension DICTIONARY 5721 decimal = 0x1659.",
+      "edge": "The extension dictionary key ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP resolves to 52887; TABLESTYLE handle 135 decimal = 0x87 points to extension dictionary 5721.",
+      "fields": "Three named cell records _TITLE/_HEADER/_DATA; the peer reports background CMC bytes beginning C8 and six borders per cell. This corroborates source identities and selected fields only.",
+      "limit": "No independent reader has yet consumed the emitted ASCII/Binary DXF; source peer data does not qualify output acceptance or native application semantics."
+    }
   },
   "specification": {
     "authority": "Open Design Specification for .dwg files v5.4.1, §20.4.101.1 (TABLESTYLE format until R21)",
@@ -55,14 +81,16 @@
     "result": "FAIL CLOSED before output preparation: typed-proxy-graphics-not-preserved, 36 records, first handle 0x2C50 (decimal 11344).",
     "interpretation": "This unrelated source graph stop does not establish TABLESTYLE output failure; use an exact selected graph projection for the next slice and keep full-source conversion refused."
   },
-  "nextAction": "Keep the exact lineweights AC1021 Standard profile narrow. Next independently qualify the second architectural TABLESTYLE profile only after its extension dictionary and CELLSTYLEMAP target roles close, then broaden version/source admission only from additional passing physical profiles. Preserve strict whole-source refusal and require no new committed fixtures.",
+  "nextAction": "Run an independent DXF reader against retained temporary ASCII/Binary outputs for this exact selected profile; then qualify the complete physical source only after unrelated object graphs and source completeness gates close. Keep AC1021 admission exact-profile only and retain whole-source refusal.",
   "validation": {
     "focusedBuild": "PASS cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4 (-Werror)",
-    "sourceProbe": "PASS existing lineweights.dwg exact TABLESTYLE/STYLE/dictionary source inventory",
-    "focusedSelector": "PASS ASCII and Binary selected output, fresh readback, destination-preserving dangling-reference refusal, and same-adapter retry",
-    "fullSuites": "NOT RUN; focused selector/build only",
+    "focusedGeneratedCtest": "PASS libdxfrw_cellstylemap_dxf_writer (1/1); generated graph control exercises C8-to-257 roundtrip.",
+    "physicalSelectors": "PASS lineweights AC1021 legacy TABLESTYLE ASCII/Binary and architectural AC1021 TABLESTYLE/CELLSTYLEMAP ASCII/Binary; both verify dangling-reference destination preservation and same-adapter retry.",
+    "focusedTableCtests": "PASS libdxfrw_dxf_tables_write_inspection and libdxfrw_table_content_dwg_object_roundtrip in prior focused run.",
+    "fullSuites": "NOT RUN",
     "fixturesCommitted": false,
-    "strictWholeSource": "Still fails closed at unrelated MATERIAL extension-graph validation; not qualified by selected projection"
+    "strictWholeSource": "Still refused by unrelated graph incompleteness; selected projections are not whole-file evidence.",
+    "independentOutputReader": "NOT RUN; independent LibreDWG source JSON is corroboration only."
   },
   "simplerCandidate": {
     "path": "/Users/dli/doc/dwg/lineweights.dwg",
@@ -73,20 +101,38 @@
     "wholeSourceResult": "FAIL CLOSED at unrelated MATERIAL extension-graph validation before output; not a TABLESTYLE verdict."
   },
   "selectedProjectionExperiment": {
-    "selector": "--tablestyle-ac1021-physical-selected-output",
-    "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --tablestyle-ac1021-physical-selected-output /Users/dli/doc/dwg/lineweights.dwg",
-    "sourceSha256": "ad2656f141675aeda06ede347f8921516700b60a0f5ba17af042419be5397b4d",
-    "result": "PASS for ASCII and Binary selected output with fresh local DXF readback. The projection retains only the selected TABLESTYLE, its NOD/owner dictionary path, the owner dictionary typed baseline, and the selected raw source frame; unrelated standard-object frames, xdictionary roots, layer-control graph, and VPORT/VIEW records are excluded.",
-    "refusalAndRetry": "For each output mode, a dangling row text-style handle was refused and the preseeded destination remained byte-identical. Restoring the original handle allowed the same dx_iface instance to export and read back successfully.",
-    "readback": "Fresh ASCII and Binary DXF imports each contain one TABLESTYLE and raw TABLESTYLE record. The NOD key resolves to one owner dictionary, whose Standard key resolves to the emitted TABLESTYLE. All three row text-style names resolve to one emitted Standard STYLE; heights, alignments, margins, row count, and six legacy border slots are checked.",
-    "productionAdmission": "Exact AC1021 legacy Standard profile guard added; it admits the observed three-row layout and rejects deviations. The existing generic TABLESTYLE identity preallocation fix is retained.",
-    "scopeLimit": "Selected projection evidence only. Strict whole-source lineweights.dwg export remains refused by an unrelated MATERIAL graph failure; no DWG/DXF fixture was committed and no general AC1021 or TABLESTYLE support claim is made.",
-    "fixtureDisposition": "Used only the existing local source file; generated output was temporary and removed by the test harness."
+    "lineweightsAc1021": {
+      "selector": "--tablestyle-ac1021-physical-selected-output",
+      "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --tablestyle-ac1021-physical-selected-output /Users/dli/doc/dwg/lineweights.dwg",
+      "sourceSha256": "ad2656f141675aeda06ede347f8921516700b60a0f5ba17af042419be5397b4d",
+      "result": "PASS for ASCII and Binary selected output with fresh local DXF readback. The projection retains only the selected TABLESTYLE, its NOD/owner dictionary path, the owner dictionary typed baseline, and the selected raw source frame; unrelated standard-object frames, xdictionary roots, layer-control graph, and VPORT/VIEW records are excluded.",
+      "refusalAndRetry": "For each output mode, a dangling row text-style handle was refused and the preseeded destination remained byte-identical. Restoring the original handle allowed the same dx_iface instance to export and read back successfully.",
+      "readback": "Fresh ASCII and Binary DXF imports each contain one TABLESTYLE and raw TABLESTYLE record. The NOD key resolves to one owner dictionary, whose Standard key resolves to the emitted TABLESTYLE. All three row text-style names resolve to one emitted Standard STYLE; heights, alignments, margins, row count, and six legacy border slots are checked.",
+      "productionAdmission": "Exact AC1021 legacy Standard profile guard added; it admits the observed three-row layout and rejects deviations. The existing generic TABLESTYLE identity preallocation fix is retained.",
+      "scopeLimit": "Selected projection evidence only. Strict whole-source lineweights.dwg export remains refused by an unrelated MATERIAL graph failure; no DWG/DXF fixture was committed and no general AC1021 or TABLESTYLE support claim is made.",
+      "fixtureDisposition": "Used only the existing local source file; generated output was temporary and removed by the test harness."
+    },
+    "architecturalCellStyleMap": {
+      "selector": "--tablestyle-ac1021-cellstylemap-selected-output",
+      "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --tablestyle-ac1021-cellstylemap-selected-output /Users/dli/doc/dwg/architectural_-_annotation_scaling_and_multileaders.dwg",
+      "sourceSha256": "0e74f0aa84b1323c922345f067739c42ee26213dea010b407b87a94212271654",
+      "result": "PASS for ASCII and Binary selected graph output and fresh local readback. The projection retains the TABLESTYLE, its owner dictionary, the TABLESTYLE extension dictionary, the single CELLSTYLEMAP, their source frame receipts, and the required named STYLE and APPID records. Unrelated LTYPE SHAPE-style references are outside this projection.",
+      "graphAndFields": "Fresh readback verifies unique NOD -> owner dictionary -> TABLESTYLE and TABLESTYLE -> extension dictionary -> CELLSTYLEMAP links; the map keeps exactly one reciprocal reactor to its extension dictionary. It verifies the three cell identities, content and border fields, and DXF background no-color code 257 corresponding to source DWG CMC index 256/method C8.",
+      "refusalAndRetry": "For both output modes, a dangling cell text-style handle is refused without changing the preseeded destination; restoring it then succeeds on the same adapter instance.",
+      "implementationFixes": "Graph admission now accepts only zero reactors or one reactor equal to the owning extension dictionary. The writer maps the validated C8/index-256 background sentinel to DXF code 62 value 257. BLOCK_RECORD planning reserves duplicated typed TABLESTYLE/CELLSTYLEMAP identities only once when those same objects also appear in the generic extension inventory.",
+      "scopeLimit": "Selected projection evidence only. It does not qualify whole-source conversion, native consumer behavior, or independent acceptance of emitted DXF. No DWG/DXF fixture was committed."
+    }
   },
   "localParserPointerCheck": {
     "selector": "Temporary read-only import diagnostic, removed after observation",
     "source": "/Users/dli/doc/dwg/lineweights.dwg (sha256 ad2656f141675aeda06ede347f8921516700b60a0f5ba17af042419be5397b4d)",
     "result": "PASS: local AC1021 parser reports TABLESTYLE handle 370, owner 369, xdict 0; all three row text-style references decode to handle 17, matching the independently observed LibreDWG hard-pointer target. The four STYLE callbacks include handle 17 named Standard.",
     "interpretation": "No AC1021 TABLESTYLE handle-layout/parser defect is indicated. The 0x172 output collision arose in the temporary selected projection/emission binding; retain the production parser unchanged."
+  },
+  "localCellStyleMapProbe": {
+    "selector": "--tablestyle-ac1021-cellstylemap-source-probe",
+    "result": "PASS. Local DWG decoder reports TABLESTYLE 0x87 -> owner dictionary 0x86 and xdictionary 0x1659; CELLSTYLEMAP 0xCE97 is owned by and has one reciprocal reactor to 0x1659. Three cells decode in _TITLE, _HEADER, _DATA order, all with text style 0x11, background index 256/CMC method C8, six edges 1/2/4/8/16/32, border type 1, lineweight -2, hidden wire value 0, and spacing 0.045.",
+    "specification": "ODA v5.4.1 §§20.4.101-20.4.102 define the TABLESTYLE/CELLSTYLEMAP relationship and R2007+ cell map layout. No parser-layout change was required.",
+    "provenanceLimit": "Existing local sample; producer provenance is unauthenticated. No file was copied into the repository."
   }
 }

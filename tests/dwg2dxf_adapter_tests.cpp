@@ -278,6 +278,142 @@ public:
         return true;
     }
 
+    static bool selectPhysicalAc1021CellStyleMapGraph(
+            const dx_data& source, dx_data& projection) {
+        if (source.sourceFormat != dx_source_format::DWG
+            || source.sourceVersion != DRW::AC1021
+            || source.importGeneration == 0u
+            || source.tableStyles.size() != 1u
+            || source.tableStyles.front().handle != 0x87u
+            || source.cellStyleMaps.size() != 1u
+            || source.cellStyleMaps.front().handle != 0xCE97u
+            || !source.hasNamedObjectDictionary
+            || !source.namedObjectDictionary.hasCompleteDwgEntries())
+            return false;
+        const DRW_TableStyle& style = source.tableStyles.front();
+        const DRW_CellStyleMap& cellMap = source.cellStyleMaps.front();
+        const auto dictionaryByHandle = [&source](std::uint32_t handle)
+                -> const DRW_Dictionary* {
+            const DRW_Dictionary* result = nullptr;
+            for (const DRW_Dictionary& dictionary : source.dictionaries) {
+                if (dictionary.handle != handle)
+                    continue;
+                if (result != nullptr)
+                    return nullptr;
+                result = &dictionary;
+            }
+            return result;
+        };
+        const DRW_Dictionary* owner = dictionaryByHandle(0x86u);
+        const DRW_Dictionary* extension = dictionaryByHandle(0x1659u);
+        if (owner == nullptr || extension == nullptr
+            || style.parentHandle != owner->handle
+            || style.xDictHandle != extension->handle
+            || owner->parentHandle != source.namedObjectDictionary.handle
+            || !owner->hasCompleteDwgEntries() || owner->m_entries.size() != 1u
+            || owner->m_entries.front().m_name != "Standard"
+            || owner->m_entries.front().m_handle != style.handle
+            || extension->parentHandle != style.handle
+            || !extension->hasCompleteDwgEntries()
+            || extension->m_entries.size() != 1u
+            || extension->m_entries.front().m_name
+                != "ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP"
+            || extension->m_entries.front().m_handle != cellMap.handle
+            || cellMap.parentHandle != extension->handle)
+            return false;
+        const dx_data::StandardDwgFrameKey styleKey{
+            source.importGeneration, style.handle};
+        const dx_data::StandardDwgFrameKey mapKey{
+            source.importGeneration, cellMap.handle};
+        const auto styleFrame = source.m_opaqueDwgSourceFrames.find(styleKey);
+        const auto mapFrame = source.m_opaqueDwgSourceFrames.find(mapKey);
+        if (styleFrame == source.m_opaqueDwgSourceFrames.end()
+            || mapFrame == source.m_opaqueDwgSourceFrames.end()
+            || source.m_opaqueDwgSourceFrameIdentities.count(styleKey) != 1u
+            || source.m_opaqueDwgSourceFrameIdentities.count(mapKey) != 1u)
+            return false;
+
+        projection.sourceFormat = source.sourceFormat;
+        projection.sourceVersion = source.sourceVersion;
+        projection.importGeneration = source.importGeneration;
+        projection.dwgReadOutcome = source.dwgReadOutcome;
+        projection.hasNamedObjectDictionary = true;
+        projection.namedObjectDictionary = source.namedObjectDictionary;
+        projection.namedObjectDictionary.m_entries.erase(
+            std::remove_if(
+                projection.namedObjectDictionary.m_entries.begin(),
+                projection.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name != "ACAD_TABLESTYLE"
+                        || entry.m_handle != 0x86u;
+                }),
+            projection.namedObjectDictionary.m_entries.end());
+        if (projection.namedObjectDictionary.m_entries.size() != 1u)
+            return false;
+        projection.dictionaries.push_back(*owner);
+        projection.dictionaries.push_back(*extension);
+        projection.tableStyles.push_back(style);
+        projection.cellStyleMaps.push_back(cellMap);
+        projection.appIds = source.appIds;
+        for (const DRW_Textstyle& textStyle : source.textStyles)
+            if (!textStyle.name.empty())
+                projection.textStyles.push_back(textStyle);
+        projection.basicTableCaptureFailed = source.basicTableCaptureFailed;
+        projection.basicTableRetainedRecords = source.basicTableRetainedRecords;
+        projection.basicTableRetainedItems = source.basicTableRetainedItems;
+        projection.basicTableRetainedBytes = source.basicTableRetainedBytes;
+        projection.dictionaryCaptureFailed = source.dictionaryCaptureFailed;
+        projection.dictionaryRetainedRecords = 2u;
+        projection.dictionaryRetainedEntries =
+            owner->m_entries.size() + extension->m_entries.size();
+        projection.dictionaryRetainedBytes =
+            source.dictionaryRetainedBytes;
+        projection.cellStyleMapsCaptureFailed =
+            source.cellStyleMapsCaptureFailed;
+        projection.cellStyleMapsRetainedRecords =
+            source.cellStyleMapsRetainedRecords;
+        projection.cellStyleMapsRetainedItems =
+            source.cellStyleMapsRetainedItems;
+        projection.cellStyleMapsRetainedBytes =
+            source.cellStyleMapsRetainedBytes;
+        projection.m_opaqueDwgSourceFrames.emplace(*styleFrame);
+        projection.m_opaqueDwgSourceFrames.emplace(*mapFrame);
+        projection.m_opaqueDwgSourceFrameIdentities.insert(styleKey);
+        projection.m_opaqueDwgSourceFrameIdentities.insert(mapKey);
+        projection.m_opaqueDwgSourceFrameRetainedBytes =
+            styleFrame->second.m_rawBytes.size()
+            + mapFrame->second.m_rawBytes.size();
+        const dx_data::StandardDwgFrameKey ownerKey{
+            source.importGeneration, owner->handle};
+        const dx_data::StandardDwgFrameKey extensionKey{
+            source.importGeneration, extension->handle};
+        for (const dx_data::StandardDwgFrameKey& key :
+                 {ownerKey, extensionKey}) {
+            const auto frame = source.m_standardDwgObjectFrames.find(key);
+            if (frame == source.m_standardDwgObjectFrames.end())
+                return false;
+            projection.m_standardDwgObjectFrames.emplace(*frame);
+            const auto ordinal = source.m_standardDwgObjectOrdinals.find(key);
+            if (ordinal != source.m_standardDwgObjectOrdinals.end())
+                projection.m_standardDwgObjectOrdinals.emplace(*ordinal);
+            projection.m_standardDwgObjectRetainedBytes +=
+                frame->second.raw.m_rawBytes.size();
+        }
+        projection.m_standardDwgObjectMembershipEntries =
+            source.m_standardDwgObjectMembershipEntries;
+        projection.m_standardDwgObjectCaptureFailed =
+            source.m_standardDwgObjectCaptureFailed;
+        projection.m_standardDwgObjectPayloadFailed =
+            source.m_standardDwgObjectPayloadFailed;
+        projection.m_standardDwgNamesClosedThrough =
+            source.m_standardDwgNamesClosedThrough;
+        projection.m_standardDwgAppIdSources =
+            source.m_standardDwgAppIdSources;
+        projection.m_standardDwgLayerSources =
+            source.m_standardDwgLayerSources;
+        return true;
+    }
+
     static void setScaleExtensionHandles(
             dx_iface& iface, const std::vector<std::uint32_t>& handles) {
         iface.m_extensionScaleHandles = handles;
@@ -54033,6 +54169,243 @@ bool physicalAc1021TableStyleSelectedOutput(
     return true;
 }
 
+bool physicalAc1021CellStyleMapSourceProbe(
+        const std::filesystem::path& sourcePath) {
+    dx_iface reader;
+    dx_data data;
+    if (!reader.fileImport(sourcePath.string(), &data, false)
+        || data.sourceFormat != dx_source_format::DWG
+        || data.sourceVersion != DRW::AC1021
+        || data.tableStyles.size() != 1u
+        || data.cellStyleMaps.size() != 1u)
+        return fail("physical AC1021 CELLSTYLEMAP source inventory changed");
+    const DRW_TableStyle& tableStyle = data.tableStyles.front();
+    const DRW_CellStyleMap& map = data.cellStyleMaps.front();
+    std::cout << "TABLESTYLE=" << std::hex << tableStyle.handle
+              << " owner=" << tableStyle.parentHandle
+              << " xdict=" << tableStyle.xDictHandle << std::dec
+              << " CELLSTYLEMAP=" << std::hex << map.handle
+              << " owner=" << map.parentHandle << std::dec
+              << " cells=" << map.m_cellStyles.size() << '\n';
+    for (const DRW_TableStyleCellStyle& cell : map.m_cellStyles) {
+        const DRW_TableStyleContentFormat& format = cell.m_contentFormat;
+        std::cout << "cell id=" << cell.m_id << " class=" << cell.m_styleClass
+                  << " name=" << cell.m_name << " type=" << cell.m_type
+                  << " data=" << cell.m_hasData << " overrides=0x"
+                  << std::hex << cell.m_propertyOverrideFlags << " merge=0x"
+                  << cell.m_mergeFlags << std::dec << " contentStyle=0x"
+                  << std::hex << format.m_textStyleHandle << std::dec
+                  << " background=" << cell.m_backgroundColor << "/0x"
+                  << std::hex << static_cast<unsigned>(
+                         cell.m_backgroundColorCmc.m_method) << std::dec
+                  << " height=" << format.m_textHeight
+                  << " align=" << format.m_cellAlignment
+                  << " layout=" << cell.m_contentLayout
+                  << " margins=0x" << std::hex
+                  << cell.m_marginOverrideFlags << std::dec << ':'
+                  << cell.m_verticalMargin << ',' << cell.m_horizontalMargin
+                  << ',' << cell.m_bottomMargin << ',' << cell.m_rightMargin
+                  << " borders=" << cell.m_borders.size() << '\n';
+        for (const DRW_TableStyleBorder& border : cell.m_borders)
+            std::cout << "  border edge=0x" << std::hex << border.m_edgeFlags
+                      << " flags=0x" << border.m_propertyOverrideFlags
+                      << std::dec << " type=" << border.m_borderType
+                      << " weight=" << border.m_lineWeight
+                      << " visibleWire=" << border.m_visible << " ltype=0x"
+                      << std::hex << border.m_lineTypeHandle << std::dec
+                      << " spacing=" << border.m_doubleLineSpacing << '\n';
+    }
+    return true;
+}
+
+bool physicalAc1021CellStyleMapSelectedOutput(
+        const std::filesystem::path& sourcePath) {
+    dx_iface sourceReader;
+    dx_data source;
+    if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+        || source.sourceVersion != DRW::AC1021
+        || source.tableStyles.size() != 1u
+        || source.cellStyleMaps.size() != 1u
+        || source.cellStyleMaps.front().handle != 0xCE97u
+        || source.cellStyleMaps.front().m_cellStyles.size() != 3u)
+        return fail("physical AC1021 TABLESTYLE/CELLSTYLEMAP source profile changed");
+    dx_data projection;
+    if (!DxIfaceStandardDwgCaptureTestAccess::
+            selectPhysicalAc1021CellStyleMapGraph(source, projection)
+        || projection.dictionaries.size() != 2u
+        || projection.tableStyles.size() != 1u
+        || projection.cellStyleMaps.size() != 1u)
+        return fail("physical AC1021 TABLESTYLE/CELLSTYLEMAP selected graph is not closed");
+
+    const std::uint32_t sourceTextStyle =
+        projection.cellStyleMaps.front().m_cellStyles.front()
+            .m_contentFormat.m_textStyleHandle;
+    if (sourceTextStyle == 0u || sourceTextStyle == DRW::NoHandle
+        || std::count_if(projection.textStyles.begin(),
+                         projection.textStyles.end(),
+            [sourceTextStyle](const DRW_Textstyle& candidate) {
+                return candidate.handle == sourceTextStyle;
+            }) != 1)
+        return fail("physical AC1021 CELLSTYLEMAP text-style dependency is not unique");
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    struct Cleanup {
+        std::array<std::filesystem::path, 2> paths;
+        ~Cleanup() {
+            for (const auto& path : paths) {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        }
+    } cleanup{{
+        std::filesystem::temp_directory_path()
+            / ("libdxfrw-ac1021-cellstylemap-ascii-"
+               + std::to_string(nonce) + ".dxf"),
+        std::filesystem::temp_directory_path()
+            / ("libdxfrw-ac1021-cellstylemap-binary-"
+               + std::to_string(nonce) + ".dxf")}};
+
+    for (std::size_t index = 0u; index < cleanup.paths.size(); ++index) {
+        const bool binary = index != 0u;
+        const auto& output = cleanup.paths[index];
+        const std::string sentinel =
+            "preserve physical AC1021 CELLSTYLEMAP destination\n";
+        {
+            std::ofstream prior(output, std::ios::binary | std::ios::trunc);
+            if (!prior || !(prior << sentinel))
+                return fail("could not seed physical AC1021 CELLSTYLEMAP destination");
+        }
+        dx_iface writer;
+        const auto exportProjection = [&]() {
+            return writer.fileExport(
+                output.string(), DRW::AC1021, binary, &projection, false, false,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::Legacy);
+        };
+        const auto destinationIsSentinel = [&]() {
+            std::ifstream prior(output, std::ios::binary);
+            const std::string contents{
+                std::istreambuf_iterator<char>{prior}, {}};
+            return prior.good() || prior.eof() ? contents == sentinel : false;
+        };
+        DRW_CellStyleMap& map = projection.cellStyleMaps.front();
+        map.m_cellStyles.front().m_contentFormat.m_textStyleHandle = 0x999u;
+        const bool danglingReferenceRefused = !exportProjection();
+        map.m_cellStyles.front().m_contentFormat.m_textStyleHandle =
+            sourceTextStyle;
+        if (!danglingReferenceRefused || !destinationIsSentinel())
+            return fail("physical AC1021 CELLSTYLEMAP accepted a dangling STYLE target or changed destination");
+        if (!exportProjection())
+            return fail("physical AC1021 CELLSTYLEMAP same-adapter retry failed: "
+                + writer.extensionGraphFailureDetail());
+
+        dx_iface outputReader;
+        dx_data readback;
+        if (!outputReader.fileImport(output.string(), &readback, false)
+            || readback.sourceFormat != dx_source_format::DXF
+            || readback.sourceVersion != DRW::AC1021
+            || readback.tableStyles.size() != 1u
+            || readback.cellStyleMaps.size() != 1u
+            || readback.rawCellStyleMaps.size() != 1u
+            || readback.cellStyleMaps.front().m_cellStyles.size() != 3u
+            || readback.dictionaries.size() < 2u
+            || !readback.hasNamedObjectDictionary)
+            return fail(binary
+                ? "physical AC1021 Binary CELLSTYLEMAP output/readback failed"
+                : "physical AC1021 ASCII CELLSTYLEMAP output/readback failed");
+
+        const DRW_TableStyle& actualStyle = readback.tableStyles.front();
+        const DRW_CellStyleMap& actualMap = readback.cellStyleMaps.front();
+        const DRW_Dictionary* extension = nullptr;
+        const DRW_Dictionary* owner = nullptr;
+        std::size_t extensionMatches = 0u;
+        std::size_t ownerMatches = 0u;
+        for (const DRW_Dictionary& candidate : readback.dictionaries) {
+            if (candidate.handle == actualMap.parentHandle) {
+                extension = &candidate;
+                ++extensionMatches;
+            }
+            if (candidate.handle == actualStyle.parentHandle) {
+                owner = &candidate;
+                ++ownerMatches;
+            }
+        }
+        const auto rootEdges = std::count_if(
+            readback.namedObjectDictionary.m_entries.begin(),
+            readback.namedObjectDictionary.m_entries.end(),
+            [owner](const DRW_Dictionary::Entry& entry) {
+                return owner != nullptr && entry.m_name == "ACAD_TABLESTYLE"
+                    && entry.m_handle == owner->handle;
+            });
+        const auto styleEdges = owner == nullptr ? 0 : std::count_if(
+            owner->m_entries.begin(), owner->m_entries.end(),
+            [&actualStyle](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "Standard"
+                    && entry.m_handle == actualStyle.handle;
+            });
+        const auto mapEdges = extension == nullptr ? 0 : std::count_if(
+            extension->m_entries.begin(), extension->m_entries.end(),
+            [&actualMap](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name
+                        == "ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP"
+                    && entry.m_handle == actualMap.handle;
+            });
+        if (actualStyle.handle == 0u || actualMap.handle == 0u
+            || actualStyle.handle == actualMap.handle
+            || actualStyle.handle == sourceTextStyle
+            || actualMap.handle == sourceTextStyle
+            || readback.rawCellStyleMaps.front().handle != actualMap.handle
+            || extensionMatches != 1u || ownerMatches != 1u
+            || actualStyle.xDictHandle == 0u || extension == nullptr
+            || owner == nullptr
+            || actualStyle.xDictHandle != extension->handle
+            || extension->parentHandle != actualStyle.handle
+            || owner->parentHandle != readback.namedObjectDictionary.handle
+            || actualMap.parentHandle != extension->handle
+            || actualMap.reactorHandles.size() != 1u
+            || actualMap.reactorHandles.front() != extension->handle
+            || rootEdges != 1 || styleEdges != 1 || mapEdges != 1)
+            return fail("physical AC1021 CELLSTYLEMAP NOD/owner/xdictionary graph did not read back uniquely");
+        const std::array<std::pair<int, std::string>, 3> identities{{
+            {1, "_TITLE"}, {2, "_HEADER"}, {3, "_DATA"}}};
+        for (std::size_t cellIndex = 0u; cellIndex < identities.size();
+             ++cellIndex) {
+            const DRW_TableStyleCellStyle& cell =
+                actualMap.m_cellStyles[cellIndex];
+            const auto& expected = identities[cellIndex];
+            if (cell.m_id != expected.first || cell.m_name != expected.second
+                || cell.m_type != 5 || !cell.m_hasData
+                || cell.m_backgroundColor != 257
+                || cell.m_backgroundColorCmc.m_method != 0u
+                || cell.m_contentLayout != 1u
+                || cell.m_contentFormat.m_textStyleHandle == 0u
+                || cell.m_contentFormat.m_textHeight
+                    != (cellIndex == 0u ? 0.25 : 0.18)
+                || cell.m_borders.size() != 6u)
+                return fail("physical AC1021 CELLSTYLEMAP cell identity/content changed on readback");
+            for (std::size_t borderIndex = 0u;
+                 borderIndex < cell.m_borders.size(); ++borderIndex) {
+                const DRW_TableStyleBorder& border =
+                    cell.m_borders[borderIndex];
+                if (border.m_edgeFlags != static_cast<int>(1u << borderIndex)
+                    || border.m_borderType != 1
+                    || border.m_lineWeight != -2
+                    || border.m_visible != 0
+                    || border.m_doubleLineSpacing != 0.045)
+                    return fail("physical AC1021 CELLSTYLEMAP border fields changed on readback");
+            }
+        }
+        std::cerr << "Physical AC1021 TABLESTYLE/CELLSTYLEMAP "
+                  << (binary ? "Binary" : "ASCII")
+                  << " selected output/readback passed with graph closure,"
+                     " dangling STYLE refusal, and same-adapter retry.\n";
+    }
+    return true;
+}
+
 bool physicalAc1018DictionaryVarSourceProfile(
         const std::filesystem::path& sourcePath) {
     dx_iface reader;
@@ -60555,6 +60928,8 @@ bool cellStyleMapExtensionGraph() {
         custom.m_id = 101;
         custom.m_styleClass = 1;
         custom.m_name = "generated-map-style";
+        custom.m_backgroundColor = 256;
+        custom.m_backgroundColorCmc.m_method = 0xC8u;
         custom.m_contentFormat.m_textStyleHandle = 0x560u;
         custom.m_contentFormat.m_cellAlignment = 1;
         custom.m_contentFormat.m_textHeight = 1.0;
@@ -60712,6 +61087,10 @@ bool cellStyleMapExtensionGraph() {
                 != 101
             || readback.cellStyleMaps.front().m_cellStyles.front().m_name
                 != "generated-map-style"
+            || readback.cellStyleMaps.front().m_cellStyles.front()
+                    .m_backgroundColor != 257
+            || readback.cellStyleMaps.front().m_cellStyles.front()
+                    .m_backgroundColorCmc.m_method != 0u
             || readback.cellStyleMaps.front().m_cellStyles.back().m_id != 102
             || readback.cellStyleMaps.front().m_cellStyles.back().m_name
                 != "generated-empty-map-style") {
@@ -76639,6 +77018,12 @@ bool sunStudyDxfGraph(const std::string& source) {
 }
 
 int main(int argc, char** argv) {
+    if (argc == 3
+        && std::string(argv[1]) == "--tablestyle-ac1021-cellstylemap-selected-output")
+        return physicalAc1021CellStyleMapSelectedOutput(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--tablestyle-ac1021-cellstylemap-source-probe")
+        return physicalAc1021CellStyleMapSourceProbe(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--tablestyle-ac1021-physical-selected-output")
         return physicalAc1021TableStyleSelectedOutput(argv[2]) ? 0 : 1;

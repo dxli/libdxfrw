@@ -12976,6 +12976,13 @@ bool dxfRW::writeCellStyleMap(DRW_CellStyleMap *ent) {
             return false;
         }
     };
+    const auto validBackgroundColor = [&validColor](
+            int index, const DRW_TableStyleCmcColor& cmc) {
+        return validColor(index, cmc)
+            || (index == 256 && cmc.m_rgb < 0 && cmc.m_name.empty()
+                && cmc.m_bookName.empty() && cmc.m_method == 0xC8u
+                && cmc.m_flags == 0u && cmc.m_reservedIndex == 0u);
+    };
     const auto colorIsDefault = [](
             const DRW_TableStyleCmcColor& color) {
         return color.m_rgb == -1 && color.m_name.empty()
@@ -13035,7 +13042,8 @@ bool dxfRW::writeCellStyleMap(DRW_CellStyleMap *ent) {
             && std::isfinite(format.m_textHeight);
     };
     const auto invalidStyleReason = [
-            &colorIsDefault, &validColor, &validContent, &validLineWeight](
+            &colorIsDefault, &validColor, &validBackgroundColor,
+            &validContent, &validLineWeight](
             const DRW_TableStyleCellStyle& style) -> const char* {
         if (style.m_type < 1 || style.m_type > 5)
             return "CELLSTYLEMAP cell-style type is outside 1-5";
@@ -13073,8 +13081,8 @@ bool dxfRW::writeCellStyleMap(DRW_CellStyleMap *ent) {
                 != 0u
             || (style.m_mergeFlags & ~std::uint32_t{0x18000u}) != 0u
             || (style.m_contentLayout & ~std::uint32_t{0x7u}) != 0u
-            || !validColor(style.m_backgroundColor,
-                           style.m_backgroundColorCmc)
+            || !validBackgroundColor(style.m_backgroundColor,
+                                     style.m_backgroundColorCmc)
             )
             return "CELLSTYLEMAP cell-style flags or background color invalid";
         if (!validContent(style.m_contentFormat))
@@ -13176,7 +13184,8 @@ bool dxfRW::writeCellStyleMap(DRW_CellStyleMap *ent) {
 
     const auto writeColor = [this](int index,
             const DRW_TableStyleCmcColor& cmc) {
-        if (!writer->writeInt16(62, static_cast<std::int16_t>(index)))
+        const int dxfIndex = cmc.m_method == 0xC8u ? 257 : index;
+        if (!writer->writeInt16(62, static_cast<std::int16_t>(dxfIndex)))
             return false;
         if (cmc.m_rgb >= 0 && !writer->writeInt32(420, cmc.m_rgb))
             return false;
