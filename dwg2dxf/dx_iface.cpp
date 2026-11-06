@@ -34276,8 +34276,10 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
     std::set<std::string> selectedNames;
     bool completeNodProfile = false;
     try {
-        if (ac1018Profile || ac1015Profile) {
-            const std::vector<const char*> emptyRootNames = ac1018Profile
+        if (ac1018Profile || ac1015Profile || ac1021Profile) {
+            const std::vector<const char*> emptyRootNames = ac1021Profile
+                ? std::vector<const char*>{"ACAD_PLOTSETTINGS"}
+                : ac1018Profile
                 ? std::vector<const char*>{
                     "ACAD_GROUP", "ACAD_PLOTSETTINGS",
                     "ACAD_MATERIAL", "ACAD_COLOR"}
@@ -34771,6 +34773,9 @@ bool dx_iface::hasUnchangedDwgLayoutOutputSources(bool debug) const noexcept {
         || (m_dwgLayoutOutputSourceVersion == DRW::AC1018
             && !m_dwgNodDictionaryOutputSources.empty()
             && m_dwgNodDictionaryOutputSources.size() != 4u)
+        || (m_dwgLayoutOutputSourceVersion == DRW::AC1021
+            && !m_dwgNodDictionaryOutputSources.empty()
+            && m_dwgNodDictionaryOutputSources.size() != 1u)
         || cData->layouts.size() != m_dwgLayoutOutputSources.size()
         || cData->namedObjectDictionary.handle != m_dwgLayoutOutputNodHandle
         || cData->namedObjectDictionary.hardOwner

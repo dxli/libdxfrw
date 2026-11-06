@@ -60,7 +60,19 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
+1. **P4 / AC1021 `ACAD_GROUP` empty dictionary:** screen NOD key
+   `ACAD_GROUP` → DICTIONARY `0xD` (13 decimal), then trace the special
+   generated/source group-root path before extending admission. The source
+   census reports an empty dictionary, NOD owner `0xC`, one reactor and no
+   extension dictionary. Reuse the new source-frame snapshot and readback
+   pattern only after proving that the group-specific writer neither
+   synthesizes a conflicting root nor loses this physical edge. Require fresh
+   ASCII/Binary readback of key/role/type/owner/reactor, atomic refusal after
+   a late mutation, and same-adapter retry. Keep whole-source strict refusal;
+   do not qualify a generated or merely empty dictionary as a physical source
+   route. The inventory selector prints DICTIONARY/XRECORD contents and NOD
+   key/target counts for reproducibility.
+2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
    links and source frame offsets are captured. The enclosing FIELDLIST has
@@ -74,22 +86,13 @@ created locally from scratch for the specific control.
    remain excluded. Reopen this candidate only with a source/profile that
    supplies full membership and a consumer-visible root relation; see the
    [source-graph screen receipt](docs/research/p5-ac1021-acexpr-root-graph-output-readiness-2026-11-06.json).
-2. **P4 / standard-object inventory to implementation:** screen the 30
-   remaining unqualified standard-object frames in the AC1021 children-room
-   source by typed DICTIONARY/XRECORD model, exact owner, reciprocal edges and
-   already-qualified dependencies. Select one smallest graph whose owner and
-   all references are themselves represented, then implement its bounded
-   physical-source output path with fresh ASCII/Binary readback, rollback and
-   same-adapter retry. The inventory output now includes concise per-frame
-   DICTIONARY/XRECORD summaries to make this selection direct. Keep whole-source
-   preflight strict; selected projections are not document support. Update the
-   inventory only after a source frame is actually qualified.
-3. **P6 / converter-dependent suffix:** a fresh ODA File Converter 27.1.0
-   retry at 2026-11-06 10:23 UTC again aborted during pasteboard/XPC
-   initialization (exit 134) and produced no output. Keep the AC1027 suffix
-   unclaimed and strict export refused. Retry only with a functioning
-   independent converter session or another eligible semantic source. This
-   external-tool blocker does not hold slices 1–2.
+3. **P6 / converter-dependent suffix:** the 2026-11-06 ODA File Converter
+   27.1.0 retry after the reported session unlock again aborted during
+   pasteboard/XPC initialization (exit 134) and produced no output. No suffix
+   evidence or support claim follows. Keep the AC1027 suffix unclaimed and
+   strict export refused. The next attempt requires a functioning independent
+   converter session or supported GUI invocation; do not repeat the same
+   failing direct CLI launch. This external-tool gate does not hold slice 1.
 
 | ID | State | Remaining result | Dependency |
 | --- | --- | --- | --- |
@@ -228,6 +231,16 @@ before changing the bit order. See the [producer differential](docs/research/p4-
 and [original receipt](docs/research/p4-ac1018-empty-style-dwg-bit-order-differential-2026-11-03.json).
 
 ## P4 — original bodies and complete document closure
+
+**Recently qualified bounded standard object:** the AC1021 children-room
+`ACAD_PLOTSETTINGS` NOD entry to empty DICTIONARY `0x19` now passes physical
+ASCII/Binary output and fresh readback. Its source frame is at offset 2817 and
+spans 16 bytes; the target is NOD-owned and reacts to NOD `0xC`. Late reactor
+mutation refuses atomically and the same adapter retries after restoration.
+This contributes one of 112 standard-object frames; 29 remain unqualified in
+the local source inventory. Export used `AllowPartial`: its 22-entry NOD and
+whole drawing remain unqualified ([receipt](docs/research/p4-ac1021-plotsettings-physical-selected-output-2026-11-06.json),
+[inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
 
 **Open strict-output defect:** a CRC-resealed AC1027 source with layer 0's
 linetype handle changed to a missing target previously exported successfully

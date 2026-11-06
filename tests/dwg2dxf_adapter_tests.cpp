@@ -1833,6 +1833,12 @@ public:
                               << " reactors="
                               << dictionary->reactorHandles.size()
                               << " xdict=" << dictionary->xDictHandle << '\n';
+                    for (const DRW_Dictionary::Entry& entry :
+                            dictionary->m_entries) {
+                        std::cout << "  dictionaryEntry owner=" << handle
+                                  << " key=" << entry.m_name
+                                  << " target=" << entry.m_handle << '\n';
+                    }
                 }
             } else if (frame.m_objectType == 79) {
                 const auto record = std::find_if(
@@ -21648,6 +21654,20 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
         data, data.importGeneration);
     DxIfaceStandardDwgCaptureTestAccess::printStandardObjectPayloadSummaries(
         data, data.importGeneration);
+    for (const DRW_Dictionary::Entry& entry :
+            data.namedObjectDictionary.m_entries) {
+        std::cout << " NOD key=" << entry.m_name
+                  << " target=" << entry.m_handle;
+        const auto dictionary = std::find_if(
+            data.dictionaries.begin(), data.dictionaries.end(),
+            [&entry](const DRW_Dictionary& value) {
+                return value.handle == entry.m_handle;
+            });
+        if (dictionary != data.dictionaries.end())
+            std::cout << " dictionaryEntries="
+                      << dictionary->m_entries.size();
+        std::cout << '\n';
+    }
     for (const DRW_VisualStyle& style : data.visualStyles) {
         std::size_t dictionaryMatches = 0u;
         const DRW_Dictionary* dictionary = nullptr;
@@ -53814,6 +53834,221 @@ bool physicalAc1021EmptyLayerStateProjection(
     return true;
 }
 
+bool physicalAc1021PlotSettingsRootOutputReadback(
+        const std::filesystem::path& sourcePath) {
+    const auto uniqueDictionary = [](const dx_data& data,
+                                     std::uint32_t handle) {
+        const DRW_Dictionary* result = nullptr;
+        for (const DRW_Dictionary& dictionary : data.dictionaries) {
+            if (dictionary.handle != handle) continue;
+            if (result != nullptr) return static_cast<const DRW_Dictionary*>(nullptr);
+            result = &dictionary;
+        }
+        return result;
+    };
+    for (const bool binary : {false, true}) {
+        dx_iface sourceReader;
+        dx_data source;
+        if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+            || source.sourceVersion != DRW::AC1021
+            || !source.hasNamedObjectDictionary)
+            return fail("AC1021 PlotSettings source projection could not be prepared");
+
+        const auto nodRoot = std::find_if(
+            source.namedObjectDictionary.m_entries.begin(),
+            source.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_PLOTSETTINGS";
+            });
+        const std::uint32_t plotHandle = nodRoot
+                == source.namedObjectDictionary.m_entries.end()
+            ? 0u : nodRoot->m_handle;
+        const DRW_Dictionary* plotSettings = uniqueDictionary(source, plotHandle);
+        const DRW_UnsupportedObject* sourceFrame =
+            DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+                source, source.importGeneration, plotHandle);
+        if (source.namedObjectDictionary.handle != 0x0Cu
+            || source.namedObjectDictionary.parentHandle != 0u
+            || source.namedObjectDictionary.hardOwner != 0
+            || source.namedObjectDictionary.cloning != 1
+            || !source.namedObjectDictionary.hasCompleteDwgEntries()
+            || plotHandle != 0x19u
+            || std::count_if(
+                source.namedObjectDictionary.m_entries.begin(),
+                source.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ACAD_PLOTSETTINGS";
+                }) != 1
+            || plotSettings == nullptr
+            || plotSettings->parentHandle != source.namedObjectDictionary.handle
+            || plotSettings->hardOwner != 0 || plotSettings->cloning != 1
+            || plotSettings->countCap || !plotSettings->hasCompleteDwgEntries()
+            || !plotSettings->m_entries.empty()
+            || plotSettings->xDictHandle != 0u
+            || !plotSettings->appData.empty() || !plotSettings->extData.empty()
+            || plotSettings->hasDataStorageBinaryData()
+            || plotSettings->hasDwgCommonLinkTail()
+            || !plotSettings->pendingAppIdResolutions.empty()
+            || !plotSettings->pendingLayerRefResolutions.empty()
+            || plotSettings->reactorHandles
+                != std::vector<std::uint32_t>{source.namedObjectDictionary.handle}
+            || sourceFrame == nullptr || sourceFrame->m_objectType != 42u
+            || sourceFrame->m_handle != plotHandle
+            || sourceFrame->m_version != DRW::AC1021
+            || sourceFrame->m_isEntity || sourceFrame->m_hasDataStorage
+            || sourceFrame->m_rawBytes.empty()
+            || sourceFrame->m_objectSize == 0u
+            || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                source, plotHandle))
+            return fail("AC1021 ACAD_PLOTSETTINGS source frame/owner/reactor profile changed");
+        struct Writer final : dx_iface {
+            std::uint32_t targetHandle{0u};
+            bool mutateAfterObjects{false};
+            void writeObjects() override {
+                dx_iface::writeObjects();
+                if (!mutateAfterObjects || cData == nullptr) return;
+                for (DRW_Dictionary& dictionary : cData->dictionaries) {
+                    if (dictionary.handle == targetHandle) {
+                        dictionary.reactorHandles.clear();
+                        return;
+                    }
+                }
+            }
+        } writer;
+        writer.cData = &source;
+        writer.targetHandle = plotHandle;
+
+        const auto nonce = std::chrono::steady_clock::now()
+                               .time_since_epoch().count();
+        const std::filesystem::path outputPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-plotsettings-ac1021-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{outputPath};
+        const std::string sentinel = "AC1021 PlotSettings sentinel\n";
+        const auto seedDestination = [&]() {
+            std::ofstream output(outputPath, std::ios::binary | std::ios::trunc);
+            return output && static_cast<bool>(output << sentinel);
+        };
+        const auto destinationIsSentinel = [&]() {
+            std::ifstream input(outputPath, std::ios::binary);
+            const std::string actual{
+                std::istreambuf_iterator<char>(input), {}};
+            return actual == sentinel;
+        };
+        const auto write = [&]() {
+            return writer.fileExport(
+                outputPath.string(), DRW::AC1021, binary, &source,
+                false, false, dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::AllowPartial);
+        };
+        if (!seedDestination())
+            return fail("could not seed AC1021 PlotSettings destination sentinel");
+        writer.mutateAfterObjects = true;
+        if (write() || !destinationIsSentinel())
+            return fail("late AC1021 PlotSettings reactor mutation published or replaced destination");
+        DRW_Dictionary* mutablePlotSettings = nullptr;
+        for (DRW_Dictionary& dictionary : source.dictionaries)
+            if (dictionary.handle == plotHandle)
+                mutablePlotSettings = &dictionary;
+        if (mutablePlotSettings == nullptr)
+            return fail("AC1021 PlotSettings source disappeared after refusal");
+        if (!mutablePlotSettings->reactorHandles.empty())
+            return fail("late AC1021 PlotSettings reactor mutation did not run");
+        mutablePlotSettings->reactorHandles = {
+            source.namedObjectDictionary.handle};
+        writer.mutateAfterObjects = false;
+        if (!write())
+            return fail("corrected AC1021 PlotSettings source did not retry on the same adapter");
+        if (!DxIfaceStandardDwgCaptureTestAccess::standardOutputHas(
+                writer, plotHandle))
+            return fail("AC1021 PlotSettings source frame was not output-qualified on retry");
+        std::cout << "AC1021 ACAD_PLOTSETTINGS source frame handle=0x"
+                  << std::hex << plotHandle << std::dec
+                  << " offset=" << sourceFrame->m_objectOffset
+                  << " size=" << sourceFrame->m_objectSize
+                  << " body-bytes=" << sourceFrame->m_rawBytes.size()
+                  << " body-bits=" << sourceFrame->m_bodyBitSize << ".\n";
+
+        dx_iface outputReader;
+        dx_data output;
+        if (!outputReader.fileImport(outputPath.string(), &output, false)
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1021
+            || !output.hasNamedObjectDictionary)
+            return fail("AC1021 PlotSettings output failed fresh DXF readback");
+        const auto outputRoot = std::find_if(
+            output.namedObjectDictionary.m_entries.begin(),
+            output.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_PLOTSETTINGS";
+            });
+        const auto layoutRoot = std::find_if(
+            output.namedObjectDictionary.m_entries.begin(),
+            output.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_LAYOUT";
+            });
+        const DRW_Dictionary* outputPlotSettings = outputRoot
+                == output.namedObjectDictionary.m_entries.end()
+            ? nullptr : uniqueDictionary(output, outputRoot->m_handle);
+        const auto outputRootRole = outputRoot
+                == output.namedObjectDictionary.m_entries.end()
+            ? DRW_Dictionary::Entry::DxfHandleCode::Unspecified
+            : outputRoot->m_dxfHandleCode;
+        const auto expectedRootRole = nodRoot->m_dxfHandleCode
+                == DRW_Dictionary::Entry::DxfHandleCode::Unspecified
+            ? (source.namedObjectDictionary.hardOwner
+                ? DRW_Dictionary::Entry::DxfHandleCode::HardOwner
+                : DRW_Dictionary::Entry::DxfHandleCode::SoftOwner)
+            : nodRoot->m_dxfHandleCode;
+        if (std::count_if(
+                output.namedObjectDictionary.m_entries.begin(),
+                output.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ACAD_PLOTSETTINGS";
+                }) != 1
+            || outputRoot == output.namedObjectDictionary.m_entries.end()
+            || outputRoot->m_handle == output.namedObjectDictionary.handle
+            || outputRootRole != expectedRootRole
+            || std::count_if(
+                output.namedObjectDictionary.m_entries.begin(),
+                output.namedObjectDictionary.m_entries.end(),
+                [outputRoot](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_handle == outputRoot->m_handle;
+                }) != 1
+            || outputPlotSettings == nullptr
+            || outputPlotSettings->handle != outputRoot->m_handle
+            || outputPlotSettings->parentHandle
+                != output.namedObjectDictionary.handle
+            || outputPlotSettings->hardOwner != 0
+            || outputPlotSettings->cloning != 1
+            || outputPlotSettings->countCap
+            || !outputPlotSettings->hasCompleteDwgEntries()
+            || !outputPlotSettings->m_entries.empty()
+            || outputPlotSettings->xDictHandle != 0u
+            || !outputPlotSettings->extData.empty()
+            || outputPlotSettings->reactorHandles
+                != std::vector<std::uint32_t>{
+                    output.namedObjectDictionary.handle}
+            || layoutRoot == output.namedObjectDictionary.m_entries.end())
+            return fail("AC1021 PlotSettings fresh readback changed the root edge, unique target, owner, empty body or reactor");
+        std::cout << "Physical AC1021 ACAD_PLOTSETTINGS empty-root "
+                  << (binary ? "Binary" : "ASCII")
+                  << " output/readback passed; late reactor mutation preserved the destination and the same adapter retried successfully.\n";
+    }
+    return true;
+}
+
 bool physicalTableStyleSourceProfile(
         const std::filesystem::path& sourcePath) {
     dx_iface sourceReader;
@@ -79216,6 +79451,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--layerstates-empty-ac1021-output-readback")
         return physicalAc1021EmptyLayerStateProjection(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--plotsettings-empty-ac1021-output-readback")
+        return physicalAc1021PlotSettingsRootOutputReadback(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--layerstates-xrecord-physical-source-admission")
         return physicalLayerStateXrecordSourceAdmission(argv[2]) ? 0 : 1;
