@@ -566,6 +566,107 @@ public:
             && projection.hasClosedModelDocViewStyleResourceReferences()
             && projection.hasCompleteDwgLineTypeControlMembership();
     }
+    static bool selectPhysicalDictionaryDefaultGraph(
+            const dx_data& source, dx_data& projection) {
+        if (source.sourceFormat != dx_source_format::DWG
+            || source.sourceVersion != DRW::AC1021
+            || source.importGeneration == 0u
+            || !source.hasSingleSuccessfulDictionaryDefaultImport()
+            || !source.hasNamedObjectDictionary
+            || source.dictionaryWithDefaults.size() != 1u
+            || source.placeholders.size() != 1u)
+            return false;
+
+        const DRW_DictionaryWithDefault& dictionary =
+            source.dictionaryWithDefaults.front();
+        const DRW_AcDbPlaceholder& placeholder = source.placeholders.front();
+        if (dictionary.handle != 0x0eu || placeholder.handle != 0x0fu
+            || dictionary.parentHandle != source.namedObjectDictionary.handle
+            || !dictionary.hasCompleteDwgEntries()
+            || dictionary.m_entries.size() != 1u
+            || dictionary.m_entries.front().m_name != "Normal"
+            || dictionary.m_entries.front().m_handle != placeholder.handle
+            || dictionary.m_defaultEntryHandle != placeholder.handle
+            || placeholder.parentHandle != dictionary.handle)
+            return false;
+
+        const auto sourceRoot = std::find_if(
+            source.namedObjectDictionary.m_entries.begin(),
+            source.namedObjectDictionary.m_entries.end(),
+            [&dictionary](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_PLOTSTYLENAME"
+                    && entry.m_handle == dictionary.handle;
+            });
+        if (sourceRoot == source.namedObjectDictionary.m_entries.end()
+            || std::count_if(
+                source.namedObjectDictionary.m_entries.begin(),
+                source.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ACAD_PLOTSTYLENAME";
+                }) != 1)
+            return false;
+
+        const dx_data::StandardDwgFrameKey dictionaryKey{
+            source.importGeneration, dictionary.handle};
+        const dx_data::StandardDwgFrameKey placeholderKey{
+            source.importGeneration, placeholder.handle};
+        const auto dictionaryFrame = source.m_opaqueDwgSourceFrames.find(
+            dictionaryKey);
+        const auto placeholderFrame = source.m_opaqueDwgSourceFrames.find(
+            placeholderKey);
+        if (dictionaryFrame == source.m_opaqueDwgSourceFrames.end()
+            || placeholderFrame == source.m_opaqueDwgSourceFrames.end()
+            || source.m_opaqueDwgSourceFrameIdentities.count(dictionaryKey) != 1u
+            || source.m_opaqueDwgSourceFrameIdentities.count(placeholderKey) != 1u)
+            return false;
+
+        projection.sourceFormat = source.sourceFormat;
+        projection.sourceVersion = source.sourceVersion;
+        projection.importGeneration = source.importGeneration;
+        projection.dwgReadOutcome = source.dwgReadOutcome;
+        projection.headerC = source.headerC;
+        projection.lineTypes = source.lineTypes;
+        projection.hasNamedObjectDictionary = true;
+        projection.namedObjectDictionary = source.namedObjectDictionary;
+        projection.namedObjectDictionary.m_entries.erase(
+            std::remove_if(
+                projection.namedObjectDictionary.m_entries.begin(),
+                projection.namedObjectDictionary.m_entries.end(),
+                [&dictionary](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name != "ACAD_PLOTSTYLENAME"
+                        || entry.m_handle != dictionary.handle;
+                }),
+            projection.namedObjectDictionary.m_entries.end());
+        projection.dictionaryWithDefaults.push_back(dictionary);
+        projection.placeholders.push_back(placeholder);
+        projection.dictionaryDefaultImport = source.dictionaryDefaultImport;
+        projection.dictionaryDefaultTypedRetainedRecords =
+            source.dictionaryDefaultTypedRetainedRecords;
+        projection.dictionaryDefaultTypedRetainedItems =
+            source.dictionaryDefaultTypedRetainedItems;
+        projection.dictionaryDefaultTypedRetainedBytes =
+            source.dictionaryDefaultTypedRetainedBytes;
+        projection.dictionaryDefaultTypedCaptureFailed = false;
+        projection.rawDictionaryDefaultRetainedRecords = 0u;
+        projection.rawDictionaryDefaultRawGroups = 0u;
+        projection.rawDictionaryDefaultRetainedBytes = 0u;
+        projection.rawDictionaryDefaultCaptureFailed = false;
+        projection.m_dwgLtypeControlPublication =
+            source.m_dwgLtypeControlPublication;
+        projection.m_dwgLtypeControlGeneration =
+            source.m_dwgLtypeControlGeneration;
+        projection.m_dwgLtypeControlPublicationSeen =
+            source.m_dwgLtypeControlPublicationSeen;
+        projection.m_dwgLtypeControlCaptureFailed =
+            source.m_dwgLtypeControlCaptureFailed;
+        projection.basicTableCaptureFailed = source.basicTableCaptureFailed;
+        projection.m_opaqueDwgSourceFrames.emplace(*dictionaryFrame);
+        projection.m_opaqueDwgSourceFrames.emplace(*placeholderFrame);
+        projection.m_opaqueDwgSourceFrameIdentities.insert(dictionaryKey);
+        projection.m_opaqueDwgSourceFrameIdentities.insert(placeholderKey);
+        return projection.namedObjectDictionary.m_entries.size() == 1u
+            && projection.hasSingleSuccessfulDictionaryDefaultImport();
+    }
     static void setDbColorEedSourceBytes(dx_data& data, std::size_t bytes) {
         data.dwgDbColorEedRetainedBytes = bytes;
     }
@@ -48007,6 +48108,7 @@ bool physicalDictionaryDefaultOutputReadback(
     if (!sourceReader.fileImport(sourcePath.string(), &source, false)
         || source.sourceFormat != dx_source_format::DWG
         || (source.sourceVersion != DRW::AC1015
+            && source.sourceVersion != DRW::AC1021
             && source.sourceVersion != DRW::AC1024
             && source.sourceVersion != DRW::AC1018)
         || (requireAc1018 && source.sourceVersion != DRW::AC1018)
@@ -48018,7 +48120,9 @@ bool physicalDictionaryDefaultOutputReadback(
         || !source.rawPlaceholders.empty()
         || source.dictionaryWithDefaults.front().handle != 0x0eu
         || source.placeholders.front().handle != 0x0fu)
-        return fail("physical dictionary-default source is not the admitted AC1015/AC1018/AC1024 typed pair");
+        return fail("physical dictionary-default source is not the admitted AC1015/AC1018/AC1021/AC1024 typed pair");
+
+    const DRW::Version targetVersion = DRW::AC1024;
 
     const std::uint32_t sourceDictionaryHandle =
         source.dictionaryWithDefaults.front().handle;
@@ -48102,6 +48206,15 @@ bool physicalDictionaryDefaultOutputReadback(
         || !sourcePlaceholder.appData.empty()
         || !sourcePlaceholder.extData.empty())
         return fail("physical plot-style dictionary/default/owner roles are not uniquely closed");
+
+    dx_data selectedSource;
+    dx_data* outputSource = &source;
+    if (source.sourceVersion == DRW::AC1021) {
+        if (!DxIfaceStandardDwgCaptureTestAccess::
+                selectPhysicalDictionaryDefaultGraph(source, selectedSource))
+            return fail("physical AC1021 dictionary-default graph could not be projected from its source-bound records");
+        outputSource = &selectedSource;
+    }
 
     const auto parseHandle = [](const DRW_Variant& value,
                                 std::uint32_t& result) {
@@ -48190,22 +48303,25 @@ bool physicalDictionaryDefaultOutputReadback(
         dx_iface writer;
         const auto exportPartial = [&]() {
             return writer.fileExport(
-                outputPath.string(), DRW::AC1024, binary, &source, false, true,
+                outputPath.string(), targetVersion, binary, outputSource, false, true,
                 dx_dxfSourceTextPolicy::RequireValidSource,
                 DRW::DxfTextWritePolicy::RequireLossless,
                 dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
                 dx_dwgReadCompletenessPolicy::AllowPartial);
         };
-        DRW_AcDbPlaceholder& mutablePlaceholder = source.placeholders.front();
+        DRW_AcDbPlaceholder& mutablePlaceholder =
+            outputSource->placeholders.front();
         const std::size_t qualificationsBeforeFailure =
             DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualificationCount(
-                source);
+                *outputSource);
         const bool dictionaryQualifiedBeforeFailure =
             DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
-                source, source.importGeneration, sourceDictionaryHandle);
+                *outputSource, outputSource->importGeneration,
+                sourceDictionaryHandle);
         const bool placeholderQualifiedBeforeFailure =
             DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
-                source, source.importGeneration, sourcePlaceholderHandle);
+                *outputSource, outputSource->importGeneration,
+                sourcePlaceholderHandle);
         const std::vector<std::uint32_t> sourceReactors =
             mutablePlaceholder.reactorHandles;
         mutablePlaceholder.reactorHandles = {DRW::NoHandle};
@@ -48216,27 +48332,31 @@ bool physicalDictionaryDefaultOutputReadback(
         mutablePlaceholder.reactorHandles = sourceReactors;
         if (!invalidGraphRejected || invalidDestination != sentinel
             || DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualificationCount(
-                source) != qualificationsBeforeFailure
+                *outputSource) != qualificationsBeforeFailure
             || DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
-                source, source.importGeneration, sourceDictionaryHandle)
+                *outputSource, outputSource->importGeneration,
+                sourceDictionaryHandle)
                 != dictionaryQualifiedBeforeFailure
             || DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
-                source, source.importGeneration, sourcePlaceholderHandle)
+                *outputSource, outputSource->importGeneration,
+                sourcePlaceholderHandle)
                 != placeholderQualifiedBeforeFailure)
             return fail("invalid physical PLACEHOLDER owner-reactor edge was not refused atomically");
         if (!exportPartial())
             return fail("corrected physical dictionary-default graph could not retry on the same adapter");
         if (!DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
-                source, source.importGeneration, sourceDictionaryHandle)
+                *outputSource, outputSource->importGeneration,
+                sourceDictionaryHandle)
             || !DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
-                source, source.importGeneration, sourcePlaceholderHandle))
+                *outputSource, outputSource->importGeneration,
+                sourcePlaceholderHandle))
             return fail("successful physical dictionary-default output did not qualify both source callbacks");
 
         dx_iface outputReader;
         dx_data output;
         if (!outputReader.fileImport(outputPath.string(), &output, false)
             || output.sourceFormat != dx_source_format::DXF
-            || output.sourceVersion != DRW::AC1024
+            || output.sourceVersion != targetVersion
             || !output.hasSingleSuccessfulDictionaryDefaultImport()
             || !output.hasNamedObjectDictionary
             || output.dictionaryWithDefaults.size() != 1u

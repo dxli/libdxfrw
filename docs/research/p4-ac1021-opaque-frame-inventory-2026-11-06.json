@@ -17,13 +17,15 @@
       "count": 74,
       "customClassCount": 68,
       "fixedTypeCount": 6,
-      "outputQualified": 62,
+      "outputQualified": 64,
       "outputQualifiedByRecord": {
         "VISUALSTYLE": 25,
         "SCALE": 17,
         "DICTIONARYVAR": 12,
         "MATERIAL": 3,
         "DBCOLOR": 1,
+        "ACDBDICTIONARYWDFLT": 1,
+        "ACDBPLACEHOLDER": 1,
         "ACDBSECTIONVIEWSTYLE": 2,
         "ACDBDETAILVIEWSTYLE": 2
       },
@@ -41,7 +43,7 @@
         "SORTENTSTABLE": 1,
         "DBCOLOR": 1,
         "CELLSTYLEMAP": 1,
-        "fixed unclassified records": 6
+        "fixed unclassified records": 5
       }
     },
     "standardObjectFrames": {
@@ -54,7 +56,7 @@
       "opaquePayloadMatches": 0,
       "outputQualified": 73
     },
-    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. Bounded physical AC1021 routes now qualify 62 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, two ACDBSECTIONVIEWSTYLE, and two ACDBDETAILVIEWSTYLE. They qualify 73 standard-object frames, including the selected VisualStyle, MATERIAL and DBCOLOR dependencies plus the two ModelDocViewStyle root dictionaries, four extension dictionaries and four XRECORDs. These are selected graph routes with ASCII/Binary output and readback; MATERIAL, DBCOLOR and ModelDocViewStyle also check their applicable retained extension/EED payloads and transaction refusal/retry. The remaining 12 opaque carriers and 39 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. Bounded physical AC1021 routes now qualify 64 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, and two ACDBDETAILVIEWSTYLE. They qualify 73 standard-object frames, including the selected VisualStyle, MATERIAL and DBCOLOR dependencies plus the two ModelDocViewStyle root dictionaries, four extension dictionaries and four XRECORDs. These are selected graph routes with ASCII/Binary output and readback; MATERIAL, DBCOLOR, ModelDocViewStyle and DICTIONARYWDFLT/PLACEHOLDER also check their applicable retained payloads and transaction refusal/retry. The remaining 10 opaque carriers and 39 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -122,5 +124,13 @@
     "selector": "--modeldoc-view-style-ac1021-source-profile /Users/dli/doc/dwg/children-room-decoration.dwg",
     "result": "PASS for the selected AC1021 graph in ASCII and Binary. The exact projection contains two NOD-rooted style dictionaries, four DETAIL/SECTIONVIEWSTYLE records, four extension dictionaries and four XRECORDs. Fresh typed readback checks NOD keys, style identities/owners/xDict links, all dictionary key/target edges, XRECORD owner/reactor and payload values, and CMC NONE -> DXF 257 projection. A post-OBJECTS std::bad_alloc preserves the destination sentinel; the same adapter then retries successfully. Source graph and field provenance remain one unauthenticated local producer profile only.",
     "receipt": "docs/research/p4-ac1021-modeldoc-view-style-physical-source-profile-2026-11-06.json"
+  },
+  "dictionaryDefaultCandidateBoundary": {
+    "record": "ACDBDICTIONARYWDFLT / ACDBPLACEHOLDER",
+    "observedCount": 2,
+    "handles": ["0xE", "0xF"],
+    "selector": "--dictionary-default-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "result": "PASS for the selected AC1021 source graph to AC1024 DXF in ASCII and Binary. Exact source identity, unique ACAD_PLOTSTYLENAME root, Normal/default target, owner/reactor roles, output qualification, fresh readback, destination-preserving refusal, and same-adapter retry pass. Unrelated source records are excluded only by a test projection; whole-source output remains unqualified.",
+    "receipt": "docs/research/p4-ac1021-dictionary-default-physical-selected-output-2026-11-06.json"
   }
 }
