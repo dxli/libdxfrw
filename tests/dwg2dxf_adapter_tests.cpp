@@ -1423,14 +1423,14 @@ public:
             return false;
         data.layouts.clear(); data.VPorts.clear(); data.views.clear();
         data.visualStyles.clear(); data.rawVisualStyleObjects.clear();
+        data.detailViewStyles.clear(); data.sectionViewStyles.clear();
+        data.rawDetailViewStyles.clear(); data.rawSectionViewStyles.clear();
         data.materials.clear(); data.backgrounds.clear();
         data.rawBackgroundObjects.clear(); data.renderSettings.clear();
         data.rawRenderSettingsObjects.clear();
         data.dictionaryWithDefaults.clear();
         data.rawDictionaryWithDefaults.clear();
         data.placeholders.clear(); data.rawPlaceholders.clear();
-        data.detailViewStyles.clear(); data.sectionViewStyles.clear();
-        data.rawDetailViewStyles.clear(); data.rawSectionViewStyles.clear();
         data.tableStyles.clear(); data.cellStyleMaps.clear();
         data.rawCellStyleMaps.clear(); data.plotSettings.clear();
         data.scales.clear(); data.dictionaryVars.clear();
@@ -2125,12 +2125,17 @@ public:
             });
         if (extensionDictionary == data.dictionaries.end()
             || extensionDictionary->parentHandle != control
-            || extensionDictionary->m_entries.size() != 3u)
+            || (extensionDictionary->m_entries.size() != 1u
+                && extensionDictionary->m_entries.size() != 3u))
             return false;
 
         std::set<std::uint32_t> dictionaries{extension};
-        const std::set<std::string> expectedRoots{
-            "ACAD_LAYERFILTERS", "ACAD_LAYERSTATES", "ACLYDICTIONARY"};
+        const std::set<std::string> expectedRoots =
+            extensionDictionary->m_entries.size() == 1u
+            ? std::set<std::string>{"ACAD_LAYERSTATES"}
+            : std::set<std::string>{"ACAD_LAYERFILTERS",
+                                    "ACAD_LAYERSTATES",
+                                    "ACLYDICTIONARY"};
         std::set<std::string> actualRoots;
         for (const DRW_Dictionary::Entry& root :
              extensionDictionary->m_entries) {
@@ -2224,6 +2229,8 @@ public:
         }
         data.VPorts.clear(); data.views.clear();
         data.visualStyles.clear(); data.rawVisualStyleObjects.clear();
+        data.detailViewStyles.clear(); data.sectionViewStyles.clear();
+        data.rawDetailViewStyles.clear(); data.rawSectionViewStyles.clear();
         for (const char* name : {"$INTERFEREOBJVS", "$INTERFEREVPVS",
                                  "$DRAGVS"}) {
             const auto headerReference = data.headerC.vars.find(name);
@@ -2236,6 +2243,33 @@ public:
         data.dictionaryWithDefaults.clear(); data.dictionaryDefaultImport = {};
         data.dictionaryVars.clear(); data.rawNamedResourceObjects.clear();
         data.mLineStyles.clear(); data.mLeaderStyles.clear();
+        data.scales.clear();
+        data.dwgDbColors.clear(); data.dwgDbColorObjects.clear();
+        data.dwgDbColorEntityReferences.clear();
+        data.dwgDbColorRetainedRecords = 0u;
+        data.dwgDbColorRetainedBytes = 0u;
+        data.dwgDbColorObjectRetainedRecords = 0u;
+        data.dwgDbColorObjectRetainedBytes = 0u;
+        data.dwgDbColorReferenceRetainedRecords = 0u;
+        data.dwgDbColorReferenceRetainedBytes = 0u;
+        data.dwgDbColorCaptureFailed = false;
+        data.dwgDbColorEedSources.clear();
+        data.dwgDbColorEedRetainedBytes = 0u;
+        data.dwgDbColorEedCaptureFailed = false;
+        data.dwgRasterVariables.clear();
+        data.rasterVariablesRetainedRecords = 0u;
+        data.rasterVariablesRetainedBytes = 0u;
+        data.rasterVariablesCaptureFailed = false;
+        data.dwgWipeoutVariables.clear();
+        data.wipeoutVariablesRetainedRecords = 0u;
+        data.wipeoutVariablesRetainedBytes = 0u;
+        data.wipeoutVariablesCaptureFailed = false;
+        for (DRW_DwgClassCoverageEntry& classEntry :
+                data.dwgClassCoverage.m_entries) {
+            if (classEntry.m_className == "AcDbRasterVariables"
+                || classEntry.m_className == "AcDbWipeoutVariables")
+                classEntry.m_instanceCount = 0;
+        }
         data.tableStyles.clear(); data.tableStylesRetainedRecords = 0u;
         data.tableStylesRetainedItems = 0u; data.tableStylesRetainedBytes = 0u;
         data.tableStylesCaptureFailed = false;
@@ -2245,14 +2279,14 @@ public:
         data.cellStyleMapsCaptureFailed = false;
         data.rawCellStyleMaps.clear();
         data.m_rawCellStyleMapDxfBaselines.clear();
-        data.namedResourceImport.scaleRange = {0u, data.scales.size()};
+        data.namedResourceImport.scaleRange = {0u, 0u};
         data.namedResourceImport.dictionaryVarRange = {0u, 0u};
         data.namedResourceImport.mLineStyleRange = {0u, 0u};
         data.namedResourceImport.mLeaderStyleRange = {0u, 0u};
-        data.namedResourceImport.typedRetainedRecords = data.scales.size();
-        data.namedResourceTypedRetainedRecords = data.scales.size();
-        data.namedResourceImport.typedRetainedBytes =
-            data.namedResourceTypedRetainedBytes;
+        data.namedResourceImport.typedRetainedRecords = 0u;
+        data.namedResourceTypedRetainedRecords = 0u;
+        data.namedResourceTypedRetainedBytes = 0u;
+        data.namedResourceImport.typedRetainedBytes = 0u;
         data.mLineStyleRetainedRecords = 0u;
         data.mLineStyleRetainedItems = 0u;
         data.mLineStyleRetainedBytes = 0u;
@@ -53435,13 +53469,19 @@ bool physicalAc1021EmptyLayerStateRootAdmission(
         return found;
     };
     const DRW_Dictionary* extension = uniqueDictionary(source, extensionHandle);
-    const std::set<std::string> expectedRootNames{
-        "ACAD_LAYERFILTERS", "ACAD_LAYERSTATES", "ACLYDICTIONARY"};
+    const std::set<std::string> expectedRootNames =
+        extension != nullptr && extension->m_entries.size() == 1u
+        ? std::set<std::string>{"ACAD_LAYERSTATES"}
+        : std::set<std::string>{"ACAD_LAYERFILTERS",
+                                "ACAD_LAYERSTATES",
+                                "ACLYDICTIONARY"};
     std::set<std::string> rootNames;
     if (extension == nullptr || extension->handle != extensionHandle
         || extension->parentHandle != layerControl
+        || (extension->m_entries.size() != 1u
+            && extension->m_entries.size() != 3u)
         || extension->m_entries.size() != expectedRootNames.size())
-        return fail("AC1021 LayerStates extension is outside its three-root profile");
+        return fail("AC1021 LayerStates extension is outside its one- or three-root profile");
     for (const DRW_Dictionary::Entry& entry : extension->m_entries)
         if (!rootNames.insert(entry.m_name).second)
             return fail("AC1021 LayerStates extension has a duplicate root key");
@@ -54332,9 +54372,11 @@ bool physicalAc1021EmptyLayerStateProjection(
                     return fail("physical AC1021 LayerStates extension dictionary is ambiguous");
                 sourceExtension = &candidate;
             }
-        if (sourceExtension == nullptr || sourceExtension->m_entries.size() != 3u)
+        if (sourceExtension == nullptr || (sourceExtension->m_entries.size() != 1u
+            && sourceExtension->m_entries.size() != 3u))
             return fail("physical AC1021 LayerStates root changed before output");
         const auto originalEntries = sourceExtension->m_entries;
+        const std::size_t expectedRootCount = originalEntries.size();
         sourceExtension->m_entries.front().m_name += "_MUTATED";
         const std::string sentinel =
             "AC1021 LayerStates destination sentinel\n";
@@ -54383,10 +54425,13 @@ bool physicalAc1021EmptyLayerStateProjection(
             uniqueDictionary(output, outputExtension);
         if (readbackExtension == nullptr
             || readbackExtension->parentHandle != outputControl
-            || readbackExtension->m_entries.size() != 3u)
+            || readbackExtension->m_entries.size() != expectedRootCount)
             return fail("AC1021 LayerStates readback changed the extension owner or root count");
-        const std::set<std::string> expectedNames{
-            "ACAD_LAYERFILTERS", "ACAD_LAYERSTATES", "ACLYDICTIONARY"};
+        const std::set<std::string> expectedNames = expectedRootCount == 1u
+            ? std::set<std::string>{"ACAD_LAYERSTATES"}
+            : std::set<std::string>{"ACAD_LAYERFILTERS",
+                                    "ACAD_LAYERSTATES",
+                                    "ACLYDICTIONARY"};
         std::set<std::string> actualNames;
         for (const DRW_Dictionary::Entry& entry :
              readbackExtension->m_entries) {

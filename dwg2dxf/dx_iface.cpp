@@ -33420,16 +33420,16 @@ bool dx_iface::prepareDwgLayerStateOutput(
         return found;
     };
     const DRW_Dictionary* extension = uniqueDictionary(extensionHandle);
-    const bool ac1024EmptyLayerStatesRoot =
-        sourceVersion == DRW::AC1024 && extension != nullptr
-        && extension->m_entries.size() == 1u;
+    const bool singleEmptyLayerStatesRoot = extension != nullptr
+        && extension->m_entries.size() == 1u
+        && (sourceVersion == DRW::AC1021 || sourceVersion == DRW::AC1024);
     if (extension == nullptr || extension->handle != extensionHandle
         || extension->parentHandle != controlHandle
         || extension->hardOwner != 1 || extension->cloning != 1
         || extension->countCap || !extension->hasCompleteDwgEntries()
         || extension->m_entries.size()
             != (sourceVersion == DRW::AC1018
-                    || ac1024EmptyLayerStatesRoot ? 1u : 3u)
+                    || singleEmptyLayerStatesRoot ? 1u : 3u)
         || !extension->appData.empty() || !extension->extData.empty()
         || !extension->reactorHandles.empty()
         || extension->xDictHandle != 0u
@@ -33471,7 +33471,7 @@ bool dx_iface::prepareDwgLayerStateOutput(
     const DRW_XRecord* layerStateRecord = nullptr;
     const bool ac1021EmptyLayerStatesRoot =
         sourceVersion == DRW::AC1021 && states->m_entries.empty();
-    if (sourceVersion == DRW::AC1018 || ac1024EmptyLayerStatesRoot
+    if (sourceVersion == DRW::AC1018 || singleEmptyLayerStatesRoot
         || ac1021EmptyLayerStatesRoot) {
         if (!states->m_entries.empty())
             return skip("empty ACAD_LAYERSTATES child dictionary profile contains entries");
@@ -33617,9 +33617,9 @@ bool dx_iface::prepareDwgLayerStateOutput(
             layerStateCompanions.push_back(*companion);
         }
         const std::size_t expectedCompanionCount =
-            ac1024EmptyLayerStatesRoot ? 0u : 2u;
+            singleEmptyLayerStatesRoot ? 0u : 2u;
         if (companionNames.size() != expectedCompanionCount)
-            return skip("AC1024 LAYER_CONTROL extension companion roots are incomplete");
+            return skip("LAYER_CONTROL extension companion roots are incomplete");
     }
     if (cData->importGeneration == 0u
         || !hasDictionaryFrame(extensionHandle, *extension)

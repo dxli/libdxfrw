@@ -61,13 +61,13 @@ created locally from scratch for the specific control.
 ### Next implementation-ready slices
 
 1. **P4 / AC1021 remaining standard-object frames:** the latest source
-   inventory has 112 standard-object frames; 100 now have bounded selected
-   ASCII/Binary output qualification, leaving 12. Identify the next smallest
+   inventory has 112 standard-object frames; 102 now have bounded selected
+   ASCII/Binary output qualification, leaving 10. Identify the next smallest
    fully typed, dependency-closed dictionary/XRECORD candidate from the source
    inventory, then prove its source membership/roles, selected output and
    fresh readback, invalid-graph refusal, destination preservation and retry.
-   Do not infer support from a callback or source frame alone. The latest slice
-   qualified the `AcDsDecomposeData` graph: its NOD (`0xC`) edge points to
+   Do not infer support from a callback or source frame alone. The completed
+   slices include the `AcDsDecomposeData` graph: its NOD (`0xC`) edge points to
    dictionary `0x3C3FE`; that dictionary owns `AcDsRecords` (`0x3C400`, empty)
    and `AcDsSchemas` (`0x3C3FF`, five ordered entries). The schemas dictionary
    owns XRECORDs `0x3C3F9` through `0x3C3FD`; each has one reciprocal
@@ -175,7 +175,7 @@ the distinct DBCOLOR source/output evidence gate. The 1,673 observed frames have
 zero entity/object parse failures, and no DXF is created. The 186 observer frames
 are 74 opaque carriers plus 112 standard-object frames; all 112 standard payloads
 match typed callbacks. Bounded selected-graph routes now qualify all 74 opaque
-carriers and 100 standard-object frames, with physical ASCII/Binary readback and
+carriers and 102 standard-object frames, with physical ASCII/Binary readback and
 applicable atomic refusal/retry. The physical AC1021 direct-NOD
 `ACDB_RECOMPOSE_DATA` XRECORD now qualifies its source frame (handle `0x3C3F8`,
 offset 7794, size 34), scalar group 90, ordered group-330 handle to
@@ -196,7 +196,17 @@ claims. The two-frame AC1021 `Siberia` NOD graph (`0x38F4B` → `Styles` → emp
 dictionary `0x38F4C`) also passes selected ASCII/Binary readback, owner/reactor
 and 350/360 role checks, late mutation refusal, destination preservation and
 same-adapter retry ([receipt](docs/research/p4-ac1021-siberia-dictionary-physical-selected-output-2026-11-06.json)).
-The remaining 12 standard-object frames are unqualified. The same-version whole-source
+The one-root empty `ACAD_LAYERSTATES` graph on `LAYER_CONTROL` (dictionary
+`0x1FF` → `0x200`) now passes source admission, selected ASCII/Binary output,
+fresh typed readback, late mutation refusal, destination preservation and
+same-adapter retry ([receipt](docs/research/p4-ac1021-layerstates-one-root-physical-selected-output-2026-11-06.json)).
+This test-only projection removes unrelated object families so it can reach the
+selected writer; that pruning is not evidence for whole-source conversion.
+The neighboring AC1024 one-root empty-LayerStates selector currently fails on
+same-writer retry (`strict-complete` reports 227/228 opaque callbacks qualified)
+despite its earlier passing receipt. Resolve the current-code/context mismatch
+and restore this compatibility control before broadening the LayerStates route.
+The remaining 10 standard-object frames are unqualified. The same-version whole-source
 recheck still stops at independent DBCOLOR and other document-wide gates. See
 the [same-version gate
 recheck](docs/research/p4-ac1021-children-room-same-version-output-gate-2026-11-05.json),

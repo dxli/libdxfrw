@@ -62,9 +62,19 @@
       },
       "typedPayloadMatches": 112,
       "opaquePayloadMatches": 0,
-      "outputQualified": 100
+      "outputQualified": 102,
+      "remainingUnqualified": 10,
+      "qualifiedByNewSlice": {
+        "record": "DICTIONARY",
+        "count": 2,
+        "handles": [
+          "0x1FF",
+          "0x200"
+        ],
+        "profile": "LAYER_CONTROL extension dictionary -> one empty ACAD_LAYERSTATES dictionary"
+      }
     },
-    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify all 74 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, one CELLSTYLEMAP, one RASTERVARIABLES, and one SORTENTSTABLE. They qualify 100 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining 12 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify all 74 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, one CELLSTYLEMAP, one RASTERVARIABLES, and one SORTENTSTABLE. They qualify 102 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining 10 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -111,7 +121,10 @@
   },
   "aseIndexDictionaryCandidateBoundary": {
     "record": "DICTIONARY + XRECORD",
-    "handles": ["0x3B3C8", "0x3B3C9"],
+    "handles": [
+      "0x3B3C8",
+      "0x3B3C9"
+    ],
     "root": "NOD/ASE_INDEX_DICTIONARY",
     "receipt": "docs/research/p4-ac1021-ase-index-dictionary-physical-selected-output-2026-11-06.json",
     "result": "PASS for the selected two-record physical AC1021 ASCII/Binary output and fresh typed readback. The unique NOD edge, one-entry dictionary, empty XRECORD, reciprocal owner/reactor links, both physical source-frame proofs, DCO15 APPID-backed EED, exact code-1040 value preservation, late mutation refusal, destination preservation and same-adapter retry are checked.",
@@ -156,7 +169,13 @@
     "root": "NOD/AcDsDecomposeData",
     "schemaDictionary": "0x3C3FF",
     "recordDictionary": "0x3C400",
-    "xrecordHandles": ["0x3C3F9", "0x3C3FA", "0x3C3FB", "0x3C3FC", "0x3C3FD"],
+    "xrecordHandles": [
+      "0x3C3F9",
+      "0x3C3FA",
+      "0x3C3FB",
+      "0x3C3FC",
+      "0x3C3FD"
+    ],
     "result": "PASS for selected physical ASCII/Binary output and fresh typed readback. Both NOD/dictionary levels, all five ordered schema XRECORDs and four remapped group-341 references are verified. Mutation refusal preserves the destination and same-adapter retry succeeds. DXF's generated {ACAD_REACTORS} appData wrapper is checked as the only synthesized application group, with exact decoded reactor identity.",
     "receipt": "docs/research/p4-ac1021-acds-decompose-data-physical-selected-output-2026-11-06.json",
     "sourceProfileReceipt": "docs/research/p4-ac1021-acds-decompose-data-source-profile-2026-11-06.json",
@@ -263,7 +282,7 @@
     "inventoryLogSha256": "26568efae6219f75419ee2f31bcea322f9245e33631a8a3eb59debf38d4f8499",
     "mlineStyleTrace": "dwg2dxf -d on the same source; parser trace around object 0x18 identifies STANDARD, flags 0 and two elements; not an independent wire-layout oracle.",
     "mlineStyleTraceLogSha256": "5f8ae476e5febb539ef46a8511662840c0411cc21a3dbf9dcbf85c9a0fa157e7",
-    "limit": "This is a source-inventory and bounded selected-output update only. All opaque source frames and 100 of 112 standard-object frames have selected-output qualification; 12 standard-object frames remain unqualified. Selected projection output does not qualify the whole source drawing, native semantics, or producer-wide support."
+    "limit": "This is a source-inventory and bounded selected-output update only. All opaque source frames and 102 of 112 standard-object frames have selected-output qualification; 10 standard-object frames remain unqualified. Selected projection output does not qualify the whole source drawing, native semantics, or producer-wide support."
   },
   "mLineStyleCandidateBoundary": {
     "record": "MLINESTYLE",
@@ -294,7 +313,7 @@
       "0x266",
       "0x26A"
     ],
-    "sourceProfile": "AC1021 source children-room-decoration.dwg (SHA-256 cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce); both entities are stored in the main *U0 container, are PaperSpace, and appear exactly once in the dwgmodels.com LAYOUT viewport list (0xD7). The LAYOUT paper-space BLOCK_RECORD backlink resolves to *Paper_Space (0xD6). Each VIEWPORT has an XDICTIONARY (0x267/0x26B) with ASDK_XREC_ANNOTATION_SCALE_INFO to XRECORD (0x268/0x26C); visual-style and layer targets resolve uniquely. ODA v5.4.1 §20.4.38 governs versioned viewport-specific handles.",
+    "sourceProfile": "AC1021 source children-room-decoration.dwg (SHA-256 cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce); both entities are stored in the main *U0 container, are PaperSpace, and appear exactly once in the dwgmodels.com LAYOUT viewport list (0xD7). The LAYOUT paper-space BLOCK_RECORD backlink resolves to *Paper_Space (0xD6). Each VIEWPORT has an XDICTIONARY (0x267/0x26B) with ASDK_XREC_ANNOTATION_SCALE_INFO to XRECORD (0x268/0x26C); visual-style and layer targets resolve uniquely. ODA v5.4.1 \u00a720.4.38 governs versioned viewport-specific handles.",
     "selector": "--viewport-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg",
     "result": "PASS for selected AC1021 same-version ASCII and Binary output with fresh DXF readback. Checks both typed viewport projections, LAYOUT list and output owner linkage, layer/visual-style references, XDICTIONARY key/target and XRECORD owner plus ordered typed payload, derived groups 68/69, invalid-field refusal preserving destination and successful same-adapter retry. Both viewport opaque callbacks and two DICTIONARY plus two XRECORD standard frames qualify. The run observes 174/186 source opaque callbacks qualified as aggregate transport accounting; this is not semantic or whole-document support evidence.",
     "validation": {
@@ -323,5 +342,17 @@
     },
     "receipt": "docs/research/p4-ac1021-rastervariables-physical-selected-output-2026-11-06.json",
     "limit": "One unauthenticated local source and selected graph only. The projection intentionally excludes unrelated source objects and layer graphs. It does not establish whole-source conversion, native raster-image semantics, producer-wide support, or independent application interoperability."
+  },
+  "layerStatesCandidateBoundary": {
+    "record": "DICTIONARY",
+    "handles": [
+      "0x1FF",
+      "0x200"
+    ],
+    "root": "LAYER_CONTROL extension dictionary / ACAD_LAYERSTATES",
+    "sourceGraph": "Source inventory reports 0x1FF owner=0x2 with one ACAD_LAYERSTATES entry to 0x200; 0x200 is empty, owned by 0x1FF, and has one reactor to 0x1FF. Both are typed, payload-matched standard object frames.",
+    "receipt": "docs/research/p4-ac1021-layerstates-one-root-physical-selected-output-2026-11-06.json",
+    "result": "PASS for source admission and selected ASCII/Binary output with fresh typed readback; mutation refusal preserves the destination and the same adapter retries successfully.",
+    "limit": "The test-only projection removes unrelated object families to reach selected output. One unauthenticated local source profile only; no independent DWG edge-role proof, whole-source output, native LayerStates semantics or producer-wide support."
   }
 }
