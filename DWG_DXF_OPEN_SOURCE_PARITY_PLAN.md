@@ -83,8 +83,15 @@ before it advances. Strict output remains refused
 Modern GEODATA DXF versions 2 and 3 now admit only documented coordinate types
 0–3 on output; tolerant input retains other signed group-70 values. Generated
 ASCII/Binary refusal, same-writer correction/readback and tolerant-input
-controls pass. Physical whole-document and native geospatial qualification
-remain open ([receipt](docs/research/p4-geodata-coordinate-type-dxf-domain-2026-11-05.json)).
+controls pass. The physical AC1024 version-2 no-tail profile now parses only
+when its bounded body ends exactly after the mesh; the existing present-tail
+profile remains accepted. The selected source has 157/157 frames published
+with zero entity/object parse failures, but strict output still refuses on its
+unclaimed 739-byte HEADER suffix. This does not choose the general CIVIL-tail
+rule, change writer output, or qualify geospatial meaning; see the [reader
+follow-up](docs/research/p4-ac1024-geodata-v2-civil-tail-conflict-2026-11-04.json).
+Physical whole-document and native geospatial qualification remain open
+([coordinate-type receipt](docs/research/p4-geodata-coordinate-type-dxf-domain-2026-11-05.json)).
 
 The bounded AC1018 direct-NOD frame-0 WIPEOUTVARIABLES graph has selected-source
 and generated ASCII/Binary output evidence; physical whole-document output,
@@ -1298,9 +1305,15 @@ the AC1027 selected graph with a nonempty mesh ([receipt](docs/research/p4-ac102
 The selected graph now transports ASCII definitions containing both literal
 caret-J and line feeds, but this does not qualify CRS semantics or whole-source
 output ([receipt](docs/research/p4-geodata-ascii-mixed-caret-newline-output-2026-11-04.json)).
-Resolve the AC1024 CIVIL-tail version contradiction with authoritative guidance
-and an independently produced AutoCAD 2010 witness before changing the parser
-or output gate ([receipt](docs/research/p4-ac1024-geodata-v2-civil-tail-conflict-2026-11-04.json)).
+The AC1024 v2 no-tail source profile is now admitted at read time by exact
+body-end evidence; the present-tail vector remains covered, while v1 keeps its
+existing tail requirement. This is a bounded reader accommodation, not a
+resolution of §20.4.78's release/AutoCAD-2010 contradiction. The writer still
+emits the current canonical target-version tail and strict whole-document
+output for this source remains refused at its HEADER suffix. Obtain an
+authoritative erratum and native AutoCAD 2010 acceptance before changing the
+writer gate or claiming general AC1024 GEODATA support
+([receipt](docs/research/p4-ac1024-geodata-v2-civil-tail-conflict-2026-11-04.json)).
 
 For WIPEOUT, qualify automatic adapter preview handling and native rendering
 beyond the explicitly authorized AC1024/AC1027/AC1032 resource-free preview

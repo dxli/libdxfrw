@@ -13745,10 +13745,11 @@ void testGeoDataCivilTailReaderVectors(TestContext& t) {
         bool includeMesh;
         bool includeCivilTail;
     };
-    const std::array<Case, 7> cases{{
+    const std::array<Case, 8> cases{{
         {DRW::AC1021, 1, false, true},
         {DRW::AC1024, 1, true, true},
         {DRW::AC1024, 2, true, true},
+        {DRW::AC1024, 2, true, false},
         {DRW::AC1027, 1, false, false},
         {DRW::AC1027, 2, false, false},
         {DRW::AC1027, 3, true, false},

@@ -25708,7 +25708,17 @@ bool DRW_GeoData::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t b
     // presence discriminator; consume every field whenever the target gate
     // says the block exists, even when that bit is false.
     DRW_GeoCivilTail parsedCivilTail;
-    if (hasGeoDataCivilTail(version)) {
+    // AC1024 producers disagree on the target-release rule in §20.4.78.
+    // A source-bound AutoCAD 2010 v2 frame ends exactly after its mesh, while
+    // §20.4.78 and the generated present-tail control also admit a tail at
+    // this target release. Admit the observed no-tail v2 variant only when
+    // the physical object-body boundary proves there are no trailing bits;
+    // keep decoding a present tail normally and do not generalize this to
+    // v1 or later releases.
+    const bool ac1024V2BodyEndsAfterMesh =
+        version == DRW::AC1024 && parsedVersion == 2
+        && currentObjectDwgBit(bodyBuf) == bodyEnd;
+    if (hasGeoDataCivilTail(version) && !ac1024V2BodyEndsAfterMesh) {
         parsedCivilTail.m_present = true;
         if (!readBit(parsedCivilTail.m_hasCivilData)
             || !readBit(parsedCivilTail.m_reservedFlag1))
