@@ -58241,7 +58241,10 @@ bool physicalAc1021CellStyleMapSourceProbe(
 }
 
 bool physicalAc1021MLineStyleSourceProbe(
-        const std::filesystem::path& sourcePath) {
+        const std::filesystem::path& sourcePath,
+        bool sameVersionOutput = false) {
+    const DRW::Version targetVersion = sameVersionOutput
+        ? DRW::AC1021 : DRW::AC1024;
     dx_iface reader;
     dx_data data;
     if (!reader.fileImport(sourcePath.string(), &data, false)
@@ -58350,7 +58353,7 @@ bool physicalAc1021MLineStyleSourceProbe(
             ~Redirect() { std::cerr.rdbuf(old); }
         } redirect{std::cerr.rdbuf(diagnostic.rdbuf())};
         exported = exporter.fileExport(
-            outputPath.string(), DRW::AC1024, false, &data, true, true,
+            outputPath.string(), targetVersion, false, &data, true, true,
             dx_dxfSourceTextPolicy::Compatible,
             DRW::DxfTextWritePolicy::Compatible,
             dx_dxfProxyGraphicsPolicy::Compatible,
@@ -58402,7 +58405,7 @@ bool physicalAc1021MLineStyleSourceProbe(
                 ~Redirect() { std::cerr.rdbuf(old); }
             } redirect{std::cerr.rdbuf(selectedDiagnostic.rdbuf())};
             selectedOutput = selectedWriter.fileExport(
-                selectedPath.string(), DRW::AC1024, binary, &selected,
+                selectedPath.string(), targetVersion, binary, &selected,
                 true, true, dx_dxfSourceTextPolicy::Compatible,
                 DRW::DxfTextWritePolicy::Compatible,
                 dx_dxfProxyGraphicsPolicy::Compatible,
@@ -58422,7 +58425,7 @@ bool physicalAc1021MLineStyleSourceProbe(
                 ~Redirect() { std::cerr.rdbuf(old); }
             } redirect{std::cerr.rdbuf(selectedDiagnostic.rdbuf())};
             selectedOutput = selectedWriter.fileExport(
-                selectedPath.string(), DRW::AC1024, binary, &selected,
+                selectedPath.string(), targetVersion, binary, &selected,
                 true, true, dx_dxfSourceTextPolicy::Compatible,
                 DRW::DxfTextWritePolicy::Compatible,
                 dx_dxfProxyGraphicsPolicy::Compatible,
@@ -58473,7 +58476,7 @@ bool physicalAc1021MLineStyleSourceProbe(
                         && entry.m_handle == style.handle;
                 }));
         if (!read || output.sourceFormat != dx_source_format::DXF
-            || output.sourceVersion != DRW::AC1024
+            || output.sourceVersion != targetVersion
             || output.mLineStyles.size() != 1u
             || output.mLineStyles.front().name != style.name
             || output.mLineStyles.front().elements.size() != 2u
@@ -81601,6 +81604,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--mline-style-ac1021-selected-output")
         return physicalAc1021MLineStyleSourceProbe(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--mline-style-ac1021-same-version-selected-output")
+        return physicalAc1021MLineStyleSourceProbe(argv[2], true) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--tablestyle-ac1021-physical-selected-output")
         return physicalAc1021TableStyleSelectedOutput(argv[2]) ? 0 : 1;

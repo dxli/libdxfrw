@@ -32719,7 +32719,9 @@ bool dx_iface::prepareDwgMLineStyles(DRW::Version version) noexcept {
             && cData->sourceVersion != DRW::AC1018
             && cData->sourceVersion != DRW::AC1021
             && cData->sourceVersion != DRW::AC1024)
-        || version != DRW::AC1024
+        || (version != DRW::AC1024
+            && !(cData->sourceVersion == DRW::AC1021
+                && version == DRW::AC1021))
         || m_extensionMLineStyleHandles.empty())
         return true;
 
@@ -33037,8 +33039,11 @@ bool dx_iface::inspectDwgMLineStyles(
                       << '\n';
         return false;
     };
-    if (dxfW == nullptr || cData == nullptr
-        || view.version != DRW::AC1024
+    const bool supportedVersion = cData != nullptr
+        && (view.version == DRW::AC1024
+            || (cData->sourceVersion == DRW::AC1021
+                && view.version == DRW::AC1021));
+    if (dxfW == nullptr || cData == nullptr || !supportedVersion
         || !hasUnchangedDwgMLineStyleOutputSources())
         return reject("source snapshot or output version");
 
