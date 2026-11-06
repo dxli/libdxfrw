@@ -60,18 +60,21 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P4 / AC1021 `ACAD_GROUP` empty dictionary:** screen NOD key
-   `ACAD_GROUP` → DICTIONARY `0xD` (13 decimal), then trace the special
-   generated/source group-root path before extending admission. The source
-   census reports an empty dictionary, NOD owner `0xC`, one reactor and no
-   extension dictionary. Reuse the new source-frame snapshot and readback
-   pattern only after proving that the group-specific writer neither
-   synthesizes a conflicting root nor loses this physical edge. Require fresh
-   ASCII/Binary readback of key/role/type/owner/reactor, atomic refusal after
-   a late mutation, and same-adapter retry. Keep whole-source strict refusal;
-   do not qualify a generated or merely empty dictionary as a physical source
-   route. The inventory selector prints DICTIONARY/XRECORD contents and NOD
-   key/target counts for reproducibility.
+1. **P4 / AC1021 `ACAD_IMAGE_DICT` empty dictionary:** screen NOD key
+   `ACAD_IMAGE_DICT` → DICTIONARY `0x2D1` (721 decimal) through the
+   IMAGE-specific generated-root route. The source census reports an empty
+   dictionary, NOD owner `0xC`, one reactor and no extension dictionary. First
+   establish whether any IMAGEDEF or IMAGEDEF_REACTOR callbacks exist, whether
+   the writer binds this physical dictionary or substitutes its generated
+   image dictionary, and how the unresolved `ACAD_IMAGE_VARS` root is treated.
+   Extend admission only if a unique closed profile preserves the physical
+   root edge and does not collide with image-generated identities. Require
+   fresh ASCII/Binary readback of root key/role, dictionary identity/type,
+   owner/reactor, atomic refusal after a late mutation and same-adapter retry.
+   Keep whole-source strict refusal; do not count a generated or merely empty
+   dictionary as physical-source output evidence. The inventory selector now
+   prints DICTIONARY/XRECORD contents, NOD key/target counts and GROUP callback
+   count for reproducibility.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
@@ -237,10 +240,20 @@ and [original receipt](docs/research/p4-ac1018-empty-style-dwg-bit-order-differe
 ASCII/Binary output and fresh readback. Its source frame is at offset 2817 and
 spans 16 bytes; the target is NOD-owned and reacts to NOD `0xC`. Late reactor
 mutation refuses atomically and the same adapter retries after restoration.
-This contributes one of 112 standard-object frames; 29 remain unqualified in
-the local source inventory. Export used `AllowPartial`: its 22-entry NOD and
+This contributes one standard-object frame. With the following `ACAD_GROUP`
+route, 28 of 112 remain unqualified in the local source inventory. Export used `AllowPartial`: its 22-entry NOD and
 whole drawing remain unqualified ([receipt](docs/research/p4-ac1021-plotsettings-physical-selected-output-2026-11-06.json),
 [inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
+
+The same source's empty `ACAD_GROUP` DICTIONARY `0xD` now also passes
+ASCII/Binary output and fresh readback through the source-backed generated
+GROUP-root path. The source has zero GROUP callbacks; both generated-root
+proofs and the standard-object source-frame proof finalize. Late reactor
+mutation refuses atomically and the same adapter retries after restoration.
+This qualifies a second standard-object frame, leaving 28 of 112
+unqualified; populated GROUP membership and whole-source output remain open
+([receipt](docs/research/p4-ac1021-group-physical-selected-output-2026-11-06.json),
+[updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
 
 **Open strict-output defect:** a CRC-resealed AC1027 source with layer 0's
 linetype handle changed to a missing target previously exported successfully

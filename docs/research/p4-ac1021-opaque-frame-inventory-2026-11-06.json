@@ -62,9 +62,9 @@
       },
       "typedPayloadMatches": 112,
       "opaquePayloadMatches": 0,
-      "outputQualified": 83
+      "outputQualified": 84
     },
-    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify all 74 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, one CELLSTYLEMAP, one RASTERVARIABLES, and one SORTENTSTABLE. They qualify 83 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining 29 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify all 74 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, one CELLSTYLEMAP, one RASTERVARIABLES, and one SORTENTSTABLE. They qualify 84 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining 28 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -81,6 +81,15 @@
     "receipt": "docs/research/p4-ac1021-plotsettings-physical-selected-output-2026-11-06.json",
     "result": "PASS for physical AC1021 ASCII/Binary output and fresh typed readback; exact NOD key role, unique DICTIONARY target, empty body, owner/reactor, mutation refusal, destination preservation, same-adapter retry and standard source-frame output qualification are checked.",
     "limit": "Selected output from one unauthenticated local source under AllowPartial. This does not qualify the other NOD entries, strict whole-source output, native plot behavior, or producer-wide support."
+  },
+  "groupCandidateBoundary": {
+    "record": "DICTIONARY",
+    "handle": "0xD",
+    "root": "NOD/ACAD_GROUP",
+    "groupCallbacks": 0,
+    "receipt": "docs/research/p4-ac1021-group-physical-selected-output-2026-11-06.json",
+    "result": "PASS for the physical zero-GROUP AC1021 profile through the source-backed generated-root path. ASCII/Binary output and fresh readback verify the unique NOD key, soft-owner role, DICTIONARY type/identity, empty membership, NOD owner/reactor, both generated-root proofs, source-frame qualification, late-mutation refusal, destination preservation and same-adapter retry.",
+    "limit": "Selected output from one unauthenticated local source under AllowPartial. Populated GROUP membership, other NOD entries, strict whole-source output, native group semantics and producer-wide support remain unqualified."
   },
   "scaleCandidateBoundary": {
     "record": "SCALE",
@@ -100,20 +109,20 @@
   },
   "diagnostic": {
     "testSource": "tests/dwg2dxf_adapter_tests.cpp",
-    "testSourceSha256": "85a440685a973daebb45684cef02c6f163d7b09e920f871fae0ea3c1fb7bca7c",
+    "testSourceSha256": "81781ef8bece94793cc27f023beb2dcd795fa8670bb1b1d363acca9b094bc7f7",
     "executable": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests",
-    "executableSha256": "b1a945ac08d8fd2827bb81eedae229d38d7ac02f4ad842f5a3c792993d2db894",
+    "executableSha256": "51368767e8a9ab63426d80417890c62090a8750472b35b25bef64c78389ba62c",
     "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/children-room-decoration.dwg",
-    "result": "PASS; prints per-handle source type, class and carrier records for all 74 opaque carrier records and all 112 standard-object source frames, including DICTIONARY/XRECORD payloads, ordered key/target edges, and NOD root keys and target handles.",
-    "logPath": "/private/tmp/p4-ac1021-opaque-inventory-post-plotsettings-2026-11-06.log",
-    "logSha256": "0af57276c481ebc75005255e150250f1739c209179bc32251827c838bab82e31"
+    "result": "PASS; prints per-handle source type, class and carrier records for all 74 opaque carrier records and all 112 standard-object source frames, including DICTIONARY/XRECORD payloads, ordered key/target edges, NOD root keys and target handles, and GROUP callback count.",
+    "logPath": "/private/tmp/p4-ac1021-opaque-inventory-post-group-2026-11-06.log",
+    "logSha256": "26568efae6219f75419ee2f31bcea322f9245e33631a8a3eb59debf38d4f8499"
   },
   "limits": [
     "The output route is a selected graph from one local source whose author and producer are not independently authenticated.",
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Broaden evidence beyond this one local AC1021 ModelSpace SORTENTSTABLE and empty ACAD_PLOTSETTINGS DICTIONARY profiles, then continue qualifying the 29 unqualified standard-object frames. Keep whole-source output, native semantics, producer-wide coverage, and named-block SORTENTSTABLE profiles open.",
+  "nextAction": "Broaden evidence beyond this one local AC1021 ModelSpace SORTENTSTABLE and empty ACAD_PLOTSETTINGS/ACAD_GROUP DICTIONARY profiles, then continue qualifying the 28 unqualified standard-object frames. Keep whole-source output, native semantics, producer-wide coverage, populated GROUP membership, and named-block SORTENTSTABLE profiles open.",
   "sortEntsCandidateBoundary": {
     "record": "SORTENTSTABLE",
     "handle": "0x2DF",
@@ -189,7 +198,7 @@
     "inventoryLogSha256": "c23a95e309acbd757994ddcb49b09f12607d552b3e47701cf8891104168fbcbd",
     "mlineStyleTrace": "dwg2dxf -d on the same source; parser trace around object 0x18 identifies STANDARD, flags 0 and two elements; not an independent wire-layout oracle.",
     "mlineStyleTraceLogSha256": "5f8ae476e5febb539ef46a8511662840c0411cc21a3dbf9dcbf85c9a0fa157e7",
-    "limit": "This is a source-inventory and bounded selected-output update only. All opaque source frames and 83 of 112 standard-object frames have selected-output qualification; 29 standard-object frames remain unqualified. Selected projection output does not qualify the whole source drawing, native semantics, or producer-wide support."
+    "limit": "This is a source-inventory and bounded selected-output update only. All opaque source frames and 84 of 112 standard-object frames have selected-output qualification; 28 standard-object frames remain unqualified. Selected projection output does not qualify the whole source drawing, native semantics, or producer-wide support."
   },
   "mLineStyleCandidateBoundary": {
     "record": "MLINESTYLE",
