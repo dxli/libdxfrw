@@ -61,8 +61,8 @@ created locally from scratch for the specific control.
 ### Next implementation-ready slices
 
 1. **P4 / AC1021 remaining standard-object frames:** the latest source
-   inventory has 112 standard-object frames; 98 now have bounded selected
-   ASCII/Binary output qualification, leaving 14. Identify the next smallest
+   inventory has 112 standard-object frames; 100 now have bounded selected
+   ASCII/Binary output qualification, leaving 12. Identify the next smallest
    fully typed, dependency-closed dictionary/XRECORD candidate from the source
    inventory, then prove its source membership/roles, selected output and
    fresh readback, invalid-graph refusal, destination preservation and retry.
@@ -175,7 +175,7 @@ the distinct DBCOLOR source/output evidence gate. The 1,673 observed frames have
 zero entity/object parse failures, and no DXF is created. The 186 observer frames
 are 74 opaque carriers plus 112 standard-object frames; all 112 standard payloads
 match typed callbacks. Bounded selected-graph routes now qualify all 74 opaque
-carriers and 98 standard-object frames, with physical ASCII/Binary readback and
+carriers and 100 standard-object frames, with physical ASCII/Binary readback and
 applicable atomic refusal/retry. The physical AC1021 direct-NOD
 `ACDB_RECOMPOSE_DATA` XRECORD now qualifies its source frame (handle `0x3C3F8`,
 offset 7794, size 34), scalar group 90, ordered group-330 handle to
@@ -192,7 +192,11 @@ preservation and same-adapter retry ([receipt](docs/research/p4-ac1021-acds-deco
 The generic root route is limited to a single NOD edge targeting one unique,
 complete, NOD-owned DICTIONARY and uses the existing graph closure validation.
 These remain local selected-source profiles and do not promote DWG support
-claims. The remaining 14 standard-object frames are unqualified. The same-version whole-source
+claims. The two-frame AC1021 `Siberia` NOD graph (`0x38F4B` → `Styles` → empty
+dictionary `0x38F4C`) also passes selected ASCII/Binary readback, owner/reactor
+and 350/360 role checks, late mutation refusal, destination preservation and
+same-adapter retry ([receipt](docs/research/p4-ac1021-siberia-dictionary-physical-selected-output-2026-11-06.json)).
+The remaining 12 standard-object frames are unqualified. The same-version whole-source
 recheck still stops at independent DBCOLOR and other document-wide gates. See
 the [same-version gate
 recheck](docs/research/p4-ac1021-children-room-same-version-output-gate-2026-11-05.json),

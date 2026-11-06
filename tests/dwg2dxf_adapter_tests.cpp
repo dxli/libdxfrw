@@ -1021,6 +1021,132 @@ public:
             && projection.hasCompleteDwgLineTypeControlMembership();
     }
 
+    static bool selectPhysicalAc1021SiberiaDictionaryGraph(
+            const dx_data& source, dx_data& projection) {
+        constexpr std::uint32_t rootHandle = 233291u;
+        constexpr std::uint32_t childHandle = 233292u;
+        const std::string rootName = "Siberia";
+        if (source.sourceFormat != dx_source_format::DWG
+            || source.sourceVersion != DRW::AC1021
+            || source.importGeneration == 0u
+            || !selectPhysicalAc1021TableStyleGraph(source, projection)
+            || !source.hasNamedObjectDictionary
+            || !source.namedObjectDictionary.hasCompleteDwgEntries())
+            return false;
+        const auto dictionaryByHandle = [&source](std::uint32_t handle)
+                -> const DRW_Dictionary* {
+            const DRW_Dictionary* result = nullptr;
+            for (const DRW_Dictionary& candidate : source.dictionaries) {
+                if (candidate.handle != handle) continue;
+                if (result != nullptr) return nullptr;
+                result = &candidate;
+            }
+            return result;
+        };
+        const DRW_Dictionary* root = dictionaryByHandle(rootHandle);
+        const DRW_Dictionary* child = dictionaryByHandle(childHandle);
+        std::size_t rootEdges = 0u;
+        const DRW_Dictionary::Entry* selectedRoot = nullptr;
+        for (const DRW_Dictionary::Entry& entry :
+                source.namedObjectDictionary.m_entries) {
+            if (entry.m_name != rootName) continue;
+            ++rootEdges;
+            selectedRoot = &entry;
+        }
+        const auto* rootFrame = standardSourceFrame(
+            source, source.importGeneration, rootHandle);
+        const auto* childFrame = standardSourceFrame(
+            source, source.importGeneration, childHandle);
+        if (rootEdges != 1u || selectedRoot == nullptr
+            || selectedRoot->m_handle != rootHandle
+            || root == nullptr || child == nullptr
+            || root->parentHandle != source.namedObjectDictionary.handle
+            || root->reactorHandles
+                != std::vector<std::uint32_t>{
+                    source.namedObjectDictionary.handle}
+            || root->m_entries.size() != 1u
+            || root->m_entries.front().m_name != "Styles"
+            || root->m_entries.front().m_handle != childHandle
+            || child->parentHandle != rootHandle
+            || child->reactorHandles != std::vector<std::uint32_t>{rootHandle}
+            || !child->m_entries.empty()
+            || root->xDictHandle != 0u || child->xDictHandle != 0u
+            || !root->appData.empty() || !child->appData.empty()
+            || !root->extData.empty() || !child->extData.empty()
+            || root->hasDataStorageBinaryData()
+            || child->hasDataStorageBinaryData()
+            || rootFrame == nullptr || childFrame == nullptr
+            || rootFrame->m_objectType != 42u
+            || childFrame->m_objectType != 42u
+            || !standardSourceEligible(source, rootHandle)
+            || !standardSourceEligible(source, childHandle))
+            return false;
+
+        projection.namedObjectDictionary.m_entries.clear();
+        projection.namedObjectDictionary.m_entries.push_back(*selectedRoot);
+        projection.dictionaries.clear();
+        projection.dictionaries.push_back(*root);
+        projection.dictionaries.push_back(*child);
+        const auto appendDictionary = [&](std::uint32_t handle,
+                                          std::uint32_t owner) {
+            if (handle == 0u) return true;
+            const DRW_Dictionary* candidate = dictionaryByHandle(handle);
+            if (candidate == nullptr || candidate->parentHandle != owner)
+                return false;
+            if (std::any_of(projection.dictionaries.begin(),
+                    projection.dictionaries.end(),
+                    [handle](const DRW_Dictionary& dictionary) {
+                        return dictionary.handle == handle;
+                    }))
+                return true;
+            projection.dictionaries.push_back(*candidate);
+            return true;
+        };
+        if (!appendDictionary(projection.namedObjectDictionary.xDictHandle,
+                projection.namedObjectDictionary.handle))
+            return false;
+        for (const DRW_Layer& layer : projection.layers)
+            if (!appendDictionary(layer.xDictHandle, layer.handle))
+                return false;
+        projection.tableStyles.clear();
+        projection.cellStyleMaps.clear();
+        projection.xRecords.clear();
+        projection.m_opaqueDwgSourceFrames.clear();
+        projection.m_opaqueDwgSourceFrameIdentities.clear();
+        projection.m_opaqueDwgSourceFrameRetainedBytes = 0u;
+        projection.m_standardDwgObjectFrames.clear();
+        projection.m_standardDwgObjectOrdinals.clear();
+        projection.m_standardDwgObjectRetainedBytes = 0u;
+        for (const std::uint32_t handle : {rootHandle, childHandle}) {
+            const dx_data::StandardDwgFrameKey key{
+                source.importGeneration, handle};
+            const auto frame = source.m_standardDwgObjectFrames.find(key);
+            if (frame == source.m_standardDwgObjectFrames.end()
+                || !projection.m_standardDwgObjectFrames.emplace(*frame).second)
+                return false;
+            const auto ordinal = source.m_standardDwgObjectOrdinals.find(key);
+            if (ordinal != source.m_standardDwgObjectOrdinals.end())
+                projection.m_standardDwgObjectOrdinals.emplace(*ordinal);
+            projection.m_standardDwgObjectRetainedBytes +=
+                frame->second.raw.m_rawBytes.size();
+        }
+        projection.m_standardDwgObjectMembershipEntries =
+            source.m_standardDwgObjectMembershipEntries;
+        projection.m_standardDwgObjectCaptureFailed =
+            source.m_standardDwgObjectCaptureFailed;
+        projection.m_standardDwgObjectPayloadFailed =
+            source.m_standardDwgObjectPayloadFailed;
+        projection.m_standardDwgNamesClosedThrough =
+            source.m_standardDwgNamesClosedThrough;
+        projection.m_standardDwgAppIdSources =
+            source.m_standardDwgAppIdSources;
+        projection.m_standardDwgLayerSources =
+            source.m_standardDwgLayerSources;
+        return projection.namedObjectDictionary.hasCompleteDwgEntries()
+            && projection.namedObjectDictionary.hasCompleteDxfEntries()
+            && projection.hasCompleteDwgLineTypeControlMembership();
+    }
+
     static bool selectPhysicalAc1021MLineStyleGraph(
             const dx_data& source, dx_data& projection) {
         if (source.sourceFormat != dx_source_format::DWG
@@ -55686,6 +55812,202 @@ bool physicalAc1021AcDsDecomposeDataOutputReadback(
     return true;
 }
 
+bool physicalAc1021SiberiaDictionaryOutputReadback(
+        const std::filesystem::path& sourcePath) {
+    constexpr std::uint32_t sourceRootHandle = 233291u;
+    constexpr std::uint32_t sourceChildHandle = 233292u;
+    dx_iface sourceReader;
+    dx_data source;
+    if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1021
+        || !source.hasNamedObjectDictionary)
+        return fail("AC1021 Siberia dictionary source import failed");
+    const DRW_Dictionary* sourceRoot = nullptr;
+    const DRW_Dictionary* sourceChild = nullptr;
+    for (const DRW_Dictionary& dictionary : source.dictionaries) {
+        if (dictionary.handle == sourceRootHandle) {
+            if (sourceRoot != nullptr)
+                return fail("duplicate AC1021 Siberia root dictionary");
+            sourceRoot = &dictionary;
+        }
+        if (dictionary.handle == sourceChildHandle) {
+            if (sourceChild != nullptr)
+                return fail("duplicate AC1021 Siberia child dictionary");
+            sourceChild = &dictionary;
+        }
+    }
+    const auto rootFrame =
+        DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+            source, source.importGeneration, sourceRootHandle);
+    const auto childFrame =
+        DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+            source, source.importGeneration, sourceChildHandle);
+    dx_data projection;
+    if (sourceRoot == nullptr || sourceChild == nullptr
+        || rootFrame == nullptr || childFrame == nullptr
+        || rootFrame->m_objectType != 42u || childFrame->m_objectType != 42u
+        || !DxIfaceStandardDwgCaptureTestAccess::
+            selectPhysicalAc1021SiberiaDictionaryGraph(source, projection)
+        || DxIfaceStandardDwgCaptureTestAccess::
+            standardSourceFrameCount(projection) != 2u)
+        return fail("AC1021 Siberia source role/frame profile changed");
+    std::cout << "AC1021 Siberia dictionary source profile root=0x"
+              << std::hex << sourceRootHandle << " child=0x"
+              << sourceChildHandle << std::dec
+              << " rootOffset=" << rootFrame->m_objectOffset
+              << " rootSize=" << rootFrame->m_objectSize
+              << " childOffset=" << childFrame->m_objectOffset
+              << " childSize=" << childFrame->m_objectSize
+              << " nodHardOwner=" << source.namedObjectDictionary.hardOwner
+              << " rootHardOwner=" << sourceRoot->hardOwner
+              << " childHardOwner=" << sourceChild->hardOwner
+              << " rootOwner=" << sourceRoot->parentHandle
+              << " childOwner=" << sourceChild->parentHandle
+              << " entries=1/0 reactors=1/1.\n";
+
+    const auto uniqueDictionary = [](const dx_data& data,
+                                     std::uint32_t handle) {
+        const DRW_Dictionary* result = nullptr;
+        for (const DRW_Dictionary& dictionary : data.dictionaries) {
+            if (dictionary.handle != handle) continue;
+            if (result != nullptr) return static_cast<const DRW_Dictionary*>(nullptr);
+            result = &dictionary;
+        }
+        return result;
+    };
+    struct Writer final : dx_iface {
+        bool mutateAfterObjects{false};
+        void writeObjects() override {
+            dx_iface::writeObjects();
+            if (!mutateAfterObjects || cData == nullptr) return;
+            for (DRW_Dictionary& dictionary : cData->dictionaries) {
+                if (dictionary.handle != 233292u) continue;
+                dictionary.reactorHandles.clear();
+                return;
+            }
+        }
+    } writer;
+    writer.cData = &projection;
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch().count();
+    for (const bool binary : {false, true}) {
+        const std::filesystem::path outputPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-siberia-ac1021-" + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{outputPath};
+        const std::string sentinel = "AC1021 Siberia sentinel\n";
+        const auto seedDestination = [&]() {
+            std::ofstream output(outputPath, std::ios::binary | std::ios::trunc);
+            return output && static_cast<bool>(output << sentinel);
+        };
+        const auto destinationIsSentinel = [&]() {
+            std::ifstream input(outputPath, std::ios::binary);
+            const std::string contents{
+                std::istreambuf_iterator<char>(input), {}};
+            return contents == sentinel;
+        };
+        const auto write = [&]() {
+            return writer.fileExport(
+                outputPath.string(), DRW::AC1021, binary, &projection,
+                false, false, dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::AllowPartial);
+        };
+        if (!seedDestination())
+            return fail("could not seed Siberia output sentinel");
+        writer.mutateAfterObjects = true;
+        if (write() || !destinationIsSentinel())
+            return fail("late Siberia dictionary mutation published output");
+        DRW_Dictionary* mutableChild = nullptr;
+        for (DRW_Dictionary& dictionary : projection.dictionaries)
+            if (dictionary.handle == sourceChildHandle)
+                mutableChild = &dictionary;
+        if (mutableChild == nullptr || !mutableChild->reactorHandles.empty())
+            return fail("Siberia mutation hook did not reach OBJECTS");
+        mutableChild->reactorHandles = {sourceRootHandle};
+        writer.mutateAfterObjects = false;
+        if (!write())
+            return fail("restored Siberia graph did not retry: "
+                + writer.extensionGraphFailureDetail());
+
+        dx_iface outputReader;
+        dx_data output;
+        if (!outputReader.fileImport(outputPath.string(), &output, false)
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1021
+            || !output.hasNamedObjectDictionary)
+            return fail("Siberia output readback import failed");
+        const auto rootEntry = std::find_if(
+            output.namedObjectDictionary.m_entries.begin(),
+            output.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "Siberia";
+            });
+        const DRW_Dictionary* outputRoot = rootEntry
+                == output.namedObjectDictionary.m_entries.end()
+            ? nullptr : uniqueDictionary(output, rootEntry->m_handle);
+        if (std::count_if(
+                output.namedObjectDictionary.m_entries.begin(),
+                output.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "Siberia";
+                }) != 1u
+            || outputRoot == nullptr
+            || outputRoot->parentHandle != output.namedObjectDictionary.handle
+            || outputRoot->m_entries.size() != 1u
+            || outputRoot->m_entries.front().m_name != "Styles")
+            return fail("Siberia root/dictionary entry changed on readback");
+        const DRW_Dictionary* outputChild = uniqueDictionary(
+            output, outputRoot->m_entries.front().m_handle);
+        if (outputChild == nullptr
+            || outputChild->parentHandle != outputRoot->handle
+            || !outputChild->m_entries.empty()
+            || outputRoot->reactorHandles
+                != std::vector<std::uint32_t>{output.namedObjectDictionary.handle}
+            || outputChild->reactorHandles
+                != std::vector<std::uint32_t>{outputRoot->handle})
+            return fail("Siberia dictionary owner/reactor graph changed on readback");
+        const auto expectedRootCode = source.namedObjectDictionary.hardOwner
+            ? DRW_Dictionary::Entry::DxfHandleCode::HardOwner
+            : DRW_Dictionary::Entry::DxfHandleCode::SoftOwner;
+        const auto expectedChildCode = sourceRoot->m_entries.front().m_dxfHandleCode
+                == DRW_Dictionary::Entry::DxfHandleCode::Unspecified
+            ? (sourceRoot->hardOwner
+                ? DRW_Dictionary::Entry::DxfHandleCode::HardOwner
+                : DRW_Dictionary::Entry::DxfHandleCode::SoftOwner)
+            : sourceRoot->m_entries.front().m_dxfHandleCode;
+        if (rootEntry->m_dxfHandleCode != expectedRootCode
+            || outputRoot->m_entries.front().m_dxfHandleCode
+                != expectedChildCode) {
+            std::cerr << "Siberia role diagnostic root="
+                      << static_cast<int>(rootEntry->m_dxfHandleCode) << "/"
+                      << static_cast<int>(expectedRootCode)
+                      << " sourceRootHard=" << sourceRoot->hardOwner
+                      << " nodHard=" << source.namedObjectDictionary.hardOwner
+                      << " child=" << static_cast<int>(
+                             outputRoot->m_entries.front().m_dxfHandleCode)
+                      << "/" << static_cast<int>(expectedChildCode)
+                      << " sourceRootChild=" << static_cast<int>(
+                             sourceRoot->m_entries.front().m_dxfHandleCode)
+                      << " sourceRootHard=" << sourceRoot->hardOwner << '\n';
+            return fail("Siberia dictionary hard/soft entry roles changed");
+        }
+        std::cout << "Physical AC1021 Siberia dictionary "
+                  << (binary ? "Binary" : "ASCII")
+                  << " selected output/readback passed for the two-level empty-child graph; late mutation preserved the destination and same-adapter retry succeeded.\n";
+    }
+    return true;
+}
+
 bool physicalAc1021PreviousProductInfoOutputReadback(
         const std::filesystem::path& sourcePath) {
     constexpr std::uint32_t sourceHandle = 534u;
@@ -81631,6 +81953,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--ac1021-acds-decompose-data-physical-output-readback")
         return physicalAc1021AcDsDecomposeDataOutputReadback(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--ac1021-siberia-dictionary-physical-output-readback")
+        return physicalAc1021SiberiaDictionaryOutputReadback(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--ac1021-recompose-data-physical-output-readback")
         return physicalAc1021RecomposeDataOutputReadback(argv[2]) ? 0 : 1;
