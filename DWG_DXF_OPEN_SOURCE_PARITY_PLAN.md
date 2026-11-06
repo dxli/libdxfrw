@@ -2080,6 +2080,11 @@ Native source-release builds and platform qualification remain open.
   wrapper NOD `0x0C`; selected ASCII/Binary output, invalid-field/reference
   refusal, same-adapter retry and typed readback pass. The prior frame=0
   physical wire selector remains passing ([receipt](docs/research/p4-ac1032-rastervariables-frame1-physical-writer-bridge-2026-11-05.json)).
+  A hash-bound physical AC1024 frame=1 witness now passes the same bounded
+  selected-wrapper route. Its source span verifies class, canonical frame
+  scalar, quality/units, zero string marker and role-4 owner/reactor to source
+  NOD `0x0A`; wrapper output remaps those roles to NOD `0x0C`, with ASCII/Binary
+  refusal, retry and typed readback ([receipt](docs/research/p4-ac1024-rastervariables-frame1-physical-writer-bridge-2026-11-05.json)).
   These controls do not convert the physical drawings as a whole. Their
   unrelated source/read/layout-integrity gates and native image semantics remain
   open, as do broader producer/version profiles.
