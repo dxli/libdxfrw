@@ -17,9 +17,16 @@
     "desktopLaunchCommand": "open -a /Applications/ODAFileConverter.app --args /private/tmp/libdxfrw-cover-unlock-1106/in /private/tmp/libdxfrw-cover-unlock-1106/out ACAD2013 DWG 0 0",
     "desktopLaunchResult": "Launch Services returned kLSNoExecutableErr (-10827); no output was produced.",
     "postAttemptOutputFiles": [],
+    "latestRetryAfterUnlockReport": {
+      "command": "ODAFileConverter /private/tmp/libdxfrw-cover-unlock-1106/in /private/tmp/libdxfrw-cover-unlock-1106/out ACAD2013 DWG 0 0",
+      "result": "ABORT (SIGABRT, return code -6) during pasteboard/XPC initialization; stdout empty; stderr reports pasteboard creation errors for clipboard/find and invalid com.apple.hiservices-xpcservice connections.",
+      "sourceSha256": "351a239cdae05894fe11863aabecfde171bd4d1758a3dd1c9868d8fe534fe6c1",
+      "converterSha256": "21a8f029e7d41af64088f65492404d97ffec0d2f7886703b3b725f5ac4a55783",
+      "postAttemptOutputFiles": []
+    },
     "sourceCopySha256": "351a239cdae05894fe11863aabecfde171bd4d1758a3dd1c9868d8fe534fe6c1"
   },
-  "decision": "No fresh resave exists to analyze. Preserve strict refusal and the existing unclaimed-suffix disposition; the reported unlock did not make this local converter invocation usable. This is an environment/tool-launch blocker, not evidence about suffix semantics.",
+  "decision": "No fresh resave exists to analyze. A further bounded retry after the unlock report reproduced the pasteboard/XPC abort. Preserve strict refusal and the existing unclaimed-suffix disposition. This is an environment/tool-launch blocker, not evidence about suffix semantics.",
   "nextAction": "Use a functioning independently launched ODA converter session or another eligible native/semantic source for the suffix; continue independent local implementation work meanwhile.",
   "validation": {
     "sourceHashRechecked": true,
