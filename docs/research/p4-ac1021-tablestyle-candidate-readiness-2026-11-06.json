@@ -1,0 +1,63 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "title": "AC1021 physical TABLESTYLE candidate and output boundary",
+  "date": "2026-11-06",
+  "supportClaimEffect": "none",
+  "scope": "Prepare a source-bound AC1021 TABLESTYLE selected-output slice using the existing architectural sample; establish typed/raw identity, graph dependencies, specification profile, independent peer field observations, and the unrelated whole-document stop.",
+  "source": {
+    "path": "/Users/dli/doc/dwg/architectural_-_annotation_scaling_and_multileaders.dwg",
+    "sha256": "0e74f0aa84b1323c922345f067739c42ee26213dea010b407b87a94212271654",
+    "version": "AC1021",
+    "producerProvenance": "Existing local sample; author and producer are not independently authenticated. No fixture or derivative is committed."
+  },
+  "localReader": {
+    "executable": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests",
+    "selector": "--opaque-dwg-source-inventory",
+    "result": "PASS inventory read; 607 source callbacks, 607 opaque frames captured, and TABLESTYLE handle 0x87 observed as type 504 / AcDbTableStyle.",
+    "inventoryLog": "/private/tmp/ac1021-architectural-inventory-1106.log"
+  },
+  "candidateGraph": {
+    "nodEntry": {
+      "key": "ACAD_TABLESTYLE",
+      "targetHandle": "0x86"
+    },
+    "ownerDictionary": {
+      "handle": "0x86",
+      "key": "Standard",
+      "targetHandle": "0x87"
+    },
+    "tableStyle": {
+      "handle": "0x87",
+      "ownerHandle": "0x86",
+      "extensionDictionaryHandle": "0x1659",
+      "name": "Standard"
+    },
+    "extensionDictionary": {
+      "handle": "0x1659",
+      "key": "ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP",
+      "targetHandle": "0xCED7"
+    },
+    "profileLimit": "The selected route must establish the extension dictionary and target role or refuse. Retaining the table style callback alone is insufficient."
+  },
+  "independentPeer": {
+    "implementation": "LibreDWG dwgread 0.14",
+    "command": "dwgread -O JSON -o /private/tmp/ac1021-architectural-libre-1106.json /Users/dli/doc/dwg/architectural_-_annotation_scaling_and_multileaders.dwg",
+    "result": "SUCCESS; independently reports the TABLESTYLE identity, owner/reactor, extension dictionary, Standard name, flow direction 0, flags 0, margins 0.06/0.06, and three row styles.",
+    "scopeLimit": "Peer JSON agreement is field corroboration only; it does not qualify this repository's output or native TABLESTYLE semantics."
+  },
+  "specification": {
+    "authority": "Open Design Specification for .dwg files v5.4.1, \u00a720.4.101.1 (TABLESTYLE format until R21)",
+    "profile": "Description TV; flow direction BS; flags BS; horizontal/vertical margins BD; title/header suppression B; three row styles in data/title/header order with hard-pointer text-style IDs, height/alignment, CMC text/fill/border colors, background-color flag, six border lineweights/visibility/colors; R2007+ data type BL, data unit BL and format TV.",
+    "implementationObservation": "The current parser has a legacy branch for version <= AC1021 and parses three row styles. No parser layout change is justified by this evidence."
+  },
+  "wholeDocumentProbe": {
+    "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/architectural_-_annotation_scaling_and_multileaders.dwg -y -v2010 /private/tmp/ac1021-architectural-full-1106.dxf",
+    "result": "FAIL CLOSED before output preparation: typed-proxy-graphics-not-preserved, 36 records, first handle 0x2C50 (decimal 11344).",
+    "interpretation": "This unrelated source graph stop does not establish TABLESTYLE output failure; use an exact selected graph projection for the next slice and keep full-source conversion refused."
+  },
+  "nextAction": "Implement a test-only source-bound AC1021 TABLESTYLE selected projection retaining the NOD entry, owner dictionary, TABLESTYLE and its extension-dictionary dependency; qualify ASCII/Binary output, fresh readback, mutation refusal, destination preservation and retry. Keep the whole-source 36 MLEADER-cache stop and all native/producer claims open.",
+  "validation": {
+    "fullSuites": "NOT RUN",
+    "fixturesCommitted": false
+  }
+}
