@@ -60,18 +60,19 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P4 / AC1021 `AEC_PROPERTY_SET_DEFS` empty dictionary:** screen NOD key
-   `AEC_PROPERTY_SET_DEFS` → DICTIONARY `0x745` (1861 decimal). The source
-   inventory reports an empty dictionary. Establish its exact owner/reactor,
-   extension-dictionary and generated-root interactions before deciding whether
-   this is an independently closed physical profile. If eligible, require fresh
-   ASCII/Binary readback of its NOD edge and role, unique dictionary identity,
-   type, owner/reactor, atomic late-mutation refusal, destination preservation
-   and same-adapter retry. Keep whole-source strict refusal and support claims
-   unchanged unless graph and semantic evidence justify them. Do not count a
-   synthesized empty dictionary as physical-source output evidence. The
-   inventory selector prints DICTIONARY/XRECORD contents, NOD key/target counts
-   and GROUP callback count for reproducibility.
+1. **P4 / AC1021 `ASE_INDEX_DICTIONARY` one-entry graph:** screen NOD key
+   `ASE_INDEX_DICTIONARY` → DICTIONARY `242632` (owner NOD `0xC`), containing
+   key `ASEBlockHierarchyIndexRecord` → XRECORD `242633`. The source inventory
+   reports an empty XRECORD body and one reactor on each object. Before adding
+   output qualification, verify the complete typed/raw payloads, reciprocal
+   owner/reactor relationships, duplicate handles/keys, physical source-frame
+   eligibility for both records, and the output role assigned to the dictionary
+   edge. If the two-object graph is closed, require ASCII/Binary output and
+   fresh typed readback of the NOD edge, dictionary entry and empty XRECORD;
+   late graph mutation must preserve the destination and the same adapter must
+   retry after restoration. Keep strict whole-source output and support claims
+   unchanged. The inventory selector prints DICTIONARY/XRECORD contents, NOD
+   key/target counts and GROUP callback count for reproducibility.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
@@ -164,8 +165,8 @@ the distinct DBCOLOR source/output evidence gate. The 1,673 observed frames have
 zero entity/object parse failures, and no DXF is created. The 186 observer frames
 are 74 opaque carriers plus 112 standard-object frames; all 112 standard payloads
 match typed callbacks. Bounded selected-graph routes now qualify all 74 opaque
-carriers and 85 standard-object frames, with physical ASCII/Binary readback and
-applicable atomic refusal/retry. The remaining 27 standard-object frames are
+carriers and 86 standard-object frames, with physical ASCII/Binary readback and
+applicable atomic refusal/retry. The remaining 26 standard-object frames are
 unqualified. The same-version whole-source
 recheck still stops at independent DBCOLOR and other document-wide gates. See
 the [same-version gate
@@ -261,6 +262,19 @@ on the same adapter. This is one additional bounded frame, leaving 27 of 112
 standard-object frames unqualified; unresolved sibling NOD entries, strict
 whole-source output, image semantics and producer qualification remain open
 ([receipt](docs/research/p4-ac1021-image-dict-physical-selected-output-2026-11-06.json),
+[updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
+
+The empty NOD entry `AEC_PROPERTY_SET_DEFS` → DICTIONARY `0x745` also passes
+selected ASCII/Binary output and fresh readback through the regular
+source-backed dictionary path. Its physical frame is at offset 8,518 and spans
+17 bytes; it has no entries or extension dictionary and reacts to NOD `0xC`.
+The emitted NOD edge has the expected soft-owner DXF role. The generated NOD
+and GROUP proofs and the physical standard-frame output proof finalize. A late
+reactor mutation preserves the destination sentinel on refusal, and restoring
+the source permits same-adapter retry. This is selected output from one
+unauthenticated source; it leaves 26 of 112 standard-object frames unqualified
+and does not close the sibling NOD graph, whole-source output or producer/native
+semantics ([receipt](docs/research/p4-ac1021-aec-property-set-defs-physical-selected-output-2026-11-06.json),
 [updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
 
 **Open strict-output defect:** a CRC-resealed AC1027 source with layer 0's
