@@ -412,10 +412,86 @@ struct Capture : LC3CompatCheck {
         }
     }
     void addMaterial(const DRW_Material& m) override {
+        const auto close = [](double left, double right) {
+            return std::abs(left - right) <= 1e-9;
+        };
+        const auto mapTransformMatches = [&](const std::array<double,16>& actual,
+                                             bool globalScale) {
+            std::array<double,16> expected{{1.0,0.0,0.0,0.0,
+                0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,
+                0.0,0.0,0.0,1.0}};
+            if (globalScale) expected[0]=expected[5]=0.0008;
+            for (std::size_t index=0; index<actual.size(); ++index)
+                if (!close(actual[index],expected[index])) return false;
+            return true;
+        };
+        const bool globalScale=physicalAc1021Profile && m.m_name=="Global";
+        const bool physicalFieldsMatch = !physicalAc1021Profile || (
+            m.m_ambientColorMethod==0u && close(m.m_ambientColorFactor,1.0)
+            && !m.m_hasAmbientColorValue
+            && m.m_diffuseColorMethod==0u && close(m.m_diffuseColorFactor,1.0)
+            && !m.m_hasDiffuseColorValue
+            && m.m_specularColorMethod==0u && close(m.m_specularColorFactor,1.0)
+            && !m.m_hasSpecularColorValue
+            && close(m.m_diffuseMapBlendFactor,1.0)
+            && m.m_diffuseMapSource==1u && m.m_diffuseMapProjection==2u
+            && m.m_diffuseMapTiling==1u && m.m_diffuseMapAutoTransform==1u
+            && mapTransformMatches(m.m_diffuseMapTransform,globalScale)
+            && close(m.m_specularGlossFactor,0.5)
+            && close(m.m_specularMapBlendFactor,1.0)
+            && m.m_specularMapSource==1u && m.m_specularMapProjection==2u
+            && m.m_specularMapTiling==1u && m.m_specularMapAutoTransform==1u
+            && mapTransformMatches(m.m_specularMapTransform,false)
+            && close(m.m_reflectionMapBlendFactor,1.0)
+            && m.m_reflectionMapSource==1u && m.m_reflectionMapProjection==2u
+            && m.m_reflectionMapTiling==1u && m.m_reflectionMapAutoTransform==1u
+            && mapTransformMatches(m.m_reflectionMapTransform,globalScale)
+            && close(m.m_opacityPercent,1.0)
+            && close(m.m_opacityMapBlendFactor,1.0)
+            && m.m_opacityMapSource==1u && m.m_opacityMapProjection==2u
+            && m.m_opacityMapTiling==1u && m.m_opacityMapAutoTransform==1u
+            && mapTransformMatches(m.m_opacityMapTransform,globalScale)
+            && close(m.m_bumpMapBlendFactor,1.0)
+            && m.m_bumpMapSource==1u && m.m_bumpMapProjection==2u
+            && m.m_bumpMapTiling==1u && m.m_bumpMapAutoTransform==1u
+            && mapTransformMatches(m.m_bumpMapTransform,globalScale)
+            && close(m.m_refractionIndex,1.0)
+            && close(m.m_refractionMapBlendFactor,1.0)
+            && m.m_refractionMapSource==0u && m.m_refractionMapProjection==2u
+            && m.m_refractionMapTiling==1u && m.m_refractionMapAutoTransform==1u
+            && mapTransformMatches(m.m_refractionMapTransform,false)
+            && close(m.m_translucence,0.0)
+            && close(m.m_reflectivity,0.0)
+            && m.m_illuminationModel==0 && m.m_channelFlags==63);
+        if (physicalAc1021Profile && !physicalFieldsMatch) {
+            std::cerr << "AC1021 MATERIAL field mismatch: " << m.m_name
+                      << " methods=" << unsigned(m.m_ambientColorMethod)
+                      << ',' << unsigned(m.m_diffuseColorMethod) << ','
+                      << unsigned(m.m_specularColorMethod)
+                      << " hasColor=" << m.m_hasAmbientColorValue << ','
+                      << m.m_hasDiffuseColorValue << ','
+                      << m.m_hasSpecularColorValue
+                      << " refractionSource="
+                      << unsigned(m.m_refractionMapSource)
+                      << " channels=" << m.m_channelFlags << " transforms=";
+            for (double value : m.m_diffuseMapTransform)
+                std::cerr << value << ',';
+            std::cerr << " map-tuples="
+                      << m.m_diffuseMapBlendFactor << ',' << unsigned(m.m_diffuseMapSource) << ',' << unsigned(m.m_diffuseMapProjection) << ',' << unsigned(m.m_diffuseMapTiling) << ',' << unsigned(m.m_diffuseMapAutoTransform) << ';'
+                      << m.m_specularMapBlendFactor << ',' << unsigned(m.m_specularMapSource) << ',' << unsigned(m.m_specularMapProjection) << ',' << unsigned(m.m_specularMapTiling) << ',' << unsigned(m.m_specularMapAutoTransform) << ';'
+                      << m.m_reflectionMapBlendFactor << ',' << unsigned(m.m_reflectionMapSource) << ',' << unsigned(m.m_reflectionMapProjection) << ',' << unsigned(m.m_reflectionMapTiling) << ',' << unsigned(m.m_reflectionMapAutoTransform) << ';'
+                      << m.m_opacityMapBlendFactor << ',' << unsigned(m.m_opacityMapSource) << ',' << unsigned(m.m_opacityMapProjection) << ',' << unsigned(m.m_opacityMapTiling) << ',' << unsigned(m.m_opacityMapAutoTransform) << ';'
+                      << m.m_bumpMapBlendFactor << ',' << unsigned(m.m_bumpMapSource) << ',' << unsigned(m.m_bumpMapProjection) << ',' << unsigned(m.m_bumpMapTiling) << ',' << unsigned(m.m_bumpMapAutoTransform) << ';'
+                      << m.m_refractionMapBlendFactor << ',' << unsigned(m.m_refractionMapSource) << ',' << unsigned(m.m_refractionMapProjection) << ',' << unsigned(m.m_refractionMapTiling) << ',' << unsigned(m.m_refractionMapAutoTransform)
+                      << " factors=" << m.m_specularGlossFactor << ',' << m.m_opacityPercent << ',' << m.m_refractionIndex << ',' << m.m_translucence << ',' << m.m_reflectivity << ',' << m.m_illuminationModel
+                      << " transforms=" << mapTransformMatches(m.m_diffuseMapTransform,true) << ',' << mapTransformMatches(m.m_specularMapTransform,false) << ',' << mapTransformMatches(m.m_reflectionMapTransform,true) << ',' << mapTransformMatches(m.m_opacityMapTransform,true) << ',' << mapTransformMatches(m.m_bumpMapTransform,true) << ',' << mapTransformMatches(m.m_refractionMapTransform,false) << '\n';
+        }
         if (m.parentHandle!=dictionary
             || m.reactorHandles!=std::vector<std::uint32_t>{dictionary}
+            || !physicalFieldsMatch
             || (requireSemantic && (!m.hasCompleteDwgSemanticFields()
-                || m.m_diffuseColorValue!=0xc2ffffffu || m.m_channelFlags!=63))
+                || (expectDefaultBody && m.m_diffuseColorValue!=0xc2ffffffu)
+                || m.m_channelFlags!=63))
             || (!requireSemantic && m.hasCompleteDwgSemanticFields())
             || (requireRaw && (!m.hasDwgRawData() || m.dwgRawDataVersion()!=rawVersion
                 || m.dwgRawDataBitSize()!=550u))) valid=false;
@@ -437,20 +513,44 @@ struct Capture : LC3CompatCheck {
     std::array<std::uint32_t,3> children{};
     std::vector<std::pair<std::string,std::uint32_t>> materials;
     bool valid=true, requireSemantic=true, requireRaw=false;
+    bool expectDefaultBody=true;
+    bool physicalAc1021Profile=false;
     DRW::Version rawVersion=DRW::AC1021;
 };
 bool inspect(const std::string& path,const std::array<std::uint32_t,4>& h,bool supplied,
              DRW::Version version) {
     dwgRW reader(path.c_str()); Capture capture;
-    // Only the exact AC1027 default body/string profile is promoted; its
-    // retained raw tail still carries 550 bits. AC1021 remains opaque.
-    capture.requireSemantic = version == DRW::AC1024 || version == DRW::AC1027;
+    // AC1021/AC1024 decode the bounded nonprocedural body; AC1027 additionally
+    // requires the exact generated default body/string profile. Retained raw
+    // payload is still checked for AC1021 and AC1027.
+    capture.requireSemantic = version == DRW::AC1021
+        || version == DRW::AC1024 || version == DRW::AC1027;
     capture.requireRaw = version == DRW::AC1021 || version == DRW::AC1027;
     capture.rawVersion = version;
     const bool r = reader.read(&capture,false); const bool m = capture.matches(h,supplied); if (!r || !m) std::cerr << "inspect read=" << r << " match=" << m << " root=" << capture.root << " dict=" << capture.dictionary << " layer=" << capture.layerMaterial << " materials=" << capture.materials.size() << " valid=" << capture.valid << "\n"; return r && m;
 }
 }
 int main(int argc,char**argv) {
+    if (argc==3 && std::string(argv[1])=="--physical-ac1021-semantic-probe") {
+        dwgRW reader(argv[2]);
+        Capture capture;
+        capture.requireSemantic=true;
+        capture.requireRaw=false;
+        capture.expectDefaultBody=false;
+        capture.physicalAc1021Profile=true;
+        const std::array<std::uint32_t,4> handles{{0x6au,0xedu,0xecu,0xeeu}};
+        const bool read=reader.read(&capture,false);
+        const bool match=capture.matches(handles,false);
+        if (!read || !match) {
+            std::cerr << "physical AC1021 MATERIAL semantic probe failed: read="
+                      << read << " match=" << match << " valid="
+                      << capture.valid << " materials="
+                      << capture.materials.size() << '\n';
+            return 1;
+        }
+        std::cout << "physical AC1021 MATERIAL semantic probe passed\n";
+        return 0;
+    }
     const bool keep=argc==2 && std::string(argv[1])=="--keep";
     if(argc>2 || (argc==2 && !keep) || !directControls() || !directAc1027Controls() || !ac1027AllocationSweep() || !ac1027LayerAllocationSweep()) return 1;
     const auto dir=std::filesystem::temp_directory_path() /

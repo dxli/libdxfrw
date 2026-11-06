@@ -16423,11 +16423,12 @@ bool DRW_Material::parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t 
     bool parsedSemanticFields = false;
 
     // ODA v5.4.1 does not publish a MATERIAL body schema. LibreDWG's
-    // dwg2.spec profile, corroborated against the physical AC1024 witness,
-    // defines the fixed nonprocedural field order. Decode on independent
+    // dwg2.spec profile, corroborated against physical AC1021 and AC1024
+    // witnesses, defines the fixed nonprocedural field order. Decode on independent
     // cursors so an unsupported procedural source or newer tail remains an
     // opaque same-version body and cannot poison the publishing cursor.
-    if (version == DRW::AC1024 || version == DRW::AC1027) {
+    if (version == DRW::AC1021 || version == DRW::AC1024
+        || version == DRW::AC1027) {
         dwgBuffer bodyProbe = buf->forkIndependent();
         dwgBuffer textProbe = sBuf->forkIndependent();
         const auto inBounds = [&]() {

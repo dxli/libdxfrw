@@ -1442,8 +1442,13 @@ open ([receipt](docs/research/p6-ac1021-layer-bit-boundary-2026-11-04.json)).
 An explicit AC1021 default MATERIAL graph binds the producer-witnessed
 defaults, and corrected synthetic VPORT null roles allow one sampled LINE
 drawing with material and plotstyle opt-ins to convert through ODA without
-warnings. Native AC1021 material semantic decoding, other graphs, native rendering
-and complete interoperability remain open
+warnings. The fixed nonprocedural AC1021 MATERIAL body now decodes for the
+three-record children-room source: a focused physical probe matches the
+LibreDWG-observed scalar/map profile and owner/reactor roles, and the generated
+default-material control passes for AC1021/AC1024/AC1027 ([parser receipt](docs/research/p4-ac1021-material-fixed-body-parser-2026-11-06.json)).
+This is parser evidence only; selected physical graph output/readback,
+procedural or unknown tails, broader source profiles, native rendering and
+complete interoperability remain open
 ([material receipt](docs/research/p6-ac1021-default-material-optin-2026-11-04.json),
 [VPORT receipt](docs/research/p6-ac1021-synthetic-vport-null-roles-2026-11-04.json)).
 The corrected AC1021 POINT/CIRCLE footer now passes the sampled ODA and
