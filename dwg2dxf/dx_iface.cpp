@@ -72712,6 +72712,21 @@ bool dx_iface::finalizeDxfWrite() {
             // Diagnostics cannot authorize publication of incomplete output.
         }
         if (m_debugDwgOutputQualification) {
+            std::cerr << "Opaque output proof profiles: TABLESTYLE sources="
+                      << m_dwgTableStyleOutputSources.size()
+                      << " inspected=" << m_dwgTableStylesInspected
+                      << "; MLEADERSTYLE sources="
+                      << m_dwgMLeaderStyleOutputSources.size()
+                      << " inspected=" << m_dwgMLeaderStylesInspected
+                      << "; CELLSTYLEMAP roots="
+                      << m_extensionCellStyleMapHandles.size()
+                      << "; SECTIONVIEWSTYLE roots="
+                      << m_extensionSectionViewStyleHandles.size()
+                      << "; DETAILVIEWSTYLE roots="
+                      << m_extensionDetailViewStyleHandles.size()
+                      << "; ModelDocViewStyle import="
+                      << (cData->hasSingleSuccessfulModelDocViewStyleImport())
+                      << '\n';
             const dx_data::StandardDwgFrameKey first{
                 cData->importGeneration, 0u};
             const auto begin =

@@ -68,12 +68,19 @@ created locally from scratch for the specific control.
    DETAILVIEWSTYLE `0x21C` and `0x18082`, and CELLSTYLEMAP `0x3C3F7`. Existing
    source-bound selected-output receipts cover these physical profiles, but
    strict conversion has not yet closed their combined emitted graph and
-   registered its source identities. First extend the existing rooted
-   TABLESTYLE proof to this source and prove its extension-dictionary
-   CELLSTYLEMAP in the same staged output transaction; preserve atomic refusal
-   and fresh readback. Then address the MLEADERSTYLE and two view-style pairs
-   in separate dependency-closed slices. Do not widen qualification from
-   callback count alone. The strict debug report and source/receipt mapping
+   registered its source identities. The current debug audit narrows the
+   missing proof paths: TABLESTYLE source snapshot count is 0; MLEADERSTYLE
+   source count is 1 but its staged inspector remains false; the output walk
+   finds one CELLSTYLEMAP root and two roots each for SECTIONVIEWSTYLE and
+   DETAILVIEWSTYLE, while the ModelDocViewStyle import receipt is valid. No
+   staged proof currently certifies the latter three families. First admit
+   the exact `0x7F` TABLESTYLE profile and prove its `0x3C3F7`
+   extension-dictionary CELLSTYLEMAP in one staged output transaction;
+   verify source fields, dependency roles, output identity and readback before
+   registering either callback identity. Then connect the existing
+   MLEADERSTYLE inspector and add staged proof for the two view-style pairs.
+   Do not widen qualification from callback count alone. The strict debug
+   report and source/receipt mapping
    are recorded in the [gap receipt](docs/research/p4-ac1021-children-room-strict-output-gaps-2026-11-06.json).
    Source SHA-256 is
    `cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce`; do

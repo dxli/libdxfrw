@@ -14,8 +14,19 @@
     "command": "build/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/children-room-decoration.dwg -y -d -v2007 /private/tmp/libdxfrw-children-room-strict-debug.dxf",
     "result": "FAIL CLOSED, exit 1. Finalization reports 179/186 opaque callbacks qualified, writes no destination DXF, and debug output enumerates all seven missing handles below.",
     "debugLog": {
-      "path": "/private/tmp/libdxfrw-children-room-strict-debug.log",
-      "sha256": "157a05c5dbae74b11665129b71b92911d5a8b4a5da8ba1a4f9a537af10b4b8a6"
+      "path": "/private/tmp/libdxfrw-children-room-strict-debug2.log",
+      "sha256": "ee7eb4da1432c9b02821b2f81eef140d00b39b86a224bf6760f1854ab7b7b187"
+    },
+    "proofProfileState": {
+      "tableStyleSourceSnapshots": 0,
+      "tableStyleInspectorPassed": false,
+      "mleaderStyleSourceSnapshots": 1,
+      "mleaderStyleInspectorPassed": false,
+      "cellStyleMapRootsDiscovered": 1,
+      "sectionViewStyleRootsDiscovered": 2,
+      "detailViewStyleRootsDiscovered": 2,
+      "modelDocViewStyleSourceImportValid": true,
+      "interpretation": "The source graph is retained and its existing selected-output receipts pass, but these proof hooks do not yet certify the complete combined staged output for these identities. Absence from the output qualification set is not evidence that the DXF records were absent from staged bytes."
     }
   },
   "unqualifiedCallbacks": [
