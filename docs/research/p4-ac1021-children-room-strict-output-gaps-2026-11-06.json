@@ -88,19 +88,47 @@
     }
   ],
   "nextSlice": {
-    "name": "AC1021 children-room TABLESTYLE/CELLSTYLEMAP strict proof",
-    "reason": "A source-specific selected-output receipt already proves this rooted graph and dependency set. It is the smallest existing graph among the seven remaining identities that can be advanced without broadening the source profile.",
+    "name": "AC1021 children-room MLEADERSTYLE strict staged output",
+    "reason": "The TABLESTYLE/CELLSTYLEMAP pair now passes the staged output inspector; MLEADERSTYLE already has one frozen source snapshot and an existing source-selected output receipt but its strict inspector is false. Its EED/APPID dependency profile is bounded and can advance without the four view-style callbacks.",
     "acceptance": [
-      "Exact frozen source identity/fields and NOD-to-owner-DICTIONARY-to-TABLESTYLE graph.",
-      "Exact extension DICTIONARY-to-CELLSTYLEMAP entry, reciprocal owner/reactor roles, text STYLE and border LTYPE dependencies.",
-      "Staged ASCII and Binary output inspection before identity qualification.",
-      "Fresh selected readback, invalid-target destination preservation and same-adapter retry.",
-      "Strict whole-source attempt either advances past these handles or reports a new exact gap; no support claim is promoted."
+      "Confirm current source hash and exact callback/class identity for MLEADERSTYLE 0x12E.",
+      "Compare the frozen MLEADERSTYLE body fields, EED APPID/LAYER references, owner dictionary edge and staged emitted identity.",
+      "Require ASCII/Binary strict staged inspection, readback, atomic bad-target refusal and same-adapter retry before qualifying the handle.",
+      "Run strict whole-source conversion once; preserve refusal and enumerate exact remaining handles if any other callback remains.",
+      "Do not commit external DWG/DXF fixtures or promote a support claim from this one source profile."
     ]
   },
   "limits": [
     "An unqualified callback count identifies missing output proof, not necessarily missing serialized bytes.",
     "The selected graph receipts do not prove a combined strict whole-source output.",
     "No native consumer, producer-wide, cross-version, or support claim is established."
-  ]
+  ],
+  "currentRecheck": {
+    "date": "2026-11-06",
+    "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/children-room-decoration.dwg -y -d -v2007 /private/tmp/libdxfrw-children-room-strict-finalization-probe.dxf",
+    "result": "FAIL CLOSED at finalization, exit 1; qualified opaque callbacks advanced to 181/186. No destination DXF was created.",
+    "debugLog": {
+      "path": "/private/tmp/libdxfrw-children-room-strict-finalization-probe.log",
+      "sha256": "43d717beda7e902b4b4eb0fc2045a2b41e3eb373472a2f1343881d2cb96e20e7"
+    },
+    "proofProfileState": {
+      "tableStyleSourceSnapshots": 1,
+      "tableStyleInspectorPassed": true,
+      "cellStyleMapRootDiscovered": 1,
+      "cellStyleMapStrictQualified": true,
+      "mleaderStyleSourceSnapshots": 1,
+      "mleaderStyleInspectorPassed": false,
+      "sectionViewStyleRootsDiscovered": 2,
+      "detailViewStyleRootsDiscovered": 2,
+      "modelDocViewStyleSourceImportValid": true
+    },
+    "remainingUnqualifiedCallbacks": [
+      "0x12E",
+      "0x21A",
+      "0x18081",
+      "0x21C",
+      "0x18082"
+    ],
+    "receipt": "docs/research/p4-ac1021-children-room-tablestyle-cellstylemap-strict-staged-output-2026-11-06.json"
+  }
 }

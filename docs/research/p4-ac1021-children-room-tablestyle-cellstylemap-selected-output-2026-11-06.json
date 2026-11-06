@@ -151,5 +151,21 @@
     }
   },
   "limits": "One more unauthenticated local AC1021 source profile; selected projection only. It does not qualify full drawing conversion, producer breadth, independent version-capable roundtrip, native TABLE semantics or support claims.",
-  "nextAction": "Add this as a distinct exact AC1021 source profile, then prove staged TABLESTYLE fields and the complete NOD/owner/extension-dictionary/CELLSTYLEMAP graph before registering callback identities; retain fail-closed strict output until that proof passes."
+  "nextAction": "Use the updated gap receipt for the remaining MLEADERSTYLE and paired section/detail view-style strict inspectors.",
+  "strictStagedProof": {
+    "result": "PASS for TABLESTYLE 0x7F and CELLSTYLEMAP 0x3C3F7 in the same staged strict-output transaction.",
+    "profile": "AC1021 Standard TABLESTYLE margins 1.5/1.5; rows (height,alignment) 4.5/2, 6.0/5, 4.5/5; exact extension DICTIONARY 0x162 and three-cell map profile.",
+    "checks": [
+      "NOD and owner dictionary key/entry roles",
+      "extension dictionary owner and canonical CELLSTYLEMAP key",
+      "TABLESTYLE staged scalar/row/border body fields",
+      "CELLSTYLEMAP staged complete field model with DXF CMC normalization",
+      "reciprocal reactor group and STYLE/LTYPE output references",
+      "source-generation snapshots unchanged"
+    ],
+    "strictWholeSource": "Advanced from 179/186 to 181/186, then failed closed on five independent callbacks; no whole-source DXF was created.",
+    "remaining": "MLEADERSTYLE 0x12E, SECTIONVIEWSTYLE 0x21A/0x18081, DETAILVIEWSTYLE 0x21C/0x18082.",
+    "debugLogSha256": "43d717beda7e902b4b4eb0fc2045a2b41e3eb373472a2f1343881d2cb96e20e7",
+    "supportClaimEffect": "none"
+  }
 }

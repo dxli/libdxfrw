@@ -1808,13 +1808,17 @@ bool retainedPendingHandleRefsEqual(
 bool retainedCellStyleMapsEqual(const DRW_CellStyleMap& lhs,
                                 const DRW_CellStyleMap& rhs,
                                 bool compareCellStyleNames = true,
-                                bool compareCellStyleClasses = true) noexcept {
+                                bool compareCellStyleClasses = true,
+                                bool ignoreDwgOnlyMetadata = false) noexcept {
     if (lhs.tType != rhs.tType || lhs.handle != rhs.handle
         || lhs.parentHandle != rhs.parentHandle || lhs.name != rhs.name
         || lhs.flags != rhs.flags || lhs.xDictHandle != rhs.xDictHandle
         || lhs.reactorHandles != rhs.reactorHandles
-        || lhs.reactorCount() != rhs.reactorCount()
-        || lhs.extensionDictionaryFlag() != rhs.extensionDictionaryFlag()
+        || (!ignoreDwgOnlyMetadata
+            && lhs.reactorCount() != rhs.reactorCount())
+        || (!ignoreDwgOnlyMetadata
+            && lhs.extensionDictionaryFlag()
+                != rhs.extensionDictionaryFlag())
         || lhs.hasDataStorageBinaryData() != rhs.hasDataStorageBinaryData()
         || lhs.hasDwgCommonLinkTail() != rhs.hasDwgCommonLinkTail()
         || !retainedPendingHandleRefsEqual(lhs.pendingAppIdResolutions,
@@ -9783,6 +9787,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
     m_extensionTableStyleHandles.clear();
     m_dwgTableStyleOutputSources.clear();
     m_dwgTableStyleDictionarySources.clear();
+    m_dwgTableStyleCellMapDictionarySources.clear();
+    m_dwgTableStyleCellMapSources.clear();
     m_dwgTableStyleNamedObjectDictionarySource = DRW_Dictionary{};
     m_dwgTableStyleRootSourceCaptured = false;
     m_dwgTableStyleOutputSourceOwner = nullptr;
@@ -9877,6 +9883,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         m_extensionTableStyleHandles.clear();
         m_dwgTableStyleOutputSources.clear();
         m_dwgTableStyleDictionarySources.clear();
+        m_dwgTableStyleCellMapDictionarySources.clear();
+        m_dwgTableStyleCellMapSources.clear();
         m_dwgTableStyleNamedObjectDictionarySource = DRW_Dictionary{};
         m_dwgTableStyleRootSourceCaptured = false;
         m_dwgTableStyleOutputSourceOwner = nullptr;
@@ -15779,6 +15787,119 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             && style != tableStyles.end()) {
                             const DRW_TableStyle& candidate =
                                 *style->second;
+                            const auto extension =
+                                dictionaries.find(candidate.xDictHandle);
+                            const DRW_CellStyleMap* witnessedMap = nullptr;
+                            const auto mapIt = cellStyleMaps.find(0x3C3F7u);
+                            const auto mapFrame =
+                                data->m_opaqueDwgSourceFrames.find(
+                                    {data->importGeneration, 0x3C3F7u});
+                            const dx_data::StandardDwgFrameKey mapFrameKey{
+                                data->importGeneration, 0x3C3F7u};
+                            const bool exactChildrenRoomGraph =
+                                handle == 0x7Fu
+                                && dictionary->second->handle == 0x7Eu
+                                && candidate.xDictHandle == 0x162u
+                                && extension != dictionaries.end()
+                                && extension->second->parentHandle == handle
+                                && extension->second->hasCompleteDwgEntries()
+                                && extension->second->m_entries.size() == 1u
+                                && mapIt != cellStyleMaps.end()
+                                && mapIt->second->handle == 0x3C3F7u
+                                && mapIt->second->parentHandle
+                                    == extension->second->handle
+                                && mapIt->second->reactorHandles.size() == 1u
+                                && mapIt->second->reactorHandles.front()
+                                    == extension->second->handle
+                                && mapFrame
+                                    != data->m_opaqueDwgSourceFrames.end()
+                                && mapFrame->second.m_handle == 0x3C3F7u
+                                && mapFrame->second.m_version == DRW::AC1021
+                                && mapFrame->second.m_isCustomClass
+                                && mapFrame->second.m_typedPayloadValidated
+                                && mapFrame->second.m_className
+                                    == "AcDbCellStyleMap"
+                                && asciiIdentifierEquals(
+                                    mapFrame->second.m_recordName,
+                                    "CELLSTYLEMAP")
+                                && data->m_opaqueDwgSourceFrameIdentities
+                                    .count(mapFrameKey) == 1u
+                                && std::count_if(
+                                    data->textStyles.begin(),
+                                    data->textStyles.end(),
+                                    [](const DRW_Textstyle& textStyle) {
+                                        return textStyle.handle == 0x11u;
+                                    }) == 1
+                                && linetypeHandles.count(0x14u) == 1u
+                                && std::count_if(
+                                    extension->second->m_entries.begin(),
+                                    extension->second->m_entries.end(),
+                                    [&mapIt](const DRW_Dictionary::Entry& entry) {
+                                        return entry.m_name
+                                                == "ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP"
+                                            && entry.m_handle
+                                                == mapIt->second->handle;
+                                    }) == 1u
+                                && mapIt->second->m_cellStyles.size() == 3u;
+                            if (exactChildrenRoomGraph)
+                                witnessedMap = mapIt->second;
+                            bool exactChildrenRoomCells =
+                                exactChildrenRoomGraph;
+                            constexpr char cellNames[][8]{
+                                "_TITLE", "_HEADER", "_DATA"};
+                            constexpr int cellClasses[]{1, 1, 2};
+                            constexpr int cellAlignments[]{5, 5, 2};
+                            constexpr double cellHeights[]{6.0, 4.5, 4.5};
+                            for (std::size_t cellIndex = 0u;
+                                 exactChildrenRoomCells
+                                     && cellIndex < 3u; ++cellIndex) {
+                                const DRW_TableStyleCellStyle& cell =
+                                    witnessedMap->m_cellStyles[cellIndex];
+                                const DRW_TableStyleContentFormat& format =
+                                    cell.m_contentFormat;
+                                exactChildrenRoomCells =
+                                    cell.m_id
+                                        == static_cast<int>(cellIndex + 1u)
+                                    && cell.m_styleClass
+                                        == cellClasses[cellIndex]
+                                    && cell.m_name == cellNames[cellIndex]
+                                    && cell.m_type == 5
+                                    && cell.m_hasData
+                                    && cell.m_propertyOverrideFlags == 0u
+                                    && cell.m_mergeFlags
+                                        == (cellIndex == 0u ? 0x8000u : 0u)
+                                    && cell.m_backgroundColor == 256
+                                    && cell.m_backgroundColorCmc.m_method
+                                        == 0xC8u
+                                    && cell.m_contentLayout == 1
+                                    && cell.m_marginOverrideFlags == 1u
+                                    && cell.m_verticalMargin == 1.5
+                                    && cell.m_horizontalMargin == 1.5
+                                    && cell.m_bottomMargin == 1.5
+                                    && cell.m_rightMargin == 1.5
+                                    && format.m_textStyleHandle == 0x11u
+                                    && format.m_textHeight
+                                        == cellHeights[cellIndex]
+                                    && format.m_cellAlignment
+                                        == cellAlignments[cellIndex]
+                                    && cell.m_borders.size() == 6u;
+                                for (std::size_t borderIndex = 0u;
+                                     exactChildrenRoomCells
+                                         && borderIndex < 6u; ++borderIndex) {
+                                    const DRW_TableStyleBorder& border =
+                                        cell.m_borders[borderIndex];
+                                    exactChildrenRoomCells =
+                                        border.m_edgeFlags
+                                            == static_cast<int>(
+                                                1u << borderIndex)
+                                        && border.m_propertyOverrideFlags == 0u
+                                        && border.m_borderType == 1
+                                        && border.m_lineWeight == -2
+                                        && border.m_visible == 0
+                                        && border.m_lineTypeHandle == 0x14u
+                                        && border.m_doubleLineSpacing == 1.125;
+                                }
+                            }
                             const std::uint32_t legacyTextStyleHandle =
                                 candidate.m_rowStyles.empty() ? 0u
                                     : candidate.m_rowStyles.front()
@@ -15792,11 +15913,16 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                     && cmc.m_flags == 0u
                                     && cmc.m_reservedIndex == 0u;
                             };
+                            const bool childRoomTableMargins =
+                                exactChildrenRoomGraph
+                                && candidate.m_horizontalCellMargin == 1.5
+                                && candidate.m_verticalCellMargin == 1.5;
                             exactLegacyRows = candidate.m_name == "Standard"
                                 && candidate.m_flowDirection == 0
                                 && candidate.m_flags == 0
-                                && candidate.m_horizontalCellMargin == 0.06
-                                && candidate.m_verticalCellMargin == 0.06
+                                && (childRoomTableMargins
+                                    || (candidate.m_horizontalCellMargin == 0.06
+                                        && candidate.m_verticalCellMargin == 0.06))
                                 && !candidate.m_titleSuppressed
                                 && !candidate.m_headerSuppressed
                                 && !candidate.m_r24PrefixPresent
@@ -15817,19 +15943,25 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                         return textStyle.handle
                                             == legacyTextStyleHandle;
                                     }) == 1;
-                            constexpr double rowHeights[]{
+                            constexpr double defaultRowHeights[]{
                                 0.18, 0.25, 0.18};
+                            constexpr double childRoomRowHeights[]{
+                                4.5, 6.0, 4.5};
                             constexpr int rowAlignments[]{2, 5, 5};
                             for (std::size_t rowIndex = 0u;
                                  exactLegacyRows && rowIndex < 3u;
                                  ++rowIndex) {
                                 const DRW_TableStyleRowStyle& row =
                                     candidate.m_rowStyles[rowIndex];
+                                const double expectedHeight =
+                                    exactChildrenRoomGraph
+                                        ? childRoomRowHeights[rowIndex]
+                                        : defaultRowHeights[rowIndex];
                                 exactLegacyRows =
                                     row.m_textStyleHandle
                                         == legacyTextStyleHandle
                                     && row.m_textHeight
-                                        == rowHeights[rowIndex]
+                                        == expectedHeight
                                     && row.m_textAlignment
                                         == rowAlignments[rowIndex]
                                     && row.m_textColor == 0
@@ -15862,6 +15994,9 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                         && border.m_doubleLineSpacing == 0.0;
                                 }
                             }
+                            exactLegacyRows = exactLegacyRows
+                                && (!exactChildrenRoomGraph
+                                    || exactChildrenRoomCells);
                         }
                         if (frame == data->m_opaqueDwgSourceFrames.end()
                             || frame->second.m_handle != handle
@@ -15893,7 +16028,29 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             || !m_dwgTableStyleOutputSources.emplace(
                                 handle, *style->second).second) {
                             m_dwgTableStyleOutputSources.clear();
+                            m_dwgTableStyleCellMapDictionarySources.clear();
+                            m_dwgTableStyleCellMapSources.clear();
                             break;
+                        }
+                        if (data->sourceVersion == DRW::AC1021
+                            && handle == 0x7Fu
+                            && style->second->xDictHandle == 0x162u
+                            && cellStyleMaps.count(0x3C3F7u) == 1u) {
+                            const auto extension = dictionaries.find(
+                                style->second->xDictHandle);
+                            const auto map = cellStyleMaps.find(0x3C3F7u);
+                            if (extension == dictionaries.end()
+                                || map == cellStyleMaps.end()
+                                || !m_dwgTableStyleCellMapDictionarySources
+                                    .emplace(extension->first,
+                                        *extension->second).second
+                                || !m_dwgTableStyleCellMapSources.emplace(
+                                    map->first, *map->second).second) {
+                                m_dwgTableStyleOutputSources.clear();
+                                m_dwgTableStyleCellMapDictionarySources.clear();
+                                m_dwgTableStyleCellMapSources.clear();
+                                break;
+                            }
                         }
                     }
                     if (!m_dwgTableStyleOutputSources.empty()) {
@@ -15912,6 +16069,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             } catch (...) {
                 m_dwgTableStyleOutputSources.clear();
                 m_dwgTableStyleDictionarySources.clear();
+                m_dwgTableStyleCellMapDictionarySources.clear();
+                m_dwgTableStyleCellMapSources.clear();
                 m_dwgTableStyleNamedObjectDictionarySource =
                     DRW_Dictionary{};
                 m_dwgTableStyleRootSourceCaptured = false;
@@ -50103,6 +50262,8 @@ bool dx_iface::hasUnchangedDwgTableStyleOutputSources() const noexcept {
         return m_dwgTableStyleOutputSourceOwner == nullptr
             && m_dwgTableStyleOutputSourceVersion == DRW::UNKNOWNV
             && m_dwgTableStyleDictionarySources.empty()
+            && m_dwgTableStyleCellMapDictionarySources.empty()
+            && m_dwgTableStyleCellMapSources.empty()
             && !m_dwgTableStyleRootSourceCaptured;
     if (cData == nullptr || cData != m_dwgTableStyleOutputSourceOwner
         || cData->sourceFormat != dx_source_format::DWG
@@ -50165,6 +50326,43 @@ bool dx_iface::hasUnchangedDwgTableStyleOutputSources() const noexcept {
                     dwgObjType::DICTIONARY))
                 return false;
         }
+        if (m_dwgTableStyleCellMapSources.empty()
+            != m_dwgTableStyleCellMapDictionarySources.empty()
+            || (!m_dwgTableStyleCellMapSources.empty()
+                && m_dwgTableStyleOutputSourceVersion != DRW::AC1021))
+            return false;
+        for (const auto& source :
+             m_dwgTableStyleCellMapDictionarySources) {
+            const DRW_Dictionary* current = nullptr;
+            std::size_t matches = 0u;
+            for (const DRW_Dictionary& dictionary : cData->dictionaries) {
+                if (dictionary.handle != source.first)
+                    continue;
+                current = &dictionary;
+                ++matches;
+            }
+            if (matches != 1u || current == nullptr
+                || !current->hasCompleteDwgEntries()
+                || !standardDwgModelsEqual(
+                    source.second, *current,
+                    m_dwgTableStyleOutputSourceVersion,
+                    dwgObjType::DICTIONARY))
+                return false;
+        }
+        for (const auto& source : m_dwgTableStyleCellMapSources) {
+            const DRW_CellStyleMap* current = nullptr;
+            std::size_t matches = 0u;
+            for (const DRW_CellStyleMap& cellMap : cData->cellStyleMaps) {
+                if (cellMap.handle != source.first)
+                    continue;
+                current = &cellMap;
+                ++matches;
+            }
+            if (matches != 1u || current == nullptr
+                || !retainedCellStyleMapsEqual(
+                    source.second, *current))
+                return false;
+        }
         return true;
     } catch (...) {
         return false;
@@ -50214,9 +50412,18 @@ bool dx_iface::inspectDwgTableStylesOutput(
             return false;
 
         std::map<std::uint32_t, std::uint32_t> expectedStyles;
+        std::map<std::uint32_t, const DRW_TableStyle*>
+            emittedStyleSources;
         std::map<std::uint32_t, std::uint32_t> expectedDictionaries;
         std::map<std::uint32_t, const DRW_Dictionary*>
             emittedDictionarySources;
+        std::map<std::uint32_t, std::uint32_t>
+            expectedCellMapDictionaries;
+        std::map<std::uint32_t, const DRW_Dictionary*>
+            emittedCellMapDictionarySources;
+        std::map<std::uint32_t, std::uint32_t> expectedCellMaps;
+        std::map<std::uint32_t, const DRW_CellStyleMap*>
+            emittedCellMapSources;
         for (const auto& source : m_dwgTableStyleDictionarySources) {
             std::uint32_t emitted = 0u, owner = 0u;
             if (!mapHandle(source.first, emitted)
@@ -50228,6 +50435,65 @@ bool dx_iface::inspectDwgTableStylesOutput(
                 || !dxfW->dxfWriteRecordHasOwner(emitted, owner))
                 return false;
             emittedDictionarySources.emplace(emitted, &source.second);
+        }
+        for (const auto& source :
+             m_dwgTableStyleCellMapDictionarySources) {
+            std::uint32_t emitted = 0u, owner = 0u;
+            if (!mapHandle(source.first, emitted)
+                || !mapHandle(static_cast<std::uint32_t>(
+                    source.second.parentHandle), owner)
+                || !expectedCellMapDictionaries.emplace(
+                    emitted, owner).second
+                || !dxfW->dxfWriteRecordHasIdentity(
+                    emitted, "DICTIONARY", "OBJECTS")
+                || !dxfW->dxfWriteRecordHasOwner(emitted, owner)) {
+                DRW_DBG("TABLESTYLE CELLSTYLEMAP extension dictionary staged identity/owner mismatch handle=");
+                DRW_DBGH(emitted); DRW_DBG(" owner="); DRW_DBGH(owner);
+                DRW_DBG("\n");
+                return false;
+            }
+            emittedCellMapDictionarySources.emplace(
+                emitted, &source.second);
+        }
+        for (const auto& source : m_dwgTableStyleCellMapSources) {
+            std::uint32_t emitted = 0u, owner = 0u;
+            if (!mapHandle(source.first, emitted)
+                || !mapHandle(source.second.parentHandle, owner)
+                || expectedCellMapDictionaries.count(owner) != 1u
+                || !expectedCellMaps.emplace(emitted, owner).second
+                || !dxfW->dxfWriteRecordHasIdentity(
+                    emitted, "CELLSTYLEMAP", "OBJECTS")
+                || !dxfW->dxfWriteRecordHasOwner(emitted, owner)) {
+                DRW_DBG("TABLESTYLE CELLSTYLEMAP staged identity/owner mismatch handle=");
+                DRW_DBGH(emitted); DRW_DBG(" owner="); DRW_DBGH(owner);
+                DRW_DBG("\n");
+                return false;
+            }
+            for (const DRW_TableStyleCellStyle& cell :
+                 source.second.m_cellStyles) {
+                if (!cell.m_hasData)
+                    continue;
+                std::uint32_t textStyle = 0u;
+                if (!mapHandle(
+                        cell.m_contentFormat.m_textStyleHandle,
+                        textStyle)
+                    || (textStyle != 0u
+                        && dxfW->dxfWriteRecordHandleCount(textStyle) != 1u)
+                    || !dxfW->dxfWriteRecordHasIdentity(
+                        textStyle, "STYLE", "TABLES"))
+                    return false;
+                for (const DRW_TableStyleBorder& border : cell.m_borders) {
+                    std::uint32_t lineType = 0u;
+                    if (!mapHandle(border.m_lineTypeHandle, lineType)
+                        || (lineType != 0u
+                            && (dxfW->dxfWriteRecordHandleCount(lineType)
+                                    != 1u
+                                || !dxfW->dxfWriteRecordHasIdentity(
+                                    lineType, "LTYPE", "TABLES"))))
+                        return false;
+                }
+            }
+            emittedCellMapSources.emplace(emitted, &source.second);
         }
         for (const auto& source : m_dwgTableStyleOutputSources) {
             const DRW_TableStyle& style = source.second;
@@ -50241,11 +50507,14 @@ bool dx_iface::inspectDwgTableStylesOutput(
                     emitted, "TABLESTYLE", "OBJECTS")
                 || !dxfW->dxfWriteRecordHasOwner(emitted, owner))
                 return false;
+            emittedStyleSources.emplace(emitted, &style);
             const auto checkTextStyle = [&](std::uint32_t handle) {
                 if (handle == 0u)
                     return true;
                 std::uint32_t emittedTextStyle = 0u;
                 return mapHandle(handle, emittedTextStyle)
+                    && dxfW->dxfWriteRecordHandleCount(
+                        emittedTextStyle) == 1u
                     && dxfW->dxfWriteRecordHasIdentity(
                         emittedTextStyle, "STYLE", "TABLES");
             };
@@ -50272,6 +50541,7 @@ bool dx_iface::inspectDwgTableStylesOutput(
 
         std::unordered_set<std::uint32_t> seenStyles;
         std::unordered_set<std::uint32_t> seenDictionaries;
+        std::unordered_set<std::uint32_t> seenCellMaps;
         bool rootKeyMatched = false;
         bool namesMatch = true;
         const bool inspected = dx_standard_output::inspectSelected(
@@ -50280,18 +50550,24 @@ bool dx_iface::inspectDwgTableStylesOutput(
                 const bool style = expectedStyles.count(handle) != 0u;
                 const bool dictionary =
                     expectedDictionaries.count(handle) != 0u;
+                const bool cellMapDictionary =
+                    expectedCellMapDictionaries.count(handle) != 0u;
+                const bool cellMap = expectedCellMaps.count(handle) != 0u;
                 const bool nod = handle == emittedNod;
                 if ((style
                         && !asciiIdentifierEquals(name, "TABLESTYLE"))
-                    || ((dictionary || nod)
+                    || ((dictionary || cellMapDictionary || nod)
                         && !asciiIdentifierEquals(name, "DICTIONARY")))
                     namesMatch = false;
-                return style || dictionary || nod;
+                if (cellMap && !asciiIdentifierEquals(name, "CELLSTYLEMAP"))
+                    namesMatch = false;
+                return style || dictionary || cellMapDictionary
+                    || cellMap || nod;
             },
             [&](const auto& shape, std::string_view body) {
                 if (shape.handle == emittedNod) {
                     dx_standard_output::Decoder decoder(view);
-                    return decoder.decodeRecord<DRW_Dictionary>(
+                    const bool decoded = decoder.decodeRecord<DRW_Dictionary>(
                         body, [&](const DRW_Dictionary& actual) {
                             const std::size_t matches = static_cast<std::size_t>(
                                 std::count_if(actual.m_entries.begin(),
@@ -50307,6 +50583,9 @@ bool dx_iface::inspectDwgTableStylesOutput(
                             return actual.handle == emittedNod
                                 && rootKeyMatched;
                         });
+                    if (!decoded)
+                        DRW_DBG("TABLESTYLE staged NOD body mismatch\n");
+                    return decoded;
                 }
                 const auto dictionary =
                     expectedDictionaries.find(shape.handle);
@@ -50318,7 +50597,7 @@ bool dx_iface::inspectDwgTableStylesOutput(
                     if (source == emittedDictionarySources.end())
                         return false;
                     dx_standard_output::Decoder decoder(view);
-                    return decoder.decodeRecord<DRW_Dictionary>(
+                    const bool decoded = decoder.decodeRecord<DRW_Dictionary>(
                         body, [&](const DRW_Dictionary& actual) {
                             const DRW_Dictionary& expected =
                                 *source->second;
@@ -50359,19 +50638,317 @@ bool dx_iface::inspectDwgTableStylesOutput(
                             }
                             return true;
                         });
+                    if (!decoded)
+                        DRW_DBG("TABLESTYLE staged owner dictionary body mismatch\n");
+                    return decoded;
+                }
+                const auto cellMapDictionary =
+                    expectedCellMapDictionaries.find(shape.handle);
+                if (cellMapDictionary
+                    != expectedCellMapDictionaries.end()) {
+                    if (!seenDictionaries.insert(shape.handle).second)
+                        return false;
+                    const auto source =
+                        emittedCellMapDictionarySources.find(
+                            cellMapDictionary->first);
+                    if (source == emittedCellMapDictionarySources.end())
+                        return false;
+                    dx_standard_output::Decoder decoder(view);
+                    const bool decoded = decoder.decodeRecord<DRW_Dictionary>(
+                        body, [&](const DRW_Dictionary& actual) {
+                            const DRW_Dictionary& expected =
+                                *source->second;
+                            std::uint32_t expectedParent = 0u;
+                            if (!mapHandle(
+                                    static_cast<std::uint32_t>(
+                                        expected.parentHandle),
+                                    expectedParent)
+                                || actual.handle != cellMapDictionary->first
+                                || actual.parentHandle != expectedParent
+                                || actual.hardOwner != expected.hardOwner
+                                || actual.cloning != expected.cloning
+                                || actual.m_entries.size()
+                                    != expected.m_entries.size())
+                                return false;
+                            std::unordered_map<UTF8STRING,
+                                const DRW_Dictionary::Entry*> entries;
+                            for (const auto& entry : actual.m_entries)
+                                if (!entries.emplace(entry.m_name,
+                                                     &entry).second)
+                                    return false;
+                            for (const auto& entry : expected.m_entries) {
+                                const auto found = entries.find(entry.m_name);
+                                std::uint32_t target = 0u;
+                                if (found == entries.end()
+                                    || !mapHandle(entry.m_handle, target)
+                                    || found->second->m_handle != target)
+                                    return false;
+                                using Role =
+                                    DRW_Dictionary::Entry::DxfHandleCode;
+                                const Role role =
+                                    entry.m_dxfHandleCode == Role::Unspecified
+                                    ? (expected.hardOwner
+                                        ? Role::HardOwner : Role::SoftOwner)
+                                    : entry.m_dxfHandleCode;
+                                if (found->second->m_dxfHandleCode != role)
+                                    return false;
+                            }
+                            return true;
+                        });
+                    if (!decoded)
+                        DRW_DBG("TABLESTYLE staged extension dictionary body mismatch\n");
+                    return decoded;
+                }
+                const auto cellMap = expectedCellMaps.find(shape.handle);
+                if (cellMap != expectedCellMaps.end()) {
+                    if (!seenCellMaps.insert(shape.handle).second)
+                        return false;
+                    const auto source = emittedCellMapSources.find(
+                        cellMap->first);
+                    if (source == emittedCellMapSources.end())
+                        return false;
+                    dx_standard_output::Decoder decoder(view);
+                    const bool decoded = decoder.decodeRecord<DRW_CellStyleMap>(
+                        body, [&](const DRW_CellStyleMap& actual) {
+                            DRW_CellStyleMap expected = *source->second;
+                            expected.handle = cellMap->first;
+                            expected.parentHandle = cellMap->second;
+                            expected.xDictHandle = 0u;
+                            expected.reactorHandles.clear();
+                            expected.reactorHandles.push_back(
+                                cellMap->second);
+                            expected.m_subrecordRanges.clear();
+                            std::size_t reactorGroups = 0u;
+                            for (const auto& group : actual.appData) {
+                                if (dx_standard_output::appName(group)
+                                        != "ACAD_REACTORS"
+                                    || !dx_standard_output::reservedGroupExact(
+                                        group, actual, true))
+                                    return false;
+                                ++reactorGroups;
+                            }
+                            if (reactorGroups != 1u)
+                                return false;
+                            expected.appData = actual.appData;
+                            const auto remapColor = [](
+                                    int& index,
+                                    DRW_TableStyleCmcColor& cmc) {
+                                if (index == 256 && cmc.m_method == 0xC8u)
+                                    index = 257;
+                                cmc = DRW_TableStyleCmcColor{};
+                            };
+                            const auto remapStyle = [&](
+                                    DRW_TableStyleCellStyle& cell) {
+                                std::uint32_t textStyle = 0u;
+                                if (!mapHandle(
+                                        cell.m_contentFormat
+                                            .m_textStyleHandle,
+                                        textStyle))
+                                    return false;
+                                cell.m_contentFormat.m_textStyleHandle =
+                                    textStyle;
+                                remapColor(cell.m_backgroundColor,
+                                    cell.m_backgroundColorCmc);
+                                remapColor(
+                                    cell.m_contentFormat.m_contentColor,
+                                    cell.m_contentFormat.m_contentColorCmc);
+                                for (DRW_TableStyleBorder& border :
+                                     cell.m_borders) {
+                                    std::uint32_t lineType = 0u;
+                                    if (!mapHandle(border.m_lineTypeHandle,
+                                                   lineType))
+                                        return false;
+                                    border.m_lineTypeHandle = lineType;
+                                    remapColor(border.m_color,
+                                               border.m_colorCmc);
+                                }
+                                return true;
+                            };
+                            for (DRW_TableStyleCellStyle& cell :
+                                 expected.m_cellStyles)
+                                if (!remapStyle(cell))
+                                    return false;
+                            // The reactor group above proves the serialized
+                            // DXF link. DWG-only count/extension flags are not
+                            // carried by the DXF record body.
+                            return retainedCellStyleMapsEqual(
+                                expected, actual, true, true, true);
+                        });
+                    if (!decoded)
+                        DRW_DBG("TABLESTYLE staged CELLSTYLEMAP body mismatch\n");
+                    return decoded;
                 }
                 const auto style = expectedStyles.find(shape.handle);
                 if (style == expectedStyles.end()
-                    || !seenStyles.insert(shape.handle).second)
+                    || !seenStyles.insert(shape.handle).second
+                    || shape.kind != dx_standard_output::Family::Other)
                     return false;
-                return !body.empty()
-                    && shape.handle == style->first
-                    && shape.kind == dx_standard_output::Family::Other;
+                const auto source = emittedStyleSources.find(style->first);
+                if (source == emittedStyleSources.end())
+                    return false;
+                if (view.version != DRW::AC1021)
+                    return !body.empty();
+                dx_standard_output::Decoder decoder(view);
+                const bool styleDecoded = decoder.decodeRecord<DRW_TableStyle>(
+                    body, [&](const DRW_TableStyle& actual) {
+                        const DRW_TableStyle& expected = *source->second;
+                        if (actual.handle != style->first
+                            || actual.parentHandle != style->second
+                            || actual.m_name != expected.m_name
+                            || actual.m_flowDirection
+                                != expected.m_flowDirection
+                            || actual.m_flags != expected.m_flags
+                            || actual.m_horizontalCellMargin
+                                != expected.m_horizontalCellMargin
+                            || actual.m_verticalCellMargin
+                                != expected.m_verticalCellMargin
+                            || actual.m_titleSuppressed
+                                != expected.m_titleSuppressed
+                            || actual.m_headerSuppressed
+                                != expected.m_headerSuppressed
+                            || actual.m_r24PrefixPresent
+                                != expected.m_r24PrefixPresent
+                            || actual.m_tableCellStyle.m_hasData
+                                != expected.m_tableCellStyle.m_hasData
+                            || actual.m_tableCellStyle.m_id
+                                != expected.m_tableCellStyle.m_id
+                            || actual.m_tableCellStyle.m_styleClass
+                                != expected.m_tableCellStyle.m_styleClass
+                            || actual.m_tableCellStyle.m_name
+                                != expected.m_tableCellStyle.m_name
+                            || actual.m_tableCellStyle.m_borders.size()
+                                != expected.m_tableCellStyle.m_borders.size()
+                            || actual.m_rowStyles.size()
+                                != expected.m_rowStyles.size()
+                            || actual.m_cellStyles.size()
+                                != expected.m_cellStyles.size())
+                            return false;
+                        for (std::size_t rowIndex = 0u;
+                             rowIndex < expected.m_rowStyles.size();
+                             ++rowIndex) {
+                            const DRW_TableStyleRowStyle& expectedRow =
+                                expected.m_rowStyles[rowIndex];
+                            const DRW_TableStyleRowStyle& actualRow =
+                                actual.m_rowStyles[rowIndex];
+                            std::string expectedTextStyleName =
+                                expectedRow.m_textStyleName;
+                            if (expectedTextStyleName.empty()) {
+                                const auto textStyle = std::find_if(
+                                    cData->textStyles.begin(),
+                                    cData->textStyles.end(),
+                                    [&expectedRow](
+                                        const DRW_Textstyle& candidate) {
+                                            return candidate.handle
+                                                == expectedRow
+                                                    .m_textStyleHandle;
+                                    });
+                                if (textStyle == cData->textStyles.end())
+                                    return false;
+                                expectedTextStyleName = textStyle->name;
+                            }
+                            const auto outputTextStyle = std::find_if(
+                                cData->textStyles.begin(),
+                                cData->textStyles.end(),
+                                [&expectedTextStyleName](
+                                    const DRW_Textstyle& candidate) {
+                                        return candidate.name
+                                            == expectedTextStyleName;
+                                    });
+                            const std::size_t outputTextStyleCount =
+                                static_cast<std::size_t>(std::count_if(
+                                    cData->textStyles.begin(),
+                                    cData->textStyles.end(),
+                                    [&expectedTextStyleName](
+                                        const DRW_Textstyle& candidate) {
+                                        return candidate.name
+                                            == expectedTextStyleName;
+                                    }));
+                            if (outputTextStyle == cData->textStyles.end()
+                                || outputTextStyleCount != 1u
+                                || actualRow.m_textStyleName
+                                    != expectedTextStyleName
+                                || actualRow.m_textHeight
+                                    != expectedRow.m_textHeight
+                                || actualRow.m_textAlignment
+                                    != expectedRow.m_textAlignment
+                                || actualRow.m_textColor
+                                    != (expectedRow.m_textColorCmc.m_method
+                                            == 0xC8u
+                                        ? 257 : expectedRow.m_textColor)
+                                || actualRow.m_fillColor
+                                    != (expectedRow.m_fillColorCmc.m_method
+                                            == 0xC8u
+                                        ? 257 : expectedRow.m_fillColor)
+                                || actualRow.m_hasBackgroundColor
+                                    != expectedRow.m_hasBackgroundColor
+                                || actualRow.m_valueDataType
+                                    != expectedRow.m_valueDataType
+                                || actualRow.m_valueUnitType
+                                    != expectedRow.m_valueUnitType
+                                || actualRow.m_valueFormatString
+                                    != expectedRow.m_valueFormatString
+                                || actualRow.m_borders.size()
+                                    != expectedRow.m_borders.size())
+                                return false;
+                            for (std::size_t borderIndex = 0u;
+                                 borderIndex < expectedRow.m_borders.size();
+                                 ++borderIndex) {
+                                const DRW_TableStyleBorder& expectedBorder =
+                                    expectedRow.m_borders[borderIndex];
+                                const DRW_TableStyleBorder& actualBorder =
+                                    actualRow.m_borders[borderIndex];
+                                std::uint32_t expectedLineType = 0u;
+                                if (!mapHandle(
+                                        expectedBorder.m_lineTypeHandle,
+                                        expectedLineType))
+                                    return false;
+                                if (actualBorder.m_edgeFlags
+                                        != expectedBorder.m_edgeFlags
+                                    || actualBorder.m_propertyOverrideFlags
+                                        != expectedBorder
+                                            .m_propertyOverrideFlags
+                                    || actualBorder.m_borderType
+                                        != expectedBorder.m_borderType
+                                    || actualBorder.m_color
+                                        != (expectedBorder.m_colorCmc
+                                                    .m_method == 0xC8u
+                                            ? 257 : expectedBorder.m_color)
+                                    || actualBorder.m_lineWeight
+                                        != expectedBorder.m_lineWeight
+                                    || actualBorder.m_visible
+                                        != expectedBorder.m_visible
+                                    || actualBorder.m_doubleLineSpacing
+                                        != expectedBorder
+                                            .m_doubleLineSpacing
+                                    || actualBorder.m_lineTypeHandle
+                                        != expectedLineType)
+                                    return false;
+                            }
+                        }
+                        return true;
+                    });
+                if (!styleDecoded)
+                    DRW_DBG("TABLESTYLE staged TABLESTYLE field/body decode mismatch\n");
+                return styleDecoded;
             });
         if (!inspected || !namesMatch || !rootKeyMatched
             || seenDictionaries.size() != expectedDictionaries.size()
-            || seenStyles.size() != expectedStyles.size())
+                    + expectedCellMapDictionaries.size()
+            || seenStyles.size() != expectedStyles.size()
+            || seenCellMaps.size() != expectedCellMaps.size()) {
+            DRW_DBG("TABLESTYLE staged body proof failed inspected=");
+            DRW_DBG(inspected); DRW_DBG(" names="); DRW_DBG(namesMatch);
+            DRW_DBG(" nod-edge="); DRW_DBG(rootKeyMatched);
+            DRW_DBG(" dictionaries=");
+            DRW_DBG(seenDictionaries.size()); DRW_DBG("/");
+            DRW_DBG(expectedDictionaries.size()
+                + expectedCellMapDictionaries.size());
+            DRW_DBG(" styles="); DRW_DBG(seenStyles.size()); DRW_DBG("/");
+            DRW_DBG(expectedStyles.size()); DRW_DBG(" cellmaps=");
+            DRW_DBG(seenCellMaps.size()); DRW_DBG("/");
+            DRW_DBG(expectedCellMaps.size()); DRW_DBG("\n");
             return false;
+        }
         m_dwgTableStylesInspected = true;
         return true;
     } catch (...) {
@@ -72655,6 +73232,15 @@ bool dx_iface::finalizeDxfWrite() {
                 if (!qualifyCapturedIdentity(proof.first))
                     return false;
             }
+            for (const auto& proof :
+                 m_dwgTableStyleCellMapDictionarySources) {
+                if (!qualifyCapturedIdentity(proof.first))
+                    return false;
+            }
+            for (const auto& proof : m_dwgTableStyleCellMapSources) {
+                if (!qualifyCapturedIdentity(proof.first))
+                    return false;
+            }
         }
         if (m_dwgDictionaryDefaultOutputInspected) {
             for (const auto& proof :
@@ -72865,6 +73451,8 @@ bool dx_iface::prepareTableFallbackGraph(dx_data& data,
     m_tableStyleDictionaryHandles.clear();
     m_dwgTableStyleOutputSources.clear();
     m_dwgTableStyleDictionarySources.clear();
+    m_dwgTableStyleCellMapDictionarySources.clear();
+    m_dwgTableStyleCellMapSources.clear();
     m_dwgTableStyleNamedObjectDictionarySource = DRW_Dictionary{};
     m_dwgTableStyleRootSourceCaptured = false;
     m_dwgTableStyleOutputSourceOwner = nullptr;
@@ -76277,6 +76865,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     m_tableStyleDictionaryHandles.clear();
     m_dwgTableStyleOutputSources.clear();
     m_dwgTableStyleDictionarySources.clear();
+    m_dwgTableStyleCellMapDictionarySources.clear();
+    m_dwgTableStyleCellMapSources.clear();
     m_dwgTableStyleNamedObjectDictionarySource = DRW_Dictionary{};
     m_dwgTableStyleRootSourceCaptured = false;
     m_dwgTableStyleOutputSourceOwner = nullptr;

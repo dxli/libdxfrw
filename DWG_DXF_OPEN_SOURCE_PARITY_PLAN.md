@@ -61,43 +61,30 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P4 / AC1021 `children-room-decoration.dwg` strict-output gap:** current
-   strict whole-source conversion stops at finalization with `179/186` opaque
-   callbacks qualified. The seven missing identities are TABLESTYLE `0x7F`,
-   MLEADERSTYLE `0x12E`, SECTIONVIEWSTYLE `0x21A` and `0x18081`,
-   DETAILVIEWSTYLE `0x21C` and `0x18082`, and CELLSTYLEMAP `0x3C3F7`. Existing
-   source-bound selected-output receipts cover these physical profiles, but
-   strict conversion has not yet closed their combined emitted graph and
-   registered its source identities. The exact physical TABLESTYLE source
-   probe confirms handle `0x7F` is `Standard`, with margins `1.5/1.5` and
-   three legacy rows `(height, alignment) = (4.5,2), (6.0,5), (4.5,5)`;
-   the current admission predicate instead requires margins `0.06/0.06` and
-   heights `0.18/0.25/0.18`, which explains its zero snapshot count. Add this
-   as a separate exact AC1021 profile, guarded by the source TABLESTYLE,
-   extension-dictionary and CELLSTYLEMAP identities and the complete observed
-   field/dependency tuple. Then stage and inspect the full NOD → owner
-   dictionary → TABLESTYLE → extension dictionary → CELLSTYLEMAP graph before
-   registering either callback identity. The current debug audit also narrows
-   the remaining proof paths: MLEADERSTYLE
-   source count is 1 but its staged inspector remains false; the output walk
-   finds one CELLSTYLEMAP root and two roots each for SECTIONVIEWSTYLE and
-   DETAILVIEWSTYLE, while the ModelDocViewStyle import receipt is valid. No
-   staged proof currently certifies the latter three families. First admit
-   the exact `0x7F` TABLESTYLE profile and prove its `0x3C3F7`
-   extension-dictionary CELLSTYLEMAP in one staged output transaction;
-   verify source fields, dependency roles, output identity and readback before
-   registering either callback identity. Then connect the existing
-   MLEADERSTYLE inspector and add staged proof for the two view-style pairs.
-   Do not widen qualification from callback count alone. The strict debug
-   report and source/receipt mapping
-   are recorded in the [gap receipt](docs/research/p4-ac1021-children-room-strict-output-gaps-2026-11-06.json).
+1. **P4 / AC1021 `children-room-decoration.dwg` strict-output gap:** strict
+   whole-source conversion now proves TABLESTYLE `0x7F` and CELLSTYLEMAP
+   `0x3C3F7` together through staged ASCII/Binary body inspection, exact
+   dictionary/owner/reactor roles, named STYLE/LTYPE dependencies, and fresh
+   selected readback. The exact source profile is guarded by its TABLESTYLE,
+   extension dictionary and map identities plus the observed row/cell fields;
+   this remains one unauthenticated local source profile. Strict qualification
+   advanced from `179/186` to `181/186`, and still fails closed with no output.
+   Five callbacks remain: MLEADERSTYLE `0x12E`, SECTIONVIEWSTYLE `0x21A` and
+   `0x18081`, and DETAILVIEWSTYLE `0x21C` and `0x18082`. Next connect the
+   existing MLEADERSTYLE source/EED/APPID snapshot to its staged inspector and
+   prove its output fields/graph; then add one paired SECTIONVIEWSTYLE and
+   DETAILVIEWSTYLE inspection for the NOD and nested-dictionary roots. Keep
+   whole-source conversion refused until all five pass. The current strict
+   recheck and original seven-callback mapping are recorded in the [gap
+   receipt](docs/research/p4-ac1021-children-room-strict-output-gaps-2026-11-06.json);
+   the completed TABLESTYLE/CELLSTYLEMAP slice is in its [staged-output
+   receipt](docs/research/p4-ac1021-children-room-tablestyle-cellstylemap-strict-staged-output-2026-11-06.json).
    Source SHA-256 is
    `cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce`; do
    not commit a drawing fixture. The preceding AC1021 `lineweights.dwg`
-   profile now has four LAYOUT-owned VIEWPORTs selected by their exact list
-   membership, with source/output owner links resolved through reciprocal
-   BLOCK_RECORD/LAYOUT handles rather than ambiguous paper-space names. See
-   the [VIEWPORT and strict-output receipt](docs/research/p4-ac1021-lineweights-four-viewport-strict-output-2026-11-06.json).
+   TABLESTYLE profile still passes its ASCII/Binary selected-output control.
+   Its four LAYOUT-owned VIEWPORTs remain qualified by exact list membership;
+   see the [VIEWPORT and strict-output receipt](docs/research/p4-ac1021-lineweights-four-viewport-strict-output-2026-11-06.json).
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child

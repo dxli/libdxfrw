@@ -4494,6 +4494,10 @@ private:
         m_dwgTableStyleOutputSources;
     std::map<std::uint32_t, DRW_Dictionary>
         m_dwgTableStyleDictionarySources;
+    std::map<std::uint32_t, DRW_Dictionary>
+        m_dwgTableStyleCellMapDictionarySources;
+    std::map<std::uint32_t, DRW_CellStyleMap>
+        m_dwgTableStyleCellMapSources;
     DRW_Dictionary m_dwgTableStyleNamedObjectDictionarySource;
     bool m_dwgTableStyleRootSourceCaptured{false};
     const dx_data* m_dwgTableStyleOutputSourceOwner{nullptr};
