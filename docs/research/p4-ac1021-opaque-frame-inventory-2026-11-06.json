@@ -17,7 +17,7 @@
       "count": 74,
       "customClassCount": 68,
       "fixedTypeCount": 6,
-      "outputQualified": 65,
+      "outputQualified": 67,
       "outputQualifiedByRecord": {
         "VISUALSTYLE": 25,
         "SCALE": 17,
@@ -28,7 +28,9 @@
         "ACDBPLACEHOLDER": 1,
         "ACDBSECTIONVIEWSTYLE": 2,
         "ACDBDETAILVIEWSTYLE": 2,
-        "MLEADERSTYLE": 1
+        "MLEADERSTYLE": 1,
+        "TABLESTYLE": 1,
+        "CELLSTYLEMAP": 1
       },
       "byRecord": {
         "VISUALSTYLE": 25,
@@ -55,9 +57,9 @@
       },
       "typedPayloadMatches": 112,
       "opaquePayloadMatches": 0,
-      "outputQualified": 74
+      "outputQualified": 76
     },
-    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. Bounded physical AC1021 routes now qualify 65 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, and one MLEADERSTYLE. They qualify 74 standard-object frames, including the selected VisualStyle, MATERIAL and DBCOLOR dependencies plus the two ModelDocViewStyle root dictionaries, four extension dictionaries, four XRECORDs, and the MLEADERSTYLE owner dictionary. These are selected graph routes with ASCII/Binary output and readback; MATERIAL, DBCOLOR, ModelDocViewStyle and DICTIONARYWDFLT/PLACEHOLDER also check their applicable retained payloads and transaction refusal/retry. The remaining nine opaque carriers and 38 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. Bounded physical AC1021 routes now qualify 67 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one TABLESTYLE, and one CELLSTYLEMAP. They qualify 76 standard-object frames; these selected graph routes verify ASCII/Binary output and typed/raw readback, with applicable dependency closure, mutation/refusal, and retry checks. The children-room TABLESTYLE/CELLSTYLEMAP route adds two typed carriers and its two owner/extension dictionaries using a second physical source profile. The remaining seven opaque carriers and 36 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -98,7 +100,7 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Continue with remaining unqualified source/object frames and graph dependencies; the selected style graph does not qualify whole-source conversion or native semantics.",
+  "nextAction": "Continue with another source-backed unqualified frame or graph from the P4 inventory. Preserve fail-closed whole-source behavior and avoid double-counting shared standard-object identities.",
   "materialCandidateBoundary": {
     "record": "MATERIAL",
     "observedCount": 3,
@@ -129,7 +131,10 @@
   "dictionaryDefaultCandidateBoundary": {
     "record": "ACDBDICTIONARYWDFLT / ACDBPLACEHOLDER",
     "observedCount": 2,
-    "handles": ["0xE", "0xF"],
+    "handles": [
+      "0xE",
+      "0xF"
+    ],
     "selector": "--dictionary-default-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg",
     "result": "PASS for the selected AC1021 source graph to AC1024 DXF in ASCII and Binary. Exact source identity, unique ACAD_PLOTSTYLENAME root, Normal/default target, owner/reactor roles, output qualification, fresh readback, destination-preserving refusal, and same-adapter retry pass. Unrelated source records are excluded only by a test projection; whole-source output remains unqualified.",
     "receipt": "docs/research/p4-ac1021-dictionary-default-physical-selected-output-2026-11-06.json"
@@ -142,5 +147,16 @@
     "result": "PASS for the bounded AC1021 selected graph to AC1024 DXF in ASCII and Binary. Deep EED snapshots detect in-place mutation; the source APPID is verified through its emitted table binding; exact XDATA order/value, owner/key/reference roles, fresh readback, destination-preserving refusal and same-adapter retry pass. Adds one opaque MLEADERSTYLE carrier and its owner dictionary frame to the bounded output inventory only.",
     "receipt": "docs/research/p4-ac1021-mleaderstyle-eed-selected-output-2026-11-06.json",
     "next": "Broaden producer/version coverage; whole-source output, native MLEADERSTYLE semantics and unmodeled EED profiles remain open."
+  },
+  "tableStyleCellStyleMapCandidateBoundary": {
+    "record": "TABLESTYLE + CELLSTYLEMAP",
+    "observedHandles": [
+      "0x7F",
+      "0x3C3F7"
+    ],
+    "selector": "--tablestyle-ac1021-cellstylemap-selected-output /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "result": "PASS selected ASCII/Binary output and fresh readback for the source NOD/owner/extension/map graph. Preserves cell identities and values, 1.5 margins, 6.0/4.5 heights, 1.125 border spacing, no-color C8->257, text-style bindings and border LTYPE dependencies. A dangling STYLE reference is refused with destination preservation and same-adapter correction/retry succeeds.",
+    "receipt": "docs/research/p4-ac1021-children-room-tablestyle-cellstylemap-selected-output-2026-11-06.json",
+    "limit": "Second unauthenticated local AC1021 sample; selected graph only, no independent native or whole-source qualification."
   }
 }

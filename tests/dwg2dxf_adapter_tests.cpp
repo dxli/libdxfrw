@@ -284,9 +284,7 @@ public:
             || source.sourceVersion != DRW::AC1021
             || source.importGeneration == 0u
             || source.tableStyles.size() != 1u
-            || source.tableStyles.front().handle != 0x87u
             || source.cellStyleMaps.size() != 1u
-            || source.cellStyleMaps.front().handle != 0xCE97u
             || !source.hasNamedObjectDictionary
             || !source.namedObjectDictionary.hasCompleteDwgEntries())
             return false;
@@ -304,22 +302,37 @@ public:
             }
             return result;
         };
-        const DRW_Dictionary* owner = dictionaryByHandle(0x86u);
-        const DRW_Dictionary* extension = dictionaryByHandle(0x1659u);
-        if (owner == nullptr || extension == nullptr
+        const DRW_Dictionary* owner = dictionaryByHandle(style.parentHandle);
+        const DRW_Dictionary* extension = dictionaryByHandle(style.xDictHandle);
+        const auto countEntry = [](const DRW_Dictionary& dictionary,
+                                  const std::string& name,
+                                  std::uint32_t handle) {
+            return std::count_if(dictionary.m_entries.begin(),
+                dictionary.m_entries.end(),
+                [&name, handle](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == name && entry.m_handle == handle;
+                });
+        };
+        if (style.handle == 0u || cellMap.handle == 0u
+            || style.handle == cellMap.handle
+            || owner == nullptr || extension == nullptr
             || style.parentHandle != owner->handle
             || style.xDictHandle != extension->handle
             || owner->parentHandle != source.namedObjectDictionary.handle
             || !owner->hasCompleteDwgEntries() || owner->m_entries.size() != 1u
-            || owner->m_entries.front().m_name != "Standard"
-            || owner->m_entries.front().m_handle != style.handle
+            || countEntry(*owner, style.m_name, style.handle) != 1
             || extension->parentHandle != style.handle
             || !extension->hasCompleteDwgEntries()
             || extension->m_entries.size() != 1u
-            || extension->m_entries.front().m_name
-                != "ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP"
-            || extension->m_entries.front().m_handle != cellMap.handle
-            || cellMap.parentHandle != extension->handle)
+            || countEntry(*extension,
+                "ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP",
+                cellMap.handle) != 1
+            || cellMap.parentHandle != extension->handle
+            || cellMap.reactorCount() != 1
+            || cellMap.reactorHandles.size() != 1u
+            || cellMap.reactorHandles.front() != extension->handle
+            || countEntry(source.namedObjectDictionary, "ACAD_TABLESTYLE",
+                          owner->handle) != 1)
             return false;
         const dx_data::StandardDwgFrameKey styleKey{
             source.importGeneration, style.handle};
@@ -343,9 +356,9 @@ public:
             std::remove_if(
                 projection.namedObjectDictionary.m_entries.begin(),
                 projection.namedObjectDictionary.m_entries.end(),
-                [](const DRW_Dictionary::Entry& entry) {
+                [owner](const DRW_Dictionary::Entry& entry) {
                     return entry.m_name != "ACAD_TABLESTYLE"
-                        || entry.m_handle != 0x86u;
+                        || entry.m_handle != owner->handle;
                 }),
             projection.namedObjectDictionary.m_entries.end());
         if (projection.namedObjectDictionary.m_entries.size() != 1u)
@@ -358,6 +371,20 @@ public:
         for (const DRW_Textstyle& textStyle : source.textStyles)
             if (!textStyle.name.empty())
                 projection.textStyles.push_back(textStyle);
+        std::set<std::uint32_t> requiredLineTypes;
+        for (const DRW_TableStyleCellStyle& cell : cellMap.m_cellStyles)
+            for (const DRW_TableStyleBorder& border : cell.m_borders)
+                if (border.m_lineTypeHandle != 0u)
+                    requiredLineTypes.insert(border.m_lineTypeHandle);
+        for (const DRW_TableStyleRowStyle& row : style.m_rowStyles)
+            for (const DRW_TableStyleBorder& border : row.m_borders)
+                if (border.m_lineTypeHandle != 0u)
+                    requiredLineTypes.insert(border.m_lineTypeHandle);
+        for (const DRW_LType& lineType : source.lineTypes)
+            if (requiredLineTypes.erase(lineType.handle) != 0u)
+                projection.lineTypes.push_back(lineType);
+        if (!requiredLineTypes.empty())
+            return false;
         projection.basicTableCaptureFailed = source.basicTableCaptureFailed;
         projection.basicTableRetainedRecords = source.basicTableRetainedRecords;
         projection.basicTableRetainedItems = source.basicTableRetainedItems;
@@ -54227,7 +54254,6 @@ bool physicalAc1021CellStyleMapSelectedOutput(
         || source.sourceVersion != DRW::AC1021
         || source.tableStyles.size() != 1u
         || source.cellStyleMaps.size() != 1u
-        || source.cellStyleMaps.front().handle != 0xCE97u
         || source.cellStyleMaps.front().m_cellStyles.size() != 3u)
         return fail("physical AC1021 TABLESTYLE/CELLSTYLEMAP source profile changed");
     dx_data projection;
@@ -54248,6 +54274,9 @@ bool physicalAc1021CellStyleMapSelectedOutput(
                 return candidate.handle == sourceTextStyle;
             }) != 1)
         return fail("physical AC1021 CELLSTYLEMAP text-style dependency is not unique");
+    const DRW_TableStyle expectedStyle = projection.tableStyles.front();
+    const std::vector<DRW_TableStyleCellStyle> expectedCells =
+        projection.cellStyleMaps.front().m_cellStyles;
 
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
@@ -54354,7 +54383,7 @@ bool physicalAc1021CellStyleMapSelectedOutput(
         const auto styleEdges = owner == nullptr ? 0 : std::count_if(
             owner->m_entries.begin(), owner->m_entries.end(),
             [&actualStyle](const DRW_Dictionary::Entry& entry) {
-                return entry.m_name == "Standard"
+                return entry.m_name == actualStyle.m_name
                     && entry.m_handle == actualStyle.handle;
             });
         const auto mapEdges = extension == nullptr ? 0 : std::count_if(
@@ -54374,38 +54403,241 @@ bool physicalAc1021CellStyleMapSelectedOutput(
             || owner == nullptr
             || actualStyle.xDictHandle != extension->handle
             || extension->parentHandle != actualStyle.handle
+            || extension->m_entries.size() != 1u
             || owner->parentHandle != readback.namedObjectDictionary.handle
+            || owner->m_entries.size() != 1u
             || actualMap.parentHandle != extension->handle
             || actualMap.reactorHandles.size() != 1u
             || actualMap.reactorHandles.front() != extension->handle
             || rootEdges != 1 || styleEdges != 1 || mapEdges != 1)
             return fail("physical AC1021 CELLSTYLEMAP NOD/owner/xdictionary graph did not read back uniquely");
-        const std::array<std::pair<int, std::string>, 3> identities{{
-            {1, "_TITLE"}, {2, "_HEADER"}, {3, "_DATA"}}};
-        for (std::size_t cellIndex = 0u; cellIndex < identities.size();
+        if (actualStyle.m_name != expectedStyle.m_name
+            || actualStyle.m_flowDirection != expectedStyle.m_flowDirection
+            || actualStyle.m_flags != expectedStyle.m_flags
+            || actualStyle.m_horizontalCellMargin
+                != expectedStyle.m_horizontalCellMargin
+            || actualStyle.m_verticalCellMargin
+                != expectedStyle.m_verticalCellMargin
+            || actualStyle.m_titleSuppressed != expectedStyle.m_titleSuppressed
+            || actualStyle.m_headerSuppressed != expectedStyle.m_headerSuppressed
+            || actualStyle.m_rowStyles.size() != expectedStyle.m_rowStyles.size())
+            return fail("physical AC1021 TABLESTYLE fields changed on CELLSTYLEMAP readback");
+        const auto expectedDxfColor = [](
+                int color, const DRW_TableStyleCmcColor& cmc) {
+            return cmc.m_method == 0xC8u ? 257 : color;
+        };
+        const auto hasTextStyleBinding = [&projection, &readback](
+                std::uint32_t sourceHandle, std::uint32_t outputHandle) {
+            const DRW_Textstyle* sourceStyle = nullptr;
+            const DRW_Textstyle* outputStyle = nullptr;
+            std::size_t sourceMatches = 0u;
+            std::size_t outputMatches = 0u;
+            for (const DRW_Textstyle& candidate : projection.textStyles) {
+                if (candidate.handle != sourceHandle)
+                    continue;
+                sourceStyle = &candidate;
+                ++sourceMatches;
+            }
+            for (const DRW_Textstyle& candidate : readback.textStyles) {
+                if (candidate.handle != outputHandle)
+                    continue;
+                outputStyle = &candidate;
+                ++outputMatches;
+            }
+            return sourceMatches == 1u && outputMatches == 1u
+                && sourceStyle != nullptr && outputStyle != nullptr
+                && sourceStyle->name == outputStyle->name;
+        };
+        const auto hasLineTypeBinding = [&projection, &readback](
+                std::uint32_t sourceHandle, std::uint32_t outputHandle) {
+            if (sourceHandle == 0u)
+                return outputHandle == 0u;
+            const DRW_LType* sourceLineType = nullptr;
+            const DRW_LType* outputLineType = nullptr;
+            std::size_t sourceMatches = 0u;
+            std::size_t outputMatches = 0u;
+            for (const DRW_LType& candidate : projection.lineTypes) {
+                if (candidate.handle != sourceHandle)
+                    continue;
+                sourceLineType = &candidate;
+                ++sourceMatches;
+            }
+            for (const DRW_LType& candidate : readback.lineTypes) {
+                if (candidate.handle != outputHandle)
+                    continue;
+                outputLineType = &candidate;
+                ++outputMatches;
+            }
+            return sourceMatches == 1u && outputMatches == 1u
+                && sourceLineType != nullptr && outputLineType != nullptr
+                && sourceLineType->name == outputLineType->name;
+        };
+        for (std::size_t rowIndex = 0u;
+             rowIndex < expectedStyle.m_rowStyles.size(); ++rowIndex) {
+            const DRW_TableStyleRowStyle& expected =
+                expectedStyle.m_rowStyles[rowIndex];
+            const DRW_TableStyleRowStyle& actual =
+                actualStyle.m_rowStyles[rowIndex];
+            std::string expectedRowTextStyleName = expected.m_textStyleName;
+            if (expectedRowTextStyleName.empty()
+                && expected.m_textStyleHandle != 0u) {
+                const DRW_Textstyle* referencedTextStyle = nullptr;
+                std::size_t referencedTextStyleCount = 0u;
+                for (const DRW_Textstyle& candidate : projection.textStyles) {
+                    if (candidate.handle != expected.m_textStyleHandle)
+                        continue;
+                    referencedTextStyle = &candidate;
+                    ++referencedTextStyleCount;
+                }
+                if (referencedTextStyleCount == 1u
+                    && referencedTextStyle != nullptr)
+                    expectedRowTextStyleName = referencedTextStyle->name;
+            }
+            const std::size_t namedTextStyleMatches = static_cast<std::size_t>(
+                std::count_if(readback.textStyles.begin(),
+                    readback.textStyles.end(), [&expectedRowTextStyleName](
+                        const DRW_Textstyle& candidate) {
+                            return candidate.name == expectedRowTextStyleName;
+                        }));
+            if (expectedRowTextStyleName.empty()
+                || actual.m_textStyleName != expectedRowTextStyleName
+                || namedTextStyleMatches != 1u
+                || actual.m_textHeight != expected.m_textHeight
+                || actual.m_textAlignment != expected.m_textAlignment
+                || actual.m_textColor != expectedDxfColor(
+                    expected.m_textColor, expected.m_textColorCmc)
+                || actual.m_fillColor != expectedDxfColor(
+                    expected.m_fillColor, expected.m_fillColorCmc)
+                || actual.m_hasBackgroundColor
+                    != expected.m_hasBackgroundColor
+                || actual.m_valueDataType != expected.m_valueDataType
+                || actual.m_valueUnitType != expected.m_valueUnitType
+                || actual.m_valueFormatString != expected.m_valueFormatString
+                || actual.m_borders.size() != expected.m_borders.size()) {
+                std::cerr << "TABLESTYLE row " << rowIndex
+                    << " textStyle=" << expected.m_textStyleName << '/'
+                    << actual.m_textStyleName << " handles=0x" << std::hex
+                    << expected.m_textStyleHandle << "/0x"
+                    << actual.m_textStyleHandle << std::dec
+                    << " namedMatches=" << namedTextStyleMatches
+                    << " height=" << expected.m_textHeight << '/'
+                    << actual.m_textHeight
+                    << " alignment=" << expected.m_textAlignment << '/'
+                    << actual.m_textAlignment
+                    << " textColor=" << expected.m_textColor << '/'
+                    << actual.m_textColor
+                    << " fillColor=" << expected.m_fillColor << '/'
+                    << actual.m_fillColor
+                    << " hasBackground=" << expected.m_hasBackgroundColor
+                    << '/' << actual.m_hasBackgroundColor
+                    << " dataType=" << expected.m_valueDataType << '/'
+                    << actual.m_valueDataType
+                    << " unit=" << expected.m_valueUnitType << '/'
+                    << actual.m_valueUnitType
+                    << " format=" << expected.m_valueFormatString << '/'
+                    << actual.m_valueFormatString
+                    << " borders=" << expected.m_borders.size() << '/'
+                    << actual.m_borders.size() << '\n';
+                return fail("physical AC1021 TABLESTYLE row changed or lost a text-style dependency");
+            }
+            for (std::size_t borderIndex = 0u;
+                 borderIndex < expected.m_borders.size(); ++borderIndex) {
+                const DRW_TableStyleBorder& expectedBorder =
+                    expected.m_borders[borderIndex];
+                const DRW_TableStyleBorder& actualBorder =
+                    actual.m_borders[borderIndex];
+                if (actualBorder.m_edgeFlags != expectedBorder.m_edgeFlags
+                    || actualBorder.m_propertyOverrideFlags
+                        != expectedBorder.m_propertyOverrideFlags
+                    || actualBorder.m_borderType != expectedBorder.m_borderType
+                    || actualBorder.m_color != expectedDxfColor(
+                        expectedBorder.m_color, expectedBorder.m_colorCmc)
+                    || actualBorder.m_lineWeight
+                        != expectedBorder.m_lineWeight
+                    || actualBorder.m_visible != expectedBorder.m_visible
+                    || actualBorder.m_doubleLineSpacing
+                        != expectedBorder.m_doubleLineSpacing
+                    || !hasLineTypeBinding(
+                        expectedBorder.m_lineTypeHandle,
+                        actualBorder.m_lineTypeHandle))
+                    return fail("physical AC1021 TABLESTYLE border changed or lost a linetype dependency");
+            }
+        }
+        for (std::size_t cellIndex = 0u; cellIndex < expectedCells.size();
              ++cellIndex) {
             const DRW_TableStyleCellStyle& cell =
                 actualMap.m_cellStyles[cellIndex];
-            const auto& expected = identities[cellIndex];
-            if (cell.m_id != expected.first || cell.m_name != expected.second
-                || cell.m_type != 5 || !cell.m_hasData
-                || cell.m_backgroundColor != 257
-                || cell.m_backgroundColorCmc.m_method != 0u
-                || cell.m_contentLayout != 1u
-                || cell.m_contentFormat.m_textStyleHandle == 0u
-                || cell.m_contentFormat.m_textHeight
-                    != (cellIndex == 0u ? 0.25 : 0.18)
-                || cell.m_borders.size() != 6u)
+            const DRW_TableStyleCellStyle& expected = expectedCells[cellIndex];
+            const int expectedBackground =
+                expected.m_backgroundColor == 256
+                    && expected.m_backgroundColorCmc.m_method == 0xC8u
+                ? 257 : expected.m_backgroundColor;
+            const DRW_TableStyleContentFormat& actualContent =
+                cell.m_contentFormat;
+            const DRW_TableStyleContentFormat& expectedContent =
+                expected.m_contentFormat;
+            if (cell.m_id != expected.m_id || cell.m_name != expected.m_name
+                || cell.m_styleClass != expected.m_styleClass
+                || cell.m_type != expected.m_type
+                || cell.m_hasData != expected.m_hasData
+                || cell.m_propertyOverrideFlags
+                    != expected.m_propertyOverrideFlags
+                || cell.m_mergeFlags != expected.m_mergeFlags
+                || cell.m_backgroundColor != expectedBackground
+                || cell.m_backgroundColorCmc.m_method
+                    != (expectedBackground == 257 ? 0u
+                        : expected.m_backgroundColorCmc.m_method)
+                || cell.m_contentLayout != expected.m_contentLayout
+                || actualContent.m_propertyOverrideFlags
+                    != expectedContent.m_propertyOverrideFlags
+                || actualContent.m_propertyFlags
+                    != expectedContent.m_propertyFlags
+                || actualContent.m_valueDataType
+                    != expectedContent.m_valueDataType
+                || actualContent.m_valueUnitType
+                    != expectedContent.m_valueUnitType
+                || actualContent.m_valueFormatString
+                    != expectedContent.m_valueFormatString
+                || actualContent.m_rotation != expectedContent.m_rotation
+                || actualContent.m_blockScale != expectedContent.m_blockScale
+                || actualContent.m_cellAlignment
+                    != expectedContent.m_cellAlignment
+                || actualContent.m_contentColor
+                    != expectedDxfColor(expectedContent.m_contentColor,
+                                        expectedContent.m_contentColorCmc)
+                || !hasTextStyleBinding(expectedContent.m_textStyleHandle,
+                                        actualContent.m_textStyleHandle)
+                || actualContent.m_textHeight != expectedContent.m_textHeight
+                || cell.m_marginOverrideFlags != expected.m_marginOverrideFlags
+                || cell.m_verticalMargin != expected.m_verticalMargin
+                || cell.m_horizontalMargin != expected.m_horizontalMargin
+                || cell.m_bottomMargin != expected.m_bottomMargin
+                || cell.m_rightMargin != expected.m_rightMargin
+                || cell.m_marginHorizontalSpacing
+                    != expected.m_marginHorizontalSpacing
+                || cell.m_marginVerticalSpacing
+                    != expected.m_marginVerticalSpacing
+                || cell.m_borders.size() != expected.m_borders.size())
                 return fail("physical AC1021 CELLSTYLEMAP cell identity/content changed on readback");
             for (std::size_t borderIndex = 0u;
                  borderIndex < cell.m_borders.size(); ++borderIndex) {
                 const DRW_TableStyleBorder& border =
                     cell.m_borders[borderIndex];
-                if (border.m_edgeFlags != static_cast<int>(1u << borderIndex)
-                    || border.m_borderType != 1
-                    || border.m_lineWeight != -2
-                    || border.m_visible != 0
-                    || border.m_doubleLineSpacing != 0.045)
+                const DRW_TableStyleBorder& expectedBorder =
+                    expected.m_borders[borderIndex];
+                if (border.m_edgeFlags != expectedBorder.m_edgeFlags
+                    || border.m_propertyOverrideFlags
+                        != expectedBorder.m_propertyOverrideFlags
+                    || border.m_borderType != expectedBorder.m_borderType
+                    || border.m_color != expectedDxfColor(
+                        expectedBorder.m_color, expectedBorder.m_colorCmc)
+                    || border.m_lineWeight != expectedBorder.m_lineWeight
+                    || border.m_visible != expectedBorder.m_visible
+                    || border.m_doubleLineSpacing
+                        != expectedBorder.m_doubleLineSpacing
+                    || !hasLineTypeBinding(
+                        expectedBorder.m_lineTypeHandle,
+                        border.m_lineTypeHandle))
                     return fail("physical AC1021 CELLSTYLEMAP border fields changed on readback");
             }
         }
