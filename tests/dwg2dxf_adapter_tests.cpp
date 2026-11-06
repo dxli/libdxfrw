@@ -332,6 +332,14 @@ public:
             || !source.namedObjectDictionary.hasCompleteDwgEntries())
             return false;
         const DRW_TableStyle& style = source.tableStyles.front();
+        const DRW_Dictionary::Entry* rootEntry = nullptr;
+        std::size_t rootMatches = 0u;
+        for (const DRW_Dictionary::Entry& entry :
+                source.namedObjectDictionary.m_entries) {
+            if (entry.m_name != "ACAD_TABLESTYLE") continue;
+            rootEntry = &entry;
+            ++rootMatches;
+        }
         const DRW_Dictionary* owner = nullptr;
         std::size_t ownerMatches = 0u;
         for (const DRW_Dictionary& dictionary : source.dictionaries) {
@@ -340,8 +348,8 @@ public:
             owner = &dictionary;
             ++ownerMatches;
         }
-        if (ownerMatches != 1u || owner == nullptr
-            || style.handle != 0x172u || owner->handle != 0x171u
+        if (ownerMatches != 1u || owner == nullptr || rootMatches != 1u
+            || rootEntry == nullptr || rootEntry->m_handle != owner->handle
             || owner->parentHandle != source.namedObjectDictionary.handle
             || !owner->hasCompleteDwgEntries()
             || owner->m_entries.size() != 1u
@@ -366,9 +374,9 @@ public:
             std::remove_if(
                 projection.namedObjectDictionary.m_entries.begin(),
                 projection.namedObjectDictionary.m_entries.end(),
-                [](const DRW_Dictionary::Entry& entry) {
+                [owner](const DRW_Dictionary::Entry& entry) {
                     return entry.m_name != "ACAD_TABLESTYLE"
-                        || entry.m_handle != 0x171u;
+                        || entry.m_handle != owner->handle;
                 }),
             projection.namedObjectDictionary.m_entries.end());
         if (projection.namedObjectDictionary.m_entries.size() != 1u)
@@ -380,6 +388,87 @@ public:
         projection.dimStyles = source.dimStyles;
         projection.textStyles = source.textStyles;
         projection.appIds = source.appIds;
+        if (projection.namedObjectDictionary.xDictHandle != 0u) {
+            const std::uint32_t handle =
+                projection.namedObjectDictionary.xDictHandle;
+            const DRW_Dictionary* extension = nullptr;
+            std::size_t extensionMatches = 0u;
+            for (const DRW_Dictionary& dictionary : source.dictionaries) {
+                if (dictionary.handle != handle)
+                    continue;
+                extension = &dictionary;
+                ++extensionMatches;
+            }
+            if (handle == DRW::NoHandle || extensionMatches != 1u
+                || extension == nullptr
+                || extension->parentHandle
+                    != projection.namedObjectDictionary.handle
+                || !extension->hasCompleteDwgEntries()
+                || !extension->m_entries.empty())
+                return false;
+            const dx_data::StandardDwgFrameKey extensionKey{
+                source.importGeneration, handle};
+            const auto extensionFrame =
+                source.m_standardDwgObjectFrames.find(extensionKey);
+            if (extensionFrame == source.m_standardDwgObjectFrames.end()
+                || !DxIfaceStandardDwgCaptureTestAccess::
+                    standardSourceEligible(source, handle))
+                return false;
+            projection.dictionaries.push_back(*extension);
+            projection.m_standardDwgObjectFrames.emplace(*extensionFrame);
+            const auto extensionOrdinal =
+                source.m_standardDwgObjectOrdinals.find(extensionKey);
+            if (extensionOrdinal != source.m_standardDwgObjectOrdinals.end())
+                projection.m_standardDwgObjectOrdinals.emplace(
+                    *extensionOrdinal);
+            projection.m_standardDwgObjectRetainedBytes +=
+                extensionFrame->second.raw.m_rawBytes.size();
+        }
+        std::set<std::uint32_t> selectedLayerExtensionHandles;
+        for (const DRW_Layer& layer : projection.layers) {
+            if (layer.xDictHandle == 0u)
+                continue;
+            if (layer.xDictHandle == DRW::NoHandle
+                || !selectedLayerExtensionHandles.insert(
+                    layer.xDictHandle).second)
+                return false;
+            const DRW_Dictionary* extension = nullptr;
+            std::size_t extensionMatches = 0u;
+            for (const DRW_Dictionary& dictionary : source.dictionaries) {
+                if (dictionary.handle != layer.xDictHandle)
+                    continue;
+                extension = &dictionary;
+                ++extensionMatches;
+            }
+            if (extensionMatches != 1u || extension == nullptr
+                || extension->parentHandle != layer.handle
+                || !extension->hasCompleteDwgEntries()
+                || !extension->m_entries.empty()
+                || std::any_of(
+                    projection.dictionaries.begin(),
+                    projection.dictionaries.end(),
+                    [extension](const DRW_Dictionary& dictionary) {
+                        return dictionary.handle == extension->handle;
+                    }))
+                return false;
+            const dx_data::StandardDwgFrameKey extensionKey{
+                source.importGeneration, extension->handle};
+            const auto extensionFrame =
+                source.m_standardDwgObjectFrames.find(extensionKey);
+            if (extensionFrame == source.m_standardDwgObjectFrames.end()
+                || !DxIfaceStandardDwgCaptureTestAccess::
+                    standardSourceEligible(source, extension->handle))
+                return false;
+            projection.dictionaries.push_back(*extension);
+            projection.m_standardDwgObjectFrames.emplace(*extensionFrame);
+            const auto extensionOrdinal =
+                source.m_standardDwgObjectOrdinals.find(extensionKey);
+            if (extensionOrdinal != source.m_standardDwgObjectOrdinals.end())
+                projection.m_standardDwgObjectOrdinals.emplace(
+                    *extensionOrdinal);
+            projection.m_standardDwgObjectRetainedBytes +=
+                extensionFrame->second.raw.m_rawBytes.size();
+        }
         projection.basicTableCaptureFailed = source.basicTableCaptureFailed;
         projection.basicTableRetainedRecords =
             source.basicTableRetainedRecords;
@@ -428,6 +517,138 @@ public:
         projection.m_standardDwgLayerSources =
             source.m_standardDwgLayerSources;
         return true;
+    }
+
+    static bool selectPhysicalAc1021RecomposeDataGraph(
+            const dx_data& source, dx_data& projection) {
+        if (!selectPhysicalAc1021TableStyleGraph(source, projection)
+            || source.tableStyles.size() != 1u
+            || source.tableStyles.front().handle != 127u
+            || source.xRecords.size() < 1u)
+            return false;
+        dx_data cellStyleProjection;
+        if (!selectPhysicalAc1021CellStyleMapGraph(
+                source, cellStyleProjection)
+            || cellStyleProjection.cellStyleMaps.size() != 1u)
+            return false;
+        for (const DRW_Dictionary& dictionary :
+                cellStyleProjection.dictionaries) {
+            const auto existing = std::find_if(
+                projection.dictionaries.begin(),
+                projection.dictionaries.end(),
+                [&dictionary](const DRW_Dictionary& candidate) {
+                    return candidate.handle == dictionary.handle;
+                });
+            if (existing == projection.dictionaries.end())
+                projection.dictionaries.push_back(dictionary);
+            else if (existing->parentHandle != dictionary.parentHandle
+                || existing->m_entries.size() != dictionary.m_entries.size())
+                return false;
+        }
+        for (const auto& item : cellStyleProjection.m_opaqueDwgSourceFrames) {
+            const auto inserted =
+                projection.m_opaqueDwgSourceFrames.emplace(item);
+            if (inserted.second)
+                projection.m_opaqueDwgSourceFrameRetainedBytes +=
+                    item.second.m_rawBytes.size();
+        }
+        projection.m_opaqueDwgSourceFrameIdentities.insert(
+            cellStyleProjection.m_opaqueDwgSourceFrameIdentities.begin(),
+            cellStyleProjection.m_opaqueDwgSourceFrameIdentities.end());
+        for (const auto& item :
+                cellStyleProjection.m_standardDwgObjectFrames) {
+            const auto inserted =
+                projection.m_standardDwgObjectFrames.emplace(item);
+            if (!inserted.second)
+                continue;
+            const auto ordinal =
+                cellStyleProjection.m_standardDwgObjectOrdinals.find(
+                    item.first);
+            if (ordinal != cellStyleProjection
+                    .m_standardDwgObjectOrdinals.end())
+                projection.m_standardDwgObjectOrdinals.emplace(*ordinal);
+            projection.m_standardDwgObjectRetainedBytes +=
+                item.second.raw.m_rawBytes.size();
+        }
+        projection.cellStyleMaps = cellStyleProjection.cellStyleMaps;
+        projection.cellStyleMapsCaptureFailed =
+            cellStyleProjection.cellStyleMapsCaptureFailed;
+        projection.cellStyleMapsRetainedRecords =
+            cellStyleProjection.cellStyleMapsRetainedRecords;
+        projection.cellStyleMapsRetainedItems =
+            cellStyleProjection.cellStyleMapsRetainedItems;
+        projection.cellStyleMapsRetainedBytes =
+            cellStyleProjection.cellStyleMapsRetainedBytes;
+        constexpr std::uint32_t recordHandle = 246776u;
+        constexpr std::uint32_t tableStyleHandle = 127u;
+        const std::string rootName = "ACDB_RECOMPOSE_DATA";
+        const DRW_Dictionary::Entry* rootEntry = nullptr;
+        std::size_t rootMatches = 0u;
+        for (const DRW_Dictionary::Entry& entry :
+                source.namedObjectDictionary.m_entries) {
+            if (entry.m_name != rootName) continue;
+            rootEntry = &entry;
+            ++rootMatches;
+        }
+        const DRW_XRecord* record = nullptr;
+        std::size_t recordMatches = 0u;
+        for (const DRW_XRecord& candidate : source.xRecords) {
+            if (candidate.handle != recordHandle) continue;
+            record = &candidate;
+            ++recordMatches;
+        }
+        const dx_data::StandardDwgFrameKey recordKey{
+            source.importGeneration, recordHandle};
+        const auto recordFrame = source.m_standardDwgObjectFrames.find(recordKey);
+        const auto recordOrdinal = source.m_standardDwgObjectOrdinals.find(recordKey);
+        if (rootMatches != 1u || rootEntry == nullptr
+            || rootEntry->m_handle != recordHandle || recordMatches != 1u
+            || record == nullptr
+            || record->parentHandle != source.namedObjectDictionary.handle
+            || record->reactorHandles
+                != std::vector<std::uint32_t>{source.namedObjectDictionary.handle}
+            || record->m_values.size() != 1u
+            || record->m_dataEntries.size() != 2u
+            || record->m_handleValues
+                != std::vector<std::pair<int, std::uint32_t>>{{330, tableStyleHandle}}
+            || recordFrame == source.m_standardDwgObjectFrames.end()
+            || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                source, recordHandle))
+            return false;
+        const auto sourceRootPosition = std::find_if(
+            source.namedObjectDictionary.m_entries.begin(),
+            source.namedObjectDictionary.m_entries.end(),
+            [&rootName](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == rootName;
+            });
+        const auto selectedStyleRoot = std::find_if(
+            projection.namedObjectDictionary.m_entries.begin(),
+            projection.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_TABLESTYLE";
+            });
+        if (sourceRootPosition == source.namedObjectDictionary.m_entries.end()
+            || selectedStyleRoot == projection.namedObjectDictionary.m_entries.end())
+            return false;
+        if (sourceRootPosition
+                < std::find_if(
+                    source.namedObjectDictionary.m_entries.begin(),
+                    source.namedObjectDictionary.m_entries.end(),
+                    [](const DRW_Dictionary::Entry& entry) {
+                        return entry.m_name == "ACAD_TABLESTYLE";
+                    }))
+            projection.namedObjectDictionary.m_entries.insert(
+                projection.namedObjectDictionary.m_entries.begin(), *rootEntry);
+        else
+            projection.namedObjectDictionary.m_entries.push_back(*rootEntry);
+        projection.xRecords.push_back(*record);
+        projection.m_standardDwgObjectFrames.emplace(*recordFrame);
+        if (recordOrdinal != source.m_standardDwgObjectOrdinals.end())
+            projection.m_standardDwgObjectOrdinals.emplace(*recordOrdinal);
+        projection.m_standardDwgObjectRetainedBytes +=
+            recordFrame->second.raw.m_rawBytes.size();
+        return projection.namedObjectDictionary.hasCompleteDwgEntries()
+            && projection.namedObjectDictionary.hasCompleteDxfEntries();
     }
 
     static bool selectPhysicalAc1021CellStyleMapGraph(
@@ -1780,6 +2001,9 @@ public:
         return found == data.m_standardDwgObjectFrames.end()
             ? nullptr : &found->second.raw;
     }
+    static std::size_t standardSourceFrameCount(const dx_data& data) {
+        return data.m_standardDwgObjectFrames.size();
+    }
     static std::size_t opaqueSourceFrameCount(const dx_data& data) {
         return data.m_opaqueDwgSourceFrames.size();
     }
@@ -1863,6 +2087,17 @@ public:
             std::uint64_t generation, std::uint32_t handle) {
         return data.m_opaqueDwgOutputQualifiedFrameIdentities.count(
             {generation, handle}) == 1u;
+    }
+    static std::uint32_t remapOutputHandle(
+            const dx_iface& iface, std::uint32_t sourceHandle) {
+        return iface.dxfW == nullptr ? 0u
+            : iface.dxfW->remapHandle(sourceHandle);
+    }
+    static bool tableStylesInspected(const dx_iface& iface) {
+        return iface.m_dwgTableStylesInspected;
+    }
+    static std::size_t tableStyleOutputSourceCount(const dx_iface& iface) {
+        return iface.m_dwgTableStyleOutputSources.size();
     }
     static std::size_t opaqueOutputQualificationCount(const dx_data& data) {
         return data.m_opaqueDwgOutputQualifiedFrameIdentities.size();
@@ -54602,29 +54837,31 @@ bool physicalAc1021NodDictionaryGraphOutputReadback(
     return true;
 }
 
-bool inspectAc1021PreviousProductInfoSource(
-        const std::filesystem::path& sourcePath) {
+bool inspectAc1021NodXRecordSourceProfile(
+        const std::filesystem::path& sourcePath,
+        const std::string& rootName,
+        std::uint32_t expectedHandle) {
     dx_iface reader;
     dx_data data;
     if (!reader.fileImport(sourcePath.string(), &data, false)
         || data.sourceVersion != DRW::AC1021
         || !data.hasNamedObjectDictionary)
-        return fail("AC1021 CIP source import failed");
+        return fail("AC1021 NOD XRECORD source import failed");
     std::vector<const DRW_Dictionary::Entry*> roots;
     for (const DRW_Dictionary::Entry& entry : data.namedObjectDictionary.m_entries)
-        if (entry.m_name == "ACAD_CIP_PREVIOUS_PRODUCT_INFO") roots.push_back(&entry);
-    if (roots.size() != 1u || roots.front()->m_handle != 534u)
-        return fail("AC1021 CIP NOD source edge changed");
+        if (entry.m_name == rootName) roots.push_back(&entry);
+    if (roots.size() != 1u || roots.front()->m_handle != expectedHandle)
+        return fail("AC1021 " + rootName + " NOD source edge changed");
     std::vector<const DRW_XRecord*> records;
     for (const DRW_XRecord& record : data.xRecords)
         if (record.handle == roots.front()->m_handle) records.push_back(&record);
     if (records.size() != 1u)
-        return fail("AC1021 CIP source XRECORD identity is ambiguous");
+        return fail("AC1021 " + rootName + " source XRECORD identity is ambiguous");
     const DRW_XRecord& record = *records.front();
     const DRW_UnsupportedObject* frame =
         DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
             data, data.importGeneration, record.handle);
-    std::cout << "AC1021 ACAD_CIP_PREVIOUS_PRODUCT_INFO handle=0x"
+    std::cout << "AC1021 " << rootName << " handle=0x"
               << std::hex << record.handle << std::dec
               << " owner=0x" << std::hex << record.parentHandle << std::dec
               << " cloning=" << record.m_cloning
@@ -54669,6 +54906,31 @@ bool inspectAc1021PreviousProductInfoSource(
     for (const auto& handleValue : record.m_handleValues)
         std::cout << " handleValue code=" << handleValue.first
                   << " target=" << handleValue.second << '\n';
+    for (std::size_t index = 0; index < record.m_values.size(); ++index) {
+        const DRW_Variant& value = record.m_values[index];
+        std::cout << " compatibilityValue[" << index << "] code=" << value.code()
+                  << " type=" << value.type();
+        if (value.type() == DRW_Variant::STRING)
+            std::cout << " string=" << value.c_str();
+        else if (value.type() == DRW_Variant::INTEGER)
+            std::cout << " integer=" << value.i_val();
+        else if (value.type() == DRW_Variant::INTEGER64)
+            std::cout << " integer64=" << value.i64_val();
+        else if (value.type() == DRW_Variant::DOUBLE)
+            std::cout << " double=" << std::setprecision(17) << value.d_val();
+        std::cout << '\n';
+    }
+    for (std::size_t index = 0; index < record.extData.size(); ++index) {
+        const DRW_Variant* value = record.extData[index];
+        if (value == nullptr) continue;
+        std::cout << " EED[" << index << "] code=" << value->code()
+                  << " type=" << value->type();
+        if (value->type() == DRW_Variant::STRING)
+            std::cout << " string=" << value->c_str();
+        else if (value->type() == DRW_Variant::DOUBLE)
+            std::cout << " double=" << std::setprecision(17) << value->d_val();
+        std::cout << '\n';
+    }
     return true;
 }
 
@@ -54858,6 +55120,323 @@ bool physicalAc1021PreviousProductInfoOutputReadback(
                   << "Physical AC1021 ACAD_CIP_PREVIOUS_PRODUCT_INFO "
                   << (binary ? "Binary" : "ASCII")
                   << " output/readback preserved the NOD edge and all three ordered strings; late reactor mutation preserved the destination and same-adapter retry succeeded.\n";
+    }
+    return true;
+}
+
+bool physicalAc1021RecomposeDataOutputReadback(
+        const std::filesystem::path& sourcePath) {
+    constexpr std::uint32_t recordHandle = 246776u;
+    constexpr std::uint32_t tableStyleHandle = 127u;
+    const std::string rootName = "ACDB_RECOMPOSE_DATA";
+    const auto uniqueRecord = [](const dx_data& data, std::uint32_t handle) {
+        const DRW_XRecord* result = nullptr;
+        for (const DRW_XRecord& record : data.xRecords) {
+            if (record.handle != handle) continue;
+            if (result != nullptr) return static_cast<const DRW_XRecord*>(nullptr);
+            result = &record;
+        }
+        return result;
+    };
+    const auto uniqueTableStyle = [](const dx_data& data, std::uint32_t handle) {
+        const DRW_TableStyle* result = nullptr;
+        for (const DRW_TableStyle& style : data.tableStyles) {
+            if (style.handle != handle) continue;
+            if (result != nullptr) return static_cast<const DRW_TableStyle*>(nullptr);
+            result = &style;
+        }
+        return result;
+    };
+    for (const bool binary : {false, true}) {
+        dx_iface sourceReader;
+        dx_data source;
+        if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+            || source.sourceVersion != DRW::AC1021
+            || !source.hasNamedObjectDictionary)
+            return fail("AC1021 recompose-data source import failed");
+        const auto root = std::find_if(
+            source.namedObjectDictionary.m_entries.begin(),
+            source.namedObjectDictionary.m_entries.end(),
+            [&rootName](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == rootName;
+            });
+        const DRW_XRecord* record = uniqueRecord(source, recordHandle);
+        const DRW_TableStyle* tableStyle = uniqueTableStyle(source, tableStyleHandle);
+        const DRW_UnsupportedObject* sourceFrame =
+            DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+                source, source.importGeneration, recordHandle);
+        const DRW_UnsupportedObject* tableStyleFrame =
+            DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+                source, source.importGeneration, tableStyleHandle);
+        if (root == source.namedObjectDictionary.m_entries.end()
+            || root->m_handle != recordHandle
+            || std::count_if(
+                source.namedObjectDictionary.m_entries.begin(),
+                source.namedObjectDictionary.m_entries.end(),
+                [&rootName](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == rootName;
+                }) != 1
+            || record == nullptr || record->handle != recordHandle
+            || record->parentHandle != source.namedObjectDictionary.handle
+            || record->reactorHandles
+                != std::vector<std::uint32_t>{source.namedObjectDictionary.handle}
+            || record->m_cloning != 1
+            || record->m_values.size() != 1u
+            || record->m_values.front().code() != 90
+            || record->m_values.front().type() != DRW_Variant::INTEGER
+            || record->m_values.front().i_val() != 1
+            || record->m_dataEntries.size() != 2u
+            || record->m_dataEntries[0].code() != 90
+            || record->m_dataEntries[0].type() != DRW_Variant::INTEGER
+            || record->m_dataEntries[0].i_val() != 1
+            || record->m_dataEntries[1].code() != 330
+            || record->m_dataEntries[1].type() != DRW_Variant::INTEGER64
+            || record->m_dataEntries[1].i64_val() != tableStyleHandle
+            || record->m_handleValues
+                != std::vector<std::pair<int, std::uint32_t>>{{330, tableStyleHandle}}
+            || !record->m_rawData.empty() || record->m_rawDataValid
+            || record->xDictHandle != 0u || !record->appData.empty()
+            || !record->extData.empty() || record->hasDataStorageBinaryData()
+            || !record->hasDwgCommonLinkTail()
+            || tableStyle == nullptr || tableStyle->m_name != "Standard"
+            || sourceFrame == nullptr || sourceFrame->m_objectType != 79u
+            || sourceFrame->m_version != DRW::AC1021
+            || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                source, recordHandle)
+            || tableStyleFrame == nullptr || tableStyleFrame->m_objectType != 504u)
+            return fail("AC1021 recompose-data record/target profile changed");
+        dx_data projection;
+        const bool projectionSelected =
+            DxIfaceStandardDwgCaptureTestAccess::
+                selectPhysicalAc1021RecomposeDataGraph(source, projection);
+        if (!projectionSelected) {
+            std::cerr << "AC1021 recompose-data projection selection failed: tableStyles="
+                      << source.tableStyles.size() << " cellStyleMaps="
+                      << source.cellStyleMaps.size() << " xRecords="
+                      << source.xRecords.size() << " projectionDictionaries="
+                      << projection.dictionaries.size() << '\n';
+            return fail("AC1021 recompose-data source projection is not closed");
+        }
+        if (projection.xRecords.size() != 1u
+            || projection.tableStyles.size() != 1u
+            || DxIfaceStandardDwgCaptureTestAccess::
+                standardSourceFrameCount(projection) != 5u
+            || projection.cellStyleMaps.size() != 1u
+            || projection.namedObjectDictionary.m_entries.size() != 2u) {
+            std::cerr << "AC1021 recompose-data projection counts xrecords="
+                      << projection.xRecords.size() << " tableStyles="
+                      << projection.tableStyles.size() << " standardFrames="
+                      << DxIfaceStandardDwgCaptureTestAccess::
+                             standardSourceFrameCount(projection)
+                      << " cellStyleMaps=" << projection.cellStyleMaps.size()
+                      << " NODEntries="
+                      << projection.namedObjectDictionary.m_entries.size()
+                      << '\n';
+            return fail("AC1021 recompose-data source projection is not closed");
+        }
+
+        struct Writer final : dx_iface {
+            bool mutateAfterObjects{false};
+            void writeObjects() override {
+                dx_iface::writeObjects();
+                if (!mutateAfterObjects || cData == nullptr) return;
+                for (DRW_XRecord& item : cData->xRecords)
+                    if (item.handle == 246776u) {
+                        item.reactorHandles.clear();
+                        return;
+                    }
+            }
+        } writer;
+        writer.cData = &projection;
+        const auto nonce = std::chrono::steady_clock::now()
+                               .time_since_epoch().count();
+        const std::filesystem::path outputPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-recompose-data-ac1021-" + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{outputPath};
+        const std::string sentinel = "AC1021 recompose-data sentinel\n";
+        const auto seedDestination = [&]() {
+            std::ofstream output(outputPath, std::ios::binary | std::ios::trunc);
+            return output && static_cast<bool>(output << sentinel);
+        };
+        const auto destinationIsSentinel = [&]() {
+            std::ifstream input(outputPath, std::ios::binary);
+            const std::string actual{
+                std::istreambuf_iterator<char>(input), {}};
+            return actual == sentinel;
+        };
+        const auto write = [&]() {
+            return writer.fileExport(
+                outputPath.string(), DRW::AC1021, binary, &projection,
+                false, false, dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::AllowPartial);
+        };
+        if (!seedDestination())
+            return fail("could not seed AC1021 recompose-data sentinel");
+        writer.mutateAfterObjects = true;
+        if (write() || !destinationIsSentinel())
+            return fail("late AC1021 recompose-data mutation published output");
+        DRW_XRecord* mutableRecord = nullptr;
+        for (DRW_XRecord& item : projection.xRecords)
+            if (item.handle == recordHandle) mutableRecord = &item;
+        if (mutableRecord == nullptr || !mutableRecord->reactorHandles.empty()) {
+            std::cerr << "AC1021 recompose-data mutation hook did not reach OBJECTS; detail="
+                      << writer.extensionGraphFailureDetail() << '\n';
+            return fail("late AC1021 recompose-data mutation did not run");
+        }
+        mutableRecord->reactorHandles = {projection.namedObjectDictionary.handle};
+        writer.mutateAfterObjects = false;
+        if (!write())
+            return fail("restored AC1021 recompose-data graph did not retry on same adapter");
+
+        dx_iface outputReader;
+        dx_data output;
+        if (!outputReader.fileImport(outputPath.string(), &output, false)
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1021
+            || !output.hasNamedObjectDictionary)
+            return fail("AC1021 recompose-data output readback import failed");
+        const auto outputRoot = std::find_if(
+            output.namedObjectDictionary.m_entries.begin(),
+            output.namedObjectDictionary.m_entries.end(),
+            [&rootName](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == rootName;
+            });
+        const DRW_XRecord* outputRecord = outputRoot
+                == output.namedObjectDictionary.m_entries.end()
+            ? nullptr : uniqueRecord(output, outputRoot->m_handle);
+        if (std::count_if(
+                output.namedObjectDictionary.m_entries.begin(),
+                output.namedObjectDictionary.m_entries.end(),
+                [&rootName](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == rootName;
+                }) != 1
+            || outputRoot == output.namedObjectDictionary.m_entries.end()
+            || outputRoot->m_dxfHandleCode
+                != DRW_Dictionary::Entry::DxfHandleCode::SoftOwner
+            || outputRecord == nullptr
+            || outputRecord->parentHandle != output.namedObjectDictionary.handle
+            || outputRecord->reactorHandles
+                != std::vector<std::uint32_t>{output.namedObjectDictionary.handle}
+            || outputRecord->m_values.size() != 1u
+            || outputRecord->m_values.front().code() != 90
+            || outputRecord->m_values.front().type() != DRW_Variant::INTEGER
+            || outputRecord->m_values.front().i_val() != 1
+            || outputRecord->m_dataEntries.size() != 2u
+            || outputRecord->m_dataEntries[0].code() != 90
+            || outputRecord->m_dataEntries[0].i_val() != 1
+            || outputRecord->m_dataEntries[1].code() != 330
+            || outputRecord->m_dataEntries[1].type() != DRW_Variant::INTEGER64
+            || outputRecord->m_handleValues.size() != 1u
+            || outputRecord->m_handleValues.front().first != 330)
+            return fail("AC1021 recompose-data readback changed root or ordered handle payload");
+        const std::uint32_t outputTableStyleHandle =
+            outputRecord->m_handleValues.front().second;
+        const DRW_TableStyle* outputTableStyle =
+            uniqueTableStyle(output, outputTableStyleHandle);
+        if (outputRecord->m_dataEntries[1].i64_val()
+                != outputTableStyleHandle
+            || outputTableStyle == nullptr
+            || outputTableStyle->m_name != "Standard")
+            return fail("AC1021 recompose-data code-330 target no longer resolves to Standard TABLESTYLE");
+        const DRW_Dictionary* styleOwner = nullptr;
+        std::size_t styleOwnerMatches = 0u;
+        for (const DRW_Dictionary& dictionary : output.dictionaries) {
+            if (dictionary.handle != outputTableStyle->parentHandle)
+                continue;
+            styleOwner = &dictionary;
+            ++styleOwnerMatches;
+        }
+        if (styleOwnerMatches != 1u || styleOwner == nullptr
+            || styleOwner->parentHandle != output.namedObjectDictionary.handle
+            || styleOwner->m_entries.size() != 1u
+            || styleOwner->m_entries.front().m_name != "Standard"
+            || styleOwner->m_entries.front().m_handle
+                != outputTableStyle->handle
+            || std::count_if(
+                output.namedObjectDictionary.m_entries.begin(),
+                output.namedObjectDictionary.m_entries.end(),
+                [styleOwner](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ACAD_TABLESTYLE"
+                        && entry.m_handle == styleOwner->handle;
+                }) != 1)
+            return fail("AC1021 recompose-data readback lost NOD/TABLESTYLE owner edges");
+        const DRW_Dictionary* styleExtension = nullptr;
+        std::size_t styleExtensionMatches = 0u;
+        for (const DRW_Dictionary& dictionary : output.dictionaries) {
+            if (dictionary.handle != outputTableStyle->xDictHandle)
+                continue;
+            styleExtension = &dictionary;
+            ++styleExtensionMatches;
+        }
+        const DRW_CellStyleMap* outputCellMap = nullptr;
+        if (styleExtensionMatches == 1u && styleExtension != nullptr
+            && styleExtension->parentHandle == outputTableStyle->handle
+            && styleExtension->m_entries.size() == 1u
+            && styleExtension->m_entries.front().m_name
+                == "ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP") {
+            for (const DRW_CellStyleMap& candidate : output.cellStyleMaps) {
+                if (candidate.handle != styleExtension->m_entries.front().m_handle)
+                    continue;
+                if (outputCellMap != nullptr) {
+                    outputCellMap = nullptr;
+                    break;
+                }
+                outputCellMap = &candidate;
+            }
+        }
+        if (outputCellMap == nullptr
+            || outputCellMap->parentHandle != styleExtension->handle
+            || outputCellMap->reactorHandles
+                != std::vector<std::uint32_t>{styleExtension->handle}
+            || outputCellMap->m_cellStyles.size() != 3u)
+            return fail("AC1021 recompose-data TABLESTYLE extension/CELLSTYLEMAP graph did not read back closed");
+        for (const DRW_Layer& sourceLayer : projection.layers) {
+            if (sourceLayer.xDictHandle == 0u)
+                continue;
+            const DRW_Layer* outputLayer = nullptr;
+            std::size_t outputLayerMatches = 0u;
+            for (const DRW_Layer& candidate : output.layers) {
+                if (candidate.name != sourceLayer.name)
+                    continue;
+                outputLayer = &candidate;
+                ++outputLayerMatches;
+            }
+            const DRW_Dictionary* outputLayerExtension = nullptr;
+            std::size_t outputLayerExtensionMatches = 0u;
+            if (outputLayer != nullptr) {
+                for (const DRW_Dictionary& candidate : output.dictionaries) {
+                    if (candidate.handle != outputLayer->xDictHandle)
+                        continue;
+                    outputLayerExtension = &candidate;
+                    ++outputLayerExtensionMatches;
+                }
+            }
+            if (outputLayerMatches != 1u || outputLayer == nullptr
+                || outputLayerExtensionMatches != 1u
+                || outputLayerExtension == nullptr
+                || outputLayerExtension->parentHandle != outputLayer->handle
+                || !outputLayerExtension->m_entries.empty())
+                return fail("AC1021 recompose-data layer extension DICTIONARY did not read back closed");
+        }
+        std::cout << "AC1021 ACDB_RECOMPOSE_DATA source frame handle=0x"
+                  << std::hex << recordHandle << std::dec
+                  << " offset=" << sourceFrame->m_objectOffset
+                  << " size=" << sourceFrame->m_objectSize
+                  << " sourceHandleCode=330 target=TABLESTYLE:Standard outputTarget=0x"
+                  << std::hex << outputTableStyleHandle << std::dec << ".\n"
+                  << "Physical AC1021 ACDB_RECOMPOSE_DATA "
+                  << (binary ? "Binary" : "ASCII")
+                  << " output/readback preserved its scalar and TABLESTYLE handle reference; late reactor mutation preserved the destination and same-adapter retry succeeded.\n";
     }
     return true;
 }
@@ -80285,10 +80864,18 @@ int main(int argc, char** argv) {
             "ASEBlockHierarchyIndexRecord", 242633u, "DCO15") ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--ac1021-cip-source-profile")
-        return inspectAc1021PreviousProductInfoSource(argv[2]) ? 0 : 1;
+        return inspectAc1021NodXRecordSourceProfile(
+            argv[2], "ACAD_CIP_PREVIOUS_PRODUCT_INFO", 534u) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--ac1021-cip-physical-output-readback")
         return physicalAc1021PreviousProductInfoOutputReadback(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--ac1021-recompose-data-source-profile")
+        return inspectAc1021NodXRecordSourceProfile(
+            argv[2], "ACDB_RECOMPOSE_DATA", 246776u) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--ac1021-recompose-data-physical-output-readback")
+        return physicalAc1021RecomposeDataOutputReadback(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--layerstates-xrecord-physical-source-admission")
         return physicalLayerStateXrecordSourceAdmission(argv[2]) ? 0 : 1;

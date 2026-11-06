@@ -60,19 +60,7 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P4 / AC1021 `ACDB_RECOMPOSE_DATA` XRECORD:** screen the direct NOD target
-   handle `246776` (owner NOD `0xC`); inventory reports one typed value but two
-   ordered data-block entries and one reactor. Resolve that value/data-entry
-   mismatch and identify any handle-valued pair, common-link tail, EED or APPID
-   dependency from the exact source record before attempting output. Require a
-   unique eligible source frame and fresh ASCII/Binary readback of the NOD edge,
-   ordered typed/raw body and all references; late mutation must preserve the
-   destination and the same adapter must retry after restoration. If the body
-   is not fully modeled, keep it refused and select another candidate. Keep
-   strict whole-source output and support claims unchanged. The inventory
-   selector prints DICTIONARY/XRECORD contents, NOD key/target counts and GROUP
-   callback count for reproducibility.
-2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
+1. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
    links and source frame offsets are captured. The enclosing FIELDLIST has
@@ -86,7 +74,7 @@ created locally from scratch for the specific control.
    remain excluded. Reopen this candidate only with a source/profile that
    supplies full membership and a consumer-visible root relation; see the
    [source-graph screen receipt](docs/research/p5-ac1021-acexpr-root-graph-output-readiness-2026-11-06.json).
-3. **P6 / converter-dependent suffix:** the 2026-11-06 ODA File Converter
+2. **P6 / converter-dependent suffix:** the 2026-11-06 ODA File Converter
    27.1.0 retry after the reported session unlock again aborted during
    pasteboard/XPC initialization (exit 134) and produced no output. No suffix
    evidence or support claim follows. Keep the AC1027 suffix unclaimed and
@@ -164,9 +152,17 @@ the distinct DBCOLOR source/output evidence gate. The 1,673 observed frames have
 zero entity/object parse failures, and no DXF is created. The 186 observer frames
 are 74 opaque carriers plus 112 standard-object frames; all 112 standard payloads
 match typed callbacks. Bounded selected-graph routes now qualify all 74 opaque
-carriers and 89 standard-object frames, with physical ASCII/Binary readback and
-applicable atomic refusal/retry. The remaining 23 standard-object frames are
-unqualified. The same-version whole-source
+carriers and 90 standard-object frames, with physical ASCII/Binary readback and
+applicable atomic refusal/retry. The physical AC1021 direct-NOD
+`ACDB_RECOMPOSE_DATA` XRECORD now qualifies its source frame (handle `0x3C3F8`,
+offset 7794, size 34), scalar group 90, ordered group-330 handle to
+`TABLESTYLE:Standard`, NOD ownership/reactor, and the closed TABLESTYLE to
+CELLSTYLEMAP graph. Selected ASCII/Binary output readback verifies remapped
+references and layer extension-dictionary ownership; late reactor mutation
+preserves the destination, and the same adapter succeeds after restoration
+([receipt](docs/research/p4-ac1021-recompose-data-physical-selected-output-2026-11-06.json)).
+This is one local source/profile only and does not promote DWG support claims.
+The remaining 22 standard-object frames are unqualified. The same-version whole-source
 recheck still stops at independent DBCOLOR and other document-wide gates. See
 the [same-version gate
 recheck](docs/research/p4-ac1021-children-room-same-version-output-gate-2026-11-05.json),

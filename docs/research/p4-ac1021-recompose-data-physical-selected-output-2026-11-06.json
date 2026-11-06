@@ -1,0 +1,93 @@
+{
+  "schema": "libdxfrw.research-receipt.v1",
+  "id": "p4-ac1021-recompose-data-physical-selected-output-2026-11-06",
+  "date": "2026-11-06",
+  "status": "PASS_BOUNDED_PHYSICAL_SOURCE_OUTPUT_READBACK",
+  "supportClaimEffect": "none",
+  "question": "Can the physical AC1021 direct-NOD ACDB_RECOMPOSE_DATA XRECORD and its TABLESTYLE target graph be written as selected ASCII/Binary DXF with exact readback, atomic mutation refusal and same-adapter retry?",
+  "source": {
+    "path": "/Users/dli/doc/dwg/children-room-decoration.dwg",
+    "sha256": "cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce",
+    "version": "AC1021",
+    "producerProvenance": "Existing local source; author and producer are not independently authenticated. No drawing fixture or derivative is committed."
+  },
+  "sourceGraph": {
+    "namedObjectDictionary": {
+      "handle": "0xC",
+      "cloning": 1
+    },
+    "root": {
+      "key": "ACDB_RECOMPOSE_DATA",
+      "targetHandle": "0x3C3F8",
+      "occurrences": 1,
+      "ownerHandle": "0xC",
+      "reactorHandles": ["0xC"],
+      "outputDxfHandleRole": "soft-owner"
+    },
+    "xrecord": {
+      "type": "XRECORD (standard object type 79)",
+      "handle": "0x3C3F8",
+      "frameOffset": 7794,
+      "frameSize": 34,
+      "cloning": 1,
+      "dataEntries": [
+        {"code": 90, "type": "integer", "value": 1},
+        {"code": 330, "type": "handle", "target": "TABLESTYLE:Standard (0x7F)"}
+      ],
+      "compatibilityValues": [
+        {"code": 90, "type": "integer", "value": 1}
+      ],
+      "handleValues": 1,
+      "rawDataValid": false,
+      "rawDataBytes": 0,
+      "extensionDictionary": "0x0",
+      "appData": 0,
+      "extData": 0,
+      "commonLinkTailValidated": true,
+      "typedPayloadMatched": true,
+      "standardSourceEligible": true
+    },
+    "tableStyleDependency": {
+      "handle": "0x7F",
+      "name": "Standard",
+      "ownerDictionary": "0x7E",
+      "namedObjectKey": "ACAD_TABLESTYLE",
+      "extensionDictionary": "0x162",
+      "cellStyleMapKey": "ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP",
+      "cellStyleMapHandle": "0x3C3F7",
+      "cellStyleCount": 3
+    },
+    "layerExtensionDependencies": [
+      {"dictionaryHandle": "0x13C", "sourceOwnerHandle": "0x10", "entryCount": 0},
+      {"dictionaryHandle": "0x3B3D4", "sourceOwnerHandle": "0x3B3D3", "entryCount": 0}
+    ]
+  },
+  "implementation": {
+    "files": ["tests/dwg2dxf_adapter_tests.cpp"],
+    "change": "Added a physical-source profile selector and a selected graph projection that combines ACDB_RECOMPOSE_DATA with the source-witnessed TABLESTYLE/CELLSTYLEMAP graph and empty layer extension dictionaries. No production writer change was required."
+  },
+  "validation": {
+    "build": {
+      "command": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4",
+      "result": "PASS"
+    },
+    "sourceProfileCommand": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --ac1021-recompose-data-source-profile /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "sourceProfileLogPath": "/private/tmp/p4-ac1021-recompose-data-source-profile-2026-11-06.log",
+    "sourceProfileLogSha256": "4ada403f23ba0e9ff3ebdb932653900bbd39d43a635b604aac7c2d283c8fb11c",
+    "selector": "--ac1021-recompose-data-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --ac1021-recompose-data-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "result": "PASS for ASCII and Binary selected output and fresh typed readback. The NOD root and XRECORD owner/reactor are retained; ordered group 90 and group 330 values resolve to the remapped Standard TABLESTYLE. Readback also verifies the TABLESTYLE owner and CELLSTYLEMAP extension graph plus both layer extension-dictionary ownership edges. Late reactor mutation fails without replacing the destination sentinel; restoration permits same-adapter retry.",
+    "outputPolicy": "AllowPartial; unresolved-owner strictness disabled. This does not qualify strict whole-source output.",
+    "logPath": "/private/tmp/p4-ac1021-recompose-data-physical-output-2026-11-06.log",
+    "logSha256": "22349f70adf23c1f2e4fa72c87690f71445e46bf8efdb009ae44fb9c7d64ae70",
+    "testSourceSha256": "e2c30e2dcd035f18ce96892de3c22c798652b69cedc1b301c5274b64e4df6b3b",
+    "executableSha256": "4829f48b8ab6e13ba564102505e1d922d22ea08719dff7cd143a51a6abda1fbf"
+  },
+  "limits": [
+    "One unauthenticated local source/profile is covered; this does not establish native TABLESTYLE/CELLSTYLEMAP semantics or producer-wide support.",
+    "The group-330 reference is verified in decoded source/output data; this does not independently establish the original DWG wire handle-role encoding.",
+    "Only the selected graph is emitted. Strict whole-source output, independent encoder roundtrip and native application acceptance remain open.",
+    "The DWG source and generated DXF outputs are not committed as fixtures."
+  ],
+  "nextAction": "Screen the next bounded AC1021 standard-object frame for exact source role, typed body, reference dependencies and a unique selected-output route."
+}

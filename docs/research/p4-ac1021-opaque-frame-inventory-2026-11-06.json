@@ -62,9 +62,9 @@
       },
       "typedPayloadMatches": 112,
       "opaquePayloadMatches": 0,
-      "outputQualified": 89
+      "outputQualified": 90
     },
-    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify all 74 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, one CELLSTYLEMAP, one RASTERVARIABLES, and one SORTENTSTABLE. They qualify 89 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining 23 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify all 74 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, one CELLSTYLEMAP, one RASTERVARIABLES, and one SORTENTSTABLE. They qualify 90 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining 22 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -141,14 +141,23 @@
     "logPath": "/private/tmp/dictionaryvar-ac1021-result.log",
     "logSha256": "6f2677a485d923381e47c429cd8bb7836818856ae5f11670d875013ac2f060af"
   },
+  "recomposeDataCandidateBoundary": {
+    "record": "ACDB_RECOMPOSE_DATA XRECORD",
+    "handle": "0x3C3F8",
+    "root": "NOD/ACDB_RECOMPOSE_DATA",
+    "sourceProfile": "The unique standard type-79 frame is at offset 7794, size 34. The body contains scalar group 90 = 1 and one group-330 handle pair to TABLESTYLE:Standard handle 0x7F; owner and reactor are NOD 0xC, cloning is 1, common-link tail is validated, and no EED, extension dictionary, or raw XRECORD payload is present. The compatibility values view omits the separately modeled handle value.",
+    "result": "PASS for bounded selected AC1021 ASCII/Binary output and fresh typed readback. The selected graph contains the NOD root, XRECORD, Standard TABLESTYLE, its extension DICTIONARY/CELLSTYLEMAP graph, and the source layer extension dictionaries. Readback verifies ordered values, mapped target, ownership and reactor links; late-mutation refusal preserves the destination and same-adapter retry succeeds.",
+    "receipt": "docs/research/p4-ac1021-recompose-data-physical-selected-output-2026-11-06.json",
+    "limit": "One unauthenticated local source profile. This does not qualify strict whole-source output, native semantics, independent DWG edge-role encoding or producer-wide support."
+  },
   "diagnostic": {
     "testSource": "tests/dwg2dxf_adapter_tests.cpp",
-    "testSourceSha256": "1bcc010400e45328a3d7e258c2d2fde194e6ed0df321f739c1477c63e85459e8",
+    "testSourceSha256": "e2c30e2dcd035f18ce96892de3c22c798652b69cedc1b301c5274b64e4df6b3b",
     "executable": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests",
-    "executableSha256": "a46e5f7033dc41424fd39b04f6283a8cfeb6fe6d2bdfc160f386a243f8668bd7",
+    "executableSha256": "4829f48b8ab6e13ba564102505e1d922d22ea08719dff7cd143a51a6abda1fbf",
     "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/children-room-decoration.dwg",
     "result": "PASS; prints per-handle source type, class and carrier records for all 74 opaque carrier records and all 112 standard-object source frames, including DICTIONARY/XRECORD payloads, ordered key/target edges, NOD root keys and target handles, and GROUP callback count.",
-    "logPath": "/private/tmp/p4-ac1021-opaque-inventory-post-cip-2026-11-06.log",
+    "logPath": "/private/tmp/p4-ac1021-opaque-inventory-post-recompose-2026-11-06.log",
     "logSha256": "26568efae6219f75419ee2f31bcea322f9245e33631a8a3eb59debf38d4f8499"
   },
   "limits": [
@@ -156,7 +165,7 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Screen ACDB_RECOMPOSE_DATA XRECORD handle 246776: reconcile one typed value with two ordered data-block entries and determine the referenced handle's role/target before deciding whether selected output is closed. Continue qualifying the 23 remaining standard-object frames; keep whole-source output, native semantics, producer-wide coverage, populated GROUP and image graphs, and named-block SORTENTSTABLE profiles open.",
+  "nextAction": "Screen the next bounded standard-object frame candidate for source role, exact typed body and graph dependencies before attempting selected output. Continue qualifying the 22 remaining standard-object frames; keep whole-source output, native semantics, producer-wide coverage, populated GROUP and image graphs, and named-block SORTENTSTABLE profiles open.",
   "sortEntsCandidateBoundary": {
     "record": "SORTENTSTABLE",
     "handle": "0x2DF",
