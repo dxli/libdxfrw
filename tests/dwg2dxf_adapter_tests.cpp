@@ -17598,6 +17598,44 @@ bool materialAc1024TypedGraphOutput() {
             extensionDictionary.hardOwner = 1;
             data.dictionaries.push_back(extensionDictionary);
         }
+        // The export below explicitly opts into bounded partial-read mode.
+        // Supply the required source-matched LTYPE_CONTROL receipt and its
+        // three mandatory table rows so the test reaches MATERIAL behavior
+        // instead of failing the unrelated completeness gate.
+        dx_iface sourceCapture;
+        sourceCapture.cData = &data;
+        DRW_DwgFramePublication ltypeControl;
+        ltypeControl.m_version = DRW::AC1024;
+        ltypeControl.m_handle = 0x401u;
+        ltypeControl.m_sourceOffset = 0x120u;
+        ltypeControl.m_sourceMapOrdinal = 1u;
+        ltypeControl.m_sourceOffsetSpace =
+            DRW_DwgFrameOffsetSpace::PhysicalFile;
+        ltypeControl.m_hasSourceLocation = true;
+        ltypeControl.m_encodedType = DRW::DwgLTypeControlObjectType;
+        ltypeControl.m_resolvedType = DRW::DwgLTypeControlObjectType;
+        ltypeControl.m_recordName = "LTYPE_CONTROL";
+        ltypeControl.m_commonLinkEvidence =
+            DRW_DwgCommonLinkEvidence::NotApplicable;
+        ltypeControl.m_carrier = DRW_DwgFramePublication::Carrier::Control;
+        ltypeControl.m_controlHandles = {
+            DRW::DwgLtypeContinuousHandle,
+            0x402u,
+            DRW::DwgLtypeByBlockHandle,
+            DRW::DwgLtypeByLayerHandle};
+        sourceCapture.addDwgFramePublication(ltypeControl);
+        for (const auto& row : {
+                 std::pair<std::uint32_t, const char*>{
+                     DRW::DwgLtypeContinuousHandle, "Continuous"},
+                 {DRW::DwgLtypeByBlockHandle, "ByBlock"},
+                 {DRW::DwgLtypeByLayerHandle, "ByLayer"},
+                 {0x402u, "MATERIAL_TEST"}}) {
+            DRW_LType lineType;
+            lineType.handle = row.first;
+            lineType.parentHandle = ltypeControl.m_handle;
+            lineType.name = row.second;
+            sourceCapture.addLType(lineType);
+        }
         data.materials.push_back(static_cast<const DRW_Material&>(parsed));
         return true;
     };
