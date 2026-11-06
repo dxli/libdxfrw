@@ -1,0 +1,95 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "title": "AC1021 children-room strict-output callback gaps",
+  "date": "2026-11-06",
+  "supportClaimEffect": "none",
+  "scope": "Identify the exact callback identities preventing one existing AC1021 source from completing strict whole-source DXF output, and map the gaps to existing bounded physical-source evidence.",
+  "source": {
+    "path": "/Users/dli/doc/dwg/children-room-decoration.dwg",
+    "sha256": "cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce",
+    "version": "AC1021",
+    "provenanceLimit": "Existing local input; author and producer are unauthenticated. No source drawing or derivative is committed."
+  },
+  "validation": {
+    "command": "build/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/children-room-decoration.dwg -y -d -v2007 /private/tmp/libdxfrw-children-room-strict-debug.dxf",
+    "result": "FAIL CLOSED, exit 1. Finalization reports 179/186 opaque callbacks qualified, writes no destination DXF, and debug output enumerates all seven missing handles below.",
+    "debugLog": {
+      "path": "/private/tmp/libdxfrw-children-room-strict-debug.log",
+      "sha256": "157a05c5dbae74b11665129b71b92911d5a8b4a5da8ba1a4f9a537af10b4b8a6"
+    }
+  },
+  "unqualifiedCallbacks": [
+    {
+      "handle": "0x7F",
+      "type": 504,
+      "record": "TABLESTYLE",
+      "class": "AcDbTableStyle",
+      "existingEvidence": "docs/research/p4-ac1021-children-room-tablestyle-cellstylemap-selected-output-2026-11-06.json",
+      "nextProof": "Carry the exact TABLESTYLE source/field profile through strict staged-object inspection together with NOD, owner DICTIONARY, extension DICTIONARY and CELLSTYLEMAP 0x3C3F7; only then register these callback identities."
+    },
+    {
+      "handle": "0x12E",
+      "type": 508,
+      "record": "MLEADERSTYLE",
+      "class": "AcDbMLeaderStyle",
+      "existingEvidence": "docs/research/p4-ac1021-mleaderstyle-eed-selected-output-2026-11-06.json",
+      "nextProof": "After the TABLESTYLE slice, connect the source-bound MLEADERSTYLE field/EED and APPID proof to strict staged output inspection and full-file readback."
+    },
+    {
+      "handle": "0x21A",
+      "type": 515,
+      "record": "ACDBSECTIONVIEWSTYLE",
+      "class": "AcDbSectionViewStyle",
+      "existingEvidence": "docs/research/p4-ac1021-modeldoc-view-style-physical-source-profile-2026-11-06.json",
+      "nextProof": "Bind the typed callback and extension dictionary/XRECORD graph to strict staged bytes and the NOD dictionary key."
+    },
+    {
+      "handle": "0x18081",
+      "type": 515,
+      "record": "ACDBSECTIONVIEWSTYLE",
+      "class": "AcDbSectionViewStyle",
+      "existingEvidence": "docs/research/p4-ac1021-modeldoc-view-style-physical-source-profile-2026-11-06.json",
+      "nextProof": "Bind the typed callback and extension dictionary/XRECORD graph to strict staged bytes and the NOD dictionary key."
+    },
+    {
+      "handle": "0x21C",
+      "type": 516,
+      "record": "ACDBDETAILVIEWSTYLE",
+      "class": "AcDbDetailViewStyle",
+      "existingEvidence": "docs/research/p4-ac1021-modeldoc-view-style-physical-source-profile-2026-11-06.json",
+      "nextProof": "Bind the typed callback and extension dictionary/XRECORD graph to strict staged bytes and the NOD dictionary key."
+    },
+    {
+      "handle": "0x18082",
+      "type": 516,
+      "record": "ACDBDETAILVIEWSTYLE",
+      "class": "AcDbDetailViewStyle",
+      "existingEvidence": "docs/research/p4-ac1021-modeldoc-view-style-physical-source-profile-2026-11-06.json",
+      "nextProof": "Bind the typed callback and extension dictionary/XRECORD graph to strict staged bytes and the NOD dictionary key."
+    },
+    {
+      "handle": "0x3C3F7",
+      "type": 509,
+      "record": "CELLSTYLEMAP",
+      "class": "AcDbCellStyleMap",
+      "existingEvidence": "docs/research/p4-ac1021-children-room-tablestyle-cellstylemap-selected-output-2026-11-06.json",
+      "nextProof": "Prove the typed source map, style/dictionary owner relation, exact staged CELLSTYLEMAP identity, text-style and border-linetype targets, and readback in the same strict output profile as TABLESTYLE 0x7F."
+    }
+  ],
+  "nextSlice": {
+    "name": "AC1021 children-room TABLESTYLE/CELLSTYLEMAP strict proof",
+    "reason": "A source-specific selected-output receipt already proves this rooted graph and dependency set. It is the smallest existing graph among the seven remaining identities that can be advanced without broadening the source profile.",
+    "acceptance": [
+      "Exact frozen source identity/fields and NOD-to-owner-DICTIONARY-to-TABLESTYLE graph.",
+      "Exact extension DICTIONARY-to-CELLSTYLEMAP entry, reciprocal owner/reactor roles, text STYLE and border LTYPE dependencies.",
+      "Staged ASCII and Binary output inspection before identity qualification.",
+      "Fresh selected readback, invalid-target destination preservation and same-adapter retry.",
+      "Strict whole-source attempt either advances past these handles or reports a new exact gap; no support claim is promoted."
+    ]
+  },
+  "limits": [
+    "An unqualified callback count identifies missing output proof, not necessarily missing serialized bytes.",
+    "The selected graph receipts do not prove a combined strict whole-source output.",
+    "No native consumer, producer-wide, cross-version, or support claim is established."
+  ]
+}

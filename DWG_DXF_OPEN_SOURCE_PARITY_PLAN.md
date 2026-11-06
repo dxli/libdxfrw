@@ -61,16 +61,21 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P4 / AC1021 `children-room-decoration.dwg` strict-output gap:** its exact
-   VIEWPORT selected-output route remains bounded and passes; current strict
-   whole-source conversion stops at finalization with `179/186` opaque
-   callbacks qualified. First enumerate the seven unqualified callback
-   identities and their failed output-proof reason from the current source
-   import, then classify each against existing source receipts and graph
-   dependencies. Implement the first dependency-closed, source-evidenced
-   output slice; do not widen qualification from callback count alone. Keep
-   refusal atomic until the exact full source reaches fresh readback. Source
-   SHA-256 is
+1. **P4 / AC1021 `children-room-decoration.dwg` strict-output gap:** current
+   strict whole-source conversion stops at finalization with `179/186` opaque
+   callbacks qualified. The seven missing identities are TABLESTYLE `0x7F`,
+   MLEADERSTYLE `0x12E`, SECTIONVIEWSTYLE `0x21A` and `0x18081`,
+   DETAILVIEWSTYLE `0x21C` and `0x18082`, and CELLSTYLEMAP `0x3C3F7`. Existing
+   source-bound selected-output receipts cover these physical profiles, but
+   strict conversion has not yet closed their combined emitted graph and
+   registered its source identities. First extend the existing rooted
+   TABLESTYLE proof to this source and prove its extension-dictionary
+   CELLSTYLEMAP in the same staged output transaction; preserve atomic refusal
+   and fresh readback. Then address the MLEADERSTYLE and two view-style pairs
+   in separate dependency-closed slices. Do not widen qualification from
+   callback count alone. The strict debug report and source/receipt mapping
+   are recorded in the [gap receipt](docs/research/p4-ac1021-children-room-strict-output-gaps-2026-11-06.json).
+   Source SHA-256 is
    `cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce`; do
    not commit a drawing fixture. The preceding AC1021 `lineweights.dwg`
    profile now has four LAYOUT-owned VIEWPORTs selected by their exact list
