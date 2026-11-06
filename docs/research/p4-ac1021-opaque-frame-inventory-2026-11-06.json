@@ -132,5 +132,14 @@
     "selector": "--dictionary-default-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg",
     "result": "PASS for the selected AC1021 source graph to AC1024 DXF in ASCII and Binary. Exact source identity, unique ACAD_PLOTSTYLENAME root, Normal/default target, owner/reactor roles, output qualification, fresh readback, destination-preserving refusal, and same-adapter retry pass. Unrelated source records are excluded only by a test projection; whole-source output remains unqualified.",
     "receipt": "docs/research/p4-ac1021-dictionary-default-physical-selected-output-2026-11-06.json"
+  },
+  "mLeaderStyleCandidateBoundary": {
+    "record": "MLEADERSTYLE",
+    "observedCount": 1,
+    "handle": "0x12E",
+    "selector": "--mleaderstyle-ac1021-eed-source-profile /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "result": "PASS for source facts only: the style is uniquely rooted and owned, its source frame is class-identified, and its ordered XDATA is (1001, ACAD_MLEADERVER), (1070, 2) with one matching APPID row. Physical selected output remains unqualified because the current source/output proof skips MLEADERSTYLE records carrying EED.",
+    "receipt": "docs/research/p4-ac1021-mleaderstyle-eed-source-profile-2026-11-06.json",
+    "next": "Deep-snapshot pointer-backed EED values, close APPID dependency, then prove emitted XDATA order/value, ASCII/Binary readback, mutation refusal and retry."
   }
 }

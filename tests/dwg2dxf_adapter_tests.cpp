@@ -55117,6 +55117,80 @@ bool mLeaderStyleOutputOmitsTableRecordFields(
     return !stream.bad() && styleCount == expectedStyles;
 }
 
+bool physicalAc1021MLeaderStyleEedSourceProfile(
+        const std::filesystem::path& sourcePath) {
+    dx_iface reader;
+    dx_data source;
+    if (!reader.fileImport(sourcePath.string(), &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1021
+        || !source.hasSingleSuccessfulNamedResourceImport()
+        || !source.hasNamedObjectDictionary
+        || source.mLeaderStyles.size() != 1u)
+        return fail("AC1021 MLEADERSTYLE EED source is not the one-record typed profile");
+
+    const DRW_MLeaderStyle& style = source.mLeaderStyles.front();
+    const auto root = std::find_if(
+        source.namedObjectDictionary.m_entries.begin(),
+        source.namedObjectDictionary.m_entries.end(),
+        [](const DRW_Dictionary::Entry& entry) {
+            return entry.m_name == "ACAD_MLEADERSTYLE";
+        });
+    if (root == source.namedObjectDictionary.m_entries.end()
+        || std::count_if(source.namedObjectDictionary.m_entries.begin(),
+                         source.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_MLEADERSTYLE";
+            }) != 1u)
+        return fail("AC1021 MLEADERSTYLE has no unique NOD root entry");
+    const auto owner = std::find_if(source.dictionaries.begin(),
+        source.dictionaries.end(), [&root](const DRW_Dictionary& dictionary) {
+            return dictionary.handle == root->m_handle;
+        });
+    if (owner == source.dictionaries.end()
+        || owner->parentHandle != source.namedObjectDictionary.handle
+        || !owner->hasCompleteDwgEntries()
+        || owner->m_entries.size() != 1u
+        || owner->m_entries.front().m_handle != style.handle
+        || style.parentHandle != owner->handle)
+        return fail("AC1021 MLEADERSTYLE NOD/dictionary/owner graph is not closed");
+
+    const DRW_UnsupportedObject* frame =
+        DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+            source, source.importGeneration, style.handle);
+    if (style.handle != 0x12Eu || style.tType != DRW::MLEADERSTYLE
+        || frame == nullptr || frame->m_handle != style.handle
+        || frame->m_version != DRW::AC1021 || frame->m_objectType != 508
+        || frame->m_recordName != "MLEADERSTYLE"
+        || frame->m_className != "AcDbMLeaderStyle"
+        || !frame->m_isCustomClass || frame->m_isEntity)
+        return fail("AC1021 MLEADERSTYLE callback does not match its source frame identity");
+
+    if (!style.appData.empty() || style.extData.size() != 2u
+        || style.extData[0] == nullptr || style.extData[1] == nullptr
+        || style.extData[0]->code() != 1001
+        || style.extData[0]->type() != DRW_Variant::STRING
+        || style.extData[0]->c_str() == nullptr
+        || std::string(style.extData[0]->c_str()) != "ACAD_MLEADERVER"
+        || style.extData[1]->code() != 1070
+        || style.extData[1]->type() != DRW_Variant::INTEGER
+        || style.extData[1]->i_val() != 2)
+        return fail("AC1021 MLEADERSTYLE XDATA source profile changed");
+
+    const std::size_t appIdMatches = static_cast<std::size_t>(std::count_if(
+        source.appIds.begin(), source.appIds.end(),
+        [](const DRW_AppId& appId) {
+            return appId.name == "ACAD_MLEADERVER";
+        }));
+    if (appIdMatches != 1u)
+        return fail("AC1021 MLEADERSTYLE XDATA APPID row is missing or ambiguous");
+
+    std::cout << "AC1021 MLEADERSTYLE EED source profile PASS;"
+                 " selected output remains unqualified"
+              << std::endl;
+    return true;
+}
+
 bool physicalMLeaderStyleOutputReadback(
         const std::filesystem::path& sourcePath) {
     dx_iface sourceReader;
@@ -76543,6 +76617,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--mleaderstyle-physical-output-readback")
         return physicalMLeaderStyleOutputReadback(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--mleaderstyle-ac1021-eed-source-profile")
+        return physicalAc1021MLeaderStyleEedSourceProfile(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--assocvariable-physical-output-readback")
         return physicalAssociativeVariableOutputReadback(argv[2]) ? 0 : 1;
