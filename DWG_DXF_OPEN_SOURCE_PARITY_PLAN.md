@@ -832,8 +832,9 @@ consumers keep the prior input refusal
 ([sparse MATERIAL receipt](docs/research/p6-ac1027-sparse-default-material-raw-only-2026-11-04.json)).
 The AC1032 group-94 channel mask value 63 now has a separate explicit raw-only
 replay route for sparse/partially modeled MATERIAL records, including trailing
-XDATA. Generated ASCII/Binary controls verify exact group retention, typed-output
-refusal, destination preservation, opt-in raw replay and fresh readback. A local
+XDATA. Generated ASCII/Binary controls verify exact group retention, legacy
+consumer refusal without partial callbacks, same-adapter opt-in retry,
+typed-output refusal, destination preservation, opt-in raw replay and fresh readback. A local
 physical AC1032 DXF now parses beyond these records but whole-file output remains
 refused at two unpreserved proxy graphics (first handle 1284). This does not
 qualify channel-mask semantics, typed material support, rendering, or whole-file

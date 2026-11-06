@@ -18,7 +18,7 @@
     "sourceHashes": {
       "src/drw_objects.cpp": "1b5e57effd799cba0a4907c6f307469b179dec1be12810ba15b22ba5eb9ddc9b",
       "src/libdxfrw.cpp": "219be25084ee85f57a45b6f5d6798b30dfd361244ab9134617aff704bfed0edf",
-      "tests/dxf_sparse_material_raw_tests.cpp": "f9926ae5c0f39ee33d25b945e480f530da2bbd9caefa633f8fbf14101b791168"
+      "tests/dxf_sparse_material_raw_tests.cpp": "d345cf552e705dbb9aa9763b410ae2db44bd91e3b540ec3cf2af8d394a1b4cac"
     }
   },
   "generatedControls": {
@@ -27,13 +27,14 @@
       "Minimal ByBlock material with extension-dictionary and reactor groups",
       "Longer Global material with description and trailing XDATA",
       "Exact retained group-code sequence and group-94 value",
+      "Legacy consumer refusal without partial callbacks and same-adapter opt-in retry",
       "Typed output refusal preserves the destination sentinel",
       "Explicit raw output and fresh raw readback for both records and encodings"
     ],
     "buildCommand": "cmake --build build-gcc --target libdxfrw_dxf_sparse_material_raw_tests dwg2dxf -j3",
     "testCommand": "ctest --test-dir build-gcc -R '^libdxfrw_dxf_sparse_material_raw$' --output-on-failure",
     "result": "PASS, 1/1 CTest; ASCII and Binary cases run inside the test executable.",
-    "testBinarySha256": "9e2555a96f21ea0905504a6f2a07e6d868d29539a388972d2b1c857b9db7ecbe"
+    "testBinarySha256": "435adb2c24884733b11a855e108bd56d480292b6945b702537ae631af206d9dd"
   },
   "physicalSourceCheck": {
     "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg5/wipeout_door.dxf -y -d -v2018 /private/tmp/wipeout-door-roundtrip.dxf",

@@ -130,6 +130,16 @@ int main(){
      ||ac1032.raw.back().groups.size()!=8u
      ||ac1032.raw.back().groups.back().code()!=1000
      ||std::string(ac1032.raw.back().groups.back().c_str())!="raw-tail")return 34;
+  LegacyReader ac1032Legacy;
+  if(ac1032Reader.read(&ac1032Legacy,false)||ac1032Legacy.materialCallbacks
+     ||ac1032Legacy.rawCallbacks)return 42;
+  Reader ac1032Disabled;ac1032Disabled.enabled=false;
+  if(ac1032Reader.read(&ac1032Disabled,false)||!ac1032Disabled.materials.empty()
+     ||!ac1032Disabled.raw.empty())return 43;
+  ac1032Disabled.enabled=true;
+  if(!ac1032Reader.read(&ac1032Disabled,false)||ac1032Disabled.materials.size()!=2u
+     ||ac1032Disabled.raw.size()!=2u
+     ||!ac1032Disabled.materials.front().requiresRawDxfMaterialReplay())return 44;
   const std::vector<int> ac1032Expected={5,102,360,102,102,330,102,330,100,1,94};
   std::vector<int> ac1032Observed;
   for(const auto& group:ac1032.raw.front().groups)ac1032Observed.push_back(group.code());
