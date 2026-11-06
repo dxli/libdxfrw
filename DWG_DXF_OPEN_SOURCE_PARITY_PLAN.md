@@ -60,43 +60,7 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P4 / AC1021 remaining standard-object frames:** the latest source
-   inventory has 112 standard-object frames; 106 now have bounded selected
-   ASCII/Binary output qualification, leaving 6. Reconcile those six source
-   identities against every completed selector's standard-frame output-proof
-   ledger before starting another projection. In particular, empty DICTIONARY
-   `0x13C` (source owner `0x10`, zero entries/reactors) is already retained as
-   a layer-extension dependency in the successful Recompose Data selected
-   output graph ([receipt](docs/research/p4-ac1021-recompose-data-physical-selected-output-2026-11-06.json)).
-   The selector now proves that `0x13C` is uniquely owned by typed LAYER `0x10`,
-   source-eligible, present in the projection, finalized in the standard-frame
-   output-proof ledger, and read back with the expected owner and empty body;
-   this closes one residual frame without a duplicate projection. See the
-   [updated receipt](docs/research/p4-ac1021-recompose-data-physical-selected-output-2026-11-06.json)
-   and [inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json).
-   Choose the next candidate only from an identity-level reconciliation of the
-   six remaining source frames, then prove source membership/roles, selected
-   output and fresh readback, invalid-graph refusal, destination preservation
-   and same-adapter retry. The source inventory line alone does not establish
-   candidate qualification or the owner's typed family.
-   Do not infer support from a callback or source frame alone. The completed
-   slices include the `AcDsDecomposeData` graph: its NOD (`0xC`) edge points to
-   dictionary `0x3C3FE`; that dictionary owns `AcDsRecords` (`0x3C400`, empty)
-   and `AcDsSchemas` (`0x3C3FF`, five ordered entries). The schemas dictionary
-   owns XRECORDs `0x3C3F9` through `0x3C3FD`; each has one reciprocal
-   schema-dictionary reactor. The first record has four ordered group-341
-   references to the other schema XRECORDs. ASCII/Binary output verifies both
-   dictionary levels, ordered payloads and remapped targets; mutation refusal
-   preserves the destination and the same adapter retries successfully. The
-   root is admitted through generic rooted-graph validation only when the DWG
-   projection has exactly one NOD key targeting one unique complete
-   NOD-owned DICTIONARY. See the
-   [selected-output receipt](docs/research/p4-ac1021-acds-decompose-data-physical-selected-output-2026-11-06.json)
-   and [source-profile receipt](docs/research/p4-ac1021-acds-decompose-data-source-profile-2026-11-06.json).
-   This remains one unauthenticated source profile; whole-source output, native
-   ACDS semantics, independent source wire-role proof and support claims remain
-   open.
-2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
+1. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
    links and source frame offsets are captured. The enclosing FIELDLIST has
@@ -110,13 +74,13 @@ created locally from scratch for the specific control.
    remain excluded. Reopen this candidate only with a source/profile that
    supplies full membership and a consumer-visible root relation; see the
    [source-graph screen receipt](docs/research/p5-ac1021-acexpr-root-graph-output-readiness-2026-11-06.json).
-3. **P6 / converter-dependent suffix:** the 2026-11-06 ODA File Converter
+2. **P6 / converter-dependent suffix:** the 2026-11-06 ODA File Converter
    27.1.0 retry after the reported session unlock again aborted during
    pasteboard/XPC initialization (exit 134) and produced no output. No suffix
    evidence or support claim follows. Keep the AC1027 suffix unclaimed and
    strict export refused. The next attempt requires a functioning independent
    converter session or supported GUI invocation; do not repeat the same
-   failing direct CLI launch. This external-tool gate does not hold slice 1.
+   failing direct CLI launch. This external-tool gate does not block independent local P4 work.
 
 | ID | State | Remaining result | Dependency |
 | --- | --- | --- | --- |
@@ -188,15 +152,18 @@ the distinct DBCOLOR source/output evidence gate. The 1,673 observed frames have
 zero entity/object parse failures, and no DXF is created. The 186 observer frames
 are 74 opaque carriers plus 112 standard-object frames; all 112 standard payloads
 match typed callbacks. Bounded selected-graph routes now qualify all 74 opaque
-carriers and 106 standard-object frames, with physical ASCII/Binary readback and
-applicable atomic refusal/retry. The physical AC1021 direct-NOD
-`ACDB_RECOMPOSE_DATA` XRECORD now qualifies its source frame (handle `0x3C3F8`,
-offset 7794, size 34), scalar group 90, ordered group-330 handle to
-`TABLESTYLE:Standard`, NOD ownership/reactor, and the closed TABLESTYLE to
-CELLSTYLEMAP graph. Selected ASCII/Binary output readback verifies remapped
-references and layer extension-dictionary ownership; late reactor mutation
-preserves the destination, and the same adapter succeeds after restoration
-([receipt](docs/research/p4-ac1021-recompose-data-physical-selected-output-2026-11-06.json)).
+carriers and all 112 standard-object frames for this source, with physical
+ASCII/Binary readback and applicable atomic refusal/retry. The final three
+standard-frame proofs close the physical AC1021 TABLESTYLE/Recompose Data graph:
+DICTIONARY `0x7E`, extension DICTIONARY `0x162`, and XRECORD `0x3C3F8`. The
+XRECORD source frame (offset 7794, size 34) verifies scalar group 90 and the
+ordered group-330 handle to `TABLESTYLE:Standard`; the DICTIONARY proofs close
+the NOD root, TABLESTYLE owner and CELLSTYLEMAP extension edge. The final census
+is 112/112 ([receipt](docs/research/p4-ac1021-recompose-data-physical-selected-output-2026-11-06.json),
+[inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
+Selected ASCII/Binary readback verifies remapped references and layer
+extension-dictionary ownership; late reactor mutation preserves the destination,
+and the same adapter succeeds after restoration.
 The physical AC1021 `AcDsDecomposeData` graph now also passes selected ASCII/Binary
 output and fresh readback across its NOD root, two DICTIONARY levels and five
 XRECORDs. It checks all four remapped group-341 references, exact ordered record
@@ -241,7 +208,11 @@ snapshot; fresh ASCII/Binary readback resolves each reference to the matching
 SCALE record. The existing AC1024 VIEWPORT compatibility witness still passes
 ([receipt](docs/research/p4-ac1021-viewport-physical-selected-output-2026-11-06.json)).
 This adds two standard frames, bringing the inventory to 106/112; six remain
-unqualified. A focused audit also confirms the AC1021 LAYOUT extension
+unqualified at that checkpoint. The subsequent finalized proof census identifies
+109/112 qualified frames and the exact three TABLESTYLE/Recompose Data residuals
+(`0x7E`, `0x162`, `0x3C3F8`). The final Recompose Data proof census closes
+those three identities and confirms 112/112 standard-object frames for this
+source; no standard-frame residual remains in this bounded inventory. A focused audit also confirms the AC1021 LAYOUT extension
 DICTIONARY/XRECORD frames `0x205`, `0x288`, `0x3BF` and `0x3C0` already have
 finalized output proofs within that count, so they are not new residuals
 ([receipt](docs/research/p4-ac1021-layout-physical-selected-output-2026-11-06.json)).

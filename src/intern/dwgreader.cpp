@@ -14103,7 +14103,9 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                 intfa.addCellStyleMap(e);
                 // Preserve the complete validated object frame
                 // alongside the typed metadata.
-                intfa.addUnsupportedObject(makeRawObject(oType, cit->second));
+                DRW_UnsupportedObject raw = makeRawObject(oType, cit->second);
+                raw.m_typedPayloadValidated = true;
+                intfa.addUnsupportedObject(raw);
               }
               break;
             }

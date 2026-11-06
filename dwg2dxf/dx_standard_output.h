@@ -11,6 +11,7 @@
 #include <cstring>
 #include <istream>
 #include <iterator>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <streambuf>
@@ -806,16 +807,20 @@ template <class Mapper, class LayerVerifier> bool commonEqual(const DRW_TableEnt
 template <class Mapper, class LayerVerifier = NoLayerReferences> bool equal(const DRW_Dictionary& source,
         const DRW_Dictionary& actual, Mapper& map, std::vector<std::uint32_t>& references,
         LayerVerifier verifyLayer = {}) {
-    if (!commonEqual(source, actual, Family::Dictionary, map, references, verifyLayer)
-        || !actual.hasCompleteDxfEntries() || source.cloning != actual.cloning
-        || source.hardOwner != actual.hardOwner || source.m_entries.size() != actual.m_entries.size()) return false;
+    const bool common = commonEqual(source, actual, Family::Dictionary, map, references, verifyLayer);
+    if (!common || !actual.hasCompleteDxfEntries() || source.cloning != actual.cloning
+        || source.hardOwner != actual.hardOwner || source.m_entries.size() != actual.m_entries.size()) {
+        return false;
+    }
     for (std::size_t index = 0; index < source.m_entries.size(); ++index) {
         const auto& a = source.m_entries[index]; const auto& b = actual.m_entries[index];
         const auto role = a.m_dxfHandleCode == DRW_Dictionary::Entry::DxfHandleCode::Unspecified
             ? (source.hardOwner == 1 ? DRW_Dictionary::Entry::DxfHandleCode::HardOwner
                                     : DRW_Dictionary::Entry::DxfHandleCode::SoftOwner) : a.m_dxfHandleCode;
-        if (a.m_name != b.m_name || role != b.m_dxfHandleCode
-            || !referenceEqual(a.m_handle, b.m_handle, map, references)) return false;
+        const bool reference = referenceEqual(a.m_handle, b.m_handle, map, references);
+        if (a.m_name != b.m_name || role != b.m_dxfHandleCode || !reference) {
+            return false;
+        }
     }
     return true;
 }

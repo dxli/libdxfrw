@@ -43444,16 +43444,128 @@ bool dx_iface::inspectStandardDwgOutput(const dxfRW::DxfObjectsWriteView& view) 
             }
             return BlockRecordMapping::Mapped;
         };
-        const auto map = [this, context, &mapBlockRecord](std::uint32_t source, std::uint32_t& output) {
+        const auto mapCapturedCellStyleMap = [this, context](
+                std::uint32_t source, std::uint32_t& output) {
+            output = 0u;
+            if (cData == nullptr || dxfW == nullptr
+                || cData->sourceFormat != dx_source_format::DWG
+                || (cData->sourceVersion != DRW::AC1021
+                    && cData->sourceVersion != DRW::AC1024)
+                || source == 0u || source == DRW::NoHandle
+                || cData->importGeneration == 0u)
+                return false;
+            const dx_data::StandardDwgFrameKey key{
+                cData->importGeneration, source};
+            const auto rawFrame = cData->m_opaqueDwgSourceFrames.find(key);
+            if (rawFrame == cData->m_opaqueDwgSourceFrames.end()
+                || rawFrame->second.m_handle != source
+                || !asciiIdentifierEquals(
+                    rawFrame->second.m_recordName, "CELLSTYLEMAP")
+                || rawFrame->second.m_className != "AcDbCellStyleMap"
+                || !rawFrame->second.m_isCustomClass
+                || rawFrame->second.m_version != cData->sourceVersion
+                || !rawFrame->second.m_typedPayloadValidated)
+                return false;
+            const DRW_CellStyleMap* cellStyleMap = nullptr;
+            std::size_t cellStyleMapMatches = 0u;
+            for (const DRW_CellStyleMap& candidate : cData->cellStyleMaps) {
+                if (candidate.handle != source)
+                    continue;
+                cellStyleMap = &candidate;
+                ++cellStyleMapMatches;
+            }
+            const DRW_Dictionary* ownerDictionary = nullptr;
+            std::size_t ownerDictionaryMatches = 0u;
+            if (cellStyleMap != nullptr) {
+                for (const DRW_Dictionary& candidate : cData->dictionaries) {
+                    if (candidate.handle != cellStyleMap->parentHandle)
+                        continue;
+                    ownerDictionary = &candidate;
+                    ++ownerDictionaryMatches;
+                }
+            }
+            const DRW_TableStyle* ownerStyle = nullptr;
+            std::size_t ownerStyleMatches = 0u;
+            if (ownerDictionary != nullptr) {
+                for (const DRW_TableStyle& candidate : cData->tableStyles) {
+                    if (candidate.handle != ownerDictionary->parentHandle)
+                        continue;
+                    ownerStyle = &candidate;
+                    ++ownerStyleMatches;
+                }
+            }
+            if (cellStyleMapMatches != 1u || ownerDictionaryMatches != 1u
+                || ownerStyleMatches != 1u || cellStyleMap == nullptr
+                || ownerDictionary == nullptr || ownerStyle == nullptr)
+                return false;
+            const auto ownerRaw = cData->m_opaqueDwgSourceFrames.find(
+                {key.first, ownerStyle->handle});
+            const auto styleMinted = context->sourceHandleToMintedMap.find(
+                ownerStyle->handle);
+            const auto mapMinted = context->sourceHandleToMintedMap.find(source);
+            if (ownerRaw == cData->m_opaqueDwgSourceFrames.end()
+                || !asciiIdentifierEquals(ownerRaw->second.m_recordName,
+                    "TABLESTYLE")
+                || ownerRaw->second.m_className != "AcDbTableStyle"
+                || !ownerRaw->second.m_typedPayloadValidated
+                || styleMinted == context->sourceHandleToMintedMap.end()
+                || mapMinted == context->sourceHandleToMintedMap.end()
+                || styleMinted->second == 0u
+                || styleMinted->second == DRW::NoHandle
+                || mapMinted->second == 0u
+                || mapMinted->second == DRW::NoHandle)
+                return false;
+            for (const auto* aliases : {
+                    &context->sourceHandleToWrittenTableMap,
+                    &context->sourceHandleToWrittenObjectMap}) {
+                const auto alias = aliases->find(source);
+                if (alias != aliases->end()
+                    && alias->second != mapMinted->second)
+                    return false;
+            }
+            const bool exactMembership = ownerStyle->xDictHandle != 0u
+                && ownerStyle->xDictHandle == ownerDictionary->handle
+                && ownerDictionary->hasCompleteDwgEntries()
+                && std::count_if(ownerDictionary->m_entries.begin(),
+                    ownerDictionary->m_entries.end(), [source](
+                        const DRW_Dictionary::Entry& entry) {
+                            return asciiIdentifierEquals(entry.m_name,
+                                "ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP")
+                                && entry.m_handle == source;
+                        }) == 1;
+            const std::uint32_t emittedOwner = dxfW->remapHandle(
+                ownerDictionary->handle);
+            if (!exactMembership || emittedOwner == 0u
+                || emittedOwner == DRW::NoHandle
+                || dxfW->dxfWriteRecordHandleCount(emittedOwner) != 1u
+                || !dxfW->dxfWriteRecordHasIdentity(
+                    emittedOwner, "DICTIONARY", "OBJECTS")
+                || dxfW->dxfWriteRecordHandleCount(styleMinted->second) != 1u
+                || !dxfW->dxfWriteRecordHasIdentity(
+                    styleMinted->second, "TABLESTYLE", "OBJECTS")
+                || dxfW->dxfWriteRecordHandleCount(mapMinted->second) != 1u
+                || !dxfW->dxfWriteRecordHasIdentity(
+                    mapMinted->second, "CELLSTYLEMAP", "OBJECTS")
+                || !dxfW->dxfWriteRecordHasOwner(
+                    mapMinted->second, emittedOwner))
+                return false;
+            output = mapMinted->second;
+            return true;
+        };
+        const auto map = [this, context, &mapBlockRecord,
+                          &mapCapturedCellStyleMap](
+                std::uint32_t source, std::uint32_t& output) {
             output = 0u;
             if (source == 0u) return true;
-            if (context->ambiguousSourceHandles.count(source) != 0u) return false;
+            if (context->ambiguousSourceHandles.count(source) != 0u)
+                return false;
             // BLOCK_RECORD table entries are mapped by their source names,
             // not by the generic object/table handle aliases. In particular,
             // model/paper space use canonical DXF handles.
             const auto blockRecord = mapBlockRecord(source, output);
             if (blockRecord == BlockRecordMapping::Mapped) return true;
             if (blockRecord == BlockRecordMapping::Invalid) return false;
+            if (mapCapturedCellStyleMap(source, output)) return true;
             const auto& layerControl = m_standardDwgLayerControlOutputProof;
             if (layerControl.inspected
                 && source == layerControl.sourceControl) {
@@ -43475,6 +43587,99 @@ bool dx_iface::inspectStandardDwgOutput(const dxfRW::DxfObjectsWriteView& view) 
                 find(context->sourceHandleToMintedMap);
             if (bindings == 1u && output != 0u)
                 return true;
+
+            // A physical standard TABLESTYLE frame may be emitted through a
+            // typed OBJECTS writer with a minted handle that is not published
+            // in the generic object map. Admit that one edge only when the
+            // captured raw frame, typed source model and
+            // staged TABLESTYLE record all identify the same source object.
+            const dx_data::StandardDwgFrameKey key{
+                cData != nullptr ? cData->importGeneration : 0u, source};
+            const auto rawFrame = cData != nullptr
+                ? cData->m_opaqueDwgSourceFrames.find(key)
+                : decltype(cData->m_opaqueDwgSourceFrames.find(key)){};
+            if (bindings == 0u && cData != nullptr && dxfW != nullptr
+                && cData->sourceFormat == dx_source_format::DWG
+                && (cData->sourceVersion == DRW::AC1021
+                    || cData->sourceVersion == DRW::AC1024)
+                && key.first != 0u
+                && rawFrame != cData->m_opaqueDwgSourceFrames.end()
+                && rawFrame->second.m_handle == source
+                && rawFrame->second.m_recordName == "TABLESTYLE"
+                && rawFrame->second.m_className == "AcDbTableStyle"
+                && rawFrame->second.m_isCustomClass
+                && rawFrame->second.m_version == cData->sourceVersion
+                && rawFrame->second.m_typedPayloadValidated) {
+                const DRW_TableStyle* current = nullptr;
+                std::size_t currentMatches = 0u;
+                for (const DRW_TableStyle& candidate : cData->tableStyles) {
+                    if (candidate.handle != source)
+                        continue;
+                    current = &candidate;
+                    ++currentMatches;
+                }
+                const auto minted = context->sourceHandleToMintedMap.find(source);
+                std::uint32_t emittedOwner = 0u;
+                const std::uint32_t candidateHandle =
+                    minted != context->sourceHandleToMintedMap.end()
+                        ? minted->second : 0u;
+                bool aliasesAgree = candidateHandle != 0u
+                    && candidateHandle != DRW::NoHandle;
+                for (const auto* aliases : {
+                        &context->sourceHandleToWrittenTableMap,
+                        &context->sourceHandleToWrittenObjectMap}) {
+                    const auto alias = aliases->find(source);
+                    if (alias != aliases->end()
+                        && alias->second != candidateHandle)
+                        aliasesAgree = false;
+                }
+                const DRW_Dictionary* owner = nullptr;
+                std::size_t ownerMatches = 0u;
+                if (current != nullptr) {
+                    for (const DRW_Dictionary& dictionary : cData->dictionaries) {
+                        if (dictionary.handle != current->parentHandle)
+                            continue;
+                        owner = &dictionary;
+                        ++ownerMatches;
+                    }
+                }
+                const bool uniqueSourceMembership = current != nullptr
+                    && ownerMatches == 1u && owner != nullptr
+                    && owner->hasCompleteDwgEntries()
+                    && std::count_if(owner->m_entries.begin(), owner->m_entries.end(),
+                        [source](const DRW_Dictionary::Entry& entry) {
+                            return entry.m_name == "Standard"
+                                && entry.m_handle == source;
+                        }) == 1
+                    && cData->hasNamedObjectDictionary
+                    && cData->namedObjectDictionary.hasCompleteDwgEntries()
+                    && std::count_if(
+                        cData->namedObjectDictionary.m_entries.begin(),
+                        cData->namedObjectDictionary.m_entries.end(),
+                        [owner](const DRW_Dictionary::Entry& entry) {
+                            return asciiIdentifierEquals(
+                                       entry.m_name, "ACAD_TABLESTYLE")
+                                && entry.m_handle == owner->handle;
+                        }) == 1;
+                if (currentMatches == 1u && current != nullptr
+                    && uniqueSourceMembership && aliasesAgree) {
+                    emittedOwner = dxfW->remapHandle(
+                        static_cast<std::uint32_t>(current->parentHandle));
+                    if (emittedOwner != 0u
+                        && emittedOwner != DRW::NoHandle
+                        && dxfW->dxfWriteRecordHandleCount(emittedOwner) == 1u
+                        && dxfW->dxfWriteRecordHasIdentity(
+                            emittedOwner, "DICTIONARY", "OBJECTS")
+                        && dxfW->dxfWriteRecordHandleCount(candidateHandle) == 1u
+                        && dxfW->dxfWriteRecordHasIdentity(
+                            candidateHandle, "TABLESTYLE", "OBJECTS")
+                        && dxfW->dxfWriteRecordHasOwner(
+                            candidateHandle, emittedOwner)) {
+                        output = candidateHandle;
+                        return true;
+                    }
+                }
+            }
 
             // A validated DWG SCALE snapshot is emitted as a custom OBJECTS
             // record; its identity is not always present in the generic table

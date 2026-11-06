@@ -712,7 +712,7 @@ struct DRW_UnsupportedObject {
   std::vector<std::uint8_t> m_rawBytes;
   // Set only when the reader also completed the typed parser for this
   // known record. It prevents an injected raw body from masquerading as a
-  // replayable TABLESTYLE payload.
+  // parsed custom-object payload during an output identity proof.
   bool m_typedPayloadValidated = false;
   // Raw object bytes are only valid for the DWG version that encoded them.
   // Keep the provenance with the bytes so direct writer users cannot

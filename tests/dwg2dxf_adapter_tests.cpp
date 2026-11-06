@@ -2435,6 +2435,16 @@ public:
         return proof != iface.m_standardDwgOutputProofs.end()
             && proof->second.generation == generation;
     }
+    static void printStandardDwgOutputProofHandles(
+            const dx_iface& iface, std::uint64_t generation) {
+        std::cout << "standard DWG output-proof handles:";
+        for (const auto& proof : iface.m_standardDwgOutputProofs) {
+            if (proof.second.generation != generation)
+                continue;
+            std::cout << " 0x" << std::hex << proof.first << std::dec;
+        }
+        std::cout << '\n';
+    }
     static std::size_t opaqueSourceFrameCount(const dx_data& data) {
         return data.m_opaqueDwgSourceFrames.size();
     }
@@ -52464,6 +52474,9 @@ bool physicalLayoutOutputReadback(
                         + std::to_string(handle)
                         + " lacks finalized standard output proof");
             }
+            DxIfaceStandardDwgCaptureTestAccess::
+                printStandardDwgOutputProofHandles(
+                    writer, source.importGeneration);
         }
         if (!ac1021Source && source.dwgReadOutcome.opaqueViewCallbacks != 0u
             && DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualificationCount(
@@ -56644,6 +56657,10 @@ bool physicalAc1021RecomposeDataOutputReadback(
             || layerExtensionFrame->m_objectType != 42u
             || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
                 source, 0x13Cu)
+            || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                source, 0x7Eu)
+            || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                source, 0x162u)
             || tableStyleFrame == nullptr || tableStyleFrame->m_objectType != 504u)
             return fail("AC1021 recompose-data record/target profile changed");
         dx_data projection;
@@ -56741,6 +56758,13 @@ bool physicalAc1021RecomposeDataOutputReadback(
         if (!DxIfaceStandardDwgCaptureTestAccess::standardDwgOutputQualified(
                 writer, source.importGeneration, 0x13Cu))
             return fail("AC1021 recompose-data layer extension DICTIONARY source frame was not output-qualified");
+        for (const std::uint32_t handle : {0x7Eu, 0x162u, recordHandle}) {
+            if (!DxIfaceStandardDwgCaptureTestAccess::standardDwgOutputQualified(
+                    writer, source.importGeneration, handle))
+                return fail("AC1021 Recompose Data TABLESTYLE graph standard frame "
+                    + std::to_string(handle)
+                    + " lacks finalized output proof");
+        }
 
         dx_iface outputReader;
         dx_data output;
