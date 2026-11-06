@@ -14,7 +14,12 @@
         "name": "",
         "font": "ltypeshp.shx",
         "big_font": "",
-        "flags": 0
+        "flags": 68,
+        "decoded_bits": {
+          "shape_bit_0": false,
+          "vertical_bit_2": true,
+          "xref_dependent_bit_6": true
+        }
       },
       "read": "The local adapter imports all six STYLE records; the typed model retains the empty row without changing caller data."
     }
@@ -27,6 +32,7 @@
         "handle": "0xDF",
         "name": "",
         "is_shape": true,
+        "group_70_flag": 65,
         "font_file": "ltypeshp.shx"
       },
       "reference_scan": "A recursive scan of the independently decoded JSON found no handle reference to 0xDF outside the STYLE_CONTROL membership and the STYLE record's own identity."
@@ -38,7 +44,7 @@
     },
     "claim_limit": "Independent open-source consumer evidence for this source only; not native AutoCAD or platform qualification."
   },
-  "unresolved_field_difference": "LibreDWG reports is_shape=true for handle 0xDF; the local typed model reports flags=0. The selected-output omission does not depend on this flag. Resolve the AC1018 field mapping before claiming parser-level shape-font parity.",
+  "unresolved_field_difference": "For handle 0xDF, LibreDWG's trace reports group-70 flag 65 (shape bit set, xref-dependent bit set); the local typed model reports flags=68 (vertical bit set, xref-dependent bit set). The selected-output omission does not depend on this flag. ODA v5.4.1 §20.4.56 lists Vertical then shape-file fields for AC1018, while LibreDWG's trace associates the source bits in the opposite order. Resolve this spec/peer/native discrepancy before claiming parser-level shape-font parity.",
   "implementation": {
     "behavior": "For a sourceFormat-Unknown selected output projection only, omit an empty-name STYLE when its modeled entity, shape-linetype, dimension, MLeader, table, and retained raw-resource dependencies are absent. Keep the omission fail-closed when opaque reference-bearing families are present. Any referenced or otherwise unproven empty-name row is explicitly refused, including a shape-style row whose flags would otherwise pass the generic STYLE payload validator.",
     "diagnostic": "Successful omission writes a stderr diagnostic with the omitted source handle; suppression is not silent.",
