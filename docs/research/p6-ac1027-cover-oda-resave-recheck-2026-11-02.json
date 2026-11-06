@@ -160,5 +160,22 @@
     "finding": "The installed 27.1 bundle passed strict deep signature verification outside the sandbox; the prior sandboxed failures do not establish an invalid signature. The verified CLI ran successfully outside the sandbox on a scratch source.",
     "receipt": "docs/research/p6-ac1027-cover-oda-same-version-resave-2026-11-03.json",
     "effect": "Prior sandboxed invocation and signature failures remain historical observations; the converter is available outside that sandbox. The original and resaved HEADER suffixes remain unclaimed."
+  },
+  "latestUserUnlockRetry20261105": {
+    "date": "2026-11-05",
+    "time": "2026-11-06 03:25:44 UTC",
+    "userStateUpdate": "User reported unlocking the Mac session; a fresh CLI help invocation was attempted.",
+    "applicationBundle": "/Applications/ODAFileConverter.app",
+    "bundleVersion": "27.1.0.0",
+    "executable": "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter",
+    "executableSha256": "21a8f029e7d41af64088f65492404d97ffec0d2f7886703b3b725f5ac4a55783",
+    "toolContext": "Sandboxed shell invocation",
+    "signatureCheckCommand": "codesign --verify --strict --verbose=2 /Applications/ODAFileConverter.app",
+    "signatureCheckExitCode": 1,
+    "signatureCheckResult": "FAIL in this sandboxed invocation: invalid signature (code or signature have been modified), arm64. An earlier outside-sandbox verification passed; this result does not supersede it.",
+    "converterCommand": "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter -h",
+    "converterExitCode": 134,
+    "converterResult": "After the user unlock update, invocation still aborted with PasteBoard clipboard/find errors (-4960), followed by an invalid hiservices XPC reply. No conversion was run and no new resave was produced.",
+    "qualificationEffect": "No support claim changed. The user unlock did not make this sandboxed CLI route usable; do not bypass signature verification or infer anything about the AC1027 suffix."
   }
 }

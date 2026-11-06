@@ -1733,6 +1733,16 @@ atomic refusal and corrected retry. Do not repeat adapter-retention or output
 work without a new failing witness. Physical producer breadth, independent
 source-span/target-role evidence for other profiles, native coordinate and
 projection semantics, and composed whole-document qualification remain open.
+ACadSharp issue [#1261](https://github.com/DomCR/ACadSharp/issues/1261)
+reports two private drawings where a R2009 GEODATA class-version-1 object
+needs a trailing Civil 3D block after its mesh. The report does not identify
+the target DWG revision. This implementation already writes and parses the
+literal tail for AC1021 class version 1 and keeps the AC1024 exception
+separate from object version; the fast matrix verifies AC1021/AC1024 v1 and
+v2 bodies, exact tail ordering, and that AC1027/AC1032 omit the tail. The
+focused selector passed on 2026-11-05. Treat #1261 as corroboration for the
+R2009 object profile, not evidence to extend the tail to later target releases
+or to close physical/native qualification; see the [cross-check receipt](docs/research/p4-geodata-acadsharp-civil-tail-crosscheck-2026-11-05.json).
 The AC1027 version-3 adapter now closes the witnessed model-space extension
 dictionary, GEODATA owner/reactor and separate host pointer, with staged
 field/reference checks and independent ASCII/Binary selected-graph readback.
