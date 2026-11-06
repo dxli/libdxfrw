@@ -318,6 +318,95 @@ public:
         }
         return data.dictionaries.size() == 1u;
     }
+    static bool selectPhysicalDbColorGraph(const dx_data& source,
+            dx_data& projection, std::uint32_t colorHandle,
+            std::uint32_t dictionaryHandle, std::uint32_t appIdHandle) {
+        if (source.sourceFormat != dx_source_format::DWG
+            || source.sourceVersion != DRW::AC1021
+            || source.importGeneration == 0u
+            || !source.hasNamedObjectDictionary
+            || source.namedObjectDictionary.handle == 0u
+            || source.dwgDbColorObjects.size() != 1u
+            || source.dwgDbColorEedSources.size() != 1u)
+            return false;
+        const dx_data::DwgDbColorKey colorKey{
+            source.importGeneration, colorHandle};
+        const dx_data::StandardDwgFrameKey dictionaryKey{
+            source.importGeneration, dictionaryHandle};
+        const dx_data::StandardDwgFrameKey appIdKey{
+            source.importGeneration, appIdHandle};
+        const auto color = source.dwgDbColorObjects.find(colorKey);
+        const auto colorEed = source.dwgDbColorEedSources.find(colorKey);
+        const auto rawColor = source.m_opaqueDwgSourceFrames.find(colorKey);
+        const auto dictionaryFrame =
+            source.m_standardDwgObjectFrames.find(dictionaryKey);
+        const auto appSource = source.m_standardDwgAppIdSources.find(appIdKey);
+        const auto app = std::find_if(source.appIds.begin(), source.appIds.end(),
+            [appIdHandle](const DRW_AppId& value) {
+                return value.handle == appIdHandle;
+            });
+        const auto dictionary = std::find_if(source.dictionaries.begin(),
+            source.dictionaries.end(), [dictionaryHandle](
+                const DRW_Dictionary& value) {
+                return value.handle == dictionaryHandle;
+            });
+        if (color == source.dwgDbColorObjects.end()
+            || colorEed == source.dwgDbColorEedSources.end()
+            || rawColor == source.m_opaqueDwgSourceFrames.end()
+            || dictionaryFrame == source.m_standardDwgObjectFrames.end()
+            || appSource == source.m_standardDwgAppIdSources.end()
+            || !appSource->second || app == source.appIds.end()
+            || dictionary == source.dictionaries.end()
+            || color->second.parentHandle != dictionaryHandle
+            || dictionary->parentHandle != source.namedObjectDictionary.handle
+            || app->name != "ACAD")
+            return false;
+
+        projection.sourceFormat = source.sourceFormat;
+        projection.sourceVersion = source.sourceVersion;
+        projection.importGeneration = source.importGeneration;
+        projection.dwgReadOutcome = source.dwgReadOutcome;
+        projection.hasNamedObjectDictionary = true;
+        projection.namedObjectDictionary = source.namedObjectDictionary;
+        projection.namedObjectDictionary.m_entries.erase(
+            std::remove_if(projection.namedObjectDictionary.m_entries.begin(),
+                projection.namedObjectDictionary.m_entries.end(),
+                [dictionaryHandle](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name != "ACAD_COLOR"
+                        || entry.m_handle != dictionaryHandle;
+                }), projection.namedObjectDictionary.m_entries.end());
+        if (projection.namedObjectDictionary.m_entries.size() != 1u)
+            return false;
+        projection.dictionaries.push_back(*dictionary);
+        projection.appIds.push_back(*app);
+        projection.dwgDbColorObjects.emplace(colorKey, color->second);
+        const auto appearance = source.dwgDbColors.find(colorKey);
+        if (appearance == source.dwgDbColors.end())
+            return false;
+        projection.dwgDbColors.emplace(colorKey, appearance->second);
+        projection.dwgDbColorEedSources.emplace(colorKey, colorEed->second);
+        projection.dwgDbColorRetainedRecords = 1u;
+        projection.dwgDbColorObjectRetainedRecords = 1u;
+        projection.dwgDbColorReferenceRetainedRecords = 0u;
+        projection.dwgDbColorCaptureFailed = false;
+        projection.dwgDbColorEedRetainedBytes =
+            source.dwgDbColorEedRetainedBytes;
+        projection.dwgDbColorEedCaptureFailed = false;
+        projection.m_standardDwgNamesClosedThrough =
+            source.m_standardDwgNamesClosedThrough;
+        projection.m_standardDwgAppIdSources.emplace(appIdKey,
+            appSource->second);
+        projection.m_standardDwgObjectFrames.emplace(dictionaryKey,
+            dictionaryFrame->second);
+        projection.m_opaqueDwgSourceFrames.emplace(colorKey,
+            rawColor->second);
+        projection.m_opaqueDwgSourceFrameIdentities.insert(colorKey);
+        projection.m_standardDwgObjectCaptureFailed = false;
+        projection.m_standardDwgObjectPayloadFailed = false;
+        return projection.hasCompleteDwgDbColorTypedCapture()
+            && projection.hasCompleteDwgDbColorAppearanceBindings()
+            && projection.dwgDbColorEedSources.size() == 1u;
+    }
     static void setDbColorEedSourceBytes(dx_data& data, std::size_t bytes) {
         data.dwgDbColorEedRetainedBytes = bytes;
     }
@@ -74134,6 +74223,197 @@ static bool dbColorSelectedEedProjection(const DRW_Dictionary& sourceDictionary,
     return true;
 }
 
+static bool dbColorPhysicalSelectedAdapterOutput(dx_data& projection,
+        std::uint32_t colorHandle, std::uint32_t dictionaryHandle) {
+    const dx_data::DwgDbColorKey colorKey{
+        projection.importGeneration, colorHandle};
+    const auto expectedColor = projection.dwgDbColorObjects.find(colorKey);
+    if (expectedColor == projection.dwgDbColorObjects.end())
+        return fail("selected DBCOLOR projection lost its retained object");
+    const DRW_DbColor sourceColor = expectedColor->second;
+    class LateColorMutation final : public dx_iface {
+    public:
+        bool mutateAfterObjects{false};
+        bool mutateDictionaryAfterObjects{false};
+        dx_data::DwgDbColorKey key{};
+        std::uint32_t dictionaryHandle{0u};
+        void writeObjects() override {
+            dx_iface::writeObjects();
+            if (cData == nullptr)
+                return;
+            if (mutateAfterObjects) {
+                const auto found = cData->dwgDbColorObjects.find(key);
+                if (found != cData->dwgDbColorObjects.end())
+                    found->second.rgb ^= 1;
+            }
+            if (mutateDictionaryAfterObjects) {
+                for (DRW_Dictionary& dictionary : cData->dictionaries) {
+                    if (dictionary.handle == dictionaryHandle
+                        && !dictionary.m_entries.empty()) {
+                        dictionary.m_entries.front().m_name += "_LATE";
+                        break;
+                    }
+                }
+            }
+        }
+    } writer;
+    writer.key = colorKey;
+    writer.dictionaryHandle = dictionaryHandle;
+    class ColorReadback final : public dx_iface {
+    public:
+        std::size_t count{0u};
+        DRW_DbColor color;
+        void addDbColor(const DRW_DbColor& value) override {
+            color = value;
+            ++count;
+        }
+    };
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch().count();
+    for (const bool binary : {false, true}) {
+        const auto output = std::filesystem::temp_directory_path()
+            / ("libdxfrw-dbcolor-adapter-" + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{output};
+        const std::string sentinel = "DBCOLOR adapter destination sentinel";
+        {
+            std::ofstream file(output, std::ios::binary | std::ios::trunc);
+            file << sentinel;
+        }
+        writer.mutateAfterObjects = true;
+        const bool mutatedExport = writer.fileExport(output.string(),
+            DRW::AC1021, binary, &projection, true, false,
+            dx_dxfSourceTextPolicy::Compatible,
+            DRW::DxfTextWritePolicy::Compatible,
+            dx_dxfProxyGraphicsPolicy::Compatible,
+            dx_dwgReadCompletenessPolicy::Legacy);
+        const auto destinationEqualsSentinel = [&]() {
+            std::ifstream file(output, std::ios::binary);
+            return file && std::string{
+                std::istreambuf_iterator<char>(file), {}} == sentinel;
+        };
+        if (mutatedExport || !destinationEqualsSentinel())
+            return fail("late DBCOLOR mutation did not refuse atomically");
+        projection.dwgDbColorObjects.at(colorKey).rgb = sourceColor.rgb;
+        writer.mutateAfterObjects = false;
+        auto selectedDictionary = std::find_if(
+            projection.dictionaries.begin(), projection.dictionaries.end(),
+            [dictionaryHandle](const DRW_Dictionary& value) {
+                return value.handle == dictionaryHandle;
+            });
+        if (selectedDictionary == projection.dictionaries.end()
+            || selectedDictionary->m_entries.size() != 1u)
+            return fail("selected ACAD_COLOR dictionary disappeared");
+        const std::string sourceKey =
+            sourceColor.bookName + "$" + sourceColor.name;
+        {
+            std::ofstream file(output, std::ios::binary | std::ios::trunc);
+            file << sentinel;
+        }
+        writer.mutateDictionaryAfterObjects = true;
+        const bool lateDictionaryAccepted = writer.fileExport(
+            output.string(), DRW::AC1021, binary, &projection, true, false,
+            dx_dxfSourceTextPolicy::Compatible,
+            DRW::DxfTextWritePolicy::Compatible,
+            dx_dxfProxyGraphicsPolicy::Compatible,
+            dx_dwgReadCompletenessPolicy::Legacy);
+        writer.mutateDictionaryAfterObjects = false;
+        selectedDictionary->m_entries.front().m_name = sourceKey;
+        if (lateDictionaryAccepted || !destinationEqualsSentinel())
+            return fail("late ACAD_COLOR dictionary mutation did not refuse atomically");
+        selectedDictionary->m_entries.front().m_name += "_INVALID";
+        if (!destinationEqualsSentinel()
+            || writer.fileExport(output.string(), DRW::AC1021, binary,
+                &projection, true, false,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::Legacy)
+            || !destinationEqualsSentinel())
+            return fail("invalid ACAD_COLOR key did not refuse atomically");
+        selectedDictionary->m_entries.front().m_name = sourceKey;
+        if (!writer.fileExport(output.string(), DRW::AC1021, binary,
+                &projection, true, false,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::Legacy))
+            return fail("corrected DBCOLOR graph did not retry on the same adapter");
+        ColorReadback reader;
+        dx_data readback;
+        if (!reader.fileImport(output.string(), &readback, false)
+            || reader.count != 1u || reader.color.handle == 0u
+            || reader.color.parentHandle == 0u
+            || reader.color.parentHandle != dictionaryHandle
+            || reader.color.reactorHandles
+                != std::vector<std::uint32_t>{dictionaryHandle})
+            return fail("DBCOLOR typed graph did not read back exactly");
+        if (reader.color.rgb != sourceColor.rgb
+            || reader.color.hasDxfColorIndex()
+                != sourceColor.hasDxfColorIndex()
+            || reader.color.bookName != sourceColor.bookName
+            || reader.color.name != sourceColor.name
+            || reader.color.extData.size() != sourceColor.extData.size()) {
+            return fail("DBCOLOR typed body fields changed on readback");
+        }
+        for (std::size_t index = 0u;
+             index < sourceColor.extData.size(); ++index) {
+            const DRW_Variant* expected = sourceColor.extData[index];
+            const DRW_Variant* actual = reader.color.extData[index];
+            if (expected == nullptr || actual == nullptr
+                || expected->code() != actual->code()
+                || expected->type() != actual->type())
+                return fail("DBCOLOR EED tuple framing changed on readback");
+            if (expected->type() == DRW_Variant::STRING
+                && (!expected->content.s || !actual->content.s
+                    || *expected->content.s != *actual->content.s))
+                return fail("DBCOLOR EED string changed on readback");
+            if (expected->type() == DRW_Variant::INTEGER
+                && expected->i_val() != actual->i_val())
+                return fail("DBCOLOR EED integer changed on readback");
+        }
+        const auto root = std::find_if(
+            readback.namedObjectDictionary.m_entries.begin(),
+            readback.namedObjectDictionary.m_entries.end(),
+            [dictionaryHandle](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_COLOR"
+                    && entry.m_handle == dictionaryHandle;
+            });
+        const auto dictionary = std::find_if(readback.dictionaries.begin(),
+            readback.dictionaries.end(), [dictionaryHandle](
+                const DRW_Dictionary& value) {
+                return value.handle == dictionaryHandle;
+            });
+        const std::string key = sourceColor.bookName + "$" + sourceColor.name;
+        if (!readback.hasNamedObjectDictionary
+            || root == readback.namedObjectDictionary.m_entries.end()
+            || dictionary == readback.dictionaries.end()
+            || dictionary->parentHandle
+                != readback.namedObjectDictionary.handle
+            || dictionary->reactorHandles
+                != std::vector<std::uint32_t>{
+                    readback.namedObjectDictionary.handle}
+            || std::count_if(dictionary->m_entries.begin(),
+                dictionary->m_entries.end(), [&key, &reader](
+                    const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == key
+                        && entry.m_handle == reader.color.handle;
+                }) != 1
+            || std::count_if(readback.appIds.begin(), readback.appIds.end(),
+                [](const DRW_AppId& value) {
+                    return value.name == "ACAD";
+                }) != 1)
+            return fail("ACAD_COLOR root/key or ACAD APPID closure changed on readback");
+    }
+    return true;
+}
+
 static bool dbColorPhysicalEedSource(const std::filesystem::path& path) {
     const auto fail = [](const char* message) {
         std::cerr << "DBCOLOR physical EED source: " << message << '\n';
@@ -74228,7 +74508,13 @@ static bool dbColorPhysicalEedSource(const std::filesystem::path& path) {
         return fail("selected source graph did not survive rollback, retry and DXF readback");
     if (DxIfaceExtensionGraphTestAccess::prepare(graph, data, true))
         return fail("source capture alone incorrectly opened DBCOLOR graph output");
-    std::cout << "Physical DBCOLOR APPID, owner graph and 13 EED tuples retained; output remains gated\n";
+    dx_data selected;
+    if (!DxIfaceStandardDwgCaptureTestAccess::selectPhysicalDbColorGraph(
+            data, selected, 0x369B0u, 0x6Bu, 0x12u))
+        return fail("could not construct exact physical AC1021 DBCOLOR projection");
+    if (!dbColorPhysicalSelectedAdapterOutput(selected, 0x369B0u, 0x6Bu))
+        return fail("adapter DBCOLOR graph output/readback or retry failed");
+    std::cout << "Physical DBCOLOR APPID, rooted owner graph and 13 EED tuples pass selected ASCII/Binary adapter output; whole-source output remains gated\n";
     return true;
 }
 
@@ -74510,10 +74796,17 @@ static bool dbColorExternalEvidenceGate() {
         return fail("generated same-implementation source incorrectly promoted DBCOLOR output support");
     const std::string gate =
         DxIfaceExtensionGraphTestAccess::failureDetail(graph);
+    const bool repeatedPrepare =
+        DxIfaceExtensionGraphTestAccess::prepare(graph, imported, true);
+    const std::string repeatedGate =
+        DxIfaceExtensionGraphTestAccess::failureDetail(graph);
     if (gate.find("independent producer source profile") == std::string::npos
-        || DxIfaceExtensionGraphTestAccess::prepare(graph, imported, true)
-        || DxIfaceExtensionGraphTestAccess::failureDetail(graph) != gate)
+        || repeatedPrepare || repeatedGate != gate) {
+        std::cerr << "initial gate: " << gate << " repeated gate: "
+                  << repeatedGate << " repeated prepare=" << repeatedPrepare
+                  << '\n';
         return fail("independent-evidence gate did not remain stable after a repeated retry");
+    }
 
     const auto baseline = std::string("old destination");
     {

@@ -1701,6 +1701,8 @@ public:
             || !hasUnchangedDxfAssociativeValueSources()
             || !hasUnchangedExtensionDictionaryOwnerSources()
             || !hasUnchangedDwgGeoDataGraphs()
+            || (!m_extensionDbColorHandles.empty()
+                && !hasUnchangedDwgDbColorEedDependencies(*cData))
             || !hasUnchangedDynamicBlockOutputProfile()
             || !hasUnchangedExtensionMaterialSources()
             || !hasUnchangedDxfDictionaryVars() || !hasUnchangedDxfScales()
@@ -1958,6 +1960,20 @@ public:
             if (!recordOpaqueDwgOutputQualification(handle)) {
                 std::cerr << "RASTERVARIABLES output frame qualification failed for handle "
                           << handle << '\n';
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+        }
+        objectWritePhase = "DBCOLOR";
+        for (const std::uint32_t handle : m_extensionDbColorHandles) {
+            const dx_data::DwgDbColorKey key{cData->importGeneration, handle};
+            const auto color = cData->dwgDbColorObjects.find(key);
+            if (color == cData->dwgDbColorObjects.end()
+                || !dxfW->writeDbColor(&color->second, "DBCOLOR")) {
+                dxfW->writeRawDxfObject(nullptr);
+                return;
+            }
+            if (!recordOpaqueDwgOutputQualification(handle)) {
                 dxfW->writeRawDxfObject(nullptr);
                 return;
             }
@@ -4264,6 +4280,7 @@ private:
     bool inspectDwgGeoDataTables(const dxfRW::DxfTablesWriteView& view) noexcept;
     bool inspectDwgGeoDataObjects(const dxfRW::DxfObjectsWriteView& view) noexcept;
     std::vector<std::uint32_t> m_extensionRasterVariablesHandles;
+    std::vector<std::uint32_t> m_extensionDbColorHandles;
     std::vector<std::uint32_t> m_extensionWipeoutVariablesHandles;
     std::vector<std::uint32_t> m_extensionSunStudyHandles;
     bool m_sunStudyOutputInspected{false};

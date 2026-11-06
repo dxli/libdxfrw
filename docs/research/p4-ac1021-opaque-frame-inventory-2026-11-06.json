@@ -17,12 +17,13 @@
       "count": 74,
       "customClassCount": 68,
       "fixedTypeCount": 6,
-      "outputQualified": 57,
+      "outputQualified": 58,
       "outputQualifiedByRecord": {
         "VISUALSTYLE": 25,
         "SCALE": 17,
         "DICTIONARYVAR": 12,
-        "MATERIAL": 3
+        "MATERIAL": 3,
+        "DBCOLOR": 1
       },
       "byRecord": {
         "VISUALSTYLE": 25,
@@ -49,9 +50,9 @@
       },
       "typedPayloadMatches": 112,
       "opaquePayloadMatches": 0,
-      "outputQualified": 61
+      "outputQualified": 63
     },
-    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. Bounded physical AC1021 routes qualify 25 typed VISUALSTYLE records plus their 25 extension dictionaries and 25 XRECORDs (50 standard frames), 17 rooted SCALE records, 12 rooted DICTIONARYVAR records, and the three MATERIAL records with their owner/extension dictionaries and seven XRECORDs (11 additional standard frames). The MATERIAL slice checks selected ASCII/Binary output, exact typed and payload readback, atomic refusal and retry. The remaining 17 opaque carriers and 51 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. Bounded physical AC1021 routes qualify 25 typed VISUALSTYLE records plus their 25 extension dictionaries and 25 XRECORDs (50 standard frames), 17 rooted SCALE records, 12 rooted DICTIONARYVAR records, three MATERIAL records with their owner/extension dictionaries and seven XRECORDs (11 additional standard frames), and one DBCOLOR record with its ACAD_COLOR owner dictionary and source-bound ACAD APPID row (two additional standard frames). The MATERIAL and DBCOLOR slices check selected ASCII/Binary output, typed and source payload readback, atomic refusal and retry. The remaining 16 opaque carriers and 49 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -92,12 +93,19 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Continue with an inventory-backed source family whose typed parser and writer route already exist, starting with ACDBSECTIONVIEWSTYLE/ACDBDETAILVIEWSTYLE or DBCOLOR. Require exact root/dependency closure and fresh ASCII/Binary readback, and keep unqualified frames and whole-source output refused.",
+  "nextAction": "Continue with an inventory-backed source family whose typed parser and writer route already exist, starting with ACDBSECTIONVIEWSTYLE/ACDBDETAILVIEWSTYLE or another DBCOLOR producer/version profile. Require exact root/dependency closure and fresh ASCII/Binary readback, and keep unqualified frames and whole-source output refused.",
   "materialCandidateBoundary": {
     "record": "MATERIAL",
     "observedCount": 3,
     "selector": "--material-ac1021-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg",
     "result": "PASS. The selected ACAD_MATERIAL root, three MATERIAL records, owner and extension dictionaries, and seven XRECORDs pass ASCII/Binary output and fresh readback. Typed material fields/common links, dictionary keys/targets and available roles, XRECORD owners/payloads, late-mutation and invalid-owner-key atomic refusal, destination preservation and same-adapter retry are checked. Source DWG edge-code annotations are incomplete, so no independent 350/360 source-role claim is made where the annotation is absent. Selected graph only; see the dedicated MATERIAL receipt.",
     "receipt": "docs/research/p4-ac1021-material-physical-selected-output-2026-11-06.json"
+  },
+  "dbColorCandidateBoundary": {
+    "record": "DBCOLOR",
+    "observedCount": 1,
+    "selector": "--dbcolor-physical-eed-source /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "result": "PASS. The selected projection includes the NOD ACAD_COLOR root, its one-entry dictionary, one typed color-book DBCOLOR, the source-bound ACAD APPID row, and all 13 source EED tuples. ASCII/Binary output and fresh readback verify RGB/book/name, key and target, owner/reactor roles, APPID and EED payload. Late color and dictionary mutation plus an invalid key refuse atomically with destination preservation; the same writer retries after restoration. DWG-only CMC metadata is not claimed as DXF-preserved semantics. Selected graph only; see the dedicated DBCOLOR receipt.",
+    "receipt": "docs/research/p4-ac1021-dbcolor-physical-selected-output-2026-11-06.json"
   }
 }
