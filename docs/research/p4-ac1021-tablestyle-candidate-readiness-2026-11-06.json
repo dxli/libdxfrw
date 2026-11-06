@@ -76,7 +76,13 @@
     "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --tablestyle-physical-ac1021-selected-output /Users/dli/doc/dwg/lineweights.dwg",
     "buildExecutableSha256": "23a3e206fcfc2fa258fc9b036cb91c1125b84d9909b888832892d6d88c5e80c3",
     "result": "The test-only selected projection passed source admission only after preserving the physical object baselines, but AC1024 output did not complete. The invalid text-style mutation was rejected atomically; after restoring it, output finalization detected a duplicate emitted handle 0x172 for STYLE and TABLESTYLE. The experimental test and attempted AC1021 production admission were reverted; the committed source remains fail closed.",
-    "interpretation": "The source subset currently lacks a trustworthy output-handle binding for the selected STYLE/TABLESTYLE pair. Do not enable AC1021 TABLESTYLE output by merely widening the version allowlist. Build a projection that preserves source identity and a unique emitted-handle map for every selected dependency, then rerun ASCII/Binary output and fresh readback.",
+    "interpretation": "The local parser decodes the physical hard-pointer correctly as text STYLE handle 17, matching LibreDWG. The temporary projection rejected the invalid-reference mutation atomically, but its restored write mapped emitted STYLE and TABLESTYLE records to the same handle 0x172. The experimental test and attempted AC1021 production admission were reverted; committed code remains fail closed. Fix and validate selected source-to-output identity binding; do not change the parser or widen the version allowlist based on this experiment.",
     "fixtureDisposition": "No DWG/DXF fixture was committed; temporary output paths were cleaned by the test harness."
+  },
+  "localParserPointerCheck": {
+    "selector": "Temporary read-only import diagnostic, removed after observation",
+    "source": "/Users/dli/doc/dwg/lineweights.dwg (sha256 ad2656f141675aeda06ede347f8921516700b60a0f5ba17af042419be5397b4d)",
+    "result": "PASS: local AC1021 parser reports TABLESTYLE handle 370, owner 369, xdict 0; all three row text-style references decode to handle 17, matching the independently observed LibreDWG hard-pointer target. The four STYLE callbacks include handle 17 named Standard.",
+    "interpretation": "No AC1021 TABLESTYLE handle-layout/parser defect is indicated. The 0x172 output collision arose in the temporary selected projection/emission binding; retain the production parser unchanged."
   }
 }
