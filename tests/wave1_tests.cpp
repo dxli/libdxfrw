@@ -3524,7 +3524,7 @@ void testDbColorIdentityRemapping(TestContext& t) {
         // The ODA-produced color-book witness carries both the ACI fallback
         // and true color. DXF group order is not guaranteed; the true-color
         // method must survive either order, including an explicit ACI zero.
-        for (const int fallback : {0, 254}) {
+        for (const int fallback : {0, 254, 256}) {
             for (const bool aciFirst : {false, true}) {
                 std::ostringstream sourceBytes;
                 std::unique_ptr<dxfWriter> sourceWriter = binary
@@ -3611,21 +3611,28 @@ void testDbColorIdentityRemapping(TestContext& t) {
                      && readTyped(absentBytes, binary, absentReadback)
                      && !absentReadback.hasDxfColorIndex(),
                  "DBCOLOR RGB output does not invent an absent ACI fallback");
-        DRW_DbColor invalidIndex = makeColor();
-        invalidIndex.handle = source;
-        invalidIndex.setDxfColorIndex(0xFFFFu);
-        std::string rejectedBytes;
-        const bool rejectedIndex = !writeTyped(invalidIndex, binary, rejectedBytes)
-            && rejectedBytes.empty() && invalidIndex.hasDxfColorIndex()
-            && invalidIndex.colorIndex == 0xFFFFu;
-        invalidIndex.setDxfColorIndex(254u);
+        bool rejectedInvalidIndices = true;
+        for (const std::uint16_t invalid : {257u, 0xFFFFu}) {
+            DRW_DbColor invalidIndex = makeColor();
+            invalidIndex.handle = source;
+            invalidIndex.setDxfColorIndex(invalid);
+            std::string rejectedBytes;
+            rejectedInvalidIndices = rejectedInvalidIndices
+                && !writeTyped(invalidIndex, binary, rejectedBytes)
+                && rejectedBytes.empty() && invalidIndex.hasDxfColorIndex()
+                && invalidIndex.colorIndex == invalid;
+        }
+        DRW_DbColor correctedIndex = makeColor();
+        correctedIndex.handle = source;
+        correctedIndex.setDxfColorIndex(254u);
         std::string retriedBytes;
         DRW_DbColor retriedIndex;
-        t.expect(rejectedIndex && writeTyped(invalidIndex, binary, retriedBytes)
+        t.expect(rejectedInvalidIndices
+                     && writeTyped(correctedIndex, binary, retriedBytes)
                      && readTyped(retriedBytes, binary, retriedIndex)
                      && retriedIndex.hasDxfColorIndex()
                      && retriedIndex.colorIndex == 254u,
-                 "DBCOLOR unrepresentable ACI refusal preserves caller state for corrected retry");
+                 "DBCOLOR out-of-domain ACI refusal preserves caller state for corrected retry");
         std::ostringstream output;
         dxfRW owner("");
         owner.version = DRW::AC1032;

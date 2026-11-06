@@ -36596,8 +36596,10 @@ bool dxfRW::writeDbColor(DRW_DbColor *ent, const char *recordName) {
     if (recordName == nullptr || *recordName == '\0')
         return failDxfWrite();
     const bool writeColorIndex = ent->rgb < 0 || ent->hasDxfColorIndex();
-    if (writeColorIndex && ent->colorIndex > static_cast<std::uint16_t>(
-            std::numeric_limits<std::int16_t>::max()))
+    // AcDbColor's CMC index is an ACI value: 0 is BYBLOCK, 1..255 are
+    // indexed colors, and 256 is BYLAYER. Keep DXF input tolerant, but do
+    // not publish values outside that documented domain.
+    if (writeColorIndex && ent->colorIndex > 256u)
         return failDxfWrite();
     const std::uint32_t sourceHandle = ent->handle;
     std::uint32_t emittedHandle = sourceHandle == 0u

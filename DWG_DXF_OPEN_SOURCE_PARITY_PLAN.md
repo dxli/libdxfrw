@@ -490,6 +490,11 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    with multiple ODA outputs. Determine the actual mapping before synthesizing
    a fallback; see the [EED differential](docs/research/p4-dbcolor-oda-fallback-eed-counterexamples-2026-11-03.json)
    and [palette differential](docs/research/p4-dbcolor-oda-palette-differential-2026-11-03.json).
+   The low-level DBCOLOR writer now rejects a present group-62 ACI above 256
+   before output, while retaining tolerant input and same-object retry. ASCII/
+   Binary checks cover 0, 254, 256, 257 and 65535; this closes the modeled
+   output-domain gap only and does not infer the DWG CMC fallback
+   ([receipt](docs/research/p4-dbcolor-dxf-aci-domain-guard-2026-11-05.json)).
    The `DICTIONARYWDFLT` default edge is checked as a hard pointer before it can
    become a typed reference; the generated wrong-role, rollback, and cursor
    alignment control is in the [default-handle role receipt](docs/research/p4-dictionary-default-handle-role-guard-2026-11-02.json).
