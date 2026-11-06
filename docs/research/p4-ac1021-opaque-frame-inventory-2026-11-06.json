@@ -62,9 +62,9 @@
       },
       "typedPayloadMatches": 112,
       "opaquePayloadMatches": 0,
-      "outputQualified": 90
+      "outputQualified": 98
     },
-    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify all 74 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, one CELLSTYLEMAP, one RASTERVARIABLES, and one SORTENTSTABLE. They qualify 90 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining 22 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify all 74 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, one CELLSTYLEMAP, one RASTERVARIABLES, and one SORTENTSTABLE. They qualify 98 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining 14 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -157,18 +157,19 @@
     "schemaDictionary": "0x3C3FF",
     "recordDictionary": "0x3C400",
     "xrecordHandles": ["0x3C3F9", "0x3C3FA", "0x3C3FB", "0x3C3FC", "0x3C3FD"],
-    "result": "SOURCE PROFILE PASS. Two complete dictionary levels, an empty AcDsRecords sibling, and five typed XRECORD children have unique source frames, reciprocal ownership/reactors and common-link tails. The first XRECORD contains four ordered group-341 references to the other four schema records; the remaining four records are scalar-only.",
-    "receipt": "docs/research/p4-ac1021-acds-decompose-data-source-profile-2026-11-06.json",
-    "limit": "Selected output/readback is not yet qualified; source fields do not establish ACDS semantics or DWG wire-role encoding."
+    "result": "PASS for selected physical ASCII/Binary output and fresh typed readback. Both NOD/dictionary levels, all five ordered schema XRECORDs and four remapped group-341 references are verified. Mutation refusal preserves the destination and same-adapter retry succeeds. DXF's generated {ACAD_REACTORS} appData wrapper is checked as the only synthesized application group, with exact decoded reactor identity.",
+    "receipt": "docs/research/p4-ac1021-acds-decompose-data-physical-selected-output-2026-11-06.json",
+    "sourceProfileReceipt": "docs/research/p4-ac1021-acds-decompose-data-source-profile-2026-11-06.json",
+    "limit": "One selected graph from an unauthenticated local source only. This does not establish native ACDS semantics, independent DWG wire-role encoding, whole-source output, or producer-wide support."
   },
   "diagnostic": {
     "testSource": "tests/dwg2dxf_adapter_tests.cpp",
-    "testSourceSha256": "db225df84a3ab4ce89dd48bd21b90d31975eb5c6a35cbedf7b37f17d90537c11",
+    "testSourceSha256": "7e5c61102061f68d507e52a8bc88287ef9de5ab9f7008c7dff214770561df7ee",
     "executable": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests",
-    "executableSha256": "34d7b6f25f374df2addeb416de0222e0b1790dfdce8297fb465361ca51abd082",
+    "executableSha256": "ab471446f0e46ea532b66b89a85156b6c93ccef12cd4cd50e4730fae78a1ae7c",
     "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/children-room-decoration.dwg",
     "result": "PASS; prints per-handle source type, class and carrier records for all 74 opaque carrier records and all 112 standard-object source frames, including DICTIONARY/XRECORD payloads, ordered key/target edges, NOD root keys and target handles, and GROUP callback count.",
-    "logPath": "/private/tmp/p4-ac1021-opaque-inventory-post-acds-screen-2026-11-06.log",
+    "logPath": "/tmp/p4-ac1021-opaque-inventory-post-acds-output-2026-11-06.log",
     "logSha256": "26568efae6219f75419ee2f31bcea322f9245e33631a8a3eb59debf38d4f8499"
   },
   "limits": [
@@ -176,7 +177,7 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Build and qualify selected ASCII/Binary output for the screened AcDsDecomposeData two-level dictionary and five-XRECORD graph; prove ordered group-341 references, readback, mutation refusal and retry. Continue qualifying the 22 remaining standard-object frames; keep whole-source output, native semantics, producer-wide coverage, populated GROUP and image graphs, and named-block SORTENTSTABLE profiles open.",
+  "nextAction": "Identify the next smallest fully typed, dependency-closed candidate among the 14 unqualified standard-object frames, then prove source membership/roles, selected ASCII/Binary output/readback, invalid-graph refusal, destination preservation and retry. Keep whole-source output, native semantics, producer-wide coverage, populated GROUP and image graphs, and named-block SORTENTSTABLE profiles open.",
   "sortEntsCandidateBoundary": {
     "record": "SORTENTSTABLE",
     "handle": "0x2DF",
@@ -249,10 +250,10 @@
     "evidence": "Current source inventory selector output reconciled with selected-source output qualification. Handles 0xF (ACDBPLACEHOLDER), 0x18 (MLINESTYLE), 0x22 (Model LAYOUT), 0xD7 (dwgmodels.com LAYOUT), 0x266/0x26A (VIEWPORT), 0x2D2 (RASTERVARIABLES), and 0x2DF (ModelSpace SORTENTSTABLE) have bounded selected-output qualification; no opaque source-frame identity remains unqualified in this source inventory.",
     "frames": [],
     "inventorySelector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/children-room-decoration.dwg",
-    "inventoryLogSha256": "c23a95e309acbd757994ddcb49b09f12607d552b3e47701cf8891104168fbcbd",
+    "inventoryLogSha256": "26568efae6219f75419ee2f31bcea322f9245e33631a8a3eb59debf38d4f8499",
     "mlineStyleTrace": "dwg2dxf -d on the same source; parser trace around object 0x18 identifies STANDARD, flags 0 and two elements; not an independent wire-layout oracle.",
     "mlineStyleTraceLogSha256": "5f8ae476e5febb539ef46a8511662840c0411cc21a3dbf9dcbf85c9a0fa157e7",
-    "limit": "This is a source-inventory and bounded selected-output update only. All opaque source frames and 84 of 112 standard-object frames have selected-output qualification; 28 standard-object frames remain unqualified. Selected projection output does not qualify the whole source drawing, native semantics, or producer-wide support."
+    "limit": "This is a source-inventory and bounded selected-output update only. All opaque source frames and 98 of 112 standard-object frames have selected-output qualification; 14 standard-object frames remain unqualified. Selected projection output does not qualify the whole source drawing, native semantics, or producer-wide support."
   },
   "mLineStyleCandidateBoundary": {
     "record": "MLINESTYLE",

@@ -77372,7 +77372,35 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         && wipeoutVariablesFirst->first.first == cData->importGeneration;
     const bool hasPointCloudObjectRecords =
         cData->pointCloudObjectRetainedRecords != 0u;
+    // A selected DWG projection may consist of one generic NOD-owned
+    // DICTIONARY graph (for example, an application dictionary with nested
+    // dictionaries and XRECORDs). Route that graph through the same rooted
+    // closure checks as the named built-in families instead of silently
+    // omitting its NOD edge. Requiring a unique typed target and exact NOD
+    // ownership keeps unrelated or partial roots out of this route.
+    bool hasSingleDwgNodDictionaryGraph = false;
+    if (cData->sourceFormat == dx_source_format::DWG
+        && cData->hasNamedObjectDictionary
+        && cData->namedObjectDictionary.m_entries.size() == 1u) {
+        const DRW_Dictionary::Entry& rootEntry =
+            cData->namedObjectDictionary.m_entries.front();
+        std::size_t targetMatches = 0u;
+        const DRW_Dictionary* target = nullptr;
+        for (const DRW_Dictionary& dictionary : cData->dictionaries) {
+            if (dictionary.handle != rootEntry.m_handle)
+                continue;
+            target = &dictionary;
+            ++targetMatches;
+        }
+        hasSingleDwgNodDictionaryGraph = !rootEntry.m_name.empty()
+            && rootEntry.m_handle != 0u
+            && rootEntry.m_handle != DRW::NoHandle
+            && targetMatches == 1u && target != nullptr
+            && target->parentHandle == cData->namedObjectDictionary.handle
+            && target->hasCompleteDwgEntries();
+    }
     const bool includeNamedObjectRoot = requireResolvedOwners
+        || hasSingleDwgNodDictionaryGraph
         || hasPointCloudObjectRecords
         || hasDwgAssociativeObjects
         || validateVisualStyles || validateMLineStyles

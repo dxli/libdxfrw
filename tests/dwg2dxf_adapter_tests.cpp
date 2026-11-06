@@ -814,6 +814,213 @@ public:
         return true;
     }
 
+    static bool selectPhysicalAc1021AcDsDecomposeDataGraph(
+            const dx_data& source, dx_data& projection) {
+        constexpr std::uint32_t rootHandle = 246782u;
+        constexpr std::uint32_t schemasHandle = 246783u;
+        constexpr std::uint32_t recordsHandle = 246784u;
+        const std::array<std::uint32_t, 5> recordHandles{
+            246777u, 246778u, 246779u, 246780u, 246781u};
+        if (source.sourceFormat != dx_source_format::DWG
+            || source.sourceVersion != DRW::AC1021
+            || source.importGeneration == 0u
+            || !selectPhysicalAc1021TableStyleGraph(source, projection)
+            || !source.hasNamedObjectDictionary
+            || !source.namedObjectDictionary.hasCompleteDwgEntries())
+            return false;
+        const auto dictionaryByHandle = [&source](std::uint32_t handle)
+                -> const DRW_Dictionary* {
+            const DRW_Dictionary* result = nullptr;
+            for (const DRW_Dictionary& candidate : source.dictionaries) {
+                if (candidate.handle != handle) continue;
+                if (result != nullptr) return nullptr;
+                result = &candidate;
+            }
+            return result;
+        };
+        const DRW_Dictionary* root = dictionaryByHandle(rootHandle);
+        const DRW_Dictionary* schemas = dictionaryByHandle(schemasHandle);
+        const DRW_Dictionary* records = dictionaryByHandle(recordsHandle);
+        const auto nodRootCount = std::count_if(
+            source.namedObjectDictionary.m_entries.begin(),
+            source.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "AcDsDecomposeData"
+                    && entry.m_handle == rootHandle;
+            });
+        if (nodRootCount != 1u || root == nullptr || schemas == nullptr
+            || records == nullptr
+            || root->parentHandle != source.namedObjectDictionary.handle
+            || root->reactorHandles
+                != std::vector<std::uint32_t>{
+                    source.namedObjectDictionary.handle}
+            || !root->hasCompleteDwgEntries()
+            || root->m_entries.size() != 2u
+            || root->m_entries[0].m_name != "AcDsRecords"
+            || root->m_entries[0].m_handle != recordsHandle
+            || root->m_entries[1].m_name != "AcDsSchemas"
+            || root->m_entries[1].m_handle != schemasHandle
+            || schemas->parentHandle != rootHandle
+            || schemas->reactorHandles
+                != std::vector<std::uint32_t>{rootHandle}
+            || !schemas->hasCompleteDwgEntries()
+            || schemas->m_entries.size() != recordHandles.size()
+            || records->parentHandle != rootHandle
+            || records->reactorHandles
+                != std::vector<std::uint32_t>{rootHandle}
+            || !records->hasCompleteDwgEntries()
+            || !records->m_entries.empty())
+            return false;
+
+        std::vector<const DRW_XRecord*> selectedRecords;
+        selectedRecords.reserve(recordHandles.size());
+        std::set<std::string> schemaNames;
+        for (std::size_t index = 0; index < recordHandles.size(); ++index) {
+            const std::uint32_t handle = recordHandles[index];
+            const DRW_Dictionary::Entry& edge = schemas->m_entries[index];
+            const DRW_XRecord* selected = nullptr;
+            std::size_t matches = 0u;
+            for (const DRW_XRecord& candidate : source.xRecords) {
+                if (candidate.handle != handle) continue;
+                selected = &candidate;
+                ++matches;
+            }
+            if (matches != 1u || selected == nullptr
+                || edge.m_handle != handle || edge.m_name.empty()
+                || !schemaNames.insert(edge.m_name).second
+                || selected->parentHandle != schemasHandle
+                || selected->reactorHandles
+                    != std::vector<std::uint32_t>{schemasHandle}
+                || !selected->hasDwgCommonLinkTail()
+                || selected->xDictHandle != 0u
+                || !selected->appData.empty() || !selected->extData.empty()
+                || selected->m_rawDataValid || !selected->m_rawData.empty()
+                || !DxIfaceStandardDwgCaptureTestAccess::
+                    standardSourceEligible(source, handle))
+                return false;
+            std::vector<std::pair<int, std::uint32_t>> orderedHandleValues;
+            for (const DRW_Variant& value : selected->m_dataEntries) {
+                if (value.code() != 341) continue;
+                if (value.type() != DRW_Variant::INTEGER64
+                    || value.i64_val() <= 0
+                    || value.i64_val()
+                        > std::numeric_limits<std::uint32_t>::max())
+                    return false;
+                orderedHandleValues.emplace_back(value.code(),
+                    static_cast<std::uint32_t>(value.i64_val()));
+            }
+            if (orderedHandleValues != selected->m_handleValues
+                || (index == 0u
+                    && selected->m_handleValues
+                        != std::vector<std::pair<int, std::uint32_t>>{
+                            {341, recordHandles[1]},
+                            {341, recordHandles[2]},
+                            {341, recordHandles[3]},
+                            {341, recordHandles[4]}})
+                || (index != 0u && !selected->m_handleValues.empty()))
+                return false;
+            selectedRecords.push_back(selected);
+        }
+
+        const std::string rootName = "AcDsDecomposeData";
+        const DRW_Dictionary::Entry* nodRoot = nullptr;
+        for (const DRW_Dictionary::Entry& entry :
+                source.namedObjectDictionary.m_entries)
+            if (entry.m_name == rootName && entry.m_handle == rootHandle)
+                nodRoot = &entry;
+        if (nodRoot == nullptr)
+            return false;
+        projection.namedObjectDictionary.m_entries.erase(
+            std::remove_if(
+                projection.namedObjectDictionary.m_entries.begin(),
+                projection.namedObjectDictionary.m_entries.end(),
+                [&rootName](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name != rootName;
+                }),
+            projection.namedObjectDictionary.m_entries.end());
+        if (projection.namedObjectDictionary.m_entries.size() != 0u)
+            return false;
+        projection.namedObjectDictionary.m_entries.push_back(*nodRoot);
+
+        std::set<std::uint32_t> selectedDictionaryHandles;
+        projection.dictionaries.clear();
+        const auto appendDictionary = [&](std::uint32_t handle,
+                                          std::uint32_t expectedOwner) {
+            const DRW_Dictionary* candidate = dictionaryByHandle(handle);
+            if (candidate == nullptr || candidate->parentHandle != expectedOwner
+                || !candidate->hasCompleteDwgEntries()
+                || !selectedDictionaryHandles.insert(handle).second)
+                return false;
+            projection.dictionaries.push_back(*candidate);
+            return true;
+        };
+        if (!appendDictionary(rootHandle,
+                source.namedObjectDictionary.handle)
+            || !appendDictionary(schemasHandle, rootHandle)
+            || !appendDictionary(recordsHandle, rootHandle))
+            return false;
+        if (projection.namedObjectDictionary.xDictHandle != 0u
+            && !appendDictionary(
+                projection.namedObjectDictionary.xDictHandle,
+                source.namedObjectDictionary.handle))
+            return false;
+        for (const DRW_Layer& layer : projection.layers)
+            if (layer.xDictHandle != 0u
+                && !appendDictionary(layer.xDictHandle, layer.handle))
+                return false;
+
+        projection.tableStyles.clear();
+        projection.cellStyleMaps.clear();
+        projection.xRecords.clear();
+        for (const DRW_XRecord* record : selectedRecords) {
+            if (record == nullptr)
+                return false;
+            projection.xRecords.push_back(*record);
+        }
+        projection.m_opaqueDwgSourceFrames.clear();
+        projection.m_opaqueDwgSourceFrameIdentities.clear();
+        projection.m_opaqueDwgSourceFrameRetainedBytes = 0u;
+        projection.m_standardDwgObjectFrames.clear();
+        projection.m_standardDwgObjectOrdinals.clear();
+        projection.m_standardDwgObjectRetainedBytes = 0u;
+        const auto includeStandardFrame = [&](std::uint32_t handle) {
+            const dx_data::StandardDwgFrameKey key{
+                source.importGeneration, handle};
+            const auto frame = source.m_standardDwgObjectFrames.find(key);
+            if (frame == source.m_standardDwgObjectFrames.end()
+                || !DxIfaceStandardDwgCaptureTestAccess::
+                    standardSourceEligible(source, handle)
+                || !projection.m_standardDwgObjectFrames.emplace(*frame).second)
+                return false;
+            const auto ordinal = source.m_standardDwgObjectOrdinals.find(key);
+            if (ordinal != source.m_standardDwgObjectOrdinals.end())
+                projection.m_standardDwgObjectOrdinals.emplace(*ordinal);
+            projection.m_standardDwgObjectRetainedBytes +=
+                frame->second.raw.m_rawBytes.size();
+            return true;
+        };
+        for (const std::uint32_t handle : selectedDictionaryHandles)
+            if (!includeStandardFrame(handle)) return false;
+        for (const DRW_XRecord* record : selectedRecords)
+            if (record == nullptr || !includeStandardFrame(record->handle))
+                return false;
+        projection.m_standardDwgObjectMembershipEntries =
+            source.m_standardDwgObjectMembershipEntries;
+        projection.m_standardDwgObjectCaptureFailed =
+            source.m_standardDwgObjectCaptureFailed;
+        projection.m_standardDwgObjectPayloadFailed =
+            source.m_standardDwgObjectPayloadFailed;
+        projection.m_standardDwgNamesClosedThrough =
+            source.m_standardDwgNamesClosedThrough;
+        projection.m_standardDwgAppIdSources =
+            source.m_standardDwgAppIdSources;
+        projection.m_standardDwgLayerSources =
+            source.m_standardDwgLayerSources;
+        return projection.namedObjectDictionary.hasCompleteDwgEntries()
+            && projection.namedObjectDictionary.hasCompleteDxfEntries()
+            && projection.hasCompleteDwgLineTypeControlMembership();
+    }
+
     static bool selectPhysicalAc1021MLineStyleGraph(
             const dx_data& source, dx_data& projection) {
         if (source.sourceFormat != dx_source_format::DWG
@@ -55115,6 +55322,370 @@ bool inspectAc1021AcDsDecomposeDataSourceProfile(
     return true;
 }
 
+bool physicalAc1021AcDsDecomposeDataOutputReadback(
+        const std::filesystem::path& sourcePath) {
+    constexpr std::uint32_t rootHandle = 246782u;
+    constexpr std::uint32_t schemasHandle = 246783u;
+    constexpr std::uint32_t recordsHandle = 246784u;
+    constexpr std::uint32_t mutatedRecordHandle = 246777u;
+    const std::array<std::uint32_t, 5> recordHandles{
+        246777u, 246778u, 246779u, 246780u, 246781u};
+    const std::string rootName = "AcDsDecomposeData";
+    const auto dictionaryByHandle = [](const dx_data& data,
+                                       std::uint32_t handle)
+            -> const DRW_Dictionary* {
+        const DRW_Dictionary* result = nullptr;
+        for (const DRW_Dictionary& candidate : data.dictionaries) {
+            if (candidate.handle != handle) continue;
+            if (result != nullptr) return nullptr;
+            result = &candidate;
+        }
+        return result;
+    };
+    const auto recordByHandle = [](const dx_data& data,
+                                   std::uint32_t handle)
+            -> const DRW_XRecord* {
+        const DRW_XRecord* result = nullptr;
+        for (const DRW_XRecord& candidate : data.xRecords) {
+            if (candidate.handle != handle) continue;
+            if (result != nullptr) return nullptr;
+            result = &candidate;
+        }
+        return result;
+    };
+    const auto variantEqual = [](const DRW_Variant& source,
+                                const DRW_Variant& output,
+                                const std::map<std::uint32_t, std::uint32_t>& handles) {
+        if (source.code() != output.code() || source.type() != output.type())
+            return false;
+        switch (source.type()) {
+        case DRW_Variant::STRING:
+            return std::string(source.c_str()) == output.c_str();
+        case DRW_Variant::INTEGER:
+            return source.i_val() == output.i_val();
+        case DRW_Variant::INTEGER64: {
+            const std::int64_t value = source.i64_val();
+            if (source.code() == 341) {
+                if (value <= 0
+                    || value > std::numeric_limits<std::uint32_t>::max())
+                    return false;
+                const auto mapped = handles.find(
+                    static_cast<std::uint32_t>(value));
+                return mapped != handles.end()
+                    && output.i64_val() == mapped->second;
+            }
+            return value == output.i64_val();
+        }
+        case DRW_Variant::DOUBLE:
+            return source.d_val() == output.d_val();
+        case DRW_Variant::COORD: {
+            const DRW_Coord* left = source.coord();
+            const DRW_Coord* right = output.coord();
+            return left != nullptr && right != nullptr
+                && left->x == right->x && left->y == right->y
+                && left->z == right->z;
+        }
+        case DRW_Variant::BINARY: {
+            const auto* left = source.binary();
+            const auto* right = output.binary();
+            return left != nullptr && right != nullptr && *left == *right;
+        }
+        default:
+            return false;
+        }
+    };
+    const auto hasOnlyReactorAppGroup = [](const DRW_XRecord& record) {
+        if (record.appData.empty())
+            return record.reactorHandles.empty();
+        if (record.appData.size() != 1u)
+            return false;
+        const std::list<DRW_Variant>& group = record.appData.front();
+        if (group.size() != record.reactorHandles.size() + 2u)
+            return false;
+        auto value = group.begin();
+        if (value->code() != 102 || value->type() != DRW_Variant::STRING
+            || value->c_str() == nullptr
+            || std::string(value->c_str()) != "ACAD_REACTORS")
+            return false;
+        ++value;
+        for (std::size_t index = 0; index < record.reactorHandles.size();
+                ++index, ++value)
+            if (value->code() != 330)
+                return false;
+        return value->code() == 102
+            && value->type() == DRW_Variant::STRING
+            && value->c_str() != nullptr
+            && std::string(value->c_str()) == "}";
+    };
+    dx_iface sourceReader;
+    dx_data source;
+    if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+        || source.sourceVersion != DRW::AC1021
+        || !source.hasNamedObjectDictionary)
+        return fail("physical AC1021 AcDsDecomposeData import failed");
+    dx_data projection;
+    if (!DxIfaceStandardDwgCaptureTestAccess::
+            selectPhysicalAc1021AcDsDecomposeDataGraph(source, projection)
+        || projection.xRecords.size() != recordHandles.size()
+        || projection.dictionaries.size() < 3u
+        || projection.namedObjectDictionary.m_entries.size() != 1u
+        || DxIfaceStandardDwgCaptureTestAccess::
+            standardSourceFrameCount(projection) < 8u
+        || !projection.hasCompleteDwgLineTypeControlMembership())
+        return fail("physical AC1021 AcDsDecomposeData projection is not closed");
+
+    struct Writer final : dx_iface {
+        bool mutateAfterObjects{false};
+        void writeObjects() override {
+            dx_iface::writeObjects();
+            if (!mutateAfterObjects || cData == nullptr) return;
+            for (DRW_XRecord& record : cData->xRecords) {
+                if (record.handle != 246777u) continue;
+                record.reactorHandles.clear();
+                return;
+            }
+        }
+    } writer;
+    writer.cData = &projection;
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch().count();
+    for (const bool binary : {false, true}) {
+        const std::filesystem::path outputPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-acds-decompose-ac1021-" + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{outputPath};
+        const std::string sentinel = "AC1021 AcDsDecomposeData sentinel\n";
+        const auto seedDestination = [&]() {
+            std::ofstream output(outputPath, std::ios::binary | std::ios::trunc);
+            return output && static_cast<bool>(output << sentinel);
+        };
+        const auto destinationIsSentinel = [&]() {
+            std::ifstream input(outputPath, std::ios::binary);
+            const std::string contents{
+                std::istreambuf_iterator<char>(input), {}};
+            return contents == sentinel;
+        };
+        const auto write = [&]() {
+            return writer.fileExport(
+                outputPath.string(), DRW::AC1021, binary, &projection,
+                false, false, dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::AllowPartial);
+        };
+        if (!seedDestination())
+            return fail("could not seed AcDsDecomposeData output sentinel");
+        writer.mutateAfterObjects = true;
+        if (write() || !destinationIsSentinel())
+            return fail("late AcDsDecomposeData mutation published output");
+        DRW_XRecord* mutableRecord = nullptr;
+        for (DRW_XRecord& record : projection.xRecords)
+            if (record.handle == mutatedRecordHandle)
+                mutableRecord = &record;
+        if (mutableRecord == nullptr || !mutableRecord->reactorHandles.empty())
+            return fail("AcDsDecomposeData mutation hook did not reach OBJECTS");
+        mutableRecord->reactorHandles = {schemasHandle};
+        writer.mutateAfterObjects = false;
+        if (!write())
+            return fail("restored AcDsDecomposeData graph did not retry on same adapter: "
+                + writer.extensionGraphFailureDetail());
+
+        dx_iface outputReader;
+        dx_data output;
+        if (!outputReader.fileImport(outputPath.string(), &output, false)
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1021
+            || !output.hasNamedObjectDictionary)
+            return fail("AcDsDecomposeData output readback import failed");
+        const auto outputRootEntry = std::find_if(
+            output.namedObjectDictionary.m_entries.begin(),
+            output.namedObjectDictionary.m_entries.end(),
+            [&rootName](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == rootName;
+            });
+        const DRW_Dictionary* sourceRoot =
+            dictionaryByHandle(source, rootHandle);
+        if (std::count_if(
+                output.namedObjectDictionary.m_entries.begin(),
+                output.namedObjectDictionary.m_entries.end(),
+                [&rootName](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == rootName;
+                }) != 1
+            || outputRootEntry == output.namedObjectDictionary.m_entries.end()
+            || sourceRoot == nullptr
+            || outputRootEntry->m_dxfHandleCode
+                != (sourceRoot->hardOwner
+                    ? DRW_Dictionary::Entry::DxfHandleCode::HardOwner
+                    : DRW_Dictionary::Entry::DxfHandleCode::SoftOwner)) {
+            std::cerr << "AcDsDecomposeData root diagnostic keyCount="
+                      << std::count_if(
+                             output.namedObjectDictionary.m_entries.begin(),
+                             output.namedObjectDictionary.m_entries.end(),
+                             [&rootName](const DRW_Dictionary::Entry& entry) {
+                                 return entry.m_name == rootName;
+                             })
+                      << " rootPresent="
+                      << (outputRootEntry
+                          != output.namedObjectDictionary.m_entries.end())
+                      << " sourceHardOwner="
+                      << (sourceRoot ? sourceRoot->hardOwner : -1)
+                      << " outputRole="
+                      << (outputRootEntry
+                          == output.namedObjectDictionary.m_entries.end()
+                          ? -1 : static_cast<int>(
+                                outputRootEntry->m_dxfHandleCode)) << '\n';
+            return fail("AcDsDecomposeData NOD root key or owner role changed");
+        }
+        const std::uint32_t outputRootHandle = outputRootEntry->m_handle;
+        const DRW_Dictionary* outputRoot =
+            dictionaryByHandle(output, outputRootHandle);
+        if (outputRoot == nullptr
+            || outputRoot->parentHandle != output.namedObjectDictionary.handle
+            || outputRoot->m_entries.size() != 2u
+            || outputRoot->m_entries[0].m_name != "AcDsRecords"
+            || outputRoot->m_entries[1].m_name != "AcDsSchemas")
+            return fail("AcDsDecomposeData first dictionary level changed on readback");
+        const std::uint32_t outputRecordsHandle =
+            outputRoot->m_entries[0].m_handle;
+        const std::uint32_t outputSchemasHandle =
+            outputRoot->m_entries[1].m_handle;
+        const DRW_Dictionary* outputRecords =
+            dictionaryByHandle(output, outputRecordsHandle);
+        const DRW_Dictionary* outputSchemas =
+            dictionaryByHandle(output, outputSchemasHandle);
+        const DRW_Dictionary* sourceSchemas =
+            dictionaryByHandle(source, schemasHandle);
+        const DRW_Dictionary* sourceRecords =
+            dictionaryByHandle(source, recordsHandle);
+        if (outputRecords == nullptr || outputSchemas == nullptr
+            || sourceRoot == nullptr || sourceSchemas == nullptr
+            || sourceRecords == nullptr
+            || outputRecords->parentHandle != outputRootHandle
+            || outputSchemas->parentHandle != outputRootHandle
+            || !outputRecords->m_entries.empty()
+            || outputSchemas->m_entries.size() != recordHandles.size())
+            return fail("AcDsDecomposeData nested dictionary ownership changed");
+
+        std::map<std::uint32_t, std::uint32_t> handleMap{
+            {rootHandle, outputRootHandle},
+            {schemasHandle, outputSchemasHandle},
+            {recordsHandle, outputRecordsHandle}};
+        for (std::size_t index = 0; index < recordHandles.size(); ++index) {
+            if (sourceSchemas->m_entries[index].m_name
+                    != outputSchemas->m_entries[index].m_name)
+                return fail("AcDsDecomposeData schema key order changed on readback");
+            handleMap.emplace(recordHandles[index],
+                outputSchemas->m_entries[index].m_handle);
+        }
+        const auto verifyDictionaryEntries = [&](const DRW_Dictionary& from,
+                                                 const DRW_Dictionary& to) {
+            if (from.m_entries.size() != to.m_entries.size()) return false;
+            const auto mappedOwner = handleMap.find(from.handle);
+            if (mappedOwner == handleMap.end()
+                || mappedOwner->second != to.handle)
+                return false;
+            for (std::size_t index = 0; index < from.m_entries.size(); ++index) {
+                const DRW_Dictionary::Entry& sourceEntry = from.m_entries[index];
+                const DRW_Dictionary::Entry& outputEntry = to.m_entries[index];
+                const auto mappedTarget = handleMap.find(sourceEntry.m_handle);
+                if (sourceEntry.m_name != outputEntry.m_name
+                    || mappedTarget == handleMap.end()
+                    || mappedTarget->second != outputEntry.m_handle)
+                    return false;
+                const DRW_Dictionary::Entry::DxfHandleCode expectedCode =
+                    sourceEntry.m_dxfHandleCode
+                        == DRW_Dictionary::Entry::DxfHandleCode::Unspecified
+                    ? (from.hardOwner
+                        ? DRW_Dictionary::Entry::DxfHandleCode::HardOwner
+                        : DRW_Dictionary::Entry::DxfHandleCode::SoftOwner)
+                    : sourceEntry.m_dxfHandleCode;
+                if (outputEntry.m_dxfHandleCode != expectedCode)
+                    return false;
+            }
+            return true;
+        };
+        if (!verifyDictionaryEntries(*sourceRoot, *outputRoot)
+            || !verifyDictionaryEntries(*sourceSchemas, *outputSchemas)
+            || !verifyDictionaryEntries(*sourceRecords, *outputRecords))
+            return fail("AcDsDecomposeData dictionary key/target/role readback changed");
+
+        for (std::size_t index = 0; index < recordHandles.size(); ++index) {
+            const std::uint32_t sourceHandle = recordHandles[index];
+            const std::uint32_t outputHandle =
+                outputSchemas->m_entries[index].m_handle;
+            const DRW_XRecord* from = recordByHandle(source, sourceHandle);
+            const DRW_XRecord* to = recordByHandle(output, outputHandle);
+            if (from == nullptr || to == nullptr
+                || to->parentHandle != outputSchemasHandle
+                || to->reactorHandles
+                    != std::vector<std::uint32_t>{outputSchemasHandle}
+                || to->m_cloning != from->m_cloning
+                || to->xDictHandle != 0u || !to->extData.empty()
+                || !from->appData.empty()
+                || !hasOnlyReactorAppGroup(*to) || to->m_rawDataValid
+                || !to->m_rawData.empty()
+                || to->m_dataEntries.size() != from->m_dataEntries.size()
+                || to->m_handleValues.size() != from->m_handleValues.size()
+                || to->m_values.size() != from->m_values.size()) {
+                std::cerr << "AcDsDecomposeData XRECORD diagnostic index="
+                          << index << " from=" << (from != nullptr)
+                          << " to=" << (to != nullptr);
+                if (from != nullptr && to != nullptr)
+                    std::cerr << " parent=" << to->parentHandle << "/"
+                              << outputSchemasHandle << " reactors="
+                              << to->reactorHandles.size() << " cloning="
+                              << to->m_cloning << "/" << from->m_cloning
+                              << " reactor="
+                              << (to->reactorHandles.empty()
+                                  ? 0u : to->reactorHandles.front())
+                              << " extData=" << to->extData.size()
+                              << " appData=" << to->appData.size()
+                              << " canonicalReactors="
+                              << hasOnlyReactorAppGroup(*to)
+                              << " dataEntries=" << to->m_dataEntries.size()
+                              << "/" << from->m_dataEntries.size()
+                              << " handleValues=" << to->m_handleValues.size()
+                              << "/" << from->m_handleValues.size()
+                              << " values=" << to->m_values.size() << "/"
+                              << from->m_values.size() << " xdict="
+                              << to->xDictHandle << " raw=" << to->m_rawDataValid;
+                std::cerr << '\n';
+                return fail("AcDsDecomposeData XRECORD ownership/payload shape changed");
+            }
+            for (std::size_t valueIndex = 0;
+                    valueIndex < from->m_dataEntries.size(); ++valueIndex)
+                if (!variantEqual(from->m_dataEntries[valueIndex],
+                                  to->m_dataEntries[valueIndex], handleMap))
+                    return fail("AcDsDecomposeData ordered XRECORD body changed");
+            for (std::size_t valueIndex = 0;
+                    valueIndex < from->m_values.size(); ++valueIndex)
+                if (!variantEqual(from->m_values[valueIndex],
+                                  to->m_values[valueIndex], handleMap))
+                    return fail("AcDsDecomposeData compatibility XRECORD view changed");
+            std::vector<std::pair<int, std::uint32_t>> expectedHandles;
+            for (const auto& handleValue : from->m_handleValues) {
+                const auto target = handleMap.find(handleValue.second);
+                if (target == handleMap.end())
+                    return fail("AcDsDecomposeData handle target was not selected");
+                expectedHandles.emplace_back(handleValue.first, target->second);
+            }
+            if (to->m_handleValues != expectedHandles)
+                return fail("AcDsDecomposeData ordered handle-value targets changed");
+        }
+        std::cout << "Physical AC1021 AcDsDecomposeData "
+                  << (binary ? "Binary" : "ASCII")
+                  << " selected output/readback passed for the two-level dictionary, five XRECORDs and four remapped group-341 references; late mutation preserved the destination and same-adapter retry succeeded.\n";
+    }
+    return true;
+}
+
 bool physicalAc1021PreviousProductInfoOutputReadback(
         const std::filesystem::path& sourcePath) {
     constexpr std::uint32_t sourceHandle = 534u;
@@ -81057,6 +81628,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--ac1021-acds-decompose-data-source-profile")
         return inspectAc1021AcDsDecomposeDataSourceProfile(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--ac1021-acds-decompose-data-physical-output-readback")
+        return physicalAc1021AcDsDecomposeDataOutputReadback(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--ac1021-recompose-data-physical-output-readback")
         return physicalAc1021RecomposeDataOutputReadback(argv[2]) ? 0 : 1;

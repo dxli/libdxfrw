@@ -60,24 +60,29 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P4 / AC1021 `AcDsDecomposeData` schema graph:** source screening passes
-   on `children-room-decoration.dwg`. The NOD (`0xC`) has one
-   `AcDsDecomposeData` edge to dictionary `0x3C3FE`; that dictionary owns
-   `AcDsRecords` (`0x3C400`, empty) and `AcDsSchemas` (`0x3C3FF`, five ordered
-   entries). The schemas dictionary owns XRECORDs `0x3C3F9` through `0x3C3FD`;
-   each record has one reciprocal schema-dictionary reactor and an eligible
-   source frame. The first record has 31 ordered entries, including four
-   group-341 handle pairs to the other four schema XRECORDs; the other records
-   have 4, 4, 4 and 5 scalar entries. None has EED, APPDATA, an extension
-   dictionary or raw-data payload. Dictionary and XRECORD frame offsets/sizes,
-   source owners, keys and exact fields are recorded in the
-   [source-profile receipt](docs/research/p4-ac1021-acds-decompose-data-source-profile-2026-11-06.json).
-   Next build this exact selected graph and prove ASCII/Binary output with fresh
-   readback of both NOD/dictionary levels, ordered keys and bodies, remapped
-   group-341 targets, atomic late-mutation refusal, destination preservation
-   and same-adapter retry. Keep the graph selected-source only; strict
-   whole-source, native ACDS semantics, independent source wire-role proof and
-   support claims remain open.
+1. **P4 / AC1021 remaining standard-object frames:** the latest source
+   inventory has 112 standard-object frames; 98 now have bounded selected
+   ASCII/Binary output qualification, leaving 14. Identify the next smallest
+   fully typed, dependency-closed dictionary/XRECORD candidate from the source
+   inventory, then prove its source membership/roles, selected output and
+   fresh readback, invalid-graph refusal, destination preservation and retry.
+   Do not infer support from a callback or source frame alone. The latest slice
+   qualified the `AcDsDecomposeData` graph: its NOD (`0xC`) edge points to
+   dictionary `0x3C3FE`; that dictionary owns `AcDsRecords` (`0x3C400`, empty)
+   and `AcDsSchemas` (`0x3C3FF`, five ordered entries). The schemas dictionary
+   owns XRECORDs `0x3C3F9` through `0x3C3FD`; each has one reciprocal
+   schema-dictionary reactor. The first record has four ordered group-341
+   references to the other schema XRECORDs. ASCII/Binary output verifies both
+   dictionary levels, ordered payloads and remapped targets; mutation refusal
+   preserves the destination and the same adapter retries successfully. The
+   root is admitted through generic rooted-graph validation only when the DWG
+   projection has exactly one NOD key targeting one unique complete
+   NOD-owned DICTIONARY. See the
+   [selected-output receipt](docs/research/p4-ac1021-acds-decompose-data-physical-selected-output-2026-11-06.json)
+   and [source-profile receipt](docs/research/p4-ac1021-acds-decompose-data-source-profile-2026-11-06.json).
+   This remains one unauthenticated source profile; whole-source output, native
+   ACDS semantics, independent source wire-role proof and support claims remain
+   open.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
@@ -170,7 +175,7 @@ the distinct DBCOLOR source/output evidence gate. The 1,673 observed frames have
 zero entity/object parse failures, and no DXF is created. The 186 observer frames
 are 74 opaque carriers plus 112 standard-object frames; all 112 standard payloads
 match typed callbacks. Bounded selected-graph routes now qualify all 74 opaque
-carriers and 90 standard-object frames, with physical ASCII/Binary readback and
+carriers and 98 standard-object frames, with physical ASCII/Binary readback and
 applicable atomic refusal/retry. The physical AC1021 direct-NOD
 `ACDB_RECOMPOSE_DATA` XRECORD now qualifies its source frame (handle `0x3C3F8`,
 offset 7794, size 34), scalar group 90, ordered group-330 handle to
@@ -179,8 +184,15 @@ CELLSTYLEMAP graph. Selected ASCII/Binary output readback verifies remapped
 references and layer extension-dictionary ownership; late reactor mutation
 preserves the destination, and the same adapter succeeds after restoration
 ([receipt](docs/research/p4-ac1021-recompose-data-physical-selected-output-2026-11-06.json)).
-This is one local source/profile only and does not promote DWG support claims.
-The remaining 22 standard-object frames are unqualified. The same-version whole-source
+The physical AC1021 `AcDsDecomposeData` graph now also passes selected ASCII/Binary
+output and fresh readback across its NOD root, two DICTIONARY levels and five
+XRECORDs. It checks all four remapped group-341 references, exact ordered record
+payloads, reactor-group representation, mutation refusal, destination
+preservation and same-adapter retry ([receipt](docs/research/p4-ac1021-acds-decompose-data-physical-selected-output-2026-11-06.json)).
+The generic root route is limited to a single NOD edge targeting one unique,
+complete, NOD-owned DICTIONARY and uses the existing graph closure validation.
+These remain local selected-source profiles and do not promote DWG support
+claims. The remaining 14 standard-object frames are unqualified. The same-version whole-source
 recheck still stops at independent DBCOLOR and other document-wide gates. See
 the [same-version gate
 recheck](docs/research/p4-ac1021-children-room-same-version-output-gate-2026-11-05.json),
