@@ -43473,7 +43473,39 @@ bool dx_iface::inspectStandardDwgOutput(const dxfRW::DxfObjectsWriteView& view) 
             find(context->sourceHandleToWrittenTableMap);
             if (context->writtenSourceEntityHandles.count(source) != 0u)
                 find(context->sourceHandleToMintedMap);
-            return bindings == 1u && output != 0u;
+            if (bindings == 1u && output != 0u)
+                return true;
+
+            // The bounded DWG TABLESTYLE writer deliberately does not publish
+            // a generic source-object binding. It can still own a source
+            // DICTIONARY. Admit that dependency only after the TABLESTYLE
+            // inspector authenticated the family and staged identity.
+            const auto tableStyle = m_dwgTableStyleOutputSources.find(source);
+            if (bindings == 0u
+                && tableStyle != m_dwgTableStyleOutputSources.end()
+                && m_dwgTableStylesInspected
+                && hasUnchangedDwgTableStyleOutputSources()) {
+                output = dxfW->remapHandle(source);
+                bool bound = output != source;
+                for (const auto* aliases : {
+                        &context->sourceHandleToWrittenTableMap,
+                        &context->sourceHandleToWrittenObjectMap,
+                        &context->sourceHandleToMintedMap}) {
+                    const auto alias = aliases->find(source);
+                    if (alias == aliases->end())
+                        continue;
+                    if (bound && output != alias->second)
+                        return false;
+                    output = alias->second;
+                    bound = true;
+                }
+                if (bound && output != 0u && output != DRW::NoHandle
+                    && dxfW->dxfWriteRecordHandleCount(output) == 1u
+                    && dxfW->dxfWriteRecordHasIdentity(
+                        output, "TABLESTYLE", "OBJECTS"))
+                    return true;
+            }
+            return false;
         };
         const auto isAseHierarchyIndexCache = [this](
                 const DRW_XRecord& source) {

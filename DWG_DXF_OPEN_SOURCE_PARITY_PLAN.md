@@ -202,10 +202,16 @@ fresh typed readback, late mutation refusal, destination preservation and
 same-adapter retry ([receipt](docs/research/p4-ac1021-layerstates-one-root-physical-selected-output-2026-11-06.json)).
 This test-only projection removes unrelated object families so it can reach the
 selected writer; that pruning is not evidence for whole-source conversion.
-The neighboring AC1024 one-root empty-LayerStates selector currently fails on
-same-writer retry (`strict-complete` reports 227/228 opaque callbacks qualified)
-despite its earlier passing receipt. Resolve the current-code/context mismatch
-and restore this compatibility control before broadening the LayerStates route.
+The neighboring AC1024 one-root empty-LayerStates compatibility control now
+passes again. Its last unqualified callback was DICTIONARY `0x104`, owned by
+TABLESTYLE `0x87`; that table style receives a minted output identity without a
+generic object binding. The standard-object verifier now accepts this owner
+mapping only after TABLESTYLE source/output inspection, unchanged-source proof,
+and unique staged TABLESTYLE identity. ASCII/Binary refusal, sentinel
+preservation, same-adapter retry and fresh readback pass
+([receipt](docs/research/p4-ac1024-table-style-owned-dictionary-identity-bridge-2026-11-06.json)).
+This closes only the exact current AC1024 witness/control, not broader
+TABLESTYLE ownership profiles.
 The remaining 10 standard-object frames are unqualified. The same-version whole-source
 recheck still stops at independent DBCOLOR and other document-wide gates. See
 the [same-version gate
