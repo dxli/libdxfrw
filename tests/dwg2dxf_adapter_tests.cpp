@@ -50715,6 +50715,19 @@ bool physicalViewportOutputReadback(
     const bool ac1021Source = source.sourceVersion == DRW::AC1021;
     const DRW::Version outputVersion = ac1021Source
         ? DRW::AC1021 : DRW::AC1024;
+    const auto hasLayoutIdentity = [&source](std::uint32_t handle,
+                                               const char* name) {
+        return std::count_if(source.layouts.begin(), source.layouts.end(),
+            [handle, name](const DRW_Layout& layout) {
+                return layout.handle == handle && layout.name == name;
+            }) == 1u;
+    };
+    const bool ac1021LineweightsSource = ac1021Source
+        && source.layouts.size() == 3u
+        && hasLayoutIdentity(0x22u, "Model")
+        && hasLayoutIdentity(0x102u, "ISO A4 Size")
+        && hasLayoutIdentity(0x108u, "Letter Size")
+        && source.dwgReadOutcome.opaqueViewCallbacks == 49u;
 
     struct LocatedViewport {
         const DRW_Viewport* viewport{nullptr};
@@ -50723,7 +50736,12 @@ bool physicalViewportOutputReadback(
     };
     std::vector<std::uint32_t> expectedHandles;
     std::vector<std::pair<std::uint32_t, int>> expectedOpaqueCallbacks;
-    if (ac1021Source
+    if (ac1021LineweightsSource) {
+        expectedHandles = {0x104u, 0x105u, 0x10Au, 0x10Bu};
+        expectedOpaqueCallbacks = {
+            {0x104u, 34}, {0x105u, 34},
+            {0x10Au, 34}, {0x10Bu, 34}};
+    } else if (ac1021Source
         && source.dwgReadOutcome.opaqueViewCallbacks == 186u) {
         expectedHandles = {0x266u, 0x26Au};
         expectedOpaqueCallbacks = {
@@ -50977,7 +50995,7 @@ bool physicalViewportOutputReadback(
         }
         return found;
     };
-    if (ac1021Source) {
+    if (ac1021Source && !ac1021LineweightsSource) {
         const DRW_Layout* layout =
             uniqueLayoutByName(source, "dwgmodels.com");
         if (layout == nullptr || layout->handle != 0xD7u
@@ -51045,6 +51063,123 @@ bool physicalViewportOutputReadback(
                 return fail("AC1021 VIEWPORT extension graph is missing standard source-frame eligibility");
             if (styleMatches != 1u || layerMatches != 1u)
                 return fail("AC1021 VIEWPORT layer or visual-style dependency is missing/ambiguous");
+        }
+    } else if (ac1021LineweightsSource) {
+        const auto verifyLayout = [&source, &uniqueLayoutByName,
+                                   &uniqueBlockRecord](
+                const char* name, std::uint32_t layoutHandle,
+                std::uint32_t expectedBlockHandle,
+                std::initializer_list<std::uint32_t> viewportHandles) {
+            const DRW_Layout* layout = uniqueLayoutByName(source, name);
+            const std::uint32_t blockHandle = layout == nullptr ? 0u
+                : layout->paperSpaceBlockRecordHandle.ref;
+            const DRW_Block_Record* owner = uniqueBlockRecord(source, blockHandle);
+            return layout != nullptr && layout->handle == layoutHandle
+                && blockHandle == expectedBlockHandle
+                && layout->viewportCount
+                    == static_cast<std::int32_t>(viewportHandles.size())
+                && layout->viewportHandles
+                    == std::vector<std::uint32_t>(viewportHandles)
+                && owner != nullptr && owner->handle == blockHandle
+                && owner->layoutHandle == layoutHandle;
+        };
+        const bool layoutsMatch =
+            verifyLayout("ISO A4 Size", 0x102u, 0x103u,
+                         {0x104u, 0x105u})
+            && verifyLayout("Letter Size", 0x108u, 0x109u,
+                            {0x10Au, 0x10Bu});
+        if (!layoutsMatch) {
+            for (const char* name : {"ISO A4 Size", "Letter Size"}) {
+                const DRW_Layout* layout = uniqueLayoutByName(source, name);
+                if (layout == nullptr) {
+                    std::cerr << "LAYOUT profile missing: " << name << '\n';
+                    continue;
+                }
+                const DRW_Block_Record* owner = uniqueBlockRecord(
+                    source, layout->paperSpaceBlockRecordHandle.ref);
+                std::cerr << "LAYOUT profile detail: name=" << name
+                          << " handle=0x" << std::hex << layout->handle
+                          << " block=0x"
+                          << layout->paperSpaceBlockRecordHandle.ref
+                          << std::dec << " count=" << layout->viewportCount
+                          << " members=";
+                for (const std::uint32_t handle : layout->viewportHandles)
+                    std::cerr << "0x" << std::hex << handle << ' ';
+                std::cerr << std::dec << " owner-name="
+                          << (owner == nullptr ? "<missing>" : owner->name)
+                          << " owner-layout=0x"
+                          << (owner == nullptr ? 0u : owner->layoutHandle)
+                          << '\n';
+            }
+            return fail("AC1021 lineweights LAYOUT-to-VIEWPORT or BLOCK_RECORD roles changed");
+        }
+        for (const auto& located : sourceViewports) {
+            const DRW_Viewport& viewport = *located.viewport;
+            const std::uint32_t expectedLayer =
+                viewport.handle == 0x104u || viewport.handle == 0x10Au
+                    ? 0x10u : 0x2Du;
+            const DRW_Layout* layout = uniqueLayoutForViewport(
+                source, viewport.handle);
+            const std::uint32_t expectedLayout =
+                viewport.handle == 0x104u || viewport.handle == 0x105u
+                    ? 0x102u : 0x108u;
+            const std::size_t layerMatches = static_cast<std::size_t>(
+                std::count_if(source.layers.begin(), source.layers.end(),
+                    [expectedLayer, &viewport](const DRW_Layer& layer) {
+                        return layer.handle == expectedLayer
+                            && layer.name == viewport.layer;
+                    }));
+            const std::size_t styleMatches = static_cast<std::size_t>(
+                std::count_if(source.visualStyles.begin(),
+                    source.visualStyles.end(), [&viewport](
+                            const DRW_VisualStyle& style) {
+                        return style.handle == 0x208u
+                            && style.handle == viewport.visualStyleHandle;
+                    }));
+            const DRW_Block_Record* owner = layout == nullptr ? nullptr
+                : uniqueBlockRecord(
+                    source, layout->paperSpaceBlockRecordHandle.ref);
+            if (located.mainContainer != (viewport.parentHandle == 0u)
+                || viewport.space != DRW::PaperSpace
+                || (viewport.parentHandle != 0u
+                    && (owner == nullptr
+                        || viewport.parentHandle != owner->handle))
+                || layout == nullptr || layout->handle != expectedLayout
+                || owner == nullptr || owner->layoutHandle != layout->handle
+                || (!located.mainContainer
+                    && located.blockName != owner->name)
+                || layerMatches != 1u || styleMatches != 1u
+                || viewport.xDictHandle != 0u
+                || !viewport.reactorHandles.empty()
+                || viewport.shadePlotMode != 0
+                || viewport.shadePlotHandle != 0u
+                || viewport.backgroundHandle != 0u
+                || viewport.m_sunHandle != 0u
+                || !viewport.frozenLayerHandles.empty()) {
+                std::cerr << "VIEWPORT profile detail: handle=0x" << std::hex
+                          << viewport.handle << " parent=0x"
+                          << viewport.parentHandle << " layout=0x"
+                          << (layout == nullptr ? 0u : layout->handle)
+                          << " expected-layout=0x" << expectedLayout
+                          << " owner=0x" << (owner == nullptr ? 0u : owner->handle)
+                          << " owner-layout=0x"
+                          << (owner == nullptr ? 0u : owner->layoutHandle)
+                          << std::dec << " block='" << located.blockName
+                          << "' owner-name='"
+                          << (owner == nullptr ? "<missing>" : owner->name)
+                          << "' layer='" << viewport.layer << "' layer-matches="
+                          << layerMatches << " style=0x" << std::hex
+                          << viewport.visualStyleHandle << std::dec
+                          << " style-matches=" << styleMatches
+                          << " xdict=" << viewport.xDictHandle
+                          << " reactors=" << viewport.reactorHandles.size()
+                          << " shade=" << viewport.shadePlotMode << '/'
+                          << viewport.shadePlotHandle << " background="
+                          << viewport.backgroundHandle << " sun="
+                          << viewport.m_sunHandle << " frozen="
+                          << viewport.frozenLayerHandles.size() << '\n';
+                return fail("AC1021 lineweights VIEWPORT owner, layer/style, optional-link, or entity-container profile changed");
+            }
         }
     }
     for (const bool binary : {false, true}) {
@@ -51116,7 +51251,7 @@ bool physicalViewportOutputReadback(
             return fail("refused physical VIEWPORT export changed published callback qualifications");
         if (!exportSelected())
             return fail("corrected physical VIEWPORT source could not retry on the same adapter");
-        if (ac1021Source) {
+        if (ac1021Source && !ac1021LineweightsSource) {
             for (const std::uint32_t handle :
                     {0x267u, 0x268u, 0x26Bu, 0x26Cu}) {
                 if (!DxIfaceStandardDwgCaptureTestAccess::standardDwgOutputQualified(
@@ -51143,9 +51278,12 @@ bool physicalViewportOutputReadback(
                 || qualifiedOpaqueCallbacks
                     != source.dwgReadOutcome.opaqueViewCallbacks))
             return fail("physical VIEWPORT retry did not qualify every source-bound callback in the admitted AC1024 witness");
-        if (ac1021Source
+        if (ac1021Source && !ac1021LineweightsSource
             && source.dwgReadOutcome.opaqueViewCallbacks != 186u)
             return fail("physical AC1021 VIEWPORT source census changed during output");
+        if (ac1021LineweightsSource
+            && source.dwgReadOutcome.opaqueViewCallbacks != 49u)
+            return fail("physical AC1021 lineweights VIEWPORT source census changed during output");
 
         dx_iface outputReader;
         dx_data output;
@@ -51170,7 +51308,7 @@ bool physicalViewportOutputReadback(
         for (const dx_ifaceBlock* block : output.blocks)
             appendOutputViewports(block, false);
         if (outputViewports.size() != expectedHandles.size())
-            return fail("one or both physical census VIEWPORTs disappeared on readback");
+            return fail("one or more physical census VIEWPORTs disappeared on readback");
         std::vector<bool> matchedOutput(expectedHandles.size(), false);
         std::set<std::pair<int, int>> outputViewportStatusAndIds;
         std::set<std::pair<int, int>> expectedViewportStatusAndIds;
@@ -51189,8 +51327,9 @@ bool physicalViewportOutputReadback(
             if (match == outputViewports.size() || matchedOutput[match]
                 || sourceViewports[index].mainContainer
                     != outputViewports[match].mainContainer
-                || sourceViewports[index].blockName
-                    != outputViewports[match].blockName)
+                || (!ac1021LineweightsSource
+                    && sourceViewports[index].blockName
+                        != outputViewports[match].blockName))
                 return fail("physical VIEWPORT source fields, identity, or entity-container membership changed on readback");
             const DRW_Viewport& sourceViewport =
                 *sourceViewports[index].viewport;
@@ -51227,7 +51366,13 @@ bool physicalViewportOutputReadback(
                 || outputViewport.parentHandle != outputOwner->handle
                 || outputStyleMatches != 1u || outputLayerMatches != 1u)
                 return fail("physical VIEWPORT owner, layer, or visual-style target does not resolve after readback");
-            const int projectedStatus = static_cast<int>(index + 1u);
+            const auto sourceLayoutViewport = std::find(
+                sourceLayout->viewportHandles.begin(),
+                sourceLayout->viewportHandles.end(), sourceViewport.handle);
+            if (sourceLayoutViewport == sourceLayout->viewportHandles.end())
+                return fail("physical VIEWPORT source is absent from its LAYOUT member list");
+            const int projectedStatus = static_cast<int>(
+                sourceLayoutViewport - sourceLayout->viewportHandles.begin() + 1);
             expectedViewportStatusAndIds.emplace(
                 projectedStatus, projectedStatus);
             if (outputViewport.handle == 0u

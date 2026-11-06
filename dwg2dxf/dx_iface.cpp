@@ -70431,13 +70431,6 @@ bool validateLayoutGraph(const dx_data& data, DRW::Version targetVersion,
                     || owner->second->layoutHandle != layout.handle
                     || !layoutHandles.insert(layout.handle).second)
                     return reject("DWG LAYOUT viewport list has no unique reciprocal paper-space BLOCK_RECORD owner");
-                const std::string currentPaperKey =
-                    layoutSymbolKey("*PAPER_SPACE");
-                const auto currentPaper = recordsByName.find(currentPaperKey);
-                const bool uniqueCurrentPaper =
-                    currentPaper != recordsByName.end()
-                    && ambiguousRecordNames.count(currentPaperKey) == 0
-                    && currentPaper->second == ownerHandle;
                 std::unordered_set<std::uint32_t> listHandles;
                 for (const std::uint32_t handle : layout.viewportHandles) {
                     const auto target = entitiesByHandle.find(handle);
@@ -70454,11 +70447,15 @@ bool validateLayoutGraph(const dx_data& data, DRW::Version targetVersion,
                         return reject("DWG LAYOUT viewport list contains a missing, duplicate, or non-VIEWPORT target");
                     const bool explicitOwner =
                         viewport->parentHandle == ownerHandle;
-                    const bool implicitCurrentOwner =
+                    // The LAYOUT list and its reciprocal BLOCK_RECORD link
+                    // are the owner evidence for deferred paper-space
+                    // VIEWPORTs delivered through ENTITIES. There may be
+                    // several *PAPER_SPACE<n> records, so the canonical name
+                    // cannot identify this layout's owner.
+                    const bool implicitListedOwner =
                         viewport->parentHandle == 0
-                        && mainContainerEntityHandles.count(handle) == 1u
-                        && uniqueCurrentPaper;
-                    if (!explicitOwner && !implicitCurrentOwner)
+                        && mainContainerEntityHandles.count(handle) == 1u;
+                    if (!explicitOwner && !implicitListedOwner)
                         return reject("DWG LAYOUT viewport-list target has a conflicting paper-space owner");
                 }
             }
@@ -70952,6 +70949,16 @@ bool dx_iface::prepareDwgViewportProjection(std::string& failure) {
                 if (viewport == nullptr)
                     return reject("VIEWPORT type code does not match its payload");
 
+                const auto declaredViewport = std::lower_bound(
+                    declaredViewportOwners.begin(),
+                    declaredViewportOwners.end(), entity->handle,
+                    [](const std::pair<std::uint32_t, std::uint32_t>& entry,
+                       std::uint32_t handle) {
+                        return entry.first < handle;
+                    });
+                const bool hasDeclaredLayout =
+                    declaredViewport != declaredViewportOwners.end()
+                    && declaredViewport->first == entity->handle;
                 const DRW_Block_Record* owner = nullptr;
                 if (entity->parentHandle != 0
                     && entity->parentHandle != DRW::NoHandle) {
@@ -70959,9 +70966,22 @@ bool dx_iface::prepareDwgViewportProjection(std::string& failure) {
                     if (owner == nullptr)
                         return reject("DWG paper-space VIEWPORT owner handle does not resolve uniquely");
                 } else if (mainContainer) {
-                    // ENTITIES has one implicit current-space owner. Only the
-                    // canonical current paper-space record is a valid fallback.
-                    owner = recordByName("*PAPER_SPACE");
+                    // Prefer the exact layout membership for deferred
+                    // paper-space entities. Canonical-name fallback remains
+                    // for older inputs that have no viewport list.
+                    if (hasDeclaredLayout) {
+                        const auto layout = layoutsByHandle.find(
+                            declaredViewport->second);
+                        if (layout == layoutsByHandle.end())
+                            return reject("DWG LAYOUT-listed VIEWPORT has no unique LAYOUT record");
+                        owner = recordByHandle(
+                            layout->second->paperSpaceBlockRecordHandle.ref);
+                        if (owner == nullptr
+                            || owner->layoutHandle != layout->second->handle)
+                            return reject("DWG LAYOUT-listed VIEWPORT has no reciprocal paper-space BLOCK_RECORD owner");
+                    } else {
+                        owner = recordByName("*PAPER_SPACE");
+                    }
                     if (owner == nullptr)
                         return reject("implicit current paper-space BLOCK_RECORD is unresolved or ambiguous");
                 } else if (block->parentHandle != 0
@@ -71005,17 +71025,9 @@ bool dx_iface::prepareDwgViewportProjection(std::string& failure) {
                             != owner->handle
                         || layoutSymbolKey(layout->second->name) == "MODEL")
                         return reject("paper-space BLOCK_RECORD does not match a unique non-model LAYOUT");
-                    const auto declaredViewport = std::lower_bound(
-                        declaredViewportOwners.begin(),
-                        declaredViewportOwners.end(), entity->handle,
-                        [](const std::pair<std::uint32_t, std::uint32_t>& entry,
-                           std::uint32_t handle) {
-                            return entry.first < handle;
-                        });
                     if (entity->handle == 0 || entity->handle == DRW::NoHandle)
                         return reject("emitted paper-space VIEWPORT has an invalid identity");
-                    if (declaredViewport != declaredViewportOwners.end()
-                        && declaredViewport->first == entity->handle) {
+                    if (hasDeclaredLayout) {
                         if (declaredViewport->second != owner->layoutHandle)
                             return reject("DWG LAYOUT viewport-list target resolves to a different paper-space LAYOUT");
                         emittedListedViewports.insert(entity->handle);
@@ -71311,6 +71323,11 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
     constexpr std::array<ExpectedViewport, 2> ac1021Profile{{
         {0x266u, 1, 1, "dwgmodels.com"},
         {0x26Au, 2, 2, "dwgmodels.com"}}};
+    constexpr std::array<ExpectedViewport, 4> ac1021LineweightsProfile{{
+        {0x104u, 1, 1, "ISO A4 Size"},
+        {0x105u, 2, 2, "ISO A4 Size"},
+        {0x10Au, 1, 1, "Letter Size"},
+        {0x10Bu, 2, 2, "Letter Size"}}};
     const auto matchesProfile = [&type34Entities](const auto& profile) {
         return type34Entities.size() == profile.size()
             && std::all_of(profile.begin(), profile.end(),
@@ -71320,23 +71337,30 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
     };
     const bool ac1021Source = cData->sourceVersion == DRW::AC1021
         && matchesProfile(ac1021Profile);
+    const bool ac1021LineweightsSource =
+        cData->sourceVersion == DRW::AC1021
+        && matchesProfile(ac1021LineweightsProfile);
     const bool mechanicalSource = cData->sourceVersion == DRW::AC1024
         && matchesProfile(mechanicalProfile);
     const bool titleBlockSource = matchesProfile(titleBlockProfile);
     // Do not generalize from oType alone. The single-title-viewport route is
     // accepted only without an extension dictionary; that would add an
     // unqualified child graph and must stay refused until separately proved.
-    if (!ac1021Source && !mechanicalSource && !titleBlockSource)
+    if (!ac1021Source && !ac1021LineweightsSource
+        && !mechanicalSource && !titleBlockSource)
         return true;
     const ExpectedViewport* expected = ac1021Source
         ? ac1021Profile.data()
+        : ac1021LineweightsSource ? ac1021LineweightsProfile.data()
         : mechanicalSource ? mechanicalProfile.data()
                            : titleBlockProfile.data();
     const std::size_t expectedCount = ac1021Source
         ? ac1021Profile.size()
+        : ac1021LineweightsSource ? ac1021LineweightsProfile.size()
         : mechanicalSource ? mechanicalProfile.size()
                            : titleBlockProfile.size();
-    if ((ac1021Source || mechanicalSource)
+    const bool xrecordSource = ac1021Source || mechanicalSource;
+    if (xrecordSource
         && !m_dwgViewportXrecordsInspected)
         return true;
 
@@ -71453,7 +71477,7 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
             || !recordOpaqueDwgOutputQualification(item.handle))
             return false;
     }
-    if (!ac1021Source && !mechanicalSource)
+    if (!xrecordSource)
         return m_dwgViewportXrecordOutputProofs.empty();
     if (m_dwgViewportXrecordOutputProofs.size() != 2u)
         return false;
