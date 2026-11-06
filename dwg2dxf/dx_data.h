@@ -687,6 +687,10 @@ public:
     bool geoDataCaptureFailed{false};
     using RasterVariablesKey = std::pair<std::uint64_t, std::uint32_t>;
     std::map<RasterVariablesKey, DRW_RasterVariables> dwgRasterVariables;
+    std::map<RasterVariablesKey, DRW_RasterVariables> dxfRasterVariables;
+    std::size_t dxfRasterVariablesRetainedRecords{0u};
+    std::size_t dxfRasterVariablesRetainedBytes{0u};
+    bool dxfRasterVariablesCaptureFailed{false};
     std::size_t rasterVariablesRetainedRecords{0};
     std::size_t rasterVariablesRetainedBytes{0};
     bool rasterVariablesCaptureFailed{false};
@@ -1124,6 +1128,14 @@ public:
     };
     std::map<DwgDbColorKey, DwgDbColorAppearance> dwgDbColors;
     std::map<DwgDbColorKey, DRW_DbColor> dwgDbColorObjects;
+    // DXF imports retain typed DBCOLOR callbacks separately from the DWG
+    // appearance/EED capture above. The raw DXF record remains the emitted
+    // source; this generation-scoped map supplies typed identity and graph
+    // roles for preflight only.
+    std::map<DwgDbColorKey, DRW_DbColor> dxfDbColorObjects;
+    std::size_t dxfDbColorObjectRetainedRecords{0u};
+    std::size_t dxfDbColorObjectRetainedBytes{0u};
+    bool dxfDbColorCaptureFailed{false};
     struct DwgDbColorEedSource {
         DRW::Version version{DRW::UNKNOWNV};
         std::vector<DRW_TableEntry::PendingHandleRef> appIds;

@@ -80456,6 +80456,7 @@ static bool dbColorSelectedEedProjection(const DRW_Dictionary& sourceDictionary,
     class ColorReadback final : public dx_iface {
     public:
         void addDbColor(const DRW_DbColor& value) override {
+            dx_iface::addDbColor(value);
             color = value;
             ++count;
         }
@@ -80558,6 +80559,41 @@ static bool dbColorSelectedEedProjection(const DRW_Dictionary& sourceDictionary,
             }
             return projectionFail("root/dictionary/APPID readback mismatch", binary);
         }
+        dx_iface graph;
+        if (!DxIfaceExtensionGraphTestAccess::prepare(graph, result, true))
+            return projectionFail(
+                ("DXF-origin ACAD_COLOR graph admission failed: "
+                    + DxIfaceExtensionGraphTestAccess::failureDetail(graph))
+                    .c_str(), binary);
+        const auto dictionaryEntry = std::find_if(
+            dictionary->m_entries.begin(), dictionary->m_entries.end(),
+            [&sourceColor](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name
+                        == sourceColor.bookName + "$" + sourceColor.name
+                    && entry.m_handle == sourceColor.handle;
+            });
+        if (dictionaryEntry == dictionary->m_entries.end())
+            return projectionFail("DXF-origin DBCOLOR dictionary entry disappeared", binary);
+        const auto goodTarget = dictionaryEntry->m_handle;
+        dictionaryEntry->m_handle = 0xFFFFFFFEu;
+        const std::string graphSentinel = "DXF_COLOR_GRAPH_PRIOR_DESTINATION";
+        { std::ofstream file(output, std::ios::binary | std::ios::trunc); file << graphSentinel; }
+        dx_iface exporter;
+        if (exporter.fileExport(output.string(), version, binary, &result,
+                                false, true))
+            return projectionFail("wrong ACAD_COLOR target was accepted", binary);
+        std::ifstream graphPrior(output, std::ios::binary);
+        const std::string graphPriorBytes{
+            std::istreambuf_iterator<char>{graphPrior},
+            std::istreambuf_iterator<char>{}};
+        if (graphPriorBytes != graphSentinel)
+            return projectionFail("wrong-target graph failure changed the destination", binary);
+        dictionaryEntry->m_handle = goodTarget;
+        if (!DxIfaceExtensionGraphTestAccess::prepare(graph, result, true))
+            return projectionFail(
+                ("DXF-origin graph did not recover after correction: "
+                    + DxIfaceExtensionGraphTestAccess::failureDetail(graph))
+                    .c_str(), binary);
     }
     return true;
 }

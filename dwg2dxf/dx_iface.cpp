@@ -9991,6 +9991,14 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     "DWG DBCOLOR source EED, APPID, or LAYER dependency is missing, ambiguous, or modified");
         }
     }
+    if (data->sourceFormat == dx_source_format::DXF
+        && data->dxfDbColorCaptureFailed)
+        return reject(ExtensionGraphFailure::InvalidGraph,
+            "DXF DBCOLOR source identity capture is incomplete");
+    if (data->sourceFormat == dx_source_format::DXF
+        && data->dxfRasterVariablesCaptureFailed)
+        return reject(ExtensionGraphFailure::InvalidGraph,
+            "DXF RASTERVARIABLES source identity capture is incomplete");
 
     std::uint64_t headerPlotStyleHandle = 0;
     bool hasHeaderPlotStyleHandle = false;
@@ -10271,6 +10279,22 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         &color.second).second)
                     return reject(ExtensionGraphFailure::InvalidGraph,
                         "invalid or colliding DBCOLOR source identity");
+            }
+        } else if (data->sourceFormat == dx_source_format::DXF) {
+            inventoryFamily = "DXF DBCOLOR typed graph identities";
+            for (const auto& color : data->dxfDbColorObjects) {
+                if (color.first.first != data->importGeneration)
+                    continue;
+                if (!examineSourceRecord())
+                    return false;
+                if (color.first.second == 0u
+                    || color.first.second == DRW::NoHandle
+                    || color.second.handle != color.first.second
+                    || !sourceHandles.insert(color.first.second).second
+                    || !dbColors.emplace(color.first.second,
+                        &color.second).second)
+                    return reject(ExtensionGraphFailure::InvalidGraph,
+                        "invalid or colliding DXF DBCOLOR source identity");
             }
         }
         inventoryFamily = "GROUP common-metadata owners";
@@ -10950,6 +10974,25 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         variables.handle, &variables).second)
                     return reject(ExtensionGraphFailure::InvalidGraph,
                         "invalid, duplicate, or colliding RASTERVARIABLES identity");
+            }
+        } else if (data->sourceFormat == dx_source_format::DXF) {
+            const auto first = data->dxfRasterVariables.lower_bound(
+                {data->importGeneration, 0u});
+            for (auto current = first;
+                 current != data->dxfRasterVariables.end()
+                     && current->first.first == data->importGeneration;
+                 ++current) {
+                if (!examineSourceRecord())
+                    return false;
+                const DRW_RasterVariables& variables = current->second;
+                if (current->first.second == 0u
+                    || current->first.second == DRW::NoHandle
+                    || variables.handle != current->first.second
+                    || !sourceHandles.insert(variables.handle).second
+                    || !rasterVariables.emplace(
+                        variables.handle, &variables).second)
+                    return reject(ExtensionGraphFailure::InvalidGraph,
+                        "invalid, duplicate, or colliding DXF RASTERVARIABLES identity");
             }
         }
         inventoryFamily = "standalone WIPEOUTVARIABLES records";
@@ -13188,7 +13231,27 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             && variables.reactorHandles.size() == 1u
                             && variables.reactorHandles.front()
                                 == data->namedObjectDictionary.handle;
-                        if (data->sourceFormat != dx_source_format::DWG
+                        const bool exactDxfDirectNodReactor =
+                            data->sourceFormat == dx_source_format::DXF
+                            && data->hasNamedObjectDictionary
+                            && variables.parentHandle
+                                == data->namedObjectDictionary.handle
+                            && (variables.reactorHandles.empty()
+                                || variables.reactorHandles
+                                    == std::vector<std::uint32_t>{
+                                        data->namedObjectDictionary.handle});
+                        const auto dxfSource = data->dxfRasterVariables.find(
+                            {data->importGeneration, frame.handle});
+                        const bool validDxfRasterVariables =
+                            exactDxfDirectNodReactor
+                            && dxfSource != data->dxfRasterVariables.end()
+                            && dxfSource->second.handle == frame.handle
+                            && variables.xDictHandle == 0u;
+                        if (data->sourceFormat == dx_source_format::DXF) {
+                            if (!validDxfRasterVariables)
+                                return reject(ExtensionGraphFailure::InvalidGraph,
+                                    "DXF RASTERVARIABLES is not the exact typed NOD-owned source record");
+                        } else if (data->sourceFormat != dx_source_format::DWG
                             || (data->sourceVersion != DRW::AC1018
                                 && data->sourceVersion != DRW::AC1021
                                 && data->sourceVersion != DRW::AC1024
@@ -13283,37 +13346,58 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                 "MATERIAL target lacks a frozen validated replay source");
                         }
                     } else if (frame.dbColor != nullptr) {
-                        const auto raw = data->m_opaqueDwgSourceFrames.find(
-                            {data->importGeneration, frame.handle});
-                        if (data->sourceFormat != dx_source_format::DWG
-                            || data->sourceVersion != DRW::AC1021
-                            || frame.dbColor->parentHandle
-                                != entry.parentHandle
-                            || frame.dbColor->reactorCount() != 1u
-                            || frame.dbColor->reactorHandles
-                                != std::vector<std::uint32_t>{
-                                    static_cast<std::uint32_t>(entry.parentHandle)}
-                            || frame.dbColor->extensionDictionaryFlag() != 1u
-                            || frame.dbColor->xDictHandle != 0u
-                            || frame.dbColor->bookName.empty()
-                            || frame.dbColor->name.empty()
-                            || frame.dbColor->extData.size() != 53u
-                            || raw == data->m_opaqueDwgSourceFrames.end()
-                            || !raw->second.m_isCustomClass
-                            || raw->second.m_isEntity
-                            || raw->second.m_objectType != 551
-                            || layoutSymbolKey(raw->second.m_className)
-                                != "ACDBCOLOR"
-                            || layoutSymbolKey(raw->second.m_recordName)
-                                != "DBCOLOR"
-                            || raw->second.m_handle != frame.handle
-                            || raw->second.m_parentHandle
-                                != entry.parentHandle
-                            || !raw->second.m_commonHandleDataValidated
-                            || !drwDwgCommonLinkEvidenceValidated(
-                                raw->second.m_commonLinkEvidence))
+                        bool valid = frame.dbColor->parentHandle
+                                == entry.parentHandle
+                            && (frame.dbColor->reactorHandles.empty()
+                                || frame.dbColor->reactorHandles
+                                    == std::vector<std::uint32_t>{
+                                        static_cast<std::uint32_t>(
+                                            entry.parentHandle)})
+                            && !frame.dbColor->bookName.empty()
+                            && !frame.dbColor->name.empty();
+                        if (data->sourceFormat == dx_source_format::DWG) {
+                            const auto raw = data->m_opaqueDwgSourceFrames.find(
+                                {data->importGeneration, frame.handle});
+                            valid = valid
+                                && data->sourceVersion == DRW::AC1021
+                                && frame.dbColor->reactorCount() == 1u
+                                && frame.dbColor->extensionDictionaryFlag() == 1u
+                                && frame.dbColor->xDictHandle == 0u
+                                && frame.dbColor->extData.size() == 53u
+                                && raw != data->m_opaqueDwgSourceFrames.end()
+                                && raw->second.m_isCustomClass
+                                && !raw->second.m_isEntity
+                                && raw->second.m_objectType == 551
+                                && layoutSymbolKey(raw->second.m_className)
+                                    == "ACDBCOLOR"
+                                && layoutSymbolKey(raw->second.m_recordName)
+                                    == "DBCOLOR"
+                                && raw->second.m_handle == frame.handle
+                                && raw->second.m_parentHandle
+                                    == entry.parentHandle
+                                && raw->second.m_commonHandleDataValidated
+                                && drwDwgCommonLinkEvidenceValidated(
+                                    raw->second.m_commonLinkEvidence);
+                        } else if (data->sourceFormat
+                                == dx_source_format::DXF) {
+                            const auto source = data->dxfDbColorObjects.find(
+                                {data->importGeneration, frame.handle});
+                            valid = valid
+                            && (frame.dbColor->reactorHandles.empty()
+                                || frame.dbColor->reactorHandles
+                                    == std::vector<std::uint32_t>{
+                                        static_cast<std::uint32_t>(
+                                            entry.parentHandle)})
+                                && source != data->dxfDbColorObjects.end()
+                                && source->second.handle == frame.handle;
+                        } else {
+                            valid = false;
+                        }
+                        if (!valid)
                             return reject(ExtensionGraphFailure::InvalidGraph,
-                                "DBCOLOR is outside the independent producer source profile; only the bounded AC1021 color-book source profile is admitted or the owner is wrong");
+                                data->sourceFormat == dx_source_format::DWG
+                                    ? "DBCOLOR is outside the independent producer source profile; only the bounded AC1021 color-book source profile is admitted or the owner is wrong"
+                                    : "DXF DBCOLOR owner, reactor, or source identity is invalid");
                     } else if (frame.underlayDefinition != nullptr) {
                         const DRW_UnderlayDefinition& definition =
                             *frame.underlayDefinition;
@@ -13387,9 +13471,14 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             frame.handle);
                     else if (frame.plotSettings != nullptr)
                         m_extensionPlotSettingsHandles.push_back(frame.handle);
-                    else if (frame.rasterVariables != nullptr)
+                    else if (frame.rasterVariables != nullptr
+                             && data->sourceFormat == dx_source_format::DWG)
                         m_extensionRasterVariablesHandles.push_back(
                             frame.handle);
+                    else if (frame.rasterVariables != nullptr) {
+                        // DXF-origin RASTERVARIABLES uses its raw carrier;
+                        // this typed node is retained for graph validation.
+                    }
                     else if (frame.wipeoutVariables != nullptr)
                         m_extensionWipeoutVariablesHandles.push_back(
                             frame.handle);
@@ -13405,6 +13494,11 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     else if (frame.dbColor != nullptr
                              && data->sourceFormat == dx_source_format::DWG)
                         m_extensionDbColorHandles.push_back(frame.handle);
+                    else if (frame.dbColor != nullptr) {
+                        // DXF-origin DBCOLOR is replayed through its retained
+                        // raw carrier. The typed graph node exists only to
+                        // prove owner and dictionary closure.
+                    }
                     else if (frame.underlayDefinition != nullptr) {
                         // UNDERLAY definitions are emitted by the dedicated
                         // rooted dictionary writer after generic graph proof.
@@ -14220,7 +14314,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     || blockDelimiterHandles.count(reactor) != 0u) continue;
                 const bool rootedImageDictionaryNodReactor =
                     rootedImageDictionary != nullptr
-                    && data->sourceFormat == dx_source_format::DWG
+                    && (data->sourceFormat == dx_source_format::DWG
+                        || data->sourceFormat == dx_source_format::DXF)
                     && data->sourceVersion == DRW::AC1021
                     && definition.handle == rootedImageDictionary->handle
                     && reactor == data->namedObjectDictionary.handle
@@ -14525,6 +14620,11 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     ++matches;
                     targetOwner = dictionaryVar->second->parentHandle;
                 }
+                const auto dbColor = dbColors.find(entry.m_handle);
+                if (dbColor != dbColors.end()) {
+                    ++matches;
+                    targetOwner = dbColor->second->parentHandle;
+                }
                 const auto scale = scales.find(entry.m_handle);
                 if (scale != scales.end()) {
                     ++matches;
@@ -14587,7 +14687,10 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 }
                 if (matches != 1u)
                     return reject(ExtensionGraphFailure::InvalidGraph,
-                        "NOD dictionary entry target is missing or ambiguous");
+                        "NOD dictionary entry target is missing or ambiguous: key="
+                            + entry.m_name + " handle="
+                            + std::to_string(entry.m_handle)
+                            + " matches=" + std::to_string(matches));
                 if (targetOwner != data->namedObjectDictionary.handle)
                     return reject(ExtensionGraphFailure::InvalidGraph,
                         "NOD dictionary entry target does not name the NOD as its owner");
@@ -14651,7 +14754,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             }
         }
         for (std::uint32_t handle : m_extensionDictionaryHandles) {
-            const DRW_Dictionary* dictionary = dictionaries.at(handle);
+            const auto dictionarySource = dictionaries.find(handle);
+            if (dictionarySource == dictionaries.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "extension DICTIONARY output identity disappeared: handle="
+                        + std::to_string(handle));
+            const DRW_Dictionary* dictionary = dictionarySource->second;
             if (!examineEdge())
                 return false;
             const auto sourceExtensionOwner =
@@ -14677,8 +14785,13 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         }
         for (std::uint32_t handle :
              m_extensionDictionaryWithDefaultHandles) {
+            const auto dictionarySource = dictionariesWithDefault.find(handle);
+            if (dictionarySource == dictionariesWithDefault.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "extension DICTIONARYWDFLT output identity disappeared: handle="
+                        + std::to_string(handle));
             const DRW_DictionaryWithDefault* dictionary =
-                dictionariesWithDefault.at(handle);
+                dictionarySource->second;
             if (!examineEdge())
                 return false;
             if (!hasParent(dictionary->parentHandle))
@@ -14811,7 +14924,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 "multiple ASEBlockHierarchyIndexRecord NOD cache profiles are selected");
 
         for (std::uint32_t handle : m_extensionXRecordHandles) {
-            const DRW_XRecord* record = xrecords.at(handle);
+            const auto recordSource = xrecords.find(handle);
+            if (recordSource == xrecords.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "extension XRECORD output identity disappeared: handle="
+                        + std::to_string(handle));
+            const DRW_XRecord* record = recordSource->second;
             if (!examineEdge())
                 return false;
             if (!hasParent(record->parentHandle))
@@ -15171,7 +15289,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             }
         }
         for (std::uint32_t handle : m_extensionDictionaryVarHandles) {
-            const DRW_DictionaryVar* value = dictionaryVars.at(handle);
+            const auto source = dictionaryVars.find(handle);
+            if (source == dictionaryVars.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "DICTIONARYVAR output identity disappeared: handle="
+                        + std::to_string(handle));
+            const DRW_DictionaryVar* value = source->second;
             if (!examineEdge())
                 return false;
             if (!hasParent(value->parentHandle))
@@ -15181,7 +15304,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         + std::to_string(value->parentHandle));
         }
         for (std::uint32_t handle : m_extensionScaleHandles) {
-            const DRW_Scale* value = scales.at(handle);
+            const auto source = scales.find(handle);
+            if (source == scales.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "SCALE output identity disappeared: handle="
+                        + std::to_string(handle));
+            const DRW_Scale* value = source->second;
             if (!examineEdge())
                 return false;
             if (!hasParent(value->parentHandle))
@@ -15191,7 +15319,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         + std::to_string(value->parentHandle));
         }
         for (std::uint32_t handle : m_extensionMLineStyleHandles) {
-            const DRW_MLineStyle* style = mlineStyles.at(handle);
+            const auto source = mlineStyles.find(handle);
+            if (source == mlineStyles.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "MLINESTYLE output identity disappeared: handle="
+                        + std::to_string(handle));
+            const DRW_MLineStyle* style = source->second;
             if (!examineEdge())
                 return false;
             if (!hasParent(style->parentHandle))
@@ -15201,7 +15334,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         + std::to_string(style->parentHandle));
         }
         for (std::uint32_t handle : m_extensionMLeaderStyleHandles) {
-            const DRW_MLeaderStyle* style = mleaderStyles.at(handle);
+            const auto source = mleaderStyles.find(handle);
+            if (source == mleaderStyles.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "MLEADERSTYLE output identity disappeared: handle="
+                        + std::to_string(handle));
+            const DRW_MLeaderStyle* style = source->second;
             if (!examineEdge())
                 return false;
             if (!hasParent(style->parentHandle))
@@ -15211,7 +15349,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         + std::to_string(style->parentHandle));
         }
         for (std::uint32_t handle : m_extensionVisualStyleHandles) {
-            const DRW_VisualStyle* style = visualStyles.at(handle);
+            const auto source = visualStyles.find(handle);
+            if (source == visualStyles.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "VISUALSTYLE output identity disappeared: handle="
+                        + std::to_string(handle));
+            const DRW_VisualStyle* style = source->second;
             if (!examineEdge())
                 return false;
             if (!hasParent(style->parentHandle))
@@ -15221,7 +15364,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         + std::to_string(style->parentHandle));
         }
         for (std::uint32_t handle : m_extensionTableStyleHandles) {
-            const DRW_TableStyle* style = tableStyles.at(handle);
+            const auto source = tableStyles.find(handle);
+            if (source == tableStyles.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "TABLESTYLE output identity disappeared: handle="
+                        + std::to_string(handle));
+            const DRW_TableStyle* style = source->second;
             if (!examineEdge())
                 return false;
             if (!hasParent(style->parentHandle))
@@ -15231,7 +15379,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         + std::to_string(style->parentHandle));
         }
         for (std::uint32_t handle : m_extensionDetailViewStyleHandles) {
-            const DRW_DetailViewStyle* style = detailViewStyles.at(handle);
+            const auto source = detailViewStyles.find(handle);
+            if (source == detailViewStyles.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "DETAILVIEWSTYLE output identity disappeared: handle="
+                        + std::to_string(handle));
+            const DRW_DetailViewStyle* style = source->second;
             if (!examineEdge())
                 return false;
             if (!hasParent(style->parentHandle))
@@ -15241,7 +15394,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         + std::to_string(style->parentHandle));
         }
         for (std::uint32_t handle : m_extensionSectionViewStyleHandles) {
-            const DRW_SectionViewStyle* style = sectionViewStyles.at(handle);
+            const auto source = sectionViewStyles.find(handle);
+            if (source == sectionViewStyles.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "SECTIONVIEWSTYLE output identity disappeared: handle="
+                        + std::to_string(handle));
+            const DRW_SectionViewStyle* style = source->second;
             if (!examineEdge())
                 return false;
             if (!hasParent(style->parentHandle))
@@ -15251,7 +15409,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         + std::to_string(style->parentHandle));
         }
         for (std::uint32_t handle : m_extensionPlotSettingsHandles) {
-            const DRW_PlotSettings* settings = plotSettings.at(handle);
+            const auto source = plotSettings.find(handle);
+            if (source == plotSettings.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "PLOTSETTINGS output identity disappeared: handle="
+                        + std::to_string(handle));
+            const DRW_PlotSettings* settings = source->second;
             if (!examineEdge())
                 return false;
             if (!hasParent(settings->parentHandle))
@@ -15261,7 +15424,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         + std::to_string(settings->parentHandle));
         }
         for (std::uint32_t handle : m_extensionRenderSettingsHandles) {
-            const DRW_RenderSettings* settings = renderSettings.at(handle);
+            const auto source = renderSettings.find(handle);
+            if (source == renderSettings.end())
+                return reject(ExtensionGraphFailure::InvalidGraph,
+                    "RENDERSETTINGS output identity disappeared: handle="
+                        + std::to_string(handle));
+            const DRW_RenderSettings* settings = source->second;
             if (!examineEdge())
                 return false;
             if (!hasParent(settings->parentHandle))
@@ -15437,14 +15605,24 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 return reject(ExtensionGraphFailure::InvalidGraph,
                     "ACAD_MATERIAL dictionary does not cover each typed MATERIAL exactly once");
         }
-        if (data->sourceFormat == dx_source_format::DWG && !dbColors.empty()) {
+        if ((data->sourceFormat == dx_source_format::DWG
+                && !dbColors.empty())
+            || (data->sourceFormat == dx_source_format::DXF
+                && !dbColors.empty())) {
             inventoryFamily = "ACAD_COLOR dictionary closure";
-            if (data->sourceVersion != DRW::AC1021 || dbColors.size() != 1u
+            if ((data->sourceFormat == dx_source_format::DWG
+                    && data->sourceVersion != DRW::AC1021)
+                || dbColors.size() != 1u
                 || !includeNamedObjectRoot
                 || visitedDbColors.size() != dbColors.size()
-                || m_extensionDbColorHandles.size() != dbColors.size())
+                || (data->sourceFormat == dx_source_format::DWG
+                    && m_extensionDbColorHandles.size() != dbColors.size())
+                || (data->sourceFormat == dx_source_format::DXF
+                    && !m_extensionDbColorHandles.empty()))
                 return reject(ExtensionGraphFailure::InvalidGraph,
-                    "DBCOLOR remains outside the independent producer source profile; only the bounded one-record AC1021 profile is admitted");
+                    data->sourceFormat == dx_source_format::DWG
+                        ? "DBCOLOR remains outside the independent producer source profile; only the bounded one-record AC1021 profile is admitted"
+                        : "DXF ACAD_COLOR graph is not a complete one-record rooted profile");
             const DRW_Dictionary::Entry* rootEntry = nullptr;
             std::size_t rootMatches = 0u;
             for (const DRW_Dictionary::Entry& entry :
@@ -15478,14 +15656,26 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     || entry.m_name != color->second->bookName + "$"
                         + color->second->name
                     || color->second->parentHandle != dictionary->second->handle
-                    || color->second->reactorCount() != 1u
-                    || color->second->reactorHandles
-                        != std::vector<std::uint32_t>{dictionary->second->handle}
+                    || (data->sourceFormat == dx_source_format::DWG
+                        ? color->second->reactorCount() != 1u
+                        : !color->second->reactorHandles.empty()
+                            && color->second->reactorHandles
+                                != std::vector<std::uint32_t>{
+                                    dictionary->second->handle})
+                    || (data->sourceFormat == dx_source_format::DWG
+                        && color->second->reactorHandles
+                            != std::vector<std::uint32_t>{
+                                dictionary->second->handle})
                     || !colorTargets.insert(entry.m_handle).second
                     || visitedDbColors.count(entry.m_handle) != 1u
-                    || std::find(m_extensionDbColorHandles.begin(),
-                        m_extensionDbColorHandles.end(), entry.m_handle)
-                        == m_extensionDbColorHandles.end())
+                    || (data->sourceFormat == dx_source_format::DWG
+                        && std::find(m_extensionDbColorHandles.begin(),
+                            m_extensionDbColorHandles.end(), entry.m_handle)
+                            == m_extensionDbColorHandles.end())
+                    || (data->sourceFormat == dx_source_format::DXF
+                        && std::find(m_extensionDbColorHandles.begin(),
+                            m_extensionDbColorHandles.end(), entry.m_handle)
+                            != m_extensionDbColorHandles.end()))
                     return reject(ExtensionGraphFailure::InvalidGraph,
                         "ACAD_COLOR entry does not uniquely bind the book/name key to its owned DBCOLOR");
             }
@@ -65576,7 +65766,45 @@ void dx_iface::addDwgDbColorEedSource(
 }
 
 void dx_iface::addDbColor(const DRW_DbColor& data) {
-    if (cData == nullptr || cData->sourceFormat != dx_source_format::DWG
+    if (cData == nullptr)
+        return;
+
+    if (cData->sourceFormat == dx_source_format::DXF) {
+        if (cData->importGeneration == 0u || data.handle == 0u
+            || data.handle == DRW::NoHandle || data.rgb < -1
+            || data.rgb > 0x00FFFFFF
+            || cData->dxfDbColorCaptureFailed
+            || cData->dxfDbColorObjectRetainedRecords
+                >= DwgDbColorCaptureMaxRecords) {
+            cData->dxfDbColorCaptureFailed = true;
+            return;
+        }
+        std::size_t bytes = 0u;
+        if (!estimateDbColorTypedBytes(data, bytes)
+            || cData->dxfDbColorObjectRetainedBytes
+                > DwgDbColorCaptureMaxRetainedBytes
+            || bytes > DwgDbColorCaptureMaxRetainedBytes
+                - cData->dxfDbColorObjectRetainedBytes) {
+            cData->dxfDbColorCaptureFailed = true;
+            return;
+        }
+        const dx_data::DwgDbColorKey key{
+            cData->importGeneration, data.handle};
+        try {
+            if (!cData->dxfDbColorObjects.emplace(key, data).second) {
+                cData->dxfDbColorCaptureFailed = true;
+                return;
+            }
+        } catch (...) {
+            cData->dxfDbColorCaptureFailed = true;
+            return;
+        }
+        ++cData->dxfDbColorObjectRetainedRecords;
+        cData->dxfDbColorObjectRetainedBytes += bytes;
+        return;
+    }
+
+    if (cData->sourceFormat != dx_source_format::DWG
         || !cData->dwgReadOutcome.attempted
         || cData->dwgDbColorCaptureFailed)
         return;
@@ -66034,8 +66262,45 @@ void dx_iface::addDimensionAssociation(
 }
 
 void dx_iface::addRasterVariables(const DRW_RasterVariables& data) {
-    if (cData == nullptr || cData->sourceFormat != dx_source_format::DWG
-        || !cData->dwgReadOutcome.attempted || cData->rasterVariablesCaptureFailed)
+    if (cData == nullptr)
+        return;
+    const bool isDxf = cData->sourceFormat == dx_source_format::DXF;
+    if (isDxf) {
+        if (cData->importGeneration == 0u || data.handle == 0u
+            || data.handle == DRW::NoHandle
+            || cData->dxfRasterVariablesCaptureFailed
+            || cData->dxfRasterVariablesRetainedRecords
+                >= kMaxAdapterRasterVariablesRecords) {
+            cData->dxfRasterVariablesCaptureFailed = true;
+            return;
+        }
+        std::size_t bytes = 0u;
+        if (!estimateRasterVariablesTypedBytes(data, bytes)
+            || cData->dxfRasterVariablesRetainedBytes
+                > kMaxAdapterRasterVariablesRetainedBytes
+            || bytes > kMaxAdapterRasterVariablesRetainedBytes
+                - cData->dxfRasterVariablesRetainedBytes) {
+            cData->dxfRasterVariablesCaptureFailed = true;
+            return;
+        }
+        const dx_data::RasterVariablesKey key{
+            cData->importGeneration, data.handle};
+        try {
+            if (!cData->dxfRasterVariables.emplace(key, data).second) {
+                cData->dxfRasterVariablesCaptureFailed = true;
+                return;
+            }
+        } catch (...) {
+            cData->dxfRasterVariablesCaptureFailed = true;
+            return;
+        }
+        ++cData->dxfRasterVariablesRetainedRecords;
+        cData->dxfRasterVariablesRetainedBytes += bytes;
+        return;
+    }
+    if (cData->sourceFormat != dx_source_format::DWG
+        || !cData->dwgReadOutcome.attempted
+        || cData->rasterVariablesCaptureFailed)
         return;
     const auto reject = [this]() {
         cData->rasterVariablesCaptureFailed = true;
@@ -73879,6 +74144,51 @@ bool dx_iface::finalizeDxfWrite() {
             || !dxfW->dxfWriteRecordHasOwner(emitted, owner))
             return false;
     }
+    if (cData != nullptr
+        && cData->sourceFormat == dx_source_format::DXF) {
+        const auto first = cData->dxfDbColorObjects.lower_bound(
+            {cData->importGeneration, 0u});
+        for (auto source = first;
+             source != cData->dxfDbColorObjects.end()
+                 && source->first.first == cData->importGeneration;
+             ++source) {
+            if (source->second.parentHandle
+                > (std::numeric_limits<std::uint32_t>::max)())
+                return false;
+            const std::uint32_t sourceHandle = source->first.second;
+            const std::uint32_t emitted = dxfW->remapHandle(sourceHandle);
+            const std::uint32_t owner = dxfW->remapHandle(
+                static_cast<std::uint32_t>(source->second.parentHandle));
+            if (emitted == 0u || emitted == DRW::NoHandle
+                || owner == 0u || owner == DRW::NoHandle
+                || dxfW->dxfWriteRecordHandleCount(emitted) != 1u
+                || !dxfW->dxfWriteRecordHasIdentity(
+                    emitted, "DBCOLOR", "OBJECTS")
+                || !dxfW->dxfWriteRecordHasOwner(emitted, owner))
+                return false;
+        }
+        const auto rasterFirst = cData->dxfRasterVariables.lower_bound(
+            {cData->importGeneration, 0u});
+        for (auto source = rasterFirst;
+             source != cData->dxfRasterVariables.end()
+                 && source->first.first == cData->importGeneration;
+             ++source) {
+            if (source->second.parentHandle
+                > (std::numeric_limits<std::uint32_t>::max)())
+                return false;
+            const std::uint32_t sourceHandle = source->first.second;
+            const std::uint32_t emitted = dxfW->remapHandle(sourceHandle);
+            const std::uint32_t owner = dxfW->remapHandle(
+                static_cast<std::uint32_t>(source->second.parentHandle));
+            if (emitted == 0u || emitted == DRW::NoHandle
+                || owner == 0u || owner == DRW::NoHandle
+                || dxfW->dxfWriteRecordHandleCount(emitted) != 1u
+                || !dxfW->dxfWriteRecordHasIdentity(
+                    emitted, "RASTERVARIABLES", "OBJECTS")
+                || !dxfW->dxfWriteRecordHasOwner(emitted, owner))
+                return false;
+        }
+    }
     if (!hasUnchangedAcdsDxfHistorySources()
         || (!m_acdsDxfHistoryObjects.empty() && !m_acdsDxfHistoryInspected)) return false;
     for (const auto& row : m_acdsDxfHistoryObjects) {
@@ -79261,6 +79571,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             && !cData->materials.empty())
         || (cData->sourceFormat == dx_source_format::DWG
             && !cData->dwgDbColorObjects.empty())
+        || (cData->sourceFormat == dx_source_format::DXF
+            && !cData->dxfDbColorObjects.empty())
         || hasNonNullHeaderPlotStyle;
     std::vector<std::uint32_t> backgroundDictionaryHandles;
     std::vector<std::uint32_t> backgroundHandles;
@@ -80251,8 +80563,25 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                                    : "standalone PLOTSETTINGS graph closure");
         return false;
     }
-    if(!prepareDxfHeaderMaterial(v)||!prepareDxfLayerMaterials(v)||!prepareDxfLayerPlot(v,requireResolvedOwners)||!prepareDxfFullStyles(v)||!prepareDxfCommonReferences(v,347,m_dxfMaterialReferenceState)){
-        reportPreflightFailure("common material/style carrier capture incomplete, wrong-version or over budget");return false;
+    if (!prepareDxfHeaderMaterial(v)) {
+        reportPreflightFailure("HEADER material carrier capture incomplete, unsupported, or over budget");
+        return false;
+    }
+    if (!prepareDxfLayerMaterials(v)) {
+        reportPreflightFailure("LAYER material carrier capture incomplete, unsupported, or over budget");
+        return false;
+    }
+    if (!prepareDxfLayerPlot(v, requireResolvedOwners)) {
+        reportPreflightFailure("LAYER plot-style carrier capture incomplete, unsupported, or over budget");
+        return false;
+    }
+    if (!prepareDxfFullStyles(v)) {
+        reportPreflightFailure("STYLE carrier capture incomplete, unsupported, or over budget");
+        return false;
+    }
+    if (!prepareDxfCommonReferences(v, 347, m_dxfMaterialReferenceState)) {
+        reportPreflightFailure("common material reference capture incomplete, unsupported, or over budget");
+        return false;
     }
     if (!prepareDxfShadeConsumers(v)) {
         reportPreflightFailure("shade consumer binding capture incomplete or over budget");

@@ -61,24 +61,34 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P4 / AC1021 strict-output roundtrip after view-style closure:** the four
+1. **P4 / AC1021 strict-output DXF re-export:** the four
    SECTIONVIEWSTYLE/DETAILVIEWSTYLE callbacks and their two NOD dictionaries,
-   four extension dictionaries and four XRECORDs now pass exact source snapshot
+   four extension dictionaries and four XRECORDs pass exact source snapshot
    and staged-body/reference inspection. The AC1021 `children-room-decoration.dwg`
-   full strict ASCII conversion to AC1021 now completes and writes output;
-   the focused physical selector still passes ASCII/Binary rollback, retry and
-   fresh selected-graph readback. The new output’s subsequent DXF-to-DXF
-   re-export imports the file but stops at extension-graph validation for the
-   IMAGEDEF roots at handle `0xC`, during reactor target lookup. Next trace the
-   emitted IMAGEDEF graph and determine the exact source/output role mismatch;
-   add a bounded full-output readback/retry control and fix the graph admission
-   or serialization defect it proves. Keep the successful strict conversion
-   scoped to this unauthenticated local source and do not promote a support
-   claim. See the updated [gap receipt](docs/research/p4-ac1021-children-room-strict-output-gaps-2026-11-06.json)
+   strict ASCII conversion completes with all 186 opaque callbacks qualified;
+   its focused physical selector also passes ASCII/Binary rollback, retry and
+   fresh selected-graph readback. Bounded DXF-origin graph admission now covers
+   the rooted ACAD_COLOR → DBCOLOR graph and the direct NOD RASTERVARIABLES
+   neighbor that becomes reachable during validation. Typed DXF records are
+   retained by generation for graph checks while raw carriers remain the output
+   source; owner, key, reactor-role, identity and output-binding checks remain
+   exact. The generated ASCII/Binary AC1027 control passes graph admission,
+   wrong-target refusal with destination preservation, and correction/retry;
+   existing selected-output controls provide typed DBCOLOR readback. On the
+   full generated file, re-export now advances beyond IMAGEDEF, ACAD_COLOR and
+   RASTERVARIABLES, then fails closed at the source-profile-limited LAYER plot-
+   style capture (the generated input has four layers using default handle
+   `0xF`; the current strict profile only accepts a single-layer AC1027 plot
+   carrier). Next determine whether those default references are the exact
+   unmodified default placeholder graph, then admit only that evidenced
+   profile with full source and staged-output binding checks. Keep the full-file
+   re-export gate open until readback passes. Qualification remains scoped to
+   this unauthenticated local source; do not promote support claims or commit
+   its generated DWG/DXF.
+   See the updated [gap receipt](docs/research/p4-ac1021-children-room-strict-output-gaps-2026-11-06.json)
    and [view-style receipt](docs/research/p4-ac1021-modeldoc-view-style-physical-source-profile-2026-11-06.json).
    Source SHA-256 is
-   `cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce`; do
-   not commit a drawing fixture.
+   `cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce`.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
