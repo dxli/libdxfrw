@@ -2087,6 +2087,10 @@ Native source-release builds and platform qualification remain open.
   scalar, quality/units, zero string marker and role-4 owner/reactor to source
   NOD `0x0A`; wrapper output remaps those roles to NOD `0x0C`, with ASCII/Binary
   refusal, retry and typed readback ([receipt](docs/research/p4-ac1024-rastervariables-frame1-physical-writer-bridge-2026-11-05.json)).
+  The physical AC1024 frame=0 source now also passes exact scalar/handle-span
+  checks and a locally authored wrapper under RequireComplete owner-resolved
+  ASCII/Binary output; the wrapper remaps physical NOD `0x0A` to `0x0C`
+  ([receipt](docs/research/p4-ac1024-rastervariables-frame0-physical-writer-bridge-2026-11-05.json)).
   A hash-bound physical AC1018 frame=1 witness now passes the same bridge with
   the R2004-specific 18-byte body, 10-bit frame span, RL boundary and owner/
   reactor handle spans verified before wrapping; source NOD `0x0A` maps to the

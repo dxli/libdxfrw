@@ -949,7 +949,9 @@ public:
             || data.namedObjectDictionary.handle != 0x0Au)
             return false;
         const auto& raw = frame->second;
-        if (raw.m_version != DRW::AC1024 || raw.m_rawBytes.size() != 13u
+        const std::uint32_t scalarEnd = expectedFrame == 1 ? 71u : 63u;
+        if (raw.m_version != DRW::AC1024
+            || raw.m_rawBytes.size() != (expectedFrame == 1 ? 13u : 12u)
             || raw.m_objectType != 512u || raw.m_handle != 0x2Fu
             || !raw.m_isCustomClass)
             return false;
@@ -968,7 +970,7 @@ public:
         const auto frameEnd = body.getPosition() * 8u + body.getBitPos();
         if (frameEnd - frameStart != (expectedFrame == 1 ? 10u : 2u)
             || body.getBitShort() != 1u || body.getBitShort() != 3u
-            || body.getPosition() * 8u + body.getBitPos() != 71u
+            || body.getPosition() * 8u + body.getBitPos() != scalarEnd
             || body.getBit() != 0u)
             return false;
         const auto ownerStart = body.getPosition() * 8u + body.getBitPos();
@@ -976,7 +978,8 @@ public:
         const auto ownerEnd = body.getPosition() * 8u + body.getBitPos();
         const auto reactor = body.getHandle();
         const auto reactorEnd = body.getPosition() * 8u + body.getBitPos();
-        return body.isGood() && ownerEnd - ownerStart == 16u
+        return body.isGood() && ownerStart == scalarEnd + 1u
+            && ownerEnd - ownerStart == 16u
             && reactorEnd - ownerEnd == 16u && owner.code == 4u
             && owner.ref == 0x0Au && reactor.code == 4u
             && reactor.ref == 0x0Au;
@@ -71742,7 +71745,7 @@ bool rasterVariablesDwgAdapterTransport(
             && !DxIfaceStandardDwgCaptureTestAccess::physicalDirectRaster1018Wire(
                 imported, expectedFrame))
             return fail("physical AC1018 RASTERVARIABLES field/role span mismatch");
-        if (revision == DRW::AC1024 && frameOne
+        if (revision == DRW::AC1024
             && !DxIfaceStandardDwgCaptureTestAccess::physicalDirectRaster1024Wire(
                 imported, expectedFrame))
             return fail("physical AC1024 RASTERVARIABLES field/role span mismatch");
@@ -71816,7 +71819,7 @@ bool rasterVariablesDwgAdapterTransport(
         if (revision != DRW::AC1021 && revision != DRW::AC1027
             && revision != DRW::AC1032
             && !(revision == DRW::AC1018
-                || (frameOne && revision == DRW::AC1024)))
+                || revision == DRW::AC1024))
             return true;
 
         // Bind the physical producer's decoded record to a locally authored,
@@ -71887,7 +71890,8 @@ bool rasterVariablesDwgAdapterTransport(
         // closure, so whole-source owner qualification would test a different
         // gate (and make ASCII/Binary coverage asymmetric).
         const bool requireResolvedOwners =
-            revision == DRW::AC1018 || revision == DRW::AC1032 || frameOne;
+            revision == DRW::AC1018 || revision == DRW::AC1024
+            || revision == DRW::AC1032 || frameOne;
         const std::string sentinel = "RASTERVARIABLES_ATOMIC_DESTINATION";
         {
             std::ofstream previous(target.first, std::ios::binary);
@@ -71905,7 +71909,8 @@ bool rasterVariablesDwgAdapterTransport(
                 outputSourceData, debugExport, requireResolvedOwners,
                 dx_dxfSourceTextPolicy::Compatible, DRW::DxfTextWritePolicy::Compatible,
                 dx_dxfProxyGraphicsPolicy::Compatible,
-                revision == DRW::AC1018 || revision == DRW::AC1032 || frameOne
+                revision == DRW::AC1018 || revision == DRW::AC1024
+                    || revision == DRW::AC1032 || frameOne
                     ? dx_dwgReadCompletenessPolicy::RequireComplete
                                         : dx_dwgReadCompletenessPolicy::Legacy);
         };
