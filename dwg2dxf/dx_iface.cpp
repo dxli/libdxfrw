@@ -28682,12 +28682,16 @@ bool dx_iface::prepareDwgDictionaryVars(DRW::Version version, bool binary,
         return reject("no source container");
     if (cData->sourceFormat != dx_source_format::DWG
         || (cData->sourceVersion != DRW::AC1018
+            && cData->sourceVersion != DRW::AC1021
             && cData->sourceVersion != DRW::AC1024))
         return true;
     if (cData->dictionaryVars.empty()
         && m_extensionDictionaryVarHandles.empty())
         return true;
-    if (version != DRW::AC1024
+    const DRW::Version expectedTargetVersion =
+        cData->sourceVersion == DRW::AC1021
+            ? DRW::AC1021 : DRW::AC1024;
+    if (version != expectedTargetVersion
         || !cData->hasSingleSuccessfulNamedResourceImport()
         || !cData->hasNamedObjectDictionary
         || cData->dictionaryVars.empty()
@@ -28828,9 +28832,12 @@ bool dx_iface::hasUnchangedDwgDictionaryVars() const noexcept {
     if (cData == nullptr || m_dwgDictionaryVarOutputOwner != cData
         || m_dwgDictionaryVarOutputGeneration != cData->importGeneration
         || (sourceVersion != DRW::AC1018
+            && sourceVersion != DRW::AC1021
             && sourceVersion != DRW::AC1024)
         || m_dwgDictionaryVarOutputVersion != sourceVersion
-        || m_dwgDictionaryVarTargetVersion != DRW::AC1024
+        || m_dwgDictionaryVarTargetVersion
+            != (sourceVersion == DRW::AC1021
+                ? DRW::AC1021 : DRW::AC1024)
         || m_dwgDictionaryVarOutputBytes
             > kMaxAdapterNamedResourceTypedRetainedBytes
         || cData->sourceFormat != dx_source_format::DWG
@@ -76907,6 +76914,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         || !cData->plotSettings.empty()
         || hasCurrentDwgRasterVariables
         || hasCurrentDwgWipeoutVariables
+        || (cData->sourceFormat == dx_source_format::DWG
+            && !cData->dictionaryVars.empty())
         || (cData->sourceFormat == dx_source_format::DWG
             && !cData->scales.empty())
         || !cData->renderSettings.empty()

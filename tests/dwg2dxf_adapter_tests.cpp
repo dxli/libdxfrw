@@ -175,6 +175,11 @@ public:
         iface.m_extensionScaleHandles = handles;
     }
 
+    static void setDictionaryVarExtensionHandles(
+            dx_iface& iface, const std::vector<std::uint32_t>& handles) {
+        iface.m_extensionDictionaryVarHandles = handles;
+    }
+
     static void retainStandardFrames(const dx_data& source,
                                     dx_data& projection,
                                     const std::set<std::uint32_t>& handles) {
@@ -46169,6 +46174,260 @@ bool physicalAc1021ScaleSelectedGraphOutput(
     return true;
 }
 
+bool physicalAc1021DictionaryVarSelectedGraphOutput(
+        const std::filesystem::path& sourcePath,
+        const std::filesystem::path& directory) {
+    dx_iface sourceReader;
+    dx_data source;
+    if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1021
+        || !source.hasSingleSuccessfulNamedResourceImport()
+        || source.dictionaryVars.size() != 12u
+        || !source.hasNamedObjectDictionary)
+        return fail("physical AC1021 DICTIONARYVAR source did not import as 12 witnessed records");
+
+    const DRW_Dictionary::Entry* root = nullptr;
+    for (const DRW_Dictionary::Entry& entry :
+         source.namedObjectDictionary.m_entries) {
+        if (entry.m_name != "AcDbVariableDictionary")
+            continue;
+        if (root != nullptr)
+            return fail("physical AC1021 DICTIONARYVAR NOD root is ambiguous");
+        root = &entry;
+    }
+    const DRW_Dictionary* sourceDictionary = nullptr;
+    if (root != nullptr)
+        for (const DRW_Dictionary& dictionary : source.dictionaries) {
+            if (dictionary.handle != root->m_handle)
+                continue;
+            if (sourceDictionary != nullptr)
+                return fail("physical AC1021 DICTIONARYVAR owner is ambiguous");
+            sourceDictionary = &dictionary;
+        }
+    if (root == nullptr || sourceDictionary == nullptr
+        || sourceDictionary->parentHandle
+            != source.namedObjectDictionary.handle
+        || sourceDictionary->flags != 0
+        || !sourceDictionary->hasCompleteDwgEntries()
+        || sourceDictionary->m_entries.size() != source.dictionaryVars.size())
+        return fail("physical AC1021 AcDbVariableDictionary graph is incomplete");
+
+    for (const DRW_DictionaryVar& value : source.dictionaryVars) {
+        if (value.parentHandle != sourceDictionary->handle
+            || value.reactorHandles.size() != 1u
+            || value.reactorHandles.front() != sourceDictionary->handle
+            || !value.hasDwgCommonLinkTail()
+            || value.xDictHandle != 0u
+            || value.hasDataStorageBinaryData()
+            || value.m_schema < 0 || value.m_schema > 255
+            || value.m_value.empty() || !value.appData.empty()
+            || !value.extData.empty())
+            return fail("physical AC1021 DICTIONARYVAR is outside the bounded source profile");
+        const auto entry = std::find_if(sourceDictionary->m_entries.begin(),
+            sourceDictionary->m_entries.end(), [&value](
+                const DRW_Dictionary::Entry& candidate) {
+                return candidate.m_handle == value.handle;
+            });
+        if (entry == sourceDictionary->m_entries.end()
+            || entry->m_name.empty())
+            return fail("physical AC1021 DICTIONARYVAR owner key is missing");
+    }
+
+    // Retain the authentic import receipt and source values while narrowing
+    // the selected graph to this rooted variable dictionary.
+    dx_data selected;
+    selected.sourceFormat = source.sourceFormat;
+    selected.sourceVersion = source.sourceVersion;
+    selected.importGeneration = source.importGeneration;
+    selected.dwgReadOutcome = source.dwgReadOutcome;
+    selected.namedObjectDictionary = source.namedObjectDictionary;
+    selected.namedObjectDictionary.m_entries.erase(
+        std::remove_if(selected.namedObjectDictionary.m_entries.begin(),
+            selected.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name != "AcDbVariableDictionary";
+            }), selected.namedObjectDictionary.m_entries.end());
+    selected.hasNamedObjectDictionary = true;
+    selected.dictionaries.push_back(*sourceDictionary);
+    selected.dictionaryVars = source.dictionaryVars;
+    selected.namedResourceImport = source.namedResourceImport;
+    selected.namedResourceImport.dictionaryVarRange =
+        {0u, selected.dictionaryVars.size()};
+    selected.namedResourceImport.scaleRange = {0u, 0u};
+    selected.namedResourceImport.mLineStyleRange = {0u, 0u};
+    selected.namedResourceImport.mLeaderStyleRange = {0u, 0u};
+    selected.namedResourceImport.rawRange = {0u, 0u};
+    selected.namedResourceTypedRetainedRecords =
+        selected.dictionaryVars.size();
+    selected.namedResourceTypedRetainedBytes =
+        source.namedResourceTypedRetainedBytes;
+    selected.namedResourceImport.typedRetainedRecords =
+        selected.namedResourceTypedRetainedRecords;
+    selected.namedResourceImport.typedRetainedBytes =
+        selected.namedResourceTypedRetainedBytes;
+    if (!selected.hasSingleSuccessfulNamedResourceImport())
+        return fail("selected AC1021 DICTIONARYVAR projection lost its import profile");
+
+    const auto verifyOutput = [&selected, &sourceDictionary](
+            const std::filesystem::path& path) {
+        dx_iface reader;
+        dx_data output;
+        if (!reader.fileImport(path.string(), &output, false)
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1021
+            || output.dictionaryVars.size() != selected.dictionaryVars.size())
+            return fail("AC1021 DICTIONARYVAR output did not reimport as 12 typed records");
+        const DRW_Dictionary::Entry* outputRoot = nullptr;
+        for (const DRW_Dictionary::Entry& entry :
+             output.namedObjectDictionary.m_entries) {
+            if (entry.m_name != "AcDbVariableDictionary")
+                continue;
+            if (outputRoot != nullptr)
+                return fail("AC1021 DICTIONARYVAR output NOD root is ambiguous");
+            outputRoot = &entry;
+        }
+        const DRW_Dictionary* outputDictionary = nullptr;
+        if (outputRoot != nullptr)
+            for (const DRW_Dictionary& dictionary : output.dictionaries) {
+                if (dictionary.handle != outputRoot->m_handle)
+                    continue;
+                if (outputDictionary != nullptr)
+                    return fail("AC1021 DICTIONARYVAR output owner is ambiguous");
+                outputDictionary = &dictionary;
+            }
+        if (outputDictionary == nullptr
+            || outputDictionary->m_entries.size()
+                != sourceDictionary->m_entries.size())
+            return fail("AC1021 DICTIONARYVAR owner dictionary is incomplete");
+        for (std::size_t index = 0u;
+             index < sourceDictionary->m_entries.size(); ++index) {
+            const auto& expected = sourceDictionary->m_entries[index];
+            const auto& actual = outputDictionary->m_entries[index];
+            if (actual.m_name != expected.m_name
+                || actual.m_handle != expected.m_handle)
+                return fail("AC1021 DICTIONARYVAR owner order or membership changed");
+        }
+        for (const DRW_DictionaryVar& expected : selected.dictionaryVars) {
+            const auto actual = std::find_if(output.dictionaryVars.begin(),
+                output.dictionaryVars.end(), [&expected](
+                    const DRW_DictionaryVar& candidate) {
+                    return candidate.handle == expected.handle;
+                });
+            if (actual == output.dictionaryVars.end()
+                || actual->parentHandle != outputDictionary->handle
+                || actual->reactorHandles.size() != 1u
+                || actual->reactorHandles.front() != outputDictionary->handle
+                || actual->m_schema != expected.m_schema
+                || actual->m_value != expected.m_value)
+                return fail("AC1021 DICTIONARYVAR identity, owner/reactor, schema or value changed");
+            const auto raw = std::find_if(
+                output.rawNamedResourceObjects.begin(),
+                output.rawNamedResourceObjects.end(),
+                [&expected](const DRW_RawDxfObject& object) {
+                    return object.name == "DICTIONARYVAR"
+                        && object.handle == expected.handle;
+                });
+            if (raw == output.rawNamedResourceObjects.end()
+                || raw->m_version != DRW::AC1021
+                || raw->parentHandle != outputDictionary->handle)
+                return fail("AC1021 DICTIONARYVAR raw identity or owner is missing");
+            const auto schema = std::find_if(raw->groups.begin(),
+                raw->groups.end(), [](const DRW_Variant& group) {
+                    return group.code() == 280;
+                });
+            const auto value = std::find_if(raw->groups.begin(),
+                raw->groups.end(), [](const DRW_Variant& group) {
+                    return group.code() == 1;
+                });
+            if (schema == raw->groups.end()
+                || schema->type() != DRW_Variant::INTEGER
+                || schema->i_val() != expected.m_schema
+                || value == raw->groups.end()
+                || value->type() != DRW_Variant::STRING
+                || std::string(value->c_str()) != expected.m_value)
+                return fail("AC1021 DICTIONARYVAR raw schema or value changed");
+        }
+        return true;
+    };
+
+    std::filesystem::create_directories(directory);
+    for (const bool binary : {false, true}) {
+        const auto output = directory / (binary
+            ? "physical-dictionaryvar-ac1021-binary.dxf"
+            : "physical-dictionaryvar-ac1021-ascii.dxf");
+        class LateDictionaryVarMutation final : public dx_iface {
+        public:
+            bool mutateAfterObjects{false};
+            std::uint32_t targetHandle{0u};
+            UTF8STRING originalValue;
+
+            void writeObjects() override {
+                dx_iface::writeObjects();
+                if (!mutateAfterObjects || cData == nullptr)
+                    return;
+                const auto variable = std::find_if(
+                    cData->dictionaryVars.begin(), cData->dictionaryVars.end(),
+                    [this](const DRW_DictionaryVar& value) {
+                        return value.handle == targetHandle;
+                    });
+                if (variable != cData->dictionaryVars.end())
+                    variable->m_value = originalValue + "-mutated";
+            }
+        } writer;
+        std::vector<std::uint32_t> handles;
+        for (const DRW_DictionaryVar& value : selected.dictionaryVars)
+            handles.push_back(value.handle);
+        writer.targetHandle = selected.dictionaryVars.front().handle;
+        writer.originalValue = selected.dictionaryVars.front().m_value;
+        DxIfaceStandardDwgCaptureTestAccess::setDictionaryVarExtensionHandles(
+            writer, handles);
+        const auto exportSelected = [&]() {
+            return writer.fileExport(output.string(), DRW::AC1021, binary,
+                &selected, true, false,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::Legacy);
+        };
+        if (!exportSelected() || !verifyOutput(output))
+            return fail("selected physical AC1021 DICTIONARYVAR graph output/readback failed: "
+                + writer.extensionGraphFailureDetail());
+        const std::string sentinel =
+            "preserve rejected AC1021 DICTIONARYVAR graph\n";
+        { std::ofstream existing(output, std::ios::binary | std::ios::trunc);
+          existing << sentinel; }
+        writer.mutateAfterObjects = true;
+        if (exportSelected())
+            return fail("late-mutated AC1021 DICTIONARYVAR source was emitted");
+        std::ifstream sentinelInput(output, std::ios::binary);
+        const std::string retained{
+            std::istreambuf_iterator<char>(sentinelInput),
+            std::istreambuf_iterator<char>()};
+        if (retained != sentinel)
+            return fail("rejected AC1021 DICTIONARYVAR graph replaced the destination");
+        const auto restored = std::find_if(selected.dictionaryVars.begin(),
+            selected.dictionaryVars.end(), [&writer](
+                const DRW_DictionaryVar& value) {
+                return value.handle == writer.targetHandle;
+            });
+        if (restored == selected.dictionaryVars.end())
+            return fail("AC1021 DICTIONARYVAR mutation target disappeared");
+        restored->m_value = writer.originalValue;
+        writer.mutateAfterObjects = false;
+        if (!exportSelected() || !verifyOutput(output))
+            return fail("restored AC1021 DICTIONARYVAR graph could not retry on the same writer");
+    }
+    std::cout << "physicalAc1021DictionaryVarSelectedGraphOutput PASS"
+              << " encodings=ASCII,Binary variables=12 rooted=AcDbVariableDictionary"
+              << " fields=schema,value rollback=pass sameWriterRetry=pass"
+              << " qualifiedSourceFrames="
+              << DxIfaceStandardDwgCaptureTestAccess::
+                     opaqueOutputQualificationCount(selected)
+              << '\n';
+    return true;
+}
+
 bool physicalXRecordOutputReadback(
         const std::filesystem::path& sourcePath) {
     dx_iface sourceReader;
@@ -74550,6 +74809,11 @@ int main(int argc, char** argv) {
     if (argc == 4
         && std::string(argv[1]) == "--scale-ac1021-physical-selected-graph")
         return physicalAc1021ScaleSelectedGraphOutput(
+            argv[2], argv[3]) ? 0 : 1;
+    if (argc == 4
+        && std::string(argv[1])
+            == "--dictionaryvar-ac1021-physical-selected-graph")
+        return physicalAc1021DictionaryVarSelectedGraphOutput(
             argv[2], argv[3]) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--geodata-dwg-adapter-transport")
