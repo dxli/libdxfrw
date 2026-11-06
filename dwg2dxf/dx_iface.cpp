@@ -34174,6 +34174,18 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
             && cData->sourceVersion != DRW::AC1024))
         return true;
     const bool ac1021Profile = cData->sourceVersion == DRW::AC1021;
+    const auto hasLayoutIdentity = [this](std::uint32_t handle,
+                                           const char* name) {
+        return std::count_if(cData->layouts.begin(), cData->layouts.end(),
+            [handle, name](const DRW_Layout& layout) {
+                return layout.handle == handle && layout.name == name;
+            }) == 1u;
+    };
+    const bool ac1021LineweightsProfile = ac1021Profile
+        && cData->layouts.size() == 3u
+        && hasLayoutIdentity(0x22u, "Model")
+        && hasLayoutIdentity(0x102u, "ISO A4 Size")
+        && hasLayoutIdentity(0x108u, "Letter Size");
     if (version != (ac1021Profile ? DRW::AC1021 : DRW::AC1024))
         return skip("target is outside the exact source-version DXF profile");
 
@@ -34182,7 +34194,8 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
     // dictionary, reciprocal BLOCK_RECORD edges, and bounded dependencies.
     const bool ac1015Profile = cData->sourceVersion == DRW::AC1015;
     const bool ac1018Profile = cData->sourceVersion == DRW::AC1018;
-    const std::size_t expectedLayoutCount = ac1018Profile ? 3u : 2u;
+    const std::size_t expectedLayoutCount =
+        (ac1018Profile || ac1021LineweightsProfile) ? 3u : 2u;
     if (cData->layouts.size() != expectedLayoutCount
         || !cData->hasNamedObjectDictionary
         || cData->namedObjectDictionary.handle == 0u
@@ -34269,12 +34282,15 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
             != std::vector<std::uint32_t>{nod.handle})
         return skip("ACAD_LAYOUT dictionary source role/shape");
 
-    const std::array<const char*, 3> expected{{
-        "Model", "Layout1",
-        ac1018Profile ? "Layout2"
-                      : ac1015Profile ? "Layout1"
-                      : ac1021Profile ? "dwgmodels.com"
-                                      : "Architectural Title Block"}};
+    const std::vector<const char*> expected = ac1021LineweightsProfile
+        ? std::vector<const char*>{
+            "Model", "ISO A4 Size", "Letter Size"}
+        : std::vector<const char*>{
+            "Model", "Layout1",
+            ac1018Profile ? "Layout2"
+                          : ac1015Profile ? "Layout1"
+                          : ac1021Profile ? "dwgmodels.com"
+                                          : "Architectural Title Block"};
     std::map<std::uint32_t, DwgLayoutOutputSource> selected;
     std::map<std::uint32_t, DwgNodDictionaryOutputSource>
         selectedNodDictionaries;
@@ -34282,7 +34298,11 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
     bool completeNodProfile = false;
     try {
         if (ac1018Profile || ac1015Profile || ac1021Profile) {
-            const std::vector<const char*> emptyRootNames = ac1021Profile
+            const std::vector<const char*> emptyRootNames =
+                ac1021LineweightsProfile
+                ? std::vector<const char*>{
+                    "ACAD_GROUP", "ACAD_PLOTSETTINGS", "ACAD_COLOR"}
+                : ac1021Profile
                 ? std::vector<const char*>{"ACAD_PLOTSETTINGS"}
                 : ac1018Profile
                 ? std::vector<const char*>{
@@ -34364,7 +34384,15 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
             // must resolve to one typed DICTIONARY/DICTIONARYWDFLT owned by
             // this NOD. Staged inspection checks the emitted graph against
             // this frozen source model.
-            const std::vector<const char*> expectedNodNames = ac1018Profile
+            const std::vector<const char*> expectedNodNames =
+                ac1021LineweightsProfile
+                ? std::vector<const char*>{
+                    "ACAD_COLOR", "ACAD_GROUP", "ACAD_LAYOUT",
+                    "ACAD_MATERIAL", "ACAD_MLINESTYLE",
+                    "ACAD_PLOTSETTINGS", "ACAD_PLOTSTYLENAME",
+                    "ACAD_TABLESTYLE", "ACAD_VISUALSTYLE",
+                    "AcDbVariableDictionary", "ASE_INDEX_DICTIONARY"}
+                : ac1018Profile
                 ? std::vector<const char*>{
                     "ACAD_COLOR", "ACAD_GROUP", "ACAD_LAYOUT",
                     "ACAD_MATERIAL", "ACAD_MLINESTYLE",
@@ -34693,7 +34721,10 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
             if (!selected.emplace(layout.handle, std::move(snapshot)).second)
                 return skip("two unique physical layout identities");
         }
-        const bool expectedPaperLayouts = ac1018Profile
+        const bool expectedPaperLayouts = ac1021LineweightsProfile
+            ? selectedNames.count("ISO A4 Size") == 1u
+                && selectedNames.count("Letter Size") == 1u
+            : ac1018Profile
             ? selectedNames.count("Layout1") == 1u
                 && selectedNames.count("Layout2") == 1u
             : ac1021Profile
@@ -34757,6 +34788,20 @@ bool dx_iface::hasUnchangedDwgLayoutOutputSources(bool debug) const noexcept {
             && m_dwgLayoutOutputNod.handle == 0u
             && m_dwgLayoutOutputNodHandle == 0u
             && m_dwgNodDictionaryOutputSources.empty();
+    const auto hasLayoutIdentity = [this](std::uint32_t handle,
+                                           const char* name) {
+        return cData != nullptr
+            && std::count_if(cData->layouts.begin(), cData->layouts.end(),
+                [handle, name](const DRW_Layout& layout) {
+                    return layout.handle == handle && layout.name == name;
+                }) == 1u;
+    };
+    const bool ac1021LineweightsProfile = cData != nullptr
+        && cData->sourceVersion == DRW::AC1021
+        && cData->layouts.size() == 3u
+        && hasLayoutIdentity(0x22u, "Model")
+        && hasLayoutIdentity(0x102u, "ISO A4 Size")
+        && hasLayoutIdentity(0x108u, "Letter Size");
     if (cData == nullptr || m_dwgLayoutOutputOwner != cData
         || m_dwgLayoutOutputGeneration != cData->importGeneration
         || cData->sourceFormat != dx_source_format::DWG
@@ -34767,7 +34812,9 @@ bool dx_iface::hasUnchangedDwgLayoutOutputSources(bool debug) const noexcept {
             && m_dwgLayoutOutputSourceVersion != DRW::AC1024)
         || (m_dwgLayoutOutputNodComplete
             && m_dwgLayoutOutputSourceVersion != DRW::AC1015
-            && m_dwgLayoutOutputSourceVersion != DRW::AC1018)
+            && m_dwgLayoutOutputSourceVersion != DRW::AC1018
+            && !(m_dwgLayoutOutputSourceVersion == DRW::AC1021
+                 && ac1021LineweightsProfile))
         || (m_dwgLayoutOutputNodComplete
             != (m_dwgLayoutOutputNod.handle != 0u))
         || (m_dwgLayoutOutputSourceVersion == DRW::AC1024
@@ -34780,7 +34827,8 @@ bool dx_iface::hasUnchangedDwgLayoutOutputSources(bool debug) const noexcept {
             && m_dwgNodDictionaryOutputSources.size() != 4u)
         || (m_dwgLayoutOutputSourceVersion == DRW::AC1021
             && !m_dwgNodDictionaryOutputSources.empty()
-            && m_dwgNodDictionaryOutputSources.size() != 1u)
+            && m_dwgNodDictionaryOutputSources.size()
+                != (ac1021LineweightsProfile ? 3u : 1u))
         || cData->layouts.size() != m_dwgLayoutOutputSources.size()
         || cData->namedObjectDictionary.handle != m_dwgLayoutOutputNodHandle
         || cData->namedObjectDictionary.hardOwner

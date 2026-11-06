@@ -51875,14 +51875,6 @@ bool physicalLayoutOutputReadback(
         sourcePath.string(), &source, false);
     const bool ac1015Source = source.sourceVersion == DRW::AC1015;
     const bool ac1021Source = source.sourceVersion == DRW::AC1021;
-    if (!imported
-        || source.sourceFormat != dx_source_format::DWG
-        || (!ac1015Source && !ac1021Source
-            && source.sourceVersion != DRW::AC1024)
-        || source.layouts.size() != 2u
-        || !source.hasNamedObjectDictionary)
-        return fail("physical LAYOUT source is not an admitted two-layout AC1015/AC1021/AC1024 graph");
-
     const auto hasIdentity = [&source](std::uint32_t handle,
                                        const char* name) {
         return std::count_if(source.layouts.begin(), source.layouts.end(),
@@ -51890,23 +51882,38 @@ bool physicalLayoutOutputReadback(
                 return layout.handle == handle && layout.name == name;
             }) == 1;
     };
-    std::array<std::pair<std::uint32_t, const char*>, 2> expected{};
+    const bool ac1021LineweightsSource = ac1021Source
+        && source.layouts.size() == 3u
+        && hasIdentity(0x22u, "Model")
+        && hasIdentity(0x102u, "ISO A4 Size")
+        && hasIdentity(0x108u, "Letter Size");
+    if (!imported
+        || source.sourceFormat != dx_source_format::DWG
+        || (!ac1015Source && !ac1021Source
+            && source.sourceVersion != DRW::AC1024)
+        || source.layouts.size() != (ac1021LineweightsSource ? 3u : 2u)
+        || !source.hasNamedObjectDictionary)
+        return fail("physical LAYOUT source is not an admitted AC1015/AC1021/AC1024 graph");
+
+    std::vector<std::pair<std::uint32_t, const char*>> expected;
     if (ac1015Source && hasIdentity(0x27u, "Model")
         && hasIdentity(0x29u, "Layout1")) {
-        expected = {{{0x27u, "Model"}, {0x29u, "Layout1"}}};
+        expected = {{0x27u, "Model"}, {0x29u, "Layout1"}};
     } else if (ac1021Source && hasIdentity(0x22u, "Model")
                && hasIdentity(0xD7u, "dwgmodels.com")) {
-        expected = {{{0x22u, "Model"}, {0xD7u, "dwgmodels.com"}}};
+        expected = {{0x22u, "Model"}, {0xD7u, "dwgmodels.com"}};
+    } else if (ac1021LineweightsSource) {
+        expected = {{0x22u, "Model"}, {0x102u, "ISO A4 Size"},
+                    {0x108u, "Letter Size"}};
     } else if (!ac1015Source && hasIdentity(0x22u, "Model")
         && hasIdentity(0x59u, "Layout1")) {
-        expected = {{{0x22u, "Model"}, {0x59u, "Layout1"}}};
+        expected = {{0x22u, "Model"}, {0x59u, "Layout1"}};
     } else if (!ac1015Source && hasIdentity(0xAu, "Model")
                && hasIdentity(0xFu, "Architectural Title Block")) {
-        expected = {{{0xAu, "Model"}, {0xFu, "Architectural Title Block"}}};
+        expected = {{0xAu, "Model"}, {0xFu, "Architectural Title Block"}};
     } else {
         return fail("physical LAYOUT source is outside the admitted AC1015/AC1021/AC1024 identity profiles");
     }
-    const std::string paperLayoutName = expected[1].second;
     const DRW::Version layoutTargetVersion = ac1021Source
         ? DRW::AC1021 : DRW::AC1024;
     const auto hasArchBlockRecord = std::count_if(
@@ -51934,14 +51941,14 @@ bool physicalLayoutOutputReadback(
         && hasArchDynamicObject(0x111Au)
         && hasArchDynamicObject(0x111Bu)
         && hasArchDynamicObject(0x1122u);
-    std::array<const DRW_Layout*, 2> sourceLayouts{{nullptr, nullptr}};
+    std::vector<const DRW_Layout*> sourceLayouts(expected.size(), nullptr);
     for (const auto& layout : source.layouts) {
         const auto found = std::find_if(expected.begin(), expected.end(),
             [&layout](const auto& item) {
                 return item.first == layout.handle && item.second == layout.name;
             });
         if (found == expected.end())
-            return fail("physical LAYOUT identity is outside the two census records");
+            return fail("physical LAYOUT identity is outside the exact source census");
         const std::size_t index =
             static_cast<std::size_t>(found - expected.begin());
         if (sourceLayouts[index] != nullptr)
@@ -51950,7 +51957,7 @@ bool physicalLayoutOutputReadback(
     }
     if (std::any_of(sourceLayouts.begin(), sourceLayouts.end(),
             [](const DRW_Layout* layout) { return layout == nullptr; }))
-        return fail("one or both physical LAYOUT census identities are absent");
+        return fail("one or more physical LAYOUT census identities are absent");
 
     const auto uniqueDictionary = [](const dx_data& data,
                                      std::uint32_t handle) {
@@ -52182,6 +52189,26 @@ bool physicalLayoutOutputReadback(
             != source.namedObjectDictionary.handle
         || sourceLayoutDictionary->m_entries.size() != source.layouts.size())
         return fail("physical ACAD_LAYOUT dictionary root or cardinality is not uniquely closed");
+    std::vector<std::uint32_t> layoutExtensionFrameHandles;
+    if (ac1021LineweightsSource) {
+        for (const DRW_Layout* layout : sourceLayouts) {
+            if (layout->xDictHandle == 0u)
+                continue;
+            const DRW_Dictionary* extension =
+                uniqueDictionary(source, layout->xDictHandle);
+            if (extension == nullptr)
+                return fail("physical lineweights LAYOUT extension dictionary is not unique");
+            layoutExtensionFrameHandles.push_back(extension->handle);
+            for (const DRW_Dictionary::Entry& entry : extension->m_entries)
+                layoutExtensionFrameHandles.push_back(entry.m_handle);
+        }
+        std::sort(layoutExtensionFrameHandles.begin(),
+                  layoutExtensionFrameHandles.end());
+        if (std::adjacent_find(layoutExtensionFrameHandles.begin(),
+                               layoutExtensionFrameHandles.end())
+            != layoutExtensionFrameHandles.end())
+            return fail("physical lineweights LAYOUT extension frame identity is aliased");
+    }
     const auto uniqueDictionaryWithDefault = [](
             const dx_data& data, std::uint32_t handle) {
         const DRW_DictionaryWithDefault* result = nullptr;
@@ -52351,10 +52378,15 @@ bool physicalLayoutOutputReadback(
                 || !layout->viewportHandles.empty())
                 return fail("physical AC1015 LAYOUT viewports are outside the exact local source profile");
         } else if (layout->name == "Model") {
-            const DRW_Vport* active =
-                uniqueVport(source, layout->lastActiveViewportHandle.ref);
-            if (active == nullptr)
-                return fail("physical Model LAYOUT last-active handle does not resolve to a VPORT record");
+            if (ac1021LineweightsSource) {
+                if (layout->lastActiveViewportHandle.ref != 0u)
+                    return fail("physical lineweights Model LAYOUT has an unexpected active viewport handle");
+            } else {
+                const DRW_Vport* active =
+                    uniqueVport(source, layout->lastActiveViewportHandle.ref);
+                if (active == nullptr)
+                    return fail("physical Model LAYOUT last-active handle does not resolve to a VPORT record");
+            }
         } else if (layout->lastActiveViewportHandle.ref != 0) {
             if (std::find(layout->viewportHandles.begin(),
                           layout->viewportHandles.end(),
@@ -52403,8 +52435,10 @@ bool physicalLayoutOutputReadback(
             return fail("physical Layout1 could not be selected for atomic refusal");
         const dwgHandle originalBlockRecord =
             mutableLayout->paperSpaceBlockRecordHandle;
-        std::vector<std::uint32_t> qualificationHandles{
-            expected[0].first, expected[1].first};
+        std::vector<std::uint32_t> qualificationHandles;
+        qualificationHandles.reserve(expected.size() + 8u);
+        for (const auto& identity : expected)
+            qualificationHandles.push_back(identity.first);
         if (ac1015Source) {
             qualificationHandles.insert(qualificationHandles.end(),
                 {0x0Cu, 0x0Du, 0x0Eu, 0x0Fu, 0x17u, 0x18u, 0x19u, 0x1Au});
@@ -52468,7 +52502,7 @@ bool physicalLayoutOutputReadback(
             return fail("invalid physical LAYOUT block-record target was not refused atomically");
         if (!exportPartial())
             return fail("corrected physical LAYOUT graph could not retry on the same adapter");
-        if (ac1021Source) {
+        if (ac1021Source && !ac1021LineweightsSource) {
             for (const std::uint32_t handle :
                     {0x205u, 0x288u, 0x3BFu, 0x3C0u}) {
                 if (!DxIfaceStandardDwgCaptureTestAccess::standardDwgOutputQualified(
@@ -52477,6 +52511,18 @@ bool physicalLayoutOutputReadback(
                         + std::to_string(handle)
                         + " lacks finalized standard output proof");
             }
+            DxIfaceStandardDwgCaptureTestAccess::
+                printStandardDwgOutputProofHandles(
+                    writer, source.importGeneration);
+        }
+        if (ac1021LineweightsSource) {
+            for (const std::uint32_t handle : layoutExtensionFrameHandles)
+                if (!DxIfaceStandardDwgCaptureTestAccess::
+                        standardDwgOutputQualified(
+                            writer, source.importGeneration, handle))
+                    return fail("physical lineweights LAYOUT extension frame "
+                        + std::to_string(handle)
+                        + " lacks finalized standard output proof");
             DxIfaceStandardDwgCaptureTestAccess::
                 printStandardDwgOutputProofHandles(
                     writer, source.importGeneration);
@@ -52703,11 +52749,15 @@ bool physicalLayoutOutputReadback(
             if (!sourceLayout.viewportHandles.empty()) {
                 const auto sourceViewportSet = collectViewports(source);
                 const auto outputViewportSet = collectViewports(output);
+                std::size_t expectedViewportCount = 0u;
+                for (const DRW_Layout* candidate : sourceLayouts)
+                    expectedViewportCount +=
+                        candidate->viewportHandles.size();
                 if (!sourceViewportSet.first || !outputViewportSet.first
                     || sourceViewportSet.second.size()
-                        != sourceLayout.viewportHandles.size()
+                        != expectedViewportCount
                     || outputViewportSet.second.size()
-                        != sourceLayout.viewportHandles.size())
+                        != expectedViewportCount)
                     return fail("physical LAYOUT viewport-list source/output cardinality is not closed");
                 std::set<std::uint32_t> matchedHandles;
                 for (const std::uint32_t sourceHandle :
@@ -52737,13 +52787,19 @@ bool physicalLayoutOutputReadback(
                     || outputMatch->lastActiveViewportHandle.ref != 0u)
                     return fail("physical AC1015 LAYOUT active-viewport field changed");
             } else if (sourceLayout.name == "Model") {
-                const DRW_Vport* sourceActive = uniqueVport(
-                    source, sourceLayout.lastActiveViewportHandle.ref);
-                const DRW_Vport* outputActive = uniqueVport(
-                    output, outputMatch->lastActiveViewportHandle.ref);
-                if (sourceActive == nullptr || outputActive == nullptr
-                    || !sameAsciiSymbol(sourceActive->name, outputActive->name))
-                    return fail("physical Model LAYOUT last-active VPORT identity changed on output/readback");
+                if (ac1021LineweightsSource) {
+                    if (sourceLayout.lastActiveViewportHandle.ref != 0u
+                        || outputMatch->lastActiveViewportHandle.ref != 0u)
+                        return fail("physical lineweights Model LAYOUT active viewport field changed on output/readback");
+                } else {
+                    const DRW_Vport* sourceActive = uniqueVport(
+                        source, sourceLayout.lastActiveViewportHandle.ref);
+                    const DRW_Vport* outputActive = uniqueVport(
+                        output, outputMatch->lastActiveViewportHandle.ref);
+                    if (sourceActive == nullptr || outputActive == nullptr
+                        || !sameAsciiSymbol(sourceActive->name, outputActive->name))
+                        return fail("physical Model LAYOUT last-active VPORT identity changed on output/readback");
+                }
             } else {
                 const DRW_Viewport* sourceActive = uniqueViewport(
                     source, sourceLayout.lastActiveViewportHandle.ref);
@@ -52763,8 +52819,10 @@ bool physicalLayoutOutputReadback(
                 source, output, outputPath, binary))
             return false;
         std::cerr << "Physical LAYOUT " << (binary ? "binary" : "ASCII")
-                  << " readback passed: Model/" << paperLayoutName
-                  << " plot and layout fields, "
+                  << " readback passed for ";
+        for (std::size_t index = 0u; index < expected.size(); ++index)
+            std::cerr << (index == 0u ? "" : "/") << expected[index].second;
+        std::cerr << " plot and layout fields, "
                      "ACAD_LAYOUT and BLOCK_RECORD links, extension dictionary/"
                      "XRECORD ownership, last-active target roles, atomic refusal "
                      "and same-adapter retry"

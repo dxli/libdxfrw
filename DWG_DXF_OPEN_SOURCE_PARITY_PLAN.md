@@ -61,24 +61,30 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P4 / AC1021 `lineweights.dwg` LAYOUT/VIEWPORT closure — next source-bound slice:**
-   same-version DICTIONARYWDFLT/PLACEHOLDER output is qualified in ASCII and
-   Binary ([receipt](docs/research/p4-ac1021-dictionary-default-same-version-output-2026-11-06.json)),
-   and MLINESTYLE `0x18` now passes the same-version AC1021 selected output,
-   readback, atomic refusal and retry route ([receipt](docs/research/p4-ac1021-mline-style-same-version-output-2026-11-06.json)).
-   Strict AC1021 conversion advances to the final completeness check with
-   42/49 callbacks qualified. The seven remaining callbacks are LAYOUT
-   `0x22`, `0x102`, `0x108` (type 82) and VIEWPORT `0x104`, `0x105`, `0x10A`,
-   `0x10B` (type 34). Compare source fields and owner/reactor, table/control,
-   layout/block, viewport membership, plot-settings and VisualStyle links
-   against LibreDWG 0.14 source JSON/DXF output and ODA v5.4.1. Extend the
-   existing versioned profiles only where each field and role is represented.
-   Prove exact source-bound ASCII/Binary output and fresh readback, invalid
-   reference destination preservation, and same-writer retry. Then rerun
-   strict same-version conversion and use the debug gap list to choose the
-   next residual. The source is existing local input (`lineweights.dwg`,
-   SHA-256 `ad2656f141675aeda06ede347f8921516700b60a0f5ba17af042419be5397b4d`);
-   commit no drawing fixture.
+1. **P4 / AC1021 `lineweights.dwg` VIEWPORT output — next source-bound slice:**
+   same-version DICTIONARYWDFLT/PLACEHOLDER, MLINESTYLE `0x18`, and all three
+   LAYOUT callbacks now pass selected same-version output, atomic refusal,
+   retry and fresh readback. The new LAYOUT receipt records exact source
+   handles, field/link checks, producer limits and the independent
+   LibreDWG 0.14 cross-check ([receipt](docs/research/p4-ac1021-lineweights-three-layout-selected-output-2026-11-06.json)).
+   Strict conversion advances to 45/49 callbacks; only VIEWPORT `0x104`,
+   `0x105`, `0x10A`, `0x10B` (type 34) remain.
+
+   Extend `--viewport-physical-output-readback` with this separately guarded
+   source census, preserving its existing AC1021/AC1024 profiles. The LAYOUT
+   selector now fixes the source membership: `0x104`/`0x105` belong to ISO A4
+   LAYOUT `0x102`, and `0x10A`/`0x10B` belong to Letter LAYOUT `0x108`. For
+   each VIEWPORT, bind its original type-34 frame and exact owner BLOCK_RECORD
+   to the typed entity; verify common owner/reactor roles and every modeled
+   layer, visual-style, shade-plot, UCS, and frozen-layer dependency against
+   ODA v5.4.1 §20.4.38 and LibreDWG 0.14 JSON. Preserve exact supported
+   fields, and refuse non-null links whose target role or emitted mapping is
+   not proven. Prove ASCII/Binary output and fresh typed readback, invalid-link
+   destination preservation, and same-adapter correction/retry. Keep strict
+   whole-source conversion closed until it reaches the completeness gate with
+   no gaps. The source is existing local input (`lineweights.dwg`, SHA-256
+   `ad2656f141675aeda06ede347f8921516700b60a0f5ba17af042419be5397b4d`); do
+   not commit a drawing fixture.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
