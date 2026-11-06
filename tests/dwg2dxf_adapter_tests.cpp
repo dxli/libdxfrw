@@ -54219,7 +54219,8 @@ bool physicalAc1021CellStyleMapSourceProbe(
 }
 
 bool physicalAc1021CellStyleMapSelectedOutput(
-        const std::filesystem::path& sourcePath) {
+        const std::filesystem::path& sourcePath,
+        const std::filesystem::path& outputDirectory = {}) {
     dx_iface sourceReader;
     dx_data source;
     if (!sourceReader.fileImport(sourcePath.string(), &source, false)
@@ -54250,21 +54251,31 @@ bool physicalAc1021CellStyleMapSelectedOutput(
 
     const auto nonce = std::chrono::steady_clock::now()
         .time_since_epoch().count();
+    const bool removeOutputs = outputDirectory.empty();
+    const std::filesystem::path selectedOutputDirectory = removeOutputs
+        ? std::filesystem::temp_directory_path() : outputDirectory;
+    std::error_code directoryError;
+    std::filesystem::create_directories(selectedOutputDirectory, directoryError);
+    if (directoryError)
+        return fail("could not create physical CELLSTYLEMAP output directory");
     struct Cleanup {
         std::array<std::filesystem::path, 2> paths;
+        bool removeOutputs;
         ~Cleanup() {
+            if (!removeOutputs)
+                return;
             for (const auto& path : paths) {
                 std::error_code ignored;
                 std::filesystem::remove(path, ignored);
             }
         }
     } cleanup{{
-        std::filesystem::temp_directory_path()
+        selectedOutputDirectory
             / ("libdxfrw-ac1021-cellstylemap-ascii-"
                + std::to_string(nonce) + ".dxf"),
-        std::filesystem::temp_directory_path()
+        selectedOutputDirectory
             / ("libdxfrw-ac1021-cellstylemap-binary-"
-               + std::to_string(nonce) + ".dxf")}};
+               + std::to_string(nonce) + ".dxf")}, removeOutputs};
 
     for (std::size_t index = 0u; index < cleanup.paths.size(); ++index) {
         const bool binary = index != 0u;
@@ -77018,9 +77029,11 @@ bool sunStudyDxfGraph(const std::string& source) {
 }
 
 int main(int argc, char** argv) {
-    if (argc == 3
+    if ((argc == 3 || argc == 4)
         && std::string(argv[1]) == "--tablestyle-ac1021-cellstylemap-selected-output")
-        return physicalAc1021CellStyleMapSelectedOutput(argv[2]) ? 0 : 1;
+        return physicalAc1021CellStyleMapSelectedOutput(
+            argv[2], argc == 4 ? std::filesystem::path(argv[3])
+                               : std::filesystem::path{}) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--tablestyle-ac1021-cellstylemap-source-probe")
         return physicalAc1021CellStyleMapSourceProbe(argv[2]) ? 0 : 1;

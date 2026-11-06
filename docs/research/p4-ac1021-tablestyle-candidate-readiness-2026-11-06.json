@@ -37,7 +37,7 @@
       "key": "ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP",
       "targetHandle": "0xCE97"
     },
-    "profileLimit": "The exact selected TABLESTYLE/CELLSTYLEMAP graph and source profile now pass local ASCII/Binary output/readback with atomic reference refusal and retry. Keep whole-source and native consumer claims closed until unrelated source graphs close and an independent reader accepts the emitted DXF.",
+    "profileLimit": "The exact selected TABLESTYLE/CELLSTYLEMAP graph and source profile pass local ASCII/Binary output/readback with atomic reference refusal and retry. LibreDWG 0.14 independently parses the emitted ASCII/Binary DXF and reports the map fields, but its R2007 encoder is unavailable and its successful R2004 downgrade drops CELLSTYLEMAP while leaving the dictionary key unresolved. Keep whole-source and native consumer claims closed.",
     "cellStyleMap": {
       "handle": "0xCE97",
       "type": 509,
@@ -68,7 +68,7 @@
       "identity": "CELLSTYLEMAP handle 52887 decimal = 0xCE97; owner and sole reactor are extension DICTIONARY 5721 decimal = 0x1659.",
       "edge": "The extension dictionary key ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP resolves to 52887; TABLESTYLE handle 135 decimal = 0x87 points to extension dictionary 5721.",
       "fields": "Three named cell records _TITLE/_HEADER/_DATA; the peer reports background CMC bytes beginning C8 and six borders per cell. This corroborates source identities and selected fields only.",
-      "limit": "No independent reader has yet consumed the emitted ASCII/Binary DXF; source peer data does not qualify output acceptance or native application semantics."
+      "limit": "LibreDWG source JSON corroborates source fields. Its dxf2dwg 0.14 importer parses selected emitted ASCII/Binary fields, but independent version-capable output roundtrip and native application semantics remain unqualified; R2004 downgrade loses CELLSTYLEMAP."
     }
   },
   "specification": {
@@ -81,7 +81,7 @@
     "result": "FAIL CLOSED before output preparation: typed-proxy-graphics-not-preserved, 36 records, first handle 0x2C50 (decimal 11344).",
     "interpretation": "This unrelated source graph stop does not establish TABLESTYLE output failure; use an exact selected graph projection for the next slice and keep full-source conversion refused."
   },
-  "nextAction": "Run an independent DXF reader against retained temporary ASCII/Binary outputs for this exact selected profile; then qualify the complete physical source only after unrelated object graphs and source completeness gates close. Keep AC1021 admission exact-profile only and retain whole-source refusal.",
+  "nextAction": "Keep AC1021 admission exact-profile only. Obtain a version-capable independent consumer/reader that preserves and semantically resolves CELLSTYLEMAP, or move to the next independently ready local P4 implementation slice; qualify the complete physical source only after unrelated graphs and source completeness gates close.",
   "validation": {
     "focusedBuild": "PASS cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4 (-Werror)",
     "focusedGeneratedCtest": "PASS libdxfrw_cellstylemap_dxf_writer (1/1); generated graph control exercises C8-to-257 roundtrip.",
@@ -90,7 +90,7 @@
     "fullSuites": "NOT RUN",
     "fixturesCommitted": false,
     "strictWholeSource": "Still refused by unrelated graph incompleteness; selected projections are not whole-file evidence.",
-    "independentOutputReader": "NOT RUN; independent LibreDWG source JSON is corroboration only."
+    "independentOutputReader": "PARTIAL: LibreDWG 0.14 parses emitted ASCII and Binary DXF and reports the TABLESTYLE/CELLSTYLEMAP graph fields. R2007 encoding is unavailable; R2004 encoding/readback succeeds but drops CELLSTYLEMAP and leaves a dangling dictionary target. See p4-ac1021-cellstylemap-independent-dxf-import-2026-11-06.json."
   },
   "simplerCandidate": {
     "path": "/Users/dli/doc/dwg/lineweights.dwg",
