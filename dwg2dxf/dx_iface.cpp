@@ -63206,6 +63206,88 @@ void dx_iface::addDimStyle(const DRW_Dimstyle& data) {
         estimateDimStyleTypedBytes);
 }
 
+bool dx_iface::mayOmitUnreferencedEmptyTextStyle(
+        const DRW_Textstyle& style) const noexcept {
+    if (cData == nullptr
+        || cData->sourceFormat != dx_source_format::Unknown
+        || !style.name.empty() || style.handle == 0
+        || style.handle == DRW::NoHandle || !style.extData.empty())
+        return false;
+
+    // A DXF STYLE row needs a name. Drop the invalid row only when the
+    // retained projection proves that no modeled text, shape linetype, or
+    // text-style-bearing object depends on its handle. Object families with
+    // uninspected style links keep the route fail-closed; this does not prove
+    // whole-document reference closure.
+    if (!cData->rawSectionRecords.empty() || !cData->rawSunStudies.empty()
+        || !cData->rawDetailViewStyles.empty()
+        || !cData->rawSectionViewStyles.empty()
+        || !cData->rawCellStyleMaps.empty()
+        || !cData->rawSortEntsTables.empty() || !cData->rawFields.empty()
+        || !cData->rawFieldLists.empty()
+        || !cData->rawDictionaryWithDefaults.empty()
+        || !cData->rawPlaceholders.empty() || !cData->tableStyles.empty()
+        || !cData->tableContents.empty() || !cData->mLeaderStyles.empty()
+        || !cData->rawTableStyles.empty()
+        || !cData->rawRenderSettingsObjects.empty()
+        || !cData->rawBackgroundObjects.empty() || !cData->rawSunObjects.empty()
+        || !cData->rawMaterialObjects.empty()
+        || !cData->rawVisualStyleObjects.empty()
+        || !cData->rawAssociativeObjects.empty()
+        || !cData->rawSpatialFilterObjects.empty()
+        || !cData->rawNamedResourceObjects.empty()
+        || !cData->rawProxyObjects.empty()
+        || !cData->rawAcdsHistoryObjects.empty()
+        || !cData->rawDynamicBlockObjects.empty())
+        return false;
+
+    const auto blockHasReference = [&style](const dx_ifaceBlock* block) {
+        if (block == nullptr || !block->rawEntities.empty())
+            return true;
+        for (const DRW_Entity* entity : block->ent) {
+            if (entity == nullptr || !entity->extData.empty()
+                || !entity->appData.empty())
+                return true;
+            if (const auto* text = dynamic_cast<const DRW_Text*>(entity))
+                if (text->styleH.ref == style.handle)
+                    return true;
+            if (const auto* leader =
+                    dynamic_cast<const DRW_MLeader*>(entity))
+                if (leader->styleTextStyleHandle.ref == style.handle
+                    || leader->context.textStyleHandle.ref == style.handle)
+                    return true;
+            if (dynamic_cast<const DRW_Table*>(entity) != nullptr)
+                return true;
+            if (const auto* insert = dynamic_cast<const DRW_Insert*>(entity)) {
+                for (const auto& attribute : insert->attlist) {
+                    if (attribute == nullptr
+                        || attribute->styleH.ref == style.handle
+                        || !attribute->extData.empty()
+                        || !attribute->appData.empty())
+                        return true;
+                }
+            }
+        }
+        return false;
+    };
+    if (blockHasReference(cData->mBlock))
+        return false;
+    for (const dx_ifaceBlock* block : cData->blocks)
+        if (blockHasReference(block))
+            return false;
+
+    for (const DRW_LType& lineType : cData->lineTypes)
+        for (const DRW_LTypeSegment& segment : lineType.segments)
+            if (segment.shapeFlags != 0
+                && segment.styleHandle.ref == style.handle)
+                return false;
+    for (const DRW_Dimstyle& dimensionStyle : cData->dimStyles)
+        if (dimensionStyle.dimtxstyH.ref == style.handle
+            || !dimensionStyle.extData.empty())
+            return false;
+    return true;
+}
+
 void dx_iface::addTextStyle(const DRW_Textstyle& data) {
     retainTableResource(dx_tableResourceFamily::TextStyle,data);
     observeResourceOrigin(&data,nullptr);

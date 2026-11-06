@@ -51472,6 +51472,8 @@ bool physicalAc1018EmptyTextStyleOutputRefusal(
         return fail("physical AC1018 empty-name STYLE profile changed");
 
     const DRW_Textstyle original = *emptyStyle;
+    const std::vector<std::string> expectedNames{
+        "Standard", "SIMPLEX", "COMPLEX", "ROMANS", "symbol"};
     const auto stamp = std::chrono::steady_clock::now()
                            .time_since_epoch().count();
     for (const bool binary : {false, true}) {
@@ -51489,54 +51491,89 @@ bool physicalAc1018EmptyTextStyleOutputRefusal(
                 return fail("could not write empty-name STYLE destination sentinel");
         }
 
+        dx_data projection;
+        projection.sourceVersion = source.sourceVersion;
+        projection.textStyles = source.textStyles;
+        projection.appIds = source.appIds;
+        auto projectedEmptyStyle = std::find_if(
+            projection.textStyles.begin(), projection.textStyles.end(),
+            [&original](const DRW_Textstyle& style) {
+                return style.handle == original.handle;
+            });
+        if (projectedEmptyStyle == projection.textStyles.end()
+            || !projectedEmptyStyle->name.empty()) {
+            std::filesystem::remove(output);
+            return fail("selected physical STYLE projection lost the empty-name source row");
+        }
+
         dx_iface exporter;
-        const bool invalidSourceWritten = exporter.fileExport(
-            output.string(), DRW::AC1024, binary, &source, false, true,
-            dx_dxfSourceTextPolicy::RequireValidSource,
-            DRW::DxfTextWritePolicy::RequireLossless,
-            dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
-            dx_dwgReadCompletenessPolicy::AllowPartial);
+        auto* text = new DRW_Text();
+        text->styleH.ref = original.handle;
+        text->style.clear();
+        projection.mBlock->ent.push_back(text);
+        const bool referencedRejected = !exporter.fileExport(
+            output.string(), DRW::AC1024, binary, &projection, false, true);
         std::ifstream refusedOutput(output, std::ios::binary);
         const std::string refusedBytes{
             std::istreambuf_iterator<char>(refusedOutput),
             std::istreambuf_iterator<char>()};
-        if (invalidSourceWritten || refusedBytes != sentinel
-            || emptyStyle->name != original.name
-            || emptyStyle->handle != original.handle
-            || emptyStyle->font != original.font
-            || emptyStyle->flags != original.flags) {
+        if (!referencedRejected || refusedBytes != sentinel
+            || projectedEmptyStyle->name != original.name
+            || projectedEmptyStyle->handle != original.handle
+            || projectedEmptyStyle->font != original.font
+            || projectedEmptyStyle->flags != original.flags) {
             std::filesystem::remove(output);
-            return fail("empty-name STYLE emission did not refuse atomically and preserve caller state");
+            return fail("referenced empty-name STYLE did not refuse atomically and preserve caller state");
         }
 
-        emptyStyle->name = "ET_EMPTY_STYLE_RECOVERY";
-        if (!exporter.fileExport(
-                output.string(), DRW::AC1024, binary, &source, false, true,
-                dx_dxfSourceTextPolicy::RequireValidSource,
-                DRW::DxfTextWritePolicy::RequireLossless,
-                dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
-                dx_dwgReadCompletenessPolicy::AllowPartial)) {
-            emptyStyle->name = original.name;
+        projectedEmptyStyle->flags |= 0x01;
+        const bool shapeStyleRejected = !exporter.fileExport(
+            output.string(), DRW::AC1024, binary, &projection, false, true);
+        std::ifstream shapeRefusedOutput(output, std::ios::binary);
+        const std::string shapeRefusedBytes{
+            std::istreambuf_iterator<char>(shapeRefusedOutput),
+            std::istreambuf_iterator<char>()};
+        if (!shapeStyleRejected || shapeRefusedBytes != sentinel
+            || projectedEmptyStyle->name != original.name
+            || projectedEmptyStyle->handle != original.handle
+            || projectedEmptyStyle->font != original.font
+            || projectedEmptyStyle->flags != (original.flags | 0x01)) {
+            projectedEmptyStyle->flags = original.flags;
             std::filesystem::remove(output);
-            return fail("corrected AC1018 STYLE profile could not retry on the same adapter");
+            return fail("referenced shape STYLE with empty name was emitted or changed caller state");
+        }
+        projectedEmptyStyle->flags = original.flags;
+
+        projection.mBlock->ent.remove(text);
+        delete text;
+        if (!exporter.fileExport(output.string(), DRW::AC1024, binary,
+                                 &projection, false, true)) {
+            std::filesystem::remove(output);
+            return fail("unreferenced empty-name STYLE could not be omitted on same-adapter retry");
         }
         dx_iface outputReader;
         dx_data outputData;
         if (!outputReader.fileImport(output.string(), &outputData, false)
-            || std::none_of(outputData.textStyles.begin(),
-                            outputData.textStyles.end(),
-                [](const DRW_Textstyle& style) {
-                    return style.name == "ET_EMPTY_STYLE_RECOVERY";
-                })) {
-            emptyStyle->name = original.name;
+            || outputData.textStyles.size() != expectedNames.size()) {
             std::filesystem::remove(output);
-            return fail("corrected AC1018 STYLE retry did not freshly import");
+            return fail("empty-name STYLE projection did not freshly import with the expected table size");
         }
-        emptyStyle->name = original.name;
+        std::vector<std::string> outputNames;
+        for (const DRW_Textstyle& style : outputData.textStyles)
+            outputNames.push_back(style.name);
+        std::sort(outputNames.begin(), outputNames.end());
+        std::vector<std::string> sortedExpectedNames = expectedNames;
+        std::sort(sortedExpectedNames.begin(), sortedExpectedNames.end());
+        if (outputNames != sortedExpectedNames
+            || projectedEmptyStyle->name != original.name) {
+            std::filesystem::remove(output);
+            return fail("ASCII/Binary STYLE output did not omit only the empty-name row");
+        }
         std::filesystem::remove(output);
     }
-    std::cerr << "Physical AC1018 empty-name STYLE is refused without output mutation; "
-                 "corrected ASCII/Binary retries freshly import.\n";
+    std::cerr << "Physical AC1018 unreferenced empty-name STYLE is omitted from selected "
+                 "ASCII/Binary output; a referenced row refuses atomically, and "
+                 "same-adapter retry freshly imports the five named records.\n";
     return true;
 }
 

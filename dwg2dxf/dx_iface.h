@@ -1643,8 +1643,18 @@ public:
         }
     }
     virtual void writeTextstyles() override{
-        for (std::list<DRW_Textstyle>::iterator it=cData->textStyles.begin(); it != cData->textStyles.end(); ++it)
+        for (std::list<DRW_Textstyle>::iterator it=cData->textStyles.begin(); it != cData->textStyles.end(); ++it) {
+            if (it->name.empty()) {
+                if (mayOmitUnreferencedEmptyTextStyle(*it))
+                    continue;
+                // Even shape styles cannot be emitted with an empty DXF
+                // symbol name. Refuse whenever the selected projection does
+                // not prove the omission safe.
+                (void)dxfW->writeTextstyle(nullptr);
+                return;
+            }
             dxfW->writeTextstyle(&(*it));
+        }
     }
     virtual void writeVports() override{
         for (std::list<DRW_Vport>::iterator it=cData->VPorts.begin(); it != cData->VPorts.end(); ++it)
@@ -3088,6 +3098,8 @@ private:
     friend class DxWholeSourceTestAccess;
     friend class DxIfaceMlineDependencyTestAccess;
     friend class DxIfaceDwgLtypeControlOutputTestAccess;
+    bool mayOmitUnreferencedEmptyTextStyle(
+        const DRW_Textstyle& style) const noexcept;
     bool mlineRootDictionarySourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
     bool mlineStyleDictionarySourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
     bool mlineStyleBodiesSourceLiveProof(const dx_data&,std::size_t,std::size_t*) const noexcept;
