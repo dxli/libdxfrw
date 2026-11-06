@@ -54602,6 +54602,266 @@ bool physicalAc1021NodDictionaryGraphOutputReadback(
     return true;
 }
 
+bool inspectAc1021PreviousProductInfoSource(
+        const std::filesystem::path& sourcePath) {
+    dx_iface reader;
+    dx_data data;
+    if (!reader.fileImport(sourcePath.string(), &data, false)
+        || data.sourceVersion != DRW::AC1021
+        || !data.hasNamedObjectDictionary)
+        return fail("AC1021 CIP source import failed");
+    std::vector<const DRW_Dictionary::Entry*> roots;
+    for (const DRW_Dictionary::Entry& entry : data.namedObjectDictionary.m_entries)
+        if (entry.m_name == "ACAD_CIP_PREVIOUS_PRODUCT_INFO") roots.push_back(&entry);
+    if (roots.size() != 1u || roots.front()->m_handle != 534u)
+        return fail("AC1021 CIP NOD source edge changed");
+    std::vector<const DRW_XRecord*> records;
+    for (const DRW_XRecord& record : data.xRecords)
+        if (record.handle == roots.front()->m_handle) records.push_back(&record);
+    if (records.size() != 1u)
+        return fail("AC1021 CIP source XRECORD identity is ambiguous");
+    const DRW_XRecord& record = *records.front();
+    const DRW_UnsupportedObject* frame =
+        DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+            data, data.importGeneration, record.handle);
+    std::cout << "AC1021 ACAD_CIP_PREVIOUS_PRODUCT_INFO handle=0x"
+              << std::hex << record.handle << std::dec
+              << " owner=0x" << std::hex << record.parentHandle << std::dec
+              << " cloning=" << record.m_cloning
+              << " values=" << record.m_values.size()
+              << " dataEntries=" << record.m_dataEntries.size()
+              << " handleValues=" << record.m_handleValues.size()
+              << " reactors=" << record.reactorHandles.size()
+              << " xdict=" << record.xDictHandle
+              << " appData=" << record.appData.size()
+              << " extData=" << record.extData.size()
+              << " rawDataValid=" << record.m_rawDataValid
+              << " rawDataBytes=" << record.m_rawData.size()
+              << " commonLinkTail=" << record.hasDwgCommonLinkTail()
+              << " frameEligible="
+              << DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                     data, record.handle)
+              << " frameOffset=" << (frame ? frame->m_objectOffset : 0u)
+              << " frameSize=" << (frame ? frame->m_objectSize : 0u) << '\n';
+    for (std::size_t index = 0; index < record.m_dataEntries.size(); ++index) {
+        const DRW_Variant& value = record.m_dataEntries[index];
+        std::cout << " data[" << index << "] code=" << value.code()
+                  << " type=" << value.type();
+        if (value.type() == DRW_Variant::STRING)
+            std::cout << " string=" << value.c_str();
+        else if (value.type() == DRW_Variant::INTEGER)
+            std::cout << " integer=" << value.i_val();
+        else if (value.type() == DRW_Variant::INTEGER64)
+            std::cout << " integer64=" << value.i64_val();
+        else if (value.type() == DRW_Variant::DOUBLE)
+            std::cout << " double=" << std::setprecision(17) << value.d_val();
+        else if (value.type() == DRW_Variant::COORD) {
+            const DRW_Coord* coord = value.coord();
+            std::cout << " coord=" << (coord ? coord->x : 0.0)
+                      << ',' << (coord ? coord->y : 0.0)
+                      << ',' << (coord ? coord->z : 0.0);
+        } else if (value.type() == DRW_Variant::BINARY) {
+            const auto* bytes = value.binary();
+            std::cout << " bytes=" << (bytes ? bytes->size() : 0u);
+        }
+        std::cout << '\n';
+    }
+    for (const auto& handleValue : record.m_handleValues)
+        std::cout << " handleValue code=" << handleValue.first
+                  << " target=" << handleValue.second << '\n';
+    return true;
+}
+
+bool physicalAc1021PreviousProductInfoOutputReadback(
+        const std::filesystem::path& sourcePath) {
+    constexpr std::uint32_t sourceHandle = 534u;
+    const std::string rootName = "ACAD_CIP_PREVIOUS_PRODUCT_INFO";
+    const std::vector<std::string> expectedValues{"ACD", "2016", "ACD_F_S"};
+    const auto uniqueRecord = [](const dx_data& data, std::uint32_t handle) {
+        const DRW_XRecord* result = nullptr;
+        for (const DRW_XRecord& record : data.xRecords) {
+            if (record.handle != handle) continue;
+            if (result != nullptr) return static_cast<const DRW_XRecord*>(nullptr);
+            result = &record;
+        }
+        return result;
+    };
+    for (const bool binary : {false, true}) {
+        dx_iface sourceReader;
+        dx_data source;
+        if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+            || source.sourceVersion != DRW::AC1021
+            || !source.hasNamedObjectDictionary)
+            return fail("AC1021 CIP physical source import failed");
+        const auto root = std::find_if(
+            source.namedObjectDictionary.m_entries.begin(),
+            source.namedObjectDictionary.m_entries.end(),
+            [&rootName](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == rootName;
+            });
+        const DRW_XRecord* record = uniqueRecord(source, sourceHandle);
+        const DRW_UnsupportedObject* sourceFrame =
+            DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+                source, source.importGeneration, sourceHandle);
+        if (root == source.namedObjectDictionary.m_entries.end()
+            || std::count_if(
+                source.namedObjectDictionary.m_entries.begin(),
+                source.namedObjectDictionary.m_entries.end(),
+                [&rootName](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == rootName;
+                }) != 1
+            || root->m_handle != sourceHandle
+            || record == nullptr || record->handle != sourceHandle
+            || record->parentHandle != source.namedObjectDictionary.handle
+            || record->reactorHandles
+                != std::vector<std::uint32_t>{source.namedObjectDictionary.handle}
+            || record->m_cloning != 1
+            || record->m_values.size() != expectedValues.size()
+            || record->m_dataEntries.size() != expectedValues.size()
+            || !record->m_handleValues.empty() || record->m_rawDataValid
+            || !record->m_rawData.empty() || record->xDictHandle != 0u
+            || !record->appData.empty() || !record->extData.empty()
+            || record->hasDataStorageBinaryData()
+            || !record->hasDwgCommonLinkTail()
+            || sourceFrame == nullptr || sourceFrame->m_objectType != 79u
+            || sourceFrame->m_handle != sourceHandle
+            || sourceFrame->m_version != DRW::AC1021
+            || sourceFrame->m_isEntity || sourceFrame->m_hasDataStorage
+            || sourceFrame->m_rawBytes.empty() || sourceFrame->m_objectSize == 0u
+            || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                source, sourceHandle))
+            return fail("AC1021 CIP source root/XRECORD profile changed");
+        for (std::size_t index = 0; index < expectedValues.size(); ++index) {
+            const DRW_Variant& value = record->m_dataEntries[index];
+            if (value.code() != 300 || value.type() != DRW_Variant::STRING
+                || value.c_str() != expectedValues[index]
+                || record->m_values[index].code() != 300
+                || record->m_values[index].type() != DRW_Variant::STRING
+                || record->m_values[index].c_str() != expectedValues[index])
+                return fail("AC1021 CIP source XRECORD ordered string values changed");
+        }
+
+        struct Writer final : dx_iface {
+            std::uint32_t targetHandle{0u};
+            bool mutateAfterObjects{false};
+            void writeObjects() override {
+                dx_iface::writeObjects();
+                if (!mutateAfterObjects || cData == nullptr) return;
+                for (DRW_XRecord& record : cData->xRecords)
+                    if (record.handle == targetHandle) {
+                        record.reactorHandles.clear();
+                        return;
+                    }
+            }
+        } writer;
+        writer.cData = &source;
+        writer.targetHandle = sourceHandle;
+        const auto nonce = std::chrono::steady_clock::now()
+                               .time_since_epoch().count();
+        const std::filesystem::path outputPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-cip-ac1021-" + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{outputPath};
+        const std::string sentinel = "AC1021 CIP sentinel\n";
+        const auto seedDestination = [&]() {
+            std::ofstream output(outputPath, std::ios::binary | std::ios::trunc);
+            return output && static_cast<bool>(output << sentinel);
+        };
+        const auto destinationIsSentinel = [&]() {
+            std::ifstream input(outputPath, std::ios::binary);
+            const std::string actual{
+                std::istreambuf_iterator<char>(input), {}};
+            return actual == sentinel;
+        };
+        const auto write = [&]() {
+            return writer.fileExport(
+                outputPath.string(), DRW::AC1021, binary, &source,
+                false, false, dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::AllowPartial);
+        };
+        if (!seedDestination())
+            return fail("could not seed AC1021 CIP destination sentinel");
+        writer.mutateAfterObjects = true;
+        if (write() || !destinationIsSentinel())
+            return fail("late AC1021 CIP reactor mutation published output");
+        DRW_XRecord* mutableRecord = nullptr;
+        for (DRW_XRecord& candidate : source.xRecords)
+            if (candidate.handle == sourceHandle) mutableRecord = &candidate;
+        if (mutableRecord == nullptr || !mutableRecord->reactorHandles.empty())
+            return fail("late AC1021 CIP mutation did not run");
+        mutableRecord->reactorHandles = {source.namedObjectDictionary.handle};
+        writer.mutateAfterObjects = false;
+        if (!write())
+            return fail("restored AC1021 CIP graph did not retry on same adapter");
+        if (!DxIfaceStandardDwgCaptureTestAccess::standardOutputHas(
+                writer, sourceHandle)
+            || !DxIfaceStandardDwgCaptureTestAccess::generatedRootsFinal(
+                writer, 2u, true))
+            return fail("AC1021 CIP source frame/generated-root proofs did not finalize");
+
+        dx_iface outputReader;
+        dx_data output;
+        if (!outputReader.fileImport(outputPath.string(), &output, false)
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1021
+            || !output.hasNamedObjectDictionary)
+            return fail("AC1021 CIP output readback import failed");
+        const auto outputRoot = std::find_if(
+            output.namedObjectDictionary.m_entries.begin(),
+            output.namedObjectDictionary.m_entries.end(),
+            [&rootName](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == rootName;
+            });
+        const DRW_XRecord* outputRecord = outputRoot
+                == output.namedObjectDictionary.m_entries.end()
+            ? nullptr : uniqueRecord(output, outputRoot->m_handle);
+        if (std::count_if(
+                output.namedObjectDictionary.m_entries.begin(),
+                output.namedObjectDictionary.m_entries.end(),
+                [&rootName](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == rootName;
+                }) != 1
+            || outputRoot == output.namedObjectDictionary.m_entries.end()
+            || outputRoot->m_dxfHandleCode
+                != DRW_Dictionary::Entry::DxfHandleCode::SoftOwner
+            || outputRecord == nullptr
+            || outputRecord->parentHandle != output.namedObjectDictionary.handle
+            || outputRecord->reactorHandles
+                != std::vector<std::uint32_t>{output.namedObjectDictionary.handle}
+            || outputRecord->m_values.size() != expectedValues.size()
+            || outputRecord->m_dataEntries.size() != expectedValues.size()
+            || !outputRecord->m_handleValues.empty()
+            || !outputRecord->extData.empty())
+            return fail("AC1021 CIP readback changed NOD/XRECORD graph or payload size");
+        for (std::size_t index = 0; index < expectedValues.size(); ++index) {
+            const DRW_Variant& value = outputRecord->m_dataEntries[index];
+            if (value.code() != 300 || value.type() != DRW_Variant::STRING
+                || value.c_str() != expectedValues[index]
+                || outputRecord->m_values[index].code() != 300
+                || outputRecord->m_values[index].type() != DRW_Variant::STRING
+                || outputRecord->m_values[index].c_str() != expectedValues[index])
+                return fail("AC1021 CIP readback changed ordered XRECORD values");
+        }
+        std::cout << "AC1021 CIP XRECORD source frame handle=0x"
+                  << std::hex << sourceHandle << std::dec
+                  << " offset=" << sourceFrame->m_objectOffset
+                  << " size=" << sourceFrame->m_objectSize << ".\n"
+                  << "Physical AC1021 ACAD_CIP_PREVIOUS_PRODUCT_INFO "
+                  << (binary ? "Binary" : "ASCII")
+                  << " output/readback preserved the NOD edge and all three ordered strings; late reactor mutation preserved the destination and same-adapter retry succeeded.\n";
+    }
+    return true;
+}
+
 bool physicalTableStyleSourceProfile(
         const std::filesystem::path& sourcePath) {
     dx_iface sourceReader;
@@ -80023,6 +80283,12 @@ int main(int argc, char** argv) {
         return physicalAc1021NodDictionaryGraphOutputReadback(
             argv[2], "ASE_INDEX_DICTIONARY", 242632u, false,
             "ASEBlockHierarchyIndexRecord", 242633u, "DCO15") ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--ac1021-cip-source-profile")
+        return inspectAc1021PreviousProductInfoSource(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--ac1021-cip-physical-output-readback")
+        return physicalAc1021PreviousProductInfoOutputReadback(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--layerstates-xrecord-physical-source-admission")
         return physicalLayerStateXrecordSourceAdmission(argv[2]) ? 0 : 1;

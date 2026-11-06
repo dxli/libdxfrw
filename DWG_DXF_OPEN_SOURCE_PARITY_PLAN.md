@@ -60,16 +60,18 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P4 / AC1021 `ACAD_CIP_PREVIOUS_PRODUCT_INFO` XRECORD:** screen the direct
-   NOD target handle `534` (owner NOD `0xC`); inventory reports three ordered
-   values and one reactor. Verify its exact typed/raw body, common-link and EED
-   state, unique source-frame eligibility, NOD edge output role and any APPID
-   dependency before selecting it. If closed, require ASCII/Binary output and
-   fresh readback of the NOD edge and every XRECORD value/role; late record or
-   dependency mutation must preserve the destination and the same adapter must
-   retry after source restoration. Keep strict whole-source output and support
-   claims unchanged. The inventory selector prints DICTIONARY/XRECORD contents,
-   NOD key/target counts and GROUP callback count for reproducibility.
+1. **P4 / AC1021 `ACDB_RECOMPOSE_DATA` XRECORD:** screen the direct NOD target
+   handle `246776` (owner NOD `0xC`); inventory reports one typed value but two
+   ordered data-block entries and one reactor. Resolve that value/data-entry
+   mismatch and identify any handle-valued pair, common-link tail, EED or APPID
+   dependency from the exact source record before attempting output. Require a
+   unique eligible source frame and fresh ASCII/Binary readback of the NOD edge,
+   ordered typed/raw body and all references; late mutation must preserve the
+   destination and the same adapter must retry after restoration. If the body
+   is not fully modeled, keep it refused and select another candidate. Keep
+   strict whole-source output and support claims unchanged. The inventory
+   selector prints DICTIONARY/XRECORD contents, NOD key/target counts and GROUP
+   callback count for reproducibility.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
@@ -162,8 +164,8 @@ the distinct DBCOLOR source/output evidence gate. The 1,673 observed frames have
 zero entity/object parse failures, and no DXF is created. The 186 observer frames
 are 74 opaque carriers plus 112 standard-object frames; all 112 standard payloads
 match typed callbacks. Bounded selected-graph routes now qualify all 74 opaque
-carriers and 88 standard-object frames, with physical ASCII/Binary readback and
-applicable atomic refusal/retry. The remaining 24 standard-object frames are
+carriers and 89 standard-object frames, with physical ASCII/Binary readback and
+applicable atomic refusal/retry. The remaining 23 standard-object frames are
 unqualified. The same-version whole-source
 recheck still stops at independent DBCOLOR and other document-wide gates. See
 the [same-version gate
@@ -289,6 +291,19 @@ restoration. This is one selected source profile and does not independently
 prove the DWG dictionary edge's wire role, ASE semantics, whole-source output,
 or producer/native support; 24 of 112 standard-object frames remain unqualified
 ([receipt](docs/research/p4-ac1021-ase-index-dictionary-physical-selected-output-2026-11-06.json),
+[updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
+
+The direct NOD XRECORD `ACAD_CIP_PREVIOUS_PRODUCT_INFO` at handle `0x216` now
+passes selected ASCII/Binary output and fresh readback. Its 57-byte physical
+frame is at offset 1,990,278; owner and sole reactor are NOD `0xC`, the common
+link tail is validated, and the body contains exactly three ordered code-300
+strings: `ACD`, `2016`, `ACD_F_S`. It has no EED, extension dictionary, handle
+values or retained raw block. The NOD edge is read back as soft-owner and the
+XRECORD source-frame proof finalizes. A late reactor mutation refuses
+atomically, preserves the destination, and succeeds after restoration on the
+same adapter. This selected record does not qualify native CIP behavior or the
+remaining NOD graph; 23 of 112 standard-object frames remain unqualified
+([receipt](docs/research/p4-ac1021-cip-physical-selected-output-2026-11-06.json),
 [updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
 
 **Open strict-output defect:** a CRC-resealed AC1027 source with layer 0's
