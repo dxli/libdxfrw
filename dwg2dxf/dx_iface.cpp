@@ -48454,7 +48454,8 @@ bool dx_iface::hasUnchangedDwgSortEntsOutputSources() const noexcept {
     if (cData == nullptr || cData != m_dwgSortEntsOutputSourceOwner
         || cData->importGeneration != m_dwgSortEntsOutputGeneration
         || cData->sourceFormat != dx_source_format::DWG
-        || cData->sourceVersion != DRW::AC1024
+        || (cData->sourceVersion != DRW::AC1021
+            && cData->sourceVersion != DRW::AC1024)
         || !cData->dwgReadOutcome.attempted
         || cData->sortEntsCaptureFailed
         || cData->sortEntsTables.size() != m_sortEmissionTables.size()
@@ -48463,10 +48464,12 @@ bool dx_iface::hasUnchangedDwgSortEntsOutputSources() const noexcept {
         || m_dwgSortEntsOutputSources.size()
             > cData->sortEntsTables.size())
         return false;
+    const DRW::Version sourceVersion = cData->sourceVersion;
     try {
         const auto tableEqual = [](const DRW_SortEntsTable& left,
-                                   const DRW_SortEntsTable& right) {
-            return standardDwgCommonEqual(left, right, DRW::AC1024)
+                                   const DRW_SortEntsTable& right,
+                                   DRW::Version version) {
+            return standardDwgCommonEqual(left, right, version)
                 && left.m_blockOwnerHandle == right.m_blockOwnerHandle
                 && left.m_entityHandles == right.m_entityHandles
                 && left.m_sortHandles == right.m_sortHandles;
@@ -48523,8 +48526,9 @@ bool dx_iface::hasUnchangedDwgSortEntsOutputSources() const noexcept {
                 currentBlockIt == blocks.end() ? nullptr
                                                : currentBlockIt->second;
             if (current.handle != source.table.handle
-                || !tableEqual(source.table, current)
-                || !tableEqual(source.emission, currentEmission)
+                || !tableEqual(source.table, current, sourceVersion)
+                || !tableEqual(source.emission, currentEmission,
+                               sourceVersion)
                 || membership.m_version != source.membership.m_version
                 || membership.m_tableHandle != source.membership.m_tableHandle
                 || membership.m_sourceOffset
@@ -48549,10 +48553,11 @@ bool dx_iface::hasUnchangedDwgSortEntsOutputSources() const noexcept {
                     != source.membership.m_entries.size()
                 || currentDictionary == nullptr
                 || !standardDwgModelsEqual(source.ownerDictionary,
-                    *currentDictionary, DRW::AC1024, dwgObjType::DICTIONARY)
+                    *currentDictionary, sourceVersion,
+                    dwgObjType::DICTIONARY)
                 || currentBlock == nullptr
                 || !standardDwgCommonEqual(source.ownerBlock, *currentBlock,
-                                            DRW::AC1024)
+                                            sourceVersion)
                 || source.ownerBlock.xDictHandle
                     != currentBlock->xDictHandle
                 || source.ownerBlock.handle != source.table.m_blockOwnerHandle
@@ -48578,14 +48583,14 @@ bool dx_iface::hasUnchangedDwgSortEntsOutputSources() const noexcept {
                     != source.ownerDictionary.handle
                 || ownerFrame->second.raw.m_objectType
                     != dwgObjType::DICTIONARY
-                || ownerFrame->second.raw.m_version != DRW::AC1024
+                || ownerFrame->second.raw.m_version != sourceVersion
                 || ownerFrame->second.raw.m_isEntity
                 || ownerFrame->second.raw.m_isCustomClass
                 || !ownerFrame->second.raw.m_recordName.empty()
                 || !ownerFrame->second.raw.m_className.empty()
                 || !standardDwgModelsEqual(
                     *ownerFrameBaseline, source.ownerDictionary,
-                    DRW::AC1024, dwgObjType::DICTIONARY))
+                    sourceVersion, dwgObjType::DICTIONARY))
                 return false;
             for (std::size_t index = 0u;
                  index < source.membership.m_entries.size(); ++index) {
@@ -48608,7 +48613,7 @@ bool dx_iface::hasUnchangedDwgSortEntsOutputSources() const noexcept {
                 || frame == cData->m_opaqueDwgSourceFrames.end()
                 || frame->second.m_handle != source.table.handle
                 || frame->second.m_objectType != source.objectType
-                || frame->second.m_version != DRW::AC1024
+                || frame->second.m_version != sourceVersion
                 || !asciiIdentifierEquals(frame->second.m_recordName,
                                           source.recordName)
                 || frame->second.m_className != source.className)
@@ -48626,7 +48631,9 @@ bool dx_iface::inspectDwgSortEntsOutput(
     if (m_dwgSortEntsOutputSources.empty())
         return true;
     if (dxfW == nullptr || cData == nullptr
-        || view.version != DRW::AC1024
+        || (cData->sourceVersion != DRW::AC1021
+            && cData->sourceVersion != DRW::AC1024)
+        || view.version != cData->sourceVersion
         || !hasUnchangedDwgSortEntsOutputSources()) {
         if (debug)
             std::cerr << "SORTENTSTABLE output binding rejected: source snapshot"
@@ -48873,7 +48880,8 @@ bool dx_iface::inspectDwgSortEntsOutput(
                                 expected[index].table;
                             const bool commonEqual =
                                 standardDwgCommonEqual(
-                                    expectedTable, actual, DRW::AC1024);
+                                    expectedTable, actual,
+                                    cData->sourceVersion);
                             const bool ownerEqual = commonEqual
                                 && actual.m_blockOwnerHandle
                                     == expectedTable.m_blockOwnerHandle;
@@ -48920,7 +48928,8 @@ bool dx_iface::inspectDwgSortEntsOutput(
                     [&](const DRW_Dictionary& actual) {
                         if (!standardDwgModelsEqual(
                                 expected[index].dictionary, actual,
-                                DRW::AC1024, dwgObjType::DICTIONARY))
+                                cData->sourceVersion,
+                                dwgObjType::DICTIONARY))
                             return false;
                         std::size_t sortEntries = 0u;
                         for (const DRW_Dictionary::Entry& entry :
@@ -67273,7 +67282,8 @@ bool dx_iface::validateSortEntsGraph(const dx_data& data, bool debug) {
                 return reject();
         }
         if (data.sourceFormat == dx_source_format::DWG
-            && data.sourceVersion == DRW::AC1024
+            && (data.sourceVersion == DRW::AC1021
+                || data.sourceVersion == DRW::AC1024)
             && data.dwgReadOutcome.attempted) {
             std::unordered_map<std::uint32_t,
                 const DRW_DwgSortEntsMembership*> memberships;
@@ -67326,20 +67336,21 @@ bool dx_iface::validateSortEntsGraph(const dx_data& data, bool debug) {
                     || ownerFrame->second.raw.m_handle != table.parentHandle
                     || ownerFrame->second.raw.m_objectType
                         != dwgObjType::DICTIONARY
-                    || ownerFrame->second.raw.m_version != DRW::AC1024
+                    || ownerFrame->second.raw.m_version
+                        != data.sourceVersion
                     || ownerFrame->second.raw.m_isEntity
                     || ownerFrame->second.raw.m_isCustomClass
                     || !ownerFrame->second.raw.m_recordName.empty()
                     || !ownerFrame->second.raw.m_className.empty()
                     || !standardDwgModelsEqual(
                         *ownerFrameBaseline, *dictionary->second,
-                        DRW::AC1024, dwgObjType::DICTIONARY)
+                        data.sourceVersion, dwgObjType::DICTIONARY)
                     || table.handle == 0u || table.handle == DRW::NoHandle
                     || table.hasCompleteDwgEntries() == false
                     || !sourceMembership.m_complete
                     || !sourceMembership.m_hasSourceLocation
                     || !sourceMembership.m_classStreamOrdinal.has_value()
-                    || sourceMembership.m_version != DRW::AC1024
+                    || sourceMembership.m_version != data.sourceVersion
                     || sourceMembership.m_tableHandle != table.handle
                     || sourceMembership.m_recordName != "SORTENTSTABLE"
                     || sourceMembership.m_className != "AcDbSortentsTable"
@@ -67348,7 +67359,7 @@ bool dx_iface::validateSortEntsGraph(const dx_data& data, bool debug) {
                     || sourceMembership.m_resolvedType
                         != frame->second.m_objectType
                     || frame->second.m_handle != table.handle
-                    || frame->second.m_version != DRW::AC1024
+                    || frame->second.m_version != data.sourceVersion
                     || !asciiIdentifierEquals(frame->second.m_recordName,
                                               "SORTENTSTABLE")
                     || frame->second.m_className != "AcDbSortentsTable"

@@ -48305,9 +48305,234 @@ bool physicalSortEntsOutputReadback(
     dx_data source;
     if (!sourceReader.fileImport(sourcePath.string(), &source, false)
         || source.sourceFormat != dx_source_format::DWG
-        || source.sourceVersion != DRW::AC1024
-        || source.sortEntsTables.size() != 1u
-        || source.dwgSortEntsMemberships.size() != 1u
+        || (source.sourceVersion != DRW::AC1021
+            && source.sourceVersion != DRW::AC1024)
+        || source.sortEntsTables.size() != 1u)
+        return fail("physical SORTENTSTABLE source is outside the single-record census");
+    if (source.sourceVersion == DRW::AC1021) {
+        const DRW_SortEntsTable& table = source.sortEntsTables.front();
+        const DRW_DwgSortEntsMembership* membership =
+            source.dwgSortEntsMemberships.size() == 1u
+                ? &source.dwgSortEntsMemberships.front() : nullptr;
+        const auto dictionary = std::find_if(
+            source.dictionaries.begin(), source.dictionaries.end(),
+            [&table](const DRW_Dictionary& row) {
+                return row.handle == table.parentHandle;
+            });
+        const auto blockOwner = std::find_if(
+            source.blockRecords.begin(), source.blockRecords.end(),
+            [&table](const DRW_Block_Record& row) {
+                return row.handle == table.m_blockOwnerHandle;
+            });
+        const DRW_UnsupportedObject* sourceFrame =
+            DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+                source, source.importGeneration, table.handle);
+        const DRW_UnsupportedObject* dictionaryFrame =
+            dictionary == source.dictionaries.end() ? nullptr
+            : DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+                source, source.importGeneration, dictionary->handle);
+        std::vector<const DRW_Entity*> sourceModelEntities;
+        if (source.mBlock != nullptr)
+            for (const DRW_Entity* entity : source.mBlock->ent)
+                if (entity != nullptr && entity->space == DRW::ModelSpace)
+                    sourceModelEntities.push_back(entity);
+        if (membership == nullptr || table.handle != 0x2DFu
+            || table.parentHandle != 0x1CEu
+            || table.m_blockOwnerHandle != 0x1Fu
+            || table.m_entityHandles.size() != 1266u
+            || table.m_sortHandles.size() != 1266u
+            || !table.hasCompleteDwgEntries()
+            || table.xDictHandle != 0u
+            || table.reactorHandles
+                != std::vector<std::uint32_t>{table.parentHandle}
+            || membership->m_version != DRW::AC1021
+            || membership->m_tableHandle != table.handle
+            || membership->m_recordName != "SORTENTSTABLE"
+            || membership->m_className != "AcDbSortentsTable"
+            || !membership->m_complete
+            || !membership->m_hasSourceLocation
+            || !membership->m_classStreamOrdinal.has_value()
+            || membership->m_blockOwnerHandle != table.m_blockOwnerHandle
+            || membership->m_entries.size() != table.m_entityHandles.size()
+            || sourceFrame == nullptr
+            || sourceFrame->m_objectType != 522
+            || sourceFrame->m_version != DRW::AC1021
+            || sourceFrame->m_handle != table.handle
+            || !sourceFrame->m_isCustomClass
+            || sourceFrame->m_isEntity
+            || sourceFrame->m_recordName != "SORTENTSTABLE"
+            || sourceFrame->m_className != "AcDbSortentsTable"
+            || dictionary == source.dictionaries.end()
+            || dictionary->parentHandle != table.m_blockOwnerHandle
+            || dictionary->m_entries.size() != 1u
+            || dictionary->m_entries.front().m_name != "ACAD_SORTENTS"
+            || dictionary->m_entries.front().m_handle != table.handle
+            || dictionary->reactorHandles.size() != 0u
+            || dictionaryFrame == nullptr
+            || dictionaryFrame->m_objectType != 42
+            || dictionaryFrame->m_version != DRW::AC1021
+            || dictionaryFrame->m_handle != dictionary->handle
+            || dictionaryFrame->m_isEntity
+            || dictionaryFrame->m_isCustomClass
+            || blockOwner == source.blockRecords.end()
+            || blockOwner->name != "*Model_Space"
+            || blockOwner->layoutHandle != 0x22u
+            || blockOwner->xDictHandle != dictionary->handle
+            || sourceModelEntities.size() != 1431u)
+            return fail("physical AC1021 SORTENTSTABLE model-space source graph changed");
+
+        std::unordered_map<std::uint32_t, std::uint32_t> sourceSortKeys;
+        sourceSortKeys.reserve(membership->m_entries.size());
+        for (std::size_t index = 0u;
+             index < membership->m_entries.size(); ++index) {
+            const auto& entry = membership->m_entries[index];
+            if (entry.m_ordinal != index
+                || entry.m_entityHandle != table.m_entityHandles[index]
+                || entry.m_sortHandle != table.m_sortHandles[index]
+                || entry.m_entityHandle == 0u
+                || entry.m_entityHandle == DRW::NoHandle
+                || !sourceSortKeys.emplace(
+                    entry.m_entityHandle, entry.m_sortHandle).second)
+                return fail("physical AC1021 SORTENTSTABLE membership pairs are duplicate or inconsistent");
+        }
+        for (const std::uint32_t handle : table.m_entityHandles)
+            if (std::none_of(sourceModelEntities.begin(),
+                             sourceModelEntities.end(), [handle](
+                    const DRW_Entity* entity) {
+                        return entity->handle == handle;
+                    }))
+                return fail("physical AC1021 SORTENTSTABLE target is outside ModelSpace");
+
+        for (const bool binary : {false, true}) {
+            const auto nonce = std::chrono::steady_clock::now()
+                .time_since_epoch().count();
+            const std::filesystem::path outputPath =
+                std::filesystem::temp_directory_path()
+                / ("libdxfrw-sortents-ac1021-physical-"
+                   + std::to_string(nonce)
+                   + (binary ? "-binary.dxf" : "-ascii.dxf"));
+            struct Cleanup {
+                std::filesystem::path path;
+                ~Cleanup() {
+                    std::error_code ignored;
+                    std::filesystem::remove(path, ignored);
+                }
+            } cleanup{outputPath};
+            const std::string sentinel =
+                "preserve physical AC1021 SORTENTSTABLE destination\n";
+            {
+                std::ofstream existing(outputPath, std::ios::binary | std::ios::trunc);
+                if (!existing || !(existing << sentinel))
+                    return fail("could not seed physical AC1021 SORTENTSTABLE destination");
+            }
+            dx_iface writer;
+            const auto exportPartial = [&]() {
+                return writer.fileExport(
+                    outputPath.string(), DRW::AC1021, binary, &source,
+                    false, false,
+                    dx_dxfSourceTextPolicy::RequireValidSource,
+                    DRW::DxfTextWritePolicy::RequireLossless,
+                    dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
+                    dx_dwgReadCompletenessPolicy::AllowPartial);
+            };
+            DRW_SortEntsTable& mutableTable = source.sortEntsTables.front();
+            const std::uint32_t originalFirstEntity =
+                mutableTable.m_entityHandles.front();
+            const std::size_t qualificationsBeforeFailure =
+                DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualificationCount(
+                    source);
+            mutableTable.m_entityHandles.front() = DRW::NoHandle;
+            const bool invalidGraphRejected = !exportPartial();
+            std::ifstream refused(outputPath, std::ios::binary);
+            const std::string refusedContents{
+                std::istreambuf_iterator<char>{refused}, {}};
+            mutableTable.m_entityHandles.front() = originalFirstEntity;
+            if (!invalidGraphRejected || refusedContents != sentinel
+                || DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualificationCount(
+                    source) != qualificationsBeforeFailure)
+                return fail("invalid physical AC1021 SORTENTSTABLE target was not refused atomically");
+            if (!exportPartial())
+                return fail("corrected physical AC1021 SORTENTSTABLE could not retry on the same adapter");
+            if (!DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
+                    source, source.importGeneration, table.handle)
+                || !DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
+                    source, source.importGeneration, dictionary->handle))
+                return fail("physical AC1021 SORTENTSTABLE or owner DICTIONARY output was not source-qualified");
+
+            dx_iface outputReader;
+            dx_data output;
+            if (!outputReader.fileImport(outputPath.string(), &output, false)
+                || output.sourceFormat != dx_source_format::DXF
+                || output.sourceVersion != DRW::AC1021
+                || output.sortEntsTables.size() != 1u
+                || output.rawSortEntsTables.size() != 1u
+                || output.sortEntsCaptureFailed)
+                return fail("physical AC1021 SORTENTSTABLE output failed fresh typed/raw readback");
+            const DRW_SortEntsTable& emitted = output.sortEntsTables.front();
+            const auto outputDictionary = std::find_if(
+                output.dictionaries.begin(), output.dictionaries.end(),
+                [&emitted](const DRW_Dictionary& row) {
+                    return row.handle == emitted.parentHandle;
+                });
+            const auto outputBlockOwner = std::find_if(
+                output.blockRecords.begin(), output.blockRecords.end(),
+                [&emitted](const DRW_Block_Record& row) {
+                    return row.handle == emitted.m_blockOwnerHandle;
+                });
+            std::vector<const DRW_Entity*> outputModelEntities;
+            if (output.mBlock != nullptr)
+                for (const DRW_Entity* entity : output.mBlock->ent)
+                    if (entity != nullptr && entity->space == DRW::ModelSpace)
+                        outputModelEntities.push_back(entity);
+            if (emitted.handle != table.handle
+                || emitted.parentHandle != table.parentHandle
+                || emitted.m_blockOwnerHandle != table.m_blockOwnerHandle
+                || emitted.m_entityHandles.size() != sourceModelEntities.size()
+                || emitted.m_sortHandles.size() != sourceModelEntities.size()
+                || outputModelEntities.size() != sourceModelEntities.size()
+                || outputDictionary == output.dictionaries.end()
+                || outputDictionary->parentHandle != emitted.m_blockOwnerHandle
+                || outputDictionary->m_entries.size() != 1u
+                || outputDictionary->m_entries.front().m_name != "ACAD_SORTENTS"
+                || outputDictionary->m_entries.front().m_handle != emitted.handle
+                || outputBlockOwner == output.blockRecords.end()
+                || outputBlockOwner->name != "*Model_Space"
+                || outputBlockOwner->xDictHandle != outputDictionary->handle
+                || emitted.reactorHandles
+                    != std::vector<std::uint32_t>{outputDictionary->handle})
+                return fail("physical AC1021 SORTENTSTABLE output owner graph or completed pair count changed");
+            for (std::size_t index = 0u;
+                 index < sourceModelEntities.size(); ++index) {
+                const DRW_Entity* sourceEntity = sourceModelEntities[index];
+                const DRW_Entity* outputEntity = outputModelEntities[index];
+                const auto explicitKey = sourceSortKeys.find(sourceEntity->handle);
+                const std::uint32_t expectedKey = explicitKey
+                    == sourceSortKeys.end() ? sourceEntity->handle
+                                            : explicitKey->second;
+                if (outputEntity->eType != sourceEntity->eType
+                    || outputEntity->space != sourceEntity->space
+                    || outputEntity->layer != sourceEntity->layer
+                    || emitted.m_entityHandles[index] != outputEntity->handle
+                    || emitted.m_sortHandles[index] != expectedKey)
+                    return fail("physical AC1021 SORTENTSTABLE changed source draw order or implicit self-handle sorting at index "
+                        + std::to_string(index) + " source-entity="
+                        + std::to_string(sourceEntity->handle)
+                        + " output-entity="
+                        + std::to_string(outputEntity->handle)
+                        + " emitted-entity="
+                        + std::to_string(emitted.m_entityHandles[index])
+                        + " expected-sort=" + std::to_string(expectedKey)
+                        + " actual-sort="
+                        + std::to_string(emitted.m_sortHandles[index]));
+            }
+            std::cerr << "Physical AC1021 SORTENTSTABLE "
+                      << (binary ? "binary" : "ASCII")
+                      << " readback passed: 1266 physical mappings, 165 implicit self-handle mappings, "
+                         "1431 ordered ModelSpace targets, source-frame qualification, atomic refusal and retry.\n";
+        }
+        return true;
+    }
+    if (source.dwgSortEntsMemberships.size() != 1u
         || source.sortEntsCaptureFailed
         || source.dwgSortEntsMemberships.front().m_version != DRW::AC1024
         || source.dwgSortEntsMemberships.front().m_tableHandle != 0x354u

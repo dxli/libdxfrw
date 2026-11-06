@@ -1,0 +1,57 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "title": "AC1021 physical SORTENTSTABLE selected-output qualification",
+  "date": "2026-11-06",
+  "supportClaimEffect": "none",
+  "scope": "Qualify the exact physical AC1021 ModelSpace SORTENTSTABLE and owner dictionary as a bounded selected graph through ASCII/Binary DXF output and fresh typed/raw readback.",
+  "authority": {
+    "dwgSpecification": "Open Design Specification for .dwg files v5.4.1, §20.4.93 SORTENTSTABLE",
+    "formatRule": "SORTENTSTABLE entries carry an entity handle and an independent sort handle; where an entity has no explicit mapping, its own handle supplies its ordering key. The table is associated with its block owner and the dictionary graph is a separate ownership/reference relationship.",
+    "authorityLimit": "The local ODA specification text is authoritative for the documented wire fields. This receipt does not claim native application ordering semantics beyond the checked output mapping."
+  },
+  "source": {
+    "path": "/Users/dli/doc/dwg/children-room-decoration.dwg",
+    "sha256": "cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce",
+    "version": "AC1021",
+    "provenanceLimit": "Existing local drawing; author and producer are not independently authenticated. The source file and derivatives are not committed."
+  },
+  "sourceProfile": {
+    "table": {
+      "handle": "0x2DF",
+      "objectType": 522,
+      "class": "AcDbSortentsTable",
+      "entryCount": 1266,
+      "blockOwnerHandle": "0x1F",
+      "parentDictionaryHandle": "0x1CE",
+      "reactors": ["0x1CE"],
+      "extensionDictionary": null
+    },
+    "owner": {
+      "blockRecord": "*Model_Space",
+      "layoutHandle": "0x22",
+      "extensionDictionaryHandle": "0x1CE"
+    },
+    "dictionary": {
+      "handle": "0x1CE",
+      "objectType": 42,
+      "parentHandle": "0x1F",
+      "entries": [{"key": "ACAD_SORTENTS", "target": "0x2DF"}],
+      "reactors": []
+    },
+    "membership": "1,266 unique ordered entity/sort-handle pairs target ModelSpace entities. The ModelSpace container contains 1,431 entities; 165 entities lack an explicit pair and use their own source handle as the sort key."
+  },
+  "validation": {
+    "buildCommand": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4",
+    "selectorCommand": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --sortents-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "result": "PASS, exit 0 for ASCII and Binary DXF. Both paths verify the source table and dictionary identities, source-frame output qualification, all 1,431 ordered ModelSpace entity targets and sort keys, fresh typed/raw readback, refusal with destination preservation for an invalid source target, and successful retry on the same adapter after source restoration.",
+    "testSourceSha256": "7307bb0841a98cd48bc2f143c773a5ebe17f49a0482ebb56f36b363d905ca98c",
+    "executableSha256": "2feab28f32e5d14411657204a4f14aa508846b825a2677c2b34f9ffbe85f5e1e",
+    "ac1024Comparator": "The focused AC1024 mechanical_example-imperial.dwg selector did not pass: it stopped at the existing owner-entity order/type readback assertion. This result is retained as an unresolved comparator and is not evidence that the AC1021 route supports AC1024."
+  },
+  "limits": [
+    "One unauthenticated physical source and one exact AC1021 ModelSpace graph only; no named-block SORTENTSTABLE profile is established.",
+    "Selected graph output does not establish whole-drawing conversion, native application semantics, producer-wide coverage, independent encoder interoperability, or support claims.",
+    "The AC1024 selected-output comparator remains unresolved.",
+    "No DWG/DXF fixture or derivative is committed."
+  ]
+}
