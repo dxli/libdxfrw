@@ -1015,65 +1015,89 @@ public:
             && body.pos == 143u && body.take(1u) == 0u && body.good
             && body.pos == 144u;
     }
-    static bool physicalDirectWipeoutWire(const dx_data& data) {
+    static bool physicalDirectWipeoutWire(
+            const dx_data& data, std::uint8_t expectedFrame = 0u) {
         const auto frame = data.m_opaqueDwgSourceFrames.find({data.importGeneration, 0x30u});
         const auto typed = data.dwgWipeoutVariables.find({data.importGeneration, 0x30u});
         if (frame == data.m_opaqueDwgSourceFrames.end() || typed == data.dwgWipeoutVariables.end()
             || data.namedObjectDictionary.handle != 0xAu || typed->second.parentHandle != 0xAu
-            || typed->second.m_displayFrame != 0u || typed->second.reactorHandles != std::vector<std::uint32_t>{0xAu}
+            || typed->second.m_displayFrame != expectedFrame
+            || typed->second.reactorHandles != std::vector<std::uint32_t>{0xAu}
             || typed->second.extensionDictionaryFlag() != 1u) return false;
         const auto& raw = frame->second;
         if (raw.m_version == DRW::AC1018) {
-            if (raw.m_rawBytes.size() != 15u || raw.m_bodyBitSize != 0u
-                || raw.m_objectType != 513u || !raw.m_isCustomClass
+            const std::uint32_t scalarEnd = expectedFrame == 1u ? 89u : 81u;
+            const std::uint32_t rawBits = expectedFrame == 1u ? 128u : 120u;
+            if (raw.m_rawBytes.size() != (expectedFrame == 1u ? 16u : 15u)
+                || raw.m_bodyBitSize != 0u
+                || raw.m_objectType != (expectedFrame == 1u ? 516u : 513u)
+                || !raw.m_isCustomClass
                 || raw.m_commonLinkEvidence
                     != DRW_DwgCommonLinkEvidence::Unknown)
                 return false;
             using namespace dx_raster_wire::detail;
-            Bits body{raw.m_rawBytes.data(), 0u, 120u};
-            if (body.shortValue() != 513u || body.little(4u) != 81u
+            Bits body{raw.m_rawBytes.data(), 0u, rawBits};
+            if (body.shortValue() != (expectedFrame == 1u ? 516u : 513u)
+                || body.little(4u) != scalarEnd
                 || handle(body, 0u, 0u, true).value != 0x30u
                 || body.shortValue() != 0u || body.longValue() != 1u
-                || body.take(1u) != 1u || body.shortValue() != 0u
-                || !body.good || body.pos != 81u)
+                || body.take(1u) != 1u || !body.good || body.pos != 79u)
+                return false;
+            const auto frameStart = body.pos;
+            if (body.shortValue() != expectedFrame
+                || body.pos - frameStart != (expectedFrame == 1u ? 10u : 2u)
+                || body.pos != scalarEnd)
                 return false;
             const auto owner = handle(body, 4u, 0x30u);
             if (!body.good || owner.role != 4u || owner.value != 0xAu
-                || body.pos != 97u)
+                || body.pos != scalarEnd + 16u)
                 return false;
             const auto reactor = handle(body, 4u, 0x30u);
             if (!body.good || reactor.role != 4u || reactor.value != 0xAu
-                || body.pos != 113u || body.take(7u) != 0u
-                || !body.good || body.pos != 120u)
+                || body.pos != scalarEnd + 32u)
                 return false;
+            while (body.pos < rawBits)
+                if (body.take(1u) != 0u) return false;
+            if (!body.good || body.pos != rawBits) return false;
             return std::count_if(data.namedObjectDictionary.m_entries.begin(),
                 data.namedObjectDictionary.m_entries.end(), [](const DRW_Dictionary::Entry& e) {
                     return e.m_name == "ACAD_WIPEOUT_VARS" && e.m_handle == 0x30u;
                 }) == 1;
         }
-        if (raw.m_rawBytes.size() != 10u) return false;
         using namespace dx_raster_wire;
         if (raw.m_version == DRW::AC1024) {
             const std::array<std::uint8_t, 10> expected{{
                 0x44u, 0x40u, 0x4Cu, 0x24u, 0x07u,
                 0x10u, 0x42u, 0x90u, 0x42u, 0x80u}};
-            if (raw.m_objectType != 513u || raw.m_bodyBitSize != 38u
-                || !std::equal(expected.begin(), expected.end(),
-                               raw.m_rawBytes.begin()))
+            const std::uint32_t handleStart = expectedFrame == 1u ? 50u : 42u;
+            if (raw.m_rawBytes.size() != (expectedFrame == 1u ? 11u : 10u)
+                || raw.m_objectType != (expectedFrame == 1u ? 516u : 513u)
+                || raw.m_bodyBitSize != 38u
+                || (expectedFrame == 0u
+                    && !std::equal(expected.begin(), expected.end(),
+                                   raw.m_rawBytes.begin())))
                 return false;
-            detail::Bits body{raw.m_rawBytes.data(), 0u, 42u};
-            if (body.take(2u) != 1u || body.take(8u) + 0x1F0u != 513u
+            detail::Bits body{raw.m_rawBytes.data(), 0u, handleStart};
+            if (body.take(2u) != 1u
+                || body.take(8u) + 0x1F0u
+                    != (expectedFrame == 1u ? 516u : 513u)
                 || detail::handle(body, 0u, 0u, true).value != 0x30u
                 || body.shortValue() != 0u || body.longValue() != 1u
-                || body.take(1u) != 1u || body.shortValue() != 0u
-                || body.pos != 41u || body.take(1u) != 0u || !body.good)
+                || body.take(1u) != 1u)
                 return false;
-            detail::Bits handles{raw.m_rawBytes.data(), 42u, 80u};
+            const auto frameStart = body.pos;
+            if (body.shortValue() != expectedFrame
+                || body.pos - frameStart != (expectedFrame == 1u ? 10u : 2u)
+                || body.pos + 1u != handleStart || body.take(1u) != 0u
+                || !body.good)
+                return false;
+            detail::Bits handles{raw.m_rawBytes.data(), handleStart,
+                static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u)};
             const auto owner = detail::handle(handles, 4u, 0x30u);
             const auto reactor = detail::handle(handles, 4u, 0x30u);
             if (!handles.good || owner.role != 4u || reactor.role != 4u
                 || owner.value != 0xAu || reactor.value != 0xAu
-                || handles.pos != 74u)
+                || handles.pos != handleStart + 32u)
                 return false;
             while (handles.pos < handles.end)
                 if (handles.take(1u) != 0u) return false;
@@ -1086,29 +1110,42 @@ public:
                 && raw.m_version != DRW::AC1032)
             || raw.m_bodyBitSize != 37u)
             return false;
-        const std::uint32_t expectedClass =
-            raw.m_version == DRW::AC1027 ? 516u : 514u;
+        const std::uint32_t expectedClass = expectedFrame == 1u ? 516u
+            : raw.m_version == DRW::AC1027 ? 516u : 514u;
         if (raw.m_version == DRW::AC1032) {
             const std::array<std::uint8_t, 10> expected{{
                 0x44u, 0x80u, 0x4Cu, 0x24u, 0x06u,
                 0x88u, 0x21u, 0x48u, 0x21u, 0x40u}};
             if (raw.m_hasDataStorage
-                || !std::equal(expected.begin(), expected.end(),
-                               raw.m_rawBytes.begin()))
+                || (expectedFrame == 0u
+                    && !std::equal(expected.begin(), expected.end(),
+                                   raw.m_rawBytes.begin())))
                 return false;
         }
-        detail::Bits body{raw.m_rawBytes.data(), 0u, 43u};
+        const std::uint32_t handleStart = expectedFrame == 1u ? 51u : 43u;
+        if (raw.m_rawBytes.size() != (expectedFrame == 1u ? 11u : 10u))
+            return false;
+        detail::Bits body{raw.m_rawBytes.data(), 0u, handleStart};
         if (body.take(2u) != 1u || body.take(8u) + 0x1F0u != expectedClass
             || detail::handle(body, 0u, 0u, true).value != 0x30u
             || body.shortValue() != 0u || body.longValue() != 1u
-            || body.take(1u) != 1u || body.take(1u) != 0u
-            || body.shortValue() != 0u || body.pos != 42u || body.take(1u) != 0u || !body.good) return false;
-        detail::Bits handles{raw.m_rawBytes.data(), 43u, 80u};
+            || body.take(1u) != 1u || body.take(1u) != 0u)
+            return false;
+        const auto frameStart = body.pos;
+        if (body.shortValue() != expectedFrame
+            || body.pos - frameStart != (expectedFrame == 1u ? 10u : 2u)
+            || body.pos + 1u != handleStart || body.take(1u) != 0u
+            || !body.good)
+            return false;
+        detail::Bits handles{raw.m_rawBytes.data(), handleStart,
+            static_cast<std::uint32_t>(raw.m_rawBytes.size() * 8u)};
         const auto parent = detail::handle(handles, 4u, 0x30u);
         const auto reactor = detail::handle(handles, 4u, 0x30u);
         if (!handles.good || parent.role != 4u || reactor.role != 4u
-            || parent.value != 0xAu || reactor.value != 0xAu || handles.pos != 75u) return false;
-        while (handles.pos < handles.end) if (handles.take(1u) != 0u) return false;
+            || parent.value != 0xAu || reactor.value != 0xAu
+            || handles.pos != handleStart + 32u) return false;
+        while (handles.pos < handles.end)
+            if (handles.take(1u) != 0u) return false;
         return std::count_if(data.namedObjectDictionary.m_entries.begin(),
             data.namedObjectDictionary.m_entries.end(), [](const DRW_Dictionary::Entry& e) {
                 return e.m_name == "ACAD_WIPEOUT_VARS" && e.m_handle == 0x30u;
@@ -72240,23 +72277,45 @@ bool wipeoutVariablesDwgAdapterTransport(bool directNod = false,
     dx_iface physicalReader;
     const DRW_WipeoutVariables* physicalWitness = nullptr;
     if (!generatedSource) {
+        const bool importedPhysical = physicalReader.fileImport(
+            physicalSourcePath.string(), &physicalData, false);
+        const bool sourceWireMatches = importedPhysical
+            && DxIfaceStandardDwgCaptureTestAccess::physicalDirectWipeoutWire(
+                physicalData, frameOne ? 1u : 0u);
         if ((revision != DRW::AC1018 && revision != DRW::AC1024
                 && revision != DRW::AC1027
                 && revision != DRW::AC1032)
-            || !directNod || frameOne
-            || !physicalReader.fileImport(
-                physicalSourcePath.string(), &physicalData, false)
+            || !directNod
+            || !importedPhysical
             || physicalData.sourceFormat != dx_source_format::DWG
             || physicalData.sourceVersion != revision
-            || !DxIfaceStandardDwgCaptureTestAccess::physicalDirectWipeoutWire(
-                physicalData))
-            return fail("physical WIPEOUTVARIABLES source is outside its evidenced frame-0 profile");
+            || !sourceWireMatches) {
+            const auto* raw = DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
+                physicalData, physicalData.importGeneration, 0x30u);
+            if (raw != nullptr) {
+                std::cerr << "physical WIPEOUT source diagnostic: revision="
+                          << static_cast<int>(physicalData.sourceVersion)
+                          << " helper=" << sourceWireMatches
+                          << " frame=" << frameOne
+                          << " raw-size=" << raw->m_rawBytes.size()
+                          << " body-bits=" << raw->m_bodyBitSize
+                          << " object-type=" << raw->m_objectType
+                          << " handle=" << raw->m_handle
+                          << " custom=" << raw->m_isCustomClass
+                          << " storage=" << raw->m_hasDataStorage
+                          << " bytes=";
+                for (const auto byte : raw->m_rawBytes)
+                    std::cerr << std::hex << static_cast<unsigned>(byte) << ' ';
+                std::cerr << std::dec << '\n';
+            }
+            return fail("physical WIPEOUTVARIABLES source is outside its evidenced direct-NOD profile");
+        }
         const auto found = physicalData.dwgWipeoutVariables.find(
             {physicalData.importGeneration, 0x30u});
         if (found == physicalData.dwgWipeoutVariables.end()
             || found->second.parentHandle
                 != physicalData.namedObjectDictionary.handle
-            || found->second.m_displayFrame != 0u
+            || found->second.m_displayFrame != (frameOne ? 1u : 0u)
             || found->second.reactorHandles
                 != std::vector<std::uint32_t>{
                     physicalData.namedObjectDictionary.handle}
@@ -73818,6 +73877,22 @@ int main(int argc, char** argv) {
     if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1032-direct-nod") {
         return wipeoutVariablesDwgAdapterTransport(
             true, DRW::AC1032, false, argv[2]) ? 0 : 1;
+    }
+    if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1018-frame1-direct-nod") {
+        return wipeoutVariablesDwgAdapterTransport(
+            true, DRW::AC1018, true, argv[2]) ? 0 : 1;
+    }
+    if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1024-frame1-direct-nod") {
+        return wipeoutVariablesDwgAdapterTransport(
+            true, DRW::AC1024, true, argv[2]) ? 0 : 1;
+    }
+    if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1027-frame1-direct-nod") {
+        return wipeoutVariablesDwgAdapterTransport(
+            true, DRW::AC1027, true, argv[2]) ? 0 : 1;
+    }
+    if (argc == 3 && std::string(argv[1]) == "--wipeoutvariables-physical-ac1032-frame1-direct-nod") {
+        return wipeoutVariablesDwgAdapterTransport(
+            true, DRW::AC1032, true, argv[2]) ? 0 : 1;
     }
     if (argc == 2
         && std::string(argv[1]) == "--wipeoutvariables-dwg-direct-nod")

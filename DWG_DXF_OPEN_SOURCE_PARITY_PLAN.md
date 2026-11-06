@@ -2105,6 +2105,13 @@ Native source-release builds and platform qualification remain open.
   integrity observations and the global strict-source gate. Native wipeout
   display/plot behavior, preview preservation, generic common-link expansion,
   and broader producer/mode coverage remain open.
+  Physical frame=1 witnesses for AC1018, AC1024, AC1027 and AC1032 now also
+  pass exact version-specific frame/class/owner/reactor checks and seed local
+  wrappers. Each wrapper passes selected ASCII/Binary output, refusal,
+  same-adapter retry and typed readback; physical source NOD `0x0A` roles are
+  remapped into the wrapper graph ([frame=1 bridge receipt](docs/research/p4-wipeoutvariables-frame1-physical-writer-bridges-2026-11-05.json)).
+  This closes only those four selected-object source-to-writer profiles; no
+  physical whole-drawing or native display claim follows.
   A separate AC1024 source-frame control supports the bounded 0/1/3 profile.
   The exact hash-bound physical source now passes selected-object ASCII/Binary
   output and fresh typed readback: its source NOD `0x0A` owner/reactor map to
