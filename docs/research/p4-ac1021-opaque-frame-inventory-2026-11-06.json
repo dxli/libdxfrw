@@ -150,14 +150,25 @@
     "receipt": "docs/research/p4-ac1021-recompose-data-physical-selected-output-2026-11-06.json",
     "limit": "One unauthenticated local source profile. This does not qualify strict whole-source output, native semantics, independent DWG edge-role encoding or producer-wide support."
   },
+  "acDsDecomposeDataCandidateBoundary": {
+    "record": "AcDsDecomposeData schema graph",
+    "rootHandle": "0x3C3FE",
+    "root": "NOD/AcDsDecomposeData",
+    "schemaDictionary": "0x3C3FF",
+    "recordDictionary": "0x3C400",
+    "xrecordHandles": ["0x3C3F9", "0x3C3FA", "0x3C3FB", "0x3C3FC", "0x3C3FD"],
+    "result": "SOURCE PROFILE PASS. Two complete dictionary levels, an empty AcDsRecords sibling, and five typed XRECORD children have unique source frames, reciprocal ownership/reactors and common-link tails. The first XRECORD contains four ordered group-341 references to the other four schema records; the remaining four records are scalar-only.",
+    "receipt": "docs/research/p4-ac1021-acds-decompose-data-source-profile-2026-11-06.json",
+    "limit": "Selected output/readback is not yet qualified; source fields do not establish ACDS semantics or DWG wire-role encoding."
+  },
   "diagnostic": {
     "testSource": "tests/dwg2dxf_adapter_tests.cpp",
-    "testSourceSha256": "e2c30e2dcd035f18ce96892de3c22c798652b69cedc1b301c5274b64e4df6b3b",
+    "testSourceSha256": "db225df84a3ab4ce89dd48bd21b90d31975eb5c6a35cbedf7b37f17d90537c11",
     "executable": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests",
-    "executableSha256": "4829f48b8ab6e13ba564102505e1d922d22ea08719dff7cd143a51a6abda1fbf",
+    "executableSha256": "34d7b6f25f374df2addeb416de0222e0b1790dfdce8297fb465361ca51abd082",
     "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/children-room-decoration.dwg",
     "result": "PASS; prints per-handle source type, class and carrier records for all 74 opaque carrier records and all 112 standard-object source frames, including DICTIONARY/XRECORD payloads, ordered key/target edges, NOD root keys and target handles, and GROUP callback count.",
-    "logPath": "/private/tmp/p4-ac1021-opaque-inventory-post-recompose-2026-11-06.log",
+    "logPath": "/private/tmp/p4-ac1021-opaque-inventory-post-acds-screen-2026-11-06.log",
     "logSha256": "26568efae6219f75419ee2f31bcea322f9245e33631a8a3eb59debf38d4f8499"
   },
   "limits": [
@@ -165,7 +176,7 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Screen the next bounded standard-object frame candidate for source role, exact typed body and graph dependencies before attempting selected output. Continue qualifying the 22 remaining standard-object frames; keep whole-source output, native semantics, producer-wide coverage, populated GROUP and image graphs, and named-block SORTENTSTABLE profiles open.",
+  "nextAction": "Build and qualify selected ASCII/Binary output for the screened AcDsDecomposeData two-level dictionary and five-XRECORD graph; prove ordered group-341 references, readback, mutation refusal and retry. Continue qualifying the 22 remaining standard-object frames; keep whole-source output, native semantics, producer-wide coverage, populated GROUP and image graphs, and named-block SORTENTSTABLE profiles open.",
   "sortEntsCandidateBoundary": {
     "record": "SORTENTSTABLE",
     "handle": "0x2DF",

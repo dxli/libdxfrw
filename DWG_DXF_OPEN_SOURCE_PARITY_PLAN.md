@@ -60,7 +60,25 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
+1. **P4 / AC1021 `AcDsDecomposeData` schema graph:** source screening passes
+   on `children-room-decoration.dwg`. The NOD (`0xC`) has one
+   `AcDsDecomposeData` edge to dictionary `0x3C3FE`; that dictionary owns
+   `AcDsRecords` (`0x3C400`, empty) and `AcDsSchemas` (`0x3C3FF`, five ordered
+   entries). The schemas dictionary owns XRECORDs `0x3C3F9` through `0x3C3FD`;
+   each record has one reciprocal schema-dictionary reactor and an eligible
+   source frame. The first record has 31 ordered entries, including four
+   group-341 handle pairs to the other four schema XRECORDs; the other records
+   have 4, 4, 4 and 5 scalar entries. None has EED, APPDATA, an extension
+   dictionary or raw-data payload. Dictionary and XRECORD frame offsets/sizes,
+   source owners, keys and exact fields are recorded in the
+   [source-profile receipt](docs/research/p4-ac1021-acds-decompose-data-source-profile-2026-11-06.json).
+   Next build this exact selected graph and prove ASCII/Binary output with fresh
+   readback of both NOD/dictionary levels, ordered keys and bodies, remapped
+   group-341 targets, atomic late-mutation refusal, destination preservation
+   and same-adapter retry. Keep the graph selected-source only; strict
+   whole-source, native ACDS semantics, independent source wire-role proof and
+   support claims remain open.
+2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
    links and source frame offsets are captured. The enclosing FIELDLIST has
@@ -74,7 +92,7 @@ created locally from scratch for the specific control.
    remain excluded. Reopen this candidate only with a source/profile that
    supplies full membership and a consumer-visible root relation; see the
    [source-graph screen receipt](docs/research/p5-ac1021-acexpr-root-graph-output-readiness-2026-11-06.json).
-2. **P6 / converter-dependent suffix:** the 2026-11-06 ODA File Converter
+3. **P6 / converter-dependent suffix:** the 2026-11-06 ODA File Converter
    27.1.0 retry after the reported session unlock again aborted during
    pasteboard/XPC initialization (exit 134) and produced no output. No suffix
    evidence or support claim follows. Keep the AC1027 suffix unclaimed and

@@ -54934,6 +54934,187 @@ bool inspectAc1021NodXRecordSourceProfile(
     return true;
 }
 
+bool inspectAc1021AcDsDecomposeDataSourceProfile(
+        const std::filesystem::path& sourcePath) {
+    constexpr std::uint32_t rootHandle = 246782u;
+    constexpr std::uint32_t schemasHandle = 246783u;
+    constexpr std::uint32_t recordsHandle = 246784u;
+    const std::array<std::uint32_t, 5> recordHandles{
+        246777u, 246778u, 246779u, 246780u, 246781u};
+    dx_iface reader;
+    dx_data data;
+    if (!reader.fileImport(sourcePath.string(), &data, false)
+        || data.sourceVersion != DRW::AC1021
+        || !data.hasNamedObjectDictionary)
+        return fail("AC1021 AcDsDecomposeData source import failed");
+    const auto countDictionary = [&data](std::uint32_t handle) {
+        return std::count_if(
+            data.dictionaries.begin(), data.dictionaries.end(),
+            [handle](const DRW_Dictionary& dictionary) {
+                return dictionary.handle == handle;
+            });
+    };
+    const auto dictionary = [&data](std::uint32_t handle)
+            -> const DRW_Dictionary* {
+        const DRW_Dictionary* result = nullptr;
+        for (const DRW_Dictionary& candidate : data.dictionaries) {
+            if (candidate.handle != handle) continue;
+            if (result != nullptr) return nullptr;
+            result = &candidate;
+        }
+        return result;
+    };
+    const DRW_Dictionary* root = dictionary(rootHandle);
+    const DRW_Dictionary* schemas = dictionary(schemasHandle);
+    const DRW_Dictionary* records = dictionary(recordsHandle);
+    const auto rootEdge = std::find_if(
+        data.namedObjectDictionary.m_entries.begin(),
+        data.namedObjectDictionary.m_entries.end(),
+        [](const DRW_Dictionary::Entry& entry) {
+            return entry.m_name == "AcDsDecomposeData"
+                && entry.m_handle == rootHandle;
+        });
+    const auto rootEdgeCount = std::count_if(
+        data.namedObjectDictionary.m_entries.begin(),
+        data.namedObjectDictionary.m_entries.end(),
+        [](const DRW_Dictionary::Entry& entry) {
+            return entry.m_name == "AcDsDecomposeData"
+                && entry.m_handle == rootHandle;
+        });
+    if (rootEdge == data.namedObjectDictionary.m_entries.end()
+        || rootEdgeCount != 1
+        || countDictionary(rootHandle) != 1u
+        || countDictionary(schemasHandle) != 1u
+        || countDictionary(recordsHandle) != 1u
+        || root == nullptr || schemas == nullptr || records == nullptr
+        || root->parentHandle != data.namedObjectDictionary.handle
+        || root->reactorHandles
+            != std::vector<std::uint32_t>{data.namedObjectDictionary.handle}
+        || !root->hasCompleteDwgEntries()
+        || root->m_entries.size() != 2u
+        || root->m_entries[0].m_name != "AcDsRecords"
+        || root->m_entries[0].m_handle != recordsHandle
+        || root->m_entries[1].m_name != "AcDsSchemas"
+        || root->m_entries[1].m_handle != schemasHandle
+        || schemas->parentHandle != rootHandle
+        || schemas->reactorHandles != std::vector<std::uint32_t>{rootHandle}
+        || !schemas->hasCompleteDwgEntries()
+        || schemas->m_entries.size() != recordHandles.size()
+        || records->parentHandle != rootHandle
+        || records->reactorHandles != std::vector<std::uint32_t>{rootHandle}
+        || !records->hasCompleteDwgEntries()
+        || !records->m_entries.empty())
+        return fail("AC1021 AcDsDecomposeData dictionary graph changed");
+    for (const std::uint32_t handle :
+            {rootHandle, schemasHandle, recordsHandle}) {
+        const DRW_UnsupportedObject* frame =
+            DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+                data, data.importGeneration, handle);
+        if (frame == nullptr
+            || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                data, handle))
+            return fail("AC1021 AcDsDecomposeData dictionary source frame is ineligible");
+        std::cout << " dictionary handle=0x" << std::hex << handle << std::dec
+                  << " owner=" << (handle == rootHandle
+                        ? data.namedObjectDictionary.handle : rootHandle)
+                  << " entries=" << (handle == rootHandle
+                        ? root->m_entries.size()
+                        : (handle == schemasHandle ? schemas->m_entries.size()
+                                                   : records->m_entries.size()))
+                  << " frameOffset=" << frame->m_objectOffset
+                  << " frameSize=" << frame->m_objectSize << '\n';
+    }
+    std::cout << "AC1021 AcDsDecomposeData NOD handle=0x"
+              << std::hex << data.namedObjectDictionary.handle << std::dec
+              << " root=0x" << std::hex << rootHandle << std::dec
+              << " schemas=0x" << std::hex << schemasHandle << std::dec
+              << " records=0x" << std::hex << recordsHandle << std::dec
+              << " schemaEntries=" << schemas->m_entries.size()
+              << " recordsEntries=" << records->m_entries.size() << '\n';
+    std::set<std::string> schemaNames;
+    for (std::size_t index = 0; index < recordHandles.size(); ++index) {
+        const std::uint32_t handle = recordHandles[index];
+        const DRW_Dictionary::Entry& entry = schemas->m_entries[index];
+        if (entry.m_name.empty() || !schemaNames.insert(entry.m_name).second)
+            return fail("AC1021 AcDsDecomposeData schema keys are empty or duplicated");
+        const DRW_XRecord* record = nullptr;
+        std::size_t recordMatches = 0u;
+        for (const DRW_XRecord& candidate : data.xRecords) {
+            if (candidate.handle != handle) continue;
+            record = &candidate;
+            ++recordMatches;
+        }
+        const DRW_UnsupportedObject* frame =
+            DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+                data, data.importGeneration, handle);
+        if (recordMatches != 1u || record == nullptr
+            || entry.m_handle != handle
+            || record->parentHandle != schemasHandle
+            || record->reactorHandles
+                != std::vector<std::uint32_t>{schemasHandle}
+            || !record->hasDwgCommonLinkTail()
+            || record->xDictHandle != 0u || !record->appData.empty()
+            || !record->extData.empty() || record->m_rawDataValid
+            || !record->m_rawData.empty()
+            || frame == nullptr
+            || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                data, handle))
+            return fail("AC1021 AcDsDecomposeData schema XRECORD role/profile changed");
+        std::vector<std::pair<int, std::uint32_t>> orderedHandleValues;
+        for (const DRW_Variant& value : record->m_dataEntries) {
+            if (value.code() != 341)
+                continue;
+            if (value.type() != DRW_Variant::INTEGER64
+                || value.i64_val() <= 0
+                || value.i64_val() > std::numeric_limits<std::uint32_t>::max())
+                return fail("AC1021 AcDsDecomposeData handle field is malformed");
+            orderedHandleValues.emplace_back(
+                value.code(), static_cast<std::uint32_t>(value.i64_val()));
+        }
+        if (orderedHandleValues != record->m_handleValues
+            || (index == 0u
+                && record->m_handleValues
+                    != std::vector<std::pair<int, std::uint32_t>>{
+                        {341, recordHandles[1]}, {341, recordHandles[2]},
+                        {341, recordHandles[3]}, {341, recordHandles[4]}})
+            || (index != 0u && !record->m_handleValues.empty()))
+            return fail("AC1021 AcDsDecomposeData handle-field order/targets changed");
+        std::cout << " record index=" << index << " key=" << entry.m_name
+                  << " handle=0x" << std::hex << handle << std::dec
+                  << " owner=0x" << std::hex << record->parentHandle << std::dec
+                  << " values=" << record->m_values.size()
+                  << " dataEntries=" << record->m_dataEntries.size()
+                  << " handleValues=" << record->m_handleValues.size()
+                  << " reactors=" << record->reactorHandles.size()
+                  << " xdict=" << record->xDictHandle
+                  << " EED=" << record->extData.size()
+                  << " appData=" << record->appData.size()
+                  << " rawDataValid=" << record->m_rawDataValid
+                  << " rawDataBytes=" << record->m_rawData.size()
+                  << " frameOffset=" << frame->m_objectOffset
+                  << " frameSize=" << frame->m_objectSize << '\n';
+        for (std::size_t item = 0; item < record->m_dataEntries.size(); ++item) {
+            const DRW_Variant& value = record->m_dataEntries[item];
+            std::cout << "  data[" << item << "] code=" << value.code()
+                      << " type=" << value.type();
+            if (value.type() == DRW_Variant::STRING)
+                std::cout << " string=" << value.c_str();
+            else if (value.type() == DRW_Variant::INTEGER)
+                std::cout << " integer=" << value.i_val();
+            else if (value.type() == DRW_Variant::INTEGER64)
+                std::cout << " integer64=" << value.i64_val();
+            else if (value.type() == DRW_Variant::DOUBLE)
+                std::cout << " double=" << std::setprecision(17)
+                          << value.d_val();
+            std::cout << '\n';
+        }
+        for (const auto& reference : record->m_handleValues)
+            std::cout << "  handleValue code=" << reference.first
+                      << " target=" << reference.second << '\n';
+    }
+    return true;
+}
+
 bool physicalAc1021PreviousProductInfoOutputReadback(
         const std::filesystem::path& sourcePath) {
     constexpr std::uint32_t sourceHandle = 534u;
@@ -80873,6 +81054,9 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--ac1021-recompose-data-source-profile")
         return inspectAc1021NodXRecordSourceProfile(
             argv[2], "ACDB_RECOMPOSE_DATA", 246776u) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--ac1021-acds-decompose-data-source-profile")
+        return inspectAc1021AcDsDecomposeDataSourceProfile(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--ac1021-recompose-data-physical-output-readback")
         return physicalAc1021RecomposeDataOutputReadback(argv[2]) ? 0 : 1;
