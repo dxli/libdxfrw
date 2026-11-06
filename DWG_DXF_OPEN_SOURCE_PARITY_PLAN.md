@@ -61,11 +61,15 @@ created locally from scratch for the specific control.
 ### Next implementation-ready slices
 
 1. **P4 / AC1021 remaining standard-object frames:** the latest source
-   inventory has 112 standard-object frames; 102 now have bounded selected
-   ASCII/Binary output qualification, leaving 10. Identify the next smallest
+   inventory has 112 standard-object frames; 103 now have bounded selected
+   ASCII/Binary output qualification, leaving 9. Identify the next smallest
    fully typed, dependency-closed dictionary/XRECORD candidate from the source
    inventory, then prove its source membership/roles, selected output and
    fresh readback, invalid-graph refusal, destination preservation and retry.
+   The first one-frame candidate to screen is empty DICTIONARY `0x13C` (source
+   inventory owner `0x10`, zero entries/reactors). First resolve the owner's
+   exact typed family and check whether this frame is among the nine residuals;
+   do not count or broaden it based on the dictionary inventory line alone.
    Do not infer support from a callback or source frame alone. The completed
    slices include the `AcDsDecomposeData` graph: its NOD (`0xC`) edge points to
    dictionary `0x3C3FE`; that dictionary owns `AcDsRecords` (`0x3C400`, empty)
@@ -175,7 +179,7 @@ the distinct DBCOLOR source/output evidence gate. The 1,673 observed frames have
 zero entity/object parse failures, and no DXF is created. The 186 observer frames
 are 74 opaque carriers plus 112 standard-object frames; all 112 standard payloads
 match typed callbacks. Bounded selected-graph routes now qualify all 74 opaque
-carriers and 102 standard-object frames, with physical ASCII/Binary readback and
+carriers and 103 standard-object frames, with physical ASCII/Binary readback and
 applicable atomic refusal/retry. The physical AC1021 direct-NOD
 `ACDB_RECOMPOSE_DATA` XRECORD now qualifies its source frame (handle `0x3C3F8`,
 offset 7794, size 34), scalar group 90, ordered group-330 handle to
@@ -212,7 +216,12 @@ preservation, same-adapter retry and fresh readback pass
 ([receipt](docs/research/p4-ac1024-table-style-owned-dictionary-identity-bridge-2026-11-06.json)).
 This closes only the exact current AC1024 witness/control, not broader
 TABLESTYLE ownership profiles.
-The remaining 10 standard-object frames are unqualified. The same-version whole-source
+The empty LAYER extension DICTIONARY `0x3B3D4`, owned by LAYER `0x3B3D3`,
+now has a finalized source-frame output proof. Selected ASCII/Binary
+output and fresh readback preserve the owner link and empty body; an
+invalid owner refuses atomically, and same-adapter retry succeeds
+([receipt](docs/research/p4-ac1021-layer-empty-extension-physical-selected-output-2026-11-06.json)).
+The remaining 9 standard-object frames are unqualified. The same-version whole-source
 recheck still stops at independent DBCOLOR and other document-wide gates. See
 the [same-version gate
 recheck](docs/research/p4-ac1021-children-room-same-version-output-gate-2026-11-05.json),

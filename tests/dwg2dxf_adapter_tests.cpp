@@ -2320,6 +2320,63 @@ public:
         return true;
     }
 
+    static bool makeAc1021EmptyLayerExtensionProjection(
+            dx_data& data, std::uint32_t layerHandle,
+            std::uint32_t dictionaryHandle) {
+        if (data.sourceFormat != dx_source_format::DWG
+            || data.sourceVersion != DRW::AC1021
+            || data.importGeneration == 0u)
+            return false;
+        auto layer = std::find_if(data.layers.begin(), data.layers.end(),
+            [layerHandle](const DRW_Layer& candidate) {
+                return candidate.handle == layerHandle;
+            });
+        const auto dictionary = std::find_if(data.dictionaries.begin(),
+            data.dictionaries.end(), [dictionaryHandle](
+                const DRW_Dictionary& candidate) {
+                return candidate.handle == dictionaryHandle;
+            });
+        const dx_data::StandardDwgFrameKey key{
+            data.importGeneration, dictionaryHandle};
+        const auto frame = data.m_standardDwgObjectFrames.find(key);
+        if (layer == data.layers.end() || layer->xDictHandle != dictionaryHandle
+            || dictionary == data.dictionaries.end()
+            || dictionary->parentHandle != layerHandle
+            || !dictionary->m_entries.empty()
+            || frame == data.m_standardDwgObjectFrames.end()
+            || frame->second.raw.m_objectType != 42u
+            || !frame->second.payloadMatched || frame->second.opaquePayload)
+            return false;
+        const DRW_Dictionary savedDictionary = *dictionary;
+        const dx_data::StandardDwgObjectFrame savedFrame = frame->second;
+        const bool hasIdentity =
+            data.m_opaqueDwgSourceFrameIdentities.count(key) == 1u;
+        std::vector<decltype(data.m_standardDwgObjectOrdinals)::value_type>
+            savedOrdinals;
+        for (const auto& ordinal : data.m_standardDwgObjectOrdinals)
+            if (ordinal.second == dictionaryHandle)
+                savedOrdinals.push_back(ordinal);
+
+        std::uint32_t layerControl = 0u, layerExtension = 0u;
+        if (!makeEmptyAc1021LayerStateProjection(
+                data, layerControl, layerExtension))
+            return false;
+        layer = std::find_if(data.layers.begin(), data.layers.end(),
+            [layerHandle](const DRW_Layer& candidate) {
+                return candidate.handle == layerHandle;
+            });
+        if (layer == data.layers.end())
+            return false;
+        layer->xDictHandle = dictionaryHandle;
+        data.dictionaries.push_back(savedDictionary);
+        data.m_standardDwgObjectFrames.emplace(key, savedFrame);
+        if (hasIdentity)
+            data.m_opaqueDwgSourceFrameIdentities.insert(key);
+        for (const auto& ordinal : savedOrdinals)
+            data.m_standardDwgObjectOrdinals.emplace(ordinal);
+        return true;
+    }
+
     static bool prepareLayerStateOutput(dx_iface& iface,
                                         DRW::Version targetVersion) {
         return iface.prepareDwgLayerStateOutput(targetVersion, false);
@@ -2370,6 +2427,13 @@ public:
     }
     static std::size_t standardSourceFrameCount(const dx_data& data) {
         return data.m_standardDwgObjectFrames.size();
+    }
+    static bool standardDwgOutputQualified(const dx_iface& iface,
+                                           std::uint64_t generation,
+                                           std::uint32_t handle) {
+        const auto proof = iface.m_standardDwgOutputProofs.find(handle);
+        return proof != iface.m_standardDwgOutputProofs.end()
+            && proof->second.generation == generation;
     }
     static std::size_t opaqueSourceFrameCount(const dx_data& data) {
         return data.m_opaqueDwgSourceFrames.size();
@@ -54455,6 +54519,158 @@ bool physicalAc1021EmptyLayerStateProjection(
     return true;
 }
 
+bool physicalAc1021EmptyLayerExtensionOutputReadback(
+        const std::filesystem::path& sourcePath) {
+    constexpr std::uint32_t layerHandle = 0x3B3D3u;
+    constexpr std::uint32_t dictionaryHandle = 0x3B3D4u;
+    const auto uniqueDictionary = [](const dx_data& data,
+                                     std::uint32_t handle) {
+        const DRW_Dictionary* result = nullptr;
+        for (const DRW_Dictionary& row : data.dictionaries) {
+            if (row.handle != handle)
+                continue;
+            if (result != nullptr)
+                return static_cast<const DRW_Dictionary*>(nullptr);
+            result = &row;
+        }
+        return result;
+    };
+    for (const bool binary : {false, true}) {
+        dx_iface sourceReader;
+        dx_data source;
+        if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+            || source.sourceFormat != dx_source_format::DWG
+            || source.sourceVersion != DRW::AC1021)
+            return fail("physical layer-extension witness is not an AC1021 DWG");
+        const auto sourceLayer = std::find_if(source.layers.begin(),
+            source.layers.end(), [](const DRW_Layer& layer) {
+                return layer.handle == layerHandle;
+            });
+        const DRW_Dictionary* sourceDictionary = uniqueDictionary(
+            source, dictionaryHandle);
+        const auto* sourceFrame =
+            DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+                source, source.importGeneration, dictionaryHandle);
+        if (sourceLayer == source.layers.end()
+            || sourceLayer->xDictHandle != dictionaryHandle
+            || sourceDictionary == nullptr
+            || sourceDictionary->parentHandle != layerHandle
+            || !sourceDictionary->m_entries.empty()
+            || sourceDictionary->hardOwner != 1
+            || sourceDictionary->cloning != 1
+            || sourceDictionary->countCap
+            || !sourceDictionary->reactorHandles.empty()
+            || sourceDictionary->xDictHandle != 0u
+            || !sourceDictionary->appData.empty()
+            || !sourceDictionary->extData.empty()
+            || sourceDictionary->hasDataStorageBinaryData()
+            || sourceDictionary->hasDwgCommonLinkTail()
+            || !sourceDictionary->pendingAppIdResolutions.empty()
+            || !sourceDictionary->pendingLayerRefResolutions.empty()
+            || sourceFrame == nullptr
+            || sourceFrame->m_objectType != 42u
+            || sourceFrame->m_version != DRW::AC1021
+            || sourceFrame->m_isEntity || sourceFrame->m_hasDataStorage)
+            return fail("physical empty layer extension dictionary source profile changed");
+        const std::string layerName = sourceLayer->name;
+        const std::uint32_t originalOwner = sourceDictionary->parentHandle;
+        if (!DxIfaceStandardDwgCaptureTestAccess::
+                makeAc1021EmptyLayerExtensionProjection(
+                    source, layerHandle, dictionaryHandle))
+            return fail("physical empty layer-extension graph could not be projected");
+
+        const auto nonce = std::chrono::steady_clock::now()
+                               .time_since_epoch().count();
+        const std::filesystem::path outputPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-layer-extension-ac1021-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{outputPath};
+
+        dx_iface writer;
+        writer.cData = &source;
+        auto mutableDictionary = std::find_if(source.dictionaries.begin(),
+            source.dictionaries.end(), [](const DRW_Dictionary& dictionary) {
+                return dictionary.handle == dictionaryHandle;
+            });
+        if (mutableDictionary == source.dictionaries.end())
+            return fail("projected layer extension dictionary disappeared");
+        const std::string sentinel = "layer extension destination sentinel\n";
+        {
+            std::ofstream existing(outputPath,
+                                   std::ios::binary | std::ios::trunc);
+            if (!existing || !(existing << sentinel))
+                return fail("could not seed layer extension destination");
+        }
+        mutableDictionary->parentHandle = DRW::NoHandle;
+        const auto write = [&]() {
+            return writer.fileExport(outputPath.string(), DRW::AC1024,
+                binary, &source, false, true,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::AllowPartial);
+        };
+        if (write())
+            return fail("invalid layer extension owner was emitted");
+        {
+            std::ifstream input(outputPath, std::ios::binary);
+            const std::string retained{
+                std::istreambuf_iterator<char>(input), {}};
+            if (retained != sentinel)
+                return fail("invalid layer extension graph changed destination");
+        }
+        mutableDictionary->parentHandle = originalOwner;
+        if (!write())
+            return fail("corrected physical layer extension graph failed same-writer retry");
+        if (!DxIfaceStandardDwgCaptureTestAccess::standardDwgOutputQualified(
+                writer, source.importGeneration, dictionaryHandle))
+            return fail("physical layer extension DICTIONARY source frame was not output-qualified");
+
+        dx_iface outputReader;
+        dx_data output;
+        if (!outputReader.fileImport(outputPath.string(), &output, false)
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1024)
+            return fail("layer extension output failed fresh DXF readback");
+        const auto outputLayer = std::find_if(output.layers.begin(),
+            output.layers.end(), [&layerName](const DRW_Layer& layer) {
+                return layer.name == layerName;
+            });
+        if (outputLayer == output.layers.end()
+            || outputLayer->xDictHandle == 0u
+            || outputLayer->xDictHandle == DRW::NoHandle)
+            return fail("fresh layer readback lost its extension dictionary link");
+        const DRW_Dictionary* outputDictionary = uniqueDictionary(
+            output, outputLayer->xDictHandle);
+        if (outputDictionary == nullptr
+            || outputDictionary->parentHandle != outputLayer->handle
+            || outputDictionary->hardOwner != 1
+            || outputDictionary->cloning != 1
+            || !outputDictionary->m_entries.empty()
+            || !outputDictionary->reactorHandles.empty()
+            || outputDictionary->xDictHandle != 0u
+            || !outputDictionary->appData.empty()
+            || !outputDictionary->extData.empty()
+            || std::any_of(output.xRecords.begin(), output.xRecords.end(),
+                [outputDictionary](const DRW_XRecord& record) {
+                    return record.parentHandle == outputDictionary->handle;
+                }))
+            return fail("fresh layer extension dictionary owner or empty body changed");
+        std::cout << "Physical AC1021 empty layer extension "
+                  << (binary ? "Binary" : "ASCII")
+                  << " output/readback passed; standard source-frame proof was recorded, invalid owner refusal preserved the destination, and the same adapter retried successfully.\n";
+    }
+    return true;
+}
+
 bool physicalAc1021PlotSettingsRootOutputReadback(
         const std::filesystem::path& sourcePath) {
     const auto uniqueDictionary = [](const dx_data& data,
@@ -81962,6 +82178,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--layerstates-empty-ac1021-output-readback")
         return physicalAc1021EmptyLayerStateProjection(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--layer-extension-empty-ac1021-output-readback")
+        return physicalAc1021EmptyLayerExtensionOutputReadback(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--plotsettings-empty-ac1021-output-readback")
         return physicalAc1021PlotSettingsRootOutputReadback(argv[2]) ? 0 : 1;

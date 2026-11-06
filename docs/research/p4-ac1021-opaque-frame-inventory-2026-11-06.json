@@ -62,8 +62,8 @@
       },
       "typedPayloadMatches": 112,
       "opaquePayloadMatches": 0,
-      "outputQualified": 102,
-      "remainingUnqualified": 10,
+      "outputQualified": 103,
+      "remainingUnqualified": 9,
       "qualifiedByNewSlice": {
         "record": "DICTIONARY",
         "count": 2,
@@ -72,9 +72,28 @@
           "0x200"
         ],
         "profile": "LAYER_CONTROL extension dictionary -> one empty ACAD_LAYERSTATES dictionary"
-      }
+      },
+      "qualifiedByRecentSlices": [
+        {
+          "record": "DICTIONARY",
+          "count": 2,
+          "handles": [
+            "0x1FF",
+            "0x200"
+          ],
+          "profile": "LAYER_CONTROL extension -> one empty ACAD_LAYERSTATES child"
+        },
+        {
+          "record": "DICTIONARY",
+          "count": 1,
+          "handles": [
+            "0x3B3D4"
+          ],
+          "profile": "One empty LAYER extension dictionary owned by layer 0x3B3D3"
+        }
+      ]
     },
-    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify all 74 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, one CELLSTYLEMAP, one RASTERVARIABLES, and one SORTENTSTABLE. They qualify 102 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining 10 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify all 74 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, one CELLSTYLEMAP, one RASTERVARIABLES, and one SORTENTSTABLE. They qualify 103 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining 9 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -279,10 +298,10 @@
     "evidence": "Current source inventory selector output reconciled with selected-source output qualification. Handles 0xF (ACDBPLACEHOLDER), 0x18 (MLINESTYLE), 0x22 (Model LAYOUT), 0xD7 (dwgmodels.com LAYOUT), 0x266/0x26A (VIEWPORT), 0x2D2 (RASTERVARIABLES), and 0x2DF (ModelSpace SORTENTSTABLE) have bounded selected-output qualification; no opaque source-frame identity remains unqualified in this source inventory.",
     "frames": [],
     "inventorySelector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/children-room-decoration.dwg",
-    "inventoryLogSha256": "26568efae6219f75419ee2f31bcea322f9245e33631a8a3eb59debf38d4f8499",
+    "inventoryLogSha256": "8dd77c4f8e73e024c495c3c9bf29dbb40581c69489b8f528c7f0d9da5123b0b4",
     "mlineStyleTrace": "dwg2dxf -d on the same source; parser trace around object 0x18 identifies STANDARD, flags 0 and two elements; not an independent wire-layout oracle.",
     "mlineStyleTraceLogSha256": "5f8ae476e5febb539ef46a8511662840c0411cc21a3dbf9dcbf85c9a0fa157e7",
-    "limit": "This is a source-inventory and bounded selected-output update only. All opaque source frames and 102 of 112 standard-object frames have selected-output qualification; 10 standard-object frames remain unqualified. Selected projection output does not qualify the whole source drawing, native semantics, or producer-wide support."
+    "limit": "This is a source-inventory and bounded selected-output update only. All opaque source frames and 103 of 112 standard-object frames have selected-output qualification; 9 standard-object frames remain unqualified. Selected projection output does not qualify the whole source drawing, native semantics, or producer-wide support."
   },
   "mLineStyleCandidateBoundary": {
     "record": "MLINESTYLE",
@@ -354,5 +373,22 @@
     "receipt": "docs/research/p4-ac1021-layerstates-one-root-physical-selected-output-2026-11-06.json",
     "result": "PASS for source admission and selected ASCII/Binary output with fresh typed readback; mutation refusal preserves the destination and the same adapter retries successfully.",
     "limit": "The test-only projection removes unrelated object families to reach selected output. One unauthenticated local source profile only; no independent DWG edge-role proof, whole-source output, native LayerStates semantics or producer-wide support."
+  },
+  "layerExtensionCandidateBoundary": {
+    "record": "DICTIONARY",
+    "handle": "0x3B3D4",
+    "owner": {
+      "record": "LAYER",
+      "handle": "0x3B3D3"
+    },
+    "sourceGraph": "The source layer row has xDictHandle 0x3B3D4; the unique dictionary has parent 0x3B3D3, hardOwner 1, cloning 1, zero entries/reactors, and no appData, EED, xdictionary, data storage, common-link tail or pending name references. The matching standard type-42 source frame is payload-matched and non-opaque.",
+    "receipt": "docs/research/p4-ac1021-layer-empty-extension-physical-selected-output-2026-11-06.json",
+    "result": "PASS for selected AC1024-target ASCII/Binary output and fresh typed readback. The finalized standard-object output proof names the DICTIONARY source frame. Invalid owner mutation refuses without changing a destination sentinel; same-adapter corrected retry passes.",
+    "limit": "Test-only projection retains one layer-owned empty extension dictionary plus required existing base projection data. One unauthenticated local AC1021 source only; no independent DWG wire-role proof, whole-source output or support-claim promotion."
+  },
+  "sourceInventoryLog": {
+    "path": "/private/tmp/p4-ac1021-opaque-inventory-post-layerstates-2026-11-06.log",
+    "sha256": "8dd77c4f8e73e024c495c3c9bf29dbb40581c69489b8f528c7f0d9da5123b0b4",
+    "selector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/children-room-decoration.dwg"
   }
 }
