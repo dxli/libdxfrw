@@ -55,9 +55,28 @@
     "result": "FAIL CLOSED before output preparation: typed-proxy-graphics-not-preserved, 36 records, first handle 0x2C50 (decimal 11344).",
     "interpretation": "This unrelated source graph stop does not establish TABLESTYLE output failure; use an exact selected graph projection for the next slice and keep full-source conversion refused."
   },
-  "nextAction": "Implement a test-only source-bound AC1021 TABLESTYLE selected projection retaining the NOD entry, owner dictionary, TABLESTYLE and its extension-dictionary dependency; qualify ASCII/Binary output, fresh readback, mutation refusal, destination preservation and retry. Keep the whole-source 36 MLEADER-cache stop and all native/producer claims open.",
+  "nextAction": "Implement an evidence-preserving selected projection for the simpler lineweights AC1021 graph, including immutable STYLE and dictionary baselines and collision-free source-to-output handle bindings; only then enable the AC1021 source route. Keep the architectural CELLSTYLEMAP profile deferred until this basic graph closes. Validate destination-preserving refusal, same-adapter retry, ASCII/Binary readback, and unchanged full-source refusal.",
   "validation": {
+    "focusedBuild": "PASS build-gcc target libdxfrw_dwg2dxf_adapter_tests with -Werror",
+    "focusedSelector": "FAIL CLOSED on source-to-output duplicate handle; no successful output asserted",
     "fullSuites": "NOT RUN",
-    "fixturesCommitted": false
+    "fixturesCommitted": false,
+    "productionChanges": "Reverted; no AC1021 TABLESTYLE allowlist expansion remains in the committed C++ source."
+  },
+  "simplerCandidate": {
+    "path": "/Users/dli/doc/dwg/lineweights.dwg",
+    "sha256": "ad2656f141675aeda06ede347f8921516700b60a0f5ba17af042419be5397b4d",
+    "version": "AC1021",
+    "localInventory": "49 source callbacks and captured opaque frames; TABLESTYLE handle 0x172 (decimal 370), source type 503, owner dictionary 0x171 (decimal 369), no extension dictionary.",
+    "independentPeer": "LibreDWG JSON independently reports Standard with three legacy row styles and no xdictionary. Text-style hard pointers resolve to STYLE handle 0x11 (decimal 17).",
+    "wholeSourceResult": "FAIL CLOSED at unrelated MATERIAL extension-graph validation before output; not a TABLESTYLE verdict."
+  },
+  "selectedProjectionExperiment": {
+    "temporarySelector": "--tablestyle-physical-ac1021-selected-output",
+    "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --tablestyle-physical-ac1021-selected-output /Users/dli/doc/dwg/lineweights.dwg",
+    "buildExecutableSha256": "23a3e206fcfc2fa258fc9b036cb91c1125b84d9909b888832892d6d88c5e80c3",
+    "result": "The test-only selected projection passed source admission only after preserving the physical object baselines, but AC1024 output did not complete. The invalid text-style mutation was rejected atomically; after restoring it, output finalization detected a duplicate emitted handle 0x172 for STYLE and TABLESTYLE. The experimental test and attempted AC1021 production admission were reverted; the committed source remains fail closed.",
+    "interpretation": "The source subset currently lacks a trustworthy output-handle binding for the selected STYLE/TABLESTYLE pair. Do not enable AC1021 TABLESTYLE output by merely widening the version allowlist. Build a projection that preserves source identity and a unique emitted-handle map for every selected dependency, then rerun ASCII/Binary output and fresh readback.",
+    "fixtureDisposition": "No DWG/DXF fixture was committed; temporary output paths were cleaned by the test harness."
   }
 }
