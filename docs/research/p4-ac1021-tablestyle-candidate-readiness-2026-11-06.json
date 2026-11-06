@@ -46,7 +46,7 @@
     "scopeLimit": "Peer JSON agreement is field corroboration only; it does not qualify this repository's output or native TABLESTYLE semantics."
   },
   "specification": {
-    "authority": "Open Design Specification for .dwg files v5.4.1, \u00a720.4.101.1 (TABLESTYLE format until R21)",
+    "authority": "Open Design Specification for .dwg files v5.4.1, §20.4.101.1 (TABLESTYLE format until R21)",
     "profile": "Description TV; flow direction BS; flags BS; horizontal/vertical margins BD; title/header suppression B; three row styles in data/title/header order with hard-pointer text-style IDs, height/alignment, CMC text/fill/border colors, background-color flag, six border lineweights/visibility/colors; R2007+ data type BL, data unit BL and format TV.",
     "implementationObservation": "The current parser has a legacy branch for version <= AC1021 and parses three row styles. No parser layout change is justified by this evidence."
   },
@@ -55,13 +55,14 @@
     "result": "FAIL CLOSED before output preparation: typed-proxy-graphics-not-preserved, 36 records, first handle 0x2C50 (decimal 11344).",
     "interpretation": "This unrelated source graph stop does not establish TABLESTYLE output failure; use an exact selected graph projection for the next slice and keep full-source conversion refused."
   },
-  "nextAction": "Implement an evidence-preserving selected projection for the simpler lineweights AC1021 graph, including immutable STYLE and dictionary baselines and collision-free source-to-output handle bindings; only then enable the AC1021 source route. Keep the architectural CELLSTYLEMAP profile deferred until this basic graph closes. Validate destination-preserving refusal, same-adapter retry, ASCII/Binary readback, and unchanged full-source refusal.",
+  "nextAction": "Keep the exact lineweights AC1021 Standard profile narrow. Next independently qualify the second architectural TABLESTYLE profile only after its extension dictionary and CELLSTYLEMAP target roles close, then broaden version/source admission only from additional passing physical profiles. Preserve strict whole-source refusal and require no new committed fixtures.",
   "validation": {
-    "focusedBuild": "PASS build-gcc target libdxfrw_dwg2dxf_adapter_tests with -Werror",
-    "focusedSelector": "FAIL CLOSED on source-to-output duplicate handle; no successful output asserted",
-    "fullSuites": "NOT RUN",
+    "focusedBuild": "PASS cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4 (-Werror)",
+    "sourceProbe": "PASS existing lineweights.dwg exact TABLESTYLE/STYLE/dictionary source inventory",
+    "focusedSelector": "PASS ASCII and Binary selected output, fresh readback, destination-preserving dangling-reference refusal, and same-adapter retry",
+    "fullSuites": "NOT RUN; focused selector/build only",
     "fixturesCommitted": false,
-    "productionChanges": "Reverted; no AC1021 TABLESTYLE allowlist expansion remains in the committed C++ source."
+    "strictWholeSource": "Still fails closed at unrelated MATERIAL extension-graph validation; not qualified by selected projection"
   },
   "simplerCandidate": {
     "path": "/Users/dli/doc/dwg/lineweights.dwg",
@@ -72,12 +73,15 @@
     "wholeSourceResult": "FAIL CLOSED at unrelated MATERIAL extension-graph validation before output; not a TABLESTYLE verdict."
   },
   "selectedProjectionExperiment": {
-    "temporarySelector": "--tablestyle-physical-ac1021-selected-output",
-    "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --tablestyle-physical-ac1021-selected-output /Users/dli/doc/dwg/lineweights.dwg",
-    "buildExecutableSha256": "23a3e206fcfc2fa258fc9b036cb91c1125b84d9909b888832892d6d88c5e80c3",
-    "result": "The test-only selected projection passed source admission only after preserving the physical object baselines, but AC1024 output did not complete. The invalid text-style mutation was rejected atomically; after restoring it, output finalization detected a duplicate emitted handle 0x172 for STYLE and TABLESTYLE. The experimental test and attempted AC1021 production admission were reverted; the committed source remains fail closed.",
-    "interpretation": "The local parser decodes the physical hard-pointer correctly as text STYLE handle 17, matching LibreDWG. The temporary projection rejected the invalid-reference mutation atomically, but its restored write mapped emitted STYLE and TABLESTYLE records to the same handle 0x172. The experimental test and attempted AC1021 production admission were reverted; committed code remains fail closed. Fix and validate selected source-to-output identity binding; do not change the parser or widen the version allowlist based on this experiment.",
-    "fixtureDisposition": "No DWG/DXF fixture was committed; temporary output paths were cleaned by the test harness."
+    "selector": "--tablestyle-ac1021-physical-selected-output",
+    "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --tablestyle-ac1021-physical-selected-output /Users/dli/doc/dwg/lineweights.dwg",
+    "sourceSha256": "ad2656f141675aeda06ede347f8921516700b60a0f5ba17af042419be5397b4d",
+    "result": "PASS for ASCII and Binary selected output with fresh local DXF readback. The projection retains only the selected TABLESTYLE, its NOD/owner dictionary path, the owner dictionary typed baseline, and the selected raw source frame; unrelated standard-object frames, xdictionary roots, layer-control graph, and VPORT/VIEW records are excluded.",
+    "refusalAndRetry": "For each output mode, a dangling row text-style handle was refused and the preseeded destination remained byte-identical. Restoring the original handle allowed the same dx_iface instance to export and read back successfully.",
+    "readback": "Fresh ASCII and Binary DXF imports each contain one TABLESTYLE and raw TABLESTYLE record. The NOD key resolves to one owner dictionary, whose Standard key resolves to the emitted TABLESTYLE. All three row text-style names resolve to one emitted Standard STYLE; heights, alignments, margins, row count, and six legacy border slots are checked.",
+    "productionAdmission": "Exact AC1021 legacy Standard profile guard added; it admits the observed three-row layout and rejects deviations. The existing generic TABLESTYLE identity preallocation fix is retained.",
+    "scopeLimit": "Selected projection evidence only. Strict whole-source lineweights.dwg export remains refused by an unrelated MATERIAL graph failure; no DWG/DXF fixture was committed and no general AC1021 or TABLESTYLE support claim is made.",
+    "fixtureDisposition": "Used only the existing local source file; generated output was temporary and removed by the test harness."
   },
   "localParserPointerCheck": {
     "selector": "Temporary read-only import diagnostic, removed after observation",

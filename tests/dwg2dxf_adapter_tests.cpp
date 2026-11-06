@@ -170,6 +170,114 @@ public:
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
+    static bool selectPhysicalAc1021TableStyleGraph(
+            const dx_data& source, dx_data& projection) {
+        if (source.sourceFormat != dx_source_format::DWG
+            || source.sourceVersion != DRW::AC1021
+            || source.importGeneration == 0u
+            || source.tableStyles.size() != 1u
+            || !source.hasNamedObjectDictionary
+            || !source.namedObjectDictionary.hasCompleteDwgEntries())
+            return false;
+        const DRW_TableStyle& style = source.tableStyles.front();
+        const DRW_Dictionary* owner = nullptr;
+        std::size_t ownerMatches = 0u;
+        for (const DRW_Dictionary& dictionary : source.dictionaries) {
+            if (dictionary.handle != style.parentHandle)
+                continue;
+            owner = &dictionary;
+            ++ownerMatches;
+        }
+        if (ownerMatches != 1u || owner == nullptr
+            || style.handle != 0x172u || owner->handle != 0x171u
+            || owner->parentHandle != source.namedObjectDictionary.handle
+            || !owner->hasCompleteDwgEntries()
+            || owner->m_entries.size() != 1u
+            || owner->m_entries.front().m_name != "Standard"
+            || owner->m_entries.front().m_handle != style.handle)
+            return false;
+        const dx_data::StandardDwgFrameKey styleKey{
+            source.importGeneration, style.handle};
+        const auto styleFrame = source.m_opaqueDwgSourceFrames.find(styleKey);
+        if (styleFrame == source.m_opaqueDwgSourceFrames.end()
+            || source.m_opaqueDwgSourceFrameIdentities.count(styleKey) != 1u)
+            return false;
+
+        projection.sourceFormat = source.sourceFormat;
+        projection.sourceVersion = source.sourceVersion;
+        projection.importGeneration = source.importGeneration;
+        projection.dwgReadOutcome = source.dwgReadOutcome;
+        projection.headerC = source.headerC;
+        projection.hasNamedObjectDictionary = true;
+        projection.namedObjectDictionary = source.namedObjectDictionary;
+        projection.namedObjectDictionary.m_entries.erase(
+            std::remove_if(
+                projection.namedObjectDictionary.m_entries.begin(),
+                projection.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name != "ACAD_TABLESTYLE"
+                        || entry.m_handle != 0x171u;
+                }),
+            projection.namedObjectDictionary.m_entries.end());
+        if (projection.namedObjectDictionary.m_entries.size() != 1u)
+            return false;
+        projection.dictionaries.push_back(*owner);
+        projection.tableStyles.push_back(style);
+        projection.layers = source.layers;
+        projection.lineTypes = source.lineTypes;
+        projection.dimStyles = source.dimStyles;
+        projection.textStyles = source.textStyles;
+        projection.appIds = source.appIds;
+        projection.basicTableCaptureFailed = source.basicTableCaptureFailed;
+        projection.basicTableRetainedRecords =
+            source.basicTableRetainedRecords;
+        projection.basicTableRetainedItems = source.basicTableRetainedItems;
+        projection.basicTableRetainedBytes = source.basicTableRetainedBytes;
+        projection.dictionaryRetainedRecords =
+            source.dictionaryRetainedRecords;
+        projection.dictionaryRetainedEntries =
+            source.dictionaryRetainedEntries;
+        projection.dictionaryRetainedBytes = source.dictionaryRetainedBytes;
+        projection.dictionaryCaptureFailed = source.dictionaryCaptureFailed;
+        projection.m_dwgLtypeControlPublication =
+            source.m_dwgLtypeControlPublication;
+        projection.m_dwgLtypeControlGeneration =
+            source.m_dwgLtypeControlGeneration;
+        projection.m_dwgLtypeControlPublicationSeen =
+            source.m_dwgLtypeControlPublicationSeen;
+        projection.m_dwgLtypeControlCaptureFailed =
+            source.m_dwgLtypeControlCaptureFailed;
+        projection.m_opaqueDwgSourceFrames.emplace(*styleFrame);
+        projection.m_opaqueDwgSourceFrameIdentities.insert(styleKey);
+        projection.m_opaqueDwgSourceFrameRetainedBytes =
+            styleFrame->second.m_rawBytes.size();
+        const dx_data::StandardDwgFrameKey ownerKey{
+            source.importGeneration, owner->handle};
+        const auto ownerFrame = source.m_standardDwgObjectFrames.find(ownerKey);
+        if (ownerFrame == source.m_standardDwgObjectFrames.end())
+            return false;
+        projection.m_standardDwgObjectFrames.emplace(*ownerFrame);
+        const auto ownerOrdinal = source.m_standardDwgObjectOrdinals.find(
+            ownerKey);
+        if (ownerOrdinal != source.m_standardDwgObjectOrdinals.end())
+            projection.m_standardDwgObjectOrdinals.emplace(*ownerOrdinal);
+        projection.m_standardDwgObjectRetainedBytes =
+            ownerFrame->second.raw.m_rawBytes.size();
+        projection.m_standardDwgObjectMembershipEntries =
+            source.m_standardDwgObjectMembershipEntries;
+        projection.m_standardDwgObjectCaptureFailed =
+            source.m_standardDwgObjectCaptureFailed;
+        projection.m_standardDwgObjectPayloadFailed =
+            source.m_standardDwgObjectPayloadFailed;
+        projection.m_standardDwgNamesClosedThrough =
+            source.m_standardDwgNamesClosedThrough;
+        projection.m_standardDwgAppIdSources =
+            source.m_standardDwgAppIdSources;
+        projection.m_standardDwgLayerSources =
+            source.m_standardDwgLayerSources;
+        return true;
+    }
+
     static void setScaleExtensionHandles(
             dx_iface& iface, const std::vector<std::uint32_t>& handles) {
         iface.m_extensionScaleHandles = handles;
@@ -53687,6 +53795,244 @@ bool physicalTableStyleOutputReadback(
     return true;
 }
 
+bool physicalAc1021TableStyleSourceProbe(
+        const std::filesystem::path& sourcePath) {
+    dx_iface reader;
+    dx_data data;
+    if (!reader.fileImport(sourcePath.string(), &data, false)
+        || data.sourceFormat != dx_source_format::DWG
+        || data.sourceVersion != DRW::AC1021
+        || data.tableStyles.size() != 1u)
+        return fail("physical AC1021 TABLESTYLE source probe import failed");
+    const DRW_TableStyle& style = data.tableStyles.front();
+    std::cout << "handle=" << std::hex << style.handle << " owner="
+              << style.parentHandle << std::dec << " name=" << style.m_name
+              << " flow=" << style.m_flowDirection << " flags=" << style.m_flags
+              << " margins=" << style.m_horizontalCellMargin << ','
+              << style.m_verticalCellMargin << " suppressed="
+              << style.m_titleSuppressed << ',' << style.m_headerSuppressed
+              << " rows=" << style.m_rowStyles.size() << " cells="
+              << style.m_cellStyles.size() << " r24="
+              << style.m_r24PrefixPresent << '\n';
+    for (std::size_t i = 0; i < style.m_rowStyles.size(); ++i) {
+        const DRW_TableStyleRowStyle& row = style.m_rowStyles[i];
+        std::cout << "row=" << i << " textStyle=" << std::hex
+                  << row.m_textStyleHandle << std::dec << " height="
+                  << row.m_textHeight << " align=" << row.m_textAlignment
+                  << " textColor=" << row.m_textColor << " fill="
+                  << row.m_fillColor << " background="
+                  << row.m_hasBackgroundColor << " dataType="
+                  << row.m_valueDataType << " unit=" << row.m_valueUnitType
+                  << " format=" << row.m_valueFormatString
+                  << " borders=" << row.m_borders.size() << '\n';
+        for (std::size_t j = 0; j < row.m_borders.size(); ++j) {
+            const DRW_TableStyleBorder& border = row.m_borders[j];
+            std::cout << "border=" << j << " edge=" << border.m_edgeFlags
+                      << " weight=" << border.m_lineWeight << " visible="
+                      << border.m_visible << " color=" << border.m_color
+                      << " type=" << border.m_borderType << " lineType="
+                      << std::hex << border.m_lineTypeHandle << std::dec
+                      << " spacing=" << border.m_doubleLineSpacing << '\n';
+        }
+    }
+    for (const DRW_Textstyle& textStyle : data.textStyles)
+        std::cout << "style=" << std::hex << textStyle.handle << std::dec
+                  << " name=" << textStyle.name << '\n';
+    for (const DRW_Dictionary& dictionary : data.dictionaries) {
+        if (dictionary.handle != style.parentHandle)
+            continue;
+        std::cout << "dictionary=" << std::hex << dictionary.handle
+                  << std::dec << " owner=" << dictionary.parentHandle
+                  << " entries=" << dictionary.m_entries.size() << '\n';
+        for (const DRW_Dictionary::Entry& entry : dictionary.m_entries)
+            std::cout << "entry=" << entry.m_name << ':' << std::hex
+                      << entry.m_handle << std::dec << '\n';
+    }
+    return true;
+}
+
+bool physicalAc1021TableStyleSelectedOutput(
+        const std::filesystem::path& sourcePath) {
+    dx_iface sourceReader;
+    dx_data source;
+    if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1021
+        || source.tableStyles.size() != 1u
+        || source.tableStyles.front().handle != 0x172u
+        || source.tableStyles.front().parentHandle != 0x171u
+        || source.tableStyles.front().m_name != "Standard"
+        || source.tableStyles.front().m_rowStyles.size() != 3u
+        || !source.hasNamedObjectDictionary)
+        return fail("physical AC1021 TABLESTYLE source identity/profile changed");
+
+    dx_data projection;
+    if (!DxIfaceStandardDwgCaptureTestAccess::
+            selectPhysicalAc1021TableStyleGraph(source, projection)
+        || projection.tableStyles.size() != 1u
+        || projection.dictionaries.size() != 1u
+        || !projection.hasNamedObjectDictionary
+        || !projection.hasCompleteDwgLineTypeControlMembership())
+        return fail("physical AC1021 TABLESTYLE projection lost source baselines or LTYPE membership");
+
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    struct Cleanup {
+        std::array<std::filesystem::path, 2> paths;
+        ~Cleanup() {
+            for (const auto& path : paths) {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        }
+    } cleanup{{
+        std::filesystem::temp_directory_path()
+            / ("libdxfrw-ac1021-tablestyle-ascii-"
+               + std::to_string(nonce) + ".dxf"),
+        std::filesystem::temp_directory_path()
+            / ("libdxfrw-ac1021-tablestyle-binary-"
+               + std::to_string(nonce) + ".dxf")}};
+
+    DRW_TableStyle& style = projection.tableStyles.front();
+    const std::uint32_t sourceTextStyle =
+        style.m_rowStyles.front().m_textStyleHandle;
+    if (sourceTextStyle == 0u || sourceTextStyle == DRW::NoHandle
+        || std::count_if(projection.textStyles.begin(),
+                         projection.textStyles.end(),
+            [sourceTextStyle](const DRW_Textstyle& candidate) {
+                return candidate.handle == sourceTextStyle;
+            }) != 1)
+        return fail("physical AC1021 TABLESTYLE text-style dependency is not unique");
+
+    for (std::size_t index = 0u; index < cleanup.paths.size(); ++index) {
+        const bool binary = index != 0u;
+        const std::filesystem::path& output = cleanup.paths[index];
+        const std::string sentinel =
+            "preserve physical AC1021 TABLESTYLE destination\n";
+        {
+            std::ofstream prior(output, std::ios::binary | std::ios::trunc);
+            if (!prior || !(prior << sentinel))
+                return fail("could not seed physical AC1021 TABLESTYLE destination");
+        }
+        dx_iface writer;
+        const auto exportProjection = [&]() {
+            return writer.fileExport(
+                output.string(), DRW::AC1021, binary, &projection, false, true,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::AllowPartial);
+        };
+        const auto destinationIsSentinel = [&]() {
+            std::ifstream prior(output, std::ios::binary);
+            const std::string contents{
+                std::istreambuf_iterator<char>{prior}, {}};
+            return prior.good() || prior.eof() ? contents == sentinel : false;
+        };
+
+        style.m_rowStyles.front().m_textStyleHandle = 0x999u;
+        const bool wrongReferenceRefused = !exportProjection();
+        style.m_rowStyles.front().m_textStyleHandle = sourceTextStyle;
+        if (!wrongReferenceRefused || !destinationIsSentinel())
+            return fail("physical AC1021 TABLESTYLE accepted a dangling text-style target or changed destination");
+        if (!exportProjection())
+            return fail("physical AC1021 TABLESTYLE retry failed: "
+                + writer.extensionGraphFailureDetail());
+
+        dx_iface outputReader;
+        dx_data readback;
+        const bool readbackImported = outputReader.fileImport(
+            output.string(), &readback, false);
+        if (!readbackImported
+            || readback.sourceFormat != dx_source_format::DXF
+            || readback.sourceVersion != DRW::AC1021
+            || readback.tableStyles.size() != 1u
+            || readback.rawTableStyles.size() != 1u
+            || readback.dictionaries.empty()
+            || !readback.hasNamedObjectDictionary) {
+            std::cerr << "physical AC1021 readback diagnostic: imported="
+                      << readbackImported << " format="
+                      << static_cast<int>(readback.sourceFormat)
+                      << " version=" << static_cast<int>(readback.sourceVersion)
+                      << " tableStyles=" << readback.tableStyles.size()
+                      << " raw=" << readback.rawTableStyles.size()
+                      << " dictionaries=" << readback.dictionaries.size()
+                      << " NOD=" << readback.hasNamedObjectDictionary << '\n';
+            return fail(binary
+                ? "physical AC1021 Binary TABLESTYLE output/readback failed"
+                : "physical AC1021 ASCII TABLESTYLE output/readback failed");
+        }
+        const DRW_TableStyle& actual = readback.tableStyles.front();
+        const DRW_RawDxfObject& raw = readback.rawTableStyles.front();
+        if (actual.m_rowStyles.size() != 3u)
+            return fail("physical AC1021 TABLESTYLE row count changed on readback");
+        const DRW_Dictionary* outputDictionary = nullptr;
+        std::size_t outputDictionaryMatches = 0u;
+        for (const DRW_Dictionary& candidate : readback.dictionaries) {
+            if (candidate.handle != actual.parentHandle)
+                continue;
+            outputDictionary = &candidate;
+            ++outputDictionaryMatches;
+        }
+        std::size_t emittedTextStyleMatches = 0u;
+        for (const DRW_Textstyle& textStyle : readback.textStyles) {
+            if (textStyle.handle != 0u && textStyle.name == "Standard")
+                ++emittedTextStyleMatches;
+        }
+        const bool handleAlias = std::any_of(
+            readback.textStyles.begin(), readback.textStyles.end(),
+            [&actual](const DRW_Textstyle& textStyle) {
+                return textStyle.handle == 0u
+                    || textStyle.handle == actual.handle;
+            });
+        const std::array<double, 3> heights{0.18, 0.25, 0.18};
+        const std::array<int, 3> alignments{2, 5, 5};
+        if (actual.handle == 0u || actual.handle == sourceTextStyle
+            || handleAlias || actual.m_name != "Standard"
+            || outputDictionaryMatches != 1u || outputDictionary == nullptr
+            || outputDictionary->parentHandle
+                != readback.namedObjectDictionary.handle
+            || emittedTextStyleMatches != 1u
+            || actual.m_rowStyles.size() != 3u
+            || raw.handle != actual.handle
+            || actual.m_horizontalCellMargin != 0.06
+            || actual.m_verticalCellMargin != 0.06
+            || actual.m_titleSuppressed || actual.m_headerSuppressed) {
+            return fail("physical AC1021 TABLESTYLE output changed its identity, owner, or header fields");
+        }
+        for (std::size_t rowIndex = 0u; rowIndex < 3u; ++rowIndex) {
+            const DRW_TableStyleRowStyle& row = actual.m_rowStyles[rowIndex];
+            if (row.m_textHeight != heights[rowIndex]
+                || row.m_textAlignment != alignments[rowIndex]
+                || row.m_textStyleName != "Standard"
+                || row.m_valueDataType != 512
+                || row.m_valueUnitType != 0
+                || row.m_borders.size() != 6u)
+                return fail("physical AC1021 TABLESTYLE row fields changed on readback");
+        }
+        const bool rootClosed = std::count_if(
+            readback.namedObjectDictionary.m_entries.begin(),
+            readback.namedObjectDictionary.m_entries.end(),
+            [&actual, outputDictionary](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_TABLESTYLE"
+                    && entry.m_handle == outputDictionary->handle
+                    && std::count_if(
+                        outputDictionary->m_entries.begin(),
+                        outputDictionary->m_entries.end(),
+                        [&actual](const DRW_Dictionary::Entry& nested) {
+                            return nested.m_name == actual.m_name
+                                && nested.m_handle == actual.handle;
+                        }) == 1;
+            }) == 1;
+        if (!rootClosed)
+            return fail("physical AC1021 TABLESTYLE output lost NOD/dictionary/style key closure");
+        std::cerr << "Physical AC1021 TABLESTYLE "
+                  << (binary ? "Binary" : "ASCII")
+                  << " selected output/readback passed; dangling text-style refusal preserved the destination and the same adapter retried successfully.\n";
+    }
+    return true;
+}
+
 bool physicalAc1018DictionaryVarSourceProfile(
         const std::filesystem::path& sourcePath) {
     dx_iface reader;
@@ -76293,6 +76639,12 @@ bool sunStudyDxfGraph(const std::string& source) {
 }
 
 int main(int argc, char** argv) {
+    if (argc == 3
+        && std::string(argv[1]) == "--tablestyle-ac1021-physical-selected-output")
+        return physicalAc1021TableStyleSelectedOutput(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--tablestyle-ac1021-physical-source-probe")
+        return physicalAc1021TableStyleSourceProbe(argv[2]) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--tablestyle-source-output-identity-collision")
         return typedDwgTableStyleIdentityCollision(false)

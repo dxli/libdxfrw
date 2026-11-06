@@ -15644,10 +15644,12 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             m_extensionMaterialSourceGeneration = data->importGeneration;
         }
         // Keep immutable source/output bindings only for independently
-        // witnessed physical TABLESTYLE profiles. AC1018 is limited to the
-        // exact legacy Standard row profile; AC1024 retains its R24 gate.
+        // witnessed physical TABLESTYLE profiles. AC1018 and AC1021 are
+        // limited to exact legacy Standard row profiles; AC1024 retains its
+        // separately witnessed R24 gate.
         if (data->sourceFormat == dx_source_format::DWG
             && (data->sourceVersion == DRW::AC1018
+                || data->sourceVersion == DRW::AC1021
                 || data->sourceVersion == DRW::AC1024)
             && data->dwgReadOutcome.attempted
             && !m_extensionTableStyleHandles.empty()) {
@@ -15749,6 +15751,94 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                         && border.m_visible == 1
                                         && border.m_color == 0
                                         && border.m_colorCmc.m_method == 0xC1u
+                                        && border.m_propertyOverrideFlags == 0
+                                        && border.m_borderType == 0
+                                        && border.m_lineTypeHandle == 0u
+                                        && border.m_doubleLineSpacing == 0.0;
+                                }
+                            }
+                        }
+                        if (data->sourceVersion == DRW::AC1021
+                            && style != tableStyles.end()) {
+                            const DRW_TableStyle& candidate =
+                                *style->second;
+                            const std::uint32_t legacyTextStyleHandle =
+                                candidate.m_rowStyles.empty() ? 0u
+                                    : candidate.m_rowStyles.front()
+                                        .m_textStyleHandle;
+                            const auto defaultCmc = [](
+                                    const DRW_TableStyleCmcColor& cmc,
+                                    std::uint8_t method) {
+                                return cmc.m_rgb == -1 && cmc.m_name.empty()
+                                    && cmc.m_bookName.empty()
+                                    && cmc.m_method == method
+                                    && cmc.m_flags == 0u
+                                    && cmc.m_reservedIndex == 0u;
+                            };
+                            exactLegacyRows = candidate.m_name == "Standard"
+                                && candidate.m_flowDirection == 0
+                                && candidate.m_flags == 0
+                                && candidate.m_horizontalCellMargin == 0.06
+                                && candidate.m_verticalCellMargin == 0.06
+                                && !candidate.m_titleSuppressed
+                                && !candidate.m_headerSuppressed
+                                && !candidate.m_r24PrefixPresent
+                                && candidate.m_rowStyles.size() == 3u
+                                && candidate.m_cellStyles.empty()
+                                && !candidate.m_tableCellStyle.m_hasData
+                                && candidate.m_tableCellStyle.m_id == 0
+                                && candidate.m_tableCellStyle.m_styleClass == 0
+                                && candidate.m_tableCellStyle.m_name.empty()
+                                && candidate.m_tableCellStyle.m_borders.empty()
+                                && legacyTextStyleHandle != 0u
+                                && legacyTextStyleHandle != DRW::NoHandle
+                                && std::count_if(
+                                    data->textStyles.begin(),
+                                    data->textStyles.end(),
+                                    [legacyTextStyleHandle](
+                                            const DRW_Textstyle& textStyle) {
+                                        return textStyle.handle
+                                            == legacyTextStyleHandle;
+                                    }) == 1;
+                            constexpr double rowHeights[]{
+                                0.18, 0.25, 0.18};
+                            constexpr int rowAlignments[]{2, 5, 5};
+                            for (std::size_t rowIndex = 0u;
+                                 exactLegacyRows && rowIndex < 3u;
+                                 ++rowIndex) {
+                                const DRW_TableStyleRowStyle& row =
+                                    candidate.m_rowStyles[rowIndex];
+                                exactLegacyRows =
+                                    row.m_textStyleHandle
+                                        == legacyTextStyleHandle
+                                    && row.m_textHeight
+                                        == rowHeights[rowIndex]
+                                    && row.m_textAlignment
+                                        == rowAlignments[rowIndex]
+                                    && row.m_textColor == 0
+                                    && defaultCmc(row.m_textColorCmc, 0xC1u)
+                                    && row.m_fillColor == 7
+                                    && defaultCmc(row.m_fillColorCmc, 0xC3u)
+                                    && !row.m_hasBackgroundColor
+                                    && row.m_valueDataType == 512
+                                    && row.m_valueUnitType == 0
+                                    && row.m_valueFormatString.empty()
+                                    && row.m_borders.size() == 6u;
+                                for (std::size_t borderIndex = 0u;
+                                     exactLegacyRows
+                                        && borderIndex < row.m_borders.size();
+                                     ++borderIndex) {
+                                    const DRW_TableStyleBorder& border =
+                                        row.m_borders[borderIndex];
+                                    exactLegacyRows =
+                                        border.m_edgeFlags
+                                            == static_cast<int>(
+                                                1u << borderIndex)
+                                        && border.m_lineWeight == -2
+                                        && border.m_visible == 1
+                                        && border.m_color == 0
+                                        && defaultCmc(
+                                            border.m_colorCmc, 0xC1u)
                                         && border.m_propertyOverrideFlags == 0
                                         && border.m_borderType == 0
                                         && border.m_lineTypeHandle == 0u
@@ -49650,6 +49740,7 @@ bool dx_iface::hasUnchangedDwgTableStyleOutputSources() const noexcept {
         || cData->sourceFormat != dx_source_format::DWG
         || cData->sourceVersion != m_dwgTableStyleOutputSourceVersion
         || (m_dwgTableStyleOutputSourceVersion != DRW::AC1018
+            && m_dwgTableStyleOutputSourceVersion != DRW::AC1021
             && m_dwgTableStyleOutputSourceVersion != DRW::AC1024)
         || cData->importGeneration
             != m_dwgTableStyleOutputSourceGeneration
@@ -49718,7 +49809,8 @@ bool dx_iface::inspectDwgTableStylesOutput(
     if (m_dwgTableStyleOutputSources.empty())
         return true;
     if (dxfW == nullptr || cData == nullptr
-        || view.version != DRW::AC1024
+        || (view.version != DRW::AC1021
+            && view.version != DRW::AC1024)
         || !hasUnchangedDwgTableStyleOutputSources())
         return false;
     try {
