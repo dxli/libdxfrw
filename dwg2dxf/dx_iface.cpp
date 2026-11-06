@@ -80191,7 +80191,10 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             return false;
         }
     }
-    dxfW->setResolvedTableStyleHandles(std::move(m_tableStylesToEmit));
+    // Keep the adapter's selection list intact: writeTables() must preallocate
+    // these source identities before table-record handles are minted, while
+    // the DXF writer also needs the same list to validate TABLE code 342.
+    dxfW->setResolvedTableStyleHandles(m_tableStylesToEmit);
     dxfW->setResolvedTableStyleBaseIds(
         std::move(m_extensionTableStyleBaseIds));
     const auto hasRawXdataHandle = [](const dx_ifaceBlock* block) {

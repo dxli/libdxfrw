@@ -1496,6 +1496,22 @@ public:
             return;
         }
         if (dxfW->getVersion() > DRW::AC1009) {
+            // TABLESTYLE objects are emitted later with OBJECTS, but their
+            // source identities must be reserved before table records mint
+            // output handles. A low source TABLESTYLE handle can otherwise
+            // alias the next generated TEXTSTYLE handle.
+            for (const std::uint32_t handle : m_tableStylesToEmit) {
+                if (dxfW->preallocateEntityHandle(handle) == 0) {
+                    (void)dxfW->writeTable(nullptr);
+                    return;
+                }
+            }
+            for (const std::uint32_t handle : m_extensionTableStyleHandles) {
+                if (dxfW->preallocateEntityHandle(handle) == 0) {
+                    (void)dxfW->writeTable(nullptr);
+                    return;
+                }
+            }
             std::unordered_set<std::uint32_t> sourceStyleHandles;
             for (const DRW_Textstyle& style : cData->textStyles) {
                 if (style.handle == 0)
@@ -1518,12 +1534,6 @@ public:
                         return;
                     }
                 }
-            }
-        }
-        for (const std::uint32_t handle : m_tableStylesToEmit) {
-            if (dxfW->preallocateEntityHandle(handle) == 0) {
-                (void)dxfW->writeTable(nullptr);
-                return;
             }
         }
         for (const std::uint32_t handle : m_extensionCellStyleMapHandles) {

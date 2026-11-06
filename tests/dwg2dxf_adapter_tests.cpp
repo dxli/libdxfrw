@@ -35240,6 +35240,77 @@ bool typedDwgTableStyleDxfRoundTrip(
     return true;
 }
 
+bool typedDwgTableStyleIdentityCollision(bool binary) {
+    const auto nonce = std::chrono::steady_clock::now()
+        .time_since_epoch().count();
+    const std::filesystem::path output =
+        std::filesystem::temp_directory_path()
+        / ("libdxfrw-tablestyle-identity-collision-"
+           + std::to_string(nonce)
+           + (binary ? "-binary.dxf" : "-ascii.dxf"));
+    dx_data data;
+    populateTypedDwgTableStyleGraph(data);
+    // The highest pre-existing graph handle is the style dictionary at 0x700.
+    // Text STYLE therefore receives 0x701. Give TABLESTYLE that same source
+    // handle to require a source-to-output binding before record emission.
+    constexpr std::uint32_t collidingSourceHandle = 0x701u;
+    data.dictionaries.front().m_entries.front().m_handle =
+        collidingSourceHandle;
+    data.tableStyles.front().handle = collidingSourceHandle;
+    dx_iface writer;
+    writer.cData = &data;
+    writer.currentBlock = data.mBlock;
+    DRW_Table table = makeTextTableControl();
+    table.handle = 0x510u;
+    table.m_tableStyleHandle = collidingSourceHandle;
+    table.m_content.m_tableStyleHandle = collidingSourceHandle;
+    for (DRW_TableRow& row : table.m_content.m_rows) {
+        for (DRW_TableCell& cell : row.m_cells) {
+            if (cell.m_isMerged)
+                continue;
+            cell.m_mergedWidth = 1;
+            cell.m_mergedHeight = 1;
+        }
+    }
+    writer.addTable(table);
+    if (std::filesystem::exists(output)
+        || !writer.fileExport(output.string(), DRW::AC1021, binary,
+                              &data, true)) {
+        std::error_code ignored;
+        std::filesystem::remove(output, ignored);
+        return fail("TABLESTYLE source/output identity collision was not resolved");
+    }
+
+    dx_data readback;
+    dx_iface reader;
+    const bool imported = reader.fileImport(output.string(), &readback, false);
+    std::error_code ignored;
+    std::filesystem::remove(output, ignored);
+    std::vector<std::string> textStyleNames;
+    if (!readback.rawTableStyles.empty()) {
+        for (const DRW_Variant& group : readback.rawTableStyles.front().groups) {
+            if (group.code() == 7 && group.type() == DRW_Variant::STRING
+                && group.c_str() != nullptr)
+                textStyleNames.emplace_back(group.c_str());
+        }
+    }
+    const bool tableStyleHandleAliasesTextStyle = !readback.rawTableStyles.empty()
+        && std::any_of(readback.textStyles.begin(), readback.textStyles.end(),
+            [&readback](const DRW_Textstyle& style) {
+                return style.handle == 0u
+                    || style.handle == readback.rawTableStyles.front().handle;
+            });
+    if (!imported || readback.rawTableStyles.size() != 1u
+        || readback.textStyles.size() != 2u
+        || readback.rawTableStyles.front().handle == 0u
+        || tableStyleHandleAliasesTextStyle
+        || readback.tableStyles.size() != 1u
+        || readback.tableStyles.front().m_rowStyles.size() != 3u
+        || textStyleNames != std::vector<std::string>(3u, "TABLE_FONT"))
+        return fail("TABLESTYLE and STYLE output identities/references collided on readback");
+    return true;
+}
+
 bool tableWriterVersionRoundTrip(
     DRW::Version version, bool binary, std::uint64_t nonce,
     bool titleSuppressed = true, bool headerSuppressed = false) {
@@ -37238,7 +37309,8 @@ bool tableWriterRoundTrip(bool binary) {
                 binary, nonce + 5u
                     + static_cast<std::uint64_t>(suppression.first ? 2u : 0u)
                     + static_cast<std::uint64_t>(suppression.second ? 1u : 0u),
-                suppression.first, suppression.second))
+                suppression.first, suppression.second)
+            || !typedDwgTableStyleIdentityCollision(binary))
             return false;
     }
     if (!tableBlockCellWriterRoundTrip(binary, nonce))
@@ -76221,6 +76293,10 @@ bool sunStudyDxfGraph(const std::string& source) {
 }
 
 int main(int argc, char** argv) {
+    if (argc == 2
+        && std::string(argv[1]) == "--tablestyle-source-output-identity-collision")
+        return typedDwgTableStyleIdentityCollision(false)
+                && typedDwgTableStyleIdentityCollision(true) ? 0 : 1;
     if (argc == 3 && std::string(argv[1]) == "--sunstudy-dxf-graph")
         return sunStudyDxfGraph(argv[2]) ? 0 : 1;
     if (argc == 3 && std::string(argv[1]) == "--ac1018-minimal-root-group")
