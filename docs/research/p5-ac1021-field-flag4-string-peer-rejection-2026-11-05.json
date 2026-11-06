@@ -47,6 +47,14 @@
       "value": "%tc4",
       "decoded_child_count": 1074221063,
       "peer_disposition": "Invalid FIELD.num_childval"
+    },
+    {
+      "field_handle": "0x21C9",
+      "child_key": "SheetSetPropertyName",
+      "format_flags": 76,
+      "peer_decoded_data_type": 1342603270,
+      "peer_disposition": "Invalid data type in TABLE_value_fields; following unit type is also invalid",
+      "local_disposition": "unsupported child CadValue flags retain the containing FIELD as incomplete/raw"
     }
   ],
   "local_probe": {
@@ -55,7 +63,7 @@
   },
   "limitations": [
     "LibreDWG field values establish observed root transport, not validity of the enclosing records or application semantics.",
-    "No parser change, fixture, or support claim was added.",
-    "The separately observed flags=76 child profile remains unresolved."
+    "The same physical source has malformed downstream child framing for both flags=4/type=4 roots and a flags=76 child; these are not ready typed-output profiles.",
+    "No parser change, fixture, or support claim was added."
   ]
 }
