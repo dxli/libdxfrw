@@ -1,0 +1,44 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "title": "AC1021 ModelDocViewStyle physical selected output and readback",
+  "date": "2026-11-06",
+  "supportClaimEffect": "none",
+  "scope": "Qualify an exact selected projection of the four physical AC1021 ModelDocViewStyle frames, both NOD-rooted style dictionaries, and their extension-dictionary/XRECORD graph in ASCII and Binary DXF with fresh typed readback and output rollback/retry controls.",
+  "source": {
+    "path": "/Users/dli/doc/dwg/children-room-decoration.dwg",
+    "sha256": "cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce",
+    "version": "AC1021",
+    "provenanceLimit": "Existing local drawing; author and producer are not independently authenticated. No drawing fixture or derivative is committed."
+  },
+  "sourceGraph": {
+    "namedObjectDictionary": "Handle 0xC has one ACAD_DETAILVIEWSTYLE edge to dictionary 0x21B and one ACAD_SECTIONVIEWSTYLE edge to dictionary 0x219.",
+    "detailDictionary": "Dictionary 0x21B is owned by and reacts to NOD 0xC. Ordered entries Imperial24 -> DETAILVIEWSTYLE 0x18082 and Metric50 -> DETAILVIEWSTYLE 0x21C.",
+    "sectionDictionary": "Dictionary 0x219 is owned by and reacts to NOD 0xC. Ordered entries Imperial24 -> SECTIONVIEWSTYLE 0x18081 and Metric50 -> SECTIONVIEWSTYLE 0x21A.",
+    "recordFrames": "The four raw source frames match ACDBSECTIONVIEWSTYLE type 515 / AcDbSectionViewStyle and ACDBDETAILVIEWSTYLE type 516 / AcDbDetailViewStyle, with common owner equal to their dictionary. Typed callbacks match each handle, name, owner and record family.",
+    "resourceReferences": "All four typed styles resolve text-style handle 0x11 and linetype handle 0x16 through the source table inventory. Arrow/block references are zero in this sample.",
+    "extensionRecords": "All four styles reference one extension dictionary; each extension dictionary contains ACAD_XREC_ROUNDTRIP targeting one XRECORD. The XRECORD owner/reactor and ordered payload are checked on output readback. Source XRECORD extensionDictionaryFlag=1 with xDictHandle=0 is preserved as the source model state but is not represented in DXF and is not compared as a DXF field."
+  },
+  "verification": {
+    "build": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4 \u2014 PASS.",
+    "typedOnlyControl": {
+      "selector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --modeldoc-view-style-callbacks",
+      "result": "PASS for generated typed-only DWG writer route in ASCII and Binary. Checks typed field and reference readback, valid absent extension dictionaries (NoHandle with flag 0), extension dictionary dependency refusal, wrong dictionary owner atomic refusal, and cross-version refusal."
+    },
+    "physicalSourceSelector": {
+      "selector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --modeldoc-view-style-ac1021-source-profile /Users/dli/doc/dwg/children-room-decoration.dwg",
+      "result": "PASS in ASCII and Binary. Checks source graph identity, both NOD edges, dictionary ownership/reactors, four style identities and source frame types/owners, closed text-style/linetype references, exact selected output/readback, four extension-dictionary keys and targets, XRECORD owners/reactors/payload entries, and SECTIONVIEWSTYLE NONE color sentinel readback."
+    },
+    "failureAndRetry": "The physical selector injects std::bad_alloc after OBJECTS emission for both ASCII and Binary, verifies the prior destination sentinel remains unchanged, then retries on the same adapter and imports the result for typed graph readback. Expected injected-failure diagnostics are emitted.",
+    "diffCheck": "git diff --check \u2014 PASS."
+  },
+  "limits": [
+    "This is one local source whose author and producer are not independently authenticated.",
+    "Selected graph evidence does not qualify whole-drawing conversion, other producer/version profiles, native consumer semantics, or general ModelDocViewStyle support.",
+    "Source XRECORD DWG-only extensionDictionaryFlag is not asserted as a DXF-preserved field; no fixture or derivative is committed."
+  ],
+  "nextAction": "Continue P4 with another ready residual source/object profile, retaining strict refusal for unclosed whole-document graphs and updating the per-handle inventory only when the next bounded route has source, role, output and readback proof.",
+  "projection": {
+    "records": "Two rooted style dictionaries, four typed style records, four extension dictionaries, and four XRECORDs; required text-style and linetype targets are retained.",
+    "colorMapping": "The source SECTIONVIEWSTYLE hatch-background CMC uses method 0xC8 (NONE) with scalar 256. It is projected to DXF group-62 sentinel 257, consistent with this codebase\u2019s existing TABLESTYLE serializer convention. ODA \u00a72.11 documents CMC wire structure; this receipt does not claim independent ODA documentation of the method-to-sentinel semantics."
+  }
+}

@@ -2553,9 +2553,9 @@ bool overlayTableStyleSupportedFields(DRW_RawDxfObject& raw,
     return true;
 }
 
-// Detail/section view-style DXF groups carry scalar ACI values only. C0/C1/C3
-// have a direct group-62 projection; RGB, optional strings, reserved-index
-// data, and other source methods must not be silently collapsed to ACI.
+// Detail/section view-style DXF groups carry scalar color values only. C0/C1/C3
+// and NONE have direct group-62 projections; RGB, optional strings,
+// reserved-index data, and other source methods must not be collapsed to ACI.
 bool viewStyleCmcProjectsToDxfAci(
         const DRW_DwgCmcColorMetadata& source, int scalar) noexcept {
     if (!source.present) {
@@ -2574,9 +2574,16 @@ bool viewStyleCmcProjectsToDxfAci(
         return scalar == 0;
     case 0xC3u: // Indexed color
         return scalar >= 1 && scalar <= 255;
+    case 0xC8u: // NONE uses DXF's 257 sentinel; DWG's scalar fallback is 256.
+        return scalar == 256;
     default:
         return false;
     }
+}
+
+int viewStyleDxfAciValue(const DRW_DwgCmcColorMetadata& source,
+                         int scalar) noexcept {
+    return source.present && source.method == 0xC8u ? 257 : scalar;
 }
 
 bool insertRawDxfGroup(DRW_RawDxfObject& raw,
@@ -2748,19 +2755,22 @@ bool insertRawViewStyleHeaderGroup(DRW_RawDxfObject& raw,
 
     std::size_t classBegin = raw.groups.size();
     std::size_t classEnd = raw.groups.size();
+    bool foundSubclass = false;
     for (std::size_t index = 0; index < raw.groups.size(); ++index) {
         const DRW_Variant& group = raw.groups[index];
         if (group.code() != 100 || group.type() != DRW_Variant::STRING
             || group.c_str() == nullptr)
             continue;
-        if (classBegin != raw.groups.size()) {
+        if (foundSubclass) {
             classEnd = index;
             break;
         }
-        if (std::string_view(group.c_str()) == subclassName)
+        if (std::string_view(group.c_str()) == subclassName) {
             classBegin = index + 1u;
+            foundSubclass = true;
+        }
     }
-    if (classBegin == raw.groups.size())
+    if (!foundSubclass)
         return false;
 
     std::size_t headerEnd = classEnd;
@@ -3052,20 +3062,26 @@ bool overlayDetailViewStyleGroups(DRW_RawDxfObject& raw,
             if (currentGroup == 1) {
                 const bool first = colorCount++ == 0;
                 mark(first ? IdentifierColor : ArrowColor);
-                const int value = first
-                    ? style.m_identifierColor : style.m_arrowSymbolColor;
+                const std::size_t colorIndex = first ? 0u : 1u;
+                const int value = viewStyleDxfAciValue(
+                    style.m_colorCmc[colorIndex], first
+                    ? style.m_identifierColor : style.m_arrowSymbolColor);
                 if (!setRawDxfInteger(group, value)) return false;
             } else if (currentGroup == 2) {
                 mark(BoundaryLineColor);
-                if (!setRawDxfInteger(group, style.m_boundaryLineColor)) return false;
+                if (!setRawDxfInteger(group, viewStyleDxfAciValue(
+                        style.m_colorCmc[2], style.m_boundaryLineColor))) return false;
             } else if (currentGroup == 3) {
                 mark(ViewLabelTextColor);
-                if (!setRawDxfInteger(group, style.m_viewLabelTextColor)) return false;
+                if (!setRawDxfInteger(group, viewStyleDxfAciValue(
+                        style.m_colorCmc[3], style.m_viewLabelTextColor))) return false;
             } else if (currentGroup == 4) {
                 const bool first = colorCount++ == 0;
                 mark(first ? ConnectionLineColor : BorderLineColor);
-                const int value = first
-                    ? style.m_connectionLineColor : style.m_borderLineColor;
+                const std::size_t colorIndex = first ? 4u : 5u;
+                const int value = viewStyleDxfAciValue(
+                    style.m_colorCmc[colorIndex], first
+                    ? style.m_connectionLineColor : style.m_borderLineColor);
                 if (!setRawDxfInteger(group, value)) return false;
             }
             break;
@@ -3349,7 +3365,9 @@ bool overlayDetailViewStyleGroups(DRW_RawDxfObject& raw,
         if (!insertGroup1Handle(style.m_arrowSymbolHandle))
             return false;
     }
-    const auto insertGroup1Color = [&raw](int color) {
+    const auto insertGroup1Color = [&raw, &style](
+            std::size_t index, int scalar) {
+        const int color = viewStyleDxfAciValue(style.m_colorCmc[index], scalar);
         if (color < std::numeric_limits<std::int16_t>::min()
             || color > std::numeric_limits<std::int16_t>::max())
             return false;
@@ -3357,13 +3375,14 @@ bool overlayDetailViewStyleGroups(DRW_RawDxfObject& raw,
         return insertRawDxfGroup(raw, "AcDbDetailViewStyle", 1,
             DRW_Variant(62, static_cast<std::int32_t>(color)), lexeme);
     };
-    if (insertIdentifierColor && !insertGroup1Color(style.m_identifierColor))
+    if (insertIdentifierColor
+        && !insertGroup1Color(0u, style.m_identifierColor))
         return false;
     if (insertArrowColor) {
         if (missing(IdentifierColor) && !insertIdentifierColor
-            && !insertGroup1Color(style.m_identifierColor))
+            && !insertGroup1Color(0u, style.m_identifierColor))
             return false;
-        if (!insertGroup1Color(style.m_arrowSymbolColor))
+        if (!insertGroup1Color(1u, style.m_arrowSymbolColor))
             return false;
     }
     int lastMissingGroup1Double = -1;
@@ -3458,7 +3477,9 @@ bool overlayDetailViewStyleGroups(DRW_RawDxfObject& raw,
         if (!insertGroup4Handle(style.m_borderLineTypeHandle))
             return false;
     }
-    const auto insertGroup4Color = [&raw](int color) {
+    const auto insertGroup4Color = [&raw, &style](
+            std::size_t index, int scalar) {
+        const int color = viewStyleDxfAciValue(style.m_colorCmc[index], scalar);
         if (color < std::numeric_limits<std::int16_t>::min()
             || color > std::numeric_limits<std::int16_t>::max())
             return false;
@@ -3467,13 +3488,13 @@ bool overlayDetailViewStyleGroups(DRW_RawDxfObject& raw,
             DRW_Variant(62, static_cast<std::int32_t>(color)), lexeme);
     };
     if (insertConnectionLineColor
-        && !insertGroup4Color(style.m_connectionLineColor))
+        && !insertGroup4Color(4u, style.m_connectionLineColor))
         return false;
     if (insertBorderLineColor) {
         if (missing(ConnectionLineColor) && !insertConnectionLineColor
-            && !insertGroup4Color(style.m_connectionLineColor))
+            && !insertGroup4Color(4u, style.m_connectionLineColor))
             return false;
-        if (!insertGroup4Color(style.m_borderLineColor))
+        if (!insertGroup4Color(5u, style.m_borderLineColor))
             return false;
     }
     int lastMissingGroup4Weight = -1;
@@ -3505,13 +3526,13 @@ bool overlayDetailViewStyleGroups(DRW_RawDxfObject& raw,
             return false;
     }
     if (insertViewLabelTextColor) {
-        if (style.m_viewLabelTextColor
-                < std::numeric_limits<std::int16_t>::min()
-            || style.m_viewLabelTextColor
+        const int color = viewStyleDxfAciValue(
+            style.m_colorCmc[3], style.m_viewLabelTextColor);
+        if (color < std::numeric_limits<std::int16_t>::min()
+            || color
                 > std::numeric_limits<std::int16_t>::max()
             || !insertRawDxfGroup(raw, "AcDbDetailViewStyle", 3,
-                DRW_Variant(62, style.m_viewLabelTextColor),
-                std::to_string(style.m_viewLabelTextColor)))
+                DRW_Variant(62, color), std::to_string(color)))
             return false;
     }
     if ((insertIdentifierPlacement
@@ -3526,13 +3547,14 @@ bool overlayDetailViewStyleGroups(DRW_RawDxfObject& raw,
                 std::to_string(style.m_modelEdge))))
         return false;
     if (insertBoundaryLineColor) {
-        if (style.m_boundaryLineColor < std::numeric_limits<std::int16_t>::min()
-            || style.m_boundaryLineColor
+        const int color = viewStyleDxfAciValue(
+            style.m_colorCmc[2], style.m_boundaryLineColor);
+        if (color < std::numeric_limits<std::int16_t>::min()
+            || color
                 > std::numeric_limits<std::int16_t>::max()
             || !insertRawDxfGroup(raw, "AcDbDetailViewStyle", 2,
-                DRW_Variant(62,
-                    static_cast<std::int32_t>(style.m_boundaryLineColor)),
-                std::to_string(style.m_boundaryLineColor)))
+                DRW_Variant(62, static_cast<std::int32_t>(color)),
+                std::to_string(color)))
             return false;
     }
     if (insertBoundaryLineWeight
@@ -3791,23 +3813,30 @@ bool overlaySectionViewStyleGroups(DRW_RawDxfObject& raw,
             if (currentGroup == 1) {
                 const bool first = colorCount++ == 0;
                 mark(first ? IdentifierColor : ArrowColor);
-                const int value = first
-                    ? style.m_identifierColor : style.m_arrowSymbolColor;
+                const std::size_t colorIndex = first ? 0u : 1u;
+                const int value = viewStyleDxfAciValue(
+                    style.m_colorCmc[colorIndex], first
+                    ? style.m_identifierColor : style.m_arrowSymbolColor);
                 if (!setRawDxfInteger(group, value)) return false;
             } else if (currentGroup == 2) {
                 const bool first = colorCount++ == 0;
                 mark(first ? PlaneLineColor : BendLineColor);
-                const int value = first
-                    ? style.m_planeLineColor : style.m_bendLineColor;
+                const std::size_t colorIndex = first ? 2u : 3u;
+                const int value = viewStyleDxfAciValue(
+                    style.m_colorCmc[colorIndex], first
+                    ? style.m_planeLineColor : style.m_bendLineColor);
                 if (!setRawDxfInteger(group, value)) return false;
             } else if (currentGroup == 3) {
                 mark(ViewLabelTextColor);
-                if (!setRawDxfInteger(group, style.m_viewLabelTextColor)) return false;
+                if (!setRawDxfInteger(group, viewStyleDxfAciValue(
+                        style.m_colorCmc[4], style.m_viewLabelTextColor))) return false;
             } else if (currentGroup == 4) {
                 const bool first = colorCount++ == 0;
                 mark(first ? HatchColor : HatchBackgroundColor);
-                const int value = first
-                    ? style.m_hatchColor : style.m_hatchBackgroundColor;
+                const std::size_t colorIndex = first ? 5u : 6u;
+                const int value = viewStyleDxfAciValue(
+                    style.m_colorCmc[colorIndex], first
+                    ? style.m_hatchColor : style.m_hatchBackgroundColor);
                 if (!setRawDxfInteger(group, value)) return false;
             }
             break;
@@ -4325,7 +4354,9 @@ bool overlaySectionViewStyleGroups(DRW_RawDxfObject& raw,
             && !insertRawDxfTextGroup(raw, "AcDbSectionViewStyle", 4,
                                       style.m_hatchPattern)))
         return false;
-    const auto insertGroup4Color = [&raw](int color) {
+    const auto insertGroup4Color = [&raw, &style](
+            std::size_t index, int scalar) {
+        const int color = viewStyleDxfAciValue(style.m_colorCmc[index], scalar);
         if (color < std::numeric_limits<std::int16_t>::min()
             || color > std::numeric_limits<std::int16_t>::max())
             return false;
@@ -4333,13 +4364,13 @@ bool overlaySectionViewStyleGroups(DRW_RawDxfObject& raw,
         return insertRawDxfGroup(raw, "AcDbSectionViewStyle", 4,
             DRW_Variant(62, static_cast<std::int32_t>(color)), lexeme);
     };
-    if (insertHatchColor && !insertGroup4Color(style.m_hatchColor))
+    if (insertHatchColor && !insertGroup4Color(5u, style.m_hatchColor))
         return false;
     if (insertHatchBackgroundColor) {
         if (missing(HatchColor) && !insertHatchColor
-            && !insertGroup4Color(style.m_hatchColor))
+            && !insertGroup4Color(5u, style.m_hatchColor))
             return false;
-        if (!insertGroup4Color(style.m_hatchBackgroundColor))
+        if (!insertGroup4Color(6u, style.m_hatchBackgroundColor))
             return false;
     }
     if (insertHatchScale) {
@@ -4524,7 +4555,9 @@ bool overlaySectionViewStyleGroups(DRW_RawDxfObject& raw,
                 return false;
         }
     }
-    const auto insertGroup1Color = [&raw](int color) {
+    const auto insertGroup1Color = [&raw, &style](
+            std::size_t index, int scalar) {
+        const int color = viewStyleDxfAciValue(style.m_colorCmc[index], scalar);
         if (color < std::numeric_limits<std::int16_t>::min()
             || color > std::numeric_limits<std::int16_t>::max())
             return false;
@@ -4533,13 +4566,13 @@ bool overlaySectionViewStyleGroups(DRW_RawDxfObject& raw,
             DRW_Variant(62, static_cast<std::int32_t>(color)), lexeme);
     };
     if (insertIdentifierColor
-        && !insertGroup1Color(style.m_identifierColor))
+        && !insertGroup1Color(0u, style.m_identifierColor))
         return false;
     if (insertArrowColor) {
         if (missing(IdentifierColor) && !insertIdentifierColor
-            && !insertGroup1Color(style.m_identifierColor))
+            && !insertGroup1Color(0u, style.m_identifierColor))
             return false;
-        if (!insertGroup1Color(style.m_arrowSymbolColor))
+        if (!insertGroup1Color(1u, style.m_arrowSymbolColor))
             return false;
     }
     const int lastMissingGroup2Handle = insertBendLineType ? 1
@@ -4563,7 +4596,9 @@ bool overlaySectionViewStyleGroups(DRW_RawDxfObject& raw,
                 return false;
         }
     }
-    const auto insertGroup2Color = [&raw](int color) {
+    const auto insertGroup2Color = [&raw, &style](
+            std::size_t index, int scalar) {
+        const int color = viewStyleDxfAciValue(style.m_colorCmc[index], scalar);
         if (color < std::numeric_limits<std::int16_t>::min()
             || color > std::numeric_limits<std::int16_t>::max())
             return false;
@@ -4572,13 +4607,13 @@ bool overlaySectionViewStyleGroups(DRW_RawDxfObject& raw,
             DRW_Variant(62, static_cast<std::int32_t>(color)), lexeme);
     };
     if (insertPlaneLineColor
-        && !insertGroup2Color(style.m_planeLineColor))
+        && !insertGroup2Color(2u, style.m_planeLineColor))
         return false;
     if (insertBendLineColor) {
         if (missing(PlaneLineColor) && !insertPlaneLineColor
-            && !insertGroup2Color(style.m_planeLineColor))
+            && !insertGroup2Color(2u, style.m_planeLineColor))
             return false;
-        if (!insertGroup2Color(style.m_bendLineColor))
+        if (!insertGroup2Color(3u, style.m_bendLineColor))
             return false;
     }
     const auto insertGroup2Long = [&raw](std::int32_t value) {
@@ -4694,13 +4729,13 @@ bool overlaySectionViewStyleGroups(DRW_RawDxfObject& raw,
             return false;
     }
     if (insertViewLabelTextColor) {
-        if (style.m_viewLabelTextColor
-                < std::numeric_limits<std::int16_t>::min()
-            || style.m_viewLabelTextColor
+        const int color = viewStyleDxfAciValue(
+            style.m_colorCmc[4], style.m_viewLabelTextColor);
+        if (color < std::numeric_limits<std::int16_t>::min()
+            || color
                 > std::numeric_limits<std::int16_t>::max()
             || !insertRawDxfGroup(raw, "AcDbSectionViewStyle", 3,
-                DRW_Variant(62, style.m_viewLabelTextColor),
-                std::to_string(style.m_viewLabelTextColor)))
+                DRW_Variant(62, color), std::to_string(color)))
             return false;
     }
     int lastMissingGroup3Double = insertViewLabelOffset ? 1
@@ -8168,29 +8203,42 @@ bool dx_iface::writeDetailViewStyleRaw(DRW_RawDxfObject* raw,
                 || typed->handle == 0 || typed->handle == DRW::NoHandle
                 || typed->parentHandle == 0
                 || typed->parentHandle == DRW::NoHandle
-                || typed->reactorCount() != 0
-                || !typed->reactorHandles.empty()
-                || typed->extensionDictionaryFlag() != 0
-                || typed->xDictHandle != 0
+                || typed->reactorCount() > 1
+                || (typed->reactorCount() == 1u
+                    && typed->reactorHandles
+                        != std::vector<std::uint32_t>{
+                            static_cast<std::uint32_t>(
+                                typed->parentHandle)})
+                || typed->extensionDictionaryFlag() > 1u
+                || (typed->xDictHandle == DRW::NoHandle
+                    && typed->extensionDictionaryFlag() != 0u)
                 || typed->hasDataStorageBinaryData()
                 || !typed->extData.empty() || !typed->appData.empty()
                 || !typed->pendingAppIdResolutions.empty()
-                || !typed->pendingLayerRefResolutions.empty())
+                || !typed->pendingLayerRefResolutions.empty()) {
                 return false;
+            }
             output.name = "DETAILVIEWSTYLE";
             output.handle = typed->handle;
             output.parentHandle = typed->parentHandle;
             output.m_version = cData->sourceVersion;
             output.groups.emplace_back(5, proxyHandleString(typed->handle));
+            if (typed->reactorCount() == 1u) {
+                output.groups.emplace_back(102, "{ACAD_REACTORS");
+                output.groups.emplace_back(
+                    330, proxyHandleString(typed->reactorHandles.front()));
+                output.groups.emplace_back(102, "}");
+            }
+            if (typed->xDictHandle != 0u) {
+                output.groups.emplace_back(102, "{ACAD_XDICTIONARY");
+                output.groups.emplace_back(
+                    360, proxyHandleString(typed->xDictHandle));
+                output.groups.emplace_back(102, "}");
+            }
             output.groups.emplace_back(330,
                                        proxyHandleString(typed->parentHandle));
             output.groups.emplace_back(100, "AcDbModelDocViewStyle");
             output.groups.emplace_back(100, "AcDbDetailViewStyle");
-            // Overlay the class header through recognized default slots; the
-            // header insertion helper intentionally requires an unambiguous
-            // existing field context when preserving raw carriers.
-            output.groups.emplace_back(70, 0);
-            output.groups.emplace_back(90, 0);
         } else {
             if (raw->name != "DETAILVIEWSTYLE"
                 && raw->name != "ACDBDETAILVIEWSTYLE")
@@ -8220,10 +8268,15 @@ bool dx_iface::writeSectionViewStyleRaw(DRW_RawDxfObject* raw,
                 || typed->handle == 0 || typed->handle == DRW::NoHandle
                 || typed->parentHandle == 0
                 || typed->parentHandle == DRW::NoHandle
-                || typed->reactorCount() != 0
-                || !typed->reactorHandles.empty()
-                || typed->extensionDictionaryFlag() != 0
-                || typed->xDictHandle != 0
+                || typed->reactorCount() > 1
+                || (typed->reactorCount() == 1u
+                    && typed->reactorHandles
+                        != std::vector<std::uint32_t>{
+                            static_cast<std::uint32_t>(
+                                typed->parentHandle)})
+                || typed->extensionDictionaryFlag() > 1u
+                || (typed->xDictHandle == DRW::NoHandle
+                    && typed->extensionDictionaryFlag() != 0u)
                 || typed->hasDataStorageBinaryData()
                 || !typed->extData.empty() || !typed->appData.empty()
                 || !typed->pendingAppIdResolutions.empty()
@@ -8234,12 +8287,22 @@ bool dx_iface::writeSectionViewStyleRaw(DRW_RawDxfObject* raw,
             output.parentHandle = typed->parentHandle;
             output.m_version = cData->sourceVersion;
             output.groups.emplace_back(5, proxyHandleString(typed->handle));
+            if (typed->reactorCount() == 1u) {
+                output.groups.emplace_back(102, "{ACAD_REACTORS");
+                output.groups.emplace_back(
+                    330, proxyHandleString(typed->reactorHandles.front()));
+                output.groups.emplace_back(102, "}");
+            }
+            if (typed->xDictHandle != 0u) {
+                output.groups.emplace_back(102, "{ACAD_XDICTIONARY");
+                output.groups.emplace_back(
+                    360, proxyHandleString(typed->xDictHandle));
+                output.groups.emplace_back(102, "}");
+            }
             output.groups.emplace_back(330,
                                        proxyHandleString(typed->parentHandle));
             output.groups.emplace_back(100, "AcDbModelDocViewStyle");
             output.groups.emplace_back(100, "AcDbSectionViewStyle");
-            output.groups.emplace_back(70, 0);
-            output.groups.emplace_back(90, 0);
             // The overlay uses the DXF occurrence grammar for group-4 hatch
             // values: scale, transparency, declared angle count, then angles.
             // Seed the empty/default count slots so typed angle vectors can

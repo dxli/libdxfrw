@@ -17,13 +17,15 @@
       "count": 74,
       "customClassCount": 68,
       "fixedTypeCount": 6,
-      "outputQualified": 58,
+      "outputQualified": 62,
       "outputQualifiedByRecord": {
         "VISUALSTYLE": 25,
         "SCALE": 17,
         "DICTIONARYVAR": 12,
         "MATERIAL": 3,
-        "DBCOLOR": 1
+        "DBCOLOR": 1,
+        "ACDBSECTIONVIEWSTYLE": 2,
+        "ACDBDETAILVIEWSTYLE": 2
       },
       "byRecord": {
         "VISUALSTYLE": 25,
@@ -50,9 +52,9 @@
       },
       "typedPayloadMatches": 112,
       "opaquePayloadMatches": 0,
-      "outputQualified": 63
+      "outputQualified": 73
     },
-    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. Bounded physical AC1021 routes qualify 25 typed VISUALSTYLE records plus their 25 extension dictionaries and 25 XRECORDs (50 standard frames), 17 rooted SCALE records, 12 rooted DICTIONARYVAR records, three MATERIAL records with their owner/extension dictionaries and seven XRECORDs (11 additional standard frames), and one DBCOLOR record with its ACAD_COLOR owner dictionary and source-bound ACAD APPID row (two additional standard frames). The MATERIAL and DBCOLOR slices check selected ASCII/Binary output, typed and source payload readback, atomic refusal and retry. The remaining 16 opaque carriers and 49 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. Bounded physical AC1021 routes now qualify 62 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, two ACDBSECTIONVIEWSTYLE, and two ACDBDETAILVIEWSTYLE. They qualify 73 standard-object frames, including the selected VisualStyle, MATERIAL and DBCOLOR dependencies plus the two ModelDocViewStyle root dictionaries, four extension dictionaries and four XRECORDs. These are selected graph routes with ASCII/Binary output and readback; MATERIAL, DBCOLOR and ModelDocViewStyle also check their applicable retained extension/EED payloads and transaction refusal/retry. The remaining 12 opaque carriers and 39 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -93,7 +95,7 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Continue with an inventory-backed source family whose typed parser and writer route already exist, starting with ACDBSECTIONVIEWSTYLE/ACDBDETAILVIEWSTYLE or another DBCOLOR producer/version profile. Require exact root/dependency closure and fresh ASCII/Binary readback, and keep unqualified frames and whole-source output refused.",
+  "nextAction": "Continue with remaining unqualified source/object frames and graph dependencies; the selected style graph does not qualify whole-source conversion or native semantics.",
   "materialCandidateBoundary": {
     "record": "MATERIAL",
     "observedCount": 3,
@@ -107,5 +109,18 @@
     "selector": "--dbcolor-physical-eed-source /Users/dli/doc/dwg/children-room-decoration.dwg",
     "result": "PASS. The selected projection includes the NOD ACAD_COLOR root, its one-entry dictionary, one typed color-book DBCOLOR, the source-bound ACAD APPID row, and all 13 source EED tuples. ASCII/Binary output and fresh readback verify RGB/book/name, key and target, owner/reactor roles, APPID and EED payload. Late color and dictionary mutation plus an invalid key refuse atomically with destination preservation; the same writer retries after restoration. DWG-only CMC metadata is not claimed as DXF-preserved semantics. Selected graph only; see the dedicated DBCOLOR receipt.",
     "receipt": "docs/research/p4-ac1021-dbcolor-physical-selected-output-2026-11-06.json"
+  },
+  "modelDocViewStyleCandidateBoundary": {
+    "record": "ACDBDETAILVIEWSTYLE / ACDBSECTIONVIEWSTYLE",
+    "observedCount": 4,
+    "handles": [
+      "0x18081",
+      "0x18082",
+      "0x21A",
+      "0x21C"
+    ],
+    "selector": "--modeldoc-view-style-ac1021-source-profile /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "result": "PASS for the selected AC1021 graph in ASCII and Binary. The exact projection contains two NOD-rooted style dictionaries, four DETAIL/SECTIONVIEWSTYLE records, four extension dictionaries and four XRECORDs. Fresh typed readback checks NOD keys, style identities/owners/xDict links, all dictionary key/target edges, XRECORD owner/reactor and payload values, and CMC NONE -> DXF 257 projection. A post-OBJECTS std::bad_alloc preserves the destination sentinel; the same adapter then retries successfully. Source graph and field provenance remain one unauthenticated local producer profile only.",
+    "receipt": "docs/research/p4-ac1021-modeldoc-view-style-physical-source-profile-2026-11-06.json"
   }
 }

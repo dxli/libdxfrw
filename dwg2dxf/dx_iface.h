@@ -2589,11 +2589,13 @@ public:
             const bool dxfCarrierStyle =
                 cData->sourceFormat == dx_source_format::DXF
                 && rawMatches == 1u && rawStyle != nullptr;
+            const bool styleImportValid =
+                cData->hasSingleSuccessfulModelDocViewStyleImport();
             if ((!typedDwgStyle && !dxfCarrierStyle)
                 || !detailViewStyleHandles.insert(handle).second
                 || (typedDwgStyle && rawMatches != 0u)
                 || typedMatches != 1u || typedStyle == nullptr
-                || !cData->hasSingleSuccessfulModelDocViewStyleImport()
+                || !styleImportValid
                 || !writeDetailViewStyleRaw(
                     typedDwgStyle ? nullptr : rawStyle, typedStyle)) {
                 dxfW->writeRawDxfObject(nullptr);
