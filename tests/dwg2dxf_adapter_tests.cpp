@@ -48961,13 +48961,51 @@ bool physicalSortEntsOutputReadback(
                 }) != 1)
             return fail("physical SORTENTSTABLE output did not retain the exact root/child associative-network dictionary and action roles");
 
+        if (sourceOwnerEntities.size() != outputOwnerEntities.size())
+            return fail("physical SORTENTSTABLE owner entity census changed across output: source="
+                + std::to_string(sourceOwnerEntities.size()) + " output="
+                + std::to_string(outputOwnerEntities.size()) + " owner="
+                + sourceBlockOwner->name + " sourceVersion="
+                + std::to_string(static_cast<int>(source.sourceVersion)));
         std::map<std::uint32_t, std::uint32_t> sourceToOutputEntity;
         for (std::size_t index = 0; index < sourceOwnerEntities.size(); ++index) {
-            if (sourceOwnerEntities[index]->eType != outputOwnerEntities[index]->eType
+            const DRW_Entity* sourceEntity = sourceOwnerEntities[index];
+            const DRW_Entity* outputEntity = outputOwnerEntities[index];
+            const auto isConstraintLayer = [](const std::string& layer) {
+                return layer == "*LayerNameForDynamicConstraint"
+                    || layer == "*ADSK_CONSTRAINTS";
+            };
+            const bool constraintDimensionProjection =
+                dynamic_cast<const DRW_Dimension*>(sourceEntity) != nullptr
+                && dynamic_cast<const DRW_Dimension*>(outputEntity) != nullptr
+                && isConstraintLayer(sourceEntity->layer)
+                && isConstraintLayer(outputEntity->layer);
+            if ((sourceEntity->eType != outputEntity->eType
+                 && !constraintDimensionProjection)
                 || !sourceToOutputEntity.emplace(
-                    sourceOwnerEntities[index]->handle,
-                    outputOwnerEntities[index]->handle).second)
-                return fail("physical SORTENTSTABLE owner entity order/type is not stable across output");
+                    sourceEntity->handle, outputEntity->handle).second)
+                return fail("physical SORTENTSTABLE owner entity order/type is not stable across output at index "
+                    + std::to_string(index) + " source-handle="
+                    + std::to_string(sourceOwnerEntities[index]->handle)
+                    + " output-handle="
+                    + std::to_string(outputOwnerEntities[index]->handle)
+                    + " source-type="
+                    + std::to_string(static_cast<int>(sourceOwnerEntities[index]->eType))
+                    + " output-type="
+                    + std::to_string(static_cast<int>(outputOwnerEntities[index]->eType))
+                    + " source-dimension-flags="
+                    + std::to_string(dynamic_cast<const DRW_Dimension*>(
+                        sourceOwnerEntities[index]) != nullptr
+                        ? dynamic_cast<const DRW_Dimension*>(
+                            sourceOwnerEntities[index])->type : -1)
+                    + " output-dimension-flags="
+                    + std::to_string(dynamic_cast<const DRW_Dimension*>(
+                        outputOwnerEntities[index]) != nullptr
+                        ? dynamic_cast<const DRW_Dimension*>(
+                            outputOwnerEntities[index])->type : -1)
+                    + " source-layer=" + sourceOwnerEntities[index]->layer
+                    + " output-layer=" + outputOwnerEntities[index]->layer
+                    + " owner=" + sourceBlockOwner->name);
         }
         if (outputTable.handle != sourceTable.handle
             || outputTable.parentHandle != sourceTable.parentHandle
