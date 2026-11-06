@@ -70739,12 +70739,19 @@ bool dx_iface::inspectDwgViewportXrecords(
     m_dwgViewportXrecordsInspected = false;
     if (cData == nullptr || dxfW == nullptr
         || cData->sourceFormat != dx_source_format::DWG
-        || cData->sourceVersion != DRW::AC1024
-        || view.version != DRW::AC1024)
+        || (cData->sourceVersion != DRW::AC1021
+            && cData->sourceVersion != DRW::AC1024)
+        || view.version != cData->sourceVersion)
         return true;
 
-    constexpr std::array<std::uint32_t, 2> viewportHandles{{0x28Bu, 0x290u}};
-    constexpr std::array<std::uint32_t, 2> expectedXrecordHandles{{0x28Du, 0x292u}};
+    const std::array<std::uint32_t, 2> viewportHandles =
+        cData->sourceVersion == DRW::AC1021
+            ? std::array<std::uint32_t, 2>{{0x266u, 0x26Au}}
+            : std::array<std::uint32_t, 2>{{0x28Bu, 0x290u}};
+    const std::array<std::uint32_t, 2> expectedXrecordHandles =
+        cData->sourceVersion == DRW::AC1021
+            ? std::array<std::uint32_t, 2>{{0x268u, 0x26Cu}}
+            : std::array<std::uint32_t, 2>{{0x28Du, 0x292u}};
     for (std::size_t index = 0u; index < viewportHandles.size(); ++index) {
         const dx_data::StandardDwgFrameKey key{
             cData->importGeneration, viewportHandles[index]};
@@ -70946,7 +70953,8 @@ bool dx_iface::inspectDwgViewportXrecords(
 bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
     if (cData == nullptr || dxfW == nullptr
         || cData->sourceFormat != dx_source_format::DWG
-        || cData->sourceVersion != DRW::AC1024
+        || (cData->sourceVersion != DRW::AC1021
+            && cData->sourceVersion != DRW::AC1024)
         || !cData->dwgReadOutcome.attempted)
         return true;
 
@@ -70972,6 +70980,9 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
         {0x290u, 2, 2, "Layout1"}}};
     constexpr std::array<ExpectedViewport, 1> titleBlockProfile{{
         {0x52u, 1, 1, "Architectural Title Block"}}};
+    constexpr std::array<ExpectedViewport, 2> ac1021Profile{{
+        {0x266u, 1, 1, "dwgmodels.com"},
+        {0x26Au, 2, 2, "dwgmodels.com"}}};
     const auto matchesProfile = [&type34Entities](const auto& profile) {
         return type34Entities.size() == profile.size()
             && std::all_of(profile.begin(), profile.end(),
@@ -70979,18 +70990,26 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
                     return type34Entities.count(item.handle) == 1u;
                 });
     };
-    const bool mechanicalSource = matchesProfile(mechanicalProfile);
+    const bool ac1021Source = cData->sourceVersion == DRW::AC1021
+        && matchesProfile(ac1021Profile);
+    const bool mechanicalSource = cData->sourceVersion == DRW::AC1024
+        && matchesProfile(mechanicalProfile);
     const bool titleBlockSource = matchesProfile(titleBlockProfile);
     // Do not generalize from oType alone. The single-title-viewport route is
     // accepted only without an extension dictionary; that would add an
     // unqualified child graph and must stay refused until separately proved.
-    if (!mechanicalSource && !titleBlockSource)
+    if (!ac1021Source && !mechanicalSource && !titleBlockSource)
         return true;
-    const ExpectedViewport* expected = mechanicalSource
-        ? mechanicalProfile.data() : titleBlockProfile.data();
-    const std::size_t expectedCount = mechanicalSource
-        ? mechanicalProfile.size() : titleBlockProfile.size();
-    if (mechanicalSource && !m_dwgViewportXrecordsInspected)
+    const ExpectedViewport* expected = ac1021Source
+        ? ac1021Profile.data()
+        : mechanicalSource ? mechanicalProfile.data()
+                           : titleBlockProfile.data();
+    const std::size_t expectedCount = ac1021Source
+        ? ac1021Profile.size()
+        : mechanicalSource ? mechanicalProfile.size()
+                           : titleBlockProfile.size();
+    if ((ac1021Source || mechanicalSource)
+        && !m_dwgViewportXrecordsInspected)
         return true;
 
     for (std::size_t expectedIndex = 0u;
@@ -71003,7 +71022,7 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
             || frame->second.m_objectType != 34
             || !frame->second.m_isEntity
             || frame->second.m_handle != item.handle
-            || frame->second.m_version != DRW::AC1024
+            || frame->second.m_version != cData->sourceVersion
             || cData->m_opaqueDwgSourceFrameIdentities.count(key) != 1u)
             return false;
 
@@ -71106,7 +71125,7 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
             || !recordOpaqueDwgOutputQualification(item.handle))
             return false;
     }
-    if (!mechanicalSource)
+    if (!ac1021Source && !mechanicalSource)
         return m_dwgViewportXrecordOutputProofs.empty();
     if (m_dwgViewportXrecordOutputProofs.size() != 2u)
         return false;

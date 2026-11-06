@@ -49410,8 +49410,12 @@ bool physicalViewportOutputReadback(
     dx_data source;
     if (!sourceReader.fileImport(sourcePath.string(), &source, false)
         || source.sourceFormat != dx_source_format::DWG
-        || source.sourceVersion != DRW::AC1024)
-        return fail("physical viewport source is not the admitted AC1024 drawing");
+        || (source.sourceVersion != DRW::AC1021
+            && source.sourceVersion != DRW::AC1024))
+        return fail("physical viewport source is outside the admitted AC1021/AC1024 profiles");
+    const bool ac1021Source = source.sourceVersion == DRW::AC1021;
+    const DRW::Version outputVersion = ac1021Source
+        ? DRW::AC1021 : DRW::AC1024;
 
     struct LocatedViewport {
         const DRW_Viewport* viewport{nullptr};
@@ -49420,15 +49424,22 @@ bool physicalViewportOutputReadback(
     };
     std::vector<std::uint32_t> expectedHandles;
     std::vector<std::pair<std::uint32_t, int>> expectedOpaqueCallbacks;
-    if (source.dwgReadOutcome.opaqueViewCallbacks == 228u) {
+    if (ac1021Source
+        && source.dwgReadOutcome.opaqueViewCallbacks == 186u) {
+        expectedHandles = {0x266u, 0x26Au};
+        expectedOpaqueCallbacks = {
+            {0x266u, 34}, {0x26Au, 34}, {0x268u, 79}, {0x26Cu, 79}};
+    } else if (!ac1021Source
+               && source.dwgReadOutcome.opaqueViewCallbacks == 228u) {
         expectedHandles = {0x28Bu, 0x290u};
         expectedOpaqueCallbacks = {
             {0x28Bu, 34}, {0x290u, 34}, {0x28Du, 79}, {0x292u, 79}};
-    } else if (source.dwgReadOutcome.opaqueViewCallbacks == 109u) {
+    } else if (!ac1021Source
+               && source.dwgReadOutcome.opaqueViewCallbacks == 109u) {
         expectedHandles = {0x52u};
         expectedOpaqueCallbacks = {{0x52u, 34}};
     } else {
-        return fail("physical VIEWPORT witness is outside the two admitted AC1024 source censuses");
+        return fail("physical VIEWPORT witness is outside the admitted source censuses");
     }
     for (const auto& callback : expectedOpaqueCallbacks) {
         const bool entity = callback.second == 34;
@@ -49470,7 +49481,6 @@ bool physicalViewportOutputReadback(
     };
     if (!findViewports(source, sourceViewports))
         return fail("opaque-census VIEWPORT handles are not unique typed block members");
-
     const auto sameDouble = [](double lhs, double rhs) {
         return lhs == rhs;
     };
@@ -49551,6 +49561,37 @@ bool physicalViewportOutputReadback(
             && actual.m_sunHandle == expected.m_sunHandle
             && actual.frozenLayerHandles == expected.frozenLayerHandles;
     };
+    const auto sameVariant = [&sameCoord](const DRW_Variant& lhs,
+                                          const DRW_Variant& rhs) {
+        if (lhs.code() != rhs.code() || lhs.type() != rhs.type())
+            return false;
+        switch (lhs.type()) {
+        case DRW_Variant::STRING:
+            return lhs.content.s != nullptr && rhs.content.s != nullptr
+                && *lhs.content.s == *rhs.content.s;
+        case DRW_Variant::INTEGER:
+            return lhs.i_val() == rhs.i_val();
+        case DRW_Variant::INTEGER64:
+            return lhs.i64_val() == rhs.i64_val();
+        case DRW_Variant::DOUBLE:
+            return lhs.d_val() == rhs.d_val();
+        case DRW_Variant::COORD:
+            return lhs.coord() != nullptr && rhs.coord() != nullptr
+                && sameCoord(*lhs.coord(), *rhs.coord());
+        case DRW_Variant::BINARY:
+            return lhs.binary() != nullptr && rhs.binary() != nullptr
+                && *lhs.binary() == *rhs.binary();
+        case DRW_Variant::INVALID:
+            return true;
+        }
+        return false;
+    };
+    const auto sameVariants = [&sameVariant](
+            const std::vector<DRW_Variant>& lhs,
+            const std::vector<DRW_Variant>& rhs) {
+        return lhs.size() == rhs.size()
+            && std::equal(lhs.begin(), lhs.end(), rhs.begin(), sameVariant);
+    };
     const auto uniqueDictionary = [](const dx_data& data,
                                      std::uint32_t handle) {
         const DRW_Dictionary* found = nullptr;
@@ -49613,6 +49654,71 @@ bool physicalViewportOutputReadback(
         }
         return found;
     };
+    if (ac1021Source) {
+        const DRW_Layout* layout =
+            uniqueLayoutByName(source, "dwgmodels.com");
+        if (layout == nullptr || layout->handle != 0xD7u
+            || layout->viewportCount != 2
+            || layout->viewportHandles.size() != 2u
+            || std::count(layout->viewportHandles.begin(),
+                          layout->viewportHandles.end(), 0x266u) != 1
+            || std::count(layout->viewportHandles.begin(),
+                          layout->viewportHandles.end(), 0x26Au) != 1)
+            return fail("AC1021 dwgmodels.com LAYOUT does not own the exact two VIEWPORT handles");
+        const DRW_Block_Record* owner = uniqueBlockRecord(
+            source, layout->paperSpaceBlockRecordHandle.ref);
+        if (owner == nullptr || owner->layoutHandle != layout->handle
+            || owner->name != "*Paper_Space")
+            return fail("AC1021 paper-space BLOCK_RECORD does not point back to dwgmodels.com");
+        for (const auto& located : sourceViewports) {
+            const DRW_Viewport& viewport = *located.viewport;
+            const std::uint32_t expectedDictionary =
+                viewport.handle == 0x266u ? 0x267u : 0x26Bu;
+            const std::uint32_t expectedXrecord =
+                viewport.handle == 0x266u ? 0x268u : 0x26Cu;
+            const DRW_Dictionary* extension = uniqueDictionary(
+                source, expectedDictionary);
+            const DRW_XRecord* xrecord = uniqueXRecord(
+                source, expectedXrecord);
+            const std::size_t styleMatches = static_cast<std::size_t>(
+                std::count_if(source.visualStyles.begin(),
+                    source.visualStyles.end(), [&viewport](
+                            const DRW_VisualStyle& style) {
+                        return style.handle == viewport.visualStyleHandle;
+                    }));
+            const std::size_t layerMatches = static_cast<std::size_t>(
+                std::count_if(source.layers.begin(), source.layers.end(),
+                    [&viewport](const DRW_Layer& layer) {
+                        return layer.name == viewport.layer;
+                    }));
+            if (uniqueLayoutForViewport(source, viewport.handle) != layout)
+                return fail("AC1021 VIEWPORT is not uniquely listed by dwgmodels.com");
+            if (located.blockName != "*U0"
+                || viewport.space != DRW::PaperSpace
+                || viewport.parentHandle != 0u)
+                return fail("AC1021 VIEWPORT container profile changed: block="
+                    + located.blockName + " main="
+                    + std::to_string(located.mainContainer) + " space="
+                    + std::to_string(static_cast<int>(viewport.space))
+                    + " parent=" + std::to_string(viewport.parentHandle));
+            if (viewport.xDictHandle != expectedDictionary
+                || extension == nullptr
+                || extension->parentHandle != viewport.handle
+                || !extension->hasCompleteDwgEntries()
+                || extension->m_entries.size() != 1u
+                || extension->m_entries.front().m_name
+                    != "ASDK_XREC_ANNOTATION_SCALE_INFO"
+                || extension->m_entries.front().m_handle != expectedXrecord)
+                return fail("AC1021 VIEWPORT extension-dictionary source role changed");
+            if (xrecord == nullptr
+                || xrecord->parentHandle != extension->handle
+                || xrecord->m_dataEntries.empty()
+                || xrecord->m_rawDataValid)
+                return fail("AC1021 VIEWPORT XRECORD source role or payload is unavailable");
+            if (styleMatches != 1u || layerMatches != 1u)
+                return fail("AC1021 VIEWPORT layer or visual-style dependency is missing/ambiguous");
+        }
+    }
     for (const bool binary : {false, true}) {
         const std::size_t initialQualifiedCount =
             DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualificationCount(
@@ -49644,13 +49750,14 @@ bool physicalViewportOutputReadback(
                 return fail("could not seed physical VIEWPORT destination sentinel");
         }
         dx_iface writer;
-        const auto exportStrictComplete = [&]() {
+        const auto exportSelected = [&]() {
             return writer.fileExport(
-                outputPath.string(), DRW::AC1024, binary, &source, false, true,
+                outputPath.string(), outputVersion, binary, &source, false, true,
                 dx_dxfSourceTextPolicy::RequireValidSource,
                 DRW::DxfTextWritePolicy::RequireLossless,
                 dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
-                dx_dwgReadCompletenessPolicy::RequireComplete);
+                ac1021Source ? dx_dwgReadCompletenessPolicy::AllowPartial
+                             : dx_dwgReadCompletenessPolicy::RequireComplete);
         };
         DRW_Viewport* mutableViewport = const_cast<DRW_Viewport*>(
             sourceViewports.front().viewport);
@@ -49658,7 +49765,7 @@ bool physicalViewportOutputReadback(
             return fail("the first census VIEWPORT could not be selected for the refusal control");
         const double originalHeight = mutableViewport->viewHeight;
         mutableViewport->viewHeight = std::numeric_limits<double>::infinity();
-        const bool invalidPayloadRejected = !exportStrictComplete();
+        const bool invalidPayloadRejected = !exportSelected();
         std::ifstream refusedOutput(outputPath, std::ios::binary);
         const std::string refusedContents{
             std::istreambuf_iterator<char>{refusedOutput}, {}};
@@ -49679,7 +49786,7 @@ bool physicalViewportOutputReadback(
         }
         if (qualificationChanged)
             return fail("refused physical VIEWPORT export changed published callback qualifications");
-        if (!exportStrictComplete())
+        if (!exportSelected())
             return fail("corrected physical VIEWPORT source could not retry on the same adapter");
         for (const auto& callback : expectedOpaqueCallbacks) {
             if (!DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualified(
@@ -49689,20 +49796,24 @@ bool physicalViewportOutputReadback(
         const std::size_t qualifiedOpaqueCallbacks =
             DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualificationCount(
                 source);
-        if (source.dwgReadOutcome.opaqueViewCallbacks
-                != (expectedHandles.size() == 2u ? 228u : 109u)
-            || source.dwgReadOutcome.opaqueFramesOutputQualified
-                != source.dwgReadOutcome.opaqueViewCallbacks
-            || qualifiedOpaqueCallbacks
-                != source.dwgReadOutcome.opaqueViewCallbacks)
+        if (!ac1021Source
+            && (source.dwgReadOutcome.opaqueViewCallbacks
+                    != (expectedHandles.size() == 2u ? 228u : 109u)
+                || source.dwgReadOutcome.opaqueFramesOutputQualified
+                    != source.dwgReadOutcome.opaqueViewCallbacks
+                || qualifiedOpaqueCallbacks
+                    != source.dwgReadOutcome.opaqueViewCallbacks))
             return fail("physical VIEWPORT retry did not qualify every source-bound callback in the admitted AC1024 witness");
+        if (ac1021Source
+            && source.dwgReadOutcome.opaqueViewCallbacks != 186u)
+            return fail("physical AC1021 VIEWPORT source census changed during output");
 
         dx_iface outputReader;
         dx_data output;
         if (!outputReader.fileImport(outputPath.string(), &output, false)
             || output.sourceFormat != dx_source_format::DXF
-            || output.sourceVersion != DRW::AC1024)
-            return fail("physical VIEWPORT output did not freshly reimport as AC1024 DXF");
+            || output.sourceVersion != outputVersion)
+            return fail("physical VIEWPORT output did not freshly reimport at its selected DXF version");
         std::vector<LocatedViewport> outputViewports;
         const auto appendOutputViewports = [&outputViewports](
                 const dx_ifaceBlock* block, bool mainContainer) {
@@ -49759,11 +49870,24 @@ bool physicalViewportOutputReadback(
                 source, sourceLayout->paperSpaceBlockRecordHandle.ref);
             const DRW_Block_Record* outputOwner = uniqueBlockRecord(
                 output, outputLayout->paperSpaceBlockRecordHandle.ref);
+            const std::size_t outputStyleMatches = static_cast<std::size_t>(
+                std::count_if(output.visualStyles.begin(),
+                    output.visualStyles.end(), [&outputViewport](
+                            const DRW_VisualStyle& style) {
+                        return style.handle
+                            == outputViewport.visualStyleHandle;
+                    }));
+            const std::size_t outputLayerMatches = static_cast<std::size_t>(
+                std::count_if(output.layers.begin(), output.layers.end(),
+                    [&outputViewport](const DRW_Layer& layer) {
+                        return layer.name == outputViewport.layer;
+                    }));
             if (sourceOwner == nullptr || outputOwner == nullptr
                 || sourceOwner->layoutHandle != sourceLayout->handle
                 || outputOwner->layoutHandle != outputLayout->handle
-                || outputViewport.parentHandle != outputOwner->handle)
-                return fail("physical VIEWPORT owner handle does not resolve to its paper-space BLOCK_RECORD and LAYOUT after readback");
+                || outputViewport.parentHandle != outputOwner->handle
+                || outputStyleMatches != 1u || outputLayerMatches != 1u)
+                return fail("physical VIEWPORT owner, layer, or visual-style target does not resolve after readback");
             const int projectedStatus = static_cast<int>(index + 1u);
             expectedViewportStatusAndIds.emplace(
                 projectedStatus, projectedStatus);
@@ -49807,7 +49931,9 @@ bool physicalViewportOutputReadback(
                         || sourceChild->parentHandle != sourceExtension->handle
                         || outputChild->parentHandle != outputExtension->handle
                         || sourceChild->m_dataEntries.size()
-                            != outputChild->m_dataEntries.size())
+                            != outputChild->m_dataEntries.size()
+                        || !sameVariants(sourceChild->m_dataEntries,
+                                         outputChild->m_dataEntries))
                         return fail("physical VIEWPORT extension dictionary key or XRECORD owner edge changed on output/readback");
                 }
             }
@@ -49821,7 +49947,10 @@ bool physicalViewportOutputReadback(
             return fail("physical VIEWPORT group 68/69 output projection did not produce the ordered paper-space identities");
         std::cerr << "Physical VIEWPORT " << (binary ? "binary" : "ASCII")
                   << " readback passed: " << sourceViewports.size()
-                  << " census source projection(s), full typed "
+                  << " source projection(s), "
+                  << source.dwgReadOutcome.opaqueFramesOutputQualified << '/'
+                  << source.dwgReadOutcome.opaqueViewCallbacks
+                  << " source callbacks qualified, full typed "
                      "view fields, entity-container membership, extension "
                      "dictionary/XRECORD owner edges, derived group 68/69, atomic "
                      "refusal and same-adapter retry.\n";
