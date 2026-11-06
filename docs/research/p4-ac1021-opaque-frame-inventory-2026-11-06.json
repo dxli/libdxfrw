@@ -17,7 +17,7 @@
       "count": 74,
       "customClassCount": 68,
       "fixedTypeCount": 6,
-      "outputQualified": 72,
+      "outputQualified": 73,
       "outputQualifiedByRecord": {
         "VISUALSTYLE": 25,
         "SCALE": 17,
@@ -33,7 +33,8 @@
         "CELLSTYLEMAP": 1,
         "MLINESTYLE": 1,
         "LAYOUT": 2,
-        "VIEWPORT": 2
+        "VIEWPORT": 2,
+        "RASTERVARIABLES": 1
       },
       "byRecord": {
         "VISUALSTYLE": 25,
@@ -62,7 +63,7 @@
       "opaquePayloadMatches": 0,
       "outputQualified": 81
     },
-    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify 72 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, and one CELLSTYLEMAP. They qualify 81 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining two opaque carriers and 31 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify 73 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, and one CELLSTYLEMAP. They qualify 81 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining one opaque carrier and 31 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -103,7 +104,7 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Qualify original physical RASTERVARIABLES 0x2D2 frame binding; the existing route replays fields through a locally authored wrapper and does not yet bind the original source frame to emitted DXF. Then resolve the exact SORTENTSTABLE 0x2DF owner/membership profile. Keep whole-source output, native semantics and producer-wide claims open.",
+  "nextAction": "Resolve the exact SORTENTSTABLE 0x2DF source owner/membership profile and qualify its selected output only if the named-block graph is source-bound. Keep whole-source output, native semantics, producer-wide support, and the 31 unqualified standard-object frames open.",
   "materialCandidateBoundary": {
     "record": "MATERIAL",
     "observedCount": 3,
@@ -165,16 +166,8 @@
   "remainingOpaqueFrames": {
     "source": "/Users/dli/doc/dwg/children-room-decoration.dwg",
     "sourceSha256": "cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce",
-    "evidence": "Current source inventory selector output reconciled with selected-source output qualification. Handles 0xF (ACDBPLACEHOLDER), 0x18 (MLINESTYLE), 0x22 (Model LAYOUT), 0xD7 (dwgmodels.com LAYOUT), 0x266 and 0x26A (VIEWPORT) are output-qualified; two opaque source-frame identities remain unqualified.",
+    "evidence": "Current source inventory selector output reconciled with selected-source output qualification. Handles 0xF (ACDBPLACEHOLDER), 0x18 (MLINESTYLE), 0x22 (Model LAYOUT), 0xD7 (dwgmodels.com LAYOUT), 0x266/0x26A (VIEWPORT), and 0x2D2 (RASTERVARIABLES) have bounded selected-output qualification; one opaque source-frame identity remains unqualified.",
     "frames": [
-      {
-        "handle": "0x2D2",
-        "objectType": 518,
-        "record": "RASTERVARIABLES",
-        "class": "AcDbRasterVariables",
-        "state": "UNQUALIFIED_SOURCE_FRAME",
-        "sourceRoles": "The existing writer bridge replays the physical fields through a locally authored wrapper; it does not bind the original physical source frame to emitted DXF."
-      },
       {
         "handle": "0x2DF",
         "objectType": 522,
@@ -188,7 +181,7 @@
     "inventoryLogSha256": "c23a95e309acbd757994ddcb49b09f12607d552b3e47701cf8891104168fbcbd",
     "mlineStyleTrace": "dwg2dxf -d on the same source; parser trace around object 0x18 identifies STANDARD, flags 0 and two elements; not an independent wire-layout oracle.",
     "mlineStyleTraceLogSha256": "5f8ae476e5febb539ef46a8511662840c0411cc21a3dbf9dcbf85c9a0fa157e7",
-    "limit": "This is a source-inventory and bounded selected-output update only. Two opaque source frames and 31 standard-object frames remain unqualified; aggregate callback transport or matching typed callbacks alone do not qualify serialization."
+    "limit": "This is a source-inventory and bounded selected-output update only. One opaque source frame and 31 standard-object frames remain unqualified; selected projection output does not qualify the whole source drawing, native semantics, or producer-wide support."
   },
   "mLineStyleCandidateBoundary": {
     "record": "MLINESTYLE",
@@ -231,5 +224,22 @@
     },
     "receipt": "docs/research/p4-ac1021-viewport-physical-selected-output-2026-11-06.json",
     "limit": "One unauthenticated local source and a selected graph only. No fixture or derivative is committed; no whole-source conversion, native behavior, producer-wide support, or independent semantic claim."
+  },
+  "rasterVariablesCandidateBoundary": {
+    "record": "RASTERVARIABLES",
+    "observedCount": 1,
+    "handle": "0x2D2",
+    "selector": "--rastervariables-physical-ac1021-direct-nod /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "sourceProfile": "The imported physical AC1021 object is directly rooted by NOD key ACAD_IMAGE_VARS; its owner and sole reactor resolve to NOD handle 0xC. The selected projection retains the authentic source object frame and typed record at handle 0x2D2, plus unchanged source CLASS evidence. It excludes unrelated source objects and layer graphs.",
+    "result": "PASS selected AC1021 same-version ASCII/Binary DXF output and fresh typed readback. The writer publishes output qualification for the original 0x2D2 source identity; readback verifies handle, NOD owner and key, reactor, class version, display frame, quality and units. Invalid typed fields and owner metadata preserve a destination sentinel; corrected state retries successfully on the same adapter.",
+    "validation": {
+      "buildCommand": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4",
+      "selectorCommand": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --rastervariables-physical-ac1021-direct-nod /Users/dli/doc/dwg/children-room-decoration.dwg",
+      "result": "PASS, exit 0; ASCII and Binary output/readback paths both pass.",
+      "testSourceSha256": "3334c18021137740e03a3dac71fa35e11c3bbab5bae99814d09639289338f769",
+      "executableSha256": "4657e9124e5d5aa1bfb8b5c9175096b73c539ee7c56c7b387cf5fdcb838100d9"
+    },
+    "receipt": "docs/research/p4-ac1021-rastervariables-physical-selected-output-2026-11-06.json",
+    "limit": "One unauthenticated local source and selected graph only. The projection intentionally excludes unrelated source objects and layer graphs. It does not establish whole-source conversion, native raster-image semantics, producer-wide support, or independent application interoperability."
   }
 }

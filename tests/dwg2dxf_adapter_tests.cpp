@@ -170,6 +170,158 @@ public:
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
+    static bool selectPhysicalAc1021RasterVariablesGraph(
+            const dx_data& source, dx_data& projection,
+            std::uint32_t handle) {
+        if (source.sourceFormat != dx_source_format::DWG
+            || source.sourceVersion != DRW::AC1021
+            || source.importGeneration == 0u
+            || handle != 0x2D2u
+            || !source.hasNamedObjectDictionary
+            || !source.namedObjectDictionary.hasCompleteDwgEntries()
+            || source.dwgRasterVariables.size() != 1u)
+            return false;
+        const auto rasterKey = dx_data::RasterVariablesKey{
+            source.importGeneration, handle};
+        const auto variables = source.dwgRasterVariables.find(rasterKey);
+        const auto root = std::find_if(
+            source.namedObjectDictionary.m_entries.begin(),
+            source.namedObjectDictionary.m_entries.end(),
+            [handle](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_IMAGE_VARS"
+                    && entry.m_handle == handle;
+            });
+        if (variables == source.dwgRasterVariables.end()
+            || variables->second.parentHandle
+                != source.namedObjectDictionary.handle
+            || variables->second.reactorCount() != 1
+            || variables->second.reactorHandles
+                != std::vector<std::uint32_t>{
+                    source.namedObjectDictionary.handle}
+            || variables->second.extensionDictionaryFlag() != 1u
+            || root == source.namedObjectDictionary.m_entries.end()
+            || std::count_if(
+                source.namedObjectDictionary.m_entries.begin(),
+                source.namedObjectDictionary.m_entries.end(),
+                [handle](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ACAD_IMAGE_VARS"
+                        && entry.m_handle == handle;
+                }) != 1
+            || std::count_if(
+                source.namedObjectDictionary.m_entries.begin(),
+                source.namedObjectDictionary.m_entries.end(),
+                [handle](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_handle == handle;
+                }) != 1)
+            return false;
+        const auto raw = source.m_opaqueDwgSourceFrames.find(rasterKey);
+        if (raw == source.m_opaqueDwgSourceFrames.end()
+            || source.m_opaqueDwgSourceFrameIdentities.count(rasterKey) != 1u
+            || raw->second.m_version != DRW::AC1021
+            || raw->second.m_handle != handle
+            || !raw->second.m_isCustomClass || raw->second.m_isEntity
+            || raw->second.m_className != "AcDbRasterVariables"
+            || raw->second.m_recordName != "RASTERVARIABLES")
+            return false;
+
+        projection.sourceFormat = source.sourceFormat;
+        projection.sourceVersion = source.sourceVersion;
+        projection.importGeneration = source.importGeneration;
+        projection.dwgReadOutcome = source.dwgReadOutcome;
+        projection.dwgReadOutcome.opaqueViewCallbacks = 1u;
+        projection.dwgReadOutcome.opaqueSourceFramesCaptured = 1u;
+        projection.dwgReadOutcome.opaqueFramesOutputQualified = 0u;
+        projection.headerC = source.headerC;
+        projection.dwgClassCoverage = source.dwgClassCoverage;
+        projection.hasNamedObjectDictionary = true;
+        projection.namedObjectDictionary = source.namedObjectDictionary;
+        projection.namedObjectDictionary.m_entries.erase(
+            std::remove_if(
+                projection.namedObjectDictionary.m_entries.begin(),
+                projection.namedObjectDictionary.m_entries.end(),
+                [handle](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name != "ACAD_IMAGE_VARS"
+                        || entry.m_handle != handle;
+                }),
+            projection.namedObjectDictionary.m_entries.end());
+        if (projection.namedObjectDictionary.m_entries.size() != 1u)
+            return false;
+        if (source.namedObjectDictionary.xDictHandle != 0u
+            && source.namedObjectDictionary.xDictHandle != DRW::NoHandle) {
+            const DRW_Dictionary* nodExtension = nullptr;
+            for (const DRW_Dictionary& candidate : source.dictionaries) {
+                if (candidate.handle
+                    != source.namedObjectDictionary.xDictHandle)
+                    continue;
+                if (nodExtension != nullptr)
+                    return false;
+                nodExtension = &candidate;
+            }
+            if (nodExtension == nullptr
+                || nodExtension->parentHandle
+                    != source.namedObjectDictionary.handle)
+                return false;
+            projection.dictionaries.push_back(*nodExtension);
+        }
+        projection.dwgRasterVariables.emplace(rasterKey, variables->second);
+        projection.rasterVariablesRetainedRecords = 1u;
+        projection.rasterVariablesRetainedBytes =
+            source.rasterVariablesRetainedBytes;
+        projection.rasterVariablesCaptureFailed =
+            source.rasterVariablesCaptureFailed;
+
+        // This test projection admits one selected callback. The retained
+        // bytes and CLASS evidence are copied from the physical import, while
+        // unrelated source graphs remain outside the selected output request.
+        projection.m_opaqueDwgSourceFrames.emplace(rasterKey, raw->second);
+        projection.m_opaqueDwgSourceFrameIdentities.insert(rasterKey);
+        projection.m_opaqueDwgSourceFrameRetainedBytes =
+            raw->second.m_rawBytes.size();
+        projection.m_classEvidenceImports = source.m_classEvidenceImports;
+        projection.m_classEvidenceFailure = source.m_classEvidenceFailure;
+        projection.m_classEvidenceAttempt = source.m_classEvidenceAttempt;
+        projection.m_classEvidenceGeneration = source.m_classEvidenceGeneration;
+        projection.m_classEvidenceHighWater = source.m_classEvidenceHighWater;
+        projection.m_classEvidenceOwner = source.m_classEvidenceOwner;
+        projection.m_classEvidenceBytes = source.m_classEvidenceBytes;
+        projection.m_classEvidenceByteLimit = source.m_classEvidenceByteLimit;
+        projection.m_classEvidenceCountLimit = source.m_classEvidenceCountLimit;
+        projection.m_classEvidenceFallback = source.m_classEvidenceFallback;
+        projection.m_classSourceReports = source.m_classSourceReports;
+        projection.m_classSourceFailure = source.m_classSourceFailure;
+        projection.m_classSourceFailureGeneration =
+            source.m_classSourceFailureGeneration;
+
+        // The selected RASTERVARIABLES object has no layer dependencies.
+        // Omitting unrelated layers also omits their separate extension
+        // graphs from this deliberately bounded projection.
+        projection.layers.clear();
+        projection.lineTypes = source.lineTypes;
+        projection.dimStyles = source.dimStyles;
+        projection.textStyles = source.textStyles;
+        projection.appIds = source.appIds;
+        projection.basicTableCaptureFailed = source.basicTableCaptureFailed;
+        projection.basicTableRetainedRecords = source.basicTableRetainedRecords;
+        projection.basicTableRetainedItems = source.basicTableRetainedItems;
+        projection.basicTableRetainedBytes = source.basicTableRetainedBytes;
+        projection.dictionaryRetainedRecords = source.dictionaryRetainedRecords;
+        projection.dictionaryRetainedEntries = source.dictionaryRetainedEntries;
+        projection.dictionaryRetainedBytes = source.dictionaryRetainedBytes;
+        projection.dictionaryCaptureFailed = source.dictionaryCaptureFailed;
+        projection.m_dwgLtypeControlPublication =
+            source.m_dwgLtypeControlPublication;
+        projection.m_dwgLtypeControlGeneration =
+            source.m_dwgLtypeControlGeneration;
+        projection.m_dwgLtypeControlPublicationSeen =
+            source.m_dwgLtypeControlPublicationSeen;
+        projection.m_dwgLtypeControlCaptureFailed =
+            source.m_dwgLtypeControlCaptureFailed;
+        // The selected route has no selected standard-object dependency.
+        // Those independent typed objects remain outside this projection.
+        return projection.hasCompleteOpaqueDwgSourceCapture()
+            && projection.hasUnchangedDwgClassEvidence();
+    }
+
     static bool selectPhysicalAc1021TableStyleGraph(
             const dx_data& source, dx_data& projection) {
         if (source.sourceFormat != dx_source_format::DWG
@@ -75573,10 +75725,6 @@ bool rasterVariablesDwgAdapterTransport(
                 || revision == DRW::AC1024))
             return true;
 
-        // Bind the physical producer's decoded record to a locally authored,
-        // dependency-closed DWG wrapper. This qualifies that captured profile
-        // through the writer and DXF serializer without claiming whole-source
-        // conversion of the physical drawing.
         if (!source->second.appData.empty() || !source->second.extData.empty()
             || source->second.hasDataStorageBinaryData()
             || source->second.xDictHandle != 0u
@@ -75584,6 +75732,19 @@ bool rasterVariablesDwgAdapterTransport(
             || source->second.reactorHandles
                 != std::vector<std::uint32_t>{expectedParent})
             return fail("physical RASTERVARIABLES exceeds the selected wrapper profile");
+        if (revision == DRW::AC1021) {
+            if (!DxIfaceStandardDwgCaptureTestAccess::
+                    selectPhysicalAc1021RasterVariablesGraph(
+                        imported, projected, expectedHandle))
+                return fail("physical AC1021 RASTERVARIABLES source-frame projection failed");
+            outputSourceData = &projected;
+            key = {projected.importGeneration, expectedHandle};
+            source = projected.dwgRasterVariables.find(key);
+            if (source == projected.dwgRasterVariables.end())
+                return fail("physical AC1021 RASTERVARIABLES disappeared from selected source projection");
+        } else {
+        // Other physical revisions still use a locally authored dependency-
+        // closed wrapper. AC1021 now exercises the original source frame.
         expectedHandle = 0xB500u;
         expectedParent = DRW::DwgNamedObjectsDictionaryHandle;
         expectedRootKey = "ACAD_IMAGE_VARS";
@@ -75623,6 +75784,7 @@ bool rasterVariablesDwgAdapterTransport(
         outputSourceData = &projected;
         key = projectedKey;
         source = projected.dwgRasterVariables.find(key);
+        }
     }
 
     class Readback final : public dx_iface {
