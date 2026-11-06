@@ -170,6 +170,11 @@ public:
 
 class DxIfaceStandardDwgCaptureTestAccess {
 public:
+    static void setScaleExtensionHandles(
+            dx_iface& iface, const std::vector<std::uint32_t>& handles) {
+        iface.m_extensionScaleHandles = handles;
+    }
+
     static void retainStandardFrames(const dx_data& source,
                                     dx_data& projection,
                                     const std::set<std::uint32_t>& handles) {
@@ -45917,6 +45922,253 @@ bool readbackPhysicalScaleOutput(const std::filesystem::path& sourcePath,
     return true;
 }
 
+bool physicalAc1021ScaleSelectedGraphOutput(
+        const std::filesystem::path& sourcePath,
+        const std::filesystem::path& directory) {
+    dx_iface sourceReader;
+    dx_data source;
+    if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1021
+        || !source.hasSingleSuccessfulNamedResourceImport()
+        || source.scales.size() != 17u || !source.hasNamedObjectDictionary)
+        return fail("physical AC1021 SCALE source did not import as 17 witnessed records");
+
+    const DRW_Dictionary::Entry* root = nullptr;
+    for (const DRW_Dictionary::Entry& entry :
+         source.namedObjectDictionary.m_entries) {
+        if (entry.m_name != "ACAD_SCALELIST")
+            continue;
+        if (root != nullptr)
+            return fail("physical AC1021 SCALE NOD root is ambiguous");
+        root = &entry;
+    }
+    const DRW_Dictionary* sourceDictionary = nullptr;
+    if (root != nullptr) {
+        for (const DRW_Dictionary& dictionary : source.dictionaries) {
+            if (dictionary.handle != root->m_handle)
+                continue;
+            if (sourceDictionary != nullptr)
+                return fail("physical AC1021 ACAD_SCALELIST target is ambiguous");
+            sourceDictionary = &dictionary;
+        }
+    }
+    if (root == nullptr || sourceDictionary == nullptr
+        || sourceDictionary->parentHandle != source.namedObjectDictionary.handle
+        || !sourceDictionary->hasCompleteDwgEntries()
+        || sourceDictionary->m_entries.size() != source.scales.size())
+        return fail("physical AC1021 ACAD_SCALELIST graph is incomplete");
+    for (const DRW_Scale& scale : source.scales) {
+        if (scale.parentHandle != sourceDictionary->handle
+            || scale.reactorHandles.size() != 1u
+            || scale.reactorHandles.front() != sourceDictionary->handle
+            || scale.xDictHandle != 0u || scale.flags != 0
+            || scale.extensionDictionaryFlag() != 1u
+            || scale.hasDataStorageBinaryData() || scale.hasDwgCommonLinkTail()
+            || !scale.appData.empty() || !scale.extData.empty()
+            || scale.name.empty() || !std::isfinite(scale.paperUnits)
+            || !std::isfinite(scale.drawingUnits)
+            || scale.paperUnits <= 0.0 || scale.drawingUnits <= 0.0)
+            return fail("physical AC1021 SCALE record is outside the bounded source profile");
+    }
+
+    // Keep the authentic import receipt and selected SCALE values. The test
+    // projection narrows only the named-resource ranges and NOD membership;
+    // no drawing fixture or synthesized record is used.
+    dx_data selected;
+    selected.sourceFormat = source.sourceFormat;
+    selected.sourceVersion = source.sourceVersion;
+    selected.importGeneration = source.importGeneration;
+    selected.dwgReadOutcome = source.dwgReadOutcome;
+    selected.namedObjectDictionary = source.namedObjectDictionary;
+    selected.namedObjectDictionary.m_entries.erase(
+        std::remove_if(selected.namedObjectDictionary.m_entries.begin(),
+            selected.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name != "ACAD_SCALELIST";
+            }), selected.namedObjectDictionary.m_entries.end());
+    selected.hasNamedObjectDictionary = true;
+    selected.dictionaries.push_back(*sourceDictionary);
+    selected.scales = source.scales;
+    selected.namedResourceImport = source.namedResourceImport;
+    selected.namedResourceImport.scaleRange = {0u, selected.scales.size()};
+    selected.namedResourceImport.dictionaryVarRange = {0u, 0u};
+    selected.namedResourceImport.mLineStyleRange = {0u, 0u};
+    selected.namedResourceImport.mLeaderStyleRange = {0u, 0u};
+    selected.namedResourceImport.rawRange = {0u, 0u};
+    selected.namedResourceTypedRetainedRecords = selected.scales.size();
+    selected.namedResourceTypedRetainedBytes =
+        source.namedResourceTypedRetainedBytes;
+    selected.namedResourceImport.typedRetainedRecords =
+        selected.namedResourceTypedRetainedRecords;
+    selected.namedResourceImport.typedRetainedBytes =
+        selected.namedResourceTypedRetainedBytes;
+    if (!selected.hasSingleSuccessfulNamedResourceImport())
+        return fail("selected AC1021 SCALE projection lost its import profile");
+
+    const auto verifyOutput = [&selected, &sourceDictionary](
+            const std::filesystem::path& path, bool binary) {
+        dx_iface reader;
+        dx_data output;
+        if (!reader.fileImport(path.string(), &output, false)
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1021
+            || output.scales.size() != selected.scales.size())
+            return fail("AC1021 SCALE output did not reimport as 17 typed records");
+        const DRW_Dictionary::Entry* outputRoot = nullptr;
+        for (const DRW_Dictionary::Entry& entry :
+             output.namedObjectDictionary.m_entries) {
+            if (entry.m_name != "ACAD_SCALELIST")
+                continue;
+            if (outputRoot != nullptr)
+                return fail("AC1021 SCALE output NOD root is ambiguous");
+            outputRoot = &entry;
+        }
+        const DRW_Dictionary* outputDictionary = nullptr;
+        if (outputRoot != nullptr)
+            for (const DRW_Dictionary& dictionary : output.dictionaries) {
+                if (dictionary.handle != outputRoot->m_handle)
+                    continue;
+                if (outputDictionary != nullptr)
+                    return fail("AC1021 SCALE output dictionary is ambiguous");
+                outputDictionary = &dictionary;
+            }
+        if (outputDictionary == nullptr
+            || outputDictionary->m_entries.size()
+                != sourceDictionary->m_entries.size())
+            return fail("AC1021 SCALE output root dictionary is incomplete");
+        for (std::size_t index = 0u;
+             index < sourceDictionary->m_entries.size(); ++index) {
+            const auto& expected = sourceDictionary->m_entries[index];
+            const auto& actual = outputDictionary->m_entries[index];
+            if (actual.m_name != expected.m_name
+                || actual.m_handle != expected.m_handle)
+                return fail("AC1021 ACAD_SCALELIST order or membership changed");
+        }
+        for (const DRW_Scale& expected : selected.scales) {
+            const auto actual = std::find_if(output.scales.begin(),
+                output.scales.end(), [&expected](const DRW_Scale& candidate) {
+                    return candidate.handle == expected.handle;
+                });
+            if (actual == output.scales.end()
+                || actual->parentHandle != outputDictionary->handle
+                || actual->reactorHandles.size() != 1u
+                || actual->reactorHandles.front() != outputDictionary->handle
+                || actual->flag != expected.flag || actual->name != expected.name
+                || std::memcmp(&actual->paperUnits, &expected.paperUnits,
+                               sizeof(double)) != 0
+                || std::memcmp(&actual->drawingUnits, &expected.drawingUnits,
+                               sizeof(double)) != 0
+                || actual->isUnitScale != expected.isUnitScale)
+                return fail("AC1021 SCALE identity, owner/reactor, or field changed");
+            const auto raw = std::find_if(
+                output.rawNamedResourceObjects.begin(),
+                output.rawNamedResourceObjects.end(),
+                [&expected](const DRW_RawDxfObject& object) {
+                    return object.name == "SCALE"
+                        && object.handle == expected.handle;
+                });
+            if (raw == output.rawNamedResourceObjects.end()
+                || raw->m_version != DRW::AC1021
+                || raw->parentHandle != outputDictionary->handle)
+                return fail("AC1021 SCALE raw output identity or owner is missing");
+            const auto check = [&raw](int code) {
+                const auto value = std::find_if(raw->groups.begin(),
+                    raw->groups.end(), [code](const DRW_Variant& group) {
+                        return group.code() == code;
+                    });
+                return value;
+            };
+            const auto flag = check(70);
+            const auto name = check(300);
+            const auto paper = check(140);
+            const auto drawing = check(141);
+            const auto unitScale = check(290);
+            if (flag == raw->groups.end() || flag->type() != DRW_Variant::INTEGER
+                || flag->i_val() != expected.flag
+                || name == raw->groups.end() || name->type() != DRW_Variant::STRING
+                || std::string(name->c_str()) != expected.name
+                || paper == raw->groups.end() || paper->type() != DRW_Variant::DOUBLE
+                || std::memcmp(&paper->content.d, &expected.paperUnits,
+                               sizeof(double)) != 0
+                || drawing == raw->groups.end()
+                || drawing->type() != DRW_Variant::DOUBLE
+                || std::memcmp(&drawing->content.d, &expected.drawingUnits,
+                               sizeof(double)) != 0
+                || unitScale == raw->groups.end()
+                || unitScale->type() != DRW_Variant::INTEGER
+                || unitScale->i_val() != (expected.isUnitScale ? 1 : 0))
+                return fail("AC1021 SCALE raw scalar fields changed");
+        }
+        (void)binary;
+        return true;
+    };
+
+    std::filesystem::create_directories(directory);
+    for (const bool binary : {false, true}) {
+        const auto output = directory / (binary
+            ? "physical-scale-ac1021-binary.dxf"
+            : "physical-scale-ac1021-ascii.dxf");
+        class LateScaleMutation final : public dx_iface {
+        public:
+            bool mutateAfterObjects{false};
+            std::uint32_t targetHandle{0u};
+
+            void writeObjects() override {
+                dx_iface::writeObjects();
+                if (!mutateAfterObjects || cData == nullptr)
+                    return;
+                const auto scale = std::find_if(
+                    cData->scales.begin(), cData->scales.end(),
+                    [this](const DRW_Scale& value) {
+                        return value.handle == targetHandle;
+                    });
+                if (scale != cData->scales.end())
+                    scale->paperUnits += 0.125;
+            }
+        } writer;
+        std::vector<std::uint32_t> scaleHandles;
+        for (const DRW_Scale& scale : selected.scales)
+            scaleHandles.push_back(scale.handle);
+        writer.targetHandle = selected.scales.front().handle;
+        DxIfaceStandardDwgCaptureTestAccess::setScaleExtensionHandles(
+            writer, scaleHandles);
+        const auto exportSelected = [&]() {
+            return writer.fileExport(output.string(), DRW::AC1021, binary,
+                &selected, true, false,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::Legacy);
+        };
+        if (!exportSelected() || !verifyOutput(output, binary))
+            return fail("selected physical AC1021 SCALE graph output/readback failed: "
+                + writer.extensionGraphFailureDetail());
+        const std::string sentinel = "preserve rejected AC1021 SCALE graph\n";
+        { std::ofstream existing(output, std::ios::binary | std::ios::trunc);
+          existing << sentinel; }
+        const DRW_Scale saved = selected.scales.front();
+        writer.mutateAfterObjects = true;
+        if (exportSelected())
+            return fail("late-mutated AC1021 SCALE source snapshot was emitted");
+        std::ifstream sentinelInput(output, std::ios::binary);
+        const std::string retained{
+            std::istreambuf_iterator<char>(sentinelInput),
+            std::istreambuf_iterator<char>()};
+        if (retained != sentinel)
+            return fail("rejected AC1021 SCALE graph replaced the destination");
+        selected.scales.front() = saved;
+        writer.mutateAfterObjects = false;
+        if (!exportSelected() || !verifyOutput(output, binary))
+            return fail("corrected AC1021 SCALE graph same-writer retry failed");
+    }
+    std::cout << "physicalAc1021ScaleSelectedGraphOutput PASS"
+              << " encodings=ASCII,Binary scales=17 rooted=ACAD_SCALELIST"
+              << " fields=flag,name,paper,drawing,unitScale"
+              << " rollback=pass sameWriterRetry=pass\n";
+    return true;
+}
+
 bool physicalXRecordOutputReadback(
         const std::filesystem::path& sourcePath) {
     dx_iface sourceReader;
@@ -74294,6 +74546,10 @@ int main(int argc, char** argv) {
     if (argc == 4
         && std::string(argv[1]) == "--visual-style-ac1021-physical-extension-graph")
         return physicalAc1021VisualStyleExtensionGraphOutput(
+            argv[2], argv[3]) ? 0 : 1;
+    if (argc == 4
+        && std::string(argv[1]) == "--scale-ac1021-physical-selected-graph")
+        return physicalAc1021ScaleSelectedGraphOutput(
             argv[2], argv[3]) ? 0 : 1;
     if (argc == 2
         && std::string(argv[1]) == "--geodata-dwg-adapter-transport")

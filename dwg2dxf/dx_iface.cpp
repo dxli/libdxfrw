@@ -28918,18 +28918,32 @@ bool dx_iface::prepareDwgScales(DRW::Version version,
     if (cData == nullptr)
         return reject("no source container");
     if (cData->sourceFormat != dx_source_format::DWG
-        || cData->sourceVersion != DRW::AC1024)
+        || (cData->sourceVersion != DRW::AC1021
+            && cData->sourceVersion != DRW::AC1024))
         return true;
     if (cData->scales.empty() && m_extensionScaleHandles.empty())
         return true;
-    if (version != DRW::AC1024
+    if (version != cData->sourceVersion
         || !cData->hasSingleSuccessfulNamedResourceImport()
         || !cData->hasNamedObjectDictionary
         || !validateNamedObjectRootForExport(
             *cData, "ACAD_SCALELIST", true)
         || cData->scales.empty()
-        || m_extensionScaleHandles.size() != cData->scales.size())
+        || m_extensionScaleHandles.size() != cData->scales.size()) {
+        if (debug)
+            std::cerr << "SCALE DWG source snapshot gate: target="
+                      << static_cast<int>(version) << " source="
+                      << static_cast<int>(cData->sourceVersion)
+                      << " receipt="
+                      << cData->hasSingleSuccessfulNamedResourceImport()
+                      << " NOD=" << cData->hasNamedObjectDictionary
+                      << " root=" << validateNamedObjectRootForExport(
+                             *cData, "ACAD_SCALELIST", true)
+                      << " scales=" << cData->scales.size()
+                      << " selected=" << m_extensionScaleHandles.size()
+                      << '\n';
         return reject("version, import receipt, root, or selected-count gate");
+    }
 
     try {
         const std::uint32_t nodHandle =
@@ -29094,12 +29108,11 @@ bool dx_iface::hasUnchangedDwgScales() const noexcept {
             && m_dwgScaleOutputBytes == 0u;
     if (cData == nullptr || m_dwgScaleOutputOwner != cData
         || m_dwgScaleOutputGeneration != cData->importGeneration
-        || m_dwgScaleOutputVersion != DRW::AC1024
-        || m_dwgScaleTargetVersion != DRW::AC1024
+        || m_dwgScaleOutputVersion != cData->sourceVersion
+        || m_dwgScaleTargetVersion != cData->sourceVersion
         || m_dwgScaleOutputBytes
             > kMaxAdapterNamedResourceTypedRetainedBytes
         || cData->sourceFormat != dx_source_format::DWG
-        || cData->sourceVersion != DRW::AC1024
         || !cData->hasSingleSuccessfulNamedResourceImport()
         || !cData->hasNamedObjectDictionary
         || cData->scales.size() != m_dwgScaleOutputSources.size()
@@ -29122,7 +29135,7 @@ bool dx_iface::hasUnchangedDwgScales() const noexcept {
             if (source == m_dwgScaleOutputSources.end()
                 || !currentScaleHandles.insert(current.handle).second
                 || !standardDwgCommonEqual(
-                    source->second.model, current, DRW::AC1024)
+                    source->second.model, current, cData->sourceVersion)
                 || !scaleFieldsEqual(source->second.model, current))
                 return false;
         }
@@ -29135,7 +29148,7 @@ bool dx_iface::hasUnchangedDwgScales() const noexcept {
                     current.handle);
                 return source != m_dwgScaleOutputDictionaries.end()
                     && standardDwgModelsEqual(
-                        source->second, current, DRW::AC1024,
+                        source->second, current, cData->sourceVersion,
                         dwgObjType::DICTIONARY);
             };
         if (!dictionaryUnchanged(cData->namedObjectDictionary))
@@ -76894,6 +76907,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         || !cData->plotSettings.empty()
         || hasCurrentDwgRasterVariables
         || hasCurrentDwgWipeoutVariables
+        || (cData->sourceFormat == dx_source_format::DWG
+            && !cData->scales.empty())
         || !cData->renderSettings.empty()
         || !cData->backgrounds.empty()
         || !cData->rawBackgroundObjects.empty()

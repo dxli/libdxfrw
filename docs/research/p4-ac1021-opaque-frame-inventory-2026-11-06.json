@@ -17,9 +17,10 @@
       "count": 74,
       "customClassCount": 68,
       "fixedTypeCount": 6,
-      "outputQualified": 25,
+      "outputQualified": 42,
       "byRecord": {
         "VISUALSTYLE": 25,
+        "SCALE": 17,
         "SCALE": 17,
         "DICTIONARYVAR": 12,
         "MATERIAL": 3,
@@ -42,7 +43,7 @@
       "opaquePayloadMatches": 0,
       "outputQualified": 50
     },
-    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. A bounded physical AC1021 VisualStyle route now qualifies 25 typed VISUALSTYLE records plus their 25 extension dictionaries and 25 XRECORDs (50 standard frames) in selected ASCII/Binary output with exact graph readback, atomic refusal and retry. The remaining 49 opaque carriers and 62 standard-object frames remain unqualified; captured source bytes or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. Bounded physical AC1021 routes qualify 25 typed VISUALSTYLE records plus their 25 extension dictionaries and 25 XRECORDs (50 standard frames), and 17 rooted SCALE records, in selected ASCII/Binary output with exact graph readback, atomic refusal and retry. The remaining 32 opaque carriers and 62 standard-object frames remain unqualified; captured source bytes or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -52,11 +53,19 @@
     "logPath": "/private/tmp/children-room-vs-xdict-output.log",
     "logSha256": "a12b48e9b4f0fe2c99ce2cd8081a30a2455b9cdc8bb88ba73d3320025df72098"
   },
+  "scaleCandidateBoundary": {
+    "record": "SCALE",
+    "observedCount": 17,
+    "selector": "--scale-ac1021-physical-selected-graph /Users/dli/doc/dwg/children-room-decoration.dwg /private/tmp/children-room-ac1021-scale-final",
+    "result": "PASS. The selector qualifies all 17 rooted records in selected ASCII/Binary output and fresh typed/raw readback, including NOD membership, unique dictionary ownership/reactors, exact scalar fields, late-mutation atomic refusal, destination preservation, and same-writer retry. This is selected-graph evidence only; see the dedicated SCALE receipt.",
+    "logPath": "/private/tmp/scale-ac1021-result.log",
+    "logSha256": "f4eec9b8dc7b4daf6741f704f39ff6adec64cff1e89fd4b67a59c04a341d72e8"
+  },
   "diagnostic": {
     "testSource": "tests/dwg2dxf_adapter_tests.cpp",
-    "testSourceSha256": "736e3a4ad75234fad3455fb5349c46cdb10ceaf18789aea75d34433446bab4df",
+    "testSourceSha256": "a0abc7319ad20d82074ba215ace0600b8336b341be4afdc9ab263906425a4647",
     "executable": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests",
-    "executableSha256": "39a758b0d85dd29052c5b6312141cdc2b7088a36449980a1fe18f6461b92e6dc",
+    "executableSha256": "09b899447285b81a2600fb50849fc680a27aa979b3f420c6e2213984eefc3924",
     "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/children-room-decoration.dwg",
     "result": "PASS; prints per-handle source type, class and carrier records for all 74 opaque carrier records and all 112 standard-object source frames, including VisualStyle extension graph fields.",
     "logPath": "/private/tmp/children-room-opaque-inventory-full.log",
@@ -67,5 +76,5 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Select the next repeated physical family with an existing serializer, likely SCALE or DICTIONARYVAR, and establish its exact source profile, dependency closure, output and readback. Keep the remaining 49 opaque carriers and 62 standard frames separately gated; the whole source remains refused at independent DBCOLOR and other document-wide gates."
+  "nextAction": "Select the next repeated physical family with an existing serializer, likely DICTIONARYVAR, and establish its exact source profile, dependency closure, output and readback. Keep the remaining 32 opaque carriers and 62 standard frames separately gated; the whole source remains refused at independent DBCOLOR and other document-wide gates."
 }
