@@ -13133,7 +13133,9 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                             return reject(ExtensionGraphFailure::InvalidGraph, "SUNSTUDY source graph changed");
                     } else if (frame.material != nullptr) {
                         if (data->sourceFormat == dx_source_format::DWG) {
-                            if ((data->sourceVersion != DRW::AC1024 && data->sourceVersion != DRW::AC1027)
+                            if ((data->sourceVersion != DRW::AC1021
+                                    && data->sourceVersion != DRW::AC1024
+                                    && data->sourceVersion != DRW::AC1027)
                                 || frame.material->parentHandle
                                     != entry.parentHandle
                                 || !frame.material->hasDwgRawData()
@@ -37217,7 +37219,9 @@ bool dx_iface::hasUnchangedExtensionMaterialSources() const noexcept {
     if (cData != m_extensionMaterialSourceOwner || !cData
         || cData->sourceFormat != dx_source_format::DWG
         || cData->sourceVersion != m_extensionMaterialSourceVersion
-        || (cData->sourceVersion != DRW::AC1024 && cData->sourceVersion != DRW::AC1027)
+        || (cData->sourceVersion != DRW::AC1021
+            && cData->sourceVersion != DRW::AC1024
+            && cData->sourceVersion != DRW::AC1027)
         || cData->importGeneration != m_extensionMaterialSourceGeneration
         || m_extensionMaterialHandles.size()
             != m_extensionMaterialSources.size()
@@ -76925,6 +76929,8 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         || !cData->rawDictionaryWithDefaults.empty()
         || !cData->placeholders.empty()
         || !cData->rawPlaceholders.empty()
+        || (cData->sourceFormat == dx_source_format::DWG
+            && !cData->materials.empty())
         || hasNonNullHeaderPlotStyle;
     std::vector<std::uint32_t> backgroundDictionaryHandles;
     std::vector<std::uint32_t> backgroundHandles;
