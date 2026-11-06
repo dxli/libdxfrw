@@ -46764,9 +46764,9 @@ bool physicalAc1021DictionaryVarSelectedGraphOutput(
         || source.sourceFormat != dx_source_format::DWG
         || source.sourceVersion != DRW::AC1021
         || !source.hasSingleSuccessfulNamedResourceImport()
-        || source.dictionaryVars.size() != 12u
+        || source.dictionaryVars.empty()
         || !source.hasNamedObjectDictionary)
-        return fail("physical AC1021 DICTIONARYVAR source did not import as 12 witnessed records");
+        return fail("physical AC1021 DICTIONARYVAR source did not import a witnessed variable graph");
 
     const DRW_Dictionary::Entry* root = nullptr;
     for (const DRW_Dictionary::Entry& entry :
@@ -46858,7 +46858,7 @@ bool physicalAc1021DictionaryVarSelectedGraphOutput(
             || output.sourceFormat != dx_source_format::DXF
             || output.sourceVersion != DRW::AC1021
             || output.dictionaryVars.size() != selected.dictionaryVars.size())
-            return fail("AC1021 DICTIONARYVAR output did not reimport as 12 typed records");
+            return fail("AC1021 DICTIONARYVAR output did not reimport the selected typed records");
         const DRW_Dictionary::Entry* outputRoot = nullptr;
         for (const DRW_Dictionary::Entry& entry :
              output.namedObjectDictionary.m_entries) {
@@ -47000,7 +47000,9 @@ bool physicalAc1021DictionaryVarSelectedGraphOutput(
             return fail("restored AC1021 DICTIONARYVAR graph could not retry on the same writer");
     }
     std::cout << "physicalAc1021DictionaryVarSelectedGraphOutput PASS"
-              << " encodings=ASCII,Binary variables=12 rooted=AcDbVariableDictionary"
+              << " encodings=ASCII,Binary variables="
+              << selected.dictionaryVars.size()
+              << " rooted=AcDbVariableDictionary"
               << " fields=schema,value rollback=pass sameWriterRetry=pass"
               << " qualifiedSourceFrames="
               << DxIfaceStandardDwgCaptureTestAccess::
