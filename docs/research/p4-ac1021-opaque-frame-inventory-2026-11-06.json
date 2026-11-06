@@ -100,7 +100,7 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Continue with another source-backed unqualified frame or graph from the P4 inventory. Preserve fail-closed whole-source behavior and avoid double-counting shared standard-object identities.",
+  "nextAction": "Implement and qualify the source-backed AC1021 MLINESTYLE profile at handle 0x18 first; freeze its actual owner and extension-dictionary graph before admission. Then choose among the remaining AC1021 LAYOUT, VIEWPORT, RASTERVARIABLES, SORTENTSTABLE frames using the same source-frame/output-binding gate. Preserve whole-source refusal and avoid double-counting.",
   "materialCandidateBoundary": {
     "record": "MATERIAL",
     "observedCount": 3,
@@ -158,5 +158,73 @@
     "result": "PASS selected ASCII/Binary output and fresh readback for the source NOD/owner/extension/map graph. Preserves cell identities and values, 1.5 margins, 6.0/4.5 heights, 1.125 border spacing, no-color C8->257, text-style bindings and border LTYPE dependencies. A dangling STYLE reference is refused with destination preservation and same-adapter correction/retry succeeds.",
     "receipt": "docs/research/p4-ac1021-children-room-tablestyle-cellstylemap-selected-output-2026-11-06.json",
     "limit": "Second unauthenticated local AC1021 sample; selected graph only, no independent native or whole-source qualification."
+  },
+  "remainingOpaqueFrames": {
+    "source": "/Users/dli/doc/dwg/children-room-decoration.dwg",
+    "sourceSha256": "cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce",
+    "evidence": "Current source inventory selector output; exact record identities and handles listed below. Handle 0xF (ACDBPLACEHOLDER) is already included in output-qualified counts; six other fixed-object frames include five still unqualified.",
+    "frames": [
+      {
+        "handle": "0x18",
+        "objectType": 73,
+        "record": "MLINESTYLE",
+        "class": "",
+        "state": "UNQUALIFIED",
+        "sourceRoles": "NOD ACAD_MLINESTYLE root points to owner dictionary 0x17; parser debug identifies STANDARD, flags 0, two elements. Extension-dictionary handle/contents and complete field/dependency binding still require exact typed-model capture."
+      },
+      {
+        "handle": "0x22",
+        "objectType": 82,
+        "record": "",
+        "class": "",
+        "state": "UNQUALIFIED",
+        "sourceRoles": "Typed LAYOUT route; owner graph not yet bound to a selected-output proof."
+      },
+      {
+        "handle": "0xD7",
+        "objectType": 82,
+        "record": "",
+        "class": "",
+        "state": "UNQUALIFIED",
+        "sourceRoles": "Typed LAYOUT route; owner graph not yet bound to a selected-output proof."
+      },
+      {
+        "handle": "0x266",
+        "objectType": 34,
+        "record": "",
+        "class": "",
+        "state": "UNQUALIFIED",
+        "sourceRoles": "Fixed-type source frame; output role and owning graph need classification."
+      },
+      {
+        "handle": "0x26A",
+        "objectType": 34,
+        "record": "",
+        "class": "",
+        "state": "UNQUALIFIED",
+        "sourceRoles": "Fixed-type source frame; output role and owning graph need classification."
+      },
+      {
+        "handle": "0x2D2",
+        "objectType": 518,
+        "record": "RASTERVARIABLES",
+        "class": "AcDbRasterVariables",
+        "state": "UNQUALIFIED_SOURCE_FRAME",
+        "sourceRoles": "The existing writer bridge replays the physical fields through a locally authored wrapper; it does not bind the original physical source frame to emitted DXF."
+      },
+      {
+        "handle": "0x2DF",
+        "objectType": 522,
+        "record": "SORTENTSTABLE",
+        "class": "AcDbSortentsTable",
+        "state": "UNQUALIFIED",
+        "sourceRoles": "Current children-room named-block profile is not admitted by the existing documented SORTENTSTABLE route."
+      }
+    ],
+    "inventorySelector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "inventoryLogSha256": "c23a95e309acbd757994ddcb49b09f12607d552b3e47701cf8891104168fbcbd",
+    "mlineStyleTrace": "dwg2dxf -d on the same source; parser trace around object 0x18 identifies STANDARD, flags 0 and two elements; not an independent wire-layout oracle.",
+    "mlineStyleTraceLogSha256": "5f8ae476e5febb539ef46a8511662840c0411cc21a3dbf9dcbf85c9a0fa157e7",
+    "limit": "This is a source-inventory/readiness update only. It qualifies no output frame or support claim."
   }
 }
