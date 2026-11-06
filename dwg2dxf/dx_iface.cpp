@@ -8368,6 +8368,16 @@ bool buildAc1021VisualStyleRaw(const DRW_VisualStyle& typed,
         330, proxyHandleString(typed.reactorHandles.front()));
     output.groups.emplace_back(102, "}");
     output.groups.emplace_back(330, proxyHandleString(typed.parentHandle));
+    if (typed.xDictHandle != 0u) {
+        output.groups.emplace_back(102, "{ACAD_XDICTIONARY");
+        output.groups.emplace_back(360, proxyHandleString(typed.xDictHandle));
+        output.groups.emplace_back(102, "}");
+    }
+    for (const DRW_Variant* value : typed.extData) {
+        if (value == nullptr)
+            return false;
+        output.groups.push_back(*value);
+    }
     output.groups.emplace_back(100, "AcDbVisualStyle");
     output.groups.emplace_back(2, typed.desc);
     output.groups.emplace_back(70, typed.type);

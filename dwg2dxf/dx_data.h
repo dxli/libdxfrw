@@ -38,6 +38,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <list>
 #include <limits>
 #include <map>
@@ -1430,13 +1431,120 @@ public:
                 || style.reactorCount() != 1u
                 || style.reactorHandles.size() != 1u
                 || style.reactorHandles.front() != style.parentHandle
-                || style.extensionDictionaryFlag() != 1u
-                || style.xDictHandle != 0u
                 || style.hasDataStorageBinaryData()
-                || !style.extData.empty() || !style.appData.empty()
+                || !style.appData.empty()
                 || !style.pendingAppIdResolutions.empty()
                 || !style.pendingLayerRefResolutions.empty())
                 return false;
+
+            if ((style.xDictHandle == 0u) != style.extData.empty())
+                return false;
+            if (!style.extData.empty()) {
+                if (style.extData.size() != 3u
+                    || style.extData[0] == nullptr
+                    || style.extData[1] == nullptr
+                    || style.extData[2] == nullptr
+                    || style.extData[0]->code() != 1001
+                    || style.extData[0]->type() != DRW_Variant::STRING
+                    || std::strcmp(style.extData[0]->c_str(), "ACAD") != 0
+                    || style.extData[1]->code() != 1000
+                    || style.extData[1]->type() != DRW_Variant::STRING
+                    || std::strcmp(style.extData[1]->c_str(),
+                                   "AcDbSavedByObjectVersion") != 0
+                    || style.extData[2]->code() != 1070
+                    || style.extData[2]->type() != DRW_Variant::INTEGER
+                    || style.extData[2]->i_val() != 0
+                    || std::count_if(appIds.begin(), appIds.end(),
+                        [](const DRW_AppId& appId) {
+                            return appId.name == "ACAD"
+                                && appId.handle != 0u
+                                && appId.handle != DRW::NoHandle;
+                        }) != 1)
+                    return false;
+            }
+
+            // The first AC1021 profile had no per-style extension dictionary.
+            // The children-room source adds one exact graph shape: each style
+            // owns one DICTIONARY, which owns one XRECORD under the witnessed
+            // ACAD_XREC_ROUNDTRIP key. Admit it only when the physical source
+            // object frames independently match the typed dictionary/XRECORD
+            // payloads. The graph writer still performs its ordinary closure
+            // and output/readback checks; this gate does not generalize the
+            // XRECORD schema or other extension-dictionary contents.
+            if (style.xDictHandle == 0u) {
+                if (style.extensionDictionaryFlag() != 1u)
+                    return false;
+            } else {
+                if (style.extensionDictionaryFlag() != 0u)
+                    return false;
+                const DRW_Dictionary* extension = nullptr;
+                std::size_t extensionMatches = 0u;
+                for (const DRW_Dictionary& candidate : dictionaries) {
+                    if (candidate.handle != style.xDictHandle)
+                        continue;
+                    extension = &candidate;
+                    ++extensionMatches;
+                }
+                if (extensionMatches != 1u || extension == nullptr
+                    || extension->parentHandle != style.handle
+                    || extension->hardOwner != 1
+                    || extension->cloning != 1
+                    || extension->xDictHandle != 0u
+                    || extension->reactorCount() != 0u
+                    || !extension->reactorHandles.empty()
+                    || !extension->hasCompleteDwgEntries()
+                    || extension->m_entries.size() != 1u
+                    || extension->m_entries.front().m_name
+                        != "ACAD_XREC_ROUNDTRIP"
+                    || extension->m_entries.front().m_handle == 0u
+                    || extension->m_entries.front().m_handle == DRW::NoHandle
+                    || !extension->extData.empty()
+                    || !extension->appData.empty())
+                    return false;
+
+                const std::uint32_t recordHandle =
+                    extension->m_entries.front().m_handle;
+                const DRW_XRecord* record = nullptr;
+                std::size_t recordMatches = 0u;
+                for (const DRW_XRecord& candidate : xRecords) {
+                    if (candidate.handle != recordHandle)
+                        continue;
+                    record = &candidate;
+                    ++recordMatches;
+                }
+                if (recordMatches != 1u || record == nullptr
+                    || record->parentHandle != extension->handle
+                    || record->m_cloning != 1
+                    || record->xDictHandle != 0u
+                    || record->reactorCount() != 1u
+                    || record->reactorHandles.size() != 1u
+                    || record->reactorHandles.front() != extension->handle
+                    || !record->m_handleValues.empty()
+                    || !record->extData.empty() || !record->appData.empty()
+                    || record->m_dataEntries.size() != 252u
+                    || record->m_rawDataValid)
+                    return false;
+
+                const StandardDwgFrameKey dictionaryKey{
+                    importGeneration, extension->handle};
+                const StandardDwgFrameKey recordKey{
+                    importGeneration, record->handle};
+                const auto dictionaryFrame = m_standardDwgObjectFrames.find(
+                    dictionaryKey);
+                const auto recordFrame = m_standardDwgObjectFrames.find(
+                    recordKey);
+                if (dictionaryFrame == m_standardDwgObjectFrames.end()
+                    || recordFrame == m_standardDwgObjectFrames.end()
+                    || dictionaryFrame->second.generation != importGeneration
+                    || recordFrame->second.generation != importGeneration
+                    || !dictionaryFrame->second.payloadMatched
+                    || !recordFrame->second.payloadMatched
+                    || dictionaryFrame->second.raw.m_objectType
+                        != DRW_Dictionary::kDwgFixedType
+                    || recordFrame->second.raw.m_objectType
+                        != 79u)
+                    return false;
+            }
 
             for (std::size_t index = 0u; index < encoding.colorCount; ++index) {
                 const DRW_VisualStyleColor& color = encoding.colors[index];
