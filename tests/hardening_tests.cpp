@@ -2675,7 +2675,7 @@ void testDxfMeshCreaseValueDomains(TestContext& t) {
             ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
             : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
         codec.writer->setVersion("AC1027", true);
-        ExposedMesh validOutput = valid;
+        DRW_Mesh validOutput = valid;
         t.expect(codec.writeMesh(&validOutput) && !output.str().empty(),
                  "MESH writer accepts -1, zero, and positive crease values");
     }
@@ -2689,7 +2689,7 @@ void testDxfMeshCreaseValueDomains(TestContext& t) {
             ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
             : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
         codec.writer->setVersion("AC1027", true);
-        ExposedMesh unrepresentable = valid;
+        DRW_Mesh unrepresentable = valid;
         unrepresentable.unknown = 1;
         const bool refused = !codec.writeMesh(&unrepresentable)
             && output.str().empty();
@@ -2712,7 +2712,7 @@ void testDxfMeshCreaseValueDomains(TestContext& t) {
         t.expect(retried,
                  "MESH corrected model writes with a fresh ASCII/Binary writer");
 
-        ExposedMesh unrepresentedSubdivVertices = valid;
+        DRW_Mesh unrepresentedSubdivVertices = valid;
         unrepresentedSubdivVertices.subdivVertices = {
             DRW_Coord{2.0, 3.0, 4.0}};
         std::ostringstream subdivOutput(std::ios::out | std::ios::binary);
@@ -2776,7 +2776,7 @@ void testDxfMeshCreaseValueDomains(TestContext& t) {
             ? std::unique_ptr<dxfWriter>(new dxfWriterBinary(&output))
             : std::unique_ptr<dxfWriter>(new dxfWriterAscii(&output));
         codec.writer->setVersion("AC1027", true);
-        ExposedMesh prefixOutput = valid;
+        DRW_Mesh prefixOutput = valid;
         prefixOutput.creases = {0.25};
         t.expect(codec.writeMesh(&prefixOutput) && !output.str().empty(),
                  "MESH ASCII/Binary writers retain a shorter edge-order crease prefix");
@@ -4216,7 +4216,7 @@ void testPublicOwnershipContracts(TestContext& t) {
 
     const std::string sunStudyBody =
         "90\n7\n1\nsetup\n2\ndescription\n3\nsheet\n4\nsubset\n"
-        "70\n0\n290\n1\n91\n1\n90\n10\n90\n20\n91\n2\n"
+        "70\n0\n290\n1\n91\n1\n90\n10\n90\n20\n73\n2\n"
         "290\n1\n290\n0\n40\n2.5\n340\nA1\n341\nA2\n"
         "342\nA3\n343\nA4\n";
     ExposedSunStudy partialSunStudy;
@@ -4224,7 +4224,7 @@ void testPublicOwnershipContracts(TestContext& t) {
                  && partialSunStudy.m_classVersion == 7
                  && partialSunStudy.m_dates.size() == 1u
                  && partialSunStudy.m_dates.front().m_julianDay == 10
-                 && partialSunStudy.m_dates.front().m_milliseconds == 20
+                 && partialSunStudy.m_dates.front().m_milliseconds == 20000
                  && partialSunStudy.m_hours.size() == 2u
                  && partialSunStudy.m_hours.front()
                  && !partialSunStudy.m_hours.back()
@@ -4235,7 +4235,7 @@ void testPublicOwnershipContracts(TestContext& t) {
         copiedSunStudy, "90\n8\n91\n1\n90\n30\n90\n40\n");
     t.expect(copiedSunStudyFresh && copiedSunStudy.m_dates.size() == 2u
                  && copiedSunStudy.m_dates.back().m_julianDay == 30
-                 && copiedSunStudy.m_dates.back().m_milliseconds == 40
+                 && copiedSunStudy.m_dates.back().m_milliseconds == 40000
                  && copiedSunStudy.m_hours.size() == 2u,
              "SUNSTUDY copy clears date/hour parser state");
     ExposedSunStudy assignedSunStudy;
@@ -4244,7 +4244,7 @@ void testPublicOwnershipContracts(TestContext& t) {
         assignedSunStudy, "90\n9\n91\n1\n90\n50\n90\n60\n");
     t.expect(assignedSunStudyFresh && assignedSunStudy.m_dates.size() == 2u
                  && assignedSunStudy.m_dates.back().m_julianDay == 50
-                 && assignedSunStudy.m_dates.back().m_milliseconds == 60
+                 && assignedSunStudy.m_dates.back().m_milliseconds == 60000
                  && assignedSunStudy.m_hours.size() == 2u,
              "SUNSTUDY assignment clears date/hour parser state");
 
@@ -17120,7 +17120,7 @@ void testDxfArcAlignedD2TRetentionBudget(TestContext& t) {
     };
     const std::string replacement = "42\n1\n42\n2.5\n";
     {
-        auto budget = std::make_shared<DxfReadRetainedBudget>(23u);
+        auto budget = std::make_shared<DxfReadRetainedBudget>(31u);
         ArcTextParseProbe text;
         t.expect(parse(text, replacement, budget)
                      && text.m_textSize == "2.5" && budget->used() == 3u,
@@ -17138,7 +17138,7 @@ void testDxfArcAlignedD2TRetentionBudget(TestContext& t) {
                  "final D2T text-size owner reset releases the retained lease");
     }
     {
-        auto budget = std::make_shared<DxfReadRetainedBudget>(22u);
+        auto budget = std::make_shared<DxfReadRetainedBudget>(30u);
         ArcTextParseProbe text;
         t.expect(!parse(text, replacement, budget) && budget->exceeded()
                      && text.m_textSize == "1" && budget->used() == 1u,
@@ -17158,9 +17158,9 @@ void testDxfArcAlignedD2TRetentionBudget(TestContext& t) {
                      && text.m_textSize == "2.5"
                      && text.m_charSpacing == "-0.75"
                      && text.m_offsetFromArc == "0"
-                     && text.m_rightOffset == "123457"
-                     && text.m_leftOffset == "-1.79769e+308"
-                     && budget->used() == 32u,
+                     && text.m_rightOffset == "123456.789"
+                     && text.m_leftOffset == "-1.7976931348623157e+308"
+                     && budget->used() == 47u,
                  "all six bounded D2T fields retain their canonical formatted values, including maximum exponent");
         text.resetDwgState();
         t.expect(budget->used() == 0u,
@@ -23325,16 +23325,23 @@ void testDimensionAssociationDocumentedScalarFields(TestContext& t) {
                  "DIMASSOC apparent-intersection type 11 retains its second edge");
         parseOutput(apparentOutput.str(), false,
                     apparentIntersection.m_osnapRefs.front());
-        dwgBufferW dwgIntersectionBody;
-        t.expect(!intersection.encodeDwg(DRW::AC1021, &dwgIntersectionBody)
-                     && dwgIntersectionBody.size() == 0u,
-                 "DIMASSOC DXF intersection edge is refused by DWG encoder before bytes");
+        dwgBufferW dwgIntersectionBody, dwgIntersectionStrings,
+            dwgIntersectionHandles;
+        t.expect(intersection.encodeDwg(
+                     DRW::AC1021, &dwgIntersectionBody,
+                     &dwgIntersectionStrings, &dwgIntersectionHandles)
+                     && dwgIntersectionBody.size() > 0u
+                     && dwgIntersectionStrings.size() > 0u
+                     && dwgIntersectionHandles.size() > 0u,
+                 "DIMASSOC modeled intersection profile enters DWG output");
     }
 
-    dwgBufferW dwgBody;
-    t.expect(!parsed.encodeDwg(DRW::AC1021, &dwgBody)
-                 && dwgBody.size() == 0u,
-             "DIMASSOC DXF-only details are refused by DWG encoder before bytes");
+    dwgBufferW dwgBody, dwgStrings, dwgHandles;
+    t.expect(parsed.encodeDwg(DRW::AC1021, &dwgBody, &dwgStrings,
+                              &dwgHandles)
+                 && dwgBody.size() > 0u && dwgStrings.size() > 0u
+                 && dwgHandles.size() > 0u,
+             "DIMASSOC modeled main-object fields enter the bounded DWG profile");
 
     ExposedDimensionAssociation xrefOnly;
     xrefOnly.m_associativityFlags = 1u;
@@ -23345,10 +23352,13 @@ void testDimensionAssociationDocumentedScalarFields(TestContext& t) {
     xrefOnlyRef.m_hasXrefObjectHandleString = true;
     xrefOnlyRef.m_xrefObjectHandleString = "XREF_A1";
     xrefOnly.m_osnapRefs.push_back(xrefOnlyRef);
-    dwgBufferW dwgXrefBody;
-    t.expect(!xrefOnly.encodeDwg(DRW::AC1021, &dwgXrefBody)
-                 && dwgXrefBody.size() == 0u,
-             "DIMASSOC XREF handle strings are refused by DWG encoder before bytes");
+    dwgBufferW dwgXrefBody, dwgXrefStrings, dwgXrefHandles;
+    t.expect(xrefOnly.encodeDwg(DRW::AC1021, &dwgXrefBody,
+                                &dwgXrefStrings, &dwgXrefHandles)
+                 && dwgXrefBody.size() > 0u
+                 && dwgXrefStrings.size() > 0u
+                 && dwgXrefHandles.size() > 0u,
+             "DIMASSOC modeled XREF path enters DWG output");
 
     ExposedDimensionAssociation partialPoint;
     t.expect(parseDxfRecords(partialPoint,

@@ -4251,6 +4251,15 @@ bool DRW_Entity::replaceDxfRetainedStringField(
         std::move(value));
 }
 
+bool DRW_Entity::replaceDxfRetainedStringField(
+    const std::unique_ptr<dxfReader>& reader, std::size_t& ownerBytes,
+    std::string& destination, std::string value,
+    DxfReadRetainedReservation& reservation) {
+    return replaceDxfReadRetainedString(
+        reader, m_dxfRetainedStringLease, ownerBytes, destination,
+        std::move(value), reservation);
+}
+
 bool DRW_Entity::appendDxfRetainedStringField(
     const std::unique_ptr<dxfReader>& reader, std::size_t& ownerBytes,
     std::vector<std::string>& destination, std::string value) {
@@ -15311,7 +15320,7 @@ bool DRW_ArcAlignedText::parseCode(int code, const std::unique_ptr<dxfReader>& r
         }
         return replaceDxfRetainedStringField(
             reader, m_dxfRetainedD2TFieldBytes[index], destination,
-            std::move(value));
+            std::move(value), formattedOutput);
     };
     switch (code) {
     case 1:
@@ -29015,6 +29024,10 @@ bool DRW_Viewport::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
     case 63:
         // Groups 63, 421 and 431 are independent ambient color fields;
         // their order in a DXF record is not fixed.
+        if (!replaceDxfRetainedStringField(
+                reader, m_dxfRetainedAmbientColorNameBytes,
+                ambientColorName, std::string{}))
+            return false;
         ambientColor = static_cast<std::uint32_t>(reader->getInt32());
         ambientColorMethod = 0u;
         ambientColorDwgFlags = 0u;
@@ -29080,6 +29093,10 @@ bool DRW_Viewport::parseCode(int code, const std::unique_ptr<dxfReader>& reader)
         contrast = reader->getDouble();
         break;
     case 421:
+        if (!replaceDxfRetainedStringField(
+                reader, m_dxfRetainedAmbientColorNameBytes,
+                ambientColorName, std::string{}))
+            return false;
         ambientColorRgb = reader->getInt32();
         ambientColorMethod = 0u;
         ambientColorDwgFlags = 0u;

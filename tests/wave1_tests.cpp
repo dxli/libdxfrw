@@ -22835,7 +22835,7 @@ void testDimensionPictureBlockStrictNameAdmission(TestContext& t) {
             dimension = std::make_unique<DRW_DimLargeRadial>();
         else
             dimension = std::make_unique<DRW_DimAligned>();
-        dimension->setStyle("");
+        dimension->setStyle("Standard");
         return dimension;
     };
     class PictureBlockInterface final : public dx_iface {
@@ -22866,7 +22866,7 @@ void testDimensionPictureBlockStrictNameAdmission(TestContext& t) {
             block->handle = nextHandle++;
             auto dimension = std::make_unique<DRW_DimAligned>();
             dimension->handle = nextHandle++;
-            dimension->setStyle("");
+            dimension->setStyle("Standard");
             dimension->setName(pictureName);
             block->ent.push_back(dimension.release());
             storage.blocks.push_back(block.release());
@@ -22977,6 +22977,7 @@ void testDimensionPictureBlockStrictNameAdmission(TestContext& t) {
                                               std::ostringstream& output,
                                               PictureBlockInterface& adapter) {
             owner.version = DRW::AC1032;
+            owner.binFile = binary;
             owner.writer = binary
                 ? std::unique_ptr<dxfWriter>(
                       std::make_unique<dxfWriterBinary>(&output))
@@ -22985,6 +22986,7 @@ void testDimensionPictureBlockStrictNameAdmission(TestContext& t) {
             owner.setSourceBlockRecords({}, true);
             owner.iface = &adapter;
             adapter.bind(owner);
+            return owner.writeTables();
         };
 
         for (int kind = 0; kind != 3; ++kind) {
@@ -22992,9 +22994,10 @@ void testDimensionPictureBlockStrictNameAdmission(TestContext& t) {
             missingBodyOutput << prefix;
             PictureBlockInterface missingBodyAdapter;
             dxfRW missingBodyOwner("");
-            configureOwner(missingBodyOwner, missingBodyOutput,
-                           missingBodyAdapter);
-            const bool missingBodyPlanned =
+            const bool missingTables = configureOwner(
+                missingBodyOwner, missingBodyOutput, missingBodyAdapter);
+            const bool missingBodyPlanned = missingTables
+                &&
                 missingBodyOwner.writeBlockRecord("*D_NO_BODY");
             const bool emptyBlockSection = missingBodyOwner.writeBlocks();
             const std::string beforeMissingDimension =
@@ -23019,10 +23022,10 @@ void testDimensionPictureBlockStrictNameAdmission(TestContext& t) {
             PictureBlockInterface completeBodyAdapter;
             completeBodyAdapter.addGeometryBlock("*D_COMPLETE");
             dxfRW completeBodyOwner("");
-            configureOwner(completeBodyOwner, completeBodyOutput,
-                           completeBodyAdapter);
-            const bool completeBodyPlanned =
-                completeBodyOwner.writeBlockRecord("*D_COMPLETE");
+            const bool completeBodyPlanned = configureOwner(
+                completeBodyOwner, completeBodyOutput, completeBodyAdapter);
+            const bool completeRecordPlanned = completeBodyPlanned
+                && completeBodyOwner.writeBlockRecord("*D_COMPLETE");
             const bool completeBlockSection = completeBodyOwner.writeBlocks();
             auto completeBodyDimension = makeDimension(kind);
             completeBodyDimension->handle =
@@ -23030,7 +23033,7 @@ void testDimensionPictureBlockStrictNameAdmission(TestContext& t) {
             completeBodyDimension->setName("*D_COMPLETE");
             const bool completeDimensionWritten =
                 completeBodyOwner.writeDimension(completeBodyDimension.get());
-            t.expect(completeBodyPlanned && completeBlockSection
+            t.expect(completeRecordPlanned && completeBlockSection
                          && completeBodyOwner.m_emittedDxfBlockBodyNames.count(
                                 "*D_COMPLETE") == 1u
                          && completeDimensionWritten,
@@ -23043,18 +23046,19 @@ void testDimensionPictureBlockStrictNameAdmission(TestContext& t) {
         forwardAdapter.addDimensionBlock("*D_OWNER", "*D_FORWARD");
         forwardAdapter.addGeometryBlock("*D_FORWARD");
         dxfRW forwardOwner("");
-        configureOwner(forwardOwner, forwardOutput, forwardAdapter);
-        const bool forwardRecordsPlanned =
-            forwardOwner.writeBlockRecord("*D_OWNER")
+        const bool forwardRecordsPlanned = configureOwner(
+            forwardOwner, forwardOutput, forwardAdapter);
+        const bool forwardRecordsRegistered = forwardRecordsPlanned
+            && forwardOwner.writeBlockRecord("*D_OWNER")
             && forwardOwner.writeBlockRecord("*D_FORWARD");
         const bool forwardBlockSection = forwardOwner.writeBlocks();
         DRW_DimAligned forwardModelDimension;
         forwardModelDimension.handle = 0x592u;
-        forwardModelDimension.setStyle("");
+        forwardModelDimension.setStyle("Standard");
         forwardModelDimension.setName("*D_FORWARD");
         const bool forwardDimensionWritten =
             forwardOwner.writeDimension(&forwardModelDimension);
-        t.expect(forwardRecordsPlanned && forwardBlockSection
+        t.expect(forwardRecordsRegistered && forwardBlockSection
                      && forwardOwner.m_emittedDxfBlockBodyNames.count(
                             "*D_OWNER") == 1u
                      && forwardOwner.m_emittedDxfBlockBodyNames.count(
@@ -23067,15 +23071,16 @@ void testDimensionPictureBlockStrictNameAdmission(TestContext& t) {
         PictureBlockInterface unresolvedForwardAdapter;
         unresolvedForwardAdapter.addDimensionBlock("*D_OWNER", "*D_ABSENT");
         dxfRW unresolvedForwardOwner("");
-        configureOwner(unresolvedForwardOwner, unresolvedForwardOutput,
-                       unresolvedForwardAdapter);
-        const bool unresolvedForwardPlanned =
-            unresolvedForwardOwner.writeBlockRecord("*D_OWNER")
+        const bool unresolvedForwardPlanned = configureOwner(
+            unresolvedForwardOwner, unresolvedForwardOutput,
+            unresolvedForwardAdapter);
+        const bool unresolvedForwardRegistered = unresolvedForwardPlanned
+            && unresolvedForwardOwner.writeBlockRecord("*D_OWNER")
             && unresolvedForwardOwner.writeBlockRecord("*D_ABSENT");
         const std::string beforeUnresolvedBlocks = unresolvedForwardOutput.str();
         const bool unresolvedForwardRejected =
             !unresolvedForwardOwner.writeBlocks();
-        t.expect(unresolvedForwardPlanned
+        t.expect(unresolvedForwardRegistered
                      && unresolvedForwardRejected
                      && unresolvedForwardOwner.getLastDiagnostic().code
                          == "incomplete-dimension-picture-block"

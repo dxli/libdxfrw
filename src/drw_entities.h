@@ -30,6 +30,7 @@
 
 class dxfReader;
 class DxfReadRetainedLease;
+class DxfReadRetainedReservation;
 class dwgBuffer;
 class dwgRW;
 class DRW_Polyline;
@@ -284,6 +285,10 @@ protected:
     bool replaceDxfRetainedStringField(
         const std::unique_ptr<dxfReader>& reader, std::size_t& ownerBytes,
         std::string& destination, std::string value);
+    bool replaceDxfRetainedStringField(
+        const std::unique_ptr<dxfReader>& reader, std::size_t& ownerBytes,
+        std::string& destination, std::string value,
+        DxfReadRetainedReservation& reservation);
     // Append a parsed string to one aggregate vector field while charging the
     // same shared lease used by scalar string destinations.
     bool appendDxfRetainedStringField(

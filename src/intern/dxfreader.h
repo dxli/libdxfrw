@@ -208,6 +208,7 @@ public:
         DxfReadRetainedReservation&&) = delete;
 
     bool reserved() const noexcept { return m_reserved; }
+    std::size_t bytes() const noexcept { return m_bytes; }
 
     // Adjust or transfer a live charge when an owned representation changes
     // form without changing its lifetime owner.
@@ -309,6 +310,19 @@ public:
         if (m_bytes != 0u)
             m_budget->release(m_bytes);
         m_bytes = nextSize;
+        return true;
+    }
+
+    // Transfer a precharged field reservation into this aggregate owner while
+    // keeping the charges for its sibling fields. The caller releases the
+    // replaced field's old charge after publishing the new value.
+    bool absorb(DxfReadRetainedReservation& reservation) noexcept {
+        if (m_budget == nullptr || reservation.budget() != m_budget
+            || !reservation.reserved()
+            || reservation.bytes()
+                > (std::numeric_limits<std::size_t>::max)() - m_bytes)
+            return false;
+        m_bytes += reservation.transfer();
         return true;
     }
 
@@ -860,6 +874,47 @@ inline bool replaceDxfReadRetainedString(
             return false;
     }
     ownerBytes = budget != nullptr ? destination.size() : 0u;
+    checkpoint.commit();
+    return true;
+}
+
+// Replace a string whose allocation was already covered by a lexical
+// reservation. Absorb that charge into the aggregate value lease before
+// releasing the old field charge, avoiding a transient double charge while
+// preserving the same atomic admission boundary.
+inline bool replaceDxfReadRetainedString(
+    const std::unique_ptr<dxfReader>& reader,
+    std::shared_ptr<DxfReadRetainedLease>& lease,
+    std::size_t& ownerBytes, std::string& destination, std::string value,
+    DxfReadRetainedReservation& reservation) {
+    if (reader == nullptr)
+        return false;
+    const auto budget = reader->retainedByteBudget();
+    if (budget == nullptr)
+        return replaceDxfReadRetainedString(
+            reader, lease, ownerBytes, destination, std::move(value));
+
+    DxfReadRetainedLeaseCheckpoint checkpoint(lease);
+    if (lease == nullptr) {
+        try {
+            lease = std::make_shared<DxfReadRetainedLease>(budget);
+        } catch (...) {
+            return false;
+        }
+    } else if (lease->budget() != budget
+               && !lease->bind(budget, lease->bytes())) {
+        return false;
+    }
+    if (!lease->absorb(reservation))
+        return false;
+    if (ownerBytes > lease->bytes()) {
+        budget->reject();
+        return false;
+    }
+    destination = std::move(value);
+    if (!lease->resizeTo(lease->bytes() - ownerBytes))
+        return false;
+    ownerBytes = destination.size();
     checkpoint.commit();
     return true;
 }

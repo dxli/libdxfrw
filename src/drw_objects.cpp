@@ -35357,8 +35357,8 @@ bool DRW_DimensionAssociation::encodeDwg(
     DRW::Version version, dwgBufferW *buf, dwgBufferW *strBuf,
     dwgBufferW *handleBuf) const {
     // DIMASSOC is introduced with the R2007 custom-class set. This encoder
-    // writes the modeled AcDbOsnapPointRef profile, retaining ordered main
-    // handles, optional XREF paths, and the single modeled intersection edge.
+    // writes the modeled AcDbOsnapPointRef profile, including ordered main
+    // handles, XREF paths, and the single modeled intersection edge.
     if (buf == nullptr || version < DRW::AC1021
         || (m_associativityFlags & ~0x0Fu) != 0
         || m_osnapRefs.size() > 4
