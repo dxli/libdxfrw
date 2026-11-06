@@ -74414,13 +74414,21 @@ bool rasterVariablesDwgAdapterTransport(
         const std::filesystem::path& physicalSourcePath = {},
         bool directNodOwner = false,
         DRW::Version revision = DRW::AC1027,
-        bool frameOne = false) {
+        bool frameOne = false,
+        const std::filesystem::path& outputDirectory = {}) {
     const bool generatedSource = physicalSourcePath.empty();
     const auto nonce = std::chrono::steady_clock::now()
                            .time_since_epoch()
                            .count();
-    const std::filesystem::path base =
-        std::filesystem::temp_directory_path()
+    const bool removeDxfOutputs = outputDirectory.empty();
+    const std::filesystem::path selectedOutputDirectory = removeDxfOutputs
+        ? std::filesystem::temp_directory_path() : outputDirectory;
+    std::error_code directoryError;
+    std::filesystem::create_directories(selectedOutputDirectory,
+                                        directoryError);
+    if (directoryError)
+        return fail("could not create RASTERVARIABLES output directory");
+    const std::filesystem::path base = selectedOutputDirectory
         / ("libdxfrw-rastervariables-adapter-" + std::to_string(nonce));
     const std::filesystem::path sourcePath = generatedSource
         ? std::filesystem::path(base.string() + ".dwg")
@@ -74433,17 +74441,21 @@ bool rasterVariablesDwgAdapterTransport(
         std::filesystem::path source;
         std::array<std::filesystem::path, 3> outputs;
         bool removeSource;
+        bool removeDxfOutputs;
         ~Cleanup() {
             if (removeSource) {
                 std::error_code ignored;
                 std::filesystem::remove(source, ignored);
             }
-            for (const auto& path : outputs) {
+            for (std::size_t i = 0; i < outputs.size(); ++i) {
+                if (i < 2u && !removeDxfOutputs)
+                    continue;
                 std::error_code ignored;
-                std::filesystem::remove(path, ignored);
+                std::filesystem::remove(outputs[i], ignored);
             }
         }
-    } cleanup{sourcePath, {asciiPath, binaryPath, physicalProjectionPath}, generatedSource};
+    } cleanup{sourcePath, {asciiPath, binaryPath, physicalProjectionPath},
+              generatedSource, removeDxfOutputs};
     if ((generatedSource && std::filesystem::exists(sourcePath))
         || (!generatedSource && !std::filesystem::is_regular_file(sourcePath))
         || std::filesystem::exists(physicalProjectionPath)
@@ -77301,11 +77313,13 @@ int main(int argc, char** argv) {
             == "--rastervariables-physical-ac1027-direct-nod")
         return rasterVariablesDwgAdapterTransport(
             argv[2], true, DRW::AC1027) ? 0 : 1;
-    if (argc == 3
+    if ((argc == 3 || argc == 4)
         && std::string(argv[1])
             == "--rastervariables-physical-ac1021-direct-nod")
         return rasterVariablesDwgAdapterTransport(
-            argv[2], true, DRW::AC1021) ? 0 : 1;
+            argv[2], true, DRW::AC1021, false,
+            argc == 4 ? std::filesystem::path(argv[3])
+                      : std::filesystem::path{}) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1])
             == "--rastervariables-physical-ac1032-direct-nod")
