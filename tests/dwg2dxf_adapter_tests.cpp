@@ -56497,9 +56497,28 @@ bool physicalAc1021RecomposeDataOutputReadback(
             });
         const DRW_XRecord* record = uniqueRecord(source, recordHandle);
         const DRW_TableStyle* tableStyle = uniqueTableStyle(source, tableStyleHandle);
+        const DRW_Layer* sourceLayerExtensionOwner = nullptr;
+        std::size_t sourceLayerExtensionOwnerMatches = 0u;
+        for (const DRW_Layer& layer : source.layers) {
+            if (layer.xDictHandle != 0x13Cu)
+                continue;
+            sourceLayerExtensionOwner = &layer;
+            ++sourceLayerExtensionOwnerMatches;
+        }
+        const DRW_Dictionary* sourceLayerExtension = nullptr;
+        std::size_t sourceLayerExtensionMatches = 0u;
+        for (const DRW_Dictionary& dictionary : source.dictionaries) {
+            if (dictionary.handle != 0x13Cu)
+                continue;
+            sourceLayerExtension = &dictionary;
+            ++sourceLayerExtensionMatches;
+        }
         const DRW_UnsupportedObject* sourceFrame =
             DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
                 source, source.importGeneration, recordHandle);
+        const DRW_UnsupportedObject* layerExtensionFrame =
+            DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+                source, source.importGeneration, 0x13Cu);
         const DRW_UnsupportedObject* tableStyleFrame =
             DxIfaceStandardDwgCaptureTestAccess::opaqueSourceFrame(
                 source, source.importGeneration, tableStyleHandle);
@@ -56538,6 +56557,19 @@ bool physicalAc1021RecomposeDataOutputReadback(
             || sourceFrame->m_version != DRW::AC1021
             || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
                 source, recordHandle)
+            || sourceLayerExtensionOwnerMatches != 1u
+            || sourceLayerExtensionOwner == nullptr
+            || sourceLayerExtensionOwner->handle != 0x10u
+            || sourceLayerExtensionMatches != 1u
+            || sourceLayerExtension == nullptr
+            || sourceLayerExtension->parentHandle
+                != sourceLayerExtensionOwner->handle
+            || !sourceLayerExtension->m_entries.empty()
+            || !sourceLayerExtension->reactorHandles.empty()
+            || layerExtensionFrame == nullptr
+            || layerExtensionFrame->m_objectType != 42u
+            || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                source, 0x13Cu)
             || tableStyleFrame == nullptr || tableStyleFrame->m_objectType != 504u)
             return fail("AC1021 recompose-data record/target profile changed");
         dx_data projection;
@@ -56632,6 +56664,9 @@ bool physicalAc1021RecomposeDataOutputReadback(
         writer.mutateAfterObjects = false;
         if (!write())
             return fail("restored AC1021 recompose-data graph did not retry on same adapter");
+        if (!DxIfaceStandardDwgCaptureTestAccess::standardDwgOutputQualified(
+                writer, source.importGeneration, 0x13Cu))
+            return fail("AC1021 recompose-data layer extension DICTIONARY source frame was not output-qualified");
 
         dx_iface outputReader;
         dx_data output;
@@ -56762,6 +56797,11 @@ bool physicalAc1021RecomposeDataOutputReadback(
                 || outputLayerExtension->parentHandle != outputLayer->handle
                 || !outputLayerExtension->m_entries.empty())
                 return fail("AC1021 recompose-data layer extension DICTIONARY did not read back closed");
+            if (sourceLayer.xDictHandle == 0x13Cu
+                && (outputLayer->xDictHandle
+                        != outputLayerExtension->handle
+                    || !outputLayerExtension->reactorHandles.empty()))
+                return fail("AC1021 recompose-data selected layer extension identity/roles changed on readback");
         }
         std::cout << "AC1021 ACDB_RECOMPOSE_DATA source frame handle=0x"
                   << std::hex << recordHandle << std::dec

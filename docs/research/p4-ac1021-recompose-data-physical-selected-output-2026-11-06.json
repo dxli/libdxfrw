@@ -64,7 +64,7 @@
   },
   "implementation": {
     "files": ["tests/dwg2dxf_adapter_tests.cpp"],
-    "change": "Added a physical-source profile selector and a selected graph projection that combines ACDB_RECOMPOSE_DATA with the source-witnessed TABLESTYLE/CELLSTYLEMAP graph and empty layer extension dictionaries. No production writer change was required."
+    "change": "Added a physical-source profile selector and a selected graph projection that combines ACDB_RECOMPOSE_DATA with the source-witnessed TABLESTYLE/CELLSTYLEMAP graph and empty layer extension dictionaries. The selector now verifies that DICTIONARY 0x13C is uniquely owned by LAYER 0x10, source-eligible, retained in the selected projection, finalized in the standard-object output-proof ledger, and read back with its owner and empty-body roles intact. No production writer change was required."
   },
   "validation": {
     "build": {
@@ -76,12 +76,12 @@
     "sourceProfileLogSha256": "4ada403f23ba0e9ff3ebdb932653900bbd39d43a635b604aac7c2d283c8fb11c",
     "selector": "--ac1021-recompose-data-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg",
     "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --ac1021-recompose-data-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg",
-    "result": "PASS for ASCII and Binary selected output and fresh typed readback. The NOD root and XRECORD owner/reactor are retained; ordered group 90 and group 330 values resolve to the remapped Standard TABLESTYLE. Readback also verifies the TABLESTYLE owner and CELLSTYLEMAP extension graph plus both layer extension-dictionary ownership edges. Late reactor mutation fails without replacing the destination sentinel; restoration permits same-adapter retry.",
+    "result": "PASS for ASCII and Binary selected output and fresh typed readback. The NOD root and XRECORD owner/reactor are retained; ordered group 90 and group 330 values resolve to the remapped Standard TABLESTYLE. Readback also verifies the TABLESTYLE owner and CELLSTYLEMAP extension graph plus both layer extension-dictionary ownership edges. DICTIONARY 0x13C is uniquely source-owned by LAYER 0x10, passes source eligibility, receives finalized standard-object output proof after retry, and reads back with its owner and empty body. Late reactor mutation fails without replacing the destination sentinel; restoration permits same-adapter retry.",
     "outputPolicy": "AllowPartial; unresolved-owner strictness disabled. This does not qualify strict whole-source output.",
-    "logPath": "/private/tmp/p4-ac1021-recompose-data-physical-output-2026-11-06.log",
+    "logPath": "/private/tmp/p4-ac1021-recompose-data-proof-refresh-2026-11-06.log",
     "logSha256": "22349f70adf23c1f2e4fa72c87690f71445e46bf8efdb009ae44fb9c7d64ae70",
-    "testSourceSha256": "e2c30e2dcd035f18ce96892de3c22c798652b69cedc1b301c5274b64e4df6b3b",
-    "executableSha256": "4829f48b8ab6e13ba564102505e1d922d22ea08719dff7cd143a51a6abda1fbf"
+    "testSourceSha256": "538ac372f2e2dd758409f8af12d31931a33f488024b95b45fd01448cd441ffa0",
+    "executableSha256": "17f02aa326a8ccd1767cd27620610e77716ab474a5ec39cf0c9e4adacbb15974"
   },
   "limits": [
     "One unauthenticated local source/profile is covered; this does not establish native TABLESTYLE/CELLSTYLEMAP semantics or producer-wide support.",
@@ -89,5 +89,5 @@
     "Only the selected graph is emitted. Strict whole-source output, independent encoder roundtrip and native application acceptance remain open.",
     "The DWG source and generated DXF outputs are not committed as fixtures."
   ],
-  "nextAction": "Screen the next bounded AC1021 standard-object frame for exact source role, typed body, reference dependencies and a unique selected-output route."
+  "nextAction": "Reconcile the eight remaining AC1021 standard-object source frames against all completed selectors' finalized output-proof ledgers; select the next candidate only from that residual set."
 }
