@@ -241,7 +241,11 @@ snapshot; fresh ASCII/Binary readback resolves each reference to the matching
 SCALE record. The existing AC1024 VIEWPORT compatibility witness still passes
 ([receipt](docs/research/p4-ac1021-viewport-physical-selected-output-2026-11-06.json)).
 This adds two standard frames, bringing the inventory to 106/112; six remain
-unqualified. The same-version whole-source
+unqualified. A focused audit also confirms the AC1021 LAYOUT extension
+DICTIONARY/XRECORD frames `0x205`, `0x288`, `0x3BF` and `0x3C0` already have
+finalized output proofs within that count, so they are not new residuals
+([receipt](docs/research/p4-ac1021-layout-physical-selected-output-2026-11-06.json)).
+The same-version whole-source
 recheck still stops at independent DBCOLOR and other document-wide gates. See
 the [same-version gate
 recheck](docs/research/p4-ac1021-children-room-same-version-output-gate-2026-11-05.json),

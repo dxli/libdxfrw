@@ -52455,6 +52455,16 @@ bool physicalLayoutOutputReadback(
             return fail("invalid physical LAYOUT block-record target was not refused atomically");
         if (!exportPartial())
             return fail("corrected physical LAYOUT graph could not retry on the same adapter");
+        if (ac1021Source) {
+            for (const std::uint32_t handle :
+                    {0x205u, 0x288u, 0x3BFu, 0x3C0u}) {
+                if (!DxIfaceStandardDwgCaptureTestAccess::standardDwgOutputQualified(
+                        writer, source.importGeneration, handle))
+                    return fail("physical AC1021 LAYOUT extension DICTIONARY/XRECORD frame "
+                        + std::to_string(handle)
+                        + " lacks finalized standard output proof");
+            }
+        }
         if (!ac1021Source && source.dwgReadOutcome.opaqueViewCallbacks != 0u
             && DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualificationCount(
                 source) != source.dwgReadOutcome.opaqueViewCallbacks)

@@ -44,14 +44,16 @@
   "validation": {
     "build": "PASS: cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4; -Werror configuration.",
     "physicalSelector": "PASS: build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --layout-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg.",
-    "encodings": "PASS ASCII and Binary AC1021 output and fresh local typed readback. The selector verifies Model/dwgmodels.com plot and layout fields, ACAD_LAYOUT and BLOCK_RECORD links, extension dictionary/XRECORD ownership, last-active target roles, source callback qualification, and destination-preserving refusal after corrupting the paper-space BLOCK_RECORD backlink followed by same-adapter retry.",
+    "encodings": "PASS ASCII and Binary AC1021 output and fresh local typed readback. The selector verifies Model/dwgmodels.com plot and layout fields, ACAD_LAYOUT and BLOCK_RECORD links, extension dictionary/XRECORD ownership, last-active target roles, source callback qualification, and destination-preserving refusal after corrupting the paper-space BLOCK_RECORD backlink followed by same-adapter retry. An explicit standard-frame proof audit also passes for extension DICTIONARY/XRECORD handles 0x205, 0x288, 0x3BF and 0x3C0; these four are already represented in the aggregate 106/112 standard-object count.",
     "focusedCtests": "PASS: libdxfrw_layout_source_proof and libdxfrw_dictionary_default_adapter_roundtrip (2/2).",
     "broaderImageCtests": "NOT PASS: dwg2dxf_generated_image_dictionary_source_identity and dwg2dxf_rooted_image_dictionary_closure reach an AC1027 physical-source gate and fail with 'AC1027 DWG source references are not fully qualified'; no AC1021 LAYOUT selector failure was reported. Recheck against the corresponding AC1027 source baseline before attributing these failures.",
     "diffCheck": "PASS: git diff --check.",
     "fullSuites": "NOT RUN.",
-    "testSourceSha256": "e8a2e47375dcc4da6fcbc20e3210d2657872878d05fb22b308d79d6480faf9a0",
+    "selectorLogPath": "/tmp/p4-layout-proof-selector.log",
+    "selectorLogSha256": "5a4f451b84143d2739911356fb6681bbb18422c01a7341d01b071b5842ac3fb9",
+    "testSourceSha256": "d694fe953105972ce533efe4271ef8c54d5f113135c19c058486993c53a32fb2",
     "productionSourceSha256": "a3f2980d84033b03b1de68771f297f6375702e1dfc6dcb4c5cd4d44f8355ad21",
-    "executableSha256": "3d56da9b9ea891f36295d75051532fa3fe95bd972a7de8e70a4885b41d3976db"
+    "executableSha256": "85d016ad7de369d2482298ba0daedf63a9ce745d2052e24b6deb24a42cd62bc6"
   },
   "limits": [
     "One local AC1021 file whose author and producer are unauthenticated.",

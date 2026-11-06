@@ -229,12 +229,12 @@
   },
   "diagnostic": {
     "testSource": "tests/dwg2dxf_adapter_tests.cpp",
-    "testSourceSha256": "45352d836f9b79cc539705f1712b5ff9d3b8f5cc5b5a9cff82de88f4d6d2dbc9",
+    "testSourceSha256": "d694fe953105972ce533efe4271ef8c54d5f113135c19c058486993c53a32fb2",
     "executable": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests",
-    "executableSha256": "e00576071a165eb459ab840a5f9977dcce77d7c504767ba8cdba96832989443e",
+    "executableSha256": "85d016ad7de369d2482298ba0daedf63a9ce745d2052e24b6deb24a42cd62bc6",
     "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/children-room-decoration.dwg",
     "result": "PASS; prints per-handle source type, class and carrier records for all 74 opaque carrier records and all 112 standard-object source frames, including DICTIONARY/XRECORD payloads, ordered key/target edges, NOD root keys and target handles, and GROUP callback count.",
-    "logPath": "/tmp/p4-ac1021-opaque-inventory-post-viewport-scale-proof-2026-11-06.log",
+    "logPath": "/tmp/p4-ac1021-opaque-inventory-post-layout-proof-audit-2026-11-06.log",
     "logSha256": "26568efae6219f75419ee2f31bcea322f9245e33631a8a3eb59debf38d4f8499"
   },
   "limits": [
