@@ -54249,6 +54249,203 @@ bool physicalAc1021EmptyGroupDictionaryOutputReadback(
     return true;
 }
 
+bool physicalAc1021EmptyImageDictionaryOutputReadback(
+        const std::filesystem::path& sourcePath) {
+    const auto uniqueDictionary = [](const dx_data& data,
+                                     std::uint32_t handle) {
+        const DRW_Dictionary* result = nullptr;
+        for (const DRW_Dictionary& dictionary : data.dictionaries) {
+            if (dictionary.handle != handle) continue;
+            if (result != nullptr) return static_cast<const DRW_Dictionary*>(nullptr);
+            result = &dictionary;
+        }
+        return result;
+    };
+    for (const bool binary : {false, true}) {
+        dx_iface sourceReader;
+        dx_data source;
+        if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+            || source.sourceVersion != DRW::AC1021
+            || !source.hasNamedObjectDictionary
+            || !source.imageDefinitions.empty()
+            || !source.imageDefinitionReactors.empty())
+            return fail("AC1021 empty ACAD_IMAGE_DICT source is not the zero-image profile");
+        const auto root = std::find_if(
+            source.namedObjectDictionary.m_entries.begin(),
+            source.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_IMAGE_DICT";
+            });
+        const std::uint32_t imageHandle = root
+                == source.namedObjectDictionary.m_entries.end()
+            ? 0u : root->m_handle;
+        const DRW_Dictionary* imageDictionary =
+            uniqueDictionary(source, imageHandle);
+        const DRW_UnsupportedObject* sourceFrame =
+            DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+                source, source.importGeneration, imageHandle);
+        if (source.namedObjectDictionary.handle != 0x0Cu
+            || source.namedObjectDictionary.hardOwner != 0
+            || source.namedObjectDictionary.cloning != 1
+            || imageHandle != 0x2D1u
+            || std::count_if(
+                source.namedObjectDictionary.m_entries.begin(),
+                source.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ACAD_IMAGE_DICT";
+                }) != 1
+            || imageDictionary == nullptr
+            || imageDictionary->parentHandle
+                != source.namedObjectDictionary.handle
+            || imageDictionary->hardOwner != 0
+            || imageDictionary->cloning != 1
+            || imageDictionary->countCap
+            || !imageDictionary->hasCompleteDwgEntries()
+            || !imageDictionary->m_entries.empty()
+            || imageDictionary->xDictHandle != 0u
+            || !imageDictionary->appData.empty()
+            || !imageDictionary->extData.empty()
+            || imageDictionary->hasDataStorageBinaryData()
+            || imageDictionary->hasDwgCommonLinkTail()
+            || imageDictionary->reactorHandles
+                != std::vector<std::uint32_t>{
+                    source.namedObjectDictionary.handle}
+            || sourceFrame == nullptr || sourceFrame->m_objectType != 42u
+            || sourceFrame->m_handle != imageHandle
+            || sourceFrame->m_version != DRW::AC1021
+            || sourceFrame->m_isEntity || sourceFrame->m_hasDataStorage
+            || sourceFrame->m_rawBytes.empty()
+            || sourceFrame->m_objectSize == 0u
+            || !DxIfaceStandardDwgCaptureTestAccess::standardSourceEligible(
+                source, imageHandle))
+            return fail("AC1021 ACAD_IMAGE_DICT source frame/owner/reactor profile changed");
+
+        struct Writer final : dx_iface {
+            std::uint32_t targetHandle{0u};
+            bool mutateAfterObjects{false};
+            void writeObjects() override {
+                dx_iface::writeObjects();
+                if (!mutateAfterObjects || cData == nullptr) return;
+                for (DRW_Dictionary& dictionary : cData->dictionaries) {
+                    if (dictionary.handle == targetHandle) {
+                        dictionary.reactorHandles.clear();
+                        return;
+                    }
+                }
+            }
+        } writer;
+        writer.cData = &source;
+        writer.targetHandle = imageHandle;
+        const auto nonce = std::chrono::steady_clock::now()
+                               .time_since_epoch().count();
+        const std::filesystem::path outputPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-image-dict-ac1021-"
+               + std::to_string(nonce)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{outputPath};
+        const std::string sentinel = "AC1021 ACAD_IMAGE_DICT sentinel\n";
+        const auto seedDestination = [&]() {
+            std::ofstream output(outputPath, std::ios::binary | std::ios::trunc);
+            return output && static_cast<bool>(output << sentinel);
+        };
+        const auto destinationIsSentinel = [&]() {
+            std::ifstream input(outputPath, std::ios::binary);
+            const std::string actual{
+                std::istreambuf_iterator<char>(input), {}};
+            return actual == sentinel;
+        };
+        const auto write = [&]() {
+            return writer.fileExport(
+                outputPath.string(), DRW::AC1021, binary, &source,
+                false, false, dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::AllowPartial);
+        };
+        if (!seedDestination())
+            return fail("could not seed AC1021 ACAD_IMAGE_DICT destination sentinel");
+        writer.mutateAfterObjects = true;
+        if (write() || !destinationIsSentinel())
+            return fail("late AC1021 ACAD_IMAGE_DICT reactor mutation published or replaced destination");
+        DRW_Dictionary* mutableImageDictionary = nullptr;
+        for (DRW_Dictionary& dictionary : source.dictionaries)
+            if (dictionary.handle == imageHandle)
+                mutableImageDictionary = &dictionary;
+        if (mutableImageDictionary == nullptr
+            || !mutableImageDictionary->reactorHandles.empty())
+            return fail("late AC1021 ACAD_IMAGE_DICT mutation did not run");
+        mutableImageDictionary->reactorHandles = {
+            source.namedObjectDictionary.handle};
+        writer.mutateAfterObjects = false;
+        if (!write())
+            return fail("corrected AC1021 ACAD_IMAGE_DICT source did not retry on the same adapter");
+        if (!DxIfaceStandardDwgCaptureTestAccess::standardOutputHas(
+                writer, imageHandle)
+            || !DxIfaceStandardDwgCaptureTestAccess::generatedRootsFinal(
+                writer, 2u, true)
+            || !DxIfaceStandardDwgCaptureTestAccess::rasterFinal(writer, 0u))
+            return fail("AC1021 ACAD_IMAGE_DICT source frame/root proof was not finalized");
+
+        dx_iface outputReader;
+        dx_data output;
+        if (!outputReader.fileImport(outputPath.string(), &output, false)
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1021
+            || !output.hasNamedObjectDictionary
+            || !output.imageDefinitions.empty()
+            || !output.imageDefinitionReactors.empty())
+            return fail("AC1021 ACAD_IMAGE_DICT output failed fresh zero-image readback");
+        const auto outputRoot = std::find_if(
+            output.namedObjectDictionary.m_entries.begin(),
+            output.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_IMAGE_DICT";
+            });
+        const DRW_Dictionary* outputImageDictionary = outputRoot
+                == output.namedObjectDictionary.m_entries.end()
+            ? nullptr : uniqueDictionary(output, outputRoot->m_handle);
+        if (std::count_if(
+                output.namedObjectDictionary.m_entries.begin(),
+                output.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ACAD_IMAGE_DICT";
+                }) != 1
+            || outputRoot == output.namedObjectDictionary.m_entries.end()
+            || outputRoot->m_handle == output.namedObjectDictionary.handle
+            || outputRoot->m_dxfHandleCode
+                != DRW_Dictionary::Entry::DxfHandleCode::SoftOwner
+            || outputImageDictionary == nullptr
+            || outputImageDictionary->handle != outputRoot->m_handle
+            || outputImageDictionary->parentHandle
+                != output.namedObjectDictionary.handle
+            || outputImageDictionary->hardOwner != 0
+            || outputImageDictionary->cloning != 1
+            || outputImageDictionary->countCap
+            || !outputImageDictionary->hasCompleteDwgEntries()
+            || !outputImageDictionary->m_entries.empty()
+            || outputImageDictionary->reactorHandles
+                != std::vector<std::uint32_t>{
+                    output.namedObjectDictionary.handle})
+            return fail("AC1021 ACAD_IMAGE_DICT fresh readback changed its generated root/key/owner/reactor graph");
+        std::cout << "AC1021 ACAD_IMAGE_DICT source frame handle=0x"
+                  << std::hex << imageHandle << std::dec
+                  << " offset=" << sourceFrame->m_objectOffset
+                  << " size=" << sourceFrame->m_objectSize
+                  << " body-bytes=" << sourceFrame->m_rawBytes.size() << ".\n"
+                  << "Physical AC1021 ACAD_IMAGE_DICT empty-root "
+                  << (binary ? "Binary" : "ASCII")
+                  << " output/readback passed through the image-generated-root path; late reactor mutation preserved the destination and same-adapter retry succeeded.\n";
+    }
+    return true;
+}
+
 bool physicalTableStyleSourceProfile(
         const std::filesystem::path& sourcePath) {
     dx_iface sourceReader;
@@ -79657,6 +79854,9 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--group-empty-ac1021-output-readback")
         return physicalAc1021EmptyGroupDictionaryOutputReadback(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--image-dict-empty-ac1021-output-readback")
+        return physicalAc1021EmptyImageDictionaryOutputReadback(argv[2]) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--layerstates-xrecord-physical-source-admission")
         return physicalLayerStateXrecordSourceAdmission(argv[2]) ? 0 : 1;

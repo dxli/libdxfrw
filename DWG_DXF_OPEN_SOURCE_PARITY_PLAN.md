@@ -60,21 +60,18 @@ created locally from scratch for the specific control.
 
 ### Next implementation-ready slices
 
-1. **P4 / AC1021 `ACAD_IMAGE_DICT` empty dictionary:** screen NOD key
-   `ACAD_IMAGE_DICT` → DICTIONARY `0x2D1` (721 decimal) through the
-   IMAGE-specific generated-root route. The source census reports an empty
-   dictionary, NOD owner `0xC`, one reactor and no extension dictionary. First
-   establish whether any IMAGEDEF or IMAGEDEF_REACTOR callbacks exist, whether
-   the writer binds this physical dictionary or substitutes its generated
-   image dictionary, and how the unresolved `ACAD_IMAGE_VARS` root is treated.
-   Extend admission only if a unique closed profile preserves the physical
-   root edge and does not collide with image-generated identities. Require
-   fresh ASCII/Binary readback of root key/role, dictionary identity/type,
-   owner/reactor, atomic refusal after a late mutation and same-adapter retry.
-   Keep whole-source strict refusal; do not count a generated or merely empty
-   dictionary as physical-source output evidence. The inventory selector now
-   prints DICTIONARY/XRECORD contents, NOD key/target counts and GROUP callback
-   count for reproducibility.
+1. **P4 / AC1021 `AEC_PROPERTY_SET_DEFS` empty dictionary:** screen NOD key
+   `AEC_PROPERTY_SET_DEFS` → DICTIONARY `0x745` (1861 decimal). The source
+   inventory reports an empty dictionary. Establish its exact owner/reactor,
+   extension-dictionary and generated-root interactions before deciding whether
+   this is an independently closed physical profile. If eligible, require fresh
+   ASCII/Binary readback of its NOD edge and role, unique dictionary identity,
+   type, owner/reactor, atomic late-mutation refusal, destination preservation
+   and same-adapter retry. Keep whole-source strict refusal and support claims
+   unchanged unless graph and semantic evidence justify them. Do not count a
+   synthesized empty dictionary as physical-source output evidence. The
+   inventory selector prints DICTIONARY/XRECORD contents, NOD key/target counts
+   and GROUP callback count for reproducibility.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
@@ -166,11 +163,9 @@ exact-version guard; a same-version AC1021 recheck passes that guard and reaches
 the distinct DBCOLOR source/output evidence gate. The 1,673 observed frames have
 zero entity/object parse failures, and no DXF is created. The 186 observer frames
 are 74 opaque carriers plus 112 standard-object frames; all 112 standard payloads
-match typed callbacks. Bounded selected-graph routes now qualify 25 typed VISUALSTYLE carriers and
-50 standard DICTIONARY/XRECORD frames, including their non-null extension
-dictionaries and ACAD EED, plus all 17 rooted SCALE and 12 rooted
-DICTIONARYVAR carriers; physical ASCII/Binary readback and atomic refusal/retry
-pass. The remaining 20 opaque carriers and 62 standard-object frames are
+match typed callbacks. Bounded selected-graph routes now qualify all 74 opaque
+carriers and 85 standard-object frames, with physical ASCII/Binary readback and
+applicable atomic refusal/retry. The remaining 27 standard-object frames are
 unqualified. The same-version whole-source
 recheck still stops at independent DBCOLOR and other document-wide gates. See
 the [same-version gate
@@ -253,6 +248,19 @@ mutation refuses atomically and the same adapter retries after restoration.
 This qualifies a second standard-object frame, leaving 28 of 112
 unqualified; populated GROUP membership and whole-source output remain open
 ([receipt](docs/research/p4-ac1021-group-physical-selected-output-2026-11-06.json),
+[updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
+
+The same source's empty `ACAD_IMAGE_DICT` DICTIONARY `0x2D1` now passes
+selected ASCII/Binary output and fresh readback through the image-generated-root
+path. Its physical frame is at offset 1,990,495 and spans 17 bytes; the source
+has no IMAGEDEF or IMAGEDEF_REACTOR callbacks, and the dictionary has no
+entries or extension dictionary and reacts to NOD `0xC`. Both generated-root
+proofs and the standard-frame output proof finalize. A late reactor mutation
+preserves the destination sentinel on refusal, and restoration permits a retry
+on the same adapter. This is one additional bounded frame, leaving 27 of 112
+standard-object frames unqualified; unresolved sibling NOD entries, strict
+whole-source output, image semantics and producer qualification remain open
+([receipt](docs/research/p4-ac1021-image-dict-physical-selected-output-2026-11-06.json),
 [updated inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json)).
 
 **Open strict-output defect:** a CRC-resealed AC1027 source with layer 0's
