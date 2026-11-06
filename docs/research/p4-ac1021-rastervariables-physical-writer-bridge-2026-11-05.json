@@ -76,11 +76,11 @@
     },
     {
       "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/children-room-decoration.dwg -y -v2010 /private/tmp/children-room-decoration.dxf",
-      "result": "whole-source export refused during output preparation at the unrelated typed DWG ModelDocViewStyle source-version gate; no DXF destination was created"
+      "result": "historical cross-version AC1021-to-AC1024 attempt refused at the deliberate typed DWG ModelDocViewStyle exact-version guard; a same-version follow-up now passes this guard and reaches the DBCOLOR evidence gate (see the linked recheck receipt)."
     }
   ],
   "nonClaims": [
-    "The physical drawing itself is not eligible for whole-source DXF output; its import is partial.",
+    "The physical drawing itself is not eligible for whole-source DXF output; 186 opaque callbacks are not retained or output-qualified, despite zero entity/object parse failures.",
     "The generated wrapper is a bounded control, not an original-source byte-preserving conversion.",
     "No native AutoCAD, LibreCAD, LibreCAD_3, FreeCAD, or independent raster-display/unit semantic acceptance was run.",
     "This does not establish broader producer/version support or close P4."
@@ -91,6 +91,7 @@
     "Independent native consumer checks for raster image display and unit behavior.",
     "Broader WIPEOUTVARIABLES profile coverage and remaining P4 graph/source closure."
   ],
+  "supersededWholeSourceGateObservation": "The earlier cross-version whole-source attempt did not identify the next same-version gate. See docs/research/p4-ac1021-children-room-same-version-output-gate-2026-11-05.json.",
   "implementationFollowup": {
     "file": "dwg2dxf/dx_iface.cpp",
     "defect": "The output validator already accepted this bounded AC1021 direct-NOD profile, but the extension-object graph validator omitted AC1021 from its direct-NOD parent/reactor route, so physical wrapper output failed at graph validation.",
