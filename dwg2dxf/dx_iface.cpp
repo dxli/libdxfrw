@@ -13047,6 +13047,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         const bool exactDirectNodReactor =
                             data->sourceFormat == dx_source_format::DWG
                             && (data->sourceVersion == DRW::AC1018
+                                || data->sourceVersion == DRW::AC1021
                                 || data->sourceVersion == DRW::AC1024
                                 || data->sourceVersion == DRW::AC1027
                                 || data->sourceVersion == DRW::AC1032)
@@ -13059,6 +13060,7 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                 == data->namedObjectDictionary.handle;
                         if (data->sourceFormat != dx_source_format::DWG
                             || (data->sourceVersion != DRW::AC1018
+                                && data->sourceVersion != DRW::AC1021
                                 && data->sourceVersion != DRW::AC1024
                                 && data->sourceVersion != DRW::AC1027
                                 && data->sourceVersion != DRW::AC1032)

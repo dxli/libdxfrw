@@ -90,5 +90,18 @@
     "Physical whole-source output on a source with eligible document-wide graph closure.",
     "Independent native consumer checks for raster image display and unit behavior.",
     "Broader WIPEOUTVARIABLES profile coverage and remaining P4 graph/source closure."
-  ]
+  ],
+  "implementationFollowup": {
+    "file": "dwg2dxf/dx_iface.cpp",
+    "defect": "The output validator already accepted this bounded AC1021 direct-NOD profile, but the extension-object graph validator omitted AC1021 from its direct-NOD parent/reactor route, so physical wrapper output failed at graph validation.",
+    "fix": "Admit AC1021 in the graph validator when the single reactor and typed parent both target the NOD, consistent with the existing source/output profile checks. No source-wide completeness gate was changed.",
+    "regressionBeforeFix": "The physical selector reached wrapper output then failed with RASTERVARIABLES outside the bounded DWG owner profile during same-adapter retry."
+  },
+  "currentValidation": {
+    "build": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j3: passed with -Werror",
+    "generatedFastFamily": "ctest --test-dir build-gcc -R '^dwg2dxf_rastervariables_.*adapter_transport$' --output-on-failure: 9/9 passed",
+    "physicalSelector": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --rastervariables-physical-ac1021-direct-nod /Users/dli/doc/dwg/children-room-decoration.dwg: passed after graph admission fix",
+    "sourceDigest": "cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce before and after",
+    "diffCheck": "git diff --check: passed"
+  }
 }
