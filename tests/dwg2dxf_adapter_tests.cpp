@@ -667,6 +667,150 @@ public:
         return projection.namedObjectDictionary.m_entries.size() == 1u
             && projection.hasSingleSuccessfulDictionaryDefaultImport();
     }
+    static bool selectPhysicalAc1021MLeaderStyleGraph(
+            const dx_data& source, dx_data& projection) {
+        if (source.sourceFormat != dx_source_format::DWG
+            || source.sourceVersion != DRW::AC1021
+            || source.importGeneration == 0u
+            || !source.hasSingleSuccessfulNamedResourceImport()
+            || !source.hasNamedObjectDictionary
+            || source.mLeaderStyles.size() != 1u)
+            return false;
+        const DRW_MLeaderStyle& style = source.mLeaderStyles.front();
+        if (style.handle != 0x12Eu
+            || style.leaderLineTypeHandle.ref == 0u
+            || style.textStyleHandle.ref == 0u
+            || style.arrowHeadBlockHandle.ref != 0u
+            || style.blockHandle.ref != 0u)
+            return false;
+        const auto root = std::find_if(
+            source.namedObjectDictionary.m_entries.begin(),
+            source.namedObjectDictionary.m_entries.end(),
+            [](const DRW_Dictionary::Entry& entry) {
+                return entry.m_name == "ACAD_MLEADERSTYLE";
+            });
+        if (root == source.namedObjectDictionary.m_entries.end())
+            return false;
+        const auto owner = std::find_if(source.dictionaries.begin(),
+            source.dictionaries.end(), [&root](const DRW_Dictionary& row) {
+                return row.handle == root->m_handle;
+            });
+        const auto appId = std::find_if(source.appIds.begin(),
+            source.appIds.end(), [](const DRW_AppId& row) {
+                return row.name == "ACAD_MLEADERVER";
+            });
+        if (owner == source.dictionaries.end()
+            || appId == source.appIds.end()
+            || std::count_if(source.appIds.begin(), source.appIds.end(),
+                [](const DRW_AppId& row) {
+                    return row.name == "ACAD_MLEADERVER";
+                }) != 1u)
+            return false;
+
+        const auto ltype = std::find_if(source.lineTypes.begin(),
+            source.lineTypes.end(), [&style](const DRW_LType& row) {
+                return row.handle == style.leaderLineTypeHandle.ref;
+            });
+        const auto textStyle = std::find_if(source.textStyles.begin(),
+            source.textStyles.end(), [&style](const DRW_Textstyle& row) {
+                return row.handle == style.textStyleHandle.ref;
+            });
+        const auto ownerFrame = source.m_standardDwgObjectFrames.find(
+            {source.importGeneration, owner->handle});
+        const auto styleFrame = source.m_opaqueDwgSourceFrames.find(
+            {source.importGeneration, style.handle});
+        if (ltype == source.lineTypes.end()
+            || textStyle == source.textStyles.end()
+            || ownerFrame == source.m_standardDwgObjectFrames.end()
+            || styleFrame == source.m_opaqueDwgSourceFrames.end())
+            return false;
+
+        projection.sourceFormat = source.sourceFormat;
+        projection.sourceVersion = source.sourceVersion;
+        projection.importGeneration = source.importGeneration;
+        projection.dwgReadOutcome = source.dwgReadOutcome;
+        projection.hasNamedObjectDictionary = true;
+        projection.namedObjectDictionary = source.namedObjectDictionary;
+        projection.namedObjectDictionary.m_entries.erase(
+            std::remove_if(
+                projection.namedObjectDictionary.m_entries.begin(),
+                projection.namedObjectDictionary.m_entries.end(),
+                [&root](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name != "ACAD_MLEADERSTYLE"
+                        || entry.m_handle != root->m_handle;
+                }),
+            projection.namedObjectDictionary.m_entries.end());
+        projection.dictionaries.push_back(*owner);
+        projection.mLeaderStyles.push_back(style);
+        projection.lineTypes = source.lineTypes;
+        projection.textStyles.push_back(*textStyle);
+        projection.appIds.push_back(*appId);
+        projection.dxfClasses = source.dxfClasses;
+
+        projection.namedResourceImport = source.namedResourceImport;
+        projection.namedResourceImport.scaleRange = {0u, 0u};
+        projection.namedResourceImport.dictionaryVarRange = {0u, 0u};
+        projection.namedResourceImport.mLineStyleRange = {0u, 0u};
+        projection.namedResourceImport.mLeaderStyleRange = {0u, 1u};
+        projection.namedResourceImport.rawRange = {0u, 0u};
+        projection.namedResourceImport.typedRetainedRecords = 1u;
+        projection.namedResourceImport.typedRetainedBytes =
+            source.namedResourceTypedRetainedBytes;
+        projection.namedResourceImport.typedCaptureFailed = false;
+        projection.namedResourceImport.typedResourceLimitExceeded = false;
+        projection.namedResourceImport.rawCallbacks = 0u;
+        projection.namedResourceImport.rawGroupCount = 0u;
+        projection.namedResourceImport.retainedBytes = 0u;
+        projection.namedResourceImport.resourceLimitExceeded = false;
+        projection.namedResourceImport.captureFailed = false;
+        projection.namedResourceImport.successful = true;
+        projection.namedResourceTypedRetainedRecords = 1u;
+        projection.namedResourceTypedRetainedBytes =
+            source.namedResourceTypedRetainedBytes;
+        projection.namedResourceTypedCaptureFailed = false;
+        projection.namedResourceTypedResourceLimitExceeded = false;
+        projection.rawNamedResourceRetainedRecords = 0u;
+        projection.rawNamedResourceRawGroups = 0u;
+        projection.rawNamedResourceRetainedBytes = 0u;
+        projection.rawNamedResourceCaptureFailed = false;
+        projection.mLineStyleRetainedRecords = 0u;
+        projection.mLineStyleRetainedItems = 0u;
+        projection.mLineStyleRetainedBytes = 0u;
+        projection.mLineStyleCaptureFailed = false;
+
+        projection.m_standardDwgObjectFrames.emplace(*ownerFrame);
+        const auto ownerOrdinal = source.m_standardDwgObjectOrdinals.find(
+            {source.importGeneration, owner->handle});
+        if (ownerOrdinal != source.m_standardDwgObjectOrdinals.end())
+            projection.m_standardDwgObjectOrdinals.emplace(*ownerOrdinal);
+        projection.m_standardDwgNamesClosedThrough =
+            source.m_standardDwgNamesClosedThrough;
+        projection.m_standardDwgObjectCaptureFailed = false;
+        projection.m_standardDwgObjectPayloadFailed = false;
+        projection.dictionaryRetainedRecords =
+            source.dictionaryRetainedRecords;
+        projection.dictionaryRetainedEntries =
+            source.dictionaryRetainedEntries;
+        projection.dictionaryRetainedBytes = source.dictionaryRetainedBytes;
+        projection.basicTableRetainedRecords =
+            source.basicTableRetainedRecords;
+        projection.basicTableRetainedItems = source.basicTableRetainedItems;
+        projection.basicTableRetainedBytes = source.basicTableRetainedBytes;
+        projection.basicTableCaptureFailed = source.basicTableCaptureFailed;
+        projection.m_dwgLtypeControlPublication =
+            source.m_dwgLtypeControlPublication;
+        projection.m_dwgLtypeControlGeneration =
+            source.m_dwgLtypeControlGeneration;
+        projection.m_dwgLtypeControlPublicationSeen =
+            source.m_dwgLtypeControlPublicationSeen;
+        projection.m_dwgLtypeControlCaptureFailed =
+            source.m_dwgLtypeControlCaptureFailed;
+        projection.m_opaqueDwgSourceFrames.emplace(*styleFrame);
+        projection.m_opaqueDwgSourceFrameIdentities.insert(styleFrame->first);
+        return projection.namedObjectDictionary.m_entries.size() == 1u
+            && projection.hasSingleSuccessfulNamedResourceImport()
+            && projection.hasCompleteDwgLineTypeControlMembership();
+    }
     static void setDbColorEedSourceBytes(dx_data& data, std::size_t bytes) {
         data.dwgDbColorEedRetainedBytes = bytes;
     }
@@ -1089,6 +1233,18 @@ public:
     }
     static std::size_t opaqueOutputQualificationCount(const dx_data& data) {
         return data.m_opaqueDwgOutputQualifiedFrameIdentities.size();
+    }
+    static bool captureDwgMLeaderStyleSources(dx_iface& iface,
+                                              dx_data& data) {
+        iface.cData = &data;
+        iface.m_extensionMLeaderStyleHandles.clear();
+        for (const DRW_MLeaderStyle& style : data.mLeaderStyles)
+            iface.m_extensionMLeaderStyleHandles.push_back(style.handle);
+        return iface.prepareDxfMLeaderStyles(
+            DRW::AC1024, false, DRW::DxfTextWritePolicy::RequireLossless);
+    }
+    static bool unchangedDwgMLeaderStyleSources(const dx_iface& iface) {
+        return iface.hasUnchangedDwgMLeaderStyleOutputSources();
     }
     static void reportOpaqueOutputGaps(const dx_data& data) {
         for (const auto& key : data.m_opaqueDwgSourceFrameIdentities) {
@@ -55185,8 +55341,28 @@ bool physicalAc1021MLeaderStyleEedSourceProfile(
     if (appIdMatches != 1u)
         return fail("AC1021 MLEADERSTYLE XDATA APPID row is missing or ambiguous");
 
+    dx_iface snapshotWriter;
+    if (!DxIfaceStandardDwgCaptureTestAccess::
+            captureDwgMLeaderStyleSources(snapshotWriter, source))
+        return fail("AC1021 MLEADERSTYLE EED source snapshot could not be captured");
+    DRW_Variant* versionValue = style.extData[1];
+    const DRW_Variant originalVersion = *versionValue;
+    *versionValue = DRW_Variant(1070, std::int32_t{3});
+    const bool eedMutationDetected = !DxIfaceStandardDwgCaptureTestAccess::
+        unchangedDwgMLeaderStyleSources(snapshotWriter);
+    *versionValue = originalVersion;
+    if (!eedMutationDetected
+        || !DxIfaceStandardDwgCaptureTestAccess::
+            unchangedDwgMLeaderStyleSources(snapshotWriter))
+        return fail("AC1021 MLEADERSTYLE deep EED snapshot did not reject a mutation and permit restored retry");
+
     std::cout << "AC1021 MLEADERSTYLE EED source profile PASS;"
-                 " selected output remains unqualified"
+                 " deep snapshot mutation/refusal and restored retry PASS;"
+                 " see selected-output selector for serialization proof"
+              << " references: ltype=" << style.leaderLineTypeHandle.ref
+              << " arrowBlock=" << style.arrowHeadBlockHandle.ref
+              << " textStyle=" << style.textStyleHandle.ref
+              << " block=" << style.blockHandle.ref
               << std::endl;
     return true;
 }
@@ -55197,11 +55373,13 @@ bool physicalMLeaderStyleOutputReadback(
     dx_data source;
     if (!sourceReader.fileImport(sourcePath.string(), &source, false)
         || source.sourceFormat != dx_source_format::DWG
-        || source.sourceVersion != DRW::AC1024
+        || (source.sourceVersion != DRW::AC1024
+            && source.sourceVersion != DRW::AC1021)
         || !source.hasSingleSuccessfulNamedResourceImport()
         || !source.hasNamedObjectDictionary
-        || source.mLeaderStyles.size() != 2u)
-        return fail("physical MLEADERSTYLE source is not the two-record AC1024 profile");
+        || source.mLeaderStyles.size()
+            != (source.sourceVersion == DRW::AC1024 ? 2u : 1u))
+        return fail("physical MLEADERSTYLE source is not an admitted AC1021/AC1024 profile");
 
     using StylesByHandle = std::map<std::uint32_t, const DRW_MLeaderStyle*>;
     using DictionariesByHandle =
@@ -55284,7 +55462,21 @@ bool physicalMLeaderStyleOutputReadback(
     for (const DRW_MLeaderStyle& style : source.mLeaderStyles) {
         if (style.tType != DRW::MLEADERSTYLE
             || style.parentHandle != sourceOwner.handle
-            || !style.appData.empty() || !style.extData.empty()
+            || !style.appData.empty()
+            || (source.sourceVersion == DRW::AC1024
+                && !style.extData.empty())
+            || (source.sourceVersion == DRW::AC1021
+                && (style.extData.size() != 2u
+                    || style.extData[0] == nullptr
+                    || style.extData[1] == nullptr
+                    || style.extData[0]->code() != 1001
+                    || style.extData[0]->type() != DRW_Variant::STRING
+                    || style.extData[0]->c_str() == nullptr
+                    || std::string(style.extData[0]->c_str())
+                        != "ACAD_MLEADERVER"
+                    || style.extData[1]->code() != 1070
+                    || style.extData[1]->type() != DRW_Variant::INTEGER
+                    || style.extData[1]->i_val() != 2))
             || style.hasDataStorageBinaryData()
             || style.hasDwgCommonLinkTail()
             || !style.pendingAppIdResolutions.empty()
@@ -55322,8 +55514,18 @@ bool physicalMLeaderStyleOutputReadback(
                 && !containsBlockRecord(source, style.blockHandle.ref)))
             return fail("physical MLEADERSTYLE reference does not resolve to its declared target role");
     }
-    if (sourceOwners.size() != 2u || sourceKeys.size() != 2u)
-        return fail("physical MLEADERSTYLE owner/key census differs from two records");
+    if (sourceOwners.size() != source.mLeaderStyles.size()
+        || sourceKeys.size() != source.mLeaderStyles.size())
+        return fail("physical MLEADERSTYLE owner/key census differs from imported records");
+
+    dx_data selectedSource;
+    dx_data* outputSource = &source;
+    if (source.sourceVersion == DRW::AC1021) {
+        if (!DxIfaceStandardDwgCaptureTestAccess::
+                selectPhysicalAc1021MLeaderStyleGraph(source, selectedSource))
+            return fail("physical AC1021 MLEADERSTYLE graph could not be selected with its required table dependencies");
+        outputSource = &selectedSource;
+    }
 
     const auto outputEncoding = [&](bool binary) {
         const auto nonce = std::chrono::steady_clock::now()
@@ -55361,6 +55563,7 @@ bool physicalMLeaderStyleOutputReadback(
             bool mutateAfterObjects{false};
             std::uint32_t targetHandle{0u};
             std::map<std::uint32_t, std::uint32_t> remappedHandles;
+            std::map<std::uint32_t, std::uint32_t> emittedSourceTableHandles;
             std::set<std::uint32_t> ambiguousHandles;
 
             void writeObjects() override {
@@ -55397,6 +55600,16 @@ bool physicalMLeaderStyleOutputReadback(
                         capture(style.textStyleHandle.ref);
                         capture(style.blockHandle.ref);
                     }
+                    for (const DRW_AppId& appId : cData->appIds) {
+                        if (appId.name == "ACAD_MLEADERVER") {
+                            capture(appId.handle);
+                            const std::uint32_t emitted =
+                                dxfW->dxfWriteEmittedSourceTableHandle(
+                                    appId.handle);
+                            if (emitted != 0u && emitted != DRW::NoHandle)
+                                emittedSourceTableHandles[appId.handle] = emitted;
+                        }
+                    }
                 }
                 if (!mutateAfterObjects || cData == nullptr)
                     return;
@@ -55414,7 +55627,7 @@ bool physicalMLeaderStyleOutputReadback(
         writer.mutateAfterObjects = true;
         const auto exportPartial = [&]() {
             return writer.fileExport(
-                outputPath.string(), DRW::AC1024, binary, &source,
+                outputPath.string(), DRW::AC1024, binary, outputSource,
                 false, true, dx_dxfSourceTextPolicy::RequireValidSource,
                 DRW::DxfTextWritePolicy::RequireLossless,
                 dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
@@ -55422,27 +55635,27 @@ bool physicalMLeaderStyleOutputReadback(
         };
         if (exportPartial() || !destinationEquals(sentinel))
             return fail("late physical MLEADERSTYLE mutation did not refuse atomically");
-        auto mutableFirst = std::find_if(source.mLeaderStyles.begin(),
-            source.mLeaderStyles.end(), [&first](const DRW_MLeaderStyle& value) {
+        auto mutableFirst = std::find_if(outputSource->mLeaderStyles.begin(),
+            outputSource->mLeaderStyles.end(), [&first](const DRW_MLeaderStyle& value) {
                 return value.handle == first.handle;
             });
-        if (mutableFirst == source.mLeaderStyles.end())
+        if (mutableFirst == outputSource->mLeaderStyles.end())
             return fail("physical MLEADERSTYLE mutation target disappeared");
         mutableFirst->firstSegmentAngle = originalAngle;
         writer.mutateAfterObjects = false;
 
-        auto mutableOwner = std::find_if(source.dictionaries.begin(),
-            source.dictionaries.end(), [&sourceOwner](
+        auto mutableOwner = std::find_if(outputSource->dictionaries.begin(),
+            outputSource->dictionaries.end(), [&sourceOwner](
                 const DRW_Dictionary& value) {
                 return value.handle == sourceOwner.handle;
             });
-        if (mutableOwner == source.dictionaries.end())
+        if (mutableOwner == outputSource->dictionaries.end())
             return fail("physical ACAD_MLEADERSTYLE owner dictionary disappeared");
         const auto rejectChangedOwner = [&](const char* label) {
             if (!seedDestination())
                 return fail("could not reseed physical MLEADERSTYLE destination sentinel");
             if (writer.fileExport(
-                    outputPath.string(), DRW::AC1024, binary, &source,
+                    outputPath.string(), DRW::AC1024, binary, outputSource,
                     false, true, dx_dxfSourceTextPolicy::RequireValidSource,
                     DRW::DxfTextWritePolicy::RequireLossless,
                     dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
@@ -55462,16 +55675,17 @@ bool physicalMLeaderStyleOutputReadback(
                 const DRW_Dictionary::Entry& entry) {
                 return entry.m_handle != first.handle;
             });
-        if (firstKey == mutableOwner->m_entries.end()
-            || secondKey == mutableOwner->m_entries.end())
-            return fail("physical MLEADERSTYLE alias control lacks two owner entries");
+        if (firstKey == mutableOwner->m_entries.end())
+            return fail("physical MLEADERSTYLE owner dictionary has no style key");
         const std::size_t firstKeyIndex = static_cast<std::size_t>(
             firstKey - mutableOwner->m_entries.begin());
         const DRW_Dictionary::Entry originalKey = *firstKey;
-        firstKey->m_handle = secondKey->m_handle;
-        if (!rejectChangedOwner("owner-key alias"))
-            return false;
-        firstKey->m_handle = originalKey.m_handle;
+        if (secondKey != mutableOwner->m_entries.end()) {
+            firstKey->m_handle = secondKey->m_handle;
+            if (!rejectChangedOwner("owner-key alias"))
+                return false;
+            firstKey->m_handle = originalKey.m_handle;
+        }
         mutableOwner->m_entries.erase(mutableOwner->m_entries.begin()
             + static_cast<std::ptrdiff_t>(firstKeyIndex));
         if (!rejectChangedOwner("missing owner key"))
@@ -55568,6 +55782,20 @@ bool physicalMLeaderStyleOutputReadback(
             // targets. Source and DXF-origin object common streams can use
             // different legal reference encodings despite identical roles.
             return parts[0] && parts[1];
+        };
+        const auto sameEedValue = [](const DRW_Variant& expected,
+                                     const DRW_Variant& actual) {
+            if (expected.code() != actual.code()
+                || expected.type() != actual.type())
+                return false;
+            if (expected.type() == DRW_Variant::STRING)
+                return expected.c_str() != nullptr
+                    && actual.c_str() != nullptr
+                    && std::string(expected.c_str())
+                        == std::string(actual.c_str());
+            if (expected.type() == DRW_Variant::INTEGER)
+                return expected.i_val() == actual.i_val();
+            return false;
         };
         const auto reactorAppDataMatches = [](
                 const DRW_TableEntry& value,
@@ -55758,6 +55986,105 @@ bool physicalMLeaderStyleOutputReadback(
                     return fail("physical MLEADERSTYLE reactor role is unmapped");
                 expected.reactorHandles.push_back(mappedReactor);
             }
+            bool eedMatches =
+                actual.extData.size() == expectedOwner.style->extData.size();
+            if (eedMatches) {
+                for (std::size_t index = 0u;
+                     index < actual.extData.size(); ++index) {
+                    const DRW_Variant* sourceValue =
+                        expectedOwner.style->extData[index];
+                    const DRW_Variant* outputValue = actual.extData[index];
+                    if (sourceValue == nullptr || outputValue == nullptr
+                        || !sameEedValue(*sourceValue, *outputValue)) {
+                        eedMatches = false;
+                        break;
+                    }
+                }
+            }
+            if (!eedMatches) {
+                const auto dumpEed = [](const char* label,
+                                        const std::vector<DRW_Variant*>& values) {
+                    std::cerr << label;
+                    for (const DRW_Variant* value : values) {
+                        if (value == nullptr) {
+                            std::cerr << " <null>";
+                            continue;
+                        }
+                        std::cerr << " [" << value->code() << ":"
+                                  << value->type() << "=";
+                        if (value->type() == DRW_Variant::STRING
+                            && value->c_str() != nullptr)
+                            std::cerr << value->c_str();
+                        else if (value->type() == DRW_Variant::INTEGER)
+                            std::cerr << value->i_val();
+                        std::cerr << "]";
+                    }
+                    std::cerr << '\n';
+                };
+                std::vector<DRW_Variant*> expectedEed;
+                for (DRW_Variant* value : expectedOwner.style->extData)
+                    expectedEed.push_back(value);
+                dumpEed("expected EED:", expectedEed);
+                dumpEed("actual EED:", actual.extData);
+            }
+            bool eedAppIdsMatch = eedMatches;
+            std::string eedAppIdFailure;
+            for (const DRW_Variant* sourceValue :
+                 expectedOwner.style->extData) {
+                if (sourceValue == nullptr || sourceValue->code() != 1001)
+                    continue;
+                if (sourceValue->type() != DRW_Variant::STRING
+                    || sourceValue->c_str() == nullptr) {
+                    eedAppIdsMatch = false;
+                    break;
+                }
+                const std::string& appIdName = *sourceValue->content.s;
+                const DRW_AppId* sourceAppId = nullptr;
+                const DRW_AppId* outputAppId = nullptr;
+                for (const DRW_AppId& value : source.appIds)
+                    if (value.name == appIdName) {
+                        if (sourceAppId != nullptr)
+                            eedAppIdsMatch = false;
+                        sourceAppId = &value;
+                    }
+                for (const DRW_AppId& value : output.appIds)
+                    if (value.name == appIdName) {
+                        if (outputAppId != nullptr)
+                            eedAppIdsMatch = false;
+                        outputAppId = &value;
+                    }
+                std::uint32_t expectedAppIdHandle = 0u;
+                if (!eedAppIdsMatch) {
+                    eedAppIdFailure = "duplicate APPID name";
+                    break;
+                }
+                if (sourceAppId == nullptr) {
+                    eedAppIdFailure = "source APPID is absent";
+                    eedAppIdsMatch = false;
+                    break;
+                }
+                if (outputAppId == nullptr) {
+                    eedAppIdFailure = "output APPID is absent";
+                    eedAppIdsMatch = false;
+                    break;
+                }
+                const auto emittedAppId =
+                    writer.emittedSourceTableHandles.find(sourceAppId->handle);
+                if (emittedAppId == writer.emittedSourceTableHandles.end()) {
+                    eedAppIdFailure = "source APPID table binding is absent";
+                    eedAppIdsMatch = false;
+                    break;
+                }
+                expectedAppIdHandle = emittedAppId->second;
+                if (outputAppId->handle != expectedAppIdHandle) {
+                    eedAppIdFailure = "APPID output handle mismatch source="
+                        + std::to_string(sourceAppId->handle) + " expected="
+                        + std::to_string(expectedAppIdHandle) + " actual="
+                        + std::to_string(outputAppId->handle);
+                    eedAppIdsMatch = false;
+                    break;
+                }
+            }
             if (actual.handle != mappedHandle
                 || actual.tType != expectedOwner.style->tType
                 || actual.name != expectedOwner.style->name
@@ -55768,7 +56095,7 @@ bool physicalMLeaderStyleOutputReadback(
                 || actual.reactorHandles != expected.reactorHandles
                 || !reactorAppDataMatches(actual,
                     expected.reactorHandles)
-                || !actual.extData.empty()
+                || !eedMatches || !eedAppIdsMatch
                 || actual.hasDataStorageBinaryData()
                 || actual.hasDwgCommonLinkTail()
                 || !actual.pendingAppIdResolutions.empty()
@@ -55792,7 +56119,10 @@ bool physicalMLeaderStyleOutputReadback(
                     + std::to_string(actual.hasDataStorageBinaryData()) + "/"
                     + std::to_string(actual.hasDwgCommonLinkTail()) + "/"
                     + std::to_string(actual.pendingAppIdResolutions.size()) + "/"
-                    + std::to_string(actual.pendingLayerRefResolutions.size()));
+                    + std::to_string(actual.pendingLayerRefResolutions.size())
+                    + " eed=" + std::to_string(eedMatches)
+                    + " eedAppId=" + std::to_string(eedAppIdsMatch) + " ("
+                    + eedAppIdFailure + ")");
             }
 
             const auto sourceKey = std::find_if(sourceOwner.m_entries.begin(),
@@ -55827,16 +56157,18 @@ bool physicalMLeaderStyleOutputReadback(
                     return value.recName == "MLEADERSTYLE"
                         && value.className == "AcDbMLeaderStyle";
                 }));
-        if (outputIdentities.size() != 2u
+        if (outputIdentities.size() != sourceOwners.size()
             || outputIdentities.size() != outputByHandle.size()
             || mleaderClassCount != 1u
             || mleaderClass == output.dxfClasses.end()
-            || mleaderClass->instanceCount != 2)
+            || mleaderClass->instanceCount
+                != static_cast<int>(sourceOwners.size()))
             return fail("physical MLEADERSTYLE identity or CLASS instance census changed");
 
         std::cerr << "Physical MLEADERSTYLE "
                   << (binary ? "binary" : "ASCII")
-                  << " readback passed: 2 identities, ACAD_MLEADERSTYLE keys, "
+                  << " readback passed: " << outputIdentities.size()
+                  << " identities, ACAD_MLEADERSTYLE keys, "
                      "typed fields, LTYPE/BLOCK_RECORD/STYLE roles, CLASS count, "
                      "atomic refusal and same-adapter retry.\n";
         return true;

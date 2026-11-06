@@ -3744,6 +3744,7 @@ private:
     };
     struct DwgMLeaderStyleOutputSource {
         DRW_MLeaderStyle model;
+        std::vector<DRW_Variant> eed;
     };
     std::unordered_map<std::uint32_t,DxfMLeaderStyleSource> m_dxfMLeaderStyles;
     std::unordered_map<std::uint32_t,DwgMLeaderStyleOutputSource>

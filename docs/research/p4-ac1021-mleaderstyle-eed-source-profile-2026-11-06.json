@@ -3,7 +3,7 @@
   "title": "AC1021 MLEADERSTYLE EED source profile",
   "date": "2026-11-06",
   "supportClaimEffect": "none",
-  "scope": "Freeze the source-side owner, frame, XDATA and APPID facts for the one MLEADERSTYLE in the selected AC1021 drawing; output remains unqualified.",
+  "scope": "Freeze the source-side owner, frame, XDATA and APPID facts for the one MLEADERSTYLE in the selected AC1021 drawing. The later selected-output proof is recorded separately.",
   "source": {
     "path": "/Users/dli/doc/dwg/children-room-decoration.dwg",
     "sha256": "cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce",
@@ -22,8 +22,8 @@
   "qualification": {
     "sourceProfileSelector": "--mleaderstyle-ac1021-eed-source-profile",
     "result": "PASS for the bounded local source facts above.",
-    "output": "NOT QUALIFIED. The existing MLEADERSTYLE source/output inspector skips physical qualification when extData is present. The existing AC1024 physical output profile explicitly requires empty EED and cannot establish this AC1021 case.",
-    "nextRequired": "Deep-snapshot the pointer-backed EED values; prove APPID dependency closure and exact emitted XDATA order/value; add selected AC1021 ASCII/Binary output, readback, mutation refusal and retry before adding the two frames to qualified inventory counts."
+    "output": "This source-only receipt does not qualify output. The follow-on selected AC1021-to-AC1024 output, APPID, readback, refusal and retry proof is recorded in docs/research/p4-ac1021-mleaderstyle-eed-selected-output-2026-11-06.json.",
+    "nextRequired": "Broaden producer/version coverage; whole-source output and native MLEADERSTYLE semantics remain open."
   },
   "validation": {
     "build": {

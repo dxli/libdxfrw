@@ -17,7 +17,7 @@
       "count": 74,
       "customClassCount": 68,
       "fixedTypeCount": 6,
-      "outputQualified": 64,
+      "outputQualified": 65,
       "outputQualifiedByRecord": {
         "VISUALSTYLE": 25,
         "SCALE": 17,
@@ -27,7 +27,8 @@
         "ACDBDICTIONARYWDFLT": 1,
         "ACDBPLACEHOLDER": 1,
         "ACDBSECTIONVIEWSTYLE": 2,
-        "ACDBDETAILVIEWSTYLE": 2
+        "ACDBDETAILVIEWSTYLE": 2,
+        "MLEADERSTYLE": 1
       },
       "byRecord": {
         "VISUALSTYLE": 25,
@@ -54,9 +55,9 @@
       },
       "typedPayloadMatches": 112,
       "opaquePayloadMatches": 0,
-      "outputQualified": 73
+      "outputQualified": 74
     },
-    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. Bounded physical AC1021 routes now qualify 64 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, and two ACDBDETAILVIEWSTYLE. They qualify 73 standard-object frames, including the selected VisualStyle, MATERIAL and DBCOLOR dependencies plus the two ModelDocViewStyle root dictionaries, four extension dictionaries and four XRECORDs. These are selected graph routes with ASCII/Binary output and readback; MATERIAL, DBCOLOR, ModelDocViewStyle and DICTIONARYWDFLT/PLACEHOLDER also check their applicable retained payloads and transaction refusal/retry. The remaining 10 opaque carriers and 39 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate observer frames are not 186 unique opaque class records. The source capture map contains 74 opaque carriers plus 112 standard-object frames. Bounded physical AC1021 routes now qualify 65 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, and one MLEADERSTYLE. They qualify 74 standard-object frames, including the selected VisualStyle, MATERIAL and DBCOLOR dependencies plus the two ModelDocViewStyle root dictionaries, four extension dictionaries, four XRECORDs, and the MLEADERSTYLE owner dictionary. These are selected graph routes with ASCII/Binary output and readback; MATERIAL, DBCOLOR, ModelDocViewStyle and DICTIONARYWDFLT/PLACEHOLDER also check their applicable retained payloads and transaction refusal/retry. The remaining nine opaque carriers and 38 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -138,8 +139,8 @@
     "observedCount": 1,
     "handle": "0x12E",
     "selector": "--mleaderstyle-ac1021-eed-source-profile /Users/dli/doc/dwg/children-room-decoration.dwg",
-    "result": "PASS for source facts only: the style is uniquely rooted and owned, its source frame is class-identified, and its ordered XDATA is (1001, ACAD_MLEADERVER), (1070, 2) with one matching APPID row. Physical selected output remains unqualified because the current source/output proof skips MLEADERSTYLE records carrying EED.",
-    "receipt": "docs/research/p4-ac1021-mleaderstyle-eed-source-profile-2026-11-06.json",
-    "next": "Deep-snapshot pointer-backed EED values, close APPID dependency, then prove emitted XDATA order/value, ASCII/Binary readback, mutation refusal and retry."
+    "result": "PASS for the bounded AC1021 selected graph to AC1024 DXF in ASCII and Binary. Deep EED snapshots detect in-place mutation; the source APPID is verified through its emitted table binding; exact XDATA order/value, owner/key/reference roles, fresh readback, destination-preserving refusal and same-adapter retry pass. Adds one opaque MLEADERSTYLE carrier and its owner dictionary frame to the bounded output inventory only.",
+    "receipt": "docs/research/p4-ac1021-mleaderstyle-eed-selected-output-2026-11-06.json",
+    "next": "Broaden producer/version coverage; whole-source output, native MLEADERSTYLE semantics and unmodeled EED profiles remain open."
   }
 }

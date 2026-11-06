@@ -30864,10 +30864,18 @@ bool dx_iface::prepareDxfMLeaderStyles(DRW::Version version, bool binary,
                 || handles.size() != cData->mLeaderStyles.size())
                 return false;
             for (const DRW_MLeaderStyle& style : cData->mLeaderStyles) {
-                if (handles.count(style.handle) != 1u
-                    || !m_dwgMLeaderStyleOutputSources.emplace(
-                        style.handle,
-                        DwgMLeaderStyleOutputSource{style}).second)
+                if (handles.count(style.handle) != 1u)
+                    return false;
+                DwgMLeaderStyleOutputSource source;
+                source.model = style;
+                source.eed.reserve(style.extData.size());
+                for (const DRW_Variant* value : style.extData) {
+                    if (value == nullptr)
+                        return false;
+                    source.eed.emplace_back(*value);
+                }
+                if (!m_dwgMLeaderStyleOutputSources.emplace(
+                        style.handle, std::move(source)).second)
                     return false;
             }
             if (m_dwgMLeaderStyleOutputSources.size() != handles.size())
@@ -31251,8 +31259,16 @@ bool dx_iface::hasUnchangedDwgMLeaderStyleOutputSources() const noexcept {
                 || !currentHandles.insert(current.handle).second
                 || !standardDwgCommonEqual(source->second.model, current,
                     cData->sourceVersion)
-                || !mleaderTypedPayloadEqual(source->second.model, current))
+                || !mleaderTypedPayloadEqual(source->second.model, current)
+                || source->second.eed.size() != current.extData.size())
                 return false;
+            for (std::size_t index = 0u;
+                 index < source->second.eed.size(); ++index) {
+                if (current.extData[index] == nullptr
+                    || !retainedVariantEqual(source->second.eed[index],
+                                             *current.extData[index]))
+                    return false;
+            }
         }
         return currentHandles.size()
             == m_dwgMLeaderStyleOutputSources.size();
@@ -31387,27 +31403,46 @@ bool dx_iface::inspectDwgMLeaderStyles(
         || !hasUnchangedDwgMLeaderStyleOutputSources())
         return false;
 
-    // The physical identity/field proof below is bound to one AC1024 source
-    // and its matching AC1024 output profile. Other DWG source or target
-    // versions still require an unchanged typed snapshot, but must not be
-    // rejected (or accidentally qualified) by this narrower receipt.
-    if (cData->sourceVersion != DRW::AC1024
+    // This physical identity/field proof covers AC1021 and AC1024 sources
+    // emitted to AC1024 DXF. Other source/target profiles retain the typed
+    // writer path but do not acquire opaque-output qualification here.
+    if ((cData->sourceVersion != DRW::AC1021
+         && cData->sourceVersion != DRW::AC1024)
         || view.version != DRW::AC1024)
         return true;
     if (!cData->hasNamedObjectDictionary)
         return false;
 
-    // This source packet admits only the independently witnessed physical
-    // profile. Other MLEADERSTYLE payloads continue through the existing
-    // compatible writer, but do not acquire opaque-output qualification.
+    // The physical packet admits only styles with no common appData or
+    // DataStorage/common-link tail. EED is admitted below only for the
+    // source-witnessed ACAD_MLEADERVER tuple.
     for (const auto& row : m_dwgMLeaderStyleOutputSources) {
         const DRW_MLeaderStyle& source = row.second.model;
-        if (!source.appData.empty() || !source.extData.empty()
-            || source.hasDataStorageBinaryData()
+        if (!source.appData.empty() || source.hasDataStorageBinaryData()
             || source.hasDwgCommonLinkTail()
             || !source.pendingAppIdResolutions.empty()
             || !source.pendingLayerRefResolutions.empty())
             return true;
+        const std::vector<DRW_Variant>& eed = row.second.eed;
+        if (!eed.empty()) {
+            if (cData->sourceVersion != DRW::AC1021
+                || eed.size() != 2u
+                || eed[0].code() != 1001
+                || eed[0].type() != DRW_Variant::STRING
+                || eed[0].c_str() == nullptr
+                || *eed[0].content.s != "ACAD_MLEADERVER"
+                || eed[1].code() != 1070
+                || eed[1].type() != DRW_Variant::INTEGER
+                || eed[1].i_val() != 2)
+                return true;
+            const std::size_t appIdMatches = static_cast<std::size_t>(
+                std::count_if(cData->appIds.begin(), cData->appIds.end(),
+                    [&eed](const DRW_AppId& appId) {
+                        return appId.name == *eed[0].content.s;
+                    }));
+            if (appIdMatches != 1u)
+                return false;
+        }
     }
 
     try {
@@ -31470,6 +31505,29 @@ bool dx_iface::inspectDwgMLeaderStyles(
             }
             return result;
         };
+        for (const auto& row : m_dwgMLeaderStyleOutputSources) {
+            for (const DRW_Variant& value : row.second.eed) {
+                if (value.code() != 1001)
+                    continue;
+                if (value.type() != DRW_Variant::STRING
+                    || value.c_str() == nullptr)
+                    return false;
+                const DRW_AppId* appId = nullptr;
+                for (const DRW_AppId& candidate : cData->appIds) {
+                    if (candidate.name != *value.content.s)
+                        continue;
+                    if (appId != nullptr)
+                        return false;
+                    appId = &candidate;
+                }
+                const std::uint32_t emitted = appId == nullptr ? 0u
+                    : dxfW->dxfWriteEmittedSourceTableHandle(appId->handle);
+                if (emitted == 0u || emitted == DRW::NoHandle
+                    || !dxfW->dxfWriteRecordHasIdentity(
+                        emitted, "APPID", "TABLES"))
+                    return false;
+            }
+        }
         const auto rootEntry = std::find_if(
             cData->namedObjectDictionary.m_entries.begin(),
             cData->namedObjectDictionary.m_entries.end(),
@@ -31708,6 +31766,27 @@ bool dx_iface::inspectDwgMLeaderStyles(
                         const bool payloadEqual =
                             mleaderPayloadBodyAndStringsEqual(
                                 model, actual, DRW::AC1024);
+                        const auto sourceRow =
+                            m_dwgMLeaderStyleOutputSources.find(model.handle);
+                        bool eedEqual = sourceRow
+                                != m_dwgMLeaderStyleOutputSources.end()
+                            && sourceRow->second.eed.size()
+                                == actual.extData.size();
+                        if (eedEqual) {
+                            for (std::size_t index = 0u;
+                                 index < sourceRow->second.eed.size();
+                                 ++index) {
+                                const DRW_Variant* actualValue =
+                                    actual.extData[index];
+                                if (actualValue == nullptr
+                                    || !retainedVariantEqual(
+                                        sourceRow->second.eed[index],
+                                        *actualValue)) {
+                                    eedEqual = false;
+                                    break;
+                                }
+                            }
+                        }
                         const bool reactorAppEqual =
                             reactorAppDataMatches(actual);
                         const bool sameReactors =
@@ -31719,7 +31798,7 @@ bool dx_iface::inspectDwgMLeaderStyles(
                             && actual.parentHandle == owner
                             && actual.xDictHandle == xdict
                             && sameReactors
-                            && actual.extData.empty()
+                            && eedEqual
                             && !actual.hasDataStorageBinaryData()
                             && !actual.hasDwgCommonLinkTail()
                             && actual.pendingAppIdResolutions.empty()
