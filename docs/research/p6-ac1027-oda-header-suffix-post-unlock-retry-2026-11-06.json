@@ -33,15 +33,24 @@
       "postAttemptOutputFiles": [],
       "observedAtUtc": "2026-11-06 10:23 UTC"
     },
-    "sourceCopySha256": "351a239cdae05894fe11863aabecfde171bd4d1758a3dd1c9868d8fe534fe6c1"
+    "sourceCopySha256": "351a239cdae05894fe11863aabecfde171bd4d1758a3dd1c9868d8fe534fe6c1",
+    "latestRetryAfterThirdUnlockReport": {
+      "command": "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter /private/tmp/libdxfrw-oda-retry-after-unlock-1106b/in /private/tmp/libdxfrw-oda-retry-after-unlock-1106b/out ACAD2013 DWG 0 0",
+      "result": "ABORT (SIGABRT, return code -6) during pasteboard/XPC initialization; stdout empty; stderr reports clipboard/find pasteboard creation errors and invalid com.apple.hiservices-xpcservice connections.",
+      "sourceSha256": "351a239cdae05894fe11863aabecfde171bd4d1758a3dd1c9868d8fe534fe6c1",
+      "converterSha256": "21a8f029e7d41af64088f65492404d97ffec0d2f7886703b3b725f5ac4a55783",
+      "postAttemptOutputFiles": [],
+      "boundedSeconds": 25,
+      "observedAtLocal": "2026-11-06 16:35:12 America/Toronto"
+    }
   },
-  "decision": "No fresh resave exists to analyze. The bounded retry after the user unlocked the Mac again reproduced the pasteboard/XPC abort. Preserve strict refusal and the existing unclaimed-suffix disposition. This is an environment/tool-launch blocker, not evidence about suffix semantics.",
-  "nextAction": "Use a functioning independently launched ODA converter session or another eligible native/semantic source for the suffix; continue independent local implementation work meanwhile.",
+  "decision": "No fresh resave exists to analyze. A further bounded retry after the subsequent user unlock report reproduced the pasteboard/XPC abort with the same verified source and converter hashes. Preserve strict refusal and the existing unclaimed-suffix disposition; retry only after the launch environment changes or a functioning supported GUI/independent converter session is available. Continue independent local implementation work meanwhile.",
+  "nextAction": "Do not repeat the unchanged direct CLI launch. Use a functioning independently launched ODA converter session, supported GUI invocation, or another eligible native/semantic source for the suffix; continue independent local implementation work meanwhile.",
   "validation": {
     "sourceHashRechecked": true,
     "converterHashRechecked": true,
     "outputDirectoryChecked": true,
     "fullSuites": "NOT RUN",
-    "postUnlockUserReportedRetry": "Repeated after both unlock reports; latest retry at 2026-11-06 10:23 UTC aborted before reading source and produced no output."
+    "postUnlockUserReportedRetry": "A further bounded retry after the latest unlock report at 2026-11-06 16:35:12 local time aborted with SIGABRT before producing output; source and converter hashes matched the prior attempts."
   }
 }
