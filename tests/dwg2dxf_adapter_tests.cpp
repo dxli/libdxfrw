@@ -44200,7 +44200,7 @@ void populateTypedAc1024VisualStyleGraph(dx_data& data) {
             static_cast<std::uint16_t>(index % 2u);
     const std::array<std::uint32_t, 5> rawColors{{
         0xC2FFFFFFu, 0xC3000007u, 0xC8000000u,
-        0xC2808080u, 0xC3000007u}};
+        0xC2787878u, 0xC3000007u}};
     for (std::size_t index = 0u; index < encoding.colorCount; ++index) {
         DRW_VisualStyleColor& color = encoding.colors[index];
         color.present = true;
@@ -44636,7 +44636,7 @@ bool typedAc1024VisualStyleWriterRoundTrip(
                         == "Generated AC1024 VisualStyle";
             })
             || !packedColorMatches(421, 0xC2FFFFFFu)
-            || !packedColorMatches(424, 0xC2808080u))
+            || !packedColorMatches(424, 0xC2787878u))
             return fail("typed VisualStyle output lost properties or unsigned CMC color payloads");
         const DRW_VisualStyle& typed = readback.visualStyles.front();
         if (typed.desc != "Generated AC1024 VisualStyle" || typed.type != 8)

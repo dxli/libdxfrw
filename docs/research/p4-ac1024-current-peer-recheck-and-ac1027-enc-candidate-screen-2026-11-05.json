@@ -3,7 +3,7 @@
   "id": "p4-ac1024-current-peer-recheck-and-ac1027-enc-candidate-screen-2026-11-05",
   "date": "2026-11-05",
   "title": "Current AC1024 conversion recheck and AC1027 ENC candidate screen",
-  "status": "CURRENT_STRICT_OUTPUT_REFUSED_NO_QUALIFIED_ENC_REPLACEMENT",
+  "status": "PREFIX_STRICT_OUTPUT_REFUSED_NO_QUALIFIED_ENC_REPLACEMENT",
   "supportClaimEffect": "none",
   "ac1024CurrentRecheck": {
     "source": {
@@ -67,5 +67,7 @@
     "The current libdxfrw strict result is a refusal, not a format defect or support claim.",
     "The historical strict-output receipt does not bind the current converter executable."
   ],
-  "noFixtureCommitted": true
+  "noFixtureCommitted": true,
+  "supersededBy": "docs/research/p4-ac1024-visualstyle-c278-profile-restoration-2026-11-05.json",
+  "statusNote": "The strict-output refusal and missing paired-output comparison are a pre-fix snapshot, resolved by the linked C278 profile restoration. The AC1027 ENC candidate screen still stands: no eligible tracked replacement was found."
 }

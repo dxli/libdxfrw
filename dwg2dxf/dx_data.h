@@ -1376,6 +1376,8 @@ public:
                 const DRW_VisualStyleColor& color = encoding.colors[index];
                 const std::uint8_t method =
                     static_cast<std::uint8_t>(color.rawRgb >> 24u);
+                // Physical AC1024 style 0xA3 carries C2787878 in CMC role 4;
+                // its emitted group 424 is checked against LibreDWG output.
                 if (!color.present || !color.modern || color.rawIndex != 0u
                     || color.flags != 0u || !color.name.empty()
                     || !color.bookName.empty()
@@ -1383,6 +1385,7 @@ public:
                         && method != 0xC8u)
                     || (method == 0xC2u
                         && color.rawRgb != 0xC2FFFFFFu
+                        && color.rawRgb != 0xC2787878u
                         && color.rawRgb != 0xC2808080u))
                     return false;
                 if ((method == 0xC2u && color.normalizedIndex != 256)
