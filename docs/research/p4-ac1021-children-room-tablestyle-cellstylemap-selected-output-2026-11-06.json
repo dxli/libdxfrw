@@ -15,7 +15,38 @@
       "handle": "0x7F",
       "ownerDictionary": "0x7E",
       "extensionDictionary": "0x162",
-      "name": "Standard"
+      "name": "Standard",
+      "flowDirection": 0,
+      "flags": 0,
+      "margins": [
+        1.5,
+        1.5
+      ],
+      "titleSuppressed": false,
+      "headerSuppressed": false,
+      "legacyRows": [
+        {
+          "height": 4.5,
+          "alignment": 2,
+          "valueDataType": 512,
+          "valueUnitType": 0,
+          "borderCount": 6
+        },
+        {
+          "height": 6.0,
+          "alignment": 5,
+          "valueDataType": 512,
+          "valueUnitType": 0,
+          "borderCount": 6
+        },
+        {
+          "height": 4.5,
+          "alignment": 5,
+          "valueDataType": 512,
+          "valueUnitType": 0,
+          "borderCount": 6
+        }
+      ]
     },
     "cellStyleMap": {
       "handle": "0x3C3F7",
@@ -94,7 +125,8 @@
   ],
   "implementation": {
     "change": "Generalized the physical selected-graph test projection to resolve source TABLESTYLE/CELLSTYLEMAP owner handles dynamically and retain required border LTYPE rows. Readback compares source scalar fields, maps legacy row text-style handles to their DXF name representation, verifies nested content text-style references, and checks border LTYPE references by remapped target name.",
-    "productionWriter": "The current writer emitted this source profile without a production-code change; this slice adds a second source-bound output qualification profile, not general TABLESTYLE/CELLSTYLEMAP support."
+    "productionWriter": "The current writer emitted this source profile without a production-code change; this slice adds a second source-bound output qualification profile, not general TABLESTYLE/CELLSTYLEMAP support.",
+    "strictAdmissionGap": "The current exact legacy admission predicate rejects this physical source because it requires 0.06/0.06 margins and row heights 0.18/0.25/0.18; the source has 1.5/1.5 margins and 4.5/6.0/4.5 row heights. This explains TABLESTYLE source snapshot count 0 in strict output."
   },
   "validation": {
     "build": "PASS: cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j4 (-Werror).",
@@ -119,5 +151,5 @@
     }
   },
   "limits": "One more unauthenticated local AC1021 source profile; selected projection only. It does not qualify full drawing conversion, producer breadth, independent version-capable roundtrip, native TABLE semantics or support claims.",
-  "nextAction": "Continue with another source-backed unqualified frame or graph from the P4 inventory; preserve fail-closed whole-source behavior and do not count duplicate standard-object identities twice."
+  "nextAction": "Add this as a distinct exact AC1021 source profile, then prove staged TABLESTYLE fields and the complete NOD/owner/extension-dictionary/CELLSTYLEMAP graph before registering callback identities; retain fail-closed strict output until that proof passes."
 }

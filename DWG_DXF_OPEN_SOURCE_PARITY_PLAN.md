@@ -68,8 +68,17 @@ created locally from scratch for the specific control.
    DETAILVIEWSTYLE `0x21C` and `0x18082`, and CELLSTYLEMAP `0x3C3F7`. Existing
    source-bound selected-output receipts cover these physical profiles, but
    strict conversion has not yet closed their combined emitted graph and
-   registered its source identities. The current debug audit narrows the
-   missing proof paths: TABLESTYLE source snapshot count is 0; MLEADERSTYLE
+   registered its source identities. The exact physical TABLESTYLE source
+   probe confirms handle `0x7F` is `Standard`, with margins `1.5/1.5` and
+   three legacy rows `(height, alignment) = (4.5,2), (6.0,5), (4.5,5)`;
+   the current admission predicate instead requires margins `0.06/0.06` and
+   heights `0.18/0.25/0.18`, which explains its zero snapshot count. Add this
+   as a separate exact AC1021 profile, guarded by the source TABLESTYLE,
+   extension-dictionary and CELLSTYLEMAP identities and the complete observed
+   field/dependency tuple. Then stage and inspect the full NOD → owner
+   dictionary → TABLESTYLE → extension dictionary → CELLSTYLEMAP graph before
+   registering either callback identity. The current debug audit also narrows
+   the remaining proof paths: MLEADERSTYLE
    source count is 1 but its staged inspector remains false; the output walk
    finds one CELLSTYLEMAP root and two roots each for SECTIONVIEWSTYLE and
    DETAILVIEWSTYLE, while the ModelDocViewStyle import receipt is valid. No
