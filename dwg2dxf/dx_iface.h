@@ -1645,8 +1645,11 @@ public:
     virtual void writeTextstyles() override{
         for (std::list<DRW_Textstyle>::iterator it=cData->textStyles.begin(); it != cData->textStyles.end(); ++it) {
             if (it->name.empty()) {
-                if (mayOmitUnreferencedEmptyTextStyle(*it))
+                if (mayOmitUnreferencedEmptyTextStyle(*it)) {
+                    std::cerr << "DXF projection omitted unreferenced empty-name STYLE handle=0x"
+                              << std::hex << it->handle << std::dec << '\n';
                     continue;
+                }
                 // Even shape styles cannot be emitted with an empty DXF
                 // symbol name. Refuse whenever the selected projection does
                 // not prove the omission safe.

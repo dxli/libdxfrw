@@ -41,12 +41,13 @@
   "unresolved_field_difference": "LibreDWG reports is_shape=true for handle 0xDF; the local typed model reports flags=0. The selected-output omission does not depend on this flag. Resolve the AC1018 field mapping before claiming parser-level shape-font parity.",
   "implementation": {
     "behavior": "For a sourceFormat-Unknown selected output projection only, omit an empty-name STYLE when its modeled entity, shape-linetype, dimension, MLeader, table, and retained raw-resource dependencies are absent. Keep the omission fail-closed when opaque reference-bearing families are present. Any referenced or otherwise unproven empty-name row is explicitly refused, including a shape-style row whose flags would otherwise pass the generic STYLE payload validator.",
+    "diagnostic": "Successful omission writes a stderr diagnostic with the omitted source handle; suppression is not silent.",
     "caller_state": "The source STYLE remains empty-named and unchanged. The selected projection omits only that row; the five named source rows remain."
   },
   "validation": {
     "build": "cmake --build build-gcc --target libdxfrw_dwg2dxf_adapter_tests -j2",
     "physical_control": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --empty-textstyle-physical-ac1018-output-refusal /Users/dli/doc/dwg/ET-Drawing-with-Border.dwg",
-    "result": "PASS for ASCII and Binary: generated direct references to both ordinary and shape-flag empty-name STYLE rows refuse while preserving a destination sentinel; removing the reference allows same-adapter retry; fresh import contains exactly the five named rows and no empty-name STYLE.",
+    "result": "PASS for ASCII and Binary: generated direct references to both ordinary and shape-flag empty-name STYLE rows refuse while preserving a destination sentinel; removing the reference allows same-adapter retry; fresh import contains exactly the five named rows and no empty-name STYLE, and omission logs a diagnostic.",
     "diff_check": "git diff --check passed.",
     "fixtures": "No DWG/DXF fixture was added to the repository."
   },
