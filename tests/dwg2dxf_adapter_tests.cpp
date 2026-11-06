@@ -981,6 +981,40 @@ public:
             && owner.ref == 0x0Au && reactor.code == 4u
             && reactor.ref == 0x0Au;
     }
+    static bool physicalDirectRaster1018Wire(
+            const dx_data& data, std::int32_t expectedFrame = 1) {
+        const auto frame = data.m_opaqueDwgSourceFrames.find(
+            {data.importGeneration, 0x2Fu});
+        if (frame == data.m_opaqueDwgSourceFrames.end()
+            || data.namedObjectDictionary.handle != 0x0Au)
+            return false;
+        const auto& raw = frame->second;
+        if (raw.m_version != DRW::AC1018 || raw.m_rawBytes.size() != 18u
+            || raw.m_bodyBitSize != 0u || raw.m_objectType != 512u
+            || raw.m_handle != 0x2Fu || !raw.m_isCustomClass
+            || raw.m_commonLinkEvidence != DRW_DwgCommonLinkEvidence::Unknown)
+            return false;
+        using namespace dx_raster_wire::detail;
+        Bits body{raw.m_rawBytes.data(), 0u, 144u};
+        if (body.shortValue() != 512u || body.little(4u) != 111u
+            || handle(body, 0u, 0u, true).value != 0x2Fu
+            || body.shortValue() != 0u || body.longValue() != 1u
+            || body.take(1u) != 1u || body.longValue() != 0u
+            || !body.good || body.pos != 81u)
+            return false;
+        const auto frameStart = body.pos;
+        if (body.shortValue() != static_cast<std::uint32_t>(expectedFrame)
+            || body.pos - frameStart != (expectedFrame == 1 ? 10u : 2u)
+            || body.shortValue() != 1u || body.shortValue() != 3u
+            || !body.good || body.pos != 111u)
+            return false;
+        const auto owner = handle(body, 4u, 0x2Fu);
+        const auto reactor = handle(body, 4u, 0x2Fu);
+        return body.good && owner.role == 4u && owner.value == 0x0Au
+            && reactor.role == 4u && reactor.value == 0x0Au
+            && body.pos == 143u && body.take(1u) == 0u && body.good
+            && body.pos == 144u;
+    }
     static bool physicalDirectWipeoutWire(const dx_data& data) {
         const auto frame = data.m_opaqueDwgSourceFrames.find({data.importGeneration, 0x30u});
         const auto typed = data.dwgWipeoutVariables.find({data.importGeneration, 0x30u});
@@ -71580,7 +71614,8 @@ bool rasterVariablesDwgAdapterTransport(
         expectedRootKey = "ACAD_IMAGE_VARS";
         expectedFrame = revision == DRW::AC1021 || frameOne ? 1 : 0;
         expectedQuality = 1;
-        expectedUnits = (revision == DRW::AC1024 || revision == DRW::AC1032) ? 3 : 1;
+        expectedUnits = (revision == DRW::AC1018 || revision == DRW::AC1024
+                         || revision == DRW::AC1032) ? 3 : 1;
     }
 
     dx_data imported;
@@ -71628,9 +71663,10 @@ bool rasterVariablesDwgAdapterTransport(
             || rootEntry->m_handle == DRW::NoHandle
             || directRootEntryCount != 1u
             || directRootTargetCount != 1u
-            || (revision != DRW::AC1024 && revision != DRW::AC1032
+            || (revision != DRW::AC1018 && revision != DRW::AC1024
+                && revision != DRW::AC1032
                 && imported.namedObjectDictionary.handle != 0xCu))
-            return fail("physical AC1027 source lacks its ACAD_IMAGE_VARS NOD entry");
+            return fail("physical source lacks its ACAD_IMAGE_VARS NOD entry");
         expectedHandle = rootEntry->m_handle;
         expectedParent = imported.namedObjectDictionary.handle;
     }
@@ -71661,6 +71697,10 @@ bool rasterVariablesDwgAdapterTransport(
         return fail("RASTERVARIABLES typed owner/field values changed on read");
     }
     if (!generatedSource) {
+        if (revision == DRW::AC1018 && frameOne
+            && !DxIfaceStandardDwgCaptureTestAccess::physicalDirectRaster1018Wire(
+                imported, expectedFrame))
+            return fail("physical AC1018 RASTERVARIABLES field/role span mismatch");
         if (revision == DRW::AC1024 && frameOne
             && !DxIfaceStandardDwgCaptureTestAccess::physicalDirectRaster1024Wire(
                 imported, expectedFrame))
@@ -71734,7 +71774,8 @@ bool rasterVariablesDwgAdapterTransport(
             std::cerr << "RASTERVARIABLES reactor handle=" << reactor << '\n';
         if (revision != DRW::AC1021 && revision != DRW::AC1027
             && !(frameOne
-                && (revision == DRW::AC1024 || revision == DRW::AC1032)))
+                && (revision == DRW::AC1018 || revision == DRW::AC1024
+                    || revision == DRW::AC1032)))
             return true;
 
         // Bind the physical producer's decoded record to a locally authored,
@@ -73752,6 +73793,11 @@ int main(int argc, char** argv) {
             == "--rastervariables-physical-ac1024-frame1-direct-nod")
         return rasterVariablesDwgAdapterTransport(
             argv[2], true, DRW::AC1024, true) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1])
+            == "--rastervariables-physical-ac1018-frame1-direct-nod")
+        return rasterVariablesDwgAdapterTransport(
+            argv[2], true, DRW::AC1018, true) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1])
             == "--rastervariables-physical-ac1024-direct-nod")
