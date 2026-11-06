@@ -14192,6 +14192,18 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                     || groupReferenceHandles.count(reactor) != 0u
                     || linetypeHandles.count(reactor) != 0u
                     || blockDelimiterHandles.count(reactor) != 0u) continue;
+                const bool rootedImageDictionaryNodReactor =
+                    rootedImageDictionary != nullptr
+                    && data->sourceFormat == dx_source_format::DWG
+                    && data->sourceVersion == DRW::AC1021
+                    && definition.handle == rootedImageDictionary->handle
+                    && reactor == data->namedObjectDictionary.handle
+                    && data->hasNamedObjectDictionary
+                    && data->namedObjectDictionary.handle != 0u
+                    && data->namedObjectDictionary.handle != DRW::NoHandle
+                    && definition.parentHandle == data->namedObjectDictionary.handle
+                    && rootedImageDictionary->hasCompleteDwgEntries();
+                if (rootedImageDictionaryNodReactor) continue;
                 if (!visit(reactor, false)) return false;
             }
         }
@@ -34153,12 +34165,14 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
     if (cData->sourceFormat != dx_source_format::DWG
         || (cData->sourceVersion != DRW::AC1015
             && cData->sourceVersion != DRW::AC1018
+            && cData->sourceVersion != DRW::AC1021
             && cData->sourceVersion != DRW::AC1024))
         return true;
-    if (version != DRW::AC1024)
-        return skip("target is outside AC1024 DXF");
+    const bool ac1021Profile = cData->sourceVersion == DRW::AC1021;
+    if (version != (ac1021Profile ? DRW::AC1021 : DRW::AC1024))
+        return skip("target is outside the exact source-version DXF profile");
 
-    // Admit only the witnessed AC1015/AC1024 two-layout or AC1018
+    // Admit the witnessed AC1015/AC1021/AC1024 two-layout or AC1018
     // three-layout profiles. Each route requires a rooted ACAD_LAYOUT
     // dictionary, reciprocal BLOCK_RECORD edges, and bounded dependencies.
     const bool ac1015Profile = cData->sourceVersion == DRW::AC1015;
@@ -34254,6 +34268,7 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
         "Model", "Layout1",
         ac1018Profile ? "Layout2"
                       : ac1015Profile ? "Layout1"
+                      : ac1021Profile ? "dwgmodels.com"
                                       : "Architectural Title Block"}};
     std::map<std::uint32_t, DwgLayoutOutputSource> selected;
     std::map<std::uint32_t, DwgNodDictionaryOutputSource>
@@ -34674,6 +34689,8 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
         const bool expectedPaperLayouts = ac1018Profile
             ? selectedNames.count("Layout1") == 1u
                 && selectedNames.count("Layout2") == 1u
+            : ac1021Profile
+                ? selectedNames.count("dwgmodels.com") == 1u
             : selectedNames.count("Layout1") == 1u
                 || selectedNames.count("Architectural Title Block") == 1u;
         if (selected.size() != expectedLayoutCount
@@ -34739,6 +34756,7 @@ bool dx_iface::hasUnchangedDwgLayoutOutputSources(bool debug) const noexcept {
         || cData->sourceVersion != m_dwgLayoutOutputSourceVersion
         || (m_dwgLayoutOutputSourceVersion != DRW::AC1015
             && m_dwgLayoutOutputSourceVersion != DRW::AC1018
+            && m_dwgLayoutOutputSourceVersion != DRW::AC1021
             && m_dwgLayoutOutputSourceVersion != DRW::AC1024)
         || (m_dwgLayoutOutputNodComplete
             && m_dwgLayoutOutputSourceVersion != DRW::AC1015
@@ -34996,7 +35014,11 @@ bool dx_iface::inspectDwgLayoutBlockRecords(
                       << stage << '\n';
         return false;
     };
-    if (dxfW == nullptr || cData == nullptr || view.version != DRW::AC1024
+    const DRW::Version expectedTargetVersion =
+        m_dwgLayoutOutputSourceVersion == DRW::AC1021
+            ? DRW::AC1021 : DRW::AC1024;
+    if (dxfW == nullptr || cData == nullptr
+        || view.version != expectedTargetVersion
         || !hasUnchangedDwgLayoutOutputSources())
         return reject("source snapshot or output version");
     try {
@@ -35149,7 +35171,11 @@ bool dx_iface::inspectDwgLayouts(
                       << '\n';
         return false;
     };
-    if (dxfW == nullptr || cData == nullptr || view.version != DRW::AC1024
+    const DRW::Version expectedTargetVersion =
+        m_dwgLayoutOutputSourceVersion == DRW::AC1021
+            ? DRW::AC1021 : DRW::AC1024;
+    if (dxfW == nullptr || cData == nullptr
+        || view.version != expectedTargetVersion
         || !hasUnchangedDwgLayoutOutputSources()
         || !m_dwgLayoutBlocksInspected)
         return reject("source snapshot, TABLES proof, or output version");
@@ -49498,9 +49524,18 @@ bool dx_iface::inspectDwgDictionaryDefaultOutput(
     m_dwgDictionaryDefaultOutputInspected = false;
     if (m_dwgDictionaryDefaultOutputSources.empty())
         return true;
+    const bool selectedAc1021LayoutProfile = cData != nullptr
+        && cData->sourceVersion == DRW::AC1021
+        && m_dwgLayoutOutputSourceVersion == DRW::AC1021
+        && !m_dwgLayoutOutputSources.empty();
+    const DRW::Version expectedTargetVersion =
+        m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027
+            ? DRW::AC1027
+            : (m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1021
+                && selectedAc1021LayoutProfile)
+                ? DRW::AC1021 : DRW::AC1024;
     if (dxfW == nullptr || cData == nullptr
-        || (m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027
-            ? view.version != DRW::AC1027 : view.version != DRW::AC1024)
+        || view.version != expectedTargetVersion
         || !hasUnchangedDwgDictionaryDefaultOutputSources())
         return false;
     try {

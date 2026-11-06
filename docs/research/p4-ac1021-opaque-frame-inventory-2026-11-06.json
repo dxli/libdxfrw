@@ -17,7 +17,7 @@
       "count": 74,
       "customClassCount": 68,
       "fixedTypeCount": 6,
-      "outputQualified": 68,
+      "outputQualified": 70,
       "outputQualifiedByRecord": {
         "VISUALSTYLE": 25,
         "SCALE": 17,
@@ -31,7 +31,8 @@
         "MLEADERSTYLE": 1,
         "TABLESTYLE": 1,
         "CELLSTYLEMAP": 1,
-        "MLINESTYLE": 1
+        "MLINESTYLE": 1,
+        "LAYOUT": 2
       },
       "byRecord": {
         "VISUALSTYLE": 25,
@@ -60,7 +61,7 @@
       "opaquePayloadMatches": 0,
       "outputQualified": 77
     },
-    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify 68 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, and one CELLSTYLEMAP. They qualify 77 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining six opaque carriers and 35 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
+    "interpretation": "The 186 aggregate AC1021 source-frame observer callbacks are 74 opaque carriers plus 112 standard-object frames. Bounded physical selected-output routes now qualify 70 opaque carriers: 25 VISUALSTYLE, 17 SCALE, 12 DICTIONARYVAR, three MATERIAL, one DBCOLOR, one ACDBDICTIONARYWDFLT, one ACDBPLACEHOLDER, two ACDBSECTIONVIEWSTYLE, two ACDBDETAILVIEWSTYLE, one MLEADERSTYLE, one MLINESTYLE, one TABLESTYLE, and one CELLSTYLEMAP. They qualify 77 standard-object frames; output routes verify typed/raw readback and applicable dependency closure, refusal and retry. The remaining four opaque carriers and 35 standard-object frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "candidateBoundary": {
     "record": "VISUALSTYLE",
@@ -101,7 +102,7 @@
     "No whole-drawing conversion, native semantic, or producer-wide support claim is established.",
     "No fixture or derivative is committed."
   ],
-  "nextAction": "Qualify the next typed AC1021 LAYOUT frame profile only after matching each LAYOUT identity to its exact source owner, BLOCK_RECORD and extension payload graph. Keep the other LAYOUT, VIEWPORT, RASTERVARIABLES and SORTENTSTABLE frames unqualified until their own selected-output/readback proof passes. Preserve whole-source refusal and do not double-count.",
+  "nextAction": "Classify fixed-type source frames 0x266 and 0x26A, then bind original RASTERVARIABLES 0x2D2 and SORTENTSTABLE 0x2DF frames to exact selected output and fresh readback. Keep whole-source refusal and do not double-count.",
   "materialCandidateBoundary": {
     "record": "MATERIAL",
     "observedCount": 3,
@@ -163,24 +164,8 @@
   "remainingOpaqueFrames": {
     "source": "/Users/dli/doc/dwg/children-room-decoration.dwg",
     "sourceSha256": "cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce",
-    "evidence": "Current source inventory selector output reconciled with source-frame output qualification. Handles 0xF (ACDBPLACEHOLDER) and 0x18 (MLINESTYLE) are output-qualified; the remaining unqualified frame identities are listed below.",
+    "evidence": "Current source inventory selector output reconciled with source-frame output qualification. Handles 0xF (ACDBPLACEHOLDER), 0x18 (MLINESTYLE), 0x22 (Model LAYOUT), and 0xD7 (dwgmodels.com LAYOUT) are output-qualified; four source-frame identities remain unqualified.",
     "frames": [
-      {
-        "handle": "0x22",
-        "objectType": 82,
-        "record": "",
-        "class": "",
-        "state": "UNQUALIFIED",
-        "sourceRoles": "Typed LAYOUT route; owner graph not yet bound to a selected-output proof."
-      },
-      {
-        "handle": "0xD7",
-        "objectType": 82,
-        "record": "",
-        "class": "",
-        "state": "UNQUALIFIED",
-        "sourceRoles": "Typed LAYOUT route; owner graph not yet bound to a selected-output proof."
-      },
       {
         "handle": "0x266",
         "objectType": 34,
@@ -218,7 +203,7 @@
     "inventoryLogSha256": "c23a95e309acbd757994ddcb49b09f12607d552b3e47701cf8891104168fbcbd",
     "mlineStyleTrace": "dwg2dxf -d on the same source; parser trace around object 0x18 identifies STANDARD, flags 0 and two elements; not an independent wire-layout oracle.",
     "mlineStyleTraceLogSha256": "5f8ae476e5febb539ef46a8511662840c0411cc21a3dbf9dcbf85c9a0fa157e7",
-    "limit": "This is a source-inventory/readiness update only. It qualifies no output frame or support claim."
+    "limit": "This is a source-inventory/readiness update only. Four source frames remain unqualified; source-byte capture or matching typed callbacks alone do not qualify serialization."
   },
   "mLineStyleCandidateBoundary": {
     "record": "MLINESTYLE",
@@ -229,5 +214,17 @@
     "result": "PASS selected AC1024 DXF output and fresh typed readback in ASCII/Binary, including source-frame qualification, exact style/element fields and NOD/owner/reactor closure. A nonzero retained CMC index is refused with the existing destination preserved; corrected retry succeeds on the same adapter.",
     "wholeSourceLimit": "The full children-room conversion remains refused before selected output preparation at the unrelated exact-version ModelDocViewStyle gate. This receipt qualifies one selected MLINESTYLE graph only.",
     "receipt": "docs/research/p4-ac1021-mline-style-physical-selected-output-2026-11-06.json"
+  },
+  "layoutCandidateBoundary": {
+    "record": "LAYOUT",
+    "observedCount": 2,
+    "handles": [
+      "0x22",
+      "0xD7"
+    ],
+    "selector": "--layout-physical-output-readback /Users/dli/doc/dwg/children-room-decoration.dwg",
+    "result": "PASS for the exact Model/dwgmodels.com AC1021 profile in same-version ASCII/Binary output and fresh typed readback. Checks ACAD_LAYOUT and reciprocal BLOCK_RECORD membership, plot/layout values, selected extension dictionary/XRECORD owners, last-active roles, source callback qualification, destination-preserving bad-owner refusal, and same-adapter retry.",
+    "receipt": "docs/research/p4-ac1021-layout-physical-selected-output-2026-11-06.json",
+    "limit": "One unauthenticated local source. No fixture, whole-source claim, producer-wide support, or native semantic claim."
   }
 }

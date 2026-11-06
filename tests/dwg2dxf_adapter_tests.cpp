@@ -50382,12 +50382,14 @@ bool physicalLayoutOutputReadback(
     const auto imported = sourceReader.fileImport(
         sourcePath.string(), &source, false);
     const bool ac1015Source = source.sourceVersion == DRW::AC1015;
+    const bool ac1021Source = source.sourceVersion == DRW::AC1021;
     if (!imported
         || source.sourceFormat != dx_source_format::DWG
-        || (!ac1015Source && source.sourceVersion != DRW::AC1024)
+        || (!ac1015Source && !ac1021Source
+            && source.sourceVersion != DRW::AC1024)
         || source.layouts.size() != 2u
         || !source.hasNamedObjectDictionary)
-        return fail("physical LAYOUT source is not an admitted two-layout AC1015/AC1024 graph");
+        return fail("physical LAYOUT source is not an admitted two-layout AC1015/AC1021/AC1024 graph");
 
     const auto hasIdentity = [&source](std::uint32_t handle,
                                        const char* name) {
@@ -50400,6 +50402,9 @@ bool physicalLayoutOutputReadback(
     if (ac1015Source && hasIdentity(0x27u, "Model")
         && hasIdentity(0x29u, "Layout1")) {
         expected = {{{0x27u, "Model"}, {0x29u, "Layout1"}}};
+    } else if (ac1021Source && hasIdentity(0x22u, "Model")
+               && hasIdentity(0xD7u, "dwgmodels.com")) {
+        expected = {{{0x22u, "Model"}, {0xD7u, "dwgmodels.com"}}};
     } else if (!ac1015Source && hasIdentity(0x22u, "Model")
         && hasIdentity(0x59u, "Layout1")) {
         expected = {{{0x22u, "Model"}, {0x59u, "Layout1"}}};
@@ -50407,9 +50412,11 @@ bool physicalLayoutOutputReadback(
                && hasIdentity(0xFu, "Architectural Title Block")) {
         expected = {{{0xAu, "Model"}, {0xFu, "Architectural Title Block"}}};
     } else {
-        return fail("physical LAYOUT source is outside the admitted AC1015/AC1024 identity profiles");
+        return fail("physical LAYOUT source is outside the admitted AC1015/AC1021/AC1024 identity profiles");
     }
     const std::string paperLayoutName = expected[1].second;
+    const DRW::Version layoutTargetVersion = ac1021Source
+        ? DRW::AC1021 : DRW::AC1024;
     const auto hasArchBlockRecord = std::count_if(
         source.blockRecords.begin(), source.blockRecords.end(),
         [](const DRW_Block_Record& record) {
@@ -50890,7 +50897,7 @@ bool physicalLayoutOutputReadback(
         dx_iface writer;
         const auto exportPartial = [&]() {
             return writer.fileExport(
-                outputPath.string(), DRW::AC1024, binary, &source, false, true,
+                outputPath.string(), layoutTargetVersion, binary, &source, false, true,
                 dx_dxfSourceTextPolicy::RequireValidSource,
                 DRW::DxfTextWritePolicy::RequireLossless,
                 dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
@@ -50969,7 +50976,7 @@ bool physicalLayoutOutputReadback(
             return fail("invalid physical LAYOUT block-record target was not refused atomically");
         if (!exportPartial())
             return fail("corrected physical LAYOUT graph could not retry on the same adapter");
-        if (source.dwgReadOutcome.opaqueViewCallbacks != 0u
+        if (!ac1021Source && source.dwgReadOutcome.opaqueViewCallbacks != 0u
             && DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualificationCount(
                 source) != source.dwgReadOutcome.opaqueViewCallbacks)
             return fail("physical LAYOUT output callback count is "
@@ -51006,9 +51013,9 @@ bool physicalLayoutOutputReadback(
         dx_data output;
         if (!outputReader.fileImport(outputPath.string(), &output, false)
             || output.sourceFormat != dx_source_format::DXF
-            || output.sourceVersion != DRW::AC1024
+            || output.sourceVersion != layoutTargetVersion
             || output.layouts.size() != expected.size())
-            return fail("physical LAYOUT output did not freshly reimport as two AC1024 records");
+            return fail("physical LAYOUT output did not freshly reimport at its selected target version");
         const DRW_Dictionary* outputLayoutDictionary = layoutDictionary(output);
         if (outputLayoutDictionary == nullptr
             || outputLayoutDictionary->parentHandle
