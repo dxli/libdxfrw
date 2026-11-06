@@ -9795,6 +9795,15 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
     m_dwgTableStyleOutputSourceVersion = DRW::UNKNOWNV;
     m_dwgTableStyleOutputSourceGeneration = 0u;
     m_dwgTableStylesInspected = false;
+    m_dwgDetailViewStyleOutputSources.clear();
+    m_dwgSectionViewStyleOutputSources.clear();
+    m_dwgModelDocViewStyleDictionarySources.clear();
+    m_dwgModelDocViewStyleXRecordSources.clear();
+    m_dwgModelDocViewStyleNamedObjectDictionarySource = DRW_Dictionary{};
+    m_dwgModelDocViewStyleOutputOwner = nullptr;
+    m_dwgModelDocViewStyleOutputGeneration = 0u;
+    m_dwgModelDocViewStyleRootCaptured = false;
+    m_dwgModelDocViewStylesInspected = false;
     m_dwgDictionaryDefaultOutputSources.clear();
     m_dwgDictionaryDefaultOutputSourceOwner = nullptr;
     m_dwgDictionaryDefaultOutputSourceVersion = DRW::UNKNOWNV;
@@ -9891,6 +9900,15 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
         m_dwgTableStyleOutputSourceVersion = DRW::UNKNOWNV;
         m_dwgTableStyleOutputSourceGeneration = 0u;
         m_dwgTableStylesInspected = false;
+        m_dwgDetailViewStyleOutputSources.clear();
+        m_dwgSectionViewStyleOutputSources.clear();
+        m_dwgModelDocViewStyleDictionarySources.clear();
+        m_dwgModelDocViewStyleXRecordSources.clear();
+        m_dwgModelDocViewStyleNamedObjectDictionarySource = DRW_Dictionary{};
+        m_dwgModelDocViewStyleOutputOwner = nullptr;
+        m_dwgModelDocViewStyleOutputGeneration = 0u;
+        m_dwgModelDocViewStyleRootCaptured = false;
+        m_dwgModelDocViewStylesInspected = false;
         m_dwgDictionaryDefaultOutputSources.clear();
         m_dwgDictionaryDefaultOutputSourceOwner = nullptr;
         m_dwgDictionaryDefaultOutputSourceVersion = DRW::UNKNOWNV;
@@ -16077,6 +16095,166 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                 m_dwgTableStyleOutputSourceOwner = nullptr;
                 m_dwgTableStyleOutputSourceVersion = DRW::UNKNOWNV;
                 m_dwgTableStyleOutputSourceGeneration = 0u;
+            }
+        }
+        // Freeze the exact AC1021 ModelDocViewStyle source profile whose
+        // NOD, nested dictionaries, extension dictionaries, and XRECORD
+        // children are proven by the physical selected-output receipt.
+        if (data->sourceFormat == dx_source_format::DWG
+            && data->sourceVersion == DRW::AC1021
+            && data->hasNamedObjectDictionary
+            && data->namedObjectDictionary.handle == 0xCu
+            && data->detailViewStyles.size() == 2u
+            && data->sectionViewStyles.size() == 2u
+            && data->hasSingleSuccessfulModelDocViewStyleImport()
+            && data->hasClosedModelDocViewStyleResourceReferences()) {
+            const auto findDictionary = [&dictionaries](std::uint32_t handle)
+                    -> const DRW_Dictionary* {
+                const auto found = dictionaries.find(handle);
+                return found == dictionaries.end() ? nullptr : found->second;
+            };
+            const auto findXrecord = [&xrecords](std::uint32_t handle)
+                    -> const DRW_XRecord* {
+                const auto found = xrecords.find(handle);
+                return found == xrecords.end() ? nullptr : found->second;
+            };
+            const auto rootEdge = [data](const char* name,
+                                          std::uint32_t target) {
+                return std::count_if(
+                    data->namedObjectDictionary.m_entries.begin(),
+                    data->namedObjectDictionary.m_entries.end(),
+                    [name, target](const DRW_Dictionary::Entry& entry) {
+                        return entry.m_name == name
+                            && entry.m_handle == target;
+                    }) == 1;
+            };
+            const auto dictionaryProfile = [data](
+                    const DRW_Dictionary* dictionary, std::uint32_t handle,
+                    std::uint32_t first, std::uint32_t second) {
+                return dictionary != nullptr
+                    && dictionary->handle == handle
+                    && dictionary->parentHandle
+                        == data->namedObjectDictionary.handle
+                    && dictionary->reactorHandles
+                        == std::vector<std::uint32_t>{
+                            data->namedObjectDictionary.handle}
+                    && dictionary->m_entries.size() == 2u
+                    && dictionary->m_entries[0].m_name == "Imperial24"
+                    && dictionary->m_entries[0].m_handle == first
+                    && dictionary->m_entries[1].m_name == "Metric50"
+                    && dictionary->m_entries[1].m_handle == second
+                    && dictionary->hasCompleteDwgEntries();
+            };
+            const auto styleFrame = [data](std::uint32_t handle, int type,
+                    const char* className, std::uint32_t owner) {
+                const auto frame = data->m_opaqueDwgSourceFrames.find(
+                    {data->importGeneration, handle});
+                return frame != data->m_opaqueDwgSourceFrames.end()
+                    && frame->second.m_handle == handle
+                    && frame->second.m_version == DRW::AC1021
+                    && frame->second.m_objectType == type
+                    && frame->second.m_className == className
+                    && frame->second.m_recordName
+                        == (type == 516 ? "ACDBDETAILVIEWSTYLE"
+                                        : "ACDBSECTIONVIEWSTYLE")
+                    && frame->second.m_parentHandle == owner
+                    && frame->second.m_isCustomClass
+                    && frame->second.m_commonHandleDataValidated
+                    && drwDwgCommonLinkEvidenceValidated(
+                        frame->second.m_commonLinkEvidence);
+            };
+            const auto addStyleExtension = [&](std::uint32_t styleHandle,
+                    std::uint32_t extensionHandle,
+                    std::map<std::uint32_t, DRW_Dictionary>& dictionariesOut,
+                    std::map<std::uint32_t, DRW_XRecord>& xrecordsOut) {
+                const DRW_Dictionary* dictionary =
+                    findDictionary(extensionHandle);
+                if (dictionary == nullptr
+                    || dictionary->handle != extensionHandle
+                    || dictionary->parentHandle != styleHandle
+                    || dictionary->m_entries.size() != 1u
+                    || dictionary->m_entries.front().m_name
+                        != "ACAD_XREC_ROUNDTRIP"
+                    || !dictionary->hasCompleteDwgEntries())
+                    return false;
+                const std::uint32_t xrecordHandle =
+                    dictionary->m_entries.front().m_handle;
+                const DRW_XRecord* xrecord = findXrecord(xrecordHandle);
+                if (xrecord == nullptr || xrecord->handle != xrecordHandle
+                    || xrecord->parentHandle != extensionHandle
+                    || xrecord->reactorHandles
+                        != std::vector<std::uint32_t>{extensionHandle})
+                    return false;
+                return dictionariesOut.emplace(
+                            extensionHandle, *dictionary).second
+                    && xrecordsOut.emplace(xrecordHandle, *xrecord).second;
+            };
+            bool profile = rootEdge("ACAD_DETAILVIEWSTYLE", 0x21Bu)
+                && rootEdge("ACAD_SECTIONVIEWSTYLE", 0x219u)
+                && dictionaryProfile(findDictionary(0x21Bu), 0x21Bu,
+                                     0x18082u, 0x21Cu)
+                && dictionaryProfile(findDictionary(0x219u), 0x219u,
+                                     0x18081u, 0x21Au);
+            std::map<std::uint32_t, DRW_Dictionary> extDictionaries;
+            std::map<std::uint32_t, DRW_XRecord> extXrecords;
+            for (const std::uint32_t handle : {0x18082u, 0x21Cu}) {
+                const auto style = detailViewStyles.find(handle);
+                const std::uint32_t expectedExtension =
+                    handle == 0x18082u ? 246841u : 246835u;
+                const bool foundStyle = style != detailViewStyles.end();
+                const bool validFrame = foundStyle
+                    && styleFrame(handle, 516, "AcDbDetailViewStyle", 0x21Bu);
+                const bool validExtension = foundStyle
+                    && addStyleExtension(handle, style->second->xDictHandle,
+                                         extDictionaries, extXrecords);
+                profile = profile && style != detailViewStyles.end()
+                    && style->second->parentHandle == 0x21Bu
+                    && style->second->xDictHandle == expectedExtension
+                    && style->second->m_arrowSymbolHandle == 0u
+                    && validFrame && validExtension;
+                if (profile)
+                    m_dwgDetailViewStyleOutputSources.emplace(
+                        handle, *style->second);
+            }
+            for (const std::uint32_t handle : {0x18081u, 0x21Au}) {
+                const auto style = sectionViewStyles.find(handle);
+                const std::uint32_t expectedExtension =
+                    handle == 0x18081u ? 246839u : 246833u;
+                const bool foundStyle = style != sectionViewStyles.end();
+                const bool validFrame = foundStyle
+                    && styleFrame(handle, 515, "AcDbSectionViewStyle", 0x219u);
+                const bool validExtension = foundStyle
+                    && addStyleExtension(handle, style->second->xDictHandle,
+                                         extDictionaries, extXrecords);
+                profile = profile && style != sectionViewStyles.end()
+                    && style->second->parentHandle == 0x219u
+                    && style->second->xDictHandle == expectedExtension
+                    && style->second->m_arrowStartSymbolHandle == 0u
+                    && style->second->m_arrowEndSymbolHandle == 0u
+                    && validFrame && validExtension;
+                if (profile)
+                    m_dwgSectionViewStyleOutputSources.emplace(
+                        handle, *style->second);
+            }
+            if (profile && m_dwgDetailViewStyleOutputSources.size() == 2u
+                && m_dwgSectionViewStyleOutputSources.size() == 2u
+                && extDictionaries.size() == 4u && extXrecords.size() == 4u) {
+                m_dwgModelDocViewStyleDictionarySources.emplace(
+                    0x21Bu, *findDictionary(0x21Bu));
+                m_dwgModelDocViewStyleDictionarySources.emplace(
+                    0x219u, *findDictionary(0x219u));
+                m_dwgModelDocViewStyleDictionarySources.insert(
+                    extDictionaries.begin(), extDictionaries.end());
+                m_dwgModelDocViewStyleXRecordSources = std::move(extXrecords);
+                m_dwgModelDocViewStyleNamedObjectDictionarySource =
+                    data->namedObjectDictionary;
+                m_dwgModelDocViewStyleOutputOwner = data;
+                m_dwgModelDocViewStyleOutputGeneration =
+                    data->importGeneration;
+                m_dwgModelDocViewStyleRootCaptured = true;
+            } else {
+                m_dwgDetailViewStyleOutputSources.clear();
+                m_dwgSectionViewStyleOutputSources.clear();
             }
         }
         // Bind the physical AC1015/AC1018/AC1021/AC1024 ACDBDICTIONARYWDFLT callback
@@ -47951,7 +48129,7 @@ bool dx_iface::inspectDwgDynamicBlockOutput(
                 emitted = found->second;
                 bound = true;
             }
-            return bound && emitted != 0u && emitted != DRW::NoHandle;
+            return emitted != 0u && emitted != DRW::NoHandle;
         };
         const std::uint32_t emittedBlock =
             dxfW->getBlockRecordHandleToWrite("Title_Block-ARCH");
@@ -50370,6 +50548,678 @@ bool dx_iface::hasUnchangedDwgTableStyleOutputSources() const noexcept {
         }
         return true;
     } catch (...) {
+        return false;
+    }
+}
+
+namespace {
+
+bool modelDocViewStyleCommonPayloadEqual(
+        const DRW_ModelDocViewStyle& lhs,
+        const DRW_ModelDocViewStyle& rhs) noexcept {
+    return lhs.m_modelDocClassVersion == rhs.m_modelDocClassVersion
+        && lhs.m_description == rhs.m_description
+        && lhs.m_modifiedForRecompute == rhs.m_modifiedForRecompute
+        && lhs.m_displayName == rhs.m_displayName
+        && lhs.m_viewStyleFlags == rhs.m_viewStyleFlags;
+}
+
+bool dwgCmcMetadataEqual(const DRW_DwgCmcColorMetadata& lhs,
+                         const DRW_DwgCmcColorMetadata& rhs) noexcept {
+    return lhs.present == rhs.present && lhs.method == rhs.method
+        && lhs.flags == rhs.flags && lhs.rawIndex == rhs.rawIndex
+        && lhs.rgb24 == rhs.rgb24 && lhs.hasRgb == rhs.hasRgb
+        && lhs.colorName == rhs.colorName && lhs.bookName == rhs.bookName;
+}
+
+template<std::size_t N>
+bool dwgCmcMetadataArrayEqual(
+        const std::array<DRW_DwgCmcColorMetadata, N>& lhs,
+        const std::array<DRW_DwgCmcColorMetadata, N>& rhs) noexcept {
+    for (std::size_t index = 0u; index < N; ++index)
+        if (!dwgCmcMetadataEqual(lhs[index], rhs[index]))
+            return false;
+    return true;
+}
+
+bool detailViewStylePayloadEqual(const DRW_DetailViewStyle& lhs,
+                                 const DRW_DetailViewStyle& rhs) noexcept {
+#define DX_DETAIL_EQUAL(field) (lhs.field == rhs.field)
+    return modelDocViewStyleCommonPayloadEqual(lhs.m_modelDoc, rhs.m_modelDoc)
+        && DX_DETAIL_EQUAL(m_classVersion) && DX_DETAIL_EQUAL(m_flags)
+        && DX_DETAIL_EQUAL(m_identifierStyleHandle)
+        && DX_DETAIL_EQUAL(m_identifierColor)
+        && DX_DETAIL_EQUAL(m_identifierHeight)
+        && DX_DETAIL_EQUAL(m_identifierExcludeCharacters)
+        && DX_DETAIL_EQUAL(m_identifierOffset)
+        && DX_DETAIL_EQUAL(m_identifierPlacement)
+        && DX_DETAIL_EQUAL(m_arrowSymbolHandle)
+        && DX_DETAIL_EQUAL(m_arrowSymbolColor)
+        && DX_DETAIL_EQUAL(m_arrowSymbolSize)
+        && DX_DETAIL_EQUAL(m_boundaryLineTypeHandle)
+        && DX_DETAIL_EQUAL(m_boundaryLineWeight)
+        && DX_DETAIL_EQUAL(m_boundaryLineColor)
+        && DX_DETAIL_EQUAL(m_viewLabelTextStyleHandle)
+        && DX_DETAIL_EQUAL(m_viewLabelTextColor)
+        && DX_DETAIL_EQUAL(m_viewLabelTextHeight)
+        && DX_DETAIL_EQUAL(m_viewLabelAttachment)
+        && DX_DETAIL_EQUAL(m_viewLabelOffset)
+        && DX_DETAIL_EQUAL(m_viewLabelAlignment)
+        && DX_DETAIL_EQUAL(m_viewLabelPattern)
+        && DX_DETAIL_EQUAL(m_connectionLineTypeHandle)
+        && DX_DETAIL_EQUAL(m_connectionLineWeight)
+        && DX_DETAIL_EQUAL(m_connectionLineColor)
+        && DX_DETAIL_EQUAL(m_borderLineTypeHandle)
+        && DX_DETAIL_EQUAL(m_borderLineWeight)
+        && DX_DETAIL_EQUAL(m_borderLineColor)
+        && DX_DETAIL_EQUAL(m_modelEdge)
+        && dwgCmcMetadataArrayEqual(lhs.m_colorCmc, rhs.m_colorCmc);
+#undef DX_DETAIL_EQUAL
+}
+
+bool sectionViewStylePayloadEqual(const DRW_SectionViewStyle& lhs,
+                                  const DRW_SectionViewStyle& rhs) noexcept {
+    bool equal = modelDocViewStyleCommonPayloadEqual(
+        lhs.m_modelDoc, rhs.m_modelDoc);
+#define DX_SECTION_EQUAL(field) \
+    do { \
+        if (lhs.field != rhs.field) { \
+            DRW_DBG("ModelDocViewStyle section field mismatch: " #field "\n"); \
+            equal = false; \
+        } \
+    } while (false)
+    DX_SECTION_EQUAL(m_classVersion); DX_SECTION_EQUAL(m_flags);
+    DX_SECTION_EQUAL(m_identifierStyleHandle);
+    DX_SECTION_EQUAL(m_identifierColor); DX_SECTION_EQUAL(m_identifierHeight);
+    DX_SECTION_EQUAL(m_arrowStartSymbolHandle);
+    DX_SECTION_EQUAL(m_arrowEndSymbolHandle);
+    DX_SECTION_EQUAL(m_arrowSymbolColor); DX_SECTION_EQUAL(m_arrowSymbolSize);
+    DX_SECTION_EQUAL(m_identifierExcludeCharacters);
+    DX_SECTION_EQUAL(m_identifierPosition); DX_SECTION_EQUAL(m_identifierOffset);
+    DX_SECTION_EQUAL(m_arrowPosition); DX_SECTION_EQUAL(m_arrowSymbolExtensionLength);
+    DX_SECTION_EQUAL(m_planeLineTypeHandle); DX_SECTION_EQUAL(m_planeLineWeight);
+    DX_SECTION_EQUAL(m_planeLineColor); DX_SECTION_EQUAL(m_bendLineTypeHandle);
+    DX_SECTION_EQUAL(m_bendLineWeight); DX_SECTION_EQUAL(m_bendLineColor);
+    DX_SECTION_EQUAL(m_bendLineLength); DX_SECTION_EQUAL(m_endLineOvershoot);
+    DX_SECTION_EQUAL(m_endLineLength); DX_SECTION_EQUAL(m_viewLabelTextStyleHandle);
+    DX_SECTION_EQUAL(m_viewLabelTextColor); DX_SECTION_EQUAL(m_viewLabelTextHeight);
+    DX_SECTION_EQUAL(m_viewLabelAttachment); DX_SECTION_EQUAL(m_viewLabelOffset);
+    DX_SECTION_EQUAL(m_viewLabelAlignment); DX_SECTION_EQUAL(m_viewLabelPattern);
+    DX_SECTION_EQUAL(m_hatchColor); DX_SECTION_EQUAL(m_hatchBackgroundColor);
+    DX_SECTION_EQUAL(m_hatchPattern); DX_SECTION_EQUAL(m_hatchScale);
+    DX_SECTION_EQUAL(m_hatchTransparency); DX_SECTION_EQUAL(m_unknownB1);
+    DX_SECTION_EQUAL(m_unknownB2); DX_SECTION_EQUAL(m_hatchAngles);
+#undef DX_SECTION_EQUAL
+    if (!dwgCmcMetadataArrayEqual(lhs.m_colorCmc, rhs.m_colorCmc)) {
+        DRW_DBG("ModelDocViewStyle section color metadata mismatch\n");
+        equal = false;
+    }
+    if (!modelDocViewStyleCommonPayloadEqual(lhs.m_modelDoc, rhs.m_modelDoc)) {
+        DRW_DBG("ModelDocViewStyle common payload mismatch\n");
+        equal = false;
+    }
+    return equal;
+}
+
+} // namespace
+
+bool dx_iface::hasUnchangedDwgModelDocViewStyleOutputSources() const noexcept {
+    if (!m_dwgModelDocViewStyleRootCaptured)
+        return m_dwgDetailViewStyleOutputSources.empty()
+            && m_dwgSectionViewStyleOutputSources.empty()
+            && m_dwgModelDocViewStyleDictionarySources.empty()
+            && m_dwgModelDocViewStyleXRecordSources.empty()
+            && m_dwgModelDocViewStyleOutputOwner == nullptr
+            && m_dwgModelDocViewStyleOutputGeneration == 0u;
+    if (cData == nullptr || cData != m_dwgModelDocViewStyleOutputOwner
+        || cData->sourceFormat != dx_source_format::DWG
+        || cData->sourceVersion != DRW::AC1021
+        || cData->importGeneration != m_dwgModelDocViewStyleOutputGeneration
+        || !cData->hasSingleSuccessfulModelDocViewStyleImport()
+        || !cData->hasClosedModelDocViewStyleResourceReferences()
+        || !cData->hasNamedObjectDictionary
+        || !m_dwgModelDocViewStyleNamedObjectDictionarySource
+                .hasCompleteDwgEntries()
+        || !standardDwgModelsEqual(
+            m_dwgModelDocViewStyleNamedObjectDictionarySource,
+            cData->namedObjectDictionary, DRW::AC1021,
+            dwgObjType::DICTIONARY)
+        || m_dwgDetailViewStyleOutputSources.size() != 2u
+        || m_dwgSectionViewStyleOutputSources.size() != 2u
+        || m_dwgModelDocViewStyleDictionarySources.size() != 6u
+        || m_dwgModelDocViewStyleXRecordSources.size() != 4u)
+        return false;
+    try {
+        for (const auto& row : m_dwgDetailViewStyleOutputSources) {
+            const DRW_DetailViewStyle* current = nullptr;
+            std::size_t matches = 0u;
+            for (const DRW_DetailViewStyle& value : cData->detailViewStyles)
+                if (value.handle == row.first) {
+                    current = &value;
+                    ++matches;
+                }
+            if (matches != 1u || current == nullptr
+                || !standardDwgCommonEqual(row.second, *current,
+                                            DRW::AC1021)
+                || !detailViewStylePayloadEqual(row.second, *current))
+                return false;
+        }
+        for (const auto& row : m_dwgSectionViewStyleOutputSources) {
+            const DRW_SectionViewStyle* current = nullptr;
+            std::size_t matches = 0u;
+            for (const DRW_SectionViewStyle& value : cData->sectionViewStyles)
+                if (value.handle == row.first) {
+                    current = &value;
+                    ++matches;
+                }
+            if (matches != 1u || current == nullptr
+                || !standardDwgCommonEqual(row.second, *current,
+                                            DRW::AC1021)
+                || !sectionViewStylePayloadEqual(row.second, *current))
+                return false;
+        }
+        for (const auto& row : m_dwgModelDocViewStyleDictionarySources) {
+            const DRW_Dictionary* current = nullptr;
+            std::size_t matches = 0u;
+            for (const DRW_Dictionary& value : cData->dictionaries)
+                if (value.handle == row.first) {
+                    current = &value;
+                    ++matches;
+                }
+            if (matches != 1u || current == nullptr
+                || !standardDwgModelsEqual(row.second, *current,
+                    DRW::AC1021, dwgObjType::DICTIONARY))
+                return false;
+        }
+        for (const auto& row : m_dwgModelDocViewStyleXRecordSources) {
+            const DRW_XRecord* current = nullptr;
+            std::size_t matches = 0u;
+            for (const DRW_XRecord& value : cData->xRecords)
+                if (value.handle == row.first) {
+                    current = &value;
+                    ++matches;
+                }
+            if (matches != 1u || current == nullptr
+                || !standardDwgModelsEqual(row.second, *current,
+                    DRW::AC1021, dwgObjType::XRECORD))
+                return false;
+        }
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool dx_iface::inspectDwgModelDocViewStylesOutput(
+        const dxfRW::DxfObjectsWriteView& view) noexcept {
+    m_dwgModelDocViewStylesInspected = false;
+    if (!m_dwgModelDocViewStyleRootCaptured)
+        return hasUnchangedDwgModelDocViewStyleOutputSources();
+    if (dxfW == nullptr || cData == nullptr
+        || view.version != DRW::AC1021
+        || !hasUnchangedDwgModelDocViewStyleOutputSources())
+        return false;
+    try {
+        const auto mapHandle = [this](std::uint32_t source,
+                                      std::uint32_t& emitted) {
+            emitted = 0u;
+            if (source == 0u)
+                return true;
+            const DRW_WritingContext* context = dxfW->getWritingContext();
+            if (source == DRW::NoHandle || context == nullptr
+                || context->ambiguousSourceHandles.count(source) != 0u)
+                return false;
+            emitted = dxfW->remapHandle(source);
+            bool bound = emitted != source;
+            for (const auto* aliases : {
+                    &context->sourceHandleToWrittenTableMap,
+                    &context->sourceHandleToWrittenObjectMap,
+                    &context->sourceHandleToMintedMap}) {
+                const auto found = aliases->find(source);
+                if (found == aliases->end())
+                    continue;
+                if (bound && emitted != found->second)
+                    return false;
+                emitted = found->second;
+                bound = true;
+            }
+            return emitted != 0u && emitted != DRW::NoHandle;
+        };
+        std::map<std::uint32_t, const DRW_Dictionary*> dictionaries;
+        std::map<std::uint32_t, std::uint32_t> dictionaryOwners;
+        std::map<std::uint32_t, const DRW_XRecord*> xrecords;
+        std::map<std::uint32_t, std::uint32_t> xrecordOwners;
+        std::map<std::uint32_t, const DRW_DetailViewStyle*> detailStyles;
+        std::map<std::uint32_t, std::uint32_t> detailOwners;
+        std::map<std::uint32_t, const DRW_SectionViewStyle*> sectionStyles;
+        std::map<std::uint32_t, std::uint32_t> sectionOwners;
+        std::uint32_t emittedNod = 0u;
+        if (!mapHandle(cData->namedObjectDictionary.handle, emittedNod)
+            || !dxfW->dxfWriteRecordHasIdentity(
+                emittedNod, "DICTIONARY", "OBJECTS"))
+            return false;
+        for (const auto& row : m_dwgModelDocViewStyleDictionarySources) {
+            std::uint32_t emitted = 0u, owner = 0u;
+            const bool mapped = mapHandle(row.first, emitted)
+                && mapHandle(static_cast<std::uint32_t>(
+                    row.second.parentHandle), owner);
+            const bool hasIdentity = mapped
+                && dxfW->dxfWriteRecordHasIdentity(
+                    emitted, "DICTIONARY", "OBJECTS");
+            const bool hasOwner = hasIdentity
+                && dxfW->dxfWriteRecordHasOwner(emitted, owner);
+            if (!mapped || !hasIdentity || !hasOwner
+                || !dictionaries.emplace(emitted, &row.second).second
+                || !dictionaryOwners.emplace(emitted, owner).second
+                ) {
+                DRW_DBG("ModelDocViewStyle staged dictionary identity/owner failure handle=");
+                DRW_DBGH(row.first); DRW_DBG(" emitted=");
+                DRW_DBGH(emitted); DRW_DBG(" owner="); DRW_DBGH(owner);
+                DRW_DBG(" mapped/identity/owner="); DRW_DBG(mapped ? 1 : 0);
+                DRW_DBG("/"); DRW_DBG(hasIdentity ? 1 : 0); DRW_DBG("/");
+                DRW_DBG(hasOwner ? 1 : 0); DRW_DBG(" owner-record-count=");
+                DRW_DBG(dxfW->dxfWriteRecordHandleCount(owner));
+                DRW_DBG("\n");
+                return false;
+            }
+        }
+        for (const auto& row : m_dwgModelDocViewStyleXRecordSources) {
+            std::uint32_t emitted = 0u, owner = 0u;
+            if (!mapHandle(row.first, emitted)
+                || !mapHandle(static_cast<std::uint32_t>(
+                    row.second.parentHandle), owner)
+                || !xrecords.emplace(emitted, &row.second).second
+                || !xrecordOwners.emplace(emitted, owner).second
+                || !dxfW->dxfWriteRecordHasIdentity(
+                    emitted, "XRECORD", "OBJECTS")
+                || !dxfW->dxfWriteRecordHasOwner(emitted, owner)) {
+                DRW_DBG("ModelDocViewStyle staged XRECORD identity/owner failure handle=");
+                DRW_DBGH(row.first); DRW_DBG(" emitted=");
+                DRW_DBGH(emitted); DRW_DBG(" owner="); DRW_DBGH(owner);
+                DRW_DBG("\n");
+                return false;
+            }
+        }
+        const auto checkResource = [this, &mapHandle](
+                std::uint32_t source, const char* name) {
+            std::uint32_t emitted = 0u;
+            if (source == 0u)
+                return true;
+            if (!mapHandle(source, emitted)
+                || dxfW->dxfWriteRecordHandleCount(emitted) != 1u)
+                return false;
+            if (std::string_view(name) == "STYLE")
+                return dxfW->dxfWriteRecordHasIdentity(
+                    emitted, "STYLE", "TABLES");
+            return dxfW->dxfWriteRecordHasIdentity(
+                emitted, "LTYPE", "TABLES");
+        };
+        const auto reactorsMatch = [&mapHandle](
+                const std::vector<std::uint32_t>& source,
+                const std::vector<std::uint32_t>& actual) {
+            if (source.size() != actual.size())
+                return false;
+            for (std::size_t index = 0u; index < source.size(); ++index) {
+                std::uint32_t mapped = 0u;
+                if (!mapHandle(source[index], mapped)
+                    || actual[index] != mapped)
+                    return false;
+            }
+            return true;
+        };
+        for (const auto& row : m_dwgDetailViewStyleOutputSources) {
+            std::uint32_t emitted = 0u, owner = 0u;
+            const auto& source = row.second;
+            if (!mapHandle(row.first, emitted)
+                || !mapHandle(static_cast<std::uint32_t>(source.parentHandle),
+                              owner)
+                || dictionaries.count(owner) != 1u
+                || !detailStyles.emplace(emitted, &source).second
+                || !detailOwners.emplace(emitted, owner).second
+                || !dxfW->dxfWriteRecordHasIdentity(
+                    emitted, "DETAILVIEWSTYLE", "OBJECTS")
+                || !dxfW->dxfWriteRecordHasOwner(emitted, owner)
+                || !checkResource(source.m_identifierStyleHandle, "STYLE")
+                || !checkResource(source.m_viewLabelTextStyleHandle, "STYLE")
+                || !checkResource(source.m_boundaryLineTypeHandle, "LTYPE")
+                || !checkResource(source.m_connectionLineTypeHandle, "LTYPE")
+                || !checkResource(source.m_borderLineTypeHandle, "LTYPE")) {
+                DRW_DBG("ModelDocViewStyle staged DETAILVIEWSTYLE identity/dependency failure source=");
+                DRW_DBGH(row.first); DRW_DBG(" emitted=");
+                DRW_DBGH(emitted); DRW_DBG(" owner="); DRW_DBGH(owner);
+                DRW_DBG("\n");
+                return false;
+            }
+        }
+        for (const auto& row : m_dwgSectionViewStyleOutputSources) {
+            std::uint32_t emitted = 0u, owner = 0u;
+            const auto& source = row.second;
+            if (!mapHandle(row.first, emitted)
+                || !mapHandle(static_cast<std::uint32_t>(source.parentHandle),
+                              owner)
+                || dictionaries.count(owner) != 1u
+                || !sectionStyles.emplace(emitted, &source).second
+                || !sectionOwners.emplace(emitted, owner).second
+                || !dxfW->dxfWriteRecordHasIdentity(
+                    emitted, "SECTIONVIEWSTYLE", "OBJECTS")
+                || !dxfW->dxfWriteRecordHasOwner(emitted, owner)
+                || !checkResource(source.m_identifierStyleHandle, "STYLE")
+                || !checkResource(source.m_viewLabelTextStyleHandle, "STYLE")
+                || !checkResource(source.m_planeLineTypeHandle, "LTYPE")
+                || !checkResource(source.m_bendLineTypeHandle, "LTYPE")) {
+                DRW_DBG("ModelDocViewStyle staged SECTIONVIEWSTYLE identity/dependency failure source=");
+                DRW_DBGH(row.first); DRW_DBG(" emitted=");
+                DRW_DBGH(emitted); DRW_DBG(" owner="); DRW_DBGH(owner);
+                DRW_DBG("\n");
+                return false;
+            }
+        }
+        std::unordered_set<std::uint32_t> seenDictionaries;
+        std::unordered_set<std::uint32_t> seenXrecords;
+        std::unordered_set<std::uint32_t> seenDetails;
+        std::unordered_set<std::uint32_t> seenSections;
+        bool namesMatch = true;
+        bool rootEdgesMatch = false;
+        const bool inspected = dx_standard_output::inspectSelected(
+            view,
+            [&](std::string_view name, std::uint32_t handle) {
+                const bool nod = handle == emittedNod;
+                const bool dictionary = dictionaries.count(handle) != 0u;
+                const bool xrecord = xrecords.count(handle) != 0u;
+                const bool detail = detailStyles.count(handle) != 0u;
+                const bool section = sectionStyles.count(handle) != 0u;
+                if ((nod || dictionary)
+                    && !asciiIdentifierEquals(name, "DICTIONARY"))
+                    namesMatch = false;
+                if (xrecord && !asciiIdentifierEquals(name, "XRECORD"))
+                    namesMatch = false;
+                if (detail
+                    && !asciiIdentifierEquals(name, "DETAILVIEWSTYLE"))
+                    namesMatch = false;
+                if (section
+                    && !asciiIdentifierEquals(name, "SECTIONVIEWSTYLE"))
+                    namesMatch = false;
+                return nod || dictionary || xrecord || detail || section;
+            },
+            [&](const auto& shape, std::string_view body) {
+                dx_standard_output::Decoder decoder(view);
+                if (shape.handle == emittedNod) {
+                    bool matched = false;
+                    const bool decoded = decoder.decodeRecord<DRW_Dictionary>(
+                        body, [&](const DRW_Dictionary& actual) {
+                            std::uint32_t detailDictionary = 0u;
+                            std::uint32_t sectionDictionary = 0u;
+                            if (!mapHandle(0x21Bu, detailDictionary)
+                                || !mapHandle(0x219u, sectionDictionary))
+                                return false;
+                            const auto count = [&actual](
+                                    const char* key, std::uint32_t target) {
+                                return std::count_if(
+                                    actual.m_entries.begin(),
+                                    actual.m_entries.end(),
+                                    [key, target](
+                                        const DRW_Dictionary::Entry& entry) {
+                                        return entry.m_name == key
+                                            && entry.m_handle == target;
+                                    });
+                            };
+                            matched = actual.handle == emittedNod
+                                && count("ACAD_DETAILVIEWSTYLE",
+                                         detailDictionary) == 1
+                                && count("ACAD_SECTIONVIEWSTYLE",
+                                         sectionDictionary) == 1;
+                            return matched;
+                        });
+                    rootEdgesMatch = decoded && matched;
+                    return rootEdgesMatch;
+                }
+                const auto dictionary = dictionaries.find(shape.handle);
+                if (dictionary != dictionaries.end()) {
+                    if (!seenDictionaries.insert(shape.handle).second)
+                        return false;
+                    const DRW_Dictionary& source = *dictionary->second;
+                    const bool decoded = decoder.decodeRecord<DRW_Dictionary>(
+                        body, [&](const DRW_Dictionary& actual) {
+                            std::uint32_t expectedOwner = 0u;
+                            if (!mapHandle(static_cast<std::uint32_t>(
+                                    source.parentHandle), expectedOwner)
+                                || actual.handle != shape.handle
+                                || actual.parentHandle != expectedOwner
+                                || actual.hardOwner != source.hardOwner
+                                || actual.cloning != source.cloning
+                                || actual.m_entries.size()
+                                    != source.m_entries.size())
+                                return false;
+                            for (std::size_t index = 0u;
+                                 index < source.m_entries.size(); ++index) {
+                                std::uint32_t target = 0u;
+                                if (!mapHandle(
+                                        source.m_entries[index].m_handle,
+                                        target)
+                                    || actual.m_entries[index].m_name
+                                        != source.m_entries[index].m_name
+                                    || actual.m_entries[index].m_handle
+                                        != target)
+                                    return false;
+                                using Role =
+                                    DRW_Dictionary::Entry::DxfHandleCode;
+                                const Role expectedRole =
+                                    source.m_entries[index].m_dxfHandleCode
+                                        == Role::Unspecified
+                                    ? (source.hardOwner ? Role::HardOwner
+                                                        : Role::SoftOwner)
+                                    : source.m_entries[index].m_dxfHandleCode;
+                                if (actual.m_entries[index].m_dxfHandleCode
+                                    != expectedRole)
+                                    return false;
+                            }
+                            return true;
+                        });
+                    return decoded;
+                }
+                const auto xrecord = xrecords.find(shape.handle);
+                if (xrecord != xrecords.end()) {
+                    if (!seenXrecords.insert(shape.handle).second)
+                        return false;
+                    const DRW_XRecord& source = *xrecord->second;
+                    return decoder.decodeRecord<DRW_XRecord>(body,
+                        [&](const DRW_XRecord& actual) {
+                            std::uint32_t expectedOwner = 0u;
+                            if (!mapHandle(static_cast<std::uint32_t>(
+                                    source.parentHandle), expectedOwner)
+                                || actual.handle != shape.handle
+                                || actual.parentHandle != expectedOwner
+                                || actual.m_cloning != source.m_cloning
+                                || actual.m_values.size()
+                                    != source.m_values.size()
+                                || actual.m_dataEntries.size()
+                                    != source.m_dataEntries.size()
+                                || actual.m_handleValues.size()
+                                    != source.m_handleValues.size())
+                                return false;
+                            for (std::size_t index = 0u;
+                                 index < source.m_values.size(); ++index)
+                                if (!retainedVariantEqual(
+                                        actual.m_values[index],
+                                        source.m_values[index]))
+                                    return false;
+                            for (std::size_t index = 0u;
+                                 index < source.m_dataEntries.size(); ++index)
+                                if (!retainedVariantEqual(
+                                        actual.m_dataEntries[index],
+                                        source.m_dataEntries[index]))
+                                    return false;
+                            return actual.m_handleValues
+                                == source.m_handleValues;
+                        });
+                }
+                const auto detail = detailStyles.find(shape.handle);
+                if (detail != detailStyles.end()) {
+                    if (!seenDetails.insert(shape.handle).second)
+                        return false;
+                    const DRW_DetailViewStyle& source = *detail->second;
+                    const bool decoded = decoder.decodeRecord<DRW_DetailViewStyle>(
+                        body, [&](const DRW_DetailViewStyle& actual) {
+                            DRW_DetailViewStyle expected = source;
+                            std::uint32_t owner = 0u, xdict = 0u;
+                            if (!mapHandle(detailOwners.at(shape.handle), owner)
+                                || !mapHandle(source.xDictHandle, xdict)
+                                || !mapHandle(expected.m_identifierStyleHandle,
+                                              expected.m_identifierStyleHandle)
+                                || !mapHandle(expected.m_viewLabelTextStyleHandle,
+                                              expected.m_viewLabelTextStyleHandle)
+                                || !mapHandle(expected.m_boundaryLineTypeHandle,
+                                              expected.m_boundaryLineTypeHandle)
+                                || !mapHandle(expected.m_connectionLineTypeHandle,
+                                              expected.m_connectionLineTypeHandle)
+                                || !mapHandle(expected.m_borderLineTypeHandle,
+                                              expected.m_borderLineTypeHandle))
+                                return false;
+                            expected.handle = shape.handle;
+                            expected.parentHandle = owner;
+                            expected.xDictHandle = xdict;
+                            expected.m_colorCmc = {};
+                            const std::array<int*, 6> colors{{
+                                &expected.m_identifierColor,
+                                &expected.m_arrowSymbolColor,
+                                &expected.m_boundaryLineColor,
+                                &expected.m_viewLabelTextColor,
+                                &expected.m_connectionLineColor,
+                                &expected.m_borderLineColor}};
+                            const std::array<int, 6> sourceColors{{
+                                source.m_identifierColor,
+                                source.m_arrowSymbolColor,
+                                source.m_boundaryLineColor,
+                                source.m_viewLabelTextColor,
+                                source.m_connectionLineColor,
+                                source.m_borderLineColor}};
+                            for (std::size_t index = 0u;
+                                 index < colors.size(); ++index)
+                                if (!viewStyleCmcProjectsToDxfAci(
+                                        source.m_colorCmc[index],
+                                        sourceColors[index]))
+                                    return false;
+                                else
+                                    *colors[index] = viewStyleDxfAciValue(
+                                        source.m_colorCmc[index],
+                                        sourceColors[index]);
+                            const bool payload = detailViewStylePayloadEqual(
+                                expected, actual);
+                            const bool identity = actual.handle == expected.handle
+                                && actual.parentHandle == expected.parentHandle
+                                && actual.xDictHandle == expected.xDictHandle
+                                && reactorsMatch(source.reactorHandles,
+                                                 actual.reactorHandles);
+                            if (!payload || !identity) {
+                                DRW_DBG("ModelDocViewStyle detail body fields mismatch handle=");
+                                DRW_DBGH(shape.handle); DRW_DBG(" payload/identity=");
+                                DRW_DBG(payload ? 1 : 0); DRW_DBG("/");
+                                DRW_DBG(identity ? 1 : 0); DRW_DBG("\n");
+                            }
+                            return payload && identity;
+                        });
+                    if (!decoded) {
+                        DRW_DBG("ModelDocViewStyle detail body decode failed handle=");
+                        DRW_DBGH(shape.handle); DRW_DBG("\n");
+                    }
+                    return decoded;
+                }
+                const auto section = sectionStyles.find(shape.handle);
+                if (section != sectionStyles.end()) {
+                    if (!seenSections.insert(shape.handle).second)
+                        return false;
+                    const DRW_SectionViewStyle& source = *section->second;
+                    const bool decoded = decoder.decodeRecord<DRW_SectionViewStyle>(
+                        body, [&](const DRW_SectionViewStyle& actual) {
+                            DRW_SectionViewStyle expected = source;
+                            std::uint32_t owner = 0u, xdict = 0u;
+                            if (!mapHandle(sectionOwners.at(shape.handle), owner)
+                                || !mapHandle(source.xDictHandle, xdict)
+                                || !mapHandle(expected.m_identifierStyleHandle,
+                                              expected.m_identifierStyleHandle)
+                                || !mapHandle(expected.m_viewLabelTextStyleHandle,
+                                              expected.m_viewLabelTextStyleHandle)
+                                || !mapHandle(expected.m_planeLineTypeHandle,
+                                              expected.m_planeLineTypeHandle)
+                                || !mapHandle(expected.m_bendLineTypeHandle,
+                                              expected.m_bendLineTypeHandle))
+                                return false;
+                            expected.handle = shape.handle;
+                            expected.parentHandle = owner;
+                            expected.xDictHandle = xdict;
+                            expected.m_colorCmc = {};
+                            std::array<int*, 7> colors{{
+                                &expected.m_identifierColor,
+                                &expected.m_arrowSymbolColor,
+                                &expected.m_planeLineColor,
+                                &expected.m_bendLineColor,
+                                &expected.m_viewLabelTextColor,
+                                &expected.m_hatchColor,
+                                &expected.m_hatchBackgroundColor}};
+                            const std::array<int, 7> sourceColors{{
+                                source.m_identifierColor,
+                                source.m_arrowSymbolColor,
+                                source.m_planeLineColor,
+                                source.m_bendLineColor,
+                                source.m_viewLabelTextColor,
+                                source.m_hatchColor,
+                                source.m_hatchBackgroundColor}};
+                            for (std::size_t index = 0u;
+                                 index < colors.size(); ++index)
+                                if (!viewStyleCmcProjectsToDxfAci(
+                                        source.m_colorCmc[index],
+                                        sourceColors[index]))
+                                    return false;
+                                else
+                                    *colors[index] = viewStyleDxfAciValue(
+                                        source.m_colorCmc[index],
+                                        sourceColors[index]);
+                            const bool payload = sectionViewStylePayloadEqual(
+                                expected, actual);
+                            const bool identity = actual.handle == expected.handle
+                                && actual.parentHandle == expected.parentHandle
+                                && actual.xDictHandle == expected.xDictHandle
+                                && reactorsMatch(source.reactorHandles,
+                                                 actual.reactorHandles);
+                            if (!payload || !identity) {
+                                DRW_DBG("ModelDocViewStyle section body fields mismatch handle=");
+                                DRW_DBGH(shape.handle); DRW_DBG(" payload/identity=");
+                                DRW_DBG(payload ? 1 : 0); DRW_DBG("/");
+                                DRW_DBG(identity ? 1 : 0); DRW_DBG("\n");
+                            }
+                            return payload && identity;
+                        });
+                    if (!decoded) {
+                        DRW_DBG("ModelDocViewStyle section body decode failed handle=");
+                        DRW_DBGH(shape.handle); DRW_DBG("\n");
+                    }
+                    return decoded;
+                }
+                return false;
+            });
+        if (!inspected || !namesMatch || !rootEdgesMatch
+            || seenDictionaries.size() != dictionaries.size()
+            || seenXrecords.size() != xrecords.size()
+            || seenDetails.size() != detailStyles.size()
+            || seenSections.size() != sectionStyles.size()) {
+            DRW_DBG("ModelDocViewStyle staged body failure inspected/names/root=");
+            DRW_DBG(inspected ? 1 : 0); DRW_DBG("/");
+            DRW_DBG(namesMatch ? 1 : 0); DRW_DBG("/");
+            DRW_DBG(rootEdgesMatch ? 1 : 0); DRW_DBG(" seen d/x/detail/section=");
+            DRW_DBG(seenDictionaries.size()); DRW_DBG("/");
+            DRW_DBG(seenXrecords.size()); DRW_DBG("/");
+            DRW_DBG(seenDetails.size()); DRW_DBG("/");
+            DRW_DBG(seenSections.size()); DRW_DBG(" expected=");
+            DRW_DBG(dictionaries.size()); DRW_DBG("/");
+            DRW_DBG(xrecords.size()); DRW_DBG("/");
+            DRW_DBG(detailStyles.size()); DRW_DBG("/");
+            DRW_DBG(sectionStyles.size()); DRW_DBG("\n");
+            return false;
+        }
+        m_dwgModelDocViewStylesInspected = true;
+        return true;
+    } catch (...) {
+        m_dwgModelDocViewStylesInspected = false;
         return false;
     }
 }
@@ -72929,6 +73779,10 @@ bool dx_iface::finalizeDxfWrite() {
         || (!m_dwgTableStyleOutputSources.empty()
             && !m_dwgTableStylesInspected))
         return false;
+    if (!hasUnchangedDwgModelDocViewStyleOutputSources()
+        || (m_dwgModelDocViewStyleRootCaptured
+            && !m_dwgModelDocViewStylesInspected))
+        return false;
     if (!hasUnchangedDwgDictionaryDefaultOutputSources()
         || (!m_dwgDictionaryDefaultOutputSources.empty()
             && !m_dwgDictionaryDefaultOutputInspected))
@@ -73247,6 +74101,21 @@ bool dx_iface::finalizeDxfWrite() {
                     return false;
             }
         }
+        if (m_dwgModelDocViewStylesInspected) {
+            for (const auto& proof : m_dwgDetailViewStyleOutputSources)
+                if (!qualifyCapturedIdentity(proof.first))
+                    return false;
+            for (const auto& proof : m_dwgSectionViewStyleOutputSources)
+                if (!qualifyCapturedIdentity(proof.first))
+                    return false;
+            for (const auto& proof :
+                 m_dwgModelDocViewStyleDictionarySources)
+                if (!qualifyCapturedIdentity(proof.first))
+                    return false;
+            for (const auto& proof : m_dwgModelDocViewStyleXRecordSources)
+                if (!qualifyCapturedIdentity(proof.first))
+                    return false;
+        }
         if (m_dwgDictionaryDefaultOutputInspected) {
             for (const auto& proof :
                  m_dwgDictionaryDefaultOutputSources) {
@@ -73306,6 +74175,11 @@ bool dx_iface::finalizeDxfWrite() {
             std::cerr << "Opaque output proof profiles: TABLESTYLE sources="
                       << m_dwgTableStyleOutputSources.size()
                       << " inspected=" << m_dwgTableStylesInspected
+                      << "; ModelDocViewStyle sources=detail/section "
+                      << m_dwgDetailViewStyleOutputSources.size() << "/"
+                      << m_dwgSectionViewStyleOutputSources.size()
+                      << " inspected="
+                      << m_dwgModelDocViewStylesInspected
                       << "; MLEADERSTYLE sources="
                       << m_dwgMLeaderStyleOutputSources.size()
                       << " inspected=" << m_dwgMLeaderStylesInspected
@@ -81514,6 +82388,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
             || !m_dxfMaterialWriteSources.empty()
             || !m_dwgDictionaryDefaultOutputSources.empty()
             || !m_dwgTableStyleOutputSources.empty()
+            || m_dwgModelDocViewStyleRootCaptured
             || !m_dwgSortEntsOutputSources.empty()
             || !m_dxfAssociativeGeometrySources.empty()
             || !m_dxfAssociativeValueSources.empty()
@@ -81545,6 +82420,9 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
                 return reject("LAYER plotstyle graph");
             if (!inspectDwgTableStylesOutput(view))
                 return reject("TABLESTYLE DWG physical source/output binding");
+            if (!inspectDwgModelDocViewStylesOutput(view))
+                return reject(
+                    "ModelDocViewStyle DWG physical source/output binding");
             if (!inspectDwgDictionaryDefaultOutput(view))
                 return reject("DICTIONARYWDFLT/PLACEHOLDER DWG physical source/output binding");
             if (!inspectDwgSortEntsOutput(

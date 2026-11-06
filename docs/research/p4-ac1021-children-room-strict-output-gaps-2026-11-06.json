@@ -1,6 +1,6 @@
 {
   "schema": "libdxfrw-research-receipt-v1",
-  "title": "AC1021 children-room strict-output callback gaps",
+  "title": "AC1021 children-room strict-output gap history and current disposition",
   "date": "2026-11-06",
   "supportClaimEffect": "none",
   "scope": "Identify the exact callback identities preventing one existing AC1021 source from completing strict whole-source DXF output, and map the gaps to existing bounded physical-source evidence.",
@@ -29,7 +29,39 @@
       "interpretation": "The source graph is retained and its existing selected-output receipts pass, but these proof hooks do not yet certify the complete combined staged output for these identities. Absence from the output qualification set is not evidence that the DXF records were absent from staged bytes."
     }
   },
-  "unqualifiedCallbacks": [
+  "limits": [
+    "An unqualified callback count identifies missing output proof, not necessarily missing serialized bytes.",
+    "The selected graph receipts do not prove a combined strict whole-source output.",
+    "No native consumer, producer-wide, cross-version, or support claim is established."
+  ],
+  "currentRecheck": {
+    "date": "2026-11-06",
+    "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/children-room-decoration.dwg -y -v2007 /private/tmp/libdxfrw-children-room-viewstyle-strict.dxf",
+    "result": "PASS strict full-source ASCII conversion; all 186 opaque callback identities were qualified and output was created.",
+    "outputSha256": "cbb453feddbc65c78ee807d55489427f1a023cf3a15f3ee0b578089aba68c88c",
+    "proofProfileState": {
+      "tableStyleSourceSnapshots": 1,
+      "tableStyleInspectorPassed": true,
+      "cellStyleMapRootsDiscovered": 1,
+      "cellStyleMapStrictQualified": true,
+      "mleaderStyleSourceSnapshots": 1,
+      "mleaderStyleInspectorPassed": true,
+      "detailViewStyleSourceSnapshots": 2,
+      "sectionViewStyleSourceSnapshots": 2,
+      "modelDocViewStyleDictionaries": 6,
+      "modelDocViewStyleXrecords": 4,
+      "modelDocViewStyleInspectorPassed": true,
+      "qualifiedOpaqueCallbacks": "186/186"
+    },
+    "subsequentReexportProbe": {
+      "command": "build-gcc/dwg2dxf/dwg2dxf /private/tmp/libdxfrw-children-room-viewstyle-strict.dxf -y -v2007 /private/tmp/libdxfrw-children-room-viewstyle-roundtrip.dxf",
+      "result": "DXF source import completed; re-export failed closed at IMAGEDEF extension/reactor roots on NOD handle 0xC during reactor target lookup. No output was published.",
+      "nextSlice": "Trace and qualify this IMAGEDEF graph; strict DWG-to-DXF generation and full-file DXF re-export are separate gates."
+    },
+    "selectedGraphEvidence": "The physical selected source selector passes ASCII/Binary output and fresh typed readback with rollback/retry; this is not full-file readback or native consumer evidence.",
+    "supportClaimEffect": "none"
+  },
+  "historicalUnqualifiedCallbacks": [
     {
       "handle": "0x7F",
       "type": 504,
@@ -87,7 +119,7 @@
       "nextProof": "Prove the typed source map, style/dictionary owner relation, exact staged CELLSTYLEMAP identity, text-style and border-linetype targets, and readback in the same strict output profile as TABLESTYLE 0x7F."
     }
   ],
-  "nextSlice": {
+  "historicalNextSlice": {
     "name": "AC1021 children-room SECTIONVIEWSTYLE/DETAILVIEWSTYLE staged output",
     "reason": "TABLESTYLE/CELLSTYLEMAP and MLEADERSTYLE now pass strict staged inspection. The remaining four callbacks form two typed source-witnessed view-style pairs with existing physical profile and import evidence; qualify their body fields and owner graph in one staged transaction.",
     "acceptance": [
@@ -97,41 +129,6 @@
       "Run the existing physical selected source output/readback and add strict-target regression coverage in the same encoding/version profile.",
       "Run strict whole-source conversion once; preserve refusal and enumerate exact new gaps if any remain.",
       "Do not commit external DWG/DXF fixtures or promote support claims from this unauthenticated local source."
-    ]
-  },
-  "limits": [
-    "An unqualified callback count identifies missing output proof, not necessarily missing serialized bytes.",
-    "The selected graph receipts do not prove a combined strict whole-source output.",
-    "No native consumer, producer-wide, cross-version, or support claim is established."
-  ],
-  "currentRecheck": {
-    "date": "2026-11-06",
-    "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/children-room-decoration.dwg -y -d -v2007 /private/tmp/libdxfrw-children-room-mleader-stage.dxf",
-    "result": "FAIL CLOSED at finalization, exit 1; qualified opaque callbacks advanced to 182/186. No destination DXF was created.",
-    "debugLog": {
-      "path": "/private/tmp/libdxfrw-children-room-mleader-stage.log",
-      "sha256": "57ec52e8d43e23fdbdf7cf04b39e3b49389862e3ca4bc333cf66f638b1776ca5"
-    },
-    "proofProfileState": {
-      "tableStyleSourceSnapshots": 1,
-      "tableStyleInspectorPassed": true,
-      "cellStyleMapRootDiscovered": 1,
-      "cellStyleMapStrictQualified": true,
-      "mleaderStyleSourceSnapshots": 1,
-      "mleaderStyleInspectorPassed": true,
-      "sectionViewStyleRootsDiscovered": 2,
-      "detailViewStyleRootsDiscovered": 2,
-      "modelDocViewStyleSourceImportValid": true
-    },
-    "remainingUnqualifiedCallbacks": [
-      "0x21A",
-      "0x18081",
-      "0x21C",
-      "0x18082"
-    ],
-    "receipts": [
-      "docs/research/p4-ac1021-children-room-tablestyle-cellstylemap-strict-staged-output-2026-11-06.json",
-      "docs/research/p4-ac1021-mleaderstyle-strict-staged-output-2026-11-06.json"
     ]
   }
 }

@@ -4507,6 +4507,22 @@ private:
     bool hasUnchangedDwgTableStyleOutputSources() const noexcept;
     bool inspectDwgTableStylesOutput(
         const dxfRW::DxfObjectsWriteView& view) noexcept;
+    std::map<std::uint32_t, DRW_DetailViewStyle>
+        m_dwgDetailViewStyleOutputSources;
+    std::map<std::uint32_t, DRW_SectionViewStyle>
+        m_dwgSectionViewStyleOutputSources;
+    std::map<std::uint32_t, DRW_Dictionary>
+        m_dwgModelDocViewStyleDictionarySources;
+    std::map<std::uint32_t, DRW_XRecord>
+        m_dwgModelDocViewStyleXRecordSources;
+    DRW_Dictionary m_dwgModelDocViewStyleNamedObjectDictionarySource;
+    const dx_data* m_dwgModelDocViewStyleOutputOwner{nullptr};
+    std::uint64_t m_dwgModelDocViewStyleOutputGeneration{0u};
+    bool m_dwgModelDocViewStyleRootCaptured{false};
+    bool m_dwgModelDocViewStylesInspected{false};
+    bool hasUnchangedDwgModelDocViewStyleOutputSources() const noexcept;
+    bool inspectDwgModelDocViewStylesOutput(
+        const dxfRW::DxfObjectsWriteView& view) noexcept;
     struct DwgDictionaryDefaultOutputSource {
         DRW_DictionaryWithDefault dictionary;
         DRW_AcDbPlaceholder placeholder;
