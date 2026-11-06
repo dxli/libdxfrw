@@ -15,8 +15,18 @@
     "sourceFrame": "Object type 508; record MLEADERSTYLE; class AcDbMLeaderStyle.",
     "owner": "Unique NOD key ACAD_MLEADERSTYLE to owner dictionary to the style identity/key.",
     "eed": [
-      {"order": 0, "code": 1001, "type": "STRING", "value": "ACAD_MLEADERVER"},
-      {"order": 1, "code": 1070, "type": "INTEGER", "value": 2}
+      {
+        "order": 0,
+        "code": 1001,
+        "type": "STRING",
+        "value": "ACAD_MLEADERVER"
+      },
+      {
+        "order": 1,
+        "code": 1070,
+        "type": "INTEGER",
+        "value": 2
+      }
     ],
     "appid": "Exactly one source APPID row named ACAD_MLEADERVER. Output proof uses the emitted source-table binding and confirms the APPID TABLES record identity; it does not assume the generic handle remap is the emitted table handle.",
     "references": "The LTYPE and STYLE references resolve to their declared source rows. Arrow block and block references are null in this profile.",
@@ -24,7 +34,10 @@
   },
   "qualification": {
     "result": "PASS for this bounded local source profile only.",
-    "encodings": ["ASCII", "Binary"],
+    "encodings": [
+      "ASCII",
+      "Binary"
+    ],
     "targetVersion": "AC1024",
     "checks": [
       "Deep source snapshot copies pointer-backed EED values and refuses in-place EED mutation before output; restoring the source permits same-adapter retry.",
@@ -57,5 +70,25 @@
       "result": "PASS; existing AC1024 ASCII and Binary physical output/readback route"
     },
     "fullSuites": "NOT RUN; focused adapter selectors only."
-  }
+  },
+  "strictStagedProof": {
+    "result": "PASS for MLEADERSTYLE 0x12E within the children-room strict staged-output transaction.",
+    "targetProfiles": [
+      "AC1021 source to AC1021 DXF",
+      "AC1021 source to AC1024 DXF",
+      "AC1024 source to AC1024 DXF regression"
+    ],
+    "checks": [
+      "frozen MLEADERSTYLE typed fields and pointer-backed EED snapshot",
+      "unique ACAD_MLEADERVER APPID source table binding and staged APPID identity",
+      "NOD ACAD_MLEADERSTYLE owner dictionary and unique style key",
+      "staged MLEADERSTYLE payload body/string decode at the actual target version",
+      "mapped LTYPE, STYLE, and nullable BLOCK_RECORD target roles",
+      "ASCII/Binary selected readback, atomic late mutation/owner refusal and same-adapter retry"
+    ],
+    "strictWholeSource": "Advanced from 181/186 to 182/186 and then failed closed on the four section/detail view-style callbacks; no whole-source DXF was created.",
+    "strictDebugLogSha256": "57ec52e8d43e23fdbdf7cf04b39e3b49389862e3ca4bc333cf66f638b1776ca5",
+    "supportClaimEffect": "none"
+  },
+  "nextAction": "Qualify SECTIONVIEWSTYLE 0x21A/0x18081 and DETAILVIEWSTYLE 0x21C/0x18082 in the current strict staged transaction."
 }

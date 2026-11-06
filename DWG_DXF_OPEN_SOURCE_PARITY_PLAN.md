@@ -62,23 +62,21 @@ created locally from scratch for the specific control.
 ### Next implementation-ready slices
 
 1. **P4 / AC1021 `children-room-decoration.dwg` strict-output gap:** strict
-   whole-source conversion now proves TABLESTYLE `0x7F` and CELLSTYLEMAP
-   `0x3C3F7` together through staged ASCII/Binary body inspection, exact
-   dictionary/owner/reactor roles, named STYLE/LTYPE dependencies, and fresh
-   selected readback. The exact source profile is guarded by its TABLESTYLE,
-   extension dictionary and map identities plus the observed row/cell fields;
-   this remains one unauthenticated local source profile. Strict qualification
-   advanced from `179/186` to `181/186`, and still fails closed with no output.
-   Five callbacks remain: MLEADERSTYLE `0x12E`, SECTIONVIEWSTYLE `0x21A` and
-   `0x18081`, and DETAILVIEWSTYLE `0x21C` and `0x18082`. Next connect the
-   existing MLEADERSTYLE source/EED/APPID snapshot to its staged inspector and
-   prove its output fields/graph; then add one paired SECTIONVIEWSTYLE and
-   DETAILVIEWSTYLE inspection for the NOD and nested-dictionary roots. Keep
-   whole-source conversion refused until all five pass. The current strict
-   recheck and original seven-callback mapping are recorded in the [gap
-   receipt](docs/research/p4-ac1021-children-room-strict-output-gaps-2026-11-06.json);
-   the completed TABLESTYLE/CELLSTYLEMAP slice is in its [staged-output
-   receipt](docs/research/p4-ac1021-children-room-tablestyle-cellstylemap-strict-staged-output-2026-11-06.json).
+   whole-source conversion now proves TABLESTYLE `0x7F`, CELLSTYLEMAP `0x3C3F7`
+   and MLEADERSTYLE `0x12E` in staged output. Their exact source snapshots,
+   dictionary graph roles, modeled body fields, EED APPID binding, STYLE/LTYPE
+   dependencies and emitted identities are checked before qualification.
+   MLEADERSTYLE now covers AC1021 same-version and the existing AC1021 to
+   AC1024 route; the AC1024 source same-version regression remains covered.
+   Strict qualification advanced from `179/186` to `182/186`, and still fails
+   closed with no output. Four callbacks remain: SECTIONVIEWSTYLE `0x21A` and
+   `0x18081`, and DETAILVIEWSTYLE `0x21C` and `0x18082`. Next bind the two
+   source-witnessed view-style pairs and their NOD/nested-dictionary or
+   extension-dictionary XRECORD graphs to exact staged body inspection and
+   fresh readback. Keep whole-source conversion refused until all four pass.
+   Current strict states are recorded in the [gap receipt](docs/research/p4-ac1021-children-room-strict-output-gaps-2026-11-06.json);
+   see the TABLESTYLE/CELLSTYLEMAP [staged receipt](docs/research/p4-ac1021-children-room-tablestyle-cellstylemap-strict-staged-output-2026-11-06.json)
+   and MLEADERSTYLE [staged receipt](docs/research/p4-ac1021-mleaderstyle-strict-staged-output-2026-11-06.json).
    Source SHA-256 is
    `cbd57ef065341b81c1e5903fe13c48d9cf8ada22de11eb3d0838d78e6c1755ce`; do
    not commit a drawing fixture. The preceding AC1021 `lineweights.dwg`

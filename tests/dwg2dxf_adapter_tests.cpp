@@ -60917,7 +60917,8 @@ bool physicalAc1021MLeaderStyleEedSourceProfile(
 }
 
 bool physicalMLeaderStyleOutputReadback(
-        const std::filesystem::path& sourcePath) {
+        const std::filesystem::path& sourcePath,
+        DRW::Version targetVersion = DRW::AC1024) {
     dx_iface sourceReader;
     dx_data source;
     if (!sourceReader.fileImport(sourcePath.string(), &source, false)
@@ -61176,7 +61177,7 @@ bool physicalMLeaderStyleOutputReadback(
         writer.mutateAfterObjects = true;
         const auto exportPartial = [&]() {
             return writer.fileExport(
-                outputPath.string(), DRW::AC1024, binary, outputSource,
+                outputPath.string(), targetVersion, binary, outputSource,
                 false, true, dx_dxfSourceTextPolicy::RequireValidSource,
                 DRW::DxfTextWritePolicy::RequireLossless,
                 dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
@@ -61204,7 +61205,7 @@ bool physicalMLeaderStyleOutputReadback(
             if (!seedDestination())
                 return fail("could not reseed physical MLEADERSTYLE destination sentinel");
             if (writer.fileExport(
-                    outputPath.string(), DRW::AC1024, binary, outputSource,
+                    outputPath.string(), targetVersion, binary, outputSource,
                     false, true, dx_dxfSourceTextPolicy::RequireValidSource,
                     DRW::DxfTextWritePolicy::RequireLossless,
                     dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
@@ -61275,7 +61276,7 @@ bool physicalMLeaderStyleOutputReadback(
         DictionariesByHandle outputDictionaries;
         if (!outputReader.fileImport(outputPath.string(), &output, false)
             || output.sourceFormat != dx_source_format::DXF
-            || output.sourceVersion != DRW::AC1024
+            || output.sourceVersion != targetVersion
             || output.mLeaderStyles.size() != sourceOwners.size()
             || !indexStyles(output, outputByHandle)
             || !indexDictionaries(output, outputDictionaries)
@@ -61306,13 +61307,13 @@ bool physicalMLeaderStyleOutputReadback(
                 }) != 1)
             return fail("physical MLEADERSTYLE NOD key does not uniquely bind its owner");
 
-        const auto payloadParts = [](const DRW_MLeaderStyle& expected,
+        const auto payloadParts = [targetVersion](const DRW_MLeaderStyle& expected,
                                      const DRW_MLeaderStyle& actual) {
             dwgBufferW expectedBody, expectedStrings, expectedHandles;
             dwgBufferW actualBody, actualStrings, actualHandles;
-            if (!(expected.encodeDwg(DRW::AC1024, &expectedBody,
+            if (!(expected.encodeDwg(targetVersion, &expectedBody,
                     &expectedStrings, &expectedHandles)
-                && actual.encodeDwg(DRW::AC1024, &actualBody,
+                && actual.encodeDwg(targetVersion, &actualBody,
                     &actualStrings, &actualHandles)))
                 return std::array<bool, 3>{{false, false, false}};
             return std::array<bool, 3>{{
@@ -82600,6 +82601,10 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--mleaderstyle-physical-output-readback")
         return physicalMLeaderStyleOutputReadback(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--mleaderstyle-ac1021-same-version-output")
+        return physicalMLeaderStyleOutputReadback(
+            argv[2], DRW::AC1021) ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--mleaderstyle-ac1021-eed-source-profile")
         return physicalAc1021MLeaderStyleEedSourceProfile(argv[2]) ? 0 : 1;

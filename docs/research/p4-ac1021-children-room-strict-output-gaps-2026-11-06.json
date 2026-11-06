@@ -88,14 +88,15 @@
     }
   ],
   "nextSlice": {
-    "name": "AC1021 children-room MLEADERSTYLE strict staged output",
-    "reason": "The TABLESTYLE/CELLSTYLEMAP pair now passes the staged output inspector; MLEADERSTYLE already has one frozen source snapshot and an existing source-selected output receipt but its strict inspector is false. Its EED/APPID dependency profile is bounded and can advance without the four view-style callbacks.",
+    "name": "AC1021 children-room SECTIONVIEWSTYLE/DETAILVIEWSTYLE staged output",
+    "reason": "TABLESTYLE/CELLSTYLEMAP and MLEADERSTYLE now pass strict staged inspection. The remaining four callbacks form two typed source-witnessed view-style pairs with existing physical profile and import evidence; qualify their body fields and owner graph in one staged transaction.",
     "acceptance": [
-      "Confirm current source hash and exact callback/class identity for MLEADERSTYLE 0x12E.",
-      "Compare the frozen MLEADERSTYLE body fields, EED APPID/LAYER references, owner dictionary edge and staged emitted identity.",
-      "Require ASCII/Binary strict staged inspection, readback, atomic bad-target refusal and same-adapter retry before qualifying the handle.",
-      "Run strict whole-source conversion once; preserve refusal and enumerate exact remaining handles if any other callback remains.",
-      "Do not commit external DWG/DXF fixtures or promote a support claim from this one source profile."
+      "Confirm current source hash, version, frame/class identity, exact root keys and unique owner relations for both pairs.",
+      "Snapshot each typed view style, nested dictionaries and XRECORD extension data under the current import generation.",
+      "Inspect all four staged record bodies, group identities, mapped handles, dictionary/XRECORD roles and exact modeled fields before qualifying any pair.",
+      "Run the existing physical selected source output/readback and add strict-target regression coverage in the same encoding/version profile.",
+      "Run strict whole-source conversion once; preserve refusal and enumerate exact new gaps if any remain.",
+      "Do not commit external DWG/DXF fixtures or promote support claims from this unauthenticated local source."
     ]
   },
   "limits": [
@@ -105,11 +106,11 @@
   ],
   "currentRecheck": {
     "date": "2026-11-06",
-    "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/children-room-decoration.dwg -y -d -v2007 /private/tmp/libdxfrw-children-room-strict-finalization-probe.dxf",
-    "result": "FAIL CLOSED at finalization, exit 1; qualified opaque callbacks advanced to 181/186. No destination DXF was created.",
+    "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/children-room-decoration.dwg -y -d -v2007 /private/tmp/libdxfrw-children-room-mleader-stage.dxf",
+    "result": "FAIL CLOSED at finalization, exit 1; qualified opaque callbacks advanced to 182/186. No destination DXF was created.",
     "debugLog": {
-      "path": "/private/tmp/libdxfrw-children-room-strict-finalization-probe.log",
-      "sha256": "43d717beda7e902b4b4eb0fc2045a2b41e3eb373472a2f1343881d2cb96e20e7"
+      "path": "/private/tmp/libdxfrw-children-room-mleader-stage.log",
+      "sha256": "57ec52e8d43e23fdbdf7cf04b39e3b49389862e3ca4bc333cf66f638b1776ca5"
     },
     "proofProfileState": {
       "tableStyleSourceSnapshots": 1,
@@ -117,18 +118,20 @@
       "cellStyleMapRootDiscovered": 1,
       "cellStyleMapStrictQualified": true,
       "mleaderStyleSourceSnapshots": 1,
-      "mleaderStyleInspectorPassed": false,
+      "mleaderStyleInspectorPassed": true,
       "sectionViewStyleRootsDiscovered": 2,
       "detailViewStyleRootsDiscovered": 2,
       "modelDocViewStyleSourceImportValid": true
     },
     "remainingUnqualifiedCallbacks": [
-      "0x12E",
       "0x21A",
       "0x18081",
       "0x21C",
       "0x18082"
     ],
-    "receipt": "docs/research/p4-ac1021-children-room-tablestyle-cellstylemap-strict-staged-output-2026-11-06.json"
+    "receipts": [
+      "docs/research/p4-ac1021-children-room-tablestyle-cellstylemap-strict-staged-output-2026-11-06.json",
+      "docs/research/p4-ac1021-mleaderstyle-strict-staged-output-2026-11-06.json"
+    ]
   }
 }

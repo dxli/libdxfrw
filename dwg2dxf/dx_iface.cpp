@@ -31669,12 +31669,17 @@ bool dx_iface::inspectDwgMLeaderStyles(
         || !hasUnchangedDwgMLeaderStyleOutputSources())
         return false;
 
-    // This physical identity/field proof covers AC1021 and AC1024 sources
-    // emitted to AC1024 DXF. Other source/target profiles retain the typed
-    // writer path but do not acquire opaque-output qualification here.
-    if ((cData->sourceVersion != DRW::AC1021
-         && cData->sourceVersion != DRW::AC1024)
-        || view.version != DRW::AC1024)
+    // This physical identity/field proof covers AC1021 same-version and
+    // AC1021-to-AC1024 output, plus the witnessed AC1024 same-version route.
+    // Other source/target profiles retain typed writing without opaque-output
+    // qualification.
+    const bool admittedSourceTarget =
+        (cData->sourceVersion == DRW::AC1021
+            && (view.version == DRW::AC1021
+                || view.version == DRW::AC1024))
+        || (cData->sourceVersion == DRW::AC1024
+            && view.version == DRW::AC1024);
+    if (!admittedSourceTarget)
         return true;
     if (!cData->hasNamedObjectDictionary)
         return false;
@@ -32031,7 +32036,7 @@ bool dx_iface::inspectDwgMLeaderStyles(
                             return false;
                         const bool payloadEqual =
                             mleaderPayloadBodyAndStringsEqual(
-                                model, actual, DRW::AC1024);
+                                model, actual, view.version);
                         const auto sourceRow =
                             m_dwgMLeaderStyleOutputSources.find(model.handle);
                         bool eedEqual = sourceRow
