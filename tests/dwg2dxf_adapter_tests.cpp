@@ -22437,6 +22437,38 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
                 << " role=textStyle target=" << style.textStyleHandle.ref
                 << '\n';
   }
+  std::vector<const dx_ifaceBlock *> bodyBlocks{data.mBlock};
+  for (const dx_ifaceBlock *block : data.blocks)
+    if (std::find(bodyBlocks.begin(), bodyBlocks.end(), block) ==
+        bodyBlocks.end())
+      bodyBlocks.push_back(block);
+  for (const dx_ifaceBlock *block : bodyBlocks) {
+    if (block == nullptr)
+      continue;
+    for (const DRW_Entity *entity : block->ent) {
+      const auto *modeler = dynamic_cast<const DRW_ModelerGeometry *>(entity);
+      if (modeler == nullptr)
+        continue;
+      const char *type = modeler->eType == DRW::E3DSOLID ? "3DSOLID"
+          : modeler->eType == DRW::REGION ? "REGION"
+          : modeler->eType == DRW::BODY ? "BODY" : "OTHER";
+      const DRW_Layer *layerMatch = nullptr;
+      std::size_t layerMatches = 0u;
+      for (const DRW_Layer &layer : data.layers) {
+        if (layer.name == modeler->layer) {
+          layerMatch = &layer;
+          ++layerMatches;
+        }
+      }
+      std::cout << " typedBodyFrame type=" << type
+                << " handle=" << modeler->handle
+                << " layerName=" << modeler->layer
+                << " layerMatches=" << layerMatches << '\n';
+      if (layerMatches == 1u)
+        std::cout << " typedBodyReference owner=" << modeler->handle
+                  << " role=layer target=" << layerMatch->handle << '\n';
+    }
+  }
     DxIfaceStandardDwgCaptureTestAccess::printOpaqueSourceFrames(
         data, data.importGeneration);
     DxIfaceStandardDwgCaptureTestAccess::printStandardSourceFrames(

@@ -150,8 +150,9 @@ created locally from scratch for the specific control.
    structures and hard-pointer text-style/linetype fields. Treat the peer's
    seven edges as partial corroboration, not a complete body inventory. Other
    typed body edges include the dictionary default, two layout block-header
-   links, and two MLEADERSTYLE links; the 3DSOLID layer reference remains
-   peer-only in this diagnostic. The inventory diagnostic itself is not
+   links, and two MLEADERSTYLE links. The local 3DSOLID entity (handle `0x6F`)
+   reports layer name `0`; that name uniquely resolves to LAYER handle `0x10`,
+   matching the independent peer edge. The inventory diagnostic itself is not
    complete or source-bound: it does not bind the source hash, inspect raw
    frame bodies generally, prove every owner role from source structure, or
    establish schema-valid DXF routes. The companion
@@ -159,13 +160,12 @@ created locally from scratch for the specific control.
    binds the exact source, inventory binary/log and independent peer JSON
    hashes. It records the 75/75 frame-size join, all 21 locally parsed
    TABLESTYLE edges, the peer's partial seven-edge TABLESTYLE coverage, and the
-   unresolved 3DSOLID layer edge. Hash binding and available typed body-reference
-   reconciliation are complete as evidence capture; generic body scanning and
-   role proof for every callback remain open. Keep
-   `m_unqualifiedAc1027DwgImport` sticky. Next, capture the 3DSOLID layer target
-   in the local source inventory and classify its record type/required role;
-   then continue a source-ordered census for body edges on callbacks without a
-   typed local model, using the peer only where its decoded fields are complete.
+   3DSOLID layer edge, independently matched to the unique local LAYER row.
+   Hash binding and available typed body-reference reconciliation are complete
+   as evidence capture; generic body scanning and role proof for every callback
+   remain open. Keep `m_unqualifiedAc1027DwgImport` sticky. Next continue a
+   source-ordered census for body edges on callbacks without a typed local model,
+   using the peer only where its decoded fields are complete.
    Extend the small inventory diagnostic or a receipt generator rather than
    broad production code. Only after
    every emitted and omitted edge has a disposition may a bounded output route

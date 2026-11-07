@@ -11,10 +11,10 @@
   },
   "localInventory": {
     "command": "build-gcc/tests/libdxfrw_dwg2dxf_adapter_tests --opaque-dwg-source-inventory /Users/dli/doc/dwg/Cover.dwg",
-    "binarySha256": "2c124a4917ebdf602541e23f863dce04e76ba3ab80b9832c0802c2145648882c",
+    "binarySha256": "e0e5d01e554f60341834c659bf1664480c02f4657faaf9141892ce34df483842",
     "logPath": "/private/tmp/cover-opaque-source-inventory-body.log",
-    "logSha256": "3633365916b534da588d8f5aad1143cf449b1ec51d8c8ef84ff97065f7387676",
-    "result": "88/88 opaque callbacks captured, with 75 retained opaque frames and 13 standard-object source frames. The local importer retains typed DICTIONARYWDFLT, two LAYOUTs, TABLESTYLE, and MLEADERSTYLE models; body references from those typed models are printed. The utility does not bind the source hash and does not scan arbitrary raw frame bodies."
+    "logSha256": "0cc3bcaf0c074a4333337ad5bbc23340e5df48b204601c548b7be38516047564",
+    "result": "88/88 opaque callbacks captured, with 75 retained opaque frames and 13 standard-object source frames. The local importer retains typed DICTIONARYWDFLT, two LAYOUTs, TABLESTYLE, MLEADERSTYLE and 3DSOLID models; selected body references are printed, including the 3DSOLID layer name resolved to one unique typed LAYER record. The utility does not bind the source hash or scan arbitrary raw frame bodies."
   },
   "independentPeerParse": {
     "tool": "LibreDWG 0.14 dwgread -O minJSON",
@@ -95,7 +95,7 @@
       }
     },
     "peerTableStyleCoverage": "minJSON exposes only one cell style's seven edges and retains 7,352 TABLESTYLE bits as unknown. ODA v5.4.1 \u00a720.4.101.2-.4 specifies the R24 Table cell style plus three repeated title/header/data styles, with hard-pointer text-style and linetype fields. The peer's seven edges therefore corroborate field targets for one style but do not establish full body coverage; use the local three-style typed parse and specification as separate evidence and keep producer/semantic qualification open.",
-    "localModelCoverage": "Local typed diagnostics expose DICTIONARYWDFLT entries/default, LAYOUT block-header handles, all 21 TABLESTYLE style references, and both MLEADERSTYLE references. The 3DSOLID layer edge is currently peer-only in the local diagnostic. These reports are not a generic scanner of every opaque body reference."
+    "localModelCoverage": "Local typed diagnostics expose DICTIONARYWDFLT entries/default, LAYOUT block-header handles, all 21 TABLESTYLE style references, both MLEADERSTYLE references, and 3DSOLID 111 layer name 0 resolving uniquely to LAYER 16. The 3DSOLID layer target agrees with the independent peer. These reports are not a generic scanner of every opaque body reference."
   },
   "strictDisposition": {
     "ac1027AggregateReferenceGuard": "retained",
