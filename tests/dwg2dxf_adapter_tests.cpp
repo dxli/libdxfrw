@@ -70624,40 +70624,17 @@ bool rootDictionaryVarWriterClosure(const std::filesystem::path& directory,
     setSyntheticNamedResourceDwgReceipt(validTypedSource, DRW::AC1027);
     if (!validTypedSource.hasSingleSuccessfulNamedResourceImport())
         return fail("synthetic DICTIONARYVAR DWG import receipt is internally invalid");
-    if (!typedWriter.fileExport(typedOutput.string(), DRW::AC1027, binary,
-                                &validTypedSource, false, true))
-        return fail("synthetic typed DWG-route root DICTIONARYVAR retry failed: "
-            + typedWriter.extensionGraphFailureDetail());
-
-    dx_data typedReadback;
-    dx_iface typedReader;
-    const auto typedRootEntry = [&typedReadback, &findVariableEntry]() {
-        return findVariableEntry(typedReadback, "ROOT_VARIABLE");
-    };
-    const auto typedSecondRootEntry = [&typedReadback, &findVariableEntry]() {
-        return findVariableEntry(typedReadback, "ROOT_VARIABLE_2");
-    };
-    if (!typedReader.fileImport(typedOutput.string(), &typedReadback, false)
-        || !typedReadback.hasNamedObjectDictionary
-        || typedReadback.dictionaryVars.size() != 2u
-        || typedReadback.dictionaryVars.front().m_value != "TYPED_OUTPUT_VALUE"
-        || typedReadback.dictionaryVars.front().handle == 0x1Cu
-        || findVariableDictionary(typedReadback) == nullptr
-        || typedRootEntry() == nullptr
-        || typedReadback.dictionaryVars.front().handle
-            != typedRootEntry()->m_handle
-        || typedReadback.dictionaryVars.front().parentHandle
-            != findVariableDictionary(typedReadback)->handle
-        || typedReadback.dictionaryVars.back().m_value != "ROOT_SOURCE_VALUE_2"
-        || typedSecondRootEntry() == nullptr
-        || typedReadback.dictionaryVars.back().handle
-            != typedSecondRootEntry()->m_handle
-        || typedReadback.dictionaryVars.back().parentHandle
-            != findVariableDictionary(typedReadback)->handle)
-        return fail("typed root DICTIONARYVAR output lost its remapped owner edge");
-    if (dxfClassInstanceCount(typedReadback, "DICTIONARYVAR",
-                              "AcDbDictionaryVar") != 2)
-        return fail("typed root DICTIONARYVAR CLASS count differs from emitted instances");
+    // The receipt below is synthesized from a DXF import and is only an
+    // internal model control. It cannot authorize strict-complete DWG output.
+    if (typedWriter.fileExport(typedOutput.string(), DRW::AC1027, binary,
+                               &validTypedSource, false, true))
+        return fail("synthetic DICTIONARYVAR DWG read receipt authorized strict output");
+    std::ifstream incompleteReadInput(typedOutput, std::ios::binary);
+    const std::string incompleteReadPreserved(
+        (std::istreambuf_iterator<char>(incompleteReadInput)),
+        std::istreambuf_iterator<char>());
+    if (incompleteReadPreserved != forgedSentinel)
+        return fail("incomplete DICTIONARYVAR DWG read refusal replaced destination");
 
     dx_data wrongOwner;
     if (!reader.fileImport(source.string(), &wrongOwner, false))
@@ -71211,31 +71188,15 @@ bool rootScaleWriterClosure(const std::filesystem::path& directory,
     setSyntheticNamedResourceDwgReceipt(validTypedSource, DRW::AC1027);
     if (!validTypedSource.hasSingleSuccessfulNamedResourceImport())
         return fail("synthetic SCALE DWG import receipt is internally invalid");
-    if (!typedWriter.fileExport(typedOutput.string(), DRW::AC1027, binary,
-                                &validTypedSource, false, true))
-        return fail("synthetic typed DWG-route root SCALE retry failed: "
-            + typedWriter.extensionGraphFailureDetail());
-
-    dx_data typedReadback;
-    dx_iface typedReader;
-    if (!typedReader.fileImport(typedOutput.string(), &typedReadback, false))
-        return fail("could not read back typed root SCALE output");
-    const auto typedScaleDictionary = findRootScaleDictionary(typedReadback);
-    if (typedScaleDictionary == typedReadback.dictionaries.end()
-        || typedReadback.scales.size() != 2u
-        || typedReadback.scales.front().drawingUnits != 48.0
-        || typedReadback.scales.front().name != "1:10"
-        || typedReadback.scales.back().drawingUnits != 20.0
-        || typedReadback.scales.back().name != "1:20"
-        || typedReadback.scales.front().parentHandle
-            != typedScaleDictionary->handle
-        || typedScaleDictionary->parentHandle != 0xCu
-        || typedScaleDictionary->m_entries.size() != 2u
-        || typedScaleDictionary->m_entries.front().m_handle
-            != typedReadback.scales.front().handle)
-        return fail("typed root SCALE output lost the edited value");
-    if (dxfClassInstanceCount(typedReadback, "SCALE", "AcDbScale") != 2)
-        return fail("typed root SCALE CLASS count differs from emitted instances");
+    if (typedWriter.fileExport(typedOutput.string(), DRW::AC1027, binary,
+                               &validTypedSource, false, true))
+        return fail("synthetic SCALE DWG read receipt authorized strict output");
+    std::ifstream incompleteReadInput(typedOutput, std::ios::binary);
+    const std::string incompleteReadPreserved(
+        (std::istreambuf_iterator<char>(incompleteReadInput)),
+        std::istreambuf_iterator<char>());
+    if (incompleteReadPreserved != forgedSentinel)
+        return fail("incomplete SCALE DWG read refusal replaced destination");
     return true;
 }
 
@@ -71848,22 +71809,21 @@ bool rootMLineStyleWriterClosure(const std::filesystem::path& directory,
     const auto resolvedNameOutput = directory
         / ("root-mlinestyle-resolved-name-" + encoding + ".dxf");
     dx_iface resolvedNameWriter;
-    if (!resolvedNameWriter.fileExport(resolvedNameOutput.string(),
+    const std::string resolvedNameSentinel =
+        "edited redundant MLINE name must preserve destination\n";
+    { std::ofstream previous(resolvedNameOutput); previous << resolvedNameSentinel; }
+    // MLINE group 2 is redundant display text; the code-340 target does not
+    // authorize rewriting it when the imported live model changes it.
+    if (resolvedNameWriter.fileExport(resolvedNameOutput.string(),
             DRW::AC1027, binary, &missingNameSource, false, true))
-        return fail("MLINE code-340 target did not recover its redundant style name: "
-            + resolvedNameWriter.extensionGraphFailureDetail());
-    dx_data resolvedNameReadback;
-    dx_iface resolvedNameReader;
-    if (!resolvedNameReader.fileImport(resolvedNameOutput.string(),
-            &resolvedNameReadback, false))
-        return fail("could not read back resolved MLINE style name");
-    const DRW_MLine* resolvedNameMLine = findMLine(resolvedNameReadback);
-    if (resolvedNameMLine == nullptr
-        || resolvedNameMLine->styleName
-            != resolvedNameReadback.mLineStyles.front().name
-        || resolvedNameMLine->styleHandle
-            != resolvedNameReadback.mLineStyles.front().handle)
-        return fail("MLINE style-name recovery diverged from code-340 target");
+        return fail("edited redundant MLINE style name was accepted");
+    std::ifstream resolvedNamePreservedInput(resolvedNameOutput,
+                                              std::ios::binary);
+    const std::string resolvedNamePreserved(
+        (std::istreambuf_iterator<char>(resolvedNamePreservedInput)),
+        std::istreambuf_iterator<char>());
+    if (resolvedNamePreserved != resolvedNameSentinel)
+        return fail("redundant MLINE style-name refusal replaced destination");
 
     const std::string sentinel = "existing output must survive\n";
     const auto expectRejectedPreservingDestination =
@@ -73738,16 +73698,19 @@ bool rootMLeaderStyleWriterClosure(const std::filesystem::path& directory,
     typedSource.mLeaderStyles.front().textHeight = 4.5;
     const auto typedOutput = directory
         / ("root-mleaderstyle-typed-" + encoding + ".dxf");
+    const std::string syntheticReadSentinel =
+        "synthetic MLEADERSTYLE read must preserve destination\n";
+    { std::ofstream previous(typedOutput); previous << syntheticReadSentinel; }
     dx_iface typedWriter;
-    if (!typedWriter.fileExport(typedOutput.string(), DRW::AC1027, binary,
-                                &typedSource, false, true))
-        return fail("strict typed DWG-route root MLEADERSTYLE export failed: "
-            + typedWriter.extensionGraphFailureDetail());
-    dx_data typedReadback;
-    dx_iface typedReader;
-    if (!typedReader.fileImport(typedOutput.string(), &typedReadback, false)
-        || !assertRootedReadback(typedReadback, true, 4.5, true))
-        return fail("typed root MLEADERSTYLE output lost the edited value");
+    if (typedWriter.fileExport(typedOutput.string(), DRW::AC1027, binary,
+                               &typedSource, false, true))
+        return fail("synthetic MLEADERSTYLE receipt authorized strict DWG output");
+    std::ifstream syntheticReadInput(typedOutput, std::ios::binary);
+    const std::string syntheticReadPreserved(
+        (std::istreambuf_iterator<char>(syntheticReadInput)),
+        std::istreambuf_iterator<char>());
+    if (syntheticReadPreserved != syntheticReadSentinel)
+        return fail("incomplete MLEADERSTYLE DWG read refusal replaced destination");
 
     dx_data wrongOwner;
     if (!reader.fileImport(source.string(), &wrongOwner, false))
