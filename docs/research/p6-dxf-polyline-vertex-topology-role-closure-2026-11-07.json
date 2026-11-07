@@ -26,6 +26,9 @@
       "corrected children retry on the same adapter and receive group-70 bit 32",
       "raw output pairs bit 32 with AcDb3dPolylineVertex",
       "typed readback preserves WCS vertices and the canonical role",
+      "polygon-mesh vertices receive group-70 bit 64 and AcDbPolygonMeshVertex",
+      "a 3D-polyline child role inside a polygon mesh refuses atomically",
+      "corrected polygon-mesh vertices retry on the same adapter",
       "conflicting 3D-polyline and polygon-mesh parent bits refuse with destination preservation",
       "restoring the valid parent topology retries on the same adapter"
     ],

@@ -101,8 +101,9 @@ created locally from scratch for the specific control.
   conflicting parent topology or child vertex role bits, and supplies missing
   3D-polyline/polygon-mesh role bits from the parent before emitting the
   subclass. The AC1021 ASCII/Binary fast selector checks wire bits, subclass,
-  readback, atomic refusal, and same-adapter retry. Input remains tolerant; this
-  generated control is not producer or native-consumer qualification. See the
+  readback, atomic refusal, and same-adapter retry for both 3D polylines and
+  polygon meshes. Input remains tolerant; this generated control is not
+  producer or native-consumer qualification. See the
   [receipt](docs/research/p6-dxf-polyline-vertex-topology-role-closure-2026-11-07.json).
 - **ODA suffix investigation is waiting on a changed launch route:** the
   latest fresh direct ODA 27.1 invocation after the user's unlock attempt

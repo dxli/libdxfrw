@@ -62308,6 +62308,81 @@ void testPolylineVertexRoleClosure(TestContext& t) {
         std::error_code error;
         std::filesystem::remove(output, error);
     }
+
+    for (const bool binary : {false, true}) {
+        dx_data data;
+        auto* mesh = new DRW_Polyline;
+        mesh->flags = 16;
+        mesh->vertexcount = 2;
+        mesh->facecount = 1;
+        for (const DRW_Coord& point : {DRW_Coord(1.0, 2.0, 3.0),
+                                       DRW_Coord(4.0, 6.0, 9.0)}) {
+            DRW_Vertex vertex;
+            vertex.basePoint = point;
+            mesh->addVertex(vertex);
+        }
+        data.mBlock->ent.push_back(mesh);
+
+        dxf_identity_test::Exporter writer;
+        const bool written = writer.fileExport(
+            output.string(), DRW::AC1021, binary, &data, false);
+        t.expect(written,
+                 "polygon-mesh parent supplies omitted mesh VERTEX role bits");
+
+        dx_data readback;
+        dx_iface reader;
+        const bool imported = written
+            && reader.fileImport(output.string(), &readback, false);
+        const auto* decoded = imported && readback.mBlock->ent.size() == 1u
+            ? dynamic_cast<const DRW_Polyline*>(readback.mBlock->ent.front())
+            : nullptr;
+        t.expect(decoded != nullptr && decoded->flags == 16
+                     && decoded->vertlist.size() == 2u
+                     && (decoded->vertlist[0]->flags & (32 | 64 | 128)) == 64
+                     && (decoded->vertlist[1]->flags & (32 | 64 | 128)) == 64,
+                 "polygon-mesh typed readback has mesh-role vertices");
+
+        std::vector<TableOwnerRecord> records;
+        const bool framed = written
+            && readTableOwnerRecords(output, binary, records, false, false,
+                                     false, true, DRW::AC1021);
+        std::size_t emittedVertices = 0u;
+        bool exactRoleWire = true;
+        for (const auto& record : records) {
+            if (record.kind != "VERTEX")
+                continue;
+            ++emittedVertices;
+            exactRoleWire = exactRoleWire
+                && groupValue(record.groups, 70) == "64"
+                && std::any_of(record.groups.begin(), record.groups.end(),
+                    [](const auto& group) {
+                        return group.first == 100
+                            && group.second == "AcDbPolygonMeshVertex";
+                    });
+        }
+        t.expect(framed && emittedVertices == 2u && exactRoleWire,
+                 "raw DXF pairs mesh role bit 64 with mesh subclass");
+
+        {
+            std::ofstream sentinel(output, std::ios::binary | std::ios::trunc);
+            sentinel << "polygon mesh role sentinel\n";
+        }
+        mesh->vertlist.front()->flags = 32;
+        const bool mismatchRejected = !writer.fileExport(
+            output.string(), DRW::AC1021, binary, &data, false);
+        std::ifstream sentinelInput(output, std::ios::binary);
+        const std::string sentinelContents(
+            std::istreambuf_iterator<char>(sentinelInput), {});
+        t.expect(mismatchRejected
+                     && sentinelContents == "polygon mesh role sentinel\n",
+                 "3D-polyline child role in polygon mesh refuses atomically");
+        mesh->vertlist.front()->flags = 0;
+        t.expect(writer.fileExport(
+                     output.string(), DRW::AC1021, binary, &data, false),
+                 "corrected polygon-mesh vertex retries on the same adapter");
+        std::error_code error;
+        std::filesystem::remove(output, error);
+    }
 }
 
 void testInsertChildHandleRollback(TestContext& t) {
