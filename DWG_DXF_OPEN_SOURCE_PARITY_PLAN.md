@@ -177,11 +177,22 @@ created locally from scratch for the specific control.
    the independently matched 3DSOLID layer edge.
    Hash binding and available typed body-reference reconciliation are complete
    as evidence capture; generic body scanning and role proof for every callback
-   remain open. Keep `m_unqualifiedAc1027DwgImport` sticky. Next continue a
-   source-ordered census for body edges on callbacks without a typed local model,
-   using the peer only where its decoded fields are complete.
-   Extend the small inventory diagnostic or a receipt generator rather than
-   broad production code. Only after
+   remain open. A recursive LibreDWG minJSON scan now joins all 88 locally
+   captured frames by handle and exact frame size, enumerates 98 non-null
+   handle-valued body fields, and resolves every target in the peer object set.
+   Those fields comprise 84 DICTIONARY memberships, two DICTIONARYWDFLT links,
+   two LAYOUT block links, seven partially decoded TABLESTYLE references, two
+   MLEADERSTYLE links and one 3DSOLID layer link. The peer reports 7,352 unknown
+   bits for TABLESTYLE 106 (the JSON also contains an 1,840-character hex
+   `unknown_bits` carrier); its one-style reference list is incomplete against
+   the local three-style model. The source-frame joins and field inventory are
+   recorded in the [peer body-handle receipt](docs/research/p6-ac1027-cover-peer-body-handle-inventory-2026-11-07.json)
+   and [inventory script](tools/research/inventory_cover_peer_body_handles.py).
+   This bounds what the peer decoded; it does not prove absent fields in bodies
+   it retained as unknown or omitted. Keep `m_unqualifiedAc1027DwgImport`
+   sticky. Next reconcile the source-frame fields the peer leaves unknown or
+   does not expose against local raw-frame boundaries and ODA layouts; do not
+   infer an empty reference set from a sparse minJSON object. Only after
    every emitted and omitted edge has a disposition may a bounded output route
    replace the aggregate gate; prove it with output inspection, typed readback,
    atomic refusal and same-adapter retry. The independent 731-byte unclaimed
