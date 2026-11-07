@@ -1,0 +1,35 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "title": "Generated TABLESTYLE nested raw-net remapped identity control",
+  "date": "2026-11-07",
+  "supportClaimEffect": "none",
+  "scope": {
+    "test": "libdxfrw_tablestyle_nested_raw_net",
+    "sourceChanges": ["tests/dwg2dxf_adapter_tests.cpp"],
+    "productionCodecChanged": false,
+    "fixturePolicy": "The test creates its ASCII and Binary DXF controls at runtime; no DWG/DXF fixture was added to the repository."
+  },
+  "findings": {
+    "generatedMergedCells": "The synthetic 2x2 table now initializes all ordinary and covered cells to explicit 1x1 spans before assigning a 2x2 anchor, satisfying the writer's merge consistency checks.",
+    "rawObjectIdentity": "The writer remaps raw TABLESTYLE handles. Assertions now derive the emitted handle from readback, verify that the Table references that same handle, and verify following raw object order and distinct nonzero identities.",
+    "rawPayload": "The control preserves and compares the expected raw group sequence and source spellings after normalizing only group 5 to the emitted handle. The malformed-net control validates output object identities and order using readback handles rather than assuming source handles survive writing.",
+    "coverage": "This is generated adapter round-trip readiness, not proof of physical DWG producer coverage, TABLESTYLE semantic completeness, or output qualification."
+  },
+  "verification": {
+    "buildCommand": "cmake --build build --target libdxfrw_dwg2dxf_adapter_tests -j4",
+    "buildResult": "passed; target was up to date",
+    "testCommand": "ctest --test-dir build -R '^libdxfrw_tablestyle_nested_raw_net$' --output-on-failure",
+    "testResult": "passed, 1/1",
+    "diffCheck": "git diff --check passed",
+    "broaderFailuresStillOpen": [
+      "libdxfrw_tablestyle_identity_domains",
+      "libdxfrw_tablestyle_content_format_enum_domains"
+    ],
+    "broaderFailuresNote": "These independent TABLESTYLE domain selectors were previously observed failing in the 2026-11-07 broad run; they were not rerun as part of this focused slice."
+  },
+  "limits": [
+    "No production code or support claim changed.",
+    "No external or sample DWG/DXF was introduced.",
+    "The focused selector does not close the P5 TABLE/rendering phase."
+  ]
+}

@@ -4,7 +4,17 @@ Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectCont
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
-**Latest implementation slice (2026-11-07):** the local AC1018 `HatchG.dwg`
+**Latest implementation slice (2026-11-07):** the generated TABLESTYLE nested
+raw-net selector now passes after correcting its synthetic merged-cell spans
+and basing raw TABLESTYLE identity/order checks on emitted remapped handles.
+The test verifies unchanged raw payload/spelling, Table-to-TABLESTYLE identity,
+following-object order, and malformed-record recovery for generated ASCII and
+Binary DXF. This is test-readiness evidence only; production behavior and support
+claims are unchanged. The independent `tablestyle_identity_domains` and
+`tablestyle_content_format_enum_domains` failures remain open. See the [nested
+raw-net receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json).
+
+The local AC1018 `HatchG.dwg`
 CellStyleMap typed parse failure now falls back to exact raw-only preservation
 when a forked `RawObjectShell` validates its common header and handle data. The
 read publishes all 229 observed frames with zero failed frames. The profile is
@@ -1493,6 +1503,13 @@ capture, keep default legacy consumers opted out until codec, source, dependency
 output gates are met.
 
 ## P5 — rendering and TABLE
+
+The generated nested TABLESTYLE raw-net control now models ordinary and covered
+cells with explicit unit spans and uses the output's remapped raw-object handles
+for identity and order assertions. Its focused ASCII/Binary selector passes;
+this fixes a malformed test control and stale source-handle expectations, not a
+production codec defect. Other TABLESTYLE domain failures and physical producer
+coverage remain open ([receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json)).
 
 DXF SUN parsing retains a separately supplied RGB group regardless of the
 order of group 63, so the existing strict output refusal cannot be bypassed by

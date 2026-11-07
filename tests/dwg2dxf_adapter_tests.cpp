@@ -35807,6 +35807,14 @@ DRW_Table makeTextTableControl() {
     table.m_content.m_rows[0].m_cells = {
         cell(std::string(250, 'T') + "X"), cell("")};
     table.m_content.m_rows[1].m_cells = {cell("R2C1"), cell("R2C2")};
+    // One-by-one spans are explicit for ordinary and covered cells in the
+    // generated merge profile; the anchor below replaces these with 2-by-2.
+    for (DRW_TableRow& row : table.m_content.m_rows) {
+        for (DRW_TableCell& value : row.m_cells) {
+            value.m_mergedWidth = 1;
+            value.m_mergedHeight = 1;
+        }
+    }
     DRW_TableCell& merged = table.m_content.m_rows[0].m_cells[0];
     merged.m_isMerged = true;
     merged.m_mergedWidth = 2;
@@ -37787,13 +37795,27 @@ bool tableStyleNestedRawNetRoundTrip(bool binary, std::uint64_t nonce) {
         return true;
     };
     const DRW_RawDxfObject& captured = readback.rawTableStyles.front();
-    if (captured.handle != 0x520u
-        || !sameGroups(expectedGroups, captured.groups)
+    const std::uint32_t nestedStyleOutputHandle = captured.handle;
+    const std::uint32_t followingStyleOutputHandle =
+        readback.rawTableStyles.back().handle;
+    std::vector<DRW_Variant> expectedEmittedGroups = expectedGroups;
+    std::vector<UTF8STRING> expectedEmittedRawValues = expectedRawValues;
+    if (!expectedEmittedGroups.empty()
+        && expectedEmittedGroups.front().code() == 5) {
+        expectedEmittedGroups.front() = DRW_Variant(
+            5, DRW::toHexStr(nestedStyleOutputHandle));
+        expectedEmittedRawValues.front() =
+            DRW::toHexStr(nestedStyleOutputHandle);
+    }
+    if (nestedStyleOutputHandle == 0u
+        || nestedStyleOutputHandle == DRW::NoHandle
+        || nestedStyleOutputHandle != readback.tables.front().m_tableStyleHandle
+        || !sameGroups(expectedEmittedGroups, captured.groups)
         || (binary
             ? captured.hasRawValues
             : (!captured.hasRawValues
-               || captured.rawValues != expectedRawValues)))
-        return fail("nested TABLESTYLE raw group order or source spellings changed");
+               || captured.rawValues != expectedEmittedRawValues)))
+        return fail("nested TABLESTYLE payload changed or emitted identity was not rebound");
 
     const auto indexOf = [&order](std::uint32_t handle) {
         const std::string text = std::to_string(handle);
@@ -37804,12 +37826,14 @@ bool tableStyleNestedRawNetRoundTrip(bool binary, std::uint64_t nonce) {
         return found == order.end() ? order.size()
             : static_cast<std::size_t>(std::distance(order.begin(), found));
     };
-    const std::size_t nestedStyleIndex = indexOf(0x520u);
-    const std::size_t followingObjectIndex = indexOf(0x521u);
+    const std::size_t nestedStyleIndex = indexOf(nestedStyleOutputHandle);
+    const std::size_t followingObjectIndex = indexOf(followingStyleOutputHandle);
     if (nestedStyleIndex == order.size()
         || followingObjectIndex == order.size()
         || followingObjectIndex <= nestedStyleIndex
-        || readback.rawTableStyles.back().handle != 0x521u)
+        || followingStyleOutputHandle == 0u
+        || followingStyleOutputHandle == DRW::NoHandle
+        || followingStyleOutputHandle == nestedStyleOutputHandle)
         return fail("following TABLESTYLE OBJECT sentinel lost ordering or identity");
 
     if (std::filesystem::exists(coreEditOutput)
@@ -37860,7 +37884,7 @@ bool tableStyleNestedRawNetRoundTrip(bool binary, std::uint64_t nonce) {
         }
         return groups.size();
     };
-    std::vector<DRW_Variant> expectedEditedGroups = expectedGroups;
+    std::vector<DRW_Variant> expectedEditedGroups = expectedEmittedGroups;
     const std::size_t flowIndex = findGroupIndex(expectedEditedGroups, 70, 0u);
     const std::size_t flagsIndex = findGroupIndex(expectedEditedGroups, 71, 0u);
     const std::size_t horizontalMarginIndex =
@@ -37970,7 +37994,7 @@ bool tableStyleNestedRawNetRoundTrip(bool binary, std::uint64_t nonce) {
                 != editedFieldIndices.end();
             if (!isEdited
                 && editedReadbackRaw.rawValues[index]
-                    != expectedRawValues[index]) {
+                != expectedEmittedRawValues[index]) {
                 unchangedRawLexemesPreserved = false;
                 break;
             }
@@ -38019,7 +38043,7 @@ bool tableStyleNestedRawNetRoundTrip(bool binary, std::uint64_t nonce) {
             }
         }
     }
-    if (editedReadbackStyle.handle != 0x520u
+    if (editedReadbackStyle.handle != nestedStyleOutputHandle
         || editedReadbackStyle.m_flowDirection != 1
         || editedReadbackStyle.m_flags != 5
         || editedReadbackStyle.m_horizontalCellMargin != 0.07
@@ -38753,6 +38777,21 @@ bool tableStyleNestedRawNetRoundTrip(bool binary, std::uint64_t nonce) {
     const bool malformedOrderRead = readDxfObjectsRecordOrder(
         malformedOutput, binary, malformedOrder);
     std::filesystem::remove(malformedOutput, ignored);
+    std::vector<std::uint32_t> emittedMalformedStyleHandles;
+    emittedMalformedStyleHandles.reserve(
+        malformedReadback.rawTableStyles.size());
+    std::unordered_set<std::uint32_t> uniqueMalformedStyleHandles;
+    for (const DRW_RawDxfObject& raw : malformedReadback.rawTableStyles) {
+        if (raw.handle == 0u || raw.handle == DRW::NoHandle
+            || !uniqueMalformedStyleHandles.insert(raw.handle).second)
+            return fail("TABLESTYLE output identities are missing or duplicated");
+        emittedMalformedStyleHandles.push_back(raw.handle);
+    }
+    const auto emittedMalformedHandle = [&emittedMalformedStyleHandles](
+            std::size_t sourceIndex) {
+        return sourceIndex < emittedMalformedStyleHandles.size()
+            ? emittedMalformedStyleHandles[sourceIndex] : 0u;
+    };
     const auto malformedStyleIndex = [&malformedOrder](
             const std::string& handle) {
         const auto found = std::find_if(
@@ -38765,52 +38804,34 @@ bool tableStyleNestedRawNetRoundTrip(bool binary, std::uint64_t nonce) {
                   malformedOrder.begin(), found));
     };
     const std::size_t malformedFirstIndex = malformedStyleIndex(
-        std::to_string(0x520u));
+        std::to_string(emittedMalformedHandle(0u)));
     const std::size_t duplicateTextNameIndex = malformedStyleIndex(
-        std::to_string(0x521u));
+        std::to_string(emittedMalformedHandle(1u)));
     const std::size_t duplicateFillBookIndex = malformedStyleIndex(
-        std::to_string(0x522u));
+        std::to_string(emittedMalformedHandle(2u)));
     const std::size_t malformedSentinelIndex = malformedStyleIndex(
-        std::to_string(0x523u));
+        std::to_string(emittedMalformedHandle(3u)));
     const std::size_t duplicateFlowIndex = malformedStyleIndex(
-        std::to_string(0x524u));
+        std::to_string(emittedMalformedHandle(4u)));
     const std::size_t invalidHeaderSuppressionIndex = malformedStyleIndex(
-        std::to_string(0x525u));
+        std::to_string(emittedMalformedHandle(5u)));
     const std::size_t invalidFlowDirectionIndex = malformedStyleIndex(
-        std::to_string(0x526u));
+        std::to_string(emittedMalformedHandle(6u)));
     const std::size_t duplicateClassVersionIndex = malformedStyleIndex(
-        std::to_string(0x528u));
+        std::to_string(emittedMalformedHandle(7u)));
     const std::size_t invalidDataTypeIndex = malformedStyleIndex(
-        std::to_string(0x52Au));
+        std::to_string(emittedMalformedHandle(8u)));
     const std::size_t invalidUnitTypeIndex = malformedStyleIndex(
-        std::to_string(0x52Bu));
+        std::to_string(emittedMalformedHandle(9u)));
     const std::size_t coreFieldsSentinelIndex = malformedStyleIndex(
-        std::to_string(0x529u));
+        std::to_string(emittedMalformedHandle(10u)));
     if (!malformedImported || !malformedOrderRead
         || malformedReadback.rawTableStyles.size() != 11u
         || malformedReadback.tableStyles.size() != 2u
-        || malformedReadback.tableStyles.front().handle != 0x523u
-        || malformedReadback.tableStyles.back().handle != 0x529u
-        || malformedReadback.rawTableStyles.front().handle != 0x520u
-        || std::next(malformedReadback.rawTableStyles.begin(), 1)->handle
-            != 0x521u
-        || std::next(malformedReadback.rawTableStyles.begin(), 2)->handle
-            != 0x522u
-        || std::next(malformedReadback.rawTableStyles.begin(), 3)->handle
-            != 0x523u
-        || std::next(malformedReadback.rawTableStyles.begin(), 4)->handle
-            != 0x524u
-        || std::next(malformedReadback.rawTableStyles.begin(), 5)->handle
-            != 0x525u
-        || std::next(malformedReadback.rawTableStyles.begin(), 6)->handle
-            != 0x526u
-        || std::next(malformedReadback.rawTableStyles.begin(), 7)->handle
-            != 0x528u
-        || std::next(malformedReadback.rawTableStyles.begin(), 8)->handle
-            != 0x52Au
-        || std::next(malformedReadback.rawTableStyles.begin(), 9)->handle
-            != 0x52Bu
-        || malformedReadback.rawTableStyles.back().handle != 0x529u
+        || malformedReadback.tableStyles.front().handle
+            != emittedMalformedHandle(3u)
+        || malformedReadback.tableStyles.back().handle
+            != emittedMalformedHandle(10u)
         || malformedFirstIndex == malformedOrder.size()
         || duplicateTextNameIndex == malformedOrder.size()
         || duplicateFillBookIndex == malformedOrder.size()
