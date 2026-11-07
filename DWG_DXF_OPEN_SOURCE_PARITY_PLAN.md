@@ -2955,6 +2955,12 @@ Native source-release builds and platform qualification remain open.
   on every host; build and focused CTest pass on the current host. Native
   Windows compilation/runtime, Qt path delivery, and native FreeCAD qualification
   remain open ([Unicode CLI slice receipt](docs/research/p8-dwg2dxf-windows-utf8-argv-fast-slice-2026-11-07.json)).
+- The manually dispatched native FreeCAD Linux/Windows workflow now builds the
+  local DWG source generator and runs both build-tree and installed CLI
+  compatibility tests alongside its tracked-file handoff test. The focused
+  build-tree and installed tests pass locally; hosted MSVC/FreeCAD execution
+  remains pending ([workflow](.github/workflows/freecad-platform-qualification.yml),
+  [Unicode CLI slice receipt](docs/research/p8-dwg2dxf-windows-utf8-argv-fast-slice-2026-11-07.json)).
 - Complete native Linux/Windows FreeCAD qualification and bind the actual loaded
   library/converter child. Verify Windows UTF-8/Qt paths, filesystem collisions,
   MSVC/DLL/shared/static/relocated consumers and package/toolchain contracts.

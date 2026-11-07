@@ -12,12 +12,15 @@
     "source_sha256": "e1fe93c5f38e0263bdcfdf14b352a56e821714ec26a74ec988f8164af1a33b94",
     "cmake": "dwg2dxf/CMakeLists.txt",
     "cmake_sha256": "f2c780d4e27342deb80dbb1e34f1ac2da4d1c99bbf71706ae8083e529c8d2071",
+    "native_qualification_workflow": ".github/workflows/freecad-platform-qualification.yml",
+    "native_qualification_workflow_sha256": "76d38a0da4959ae5dde15fde6e9a8392069eee9bddcfb1a7ef35db404ac4263f",
     "test": "tests/run_freecad_dwg2dxf_compat_test.cmake",
     "test_sha256": "7e6b47eb8ba459e4f573063da20cd09d059a795f24028d8d17e12c39a6cbf976",
     "plan": "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md",
     "implementation_notes": [
       "The Windows wmain bridge rejects invalid UTF-16 instead of substituting characters.",
       "MinGW links with -municode so its console CRT selects wmain; MSVC uses its native wmain startup selection.",
+      "The manually dispatched native FreeCAD workflow now builds the source generator and includes both build-tree and installed CLI compatibility tests, in addition to its tracked-file FreeCAD handoff control.",
       "The CLI preflight now uses std::filesystem::u8path for both input and output.",
       "The test source is generated at an ASCII path, then cmake -E copy stages the same bytes at a Unicode path; generated files remain in the build scratch directory."
     ]
@@ -26,15 +29,28 @@
     "host": "macOS ARM64",
     "compiler": "/usr/bin/g++",
     "build": {
-      "command": "cmake --build build-gcc --target dwg2dxf -j4",
+      "commands": [
+        "cmake --build build-gcc --target dwg2dxf -j4",
+        "cmake --build build-gcc --target libdxfrw_dwg_local_roundtrip -j4"
+      ],
       "result": "passed"
     },
     "focused_test": {
       "command": "ctest --test-dir build-gcc -R '^dwg2dxf_freecad_cli_compat$' --output-on-failure",
       "result": "passed",
       "test": "dwg2dxf_freecad_cli_compat",
-      "duration_seconds": 1.33
+      "duration_seconds": 1.77
     },
+    "installed_and_build_tree_tests": {
+      "command": "ctest --test-dir build-gcc -R '^dwg2dxf_freecad_(cli_compat|installed_cli_compat)$' --output-on-failure",
+      "result": "passed: 2/2",
+      "includes": [
+        "build-tree Unicode input/output conversion",
+        "isolated installed converter with clean loader environment and Unicode input/output conversion"
+      ],
+      "duration_seconds": 3.75
+    },
+    "workflow_lint": "actionlint .github/workflows/freecad-platform-qualification.yml passed",
     "diff_check": "passed: git diff --check; receipt parsed with python3 -m json.tool"
   },
   "limits": [

@@ -53,7 +53,7 @@ jobs:
             -DLIBDXFRW_BUILD_DOC=OFF \
             -DLIBDXFRW_BUILD_DWG2DXF=ON \
             -DLIBDXFRW_BUILD_TESTS=ON
-          cmake --build build --parallel 2 --target dwg2dxf
+          cmake --build build --parallel 2 --target dwg2dxf libdxfrw_dwg_local_roundtrip
           cmake --install build --prefix "$RUNNER_TEMP/libdxfrw install"
           installed="$RUNNER_TEMP/libdxfrw install/bin/dwg2dxf"
           cmake -S . -B build \
@@ -62,7 +62,7 @@ jobs:
             -DLIBDXFRW_FREECAD_DWG2DXF_EXECUTABLE="$installed"
           cmake --build build --parallel 2 --target dwg2dxf
           ctest --test-dir build \
-            -R '^dwg2dxf_freecad_tracked_ac1027_line_' \
+            -R '^dwg2dxf_freecad_(tracked_ac1027_line_.*|cli_compat|installed_cli_compat)$' \
             --output-on-failure --verbose
 
       - name: Preserve native test evidence
@@ -122,7 +122,7 @@ jobs:
             -DLIBDXFRW_BUILD_DWG2DXF=ON `
             -DLIBDXFRW_BUILD_TESTS=ON
           if ($LASTEXITCODE -ne 0) { throw "CMake configure failed: $LASTEXITCODE" }
-          cmake --build build --config Release --parallel 2 --target dwg2dxf
+          cmake --build build --config Release --parallel 2 --target dwg2dxf libdxfrw_dwg_local_roundtrip
           if ($LASTEXITCODE -ne 0) { throw "CMake build failed: $LASTEXITCODE" }
           $prefix = Join-Path $env:RUNNER_TEMP 'libdxfrw install'
           cmake --install build --config Release --prefix $prefix
@@ -136,7 +136,7 @@ jobs:
           cmake --build build --config Release --parallel 2 --target dwg2dxf
           if ($LASTEXITCODE -ne 0) { throw "CMake rebuild failed: $LASTEXITCODE" }
           ctest --test-dir build -C Release `
-            -R '^dwg2dxf_freecad_tracked_ac1027_line_' `
+            -R '^dwg2dxf_freecad_(tracked_ac1027_line_.*|cli_compat|installed_cli_compat)$' `
             --output-on-failure --verbose
           if ($LASTEXITCODE -ne 0) { throw "FreeCAD CTest qualification failed: $LASTEXITCODE" }
 
