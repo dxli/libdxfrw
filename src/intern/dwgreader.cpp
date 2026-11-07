@@ -14090,6 +14090,13 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
             if (rn == "TABLECONTENT" ||
                 cit->second->className == "AcDbTableContent") {
               DRW_TableContentObject e;
+              const bool ac1032TableContent =
+                  version == DRW::AC1032
+                  && rn == "TABLECONTENT"
+                  && cit->second->className == "AcDbTableContent";
+              // Preserve a pristine cursor for the exact-version raw-only
+              // fallback if this disputed body fails typed decoding.
+              dwgBuffer tableContentShellProbe = buff.forkIndependent();
               ret = parseTableEntry(e);
               if (ret) {
                 intfa.addTableContent(e);
@@ -14100,6 +14107,29 @@ bool dwgReader::readDwgObject(dwgBuffer *dbuf, objHandle &obj,
                 intfa.addUnsupportedObject(
                     makeRawObject(oType, cit->second, false));
                 ret = true;
+              } else if (ac1032TableContent
+                         && RawObjectShell().parseDwg(
+                             version, &tableContentShellProbe, bs)
+                         && tableContentShellProbe.isGood()) {
+                // The AC1032 TABLECONTENT body/string carrier is unresolved.
+                // Publish only the validated common shell and exact raw
+                // frame; do not expose a partial typed table or qualify DXF
+                // output from this fallback.
+                intfa.addUnsupportedObject(
+                    makeRawObject(oType, cit->second, false));
+                const std::string &className = cit->second->className;
+                const std::string &recordName = cit->second->recName;
+                const std::string objectName =
+                    recordName.empty() ? className : recordName;
+                ++m_skippedCustomClasses[className.empty()
+                    ? recordName.c_str() : className.c_str()];
+                ++m_skippedUnsupportedObjects[objectName];
+                ret = true;
+                DRW_DBG("[table-content-raw-only class=");
+                DRW_DBG(className.c_str());
+                DRW_DBG(" handle=");
+                DRW_DBG(obj.handle);
+                DRW_DBG("]\n");
               }
               break;
             }

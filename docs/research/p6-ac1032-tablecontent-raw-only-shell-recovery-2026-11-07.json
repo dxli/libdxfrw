@@ -1,0 +1,68 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "title": "AC1032 TABLECONTENT bounded raw-only shell recovery",
+  "date": "2026-11-07",
+  "supportClaimEffect": "none",
+  "source": {
+    "path": "/Users/dli/dev/ACadSharp/samples/sample_AC1032.dwg",
+    "sha256": "0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528",
+    "version": "AC1032",
+    "provenance": "Tracked external ACadSharp sample; used read-only, not copied into this repository."
+  },
+  "authority": {
+    "oda": "ODA v5.4.1 §2 requires R2007+ object Unicode strings in the detached string stream; §20.4.99 describes TABLECONTENT value strings as TV. The peer's body-byte-count interpretation remains unreconciled.",
+    "implementationPolicy": "Do not change TABLECONTENT field parsing or infer semantic values. Preserve only the common shell and exact raw frame when the typed parser fails and RawObjectShell validates."
+  },
+  "implementation": {
+    "baseRevision": "f8b8d5c7",
+    "files": [
+      "src/intern/dwgreader.cpp",
+      "tests/dwg_reader_matrix_tests.cpp",
+      "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md"
+    ],
+    "behavior": "For only AC1032 TABLECONTENT / AcDbTableContent, a failed typed-body parse may publish raw-only after an independent RawObjectShell validates the common header and handle tail. The raw carrier has typedPayloadValidated=false and no TableContent callback is sent. An invalid shell remains failed. Strict output remains blocked by the raw-object/context replay gates."
+  },
+  "verification": {
+    "build": {
+      "command": "cmake --build build-gcc --target libdxfrw_dwg_reader_matrix_tests dwg2dxf -j2",
+      "result": "PASS",
+      "dwg2dxfSha256": "2f47d5188bcf5c67c923b46034a88421b4dbfaf17e2accaba135961af3fdd5ff"
+    },
+    "generatedControl": {
+      "command": "ctest --test-dir build-gcc -R '^libdxfrw_persistent_manager_prefix_dispatch$' --output-on-failure",
+      "result": "PASS, 1/1, 0.52 seconds",
+      "coverage": [
+        "raw-only publication occurs only after AC1032 shell validation",
+        "the full source payload, class identity and common owner/reactor roles are retained",
+        "no typed TABLECONTENT callback is sent for the raw-only source",
+        "a following typed associative object still publishes",
+        "the generated body is deliberately not a TABLECONTENT schema vector"
+      ]
+    },
+    "asanControl": {
+      "buildCommand": "cmake --build build-asan-custom --target libdxfrw_dwg_reader_matrix_tests dwg2dxf -j2",
+      "buildResult": "PASS",
+      "testCommand": "ctest --test-dir build-asan-custom -R '^libdxfrw_persistent_manager_prefix_dispatch$' --output-on-failure",
+      "testResult": "PASS, 1/1, 0.88 seconds"
+    },
+    "physicalRead": {
+      "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/dev/ACadSharp/samples/sample_AC1032.dwg -y -d -v2018 /private/tmp/sample-AC1032-tablecontent-raw-only.dxf",
+      "binarySha256": "2f47d5188bcf5c67c923b46034a88421b4dbfaf17e2accaba135961af3fdd5ff",
+      "logSha256": "6112e14dc0876f80cd2fe968fcbf0ec79c60aed8676d7ddc452254ca77efd492",
+      "result": "Read completed; CLI returned 1 because strict DXF preparation correctly refused the existing standalone OBJECTCONTEXTDATA replay gate.",
+      "rawOnlyTrace": [
+        "AcDbTableContent handle 0xE5F",
+        "AcDbTableContent handle 0x747"
+      ],
+      "sourceFrames": 842,
+      "publishedFrames": 842,
+      "failedFrames": 0,
+      "entityParseFailures": 0,
+      "objectParseFailures": 0,
+      "dataStorageLinkFailures": 0,
+      "dataStorageOrphanRecords": 0
+    },
+    "fixturePolicy": "No DWG or DXF fixture was added; the regression control is generated in memory."
+  },
+  "scopeLimit": "This closes raw frame publication for the two current AC1032 TABLECONTENT objects only. It does not resolve the body/string carrier dispute, recover typed cell values, establish output support, qualify other versions or producers, or establish native TABLE rendering."
+}
