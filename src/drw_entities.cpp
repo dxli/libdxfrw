@@ -3663,15 +3663,40 @@ bool parseTableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
             DRW_TableCellAttribute attribute;
             if (!readTableHandleWithRole(hdlBuf, bounds.handleEndBit,
                                          DRW::DwgSoftPointer,
-                                         attribute.m_attdefHandle))
+                                         attribute.m_attdefHandle)) {
+                dwgHandle observedHandle;
+                bool observed = false;
+                if (hdlBuf != nullptr) {
+                    dwgBuffer probe = hdlBuf->forkIndependent();
+                    observed = readBoundedDwgHandle(
+                        probe, bounds.handleEndBit, 0, false, observedHandle);
+                }
+                DRW_DBG("TABLE cell attribute handle role failed at dataBit=");
+                DRW_DBG(currentDwgBit(buf)); DRW_DBG(" handleBit=");
+                DRW_DBG(hdlBuf == nullptr ? 0 : currentDwgBit(hdlBuf));
+                DRW_DBG(" observed="); DRW_DBG(observed);
+                if (observed) {
+                    DRW_DBG(" code="); DRW_DBG(observedHandle.code);
+                    DRW_DBG(" ref="); DRW_DBGH(observedHandle.ref);
+                    DRW_DBG(" expected="); DRW_DBG(DRW::DwgSoftPointer);
+                }
+                DRW_DBG("\n");
                 return false;
+            }
             attribute.m_text = readTableText(
                 version, textBuf, tableTextEndBit(buf, textBuf, bounds));
             std::int32_t attributeIndex = 0;
-            if (!textBuf->isGood()
-                || !readBoundedBitLong(*buf, bounds.bodyEndBit,
-                                       attributeIndex))
+            if (!textBuf->isGood()) {
+                DRW_DBG("TABLE cell attribute text failed at stringBit=");
+                DRW_DBG(currentDwgBit(textBuf)); DRW_DBG("\n");
                 return false;
+            }
+            if (!readBoundedBitLong(*buf, bounds.bodyEndBit,
+                                    attributeIndex)) {
+                DRW_DBG("TABLE cell attribute index failed at dataBit=");
+                DRW_DBG(currentDwgBit(buf)); DRW_DBG("\n");
+                return false;
+            }
             attribute.m_index = attributeIndex;
             attribute.m_contentIndex = i;
             cell.m_attributes.push_back(attribute);

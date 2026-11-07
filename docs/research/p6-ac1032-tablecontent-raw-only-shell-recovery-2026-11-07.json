@@ -13,10 +13,34 @@
     "oda": "ODA v5.4.1 §2 requires R2007+ object Unicode strings in the detached string stream; §20.4.99 describes TABLECONTENT value strings as TV. The peer's body-byte-count interpretation remains unreconciled.",
     "implementationPolicy": "Do not change TABLECONTENT field parsing or infer semantic values. Preserve only the common shell and exact raw frame when the typed parser fails and RawObjectShell validates."
   },
+  "typedFailureTrace": {
+    "sourceCommand": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/dev/ACadSharp/samples/sample_AC1032.dwg -y -d -v2018 /private/tmp/sample-AC1032-tablecontent-trace3.dxf",
+    "traceFile": "/private/tmp/sample-AC1032-tablecontent-trace3.log",
+    "traceSha256": "5db37f3337346262fc0695cba3c2c5d5c33bbe17b04b72676414c9145211957e",
+    "observedFailures": [
+      {
+        "handle": "0xE5F",
+        "boundary": "first cell attribute handle",
+        "observedHandleCode": "0x5",
+        "observedReference": "0x00",
+        "expectedOdaRole": "soft pointer (code 0x4)"
+      },
+      {
+        "handle": "0x747",
+        "boundary": "first cell attribute handle",
+        "observedHandleCode": "0x5",
+        "observedReference": "0x00",
+        "expectedOdaRole": "soft pointer (code 0x4)"
+      }
+    ],
+    "interpretation": "The current handle cursor reaches code 0x5 at the parser's first cell-attribute slot. A preceding body/handle slot may be misaligned; this does not establish a producer/spec role violation and does not qualify typed payload or output.",
+    "codeChange": "Added debug-only boundary diagnostics in src/drw_entities.cpp; no parser interpretation or output behavior changed."
+  },
   "implementation": {
     "baseRevision": "f8b8d5c7",
     "files": [
       "src/intern/dwgreader.cpp",
+      "src/drw_entities.cpp",
       "tests/dwg_reader_matrix_tests.cpp",
       "DWG_DXF_OPEN_SOURCE_PARITY_PLAN.md"
     ],
