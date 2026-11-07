@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (AC1021 `truetype.dwg` now passes strict whole-source output and its selected LAYOUT/VIEWPORT profiles pass ASCII/Binary readback). This file
+Updated 2026-11-07 (after the AC1032 MentalRay and AC1021 SORTENTSTABLE read-recovery slices; the next physical candidate needs record-level failure attribution before any parser change). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -91,7 +91,14 @@ created locally from scratch for the specific control.
 
    Recent candidates remain refused for distinct reasons: title-block null
    BLOCK_CONTROL members, AC1027 Cover incomplete reference closure, and AC1018
-   Extruder2 incomplete parser disposition. The AC1024 architectural
+   Extruder2 incomplete parser disposition. The latest bounded Extruder2 read
+   publishes 14,239/14,713 frames, with 474 entity parse failures and no object
+   parse failures; the summary trace does not identify those entities' handles
+   and types. Before treating Extruder2 as implementation-ready, add a temporary
+   or focused diagnostic that attributes the first failed entity records to
+   source handles/types, then remove temporary instrumentation and select only
+   a spec-backed, bounded failure. Do not infer a common parser defect from the
+   aggregate count ([triage receipt](docs/research/p4-ac1018-extruder2-record-attribution-readiness-2026-11-07.json)). The AC1024 architectural
    named-block SORTENTSTABLE candidate is now explicitly ruled out for DXF
    output: Autodesk limits the body's owner reference to `*MODEL_SPACE` or
    `*PAPER_SPACE`; an internal writer/readback experiment was reverted because
