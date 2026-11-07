@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (AC1032 multi-schdat DataStorage advances reading to 837/842 frames; IMAGEDEF code-0xC owner is now captured as explicitly unqualified, keeping strict output refused pending role evidence). This file
+Updated 2026-11-07 (AC1032 multi-schdat DataStorage advances reading to 837/842 frames; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; one bounded ODA converter retry is queued after the user's latest unlock report). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -380,16 +380,20 @@ created locally from scratch for the specific control.
    supplies full membership and a consumer-visible root relation; see the
    [source-graph screen receipt](docs/research/p5-ac1021-acexpr-root-graph-output-readiness-2026-11-06.json).
 3. **P6 / converter-dependent suffix:** the ODA File Converter 27.1.0.0
-   seventh bounded direct launch after the user's latest unlock still
+   seventh bounded direct launch after the prior unlock report still
    aborted during pasteboard/XPC initialization (SIGABRT, return `-6`,
    30-second bound), with the same verified converter hash and no output.
    The retry used the exact AC1027 Cover source (`3a6c2315…deee42`) in a fresh
-   input/output directory. Do not repeat the unchanged direct launch. Suffix
-   analysis now needs a different launch method that actually reaches the
-   converter's document processing, or a supported GUI/independent converter
-   session. No suffix evidence or support claim follows; keep the AC1027 suffix
-   unclaimed and strict export refused. Continue local implementation in
-   parallel. See the [updated retry receipt](docs/research/p6-ac1027-oda-header-suffix-post-unlock-retry-2026-11-06.json).
+   input/output directory. The user has since reported that they are unlocking
+   the Mac session; that report is not yet a verified converter retry. After
+   confirming the session is unlocked, make one bounded direct retry with the
+   same source/converter hashes and a fresh output directory. If it again aborts
+   before document processing, stop direct retries and switch to a supported
+   GUI or independent converter launch method. No suffix evidence or support
+   claim follows; keep the AC1027 suffix unclaimed and strict export refused.
+   Continue local implementation in parallel. Record the retry outcome in a
+   new receipt rather than rewriting the historical attempts. See the
+   [updated retry receipt](docs/research/p6-ac1027-oda-header-suffix-post-unlock-retry-2026-11-06.json).
 4. **P6 / AC1032 IMAGEDEF role conflict and remaining object frames:** the AC1032 DataStorage multi-schdat profile is implemented and independently bounded; the tracked sample now reads 837/842 frames with no entity failures or DataStorage link/orphan failures. The source blocker is isolated to IMAGEDEF `0x8c4`: its owner token is code `0xC`, offset 2, resolving to `0x8c2`. ODA §2.13 defines code `0xC` as a relative soft pointer, while ODA §20.4.81 specifies IMAGEDEF `parenthandle` as a hard owner. The bounded observer now retains this as `UnqualifiedOwnerRole`; strict export still stops before serialization with an explicit owner-role refusal. Do not relabel it as hard ownership or relax the output gate without eligible normative or producer evidence ([role receipt](docs/research/p6-ac1032-imagedef-relative-owner-unqualified-profile-2026-11-07.json)).
 
    The same sample still has five independent OBJECTS parse failures: one `AcDbPersSubentManager`, two `AcDbTableContent`, and two `AcDbTextObjectContextData` frames. LibreDWG 0.14 also leaves both TABLECONTENT frames unknown; the current cell-unit values lack a proven schema. Its TextObjectContextData projection reports version 4/default/scale and common links, but the local ODA specification copy does not document this class body. PERSUBENTMGR's proposed field order remains disputed. Keep these frames refused/raw; choose a body fix only after authoritative field and boundary evidence exists. Continue with another source-ready implementation slice if none of these layouts is safely resolved. No fixture was added.
