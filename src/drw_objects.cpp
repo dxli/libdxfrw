@@ -18109,6 +18109,14 @@ bool validCellStyleMapCellStyle(
     return true;
 }
 
+bool isR24TableStyleVersion(DRW::Version version) noexcept {
+    // R24 TABLESTYLE field layout is specified for R2010 and later observed
+    // unchanged in the AC1032 source profile. Keep this explicit so earlier
+    // revisions cannot enter the R24 encoder accidentally.
+    return version == DRW::AC1024 || version == DRW::AC1027
+        || version == DRW::AC1032;
+}
+
 void putCellStyleMapContentFormat(
         DRW::Version version, dwgBufferW& body, dwgBufferW& stringBuffer,
         const DRW_TableStyleContentFormat& format) {
@@ -18174,7 +18182,7 @@ void putCellStyleMapCellStyle(DRW::Version version, dwgBufferW& body,
 } // namespace
 
 bool DRW_TableStyle::validateDwgPayload(DRW::Version version) const {
-    if (version == DRW::AC1024 || version == DRW::AC1027) {
+    if (isR24TableStyleVersion(version)) {
         if (!m_r24PrefixPresent
             || reactorHandles.size() > dwgSafety::MaxReactorCount
             || extensionDictionaryFlag() > 1u || !m_rowStyles.empty()
@@ -18257,7 +18265,7 @@ bool DRW_TableStyle::encodeDwg(DRW::Version version, dwgBufferW *buf,
     if (buf == nullptr || !validateDwgPayload(version))
         return false;
 
-    if (version == DRW::AC1024 || version == DRW::AC1027) {
+    if (isR24TableStyleVersion(version)) {
         dwgBufferW *stringBuf = strBuf != nullptr ? strBuf : buf;
         dwgBufferW *hBuf = handleBuf != nullptr ? handleBuf : buf;
         buf->putRawChar8(m_r24ClassVersion);

@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (AC1032 multi-schdat DataStorage advances reading to 837/842 frames; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; a fresh ODA retry after the latest unlock report again aborts before document processing; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions). This file
+Updated 2026-11-07 (AC1032 multi-schdat DataStorage advances reading to 837/842 frames; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; a fresh ODA retry after the latest unlock report again aborts before document processing; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -335,14 +335,16 @@ created locally from scratch for the specific control.
    and [current guard probe](docs/research/p6-ac1027-cover-current-guard-probe-2026-11-07.json).
 
    In parallel, the DWG writer now has a bounded R24 TABLESTYLE encoder for
-   AC1024 and AC1027. It serializes the modeled R24 prefix, table cell style,
+   AC1024, AC1027 and AC1032. It serializes the modeled R24 prefix, table cell style,
    three required cell styles, and text-style/linetype hard-pointer handles;
    malformed style counts and unsupported CMC forms refuse. The generated
-   local encoder/readback control passes for both versions, including malformed
-   refusal and retry. This is local encoder/parser consistency only: no
-   independent producer output, physical Cover projection, AC1032 route, DXF
-   schema closure, or native consumer qualification follows. See the
-   [R24 TABLESTYLE writer receipt](docs/research/p4-r24-tablestyle-dwg-writer-ac1024-ac1027-2026-11-07.json).
+   local encoder/readback control passes for all three versions, including
+   malformed refusal, unsupported CMC refusal, and later valid writes; the
+   six-version local DWG roundtrip also verifies AC1032 raw-carrier pairing.
+   This is local encoder/parser consistency only: no independent producer
+   output, physical Cover projection, DXF schema closure, or native consumer
+   qualification follows. See the AC1024/AC1027 [writer receipt](docs/research/p4-r24-tablestyle-dwg-writer-ac1024-ac1027-2026-11-07.json)
+   and the [AC1032 extension receipt](docs/research/p4-r24-tablestyle-dwg-writer-ac1032-2026-11-07.json).
 
    The AC1021 `truetype.dwg` selected LayerStates and four-VIEWPORT routes are
    complete for their exact source graph: ASCII/Binary typed readback, rollback

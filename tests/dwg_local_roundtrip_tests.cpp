@@ -3666,7 +3666,8 @@ public:
                 &spatialIndexRegistration);
             if (writer_->getVersion() <= DRW::AC1021
                 || writer_->getVersion() == DRW::AC1024
-                || writer_->getVersion() == DRW::AC1027) {
+                || writer_->getVersion() == DRW::AC1027
+                || writer_->getVersion() == DRW::AC1032) {
                 DRW_TableStyle tableStyleRegistration;
                 tableStyleRegistration.handle = 0xCF00u;
                 registeredTableStyle_ = writer_->registerTableStyleObjectClass(
@@ -4803,7 +4804,8 @@ public:
         }
         tableStyle.m_name = "LOCAL_TABLESTYLE";
         if (writer_->getVersion() == DRW::AC1024 ||
-            writer_->getVersion() == DRW::AC1027) {
+            writer_->getVersion() == DRW::AC1027 ||
+            writer_->getVersion() == DRW::AC1032) {
           tableStyle.m_r24PrefixPresent = true;
           tableStyle.m_r24ClassVersion = 0u;
           tableStyle.m_r24UnknownValue1 = 8;
@@ -4880,7 +4882,8 @@ public:
         }
         }
         const bool r24TableStyle = writer_->getVersion() == DRW::AC1024 ||
-                                   writer_->getVersion() == DRW::AC1027;
+                                   writer_->getVersion() == DRW::AC1027 ||
+                                   writer_->getVersion() == DRW::AC1032;
         const bool tableStyleSupported =
             writer_->getVersion() <= DRW::AC1021 || r24TableStyle;
         if (tableStyleSupported) {
@@ -7500,7 +7503,8 @@ public:
     void addTableStyle(const DRW_TableStyle& data) override {
         if (data.handle == 0xCF00u) {
             if (expectedVersion_ == DRW::AC1024 ||
-                expectedVersion_ == DRW::AC1027) {
+                expectedVersion_ == DRW::AC1027 ||
+                expectedVersion_ == DRW::AC1032) {
                 readTableStyleSeen_ = data.parentHandle == 0xA601u
                     && data.m_name == "LOCAL_TABLESTYLE"
                     && data.m_r24PrefixPresent && data.m_r24ClassVersion == 0u
@@ -8585,7 +8589,8 @@ public:
           expectedVersion_ == DRW::AC1015   ? 54u
           : expectedVersion_ == DRW::AC1018 ? 55u
           : expectedVersion_ == DRW::AC1021 ? 59u
-          : (expectedVersion_ == DRW::AC1024 || expectedVersion_ == DRW::AC1027)
+          : (expectedVersion_ == DRW::AC1024 || expectedVersion_ == DRW::AC1027
+              || expectedVersion_ == DRW::AC1032)
               ? 57u
               : 56u;
       return readRawObjectInvariant_ &&
@@ -38033,7 +38038,8 @@ int main(int argc, char** argv) {
                 .c_str(),
                failures);
         const bool r24TableStyleVersion =
-            version == DRW::AC1024 || version == DRW::AC1027;
+            version == DRW::AC1024 || version == DRW::AC1027
+            || version == DRW::AC1032;
         expect(version <= DRW::AC1021 || r24TableStyleVersion
                    ? writeIface.wroteTableStyle()
                    : writeIface.rejectedUnsupportedTableStyle(),
