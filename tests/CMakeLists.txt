@@ -3763,6 +3763,16 @@ set_tests_properties(dwg_hatch_gradient_cmc PROPERTIES
 )
 
 add_test(
+    NAME dwg_hatch_circle_boundary_output
+    COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip>
+            --hatch-circle-boundary-reference
+)
+set_tests_properties(dwg_hatch_circle_boundary_output PROPERTIES
+    LABELS "fast;dwg;dxf;adapter;hatch;circle;generated;transaction"
+    TIMEOUT 30
+)
+
+add_test(
     NAME dwg_spline_bitlong_boundary
     COMMAND $<TARGET_FILE:libdxfrw_dwg_local_roundtrip>
             --spline-bitlong-boundary

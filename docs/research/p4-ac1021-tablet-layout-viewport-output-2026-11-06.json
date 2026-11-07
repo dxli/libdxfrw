@@ -37,10 +37,25 @@
     "source_opaque_callbacks": 51,
     "strict_whole_source_conversion": "still refused; OLE2FRAME handle 0x2B80 (decimal 11136) remains unqualified"
   },
+  "ole2frame_owner_probe": {
+    "source_handle": "0x2B80",
+    "typed_container": "*U0",
+    "staged_section": "ENTITIES",
+    "emitted_block_record_handle": 0,
+    "owner_identity_proved": false,
+    "independent_peer_membership": "LibreDWG 0.14 minJSON's two paper-space BLOCK_HEADER entity lists include the four VIEWPORT handles but not OLE2FRAME 0x2B80; the OLE2FRAME has entmode=2 but no ownerhandle.",
+    "disposition": "unresolved; retain strict refusal",
+    "note": "An experimental inspector was removed after it surfaced this missing owner binding; it rejected serialization before the existing strict-completeness gate and did not qualify the frame. Do not infer an owner from entmode. Seek a producer-valid source with closed ownership or authoritative orphan semantics."
+  },
+  "hatch_circle_regression": {
+    "source": "generated AC1021 DWG authored locally for the control; no fixture is committed",
+    "test": "dwg_hatch_circle_boundary_output",
+    "command": "ctest --test-dir build -R '^dwg_hatch_circle_boundary_output$' --output-on-failure",
+    "result": "passed; ASCII and Binary DXF fresh readback preserve the HATCH boundary reference to the remapped CIRCLE handle"
+  },
   "limitations": [
     "Selected source/output transport evidence only; no native CAD consumer semantics or broad AC1021 producer claim.",
-    "The source has one remaining OLE2FRAME callback. Its payload and DXF output fields still need a bounded source snapshot, exact staged-output proof, readback, rollback and retry evidence.",
-    "The HATCH-to-CIRCLE emitted-type mapping still needs a dedicated generated regression control.",
+    "The source has one remaining OLE2FRAME callback. Its *U0 container has no established emitted BLOCK_RECORD owner; resolve the block/layout relation before snapshot, staged-output proof, readback, rollback and retry work.",
     "No DWG or DXF fixture was added to the repository."
   ]
 }

@@ -93,14 +93,27 @@ created locally from scratch for the specific control.
    LAYOUT/BLOCK_RECORD membership, derived group 68/69, destination-preserving
    refusal, and same-adapter correction/retry. The remaining callback is
    OLE2FRAME handle `0x2B80` (11136); strict whole-source output still refuses.
-   Next: (a) baseline the source OLE2FRAME model and exact payload under bounded
-   retained-byte accounting; (b) inspect staged ASCII/Binary OLE2FRAME identity,
-   owner and every modeled field/payload byte against that baseline, then prove
-   fresh readback, atomic refusal and corrected same-writer retry; (c) add a
-   locally generated HATCH/CIRCLE-reference regression control for the newly
-   added CIRCLE emitted-type binding; (d) rerun same-version strict conversion
-   and whole-file fresh readback, preserving refusal if any other dependency
-   remains unqualified. The peer census provides independent type/name and
+   The remaining OLE2FRAME is not an owner-ready output candidate in this
+   source. The local reader places handle `0x2B80` in synthetic `*U0` with no
+   BLOCK_RECORD handle/name or entity owner, and LibreDWG 0.14's minJSON lists
+   it in neither paper-space BLOCK_HEADER member list (those lists contain only
+   the four VIEWPORTs). The attempted output-proof probe returned no emitted
+   owner and was removed; strict refusal remains correct for this source. Do
+   not infer a paper-space owner from `entmode=2`. To resume OLE2FRAME output
+   work, first find an independently evidenced source whose BLOCK_HEADER and
+   entity ownership agree, or resolve this source's producer-valid orphan
+   semantics from authoritative evidence; then add a bounded immutable model
+   and payload snapshot, exact staged ASCII/Binary field/payload proof, fresh
+   readback, atomic refusal, and same-writer retry. The HATCH/CIRCLE
+   emitted-type fix now has a locally generated AC1021 DWG regression control:
+   it writes and reads a HATCH whose external boundary is a CIRCLE, then
+   verifies ASCII and Binary DXF fresh readback resolves the remapped boundary
+   handle to that CIRCLE. The registered fast CTest
+   `dwg_hatch_circle_boundary_output` passes. Next ready work is to find a
+   source-qualified OLE2FRAME with closed BLOCK_HEADER/BLOCK_RECORD ownership,
+   or continue another independent source profile; do not retry strict tablet
+   conversion until new evidence closes its orphan owner. The peer census provides
+   independent type/name and
    handle inventory, not native semantic acceptance. Whole-source output and
    support claims remain open. See the new
    [LAYOUT/VIEWPORT receipt](docs/research/p4-ac1021-tablet-layout-viewport-output-2026-11-06.json)

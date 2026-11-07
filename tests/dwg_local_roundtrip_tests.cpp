@@ -32149,6 +32149,177 @@ private:
   std::string failureReason_;
 };
 
+class HatchCircleBoundaryDwgControl final : public dx_iface {
+public:
+  explicit HatchCircleBoundaryDwgControl(dwgRW* writer = nullptr)
+      : writer_(writer) {
+    cData = &data_;
+    currentBlock = data_.mBlock;
+    circle_.basePoint = DRW_Coord(4.0, 5.0, 0.0);
+    circle_.radious = 2.0;
+    circle_.layer = "CIRCLE_BOUNDARY";
+    hatch_.handle = DRW::NoHandle;
+    hatch_.layer = "HATCH_CIRCLE_BOUNDARY";
+    hatch_.name = "SOLID";
+    hatch_.associative = 1;
+    hatch_.extPoint = DRW_Coord(0.0, 0.0, 1.0);
+    auto loop = std::make_shared<DRW_HatchLoop>(0);
+    hatch_.appendLoop(loop);
+  }
+
+  void writeHeader(DRW_Header& header) override { header.vars.clear(); }
+  void writeBlocks() override {}
+  void writeBlockRecords() override {}
+  void writeLTypes() override {}
+  void writeLayers() override {}
+  void writeTextstyles() override {}
+  void writeVports() override {}
+  void writeDimstyles() override {}
+  void writeAppId() override {}
+  void writeEntities() override {
+    if (writer_ == nullptr)
+      return;
+    if (!writer_->writeCircle(&circle_) || circle_.handle == DRW::NoHandle)
+      return;
+    hatch_.looplist.front()->m_boundaryHandles = {circle_.handle};
+    wrote_ = writer_->writeHatch(&hatch_)
+        && hatch_.handle != DRW::NoHandle;
+  }
+  void addCircle(const DRW_Circle& value) override {
+    ++circles;
+    dx_iface::addCircle(value);
+  }
+  void addHatch(const DRW_Hatch* value) override {
+    if (value != nullptr) {
+      ++hatches;
+      capturedHatch = std::make_unique<DRW_Hatch>(*value);
+    }
+    dx_iface::addHatch(value);
+  }
+
+  bool wrote() const { return wrote_; }
+  const dx_data& data() const { return data_; }
+  std::size_t circles{0};
+  std::size_t hatches{0};
+  std::unique_ptr<DRW_Hatch> capturedHatch;
+
+private:
+  dwgRW* writer_{nullptr};
+  DRW_Circle circle_;
+  DRW_Hatch hatch_;
+  bool wrote_{false};
+  dx_data data_;
+};
+
+bool runHatchCircleBoundaryReference(const std::filesystem::path& parent) {
+  const auto scratch = parent / ("hatch-circle-boundary-"
+      + std::to_string(
+          std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::error_code ec;
+  if (!std::filesystem::create_directories(scratch, ec) || ec)
+    return false;
+  struct Cleanup {
+    std::filesystem::path path;
+    ~Cleanup() {
+      std::error_code ignored;
+      std::filesystem::remove_all(path, ignored);
+    }
+  } cleanup{scratch};
+
+  const auto sourcePath = scratch / "source.dwg";
+  dwgRW sourceWriter(sourcePath.string().c_str());
+  HatchCircleBoundaryDwgControl generated(&sourceWriter);
+  if (!sourceWriter.write(&generated, DRW::AC1021, true)
+      || !generated.wrote()) {
+    std::cerr << "generated HATCH/CIRCLE DWG source write failed\n";
+    return false;
+  }
+
+  dx_iface sourceReader;
+  dx_data source;
+  if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+      || source.sourceFormat != dx_source_format::DWG
+      || source.sourceVersion != DRW::AC1021
+      || source.dwgReadOutcome.observations.entityParseFailures != 0u
+      || source.mBlock == nullptr) {
+    std::cerr << "generated HATCH/CIRCLE DWG import failed: error="
+              << static_cast<int>(source.dwgReadOutcome.error)
+              << " version=" << static_cast<int>(source.sourceVersion)
+              << " entityFailures="
+              << source.dwgReadOutcome.observations.entityParseFailures
+              << '\n';
+    return false;
+  }
+  const DRW_Circle* sourceCircle = nullptr;
+  const DRW_Hatch* sourceHatch = nullptr;
+  for (const DRW_Entity* entity : source.mBlock->ent) {
+    if (const auto* circle = dynamic_cast<const DRW_Circle*>(entity))
+      sourceCircle = circle;
+    if (const auto* hatch = dynamic_cast<const DRW_Hatch*>(entity))
+      sourceHatch = hatch;
+  }
+  if (sourceCircle == nullptr || sourceHatch == nullptr
+      || sourceCircle->handle == 0u || sourceCircle->handle == DRW::NoHandle
+      || sourceHatch->looplist.size() != 1u
+      || sourceHatch->looplist.front() == nullptr
+      || sourceHatch->looplist.front()->m_boundaryHandles
+          != std::vector<std::uint32_t>{sourceCircle->handle}) {
+    std::cerr << "generated HATCH/CIRCLE DWG graph did not read back: "
+              << "circle=" << (sourceCircle != nullptr)
+              << " hatch=" << (sourceHatch != nullptr);
+    for (const DRW_Entity* entity : source.mBlock->ent)
+      std::cerr << " [type=" << static_cast<int>(entity->eType)
+                << " handle=" << entity->handle << " layer='"
+                << entity->layer << "']";
+    std::cerr << '\n';
+    return false;
+  }
+
+  for (const bool binary : {false, true}) {
+    const auto outputPath = scratch / (binary ? "output-binary.dxf"
+                                               : "output-ascii.dxf");
+    dx_iface writer;
+    if (!writer.fileExport(outputPath.string(), DRW::AC1021, binary, &source,
+                           false, true)) {
+      std::cerr << "generated HATCH/CIRCLE DWG-to-DXF output refused: binary="
+                << binary << " graphFailure="
+                << static_cast<int>(writer.hatchGraphFailure()) << '\n';
+      return false;
+    }
+    dx_iface outputReader;
+    dx_data output;
+    if (!outputReader.fileImport(outputPath.string(), &output, false)
+        || output.sourceFormat != dx_source_format::DXF
+        || output.sourceVersion != DRW::AC1021 || output.mBlock == nullptr)
+      return false;
+    const DRW_Circle* outputCircle = nullptr;
+    const DRW_Hatch* outputHatch = nullptr;
+    for (const DRW_Entity* entity : output.mBlock->ent) {
+      if (const auto* circle = dynamic_cast<const DRW_Circle*>(entity))
+        outputCircle = circle;
+      if (const auto* hatch = dynamic_cast<const DRW_Hatch*>(entity))
+        outputHatch = hatch;
+    }
+    if (outputCircle == nullptr || outputHatch == nullptr
+        || outputCircle->handle == 0u
+        || outputCircle->handle == DRW::NoHandle
+        || outputHatch->looplist.size() != 1u
+        || outputHatch->looplist.front() == nullptr
+        || outputHatch->looplist.front()->m_boundaryHandles
+            != std::vector<std::uint32_t>{outputCircle->handle}
+        || outputCircle->basePoint.x != sourceCircle->basePoint.x
+        || outputCircle->basePoint.y != sourceCircle->basePoint.y
+        || outputCircle->radious != sourceCircle->radious) {
+      std::cerr << "generated HATCH/CIRCLE output readback mismatch: binary="
+                << binary << '\n';
+      return false;
+    }
+  }
+  std::cout << "generated AC1021 HATCH/CIRCLE boundary reference: PASS "
+               "(ASCII/Binary output and fresh readback)\n";
+  return true;
+}
+
 bool runHatchDwgBoundaryReferences(const std::filesystem::path& parent) {
   if (!runHatchDwgBoundaryReferenceMalformedControls()) {
     std::cerr << "HATCH/MPOLYGON malformed boundary-handle controls failed\n";
@@ -36978,6 +37149,9 @@ int main(int argc, char** argv) {
         std::cout << "DWG HATCH/MPOLYGON boundary references: "
                   << (passed ? "PASS" : "FAIL") << '\n';
         return passed ? 0 : 1;
+    } else if (argc == 2
+        && std::string(argv[1]) == "--hatch-circle-boundary-reference") {
+        return runHatchCircleBoundaryReference(directory) ? 0 : 1;
     } else if (argc == 2 && std::string(argv[1]) == "--hatch-publication") {
         return runHatchPublicationTests(directory) ? 0 : 1;
     } else if (argc == 2
