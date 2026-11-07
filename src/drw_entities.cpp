@@ -908,6 +908,48 @@ struct TableDwgBounds {
     std::uint64_t handleEndBit = std::numeric_limits<std::uint64_t>::max();
 };
 
+// A debug-only alternate decoder used after AC1032 TABLECONTENT failure to
+// measure the disputed body-string candidate. It never supplies published
+// object state or output bytes.
+thread_local bool tableCadValueBodyStringProbe = false;
+thread_local bool tableContentObjectHandleTraceActive = false;
+
+class TableContentObjectHandleTraceScope {
+public:
+    explicit TableContentObjectHandleTraceScope(bool enable) noexcept
+        : previous_(tableContentObjectHandleTraceActive) {
+        tableContentObjectHandleTraceActive = enable;
+    }
+    ~TableContentObjectHandleTraceScope() {
+        tableContentObjectHandleTraceActive = previous_;
+    }
+private:
+    bool previous_;
+};
+
+class TableCadValueBodyStringProbeScope {
+public:
+    TableCadValueBodyStringProbeScope() noexcept
+        : previous_(tableCadValueBodyStringProbe) {
+        tableCadValueBodyStringProbe = true;
+    }
+    ~TableCadValueBodyStringProbeScope() {
+        tableCadValueBodyStringProbe = previous_;
+    }
+private:
+    bool previous_;
+};
+
+bool skipTableContentFormat(DRW::Version version, dwgBuffer *buf,
+                            dwgBuffer *strBuf, dwgBuffer *hdlBuf,
+                            std::vector<DRW_DwgSubrecordRange> *ranges,
+                            const TableDwgBounds& bounds);
+bool skipTableCellStyle(DRW::Version version, dwgBuffer *buf,
+                        dwgBuffer *strBuf, dwgBuffer *hdlBuf,
+                        std::int32_t& styleType, bool& semanticComplete,
+                        std::vector<DRW_DwgSubrecordRange> *ranges,
+                        const TableDwgBounds& bounds);
+
 std::uint64_t tableTextEndBit(const dwgBuffer *bodyBuf,
                               const dwgBuffer *textBuf,
                               const TableDwgBounds& bounds) {
@@ -2547,30 +2589,69 @@ std::uint16_t bitShortFromInt(int value) {
     return static_cast<std::uint16_t>(value);
 }
 
+void traceTableHandleSlot(const char *slot, const dwgBuffer *bodyBuf,
+                          const dwgBuffer *strBuf, std::uint64_t handleStart,
+                          const dwgBuffer *hdlBuf, const dwgHandle *handle,
+                          int expectedRole, bool accepted) {
+    if (!tableContentObjectHandleTraceActive || slot == nullptr
+        || DRW_DBGGL != DRW_dbg::Level::Debug)
+        return;
+    DRW_DBG("TABLECONTENT handle slot="); DRW_DBG(slot);
+    DRW_DBG(" bodyBit="); DRW_DBG(bodyBuf ? currentDwgBit(bodyBuf) : 0);
+    DRW_DBG(" stringBit="); DRW_DBG(strBuf ? currentDwgBit(strBuf) : 0);
+    DRW_DBG(" handleBit="); DRW_DBG(handleStart);
+    DRW_DBG("..="); DRW_DBG(hdlBuf ? currentDwgBit(hdlBuf) : handleStart);
+    DRW_DBG(" accepted="); DRW_DBG(accepted ? 1 : 0);
+    if (expectedRole >= 0) {
+        DRW_DBG(" expected="); DRW_DBG(expectedRole);
+    }
+    if (handle != nullptr) {
+        DRW_DBG(" code="); DRW_DBG(handle->code);
+        DRW_DBG(" ref="); DRW_DBGH(handle->ref);
+    }
+    DRW_DBG("\n");
+}
+
 std::uint32_t readTableHandle(
     dwgBuffer *hdlBuf,
-    std::uint64_t endBit = std::numeric_limits<std::uint64_t>::max()) {
+    std::uint64_t endBit = std::numeric_limits<std::uint64_t>::max(),
+    const char *slot = nullptr, const dwgBuffer *bodyBuf = nullptr,
+    const dwgBuffer *strBuf = nullptr) {
     if (hdlBuf == nullptr || !hdlBuf->isGood())
         return 0;
+    const std::uint64_t handleStart = currentDwgBit(hdlBuf);
     dwgBuffer probe = hdlBuf->forkIndependent();
     dwgHandle h;
     if (!readBoundedDwgHandle(probe, endBit, 0, false, h)) {
+        traceTableHandleSlot(slot, bodyBuf, strBuf, handleStart, hdlBuf,
+                             nullptr, -1, false);
         hdlBuf->invalidate();
         return 0;
     }
     *hdlBuf = probe;
+    traceTableHandleSlot(slot, bodyBuf, strBuf, handleStart, hdlBuf,
+                         &h, -1, true);
     return h.ref;
 }
 
 bool readTableHandleWithRole(dwgBuffer *hdlBuf, std::uint64_t endBit,
                              std::uint8_t expectedRole,
-                             std::uint32_t& reference) {
+                             std::uint32_t& reference,
+                             const char *slot = nullptr,
+                             const dwgBuffer *bodyBuf = nullptr,
+                             const dwgBuffer *strBuf = nullptr) {
     if (hdlBuf == nullptr || !hdlBuf->isGood())
         return false;
+    const std::uint64_t handleStart = currentDwgBit(hdlBuf);
     dwgBuffer probe = hdlBuf->forkIndependent();
     dwgHandle handle;
-    if (!readBoundedDwgHandle(probe, endBit, 0, false, handle)
-        || handle.code != expectedRole)
+    const bool decoded = readBoundedDwgHandle(
+        probe, endBit, 0, false, handle);
+    const bool accepted = decoded && handle.code == expectedRole;
+    traceTableHandleSlot(slot, bodyBuf, strBuf, handleStart,
+                         decoded ? &probe : hdlBuf,
+                         decoded ? &handle : nullptr, expectedRole, accepted);
+    if (!accepted)
         return false;
     *hdlBuf = probe;
     reference = handle.ref;
@@ -2590,23 +2671,32 @@ bool readTableObjectCommonHandles(dwgBuffer *buf, std::uint32_t baseHandle,
                                   std::vector<std::uint32_t> *reactorHandles,
                                   std::uint32_t *xDictHandle,
                                   std::uint64_t handleEndBit =
-                                      std::numeric_limits<std::uint64_t>::max()) {
+                                      std::numeric_limits<std::uint64_t>::max(),
+                                  const dwgBuffer *bodyBuf = nullptr,
+                                  const dwgBuffer *strBuf = nullptr) {
     if (buf == nullptr || !buf->isGood()
         || !dwgSafety::validReactorCount(numReactors)) {
         if (buf != nullptr)
             buf->invalidate();
         return false;
     }
+    const auto readCommonHandle = [&](const char *slot, dwgHandle& handle) {
+        const std::uint64_t handleStart = currentDwgBit(buf);
+        const bool read = readBoundedDwgHandle(
+            *buf, handleEndBit, baseHandle, true, handle);
+        traceTableHandleSlot(slot, bodyBuf, strBuf, handleStart, buf,
+                             read ? &handle : nullptr, -1, read);
+        return read;
+    };
     std::vector<std::uint32_t> parsedReactors;
     dwgHandle parentH;
-    if (!readBoundedDwgHandle(*buf, handleEndBit, baseHandle, true, parentH))
+    if (!readCommonHandle("common-owner", parentH))
         return false;
     if (!DRW::reserve(parsedReactors, numReactors))
         return false;
     for (std::int32_t i = 0; i < numReactors; ++i) {
         dwgHandle reactor;
-        if (!readBoundedDwgHandle(*buf, handleEndBit, baseHandle, true,
-                                  reactor))
+        if (!readCommonHandle("common-reactor", reactor))
             return false;
         parsedReactors.push_back(reactor.ref);
     }
@@ -2614,8 +2704,7 @@ bool readTableObjectCommonHandles(dwgBuffer *buf, std::uint32_t baseHandle,
     std::uint32_t parsedXDictHandle = 0;
     if (xDictFlag != 1) {
         dwgHandle xDict;
-        if (!readBoundedDwgHandle(*buf, handleEndBit, baseHandle, true,
-                                  xDict))
+        if (!readCommonHandle("common-extension-dictionary", xDict))
             return false;
         parsedXDictHandle = xDict.ref;
     }
@@ -2675,6 +2764,92 @@ UTF8STRING readTableText(DRW::Version version, dwgBuffer *buf,
     while (!text.empty() && text.back() == '\0')
         text.pop_back();
     return text;
+}
+
+void traceTableBodyStringCandidate(DRW::Version version, dwgBuffer *bodyBuf,
+                                   dwgBuffer *strBuf, dwgBuffer *hdlBuf,
+                                   const TableDwgBounds& bounds) {
+    if (!tableContentObjectHandleTraceActive || bodyBuf == nullptr
+        || strBuf == nullptr || hdlBuf == nullptr
+        || DRW_DBGGL != DRW_dbg::Level::Debug)
+        return;
+    dwgBuffer candidateBody = bodyBuf->forkIndependent();
+    const std::uint64_t payloadStartBit = currentDwgBit(&candidateBody);
+    std::vector<std::uint8_t> bytes;
+    if (!readTableValueBytes(&candidateBody, bounds.bodyEndBit, bytes,
+                             "TABLE string-carrier probe")) {
+        DRW_DBG("TABLE CadValue body-string candidate rejected at bodyBit=");
+        DRW_DBG(payloadStartBit); DRW_DBG("\n");
+        return;
+    }
+    const std::uint64_t payloadEndBit = currentDwgBit(&candidateBody);
+    std::int32_t unit = 0;
+    if (!readBoundedBitLong(candidateBody, bounds.bodyEndBit, unit)) {
+        DRW_DBG("TABLE CadValue body-string candidate byteCount=");
+        DRW_DBG(bytes.size()); DRW_DBG(" bodyBit="); DRW_DBG(payloadStartBit);
+        DRW_DBG(".."); DRW_DBG(payloadEndBit);
+        DRW_DBG(" rejected: no bounded following unit\n");
+        return;
+    }
+    std::uint32_t attributeCount = 0;
+    const bool attributeCountRead = readTableBodyCount(
+        version, &candidateBody, bounds.bodyEndBit,
+        kMaxTableCellAttributes, 2, attributeCount);
+    std::uint16_t contentFormatFlag = 0;
+    const bool contentFormatFlagRead = attributeCountRead
+        && attributeCount == 0
+        && readBoundedBitShort(candidateBody, bounds.bodyEndBit,
+                               contentFormatFlag);
+    bool contentFormatProbeGood = false;
+    bool cellStyleProbeGood = false;
+    std::int32_t styleType = 0;
+    bool semanticComplete = true;
+    std::vector<DRW_DwgSubrecordRange> ranges;
+    dwgBuffer candidateHandles = hdlBuf->forkIndependent();
+    dwgBuffer candidateStrings = strBuf->forkIndependent();
+    const std::uint64_t formatStartBit = currentDwgBit(&candidateStrings);
+    const std::uint64_t stringEndBit = tableTextEndBit(
+        &candidateBody, &candidateStrings, bounds);
+    const UTF8STRING format = readTableText(
+        version, &candidateStrings, stringEndBit);
+    const std::uint64_t formatEndBit = currentDwgBit(&candidateStrings);
+    const UTF8STRING display = readTableText(
+        version, &candidateStrings, stringEndBit);
+    if (contentFormatFlagRead && contentFormatFlag != 0) {
+        contentFormatProbeGood = skipTableContentFormat(
+            version, &candidateBody, &candidateStrings, &candidateHandles,
+            &ranges, bounds);
+        if (contentFormatProbeGood)
+            cellStyleProbeGood = skipTableCellStyle(
+                version, &candidateBody, &candidateStrings, &candidateHandles,
+                styleType, semanticComplete, &ranges, bounds);
+    }
+    DRW_DBG("TABLE CadValue body-string candidate byteCount=");
+    DRW_DBG(bytes.size()); DRW_DBG(" payloadBit=");
+    DRW_DBG(payloadStartBit); DRW_DBG(".."); DRW_DBG(payloadEndBit);
+    DRW_DBG(" unit="); DRW_DBG(unit); DRW_DBG(" bodyEndBit=");
+    DRW_DBG(currentDwgBit(&candidateBody)); DRW_DBG(" attrCount=");
+    if (attributeCountRead)
+        DRW_DBG(attributeCount);
+    else
+        DRW_DBG("invalid");
+    DRW_DBG(" contentFormatFlag=");
+    if (contentFormatFlagRead)
+        DRW_DBG(contentFormatFlag);
+    else
+        DRW_DBG("not-probed");
+    DRW_DBG(" nextBodyBit="); DRW_DBG(currentDwgBit(&candidateBody));
+    DRW_DBG(" formatBit=");
+    DRW_DBG(formatStartBit); DRW_DBG(".."); DRW_DBG(formatEndBit);
+    DRW_DBG(" displayEndBit="); DRW_DBG(currentDwgBit(&candidateStrings));
+    DRW_DBG(" format="); DRW_DBG(format); DRW_DBG(" display=");
+    DRW_DBG(display); DRW_DBG(" contentFormatProbe=");
+    DRW_DBG(contentFormatProbeGood ? 1 : 0); DRW_DBG(" styleProbe=");
+    DRW_DBG(cellStyleProbeGood ? 1 : 0); DRW_DBG(" styleType=");
+    DRW_DBG(styleType); DRW_DBG(" finalBodyBit=");
+    DRW_DBG(currentDwgBit(&candidateBody)); DRW_DBG(" finalStringBit=");
+    DRW_DBG(currentDwgBit(&candidateStrings)); DRW_DBG(" finalHandleBit=");
+    DRW_DBG(currentDwgBit(&candidateHandles)); DRW_DBG("\n");
 }
 
 bool readTableValuePoint(dwgBuffer *buf, std::uint64_t bodyEndBit,
@@ -2740,6 +2915,9 @@ bool readTableCadValue(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
     DRW_DBG("/"); DRW_DBG(value.m_dataType); DRW_DBG("/");
     DRW_DBG(currentDwgBit(buf)); DRW_DBG("\n");
     if (value.hasDwgPayload(version)) {
+        const std::uint64_t payloadBodyStartBit = currentDwgBit(buf);
+        const std::uint64_t payloadStringStartBit =
+            strBuf ? currentDwgBit(strBuf) : 0;
         switch (value.m_dataType) {
         case 0:
         case 1: {
@@ -2757,6 +2935,29 @@ bool readTableCadValue(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
             break;
         }
         case 4: {
+            if (tableCadValueBodyStringProbe) {
+                if (!readTableValueBytes(
+                        buf, bounds.bodyEndBit, value.m_rawData,
+                        "TABLE candidate string byte payload"))
+                    return false;
+                value.m_dataSize = static_cast<std::uint32_t>(
+                    value.m_rawData.size());
+                UTF8STRING text;
+                if (!value.m_rawData.empty()) {
+                    DRW_TextCodec codec;
+                    codec.setVersion(version, false);
+                    text = codec.toUtf8(std::string_view(
+                        reinterpret_cast<const char*>(value.m_rawData.data()),
+                        value.m_rawData.size()));
+                    while (!text.empty() && text.back() == '\0')
+                        text.pop_back();
+                }
+                value.m_value.addString(1, std::move(text));
+                break;
+            }
+            if (version == DRW::AC1032)
+                traceTableBodyStringCandidate(version, buf, strBuf, hdlBuf,
+                                               bounds);
             // The traced R21 flags-4/6 producer profile stores a BL byte count
             // and UTF-16LE bytes in the body. Retain that opaque carrier; the
             // unqualified flag bit keeps its typed snapshot incomplete.
@@ -2822,7 +3023,8 @@ bool readTableCadValue(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
         case 64:
             if (!readTableHandleWithRole(hdlBuf, bounds.handleEndBit,
                                          DRW::DwgSoftPointer,
-                                         value.m_handle))
+                                         value.m_handle, "cad-value-object-id",
+                                         buf, strBuf))
                 return false;
             value.m_value.addInt(330, static_cast<std::uint32_t>(value.m_handle));
             break;
@@ -2834,12 +3036,26 @@ bool readTableCadValue(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
             DRW_DBG("unsupported TABLE CadValue data type: "); DRW_DBG(value.m_dataType); DRW_DBG("\n");
             return false;
         }
+        if (tableContentObjectHandleTraceActive) {
+            DRW_DBG("TABLE CadValue payload span type=");
+            DRW_DBG(value.m_dataType); DRW_DBG(" bodyBit=");
+            DRW_DBG(payloadBodyStartBit); DRW_DBG("..");
+            DRW_DBG(currentDwgBit(buf)); DRW_DBG(" stringBit=");
+            DRW_DBG(payloadStringStartBit); DRW_DBG("..");
+            DRW_DBG(strBuf ? currentDwgBit(strBuf) : 0); DRW_DBG("\n");
+        }
     }
 
     if (version > DRW::AC1018) {
         dwgBuffer *textBuf = strBuf ? strBuf : buf;
         if (!readBoundedBitLong(*buf, bounds.bodyEndBit, value.m_unitType))
             return false;
+        if (tableContentObjectHandleTraceActive) {
+            DRW_DBG("TABLE CadValue unit type="); DRW_DBG(value.m_unitType);
+            DRW_DBG(" dataBit="); DRW_DBG(currentDwgBit(buf));
+            DRW_DBG(" stringBit="); DRW_DBG(currentDwgBit(textBuf));
+            DRW_DBG("\n");
+        }
         // ODA §20.4.99 gives this scalar BL a fixed following TV/TV layout.
         // A traced R21 producer uses unit 0x20 (Percentage in Autodesk's
         // AcValue API). Preserve out-of-spec unit scalars without guessing
@@ -2852,8 +3068,22 @@ bool readTableCadValue(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
             DRW_DBG("\n");
         }
         const std::uint64_t textEndBit = tableTextEndBit(buf, textBuf, bounds);
+        const std::uint64_t formatStringStartBit = currentDwgBit(textBuf);
         value.m_formatString = readTableText(version, textBuf, textEndBit);
+        if (tableContentObjectHandleTraceActive) {
+            DRW_DBG("TABLE CadValue format stringBit=");
+            DRW_DBG(formatStringStartBit); DRW_DBG("..");
+            DRW_DBG(currentDwgBit(textBuf)); DRW_DBG(" bodyBit=");
+            DRW_DBG(currentDwgBit(buf)); DRW_DBG("\n");
+        }
+        const std::uint64_t valueStringStartBit = currentDwgBit(textBuf);
         value.m_valueString = readTableText(version, textBuf, textEndBit);
+        if (tableContentObjectHandleTraceActive) {
+            DRW_DBG("TABLE CadValue display stringBit=");
+            DRW_DBG(valueStringStartBit); DRW_DBG("..");
+            DRW_DBG(currentDwgBit(textBuf)); DRW_DBG(" bodyBit=");
+            DRW_DBG(currentDwgBit(buf)); DRW_DBG("\n");
+        }
         if (!hasDocumentedTableCadValueUnits(value)) {
             DRW_DBG("TABLE opaque-unit format/display=");
             DRW_DBG(value.m_formatString); DRW_DBG("/");
@@ -2982,7 +3212,9 @@ bool parseR2007TableCellOverrides(DRW::Version version, dwgBuffer *buf,
         && !readTableCmColor(version, buf, strBuf, bounds))
         return false;
     if (cell.m_overrideFlags & 0x00010)
-        cell.m_textStyleOverrideHandle = readTableHandle(hdlBuf, bounds.handleEndBit);
+        cell.m_textStyleOverrideHandle = readTableHandle(
+            hdlBuf, bounds.handleEndBit, "cell-text-style-override", buf,
+            strBuf);
     if (cell.m_overrideFlags & 0x00020) {
         double textHeight = 0.0;
         if (!readBoundedBitDouble(*buf, bounds.bodyEndBit, textHeight))
@@ -3105,7 +3337,8 @@ bool parseR2007TableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf
         return false;
     cell.m_type = type;
     cell.m_edgeFlags = edgeFlags;
-    cell.m_valueHandle = readTableHandle(hdlBuf, bounds.handleEndBit);
+    cell.m_valueHandle = readTableHandle(hdlBuf, bounds.handleEndBit,
+                                         "cell-value-handle", buf, strBuf);
 
     // R2008 changed table-cell encoding within AC1021, but the available
     // format references do not document the new cell types. Do not interpret
@@ -3149,7 +3382,8 @@ bool parseR2007TableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf
             for (std::uint16_t i = 0; i < numAttributes; ++i) {
                 DRW_TableCellAttribute attribute;
                 attribute.m_attdefHandle = readTableHandle(
-                    hdlBuf, bounds.handleEndBit);
+                    hdlBuf, bounds.handleEndBit, "cell-attribute-attdef",
+                    buf, strBuf);
                 std::uint16_t attributeIndex = 0;
                 if (!readBoundedBitShort(*buf, bounds.bodyEndBit,
                                          attributeIndex))
@@ -3273,15 +3507,18 @@ bool skipR2007TableOverrides(DRW::Version version, dwgBuffer *buf,
             if (!skipTableBitShort(*buf, bounds.bodyEndBit))
                 return false;
         if (flags & 0x020000)
-            if (readTableHandle(hdlBuf, bounds.handleEndBit) == 0
+            if (readTableHandle(hdlBuf, bounds.handleEndBit,
+                                "style-text-style", buf, strBuf) == 0
                 && hdlBuf != nullptr && !hdlBuf->isGood())
                 return false;
         if (flags & 0x040000)
-            if (readTableHandle(hdlBuf, bounds.handleEndBit) == 0
+            if (readTableHandle(hdlBuf, bounds.handleEndBit,
+                                "style-line-type", buf, strBuf) == 0
                 && hdlBuf != nullptr && !hdlBuf->isGood())
                 return false;
         if (flags & 0x080000)
-            if (readTableHandle(hdlBuf, bounds.handleEndBit) == 0
+            if (readTableHandle(hdlBuf, bounds.handleEndBit,
+                                "style-material", buf, strBuf) == 0
                 && hdlBuf != nullptr && !hdlBuf->isGood())
                 return false;
         if (flags & 0x100000)
@@ -3386,7 +3623,8 @@ bool skipTableContentFormat(DRW::Version version, dwgBuffer *buf,
                             color, &rgb, nullptr, &name, &book,
                             bounds.stringEndBit)
         || (hdlBuf != nullptr
-            && readTableHandle(hdlBuf, bounds.handleEndBit) == 0
+            && readTableHandle(hdlBuf, bounds.handleEndBit,
+                               "content-format-text-style", buf, strBuf) == 0
             && !hdlBuf->isGood())
         || !skipTableBitDouble(*buf, bounds.bodyEndBit)) // text height
         return false;
@@ -3484,7 +3722,8 @@ bool skipTableCellStyle(DRW::Version version, dwgBuffer *buf,
                                 bounds.stringEndBit)
             || !skipTableBitLong(*buf, bounds.bodyEndBit) // border lineweight (§20.4.101.4)
             || (hdlBuf != nullptr
-                && readTableHandle(hdlBuf, bounds.handleEndBit) == 0
+                && readTableHandle(hdlBuf, bounds.handleEndBit,
+                                   "cell-style-text-style", buf, strBuf) == 0
                 && !hdlBuf->isGood())
             || !skipTableBitLong(*buf, bounds.bodyEndBit) // visible/invisible
             || !skipTableBitDouble(*buf, bounds.bodyEndBit)) // double line spacing
@@ -3565,7 +3804,8 @@ bool parseTableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
         cell.m_hasLinkedData = true;
         if (!readTableHandleWithRole(hdlBuf, bounds.handleEndBit,
                                      DRW::DwgHardPointer,
-                                     cell.m_dataLinkHandle))
+                                     cell.m_dataLinkHandle,
+                                     "cell-linked-data", buf, strBuf))
             return false;
         if (!readBoundedBitLong(*buf, bounds.bodyEndBit,
                                 cell.m_linkedDataRowCount)
@@ -3588,10 +3828,25 @@ bool parseTableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
     }
     if (!DRW::reserve(cell.m_contents, static_cast<int>(contentCount)))
         return false;
+    if (tableContentObjectHandleTraceActive) {
+        DRW_DBG("TABLECONTENT cell content count="); DRW_DBG(contentCount);
+        DRW_DBG(" dataBit="); DRW_DBG(currentDwgBit(buf));
+        DRW_DBG(" stringBit="); DRW_DBG(strBuf ? currentDwgBit(strBuf) : 0);
+        DRW_DBG(" handleBit="); DRW_DBG(hdlBuf ? currentDwgBit(hdlBuf) : 0);
+        DRW_DBG("\n");
+    }
     for (std::uint32_t i = 0; i < contentCount; ++i) {
         DRW_TableCellContent content;
         if (!readBoundedBitLong(*buf, bounds.bodyEndBit, content.m_type))
             return false;
+        if (tableContentObjectHandleTraceActive) {
+            DRW_DBG("TABLECONTENT cell content type=");
+            DRW_DBG(content.m_type); DRW_DBG(" dataBit=");
+            DRW_DBG(currentDwgBit(buf)); DRW_DBG(" stringBit=");
+            DRW_DBG(strBuf ? currentDwgBit(strBuf) : 0);
+            DRW_DBG(" handleBit=");
+            DRW_DBG(hdlBuf ? currentDwgBit(hdlBuf) : 0); DRW_DBG("\n");
+        }
         if (content.m_type == 1) {
             if (!readTableCadValue(version, buf, strBuf, hdlBuf,
                                    content.m_value, bounds)) {
@@ -3621,7 +3876,9 @@ bool parseTableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
             // being published as a semantically complete typed cell.
             if (!readTableHandleWithRole(hdlBuf, bounds.handleEndBit,
                                          DRW::DwgHardPointer,
-                                         content.m_handle))
+                                         content.m_handle,
+                                         "cell-content-reference", buf,
+                                         strBuf))
                 return false;
         } else if (content.m_type == 0) {
             // ODA §20.4.97 names zero as Unknown and defines no value payload
@@ -3643,6 +3900,14 @@ bool parseTableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
             DRW_DBG("TABLE cell attribute count out of range: "); DRW_DBG(numAttrs); DRW_DBG("\n");
             return false;
         }
+        if (tableContentObjectHandleTraceActive) {
+            DRW_DBG("TABLECONTENT cell attribute count=");
+            DRW_DBG(numAttrs); DRW_DBG(" dataBit=");
+            DRW_DBG(currentDwgBit(buf)); DRW_DBG(" stringBit=");
+            DRW_DBG(strBuf ? currentDwgBit(strBuf) : 0);
+            DRW_DBG(" handleBit=");
+            DRW_DBG(hdlBuf ? currentDwgBit(hdlBuf) : 0); DRW_DBG("\n");
+        }
         if (numAttrs != 0) {
             if (cell.m_attributes.size() > kMaxTableCellAttributes
                 || numAttrs
@@ -3663,7 +3928,9 @@ bool parseTableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
             DRW_TableCellAttribute attribute;
             if (!readTableHandleWithRole(hdlBuf, bounds.handleEndBit,
                                          DRW::DwgSoftPointer,
-                                         attribute.m_attdefHandle)) {
+                                         attribute.m_attdefHandle,
+                                         "cell-attribute-attdef", buf,
+                                         strBuf)) {
                 dwgHandle observedHandle;
                 bool observed = false;
                 if (hdlBuf != nullptr) {
@@ -3743,7 +4010,8 @@ bool parseTableCell(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
             || !readBoundedBitLong(*buf, bounds.bodyEndBit, geometryFlags))
             return false;
         cell.m_geometryFlags = geometryFlags;
-        cell.m_geometryHandle = readTableHandle(hdlBuf, bounds.handleEndBit);
+        cell.m_geometryHandle = readTableHandle(
+            hdlBuf, bounds.handleEndBit, "cell-geometry", buf, strBuf);
         if (cell.m_geometryFlags != 0) {
             std::int32_t geometryRecordFlags = 0;
             if (!readBounded3BitDouble(*buf, bounds.bodyEndBit,
@@ -4045,7 +4313,8 @@ bool parseTableContent(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
     for (std::uint32_t i = 0; i < fieldRefs; ++i) {
         std::uint32_t ref = 0;
         if (!readTableHandleWithRole(hdlBuf, bounds.handleEndBit,
-                                     DRW::DwgHardOwnership, ref))
+                                     DRW::DwgHardOwnership, ref,
+                                     "field-reference", buf, strBuf))
             return false;
         if (ref != 0)
             content.m_fieldHandles.push_back(ref);
@@ -4082,7 +4351,8 @@ bool parseTableContent(DRW::Version version, dwgBuffer *buf, dwgBuffer *strBuf,
         content.m_mergedRanges.push_back(range);
     }
 
-    content.m_tableStyleHandle = readTableHandle(hdlBuf, bounds.handleEndBit);
+    content.m_tableStyleHandle = readTableHandle(
+        hdlBuf, bounds.handleEndBit, "table-style", buf, strBuf);
     const bool good = buf->isGood() && (!strBuf || strBuf->isGood()) && (!hdlBuf || hdlBuf->isGood());
     if (!good)
         DRW_DBG("TABLECONTENT stream ended unexpectedly\n");
@@ -13302,7 +13572,8 @@ bool DRW_TableContentObject::parseDwg(DRW::Version version, dwgBuffer *buf, std:
     std::uint32_t parsedXDictHandle = 0;
     if (!readTableObjectCommonHandles(&hBuff, handle, numReactors, xDictFlag,
                                       &parsedParentHandle, &parsedReactors,
-                                      &parsedXDictHandle, handleEndBit))
+                                      &parsedXDictHandle, handleEndBit,
+                                      bodyBuf, sBuf))
         return fail();
 
     DRW_TableContent parsedContent;
@@ -13311,9 +13582,76 @@ bool DRW_TableContentObject::parseDwg(DRW::Version version, dwgBuffer *buf, std:
     tableBounds.stringEndBit = proxyEntityEndBit(*sBuf, 0);
     tableBounds.handleEndBit = handleEndBit;
     bool semanticContentComplete = false;
+    const bool runBodyStringProbe = version == DRW::AC1032
+        && DRW_DBGGL == DRW_dbg::Level::Debug;
+    TableContentObjectHandleTraceScope traceScope(runBodyStringProbe);
+    dwgBuffer candidateBody = *bodyBuf;
+    dwgBuffer candidateStrings = *sBuf;
+    dwgBuffer candidateHandles = hBuff;
     const bool parseComplete = parseTableContent(
         version, bodyBuf, sBuf, &hBuff, parsedContent,
         semanticContentComplete, tableBounds);
+    if (!parseComplete && runBodyStringProbe) {
+        DRW_TableContent candidateContent;
+        bool candidateSemanticComplete = false;
+        bool candidateParseComplete = false;
+        {
+            TableCadValueBodyStringProbeScope probeScope;
+            candidateParseComplete = parseTableContent(
+                version, &candidateBody, &candidateStrings, &candidateHandles,
+                candidateContent, candidateSemanticComplete, tableBounds);
+        }
+        const std::uint64_t candidateBodyBit = currentDwgBit(&candidateBody);
+        const std::uint64_t candidateStringBit =
+            currentDwgBit(&candidateStrings);
+        const std::uint64_t candidateHandleBit =
+            currentDwgBit(&candidateHandles);
+        dwgBuffer trailingStringProbe = candidateStrings.forkIndependent();
+        const std::uint64_t trailingStringStartBit = candidateStringBit;
+        const UTF8STRING trailingString = readTableText(
+            version, &trailingStringProbe, objSize);
+        const bool trailingStringRead = trailingStringProbe.isGood()
+            && currentDwgBit(&trailingStringProbe) <= objSize;
+        std::string trailingStringBits;
+        dwgBuffer trailingStringBitProbe = candidateStrings.forkIndependent();
+        const std::uint64_t trailingStringGapBits = candidateStringBit <= objSize
+            ? objSize - candidateStringBit : 0;
+        if (trailingStringGapBits <= 64u) {
+            for (std::uint64_t i = 0; i < trailingStringGapBits; ++i) {
+                bool bit = false;
+                if (!readBoundedBit(trailingStringBitProbe, objSize, bit))
+                    break;
+                trailingStringBits.push_back(bit ? '1' : '0');
+            }
+        }
+        dwgBuffer trailingHandleProbe = candidateHandles.forkIndependent();
+        bool trailingHandleBitValue = false;
+        const bool trailingHandleBitRead = readBoundedBit(
+            trailingHandleProbe, handleEndBit, trailingHandleBitValue);
+        DRW_DBG("TABLECONTENT body-string alternate parse complete=");
+        DRW_DBG(candidateParseComplete ? 1 : 0);
+        DRW_DBG(" semanticComplete=");
+        DRW_DBG(candidateSemanticComplete ? 1 : 0);
+        DRW_DBG(" bodyBit="); DRW_DBG(candidateBodyBit); DRW_DBG("/");
+        DRW_DBG(tableBounds.bodyEndBit); DRW_DBG(" stringBit=");
+        DRW_DBG(candidateStringBit); DRW_DBG("/");
+        DRW_DBG(tableBounds.stringEndBit); DRW_DBG(" handleBit=");
+        DRW_DBG(candidateHandleBit); DRW_DBG("/");
+        DRW_DBG(tableBounds.handleEndBit); DRW_DBG(" handleStreamStartBit=");
+        DRW_DBG(objSize); DRW_DBG(" trailingString=");
+        DRW_DBG(trailingStringRead ? 1 : 0); DRW_DBG(" stringBit=");
+        DRW_DBG(trailingStringStartBit); DRW_DBG("..");
+        DRW_DBG(currentDwgBit(&trailingStringProbe));
+        DRW_DBG(" value="); DRW_DBG(trailingString);
+        DRW_DBG(" gapBits="); DRW_DBG(trailingStringBits);
+        DRW_DBG(" trailingHandleBit=");
+        DRW_DBG(trailingHandleBitRead ? 1 : 0);
+        if (trailingHandleBitRead) {
+            DRW_DBG(" value="); DRW_DBG(trailingHandleBitValue ? 1 : 0);
+            DRW_DBG(" at="); DRW_DBG(currentDwgBit(&trailingHandleProbe));
+        }
+        DRW_DBG("\n");
+    }
     const std::uint64_t bodyBitOffset =
         bodyBuf->getPosition() * 8u + bodyBuf->getBitPos();
     if (!parseComplete || !bodyBuf->isGood() || !sBuf->isGood()

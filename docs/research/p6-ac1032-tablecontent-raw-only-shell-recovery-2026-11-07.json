@@ -33,8 +33,36 @@
         "expectedOdaRole": "soft pointer (code 0x4)"
       }
     ],
-    "interpretation": "The current handle cursor reaches code 0x5 at the parser's first cell-attribute slot. A preceding body/handle slot may be misaligned; this does not establish a producer/spec role violation and does not qualify typed payload or output.",
+    "interpretation": "The ordinary parser's cursor reaches code 0x5 at its interpreted first cell-attribute slot. The subsequent body/string span probe shows that this interpretation is likely displaced; see handleAndBodySpanRecheck. It does not establish a producer/spec role violation or qualify typed payload or output.",
     "codeChange": "Added debug-only boundary diagnostics in src/drw_entities.cpp; no parser interpretation or output behavior changed."
+  },
+  "handleAndBodySpanRecheck": {
+    "traceCommand": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/dev/ACadSharp/samples/sample_AC1032.dwg -y -d -v2018 /private/tmp/sample-AC1032-tablecontent-final-trace.dxf",
+    "tracePath": "/private/tmp/sample-AC1032-tablecontent-final-trace.log",
+    "traceSha256": "595d08ff78fe6e16bf3b2d99d65e42485238fa4d98a4e672100357d8ce9db0af",
+    "converterSha256": "38acdbdbc1e0665dab674e183a488c54865f957dd4b77309f971989d29148fd3",
+    "observations": [
+      {
+        "handle": "0xE5F",
+        "objectSizeAndHandleStartBit": 26135,
+        "handleEndBit": 26584,
+        "commonOwner": {"span": "26135..26151", "code": "0x7", "reference": "0xE62"},
+        "currentInterpretation": {"parsedUnit": 44, "parsedAttributeCount": 32, "nextHandle": {"span": "26151..26167", "code": "0x5", "reference": "0x11", "interpretedAs": "ATTDEF soft pointer; rejected"}},
+        "bodyStringCandidate": {"byteCount": 44, "payloadSpan": "634..996", "unit": 0, "attributeCount": 0, "contentFormatOverrideFlag": 1, "format": "", "display": "Hello this is a title", "contentFormatTextStyle": {"span": "26151..26167", "code": "0x5", "reference": "0x11"}},
+        "alternateParse": {"parseComplete": true, "semanticComplete": false, "bodySpan": "40..12042/12042", "stringEndBit": 26118, "handleSpan": "26135..26583/26584", "unconsumedStringToHandleGapBits": 17, "stringGapBits": "11111100001101101", "trailingTvDecodeSucceeded": false, "terminalHandleBit": 1}
+      },
+      {
+        "handle": "0x747",
+        "objectSizeAndHandleStartBit": 53223,
+        "handleEndBit": 55080,
+        "commonOwner": {"span": "53223..53247", "code": "0x7", "reference": "0xE58"},
+        "currentInterpretation": {"parsedUnit": 26, "parsedAttributeCount": 80, "nextHandle": {"span": "53247..53255", "code": "0x5", "reference": "0x00", "interpretedAs": "ATTDEF soft pointer; rejected"}},
+        "bodyStringCandidate": {"byteCount": 26, "payloadSpan": "466..684", "unit": 0, "attributeCount": 0, "contentFormatOverrideFlag": 1, "format": "", "display": "Table sample", "contentFormatTextStyle": {"span": "53247..53255", "code": "0x5", "reference": "0x00"}},
+        "alternateParse": {"parseComplete": true, "semanticComplete": false, "bodySpan": "40..39838/39838", "stringEndBit": 53206, "handleSpan": "53223..55079/55080", "unconsumedStringToHandleGapBits": 17, "stringGapBits": "00111000001101001", "trailingTvDecodeSucceeded": false, "terminalHandleBit": 1}
+      }
+    ],
+    "interpretation": "A debug-only alternate parse treats the type-4 value as a BL byte-counted body string, then reads unit 0, zero attributes, content-format fields and the observed code-0x5 text-style handle. Both records reach the exact body boundary and consume all but one terminal handle bit. This explains the ordinary parser's 32/80 attribute counts and role mismatch as a likely cursor displacement; it does not independently establish the candidate schema. The 17-bit pre-handle string gap is not decoded, the alternate typed projections remain semantically incomplete, and the candidate conflicts with ODA v5.4.1 §§2 and 20.4.99.",
+    "implementationPolicy": "Keep the production interpretation, raw-only fallback and strict-output refusal unchanged. Resolve the candidate's complete string/handle framing and its conflict with the authoritative ODA text before adopting it."
   },
   "peerParserRecheck": {
     "parser": "dwgTs",
@@ -112,7 +140,16 @@
       "dataStorageLinkFailures": 0,
       "dataStorageOrphanRecords": 0
     },
+    "spanDiagnosticValidation": {
+      "buildCommand": "cmake --build build-gcc --target dwg2dxf -j4",
+      "buildResult": "PASS",
+      "physicalTraceCommand": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/dev/ACadSharp/samples/sample_AC1032.dwg -y -d -v2018 /private/tmp/sample-AC1032-tablecontent-final-trace.dxf",
+      "physicalTraceSha256": "595d08ff78fe6e16bf3b2d99d65e42485238fa4d98a4e672100357d8ce9db0af",
+      "generatedControlCommand": "ctest --test-dir build-gcc -R '^libdxfrw_persistent_manager_prefix_dispatch$' --output-on-failure",
+      "generatedControlResult": "PASS, 1/1, 0.49 seconds",
+      "scope": "Debug diagnostics and raw-only recovery validation only; no TABLECONTENT production interpretation or support claim changed."
+    },
     "fixturePolicy": "No DWG or DXF fixture was added; the regression control is generated in memory."
   },
-  "scopeLimit": "This closes raw frame publication for the two current AC1032 TABLECONTENT objects only. It does not resolve the body/string carrier dispute, recover typed cell values, establish output support, qualify other versions or producers, or establish native TABLE rendering."
+  "scopeLimit": "This closes raw frame publication for the two current AC1032 TABLECONTENT objects only. The debug-only body-byte-count candidate reaches the body boundary and nearly consumes each handle stream, but its 17-bit string gap, one terminal handle bit and conflict with ODA remain unresolved. It does not recover production typed cell values, establish output support, qualify other versions or producers, or establish native TABLE rendering."
 }
