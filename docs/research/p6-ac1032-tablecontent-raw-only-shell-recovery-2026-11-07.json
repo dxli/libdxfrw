@@ -333,7 +333,7 @@
       "scope": "Debug-only diagnostics and source-bound span accounting; no parser interpretation, typed publication, output eligibility or support claim changed."
     }
   },
-  "scopeLimit": "This closes raw frame publication for the two current AC1032 TABLECONTENT objects only. The debug-only body-byte-count candidate reaches exact body, detached-string, and byte-aligned handle-stream boundaries, but remains in conflict with ODA v5.4.1 §§2 and 20.4.99 and its typed projection is semantically incomplete. The acadrust fixture is an unverified research lead only. No output support, other version/producer qualification, or native TABLE rendering is established.",
+  "scopeLimit": "This closes raw frame publication for the two current AC1032 TABLECONTENT objects only. The debug-only body-byte-count candidate reaches exact body, detached-string, and byte-aligned handle-stream boundaries, but remains in conflict with ODA v5.4.1 §§2 and 20.4.99 and its typed projection is semantically incomplete. The acadrust parser is ACadSharp-derived and its fixture was unavailable locally; this lead is closed unless the exact producer bytes become available through an already authorized source. No output support, other version/producer qualification, or native TABLE rendering is established.",
   "externalResearchLead": {
     "project": "acadrust",
     "repository": "https://github.com/hakanaktt/acadrust",
@@ -345,7 +345,7 @@
       "The test writes the parsed document to DWG and rereads it, then checks selected cell values; this self-roundtrip is not independent evidence.",
       "The current writer source encodes R2007+ table string values as UTF-16LE with a trailing NUL, writes a BL byte count, then writes bytes to its merged writer; type code 4 takes this route."
     ],
-    "status": "PARSER_NOT_INDEPENDENT; PRODUCER_FIXTURE_UNVERIFIED",
+    "status": "CLOSED_UNAVAILABLE_FOR_IMPLEMENTATION; PARSER_NOT_INDEPENDENT",
     "independenceLimits": [
       "The acadrust THIRD_PARTY_NOTICES.md explicitly states its DWG reader and writer include code ported and adapted from ACadSharp. Its TABLECONTENT parser and self-roundtrip are therefore not independent evidence against the ACadSharp-derived profile.",
       "The test claims its fixture is a real AutoCAD-authored R2007 drawing, but exact fixture availability, provenance, checksum, AC code and source object spans have not been locally verified.",
@@ -353,11 +353,20 @@
       "No TABLECONTENT support or schema claim is promoted."
     ],
     "boundedNextSteps": [
-      "Check whether the exact claimed fixture is accessible in the public upstream repository or an already-local corpus without copying it into this repository.",
-      "If accessible, pin the repository commit, record fixture provenance/version/SHA-256, and inspect one type-4 cell value plus exact body, detached-string and handle spans directly.",
-      "Compare raw producer spans with ODA v5.4.1 §§2, 20.1 and 20.4.99; treat acadrust parsed values and self-roundtrip as non-independent corroboration only.",
-      "If fixture/provenance/source-span evidence is unavailable, close this lead and continue with TABLECONTENT raw-only behavior and the next local implementation packet."
+      "Reopen only if the exact claimed fixture becomes available through an already authorized/local source.",
+      "If reopened, pin repository commit and fixture provenance/version/SHA-256; inspect raw TABLECONTENT bytes and exact stream spans directly against ODA v5.4.1 §§2, 20.1 and 20.4.99.",
+      "Treat acadrust reader/writer output and self-roundtrip as non-independent because its DWG reader/writer derives from ACadSharp."
     ],
-    "lineageEvidence": "https://raw.githubusercontent.com/hakanaktt/acadrust/main/THIRD_PARTY_NOTICES.md states that the DWG reader and writer include code ported and adapted from ACadSharp."
+    "lineageEvidence": "https://raw.githubusercontent.com/hakanaktt/acadrust/main/THIRD_PARTY_NOTICES.md states that the DWG reader and writer include code ported and adapted from ACadSharp.",
+    "availabilityCheck": {
+      "localSearchRoots": [
+        "/Users/dli/dev",
+        "/Users/dli/doc"
+      ],
+      "exactFixtureFound": false,
+      "testBehavior": "The upstream test returns without executing when the fixture path does not exist; repository guidance says tests requiring unavailable drawings are skipped and directs users to supply the file.",
+      "publicBinaryRetrieved": false,
+      "result": "No producer bytes or source spans were available to inspect. This lead is closed for current implementation; no schema/support claim changes."
+    }
   }
 }
