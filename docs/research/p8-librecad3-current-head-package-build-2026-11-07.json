@@ -15,6 +15,8 @@
     "focused_export_runner_configure": "cmake -S /private/tmp/librecad3-export-tests-src -B /private/tmp/librecad3-export-tests-current -DCMAKE_BUILD_TYPE=Release",
     "focused_export_runner_build": "cmake --build /private/tmp/librecad3-export-tests-current -j4",
     "focused_export_tests": "DYLD_LIBRARY_PATH=/private/tmp/librecad3-current-package-build/persistence:/private/tmp/librecad3-current-package-build/lckernel:/private/tmp/librecad3-current-package-build/lcviewernoqt:/private/tmp/librecad3-current-package-build/lcscripting:/opt/homebrew/lib /private/tmp/librecad3-export-tests-current/dxfexport_focus --gtest_filter='DxfExportTest.*'",
+    "planar_roundtrip_build": "cmake --build /private/tmp/librecad3-export-tests-current --target persistence_roundtrip -j4",
+    "planar_roundtrip": "DYLD_LIBRARY_PATH=/private/tmp/librecad3-current-package-build/persistence:/private/tmp/librecad3-current-package-build/lckernel:/private/tmp/librecad3-current-package-build/lcviewernoqt:/private/tmp/librecad3-current-package-build/lcscripting:/opt/homebrew/lib /private/tmp/librecad3-export-tests-current/persistence_roundtrip",
     "umbrella_unit_target_attempt": "cmake --build /private/tmp/librecad3-current-package-build --target lcunittest -j4"
   },
   "results": {
@@ -25,6 +27,9 @@
     "consumer_build": "success; persistence shared library linked",
     "focused_export_tests": "PASS, 3/3 (EveryReaderProducibleKindReachesTheFile, Phase3TablesAndHeaderFidelity, Phase2PreservesZAndTextAttributes); runner linked the exact freshly built persistence/kernel/viewer libraries and current installed libdxfrw archive",
     "focused_export_runner_sha256": "9600cceb111e152cdd6e41cc0f84c08fc6672cdf2f4fa89cb1309c7bcfb48ad0",
+    "planar_roundtrip": "PASS; a locally authored scratch C++ consumer creates a drawing with one LINE, CIRCLE and ARC, saves as R2000 DXF through LibreCAD_3 persistence, reopens it through LibreCAD_3 persistence, and verifies each entity's coordinates/center/radius",
+    "planar_roundtrip_runner_sha256": "3080512cbee014c243146e27ad0367a12e07cf5f00445043db83cfc9bdbd600c",
+    "planar_roundtrip_source_sha256": "65b60ee948025f9599a1a956495021768c43a2de3ad5963591c29309b9132338",
     "umbrella_unit_target_attempt": "FAIL outside libdxfrw while compiling LibreCAD_3 Kaguya bindings: Kaguya FunctionSignature has no const-noexcept member-function-pointer specialization under AppleClang 21",
     "libdxfrw_archive_sha256": "52a463936d07cc749e7e1a78bce5aff654f0a5e5f1be07562673a062fb7aa6a8",
     "persistence_dylib_sha256": "30f4daf698534daae85d4d5b18f3e0aea8603bd8c12ecf1ff8b185600f33a526",
@@ -32,10 +37,10 @@
   },
   "limits": [
     "The LibreCAD_3 checkout was dirty and was not modified.",
-    "Only the existing three raw-DXF export tests were run; no open/save/reopen behavior or full application build/run is established.",
+    "The focused evidence covers three existing raw-DXF export tests plus a scratch LINE/CIRCLE/ARC open/save/reopen probe; it is not a full application build/run or broad entity matrix.",
     "The umbrella test target cannot currently build because of the recorded LibreCAD_3 Kaguya/AppleClang compile failure; this was not modified in the sibling checkout.",
     "No ABI, Linux, Windows, FreeCAD, or native file-behavior qualification is established.",
     "All build/install outputs are under /private/tmp; no drawing fixtures were added."
   ],
-  "next": "Qualify open/save/reopen behavior on a clean consumer revision against an exact installed current-head package, then qualify a full application build/run. Keep ABI, native application, Linux and Windows gates separate. Avoid rebuilding or rerunning the passed focused export cohort unless either source revision or linked artifact changes."
+  "next": "Qualify this consumer route on a clean LibreCAD_3 revision against an exact installed current-head package, then qualify a full application build/run. Keep ABI, native application, Linux and Windows gates separate. The umbrella test target's Kaguya/AppleClang compile blocker needs an upstream consumer fix before its broader suite can run. Avoid rebuilding or rerunning the passed focused export and planar cohorts unless either source revision or linked artifact changes."
 }
