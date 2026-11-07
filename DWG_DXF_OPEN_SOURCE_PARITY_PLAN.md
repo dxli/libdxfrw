@@ -159,7 +159,14 @@ created locally from scratch for the specific control.
    roles match LibreDWG 0.14 minJSON; ODA v5.4.1 §§20.4.54, 20.4.64 and 20.4.68
    define the corresponding handle roles, including VPORT sun as hard-owner.
    These additional checks cover only the locally typed LAYER, DIMSTYLE and
-   VPORT models. The inventory diagnostic itself is not
+   VPORT models. A separate reproducible comparison now matches all 86 local
+   DICTIONARY/DICTIONARYWDFLT membership rows against LibreDWG's decoded
+   `items` maps, including the one empty-key/null-target slot; all 85 non-null
+   targets resolve in the peer object set. The verifier and hash-bound result
+   are recorded in the [dictionary-edge receipt](docs/research/p6-ac1027-cover-dictionary-edge-comparison-2026-11-07.json)
+   and [comparison script](tools/research/verify_cover_dictionary_edges.py).
+   This closes dictionary-membership identity for this source, not dependency
+   closure or output support. The inventory diagnostic itself is not
    complete or source-bound: it does not bind the source hash, inspect raw
    frame bodies generally, prove every owner role from source structure, or
    establish schema-valid DXF routes. The companion
