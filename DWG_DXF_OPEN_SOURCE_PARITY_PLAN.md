@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (reconciled the ODA post-unlock retry outcome and made the next local source-screening step explicit). This file
+Updated 2026-11-07 (qualified selected AC1021 `truetype.dwg` LayerStates XRECORD output; strict whole-source output remains refused at 46/53 opaque callbacks). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -90,8 +90,8 @@ created locally from scratch for the specific control.
    or derivative is committed.
 
    Recent candidates remain refused for distinct reasons: AC1024 architectural
-   SORTENTSTABLE owner scope, title-block null BLOCK_CONTROL members, AC1021
-   truetype LayerStates owner route / plot-screening unresolved target, AC1027
+   SORTENTSTABLE owner scope, title-block null BLOCK_CONTROL members, the
+   separate AC1021 plot-screening XRECORD with unresolved target roles, AC1027
    Cover incomplete reference closure, and AC1018 Extruder2 incomplete parser
    disposition. See the [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json),
    [source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json),
@@ -123,27 +123,25 @@ created locally from scratch for the specific control.
    independent producer behavior, LibreCAD_3/FreeCAD acceptance or native
    geometry/group semantics ([receipt](docs/research/p4-ac1021-generated-group-2d-3d-strict-dxf-readback-2026-11-06.json)).
 
-   **Next implementation slice:** continue P4 source screening from existing
-   corpus inventories, one candidate at a time; do not repeat the completed
-   28-stream census. First use the source-matching candidate receipts to
-   identify the cheapest unresolved graph proof, then qualify a candidate only
-   if its read disposition, owner/reference roles, recursive dependencies and
-   emitted routes can be closed. The AC1021 `truetype.dwg` LayerStates XRECORD
-   is not implementation-ready: its 27 ordered entries target LAYER/LTYPE
-   records, but the AC1021 LAYER_CONTROL extension-root profile and output
-   contract are not qualified. Keep strict refusal there; do not infer that
-   group-code target presence closes the graph. Defer the 240-handle
-   plot-screening XRECORD until its owner and target-role inventory is cheaper
-   to establish. The remaining distinct screens are AC1024 architectural
-   named-block SORTENTSTABLE owner scope, title-block null BLOCK_CONTROL
-   members, AC1027 Cover reference closure, and AC1018 Extruder2 parser
-   disposition. Use each linked receipt to resume from its exact blocker.
-   Admit a code slice only when source evidence and a local fast control can
-   cover the root/owner/reference graph, output binding, failure atomicity and
-   readback. If one candidate fails a gate, preserve strict refusal and move
-   to the next independent candidate rather than repeating its corpus scan.
-   Keep test drawings outside Git unless they already exist in LibreCAD/libdxfrw
-   or were authored locally from scratch.
+   **Next implementation slice:** the AC1021 `truetype.dwg`
+   `ACAD_VIEWS_default` XRECORD now passes selected ASCII/Binary output,
+   exact 27-value readback, four LAYER/four LTYPE target resolution, atomic
+   refusal and same-adapter retry. Its source-bound group-370 compatibility
+   route and typed handling of remapped table references are recorded in the
+   [receipt](docs/research/p4-ac1021-truetype-layerstates-view-xrecord-selected-output-2026-11-07.json).
+   Whole-source strict conversion passes this graph's staged-output proof but
+   remains refused at 46/53 opaque callbacks; do not infer whole-source
+   support. Inventory only those seven unqualified callbacks next to find a
+   source-ready owner/reference graph, without repeating the 28-stream census.
+   The separate 240-handle AC1021 plot-screening XRECORD remains deferred until
+   its owner and target-role inventory is cheaper to establish. Other distinct
+   screens are AC1024 architectural named-block SORTENTSTABLE owner scope,
+   title-block null BLOCK_CONTROL members, AC1027 Cover reference closure, and
+   AC1018 Extruder2 incomplete parser disposition. Use each linked receipt to
+   resume from its exact blocker; if one fails a gate, preserve strict refusal
+   and move to another existing candidate. Keep test drawings outside Git
+   unless they already exist in LibreCAD/libdxfrw or were authored locally
+   from scratch.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child

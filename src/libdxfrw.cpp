@@ -32345,7 +32345,7 @@ bool dxfRW::writeXRecordInternal(
                 && version >= DRW::AC1021
                 && isDxfXRecordDwgCompatibilityCode(code))
             || (allowLayerStateGroup370
-                && version >= DRW::AC1024
+                && version >= DRW::AC1021
                 && isDxfXRecordLayerStateCompatibilityCode(code)))
             return false;
         DRW_DBG("XRECORD rejected application group code=");
@@ -32353,7 +32353,7 @@ bool dxfRW::writeXRecordInternal(
         DRW_DBG("\n");
         recordOperationDiagnostic(DRW::OperationPhase::Validation,
             DRW::OperationCause::ValidationFailure, "xrecord-application-code-domain",
-            "XRECORD application values require normal object groups 1..369 except 5/105; groups 1070/1071 require explicit AC1021+ DWG compatibility output",
+            "XRECORD values require groups 1..369 except 5/105; groups 1070/1071 need explicit AC1021+ compatibility output, and group 370 needs a source-bound LayerStates route",
             0, false, ent != nullptr ? ent->handle : 0u,
             ent != nullptr);
         m_writeError = true;
@@ -32392,7 +32392,7 @@ bool dxfRW::writeXRecordInternal(
             recordOperationDiagnostic(DRW::OperationPhase::Validation,
                 DRW::OperationCause::ValidationFailure,
                 "xrecord-layerstate-compatibility-value-kind",
-                "the AC1024 LayerStates XRECORD compatibility profile requires an Int16 group 370 value");
+            "the source-bound LayerStates XRECORD compatibility profile requires an Int16 group 370 value");
             m_writeError = true;
             return false;
         }

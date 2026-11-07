@@ -15243,7 +15243,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         };
                     const auto isSelectedLayerStateXRecord = [&]() {
                         if (data->sourceFormat != dx_source_format::DWG
-                            || data->sourceVersion != DRW::AC1024
+                            || (data->sourceVersion != DRW::AC1024
+                                && data->sourceVersion != DRW::AC1021)
                             || cData != data
                             || !m_dwgLayerStateOutputPrepared
                             || !m_dwgLayerStateOutputSource
@@ -15366,7 +15367,8 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                         code == 330
                         && layerHandles.count(targetHandle) != 0u
                         && data->sourceFormat == dx_source_format::DWG
-                        && data->sourceVersion == DRW::AC1024
+                        && (data->sourceVersion == DRW::AC1024
+                            || data->sourceVersion == DRW::AC1021)
                         && cData == data
                         && m_dwgLayerStateOutputPrepared
                         && m_dwgLayerStateOutputSource.hasLayerStateRecord
@@ -34348,7 +34350,9 @@ bool dx_iface::prepareDwgLayerStateOutput(
         || (cData->sourceVersion != DRW::AC1018
             && cData->sourceVersion != DRW::AC1021
             && cData->sourceVersion != DRW::AC1024)
-        || targetVersion != DRW::AC1024)
+        || (targetVersion != DRW::AC1024
+            && !(cData->sourceVersion == DRW::AC1021
+                && targetVersion == DRW::AC1021)))
         return true;
     const DRW::Version sourceVersion = cData->sourceVersion;
 
@@ -34390,13 +34394,16 @@ bool dx_iface::prepareDwgLayerStateOutput(
     const bool singleEmptyLayerStatesRoot = extension != nullptr
         && extension->m_entries.size() == 1u
         && (sourceVersion == DRW::AC1021 || sourceVersion == DRW::AC1024);
+    const bool ac1021TwoRootProfile = sourceVersion == DRW::AC1021
+        && extension != nullptr && extension->m_entries.size() == 2u;
     if (extension == nullptr || extension->handle != extensionHandle
         || extension->parentHandle != controlHandle
         || extension->hardOwner != 1 || extension->cloning != 1
         || extension->countCap || !extension->hasCompleteDwgEntries()
         || extension->m_entries.size()
             != (sourceVersion == DRW::AC1018
-                    || singleEmptyLayerStatesRoot ? 1u : 3u)
+                    || singleEmptyLayerStatesRoot ? 1u
+                : ac1021TwoRootProfile ? 2u : 3u)
         || !extension->appData.empty() || !extension->extData.empty()
         || !extension->reactorHandles.empty()
         || extension->xDictHandle != 0u
@@ -34437,7 +34444,8 @@ bool dx_iface::prepareDwgLayerStateOutput(
 
     const DRW_XRecord* layerStateRecord = nullptr;
     const bool ac1021EmptyLayerStatesRoot =
-        sourceVersion == DRW::AC1021 && states->m_entries.empty();
+        sourceVersion == DRW::AC1021 && !ac1021TwoRootProfile
+        && states->m_entries.empty();
     if (sourceVersion == DRW::AC1018 || singleEmptyLayerStatesRoot
         || ac1021EmptyLayerStatesRoot) {
         if (!states->m_entries.empty())
@@ -34479,7 +34487,10 @@ bool dx_iface::prepareDwgLayerStateOutput(
                 && value.i_val()
                     <= std::numeric_limits<std::int16_t>::max();
         };
-        if (sourceVersion != DRW::AC1024
+        const bool ac1021ViewRecord = sourceVersion == DRW::AC1021
+            && entry.m_name == "ACAD_VIEWS_default"
+            && ac1021TwoRootProfile;
+        if ((sourceVersion != DRW::AC1024 && !ac1021ViewRecord)
             || std::any_of(payload.begin(), payload.end(),
                 [&layerStatePayloadValueSupported](
                         const DRW_Variant& value) {
@@ -34561,6 +34572,9 @@ bool dx_iface::prepareDwgLayerStateOutput(
         for (const DRW_Dictionary::Entry& entry : extension->m_entries) {
             if (entry.m_name == "ACAD_LAYERSTATES")
                 continue;
+            if (ac1021TwoRootProfile
+                && entry.m_name != "ACAD_LAYERFILTERS")
+                return skip("AC1021 two-root LayerStates profile requires the ACAD_LAYERFILTERS companion");
             if ((entry.m_name != "ACAD_LAYERFILTERS"
                     && entry.m_name != "ACLYDICTIONARY")
                 || !companionNames.insert(entry.m_name).second)
@@ -34584,7 +34598,8 @@ bool dx_iface::prepareDwgLayerStateOutput(
             layerStateCompanions.push_back(*companion);
         }
         const std::size_t expectedCompanionCount =
-            singleEmptyLayerStatesRoot ? 0u : 2u;
+            singleEmptyLayerStatesRoot ? 0u
+            : ac1021TwoRootProfile ? 1u : 2u;
         if (companionNames.size() != expectedCompanionCount)
             return skip("LAYER_CONTROL extension companion roots are incomplete");
     }
@@ -34635,10 +34650,17 @@ bool dx_iface::prepareDwgLayerStateOutput(
 
 bool dx_iface::isDwgLayerStateCompatibilityRecord(
         const DRW_XRecord& record) const noexcept {
+    const DRW::Version targetVersion = dxfW == nullptr
+        ? DRW::UNKNOWNV : dxfW->getVersion();
+    const bool compatibleTarget = cData != nullptr
+        && (cData->sourceVersion == DRW::AC1024
+            ? targetVersion == DRW::AC1024
+            : cData->sourceVersion == DRW::AC1021
+                && (targetVersion == DRW::AC1021
+                    || targetVersion == DRW::AC1024));
     if (cData == nullptr || dxfW == nullptr
         || cData->sourceFormat != dx_source_format::DWG
-        || cData->sourceVersion != DRW::AC1024
-        || dxfW->getVersion() != DRW::AC1024
+        || !compatibleTarget
         || !m_dwgLayerStateOutputPrepared
         || !m_dwgLayerStateOutputSource.hasLayerStateRecord
         || record.handle
@@ -34821,7 +34843,14 @@ bool dx_iface::inspectDwgLayerStateOutput(
                       << '\n';
         return false;
     };
-    if (cData == nullptr || dxfW == nullptr || view.version != DRW::AC1024
+    const bool compatibleTarget =
+        m_dwgLayerStateOutputSourceVersion == DRW::AC1024
+            ? view.version == DRW::AC1024
+        : m_dwgLayerStateOutputSourceVersion == DRW::AC1021
+            && (view.version == DRW::AC1021
+                || view.version == DRW::AC1024);
+    if (cData == nullptr || dxfW == nullptr
+        || view.version != dxfW->getVersion() || !compatibleTarget
         || !hasUnchangedDwgLayerStateOutputSource())
         return reject("source snapshot or output version");
     const auto& tableProof = m_standardDwgLayerControlOutputProof;
@@ -34843,8 +34872,96 @@ bool dx_iface::inspectDwgLayerStateOutput(
                 return true;
             }
             const auto* context = dxfW->getWritingContext();
-            if (input == DRW::NoHandle || context == nullptr
-                || context->ambiguousSourceHandles.count(input) != 0u)
+            if (input == DRW::NoHandle || context == nullptr)
+                return false;
+            const DRW_XRecord& record = source.layerStateRecord;
+            const bool isSelectedPayloadReference = std::any_of(
+                record.m_handleValues.begin(), record.m_handleValues.end(),
+                [input](const auto& reference) {
+                    return reference.second == input
+                        && (reference.first == 330 || reference.first == 331);
+                });
+            if (isSelectedPayloadReference) {
+                // A payload group 330/331 supplies a typed table-reference
+                // role. Resolve this selected LayerStates XRECORD through its
+                // witnessed LAYER/LTYPE table binding, including when the
+                // source table identity needs remapping.
+                if (input == record.handle || input == record.parentHandle
+                    || input == source.layerControlHandle
+                    || input == source.extensionDictionary.handle
+                    || input == source.layerStatesDictionary.handle
+                    || input == record.xDictHandle
+                    || std::find(record.reactorHandles.begin(),
+                        record.reactorHandles.end(), input)
+                        != record.reactorHandles.end()
+                    || std::any_of(
+                        source.layerStateCompanionDictionaries.begin(),
+                        source.layerStateCompanionDictionaries.end(),
+                        [input](const DRW_Dictionary& dictionary) {
+                            return dictionary.handle == input;
+                        }))
+                    return false;
+                bool roleFound = false;
+                std::uint32_t roleOutput = 0u;
+                for (const auto& reference : record.m_handleValues) {
+                    if (reference.second != input)
+                        continue;
+                    std::uint32_t emitted = 0u;
+                    if (reference.first == 330) {
+                        const auto layer = std::find_if(
+                            cData->layers.begin(), cData->layers.end(),
+                            [input](const DRW_Layer& candidate) {
+                                return candidate.handle == input;
+                            });
+                        if (layer == cData->layers.end()
+                            || layer->parentHandle
+                                != source.layerControlHandle
+                            || std::count_if(cData->layers.begin(),
+                                cData->layers.end(), [input](
+                                    const DRW_Layer& candidate) {
+                                    return candidate.handle == input;
+                                }) != 1u)
+                            return false;
+                        emitted = dxfW->dxfWriteEmittedSourceTableHandle(input);
+                        if (dxfW->dxfWriteRecordHandleCount(emitted) != 1u
+                            || !dxfW->dxfWriteRecordHasIdentity(
+                                emitted, "LAYER", "TABLES"))
+                            return false;
+                    } else if (reference.first == 331) {
+                        const auto lineType = std::find_if(
+                            cData->lineTypes.begin(), cData->lineTypes.end(),
+                            [input](const DRW_LType& candidate) {
+                                return candidate.handle == input;
+                            });
+                        if (lineType == cData->lineTypes.end()
+                            || std::count_if(cData->lineTypes.begin(),
+                                cData->lineTypes.end(), [input](
+                                    const DRW_LType& candidate) {
+                                    return candidate.handle == input;
+                                }) != 1u)
+                            return false;
+                        emitted = dxfW->dxfWriteSourceLinetypeTargetHandle(
+                            input);
+                        if (emitted == 0u || emitted == DRW::NoHandle
+                            || dxfW->dxfWriteRecordHandleCount(emitted) != 1u
+                            || !dxfW->dxfWriteRecordHasIdentity(
+                                emitted, "LTYPE", "TABLES"))
+                            return false;
+                    } else {
+                        return false;
+                    }
+                    if (roleFound && roleOutput != emitted)
+                        return false;
+                    roleFound = true;
+                    roleOutput = emitted;
+                }
+                if (!roleFound || roleOutput == 0u
+                    || roleOutput == DRW::NoHandle)
+                    return false;
+                output = roleOutput;
+                return true;
+            }
+            if (context->ambiguousSourceHandles.count(input) != 0u)
                 return false;
             output = dxfW->remapHandle(input);
             return output != 0u && output != DRW::NoHandle;
@@ -34933,12 +35050,24 @@ bool dx_iface::inspectDwgLayerStateOutput(
                     std::vector<std::uint32_t> references;
                     const bool decoded = decoder.decodeRecord<DRW_XRecord>(
                         body, [&](const DRW_XRecord& actual) {
-                            return actual.handle == shape.handle
+                            const bool equal = actual.handle == shape.handle
                                 && dx_standard_output::equal(
                                     *expected->second, actual, mapHandle,
                                     references,
                                     dx_standard_output::NoLayerReferences{},
                                     true);
+                            if (!equal && debug)
+                                std::cerr << "LayerStates XRECORD staged body mismatch: source="
+                                          << expected->second->handle
+                                          << " emitted=" << shape.handle
+                                          << " values="
+                                          << expected->second->m_dataEntries.size()
+                                          << '/' << actual.m_dataEntries.size()
+                                          << " handles="
+                                          << expected->second->m_handleValues.size()
+                                          << '/' << actual.m_handleValues.size()
+                                          << '\n';
+                            return equal;
                         });
                     if (!decoded)
                         bodyMismatch = true;

@@ -55055,6 +55055,352 @@ bool physicalLayerStateXrecordSourceAdmission(
     return true;
 }
 
+bool physicalAc1021LayerStateViewXrecordOutputReadback(
+        const std::filesystem::path& sourcePath) {
+    dx_iface sourceReader;
+    dx_data source;
+    if (!sourceReader.fileImport(sourcePath.string(), &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1021)
+        return fail("LayerStates view XRECORD source is not an AC1021 DWG");
+    std::uint32_t control = 0u, extensionHandle = 0u;
+    if (!source.getLayerTableControlExtensionDictionary(
+            control, extensionHandle))
+        return fail("AC1021 LAYER_CONTROL extension edge is absent");
+    const auto uniqueDictionary = [](const dx_data& data,
+                                    std::uint32_t handle) {
+        const DRW_Dictionary* result = nullptr;
+        for (const DRW_Dictionary& row : data.dictionaries) {
+            if (row.handle != handle)
+                continue;
+            if (result != nullptr)
+                return static_cast<const DRW_Dictionary*>(nullptr);
+            result = &row;
+        }
+        return result;
+    };
+    const auto uniqueXRecord = [](const dx_data& data,
+                                  std::uint32_t handle) {
+        const DRW_XRecord* result = nullptr;
+        for (const DRW_XRecord& row : data.xRecords) {
+            if (row.handle != handle)
+                continue;
+            if (result != nullptr)
+                return static_cast<const DRW_XRecord*>(nullptr);
+            result = &row;
+        }
+        return result;
+    };
+    const DRW_Dictionary* extension = uniqueDictionary(source, extensionHandle);
+    if (extension == nullptr || extension->parentHandle != control
+        || extension->m_entries.size() != 2u
+        || !extension->hasCompleteDwgEntries())
+        return fail("AC1021 LayerStates extension root is not the two-entry source profile");
+    const auto root = std::find_if(extension->m_entries.begin(),
+        extension->m_entries.end(), [](const DRW_Dictionary::Entry& entry) {
+            return entry.m_name == "ACAD_LAYERSTATES";
+        });
+    const auto companionEntry = std::find_if(extension->m_entries.begin(),
+        extension->m_entries.end(), [](const DRW_Dictionary::Entry& entry) {
+            return entry.m_name == "ACAD_LAYERFILTERS";
+        });
+    if (root == extension->m_entries.end()
+        || companionEntry == extension->m_entries.end())
+        return fail("AC1021 LayerStates/LayerFilters root keys are incomplete");
+    const DRW_Dictionary* states = uniqueDictionary(source, root->m_handle);
+    const DRW_Dictionary* filters = uniqueDictionary(
+        source, companionEntry->m_handle);
+    if (states == nullptr || filters == nullptr
+        || states->parentHandle != extensionHandle
+        || states->reactorHandles != std::vector<std::uint32_t>{extensionHandle}
+        || states->hardOwner != 0 || states->m_entries.size() != 1u
+        || filters->parentHandle != extensionHandle
+        || filters->reactorHandles
+            != std::vector<std::uint32_t>{extensionHandle}
+        || filters->hardOwner != 0 || !filters->m_entries.empty())
+        return fail("AC1021 LayerStates child/companion dictionary roles are incomplete");
+    const DRW_Dictionary::Entry& viewEntry = states->m_entries.front();
+    const DRW_XRecord* record = uniqueXRecord(source, viewEntry.m_handle);
+    const DRW_UnsupportedObject* frame =
+        DxIfaceStandardDwgCaptureTestAccess::standardSourceFrame(
+            source, source.importGeneration, viewEntry.m_handle);
+    if (viewEntry.m_name != "ACAD_VIEWS_default"
+        || record == nullptr || record->tType != DRW::XRECORD
+        || record->parentHandle != states->handle || record->m_rawDataValid
+        || record->hasDwgRawDataSourceRecord()
+        || !record->hasDwgCommonLinkTail()
+        || record->m_dataEntries.size() != 27u
+        || record->m_handleValues.size() != 8u
+        || frame == nullptr || frame->m_objectType != 79u
+        || frame->m_handle != record->handle
+        || frame->m_version != DRW::AC1021 || frame->m_isEntity
+        || frame->m_hasDataStorage)
+        return fail("AC1021 ACAD_VIEWS_default XRECORD is not one exact typed source frame");
+
+    const auto referencedLayer = [&source, control](std::uint32_t handle) {
+        const DRW_Layer* found = nullptr;
+        for (const DRW_Layer& row : source.layers) {
+            if (row.handle != handle)
+                continue;
+            if (found != nullptr || row.parentHandle != control)
+                return static_cast<const DRW_Layer*>(nullptr);
+            found = &row;
+        }
+        return found;
+    };
+    const auto referencedLType = [&source](std::uint32_t handle) {
+        const DRW_LType* found = nullptr;
+        for (const DRW_LType& row : source.lineTypes) {
+            if (row.handle != handle)
+                continue;
+            if (found != nullptr)
+                return static_cast<const DRW_LType*>(nullptr);
+            found = &row;
+        }
+        return found;
+    };
+    std::size_t layerRefs = 0u, ltypeRefs = 0u;
+    for (const auto& reference : record->m_handleValues) {
+        if (reference.first == 330) {
+            if (referencedLayer(reference.second) == nullptr)
+                return fail("AC1021 LayerStates group 330 does not resolve uniquely to LAYER");
+            ++layerRefs;
+        } else if (reference.first == 331) {
+            if (referencedLType(reference.second) == nullptr)
+                return fail("AC1021 LayerStates group 331 does not resolve uniquely to LTYPE");
+            ++ltypeRefs;
+        } else {
+            return fail("AC1021 LayerStates XRECORD contains an unsupported handle role");
+        }
+    }
+    if (layerRefs != 4u || ltypeRefs != 4u)
+        return fail("AC1021 LayerStates XRECORD handle-role census differs from 4 LAYER/4 LTYPE");
+
+    class LateLayerStateMutation final : public dx_iface {
+    public:
+        bool mutateAfterObjects{false};
+        std::uint32_t recordHandle{0u};
+        int originalCloning{0};
+        void writeObjects() override {
+            dx_iface::writeObjects();
+            if (!mutateAfterObjects || cData == nullptr)
+                return;
+            for (DRW_XRecord& row : cData->xRecords) {
+                if (row.handle != recordHandle)
+                    continue;
+                row.m_cloning = originalCloning == 5 ? 4 : originalCloning + 1;
+                return;
+            }
+        }
+    } writer;
+    writer.recordHandle = record->handle;
+    writer.originalCloning = record->m_cloning;
+
+    const auto verifyOutput = [&uniqueDictionary, &uniqueXRecord,
+            &referencedLayer, &referencedLType, control, extensionHandle,
+            extension, states, filters, record](
+                const std::filesystem::path& path) {
+        dx_iface reader;
+        dx_data output;
+        if (!reader.fileImport(path.string(), &output, false)
+            || output.sourceFormat != dx_source_format::DXF
+            || output.sourceVersion != DRW::AC1021)
+            return fail("AC1021 LayerStates output failed fresh typed DXF import");
+        std::uint32_t outputControl = 0u, outputExtensionHandle = 0u;
+        if (!output.getLayerTableControlExtensionDictionary(
+                outputControl, outputExtensionHandle)
+            || outputControl != control
+            || outputExtensionHandle != extensionHandle)
+            return fail("AC1021 LayerStates output changed the LAYER_CONTROL extension link");
+        const DRW_Dictionary* outputExtension = uniqueDictionary(
+            output, outputExtensionHandle);
+        const DRW_Dictionary* outputStates = uniqueDictionary(
+            output, states->handle);
+        const DRW_Dictionary* outputFilters = uniqueDictionary(
+            output, filters->handle);
+        if (outputExtension == nullptr || outputStates == nullptr
+            || outputFilters == nullptr
+            || outputExtension->m_entries.size() != 2u
+            || outputStates->parentHandle != outputExtensionHandle
+            || outputFilters->parentHandle != outputExtensionHandle
+            || !outputFilters->m_entries.empty()
+            || outputStates->m_entries.size() != 1u
+            || outputStates->m_entries.front().m_name
+                != "ACAD_VIEWS_default")
+            return fail("AC1021 LayerStates output changed its root/dictionary graph");
+        for (const DRW_Dictionary::Entry& expected : extension->m_entries) {
+            const auto actual = std::find_if(outputExtension->m_entries.begin(),
+                outputExtension->m_entries.end(), [&expected](
+                    const DRW_Dictionary::Entry& entry) {
+                        return entry.m_name == expected.m_name;
+                    });
+            if (actual == outputExtension->m_entries.end()
+                || actual->m_handle != expected.m_handle
+                || actual->m_dxfHandleCode
+                    != DRW_Dictionary::Entry::DxfHandleCode::HardOwner)
+                return fail("AC1021 LayerStates extension root key/role changed on readback");
+        }
+        const DRW_XRecord* outputRecord = uniqueXRecord(
+            output, outputStates->m_entries.front().m_handle);
+        if (outputRecord == nullptr
+            || outputRecord->parentHandle != outputStates->handle
+            || outputRecord->m_dataEntries.size()
+                != record->m_dataEntries.size()
+            || outputRecord->m_handleValues.size()
+                != record->m_handleValues.size())
+            return fail("AC1021 LayerStates XRECORD output body or owner is incomplete");
+        for (std::size_t index = 0u; index < record->m_dataEntries.size();
+             ++index) {
+            const DRW_Variant& expected = record->m_dataEntries[index];
+            const DRW_Variant& actual = outputRecord->m_dataEntries[index];
+            if (expected.code() != actual.code())
+                return fail("AC1021 LayerStates XRECORD payload order changed");
+            if (expected.code() == 330 || expected.code() == 331) {
+                const auto readHandle = [](const DRW_Variant& value,
+                                           std::uint32_t& handle) {
+                    if (value.type() == DRW_Variant::INTEGER64
+                        && value.i64_val() >= 0
+                        && static_cast<std::uint64_t>(value.i64_val())
+                            <= std::numeric_limits<std::uint32_t>::max()) {
+                        handle = static_cast<std::uint32_t>(value.i64_val());
+                        return true;
+                    }
+                    if (value.type() == DRW_Variant::INTEGER
+                        && value.i_val() >= 0) {
+                        handle = static_cast<std::uint32_t>(value.i_val());
+                        return true;
+                    }
+                    return false;
+                };
+                std::uint32_t expectedHandle = 0u, actualHandle = 0u;
+                if (!readHandle(expected, expectedHandle)
+                    || !readHandle(actual, actualHandle))
+                    return fail("AC1021 LayerStates XRECORD handle value has an invalid type");
+                const DRW_Layer* layer = expected.code() == 330
+                    ? referencedLayer(expectedHandle) : nullptr;
+                const DRW_LType* lineType = expected.code() == 331
+                    ? referencedLType(expectedHandle) : nullptr;
+                const bool matched = layer != nullptr
+                    ? std::count_if(output.layers.begin(), output.layers.end(),
+                        [layer, actualHandle](const DRW_Layer& candidate) {
+                            return candidate.handle == actualHandle
+                                && candidate.name == layer->name;
+                        }) == 1u
+                    : lineType != nullptr
+                        && std::count_if(output.lineTypes.begin(),
+                            output.lineTypes.end(), [lineType, actualHandle](
+                                const DRW_LType& candidate) {
+                                return candidate.handle == actualHandle
+                                    && candidate.name == lineType->name;
+                            }) == 1u;
+                if (!matched)
+                    return fail("AC1021 LayerStates XRECORD handle target did not resolve to the matching output table row");
+            } else {
+                auto identity = [](std::uint32_t input,
+                                   std::uint32_t& mapped) {
+                    mapped = input;
+                    return true;
+                };
+                std::vector<std::uint32_t> references;
+                if (!dx_standard_output::valueEqual(
+                        expected, actual, identity, references))
+                    return fail("AC1021 LayerStates XRECORD scalar payload changed on readback");
+            }
+        }
+        if (outputRecord->reactorHandles.size() != 1u
+            || outputRecord->reactorHandles.front() != outputStates->handle
+            || outputStates->reactorHandles
+                != std::vector<std::uint32_t>{outputExtension->handle})
+            return fail("AC1021 LayerStates XRECORD dictionary/reactor roles changed on readback");
+        for (std::size_t index = 0u;
+             index < record->m_handleValues.size(); ++index) {
+            const auto& expected = record->m_handleValues[index];
+            const auto& actual = outputRecord->m_handleValues[index];
+            if (expected.first != actual.first)
+                return fail("AC1021 LayerStates XRECORD compatibility handle view changed order");
+            if (expected.first == 330) {
+                const DRW_Layer* layer = referencedLayer(expected.second);
+                if (layer == nullptr
+                    || std::count_if(output.layers.begin(), output.layers.end(),
+                        [layer, &actual](const DRW_Layer& candidate) {
+                            return candidate.handle == actual.second
+                                && candidate.name == layer->name;
+                        }) != 1u)
+                    return fail("AC1021 LayerStates compatibility view lost a LAYER target");
+            } else if (expected.first == 331) {
+                const DRW_LType* lineType = referencedLType(expected.second);
+                if (lineType == nullptr
+                    || std::count_if(output.lineTypes.begin(),
+                        output.lineTypes.end(), [lineType, &actual](
+                            const DRW_LType& candidate) {
+                            return candidate.handle == actual.second
+                                && candidate.name == lineType->name;
+                        }) != 1u)
+                    return fail("AC1021 LayerStates compatibility view lost an LTYPE target");
+            } else {
+                return fail("AC1021 LayerStates compatibility view has an unsupported handle role");
+            }
+        }
+        return true;
+    };
+
+    for (const bool binary : {false, true}) {
+        const auto nonce = std::chrono::steady_clock::now()
+                               .time_since_epoch().count();
+        const std::filesystem::path outputPath =
+            std::filesystem::temp_directory_path()
+            / ("libdxfrw-layerstate-view-ac1021-"
+                + std::to_string(nonce)
+                + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{outputPath};
+        const std::string sentinel =
+            "AC1021 LayerStates XRECORD sentinel\n";
+        { std::ofstream existing(outputPath,
+                std::ios::binary | std::ios::trunc);
+          if (!existing || !(existing << sentinel))
+              return fail("could not seed AC1021 LayerStates XRECORD sentinel"); }
+        writer.mutateAfterObjects = true;
+        const auto exportSource = [&]() {
+            return writer.fileExport(outputPath.string(), DRW::AC1021,
+                binary, &source, false, true,
+                dx_dxfSourceTextPolicy::Compatible,
+                DRW::DxfTextWritePolicy::Compatible,
+                dx_dxfProxyGraphicsPolicy::Compatible,
+                dx_dwgReadCompletenessPolicy::AllowPartial);
+        };
+        if (exportSource())
+            return fail("late AC1021 LayerStates XRECORD mutation was emitted");
+        { std::ifstream input(outputPath, std::ios::binary);
+          const std::string retained{
+              std::istreambuf_iterator<char>(input), {}};
+          if (retained != sentinel)
+              return fail("rejected AC1021 LayerStates XRECORD changed the destination"); }
+        auto mutableRecord = std::find_if(source.xRecords.begin(),
+            source.xRecords.end(), [record](const DRW_XRecord& candidate) {
+                return candidate.handle == record->handle;
+            });
+        if (mutableRecord == source.xRecords.end())
+            return fail("AC1021 LayerStates XRECORD mutation target disappeared");
+        mutableRecord->m_cloning = writer.originalCloning;
+        writer.mutateAfterObjects = false;
+        if (!exportSource() || !verifyOutput(outputPath)) {
+            std::cerr << "AC1021 LayerStates XRECORD output detail: "
+                      << writer.extensionGraphFailureDetail() << '\n';
+            return fail("AC1021 LayerStates XRECORD correction/retry or readback failed");
+        }
+    }
+    std::cout << "Physical AC1021 LayerStates ACAD_VIEWS_default output/readback "
+              << "PASS encodings=ASCII,Binary handles=4xLAYER,4xLTYPE "
+              << "rollback=pass sameAdapterRetry=pass\n";
+    return true;
+}
+
 bool physicalAc1021EmptyLayerStateProjection(
         const std::filesystem::path& sourcePath) {
     const auto uniqueDictionary = [](const dx_data& data,
@@ -83608,6 +83954,10 @@ int main(int argc, char** argv) {
     if (argc == 3
         && std::string(argv[1]) == "--layerstates-xrecord-physical-source-admission")
         return physicalLayerStateXrecordSourceAdmission(argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1]) == "--layerstates-ac1021-view-xrecord-output-readback")
+        return physicalAc1021LayerStateViewXrecordOutputReadback(argv[2])
+            ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--tablestyle-physical-ac1018-source-profile")
         return physicalTableStyleSourceProfile(argv[2]) ? 0 : 1;
