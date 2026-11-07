@@ -2415,9 +2415,13 @@ Native source-release builds and platform qualification remain open.
   `CMAKE_FIND_PACKAGE_PREFER_CONFIG=ON` plus the installed `libdxfrw_DIR`
   selects the exported package target, propagates C++17, and successfully
   builds the persistence target. This is the fastest known integration route;
-  keep the default module-mode/raw-path failure recorded, and rerun the focused
-  export and planar open/save/reopen controls against this exact package before
-  treating behavior as qualified. Preserve the pinned libdxfrw revision.
+  the existing focused DXF export tests pass 3/3 and the planar LINE/CIRCLE
+  open/save/reopen control passes 1/1 against that exact installed package
+  archive; `DYLD_PRINT_LIBRARIES` confirms the new persistence/kernel dylibs
+  were loaded. Outputs remain scratch-only. Keep the default module-mode/raw-path
+  failure recorded. This closes only this dirty macOS ARM64 persistence
+  integration probe; preserve the pinned libdxfrw revision and qualify a clean
+  consumer revision, full application, ABI, and Linux/Windows separately.
   Its full test target has an unrelated Kaguya C++17
   failure, and a nonplanar LINE triggers its 2D geometry exception. Qualify a
   clean consumer revision and full application separately
