@@ -122,6 +122,46 @@ bool exactAc1027ClassSourceMatches(const dx_data& data, const DRW_UnsupportedObj
         && raw.m_classUnknown2 == match->m_unknown2;
 }
 
+bool exactAc1021GeneratedDictionaryDefaultClass(
+        const dx_data& data, std::uint32_t objectType,
+        const char* recordName, const char* className) noexcept {
+    if (data.sourceFormat != dx_source_format::DWG
+        || data.sourceVersion != DRW::AC1021
+        || objectType != 513u
+        || !data.hasUnchangedDwgClassEvidence()
+        || !data.dwgClassCoverage.m_complete
+        || data.dwgClassCoverage.m_status
+            != DRW_DwgClassCoverageStatus::FinalizedComplete)
+        return false;
+    const DRW_DwgClassCoverageEntry* match = nullptr;
+    for (const DRW_DwgClassCoverageEntry& row :
+         data.dwgClassCoverage.m_entries) {
+        if (row.m_classNumber != objectType
+            && row.m_recordName != recordName
+            && row.m_className != className)
+            continue;
+        if (match != nullptr)
+            return false;
+        match = &row;
+    }
+    return match != nullptr
+        && match->m_classNumber == objectType
+        && match->m_recordName == recordName
+        && match->m_className == className
+        && match->m_appName == "ACAD"
+        && match->m_proxyFlag == 0x401
+        && match->m_wasAProxyFlag == 0
+        && match->m_entityFlagRaw == 0x1F3
+        && match->m_entityFlag == 0
+        && match->m_instanceCount == 1
+        && match->m_dwgVersion == 0
+        && match->m_maintenanceVersion == 0
+        && match->m_unknown1 == 0
+        && match->m_unknown2 == 0
+        && match->m_state == DRW_DwgClassCoverageState::Published
+        && match->m_reason == DRW_DwgClassCoverageReason::None;
+}
+
 template<class SourceFrames>
 bool exactAc1027ClassFrameCensus(const SourceFrames& frames, std::uint64_t generation,
                                   const DRW_UnsupportedObject& raw, std::size_t expected) noexcept {
@@ -16665,7 +16705,13 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
             if (dictionary != dictionariesWithDefault.end()
                 && placeholder != placeholders.end()
                 && frame != data->m_opaqueDwgSourceFrames.end()
-                && (frame->second.m_objectType == 500 || (data->sourceVersion == DRW::AC1027 && frame->second.m_objectType >= 500))
+                && (frame->second.m_objectType == 500
+                    || (data->sourceVersion == DRW::AC1027
+                        && frame->second.m_objectType >= 500)
+                    || exactAc1021GeneratedDictionaryDefaultClass(
+                        *data, frame->second.m_objectType,
+                        "ACDBDICTIONARYWDFLT",
+                        "AcDbDictionaryWithDefault"))
                 && frame->second.m_handle == dictionaryHandle
                 && frame->second.m_version == data->sourceVersion
                 && frame->second.m_isCustomClass
@@ -50371,7 +50417,12 @@ bool dx_iface::hasUnchangedDwgDictionaryDefaultOutputSources() const noexcept {
                     proof.dictionary.handle, proof.placeholder.handle))
                 return false;
         }
-        return (proof.objectType == 500 || (m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027 && proof.objectType >= 500))
+        return (proof.objectType == 500
+                || (m_dwgDictionaryDefaultOutputSourceVersion == DRW::AC1027
+                    && proof.objectType >= 500)
+                || exactAc1021GeneratedDictionaryDefaultClass(
+                    *cData, proof.objectType, "ACDBDICTIONARYWDFLT",
+                    "AcDbDictionaryWithDefault"))
             && asciiIdentifierEquals(proof.recordName,
                                      "ACDBDICTIONARYWDFLT")
             && proof.className == "AcDbDictionaryWithDefault"

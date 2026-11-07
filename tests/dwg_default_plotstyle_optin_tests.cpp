@@ -313,10 +313,11 @@ struct Capture : LC3CompatCheck {
             && value.m_defaultEntryHandle == value.m_entries[0].m_handle) {
             graphDictionary = value.handle;
             placeholder = value.m_defaultEntryHandle;
+            dictionaryReactors = value.reactorHandles;
         }
     }
     void addAcDbPlaceholder(const DRW_AcDbPlaceholder& value) override {
-        placeholders.emplace_back(value.handle, value.parentHandle);
+        placeholders.push_back({value.handle, value.parentHandle, value.reactorHandles});
     }
     void addLayer(const DRW_Layer& value) override {
         if (value.name == "0") { ++layerCount; layerPlotStyle = value.plotStyleHandle.ref; }
@@ -327,23 +328,56 @@ struct Capture : LC3CompatCheck {
     int roots = 0, layerCount = 0, lines = 0;
     bool sawEarlyOther = false;
     std::uint32_t dictionary = 0, graphDictionary = 0, placeholder = 0, layerPlotStyle = 0;
-    std::vector<std::pair<std::uint32_t, std::uint32_t>> placeholders;
-    bool hasGraph(bool suppliedLayer) const {
+    bool hasGraph(bool suppliedLayer, DRW::Version version) const {
         if (roots != 1 || dictionary == 0 || dictionary == 0x30u || dictionary == 0x31u
             || graphDictionary != dictionary || placeholder == 0 || placeholder == dictionary
             || placeholder == 0x30u || placeholder == 0x31u || layerCount != 1 || lines != 1
             || layerPlotStyle != (suppliedLayer ? 0xB200u : placeholder)) return false;
-        return std::find(placeholders.begin(), placeholders.end(),
-                         std::make_pair(placeholder, dictionary)) != placeholders.end();
+        const bool hasPersistentReactorProfile = version >= DRW::AC1015
+            && version <= DRW::AC1024;
+        const std::vector<std::uint32_t> expectedDictionaryReactors =
+            hasPersistentReactorProfile
+                ? std::vector<std::uint32_t>{DRW::DwgNamedObjectsDictionaryHandle}
+                : std::vector<std::uint32_t>{};
+        const std::vector<std::uint32_t> expectedPlaceholderReactors =
+            hasPersistentReactorProfile
+                ? std::vector<std::uint32_t>{dictionary}
+                : std::vector<std::uint32_t>{};
+        const auto emittedPlaceholder = std::find_if(
+            placeholders.begin(), placeholders.end(), [this](const PlaceholderCapture& value) {
+                return value.handle == placeholder && value.parent == dictionary;
+            });
+        return dictionaryReactors == expectedDictionaryReactors
+            && emittedPlaceholder != placeholders.end()
+            && emittedPlaceholder->reactors == expectedPlaceholderReactors;
     }
+    struct PlaceholderCapture {
+        std::uint32_t handle;
+        std::uint32_t parent;
+        std::vector<std::uint32_t> reactors;
+    };
+    std::vector<std::uint32_t> dictionaryReactors;
+    std::vector<PlaceholderCapture> placeholders;
 };
-bool inspect(const std::string& name, bool enabled, bool suppliedLayer = false,
+bool inspect(const std::string& name, DRW::Version version, bool enabled,
+             bool suppliedLayer = false,
              bool earlyOther = false) {
     dwgRW reader(name.c_str()); Capture capture;
     if (!reader.read(&capture, false)) return false;
-    if (enabled) return capture.hasGraph(suppliedLayer)
-        && (!earlyOther || (capture.sawEarlyOther && capture.dictionary != 0xB202u
+    if (enabled) {
+        const bool graph = capture.hasGraph(suppliedLayer, version);
+        if (!graph) {
+            std::cerr << "capture version=" << version << " roots=" << capture.roots
+                      << " dict=" << capture.dictionary << " graphDict="
+                      << capture.graphDictionary << " placeholder=" << capture.placeholder
+                      << " dictReactors=" << capture.dictionaryReactors.size()
+                      << " placeholderCount=" << capture.placeholders.size()
+                      << " layer=" << capture.layerCount << " line=" << capture.lines << '\n';
+        }
+        return graph && (!earlyOther || (capture.sawEarlyOther
+                            && capture.dictionary != 0xB202u
                             && capture.placeholder != 0xB202u));
+    }
     return capture.roots == 0 && capture.layerCount == 1
         && capture.layerPlotStyle == 0 && capture.lines == 1;
 }
@@ -353,30 +387,35 @@ bool runVersion(const std::filesystem::path& path, DRW::Version version) {
     if (!output.reserveHandle(0x30u) || !output.reserveHandle(0x31u)
         || !output.reserveHandle(0xB200u)) return false;
     LegacyAdapter legacy(output);
-    if (!output.write(&legacy, version, true) || !inspect(name, false)) {
+    if (!output.write(&legacy, version, true) || !inspect(name, version, false)) {
         std::cerr << "legacy consumer failed for " << version << '\n'; return false;
     }
     Adapter adapter(output);
     adapter.enabled = false;
-    if (!output.write(&adapter, version, true) || !inspect(name, false)
+    if (!output.write(&adapter, version, true) || !inspect(name, version, false)
         || adapter.plannedDictionary != 0 || adapter.plannedPlaceholder != 0) {
         std::cerr << "default behavior failed for " << version << '\n'; return false;
     }
     adapter.enabled = true;
-    if (!output.write(&adapter, version, true) || !inspect(name, true)
+    const bool optInWrote = output.write(&adapter, version, true);
+    const bool optInReadback = optInWrote && inspect(name, version, true);
+    if (!optInWrote || !optInReadback
         || adapter.plannedDictionary == 0x30u || adapter.plannedDictionary == 0x31u
         || adapter.plannedDictionary == 0xB200u || adapter.plannedPlaceholder == 0x30u
         || adapter.plannedPlaceholder == 0x31u || adapter.plannedPlaceholder == 0xB200u) {
-        std::cerr << "opt-in graph failed for " << version << '\n'; return false;
+        std::cerr << "opt-in graph failed for " << version << " write=" << optInWrote
+                  << " readback=" << optInReadback << " handles="
+                  << adapter.plannedDictionary << ',' << adapter.plannedPlaceholder << '\n';
+        return false;
     }
     adapter.scenario = Scenario::SuppliedLayer;
     if (!output.write(&adapter, version, true) || !adapter.layerAdded
-        || !adapter.placeholderWritten || !inspect(name, true, true)) {
+        || !adapter.placeholderWritten || !inspect(name, version, true, true)) {
         std::cerr << "caller layer override failed for " << version << '\n'; return false;
     }
     adapter.scenario = Scenario::EarlyOtherRoot;
     if (!output.write(&adapter, version, true) || !adapter.earlyOtherRegistered
-        || !adapter.placeholderWritten || !inspect(name, true, false, true)) {
+        || !adapter.placeholderWritten || !inspect(name, version, true, false, true)) {
         std::cerr << "caller identity reservation failed for " << version << '\n'; return false;
     }
     for (const Scenario fault : {Scenario::EarlyRoot, Scenario::LateRoot,
@@ -411,7 +450,7 @@ bool runVersion(const std::filesystem::path& path, DRW::Version version) {
              || fault == Scenario::NestedDefaultImpersonation) && !adapter.nestedAliasRejected)
             return false;
         adapter.scenario = Scenario::Normal;
-        if (!output.write(&adapter, version, true) || !inspect(name, true)) {
+        if (!output.write(&adapter, version, true) || !inspect(name, version, true)) {
             std::cerr << "same-writer retry failed for " << version << '\n'; return false;
         }
     }

@@ -4743,13 +4743,25 @@ bool dwgWriter15::completeDeferredDwgObjects() {
                 dictionary.parentHandle = DRW::DwgNamedObjectsDictionaryHandle;
                 dictionary.cloning = 1;
                 dictionary.hardOwner = 0;
-                dictionary.setDwgCommonObjectState(0, m_version >= DRW::AC1018 ? 1 : 0, false);
+                const bool hasPersistentReactorProfile = m_version >= DRW::AC1015
+                    && m_version <= DRW::AC1024;
+                if (hasPersistentReactorProfile) {
+                    dictionary.reactorHandles.push_back(
+                        DRW::DwgNamedObjectsDictionaryHandle);
+                }
+                dictionary.setDwgCommonObjectState(
+                    hasPersistentReactorProfile ? 1 : 0,
+                    m_version >= DRW::AC1018 ? 1 : 0, false);
                 dictionary.m_entries.push_back({"Normal", m_defaultPlotStylePlaceholderHandle});
                 dictionary.m_defaultEntryHandle = m_defaultPlotStylePlaceholderHandle;
                 DRW_AcDbPlaceholder placeholder;
                 placeholder.handle = m_defaultPlotStylePlaceholderHandle;
                 placeholder.parentHandle = m_defaultPlotStyleDictionaryHandle;
-                placeholder.setDwgCommonObjectState(0, m_version >= DRW::AC1018 ? 1 : 0, false);
+                if (hasPersistentReactorProfile)
+                    placeholder.reactorHandles.push_back(dictionary.handle);
+                placeholder.setDwgCommonObjectState(
+                    hasPersistentReactorProfile ? 1 : 0,
+                    m_version >= DRW::AC1018 ? 1 : 0, false);
                 {
                     struct ScopedDefaultGraphWrite {
                         bool& active;

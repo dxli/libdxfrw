@@ -4,6 +4,9 @@ endif()
 if(NOT DEFINED ADAPTER OR NOT EXISTS "${ADAPTER}")
     message(FATAL_ERROR "DWG/DXF adapter test executable is unavailable")
 endif()
+if(NOT DEFINED CONVERTER OR NOT EXISTS "${CONVERTER}")
+    message(FATAL_ERROR "dwg2dxf converter executable is unavailable")
+endif()
 if(NOT DEFINED OUTPUT_DIR)
     message(FATAL_ERROR "scratch output directory was not provided")
 endif()
@@ -32,6 +35,23 @@ if(NOT adapter_result EQUAL 0)
         "Generated AC1021 GROUP output/readback failed: ${adapter_stdout}${adapter_stderr}")
 endif()
 
+set(dxf_output "${scratch_dir}/strict-output.dxf")
+execute_process(
+    COMMAND "${CONVERTER}" "${source}" -y -v2007 "${dxf_output}"
+    RESULT_VARIABLE converter_result
+    OUTPUT_VARIABLE converter_stdout
+    ERROR_VARIABLE converter_stderr)
+if(NOT converter_result EQUAL 0 OR NOT EXISTS "${dxf_output}")
+    message(FATAL_ERROR
+        "Generated AC1021 strict conversion failed: ${converter_stdout}${converter_stderr}")
+endif()
+file(READ "${dxf_output}" dxf_contents)
+string(FIND "${dxf_contents}" "ACAD_PLOTSTYLENAME" plot_style_root)
+string(FIND "${dxf_contents}" "Normal" plot_style_default)
+if(plot_style_root EQUAL -1 OR plot_style_default EQUAL -1)
+    message(FATAL_ERROR "Strict DXF output omitted the default plot-style graph")
+endif()
+
 file(REMOVE_RECURSE "${scratch_dir}")
 message(STATUS
-    "Generated AC1021 GROUP rooted reactor closure, refusal and retry passed")
+    "Generated AC1021 GROUP and default plot-style reactor graph closure, refusal, retry and strict DXF output passed")
