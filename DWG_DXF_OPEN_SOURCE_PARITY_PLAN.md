@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the PERSUBENTMGR/TABLECONTENT bodies remain disputed and raw-only; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; the last bounded ODA CLI retry still aborts before document processing during pasteboard/XPC initialization; the user's latest message says they are unlocking the Mac, but no new session-state or converter result has been observed; do not repeat the unchanged CLI launch, and continue local work while this platform gate is pending; current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing, so the AC1032 TABLECONTENT candidate remains raw/refused with no parser change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; the generated associative-geometry export selector was rechecked and remains green, so its physical-source gate—not another generated serializer pass—is the remaining work). This file
+Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the PERSUBENTMGR/TABLECONTENT bodies remain disputed and raw-only; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; the last bounded ODA CLI retry still aborts before document processing during pasteboard/XPC initialization; the user's latest message says they are unlocking the Mac, but no new session-state or converter result has been observed; do not repeat the unchanged CLI launch, and continue local work while this platform gate is pending; current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing, so the AC1032 TABLECONTENT candidate remains raw/refused with no parser change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; the generated associative-geometry selector and existing AC1024 mechanical physical dependency/body selected-output route pass, but broader physical graph closure remains open). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -162,10 +162,15 @@ created locally from scratch for the specific control.
    Reuse it for regression coverage; do not schedule another generated-only
    serializer pass. Its output/readback and rollback/retry prove the bounded
    adapter mechanics, not physical-source serialization or native associative
-   meaning. The remaining associative action is source-bound: select a physical
-   profile only when every emitted dependency and target role is closed and the
-   existing strict preflight admits that exact scope; otherwise retain the
-   refusal and continue to another ready packet. See the [AC1024 constraint
+   meaning. The existing source-bound AC1024 mechanical profile now also passes
+   `--assocdependency-physical-output-readback` in ASCII and Binary: fresh
+   typed readback verifies 17 linked dependency/body pairs, all 399 constraint
+   nodes, group/dimension target roles, atomic refusal and same-adapter retry.
+   This remains one local source profile and selected-subgraph output; it does
+   not close strict whole-document output or qualify native associative
+   semantics ([receipt](docs/research/p4-ac1024-assoc-dependency-physical-selected-output-2026-11-07.json)).
+   Keep broadening only where source evidence and dependencies are closed;
+   otherwise retain refusal and continue to another ready packet. See the [AC1024 constraint
    group writer receipt](docs/research/p4-ac1024-associative-constraint-group-dxf-writer-2026-10-30.json)
    and [physical source-handle inventory](docs/research/p4-associative-source-handle-inventory-2026-10-30.json).
 
