@@ -19227,18 +19227,60 @@ int runR2007SystemPageCrcDiagnostic(const std::string& path) {
     return 0;
 }
 
-int runDwgReadSample(const std::string& path) {
+int runDwgReadSample(const std::string& path,
+                     std::size_t expectedObjectParseFailures = 0u) {
     dx_data data;
     dx_iface interface;
     const bool imported = interface.fileImport(path, &data, false);
     dx_iface::reportDwgReadOutcome(std::cerr, data.dwgReadOutcome);
     const dx_dwgReadOutcome& outcome = data.dwgReadOutcome;
     const DwgReadObservations& observations = outcome.observations;
+    std::size_t untypedAcShFrames = 0u;
+    for (const DRW_UnsupportedObject& raw : data.acdsHistoryDwgFrames) {
+        const bool acshFrame = raw.m_recordName.rfind("ACSH_", 0u) == 0u
+            || raw.m_className.rfind("AcDbSh", 0u) == 0u;
+        if (!acshFrame)
+            continue;
+        const auto typed = std::find_if(
+            data.acshHistoryObjects.cbegin(), data.acshHistoryObjects.cend(),
+            [&raw](const DRW_AcShHistoryObject& object) {
+                return object.handle == raw.m_handle;
+            });
+        if (typed != data.acshHistoryObjects.cend())
+            continue;
+        ++untypedAcShFrames;
+        const bool knownAcShClass =
+            (raw.m_recordName == "ACSH_REVOLVE_CLASS"
+             && raw.m_className == "AcDbShRevolve")
+            || (raw.m_recordName == "ACSH_LOFT_CLASS"
+                && raw.m_className == "AcDbShLoft");
+        if (raw.m_version != DRW::AC1024 || raw.m_isEntity
+            || !raw.m_isCustomClass || !raw.m_hasClassDefinition
+            || !knownAcShClass || raw.m_rawBytes.empty()
+            || raw.m_objectSize != raw.m_rawBytes.size()
+            || raw.m_bodyBitSize > raw.m_objectSize * 8u) {
+            std::cerr << "DWG sample has an unqualified raw-only AcSh frame: handle="
+                      << raw.m_handle << " record=" << raw.m_recordName
+                      << " class=" << raw.m_className << '\n';
+            return 1;
+        }
+    }
+    const bool expectedRawOnlyAcShProfile =
+        expectedObjectParseFailures != 0u
+        && expectedObjectParseFailures == untypedAcShFrames
+        && observations.objectParseFailures == expectedObjectParseFailures
+        && observations.frames.status
+            == DRW_DwgFrameCoverageStatus::FinalizedComplete
+        && observations.frames.dispositions[static_cast<std::size_t>(
+               DRW_DwgFrameDisposition::Failed)] == 0u
+        && !data.acdsHistoryDwgFrameCaptureFailed;
     if (!imported || data.sourceFormat != dx_source_format::DWG
         || !outcome.attempted || !outcome.operationSucceeded
         || outcome.error != DRW::BAD_NONE
         || observations.entityParseFailures != 0u
-        || observations.objectParseFailures != 0u) {
+        || observations.objectParseFailures != expectedObjectParseFailures
+        || (expectedObjectParseFailures != 0u
+            && !expectedRawOnlyAcShProfile)) {
         std::cerr << "DWG sample read probe failed: import=" << imported
                   << " format=" << static_cast<unsigned>(data.sourceFormat)
                   << " attempted=" << outcome.attempted
@@ -19250,7 +19292,14 @@ int runDwgReadSample(const std::string& path) {
                   << observations.objectParseFailures << '\n';
         return 1;
     }
-    std::cout << "DWG sample read probe: PASS\n";
+    if (expectedObjectParseFailures == 0u) {
+        std::cout << "DWG sample read probe: PASS\n";
+    } else {
+        std::cout << "DWG sample read probe: PASS ("
+                  << expectedObjectParseFailures
+                  << " qualified AC1024 AcSh frames retained raw-only; "
+                     "typed failures visible; source frame coverage complete)\n";
+    }
     return 0;
 }
 
@@ -19658,6 +19707,17 @@ int main(int argc, char** argv) {
         return runAssociativeRawCarrierRetention(argv[2]);
     if (argc == 3 && std::string(argv[1]) == "--read-dwg-sample")
         return runDwgReadSample(argv[2]);
+    if (argc == 4 && std::string(argv[1]) == "--read-dwg-sample") {
+        try {
+            const std::size_t expectedFailures =
+                static_cast<std::size_t>(std::stoull(argv[3]));
+            return runDwgReadSample(argv[2], expectedFailures);
+        } catch (const std::exception& error) {
+            std::cerr << "invalid expected DWG object parse failure count: "
+                      << error.what() << '\n';
+            return 2;
+        }
+    }
     if (argc == 3
         && std::string(argv[1]) == "--custom-objects-ac1024-sample")
         return runCustomObjectsAc1024Sample(argv[2]);

@@ -7,6 +7,12 @@
 if(NOT READER_TEST OR NOT SAMPLE OR NOT EXPECTED_VERSION)
     message(FATAL_ERROR "missing one of: READER_TEST SAMPLE EXPECTED_VERSION")
 endif()
+if(NOT DEFINED EXPECTED_OBJECT_PARSE_FAILURES)
+    set(EXPECTED_OBJECT_PARSE_FAILURES 0)
+endif()
+if(NOT EXPECTED_OBJECT_PARSE_FAILURES MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "EXPECTED_OBJECT_PARSE_FAILURES must be a nonnegative integer")
+endif()
 
 # Check the sample's first 6 bytes against its declared AC version.
 file(READ "${SAMPLE}" _hdr LIMIT 6 HEX)
@@ -30,6 +36,7 @@ endif()
 # tests and must not be inferred from this reader-only sample check.
 execute_process(
     COMMAND "${READER_TEST}" --read-dwg-sample "${SAMPLE}"
+        "${EXPECTED_OBJECT_PARSE_FAILURES}"
     RESULT_VARIABLE _rc
     OUTPUT_VARIABLE _stdout
     ERROR_VARIABLE _stderr
@@ -43,4 +50,5 @@ if(NOT _rc EQUAL 0)
     )
 endif()
 
-message(STATUS "OK ${EXPECTED_VERSION}: DWG parser completed without record parse failures")
+message(STATUS
+    "OK ${EXPECTED_VERSION}: DWG source read disposition matched the declared sample profile")

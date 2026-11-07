@@ -2311,6 +2311,14 @@ raw-retained but unvalidated and strict output refused until exact fields,
 following-handle alignment, and meaningful values have independent evidence.
 The files remain local and were not added to the repository. See the
 [current ACSH failure receipt](docs/research/p6-ac1024-acsh-current-parser-failures-2026-11-03.json).
+The AC1024 sample-reader matrix now distinguishes this bounded raw-only
+disposition from a zero-failure typed parse: only these two named samples may
+report exactly three object failures, and the probe requires each to correspond
+to a validated untyped LOFT/REVOLVE frame with complete source-frame coverage.
+All other sample profiles still require zero entity/object failures. The
+focused 13-test AC1024 reader/retention cohort passes; this corrects the test
+expectation without claiming typed LOFT/REVOLVE semantics or strict output
+([receipt](docs/research/p4-ac1024-acsh-sample-read-disposition-test-2026-11-07.json)).
 
 | Boundary | Remaining decision or proof |
 | --- | --- |

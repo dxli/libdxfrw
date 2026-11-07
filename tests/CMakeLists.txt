@@ -5143,12 +5143,23 @@ foreach(_ver IN LISTS _dwg_test_versions)
     message(STATUS "tests/: registering ${_n} ${_ver} reader sample test(s)")
     foreach(_sample IN LISTS _samples)
         get_filename_component(_name "${_sample}" NAME_WE)
+        set(_expected_object_parse_failures 0)
+        if(_ver STREQUAL "AC1024"
+                AND (_name STREQUAL "visualization_-_condominium_with_skylight"
+                    OR _name STREQUAL "visualization_-_conference_room"))
+            # The three exact AC1024 AcSh failures have dedicated raw-frame
+            # integrity controls below. The sample probe still requires each
+            # failure to match one validated AC1024 AcSh frame and requires
+            # complete source-frame disposition.
+            set(_expected_object_parse_failures 3)
+        endif()
         add_test(
             NAME dwg_read_${_ver}_${_name}
             COMMAND ${CMAKE_COMMAND}
                 -DREADER_TEST=$<TARGET_FILE:libdxfrw_dwg_reader_matrix_tests>
                 -DSAMPLE=${_sample}
                 -DEXPECTED_VERSION=${_ver}
+                -DEXPECTED_OBJECT_PARSE_FAILURES=${_expected_object_parse_failures}
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/run_dwg_read_test.cmake
         )
         set_tests_properties(dwg_read_${_ver}_${_name} PROPERTIES
