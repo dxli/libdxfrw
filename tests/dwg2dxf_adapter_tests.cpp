@@ -62883,9 +62883,16 @@ bool physicalMaterialOutputReadback(
             }
         }
         if (exportData == &selected) {
-            if (selectedXRecordHandles.size() != 7u
-                || output.xRecords.size() != selectedXRecordHandles.size())
-                return fail("AC1021 MATERIAL extension-XRECORD census changed on readback");
+            // This selector covers source profiles with different extension
+            // dictionary closure sizes; compare against the selected graph.
+            if (output.xRecords.size() != selectedXRecordHandles.size()) {
+                std::string handles;
+                for (const std::uint32_t handle : selectedXRecordHandles)
+                    handles += " " + std::to_string(handle);
+                return fail("AC1021 MATERIAL extension-XRECORD census changed on readback: selected="
+                    + std::to_string(selectedXRecordHandles.size()) + " output="
+                    + std::to_string(output.xRecords.size()) + " handles=" + handles);
+            }
             std::set<std::uint32_t> emittedXRecordHandles;
             for (const std::uint32_t sourceHandle : selectedXRecordHandles) {
                 const auto sourceRecord = std::find_if(source.xRecords.begin(),

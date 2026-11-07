@@ -128,15 +128,22 @@ instead of repeating successful scans or controls.
    same-version census and source inventories to select the first profile whose
    frame disposition, source identity, owner roles, and recursive targets are
    already established. Do not rescan colorwh, plot-screening, lineweights,
-   children-room, civil Edge, or Pool_Detail VISUALSTYLE. The Pool_Detail
-   AC1021 `ACAD_VISUALSTYLE` graph (NOD `0xC` to dictionary `0x33CC`, 16
+   children-room, civil Edge, Pool_Detail VISUALSTYLE, or Pool_Detail MATERIAL.
+   The Pool_Detail AC1021 `ACAD_VISUALSTYLE` graph (NOD `0xC` to dictionary `0x33CC`, 16
    styles) now passes selected ASCII/Binary output and typed/raw readback,
    late-mutation refusal, destination preservation and same-adapter retry.
-   Pool_Detail `ACAD_MATERIAL` is the next candidate, but its current selected
-   output check stops because its extension-XRECORD census differs from the
-   children-room profile. Inventory exact source targets and payloads before
-   changing admission or writer behavior; keep the unrelated `SORTENTSTABLE`
-   null-target graph refused. For the selected subgraph, freeze source
+   Pool_Detail `ACAD_MATERIAL` also passes selected ASCII/Binary output,
+   typed readback, refusal, destination preservation and same-adapter retry.
+   Its exact reachable extension-XRECORD set is empty; children-room's existing
+   seven-record profile and the AC1024 mechanical profile still pass. The
+   selector now derives the expected census from the selected dependency graph
+   instead of assuming every source has seven XRECORDs. See the [Pool_Detail
+   MATERIAL receipt](docs/research/p4-ac1021-pool-detail-material-selected-output-2026-11-07.json).
+   For the next packet, choose a distinct inventoried source with an already
+   evidenced populated GROUP or IMAGE graph; if no source closes identities,
+   owner roles and recursive dependencies, record that precise evidence gap
+   and proceed to an independently produced sample. Keep the unrelated
+   `SORTENTSTABLE` null-target graph refused. For the selected subgraph, freeze source
    identity and expected record/handle roles; implement only the missing
    serializer or planner binding; add ASCII/Binary output, fresh typed
    readback, destination-preserving refusal, correction and same-adapter retry.
@@ -304,6 +311,7 @@ document-wide gates. See the current [frame inventory](docs/research/p4-ac1021-o
 [same-version gate recheck](docs/research/p4-ac1021-children-room-same-version-output-gate-2026-11-05.json),
 [VisualStyle graph receipt](docs/research/p4-ac1021-visualstyle-extension-dictionary-xrecord-output-2026-11-06.json),
 [Pool_Detail VISUALSTYLE receipt](docs/research/p4-ac1021-pool-detail-visualstyle-selected-output-2026-11-07.json),
+[Pool_Detail MATERIAL receipt](docs/research/p4-ac1021-pool-detail-material-selected-output-2026-11-07.json),
 [SCALE graph receipt](docs/research/p4-ac1021-scale-physical-selected-output-2026-11-06.json), and
 [DICTIONARYVAR graph receipt](docs/research/p4-ac1021-dictionaryvar-physical-selected-output-2026-11-06.json).
 Source-origin admission outside witnessed tuples, broader graphs, physical
