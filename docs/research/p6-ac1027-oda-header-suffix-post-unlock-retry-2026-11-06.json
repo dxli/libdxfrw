@@ -1,7 +1,7 @@
 {
   "schema": "libdxfrw-research-receipt-v1",
   "title": "AC1027 HEADER suffix ODA retry after unlock request",
-  "date": "2026-11-06",
+  "date": "2026-11-07",
   "supportClaimEffect": "none",
   "scope": "Retry the existing controlled AC1027 ODA resave after the user reported unlocking the Mac session; establish whether a current converter output is available for independent HEADER suffix analysis.",
   "source": {
@@ -60,15 +60,25 @@
       "postAttemptOutputFiles": [],
       "boundedSeconds": 25,
       "observedAtLocal": "2026-11-06 19:27:20 America/Toronto"
+    },
+    "latestRetryAfterSixthUnlockReport": {
+      "command": "/Applications/ODAFileConverter.app/Contents/MacOS/ODAFileConverter /private/tmp/libdxfrw-cover-unlock-1107/in /private/tmp/libdxfrw-cover-unlock-1107/out ACAD2013 DWG 0 0",
+      "result": "ABORT (SIGABRT, return code -6) during pasteboard/XPC initialization; stdout empty; stderr reports clipboard/find pasteboard creation errors and invalid com.apple.hiservices-xpcservice connections.",
+      "sourcePath": "/Users/dli/doc/dwg/Cover.dwg",
+      "sourceSha256": "3a6c23151ebec25320722f0ecaaf20a10073c60079d3616181395f1c73deee42",
+      "converterSha256": "21a8f029e7d41af64088f65492404d97ffec0d2f7886703b3b725f5ac4a55783",
+      "postAttemptOutputFiles": [],
+      "boundedSeconds": 30,
+      "observedAtLocal": "2026-11-07 01:34:58 America/Toronto"
     }
   },
-  "decision": "No fresh resave exists to analyze. A fifth bounded retry after the latest user unlock report reproduced the pasteboard/XPC abort with the same verified source and converter hashes. Preserve strict refusal and the existing unclaimed-suffix disposition; do not repeat unchanged direct launches. Retry only after the launch environment changes or a functioning supported GUI/independent converter session is available. Continue independent local implementation work meanwhile.",
+  "decision": "No fresh resave exists to analyze. A sixth bounded direct launch after the latest user unlock report, now using the exact AC1027 Cover source in a fresh directory, reproduced the pasteboard/XPC abort. Preserve strict refusal and the existing unclaimed-suffix disposition; do not repeat unchanged direct launches. Retry only after the launch method or environment changes enough to reach document processing, or a functioning supported GUI/independent converter session is available. Continue independent local implementation work meanwhile.",
   "nextAction": "Do not repeat the unchanged direct CLI launch. Use a functioning independently launched ODA converter session, supported GUI invocation, or another eligible native/semantic source for the suffix; continue independent local implementation work meanwhile.",
   "validation": {
     "sourceHashRechecked": true,
     "converterHashRechecked": true,
     "outputDirectoryChecked": true,
     "fullSuites": "NOT RUN",
-    "postUnlockUserReportedRetry": "A fifth bounded retry after the latest user unlock report at 2026-11-06 19:27:20 America/Toronto aborted with SIGABRT before producing output; source and converter hashes matched prior attempts. Python subprocess enforced the 25-second bound and captured the abort."
+    "postUnlockUserReportedRetry": "A sixth bounded direct launch after the latest user unlock report at 2026-11-07 01:34:58 America/Toronto used Cover.dwg and aborted with SIGABRT before producing output. Converter hash matched prior attempts. Python subprocess enforced the 30-second bound and captured the abort."
   }
 }

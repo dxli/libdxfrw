@@ -2464,6 +2464,19 @@ public:
                       << " record=" << frame.m_recordName
                       << " class=" << frame.m_className
                       << " custom=" << frame.m_isCustomClass
+                      << " owner=" << frame.m_parentHandle
+                      << " blockOwner=" << frame.m_blockOwnerHandle
+                      << " xdict=" << frame.m_xDictHandle
+                      << " reactors=";
+            for (std::size_t index = 0u;
+                 index < frame.m_reactorHandles.size(); ++index)
+                std::cerr << (index == 0u ? "" : ",")
+                          << frame.m_reactorHandles[index];
+            std::cerr << " commonEvidence="
+                      << static_cast<unsigned>(frame.m_commonLinkEvidence)
+                      << " offset=" << frame.m_objectOffset
+                      << " size=" << frame.m_objectSize
+                      << " dataStorage=" << frame.m_hasDataStorage
                       << '\n';
         }
     }
@@ -2480,6 +2493,19 @@ public:
                       << " custom=" << frame.m_isCustomClass
                       << " payloadMatched=" << entry.second.payloadMatched
                       << " opaquePayload=" << entry.second.opaquePayload
+                      << " owner=" << frame.m_parentHandle
+                      << " blockOwner=" << frame.m_blockOwnerHandle
+                      << " xdict=" << frame.m_xDictHandle
+                      << " reactors=";
+            for (std::size_t index = 0u;
+                 index < frame.m_reactorHandles.size(); ++index)
+                std::cerr << (index == 0u ? "" : ",")
+                          << frame.m_reactorHandles[index];
+            std::cerr << " commonEvidence="
+                      << static_cast<unsigned>(frame.m_commonLinkEvidence)
+                      << " offset=" << frame.m_objectOffset
+                      << " size=" << frame.m_objectSize
+                      << " dataStorage=" << frame.m_hasDataStorage
                       << '\n';
         }
     }
@@ -22321,12 +22347,16 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
     dx_iface importer;
     if (!importer.fileImport(sourcePath, &data, false)
         || data.sourceFormat != dx_source_format::DWG
-        || data.sourceVersion != DRW::AC1021
+        || (data.sourceVersion != DRW::AC1021
+            && data.sourceVersion != DRW::AC1027)
         || !data.hasCompleteOpaqueDwgSourceCapture()) {
         std::cerr << "opaque DWG inventory: source import/capture incomplete\n";
         return false;
     }
-    std::cout << "opaqueSourceFrameInventory schema=1 sourceVersion=AC1021"
+    const char* versionName = data.sourceVersion == DRW::AC1021
+        ? "AC1021" : "AC1027";
+    std::cout << "opaqueSourceFrameInventory schema=2 sourceVersion="
+              << versionName
               << " sourceCallbacks="
               << data.dwgReadOutcome.opaqueViewCallbacks
               << " captured="
@@ -22336,7 +22366,9 @@ bool opaqueDwgSourceInventory(const std::string& sourcePath) {
                      data)
               << " standardCaptured="
               << DxIfaceStandardDwgCaptureTestAccess::frames(data)
-              << " sourceHash-bound-by-caller=1\n";
+              << " inventoryScope=identity-and-common-header"
+              << " bodyReferenceCoverage=not-inspected"
+              << " sourceHashBoundByUtility=0\n";
     DxIfaceStandardDwgCaptureTestAccess::printOpaqueSourceFrames(
         data, data.importGeneration);
     DxIfaceStandardDwgCaptureTestAccess::printStandardSourceFrames(

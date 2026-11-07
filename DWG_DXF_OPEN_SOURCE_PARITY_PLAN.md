@@ -134,22 +134,31 @@ created locally from scratch for the specific control.
    independent producer behavior, LibreCAD_3/FreeCAD acceptance or native
    geometry/group semantics ([receipt](docs/research/p4-ac1021-generated-group-2d-3d-strict-dxf-readback-2026-11-06.json)).
 
-   **Next implementation slice:** bounded AC1027 Cover source-reference
-   inventory using the existing local `/Users/dli/doc/dwg/Cover.dwg` witness.
-   The current source still reads 111/111 observed frames with zero entity/object
-   parse failures, but strict preflight stops at the sticky
-   `m_unqualifiedAc1027DwgImport` aggregate guard before exposing individual
-   missing owner/reference roles. First build one source-bound inventory for
-   this exact source: record each typed/raw callback identity, its declared
-   common and body references, resolved target class, owner role, and whether
-   the current DXF writer has a schema-valid route. Do not clear the aggregate
-   guard from callback counts alone. Only after the inventory is complete may a
-   bounded source profile replace the aggregate gate; test it with output
-   inspection, typed readback, atomic refusal and same-adapter retry. The
-   independent 731-byte unclaimed HEADER suffix remains a separate strict-read
-   blocker, so no strict whole-source success or support claim is possible in
-   this slice. If inventory shows unsupported or ambiguous references, preserve
-   refusal and move to an eligible source. See the [current guard probe](docs/research/p6-ac1027-cover-current-guard-probe-2026-11-07.json).
+   **Next implementation slice:** complete the source-bound AC1027 Cover
+   reference inventory using the existing local
+   `/Users/dli/doc/dwg/Cover.dwg` witness. A fast diagnostic extension now
+   captures identity and common-header links for all 88 opaque callbacks and
+   all 13 standard-object frames; every owner/reactor edge is accounted for
+   (85 target captured frames, one owner to typed VPORT `0x29`), the sole
+   block-owner edge targets model-space BLOCK_RECORD `0x1F`, and no extension
+   dictionary edge is present. This narrows the open work but is not yet a
+   complete source-bound inventory: the utility does not bind the source hash,
+   inspect any object-body references, prove owner roles from source structure,
+   or establish schema-valid DXF routes. Keep
+   `m_unqualifiedAc1027DwgImport` sticky. Next, bind the exact source hash in a
+   receipt and reconcile each callback identity/frame span with independently
+   decoded body references (start with the already captured LibreDWG minJSON
+   parse, then use the local trace/source fields for any peer omissions); classify
+   each target by record type and required role. A small script or extension to
+   the inventory utility is preferred over broad production changes. Only after
+   every emitted and omitted edge has a disposition may a bounded output route
+   replace the aggregate gate; prove it with output inspection, typed readback,
+   atomic refusal and same-adapter retry. The independent 731-byte unclaimed
+   HEADER suffix remains a separate strict-read blocker, so no strict whole-source
+   success or support claim is possible in this slice. If any edge remains
+   unsupported or ambiguous, preserve refusal and move to an eligible source.
+   See the [common-link inventory receipt](docs/research/p6-ac1027-cover-common-link-inventory-2026-11-07.json)
+   and [current guard probe](docs/research/p6-ac1027-cover-current-guard-probe-2026-11-07.json).
 
    The AC1021 `truetype.dwg` selected LayerStates and four-VIEWPORT routes are
    complete for their exact source graph: ASCII/Binary typed readback, rollback
@@ -163,8 +172,8 @@ created locally from scratch for the specific control.
    establish producer-wide, native plotting, platform, or support claims. The
    external source remains outside Git. Other distinct
    screens are title-block null BLOCK_CONTROL members, AC1027 Cover reference
-   closure, and AC1018 Extruder2 incomplete parser disposition. Cover's
-   aggregate strict guard requires a source-bound per-reference inventory
+   closure, and AC1018 Extruder2 incomplete parser disposition. Cover common
+   links are inventoried, but body-reference classification is still required
    before any selected-output work; the suffix remains independently unclaimed.
    The named-block
    SORTENTSTABLE candidate remains refused under the owner-scope boundary above.
@@ -187,18 +196,16 @@ created locally from scratch for the specific control.
    supplies full membership and a consumer-visible root relation; see the
    [source-graph screen receipt](docs/research/p5-ac1021-acexpr-root-graph-output-readiness-2026-11-06.json).
 3. **P6 / converter-dependent suffix:** the ODA File Converter 27.1.0.0
-   fifth bounded retry after the user's 2026-11-06 unlock report aborted during
-   pasteboard/XPC initialization (SIGABRT, exit `-6`, 25-second bound) and
-   produced no output. Source and converter hashes matched prior attempts.
-   The user has now said they are unlocking the Mac again; this is a pending
-   environment change, not evidence that the converter launched. Once the
-   unlocked session is available, make one bounded retry using the supported
-   invocation path and capture exit status/log/output. If it repeats the same
-   pasteboard/XPC abort, stop unchanged direct retries and wait for a changed
-   launch method or supported GUI/independent converter session. No suffix
-   evidence or support claim follows; keep the AC1027 suffix unclaimed and
-   strict export refused. Continue local implementation in parallel. See the
-   [retry receipt](docs/research/p6-ac1027-oda-header-suffix-post-unlock-retry-2026-11-06.json).
+   sixth bounded direct launch after the user's 2026-11-07 unlock report still
+   aborted during pasteboard/XPC initialization (SIGABRT, return `-6`,
+   30-second bound), with the same verified converter hash and no output.
+   The retry used the exact AC1027 Cover source (`3a6c2315…deee42`) in a fresh
+   input/output directory. Do not repeat the unchanged direct launch. Suffix
+   analysis now needs a different launch method that actually reaches the
+   converter's document processing, or a supported GUI/independent converter
+   session. No suffix evidence or support claim follows; keep the AC1027 suffix
+   unclaimed and strict export refused. Continue local implementation in
+   parallel. See the [updated retry receipt](docs/research/p6-ac1027-oda-header-suffix-post-unlock-retry-2026-11-06.json).
 
 | ID | State | Remaining result | Dependency |
 | --- | --- | --- | --- |
