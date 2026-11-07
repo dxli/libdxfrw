@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-06 (AC1021 DXF re-export and fresh readback pass). This file
+Updated 2026-11-06 (AC1021 LayerStates candidates screened). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -71,11 +71,35 @@ created locally from scratch for the specific control.
    retry. See the [current gap receipt](docs/research/p4-ac1021-children-room-strict-output-gaps-2026-11-06.json).
    This repository has no tracked DWG test fixtures beyond its README; scan the
    existing local source corpus for the next distinct, bounded OBJECTS graph
-   whose owner/reference roles can be independently checked. Select the smallest
-   source with a complete dependency graph, state its provenance limits, and
-   author any regression DXF from scratch in the test itself. Do not commit local
-   source or generated output files. Keep the P4 aggregate gate and all general
-   support claims open until broader source profiles and consumer evidence pass.
+   whose owner/reference roles can be independently checked. The AC1021
+   `truetype.dwg` candidate is screened out for now: XRECORD `0x5E3` contains
+   four code-330 LAYER handles and four code-331 LTYPE handles, but its owner
+   chain starts at the LAYER_CONTROL extension dictionary (`0x59B`), then
+   `ACAD_LAYERSTATES` (`0x59C`) and `ACAD_VIEWS_default`. The existing
+   versioned LayerStates gate explicitly declines this AC1021 LAYER_CONTROL
+   root profile. Its four layer targets are source-present, but that alone does
+   not qualify the root owner or output route. The read reports zero entity and
+   object parse failures despite leftover-bit diagnostics; do not change the
+   reader or enable generic code-330-to-LAYER acceptance from this candidate.
+   Autodesk classifies XRECORD codes 330–339 as soft pointers, but the exact
+   record context and source owner route still govern admission. The larger
+   `plot_screening_and_fill_patterns.dwg` candidate has 240 XRECORD handle
+   references and also stops at an unresolved code-330 target; defer it pending
+   a bounded complete graph screen. The strict-converting AC1024
+   `mechanical_example-imperial.dwg` is already the existing profiled source,
+   not a distinct candidate. AC1027 `Cover.dwg` reads 111/111 frames with zero
+   entity/object parse failures, then strict output stops at the independent
+   “source references are not fully qualified” gate; keep it out of this
+   OBJECTS slice until its unresolved target set and owner roles are scoped.
+   Continue screening existing sources for a distinct, dependency-closed graph
+   with a supported root and emitted target route. For any selected candidate,
+   require exact source-frame and owner binding, ordered ASCII/Binary output and
+   fresh readback, wrong-kind/missing-target refusal with destination
+   preservation, and corrected same-adapter retry; create regression input
+   from scratch and keep corpus/output files outside Git. Corpus provenance is
+   unauthenticated and these observations do not promote support claims (see
+   the [candidate screen receipt](docs/research/p4-ac1021-xrecord-layer-target-candidate-screen-2026-11-06.json)).
+   Keep P4 aggregate closure and all general support claims open.
 2. **P5 / AC1021 FIELD source-to-output bridge — screened, no eligible graph:**
    the 15 complete physical `AcExpr` records are each one-member FIELDLIST
    entries and each is a child of a typed `_text` FIELD; all 15 parent-child
