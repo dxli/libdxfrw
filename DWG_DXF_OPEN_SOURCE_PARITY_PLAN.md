@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the PERSUBENTMGR/TABLECONTENT bodies remain disputed and raw-only; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; the latest recorded ODA retry after an unlock still aborts before document processing, and the user's subsequent unlock action has no follow-up invocation result yet; current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing, so the AC1032 TABLECONTENT candidate remains raw/refused with no parser change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the generated associative-geometry export selector was rechecked and remains green, so its physical-source gate—not another generated serializer pass—is the remaining work). This file
+Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the PERSUBENTMGR/TABLECONTENT bodies remain disputed and raw-only; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; the last bounded ODA CLI retry still aborts before document processing during pasteboard/XPC initialization; the user's latest message says they are unlocking the Mac, but no new session-state or converter result has been observed; do not repeat the unchanged CLI launch, and continue local work while this platform gate is pending; current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing, so the AC1032 TABLECONTENT candidate remains raw/refused with no parser change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the generated associative-geometry export selector was rechecked and remains green, so its physical-source gate—not another generated serializer pass—is the remaining work). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -406,19 +406,18 @@ created locally from scratch for the specific control.
    candidate. Do not repeat conversions or guess flag meanings. See the
    [source/peer triage receipt](docs/research/p5-ac1021-blocks-tables-field-strict-triage-2026-11-07.json).
 3. **P6 / converter-dependent suffix:** the ODA File Converter 27.1.0.0
-   latest recorded bounded retry after the user reported unlocking the Mac
-   aborted during pasteboard/XPC initialization (SIGABRT, return `-6`, 0.399
-   seconds), with matching source/copy/converter hashes and no output. A newer
-   user message says they will unlock the Mac now; that is an action in
-   progress, not a completed unlock or a new converter result. Once the user
-   confirms the session is unlocked, make at most one retry only if the launch
-   path changes so the converter reaches document processing (for example,
-   invoke the installed application through a functioning GUI/session rather
-   than repeating the same direct CLI launch). Record the exact invocation,
-   hashes, process exit and output state. If launch again fails before document
-   processing, stop converter retries and continue independent local work;
-   obtain a functioning GUI or independent converter session before reopening
-   this gate. No suffix evidence or support claim follows; keep the AC1027
+   latest bounded CLI retry aborted during pasteboard/XPC initialization
+   (SIGABRT, return `-6`, 0.399 seconds), with matching source/copy/converter
+   hashes and no output. The user has said they are unlocking the Mac, but no
+   new session-state observation or converter result is recorded yet. The
+   earlier retry already shows that an unchanged direct CLI launch is not a
+   useful next action: retry at most once only after a functioning GUI/session
+   or a materially changed launch method is available, and only in a way that
+   reaches document processing. Record the exact invocation, hashes, process
+   exit and output state. If that attempt fails before document processing,
+   close this retry path and continue independent local work; reopen the gate
+   only when the launch environment or method changes. No suffix evidence or
+   support claim follows; keep the AC1027
    suffix unclaimed and strict export refused. See the
    [latest retry receipt](docs/research/p6-ac1027-oda-header-suffix-after-user-unlock-2026-11-07.json),
    the [earlier same-day retry](docs/research/p6-ac1027-oda-header-suffix-current-unlock-retry-2026-11-07.json),
