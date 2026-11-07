@@ -7273,6 +7273,12 @@ public:
             source, control, DwgIntegrityAddressSpace::DecodedBuffer);
     }
 
+    void recordBlockControlRoles(const objHandle& source,
+                                 const DRW_ObjControl& control) {
+        recordBlockControlMemberRoleError(
+            source, control, DwgIntegrityAddressSpace::DecodedBuffer);
+    }
+
     bool readTrackedAc1015Header(
         DRW_Header& header,
         std::map<std::int16_t, std::uint32_t>& controlHandles) {
@@ -7583,6 +7589,54 @@ void testLtypeControlMemberRoleDiagnostics(TestContext& t) {
                  && sourceRoleError->expected == DRW::DwgSoftOwnership
                  && sourceRoleError->observed == DRW::DwgNullReference,
              "table traversal records a source role Error before missing-target recovery");
+}
+
+void testBlockControlNullMemberDiagnostic(TestContext& t) {
+    std::vector<std::uint8_t> emptyInput;
+    TableControlRecoveryReader reader(emptyInput);
+    const objHandle source(DRW::DwgBlockControlObjectType,
+                           DRW::DwgBlockControlHandle, 0x1234u);
+
+    DRW_ObjControl nullMember;
+    nullMember.orderedHandleSlots = {0u, 0x127u, 0xFF1u, 0x11A4u,
+                                     0x2u, 0xCu};
+    nullMember.orderedHandleRoles = {
+        DRW::DwgSoftOwnership, DRW::DwgSoftOwnership,
+        DRW::DwgSoftOwnership, DRW::DwgSoftOwnership,
+        DRW::DwgHardOwnership, DRW::DwgHardOwnership};
+    reader.recordBlockControlRoles(source, nullMember);
+    const auto& nullDiagnostics = reader.diagnostics();
+    t.expect(nullDiagnostics.size() == 1u
+                 && nullDiagnostics.front().kind
+                     == DwgIntegrityCheckKind::TableControlNullMember
+                 && nullDiagnostics.front().severity == DwgIntegritySeverity::Error
+                 && nullDiagnostics.front().phase == DwgIntegrityPhase::SectionParser
+                 && nullDiagnostics.front().logicalHandle == source.handle
+                 && nullDiagnostics.front().hasLogicalHandle
+                 && nullDiagnostics.front().fileOffset == source.loc
+                 && nullDiagnostics.front().hasFileOffset
+                 && nullDiagnostics.front().expected == DRW::DwgSoftOwnership
+                 && nullDiagnostics.front().observed == DRW::DwgSoftOwnership
+                 && nullDiagnostics.front().hasExpected
+                 && nullDiagnostics.front().hasObserved,
+             "null BLOCK_CONTROL target is diagnosed separately from a role mismatch");
+
+    DRW_ObjControl wrongRole;
+    wrongRole.orderedHandleSlots = {0x127u, 0x2u, 0xCu};
+    wrongRole.orderedHandleRoles = {
+        DRW::DwgHardOwnership, DRW::DwgHardOwnership,
+        DRW::DwgHardOwnership};
+    TableControlRecoveryReader wrongRoleReader(emptyInput);
+    wrongRoleReader.recordBlockControlRoles(source, wrongRole);
+    const auto& roleDiagnostics = wrongRoleReader.diagnostics();
+    t.expect(roleDiagnostics.size() == 1u
+                 && roleDiagnostics.front().kind
+                     == DwgIntegrityCheckKind::TableControlHandleRole
+                 && roleDiagnostics.front().logicalHandle == 0x127u
+                 && roleDiagnostics.front().hasLogicalHandle
+                 && roleDiagnostics.front().expected == DRW::DwgSoftOwnership
+                 && roleDiagnostics.front().observed == DRW::DwgHardOwnership,
+             "non-null BLOCK_CONTROL member with a wrong role remains a role diagnostic");
 }
 
 std::vector<std::uint8_t> makeAc1015LtypeCountBody(
@@ -19550,6 +19604,7 @@ int main(int argc, char** argv) {
         TestContext focused;
         testDwgControlPreservesDeclaredHandleSlots(focused);
         testLtypeControlMemberRoleDiagnostics(focused);
+        testBlockControlNullMemberDiagnostic(focused);
         std::cout << (focused.failures == 0 ? "PASS" : "FAIL") << '\n';
         return focused.failures == 0 ? 0 : 1;
     }

@@ -195,7 +195,7 @@ enum class DwgIntegrityCheckKind : std::uint8_t {
     LayerLineTypeHandleRole,
     /// A non-null LTYPE_CONTROL member does not use its source ownership role.
     TableControlHandleRole,
-    /// A declared LTYPE_CONTROL slot has no referenced LTYPE target.
+    /// A declared table-control slot has no referenced table-record target.
     TableControlNullMember
 };
 

@@ -5047,6 +5047,11 @@ add_test(NAME libdxfrw_entity_space_from_block_record
 set_tests_properties(libdxfrw_entity_space_from_block_record PROPERTIES
     LABELS "fast;dwg;entities;ownership;space;generated" TIMEOUT 15)
 
+add_test(NAME libdxfrw_block_control_null_member_diagnostic
+    COMMAND libdxfrw_dwg_reader_matrix_tests --control-handle-slots)
+set_tests_properties(libdxfrw_block_control_null_member_diagnostic PROPERTIES
+    LABELS "fast;dwg;tables;integrity;generated" TIMEOUT 15)
+
 add_test(NAME libdxfrw_associative_constraint_group_generated
     COMMAND libdxfrw_dwg_reader_matrix_tests
         --associative-constraint-group-generated)

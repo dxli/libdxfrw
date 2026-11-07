@@ -143,6 +143,20 @@ created locally from scratch for the specific control.
    local source/output files outside Git and author any generated controls
    from scratch. Retain the screened-out candidate boundaries below; do not
    reopen them without new source or admission evidence.
+   The current `title_block-arch.dwg` AC1024 probe reads 501/501 frames with
+   zero entity/object parse failures and a finalized-complete frame report,
+   but strict and bounded-partial export correctly refuse its three null
+   ordinary BLOCK_CONTROL targets. The source trace, LibreDWG 0.14 JSON and
+   ODA v5.4.1 §20.4.51 agree that the slots carry soft-owner roles and that
+   separate model/paper-space hard-owner handles are present; ODA does not
+   document null ordinary entries. The prior `TableControlHandleRole` row
+   (`expected=2`, `observed=2`, no target handle) was misclassified: role
+   values match, while the target is null. It now reports
+   `TableControlNullMember`, names the control object, and remains an Error.
+   A generated fast regression control distinguishes null-target and wrong-
+   role diagnostics. This repairs diagnostic accuracy only; keep the physical
+   source out of output qualification and do not synthesize targets or relax
+   either export gate. See the [diagnostic receipt](docs/research/p4-ac1024-block-control-null-member-diagnostic-2026-11-06.json).
    The `truetype.dwg` candidate is screened out for now: XRECORD `0x5E3` contains
    four code-330 LAYER handles and four code-331 LTYPE handles, but its owner
    chain starts at the LAYER_CONTROL extension dictionary (`0x59B`), then

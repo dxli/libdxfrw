@@ -941,7 +941,16 @@ void dwgReader::recordBlockControlMemberRoleError(
     const std::uint8_t expected = static_cast<std::uint8_t>(
         index < ownedEntries ? DRW::DwgSoftOwnership
                              : DRW::DwgHardOwnership);
-    if (slots[index] != 0u && roles[index] == expected)
+    if (slots[index] == DRW::NoHandle) {
+      recordIntegrityDiagnostic(
+          DwgIntegritySeverity::Error, offsetSpace,
+          DwgIntegrityPhase::SectionParser,
+          DwgIntegrityCheckKind::TableControlNullMember, secEnum::OBJECTS,
+          -1, "BLOCK_CONTROL", 0u, false, source.loc, true, source.handle,
+          source.handle != DRW::NoHandle, expected, roles[index], true);
+      return;
+    }
+    if (roles[index] == expected)
       continue;
     recordIntegrityDiagnostic(
         DwgIntegritySeverity::Error, offsetSpace,
