@@ -887,16 +887,22 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    verifies 18 non-null readdep/node links, including 16 same-group reciprocal
    dependency edges and two entity targets. LibreDWG 0.14 independently
    confirms the common dependency objects and links, but does not decode the
-   inline node bodies. This closes only source-link accounting for these two
-   profiles: no associative constraint graph is emitted or read back, and no
-   native constraint behavior is established. Next, select one bounded,
-   source-closed subgraph and bind source node/dependency/entity identities to
-   exact DXF records and handles, with ASCII/Binary fresh typed readback,
-   malformed-link destination preservation, and same-adapter correction
-   retry. Keep the physical source route refused until the source-specific
-   whole-file gate and this output proof both pass. See the [dependency-link
-   receipt](docs/research/p4-ac1024-assoc-node-dependency-source-links-2026-10-30.json)
-   and the [generated graph output control](tests/CMakeLists.txt).
+   inline node bodies. The original receipt closes only source-link accounting.
+   The AC1024 mechanical witness now also has a separate source-bound
+   selected-output proof for 17 dependency/body pairs and all 399 constraint
+   nodes, including ASCII/Binary typed readback, refusal, and same-adapter retry;
+   this is not native constraint behavior or a whole-document claim ([receipt](docs/research/p4-ac1024-assoc-dependency-physical-selected-output-2026-11-07.json)).
+   The civil witness is not ready for the same route: it has 17 generic
+   dependencies, 29 geometry dependencies, 13 dimension-body records, and
+   three groups, while 11 geometry-dependency bodies remain wire-incomplete
+   and one carries a present edge-subentity class name. The existing
+   mechanical-only selector refuses it before serialization. Keep that
+   refusal; independently establish the incomplete edge-subentity body spans
+   and all action/member closure before designing a separate civil projection
+   ([readiness receipt](docs/research/p4-ac1024-civil-assoc-output-readiness-2026-11-07.json)).
+   Neither source profile establishes native constraint behavior. See also the
+   [dependency-link receipt](docs/research/p4-ac1024-assoc-node-dependency-source-links-2026-10-30.json)
+   and [generated graph output control](tests/CMakeLists.txt).
    HATCH and MPOLYGON group-330 boundary references now reject zero and
    `DRW::NoHandle` sources and outputs. Generated ASCII/Binary controls cover
    mapped IDs, invalid remaps, rollback, and refusal before publishing a
