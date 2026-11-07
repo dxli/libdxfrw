@@ -29127,6 +29127,195 @@ bool dx_iface::inspectRasterImageEdges(const dxfRW::DxfObjectsWriteView& view, s
     } catch (...) { return false; }
 }
 
+bool dx_iface::inspectDwgOle2FrameOutput(
+        const dxfRW::DxfObjectsWriteView& view,
+        std::string_view section) noexcept {
+    if (cData == nullptr || dxfW == nullptr
+        || cData->sourceFormat != dx_source_format::DWG
+        || !cData->dwgReadOutcome.attempted
+        || cData->m_dwgOle2FrameSourceCaptureFailed
+        || cData->importGeneration == 0u
+        || (section != "BLOCKS" && section != "ENTITIES"))
+        return false;
+    try {
+        const dx_data::StandardDwgFrameKey key{
+            cData->importGeneration, 0x2B80u};
+        const auto source = cData->m_dwgOle2FrameSources.find(key);
+        if (cData->sourceVersion != DRW::AC1021
+            || cData->dwgReadOutcome.opaqueViewCallbacks != 51u
+            || cData->m_dwgOle2FrameSources.size() != 1u
+            || source == cData->m_dwgOle2FrameSources.end()
+            || source->second.handle != 0x2B80u
+            || source->second.eType != DRW::OLE2FRAME
+            || source->second.m_objectSize != source->second.m_rawBytes.size()
+            || source->second.m_payloadTruncated
+            || source->second.m_payloadTooLarge
+            || source->second.m_declaredPayloadLength
+                != source->second.m_payloadBytes.size())
+            return false;
+
+        // This exact AC1021 source profile was independently inventoried by
+        // LibreDWG: 0x2B80 occurs in the *Model_Space BLOCK_HEADER (0x1F)
+        // entity list. In this adapter, the typed callback is delivered to
+        // mBlock, whose writer role maps to the fixed model-space record.
+        if (cData->layouts.size() != 3u
+            || std::count_if(cData->blockRecords.begin(),
+                cData->blockRecords.end(), [](const DRW_Block_Record& record) {
+                    return record.handle
+                            == DRW::DxfModelSpaceBlockRecordHandle
+                        && record.name == "*Model_Space";
+                }) != 1
+            || std::count_if(cData->layouts.begin(), cData->layouts.end(),
+                [](const DRW_Layout& layout) {
+                    return layout.handle == 0x22u && layout.name == "Model";
+                }) != 1
+            || std::count_if(cData->layouts.begin(), cData->layouts.end(),
+                [](const DRW_Layout& layout) {
+                    return layout.handle == 0x1B18u
+                        && layout.name == "ISO A2 Plot";
+                }) != 1
+            || std::count_if(cData->layouts.begin(), cData->layouts.end(),
+                [](const DRW_Layout& layout) {
+                    return layout.handle == 0x2B16u
+                        && layout.name == "ANSI C Plot";
+                }) != 1)
+            return false;
+
+        if (section == "BLOCKS") {
+            bool misplaced = false;
+            const auto inspectBlocks = [&](const dx_ifaceBlock* block) {
+                if (block == nullptr)
+                    return true;
+                for (const DRW_Entity* entity : block->ent) {
+                    if (entity != nullptr
+                        && (entity->handle == source->second.handle
+                            || entity->eType == DRW::OLE2FRAME))
+                        misplaced = true;
+                }
+                return true;
+            };
+            for (const dx_ifaceBlock* block : cData->blocks)
+                if (!inspectBlocks(block))
+                    return false;
+            if (misplaced)
+                return false;
+            return dx_raster_output::inspect(
+                view.bytes, view.binary,
+                [](std::string_view name, std::uint32_t handle,
+                   std::string_view) {
+                    return name != "OLE2FRAME" && handle != 0x2B80u;
+                },
+                rasterOutputProfile(view.compatibilityProfile));
+        }
+        if (m_dwgOle2FrameOutputInspected || cData->mBlock == nullptr)
+            return false;
+
+        const DRW_Ole2Frame* located = nullptr;
+        std::size_t typedMatches = 0u;
+        for (const DRW_Entity* entity : cData->mBlock->ent) {
+            if (entity == nullptr || entity->handle != source->second.handle)
+                continue;
+            const auto* frame = exactEntityForDxfWrite<DRW_Ole2Frame>(
+                const_cast<DRW_Entity*>(entity), DRW::OLE2FRAME);
+            if (frame == nullptr)
+                return false;
+            located = frame;
+            ++typedMatches;
+        }
+        for (const dx_ifaceBlock* block : cData->blocks) {
+            if (block == nullptr)
+                return false;
+            for (const DRW_Entity* entity : block->ent)
+                if (entity != nullptr
+                    && (entity->handle == source->second.handle
+                        || entity->eType == DRW::OLE2FRAME))
+                    return false;
+        }
+        if (typedMatches != 1u || located == nullptr
+            || located->m_rawBytes != source->second.m_rawBytes
+            || located->m_payloadBytes != source->second.m_payloadBytes
+            || located->m_objectSize != source->second.m_objectSize
+            || located->m_bodyBitSize != source->second.m_bodyBitSize)
+            return false;
+
+        const auto rawPeer = cData->m_opaqueDwgSourceFrames.find(key);
+        if (rawPeer == cData->m_opaqueDwgSourceFrames.end()
+            || rawPeer->second.m_objectType != 74
+            || !rawPeer->second.m_isEntity
+            || rawPeer->second.m_version != cData->sourceVersion
+            || rawPeer->second.m_handle != source->second.handle
+            || rawPeer->second.m_objectSize != source->second.m_objectSize
+            || rawPeer->second.m_bodyBitSize != source->second.m_bodyBitSize
+            || rawPeer->second.m_rawBytes != source->second.m_rawBytes
+            || cData->m_opaqueDwgSourceFrameIdentities.count(key) != 1u
+            || !cData->hasCompleteOpaqueDwgSourceCapture())
+            return false;
+
+        const auto* context = dxfW->getWritingContext();
+        if (context == nullptr
+            || context->writtenSourceEntityHandles.count(
+                   source->second.handle) != 1u)
+            return false;
+        const auto emitted = context->sourceHandleToMintedMap.find(
+            source->second.handle);
+        if (emitted == context->sourceHandleToMintedMap.end()
+            || emitted->second == 0u || emitted->second == DRW::NoHandle)
+            return false;
+
+        dx_standard_output::Decoder decoder(view);
+        unsigned matches = 0u;
+        bool fieldsMatched = true;
+        const bool scanned = dx_raster_output::inspect(
+            view.bytes, view.binary,
+            [&](std::string_view name, std::uint32_t handle,
+                std::string_view body) {
+                if (name != "OLE2FRAME" || handle != emitted->second)
+                    return true;
+                if (++matches != 1u)
+                    return false;
+                return decoder.decodeRecord<DRW_Ole2Frame>(
+                    body, [&](const DRW_Ole2Frame& actual) {
+                        const DRW_Ole2Frame& expected = source->second;
+                        const auto sameDouble = [](double left,
+                                                   double right) {
+                            return std::memcmp(&left, &right,
+                                               sizeof(double)) == 0;
+                        };
+                        const auto sameCoord = [&sameDouble](
+                                const DRW_Coord& left,
+                                const DRW_Coord& right) {
+                            return sameDouble(left.x, right.x)
+                                && sameDouble(left.y, right.y)
+                                && sameDouble(left.z, right.z);
+                        };
+                        fieldsMatched = actual.eType == DRW::OLE2FRAME
+                            && actual.handle == emitted->second
+                            && actual.parentHandle
+                                == DRW::DxfModelSpaceBlockRecordHandle
+                            && actual.m_oleVersion == expected.m_oleVersion
+                            && actual.m_oleClient == expected.m_oleClient
+                            && sameCoord(actual.m_pt1, expected.m_pt1)
+                            && sameCoord(actual.m_pt2, expected.m_pt2)
+                            && actual.m_flags == expected.m_flags
+                            && actual.m_mode == expected.m_mode
+                            && actual.m_lockAspect == expected.m_lockAspect
+                            && actual.m_declaredPayloadLength
+                                == expected.m_payloadBytes.size()
+                            && actual.m_payloadBytes == expected.m_payloadBytes;
+                        return fieldsMatched;
+                    });
+            }, rasterOutputProfile(view.compatibilityProfile));
+        if (!scanned || matches != 1u || !fieldsMatched
+            || !recordOpaqueDwgOutputQualification(
+                source->second.handle))
+            return false;
+        m_dwgOle2FrameOutputInspected = true;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 namespace {
 bool generatedDictionaryXdataProjectionBytes(const DRW_Dictionary& source, std::size_t& extra) {
     extra = 0u;
@@ -71276,6 +71465,10 @@ bool dx_iface::fileImport(const std::string& fileI, dx_data *fData, bool debug,
         fData->dictionaries.size(), groupBegin, fData->xRecords.size(),
         fData->appIds.size(), fData->layers.size()};
     ++fData->importGeneration;
+    fData->m_dwgOle2FrameSources.clear();
+    fData->m_dwgOle2FrameSourceRetainedBytes = 0u;
+    fData->m_dwgOle2FrameSourceGeneration = fData->importGeneration;
+    fData->m_dwgOle2FrameSourceCaptureFailed = false;
     fData->dimensionAssociationCaptureFailed = false;
     fData->dwgProxyLayerNameOrder.clear();
     fData->dwgProxyLinetypeNameOrder.clear();
@@ -78318,6 +78511,7 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     StrictDxfExportLease strictExportLease(fData,ac1027GuardStrict);
     m_dwgLtypeControlOutputRequired = false;
     m_dwgLtypeControlOutputInspected = false;
+    m_dwgOle2FrameOutputInspected = false;
     std::vector<DwgLtypeOutputBinding>().swap(
         m_dwgLtypeControlOutputBindings);
     std::unordered_map<std::uint32_t, std::size_t>().swap(
@@ -83142,6 +83336,12 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
         delete dxfW; dxfW = nullptr; return false;
     }
     const bool needsRasterOutput = !cData->imageDefinitions.empty() || sourceImageDictionary;
+    const bool needsDwgOle2FrameOutput =
+        cData->sourceFormat == dx_source_format::DWG
+        && std::any_of(cData->m_dwgOle2FrameSources.begin(),
+            cData->m_dwgOle2FrameSources.end(), [&](const auto& source) {
+                return source.first.first == cData->importGeneration;
+            });
     const bool needsGeneratedRoots = cData->hasNamedObjectDictionary;
     const bool needsRenderingOutput = !cData->renderSettings.empty();
     const bool needsVisualStyleOutput = !m_dxfVisualStyles.empty();
@@ -83305,12 +83505,14 @@ bool dx_iface::fileExport(const std::string& file, DRW::Version v, bool binary,
     const bool needsFullStyles=!m_dxfFullStyleState.sources.empty();
     const bool needsMaterialReferences=!m_dxfMaterialReferenceState.sources.empty();
     const bool needsMlines=needsDxfMLineConsumerInspection();
-    if ((needsRasterOutput || needsShadeEntities || needsFullStyles || needsMaterialReferences || needsMlines)
-        && !dxfW->setDxfEntitySectionsWriteInspector([this, needsRasterOutput, needsShadeEntities, needsFullStyles, needsMaterialReferences, needsMlines](const auto& view, auto section) {
+    if ((needsRasterOutput || needsDwgOle2FrameOutput || needsShadeEntities || needsFullStyles || needsMaterialReferences || needsMlines)
+        && !dxfW->setDxfEntitySectionsWriteInspector([this, needsRasterOutput, needsDwgOle2FrameOutput, needsShadeEntities, needsFullStyles, needsMaterialReferences, needsMlines](const auto& view, auto section) {
             return (!needsMlines || inspectDxfMLineConsumers(view,section))
                 && (!needsFullStyles || inspectDxfFullStyles(view,section))
                 && (!needsMaterialReferences || inspectDxfCommonReferences(view,section,347,m_dxfMaterialReferenceState))
                 && (!needsRasterOutput || inspectRasterImageEdges(view, section))
+                && (!needsDwgOle2FrameOutput
+                    || inspectDwgOle2FrameOutput(view, section))
                 && (!needsShadeEntities || inspectDxfShadeConsumers(view, section));
         })) {
         delete dxfW; dxfW = nullptr; return false;

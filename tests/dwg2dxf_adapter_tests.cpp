@@ -2614,6 +2614,14 @@ public:
             && !standard->second.raw.m_isEntity
             && standard->second.raw.m_handle == handle;
     }
+    static const DRW_Ole2Frame* ole2FrameSource(
+            const dx_data& data, std::uint64_t generation,
+            std::uint32_t handle) {
+        const auto found = data.m_dwgOle2FrameSources.find(
+            {generation, handle});
+        return found == data.m_dwgOle2FrameSources.end()
+            ? nullptr : &found->second;
+    }
     static bool stageOpaqueOutputQualification(dx_iface& iface,
                                                std::uint32_t handle) {
         return iface.recordOpaqueDwgOutputQualification(handle);
@@ -50756,7 +50764,7 @@ bool physicalViewportOutputReadback(
         expectedHandles = {0x1B1Au, 0x1B1Bu, 0x2B18u, 0x2B19u};
         expectedOpaqueCallbacks = {
             {0x1B1Au, 34}, {0x1B1Bu, 34},
-            {0x2B18u, 34}, {0x2B19u, 34}};
+            {0x2B18u, 34}, {0x2B19u, 34}, {0x2B80u, 74}};
     } else if (ac1021Source
         && source.dwgReadOutcome.opaqueViewCallbacks == 186u) {
         expectedHandles = {0x266u, 0x26Au};
@@ -50775,7 +50783,7 @@ bool physicalViewportOutputReadback(
         return fail("physical VIEWPORT witness is outside the admitted source censuses");
     }
     for (const auto& callback : expectedOpaqueCallbacks) {
-        const bool entity = callback.second == 34;
+        const bool entity = callback.second == 34 || callback.second == 74;
         if (!DxIfaceStandardDwgCaptureTestAccess::opaqueSourceHasType(
                 source, source.importGeneration, callback.first,
                 callback.second, entity))
@@ -50814,6 +50822,35 @@ bool physicalViewportOutputReadback(
     };
     if (!findViewports(source, sourceViewports))
         return fail("opaque-census VIEWPORT handles are not unique typed block members");
+    const DRW_Ole2Frame* sourceOle2Frame = nullptr;
+    if (ac1021TabletSource) {
+        for (const DRW_Entity* entity : source.mBlock->ent) {
+            const auto* frame = dynamic_cast<const DRW_Ole2Frame*>(entity);
+            if (frame == nullptr)
+                continue;
+            if (sourceOle2Frame != nullptr)
+                return fail("AC1021 tablet OLE2FRAME source membership is ambiguous");
+            sourceOle2Frame = frame;
+        }
+        for (const dx_ifaceBlock* block : source.blocks) {
+            if (block == nullptr)
+                return fail("AC1021 tablet contains a null typed block");
+            for (const DRW_Entity* entity : block->ent)
+                if (entity != nullptr && entity->eType == DRW::OLE2FRAME)
+                    return fail("AC1021 tablet OLE2FRAME is outside the model-space callback container");
+        }
+        const DRW_Ole2Frame* snapshot =
+            DxIfaceStandardDwgCaptureTestAccess::ole2FrameSource(
+                source, source.importGeneration, 0x2B80u);
+        if (sourceOle2Frame == nullptr || sourceOle2Frame->handle != 0x2B80u
+            || snapshot == nullptr
+            || snapshot->m_rawBytes != sourceOle2Frame->m_rawBytes
+            || snapshot->m_payloadBytes
+                != sourceOle2Frame->m_payloadBytes
+            || !DxIfaceStandardDwgCaptureTestAccess::opaqueSourceHasType(
+                source, source.importGeneration, 0x2B80u, 74, true))
+            return fail("AC1021 tablet OLE2FRAME is not bound to the independent source-frame and model-space membership evidence");
+    }
     const auto sameDouble = [](double lhs, double rhs) {
         return lhs == rhs;
     };
@@ -51320,6 +51357,39 @@ bool physicalViewportOutputReadback(
                     source, source.importGeneration, callback.first))
                 return fail("successful physical VIEWPORT/XRECORD retry did not publish its exact opaque source identity");
         }
+        if (ac1021TabletSource) {
+            if (sourceOle2Frame == nullptr
+                || sourceOle2Frame->m_payloadBytes.empty())
+                return fail("AC1021 tablet OLE2FRAME has no payload for the staged mismatch control");
+            const std::string oleSentinel =
+                "preserve physical OLE2FRAME destination\n";
+            {
+                std::ofstream existing(outputPath,
+                    std::ios::binary | std::ios::trunc);
+                if (!existing || !(existing << oleSentinel))
+                    return fail("could not seed physical OLE2FRAME destination sentinel");
+            }
+            const std::size_t qualifiedBeforeOleFailure =
+                DxIfaceStandardDwgCaptureTestAccess::
+                    opaqueOutputQualificationCount(source);
+            auto* mutableOle2Frame =
+                const_cast<DRW_Ole2Frame*>(sourceOle2Frame);
+            const std::uint8_t originalPayloadByte =
+                mutableOle2Frame->m_payloadBytes.front();
+            mutableOle2Frame->m_payloadBytes.front() ^= 0x01u;
+            const bool oleMismatchRejected = !exportSelected();
+            std::ifstream refusedOleOutput(outputPath, std::ios::binary);
+            const std::string refusedOleContents{
+                std::istreambuf_iterator<char>{refusedOleOutput}, {}};
+            mutableOle2Frame->m_payloadBytes.front() = originalPayloadByte;
+            if (!oleMismatchRejected || refusedOleContents != oleSentinel
+                || DxIfaceStandardDwgCaptureTestAccess::
+                    opaqueOutputQualificationCount(source)
+                    != qualifiedBeforeOleFailure)
+                return fail("changed OLE2FRAME payload was not refused atomically without publishing callback qualification");
+            if (!exportSelected())
+                return fail("restored physical OLE2FRAME could not retry on the same writer");
+        }
         const std::size_t qualifiedOpaqueCallbacks =
             DxIfaceStandardDwgCaptureTestAccess::opaqueOutputQualificationCount(
                 source);
@@ -51337,7 +51407,7 @@ bool physicalViewportOutputReadback(
             return fail("physical AC1021 VIEWPORT source census changed during output");
         if (ac1021TabletSource
             && (source.dwgReadOutcome.opaqueViewCallbacks != 51u
-                || qualifiedOpaqueCallbacks != 50u))
+                || qualifiedOpaqueCallbacks != 51u))
             return fail("physical AC1021 tablet VIEWPORT source census or selected callback proof count changed");
         if (ac1021LineweightsSource
             && source.dwgReadOutcome.opaqueViewCallbacks != 49u)
@@ -51349,6 +51419,62 @@ bool physicalViewportOutputReadback(
             || output.sourceFormat != dx_source_format::DXF
             || output.sourceVersion != outputVersion)
             return fail("physical VIEWPORT output did not freshly reimport at its selected DXF version");
+        if (ac1021TabletSource) {
+            const DRW_Ole2Frame* outputOle2Frame = nullptr;
+            std::size_t outputOle2FrameCount = 0u;
+            for (const DRW_Entity* entity : output.mBlock->ent) {
+                const auto* frame =
+                    dynamic_cast<const DRW_Ole2Frame*>(entity);
+                if (frame == nullptr)
+                    continue;
+                outputOle2Frame = frame;
+                ++outputOle2FrameCount;
+            }
+            for (const dx_ifaceBlock* block : output.blocks) {
+                if (block == nullptr)
+                    return fail("physical OLE2FRAME output has a null block container");
+                for (const DRW_Entity* entity : block->ent)
+                    if (entity != nullptr
+                        && entity->eType == DRW::OLE2FRAME)
+                        return fail("physical OLE2FRAME output moved out of model space");
+            }
+            if (outputOle2FrameCount != 1u || outputOle2Frame == nullptr
+                || outputOle2Frame->handle == 0u
+                || outputOle2Frame->handle == DRW::NoHandle
+                || outputOle2Frame->parentHandle
+                    != DRW::DxfModelSpaceBlockRecordHandle
+                || outputOle2Frame->m_oleVersion
+                    != sourceOle2Frame->m_oleVersion
+                || outputOle2Frame->m_oleClient
+                    != sourceOle2Frame->m_oleClient
+                || outputOle2Frame->m_pt1.x != sourceOle2Frame->m_pt1.x
+                || outputOle2Frame->m_pt1.y != sourceOle2Frame->m_pt1.y
+                || outputOle2Frame->m_pt1.z != sourceOle2Frame->m_pt1.z
+                || outputOle2Frame->m_pt2.x != sourceOle2Frame->m_pt2.x
+                || outputOle2Frame->m_pt2.y != sourceOle2Frame->m_pt2.y
+                || outputOle2Frame->m_pt2.z != sourceOle2Frame->m_pt2.z
+                || outputOle2Frame->m_flags != sourceOle2Frame->m_flags
+                || outputOle2Frame->m_mode != sourceOle2Frame->m_mode
+                || outputOle2Frame->m_lockAspect
+                    != sourceOle2Frame->m_lockAspect
+                || outputOle2Frame->m_declaredPayloadLength
+                    != sourceOle2Frame->m_payloadBytes.size()
+                || outputOle2Frame->m_payloadBytes
+                    != sourceOle2Frame->m_payloadBytes) {
+                if (outputOle2Frame != nullptr)
+                    std::cerr << "OLE2FRAME readback detail: count="
+                        << outputOle2FrameCount << " handle=0x" << std::hex
+                        << outputOle2Frame->handle << " owner=0x"
+                        << outputOle2Frame->parentHandle << std::dec
+                        << " payload-length="
+                        << outputOle2Frame->m_declaredPayloadLength
+                        << " expected-length="
+                        << sourceOle2Frame->m_payloadBytes.size()
+                        << " payload=" << outputOle2Frame->m_payloadBytes.size()
+                        << '/' << sourceOle2Frame->m_payloadBytes.size() << '\n';
+                return fail("physical OLE2FRAME DXF readback changed source fields, payload, identity or model-space ownership");
+            }
+        }
         std::vector<LocatedViewport> outputViewports;
         const auto appendOutputViewports = [&outputViewports](
                 const dx_ifaceBlock* block, bool mainContainer) {
@@ -51513,7 +51639,9 @@ bool physicalViewportOutputReadback(
             return fail("physical VIEWPORT group 68/69 output projection did not produce the ordered paper-space identities");
         std::cerr << "Physical VIEWPORT " << (binary ? "binary" : "ASCII")
                   << " readback passed: " << sourceViewports.size()
-                  << " source projection(s), "
+                  << (ac1021TabletSource
+                      ? " source projection(s) and OLE2FRAME, "
+                      : " source projection(s), ")
                   << source.dwgReadOutcome.opaqueFramesOutputQualified << '/'
                   << source.dwgReadOutcome.opaqueViewCallbacks
                   << " source callbacks qualified, full typed "

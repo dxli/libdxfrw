@@ -2718,6 +2718,12 @@ private:
     // to DXF without a separate output qualification proof.
     std::map<StandardDwgFrameKey, DRW_UnsupportedObject>
         m_opaqueDwgSourceFrames;
+    // Immutable typed and byte payload baseline for the narrowly qualified
+    // DWG OLE2FRAME-to-DXF route. Kept apart from the editable entity list.
+    std::map<StandardDwgFrameKey, DRW_Ole2Frame> m_dwgOle2FrameSources;
+    std::uint64_t m_dwgOle2FrameSourceGeneration{0u};
+    std::size_t m_dwgOle2FrameSourceRetainedBytes{0u};
+    bool m_dwgOle2FrameSourceCaptureFailed{false};
     std::set<StandardDwgFrameKey> m_opaqueDwgSourceFrameIdentities;
     std::set<StandardDwgFrameKey> m_opaqueDwgOutputQualifiedFrameIdentities;
     std::size_t m_opaqueDwgSourceFrameRetainedBytes{0u};

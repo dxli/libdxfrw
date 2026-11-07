@@ -958,12 +958,63 @@ public:
         retainTypedEntity<DRW_Shape>(data);
     }
     void addOle2Frame(const DRW_Ole2Frame& data) override {
-        if (data.eType != DRW::OLE2FRAME) {
+        if (data.eType != DRW::OLE2FRAME
+            || typeid(data) != typeid(DRW_Ole2Frame)) {
             if (cData != nullptr)
                 cData->typedEntityCaptureFailed = true;
             return;
         }
-        retainTypedEntity<DRW_Ole2Frame>(data);
+        if (cData != nullptr && cData->dwgReadOutcome.attempted
+            && cData->sourceFormat == dx_source_format::DWG) {
+            constexpr std::size_t maxSourceRecords = 100000u;
+            constexpr std::size_t maxSourceBytes = 64u * 1024u * 1024u;
+            constexpr std::size_t sourceIndexBytes =
+                sizeof(dx_data::StandardDwgFrameKey) + 4u * sizeof(void*);
+            if (cData->m_dwgOle2FrameSourceGeneration
+                    != cData->importGeneration) {
+                cData->m_dwgOle2FrameSources.clear();
+                cData->m_dwgOle2FrameSourceRetainedBytes = 0u;
+                cData->m_dwgOle2FrameSourceCaptureFailed = false;
+                cData->m_dwgOle2FrameSourceGeneration =
+                    cData->importGeneration;
+            }
+            std::size_t estimatedBytes = 0u;
+            if (cData->m_dwgOle2FrameSourceCaptureFailed
+                || cData->importGeneration == 0u
+                || data.handle == 0u || data.handle == DRW::NoHandle
+                || data.m_rawBytes.size() != data.m_objectSize
+                || data.m_payloadTooLarge || data.m_payloadTruncated
+                || !estimateTypedEntityRetainedBytes(
+                    data, sizeof(DRW_Ole2Frame), estimatedBytes)
+                || cData->m_dwgOle2FrameSources.size() >= maxSourceRecords
+                || cData->m_dwgOle2FrameSourceRetainedBytes > maxSourceBytes
+                || estimatedBytes > maxSourceBytes - sourceIndexBytes
+                || estimatedBytes + sourceIndexBytes > maxSourceBytes
+                    - cData->m_dwgOle2FrameSourceRetainedBytes) {
+                cData->m_dwgOle2FrameSourceCaptureFailed = true;
+                cData->typedEntityCaptureFailed = true;
+                return;
+            }
+            const dx_data::StandardDwgFrameKey key{
+                cData->importGeneration, data.handle};
+            try {
+                if (!cData->m_dwgOle2FrameSources.emplace(key, data).second) {
+                    cData->m_dwgOle2FrameSourceCaptureFailed = true;
+                    cData->typedEntityCaptureFailed = true;
+                    return;
+                }
+                cData->m_dwgOle2FrameSourceRetainedBytes +=
+                    estimatedBytes + sourceIndexBytes;
+            } catch (...) {
+                cData->m_dwgOle2FrameSourceCaptureFailed = true;
+                cData->typedEntityCaptureFailed = true;
+                return;
+            }
+        }
+        if (retainTypedEntity<DRW_Ole2Frame>(data) == nullptr
+            && cData != nullptr && cData->dwgReadOutcome.attempted
+            && cData->sourceFormat == dx_source_format::DWG)
+            cData->m_dwgOle2FrameSourceCaptureFailed = true;
     }
     void addOleFrame(const DRW_OleFrame& data) override {
         if (data.eType != DRW::OLEFRAME) {
@@ -3520,6 +3571,7 @@ private:
     std::size_t m_rasterOutputBytes{0u};
     std::size_t m_rasterOutputByteLimit{ImageDefinitionCaptureMaxRetainedBytes};
     bool m_rasterOutputInspected{false}, m_rasterOutputFinalized{false}, m_rasterOutputPublished{false};
+    bool m_dwgOle2FrameOutputInspected{false};
     bool m_requireCompleteDwgOutputQualification{false};
     bool m_debugDwgOutputQualification{false};
     using OpaqueDwgOutputKey = std::pair<std::uint64_t, std::uint32_t>;
@@ -3527,6 +3579,9 @@ private:
         m_pendingOpaqueDwgOutputQualificationFrameIdentities;
     bool inspectRasterOutput(const dxfRW::DxfObjectsWriteView& view) noexcept;
     bool inspectRasterImageEdges(const dxfRW::DxfObjectsWriteView& view, std::string_view section) noexcept;
+    bool inspectDwgOle2FrameOutput(
+        const dxfRW::DxfObjectsWriteView& view,
+        std::string_view section) noexcept;
     bool finalizeRasterOutputProofs() noexcept;
     void resetStandardDwgOutputProofs() noexcept;
     bool inspectStandardDwgOutput(const dxfRW::DxfObjectsWriteView& view) noexcept;

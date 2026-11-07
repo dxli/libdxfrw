@@ -92,32 +92,33 @@ created locally from scratch for the specific control.
    count from 43/51 to 50/51. The VIEWPORT route passes the physical ASCII and
    Binary readback control, including typed fields, entity-container and
    LAYOUT/BLOCK_RECORD membership, derived group 68/69, destination-preserving
-   refusal, and same-adapter correction/retry. The remaining callback is
-   OLE2FRAME handle `0x2B80` (11136); strict whole-source output still refuses.
+   refusal, and same-adapter correction/retry.
    LibreDWG 0.14's minJSON identifies the OLE2FRAME as a member of the
    `*Model_Space` BLOCK_HEADER list (source BLOCK_RECORD handle `0x1F`), even
    though its entity `entmode` is 2 and it has no direct `ownerhandle`. The
    local adapter delivers it into synthetic `mBlock` (`*U0`); that container
    maps to the fixed model-space BLOCK_RECORD during DXF writing. The earlier
    owner probe used the synthetic name as a table lookup and incorrectly got
-   handle zero. Implement the source membership check against the peer-verified
-   model-space block list, bind `mBlock` to the fixed model-space output owner,
-   retain a bounded immutable typed/payload snapshot, then prove exact staged
-   ASCII/Binary fields and payload, fresh readback, atomic refusal and
-   same-writer retry. Do not infer the owner from `entmode`; use the
-   BLOCK_HEADER membership and local `mBlock` source association. The HATCH/CIRCLE
-   emitted-type fix has a locally generated AC1021 DWG regression control:
+   handle zero. The exact AC1021/handle/layout profile now binds the typed
+   `mBlock` member to fixed model-space output owner `0x1F`, after matching the
+   immutable typed/payload snapshot to the OLE2FRAME type-74 raw callback and
+   source frame. Its staged ENTITIES proof decodes and checks identity, owner,
+   OLE fields, declared length and every payload byte. Physical ASCII/Binary
+   readback passes; a changed payload is refused with destination preservation
+   and no qualification publication, then succeeds after correction on the
+   same writer. The same-version strict `dwg2dxf` conversion now succeeds and
+   qualifies 51/51 callbacks for this exact local source profile. Do not infer
+   ownership from `entmode` or broaden the profile without new source evidence.
+   The HATCH/CIRCLE emitted-type fix has a locally generated AC1021 DWG regression control:
    it writes and reads a HATCH whose external boundary is a CIRCLE, then
    verifies ASCII and Binary DXF fresh readback resolves the remapped boundary
    handle to that CIRCLE. The registered fast CTest
-   `dwg_hatch_circle_boundary_output` passes. Next ready work is to implement
-   the tablet OLE2FRAME route using the independently observed model-space
-   membership and the adapter's fixed model-space owner mapping; then add exact
-   staged output, fresh readback, rollback and retry proof. Do not retry strict
-   tablet conversion until that proof is implemented. The peer census provides
+   `dwg_hatch_circle_boundary_output` passes. Next ready work is to select the
+   next independently evidenced source/graph profile and continue P4 closure;
+   the tablet route qualifies only this exact selected source. The peer census provides
    independent type/name and
-   handle inventory, not native semantic acceptance. Whole-source output and
-   support claims remain open. See the new
+   handle inventory, not native semantic acceptance. Broader source-profile
+   output and support claims remain open. See the updated
    [LAYOUT/VIEWPORT receipt](docs/research/p4-ac1021-tablet-layout-viewport-output-2026-11-06.json)
    and the source graph's
    [tablet XRECORD receipt](docs/research/p4-ac1021-tablet-ase-block-hierarchy-xrecord-target-screen-2026-11-06.json)
