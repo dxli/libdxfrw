@@ -13,7 +13,12 @@ Binary DXF. This is test-readiness evidence only; production behavior and suppor
 claims are unchanged. The two adjacent domain controls now pass after correcting
 the generated repeated-style index and aligning DWG unit-type admission with the
 ODA wire enum. The existing AC1024 producer-observed class-0 value remains
-retained as opaque state. See the [TABLESTYLE domain receipt](docs/research/p5-tablestyle-dwg-unit-and-identity-domains-2026-11-07.json) and [nested raw-net receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json).
+retained as opaque state. An AC1021 generated legacy-row control now exercises
+all five serialized unit values and rejects 3/16 atomically, followed by a
+successful fresh-frame parse. This closes only the identified legacy parser
+regression gap; no source, output, or support qualification changes. See the
+[TABLESTYLE domain receipt](docs/research/p5-tablestyle-dwg-unit-and-identity-domains-2026-11-07.json)
+and [nested raw-net receipt](docs/research/p5-tablestyle-nested-raw-net-remapped-identity-fast-slice-2026-11-07.json).
 
 The local AC1018 `HatchG.dwg`
 CellStyleMap typed parse failure now falls back to exact raw-only preservation

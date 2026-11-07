@@ -49,12 +49,20 @@
   },
   "verification": {
     "build": {
-      "command": "cmake --build build --target dwg2dxf libdxfrw_dwg_object_vectors_tests -j4",
+      "commands": [
+        "cmake --build build --target dwg2dxf libdxfrw_dwg_object_vectors_tests -j4",
+        "cmake --build build --target libdxfrw_dwg_object_vectors_tests -j4"
+      ],
       "result": "passed"
     },
     "focusedTests": {
-      "command": "ctest --test-dir build -R '^libdxfrw_tablestyle_(nested_raw_net|identity_domains|content_format_enum_domains)$' --output-on-failure",
-      "result": "passed, 3/3"
+      "commands": [
+        "ctest --test-dir build -R '^libdxfrw_tablestyle_(nested_raw_net|identity_domains|content_format_enum_domains)$' --output-on-failure",
+        "ctest --test-dir build -R '^libdxfrw_tablestyle_legacy_unit_type_domains$' --output-on-failure",
+        "build/libdxfrw_dwg_object_vectors_tests --tablestyle-content-format-enum-domains"
+      ],
+      "result": "all passed; prior adjacent controls passed 3/3, the AC1021 legacy parser control passed 7 generated profiles (five accepted wire values, invalid 3 and 16), and the AC1032 content-format domain control passed",
+      "coverage": "The AC1021 frame is assembled locally from a production-encoded valid TABLESTYLE and has its body size/footer/handle stream bounded as an R2007 object. An independent bit-buffer walk locates each row's serialized unit BL before mutation. Invalid records clear stale typed state; a fresh following valid frame parses after each refusal. No DWG/DXF fixture is added."
     },
     "diffCheck": "git diff --check passed",
     "externalFixtures": "none added",

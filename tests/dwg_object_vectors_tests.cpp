@@ -109,6 +109,7 @@ public:
 
 class TableStyleCodecProbe final : public DRW_TableStyle {
 public:
+    using DRW_TableStyle::encodeDwg;
     using DRW_TableStyle::parseDwg;
 };
 
@@ -2861,6 +2862,146 @@ bool makeTableStyleContentFormatFrame(DRW::Version version,
                                valueDataType, valueUnitType, cellAlignment);
 }
 
+bool patchBitLongAt(std::vector<std::uint8_t>& bytes,
+                    std::uint64_t bitOffset, std::int32_t value,
+                    DRW_TextCodec *codec) {
+    dwgBufferW encoded(codec);
+    encoded.putBitLong(value);
+    if (!encoded.isGood() || encoded.bitCount() != 10u
+        || bitOffset > static_cast<std::uint64_t>(bytes.size()) * 8u
+        || encoded.bitCount()
+            > static_cast<std::uint64_t>(bytes.size()) * 8u - bitOffset)
+        return false;
+    for (std::uint64_t bit = 0; bit < encoded.bitCount(); ++bit) {
+        const std::uint8_t sourceMask = static_cast<std::uint8_t>(
+            1u << (7u - static_cast<unsigned>(bit % 8u)));
+        const bool set = (encoded.data()[bit / 8u] & sourceMask) != 0u;
+        const std::uint64_t targetBit = bitOffset + bit;
+        const std::uint8_t targetMask = static_cast<std::uint8_t>(
+            1u << (7u - static_cast<unsigned>(targetBit % 8u)));
+        if (set)
+            bytes[targetBit / 8u] |= targetMask;
+        else
+            bytes[targetBit / 8u] &= static_cast<std::uint8_t>(~targetMask);
+    }
+    return true;
+}
+
+bool makeLegacyTableStyleFrame(
+    const std::array<std::int32_t, 3>& unitTypes, TableStyleFrame& frame,
+    std::array<std::uint64_t, 3>& unitOffsets) {
+    constexpr DRW::Version version = DRW::AC1021;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    TableStyleCodecProbe source;
+    source.handle = 0xA100u;
+    source.parentHandle = 0xA200u;
+    source.m_name = "Generated legacy table style";
+    source.m_rowStyles.resize(3u);
+    for (std::size_t index = 0; index < source.m_rowStyles.size(); ++index) {
+        DRW_TableStyleRowStyle& row = source.m_rowStyles[index];
+        row.m_textStyleHandle = 0xA300u;
+        row.m_textHeight = 2.5;
+        row.m_textAlignment = 1;
+        row.m_textColor = 0;
+        row.m_fillColor = 0;
+        row.m_valueDataType = 0;
+        row.m_valueUnitType = unitTypes[index];
+        if (index == 0u && unitTypes[index] != 0 && unitTypes[index] != 1
+            && unitTypes[index] != 2 && unitTypes[index] != 4
+            && unitTypes[index] != 8)
+            row.m_valueUnitType = 1;
+        row.m_valueFormatString = "0.00";
+        row.m_borders.resize(6u);
+        for (DRW_TableStyleBorder& border : row.m_borders) {
+            border.m_color = 0;
+            border.m_lineWeight = 0;
+        }
+    }
+
+    dwgBufferW body(&codec), strings(&codec), handles(&codec);
+    if (!source.encodeDwg(version, &body, &strings, &handles))
+        return false;
+
+    // Walk the generated legacy body independently to locate each serialized
+    // value-unit BL. Color and border fields are decoded through the public
+    // bit-buffer primitives, so the mutation does not rely on hard-coded byte
+    // offsets or a production parser's recorded spans.
+    dwgBuffer bodyWalk(body.data().data(), body.size(), &codec);
+    if (bodyWalk.getBitShort() != 0u || bodyWalk.getBitShort() != 0u)
+        return false;
+    (void)bodyWalk.getBitDouble();
+    (void)bodyWalk.getBitDouble();
+    (void)bodyWalk.getBit();
+    (void)bodyWalk.getBit();
+    for (std::size_t rowIndex = 0; rowIndex < unitOffsets.size(); ++rowIndex) {
+        (void)bodyWalk.getBitDouble();
+        (void)bodyWalk.getBitShort();
+        (void)bodyWalk.getCmColor(version);
+        (void)bodyWalk.getCmColor(version);
+        (void)bodyWalk.getBit();
+        for (int border = 0; border < 6; ++border) {
+            (void)bodyWalk.getSBitShort();
+            (void)bodyWalk.getBit();
+            (void)bodyWalk.getCmColor(version);
+        }
+        (void)bodyWalk.getBitLong(); // value data type
+        unitOffsets[rowIndex] = bodyWalk.getPosition() * 8u
+            + bodyWalk.getBitPos();
+        (void)bodyWalk.getBitLong(); // value unit type
+        if (!bodyWalk.isGood())
+            return false;
+    }
+
+    dwgBufferW object(&codec);
+    object.putObjType(version, DRW_TableStyle::kDwgClassNum);
+    const std::uint64_t objectSizeBit = object.bitCount();
+    object.putRawLong32(0u); // patched R2007+ object size in bits
+    dwgHandle ownHandle;
+    ownHandle.ref = source.handle;
+    object.putHandle(ownHandle);
+    object.putBitShort(0u); // no EED
+    object.putBitLong(0); // no reactors
+    object.putBit(1u); // no extension-dictionary handle
+    const std::uint64_t bodyStartBit = object.bitCount();
+    appendBits(object, body);
+    object.alignToByte();
+
+    strings.alignToByte();
+    if (!strings.data().empty())
+        object.putBytes(strings.data().data(), strings.size());
+    for (int bit = 0; bit < 7; ++bit)
+        object.putBit(0u);
+    const std::uint64_t stringBitSize = strings.size() * 8u + 7u;
+    if (stringBitSize > std::numeric_limits<std::uint16_t>::max())
+        return false;
+    object.putRawShort16(static_cast<std::uint16_t>(stringBitSize));
+    object.putBit(1u); // bounded R2007+ string stream
+    object.alignToByte();
+
+    const std::uint64_t objectSize = object.bitCount();
+    if (objectSize > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    object.patchRawLong32AtBit(objectSizeBit,
+                               static_cast<std::uint32_t>(objectSize));
+
+    handles.alignToByte();
+    if (handles.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    frame.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+    object.putBytes(handles.data().data(), handles.size());
+    if (!object.isGood())
+        return false;
+    frame.bytes = object.data();
+    const bool firstUnitNeedsPatch = unitTypes[0] != 0 && unitTypes[0] != 1
+        && unitTypes[0] != 2 && unitTypes[0] != 4 && unitTypes[0] != 8;
+    if (firstUnitNeedsPatch
+        && !patchBitLongAt(frame.bytes, bodyStartBit + unitOffsets[0],
+                           unitTypes[0], &codec))
+        return false;
+    return true;
+}
+
 void testTableStyleDataFlagRange(TestContext& t) {
     constexpr DRW::Version version = DRW::AC1032;
     struct Case {
@@ -3874,6 +4015,92 @@ void testTableStyleContentFormatEnumDomains(TestContext& t) {
                          && parsed.m_tableCellStyle.m_contentFormat
                                 .m_valueDataType == 0,
                      label + " refuses atomically and clears prior typed state");
+        }
+    }
+}
+
+void testLegacyTableStyleUnitTypeDomains(TestContext& t) {
+    struct Case {
+        std::array<std::int32_t, 3> units;
+        bool expectedRead;
+    };
+    const std::array<Case, 7> cases{{
+        {{{0, 1, 8}}, true},
+        {{{1, 2, 4}}, true},
+        {{{2, 4, 0}}, true},
+        {{{4, 8, 1}}, true},
+        {{{8, 0, 2}}, true},
+        {{{3, 1, 8}}, false},
+        {{{16, 1, 8}}, false},
+    }};
+
+    for (const Case& item : cases) {
+        TableStyleFrame frame;
+        std::array<std::uint64_t, 3> unitOffsets{};
+        const bool built = makeLegacyTableStyleFrame(
+            item.units, frame, unitOffsets);
+        const std::string label = "AC1021 legacy TABLESTYLE unit types "
+            + std::to_string(item.units[0]) + "/"
+            + std::to_string(item.units[1]) + "/"
+            + std::to_string(item.units[2]);
+        t.expect(built, label + " generated legacy frame builds");
+        if (!built)
+            continue;
+
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1021, false);
+        dwgBuffer input(frame.bytes.data(), frame.bytes.size(), &codec);
+        TableStyleCodecProbe parsed;
+        parsed.m_name = "stale-name";
+        parsed.handle = 0xFFFFu;
+        const bool read = parsed.parseDwg(
+            DRW::AC1021, &input, frame.handleBits);
+        t.expect(read == item.expectedRead,
+                 label + " follows ODA §20.4.99 wire values");
+        if (item.expectedRead) {
+            t.expect(input.isGood() && parsed.handle == 0xA100u
+                         && parsed.parentHandle == 0xA200u
+                         && parsed.m_name == "Generated legacy table style"
+                         && parsed.m_rowStyles.size() == 3u,
+                     label + " preserves the legacy table and common fields");
+            if (parsed.m_rowStyles.size() == item.units.size()) {
+                for (std::size_t index = 0; index < item.units.size(); ++index) {
+                    const DRW_TableStyleRowStyle& row =
+                        parsed.m_rowStyles[index];
+                    t.expect(row.m_valueUnitType == item.units[index]
+                                 && row.m_valueDataType == 0
+                                 && row.m_valueFormatString == "0.00",
+                             label + " retains row "
+                                 + std::to_string(index)
+                                 + " and its following fields");
+                }
+            }
+        } else {
+            t.expect(!input.isGood() && parsed.handle == 0u
+                         && parsed.m_name.empty()
+                         && parsed.m_rowStyles.empty(),
+                     label + " refuses atomically and clears stale state");
+
+            TableStyleFrame followingFrame;
+            std::array<std::uint64_t, 3> followingUnitOffsets{};
+            const bool followingBuilt = makeLegacyTableStyleFrame(
+                {{0, 4, 8}}, followingFrame, followingUnitOffsets);
+            t.expect(followingBuilt,
+                     label + " following valid frame builds independently");
+            if (followingBuilt) {
+                dwgBuffer followingInput(followingFrame.bytes.data(),
+                                         followingFrame.bytes.size(), &codec);
+                TableStyleCodecProbe following;
+                const bool followingRead = following.parseDwg(
+                    DRW::AC1021, &followingInput,
+                    followingFrame.handleBits);
+                t.expect(followingRead && followingInput.isGood()
+                             && following.m_rowStyles.size() == 3u
+                             && following.m_rowStyles[0].m_valueUnitType == 0
+                             && following.m_rowStyles[1].m_valueUnitType == 4
+                             && following.m_rowStyles[2].m_valueUnitType == 8,
+                         label + " leaves the next valid record parseable");
+            }
         }
     }
 }
@@ -21012,6 +21239,14 @@ int main(int argc, char** argv) {
         TestContext context;
         testTableStyleContentFormatEnumDomains(context);
         std::cout << "AC1032 TABLESTYLE content-format enum domains: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
+        && std::string(argv[1]) == "--tablestyle-legacy-unit-type-domains") {
+        TestContext context;
+        testLegacyTableStyleUnitTypeDomains(context);
+        std::cout << "AC1021 legacy TABLESTYLE unit-type domains: "
                   << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
         return context.failures == 0 ? 0 : 1;
     }

@@ -1825,6 +1825,12 @@ if(LIBDXFRW_BUILD_TESTS)
             --table-cell-unit-type-domain)
     set_tests_properties(libdxfrw_table_cell_unit_type_domain PROPERTIES
         LABELS "fast;dwg;object-vectors;tables" TIMEOUT 10)
+    add_test(NAME libdxfrw_tablestyle_legacy_unit_type_domains
+        COMMAND libdxfrw_dwg_object_vectors_tests
+            --tablestyle-legacy-unit-type-domains)
+    set_tests_properties(libdxfrw_tablestyle_legacy_unit_type_domains PROPERTIES
+        LABELS "fast;dwg;object-vectors;tablestyle;generated"
+        TIMEOUT 10)
     add_test(NAME libdxfrw_table_cell_general_value_format_flag
         COMMAND libdxfrw_dwg_object_vectors_tests
             --table-cell-general-value-format-flag)
