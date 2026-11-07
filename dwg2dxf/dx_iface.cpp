@@ -12742,8 +12742,19 @@ bool dx_iface::prepareExtensionObjectGraph(dx_data* data,
                                 || !object.m_geomDependencyFieldsParsed
                                 || object.m_geomClassVersion != 0
                                 || !object.m_geomEnabled
-                                || object.m_geomPersistentSubentityClassName
-                                    != "AcDbAssocSingleEdgePersSubentId"
+                                || !(
+                                    (object.m_geomPersistentSubentityClassName
+                                        == "AcDbAssocSingleEdgePersSubentId"
+                                        && !object.m_geomPersistentSubentityFieldsParsed
+                                        && object.m_geomPersistentSubentityClassVersion == 0
+                                        && object.m_geomPersistentSubentityIndex1 == 0
+                                        && object.m_geomPersistentSubentityIndex2 == 0)
+                                    || (object.m_geomPersistentSubentityClassName
+                                        == "AcDbAssocEdgePersSubentId"
+                                        && object.m_geomPersistentSubentityFieldsParsed
+                                        && object.m_geomPersistentSubentityClassVersion == 0
+                                        && object.m_geomPersistentSubentityIndex1 >= 0
+                                        && object.m_geomPersistentSubentityIndex2 >= 0))
                                 || object.m_geomDependentOnCompoundObject
                                 || !completeGeometryPrefixes
                                 || ownerGroup == nullptr
@@ -22127,6 +22138,14 @@ bool retainedAssociativeGeometrySourceEqual(
         && lhs.m_geomEnabled == rhs.m_geomEnabled
         && lhs.m_geomPersistentSubentityClassName
             == rhs.m_geomPersistentSubentityClassName
+        && lhs.m_geomPersistentSubentityFieldsParsed
+            == rhs.m_geomPersistentSubentityFieldsParsed
+        && lhs.m_geomPersistentSubentityClassVersion
+            == rhs.m_geomPersistentSubentityClassVersion
+        && lhs.m_geomPersistentSubentityIndex1
+            == rhs.m_geomPersistentSubentityIndex1
+        && lhs.m_geomPersistentSubentityIndex2
+            == rhs.m_geomPersistentSubentityIndex2
         && lhs.m_geomDependentOnCompoundObject
             == rhs.m_geomDependentOnCompoundObject
         && retainedAssociativePrefixStatusesEqual(
@@ -40405,8 +40424,19 @@ bool dx_iface::prepareDxfAssociativeGeometrySources() noexcept {
                 || !source.m_geomDependencyFieldsParsed
                 || source.m_geomClassVersion != 0
                 || !source.m_geomEnabled
-                || source.m_geomPersistentSubentityClassName
-                    != "AcDbAssocSingleEdgePersSubentId"
+                || !(
+                    (source.m_geomPersistentSubentityClassName
+                        == "AcDbAssocSingleEdgePersSubentId"
+                        && !source.m_geomPersistentSubentityFieldsParsed
+                        && source.m_geomPersistentSubentityClassVersion == 0
+                        && source.m_geomPersistentSubentityIndex1 == 0
+                        && source.m_geomPersistentSubentityIndex2 == 0)
+                    || (source.m_geomPersistentSubentityClassName
+                        == "AcDbAssocEdgePersSubentId"
+                        && source.m_geomPersistentSubentityFieldsParsed
+                        && source.m_geomPersistentSubentityClassVersion == 0
+                        && source.m_geomPersistentSubentityIndex1 >= 0
+                        && source.m_geomPersistentSubentityIndex2 >= 0))
                 || source.m_geomDependentOnCompoundObject
                 || !associativeGeometryUnusedPayloadEmpty(source)
                 || source.hasDataStorageBinaryData())
@@ -40672,6 +40702,14 @@ bool dx_iface::inspectDxfAssociativeGeometryOutput(
                                 == source.source.m_geomEnabled
                             && actual.m_geomPersistentSubentityClassName
                                 == source.source.m_geomPersistentSubentityClassName
+                            && actual.m_geomPersistentSubentityFieldsParsed
+                                == source.source.m_geomPersistentSubentityFieldsParsed
+                            && actual.m_geomPersistentSubentityClassVersion
+                                == source.source.m_geomPersistentSubentityClassVersion
+                            && actual.m_geomPersistentSubentityIndex1
+                                == source.source.m_geomPersistentSubentityIndex1
+                            && actual.m_geomPersistentSubentityIndex2
+                                == source.source.m_geomPersistentSubentityIndex2
                             && actual.m_geomDependentOnCompoundObject
                                 == source.source.m_geomDependentOnCompoundObject;
                     });

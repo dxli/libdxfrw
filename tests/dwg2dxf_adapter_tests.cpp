@@ -66377,7 +66377,11 @@ bool associativeDwgGeometryDependencyGraphExport() {
         dependency.m_geomClassVersion = 0;
         dependency.m_geomEnabled = true;
         dependency.m_geomPersistentSubentityClassName =
-            "AcDbAssocSingleEdgePersSubentId";
+            "AcDbAssocEdgePersSubentId";
+        dependency.m_geomPersistentSubentityFieldsParsed = true;
+        dependency.m_geomPersistentSubentityClassVersion = 0;
+        dependency.m_geomPersistentSubentityIndex1 = 201;
+        dependency.m_geomPersistentSubentityIndex2 = 202;
         dependency.m_prefixStatuses.push_back({
             DRW_AssociativePrefixStatus::Kind::AcDbAssocDependency,
             0u, 0u, 1u,
@@ -66403,17 +66407,45 @@ bool associativeDwgGeometryDependencyGraphExport() {
         struct MutatingGeometryExporter final : dx_iface {
             dx_data* source{nullptr};
             bool mutateGeometryTargetAfterEntities{false};
+            int mutateEdgeFieldAfterEntities{-1};
+            bool edgeMutationApplied{false};
 
             void writeEntities() override {
                 dx_iface::writeEntities();
-                if (!mutateGeometryTargetAfterEntities || source == nullptr)
+                if (source == nullptr
+                    || (!mutateGeometryTargetAfterEntities
+                        && mutateEdgeFieldAfterEntities < 0))
                     return;
-                mutateGeometryTargetAfterEntities = false;
                 for (DRW_AssociativeObject& object :
                      source->dwgAssociativeObjects) {
                     if (object.m_recordName
                             == "ACDBASSOCGEOMDEPENDENCY") {
-                        object.m_dependencyHandle = 0xDEADu;
+                        if (mutateGeometryTargetAfterEntities) {
+                            mutateGeometryTargetAfterEntities = false;
+                            object.m_dependencyHandle = 0xDEADu;
+                        }
+                        switch (mutateEdgeFieldAfterEntities) {
+                        case 0:
+                            object.m_geomPersistentSubentityFieldsParsed =
+                                false;
+                            edgeMutationApplied = true;
+                            break;
+                        case 1:
+                            ++object.m_geomPersistentSubentityClassVersion;
+                            edgeMutationApplied = true;
+                            break;
+                        case 2:
+                            ++object.m_geomPersistentSubentityIndex1;
+                            edgeMutationApplied = true;
+                            break;
+                        case 3:
+                            ++object.m_geomPersistentSubentityIndex2;
+                            edgeMutationApplied = true;
+                            break;
+                        default:
+                            break;
+                        }
+                        mutateEdgeFieldAfterEntities = -1;
                         return;
                     }
                 }
@@ -66443,6 +66475,39 @@ bool associativeDwgGeometryDependencyGraphExport() {
             return fail("unresolved geometry-dependency action did not refuse atomically");
 
         source.dwgAssociativeObjects[1].m_constraintActions.front() = 0x904u;
+        for (int field = 0; field < 4; ++field) {
+            exporter.edgeMutationApplied = false;
+            exporter.mutateEdgeFieldAfterEntities = field;
+            if (exporter.fileExport(path.string(), DRW::AC1024, binary,
+                    &source, false, true,
+                    dx_dxfSourceTextPolicy::Compatible,
+                    DRW::DxfTextWritePolicy::RequireLossless,
+                    dx_dxfProxyGraphicsPolicy::FailIfNotPreserved,
+                    dx_dwgReadCompletenessPolicy::RequireComplete)
+                || !exporter.edgeMutationApplied
+                || !retainedDestination(sentinel))
+                return fail("late Edge subentity-field mutation was not refused atomically: field="
+                    + std::to_string(field));
+            DRW_AssociativeObject& mutated =
+                source.dwgAssociativeObjects[2];
+            switch (field) {
+            case 0:
+                mutated.m_geomPersistentSubentityFieldsParsed = true;
+                break;
+            case 1:
+                --mutated.m_geomPersistentSubentityClassVersion;
+                break;
+            case 2:
+                --mutated.m_geomPersistentSubentityIndex1;
+                break;
+            case 3:
+                --mutated.m_geomPersistentSubentityIndex2;
+                break;
+            default:
+                return fail("unexpected Edge field mutation selector");
+            }
+        }
+
         exporter.mutateGeometryTargetAfterEntities = true;
         if (exporter.fileExport(path.string(), DRW::AC1024, binary, &source,
                 false, true, dx_dxfSourceTextPolicy::Compatible,
@@ -66539,7 +66604,11 @@ bool associativeDwgGeometryDependencyGraphExport() {
             || !readDependency->m_geomDependencyFieldsParsed
             || readDependency->m_geomClassVersion != 0
             || readDependency->m_geomPersistentSubentityClassName
-                != "AcDbAssocSingleEdgePersSubentId")
+                != "AcDbAssocEdgePersSubentId"
+            || !readDependency->m_geomPersistentSubentityFieldsParsed
+            || readDependency->m_geomPersistentSubentityClassVersion != 0
+            || readDependency->m_geomPersistentSubentityIndex1 != 201
+            || readDependency->m_geomPersistentSubentityIndex2 != 202)
             return fail("geometry-associative dependency owner, target, or subclass fields changed on readback: owner="
                 + std::to_string(readDependency->parentHandle)
                 + " expected-owner=" + std::to_string(readGroup->handle)
@@ -66700,7 +66769,15 @@ bool associativeDwgGeometryDependencyGraphExport() {
                     || actual->m_geomDependencyFieldsParsed
                         != original.m_geomDependencyFieldsParsed
                     || actual->m_geomPersistentSubentityClassName
-                        != original.m_geomPersistentSubentityClassName))
+                        != original.m_geomPersistentSubentityClassName
+                    || actual->m_geomPersistentSubentityFieldsParsed
+                        != original.m_geomPersistentSubentityFieldsParsed
+                    || actual->m_geomPersistentSubentityClassVersion
+                        != original.m_geomPersistentSubentityClassVersion
+                    || actual->m_geomPersistentSubentityIndex1
+                        != original.m_geomPersistentSubentityIndex1
+                    || actual->m_geomPersistentSubentityIndex2
+                        != original.m_geomPersistentSubentityIndex2))
                 return fail(std::string(
                     "associative-only replay changed geometry-dependency fields: ")
                     + (binary ? "binary" : "ascii"));

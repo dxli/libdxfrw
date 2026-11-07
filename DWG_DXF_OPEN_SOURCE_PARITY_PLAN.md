@@ -345,14 +345,36 @@ created locally from scratch for the specific control.
    subentity route disagrees on the compound flag; keep this as one source-bound
    profile and preserve that discrepancy. Handle `0xC55` (3157) uses the Edge
    name in the dependency name field rather than the subentity class field and
-   remains wire-incomplete and excluded. **Ready-to-code gate:** close the ten
-   records' group/action membership, target entity roles, reactor backlinks,
-   and handle remapping without admitting `0xC55`. **Acceptance:** selected
-   ASCII/Binary serialization, exact Edge field and reference comparison after
-   fresh typed re-import, destination-preserving wrong-kind/late-mutation
-   refusal, and corrected same-adapter retry. Keep strict civil whole-source
-   conversion refused for its independent null LTYPE_CONTROL member and do not
-   add a source drawing fixture.
+   remains wire-incomplete and excluded. The parser slice is complete; the
+   selected physical-output slice is not. The current source snapshot equality
+   and DXF readback proof compare the subentity class name and compound flag,
+   but not the newly decoded `fieldsParsed`, `classVersion`, `index1`, and
+   `index2` values. Close this exact proof gap first so a late mutation cannot
+   pass unnoticed.
+
+   The generated adapter field/snapshot/readback control is now complete; see
+   the [receipt](docs/research/p4-ac1024-assoc-edge-generated-adapter-fields-2026-11-07.json).
+   **Remaining physical-output implementation:** close the selected source
+   graph before adding a source selector. The two candidate groups (2478 and
+   1776) each contain nine actions and 43 ordered constraint nodes; five Edge
+   dependencies in each group correspond to the two LWPOLYLINE vertex-index
+   cycles. The other four actions per group are value or generic dependencies
+   and remain part of the serialized group membership. Inventory their target,
+   owner, reactor, body and EED/XDATA dependencies, plus the root network and
+   dictionary membership, then include the complete required closure in the
+   selected projection. Do not trim group actions/nodes to force admission.
+   Keep the third group 1911, including unresolved handle `0xC55`, outside this
+   projection. If any required member is unsupported, implement its bounded
+   writer path or preserve atomic refusal and record the exact blocker.
+
+   **Acceptance:** physical selected output in ASCII and Binary must preserve
+   all ten Edge class/version/index/compound fields, all required group action
+   and node membership, target LWPOLYLINE identities, reciprocal reactor
+   links, and remapped references on fresh typed re-import. Include
+   wrong-kind and post-plan field/target mutation refusal with destination
+   preservation, followed by corrected same-adapter retry. Keep strict civil
+   whole-source conversion refused for its independent null LTYPE_CONTROL
+   member and do not add a source drawing fixture.
 
    An exploratory test-only projection reached preflight but correctly refused
    before serialization; that harness was removed because it had no
