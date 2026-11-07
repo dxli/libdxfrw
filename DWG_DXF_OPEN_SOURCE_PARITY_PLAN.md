@@ -608,13 +608,16 @@ created locally from scratch for the specific control.
 | P8 | OPEN — consumers, platforms and release | Qualify LibreCAD and LibreCAD_3 callback/default behavior on a composed candidate; run native Linux/Windows FreeCAD open/insert checks; qualify intended 3D consumers, ABI, packaging and release contracts. Local generated probes do not close these gates. | Source-stable candidate plus native platform access and recorded consumer/tool versions. |
 | P9 | DEFERRED_EXTERNAL — six non-promoting items | Resolve J256, J260, J268, J284, J293 and J295 only through the retained successor registry and eligible independent evidence. J268 has recovered historical path/status rows but still needs original input-byte identities and digest; J284 needs its 11 target-debt/integrity blockers; J295 needs native receipts for four RTEXT position/rotation claims. Preserve each item's lineage and exclusions. | Follow `metadata/external-evidence-resolution-v1.json`; external/advisory results cannot promote support claims by themselves. |
 
-**AC1015 LTYPE_CONTROL outlier:** an unauthenticated local `simple.dwg` declares
-a 520-bit size equal to its full 65-byte frame, including handle bytes. ODA
-v5.4.1 §20.4.57 describes the R2000 object size as excluding end handles.
-LibreDWG 0.14 accepts the file and reports 25 LTYPE entries, while the tracked
-AC1015 control fixture reaches past LTYPE without this failure. Keep the local
-outlier refused; do not broaden the parser until producer provenance or another
-spec-conforming witness explains the frame profile ([receipt](docs/research/p6-ac1015-simple-ltype-control-outlier-2026-11-06.json)).
+**AC1015 LTYPE_CONTROL outlier:** the unauthenticated local `simple.dwg` still
+fails at the bounded count/boundary check on current code. LibreDWG 0.14 parses
+25 entries, but its decoded profile includes BYBLOCK/BYLAYER in the counted
+entries, duplicates them in separate special-handle fields, and reports soft
+pointers where ODA v5.4.1 §20.4.57 specifies soft-owner counted entries and
+hard-owner BYLAYER/BYBLOCK references. The reported 520-bit size also equals
+the 65-byte frame although ODA says R2000 object size excludes end handles.
+Keep strict refusal; peer tolerance does not establish a valid wire profile or
+justify parser relaxation. Reconsider only with producer provenance or an
+independent spec-conforming witness ([updated receipt](docs/research/p6-ac1015-simple-ltype-control-outlier-2026-11-06.json)).
 
 P6–P9 qualification can proceed when its inputs are ready; it does not block
 independently ready local code work.
