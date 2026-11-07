@@ -58,6 +58,7 @@
     },
     "adapterTestExecutableSha256": "b000fcfe00921197db79f757146b9df7d7779d22542c98f0746e73966c14f815",
     "dwg2dxfExecutableSha256": "f92c743bd2bc0fd9fbfb15a6935a66c4054e72c81d7069cebcfacb8d36a3f4e3",
+    "binaryDwg2dxfExecutableSha256": "ce1e0113e1f1c09a0ddf22593423e22c516b1196929aba0e20bad5bac6319dd4",
     "summary": "Adds an exact AC1021 colorwh LAYOUT graph profile and exact six-VIEWPORT source/output profile. Adds output/readback checks for source LAYOUT membership, reciprocal paper-space BLOCK_RECORDs, layer and visual-style targets, viewport status/ID derivation, clip-flag/handle agreement, remapped CIRCLE targets and geometry, plus atomic refusal and same-adapter retry. The layer-reference preflight now permits the source-bound planned LAYER remap while BLOCKS are emitted; finalizeDwgLineTypeControlOutput still verifies the actual staged LAYER record and mapped handle after the table output is available.",
     "scope": "Exact source profile only. Type 34, other layouts, other clip-boundary graphs, producer-wide support and native clipping semantics remain unqualified."
   },
@@ -84,6 +85,20 @@
       "exit": 0,
       "outputSha256": "03a955a9791fa51e6192f79743c54a513057a6a26b45a59b16c4f9a10ac13c41",
       "comparison": "Section/class record census equals the first strict output: 36,505 records in each; no class-count delta. This is structural census equality, not a complete field-semantic comparator."
+    },
+    "strictWholeSourceBinary": {
+      "command": "build-gcc/dwg2dxf/dwg2dxf /Users/dli/doc/dwg/colorwh.dwg -y -b -d -v2007 /private/tmp/colorwh-strict-ac1021-binary.dxf",
+      "exit": 0,
+      "sourceFrameCoverage": "36,516 observed frames; 36,516 published; zero failed, deferred, quarantined or unresolved dispositions.",
+      "outputBytes": 7113617,
+      "outputSha256": "e596372eb3f5286435254eef5108ee62734af577b7d43e23d9079dc0222e9a92"
+    },
+    "freshSameVersionBinaryReadback": {
+      "command": "build-gcc/dwg2dxf/dwg2dxf /private/tmp/colorwh-strict-ac1021-binary.dxf -y -b -d -v2007 /private/tmp/colorwh-strict-ac1021-binary-roundtrip.dxf",
+      "exit": 0,
+      "outputBytes": 7113598,
+      "outputSha256": "9bd87619781a0a68d4019504925c4a3b4214acc440de01e3516490f6c7caaf48",
+      "comparison": "Fresh same-version Binary import and re-export succeeds. No field-by-field binary semantic comparator was run."
     },
     "fixturePolicy": "Source DWG, generated DXFs and peer JSON remain outside Git."
   },

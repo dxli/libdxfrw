@@ -80,10 +80,12 @@ created locally from scratch for the specific control.
    boundaries, plus atomic refusal, same-adapter retry and typed readback. A
    staged LAYER handle lookup previously rejected valid BLOCKS-before-TABLES
    forward references; the entity preflight now uses the frozen source binding,
-   with the final staged-table proof still required. Existing AC1021 lineweights
-   viewport output also passes after this ordering change. Full strict AC1021
-   ASCII conversion now succeeds, and a fresh same-version re-export succeeds
-   with the same section/class record census (36,505 records each). See the
+   with finalization checking the actual staged LAYER row and mapped handle.
+   Existing AC1021 lineweights viewport output also passes after this ordering
+   change. Full strict AC1021 ASCII and Binary conversion now succeed. Fresh
+   same-version ASCII re-export retains the same section/class census
+   (36,505 records in each); Binary re-import and re-export also succeed, though
+   no field-by-field Binary semantic comparison has been run. See the
    [colorwh receipt](docs/research/p4-ac1021-colorwh-layout-viewport-strict-readback-2026-11-06.json).
    This is one unauthenticated local source profile, not independent producer,
    native clipping, platform, or broader support evidence; no drawing fixture
