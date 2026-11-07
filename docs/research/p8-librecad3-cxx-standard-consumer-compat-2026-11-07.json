@@ -1,0 +1,43 @@
+{
+  "id": "p8-librecad3-cxx-standard-consumer-compat-2026-11-07",
+  "date": "2026-11-07",
+  "scope": "LibreCAD_3 persistence compile compatibility with the current upstream libdxfrw public headers",
+  "classification": "consumer-build-configuration incompatibility; not a format-support result",
+  "source_revisions": {
+    "libdxfrw": "workspace HEAD at investigation time",
+    "librecad3": "local dirty checkout; CMake reports branch fix/msvc-eigen-include, commit 132265a0"
+  },
+  "observations": [
+    {
+      "source": "libdxfrw/CMakeLists.txt",
+      "lines": "68-69, 96",
+      "fact": "The project sets CMAKE_CXX_STANDARD to 17 and the dxfrw target publishes cxx_std_17 as a PUBLIC compile feature."
+    },
+    {
+      "source": "LibreCAD_3/CMakeLists.txt",
+      "lines": "227-228",
+      "fact": "The consumer sets CMAKE_CXX_STANDARD to 14 with CXX_STANDARD_REQUIRED enabled."
+    },
+    {
+      "source": "/private/tmp/librecad3-upstream-check/persistence/CMakeFiles/persistence.dir/flags.make",
+      "fact": "The persistence target compiles with -std=gnu++14 and includes upstream libdxfrw headers from /Users/dli/dev/libdxfrw/src. The probe supplied raw include/library paths, not the exported dxfrw target, so its PUBLIC compile feature was not propagated."
+    }
+  ],
+  "reproduction": {
+    "configure": "cmake -S ../LibreCAD_3 -B /private/tmp/librecad3-upstream-check -DCMAKE_BUILD_TYPE=Release -DWITH_PERSISTENCE=ON -DWITH_PYTHONSCRIPT=OFF -DWITH_QT_UI=OFF -DLIBDXFRW_INCLUDE_DIR=/Users/dli/dev/libdxfrw/src -DLIBDXFRW_LIBRARY=/Users/dli/dev/libdxfrw/build-gcc/libdxfrw.a",
+    "configure_result": "success; found the selected upstream headers and static library",
+    "build": "cmake --build /private/tmp/librecad3-upstream-check --target persistence -j 4",
+    "build_result": "failure while compiling persistence/file.cpp and persistence/libdxfrw/dxfimpl.cpp; public headers report no std::optional or std::nullopt under C++14, followed by cascading type errors"
+  },
+  "interpretation": "The observed failure is explained by the consumer compile mode and does not establish a source/API defect under the libdxfrw target's declared C++17 requirement. The repository AGENTS.md description of libdxfrw as C++14 is stale relative to CMakeLists.txt and must not be used as the current build contract.",
+  "implementation_follow_up": [
+    "In the LibreCAD_3 integration, prefer linking the exported/imported dxfrw target so its PUBLIC cxx_std_17 requirement propagates; if that finder path cannot represent the target, explicitly raise the consumer target's standard to C++17.",
+    "Reconfigure from a clean build directory and confirm persistence compile commands use C++17 and the focused persistence target builds.",
+    "Run the existing focused DXF export and planar open/save/reopen checks against that same pinned library; leave full application and platform qualification as separate P8 gates."
+  ],
+  "limitations": [
+    "The LibreCAD_3 checkout is dirty and was not modified.",
+    "No native application, ABI, Windows, or Linux qualification was performed.",
+    "No DWG/DXF fixtures were added."
+  ]
+}
