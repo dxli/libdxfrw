@@ -486,6 +486,16 @@ add_test(NAME libdxfrw_no_raw_sections COMMAND libdxfrw_no_raw_sections_tests)
 set_tests_properties(libdxfrw_no_raw_sections PROPERTIES LABELS "dxf;fast;transaction" TIMEOUT 30)
 
 include(${CMAKE_SOURCE_DIR}/cmake/libdxfrwTestAdapter.cmake)
+add_executable(libdxfrw_ac1021_group_polyline_dxf_readback_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/ac1021_group_polyline_dxf_readback_tests.cpp
+    ${_libdxfrw_test_adapter_source})
+target_compile_features(libdxfrw_ac1021_group_polyline_dxf_readback_tests PRIVATE cxx_std_17)
+target_compile_options(libdxfrw_ac1021_group_polyline_dxf_readback_tests
+    PRIVATE ${LIBDXFRW_WARNING_FLAGS})
+target_include_directories(libdxfrw_ac1021_group_polyline_dxf_readback_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/dwg2dxf ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(libdxfrw_ac1021_group_polyline_dxf_readback_tests PRIVATE dxfrw)
+
 add_executable(libdxfrw_xdata_int16_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/dxf_xdata_int16_tests.cpp
     ${_libdxfrw_test_adapter_source})
@@ -1492,6 +1502,7 @@ add_test(NAME dwg2dxf_generated_ac1021_group_parent_reactor_closure
         "-DAUTHOR=$<TARGET_FILE:libdxfrw_dwg_ac1021_polyline_group_targets_tests>"
         "-DADAPTER=$<TARGET_FILE:libdxfrw_dwg2dxf_adapter_tests>"
         "-DCONVERTER=$<TARGET_FILE:dwg2dxf>"
+        "-DREADBACK=$<TARGET_FILE:libdxfrw_ac1021_group_polyline_dxf_readback_tests>"
         "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/run_ac1021_group_reactor_closure_test.cmake)
 set_tests_properties(dwg2dxf_generated_ac1021_group_parent_reactor_closure
