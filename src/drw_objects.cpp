@@ -23245,13 +23245,24 @@ bool DRW_ObjectContextData::parseDwg(DRW::Version version, dwgBuffer *buf, std::
     const bool hasTypedBody = hasBody();
     if (hasTypedBody) {
         switch (m_kind) {
-    case Kind::Text:
-        if (!readBodyBitShort(m_horizontalMode)
-            || !readBodyBitDouble(m_rotation)
-            || !readBody2RawDouble(m_insertionPoint)
-            || !readBody2RawDouble(m_alignmentPoint))
-            return fail();
+    case Kind::Text: {
+        dwgBuffer textBodyStart = buf->forkIndependent();
+        const bool textBodyComplete =
+            readBodyBitShort(m_horizontalMode)
+            && readBodyBitDouble(m_rotation)
+            && readBody2RawDouble(m_insertionPoint)
+            && readBody2RawDouble(m_alignmentPoint);
+        if (!textBodyComplete) {
+            *buf = textBodyStart;
+            m_kind = Kind::Unknown;
+            m_horizontalMode = 0;
+            m_rotation = 0.0;
+            m_insertionPoint = DRW_Coord();
+            m_alignmentPoint = DRW_Coord();
+            DRW_DBG("OBJECTCONTEXTDATA text body retained raw: incomplete typed field sequence\n");
+        }
         break;
+    }
     case Kind::MText:
         if (!readBodyBitLong(m_attachment)
             || !readBody3BitDouble(m_xAxisDir)

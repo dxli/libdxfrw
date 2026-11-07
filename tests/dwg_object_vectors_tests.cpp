@@ -1834,6 +1834,47 @@ void testObjectContextBaseBits(TestContext& t) {
                      label + " parser instance succeeds on a fresh valid retry");
         }
     }
+
+    dwgBufferW partialTextBody;
+    partialTextBody.putBitShort(4u);
+    partialTextBody.putBit(1u);
+    partialTextBody.putBit(1u);
+    const std::uint64_t textFieldsStartBit = partialTextBody.bitCount();
+    partialTextBody.putBitShort(2u);
+    partialTextBody.putBitDouble(0.5);
+    partialTextBody.put2RawDouble(DRW_Coord(1.0, 2.0, 0.0));
+    ObjectContextFrame partialTextFrame;
+    const bool partialTextBuilt = makeObjectContextFrame(
+        DRW::AC1032, partialTextBody, 1u, partialTextFrame);
+    t.expect(partialTextBuilt,
+             "AC1032 incomplete TextObjectContextData vector builds from scratch");
+    if (partialTextBuilt) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1032, false);
+        dwgBuffer input(partialTextFrame.bytes.data(),
+                        partialTextFrame.bytes.size(), &codec);
+        ObjectContextCodecProbe parsed(
+            "AcDbTextObjectContextData", DRW_ObjectContextData::Kind::Text);
+        const bool read = parsed.parseDwg(
+            DRW::AC1032, &input, partialTextFrame.handleBits);
+        const std::uint64_t expectedBodyCursor =
+            partialTextFrame.bodyStartBit + textFieldsStartBit;
+        t.expect(read && input.isGood()
+                     && parsed.m_kind == DRW_ObjectContextData::Kind::Unknown
+                     && parsed.m_classVersion == 4u
+                     && parsed.m_defaultFlag
+                     && parsed.m_annotatedHandle == parentHandle
+                     && parsed.m_scaleHandle == scaleHandle
+                     && parsed.m_horizontalMode == 0u
+                     && parsed.m_rotation == 0.0
+                     && parsed.m_insertionPoint.x == 0.0
+                     && parsed.m_insertionPoint.y == 0.0
+                     && parsed.m_alignmentPoint.x == 0.0
+                     && parsed.m_alignmentPoint.y == 0.0
+                     && static_cast<std::uint64_t>(input.getPosition()) * 8u
+                              + input.getBitPos() == expectedBodyCursor,
+                 "incomplete AC1032 text-specific body rolls back to a raw-only context shell while preserving common metadata");
+    }
 }
 
 void testAssociativeActionUnsupportedValueKinds(TestContext& t) {
