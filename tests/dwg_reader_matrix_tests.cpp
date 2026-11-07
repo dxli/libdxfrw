@@ -11828,6 +11828,17 @@ struct GeneratedTableStyleObject {
     std::uint32_t handleBits{0};
 };
 
+struct GeneratedTableContentObject {
+    std::vector<std::uint8_t> payload;
+    std::uint32_t handleBits{0};
+    std::uint64_t bodyEndBit{0};
+    std::uint64_t stringDataEndBit{0};
+    std::uint64_t stringFooterEndBit{0};
+    std::uint64_t handleStartBit{0};
+    std::uint64_t handleEndBit{0};
+    std::uint64_t objectEndBit{0};
+};
+
 bool appendGeneratedBits(dwgBufferW& destination,
                          const dwgBufferW& source) {
     dwgBuffer reader(source.data().data(), source.data().size());
@@ -11910,6 +11921,126 @@ bool makeGeneratedR24TableStyleObject(std::uint32_t handle,
     return true;
 }
 
+bool makeGeneratedR24TableContentObject(
+    std::uint32_t handle, bool bodyByteCountCarrier,
+    GeneratedTableContentObject& result) {
+    constexpr DRW::Version version = DRW::AC1032;
+    DRW_TextCodec codec;
+    codec.setVersion(version, false);
+    dwgBufferW object(&codec), body(&codec), strings(&codec), handles(&codec);
+
+    // The table/cell strings are emitted in the order consumed by
+    // parseTableContent/parseTableCell. The value carrier is the only field
+    // that differs between the two local ambiguity controls.
+    strings.putVariableText(version, "Generated table");
+    strings.putVariableText(version, "");
+    body.putBitLong(1); // one column
+    strings.putVariableText(version, "Column");
+    body.putBitLong(0); // column custom data
+    body.putBitLong(0); // column custom item count
+    body.putBitLong(1); // no column style payload
+    body.putBitShort(0u);
+    body.putBitLong(0); // column style ID
+    body.putBitDouble(1.0); // column width
+
+    body.putBitLong(1); // one row
+    body.putBitLong(1); // one cell
+    body.putBitLong(0); // cell flags
+    strings.putVariableText(version, ""); // tooltip
+    body.putBitLong(0); // cell custom data
+    body.putBitLong(0); // cell custom item count
+    body.putBitLong(0); // no linked data
+    body.putBitLong(1); // one content
+    body.putBitLong(1); // kValue
+    body.putBitLong(0); // value format flags
+    body.putBitLong(4); // kString
+    if (bodyByteCountCarrier) {
+        // UTF-16LE "Body" plus its terminator; the active production parser
+        // deliberately does not enable this alternate interpretation.
+        body.putBitLong(10);
+        const std::uint8_t bodyString[] = {
+            static_cast<std::uint8_t>('B'), 0u,
+            static_cast<std::uint8_t>('o'), 0u,
+            static_cast<std::uint8_t>('d'), 0u,
+            static_cast<std::uint8_t>('y'), 0u, 0u, 0u};
+        for (const std::uint8_t byte : bodyString)
+            body.putRawChar8(byte);
+        strings.putVariableText(version, ""); // detached value slot
+    } else {
+        strings.putVariableText(version, "Detached");
+    }
+    body.putBitLong(0); // unit type
+    strings.putVariableText(version, ""); // format
+    strings.putVariableText(version, bodyByteCountCarrier ? "Body" : "Detached");
+    body.putBitLong(0); // no attributes
+    body.putBitShort(0u); // no content format override
+    body.putBitLong(1); // no cell style payload
+    body.putBitShort(0u);
+    body.putBitLong(0); // cell style ID
+    body.putBitLong(0); // no cell geometry
+
+    body.putBitLong(0); // row custom data
+    body.putBitLong(0); // row custom item count
+    body.putBitLong(1); // no row style payload
+    body.putBitShort(0u);
+    body.putBitLong(0); // row style ID
+    body.putBitDouble(1.0); // row height
+    body.putBitLong(0); // no field references
+    body.putBitLong(1); // no table style payload
+    body.putBitShort(0u);
+    body.putBitLong(0); // no merged ranges
+
+    object.putObjType(version, 700u);
+    dwgHandle ownHandle;
+    ownHandle.ref = handle;
+    object.putHandle(ownHandle);
+    object.putBitShort(0u); // no EED
+    object.putBitLong(0); // no reactors
+    object.putBit(1u); // no extension dictionary
+    object.putBit(0u); // no AcDs data
+    if (!appendGeneratedBits(object, body))
+        return false;
+    object.alignToByte();
+    result.bodyEndBit = object.bitCount();
+
+    strings.alignToByte();
+    if (!strings.data().empty())
+        object.putBytes(strings.data().data(), strings.size());
+    result.stringDataEndBit = object.bitCount();
+    for (int bit = 0; bit < 7; ++bit)
+        object.putBit(0u);
+    const std::uint64_t stringBitSize = strings.size() * 8u + 7u;
+    if (stringBitSize > std::numeric_limits<std::uint16_t>::max())
+        return false;
+    object.putRawShort16(static_cast<std::uint16_t>(stringBitSize));
+    object.putBit(1u); // bounded R2007+ string stream
+    result.stringFooterEndBit = object.bitCount();
+    object.alignToByte();
+    result.handleStartBit = object.bitCount();
+
+    dwgHandle nullHandle;
+    nullHandle.code = DRW::DwgNullReference;
+    handles.putHandle(nullHandle); // owner
+    handles.putHandle(nullHandle); // final table-style reference
+    handles.alignToByte();
+    if (!object.isGood() || !handles.isGood()
+        || handles.bitCount() > std::numeric_limits<std::uint32_t>::max())
+        return false;
+    result.handleBits = static_cast<std::uint32_t>(handles.bitCount());
+    result.handleEndBit = result.handleStartBit + result.handleBits;
+    if (!handles.data().empty())
+        object.putBytes(handles.data().data(), handles.size());
+    if (!object.isGood())
+        return false;
+    result.objectEndBit = object.bitCount();
+    result.payload = object.data();
+    return result.bodyEndBit <= result.stringDataEndBit
+        && result.stringDataEndBit <= result.stringFooterEndBit
+        && result.stringFooterEndBit <= result.handleStartBit
+        && result.handleEndBit == result.objectEndBit
+        && result.objectEndBit == result.payload.size() * 8u;
+}
+
 bool wrapGeneratedR24Object(const GeneratedTableStyleObject& object,
                             std::vector<std::uint8_t>& frameBytes) {
     if (object.payload.empty())
@@ -11926,6 +12057,28 @@ bool wrapGeneratedR24Object(const GeneratedTableStyleObject& object,
     frameBytes = frame.data();
     return true;
 }
+
+bool wrapGeneratedR24Object(const GeneratedTableContentObject& object,
+                            std::vector<std::uint8_t>& frameBytes) {
+    if (object.payload.empty())
+        return false;
+    dwgBufferW frame;
+    frame.putModularShort(static_cast<std::int32_t>(object.payload.size()));
+    frame.putUModularChar(object.handleBits);
+    frame.putBytes(object.payload.data(), object.payload.size());
+    if (!frame.isGood())
+        return false;
+    frame.putRawShort16(frame.crc16(0xC0C1u, 0u, frame.size()));
+    if (!frame.isGood())
+        return false;
+    frameBytes = frame.data();
+    return true;
+}
+
+class TestableTableContentObject final : public DRW_TableContentObject {
+public:
+    using DRW_TableContentObject::parseDwg;
+};
 
 class TableStyleDispatchReader final : public dwgReader32 {
 public:
@@ -14696,6 +14849,176 @@ void testPersistentManagerPrefixDispatch(TestContext& t) {
                           << " reactors="
                           << rawTableContent->m_reactorHandles.size();
             std::cerr << '\n';
+        }
+    }
+
+    GeneratedTableContentObject detachedValueObject;
+    const bool detachedValueBuilt = makeGeneratedR24TableContentObject(
+        0xE700u, false, detachedValueObject);
+    t.expect(detachedValueBuilt,
+             "AC1032 detached-TV TABLECONTENT carrier is generated in memory");
+    if (detachedValueBuilt) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1032, false);
+        TestableTableContentObject parsed;
+        std::vector<std::uint8_t> truncated = detachedValueObject.payload;
+        if (!truncated.empty())
+            truncated.pop_back();
+        dwgBuffer invalid(truncated.data(), truncated.size(), &codec);
+        const bool refusedTruncation = !parsed.parseDwg(
+            DRW::AC1032, &invalid, detachedValueObject.handleBits)
+            && !parsed.m_parseComplete
+            && !parsed.m_semanticContentComplete
+            && parsed.m_content.m_rows.empty();
+        dwgBuffer retry(detachedValueObject.payload.data(),
+                        detachedValueObject.payload.size(), &codec);
+        const bool retried = parsed.parseDwg(
+            DRW::AC1032, &retry, detachedValueObject.handleBits)
+            && parsed.m_parseComplete
+            && parsed.m_semanticContentComplete
+            && parsed.m_content.m_rows.size() == 1u
+            && parsed.m_content.m_rows[0].m_cells.size() == 1u
+            && parsed.m_content.m_rows[0].m_cells[0].m_contents.size() == 1u
+            && parsed.m_content.m_rows[0].m_cells[0].m_contents[0]
+                   .m_value.m_value.type() == DRW_Variant::STRING
+            && std::string(parsed.m_content.m_rows[0].m_cells[0]
+                               .m_contents[0].m_value.m_value.c_str())
+                   == "Detached";
+        t.expect(refusedTruncation && retried,
+                 "detached-TV TABLECONTENT rolls back truncated state and retries on the same parser with complete value semantics");
+        if (!refusedTruncation || !retried) {
+            std::cerr << "AC1032 detached-TV TABLECONTENT retry: truncation="
+                      << refusedTruncation << " retry=" << retried
+                      << " parseComplete=" << parsed.m_parseComplete
+                      << " semanticComplete="
+                      << parsed.m_semanticContentComplete
+                      << " rows=" << parsed.m_content.m_rows.size()
+                      << '\n';
+        }
+
+        std::vector<std::uint8_t> detachedFrame, sentinelFrame;
+        const bool wrapped = wrapGeneratedR24Object(
+                detachedValueObject, detachedFrame)
+            && wrapFrame(ac1032ManagerSentinel, managerSentinelObject,
+                         sentinelFrame);
+        t.expect(wrapped,
+                 "detached-TV TABLECONTENT and following sentinel frames wrap in memory");
+        if (wrapped) {
+            const auto sentinelOffset = static_cast<std::uint32_t>(
+                detachedFrame.size());
+            std::vector<std::uint8_t> bytes = detachedFrame;
+            bytes.insert(bytes.end(), sentinelFrame.begin(),
+                         sentinelFrame.end());
+            PersistentManagerDispatchReader reader(
+                bytes, DRW::AC1032, ac1032ManagerSentinel.classNumber);
+            reader.addTableContentClass(700u);
+            PersistentManagerDispatchSink sink;
+            const bool read = reader.readObjects(
+                bytes, 0xE700u, sentinelOffset,
+                ac1032ManagerSentinel.handle, sink);
+            const bool published = read && reader.objectFailures() == 0u
+                && sink.tableContent.size() == 1u
+                && sink.tableContent.front().m_parseComplete
+                && sink.tableContent.front().m_semanticContentComplete
+                && sink.tableContent.front().m_content.m_rows.size() == 1u
+                && sink.tableContent.front().m_content.m_rows[0]
+                       .m_cells.size() == 1u
+                && sink.tableContent.front().m_content.m_rows[0]
+                       .m_cells[0].m_contents.size() == 1u
+                && std::string(sink.tableContent.front().m_content.m_rows[0]
+                                   .m_cells[0].m_contents[0].m_value
+                                   .m_value.c_str()) == "Detached"
+                && sink.typed.size() == 1u
+                && sink.typed.front().handle
+                    == ac1032ManagerSentinel.handle;
+            t.expect(published,
+                     "detached-TV TABLECONTENT publishes complete typed semantics and recovers the following object");
+        }
+    }
+
+    GeneratedTableContentObject bodyStringObject;
+    const bool bodyStringBuilt = makeGeneratedR24TableContentObject(
+        0xE701u, true, bodyStringObject);
+    t.expect(bodyStringBuilt,
+             "AC1032 body-byte-count TABLECONTENT carrier is generated in memory");
+    if (bodyStringBuilt) {
+        DRW_TextCodec codec;
+        codec.setVersion(DRW::AC1032, false);
+        TestableTableContentObject parsed;
+        dwgBuffer input(bodyStringObject.payload.data(),
+                        bodyStringObject.payload.size(), &codec);
+        const bool refusedAlternate = !parsed.parseDwg(
+            DRW::AC1032, &input, bodyStringObject.handleBits)
+            && !parsed.m_parseComplete
+            && !parsed.m_semanticContentComplete
+            && parsed.m_content.m_rows.empty();
+        t.expect(refusedAlternate,
+                 "body-byte-count TABLECONTENT remains refused by the detached-TV production parser");
+
+        std::vector<std::uint8_t> truncatedBody = bodyStringObject.payload;
+        if (!truncatedBody.empty())
+            truncatedBody.pop_back();
+        TestableTableContentObject bodyRetry;
+        dwgBuffer invalidBody(truncatedBody.data(), truncatedBody.size(),
+                              &codec);
+        const bool rolledBack = !bodyRetry.parseDwg(
+            DRW::AC1032, &invalidBody, bodyStringObject.handleBits)
+            && !bodyRetry.m_parseComplete
+            && !bodyRetry.m_semanticContentComplete
+            && bodyRetry.m_content.m_rows.empty();
+        dwgBuffer detachedRetry(detachedValueObject.payload.data(),
+                               detachedValueObject.payload.size(), &codec);
+        const bool retryAfterBodyTruncation = detachedValueBuilt
+            && bodyRetry.parseDwg(DRW::AC1032, &detachedRetry,
+                                  detachedValueObject.handleBits)
+            && bodyRetry.m_parseComplete
+            && bodyRetry.m_semanticContentComplete
+            && bodyRetry.m_content.m_rows.size() == 1u
+            && bodyRetry.m_content.m_rows[0].m_cells.size() == 1u
+            && bodyRetry.m_content.m_rows[0].m_cells[0].m_contents.size()
+                == 1u
+            && std::string(bodyRetry.m_content.m_rows[0].m_cells[0]
+                               .m_contents[0].m_value.m_value.c_str())
+                   == "Detached";
+        t.expect(rolledBack && retryAfterBodyTruncation,
+                 "truncated body-byte-count carrier rolls back and the same parser retries with the detached-TV control");
+
+        std::vector<std::uint8_t> bodyStringFrame, sentinelFrame;
+        const bool wrapped = wrapGeneratedR24Object(
+                bodyStringObject, bodyStringFrame)
+            && wrapFrame(ac1032ManagerSentinel, managerSentinelObject,
+                         sentinelFrame);
+        t.expect(wrapped,
+                 "body-byte-count TABLECONTENT and following sentinel frames wrap in memory");
+        if (wrapped) {
+            const auto sentinelOffset = static_cast<std::uint32_t>(
+                bodyStringFrame.size());
+            std::vector<std::uint8_t> bytes = bodyStringFrame;
+            bytes.insert(bytes.end(), sentinelFrame.begin(),
+                         sentinelFrame.end());
+            PersistentManagerDispatchReader reader(
+                bytes, DRW::AC1032, ac1032ManagerSentinel.classNumber);
+            reader.addTableContentClass(700u);
+            PersistentManagerDispatchSink sink;
+            DRW_TableContentObject destinationSentinel;
+            destinationSentinel.handle = 0xACEu;
+            sink.tableContent.push_back(destinationSentinel);
+            const bool read = reader.readObjects(
+                bytes, 0xE701u, sentinelOffset,
+                ac1032ManagerSentinel.handle, sink);
+            const auto rawCandidate = std::find_if(
+                sink.raw.begin(), sink.raw.end(), [](const DRW_UnsupportedObject& object) {
+                    return object.m_handle == 0xE701u;
+                });
+            const bool recovered = read && reader.objectFailures() == 0u
+                && sink.tableContent.size() == 1u
+                && sink.tableContent.front().handle == 0xACEu
+                && sink.typed.size() == 1u
+                && sink.typed.front().handle == ac1032ManagerSentinel.handle
+                && rawCandidate != sink.raw.end()
+                && !rawCandidate->m_typedPayloadValidated;
+            t.expect(recovered,
+                     "body-byte-count candidate stays raw-only and following typed object still publishes");
         }
     }
 }

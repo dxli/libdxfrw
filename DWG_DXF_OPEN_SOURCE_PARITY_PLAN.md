@@ -1,6 +1,6 @@
 # DWG/DXF parity — remaining implementation plan
 
-Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; the PERSUBENTMGR/TABLECONTENT bodies remain disputed and raw-only; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; an unlocked Aqua session was observed, but the Launch Services attempt for ODA 27.1 failed with `kLSNoExecutableErr`; both the installed 27.1 bundle and a downloaded official ODA 27.10 ARM64 bundle fail local code-signature verification, while the 27.10 DMG's internal checksums pass, so 27.10 was not executed and no signature was modified ([package receipt](docs/research/p6-oda-27-10-official-arm64-package-signature-2026-11-07.json)); repeated 27.1 attempts, including the latest user-reported unlock, produced no document-processing result, converter output or suffix evidence; the latest direct retry again aborted during Pasteboard/XPC initialization with matching source/converter hashes; do not repeat the unchanged launch method unless the invocation environment or available converter session changes; continue local work until a publisher-verifiable executable or independent converter session is available; current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing; a debug-only alternate body-string parse of both AC1032 TABLECONTENT objects reaches each exact body boundary and consumes all but one terminal handle bit, but leaves a 17-bit pre-handle string gap and remains unqualified against ODA, so the objects stay raw/refused with no parser change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; AC1024 mechanical physical selected-output routes now cover 17 associative dependency/body pairs, 399 constraint nodes, and 17 variables across two networks and 13 value-dependency children in ASCII/Binary; the DXF `AcDbAssocEdgePersSubentId` codec slice is complete, and ten AC1024 civil Edge bodies decode to source-matched vertex-index cycles and their bounded selected ASCII/Binary output/readback passes; whole-source conversion and native meaning remain open ([read receipt](docs/research/p4-ac1024-civil-assoc-edge-dwg-read-2026-11-07.json), [selected-route receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json)); the viewport DWG debug trace now prints `centerPY` for its Y coordinate (diagnostic only; [receipt](docs/research/p6-viewport-debug-center-y-log-fix-2026-11-07.json)); a LibreCAD_3 persistence probe using raw include/library paths fails because the consumer compiles as C++14 while current upstream libdxfrw requires C++17, and this configuration bypasses libdxfrw's PUBLIC compile-feature propagation ([receipt](docs/research/p8-librecad3-cxx-standard-consumer-compat-2026-11-07.json)); broader source graph closure remains open). This file
+Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectContextData, PERSUBENTMGR, and TABLECONTENT shell recovery now reaches 842/842 published frames with zero entity/object parse failures; generated AC1032 TABLECONTENT detached-TV controls publish complete typed values, while the alternative body-byte-count control stays raw-only and verifies rollback, retry, destination preservation and following-frame recovery; the PERSUBENTMGR/TABLECONTENT source bodies remain disputed and raw-only; IMAGEDEF code-0xC owner is captured as explicitly unqualified, keeping strict output refused pending role evidence; an unlocked Aqua session was observed, but the Launch Services attempt for ODA 27.1 failed with `kLSNoExecutableErr`; both the installed 27.1 bundle and a downloaded official ODA 27.10 ARM64 bundle fail local code-signature verification, while the 27.10 DMG's internal checksums pass, so 27.10 was not executed and no signature was modified ([package receipt](docs/research/p6-oda-27-10-official-arm64-package-signature-2026-11-07.json)); repeated 27.1 attempts, including the latest user-reported unlock, produced no document-processing result, converter output or suffix evidence; the latest direct retry again aborted during Pasteboard/XPC initialization with matching source/converter hashes; do not repeat the unchanged launch method unless the invocation environment or available converter session changes; continue local work until a publisher-verifiable executable or independent converter session is available; current strict `blocks_and_tables` diagnostic reaches 3,586/3,586 frames, and LibreDWG 0.14 repeats the unqualified FIELD child flag values without resolving their semantics, so strict FIELD/FIELDLIST output remains refused; ODA §2's detached-string rule conflicts with ACadSharp-derived TABLE value byte-count parsing; a debug-only alternate body-string parse of both AC1032 TABLECONTENT objects reaches each exact body boundary and consumes all but one terminal handle bit, but leaves a 17-bit pre-handle string gap and remains unqualified against ODA, so the objects stay raw/refused with no parser change; DWG 3DFACE output now rejects invisible-edge masks outside 0–15 and passes generated rollback/retry/readback across all six writer versions; R24 TABLESTYLE generated write/readback now includes AC1032 with same-handle recovery after both invalid-count and invalid-CMC refusal; the focused named-resource import selector now passes after synthetic receipts stopped authorizing strict-complete DWG output, with destination-preserving refusals and no support-claim change; AC1024 mechanical physical selected-output routes now cover 17 associative dependency/body pairs, 399 constraint nodes, and 17 variables across two networks and 13 value-dependency children in ASCII/Binary; the DXF `AcDbAssocEdgePersSubentId` codec slice is complete, and ten AC1024 civil Edge bodies decode to source-matched vertex-index cycles and their bounded selected ASCII/Binary output/readback passes; whole-source conversion and native meaning remain open ([read receipt](docs/research/p4-ac1024-civil-assoc-edge-dwg-read-2026-11-07.json), [selected-route receipt](docs/research/p4-ac1024-civil-assoc-selected-route-readiness-2026-11-07.json)); the viewport DWG debug trace now prints `centerPY` for its Y coordinate (diagnostic only; [receipt](docs/research/p6-viewport-debug-center-y-log-fix-2026-11-07.json)); a LibreCAD_3 persistence probe using raw include/library paths fails because the consumer compiles as C++14 while current upstream libdxfrw requires C++17, and this configuration bypasses libdxfrw's PUBLIC compile-feature propagation ([receipt](docs/research/p8-librecad3-cxx-standard-consumer-compat-2026-11-07.json)); broader source graph closure remains open). This file
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
 
@@ -618,18 +618,40 @@ created locally from scratch for the specific control.
    ACadSharp-derived; none of these peers is an independent adjudicator.
    See the expanded [TABLECONTENT receipt](docs/research/p6-ac1032-tablecontent-raw-only-shell-recovery-2026-11-07.json).
 
-   Next, resolve the candidate's framing before any production parser change:
-   (a) decode the 17-bit tail against the exact R2018 string/handle boundary and
-   explain the remaining terminal handle bit for both objects; (b) research the
-   ODA rule against eligible producer/source evidence and the conflicting
-   ACadSharp/LibreDWG source profiles, without treating either implementation
-   or shared parser assumptions as an independent oracle; (c) create generated in-memory controls for both
-   detached-TV and body-byte-count hypotheses, with exact stream ends,
-   following-frame sentinel, rollback on truncation/refusal, and same-parser
-   retry. Keep the external sample out of Git. Adopt a typed profile only after
-   the spec conflict and all three stream boundaries are independently
-   reconciled. Otherwise preserve raw-only recovery and strict-output refusal,
-   and continue with another ready local packet rather than blocking the plan.
+   Next, resolve the candidate's framing before any production parser change.
+   Keep this as two bounded sub-plans so unresolved external evidence does not
+   delay the locally executable control:
+
+   1. **Generated carrier controls (implemented; local evidence only):** the
+      existing `dwg_reader_matrix_tests` TABLECONTENT raw-recovery case now
+      builds two otherwise identical in-memory AC1032 records; no DWG/DXF
+      fixture was added. The detached-TV control publishes through the typed
+      callback with the exact value and complete semantic state, then publishes
+      the following PERSUBENTMGR sentinel. The body BL byte-count UTF-16 control
+      remains raw-only under the production parser, does not call the typed
+      destination (a pre-existing destination sentinel remains intact), and
+      still publishes the following typed object. Both generated layouts
+      record and check ordered body/string/footer/handle boundaries and exact
+      final object bits. Truncated versions reset parser state; the same parser
+      instance then successfully retries with the detached-TV control. The
+      focused `libdxfrw_persistent_manager_prefix_dispatch` CTest passes. See
+      the [generated-control receipt](docs/research/p6-ac1032-tablecontent-generated-carrier-controls-2026-11-07.json).
+      These controls prove the two local framing paths and recovery behavior;
+      they do not choose the real producer's encoding. Production parsing and
+      strict-output refusal for the external source remain unchanged.
+
+   2. **External framing and schema decision (evidence-gated):** (a) decode the
+      17-bit gap against the exact R2018 string/handle boundary and explain the
+      remaining terminal handle bit for both source objects; (b) reconcile
+      ODA v5.4.1's detached-string/type-4-TV rule with eligible producer/source
+      evidence and the conflicting ACadSharp/LibreDWG source profiles, without
+      treating either implementation or shared parser assumptions as an
+      independent oracle. Keep the external DWG out of Git. Adopt a typed
+      profile only after the spec conflict and all three source stream
+      boundaries are independently reconciled. Otherwise preserve raw-only
+      recovery and strict-output refusal, then continue with another ready
+      local packet; do not let this unresolved external gate block independent
+      implementation work.
 
    A separate tracked external AC1032 ODA R2018 sample (`acad_table_cells.dwg`) exposed one `AcDbMentalRayRenderSettings` parse failure. The bounded parser now tries the observed base-field variants transactionally and accepts only the uniquely body/string-bounded layout. A current-code diagnostic publishes 182/182 frames with zero entity/object parse failures. Strict export remains refused by the sample's two HEADER integrity rows and 739 unclaimed bytes; this resolves one parser failure only. Independent producer evidence for the modern `hasPredefined` variants and HEADER-envelope meaning remain open. See the [fix receipt](docs/research/p6-ac1032-acad-table-cells-reader-fix-2026-11-07.json).
 
