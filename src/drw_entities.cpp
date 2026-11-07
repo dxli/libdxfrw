@@ -13606,20 +13606,58 @@ bool DRW_TableContentObject::parseDwg(DRW::Version version, dwgBuffer *buf, std:
             currentDwgBit(&candidateStrings);
         const std::uint64_t candidateHandleBit =
             currentDwgBit(&candidateHandles);
+        std::uint64_t sourceStringStartBit = 0;
+        std::uint64_t sourceStringEndBit = 0;
+        const bool sourceStringBoundsRead =
+            candidateStrings.getR2007StringStreamBounds(
+                objSize, sourceStringStartBit, sourceStringEndBit);
+        std::uint16_t sourceStringLowSize = 0;
+        std::uint16_t sourceStringHighSize = 0;
+        bool sourceStringPresent = false;
+        bool sourceStringFooterRead = false;
+        if (objSize >= 17u) {
+            dwgBuffer footerProbe = candidateStrings.forkIndependent();
+            const std::uint64_t footerBit = objSize - 17u;
+            if (footerProbe.setPosition(footerBit >> 3)) {
+                footerProbe.setBitPos(
+                    static_cast<std::uint8_t>(footerBit & 7u));
+                sourceStringLowSize = footerProbe.getRawShort16();
+                sourceStringPresent = footerProbe.getBit() != 0;
+                sourceStringFooterRead = footerProbe.isGood();
+            }
+            if (sourceStringFooterRead
+                && (sourceStringLowSize & 0x8000u) != 0u
+                && objSize >= 33u) {
+                dwgBuffer highSizeProbe = candidateStrings.forkIndependent();
+                const std::uint64_t highSizeBit = objSize - 33u;
+                if (highSizeProbe.setPosition(highSizeBit >> 3)) {
+                    highSizeProbe.setBitPos(
+                        static_cast<std::uint8_t>(highSizeBit & 7u));
+                    sourceStringHighSize = highSizeProbe.getRawShort16();
+                    sourceStringFooterRead = highSizeProbe.isGood();
+                }
+            }
+        }
         dwgBuffer trailingStringProbe = candidateStrings.forkIndependent();
         const std::uint64_t trailingStringStartBit = candidateStringBit;
         const UTF8STRING trailingString = readTableText(
-            version, &trailingStringProbe, objSize);
+            version, &trailingStringProbe,
+            sourceStringBoundsRead ? sourceStringEndBit : objSize);
         const bool trailingStringRead = trailingStringProbe.isGood()
-            && currentDwgBit(&trailingStringProbe) <= objSize;
+            && currentDwgBit(&trailingStringProbe)
+                <= (sourceStringBoundsRead ? sourceStringEndBit : objSize);
         std::string trailingStringBits;
         dwgBuffer trailingStringBitProbe = candidateStrings.forkIndependent();
-        const std::uint64_t trailingStringGapBits = candidateStringBit <= objSize
-            ? objSize - candidateStringBit : 0;
+        const std::uint64_t stringDataEndBit = sourceStringBoundsRead
+            ? sourceStringEndBit : objSize;
+        const std::uint64_t trailingStringGapBits =
+            candidateStringBit <= stringDataEndBit
+                ? stringDataEndBit - candidateStringBit : 0;
         if (trailingStringGapBits <= 64u) {
             for (std::uint64_t i = 0; i < trailingStringGapBits; ++i) {
                 bool bit = false;
-                if (!readBoundedBit(trailingStringBitProbe, objSize, bit))
+                if (!readBoundedBit(trailingStringBitProbe,
+                                    stringDataEndBit, bit))
                     break;
                 trailingStringBits.push_back(bit ? '1' : '0');
             }
@@ -13644,6 +13682,14 @@ bool DRW_TableContentObject::parseDwg(DRW::Version version, dwgBuffer *buf, std:
         DRW_DBG(currentDwgBit(&trailingStringProbe));
         DRW_DBG(" value="); DRW_DBG(trailingString);
         DRW_DBG(" gapBits="); DRW_DBG(trailingStringBits);
+        DRW_DBG(" exactStringBounds=");
+        DRW_DBG(sourceStringBoundsRead ? 1 : 0); DRW_DBG(":");
+        DRW_DBG(sourceStringStartBit); DRW_DBG("..");
+        DRW_DBG(sourceStringEndBit); DRW_DBG(" footerRead=");
+        DRW_DBG(sourceStringFooterRead ? 1 : 0); DRW_DBG(" lowSize=");
+        DRW_DBG(sourceStringLowSize); DRW_DBG(" highSize=");
+        DRW_DBG(sourceStringHighSize); DRW_DBG(" present=");
+        DRW_DBG(sourceStringPresent ? 1 : 0);
         DRW_DBG(" trailingHandleBit=");
         DRW_DBG(trailingHandleBitRead ? 1 : 0);
         if (trailingHandleBitRead) {

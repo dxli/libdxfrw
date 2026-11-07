@@ -10,7 +10,7 @@
     "provenance": "Tracked external ACadSharp sample; used read-only, not copied into this repository."
   },
   "authority": {
-    "oda": "ODA v5.4.1 §2 requires R2007+ object Unicode strings in the detached string stream; §20.4.99 describes TABLECONTENT value strings as TV. The peer's body-byte-count interpretation remains unreconciled.",
+    "oda": "ODA v5.4.1 \u00a72 requires R2007+ object Unicode strings in the detached string stream; \u00a720.4.99 describes TABLECONTENT value strings as TV. The peer's body-byte-count interpretation remains unreconciled.",
     "implementationPolicy": "Do not change TABLECONTENT field parsing or infer semantic values. Preserve only the common shell and exact raw frame when the typed parser fails and RawObjectShell validates."
   },
   "typedFailureTrace": {
@@ -46,22 +46,116 @@
         "handle": "0xE5F",
         "objectSizeAndHandleStartBit": 26135,
         "handleEndBit": 26584,
-        "commonOwner": {"span": "26135..26151", "code": "0x7", "reference": "0xE62"},
-        "currentInterpretation": {"parsedUnit": 44, "parsedAttributeCount": 32, "nextHandle": {"span": "26151..26167", "code": "0x5", "reference": "0x11", "interpretedAs": "ATTDEF soft pointer; rejected"}},
-        "bodyStringCandidate": {"byteCount": 44, "payloadSpan": "634..996", "unit": 0, "attributeCount": 0, "contentFormatOverrideFlag": 1, "format": "", "display": "Hello this is a title", "contentFormatTextStyle": {"span": "26151..26167", "code": "0x5", "reference": "0x11"}},
-        "alternateParse": {"parseComplete": true, "semanticComplete": false, "bodySpan": "40..12042/12042", "stringEndBit": 26118, "handleSpan": "26135..26583/26584", "unconsumedStringToHandleGapBits": 17, "stringGapBits": "11111100001101101", "trailingTvDecodeSucceeded": false, "terminalHandleBit": 1}
+        "commonOwner": {
+          "span": "26135..26151",
+          "code": "0x7",
+          "reference": "0xE62"
+        },
+        "currentInterpretation": {
+          "parsedUnit": 44,
+          "parsedAttributeCount": 32,
+          "nextHandle": {
+            "span": "26151..26167",
+            "code": "0x5",
+            "reference": "0x11",
+            "interpretedAs": "ATTDEF soft pointer; rejected"
+          }
+        },
+        "bodyStringCandidate": {
+          "byteCount": 44,
+          "payloadSpan": "634..996",
+          "unit": 0,
+          "attributeCount": 0,
+          "contentFormatOverrideFlag": 1,
+          "format": "",
+          "display": "Hello this is a title",
+          "contentFormatTextStyle": {
+            "span": "26151..26167",
+            "code": "0x5",
+            "reference": "0x11"
+          }
+        },
+        "alternateParse": {
+          "parseComplete": true,
+          "semanticComplete": false,
+          "bodySpan": "40..12042/12042",
+          "stringEndBit": 26118,
+          "handleSpan": "26135..26583/26584",
+          "unconsumedStringToHandleGapBits": 17,
+          "stringGapBits": "11111100001101101",
+          "trailingTvDecodeSucceeded": false,
+          "terminalHandleBit": 1,
+          "exactDetachedStringStream": {
+            "cursorAtEndBit": 26118,
+            "dataStartBit": 12042,
+            "dataEndBit": 26118,
+            "dataSizeBits": 14076,
+            "footerSpan": "26118..26135",
+            "footerLowSize": 14076,
+            "footerHighSize": 0,
+            "stringPresent": true,
+            "interpretation": "The previously reported 17-bit pre-handle gap is exactly the raw 16-bit string-size word plus the final string-present bit. The candidate cursor is at the ODA-defined string-data end."
+          }
+        }
       },
       {
         "handle": "0x747",
         "objectSizeAndHandleStartBit": 53223,
         "handleEndBit": 55080,
-        "commonOwner": {"span": "53223..53247", "code": "0x7", "reference": "0xE58"},
-        "currentInterpretation": {"parsedUnit": 26, "parsedAttributeCount": 80, "nextHandle": {"span": "53247..53255", "code": "0x5", "reference": "0x00", "interpretedAs": "ATTDEF soft pointer; rejected"}},
-        "bodyStringCandidate": {"byteCount": 26, "payloadSpan": "466..684", "unit": 0, "attributeCount": 0, "contentFormatOverrideFlag": 1, "format": "", "display": "Table sample", "contentFormatTextStyle": {"span": "53247..53255", "code": "0x5", "reference": "0x00"}},
-        "alternateParse": {"parseComplete": true, "semanticComplete": false, "bodySpan": "40..39838/39838", "stringEndBit": 53206, "handleSpan": "53223..55079/55080", "unconsumedStringToHandleGapBits": 17, "stringGapBits": "00111000001101001", "trailingTvDecodeSucceeded": false, "terminalHandleBit": 1}
+        "commonOwner": {
+          "span": "53223..53247",
+          "code": "0x7",
+          "reference": "0xE58"
+        },
+        "currentInterpretation": {
+          "parsedUnit": 26,
+          "parsedAttributeCount": 80,
+          "nextHandle": {
+            "span": "53247..53255",
+            "code": "0x5",
+            "reference": "0x00",
+            "interpretedAs": "ATTDEF soft pointer; rejected"
+          }
+        },
+        "bodyStringCandidate": {
+          "byteCount": 26,
+          "payloadSpan": "466..684",
+          "unit": 0,
+          "attributeCount": 0,
+          "contentFormatOverrideFlag": 1,
+          "format": "",
+          "display": "Table sample",
+          "contentFormatTextStyle": {
+            "span": "53247..53255",
+            "code": "0x5",
+            "reference": "0x00"
+          }
+        },
+        "alternateParse": {
+          "parseComplete": true,
+          "semanticComplete": false,
+          "bodySpan": "40..39838/39838",
+          "stringEndBit": 53206,
+          "handleSpan": "53223..55079/55080",
+          "unconsumedStringToHandleGapBits": 17,
+          "stringGapBits": "00111000001101001",
+          "trailingTvDecodeSucceeded": false,
+          "terminalHandleBit": 1,
+          "exactDetachedStringStream": {
+            "cursorAtEndBit": 53206,
+            "dataStartBit": 39838,
+            "dataEndBit": 53206,
+            "dataSizeBits": 13368,
+            "footerSpan": "53206..53223",
+            "footerLowSize": 13368,
+            "footerHighSize": 0,
+            "stringPresent": true,
+            "interpretation": "The previously reported 17-bit pre-handle gap is exactly the raw 16-bit string-size word plus the final string-present bit. The candidate cursor is at the ODA-defined string-data end."
+          }
+        }
       }
     ],
-    "interpretation": "A debug-only alternate parse treats the type-4 value as a BL byte-counted body string, then reads unit 0, zero attributes, content-format fields and the observed code-0x5 text-style handle. Both records reach the exact body boundary and consume all but one terminal handle bit. This explains the ordinary parser's 32/80 attribute counts and role mismatch as a likely cursor displacement; it does not independently establish the candidate schema. The 17-bit pre-handle string gap is not decoded, the alternate typed projections remain semantically incomplete, and the candidate conflicts with ODA v5.4.1 §§2 and 20.4.99.",
+    "interpretation": "A debug-only alternate parse treats the type-4 value as a BL byte-counted body string, then reads unit 0, zero attributes, content-format fields and the observed code-0x5 text-style handle. Both records reach the exact body boundary, and a follow-up check applies the ODA R2007+ detached-stream footer rule: candidate string cursors equal the exact stream ends, the 14,076/13,368-bit stream sizes match their footer words, and the 17 following bits are each the raw size word plus string-present bit. The earlier failed trailing-TV probe had interpreted that footer as text. The candidate still consumes all but one terminal handle bit, remains semantically incomplete, and conflicts with ODA v5.4.1 \u00a7\u00a72 and 20.4.99; this does not independently establish its schema.",
     "implementationPolicy": "Keep the production interpretation, raw-only fallback and strict-output refusal unchanged. Resolve the candidate's complete string/handle framing and its conflict with the authoritative ODA text before adopting it."
   },
   "peerParserRecheck": {
@@ -168,7 +262,44 @@
       "generatedControlResult": "PASS, 1/1, 0.49 seconds",
       "scope": "Debug diagnostics and raw-only recovery validation only; no TABLECONTENT production interpretation or support claim changed."
     },
-    "fixturePolicy": "No DWG or DXF fixture was added; the regression control is generated in memory."
+    "fixturePolicy": "No DWG or DXF fixture was added; the regression control is generated in memory.",
+    "stringFooterBoundaryDiagnostic": {
+      "buildCommand": "cmake --build build --target dwg2dxf -j4",
+      "buildResult": "PASS",
+      "physicalTraceCommand": "build/dwg2dxf/dwg2dxf /Users/dli/dev/ACadSharp/samples/sample_AC1032.dwg -y -d -v2018 /private/tmp/tablecontent-boundary.dxf",
+      "sourceSha256": "0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528",
+      "binarySha256": "f2889924cb197b2da5d887a5b3152964d2c6a2704b090576cf2838a56bd74e8c",
+      "logPath": "/private/tmp/tablecontent-boundary.log",
+      "logSha256": "c81fd0d69f9201cdf0d9e7c9e07fa29e29e0f8e09edb8a4b6340dfa97be3b6e6",
+      "result": "Both AC1032 candidate cursors equal the exact detached string-stream end calculated from the R2007+ footer. The low-size word matches the string-data span, high-size word is zero, and the presence bit is one. The parser still leaves one handle-tail bit and semanticComplete=false.",
+      "observations": [
+        {
+          "handle": "0xE5F",
+          "stringDataSpan": "12042..26118",
+          "stringDataBits": 14076,
+          "footerSpan": "26118..26135",
+          "footerLowSize": 14076,
+          "footerHighSize": 0,
+          "stringPresent": true,
+          "candidateStringCursor": 26118,
+          "handleStream": "26135..26584",
+          "candidateHandleCursor": 26583
+        },
+        {
+          "handle": "0x747",
+          "stringDataSpan": "39838..53206",
+          "stringDataBits": 13368,
+          "footerSpan": "53206..53223",
+          "footerLowSize": 13368,
+          "footerHighSize": 0,
+          "stringPresent": true,
+          "candidateStringCursor": 53206,
+          "handleStream": "53223..55080",
+          "candidateHandleCursor": 55079
+        }
+      ],
+      "scope": "Debug-only diagnostics and source-bound span accounting; no parser interpretation, typed publication, output eligibility or support claim changed."
+    }
   },
-  "scopeLimit": "This closes raw frame publication for the two current AC1032 TABLECONTENT objects only. The debug-only body-byte-count candidate reaches the body boundary and nearly consumes each handle stream, but its 17-bit string gap, one terminal handle bit and conflict with ODA remain unresolved. It does not recover production typed cell values, establish output support, qualify other versions or producers, or establish native TABLE rendering."
+  "scopeLimit": "This closes raw frame publication for the two current AC1032 TABLECONTENT objects only. The debug-only body-byte-count candidate reaches the exact body and detached-string boundaries, but remains in conflict with ODA v5.4.1 \u00a7\u00a72 and 20.4.99 and leaves one handle-tail bit per object unexplained. It does not recover production typed cell values, establish output support, qualify other versions or producers, or establish native TABLE rendering."
 }
