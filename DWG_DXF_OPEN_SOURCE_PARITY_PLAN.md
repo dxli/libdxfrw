@@ -897,9 +897,23 @@ and [LEADER receipt](docs/research/p4-leader-dimstyle-reference-fail-closed-2026
    three groups, while 11 geometry-dependency bodies remain wire-incomplete
    and one carries a present edge-subentity class name. The existing
    mechanical-only selector refuses it before serialization. Keep that
-   refusal; independently establish the incomplete edge-subentity body spans
-   and all action/member closure before designing a separate civil projection
-   ([readiness receipt](docs/research/p4-ac1024-civil-assoc-output-readiness-2026-11-07.json)).
+   refusal. A diagnostic profile comparison confirms the mechanical source has
+   54 parsed and wire-complete geometry-dependency bodies named
+   `AcDbAssocSingleEdgePersSubentId`; this does not prove their exact physical
+   spans independently, does not extend its selected route beyond the 17
+   generic dependency/body pairs, and does not establish that the civil
+   `AcDbAssocEdgePersSubentId` body shares that layout. Make the next slice
+   evidence-first and narrow: trace the 11 civil body and detached-string spans
+   with source frame/class/version identity; independently bind the edge
+   subentity fields and handle roles; exercise only evidence-backed candidate
+   layouts with generated sentinels, truncation and transactional rollback.
+   Once the layout is independently bounded, decode one class/profile, close
+   its action/member graph, then add selected ASCII/Binary output with typed
+   readback, wrong-kind refusal and same-adapter retry. Keep strict civil
+   whole-source output refused for its separate null LTYPE_CONTROL member, and
+   do not broaden mechanical output or support claims. See the [readiness
+   receipt](docs/research/p4-ac1024-civil-assoc-output-readiness-2026-11-07.json)
+   and [mechanical/civil wire-profile comparison](docs/research/p4-ac1024-mechanical-civil-assoc-wire-profile-comparison-2026-11-07.json).
    Neither source profile establishes native constraint behavior. See also the
    [dependency-link receipt](docs/research/p4-ac1024-assoc-node-dependency-source-links-2026-10-30.json)
    and [generated graph output control](tests/CMakeLists.txt).
