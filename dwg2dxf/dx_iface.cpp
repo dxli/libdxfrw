@@ -35287,6 +35287,15 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
         && hasLayoutIdentity(0x22u, "Model")
         && hasLayoutIdentity(0x18Eu, "ANSI A Plot")
         && hasLayoutIdentity(0x194u, "ISO A4 Plot");
+    const bool ac1021PlotScreeningProfile = ac1021Profile
+        && cData->layouts.size() == 7u
+        && hasLayoutIdentity(0x22u, "Model")
+        && hasLayoutIdentity(0x2BDu, "Fill Patterns")
+        && hasLayoutIdentity(0x2C5u, "Grayscales")
+        && hasLayoutIdentity(0x2CDu, "Screening 100%")
+        && hasLayoutIdentity(0x2D4u, "Screening 25%")
+        && hasLayoutIdentity(0x2DBu, "Screening 50%")
+        && hasLayoutIdentity(0x2E2u, "Screening 75%");
     const bool ac1021TabletProfile = ac1021Profile
         && cData->layouts.size() == 3u
         && hasLayoutIdentity(0x22u, "Model")
@@ -35300,7 +35309,8 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
     // dictionary, reciprocal BLOCK_RECORD edges, and bounded dependencies.
     const bool ac1015Profile = cData->sourceVersion == DRW::AC1015;
     const bool ac1018Profile = cData->sourceVersion == DRW::AC1018;
-    const std::size_t expectedLayoutCount =
+    const std::size_t expectedLayoutCount = ac1021PlotScreeningProfile ? 7u
+        :
         (ac1018Profile || ac1021LineweightsProfile
             || ac1021TabletProfile || ac1021ColorwhProfile
             || ac1021TrueTypeProfile) ? 3u : 2u;
@@ -35399,6 +35409,10 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
         : ac1021TrueTypeProfile
         ? std::vector<const char*>{
             "Model", "ANSI A Plot", "ISO A4 Plot"}
+        : ac1021PlotScreeningProfile
+        ? std::vector<const char*>{
+            "Model", "Fill Patterns", "Grayscales", "Screening 100%",
+            "Screening 25%", "Screening 50%", "Screening 75%"}
         : ac1021TabletProfile
         ? std::vector<const char*>{
             "Model", "ISO A2 Plot", "ANSI C Plot"}
@@ -35417,7 +35431,8 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
         if (ac1018Profile || ac1015Profile || ac1021Profile) {
             const std::vector<const char*> emptyRootNames =
                 (ac1021LineweightsProfile || ac1021ColorwhProfile
-                    || ac1021TrueTypeProfile)
+                    || ac1021TrueTypeProfile
+                    || ac1021PlotScreeningProfile)
                 ? std::vector<const char*>{
                     "ACAD_GROUP", "ACAD_PLOTSETTINGS", "ACAD_COLOR"}
                 : ac1021Profile
@@ -35504,7 +35519,8 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
             // this frozen source model.
             const std::vector<const char*> expectedNodNames =
                 (ac1021LineweightsProfile || ac1021ColorwhProfile
-                    || ac1021TrueTypeProfile)
+                    || ac1021TrueTypeProfile
+                    || ac1021PlotScreeningProfile)
                 ? std::vector<const char*>{
                     "ACAD_COLOR", "ACAD_GROUP", "ACAD_LAYOUT",
                     "ACAD_MATERIAL", "ACAD_MLINESTYLE",
@@ -35840,7 +35856,14 @@ bool dx_iface::prepareDwgLayouts(DRW::Version version, bool debug) noexcept {
             if (!selected.emplace(layout.handle, std::move(snapshot)).second)
                 return skip("two unique physical layout identities");
         }
-        const bool expectedPaperLayouts = ac1021TrueTypeProfile
+        const bool expectedPaperLayouts = ac1021PlotScreeningProfile
+            ? selectedNames.count("Fill Patterns") == 1u
+                && selectedNames.count("Grayscales") == 1u
+                && selectedNames.count("Screening 100%") == 1u
+                && selectedNames.count("Screening 25%") == 1u
+                && selectedNames.count("Screening 50%") == 1u
+                && selectedNames.count("Screening 75%") == 1u
+            : ac1021TrueTypeProfile
             ? selectedNames.count("ANSI A Plot") == 1u
                 && selectedNames.count("ISO A4 Plot") == 1u
             : ac1021LineweightsProfile
@@ -35942,6 +35965,16 @@ bool dx_iface::hasUnchangedDwgLayoutOutputSources(bool debug) const noexcept {
         && hasLayoutIdentity(0x22u, "Model")
         && hasLayoutIdentity(0x18Eu, "ANSI A Plot")
         && hasLayoutIdentity(0x194u, "ISO A4 Plot");
+    const bool ac1021PlotScreeningProfile = cData != nullptr
+        && cData->sourceVersion == DRW::AC1021
+        && cData->layouts.size() == 7u
+        && hasLayoutIdentity(0x22u, "Model")
+        && hasLayoutIdentity(0x2BDu, "Fill Patterns")
+        && hasLayoutIdentity(0x2C5u, "Grayscales")
+        && hasLayoutIdentity(0x2CDu, "Screening 100%")
+        && hasLayoutIdentity(0x2D4u, "Screening 25%")
+        && hasLayoutIdentity(0x2DBu, "Screening 50%")
+        && hasLayoutIdentity(0x2E2u, "Screening 75%");
     if (cData == nullptr || m_dwgLayoutOutputOwner != cData
         || m_dwgLayoutOutputGeneration != cData->importGeneration
         || cData->sourceFormat != dx_source_format::DWG
@@ -35955,7 +35988,8 @@ bool dx_iface::hasUnchangedDwgLayoutOutputSources(bool debug) const noexcept {
             && m_dwgLayoutOutputSourceVersion != DRW::AC1018
             && !(m_dwgLayoutOutputSourceVersion == DRW::AC1021
                  && (ac1021LineweightsProfile || ac1021ColorwhProfile
-                     || ac1021TrueTypeProfile)))
+                     || ac1021TrueTypeProfile
+                     || ac1021PlotScreeningProfile)))
         || (m_dwgLayoutOutputNodComplete
             != (m_dwgLayoutOutputNod.handle != 0u))
         || (m_dwgLayoutOutputSourceVersion == DRW::AC1024
@@ -35970,7 +36004,8 @@ bool dx_iface::hasUnchangedDwgLayoutOutputSources(bool debug) const noexcept {
             && !m_dwgNodDictionaryOutputSources.empty()
             && m_dwgNodDictionaryOutputSources.size()
                 != ((ac1021LineweightsProfile || ac1021ColorwhProfile
-                     || ac1021TrueTypeProfile)
+                     || ac1021TrueTypeProfile
+                     || ac1021PlotScreeningProfile)
                     ? 3u : 1u))
         || cData->layouts.size() != m_dwgLayoutOutputSources.size()
         || cData->namedObjectDictionary.handle != m_dwgLayoutOutputNodHandle
@@ -73803,6 +73838,19 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
         {0x191u, 2, 2, "ANSI A Plot"},
         {0x196u, 1, 1, "ISO A4 Plot"},
         {0x197u, 2, 2, "ISO A4 Plot"}}};
+    constexpr std::array<ExpectedViewport, 12> ac1021PlotScreeningProfile{{
+        {0x2BFu, 1, 1, "Fill Patterns"},
+        {0x2C0u, 2, 2, "Fill Patterns"},
+        {0x2C7u, 1, 1, "Grayscales"},
+        {0x2C8u, 2, 2, "Grayscales"},
+        {0x2CFu, 1, 1, "Screening 100%"},
+        {0x2D0u, 2, 2, "Screening 100%"},
+        {0x2D6u, 1, 1, "Screening 25%"},
+        {0x2D7u, 2, 2, "Screening 25%"},
+        {0x2DDu, 1, 1, "Screening 50%"},
+        {0x2DEu, 2, 2, "Screening 50%"},
+        {0x2E4u, 1, 1, "Screening 75%"},
+        {0x2E5u, 2, 2, "Screening 75%"}}};
     const auto matchesProfile = [&type34Entities](const auto& profile) {
         return type34Entities.size() == profile.size()
             && std::all_of(profile.begin(), profile.end(),
@@ -73821,6 +73869,9 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
         && matchesProfile(ac1021ColorwhProfile);
     const bool ac1021TrueTypeSource = cData->sourceVersion == DRW::AC1021
         && matchesProfile(ac1021TrueTypeProfile);
+    const bool ac1021PlotScreeningSource =
+        cData->sourceVersion == DRW::AC1021
+        && matchesProfile(ac1021PlotScreeningProfile);
     const bool mechanicalSource = cData->sourceVersion == DRW::AC1024
         && matchesProfile(mechanicalProfile);
     const bool titleBlockSource = matchesProfile(titleBlockProfile);
@@ -73829,7 +73880,7 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
     // unqualified child graph and must stay refused until separately proved.
     if (!ac1021Source && !ac1021LineweightsSource
         && !ac1021TabletSource && !ac1021ColorwhSource
-        && !ac1021TrueTypeSource
+        && !ac1021TrueTypeSource && !ac1021PlotScreeningSource
         && !mechanicalSource && !titleBlockSource)
         return true;
     const ExpectedViewport* expected = ac1021Source
@@ -73838,6 +73889,7 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
         : ac1021TabletSource ? ac1021TabletProfile.data()
         : ac1021ColorwhSource ? ac1021ColorwhProfile.data()
         : ac1021TrueTypeSource ? ac1021TrueTypeProfile.data()
+        : ac1021PlotScreeningSource ? ac1021PlotScreeningProfile.data()
         : mechanicalSource ? mechanicalProfile.data()
                            : titleBlockProfile.data();
     const std::size_t expectedCount = ac1021Source
@@ -73846,6 +73898,7 @@ bool dx_iface::finalizeDwgViewportOutputQualifications() noexcept {
         : ac1021TabletSource ? ac1021TabletProfile.size()
         : ac1021ColorwhSource ? ac1021ColorwhProfile.size()
         : ac1021TrueTypeSource ? ac1021TrueTypeProfile.size()
+        : ac1021PlotScreeningSource ? ac1021PlotScreeningProfile.size()
         : mechanicalSource ? mechanicalProfile.size()
                            : titleBlockProfile.size();
     const bool xrecordSource = ac1021Source || mechanicalSource;

@@ -50759,6 +50759,16 @@ bool physicalViewportOutputReadback(
         && hasLayoutIdentity(0x18Eu, "ANSI A Plot")
         && hasLayoutIdentity(0x194u, "ISO A4 Plot")
         && source.dwgReadOutcome.opaqueViewCallbacks == 53u;
+    const bool ac1021PlotScreeningSource = ac1021Source
+        && source.layouts.size() == 7u
+        && hasLayoutIdentity(0x22u, "Model")
+        && hasLayoutIdentity(0x2BDu, "Fill Patterns")
+        && hasLayoutIdentity(0x2C5u, "Grayscales")
+        && hasLayoutIdentity(0x2CDu, "Screening 100%")
+        && hasLayoutIdentity(0x2D4u, "Screening 25%")
+        && hasLayoutIdentity(0x2DBu, "Screening 50%")
+        && hasLayoutIdentity(0x2E2u, "Screening 75%")
+        && source.dwgReadOutcome.opaqueViewCallbacks == 69u;
     struct LocatedViewport {
         const DRW_Viewport* viewport{nullptr};
         std::string blockName;
@@ -50788,6 +50798,16 @@ bool physicalViewportOutputReadback(
             {0x22u, 82}, {0x18Eu, 82}, {0x194u, 82},
             {0x190u, 34}, {0x191u, 34},
             {0x196u, 34}, {0x197u, 34}};
+    } else if (ac1021PlotScreeningSource) {
+        expectedHandles = {0x2BFu, 0x2C0u, 0x2C7u, 0x2C8u,
+                           0x2CFu, 0x2D0u, 0x2D6u, 0x2D7u,
+                           0x2DDu, 0x2DEu, 0x2E4u, 0x2E5u};
+        expectedOpaqueCallbacks = {
+            {0x22u, 82}, {0x2BDu, 82}, {0x2C5u, 82}, {0x2CDu, 82},
+            {0x2D4u, 82}, {0x2DBu, 82}, {0x2E2u, 82},
+            {0x2BFu, 34}, {0x2C0u, 34}, {0x2C7u, 34}, {0x2C8u, 34},
+            {0x2CFu, 34}, {0x2D0u, 34}, {0x2D6u, 34}, {0x2D7u, 34},
+            {0x2DDu, 34}, {0x2DEu, 34}, {0x2E4u, 34}, {0x2E5u, 34}};
     } else if (ac1021Source
         && source.dwgReadOutcome.opaqueViewCallbacks == 186u) {
         expectedHandles = {0x266u, 0x26Au};
@@ -50884,7 +50904,7 @@ bool physicalViewportOutputReadback(
     };
     const auto sameProfile = [&sameDouble, &sameCoord](
             const DRW_Viewport& expected, const DRW_Viewport& actual,
-            bool remappedClipBoundary) {
+            bool remappedClipBoundary, bool remappedFrozenLayerHandles) {
         return actual.eType == DRW::VIEWPORT
             && actual.space == expected.space
             && actual.layer == expected.layer
@@ -50954,7 +50974,8 @@ bool physicalViewportOutputReadback(
             && actual.visualStyleHandle == expected.visualStyleHandle
             && actual.shadePlotHandle == expected.shadePlotHandle
             && actual.m_sunHandle == expected.m_sunHandle
-            && actual.frozenLayerHandles == expected.frozenLayerHandles;
+            && (remappedFrozenLayerHandles
+                || actual.frozenLayerHandles == expected.frozenLayerHandles);
     };
     const auto sameVariant = [&sameCoord](const DRW_Variant& lhs,
                                           const DRW_Variant& rhs) {
@@ -51102,9 +51123,10 @@ bool physicalViewportOutputReadback(
             visit(block, false);
         return matches == 1u ? found : LocatedCircle{};
     };
+    const DRW_XRecord* sourceAseHierarchyCache = nullptr;
     if (ac1021Source && !ac1021LineweightsSource
         && !ac1021TabletSource && !ac1021ColorwhSource
-        && !ac1021TrueTypeSource) {
+        && !ac1021TrueTypeSource && !ac1021PlotScreeningSource) {
         const DRW_Layout* layout =
             uniqueLayoutByName(source, "dwgmodels.com");
         if (layout == nullptr || layout->handle != 0xD7u
@@ -51172,6 +51194,141 @@ bool physicalViewportOutputReadback(
                 return fail("AC1021 VIEWPORT extension graph is missing standard source-frame eligibility");
             if (styleMatches != 1u || layerMatches != 1u)
                 return fail("AC1021 VIEWPORT layer or visual-style dependency is missing/ambiguous");
+        }
+    } else if (ac1021PlotScreeningSource) {
+        const auto verifyLayout = [&source, &uniqueLayoutByName,
+                                   &uniqueBlockRecord](
+                const char* name, std::uint32_t layoutHandle,
+                std::uint32_t blockHandle,
+                std::initializer_list<std::uint32_t> viewportHandles) {
+            const DRW_Layout* layout = uniqueLayoutByName(source, name);
+            const DRW_Block_Record* owner = layout == nullptr ? nullptr
+                : uniqueBlockRecord(source,
+                      layout->paperSpaceBlockRecordHandle.ref);
+            return layout != nullptr && layout->handle == layoutHandle
+                && layout->viewportCount
+                    == static_cast<std::int32_t>(viewportHandles.size())
+                && layout->viewportHandles
+                    == std::vector<std::uint32_t>(viewportHandles)
+                && owner != nullptr && owner->handle == blockHandle
+                && owner->layoutHandle == layoutHandle;
+        };
+        if (!verifyLayout("Fill Patterns", 0x2BDu, 0x2BEu,
+                          {0x2BFu, 0x2C0u})
+            || !verifyLayout("Grayscales", 0x2C5u, 0x2C6u,
+                             {0x2C7u, 0x2C8u})
+            || !verifyLayout("Screening 100%", 0x2CDu, 0x2CEu,
+                             {0x2CFu, 0x2D0u})
+            || !verifyLayout("Screening 25%", 0x2D4u, 0x2D5u,
+                             {0x2D6u, 0x2D7u})
+            || !verifyLayout("Screening 50%", 0x2DBu, 0x2DCu,
+                             {0x2DDu, 0x2DEu})
+            || !verifyLayout("Screening 75%", 0x2E2u, 0x2E3u,
+                             {0x2E4u, 0x2E5u}))
+            return fail("AC1021 plot-screening LAYOUT/BLOCK_RECORD viewport lists are not exact and reciprocal");
+        const DRW_Dictionary* aseDictionary =
+            uniqueDictionary(source, 0x67Eu);
+        sourceAseHierarchyCache = uniqueXRecord(source, 0x67Fu);
+        const std::size_t aseRootMatches = static_cast<std::size_t>(
+            std::count_if(source.namedObjectDictionary.m_entries.begin(),
+                source.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ASE_INDEX_DICTIONARY"
+                        && entry.m_handle == 0x67Eu;
+                }));
+        const DRW_Block_Record* colorSwatch =
+            uniqueBlockRecord(source, 0x2Bu);
+        if (!source.hasNamedObjectDictionary
+            || source.namedObjectDictionary.handle != 0x0Cu
+            || aseRootMatches != 1u || aseDictionary == nullptr
+            || aseDictionary->parentHandle != 0x0Cu
+            || aseDictionary->reactorHandles
+                != std::vector<std::uint32_t>{0x0Cu}
+            || aseDictionary->m_entries.size() != 1u
+            || aseDictionary->m_entries.front().m_name
+                != "ASEBlockHierarchyIndexRecord"
+            || aseDictionary->m_entries.front().m_handle != 0x67Fu
+            || sourceAseHierarchyCache == nullptr
+            || sourceAseHierarchyCache->parentHandle != 0x67Eu
+            || sourceAseHierarchyCache->reactorHandles
+                != std::vector<std::uint32_t>{0x67Eu}
+            || sourceAseHierarchyCache->m_cloning != 1
+            || !sourceAseHierarchyCache->m_values.empty()
+            || sourceAseHierarchyCache->m_handleValues.size() != 240u
+            || sourceAseHierarchyCache->m_dataEntries.size() != 240u
+            || source.mBlock == nullptr || colorSwatch == nullptr
+            || colorSwatch->name != "Color Swatch")
+            return fail("AC1021 plot-screening ASE NOD/dictionary/XRECORD or INSERT target profile changed");
+        std::set<std::uint32_t> aseTargetHandles;
+        std::set<std::tuple<double, double, double>> aseTargetPoints;
+        for (std::size_t targetIndex = 0u; targetIndex < 240u;
+             ++targetIndex) {
+            const auto& reference =
+                sourceAseHierarchyCache->m_handleValues[targetIndex];
+            const DRW_Variant& payload =
+                sourceAseHierarchyCache->m_dataEntries[targetIndex];
+            if (reference.first != 330 || reference.second == 0u
+                || reference.second == DRW::NoHandle
+                || payload.code() != 330
+                || !((payload.type() == DRW_Variant::INTEGER
+                        && payload.i_val() >= 0
+                        && static_cast<std::uint32_t>(payload.i_val())
+                            == reference.second)
+                    || (payload.type() == DRW_Variant::INTEGER64
+                        && payload.i64_val() >= 0
+                        && static_cast<std::uint64_t>(payload.i64_val())
+                            == reference.second))
+                || !aseTargetHandles.insert(reference.second).second)
+                return fail("AC1021 plot-screening ASE XRECORD ordered handle payload is invalid");
+            const DRW_Insert* target = nullptr;
+            std::size_t targetMatches = 0u;
+            for (const DRW_Entity* entity : source.mBlock->ent) {
+                if (entity == nullptr || entity->handle != reference.second)
+                    continue;
+                target = dynamic_cast<const DRW_Insert*>(entity);
+                ++targetMatches;
+            }
+            if (targetMatches != 1u || target == nullptr
+                || target->eType != DRW::INSERT
+                || target->blockRecH.ref != colorSwatch->handle
+                || target->space != DRW::ModelSpace
+                || target->layer != "Color Table"
+                || !aseTargetPoints.emplace(target->basePoint.x,
+                    target->basePoint.y, target->basePoint.z).second)
+                return fail("AC1021 plot-screening ASE target is not a unique Color Swatch model-space INSERT");
+        }
+        for (const auto& located : sourceViewports) {
+            const DRW_Viewport& viewport = *located.viewport;
+            const DRW_Layout* layout = uniqueLayoutForViewport(
+                source, viewport.handle);
+            const DRW_Block_Record* owner = layout == nullptr ? nullptr
+                : uniqueBlockRecord(
+                      source, layout->paperSpaceBlockRecordHandle.ref);
+            const bool firstLayer = viewport.handle == 0x2BFu
+                || viewport.handle == 0x2C7u || viewport.handle == 0x2CFu
+                || viewport.handle == 0x2D6u || viewport.handle == 0x2DDu
+                || viewport.handle == 0x2E4u;
+            const std::uint32_t expectedLayer = firstLayer ? 0x10u : 0x2BBu;
+            const auto layer = std::find_if(
+                source.layers.begin(), source.layers.end(),
+                [expectedLayer, &viewport](const DRW_Layer& candidate) {
+                    return candidate.handle == expectedLayer
+                        && candidate.name == viewport.layer;
+                });
+            const auto style = std::find_if(
+                source.visualStyles.begin(), source.visualStyles.end(),
+                [&viewport](const DRW_VisualStyle& candidate) {
+                    return candidate.handle == 0x6BEu
+                        && candidate.handle == viewport.visualStyleHandle;
+                });
+            if (layout == nullptr || owner == nullptr
+                || owner->layoutHandle != layout->handle
+                || viewport.space != DRW::PaperSpace
+                || viewport.xDictHandle != 0u
+                || !viewport.reactorHandles.empty()
+                || layer == source.layers.end()
+                || style == source.visualStyles.end())
+                return fail("AC1021 plot-screening VIEWPORT layout, layer/style, or optional-reference profile changed");
         }
     } else if (ac1021TrueTypeSource) {
         const auto verifyLayout = [&source, &uniqueLayoutByName,
@@ -51539,7 +51696,7 @@ bool physicalViewportOutputReadback(
             return fail("corrected physical VIEWPORT source could not retry on the same adapter");
         if (ac1021Source && !ac1021LineweightsSource
             && !ac1021TabletSource && !ac1021ColorwhSource
-            && !ac1021TrueTypeSource) {
+            && !ac1021TrueTypeSource && !ac1021PlotScreeningSource) {
             for (const std::uint32_t handle :
                     {0x267u, 0x268u, 0x26Bu, 0x26Cu}) {
                 if (!DxIfaceStandardDwgCaptureTestAccess::standardDwgOutputQualified(
@@ -51601,7 +51758,7 @@ bool physicalViewportOutputReadback(
             return fail("physical VIEWPORT retry did not qualify every source-bound callback in the admitted AC1024 witness");
         if (ac1021Source && !ac1021LineweightsSource
             && !ac1021TabletSource && !ac1021ColorwhSource
-            && !ac1021TrueTypeSource
+            && !ac1021TrueTypeSource && !ac1021PlotScreeningSource
             && source.dwgReadOutcome.opaqueViewCallbacks != 186u)
             return fail("physical AC1021 VIEWPORT source census changed during output");
         if (ac1021TabletSource
@@ -51620,6 +51777,11 @@ bool physicalViewportOutputReadback(
                 || source.dwgReadOutcome.opaqueFramesOutputQualified != 53u
                 || qualifiedOpaqueCallbacks != 53u))
             return fail("physical AC1021 truetype layout/viewport source census or strict callback proof count changed");
+        if (ac1021PlotScreeningSource
+            && (source.dwgReadOutcome.opaqueViewCallbacks != 69u
+                || source.dwgReadOutcome.opaqueFramesOutputQualified != 69u
+                || qualifiedOpaqueCallbacks != 69u))
+            return fail("physical AC1021 plot-screening layout/viewport source census or strict callback proof count changed");
 
         dx_iface outputReader;
         dx_data output;
@@ -51627,6 +51789,141 @@ bool physicalViewportOutputReadback(
             || output.sourceFormat != dx_source_format::DXF
             || output.sourceVersion != outputVersion)
             return fail("physical VIEWPORT output did not freshly reimport at its selected DXF version");
+        if (ac1021PlotScreeningSource) {
+            const auto sameSymbol = [](const std::string& lhs,
+                                       const std::string& rhs) {
+                if (lhs.size() != rhs.size())
+                    return false;
+                for (std::size_t index = 0u; index < lhs.size(); ++index)
+                    if (std::toupper(static_cast<unsigned char>(lhs[index]))
+                        != std::toupper(static_cast<unsigned char>(rhs[index])))
+                        return false;
+                return true;
+            };
+            const auto outputAseRoot = std::find_if(
+                output.namedObjectDictionary.m_entries.begin(),
+                output.namedObjectDictionary.m_entries.end(),
+                [](const DRW_Dictionary::Entry& entry) {
+                    return entry.m_name == "ASE_INDEX_DICTIONARY";
+                });
+            const DRW_Dictionary* outputAseDictionary =
+                outputAseRoot == output.namedObjectDictionary.m_entries.end()
+                    ? nullptr : uniqueDictionary(output, outputAseRoot->m_handle);
+            const DRW_XRecord* outputAseCache =
+                outputAseDictionary == nullptr
+                    || outputAseDictionary->m_entries.size() != 1u
+                    || outputAseDictionary->m_entries.front().m_name
+                        != "ASEBlockHierarchyIndexRecord"
+                    ? nullptr
+                    : uniqueXRecord(output,
+                        outputAseDictionary->m_entries.front().m_handle);
+            const DRW_Block_Record* outputColorSwatch = nullptr;
+            std::size_t outputColorSwatchCount = 0u;
+            for (const DRW_Block_Record& record : output.blockRecords)
+                if (sameSymbol(record.name, "Color Swatch")) {
+                    outputColorSwatch = &record;
+                    ++outputColorSwatchCount;
+                }
+            if (outputAseRoot == output.namedObjectDictionary.m_entries.end()
+                || std::count_if(
+                    output.namedObjectDictionary.m_entries.begin(),
+                    output.namedObjectDictionary.m_entries.end(),
+                    [](const DRW_Dictionary::Entry& entry) {
+                        return entry.m_name == "ASE_INDEX_DICTIONARY";
+                    }) != 1u
+                || outputAseDictionary == nullptr
+                || outputAseDictionary->parentHandle
+                    != output.namedObjectDictionary.handle
+                || outputAseDictionary->reactorHandles
+                    != std::vector<std::uint32_t>{
+                        output.namedObjectDictionary.handle}
+                || outputAseCache == nullptr
+                || outputAseCache->parentHandle != outputAseDictionary->handle
+                || outputAseCache->reactorHandles
+                    != std::vector<std::uint32_t>{outputAseDictionary->handle}
+                || outputAseCache->m_cloning != 1
+                || !outputAseCache->m_values.empty()
+                || outputAseCache->m_handleValues.size() != 240u
+                || outputAseCache->m_dataEntries.size() != 240u
+                || outputColorSwatchCount != 1u
+                || outputColorSwatch == nullptr)
+                return fail("AC1021 plot-screening ASE NOD/dictionary/XRECORD graph changed on typed readback");
+            const auto outputColorLayer = std::find_if(
+                output.layers.begin(), output.layers.end(),
+                [](const DRW_Layer& layer) {
+                    return layer.name == "Color Table";
+                });
+            if (outputColorLayer == output.layers.end()
+                || std::count_if(output.layers.begin(), output.layers.end(),
+                    [](const DRW_Layer& layer) {
+                        return layer.name == "Color Table";
+                    }) != 1u)
+                return fail("AC1021 plot-screening ASE target LAYER is missing or ambiguous on readback");
+            std::set<std::uint32_t> outputAseTargetHandles;
+            std::set<std::tuple<double, double, double>> outputAseTargetPoints;
+            for (std::size_t targetIndex = 0u; targetIndex < 240u;
+                 ++targetIndex) {
+                const auto& sourceReference =
+                    sourceAseHierarchyCache->m_handleValues[targetIndex];
+                const auto& outputReference =
+                    outputAseCache->m_handleValues[targetIndex];
+                const DRW_Variant& outputPayload =
+                    outputAseCache->m_dataEntries[targetIndex];
+                const DRW_Insert* sourceTarget = nullptr;
+                std::size_t sourceTargetMatches = 0u;
+                for (const DRW_Entity* entity : source.mBlock->ent) {
+                    if (entity == nullptr
+                        || entity->handle != sourceReference.second)
+                        continue;
+                    sourceTarget = dynamic_cast<const DRW_Insert*>(entity);
+                    ++sourceTargetMatches;
+                }
+                const DRW_Insert* outputTarget = nullptr;
+                std::size_t outputTargetMatches = 0u;
+                for (const DRW_Entity* entity : output.mBlock->ent) {
+                    if (entity == nullptr
+                        || entity->handle != outputReference.second)
+                        continue;
+                    outputTarget = dynamic_cast<const DRW_Insert*>(entity);
+                    ++outputTargetMatches;
+                }
+                if (sourceReference.first != 330
+                    || outputReference.first != 330
+                    || outputPayload.code() != 330
+                    || !((outputPayload.type() == DRW_Variant::INTEGER
+                            && outputPayload.i_val() >= 0
+                            && static_cast<std::uint32_t>(
+                                outputPayload.i_val())
+                                == outputReference.second)
+                        || (outputPayload.type() == DRW_Variant::INTEGER64
+                            && outputPayload.i64_val() >= 0
+                            && static_cast<std::uint64_t>(
+                                outputPayload.i64_val())
+                                == outputReference.second))
+                    || !outputAseTargetHandles.insert(
+                        outputReference.second).second
+                    || sourceTargetMatches != 1u || sourceTarget == nullptr
+                    || outputTargetMatches != 1u || outputTarget == nullptr
+                    || sourceTarget->basePoint.x != outputTarget->basePoint.x
+                    || sourceTarget->basePoint.y != outputTarget->basePoint.y
+                    || sourceTarget->basePoint.z != outputTarget->basePoint.z
+                    || !sameSymbol(sourceTarget->name, outputTarget->name)
+                    || !sameSymbol(outputTarget->name,
+                                   outputColorSwatch->name)
+                    || outputTarget->layer != outputColorLayer->name
+                    || outputTarget->space != DRW::ModelSpace
+                    || !outputAseTargetPoints.emplace(
+                        outputTarget->basePoint.x, outputTarget->basePoint.y,
+                        outputTarget->basePoint.z).second)
+                {
+                    std::cerr << "ASE target readback mismatch at ordered slot "
+                              << targetIndex << ": source=0x" << std::hex
+                              << sourceReference.second << " output=0x"
+                              << outputReference.second << std::dec << '\n';
+                    return fail("AC1021 plot-screening ASE XRECORD ordered reference did not resolve to its exact remapped Color Swatch INSERT on readback");
+                }
+            }
+        }
         if (ac1021TabletSource) {
             const DRW_Ole2Frame* outputOle2Frame = nullptr;
             std::size_t outputOle2FrameCount = 0u;
@@ -51701,26 +51998,82 @@ bool physicalViewportOutputReadback(
             appendOutputViewports(block, false);
         if (outputViewports.size() != expectedHandles.size())
             return fail("one or more physical census VIEWPORTs disappeared on readback");
+        const auto sameFrozenLayerReferences = [&source, &output](
+                const DRW_Viewport& expected, const DRW_Viewport& actual) {
+            if (expected.frozenLayerHandles.size()
+                != actual.frozenLayerHandles.size())
+                return false;
+            for (std::size_t index = 0u;
+                 index < expected.frozenLayerHandles.size(); ++index) {
+                const std::uint32_t sourceHandle =
+                    expected.frozenLayerHandles[index];
+                const auto sourceLayer = std::find_if(
+                    source.layers.begin(), source.layers.end(),
+                    [sourceHandle](const DRW_Layer& layer) {
+                        return layer.handle == sourceHandle;
+                    });
+                if (sourceLayer == source.layers.end()
+                    || std::count_if(source.layers.begin(), source.layers.end(),
+                        [sourceHandle](const DRW_Layer& layer) {
+                            return layer.handle == sourceHandle;
+                        }) != 1u)
+                    return false;
+                const auto outputLayer = std::find_if(
+                    output.layers.begin(), output.layers.end(),
+                    [&sourceLayer](const DRW_Layer& layer) {
+                        return layer.name == sourceLayer->name;
+                    });
+                if (outputLayer == output.layers.end()
+                    || std::count_if(output.layers.begin(), output.layers.end(),
+                        [&sourceLayer](const DRW_Layer& layer) {
+                            return layer.name == sourceLayer->name;
+                        }) != 1u
+                    || actual.frozenLayerHandles[index] != outputLayer->handle)
+                    return false;
+            }
+            return true;
+        };
         std::vector<bool> matchedOutput(expectedHandles.size(), false);
         std::set<std::pair<int, int>> outputViewportStatusAndIds;
         std::set<std::pair<int, int>> expectedViewportStatusAndIds;
         std::set<std::uint32_t> outputViewportHandles;
         for (std::size_t index = 0; index < sourceViewports.size(); ++index) {
             std::size_t match = outputViewports.size();
+            const DRW_Layout* matchSourceLayout =
+                uniqueLayoutForViewport(source,
+                    sourceViewports[index].viewport->handle);
+            const DRW_Layout* matchOutputLayout = matchSourceLayout == nullptr
+                ? nullptr : uniqueLayoutByName(output, matchSourceLayout->name);
+            const DRW_Block_Record* matchOutputOwner =
+                matchOutputLayout == nullptr ? nullptr
+                    : uniqueBlockRecord(output,
+                        matchOutputLayout->paperSpaceBlockRecordHandle.ref);
+            if (ac1021PlotScreeningSource && matchOutputOwner == nullptr)
+                return fail("AC1021 plot-screening output LAYOUT/BLOCK_RECORD is missing during VIEWPORT matching");
             for (std::size_t candidate = 0; candidate < outputViewports.size();
                  ++candidate) {
+                if (ac1021PlotScreeningSource
+                    && outputViewports[candidate].viewport->parentHandle
+                        != matchOutputOwner->handle)
+                    continue;
                 if (sameProfile(*sourceViewports[index].viewport,
                                 *outputViewports[candidate].viewport,
-                                ac1021ColorwhSource)) {
+                                ac1021ColorwhSource,
+                                ac1021PlotScreeningSource)
+                    && sameFrozenLayerReferences(
+                        *sourceViewports[index].viewport,
+                        *outputViewports[candidate].viewport)) {
                     if (match != outputViewports.size())
                         return fail("physical VIEWPORT source projection is ambiguous on readback");
                     match = candidate;
                 }
             }
             if (match == outputViewports.size() || matchedOutput[match]
-                || sourceViewports[index].mainContainer
-                    != outputViewports[match].mainContainer
+                || (!ac1021PlotScreeningSource
+                    && sourceViewports[index].mainContainer
+                        != outputViewports[match].mainContainer)
                 || (!ac1021LineweightsSource && !ac1021ColorwhSource
+                    && !ac1021PlotScreeningSource
                     && sourceViewports[index].blockName
                         != outputViewports[match].blockName)) {
                 std::cerr << "VIEWPORT readback match detail: source=0x"
@@ -51777,6 +52130,43 @@ bool physicalViewportOutputReadback(
                 || outputViewport.parentHandle != outputOwner->handle
                 || outputStyleMatches != 1u || outputLayerMatches != 1u)
                 return fail("physical VIEWPORT owner, layer, or visual-style target does not resolve after readback");
+            if (ac1021PlotScreeningSource) {
+                if (sourceViewport.frozenLayerHandles.size()
+                    != outputViewport.frozenLayerHandles.size())
+                    return fail("AC1021 plot-screening VIEWPORT frozen-layer reference count changed on readback");
+                for (std::size_t frozenIndex = 0u;
+                     frozenIndex < sourceViewport.frozenLayerHandles.size();
+                     ++frozenIndex) {
+                    const std::uint32_t sourceFrozenHandle =
+                        sourceViewport.frozenLayerHandles[frozenIndex];
+                    const auto sourceFrozen = std::find_if(
+                        source.layers.begin(), source.layers.end(),
+                        [sourceFrozenHandle](const DRW_Layer& layer) {
+                            return layer.handle == sourceFrozenHandle;
+                        });
+                    if (sourceFrozen == source.layers.end()
+                        || std::count_if(source.layers.begin(),
+                            source.layers.end(),
+                            [sourceFrozenHandle](const DRW_Layer& layer) {
+                                return layer.handle == sourceFrozenHandle;
+                            }) != 1u)
+                        return fail("AC1021 plot-screening frozen-layer source handle is unresolved or ambiguous");
+                    const auto outputFrozen = std::find_if(
+                        output.layers.begin(), output.layers.end(),
+                        [&sourceFrozen](const DRW_Layer& layer) {
+                            return layer.name == sourceFrozen->name;
+                        });
+                    if (outputFrozen == output.layers.end()
+                        || std::count_if(output.layers.begin(),
+                            output.layers.end(),
+                            [&sourceFrozen](const DRW_Layer& layer) {
+                                return layer.name == sourceFrozen->name;
+                            }) != 1u
+                        || outputViewport.frozenLayerHandles[frozenIndex]
+                            != outputFrozen->handle)
+                        return fail("AC1021 plot-screening frozen-layer reference did not resolve to the remapped output LAYER");
+                }
+            }
             if (ac1021ColorwhSource) {
                 if ((sourceViewport.clipBoundaryHandle == 0u)
                     != (outputViewport.clipBoundaryHandle == 0u))

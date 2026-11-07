@@ -90,10 +90,15 @@ created locally from scratch for the specific control.
    or derivative is committed.
 
    Recent candidates remain refused for distinct reasons: AC1024 architectural
-   SORTENTSTABLE owner scope, title-block null BLOCK_CONTROL members, the
-   separate AC1021 plot-screening XRECORD with unresolved target roles, AC1027
+   SORTENTSTABLE owner scope, title-block null BLOCK_CONTROL members, AC1027
    Cover incomplete reference closure, and AC1018 Extruder2 incomplete parser
-   disposition. See the [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json),
+   disposition. The separate AC1021 plot-screening graph is now closed for its
+   exact source profile: seven LAYOUTs, twelve VIEWPORTs, all 69 observed
+   callbacks, and the ASE_INDEX_DICTIONARY XRECORD's 240 ordered references
+   passed source-role checks, ASCII/Binary typed readback, rollback/retry, and
+   strict whole-source conversion ([receipt](docs/research/p4-ac1021-plot-screening-layout-viewport-ase-strict-output-2026-11-07.json)).
+   This is one unauthenticated local source only; no producer, native consumer,
+   or support claim follows. See the [same-version census](docs/research/p4-local-same-version-strict-output-census-2026-11-06.json),
    [source inventory](docs/research/p4-ac1021-opaque-frame-inventory-2026-11-06.json),
    and linked candidate receipts below.
 
@@ -123,13 +128,26 @@ created locally from scratch for the specific control.
    independent producer behavior, LibreCAD_3/FreeCAD acceptance or native
    geometry/group semantics ([receipt](docs/research/p4-ac1021-generated-group-2d-3d-strict-dxf-readback-2026-11-06.json)).
 
-   **Next implementation slice:** source-bound owner and target-role inventory
-   for the 240-handle AC1021 plot-screening XRECORD. Start with the existing
-   `plot_screening_and_fill_patterns.dwg` witness and its saved peer/source
-   receipts; establish its exact owner chain, ordered handle slots, target
-   kinds and source-frame identities before changing the writer. If those
-   references do not close cheaply and unambiguously, preserve refusal and move
-   to another candidate below. Do not repeat the 28-stream census.
+   **Next implementation slice:** bounded AC1024 `architectural_example-imperial.dwg`
+   SORTENTSTABLE owner-profile follow-through. The existing source receipt
+   already establishes the `Window - Imperial` owner dictionary entries and
+   preserves strict refusal at the separate incomplete dynamic-block gate
+   ([structural gate](docs/research/p5-ac1024-sortents-dynamic-owner-structural-gate-2026-10-31.json));
+   the mechanical sample's complete table/owner DICTIONARY transaction is a
+   useful selector pattern, not evidence for this owner profile
+   ([output receipt](docs/research/p4-ac1024-sortents-owner-dictionary-qualification-2026-11-01.json)).
+   Read the existing candidate receipt and current source-bound selector first.
+   Then, in one fast slice: (a) census the exact SORTENTSTABLE owner, owner
+   dictionary entries, reactors, nested associative-network sibling, ordered
+   entity targets and frame identities from the tracked AC1024 sample; (b) reuse
+   existing output inspection if every edge maps to an already supported
+   emitted record, otherwise keep refusal and select the next candidate; (c)
+   for a closed profile, add the narrow selector assertion and ASCII/Binary
+   readback with destination preservation and same-adapter correction/retry;
+   (d) run the focused selector/build and one strict whole-source probe only if
+   that graph is the last blocking gate. Do not broaden dynamic-block output or
+   infer native associative behavior. No new fixture is needed: the DWG is
+   already tracked. Do not repeat the 28-stream census.
 
    The AC1021 `truetype.dwg` selected LayerStates and four-VIEWPORT routes are
    complete for their exact source graph: ASCII/Binary typed readback, rollback
