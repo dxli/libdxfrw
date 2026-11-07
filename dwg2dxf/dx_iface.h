@@ -493,6 +493,14 @@ public:
                         dx_dxfProxyGraphicsPolicy::Compatible,
                     dx_dwgReadCompletenessPolicy readCompletenessPolicy =
                         dx_dwgReadCompletenessPolicy::Legacy);
+    // Writes a selected AC1024 DWG associative root plus explicitly selected
+    // nested network branches. The source graph remains untouched; excluded
+    // root actions are omitted only from the emitted root-network projection.
+    bool fileExportSelectedDwgAssociativeNetworks(
+        const std::string& file, DRW::Version version, bool binary,
+        dx_data* source, std::uint32_t rootNetworkHandle,
+        const std::vector<std::uint32_t>& selectedChildNetworkHandles,
+        bool debug = false);
     // A null raw carrier is accepted only for same-version, typed-only DWG
     // input; the helper constructs a bounded DXF shell and refuses common
     // object metadata that has no typed serialization path.
@@ -1876,6 +1884,17 @@ public:
             for (DRW_Dictionary& dictionary : cData->dictionaries) {
                 if (dictionary.handle != handle)
                     continue;
+                if (m_selectedDwgAssociativeSource == cData) {
+                    const auto projection =
+                        m_selectedDwgAssociativeDictionaryOutputs.find(handle);
+                    if (projection
+                            != m_selectedDwgAssociativeDictionaryOutputs.end()) {
+                        if (!hasUnchangedSelectedDwgAssociativeNetworks()
+                            || !dxfW->writeDictionary(&projection->second))
+                            return;
+                        break;
+                    }
+                }
                 if (!dxfW->writeDictionary(&dictionary))
                     return;
                 break;
@@ -3012,8 +3031,18 @@ public:
                 return;
             }
             bool written = false;
-            if (object->m_recordName == "ACDBASSOCNETWORK")
-                written = dxfW->writeAssociativeNetwork(object);
+            if (object->m_recordName == "ACDBASSOCNETWORK") {
+                DRW_AssociativeObject* networkOutput = object;
+                if (m_selectedDwgAssociativeSource == cData
+                    && handle == m_selectedDwgAssociativeRootHandle) {
+                    if (!hasUnchangedSelectedDwgAssociativeNetworks()) {
+                        dxfW->writeRawDxfObject(nullptr);
+                        return;
+                    }
+                    networkOutput = &m_selectedDwgAssociativeRootOutput;
+                }
+                written = dxfW->writeAssociativeNetwork(networkOutput);
+            }
             else if (object->m_recordName
                      == "ACDBASSOC2DCONSTRAINTGROUP")
                 written = dxfW->writeAssociativeConstraintGroup(object);
@@ -4458,6 +4487,24 @@ private:
     std::vector<dx_data::UnderlayDefinitionKey>
         m_underlayDefinitionKeysToWrite;
     std::vector<std::uint32_t> m_extensionAssociativeHandles;
+    const dx_data* m_selectedDwgAssociativeSource{nullptr};
+    std::uint64_t m_selectedDwgAssociativeGeneration{0u};
+    std::uint32_t m_selectedDwgAssociativeRootHandle{0u};
+    DRW_AssociativeObject m_selectedDwgAssociativeRootSource;
+    DRW_AssociativeObject m_selectedDwgAssociativeRootOutput;
+    std::unordered_map<std::uint32_t, DRW_AssociativeObject>
+        m_selectedDwgAssociativeChildSources;
+    std::unordered_map<std::uint32_t, std::uint32_t>
+        m_selectedDwgAssociativeChildDictionaries;
+    std::unordered_map<std::uint32_t, DRW_Dictionary>
+        m_selectedDwgAssociativeDictionarySources;
+    std::unordered_map<std::uint32_t, DRW_Dictionary>
+        m_selectedDwgAssociativeDictionaryOutputs;
+    std::unordered_map<std::uint32_t, std::uint32_t>
+        m_selectedDwgAssociativeExcludedDictionaryEdges;
+    std::unordered_set<std::uint32_t>
+        m_selectedDwgAssociativeExcludedHandles;
+    bool hasUnchangedSelectedDwgAssociativeNetworks() const noexcept;
     std::vector<std::uint32_t> m_extensionBlockRepresentationDataHandles;
     std::vector<DRW_BlockRepresentationData>
         m_extensionBlockRepresentationDataSources;

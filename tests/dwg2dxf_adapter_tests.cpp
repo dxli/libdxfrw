@@ -67799,6 +67799,670 @@ bool associativeDwgNestedNetworkSortEntsOutput() {
     return true;
 }
 
+bool generatedSelectedAssociativeNetworksOutput() {
+    const auto nonce = std::chrono::steady_clock::now()
+                           .time_since_epoch().count();
+    const auto directory = std::filesystem::temp_directory_path();
+    for (const bool binary : {false, true}) {
+        const auto path = directory / ("libdxfrw-selected-assoc-generated-"
+            + std::to_string(nonce)
+            + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+            }
+        } cleanup{path};
+
+        dx_data source;
+        source.sourceFormat = dx_source_format::DWG;
+        source.sourceVersion = DRW::AC1024;
+        source.importGeneration = 1u;
+        source.dwgReadOutcome.attempted = true;
+        source.dwgReadOutcome.operationSucceeded = true;
+        source.dwgReadOutcome.sourceVersion = DRW::AC1024;
+        source.hasNamedObjectDictionary = true;
+        source.namedObjectDictionary.handle = 0x900u;
+        source.namedObjectDictionary.name = "NOD";
+        source.namedObjectDictionary.m_entries.push_back(
+            {"ACAD_ASSOCNETWORK", 0x901u});
+
+        DRW_Dictionary rootDictionary;
+        rootDictionary.handle = 0x901u;
+        rootDictionary.parentHandle = source.namedObjectDictionary.handle;
+        rootDictionary.reactorHandles = {
+            source.namedObjectDictionary.handle};
+        rootDictionary.m_entries.push_back({"ACAD_ASSOCNETWORK", 0x902u});
+        source.dictionaries.push_back(rootDictionary);
+
+        DRW_Block_Record modelSpace;
+        modelSpace.handle = 0x500u;
+        modelSpace.name = "*Model_Space";
+        modelSpace.xDictHandle = 0x230u;
+        source.blockRecords.push_back(modelSpace);
+        for (const auto& owner : {
+                 std::pair<std::uint32_t, std::string>{0x510u, "SELECT_A"},
+                 {0x520u, "SELECT_B"}}) {
+            DRW_Block_Record block;
+            block.handle = owner.first;
+            block.name = owner.second;
+            block.xDictHandle = owner.first == 0x510u ? 0x210u : 0x220u;
+            source.blockRecords.push_back(std::move(block));
+        }
+
+        dx_iface converter;
+        converter.cData = &source;
+        converter.currentBlock = source.mBlock;
+        for (const auto& blockName : {std::string("SELECT_A"),
+                                      std::string("SELECT_B")}) {
+            DRW_Block begin;
+            begin.name = blockName;
+            begin.handle = blockName == "SELECT_A" ? 0x610u : 0x620u;
+            begin.layer = "0";
+            converter.addBlock(begin);
+            DRW_Block end = begin;
+            end.handle += 1u;
+            end.setIsEnd(true);
+            converter.addBlockEnd(end);
+        }
+        converter.currentBlock = source.mBlock;
+        DRW_Line line;
+        line.handle = 0x100u;
+        line.parentHandle = modelSpace.handle;
+        line.layer = "0";
+        line.basePoint = DRW_Coord(1.0, 2.0, 0.0);
+        line.secPoint = DRW_Coord(3.0, 4.0, 0.0);
+        converter.addLine(line);
+
+        const auto addOwner = [&source](std::uint32_t blockHandle,
+                std::uint32_t ownerHandle, std::uint32_t nestedHandle,
+                std::uint32_t networkHandle, bool withSortEnts) {
+            DRW_Dictionary owner;
+            owner.handle = ownerHandle;
+            owner.parentHandle = blockHandle;
+            if (withSortEnts)
+                owner.m_entries.push_back({"ACAD_SORTENTS", 0x300u});
+            owner.m_entries.push_back({"ACAD_ASSOCNETWORK", nestedHandle});
+            source.dictionaries.push_back(std::move(owner));
+
+            DRW_Dictionary nested;
+            nested.handle = nestedHandle;
+            nested.parentHandle = ownerHandle;
+            nested.reactorHandles.push_back(ownerHandle);
+            nested.m_entries.push_back({"ACAD_ASSOCNETWORK", networkHandle});
+            source.dictionaries.push_back(std::move(nested));
+        };
+        addOwner(0x510u, 0x210u, 0x211u, 0x910u, false);
+        addOwner(0x520u, 0x220u, 0x221u, 0x920u, false);
+        addOwner(0x500u, 0x230u, 0x231u, 0x930u, true);
+
+        DRW_SortEntsTable sortEnts;
+        sortEnts.handle = 0x300u;
+        sortEnts.parentHandle = 0x230u;
+        sortEnts.m_blockOwnerHandle = 0x500u;
+        sortEnts.m_entityHandles = {line.handle};
+        sortEnts.m_sortHandles = {DRW::NoHandle};
+        sortEnts.reactorHandles = {0x230u};
+        converter.addSortEntsTable(sortEnts);
+        DRW_DwgSortEntsMembership sortReceipt;
+        sortReceipt.m_version = DRW::AC1024;
+        sortReceipt.m_tableHandle = sortEnts.handle;
+        sortReceipt.m_sourceOffset = 0x4000u;
+        sortReceipt.m_sourceMapOrdinal = 2u;
+        sortReceipt.m_sourceOffsetSpace =
+            DRW_DwgFrameOffsetSpace::PhysicalFile;
+        sortReceipt.m_hasSourceLocation = true;
+        sortReceipt.m_complete = true;
+        sortReceipt.m_recordName = "SORTENTSTABLE";
+        sortReceipt.m_className = "AcDbSortentsTable";
+        sortReceipt.m_classStreamOrdinal = 4u;
+        sortReceipt.m_blockOwnerHandle = 0x500u;
+        sortReceipt.m_entries.push_back(
+            {line.handle, DRW::NoHandle, 0u, true});
+        converter.addDwgSortEntsMembership(sortReceipt);
+
+        DRW_AssociativeObject root("ACDBASSOCNETWORK");
+        root.handle = 0x902u;
+        root.parentHandle = rootDictionary.handle;
+        root.reactorHandles = {rootDictionary.handle};
+        root.m_classVersion = 1u;
+        root.m_networkFieldsParsed = true;
+        root.m_actions = {{false, 0x910u}, {false, 0x920u},
+                          {false, 0x930u}};
+        root.m_prefixStatuses.push_back({
+            DRW_AssociativePrefixStatus::Kind::AcDbAssocAction,
+            0u, 0u, 1u,
+            DRW_AssociativePrefixStatus::ParseStatus::Complete,
+            2u, 0u, 0, "generated selected-network root action"});
+        root.m_prefixStatuses.push_back({
+            DRW_AssociativePrefixStatus::Kind::AcDbAssocNetwork,
+            0u, 0u, 1u,
+            DRW_AssociativePrefixStatus::ParseStatus::Complete,
+            3u, 0u, 3, "generated three-branch root network"});
+
+        std::vector<DRW_AssociativeObject> networks;
+        networks.push_back(root);
+        for (const auto& row : {
+                 std::array<std::uint32_t, 3>{{0x910u, 0x211u, 0x902u}},
+                 std::array<std::uint32_t, 3>{{0x920u, 0x221u, 0x902u}},
+                 std::array<std::uint32_t, 3>{{0x930u, 0x231u, 0x902u}}}) {
+            DRW_AssociativeObject child("ACDBASSOCNETWORK");
+            child.handle = row[0];
+            child.parentHandle = row[1];
+            child.reactorHandles = {row[1]};
+            child.m_classVersion = 1u;
+            child.m_owningNetworkHandle = row[2];
+            child.m_networkFieldsParsed = true;
+            child.m_prefixStatuses.push_back({
+                DRW_AssociativePrefixStatus::Kind::AcDbAssocAction,
+                0u, 0u, 1u,
+                DRW_AssociativePrefixStatus::ParseStatus::Complete,
+                2u, 0u, 0, "generated nested-network action"});
+            child.m_prefixStatuses.push_back({
+                DRW_AssociativePrefixStatus::Kind::AcDbAssocNetwork,
+                0u, 0u, 1u,
+                DRW_AssociativePrefixStatus::ParseStatus::Complete,
+                0u, 0u, 0, "generated empty nested network"});
+            networks.push_back(std::move(child));
+        }
+        source.dwgAssociativeObjects = std::move(networks);
+        source.associativeDwgImport.generation = source.importGeneration;
+        source.associativeDwgImport.sourceVersion = source.sourceVersion;
+        source.associativeDwgImport.typedRange = {0u,
+            source.dwgAssociativeObjects.size()};
+        source.associativeDwgImport.typedCallbacks =
+            source.dwgAssociativeObjects.size();
+        source.associativeDwgImport.successful = true;
+        source.associativeDwgImport.captureComplete = true;
+
+        const std::string sentinel =
+            "generated selected associative destination sentinel\n";
+        {
+            std::ofstream output(path, std::ios::binary | std::ios::trunc);
+            if (!output || !(output << sentinel))
+                return fail("could not seed generated selected output sentinel");
+        }
+        dx_iface exporter;
+        if (exporter.fileExportSelectedDwgAssociativeNetworks(
+                path.string(), DRW::AC1024, binary, &source, root.handle,
+                {0x910u, DRW::NoHandle}, false))
+            return fail("generated selected output accepted a wrong-kind handle");
+        if (exporter.fileExportSelectedDwgAssociativeNetworks(
+                path.string(), DRW::AC1024, binary, &source, root.handle,
+                {0x910u, 0x100u}, false))
+            return fail("generated selected output accepted an entity handle as a network");
+        {
+            std::ifstream input(path, std::ios::binary);
+            const std::string contents{
+                std::istreambuf_iterator<char>(input),
+                std::istreambuf_iterator<char>()};
+            if (contents != sentinel)
+                return fail("generated invalid selection changed destination");
+        }
+        if (!exporter.fileExportSelectedDwgAssociativeNetworks(
+                path.string(), DRW::AC1024, binary, &source, root.handle,
+                {0x910u, 0x920u}, true))
+            return fail(std::string("generated selected projection failed: ")
+                + exporter.extensionGraphFailureName() + ": "
+                + exporter.extensionGraphFailureDetail());
+
+        dx_iface reader;
+        dx_data readback;
+        if (!reader.fileImport(path.string(), &readback, false))
+            return fail("generated selected projection did not re-import");
+        const auto findRecord = [&readback](std::uint32_t handle)
+                -> const DRW_AssociativeObject* {
+            const auto found = std::find_if(
+                readback.associativeObjects.begin(),
+                readback.associativeObjects.end(),
+                [handle](const DRW_AssociativeObject& object) {
+                    return object.handle == handle
+                        && object.m_recordName == "ACDBASSOCNETWORK";
+                });
+            return found == readback.associativeObjects.end()
+                ? nullptr : &*found;
+        };
+        const DRW_AssociativeObject* readRoot = findRecord(0x902u);
+        if (readRoot == nullptr || readRoot->m_actions.size() != 2u
+            || readback.sortEntsTables.size() != 1u
+            || readback.associativeObjects.size() != 3u)
+            return fail("generated selected readback did not retain two branches and SORTENTS");
+        std::set<std::uint32_t> branches;
+        for (const DRW_AssociativeHandleRef& action : readRoot->m_actions) {
+            const DRW_AssociativeObject* child = findRecord(action.m_handle);
+            if (action.m_isOwned || child == nullptr
+                || child->m_owningNetworkHandle != readRoot->handle)
+                return fail("generated selected readback has an invalid network edge");
+            branches.insert(child->handle);
+        }
+        if (branches != std::set<std::uint32_t>{0x910u, 0x920u})
+            return fail("generated selected readback retained the excluded branch");
+        const auto excludedOwner = std::find_if(readback.dictionaries.begin(),
+            readback.dictionaries.end(), [](const DRW_Dictionary& dictionary) {
+                return dictionary.handle == 0x230u;
+            });
+        if (excludedOwner == readback.dictionaries.end()
+            || excludedOwner->m_entries.size() != 1u
+            || excludedOwner->m_entries.front().m_name != "ACAD_SORTENTS"
+            || excludedOwner->m_entries.front().m_handle != 0x300u
+            || readback.sortEntsTables.front().handle != 0x300u)
+            return fail("generated excluded owner lost SORTENTS during projection");
+    }
+    return true;
+}
+
+bool physicalAc1024CivilSelectedAssociativeNetworks(
+        const std::filesystem::path& sourcePath) {
+    dx_iface reader;
+    dx_data source;
+    if (!reader.fileImport(sourcePath.string(), &source, false)
+        || source.sourceFormat != dx_source_format::DWG
+        || source.sourceVersion != DRW::AC1024
+        || !source.hasNamedObjectDictionary)
+        return fail("selected associative source did not import as AC1024 DWG");
+
+    const auto keyIs = [](const std::string& key, const char* expected) {
+        return key.size() == std::strlen(expected)
+            && std::equal(key.begin(), key.end(), expected,
+                [](unsigned char left, unsigned char right) {
+                    return std::toupper(left) == std::toupper(right);
+                });
+    };
+    const auto dictionary = [](const dx_data& data, std::uint32_t handle)
+            -> const DRW_Dictionary* {
+        const DRW_Dictionary* result = nullptr;
+        std::size_t matches = 0u;
+        if (data.hasNamedObjectDictionary
+            && data.namedObjectDictionary.handle == handle) {
+            result = &data.namedObjectDictionary;
+            ++matches;
+        }
+        for (const DRW_Dictionary& candidate : data.dictionaries) {
+            if (candidate.handle != handle)
+                continue;
+            result = &candidate;
+            ++matches;
+        }
+        return matches == 1u ? result : nullptr;
+    };
+    const auto associative = [](const dx_data& data, std::uint32_t handle)
+            -> const DRW_AssociativeObject* {
+        const DRW_AssociativeObject* result = nullptr;
+        std::size_t matches = 0u;
+        const auto visit = [&result, &matches, handle](
+                const auto& objects) {
+            for (const DRW_AssociativeObject& object : objects) {
+                if (object.handle != handle)
+                    continue;
+                result = &object;
+                ++matches;
+            }
+        };
+        visit(data.dwgAssociativeObjects);
+        visit(data.associativeObjects);
+        return matches == 1u ? result : nullptr;
+    };
+    const auto blockName = [](const dx_data& data, std::uint32_t handle)
+            -> std::string {
+        const DRW_Block_Record* found = nullptr;
+        for (const DRW_Block_Record& block : data.blockRecords) {
+            if (block.handle != handle)
+                continue;
+            if (found != nullptr)
+                return {};
+            found = &block;
+        }
+        return found == nullptr ? std::string() : found->name;
+    };
+
+    const DRW_Dictionary::Entry* rootNodEntry = nullptr;
+    for (const DRW_Dictionary::Entry& entry :
+         source.namedObjectDictionary.m_entries) {
+        if (!keyIs(entry.m_name, "ACAD_ASSOCNETWORK"))
+            continue;
+        if (rootNodEntry != nullptr)
+            return fail("selected associative NOD root is ambiguous");
+        rootNodEntry = &entry;
+    }
+    const DRW_Dictionary* rootDictionary = rootNodEntry == nullptr
+        ? nullptr : dictionary(source, rootNodEntry->m_handle);
+    if (rootDictionary == nullptr || rootDictionary->m_entries.size() != 1u
+        || !keyIs(rootDictionary->m_entries.front().m_name,
+                  "ACAD_ASSOCNETWORK"))
+        return fail("selected associative root dictionary is incomplete");
+    const DRW_AssociativeObject* root = associative(
+        source, rootDictionary->m_entries.front().m_handle);
+    if (root == nullptr || root->m_recordName != "ACDBASSOCNETWORK"
+        || root->m_actions.size() != 3u)
+        return fail("selected associative root no longer has its three source branches");
+
+    std::vector<std::uint32_t> selected;
+    std::uint32_t excluded = 0u;
+    std::uint32_t excludedOwnerDictionary = 0u;
+    std::uint32_t excludedSortEnts = 0u;
+    std::string excludedOwnerBlock;
+    for (const DRW_AssociativeHandleRef& action : root->m_actions) {
+        const DRW_AssociativeObject* child = associative(source, action.m_handle);
+        const DRW_Dictionary* childDictionary = child == nullptr
+            ? nullptr : dictionary(source,
+                static_cast<std::uint32_t>(child->parentHandle));
+        const DRW_Dictionary* ownerDictionary = childDictionary == nullptr
+            ? nullptr : dictionary(source,
+                static_cast<std::uint32_t>(childDictionary->parentHandle));
+        if (action.m_isOwned || child == nullptr || childDictionary == nullptr
+            || ownerDictionary == nullptr
+            || child->m_recordName != "ACDBASSOCNETWORK")
+            return fail("selected associative root child ownership is invalid");
+        const std::string ownerBlock = blockName(
+            source, static_cast<std::uint32_t>(ownerDictionary->parentHandle));
+        if (ownerBlock == "BLDG" || ownerBlock == "*U2") {
+            selected.push_back(action.m_handle);
+            continue;
+        }
+        if (excluded != 0u)
+            return fail("selected associative source has multiple excluded branches");
+        excluded = action.m_handle;
+        excludedOwnerDictionary = ownerDictionary->handle;
+        excludedOwnerBlock = ownerBlock;
+        for (const DRW_Dictionary::Entry& entry : ownerDictionary->m_entries)
+            if (keyIs(entry.m_name, "ACAD_SORTENTS"))
+                excludedSortEnts = entry.m_handle;
+    }
+    if (selected.size() != 2u || excluded == 0u
+        || excludedOwnerDictionary == 0u || excludedSortEnts == 0u)
+        return fail("selected associative profile lacks two selected branches and excluded SORTENTS owner");
+    const DRW_AssociativeObject sourceRoot = *root;
+    const DRW_Dictionary sourceExcludedOwner =
+        *dictionary(source, excludedOwnerDictionary);
+    const auto stamp = std::chrono::steady_clock::now()
+                           .time_since_epoch().count();
+    for (const bool binary : {false, true}) {
+        const auto output = std::filesystem::temp_directory_path()
+            / ("libdxfrw-civil-selected-assoc-" + std::to_string(stamp)
+               + (binary ? "-binary.dxf" : "-ascii.dxf"));
+        const std::string sentinel = "preserve selected associative output\n";
+        {
+            std::ofstream prior(output, std::ios::binary | std::ios::trunc);
+            if (!prior || !(prior << sentinel))
+                return fail("could not seed selected associative destination");
+        }
+        dx_iface exporter;
+        if (exporter.fileExportSelectedDwgAssociativeNetworks(
+                output.string(), DRW::AC1024, binary, &source,
+                root->handle, {DRW::NoHandle}, false))
+            return fail("invalid selected child unexpectedly exported");
+        {
+            std::ifstream prior(output, std::ios::binary);
+            const std::string bytes{
+                std::istreambuf_iterator<char>(prior),
+                std::istreambuf_iterator<char>()};
+            if (bytes != sentinel)
+                return fail("invalid selected child changed destination");
+        }
+        if (!exporter.fileExportSelectedDwgAssociativeNetworks(
+                output.string(), DRW::AC1024, binary, &source,
+                root->handle, selected, true)) {
+            std::filesystem::remove(output);
+            return fail(std::string("selected physical associative export failed: ")
+                + exporter.extensionGraphFailureName() + ": "
+                + exporter.extensionGraphFailureDetail());
+        }
+        bool sourceActionsUnchanged = root->m_actions.size()
+            == sourceRoot.m_actions.size();
+        for (std::size_t index = 0u;
+             sourceActionsUnchanged && index < sourceRoot.m_actions.size();
+             ++index)
+            sourceActionsUnchanged =
+                root->m_actions[index].m_handle
+                    == sourceRoot.m_actions[index].m_handle
+                && root->m_actions[index].m_isOwned
+                    == sourceRoot.m_actions[index].m_isOwned;
+        const DRW_Dictionary* liveExcludedOwner = dictionary(
+            source, excludedOwnerDictionary);
+        bool sourceDictionaryUnchanged = liveExcludedOwner != nullptr
+            && liveExcludedOwner->m_entries.size()
+                == sourceExcludedOwner.m_entries.size();
+        for (std::size_t index = 0u;
+             sourceDictionaryUnchanged
+                && index < sourceExcludedOwner.m_entries.size(); ++index)
+            sourceDictionaryUnchanged =
+                liveExcludedOwner->m_entries[index].m_name
+                    == sourceExcludedOwner.m_entries[index].m_name
+                && liveExcludedOwner->m_entries[index].m_handle
+                    == sourceExcludedOwner.m_entries[index].m_handle;
+        if (!sourceActionsUnchanged || !sourceDictionaryUnchanged) {
+            std::filesystem::remove(output);
+            return fail("selected graph export mutated the imported source");
+        }
+
+        dx_iface outputReader;
+        dx_data readback;
+        if (!outputReader.fileImport(output.string(), &readback, false)) {
+            std::filesystem::remove(output);
+            return fail("selected physical associative DXF did not re-import");
+        }
+        const DRW_Dictionary* readRootDictionary = nullptr;
+        for (const DRW_Dictionary::Entry& entry :
+             readback.namedObjectDictionary.m_entries) {
+            if (!keyIs(entry.m_name, "ACAD_ASSOCNETWORK"))
+                continue;
+            if (readRootDictionary != nullptr) {
+                std::filesystem::remove(output);
+                return fail("selected readback has duplicate associative NOD roots");
+            }
+            readRootDictionary = dictionary(readback, entry.m_handle);
+        }
+        if (readRootDictionary == nullptr
+            || readRootDictionary->m_entries.size() != 1u) {
+            std::filesystem::remove(output);
+            return fail("selected readback root dictionary is incomplete");
+        }
+        const DRW_AssociativeObject* readRoot = associative(
+            readback, readRootDictionary->m_entries.front().m_handle);
+        if (readRoot == nullptr || readRoot->m_actions.size() != 2u) {
+            std::filesystem::remove(output);
+            return fail("selected readback did not retain exactly two root branches");
+        }
+        for (const DRW_AssociativeHandleRef& action : readRoot->m_actions) {
+            const DRW_AssociativeObject* child =
+                associative(readback, action.m_handle);
+            if (action.m_isOwned || child == nullptr
+                || child->m_recordName != "ACDBASSOCNETWORK"
+                || child->m_owningNetworkHandle != readRoot->handle) {
+                std::filesystem::remove(output);
+                return fail("selected readback root action is not a closed nested network");
+            }
+        }
+        std::uint32_t readExcludedOwnerHandle = 0u;
+        for (const DRW_Block_Record& block : readback.blockRecords)
+            if (block.name == excludedOwnerBlock)
+                readExcludedOwnerHandle = block.xDictHandle;
+        const DRW_Dictionary* readExcludedOwner = readExcludedOwnerHandle == 0u
+            ? nullptr : dictionary(readback, readExcludedOwnerHandle);
+        bool retainedSortEnts = false;
+        bool excludedNetworkEdge = false;
+        if (readExcludedOwner != nullptr) {
+            for (const DRW_Dictionary::Entry& entry :
+                 readExcludedOwner->m_entries) {
+                retainedSortEnts = retainedSortEnts
+                    || (keyIs(entry.m_name, "ACAD_SORTENTS")
+                        && entry.m_handle != 0u
+                        && entry.m_handle != DRW::NoHandle);
+                excludedNetworkEdge = excludedNetworkEdge
+                    || keyIs(entry.m_name, "ACAD_ASSOCNETWORK");
+            }
+        }
+        retainedSortEnts = retainedSortEnts
+            && std::any_of(readback.sortEntsTables.begin(),
+                readback.sortEntsTables.end(), [readExcludedOwnerHandle](
+                    const DRW_SortEntsTable& table) {
+                    return table.parentHandle == readExcludedOwnerHandle;
+                });
+        const std::size_t outputNetworkCount = static_cast<std::size_t>(
+            std::count_if(readback.associativeObjects.begin(),
+                readback.associativeObjects.end(), [](
+                    const DRW_AssociativeObject& object) {
+                    return object.m_recordName == "ACDBASSOCNETWORK";
+                }));
+        if (!retainedSortEnts || excludedNetworkEdge
+            || outputNetworkCount != 3u) {
+            std::filesystem::remove(output);
+            return fail("selected readback did not preserve SORTENTS while excluding the third branch");
+        }
+        std::unordered_map<std::uint32_t, const DRW_AssociativeObject*>
+            sourceAssociativeByHandle;
+        for (const DRW_AssociativeObject& object :
+             source.dwgAssociativeObjects)
+            sourceAssociativeByHandle.emplace(object.handle, &object);
+        std::vector<std::uint32_t> work(selected.begin(), selected.end());
+        std::unordered_set<std::uint32_t> visited;
+        std::set<std::uint32_t> selectedEdgeHandles;
+        const auto enqueueAssociative = [&sourceAssociativeByHandle, &work](
+                std::uint32_t handle) {
+            if (sourceAssociativeByHandle.count(handle) != 0u)
+                work.push_back(handle);
+        };
+        for (std::size_t index = 0u; index < work.size(); ++index) {
+            const std::uint32_t handle = work[index];
+            if (!visited.insert(handle).second)
+                continue;
+            const auto objectAt = sourceAssociativeByHandle.find(handle);
+            if (objectAt == sourceAssociativeByHandle.end())
+                continue;
+            const DRW_AssociativeObject& object = *objectAt->second;
+            if (object.m_recordName == "ACDBASSOCGEOMDEPENDENCY")
+                selectedEdgeHandles.insert(handle);
+            for (const DRW_AssociativeHandleRef& ref : object.m_actions)
+                enqueueAssociative(ref.m_handle);
+            for (const DRW_AssociativeHandleRef& ref : object.m_dependencies)
+                enqueueAssociative(ref.m_handle);
+            for (const DRW_AssociativeHandleRef& ref :
+                 object.m_variableOwnedDependencies)
+                enqueueAssociative(ref.m_handle);
+            for (const std::uint32_t ref : object.m_ownedParams)
+                enqueueAssociative(ref);
+            for (const std::uint32_t ref : object.m_ownedActions)
+                enqueueAssociative(ref);
+            for (const std::uint32_t ref : object.m_constraintActions)
+                enqueueAssociative(ref);
+            enqueueAssociative(object.m_readDependencyHandle);
+            enqueueAssociative(object.m_writeDependencyHandle);
+            enqueueAssociative(object.m_dependencyNodeHandle);
+            enqueueAssociative(object.m_dependencyBodyHandle);
+            enqueueAssociative(object.m_dependencyHandle);
+        }
+        if (selectedEdgeHandles.size() != 10u) {
+            std::filesystem::remove(output);
+            return fail("selected physical source did not expose ten reachable Edge records");
+        }
+        const auto entityByHandle = [](const dx_data& data,
+                                       std::uint32_t handle)
+                -> const DRW_Entity* {
+            const DRW_Entity* result = nullptr;
+            std::size_t matches = 0u;
+            const auto visit = [&result, &matches, handle](
+                    const dx_ifaceBlock* block) {
+                if (block == nullptr)
+                    return;
+                for (const DRW_Entity* entity : block->ent)
+                    if (entity != nullptr && entity->handle == handle) {
+                        result = entity;
+                        ++matches;
+                    }
+            };
+            visit(data.mBlock);
+            for (const dx_ifaceBlock* block : data.blocks)
+                if (block != data.mBlock)
+                    visit(block);
+            return matches == 1u ? result : nullptr;
+        };
+        const auto samePolyline = [](const DRW_LWPolyline& lhs,
+                                     const DRW_LWPolyline& rhs) {
+            if (lhs.layer != rhs.layer || lhs.flags != rhs.flags
+                || lhs.vertexnum != rhs.vertexnum
+                || lhs.vertlist.size() != rhs.vertlist.size()
+                || lhs.elevation != rhs.elevation
+                || lhs.thickness != rhs.thickness || lhs.width != rhs.width
+                || lhs.extPoint.x != rhs.extPoint.x
+                || lhs.extPoint.y != rhs.extPoint.y
+                || lhs.extPoint.z != rhs.extPoint.z)
+                return false;
+            for (std::size_t index = 0u; index < lhs.vertlist.size(); ++index) {
+                const auto& a = lhs.vertlist[index];
+                const auto& b = rhs.vertlist[index];
+                if (a == nullptr || b == nullptr
+                    || a->x != b->x || a->y != b->y
+                    || a->stawidth != b->stawidth
+                    || a->endwidth != b->endwidth || a->bulge != b->bulge)
+                    return false;
+            }
+            return true;
+        };
+        for (const std::uint32_t edgeHandle : selectedEdgeHandles) {
+            const auto original = sourceAssociativeByHandle.find(edgeHandle);
+            const DRW_AssociativeObject* actual = associative(
+                readback, edgeHandle);
+            const DRW_Entity* sourceTarget = original
+                    == sourceAssociativeByHandle.end()
+                ? nullptr : entityByHandle(source,
+                    original->second->m_dependencyHandle);
+            const DRW_Entity* actualTarget = actual == nullptr ? nullptr
+                : entityByHandle(readback, actual->m_dependencyHandle);
+            const auto* sourcePolyline = dynamic_cast<const DRW_LWPolyline*>(
+                sourceTarget);
+            const auto* actualPolyline = dynamic_cast<const DRW_LWPolyline*>(
+                actualTarget);
+            if (original == sourceAssociativeByHandle.end()
+                || actual == nullptr
+                || actual->m_recordName != "ACDBASSOCGEOMDEPENDENCY"
+                || actual->parentHandle != original->second->parentHandle
+                || actual->reactorHandles != original->second->reactorHandles
+                || actual->m_dependencyOrder
+                    != original->second->m_dependencyOrder
+                || actual->m_dependencyFieldsParsed
+                    != original->second->m_dependencyFieldsParsed
+                || actual->m_dependencyWireComplete
+                    != original->second->m_dependencyWireComplete
+                || actual->m_readDependencyHandle
+                    != original->second->m_readDependencyHandle
+                || actual->m_writeDependencyHandle
+                    != original->second->m_writeDependencyHandle
+                || actual->m_dependencyNodeHandle
+                    != original->second->m_dependencyNodeHandle
+                || actual->m_dependencyBodyHandle
+                    != original->second->m_dependencyBodyHandle
+                || actual->m_geomDependencyFieldsParsed
+                    != original->second->m_geomDependencyFieldsParsed
+                || actual->m_geomClassVersion
+                    != original->second->m_geomClassVersion
+                || actual->m_geomEnabled != original->second->m_geomEnabled
+                || actual->m_geomPersistentSubentityClassName
+                    != original->second->m_geomPersistentSubentityClassName
+                || actual->m_geomPersistentSubentityFieldsParsed
+                    != original->second->m_geomPersistentSubentityFieldsParsed
+                || actual->m_geomPersistentSubentityClassVersion
+                    != original->second->m_geomPersistentSubentityClassVersion
+                || actual->m_geomPersistentSubentityIndex1
+                    != original->second->m_geomPersistentSubentityIndex1
+                || actual->m_geomPersistentSubentityIndex2
+                    != original->second->m_geomPersistentSubentityIndex2
+                || actual->m_geomDependentOnCompoundObject
+                    != original->second->m_geomDependentOnCompoundObject
+                || sourcePolyline == nullptr || actualPolyline == nullptr
+                || !samePolyline(*sourcePolyline, *actualPolyline)) {
+                std::filesystem::remove(output);
+                return fail("selected physical Edge fields or linked handles changed on typed readback");
+            }
+        }
+        std::filesystem::remove(output);
+    }
+    std::cerr << "AC1024 civil associative selected output passed in ASCII/Binary: "
+                 "two complete root branches retained, third branch excluded, "
+                 "SORTENTSTABLE retained, invalid-selection refusal and retry.\n";
+    return true;
+}
+
 bool cellStyleMapExtensionGraph() {
     const auto populate = [](dx_data& data, const std::string& key,
                              std::uint32_t mapParent) {
@@ -85037,6 +85701,15 @@ int main(int argc, char** argv) {
         && std::string(argv[1]) == "--assocdependency-physical-output-readback")
         return physicalAssociativeDimensionDependencyOutputReadback(
             argv[2]) ? 0 : 1;
+    if (argc == 3
+        && std::string(argv[1])
+            == "--ac1024-civil-selected-assoc-output")
+        return physicalAc1024CivilSelectedAssociativeNetworks(argv[2])
+            ? 0 : 1;
+    if (argc == 2
+        && std::string(argv[1])
+            == "--generated-selected-associative-networks-output")
+        return generatedSelectedAssociativeNetworksOutput() ? 0 : 1;
     if (argc == 3
         && std::string(argv[1]) == "--visual-style-ac1024-typed-writer")
         return typedAc1024VisualStyleWriterRoundTrip(argv[2]) ? 0 : 1;

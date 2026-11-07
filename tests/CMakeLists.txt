@@ -3569,6 +3569,18 @@ set_tests_properties(dwg2dxf_associative_dwg_nested_network_sortents_output PROP
     TIMEOUT 30
 )
 
+# Exercise the selected-network projection with a locally authored AC1024
+# source graph, including exclusion through a SORTENTS-owning dictionary.
+add_test(
+    NAME dwg2dxf_generated_selected_associative_networks_output
+    COMMAND libdxfrw_dwg2dxf_adapter_tests
+        --generated-selected-associative-networks-output
+)
+set_tests_properties(dwg2dxf_generated_selected_associative_networks_output PROPERTIES
+    LABELS "fast;dxf;adapter;objects;associative;strict;writer;sortents"
+    TIMEOUT 30
+)
+
 if(TARGET dwg2dxf)
     # Keep the concrete adapter's modern custom-class 3DLINE subtype and payload
     # through generated DXF, two exact FreeCAD-argv CLI passes, and public readback.
