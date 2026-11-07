@@ -573,6 +573,11 @@ add_test(NAME libdxfrw_polyline_wcs_extrusion_loss_guard
 set_tests_properties(libdxfrw_polyline_wcs_extrusion_loss_guard PROPERTIES
     LABELS "dxf;fast;transaction"
     TIMEOUT 30)
+add_test(NAME libdxfrw_polyline_vertex_role_closure
+    COMMAND libdxfrw_dxf_fixture_tests --polyline-vertex-role-closure)
+set_tests_properties(libdxfrw_polyline_vertex_role_closure PROPERTIES
+    LABELS "dxf;fast;transaction"
+    TIMEOUT 30)
 
 # The source and output are authored at runtime. This selected AC1027 profile
 # proves consumed MLINE group-41 reprojection in ASCII/binary, plus atomic

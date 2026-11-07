@@ -59,7 +59,7 @@ public:
     }
     bool finish(const DRW_Polyline* parent=nullptr) {
         switch(kind) {
-        case Kind::Polyline:return static_cast<const DRW_Polyline*>(value)->validatePolyfaceDxf();
+        case Kind::Polyline:return static_cast<const DRW_Polyline*>(value)->validateVertexTypesDxf();
         case Kind::Vertex: {
             const auto& vertex=*static_cast<const DRW_Vertex*>(value);
             const bool ignored=parent&&(parent->flags&64)!=0

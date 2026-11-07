@@ -18840,9 +18840,27 @@ DRW_Polyline::PolyfaceVertexRole DRW_Polyline::polyfaceVertexRole(
     }
 }
 
-bool DRW_Polyline::validatePolyfaceDxf() const noexcept {
-    if ((flags & 64) == 0)
+bool DRW_Polyline::validateVertexTypesDxf() const noexcept {
+    const unsigned topologyFlags = static_cast<unsigned>(flags & (8 | 16 | 64));
+    if (topologyFlags != 0u
+        && (topologyFlags & (topologyFlags - 1u)) != 0u)
+        return false;
+
+    if ((flags & 64) == 0) {
+        const int expectedRole = (flags & 8) != 0 ? 32
+            : (flags & 16) != 0 ? 64 : 0;
+        for (const auto& vertex : vertlist) {
+            if (!vertex)
+                return false;
+            const int actualRole = vertex->flags & (32 | 64 | 128);
+            // A missing role bit can be restored from the parent topology at
+            // output. A different role is contradictory and must not be
+            // serialized under the parent's type-specific subclass marker.
+            if (actualRole != 0 && actualRole != expectedRole)
+                return false;
+        }
         return true;
+    }
     std::size_t coordinateCount = 0;
     for (const auto& vertex : vertlist) {
         if (!vertex)

@@ -62213,6 +62213,103 @@ void testPolylineWcsExtrusionLossGuard(TestContext& t) {
     }
 }
 
+void testPolylineVertexRoleClosure(TestContext& t) {
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto output = std::filesystem::temp_directory_path()
+        / ("libdxfrw-polyline-vertex-role-" + std::to_string(nonce) + ".dxf");
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); }
+    } cleanup{output};
+
+    for (const bool binary : {false, true}) {
+        dx_data data;
+        auto* polyline = new DRW_Polyline;
+        polyline->flags = 8;
+        for (const DRW_Coord& point : {DRW_Coord(1.0, 2.0, 3.0),
+                                       DRW_Coord(4.0, 6.0, 9.0)}) {
+            DRW_Vertex vertex;
+            vertex.flags = 64; // Mesh role conflicts with the 3D-polyline parent.
+            vertex.basePoint = point;
+            polyline->addVertex(vertex);
+        }
+        data.mBlock->ent.push_back(polyline);
+
+        dxf_identity_test::Exporter writer;
+        const auto writeSentinel = [&]() {
+            std::ofstream sentinel(output, std::ios::binary | std::ios::trunc);
+            sentinel << "polyline vertex role sentinel\n";
+        };
+        writeSentinel();
+        const bool mismatchedRoleRejected = !writer.fileExport(
+            output.string(), DRW::AC1021, binary, &data, false);
+        std::ifstream mismatchInput(output, std::ios::binary);
+        const std::string mismatchContents(
+            std::istreambuf_iterator<char>(mismatchInput), {});
+        t.expect(mismatchedRoleRejected
+                     && mismatchContents == "polyline vertex role sentinel\n",
+                 "contradictory VERTEX role refuses without replacing destination");
+
+        for (const auto& vertex : polyline->vertlist)
+            vertex->flags = 0;
+        const bool roleRetry = writer.fileExport(
+            output.string(), DRW::AC1021, binary, &data, false);
+        t.expect(roleRetry,
+                 "missing VERTEX role bits are inferred from the parent and written");
+
+        dx_data readback;
+        dx_iface reader;
+        const bool imported = roleRetry
+            && reader.fileImport(output.string(), &readback, false);
+        const auto* decoded = imported && readback.mBlock->ent.size() == 1u
+            ? dynamic_cast<const DRW_Polyline*>(readback.mBlock->ent.front())
+            : nullptr;
+        t.expect(decoded != nullptr && decoded->flags == 8
+                     && decoded->vertlist.size() == 2u
+                     && (decoded->vertlist[0]->flags & (32 | 64 | 128)) == 32
+                     && (decoded->vertlist[1]->flags & (32 | 64 | 128)) == 32,
+                 "typed readback assigns the canonical 3D-polyline vertex role");
+
+        std::vector<TableOwnerRecord> records;
+        const bool framed = roleRetry
+            && readTableOwnerRecords(output, binary, records, false, false,
+                                     false, true, DRW::AC1021);
+        std::size_t emittedVertices = 0u;
+        bool exactRoleWire = true;
+        for (const auto& record : records) {
+            if (record.kind != "VERTEX")
+                continue;
+            ++emittedVertices;
+            exactRoleWire = exactRoleWire
+                && groupValue(record.groups, 70) == "32"
+                && std::any_of(record.groups.begin(), record.groups.end(),
+                    [](const auto& group) {
+                        return group.first == 100
+                            && group.second == "AcDb3dPolylineVertex";
+                    });
+        }
+        t.expect(framed && emittedVertices == 2u && exactRoleWire,
+                 "raw DXF confirms VERTEX role bits match the 3D subclass");
+
+        writeSentinel();
+        polyline->flags = 24; // 3D-polyline and polygon-mesh parent types conflict.
+        const bool parentConflictRejected = !writer.fileExport(
+            output.string(), DRW::AC1021, binary, &data, false);
+        std::ifstream parentInput(output, std::ios::binary);
+        const std::string parentContents(
+            std::istreambuf_iterator<char>(parentInput), {});
+        t.expect(parentConflictRejected
+                     && parentContents == "polyline vertex role sentinel\n",
+                 "conflicting parent topology flags refuse atomically");
+        polyline->flags = 8;
+        t.expect(writer.fileExport(
+                     output.string(), DRW::AC1021, binary, &data, false),
+                 "valid parent topology retries on the same adapter");
+        std::error_code error;
+        std::filesystem::remove(output, error);
+    }
+}
+
 void testInsertChildHandleRollback(TestContext& t) {
     const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
     const auto output = std::filesystem::temp_directory_path()
@@ -67195,6 +67292,14 @@ int main(int argc, char** argv) {
         return context.failures == 0 ? 0 : 1;
     }
     if (argc == 2
+        && std::string(argv[1]) == "--polyline-vertex-role-closure") {
+        TestContext context;
+        testPolylineVertexRoleClosure(context);
+        std::cout << "POLYLINE/VERTEX topology-role closure: "
+                  << (context.failures == 0 ? "PASS" : "FAIL") << '\n';
+        return context.failures == 0 ? 0 : 1;
+    }
+    if (argc == 2
         && std::string(argv[1]) == "--insert-child-handle-rollback") {
         TestContext context;
         testInsertChildHandleRollback(context);
@@ -68005,6 +68110,7 @@ int main(int argc, char** argv) {
     testDxfWriteAttemptFailure(context);
     testClassicVertexXdata(context);
     testPolylineWcsExtrusionLossGuard(context);
+    testPolylineVertexRoleClosure(context);
     testBlockRecordXdataRoundTrip(context);
     testClassicVertexPresenceBoundaries(context);
     testClassicVertexIdentifierRetention(context);

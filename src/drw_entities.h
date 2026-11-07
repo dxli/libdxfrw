@@ -3237,7 +3237,7 @@ protected:
     [[nodiscard]] bool validatePayloadFields() const;
     enum class PolyfaceVertexRole { Invalid, Coordinate, Face };
     static PolyfaceVertexRole polyfaceVertexRole(const DRW_Vertex& vertex) noexcept;
-    [[nodiscard]] bool validatePolyfaceDxf() const noexcept;
+    [[nodiscard]] bool validateVertexTypesDxf() const noexcept;
     virtual bool parseDwg(DRW::Version version, dwgBuffer *buf, std::uint32_t bs=0) override;
     [[nodiscard]] virtual bool encodeDwg(DRW::Version version, dwgBufferW *buf, std::uint32_t bs=0, dwgBufferW *strBuf=nullptr, dwgBufferW *handleBuf=nullptr) override;
 

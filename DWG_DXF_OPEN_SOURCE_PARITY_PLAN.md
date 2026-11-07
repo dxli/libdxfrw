@@ -97,6 +97,13 @@ created locally from scratch for the specific control.
   retry, and typed WCS-vertex readback. The default normal remains writable;
   this generated control does not qualify physical producer or native consumer
   semantics. See the [receipt](docs/research/p6-dxf-classic-polyline-wcs-extrusion-loss-guard-2026-11-07.json).
+- **P6 POLYLINE/VERTEX topology-role closure:** the typed DXF writer now refuses
+  conflicting parent topology or child vertex role bits, and supplies missing
+  3D-polyline/polygon-mesh role bits from the parent before emitting the
+  subclass. The AC1021 ASCII/Binary fast selector checks wire bits, subclass,
+  readback, atomic refusal, and same-adapter retry. Input remains tolerant; this
+  generated control is not producer or native-consumer qualification. See the
+  [receipt](docs/research/p6-dxf-polyline-vertex-topology-role-closure-2026-11-07.json).
 - **ODA suffix investigation is waiting on a changed launch route:** the
   latest fresh direct ODA 27.1 invocation after the user's unlock attempt
   aborted during Pasteboard/XPC startup and did not process the document. This

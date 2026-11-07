@@ -9995,7 +9995,7 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
     if (!preflightDxfWrite())
         return false;
     if (writer == nullptr || ent == nullptr || !ent->validatePayloadFields()
-        || !ent->validatePolyfaceDxf()
+        || !ent->validateVertexTypesDxf()
         || std::any_of(ent->vertlist.cbegin(), ent->vertlist.cend(),
                        [](const auto& vertex) {
                            return vertex == nullptr
@@ -10106,7 +10106,9 @@ bool dxfRW::writePolyline(DRW_Polyline *ent) {
         // DWG VERTEX_PFACE_FACE has four indices but no flags field. The
         // public typed subtype must supply DXF's required face-record bit.
         const int dxfVertexFlags = polyfaceFace ? 128
-            : isPolyface ? v->flags | 192 : v->flags;
+            : isPolyface ? v->flags | 192
+            : (ent->flags & 8) != 0 ? v->flags | 32
+            : (ent->flags & 16) != 0 ? v->flags | 64 : v->flags;
         writer->writeString(0, "VERTEX");
         if (!writeEntity(v, /*captureSourceHandle=*/true, parentHandle))
             return false;
