@@ -84,6 +84,12 @@ created locally from scratch for the specific control.
   exact refusal is classified; keep prior strict refusals intact and do not
   revisit the completed colorwh, plot-screening, lineweights, or civil Edge
   profiles.
+- **P6 CLI integrity summary:** the debug disposition projection now reports
+  retained integrity-row/error/warning counts and separate omission/drop
+  indicators. The tracked LibreCAD AC1021 fixture projects seven errors and
+  nine checksum warnings while strict output still preserves its destination;
+  these overlapping diagnostics do not form a semantic-loss total. See the
+  [integrity projection receipt](docs/research/p6-cli-source-disposition-integrity-summary-2026-11-07.json).
 - **ODA suffix investigation is waiting on a changed launch condition:** the
   latest direct ODA 27.1 invocation aborted during Pasteboard/XPC startup and
   did not process the document. The user has said they are unlocking the Mac,

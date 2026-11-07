@@ -1230,6 +1230,34 @@ def check_source_disposition_projection(converter, root, writer):
             f"malformed HEADER was not projected as repair-required: {malformed!r}")
     checked += 1
 
+    historical_ltype_source = (Path(__file__).resolve().parents[1] / "tests"
+                               / "fixtures" / "dwg" / "ordinary_enc_AC1021.dwg")
+    historical_output = root / "historical AC1021 strict destination.dxf"
+    historical_output.write_bytes(SENTINEL)
+    historical_bytes = historical_ltype_source.read_bytes()
+    historical = run_bounded(
+        [str(converter), str(historical_ltype_source), "-o",
+         str(historical_output), "-v2010", "-y", "-d"],
+        10, 2 * 1024 * 1024, cwd=root)
+    if (historical.returncode != 1
+            or historical_output.read_bytes() != SENTINEL
+            or historical_ltype_source.read_bytes() != historical_bytes
+            or b"sourceDwgFrameCoverage=complete" not in historical.stderr
+            or b"sourceDwgSourceFrames=26" not in historical.stderr
+            or b"sourceDwgEntityParseFailures=0" not in historical.stderr
+            or b"sourceDwgIntegrityRetainedRows=16" not in historical.stderr
+            or b"sourceDwgIntegrityErrorsAmongRetained=7" not in historical.stderr
+            or b"sourceDwgIntegrityWarningsAmongRetained=9" not in historical.stderr
+            or b"sourceDwgIntegrityExtractionOmitted=0" not in historical.stderr
+            or b"sourceDwgIntegrityUpstreamDroppedLowerBound=0" not in historical.stderr
+            or b"sourceDwgIntegrityAggregateSaturated=false" not in historical.stderr
+            or b"strict-complete conversion requires successful, complete DWG read disposition"
+            not in historical.stderr):
+        raise AssertionError(
+            "historical AC1021 integrity summary did not preserve the strict refusal: "
+            f"{historical!r}")
+    checked += 1
+
     repeated_group_header = root / "repeated HEADER group code.dxf"
     repeated_group_output = root / "repeated HEADER group destination.dxf"
     repeated_group_bytes = SOURCE.replace(

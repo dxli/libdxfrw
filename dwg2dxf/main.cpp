@@ -10,6 +10,7 @@
 **  along with this program.  If not, see <http://www.gnu.org/licenses/>.    **
 ******************************************************************************/
 
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -174,6 +175,18 @@ void reportCliConversionProjection(const dx_data& data,
         // user's selected output version.
         && data.headerC.canWriteDxfRequiredVersions(DRW::AC1032);
     const DwgReadObservations& dwgObservations = data.dwgReadOutcome.observations;
+    std::size_t retainedIntegrityErrors = 0u;
+    std::size_t retainedIntegrityWarnings = 0u;
+    const std::size_t retainedIntegrityRows = std::min(
+        dwgObservations.integrity.retained,
+        dwgObservations.integrity.rows.size());
+    for (std::size_t index = 0; index < retainedIntegrityRows; ++index) {
+        if (dwgObservations.integrity.rows[index].severity
+                == DwgIntegritySeverity::Error)
+            ++retainedIntegrityErrors;
+        else
+            ++retainedIntegrityWarnings;
+    }
     std::cerr << "CLI source disposition projection: schema=1 "
               << "sourceRepairAction=none "
               << "sourceHeaderStructure=" << headerStructure << ' '
@@ -250,6 +263,37 @@ void reportCliConversionProjection(const dx_data& data,
         std::cerr << dwgObservations.frames.unrecognizedDispositions;
     else
         std::cerr << "not-applicable";
+    std::cerr << " sourceDwgIntegrityRetainedRows=";
+    if (isDwg)
+        std::cerr << retainedIntegrityRows;
+    else
+        std::cerr << "not-applicable";
+    std::cerr << " sourceDwgIntegrityErrorsAmongRetained=";
+    if (isDwg)
+        std::cerr << retainedIntegrityErrors;
+    else
+        std::cerr << "not-applicable";
+    std::cerr << " sourceDwgIntegrityWarningsAmongRetained=";
+    if (isDwg)
+        std::cerr << retainedIntegrityWarnings;
+    else
+        std::cerr << "not-applicable";
+    std::cerr << " sourceDwgIntegrityExtractionOmitted=";
+    if (isDwg)
+        std::cerr << dwgObservations.integrity.extractionOmitted;
+    else
+        std::cerr << "not-applicable";
+    std::cerr << " sourceDwgIntegrityUpstreamDroppedLowerBound=";
+    if (isDwg)
+        std::cerr << dwgObservations.integrity.reportedUpstreamDropped;
+    else
+        std::cerr << "not-applicable";
+    std::cerr << " sourceDwgIntegrityAggregateSaturated=";
+    if (!isDwg)
+        std::cerr << "not-applicable";
+    else
+        std::cerr << (dwgObservations.integrity.aggregateSaturated
+            ? "true" : "false");
     std::cerr << "\n";
 }
 
