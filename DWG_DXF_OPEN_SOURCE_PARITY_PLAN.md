@@ -5,11 +5,17 @@ Updated 2026-11-07 (AC1032 multi-schdat DataStorage plus raw-only TextObjectCont
 revision was installed into `/private/tmp/libdxfrw-install-current`, then a
 fresh out-of-tree LibreCAD_3 configure selected its exported CONFIG package.
 The persistence target built and its compile flags contain `-std=gnu++17`.
-The exact archive and consumer library hashes, command lines, and limits are in
+The same persistence library passed all three existing `DxfExportTest.*`
+cases (raw file inspection for entity export, table/header fidelity, and Z/text
+attributes) via a scratch runner linked to that build. The exact archive,
+consumer library and runner hashes, commands, and limits are in
 the [current-head build receipt](docs/research/p8-librecad3-current-head-package-build-2026-11-07.json).
-This refreshes package integration evidence only: the LibreCAD_3 checkout is
-dirty, and no application, focused consumer tests, ABI, Linux, or Windows
-qualification was run in this pass. Do not repeat this unchanged package build.
+This refreshes selected package/export integration evidence only: the
+LibreCAD_3 checkout is dirty, and no application, open/save/reopen behavior,
+ABI, Linux, or Windows qualification was run in this pass. The umbrella
+`lcunittest` target still fails while compiling Kaguya member-function
+`noexcept` signatures with AppleClang 21; its failure is outside this library.
+Do not repeat this unchanged package build or focused export cohort.
 
 contains open work only. Implementation history and completed-item evidence belong in Git and
 `docs/research/`, not in this queue.
@@ -102,10 +108,12 @@ created locally from scratch for the specific control.
 - **External gates:** P7 ACIS/ACDS meaning, P8 native platform/consumer
   qualification, and P9's six advisory rows remain open. Local parser or codec
   controls cannot promote those claims.
-- **P8 current-head package build:** the fresh exported-CONFIG persistence
-  build passes and propagates C++17 from the libdxfrw target. Existing focused
-  consumer tests were not rerun; run them at the next pinned integration
-  checkpoint. The build emitted existing LibreCAD_3 warnings but linked.
+- **P8 current-head package integration:** the fresh exported-CONFIG persistence
+  build passes and propagates C++17 from the libdxfrw target; the three focused
+  `DxfExportTest.*` cases pass against its linked dylib. The full `lcunittest`
+  target remains blocked by the LibreCAD_3 Kaguya/AppleClang `noexcept` compile
+  error. Next, qualify open/save/reopen on a clean consumer revision and then
+  native application/platform behavior. Do not rerun this unchanged export set.
 
 ### Next work packets
 
@@ -140,10 +148,10 @@ instead of repeating successful scans or controls.
    suffix until a materially changed converter launch route reaches document
    processing; the user's unlock alone did not change the prior result.
 4. **P7/P8/P9 / qualification gates.** P7 needs independent ACIS/ACDS semantic
-   evidence. P8's current-head LibreCAD_3 CONFIG-package persistence build is
-   refreshed; next qualify a clean consumer revision and focused application
-   behavior, then native Linux/Windows FreeCAD and LibreCAD/LibreCAD_3 runs.
-   Keep the dirty-checkout build as integration evidence only. P9 remains
+   evidence. P8's current-head LibreCAD_3 CONFIG-package build and focused
+   export tests are refreshed; next qualify open/save/reopen on a clean
+   consumer revision, then native Linux/Windows FreeCAD and LibreCAD/LibreCAD_3
+   runs. Keep the dirty-checkout build as integration evidence only. P9 remains
    `DEFERRED_EXTERNAL` for J256, J260, J268,
    J284, J293 and J295. These do not block independent local slices and cannot
    be promoted by generated controls, advisory reports, or transport-only
