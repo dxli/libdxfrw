@@ -4475,7 +4475,10 @@ public:
         renderMental.m_doubles = {
             0.1, 0.2, 0.3, 0.4, 0.5, 0.6,
             0.7, 0.8, 0.9, 1.0, 1.1, 1.2};
-        renderMental.m_hasPredefined = true;
+        // Exercise both AC1027+ MentalRay base layouts with one object per
+        // generated version: omit the flag in AC1027, retain it in AC1032.
+        renderMental.m_hasPredefined = expectedVersion_ >= DRW::AC1032;
+        renderMental.m_hasPredefinedPresent = expectedVersion_ >= DRW::AC1032;
         wroteRenderMental_ = registeredRenderMental_
             && writer_->writeRenderSettings(&renderMental)
             && renderMental.handle != 0;
@@ -7409,6 +7412,10 @@ public:
                 && data.m_kind == DRW_RenderSettings::MentalRay
                 && data.m_classVersion == 1
                 && data.m_name == "LOCAL_RENDER_MENTALRAY"
+                && data.m_hasPredefinedPresent
+                    == (expectedVersion_ >= DRW::AC1032)
+                && data.m_hasPredefined
+                    == (expectedVersion_ >= DRW::AC1032)
                 && data.m_shorts.size() >= 7
                 && data.m_shorts[0] == 1
                 && data.m_shorts[6] == 7

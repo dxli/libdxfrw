@@ -12987,7 +12987,8 @@ bool DRW_RenderSettings::parseDwg(DRW::Version version, dwgBuffer *buf,
                 return false;
         if (!appendText() || !appendText() || !appendLong())
             return false;
-        if (kind != RapidRT && version >= DRW::AC1027) {
+        if (kind != RapidRT && kind != MentalRay
+            && version >= DRW::AC1027) {
             if (!readBool(hasPredefined))
                 return false;
             hasPredefinedPresent = true;
@@ -13048,39 +13049,110 @@ bool DRW_RenderSettings::parseDwg(DRW::Version version, dwgBuffer *buf,
             hasPredefinedPresent = true;
             bools.push_back(hasPredefined);
         }
-    } else if (kind == MentalRay) {
+    }
+
+    const auto readMentalRayFields = [&]() {
         for (int i = 0; i < 3; ++i)
             if (!appendLong())
-                return fail();
+                return false;
         if (!appendShort() || !appendDouble() || !appendDouble())
-            return fail();
+            return false;
         for (int i = 0; i < 4; ++i)
             if (!appendDouble())
-                return fail();
+                return false;
         if (!appendShort() || !appendBool() || !appendBool())
-            return fail();
+            return false;
         for (int i = 0; i < 3; ++i)
             if (!appendLong())
-                return fail();
+                return false;
         if (!appendBool() || !appendLong() || !appendBool()
             || !appendDouble() || !appendLong())
-            return fail();
+            return false;
         for (int i = 0; i < 3; ++i)
             if (!appendLong())
-                return fail();
+                return false;
         if (!appendBool() || !appendLong())
-            return fail();
+            return false;
         for (int i = 0; i < 3; ++i)
             if (!appendBool())
-                return fail();
+                return false;
         for (int i = 0; i < 3; ++i)
             if (!appendDouble())
-                return fail();
+                return false;
         if (!appendShort() || !appendShort() || !appendDouble()
             || !appendShort() || !appendShort() || !appendBool()
             || !appendText() || !appendLong() || !appendShort()
             || !appendLong() || !appendBool() || !appendDouble())
+            return false;
+        return true;
+    };
+
+    if (kind == MentalRay) {
+        // R2013+ MentalRay records have two observed layouts for this base
+        // flag: the generated codec includes it, while the inspected ODA
+        // R2018 source frame reaches the exact bounded body tail only when it
+        // is absent. Probe both layouts transactionally and publish one only
+        // when the complete modeled body has a unique valid interpretation.
+        const dwgBuffer baseBody = bodyBuffer;
+        const dwgBuffer baseStrings = bodyStringBuffer;
+        const auto baseLongs = longs;
+        const auto baseStringsValues = strings;
+        const auto baseBools = bools;
+        const auto baseShorts = shorts;
+        const auto baseBytes = bytes;
+        const auto baseDoubles = doubles;
+        const auto parseCandidate = [&](bool includePredefined) {
+            bodyBuffer = baseBody;
+            bodyStringBuffer = baseStrings;
+            longs = baseLongs;
+            strings = baseStringsValues;
+            bools = baseBools;
+            shorts = baseShorts;
+            bytes = baseBytes;
+            doubles = baseDoubles;
+            hasPredefined = false;
+            hasPredefinedPresent = false;
+            if (includePredefined) {
+                if (!readBool(hasPredefined))
+                    return false;
+                hasPredefinedPresent = true;
+                bools.push_back(hasPredefined);
+            }
+            return readMentalRayFields() && bodyBuf->isGood()
+                && bodyStringBuf->isGood()
+                && objectBodyFitsSize(currentObjectDwgBit(bodyBuf), bodyEnd)
+                && objectBodyFitsSize(currentObjectDwgBit(bodyStringBuf),
+                                      stringEnd);
+        };
+
+        const bool withPredefined = version >= DRW::AC1027
+            && parseCandidate(true);
+        dwgBuffer withBody = bodyBuffer;
+        dwgBuffer withStrings = bodyStringBuffer;
+        const auto withLongs = longs;
+        const auto withStringValues = strings;
+        const auto withBools = bools;
+        const auto withShorts = shorts;
+        const auto withBytes = bytes;
+        const auto withDoubles = doubles;
+        const bool withHasPredefined = hasPredefined;
+        const bool withHasPredefinedPresent = hasPredefinedPresent;
+
+        const bool withoutPredefined = parseCandidate(false);
+        if (withPredefined == withoutPredefined)
             return fail();
+        if (withPredefined) {
+            bodyBuffer = withBody;
+            bodyStringBuffer = withStrings;
+            longs = withLongs;
+            strings = withStringValues;
+            bools = withBools;
+            shorts = withShorts;
+            bytes = withBytes;
+            doubles = withDoubles;
+            hasPredefined = withHasPredefined;
+            hasPredefinedPresent = withHasPredefinedPresent;
+        }
     }
 
     const std::uint64_t rawStartBit = currentObjectDwgBit(bodyBuf);
@@ -13252,7 +13324,9 @@ bool DRW_RenderSettings::encodeDwg(DRW::Version version, dwgBufferW *buf,
                                     stringAt(1, m_environmentImageFilename));
         stringBuf->putVariableText(version, stringAt(2, m_description));
         buf->putBitLong(longAt(1, m_displayIndex));
-        if (m_kind != RapidRT && version >= DRW::AC1027)
+        if (m_kind != RapidRT && version >= DRW::AC1027
+            && (m_kind != MentalRay || m_hasPredefinedPresent
+                || m_hasPredefined))
             buf->putBit(m_hasPredefined ? 1 : 0);
         return true;
     };
@@ -13316,7 +13390,10 @@ bool DRW_RenderSettings::encodeDwg(DRW::Version version, dwgBufferW *buf,
         for (std::size_t i = 0; i < 6; ++i)
             buf->putBitDouble(doubleAt(i));
         buf->putBitShort(static_cast<std::uint16_t>(shortAt(1)));
-        const std::size_t baseBool = version >= DRW::AC1027 ? 5 : 4;
+        const bool predefinedEncoded = version >= DRW::AC1027
+            && (m_kind != MentalRay || m_hasPredefinedPresent
+                || m_hasPredefined);
+        const std::size_t baseBool = predefinedEncoded ? 5 : 4;
         const auto derivedBool = [&](std::size_t index, bool fallback = false) {
             return boolAt(baseBool + index, fallback);
         };
