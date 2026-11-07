@@ -1,0 +1,33 @@
+{
+  "schema": "libdxfrw-research-receipt-v1",
+  "title": "AC1021 tablet ASE block-hierarchy XRECORD target-role screen",
+  "date": "2026-11-06",
+  "supportClaimEffect": "none",
+  "scope": "Screen one local AC1021 OBJECTS graph as a potential bounded XRECORD route. No production code or fixture changed.",
+  "source": {
+    "path": "/Users/dli/doc/dwg/tablet.dwg",
+    "sha256": "7f203649dc8434ef7cf7a46f7f6def2a0192a1163ba34ebcf88ebfe69635ccd4",
+    "version": "AC1021",
+    "provenanceLimit": "Local user corpus; producer and repository provenance are unauthenticated. The source is not committed."
+  },
+  "localReader": {
+    "tool": "build/dwg2dxf/dwg2dxf",
+    "sha256": "cbe1474b97de3786234d33f7be6c1287e2102b44023885626a94ead2b3d678e5",
+    "observation": "The trace reports 40 graph nodes, 314 edges, 40 staged handles, 479 source records and 456 XRECORD payload slots, then refuses at XRECORD 0x2BCF code 330 target 0x1BE5 (decimal 7141). The public typed-model probe imports XRECORD 0x2BCF with owner/reactor 0x2BCE and 208 ordered handle values; its entity callback inventory contains none of those 208 target handles. The NOD-owned dictionary 0x2BCE contains ASEBlockHierarchyIndexRecord -> 0x2BCF.",
+    "traceSha256": "e171157bef1eeec839b79cb78bd5636d7e20c4d8903c3f79e3d185498e8cee21",
+    "probeSourceSha256": "07d7a9ea85f5beef55a3a58f6ec0e1675abf546a279d8421823bd99fc5fb45e7",
+    "probeBinarySha256": "23259ce1a29cbf1d5689f9207854b52c89936af3e9ff529084837726860d4efd"
+  },
+  "independentPeer": {
+    "tool": "LibreDWG 0.14.0 dwgread minJSON",
+    "jsonSha256": "54f69c22c8528f0d20f4c010446baecb581463c362430a413a40feeec5224f4d",
+    "observation": "XRECORD 0x2BCF is owned by DICTIONARY 0x2BCE, has one reactor to that dictionary, and contains 208 unique code-330 references. All 208 targets exist in the peer object inventory and are INSERT entities. The owner dictionary belongs to NOD 0x0C and contains ASEBlockHierarchyIndexRecord -> 0x2BCF. The first checked target, 0x1BE5, is an INSERT owned by BLOCK_RECORD 0x1BEF."
+  },
+  "decision": "This is a promising bounded source candidate, but it is not implementation-ready: the local typed entity inventory does not expose the 208 peer-identified INSERT targets, so local source identity, frame classification, and output remapping cannot yet be proven. Keep strict refusal and do not add an XRECORD exception based only on peer semantics.",
+  "nextAction": "Trace the first target 0x1BE5 through the local source frame census and entity dispatcher; establish whether it is omitted, misclassified, or represented under a different identity. If local identities can be recovered and all 208 emitted/remapped INSERT references close, add a generated ASCII/Binary readback and rollback/retry control before considering a narrowly gated physical projection.",
+  "validation": {
+    "fullSuites": "NOT RUN",
+    "fixturesCommitted": false,
+    "sourceOrConverterSupportClaimPromoted": false
+  }
+}

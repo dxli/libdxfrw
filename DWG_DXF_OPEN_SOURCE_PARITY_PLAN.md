@@ -72,7 +72,15 @@ created locally from scratch for the specific control.
    This repository has no tracked DWG test fixtures beyond its README; scan the
    existing local source corpus for the next distinct, bounded OBJECTS graph
    whose owner/reference roles can be independently checked. The AC1021
-   `truetype.dwg` candidate is screened out for now: XRECORD `0x5E3` contains
+   `tablet.dwg` XRECORD at `0x2BCF` is a promising bounded graph: its NOD-owned
+   `ASEBlockHierarchyIndexRecord` dictionary route is identified, and LibreDWG
+   independently resolves all 208 unique code-330 payloads as INSERT entities.
+   The local typed-model probe does not expose any of those targets, while the
+   strict graph gate refuses at target `0x1BE5`; resolve that local frame and
+   dispatcher identity mismatch before attempting output support. Keep strict
+   refusal. The source is unauthenticated and this is not a support claim (see
+   the [tablet XRECORD screen receipt](docs/research/p4-ac1021-tablet-ase-block-hierarchy-xrecord-target-screen-2026-11-06.json)).
+   The `truetype.dwg` candidate is screened out for now: XRECORD `0x5E3` contains
    four code-330 LAYER handles and four code-331 LTYPE handles, but its owner
    chain starts at the LAYER_CONTROL extension dictionary (`0x59B`), then
    `ACAD_LAYERSTATES` (`0x59C`) and `ACAD_VIEWS_default`. The existing
